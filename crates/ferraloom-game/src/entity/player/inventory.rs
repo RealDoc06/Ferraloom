@@ -185,6 +185,9 @@ impl Inventory {
         amount: i32,
         equipment: &mut EntityEquipment,
     ) -> ItemStack {
+        if slot < 36 && amount <= 0 {
+            return ItemStack::default();
+        }
         if slot < 36 || equipment_slot(slot).is_some() {
             split(self.get_item_mut(slot, equipment), amount)
         } else {
@@ -499,5 +502,28 @@ mod tests {
         assert_eq!(count(equipment.get(EquipmentSlot::Offhand)), 4);
         assert_eq!(count(&loaded.remove_item_no_update(39, &mut equipment)), 1);
         assert!(equipment.get(EquipmentSlot::Head).is_empty());
+    }
+}
+
+#[cfg(test)]
+mod removal_tests {
+    use super::*;
+    use ferraloom_protocol::component::DataComponentPatch;
+    #[test]
+    fn nonpositive_main_slot_removal_is_empty_but_equipment_splits_directly() {
+        let mut inventory = Inventory::default();
+        let mut equipment = EntityEquipment::default();
+        inventory.items[0] = ItemStack::new(
+            ferraloom_data::Item::STONE,
+            5,
+            DataComponentPatch::default(),
+        );
+        equipment.set(EquipmentSlot::Offhand, inventory.items[0].clone());
+        for amount in [0, -1] {
+            assert!(inventory.remove_item(0, amount, &mut equipment).is_empty());
+            assert_eq!(count(&inventory.items[0]), 5);
+        }
+        assert!(inventory.remove_item(40, -1, &mut equipment).is_empty());
+        assert_eq!(count(equipment.get(EquipmentSlot::Offhand)), 6);
     }
 }
