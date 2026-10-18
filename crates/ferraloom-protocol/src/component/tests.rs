@@ -442,6 +442,25 @@ fn vanilla_persistent_primitive_coercions() {
         let expected = ferraloom_nbt::parse(row["expected"].as_str().unwrap()).unwrap();
         assert_eq!(actual, expected, "nested {}", row["codec"]);
     }
+    for row in fixture["collection_shapes"].as_array().unwrap() {
+        let text = row["input"].as_str().unwrap();
+        let json: Value = serde_json::from_str(text).unwrap();
+        let nbt = if json.is_null() {
+            Tag::End
+        } else {
+            ferraloom_nbt::parse(text).unwrap()
+        };
+        assert_eq!(
+            CollectionPredicate::<MobEffectsPredicate>::from_json(&json).is_ok(),
+            row["json_accepted"].as_bool().unwrap(),
+            "collection JSON {text}"
+        );
+        assert_eq!(
+            CollectionPredicate::<MobEffectsPredicate>::from_nbt(&nbt).is_ok(),
+            row["nbt_accepted"].as_bool().unwrap(),
+            "collection NBT {text}"
+        );
+    }
     for row in fixture["double_bounds"].as_array().unwrap() {
         let name = row["name"].as_str().unwrap();
         let input = match name {

@@ -233,6 +233,7 @@ impl<P: Persistent + PartialEq> Persistent for CollectionCount<P> {
 }
 impl<P: Persistent + PartialEq> Persistent for CollectionPredicate<P> {
     fn from_json(v: &Json) -> Result<Self> {
+        object(v)?;
         Ok(Self {
             contains: field(v, "contains", Some(None))?,
             count: field(v, "count", Some(None))?,
@@ -240,6 +241,8 @@ impl<P: Persistent + PartialEq> Persistent for CollectionPredicate<P> {
         })
     }
     fn from_nbt(v: &Tag) -> Result<Self> {
+        v.as_compound()
+            .ok_or_else(|| invalid("collection predicate"))?;
         Ok(Self {
             contains: field_nbt(v, "contains", Some(None))?,
             count: field_nbt(v, "count", Some(None))?,
