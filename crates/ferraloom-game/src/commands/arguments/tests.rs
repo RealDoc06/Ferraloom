@@ -33,6 +33,7 @@ fn argument_parser_vectors_match_java_errors_cursors_and_values() {
         "minecraft:vec2",
         "minecraft:rotation",
         "minecraft:block_state",
+        "minecraft:item_stack",
         "minecraft:team_color",
         "minecraft:hex_color",
         "minecraft:message",
@@ -61,6 +62,7 @@ fn argument_parser_vectors_match_java_errors_cursors_and_values() {
         "minecraft:resource",
         "minecraft:resource_key",
         "minecraft:resource_or_tag_key",
+        "minecraft:resource_or_tag",
         "minecraft:template_mirror",
         "minecraft:template_rotation",
         "minecraft:heightmap",
@@ -98,7 +100,7 @@ fn check_vector(vector: &Vector) {
     argument.context = Arc::new(crate::commands::context::CommandBuildContext {
         registries: serde_json::from_str(include_str!("../vanilla/registry-elements.json"))
             .unwrap(),
-        tags: Default::default(),
+        tags: serde_json::from_str(include_str!("../vanilla/registry-tags.json")).unwrap(),
     });
     let mut reader = StringReader::with_provider(&vector.input, Arc::new(BrigadierExceptions));
     let parsed = argument.parse(&mut reader);

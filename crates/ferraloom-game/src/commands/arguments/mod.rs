@@ -1,6 +1,7 @@
 //! Minecraft argument values retain their parsed type and their network descriptor.
 pub mod blocks;
 pub mod coordinates;
+pub mod items;
 pub mod operation;
 pub mod range;
 pub mod scoreboard;
@@ -38,6 +39,7 @@ pub enum ArgumentValue {
     Criteria(scoreboard::ObjectiveCriteria),
     Resources(Vec<String>),
     Block(blocks::BlockInput),
+    Item(items::ItemInput),
     Boolean(bool),
     Integer(i32),
     Long(i64),
@@ -239,7 +241,38 @@ impl MinecraftArgument {
                 }
                 V::Identifier(value)
             }
-            A::Function {} | A::ResourceOrTag { .. } | A::ResourceOrTagKey { .. } => {
+            A::ResourceOrTag { registry } => {
+                let start = reader.cursor();
+                if reader.can_read() && reader.peek() == 35 {
+                    reader.skip();
+                    let parsed = (|| {
+                        let value = identifier(reader)?;
+                        if self.context.tag(registry.as_str(), &value).is_none() {
+                            return Err(error_at(
+                                reader,
+                                "argument.resource_tag.not_found",
+                                &[value, registry.to_string()],
+                            ));
+                        }
+                        Ok(V::Identifier(format!("#{value}")))
+                    })();
+                    if parsed.is_err() {
+                        reader.set_cursor(start);
+                    }
+                    parsed?
+                } else {
+                    let value = identifier(reader)?;
+                    if !self.context.contains(registry.as_str(), &value) {
+                        return Err(error_at(
+                            reader,
+                            "argument.resource.not_found",
+                            &[value, registry.to_string()],
+                        ));
+                    }
+                    V::Identifier(value)
+                }
+            }
+            A::Function {} | A::ResourceOrTagKey { .. } => {
                 let tag = reader.can_read() && reader.peek() == 35;
                 if tag {
                     reader.skip();
@@ -248,6 +281,7 @@ impl MinecraftArgument {
                 V::Identifier(if tag { format!("#{value}") } else { value })
             }
             A::BlockState {} => V::Block(blocks::parse(reader)?),
+            A::ItemStack {} => V::Item(items::parse(reader)?),
             A::ItemSlot {} => V::Integer(slots::parse(reader, true)?.slots[0]),
             A::ItemSlots {} => V::Slots(slots::parse(reader, false)?),
             A::NbtTag {} => V::Tag(nbt(reader, false)?),

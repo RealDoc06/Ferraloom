@@ -2574,3 +2574,5 @@ Every literal and argument node from `reports/commands.json` has a row, includin
 | `/whitelist`: on/off/list/add/remove/reload and enforced live admission | pending command parity scenarios | todo | todo |
 | NBT path parser preserves nested parser errors and reader cursor separately | `commands::arguments::tests::argument_parser_vectors_match_java_errors_cursors_and_values` | pass | todo |
 | `/save-off` disables automatic chunk saves; `/save-all` still forces saving | pending saved-world parity scenario | pass | todo |
+| Item-stack argument component assignments, removals and duplicate detection | `commands::arguments::tests::argument_parser_vectors_match_java_errors_cursors_and_values` | pass | todo |
+| Resource-or-tag argument validates both branches against the live registry lookup | `commands::arguments::tests::argument_parser_vectors_match_java_errors_cursors_and_values` | pass | todo |

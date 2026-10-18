@@ -55,12 +55,37 @@ public final class CommandVectors {
             registry.listElements().forEach(holder -> entries.add(holder.key().identifier().toString()));
             elements.add(registry.key().identifier().toString(), entries);
         });
-        var context = CommandBuildContext.simple(registries, FeatureFlags.DEFAULT_FLAGS);
+        // Exercise real argument parsers with a registry view containing no bound tags.
+        // Datagen lookup otherwise invents every requested tag holder.
+        var runtimeRegistries = new net.minecraft.core.HolderLookup.Provider() {
+            public java.util.stream.Stream<net.minecraft.resources.ResourceKey<? extends net.minecraft.core.Registry<?>>> listRegistryKeys() { return registries.listRegistryKeys(); }
+            public <T> Optional<net.minecraft.core.HolderLookup.RegistryLookup<T>> lookup(net.minecraft.resources.ResourceKey<? extends net.minecraft.core.Registry<? extends T>> key) {
+                return registries.lookup(key).map(parent -> new net.minecraft.core.HolderLookup.RegistryLookup.Delegate<T>() {
+                    public net.minecraft.core.HolderLookup.RegistryLookup<T> parent() { return parent; }
+                    public java.util.stream.Stream<net.minecraft.core.HolderSet.Named<T>> listTags() { return java.util.stream.Stream.empty(); }
+                    public Optional<net.minecraft.core.HolderSet.Named<T>> get(net.minecraft.tags.TagKey<T> tag) {
+                        return Optional.empty();
+                    }
+                });
+            }
+        };
+        var tags = new JsonObject();
+        runtimeRegistries.listRegistries().forEach(registry -> {
+            var boundTags = new JsonObject();
+            registry.listTags().forEach(tag -> {
+                var members = new JsonArray();
+                tag.stream().forEach(holder -> holder.unwrapKey().ifPresent(key -> members.add(key.identifier().toString())));
+                boundTags.add(tag.key().location().toString(), members);
+            });
+            tags.add(registry.key().identifier().toString(), boundTags);
+        });
+        var context = CommandBuildContext.simple(runtimeRegistries, FeatureFlags.DEFAULT_FLAGS);
         var commands = new Commands(Commands.CommandSelection.DEDICATED, context);
         var dispatcher = commands.getDispatcher();
         var out = Path.of(args[0]);
         Files.createDirectories(out);
         write(out, "registry-elements.json", elements);
+        write(out, "registry-tags.json", tags);
         var nodes = new ArrayList<CommandNode<CommandSourceStack>>();
         var ids = new IdentityHashMap<CommandNode<CommandSourceStack>,Integer>();
         var queue = new ArrayDeque<CommandNode<CommandSourceStack>>();
@@ -114,6 +139,8 @@ public final class CommandVectors {
             var inputs = new LinkedHashSet<String>(entry.getValue().getExamples());
             inputs.addAll(List.of("", " ", "?", "-1", "1.5", "~ ~ ~", "0 1", "0 1 2", "^ ^ ^", "~ ^ ~", "@a", "@e[type=minecraft:player,limit=1]"));
             if (entry.getKey().equals("minecraft:entity")) inputs.addAll(List.of("@", "@z", "@a[", "@a[limit=0]", "@a[x=1,x=2]", "@a[name=!A,name=B]", "@e[type=#minecraft:undead,type=minecraft:player]", "@a[distance=3..1]", "@a[scores={foo=1..2}]", "@a[advancements={minecraft:story/root={foo=true}}]"));
+            if (entry.getKey().equals("minecraft:item_stack")) inputs.addAll(List.of("stone[]", "stone[damage=1]", "stone[!damage]", "stone[damage=1,damage=2]", "stone[creative_slot_lock={}]", "stone[unknown=1]", "stone[damage=]", "stone[damage=1,", "stone[ damage=1 ]", "stone[custom_name='hello']"));
+            if (entry.getKey().equals("minecraft:objective_criteria")) inputs.addAll(List.of("dummy", "trigger", "health", "teamkill.red", "minecraft.mined:minecraft.stone", "minecraft.custom:minecraft.jump"));
             for (var input : inputs) {
                 var reader = new com.mojang.brigadier.StringReader(input);
                 var vector = new JsonObject();
