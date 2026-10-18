@@ -131,6 +131,36 @@ impl ServerPlayer {
         &mut self,
         tag: CompoundTag,
     ) -> Result<(), super::persistence::EntityLoadError> {
+        if tag.contains_key("recipeBook") {
+            return Err(super::persistence::EntityLoadError::RecipeManagerRequired);
+        }
+        self.load_player_data(tag)
+    }
+
+    /// Port of ServerPlayer#readAdditionalSaveData's recipe hydration against the
+    /// live manager. Optional malformed recipeBook data is diagnosed and skipped
+    /// as ValueInput#read does, without replacing the existing canonical book.
+    pub fn try_load_with_recipes(
+        &mut self,
+        tag: CompoundTag,
+        manager: &crate::crafting::RecipeManager,
+    ) -> Result<(), super::persistence::EntityLoadError> {
+        self.load_player_data(tag)?;
+        if let Some(nbt) = self.parent.parent.saved.get("recipeBook")
+            && let Err(error) = self.recipe_book.load_untrusted(nbt, manager)
+        {
+            eprintln!(
+                "Failed to load recipeBook for player {}: {error}",
+                self.uuid
+            );
+        }
+        Ok(())
+    }
+
+    fn load_player_data(
+        &mut self,
+        tag: CompoundTag,
+    ) -> Result<(), super::persistence::EntityLoadError> {
         self.parent.parent.load_nbt(tag)?;
         self.game_mode =
             GameType::from_id(self.saved.get_int_or("playerGameType", self.game_mode.id()));
@@ -155,6 +185,7 @@ impl ServerPlayer {
     /// Port of Entity#saveWithoutId, Player#addAdditionalSaveData and ServerPlayer.
     pub fn save(&self) -> CompoundTag {
         let mut tag = self.parent.parent.save_without_id();
+        tag.insert("recipeBook", self.recipe_book.to_nbt());
         tag.insert("DataVersion", Tag::Int(5023));
         tag.insert("UUID", Tag::IntArray(self.uuid.to_int_array().to_vec()));
         tag.insert("Dimension", Tag::String("minecraft:overworld".into()));
@@ -542,6 +573,92 @@ mod tests {
     use ferraloom_chunk::{BiomeId, IdMap, LevelChunkSection, Strategy};
     use ferraloom_data::Block;
     use std::sync::Arc;
+
+    #[test]
+    fn player_recipe_book_load_requires_live_manager_and_filters_unknown_ids() {
+        use super::super::persistence::EntityLoadError;
+        use crate::crafting::{Recipe, RecipeHolder, RecipeManager};
+        use ferraloom_data::{
+            Item,
+            datapack::{TagSet, Tags},
+        };
+        let tags = TagSet::<Item>::from_tags(
+            Tags {
+                values: Default::default(),
+                diagnostics: Vec::new(),
+            },
+            ferraloom_data::ITEMS.len(),
+        )
+        .unwrap();
+        let kept: ferraloom_data::datapack::Identifier = "minecraft:kept".parse().unwrap();
+        let manager = RecipeManager::new(vec![RecipeHolder {
+            id: kept.clone(),
+            value: Recipe::decode(
+                &serde_json::json!({"type":"crafting_special_repairitem"}),
+                &tags,
+            )
+            .unwrap(),
+        }])
+        .unwrap();
+        let make_player = || {
+            ServerPlayer::new(
+                Uuid::new(1, 2),
+                "recipe".into(),
+                1,
+                Vec3::ZERO,
+                GameType::Survival,
+            )
+        };
+        let mut original = make_player();
+        original.recipe_book.add(kept.clone());
+        let mut saved = original.save();
+        let book = saved
+            .get_mut("recipeBook")
+            .unwrap()
+            .as_compound_mut()
+            .unwrap();
+        book.insert("isGuiOpen", Tag::Byte(1));
+        let ids = Tag::List(ListTag(vec![
+            Tag::String("minecraft:kept".into()),
+            Tag::String("minecraft:unknown".into()),
+        ]));
+        book.insert("recipes", ids.clone());
+        book.insert("toBeDisplayed", ids);
+        let mut loaded = make_player();
+        assert_eq!(
+            loaded.try_load(saved.clone()),
+            Err(EntityLoadError::RecipeManagerRequired)
+        );
+        loaded.try_load_with_recipes(saved, &manager).unwrap();
+        assert_eq!(loaded.recipe_book.known(), std::slice::from_ref(&kept));
+        assert!(loaded.recipe_book.highlighted(&kept));
+        assert!(loaded.recipe_book.settings.0[0].open);
+        let mut round_trip = make_player();
+        round_trip
+            .try_load_with_recipes(loaded.save(), &manager)
+            .unwrap();
+        assert_eq!(round_trip.recipe_book.to_nbt(), loaded.recipe_book.to_nbt());
+    }
+
+    #[test]
+    fn malformed_optional_recipe_book_is_diagnosed_and_keeps_the_existing_book() {
+        let manager = crate::crafting::RecipeManager::new(Vec::new()).unwrap();
+        let mut player = ServerPlayer::new(
+            Uuid::new(1, 2),
+            "recipe".into(),
+            1,
+            Vec3::ZERO,
+            GameType::Survival,
+        );
+        let before = player.recipe_book.to_nbt();
+        let mut saved = player.save();
+        saved.insert(
+            "recipeBook",
+            Tag::String("invalid optional packed data".into()),
+        );
+        player.try_load_with_recipes(saved, &manager).unwrap();
+        assert_eq!(player.recipe_book.to_nbt(), before);
+    }
     #[test]
     fn display_name_matches_java_player_component() {
         let player = ServerPlayer::new(
