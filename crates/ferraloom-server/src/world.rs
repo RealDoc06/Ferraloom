@@ -1121,6 +1121,19 @@ impl World {
             self.evictions.push(pos);
         }
     }
+    /// Port of ChunkHolder#isReadyForSaving: generation claims and the FULL,
+    /// ticking and entity range futures must all have released their inputs.
+    pub fn chunk_ready_for_saving(
+        &self,
+        holder: &ferraloom_game::level::chunk_holder::ChunkHolder,
+    ) -> bool {
+        !self.generation_pins(holder.position)
+            && holder.pending_full_status().is_none()
+            && (holder.status != ChunkStatus::Full || self.light_ready.contains(&holder.position))
+            && (holder.requested_full_status()
+                < ferraloom_game::level::distance_manager::FullChunkStatus::BlockTicking
+                || self.ready.contains(&holder.position))
+    }
     pub fn generation_pins(&self, pos: ChunkPos) -> bool {
         self.active_generation
             .keys()
