@@ -186,6 +186,7 @@ pub struct MinecraftServer {
     world: World,
     commands: Commands,
     game_rules: ferraloom_game::gamerules::GameRules,
+    scoreboard: ferraloom_game::scoreboard::ServerScoreboard,
     clocks: ferraloom_game::commands::clocks::ServerClockManager,
     saving_enabled: bool,
     idle_timeout: i32,
@@ -250,6 +251,18 @@ impl MinecraftServer {
         let crafting_context = RuntimeCraftingContext::load(&resources, &registries)?;
         let world = World::open(&options.root, &properties, &resources, &registries)?;
         let game_rules = command_runtime::load_game_rules(&world)?;
+        // Older scoreboard paths are migrated by the datafix workstream, not runtime loading.
+        let scoreboard = {
+            use ferraloom_game::scoreboard::{ScoreboardSaveData, ServerScoreboard};
+            let storage =
+                ferraloom_storage::SavedDataStorage::new(world.access.path().join("data"));
+            ServerScoreboard::new(
+                storage
+                    .load::<ScoreboardSaveData>(ScoreboardSaveData::STORAGE_ID)?
+                    .map(|data| data.value().0.clone())
+                    .unwrap_or_default(),
+            )
+        };
         let clocks = command_runtime::load_clocks(&world, &resources)?;
         let command_context = command_runtime::command_build_context(
             &registries,
@@ -279,6 +292,7 @@ impl MinecraftServer {
             options.unported_behavior,
         )?;
         game_rules.update_level_rules(level.level.rules_mut());
+        level.level.set_scoreboard(scoreboard.snapshot());
         world.install_live_environment(
             &mut level.level,
             command_runtime::environment_clock_snapshot(&clocks),
@@ -378,6 +392,7 @@ impl MinecraftServer {
             level,
             world,
             game_rules,
+            scoreboard,
             clocks,
             command_entity_tags,
             selector_random: None,
