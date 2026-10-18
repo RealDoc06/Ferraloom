@@ -13,6 +13,7 @@ pub mod chunk;
 pub mod chunk_holder;
 pub mod chunk_map;
 pub mod distance_manager;
+pub mod entity;
 pub mod server_level;
 pub mod tickets;
 
@@ -31,8 +32,8 @@ pub enum LevelError {
 /// Owned portion of ServerLevel. The scheduler moves this value between workers.
 pub struct Region {
     chunks: HashMap<ChunkPos, chunk::LevelChunk>,
-    entities: HashMap<EntityRef, EntityState>,
-    entity_tick_list: Vec<EntityRef>,
+    entities: entity::EntityStorage,
+    entity_tick_list: entity::EntityTickList,
     block_ticks: LevelTicks,
     behaviors: &'static Behaviors,
 }
@@ -41,8 +42,8 @@ impl Region {
     pub fn new(behaviors: &'static Behaviors) -> Self {
         Self {
             chunks: HashMap::new(),
-            entities: HashMap::new(),
-            entity_tick_list: Vec::new(),
+            entities: entity::EntityStorage::default(),
+            entity_tick_list: entity::EntityTickList::default(),
             block_ticks: LevelTicks::default(),
             behaviors,
         }
@@ -90,45 +91,6 @@ impl Level {
         }
         region.chunks.insert(pos, chunk);
         Ok(())
-    }
-    /// Port of EntityTickList#add: insertion order is independent of lookup order.
-    pub fn add_entity(&mut self, entity: EntityRef, state: EntityState) -> Result<(), LevelError> {
-        let region = self.region_mut();
-        if region.entities.contains_key(&entity) {
-            return Err(LevelError::DuplicateEntity(entity));
-        }
-        region.entities.insert(entity, state);
-        region.entity_tick_list.push(entity);
-        Ok(())
-    }
-    /// Port of Entity#setRemoved: mark immediately, retain state for active frames.
-    pub fn remove_entity(&mut self, entity: EntityRef) -> Result<(), LevelError> {
-        self.entity_state_mut(entity)?.as_entity_mut().removed = true;
-        Ok(())
-    }
-    /// Port of ServerLevel#tickNonPassenger / EntityTickList#forEach, without riders.
-    /// Additions wait for the next iteration, removals suppress ticks immediately.
-    pub fn tick_entities(&mut self) -> Result<(), LevelError> {
-        let ticking = self.region().entity_tick_list.clone();
-        for mut entity in ticking {
-            let base = self.entity_state_mut(entity)?.as_entity_mut();
-            if base.removed {
-                continue;
-            }
-            base.tick_count = base.tick_count.wrapping_add(1);
-            entity.tick(self)?;
-        }
-        Ok(())
-    }
-    /// A separate entity-management boundary, never called during a virtual method.
-    pub fn finish_entity_management(&mut self) {
-        let region = self.region_mut();
-        region
-            .entities
-            .retain(|_, state| !state.as_entity().removed);
-        region
-            .entity_tick_list
-            .retain(|entity| region.entities.contains_key(entity));
     }
     /// Port of ServerLevel's blockTicks phase: collect first, then invoke callbacks.
     pub fn tick_scheduled_blocks(

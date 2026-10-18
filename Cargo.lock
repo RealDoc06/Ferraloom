@@ -309,6 +309,7 @@ dependencies = [
  "ferraloom-chunk",
  "ferraloom-data",
  "ferraloom-nbt",
+ "ferraloom-protocol",
  "ferraloom-storage",
  "ferraloom-util",
  "ferraloom-worldgen",
