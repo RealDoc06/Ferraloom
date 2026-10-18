@@ -739,3 +739,24 @@ fn native_component_map_and_patch_insertion_order() {
         }
     }
 }
+
+#[test]
+fn native_effect_details_optional_nbt_fields_keep_defaults_and_recursive_partials() {
+    let mut checked = 0;
+    for row in include_str!("../../tests/java/effects/vectors.tsv").lines() {
+        let fields: Vec<_> = row.split('\t').collect();
+        let input = ferraloom_nbt::parse(fields[2]).unwrap();
+        let actual = MobEffectDetails::from_nbt(&input).and_then(|value| value.to_nbt());
+        if fields[3] == "ERROR" {
+            assert!(actual.is_err(), "{row}");
+        } else {
+            assert_eq!(
+                actual.unwrap(),
+                ferraloom_nbt::parse(fields[3]).unwrap(),
+                "{row}"
+            );
+        }
+        checked += 1;
+    }
+    assert_eq!(checked, 27);
+}
