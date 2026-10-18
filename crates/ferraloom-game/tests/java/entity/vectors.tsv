@@ -230,6 +230,90 @@ travel-fluid-drag	5	bfb47ae147ae147b	true	false	8000000000000000,bf747ae147ae147
 travel-fluid-drag	6	3fb47ae147ae147b	false	false	8000000000000000,bf947ae147ae147b,3fc0000000000000	8000000000000000,bf9999999999999a,3fc0000000000000
 travel-fluid-drag	7	3fb47ae147ae147b	true	true	8000000000000000,3fe0000000000000,3fc0000000000000	8000000000000000,3fe0000000000000,3fc0000000000000
 travel-fluid-drag	8	3f847ae147ae147b	true	false	8000000000000000,bf6374bc6a7ef9dc,3fc0000000000000	8000000000000000,bf689374bc6a7efb,3fc0000000000000
+damage-type	minecraft:arrow	arrow	when_caused_by_living_non_player	3dcccccd	hurt	default	minecraft:always_kills_armor_stands,minecraft:is_projectile,minecraft:panic_causes,minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt
+damage-type	minecraft:bad_respawn_point	badRespawnPoint	always	3dcccccd	hurt	intentional_game_design	minecraft:always_hurts_ender_dragons,minecraft:avoids_guardian_thorns,minecraft:is_explosion,minecraft:no_knockback,minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt
+damage-type	minecraft:cactus	cactus	when_caused_by_living_non_player	3dcccccd	hurt	default	minecraft:bypasses_shield,minecraft:no_knockback,minecraft:panic_causes,minecraft:panic_environmental_causes,minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt
+damage-type	minecraft:campfire	inFire	when_caused_by_living_non_player	3dcccccd	burning	default	minecraft:burn_from_stepping,minecraft:bypasses_shield,minecraft:ignites_armor_stands,minecraft:is_fire,minecraft:no_knockback	minecraft:entity.player.hurt_on_fire
+damage-type	minecraft:cramming	cramming	when_caused_by_living_non_player	0	hurt	default	minecraft:bypasses_armor,minecraft:bypasses_shield,minecraft:bypasses_wolf_armor,minecraft:no_knockback	minecraft:entity.player.hurt
+damage-type	minecraft:dragon_breath	dragonBreath	when_caused_by_living_non_player	0	hurt	default	minecraft:bypasses_armor,minecraft:bypasses_shield,minecraft:no_knockback,minecraft:panic_causes	minecraft:entity.player.hurt
+damage-type	minecraft:drown	drown	when_caused_by_living_non_player	0	drowning	default	minecraft:bypasses_armor,minecraft:bypasses_shield,minecraft:bypasses_wolf_armor,minecraft:is_drowning,minecraft:no_impact,minecraft:no_knockback,minecraft:wither_immune_to	minecraft:entity.player.hurt_drown
+damage-type	minecraft:dry_out	dryout	when_caused_by_living_non_player	3dcccccd	hurt	default	minecraft:bypasses_shield,minecraft:bypasses_wolf_armor,minecraft:no_knockback,minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt
+damage-type	minecraft:ender_pearl	fall	when_caused_by_living_non_player	0	hurt	fall_variants	minecraft:bypasses_armor,minecraft:bypasses_shield,minecraft:is_fall,minecraft:no_knockback	minecraft:entity.player.hurt
+damage-type	minecraft:explosion	explosion	always	3dcccccd	hurt	default	minecraft:always_hurts_ender_dragons,minecraft:avoids_guardian_thorns,minecraft:is_explosion,minecraft:no_knockback,minecraft:panic_causes,minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt
+damage-type	minecraft:fall	fall	when_caused_by_living_non_player	0	hurt	fall_variants	minecraft:bypasses_armor,minecraft:bypasses_shield,minecraft:is_fall,minecraft:no_knockback,minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt
+damage-type	minecraft:falling_anvil	anvil	when_caused_by_living_non_player	3dcccccd	hurt	default	minecraft:bypasses_shield,minecraft:damages_helmet,minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt
+damage-type	minecraft:falling_block	fallingBlock	when_caused_by_living_non_player	3dcccccd	hurt	default	minecraft:damages_helmet,minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt
+damage-type	minecraft:falling_stalactite	fallingStalactite	when_caused_by_living_non_player	3dcccccd	hurt	default	minecraft:bypasses_shield,minecraft:damages_helmet,minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt
+damage-type	minecraft:fireball	fireball	when_caused_by_living_non_player	3dcccccd	burning	default	minecraft:always_kills_armor_stands,minecraft:is_fire,minecraft:is_projectile,minecraft:panic_causes	minecraft:entity.player.hurt_on_fire
+damage-type	minecraft:fireworks	fireworks	when_caused_by_living_non_player	3dcccccd	hurt	default	minecraft:always_hurts_ender_dragons,minecraft:avoids_guardian_thorns,minecraft:is_explosion,minecraft:panic_causes,minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt
+damage-type	minecraft:fly_into_wall	flyIntoWall	when_caused_by_living_non_player	0	hurt	default	minecraft:bypasses_armor,minecraft:bypasses_shield,minecraft:no_knockback	minecraft:entity.player.hurt
+damage-type	minecraft:freeze	freeze	when_caused_by_living_non_player	0	freezing	default	minecraft:bypasses_armor,minecraft:bypasses_shield,minecraft:bypasses_wolf_armor,minecraft:is_freezing,minecraft:no_knockback,minecraft:panic_causes,minecraft:panic_environmental_causes,minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt_freeze
+damage-type	minecraft:generic	generic	when_caused_by_living_non_player	0	hurt	default	minecraft:bypasses_armor,minecraft:bypasses_shield,minecraft:no_knockback	minecraft:entity.player.hurt
+damage-type	minecraft:generic_kill	genericKill	when_caused_by_living_non_player	0	hurt	default	minecraft:bypasses_armor,minecraft:bypasses_invulnerability,minecraft:bypasses_resistance,minecraft:bypasses_shield,minecraft:bypasses_wolf_armor,minecraft:no_knockback	minecraft:entity.player.hurt
+damage-type	minecraft:hot_floor	hotFloor	when_caused_by_living_non_player	3dcccccd	burning	default	minecraft:burn_from_stepping,minecraft:bypasses_shield,minecraft:is_fire,minecraft:no_knockback,minecraft:panic_causes,minecraft:panic_environmental_causes,minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt_on_fire
+damage-type	minecraft:in_fire	inFire	when_caused_by_living_non_player	3dcccccd	burning	default	minecraft:bypasses_shield,minecraft:ignites_armor_stands,minecraft:is_fire,minecraft:no_knockback,minecraft:panic_causes,minecraft:panic_environmental_causes	minecraft:entity.player.hurt_on_fire
+damage-type	minecraft:in_wall	inWall	when_caused_by_living_non_player	0	hurt	default	minecraft:bypasses_armor,minecraft:bypasses_shield,minecraft:bypasses_wolf_armor,minecraft:no_knockback	minecraft:entity.player.hurt
+damage-type	minecraft:indirect_magic	indirectMagic	when_caused_by_living_non_player	0	hurt	default	minecraft:bypasses_armor,minecraft:bypasses_shield,minecraft:bypasses_wolf_armor,minecraft:panic_causes,minecraft:witch_resistant_to	minecraft:entity.player.hurt
+damage-type	minecraft:lava	lava	when_caused_by_living_non_player	3dcccccd	burning	default	minecraft:bypasses_shield,minecraft:is_fire,minecraft:no_knockback,minecraft:panic_causes,minecraft:panic_environmental_causes	minecraft:entity.player.hurt_on_fire
+damage-type	minecraft:lightning_bolt	lightningBolt	when_caused_by_living_non_player	3dcccccd	hurt	default	minecraft:bypasses_shield,minecraft:is_lightning,minecraft:no_knockback,minecraft:panic_causes,minecraft:panic_environmental_causes	minecraft:entity.player.hurt
+damage-type	minecraft:mace_smash	mace_smash	when_caused_by_living_non_player	3dcccccd	hurt	default	minecraft:can_break_armor_stand,minecraft:is_player_attack,minecraft:mace_smash,minecraft:panic_causes,minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt
+damage-type	minecraft:magic	magic	when_caused_by_living_non_player	0	hurt	default	minecraft:always_triggers_silverfish,minecraft:avoids_guardian_thorns,minecraft:bypasses_armor,minecraft:bypasses_shield,minecraft:bypasses_wolf_armor,minecraft:no_knockback,minecraft:panic_causes,minecraft:witch_resistant_to	minecraft:entity.player.hurt
+damage-type	minecraft:mob_attack	mob	when_caused_by_living_non_player	3dcccccd	hurt	default	minecraft:panic_causes,minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt
+damage-type	minecraft:mob_attack_no_aggro	mob	when_caused_by_living_non_player	3dcccccd	hurt	default	minecraft:no_anger,minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt
+damage-type	minecraft:mob_projectile	mob	when_caused_by_living_non_player	3dcccccd	hurt	default	minecraft:is_projectile,minecraft:panic_causes,minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt
+damage-type	minecraft:on_fire	onFire	when_caused_by_living_non_player	0	burning	default	minecraft:burns_armor_stands,minecraft:bypasses_armor,minecraft:bypasses_shield,minecraft:is_fire,minecraft:no_knockback,minecraft:panic_causes,minecraft:panic_environmental_causes	minecraft:entity.player.hurt_on_fire
+damage-type	minecraft:out_of_world	outOfWorld	when_caused_by_living_non_player	0	hurt	default	minecraft:always_most_significant_fall,minecraft:bypasses_armor,minecraft:bypasses_invulnerability,minecraft:bypasses_resistance,minecraft:bypasses_shield,minecraft:bypasses_wolf_armor,minecraft:no_knockback	minecraft:entity.player.hurt
+damage-type	minecraft:outside_border	outsideBorder	when_caused_by_living_non_player	0	hurt	default	minecraft:bypasses_armor,minecraft:bypasses_shield,minecraft:bypasses_wolf_armor,minecraft:no_knockback	minecraft:entity.player.hurt
+damage-type	minecraft:player_attack	player	when_caused_by_living_non_player	3dcccccd	hurt	default	minecraft:can_break_armor_stand,minecraft:is_player_attack,minecraft:panic_causes,minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt
+damage-type	minecraft:player_explosion	explosion.player	always	3dcccccd	hurt	default	minecraft:always_hurts_ender_dragons,minecraft:avoids_guardian_thorns,minecraft:can_break_armor_stand,minecraft:is_explosion,minecraft:no_knockback,minecraft:panic_causes,minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt
+damage-type	minecraft:sonic_boom	sonic_boom	always	0	hurt	default	minecraft:bypasses_armor,minecraft:bypasses_enchantments,minecraft:bypasses_shield,minecraft:panic_causes,minecraft:witch_resistant_to	minecraft:entity.player.hurt
+damage-type	minecraft:spear	spear	when_caused_by_living_non_player	3dcccccd	hurt	default	minecraft:can_break_armor_stand,minecraft:is_player_attack,minecraft:no_knockback,minecraft:panic_causes,minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt
+damage-type	minecraft:spit	mob	when_caused_by_living_non_player	3dcccccd	hurt	default	minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt
+damage-type	minecraft:stalagmite	stalagmite	when_caused_by_living_non_player	0	hurt	default	minecraft:bypasses_armor,minecraft:bypasses_shield,minecraft:is_fall,minecraft:no_knockback,minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt
+damage-type	minecraft:starve	starve	when_caused_by_living_non_player	0	hurt	default	minecraft:bypasses_armor,minecraft:bypasses_effects,minecraft:bypasses_shield,minecraft:bypasses_wolf_armor,minecraft:no_knockback	minecraft:entity.player.hurt
+damage-type	minecraft:sting	sting	when_caused_by_living_non_player	3dcccccd	hurt	default	minecraft:panic_causes,minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt
+damage-type	minecraft:sulfur_cube_hot	sulfurCubeHot	when_caused_by_living_non_player	3dcccccd	burning	default	minecraft:burn_from_stepping,minecraft:bypasses_shield,minecraft:is_fire,minecraft:no_knockback,minecraft:no_wolf_retaliation,minecraft:panic_causes,minecraft:panic_environmental_causes,minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt_on_fire
+damage-type	minecraft:sweet_berry_bush	sweetBerryBush	when_caused_by_living_non_player	3dcccccd	poking	default	minecraft:bypasses_shield,minecraft:no_knockback,minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt_sweet_berry_bush
+damage-type	minecraft:thorns	thorns	when_caused_by_living_non_player	3dcccccd	thorns	default	minecraft:avoids_guardian_thorns,minecraft:bypasses_wolf_armor,minecraft:witch_resistant_to	minecraft:entity.player.hurt
+damage-type	minecraft:thrown	thrown	when_caused_by_living_non_player	3dcccccd	hurt	default	minecraft:is_projectile,minecraft:panic_causes,minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt
+damage-type	minecraft:trident	trident	when_caused_by_living_non_player	3dcccccd	hurt	default	minecraft:always_kills_armor_stands,minecraft:is_projectile,minecraft:panic_causes,minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt
+damage-type	minecraft:unattributed_fireball	onFire	when_caused_by_living_non_player	3dcccccd	burning	default	minecraft:is_fire,minecraft:is_projectile,minecraft:panic_causes	minecraft:entity.player.hurt_on_fire
+damage-type	minecraft:wind_charge	mob	when_caused_by_living_non_player	3dcccccd	hurt	default	minecraft:always_kills_armor_stands,minecraft:is_projectile,minecraft:panic_causes,minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt
+damage-type	minecraft:wither	wither	when_caused_by_living_non_player	0	hurt	default	minecraft:bypasses_armor,minecraft:bypasses_shield,minecraft:bypasses_wolf_armor,minecraft:no_knockback,minecraft:panic_causes	minecraft:entity.player.hurt
+damage-type	minecraft:wither_skull	witherSkull	when_caused_by_living_non_player	3dcccccd	hurt	default	minecraft:always_kills_armor_stands,minecraft:is_projectile,minecraft:panic_causes	minecraft:entity.player.hurt
+damage-codec	0	{"message_id":"custom","scaling":"never","exhaustion":0.1}	true	custom	never	3dcccccd	hurt	default
+damage-codec	1	{"message_id":"custom","scaling":"never","exhaustion":0.1,"effects":"thorns","death_message_type":"fall_variants"}	true	custom	never	3dcccccd	thorns	fall_variants
+damage-codec	2	{"message_id":"custom","scaling":"never","exhaustion":0.1,"effects":"bad"}	false	none
+damage-codec	3	{"message_id":"custom","scaling":"never","exhaustion":0.1,"effects":null}	true	custom	never	3dcccccd	hurt	default
+damage-codec	4	{"message_id":"custom","scaling":"never","exhaustion":0.1,"effects":5}	false	none
+damage-codec	5	{"message_id":"custom","scaling":"never","exhaustion":0.1,"death_message_type":"bad"}	false	none
+damage-codec	6	{"message_id":"custom","scaling":"never","exhaustion":0.1,"death_message_type":null}	true	custom	never	3dcccccd	hurt	default
+damage-codec	7	{"message_id":"custom","scaling":"always","exhaustion":"0.125"}	false	none
+damage-codec	8	{"message_id":"custom","scaling":"always","exhaustion":true}	false	none
+damage-codec	9	{"message_id":"custom","scaling":"always","exhaustion":1e100}	true	custom	always	7f800000	hurt	default
+damage-codec	10	{"message_id":123,"scaling":"never","exhaustion":-0.0}	false	none
+damage-codec	11	{"message_id":true,"scaling":"never","exhaustion":0}	false	none
+damage-codec	12	{"message_id":"","scaling":"never","exhaustion":-0.0}	true		never	80000000	hurt	default
+damage-codec	13	{"message_id":"custom","scaling":"bad","exhaustion":0}	false	none
+damage-codec	14	{"message_id":"custom","exhaustion":0}	false	none
+damage-codec	15	[]	false	none
+damage-codec	16	null	false	none
+damage-codec	17	{"message_id":"custom","scaling":"never","exhaustion":0.1,"unknown":[1,2,3]}	true	custom	never	3dcccccd	hurt	default
+damage-codec	18	{"message_id":"x","scaling":"never","exhaustion":0.100000000000000005}	true	x	never	3dcccccd	hurt	default
+damage-source	cause-0	minecraft:generic	0	0	true	false	false	none	none	none
+damage-source	cause-1	minecraft:generic	1	1	true	false	true	none	3ff0000000000000,4000000000000000,4008000000000000	c010000000000000,4014000000000000,c018000000000000
+damage-source	cause-2	minecraft:generic	2	2	true	true	false	none	3ff0000000000000,4000000000000000,4008000000000000	c010000000000000,4014000000000000,c018000000000000
+damage-source	cause-3	minecraft:generic	3	3	true	false	false	none	3ff0000000000000,4000000000000000,4008000000000000	c010000000000000,4014000000000000,c018000000000000
+damage-source	indirect	minecraft:generic	3	2	false	true	false	none	3ff0000000000000,4000000000000000,4008000000000000	c010000000000000,4014000000000000,c018000000000000
+damage-source	explicit	minecraft:generic	0	0	true	false	false	8000000000000000,4059000000000000,4008000000000000	8000000000000000,4059000000000000,4008000000000000	8000000000000000,4059000000000000,4008000000000000
+damage-source	explosion-0-0	minecraft:explosion	0	0	true	true	false	none	none	none
+damage-source	explosion-0-2	minecraft:explosion	0	2	false	true	false	none	none	none
+damage-source	explosion-3-0	minecraft:explosion	3	0	false	true	false	none	3ff0000000000000,4000000000000000,4008000000000000	c010000000000000,4014000000000000,c018000000000000
+damage-source	explosion-3-2	minecraft:player_explosion	3	2	false	true	false	none	3ff0000000000000,4000000000000000,4008000000000000	c010000000000000,4014000000000000,c018000000000000
+damage-source	player	minecraft:player_attack	1	1	true	false	true	none	3ff0000000000000,4000000000000000,4008000000000000	c010000000000000,4014000000000000,c018000000000000
+damage-source	mob	minecraft:mob_attack	2	2	true	true	false	none	3ff0000000000000,4000000000000000,4008000000000000	c010000000000000,4014000000000000,c018000000000000
+damage-source	thorns	minecraft:thorns	3	3	true	false	false	none	3ff0000000000000,4000000000000000,4008000000000000	c010000000000000,4014000000000000,c018000000000000
+damage-source	bad-respawn	minecraft:bad_respawn_point	0	0	true	true	false	8000000000000000,4059000000000000,4008000000000000	8000000000000000,4059000000000000,4008000000000000	8000000000000000,4059000000000000,4008000000000000
 living-climb	0	0	0	0	false	41a00000	false	true	none
 living-climb	1	7308	0	0	false	41a00000	true	false	8,64,8
 living-climb	2	10123	0	0	false	41a00000	true	false	8,64,8

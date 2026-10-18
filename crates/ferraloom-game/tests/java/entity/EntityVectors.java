@@ -103,6 +103,7 @@ public final class EntityVectors {
         AttributeVectors.run();
         LivingVectors.run(new EntityFixture(r));
         TravelVectors.run(new EntityFixture(r));
+        DamageVectors.run(new EntityFixture(r));
         ClimbVectors.run(new EntityFixture(r));
         PushingVectors.run(new EntityFixture(r));
         DimensionVectors.run(new EntityFixture(r));

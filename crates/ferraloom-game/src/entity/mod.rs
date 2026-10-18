@@ -65,6 +65,7 @@ mod base;
 pub mod bubble_column;
 pub mod collision;
 pub mod collision_context;
+pub mod damage;
 pub mod dimensions;
 pub mod fluid;
 pub mod inside_block;
