@@ -3005,6 +3005,11 @@ fn initialize_live_level(
     level.level.set_fluid_tags(Arc::new(
         TagSet::<ferraloom_data::registries::fluid::Id>::load(resources)?,
     ));
+    level
+        .level
+        .set_entity_type_tags(Arc::new(TagSet::<ferraloom_data::EntityType>::load(
+            resources,
+        )?));
     world.configure_live_rules(&mut level.level);
     level.level.set_game_time(level.game_time);
     level.level.set_unported_behavior(unported_behavior);

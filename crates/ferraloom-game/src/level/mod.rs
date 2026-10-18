@@ -51,6 +51,7 @@ pub enum LevelError {
     UnsupportedBlockEntity(Block),
     MissingBlockTags,
     MissingFluidTags,
+    MissingEntityTypeTags,
     UnsupportedShape(BlockState),
     UnsupportedFluidRandomTick,
     UnsupportedWeatherQuery,
@@ -119,6 +120,7 @@ pub struct Region {
     tags: Option<Arc<ferraloom_data::datapack::TagSet<Block>>>,
     fluid_tags:
         Option<Arc<ferraloom_data::datapack::TagSet<ferraloom_data::registries::fluid::Id>>>,
+    entity_type_tags: Option<Arc<ferraloom_data::datapack::TagSet<EntityType>>>,
     pub(crate) unported: crate::block::UnportedCalls,
     behaviors: &'static Behaviors,
 }
@@ -148,6 +150,7 @@ impl Region {
             block_changes: broadcast::BlockChanges::default(),
             tags: None,
             fluid_tags: None,
+            entity_type_tags: None,
             unported: crate::block::UnportedCalls::default(),
             behaviors,
         }

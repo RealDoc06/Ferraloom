@@ -41,6 +41,15 @@ impl Level {
     pub fn set_fluid_tags(&mut self, tags: Arc<TagSet<ferraloom_data::registries::fluid::Id>>) {
         self.region_mut().fluid_tags = Some(tags);
     }
+    pub fn set_entity_type_tags(&mut self, tags: Arc<TagSet<ferraloom_data::EntityType>>) {
+        self.region_mut().entity_type_tags = Some(tags);
+    }
+    pub fn entity_type_tags(&self) -> Result<&TagSet<ferraloom_data::EntityType>, LevelError> {
+        self.region()
+            .entity_type_tags
+            .as_deref()
+            .ok_or(LevelError::MissingEntityTypeTags)
+    }
     pub fn fluid_tags(&self) -> Result<&TagSet<ferraloom_data::registries::fluid::Id>, LevelError> {
         self.region()
             .fluid_tags
