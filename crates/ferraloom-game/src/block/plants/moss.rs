@@ -100,7 +100,7 @@ impl BlockBehavior for MossyCarpet {
         _state: BlockState,
         pos: BlockPos,
         _by: Option<crate::entity::EntityRef>,
-        _stack: &ferraloom_protocol::component::ItemStack,
+        _stack: crate::block::StackView<'_>,
         level: &mut crate::level::Level,
     ) -> Result<(), LevelError> {
         let mut access = LevelAccessRef::Server(level);

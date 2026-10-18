@@ -5,7 +5,6 @@ use crate::{
     level::{Level, LevelError},
 };
 use ferraloom_data::{Block, BlockClass, BlockState, properties as p, tags::FluidTags};
-use ferraloom_protocol::component::ItemStack;
 use ferraloom_util::BlockPos;
 
 pub struct PlantLifecycle;
@@ -16,7 +15,7 @@ impl BlockBehavior for PlantLifecycle {
         state: BlockState,
         pos: BlockPos,
         _by: Option<EntityRef>,
-        _stack: &ItemStack,
+        _stack: crate::block::StackView<'_>,
         level: &mut Level,
     ) -> Result<(), LevelError> {
         if state.block().class() == BlockClass::PitcherCropBlock {
