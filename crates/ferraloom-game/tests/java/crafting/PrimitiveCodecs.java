@@ -8,7 +8,7 @@ import net.minecraft.world.item.component.*;
 
 /** Observations of DFU codecs with Gson lazy numbers and all NBT numeric kinds. */
 public final class PrimitiveCodecs {
-    static final Gson JSON = new GsonBuilder().disableHtmlEscaping().create();
+    static final Gson JSON = new GsonBuilder().disableHtmlEscaping().serializeNulls().create();
     static final Map<String,Codec<?>> CODECS = new LinkedHashMap<>();
     static {
         CODECS.put("int", Codec.INT); CODECS.put("long", Codec.LONG);
