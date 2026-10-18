@@ -178,6 +178,7 @@ impl EntityIdAllocator {
 /// Canonical data is never removed while a callback frame is active.
 #[derive(Default)]
 pub struct EntityStorage {
+    next_ref: u64,
     effects: Vec<crate::entity::effects::EntityEffect>,
     pending_retire: Vec<EntityRef>,
     movement_effects: Vec<crate::entity::movement::MovementEffect>,
@@ -198,6 +199,7 @@ impl EntityStorage {
         if self.states.contains_key(&id) {
             return Err(LevelError::DuplicateEntity(id));
         }
+        self.next_ref = self.next_ref.max(id.0);
         let base = state.as_entity_mut();
         if !base.network_id_allocated {
             base.network_id = self
@@ -236,6 +238,25 @@ impl EntityStorage {
 }
 
 impl Level {
+    /// Server-lifetime handles never reuse a retired identity. Regional blocks
+    /// are assigned by the scheduler before parallel execution is enabled.
+    pub fn next_entity_ref(&mut self) -> EntityRef {
+        let next = &mut self.region_mut().entities.next_ref;
+        *next = next
+            .checked_add(1)
+            .expect("entity reference space exhausted");
+        EntityRef(*next)
+    }
+    /// Entity constructors share RandomSource.create's seed uniquifier with the
+    /// level factory, while retaining a separate random stream per entity.
+    pub fn create_entity_data(&mut self, kind: ferraloom_data::EntityType) -> EntityData {
+        let network_id = self.next_entity_id();
+        let ferraloom_util::random::Random::Legacy(random) = super::random::new_level_random()
+        else {
+            unreachable!("RandomSource.create uses LegacyRandomSource")
+        };
+        EntityData::from_random(kind, network_id, random)
+    }
     pub fn emit_entity_effect(&mut self, effect: crate::entity::effects::EntityEffect) {
         self.region_mut().entities.effects.push(effect);
     }
@@ -519,5 +540,25 @@ mod removal_tests {
         assert_eq!(level.entity::<EntityData>(id).unwrap().tick_count, 0);
         level.finish_entity_management();
         assert!(level.entity_state(id).is_err());
+    }
+}
+
+#[cfg(test)]
+mod identity_tests {
+    use super::*;
+    use crate::{Behaviors, entity::animal::Cow, level::Region};
+    #[test]
+    fn entity_refs_observe_existing_handles_and_never_reuse_retired_ids() {
+        static BEHAVIORS: Behaviors = Behaviors::EMPTY;
+        let mut level = Level::new(Region::new(&BEHAVIORS));
+        assert_eq!(level.next_entity_ref(), EntityRef(1));
+        let existing = EntityRef(40);
+        level
+            .add_entity(existing, EntityState::Cow(Cow::default()))
+            .unwrap();
+        level.remove_entity(existing).unwrap();
+        level.finish_entity_management();
+        assert_eq!(level.next_entity_ref(), EntityRef(41));
+        assert_eq!(level.next_entity_ref(), EntityRef(42));
     }
 }
