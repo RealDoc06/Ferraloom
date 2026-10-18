@@ -48,6 +48,29 @@ pub(super) fn rule_features(world: &World) -> RuleFeatures {
     }
 }
 impl MinecraftServer {
+    /// Publish DedicatedServer's owned spawn-protection inputs to the live level.
+    pub(super) fn publish_spawn_protection(&mut self) {
+        let spawn = self.default_spawn_data();
+        self.level.level.set_spawn_protection(
+            ferraloom_game::level::interaction::SpawnProtectionSnapshot::new(
+                self.level
+                    .dimension
+                    .parse()
+                    .expect("registered level dimension"),
+                spawn
+                    .dimension
+                    .parse()
+                    .expect("validated shared spawn dimension"),
+                spawn.position,
+                self.properties.int("spawn-protection"),
+                self.access.ops.values().map(|op| {
+                    ferraloom_game::commands::arguments::selectors::parse_uuid(&op.uuid)
+                        .expect("validated operator UUID")
+                }),
+            ),
+        );
+    }
+
     /// Port of MinecraftServer#sendDifficultyUpdate; also used when a new player joins.
     pub(super) fn difficulty_packet(&self) -> cb::Packet {
         let settings = self
@@ -1094,6 +1117,7 @@ impl MinecraftServer {
             if let Err(error) = self.access.set_operator(&profile, level) {
                 eprintln!("Could not save operator list: {error:#}");
             }
+            self.publish_spawn_protection();
             self.update_command_permissions(profile.id);
             count += 1;
             self.command_success(
@@ -1273,6 +1297,9 @@ impl MinecraftServer {
         properties.set(key, value);
         if let Err(error) = properties.store(&self.root.join("server.properties")) {
             eprintln!("Could not save server properties: {error:#}");
+        }
+        if key == "spawn-protection" {
+            self.publish_spawn_protection();
         }
     }
     fn whitelist_command(
@@ -1920,6 +1947,7 @@ impl MinecraftServer {
                     .level_data
                     .data
                     .insert("spawn", Tag::Compound(spawn.to_nbt()));
+                self.publish_spawn_protection();
                 self.broadcast(cb::Packet::SetDefaultSpawnPosition(
                     cb::SetDefaultSpawnPosition {
                         respawn_data: spawn.packet_data(),
