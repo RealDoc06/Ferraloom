@@ -140,7 +140,7 @@ impl SimpleContainer {
             .map(|slot| self.remove_item_no_update(slot))
             .filter(|stack| !stack.is_empty())
             .collect();
-        self.set_changed();
+        self.clear_content();
         removed
     }
 }

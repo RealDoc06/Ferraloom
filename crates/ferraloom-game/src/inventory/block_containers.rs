@@ -184,8 +184,8 @@ pub fn with_block_menu_context<R>(
 pub(crate) fn ensure_unrooted_menu_values(player: EntityRef, level: &Level) -> Result<()> {
     let player = level.entity::<ServerPlayer>(player)?;
     let held = |parts: Option<(&StackGenerations, &ItemStack, usize)>| {
-        parts.is_some_and(|(generations, item, index)| {
-            !item.is_empty() && generations.is_retained(generations.current(index).unwrap())
+        parts.is_some_and(|(generations, _, index)| {
+            generations.is_retained(generations.current(index).unwrap())
         })
     };
     let menu = player.menus.current();

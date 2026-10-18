@@ -151,8 +151,8 @@ impl Level {
         })
     }
     pub(crate) fn stack_is_retained(&self, slot: ContainerSlot) -> Result<bool> {
-        let (generations, item, index) = self.stack_parts(slot)?;
-        Ok(!item.is_empty() && generations.is_retained(generations.current(index).unwrap()))
+        let (generations, _, index) = self.stack_parts(slot)?;
+        Ok(generations.is_retained(generations.current(index).unwrap()))
     }
     pub fn retain_stack(&mut self, reference: StackRef) -> Result<()> {
         self.retain_stack_owner(reference.container)?;
@@ -284,8 +284,8 @@ impl<'a> StackOperation<'a> {
             roots: Vec::new(),
         }
     }
-    /// Player inventories have a direct getItem. Block/menu callers must finish
-    /// their native lazy getItem first, then retain that returned receiver.
+    /// Run native lazy getItem, then pin the receiver it returned. Owner roots
+    /// keep a replaced block or closed menu addressable throughout that read.
     pub fn pin(&mut self, slot: ContainerSlot) -> Result<StackRef> {
         self.level.retain_stack_owner(slot.container)?;
         let result: Result<StackRef> = (|| {
@@ -310,7 +310,9 @@ impl<'a> StackOperation<'a> {
     /// Unlike removeItem/split, this returns an Existing object, not a copy.
     pub fn remove_no_update(&mut self, slot: ContainerSlot) -> Result<StackValue> {
         let reference = self.pin(slot)?;
-        if self.level.stack(reference)?.is_empty() {
+        if self.level.stack(reference)?.is_empty()
+            && !matches!(slot.container, ContainerHandle::PlayerInventory(_))
+        {
             return Ok(StackValue::New(ItemStack::default()));
         }
         self.level
