@@ -52,6 +52,17 @@ impl BlockState {
         })
     }
 
+    /// Port of Property#getPossibleValues for a named property on this state.
+    /// Values retain vanilla's order; comparison rules belong to the caller.
+    pub fn property_values(self, name: &str) -> Option<&'static [&'static str]> {
+        self.block()
+            .data()
+            .properties
+            .iter()
+            .find(|property| property.name == name)
+            .map(|property| property.names)
+    }
+
     /// Port of StateDefinition#appendPropertyCodec and NbtUtils#readBlockState.
     /// Missing/invalid values keep the default, and unknown properties are ignored.
     pub fn from_properties<'a>(
@@ -523,5 +534,28 @@ impl Block {
     /// pure block subclass overrides. Air represents an absent block item.
     pub const fn as_item(self) -> Item {
         BLOCK_ITEMS[self.protocol_id() as usize]
+    }
+}
+
+#[cfg(test)]
+mod property_value_tests {
+    use super::Block;
+    #[test]
+    fn possible_values_preserve_vanilla_order_and_absence() {
+        assert_eq!(
+            Block::OAK_STAIRS
+                .default_state()
+                .property_values("waterlogged"),
+            Some(["true", "false"].as_slice())
+        );
+        assert_eq!(
+            Block::OAK_LOG.default_state().property_values("axis"),
+            Some(["x", "y", "z"].as_slice())
+        );
+        assert_eq!(
+            Block::WHEAT.default_state().property_values("age"),
+            Some(["0", "1", "2", "3", "4", "5", "6", "7"].as_slice())
+        );
+        assert_eq!(Block::STONE.default_state().property_values("age"), None);
     }
 }

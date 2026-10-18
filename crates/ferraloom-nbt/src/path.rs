@@ -204,6 +204,21 @@ impl NbtPath {
         let paths = self.targets(root, self.nodes.len(), value, true)?;
         Ok(paths.iter().filter_map(|path| at(root, path)).collect())
     }
+    /// Port of NbtPath#getOrCreate followed by mutation of its live targets.
+    /// Target selection completes before callbacks run, preserving path order
+    /// and each target's independent contents, including newly created targets.
+    pub fn get_or_create_and_update(
+        &self,
+        root: &mut Tag,
+        default: &Tag,
+        mut callback: impl FnMut(&mut Tag),
+    ) -> Result<(), PathError> {
+        let paths = self.targets(root, self.nodes.len(), default, true)?;
+        for path in paths {
+            let _ = with_mut(root, &path, &mut callback);
+        }
+        Ok(())
+    }
     pub fn set(&self, root: &mut Tag, value: &Tag) -> Result<usize, PathError> {
         if Self::is_too_deep(value, self.nodes.len()) {
             return Err(PathError::TooDeep);
@@ -569,4 +584,28 @@ fn remove_node(node: &Node, parent: &mut Tag) -> usize {
         }
     }
     count
+}
+
+#[cfg(test)]
+mod mutation_tests {
+    use super::*;
+    #[test]
+    fn update_preserves_distinct_targets_and_creates_missing_children() {
+        let mut root = crate::parse("{items:[{data:{a:1}},{data:{b:2}},{}]}").unwrap();
+        let path = NbtPath::parse("items[].data").unwrap();
+        let mut index = 0;
+        path.get_or_create_and_update(&mut root, &Tag::Compound(CompoundTag::new()), |target| {
+            let Tag::Compound(value) = target else {
+                panic!("compound target");
+            };
+            index += 1;
+            value.insert("order", Tag::Int(index));
+        })
+        .unwrap();
+        assert_eq!(
+            root,
+            crate::parse("{items:[{data:{a:1,order:1}},{data:{b:2,order:2}},{data:{order:3}}]}")
+                .unwrap()
+        );
+    }
 }
