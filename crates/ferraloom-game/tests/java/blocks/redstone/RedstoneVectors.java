@@ -33,7 +33,9 @@ public final class RedstoneVectors extends MutationFixture {
     final List<String> sounds=new ArrayList<>();
     @Override public void playSeededSound(net.minecraft.world.entity.Entity except,double x,double y,double z,Holder sound,net.minecraft.sounds.SoundSource source,float volume,float pitch,long seed){sounds.add(BuiltInRegistries.SOUND_EVENT.getId((net.minecraft.sounds.SoundEvent)sound.value())+":"+source.ordinal()+":"+Float.floatToRawIntBits(volume)+":"+Float.floatToRawIntBits(pitch)+":"+seed);}
     @Override public void playSeededSound(net.minecraft.world.entity.Entity except,net.minecraft.world.entity.Entity entity,Holder sound,net.minecraft.sounds.SoundSource source,float volume,float pitch,long seed){}
-    @Override public void gameEvent(Holder event,net.minecraft.world.phys.Vec3 pos,net.minecraft.world.level.gameevent.GameEvent.Context context){}
+    final List<String> gameplay=new ArrayList<>();
+    @Override public void gameEvent(Holder event,net.minecraft.world.phys.Vec3 pos,net.minecraft.world.level.gameevent.GameEvent.Context context){gameplay.add("G:"+BuiltInRegistries.GAME_EVENT.getId((net.minecraft.world.level.gameevent.GameEvent)event.value())+":"+(context.sourceEntity()==null?0:context.sourceEntity().getId())+":"+(context.affectedState()==null?-1:Block.getId(context.affectedState())));}
+    @Override public void levelEvent(net.minecraft.world.entity.Entity source,int event,BlockPos pos,int data){gameplay.add("L:"+event+":"+data+":"+(source==null?0:source.getId()));}
     @Override public void blockEvent(BlockPos pos,Block block,int a,int b){events.add(new net.minecraft.world.level.BlockEventData(pos,block,a,b));}
     void drainEvents(){
         while(!events.isEmpty()){
@@ -359,13 +361,40 @@ public final class RedstoneVectors extends MutationFixture {
             System.out.println("tripwire-timeline:"+direction.get3DDataValue()+"\t"+String.join("|",samples));
         }
     }
+    static final class RedstonePlayer extends net.minecraft.world.entity.player.Player {
+        RedstonePlayer(net.minecraft.world.level.Level level){super(level,new com.mojang.authlib.GameProfile(new java.util.UUID(1,2),"redstone"));}
+        @Override public net.minecraft.world.level.GameType gameMode(){return net.minecraft.world.level.GameType.SURVIVAL;}
+    }
+    static void placedBy(RegistryAccess r){
+        for(var block:List.of(Blocks.STONE,Blocks.REPEATER,Blocks.COMPARATOR,Blocks.PISTON,Blocks.STICKY_PISTON,Blocks.OAK_DOOR,Blocks.TRIPWIRE_HOOK))for(var state:block.getStateDefinition().getPossibleStates())for(int layout=0;layout<4;layout++){
+            if(state.hasProperty(DoorBlock.HALF)&&state.getValue(DoorBlock.HALF)==DoubleBlockHalf.UPPER)continue;
+            if(state.hasProperty(net.minecraft.world.level.block.piston.PistonBaseBlock.EXTENDED)&&state.getValue(net.minecraft.world.level.block.piston.PistonBaseBlock.EXTENDED))continue;
+            if(state.hasProperty(DiodeBlock.POWERED)&&state.getValue(DiodeBlock.POWERED))continue;
+            if(state.hasProperty(TripWireHookBlock.ATTACHED)&&state.getValue(TripWireHookBlock.ATTACHED))continue;
+            var level=tripwireLevel(r);var direction=state.getOptionalValue(BlockStateProperties.FACING).orElse(state.getOptionalValue(BlockStateProperties.HORIZONTAL_FACING).orElse(Direction.EAST));
+            level.raw(ORIGIN.below(),Blocks.STONE.defaultBlockState());level.raw(ORIGIN.relative(direction.getOpposite()),Blocks.STONE.defaultBlockState());
+            if(block==Blocks.TRIPWIRE_HOOK){for(int i=1;i<4;i++)level.raw(ORIGIN.relative(direction,i),Blocks.TRIPWIRE.defaultBlockState());level.raw(ORIGIN.relative(direction,4),Blocks.TRIPWIRE_HOOK.defaultBlockState().setValue(TripWireHookBlock.FACING,direction.getOpposite()));level.raw(ORIGIN.relative(direction,5),Blocks.STONE.defaultBlockState());}
+            if(layout>0)level.raw(layout==3?ORIGIN.above(2):layout==2?ORIGIN.relative(direction.getAxis()==Direction.Axis.Y?Direction.EAST:direction.getClockWise()):(block==Blocks.REPEATER||block==Blocks.COMPARATOR)?ORIGIN.relative(direction):ORIGIN.below(),Blocks.REDSTONE_BLOCK.defaultBlockState());
+            level.raw(ORIGIN,state);level.begin();block.setPlacedBy(level,ORIGIN,state,null,net.minecraft.world.item.ItemStack.EMPTY);
+            var positions=new ArrayList<BlockPos>();positions.add(ORIGIN);positions.add(ORIGIN.above());for(int i=1;i<=4;i++)positions.add(ORIGIN.relative(direction,i));
+            var states=new ArrayList<String>();for(var pos:positions)states.add(pos.toShortString()+"="+Block.getId(level.getBlockState(pos)));
+            System.out.println("placed-by:"+Block.getId(state)+":"+layout+"\t"+String.join(";",states)+"|"+String.join(";",level.changes)+"|"+level.blockTicks.hasScheduledTick(ORIGIN,block));
+        }
+        for(boolean attached:new boolean[]{false,true})for(boolean powered:new boolean[]{false,true})for(boolean disarmed:new boolean[]{false,true})for(int tool=0;tool<4;tool++){
+            var level=new RedstoneVectors(r);var state=Blocks.TRIPWIRE.defaultBlockState().setValue(TripWireBlock.ATTACHED,attached).setValue(TripWireBlock.POWERED,powered).setValue(TripWireBlock.DISARMED,disarmed);level.raw(ORIGIN,state);
+            var player=new RedstonePlayer(level);level.addFreshEntity(player);
+            player.getInventory().setItem(0,tool==0?net.minecraft.world.item.ItemStack.EMPTY:new net.minecraft.world.item.ItemStack(tool==2?net.minecraft.world.item.Items.STICK:net.minecraft.world.item.Items.SHEARS,tool==3?0:1));level.gameplay.clear();
+            var returned=Blocks.TRIPWIRE.playerWillDestroy(level,ORIGIN,state,player);
+            System.out.println("tripwire-shears:"+Block.getId(state)+":"+tool+"\t"+Block.getId(returned)+"|"+Block.getId(level.getBlockState(ORIGIN))+"|"+String.join(";",level.gameplay));
+        }
+    }
     public static void main(String[] args) {
         var out=System.out;var err=System.err;SharedConstants.tryDetectVersion();Bootstrap.bootStrap();System.setOut(out);System.setErr(err);
         var registries=NeighborVectors.load();
         var builtin=RegistryAccess.fromRegistryOfRegistries(net.minecraft.core.registries.BuiltInRegistries.REGISTRY);
         var lookup=HolderLookup.Provider.create(java.util.stream.Stream.concat(builtin.listRegistries(),registries.listRegistries()));
         net.minecraft.core.registries.BuiltInRegistries.DATA_COMPONENT_INITIALIZERS.build(lookup).forEach(net.minecraft.core.component.DataComponentInitializers.PendingComponents::apply);
-        signals(registries);piston(registries);wires(registries);try{moving(registries);pushing(registries);comparators(registries);placements(registries);hoppers(registries);pistonTimelines(registries);dispensing(registries);dispenserTriggers(registries);rails(registries);notes(registries);tripwires(registries);}catch(Exception error){throw new RuntimeException(error);}
+        signals(registries);piston(registries);wires(registries);try{moving(registries);pushing(registries);comparators(registries);placements(registries);hoppers(registries);pistonTimelines(registries);dispensing(registries);dispenserTriggers(registries);rails(registries);notes(registries);tripwires(registries);placedBy(registries);}catch(Exception error){throw new RuntimeException(error);}
     }
 }
 

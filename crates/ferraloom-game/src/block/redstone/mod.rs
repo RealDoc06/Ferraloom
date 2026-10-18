@@ -39,6 +39,19 @@ pub(crate) fn ported_behavior(
     method: BlockMethod,
 ) -> Option<&'static dyn BlockBehavior> {
     use BlockMethod as M;
+    if method == M::SetPlacedBy {
+        return match block.class() {
+            BlockClass::RepeaterBlock => Some(&diode::REPEATER),
+            BlockClass::ComparatorBlock => Some(&comparator::COMPARATOR),
+            BlockClass::PistonBaseBlock => Some(&piston::PISTON),
+            BlockClass::TripWireHookBlock => Some(&tripwire::HOOK),
+            _ if block.is_instance_of(BlockClass::DoorBlock) => Some(&opening::OPENING),
+            _ => None,
+        };
+    }
+    if method == M::PlayerWillDestroy && block.class() == BlockClass::TripWireBlock {
+        return Some(&tripwire::WIRE);
+    }
     if method == M::GetStateForPlacement && placement::supports(block) {
         return Some(&placement::PLACEMENT);
     }

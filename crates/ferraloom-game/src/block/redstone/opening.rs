@@ -76,6 +76,17 @@ fn schedule_water(level: &mut Level, pos: BlockPos, state: BlockState) -> Result
     Ok(())
 }
 impl BlockBehavior for OpeningBlock {
+    fn set_placed_by(
+        &self,
+        state: BlockState,
+        pos: BlockPos,
+        _by: Option<crate::entity::EntityRef>,
+        _stack: &ferraloom_protocol::component::ItemStack,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        level.set_block_and_update(pos.above(1), state.with(p::HALF, p::Half::Upper).unwrap())?;
+        Ok(())
+    }
     fn use_without_item(
         &self,
         state: BlockState,

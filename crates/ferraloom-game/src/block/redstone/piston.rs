@@ -495,6 +495,16 @@ fn move_blocks(
     Ok(true)
 }
 impl BlockBehavior for PistonBaseBlock {
+    fn set_placed_by(
+        &self,
+        state: BlockState,
+        pos: BlockPos,
+        _by: Option<crate::entity::EntityRef>,
+        _stack: &ferraloom_protocol::component::ItemStack,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        check_if_extend(level, pos, state)
+    }
     fn on_place(
         &self,
         state: BlockState,

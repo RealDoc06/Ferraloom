@@ -109,7 +109,7 @@ fn snapshot(level: &Level, positions: &[BlockPos]) -> String {
         .join(";")
 }
 
-fn rail_mutations(level: &mut Level) -> String {
+fn state_mutations(level: &mut Level) -> String {
     level
         .take_effects()
         .into_iter()
@@ -169,6 +169,167 @@ fn note_instrument(name: &str) -> ferraloom_data::properties::Instrument {
         .filter_map(Instrument::from_index)
         .find(|v| v.as_str() == name)
         .unwrap()
+}
+#[test]
+fn redstone_post_placement_updates_match_vanilla() {
+    use ferraloom_data::properties as p;
+    for (name, expected) in cases("placed-by:") {
+        let mut args = name.split(':').skip(1);
+        let state = BlockState::from_id(args.next().unwrap().parse().unwrap()).unwrap();
+        let layout = args.next().unwrap().parse::<u8>().unwrap();
+        let block = state.block();
+        let direction = state
+            .get(p::FACING)
+            .map(|_| state::facing(state))
+            .unwrap_or(Direction::East);
+        let mut level = level_in_radius(3);
+        level
+            .set_block_state(ORIGIN.below(1), Block::STONE.default_state())
+            .unwrap();
+        level
+            .set_block_state(
+                ORIGIN.relative(direction.opposite(), 1),
+                Block::STONE.default_state(),
+            )
+            .unwrap();
+        if block == Block::TRIPWIRE_HOOK {
+            for i in 1..4 {
+                level
+                    .set_block_state(
+                        ORIGIN.relative(direction, i),
+                        Block::TRIPWIRE.default_state(),
+                    )
+                    .unwrap();
+            }
+            level
+                .set_block_state(
+                    ORIGIN.relative(direction, 4),
+                    state::with_facing(Block::TRIPWIRE_HOOK.default_state(), direction.opposite()),
+                )
+                .unwrap();
+            level
+                .set_block_state(ORIGIN.relative(direction, 5), Block::STONE.default_state())
+                .unwrap();
+        }
+        if layout > 0 {
+            let power = if layout == 3 {
+                ORIGIN.above(2)
+            } else if layout == 2 {
+                ORIGIN.relative(
+                    if direction.axis() == ferraloom_util::Axis::Y {
+                        Direction::East
+                    } else {
+                        direction.clockwise()
+                    },
+                    1,
+                )
+            } else if block == Block::REPEATER || block == Block::COMPARATOR {
+                ORIGIN.relative(direction, 1)
+            } else {
+                ORIGIN.below(1)
+            };
+            level
+                .set_block_state(power, Block::REDSTONE_BLOCK.default_state())
+                .unwrap();
+        }
+        level.set_block_state(ORIGIN, state).unwrap();
+        level.take_effects();
+        level
+            .set_placed_by(state, ORIGIN, None, &Default::default())
+            .unwrap();
+        let mut targets = vec![ORIGIN, ORIGIN.above(1)];
+        targets.extend((1..=4).map(|i| ORIGIN.relative(direction, i)));
+        let mut parts = expected.split('|');
+        assert_eq!(
+            snapshot(&level, &targets),
+            parts.next().unwrap(),
+            "{name} state"
+        );
+        assert_eq!(
+            state_mutations(&mut level),
+            native_mutations(parts.next().unwrap()),
+            "{name} mutation order"
+        );
+        assert_eq!(
+            level.has_scheduled_block_tick(ORIGIN, block).to_string(),
+            parts.next().unwrap(),
+            "{name} initial tick"
+        );
+    }
+}
+#[test]
+fn tripwire_shears_disarm_and_base_destroy_event_order_match_vanilla() {
+    use crate::entity::{
+        EntityData, EntityRef, EntityState,
+        player::{GameType, ServerPlayer},
+    };
+    use ferraloom_data::Item;
+    use ferraloom_protocol::{component::ItemStack, play::clientbound::Packet};
+    use ferraloom_util::{Uuid, Vec3};
+    for (name, expected) in cases("tripwire-shears:") {
+        let mut args = name.split(':').skip(1);
+        let state = BlockState::from_id(args.next().unwrap().parse().unwrap()).unwrap();
+        let tool = args.next().unwrap().parse::<u8>().unwrap();
+        let mut level = level();
+        level.set_block_state(ORIGIN, state).unwrap();
+        let actor = EntityRef(1);
+        let mut player = ServerPlayer::new(
+            Uuid::new(1, 2),
+            "redstone".into(),
+            1,
+            Vec3::ZERO,
+            GameType::Survival,
+        );
+        if tool > 0 {
+            player.inventory.set_selected_item(ItemStack::new(
+                if tool == 2 { Item::STICK } else { Item::SHEARS },
+                if tool == 3 { 0 } else { 1 },
+                Default::default(),
+            ));
+        }
+        level
+            .add_entity(actor, EntityState::Player(Box::new(player)))
+            .unwrap();
+        level.take_effects();
+        let returned = level.player_will_destroy(state, ORIGIN, actor).unwrap();
+        let effects = level
+            .take_effects()
+            .into_iter()
+            .filter_map(|effect| match effect {
+                LevelEffect::PlayerPacket { packet, recipients } => {
+                    if let Packet::LevelEvent(event) = *packet {
+                        assert_eq!(event.pos, ORIGIN);
+                        assert!(recipients.is_empty());
+                        Some(format!("L:{}:{}:1", event.event_type, event.data))
+                    } else {
+                        None
+                    }
+                }
+                LevelEffect::GameEvent {
+                    event,
+                    source,
+                    affected_state,
+                    ..
+                } => Some(format!(
+                    "G:{}:{}:{}",
+                    event.protocol_id(),
+                    source.map_or(0, |id| level.entity::<EntityData>(id).unwrap().network_id),
+                    affected_state.map_or(-1, |state| i32::from(state.id()))
+                )),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+            .join(";");
+        assert_eq!(
+            format!(
+                "{}|{}|{effects}",
+                returned.id(),
+                level.get_block_state(ORIGIN).unwrap().id()
+            ),
+            expected,
+            "{name}"
+        );
+    }
 }
 #[test]
 fn tripwire_hooks_attachment_removal_and_length_limits_match_vanilla() {
@@ -270,7 +431,7 @@ fn tripwire_hooks_attachment_removal_and_length_limits_match_vanilla() {
             "{name} states"
         );
         assert_eq!(
-            rail_mutations(&mut level),
+            state_mutations(&mut level),
             native_mutations(parts.next().unwrap()),
             "{name} mutation order"
         );
@@ -358,7 +519,7 @@ fn tripwire_entity_press_and_release_scheduled_timelines_match_vanilla() {
                 snapshot(&level, &targets),
                 level.has_scheduled_block_tick(pos, Block::TRIPWIRE),
                 level.has_scheduled_block_tick(ORIGIN, Block::TRIPWIRE_HOOK),
-                rail_mutations(&mut level)
+                state_mutations(&mut level)
             ));
         }
         let expected = expected
@@ -534,7 +695,7 @@ fn rail_junctions_slopes_and_connection_update_order_match_vanilla() {
             "{name} canonical states"
         );
         assert_eq!(
-            rail_mutations(&mut level),
+            state_mutations(&mut level),
             native_mutations(parts.next().unwrap()),
             "{name} mutation order"
         );
@@ -656,7 +817,7 @@ fn powered_and_activator_rails_preserve_search_limits_and_power_update_order() {
                 let (states, changes) = expected.split_once('|').unwrap();
                 assert_eq!(snapshot(&level, &targets), states, "{name} final state");
                 assert_eq!(
-                    rail_mutations(&mut level),
+                    state_mutations(&mut level),
                     native_mutations(changes),
                     "{name} mutation order"
                 );

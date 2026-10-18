@@ -123,6 +123,19 @@ fn check_tick(level: &mut Level, pos: BlockPos, state: BlockState) -> Result<(),
     Ok(())
 }
 impl BlockBehavior for RepeaterBlock {
+    fn set_placed_by(
+        &self,
+        state: BlockState,
+        pos: BlockPos,
+        _by: Option<crate::entity::EntityRef>,
+        _stack: &ferraloom_protocol::component::ItemStack,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        if input_signal(level, pos, state)? > 0 {
+            level.schedule_block_tick_after(pos, state.block(), 1)?;
+        }
+        Ok(())
+    }
     fn use_without_item(
         &self,
         state: BlockState,

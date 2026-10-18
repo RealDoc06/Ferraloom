@@ -250,6 +250,42 @@ fn check_pressed(
     Ok(())
 }
 impl BlockBehavior for TripWireBlock {
+    fn player_will_destroy(
+        &self,
+        state: BlockState,
+        pos: BlockPos,
+        player: EntityRef,
+        level: &mut Level,
+    ) -> Result<BlockState, LevelError> {
+        let held = level
+            .entity::<crate::entity::player::ServerPlayer>(player)?
+            .inventory
+            .selected_item();
+        if !held.is_empty()
+            && held
+                .0
+                .as_ref()
+                .is_some_and(|s| s.item == ferraloom_data::Item::SHEARS)
+        {
+            level.set_block(
+                pos,
+                state.with(p::DISARMED, true).unwrap(),
+                crate::block::UpdateFlags::NONE,
+                crate::block::UPDATE_LIMIT,
+            )?;
+            level.game_event(
+                GameEvent::SHEAR,
+                Vec3::new(
+                    f64::from(pos.x) + 0.5,
+                    f64::from(pos.y) + 0.5,
+                    f64::from(pos.z) + 0.5,
+                ),
+                Some(player),
+                None,
+            );
+        }
+        crate::block::BASE_BLOCK.player_will_destroy(state, pos, player, level)
+    }
     fn update_shape(
         &self,
         state: BlockState,
@@ -326,6 +362,16 @@ impl BlockBehavior for TripWireBlock {
     }
 }
 impl BlockBehavior for TripWireHookBlock {
+    fn set_placed_by(
+        &self,
+        state: BlockState,
+        pos: BlockPos,
+        _by: Option<EntityRef>,
+        _stack: &ferraloom_protocol::component::ItemStack,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        calculate_state(level, pos, state, false, false, None)
+    }
     fn can_survive(
         &self,
         state: BlockState,
