@@ -1254,14 +1254,16 @@ fn native_bonemeal_snapshots_and_rng_match_registered_growth() {
     for line in text.lines() {
         let f: Vec<_> = line.split('\t').collect();
         let state = BlockState::from_id(f[1].parse().unwrap()).unwrap();
-        if matches!(
-            state.block().class(),
-            BlockClass::TallFlowerBlock
-                | BlockClass::FlowerBedBlock
-                | BlockClass::BigDripleafBlock
-                | BlockClass::BigDripleafStemBlock
-                | BlockClass::SmallDripleafBlock
-        ) {
+        if (state.block().class() == BlockClass::StemBlock && f.len() < 10)
+            || matches!(
+                state.block().class(),
+                BlockClass::TallFlowerBlock
+                    | BlockClass::FlowerBedBlock
+                    | BlockClass::BigDripleafBlock
+                    | BlockClass::BigDripleafStemBlock
+                    | BlockClass::SmallDripleafBlock
+            )
+        {
             // Drops and redstone queries arrive from their family owners.
             pending += 1;
             continue;
@@ -1270,6 +1272,23 @@ fn native_bonemeal_snapshots_and_rng_match_registered_growth() {
         level.set_block_tags(blocks.clone());
         level.set_fluid_tags(fluids.clone());
         level.rules_mut().block_drops = Some(false);
+        if f.len() >= 10 {
+            level.set_light_snapshot(
+                ChunkPos::containing(pos),
+                crate::level::weather::ChunkLightSnapshot {
+                    sky: [(
+                        pos.y >> 4,
+                        ferraloom_light::DataLayer::new(f[8].parse().unwrap()),
+                    )]
+                    .into(),
+                    block: [(
+                        pos.y >> 4,
+                        ferraloom_light::DataLayer::new(f[9].parse().unwrap()),
+                    )]
+                    .into(),
+                },
+            );
+        }
         for ((x, y, z), state) in cells(f[5]) {
             level.set_block_state(pos.offset(x, y, z), state).unwrap();
         }
@@ -1322,7 +1341,7 @@ fn native_bonemeal_snapshots_and_rng_match_registered_growth() {
     assert_eq!(matched + pending, 5808);
     assert!(matched > 0);
     eprintln!(
-        "plant bonemeal: {matched} complete matches; {pending} awaiting drops/redstone owners"
+        "plant bonemeal: {matched} complete matches; {pending} awaiting drops/redstone owners or native light snapshots"
     );
 }
 

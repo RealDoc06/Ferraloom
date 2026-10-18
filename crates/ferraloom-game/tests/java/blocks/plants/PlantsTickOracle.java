@@ -90,15 +90,8 @@ public final class PlantsTickOracle {
             }
             level.setBlock(pos,state,816);
             if(block!=FROSTED_ICE)level.setBlock(pos.above(),covers.get(mode),816);
-            if((block==ICE||block==SNOW)&&mode>=2) {
-                level.setBlock(pos.below(),GLOWSTONE.defaultBlockState(),816);
-                long deadline=System.nanoTime()+2_000_000_000L;
-                while(level.getBrightness(net.minecraft.world.level.LightLayer.BLOCK,pos)<=8) {
-                    level.getChunkSource().getLightEngine().tryScheduleUpdate();
-                    if(System.nanoTime()>=deadline)throw new IllegalStateException("native melt light engine did not finish");
-                    try{Thread.sleep(1);}catch(InterruptedException error){throw new RuntimeException(error);}
-                }
-            }
+            if((block==ICE||block==SNOW)&&mode>=2)level.setBlock(pos.below(),GLOWSTONE.defaultBlockState(),816);
+            settleLight(level,pos);
             level.getBlockTicks().clearArea(area);level.getFluidTicks().clearArea(area);
             String before=snapshot(level,pos);
             int sky=level.getBrightness(net.minecraft.world.level.LightLayer.SKY,pos);
@@ -129,6 +122,17 @@ public final class PlantsTickOracle {
             String blocks=ticks((net.minecraft.world.ticks.LevelChunkTicks<Block>)level.getChunkAt(pos).getBlockTicks(),net.minecraft.core.registries.BuiltInRegistries.BLOCK::getId,level,pos);
             lines.add("eyeblossom-tick\t"+Block.getId(block.defaultBlockState())+"\t"+seed+"\t"+scheduled+"\t"+attribute.getSerializedName()+"\t"+before+"\t"+snapshot(level,pos)+"\t"+blocks+"\t"+level.getRandom().nextLong());
         }
+    }
+    static void settleLight(ServerLevel level,BlockPos pos) {
+        var engine=level.getChunkSource().getLightEngine();
+        var done=engine.waitForPendingTasks(pos.getX()>>4,pos.getZ()>>4);
+        long deadline=System.nanoTime()+2_000_000_000L;
+        while(!done.isDone()) {
+            engine.tryScheduleUpdate();
+            if(System.nanoTime()>=deadline)throw new IllegalStateException("native light engine did not drain queued work");
+            try{Thread.sleep(1);}catch(InterruptedException error){throw new RuntimeException(error);}
+        }
+        done.join();
     }
     static void chorusTicks(ServerLevel level,BlockPos pos,List<String> lines) {
         var area=net.minecraft.world.level.levelgen.structure.BoundingBox.fromCorners(pos.offset(-3,-20,-3),pos.offset(3,20,3));
@@ -228,13 +232,16 @@ public final class PlantsTickOracle {
             level.setBlock(pos,state,816);
             if(mode==1)level.setBlock(pos.above(2),STONE.defaultBlockState(),816);
             if(mode==2)level.setBlock(pos.below(block==SMALL_DRIPLEAF&&state.getValue(DOUBLE_BLOCK_HALF)==DoubleBlockHalf.UPPER?2:1),STONE.defaultBlockState(),816);
+            if(block==MELON_STEM||block==PUMPKIN_STEM)settleLight(level,pos);
             String before=snapshot(level,pos);
+            int sky=level.getBrightness(net.minecraft.world.level.LightLayer.SKY,pos);
+            int blockLight=level.getBrightness(net.minecraft.world.level.LightLayer.BLOCK,pos);
             var behavior=(BonemealableBlock)block;
             level.getRandom().setSeed(seed);
             boolean valid=behavior.isValidBonemealTarget(level,pos,state,BonemealSource.INTERACTION);
             boolean success=valid&&behavior.isBonemealSuccess(level,level.getRandom(),pos,state,BonemealSource.INTERACTION);
             if(success)behavior.performBonemeal(level,level.getRandom(),pos,state,BonemealSource.INTERACTION);
-            lines.add("bonemeal\t"+Block.getId(state)+"\t"+seed+"\t"+valid+"\t"+success+"\t"+before+"\t"+snapshot(level,pos)+"\t"+level.getRandom().nextLong());
+            lines.add("bonemeal\t"+Block.getId(state)+"\t"+seed+"\t"+valid+"\t"+success+"\t"+before+"\t"+snapshot(level,pos)+"\t"+level.getRandom().nextLong()+"\t"+sky+"\t"+blockLight);
         }
     }
 }

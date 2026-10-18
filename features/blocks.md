@@ -397,3 +397,5 @@ One class row per bootstrapped runtime Block class, listing every block id assig
 | blocks.plants.tree-worldgen-bridge | Re-run all tree fixtures through shared real leaf updates, survival, moss and fluids; retained bee prefixes stay explicit dependencies | Real vanilla TreeFeature and decorators | `plants::tree_worldgen_tests::tree_fixtures_use_real_leaf_and_plant_bridge` (2,444 native cases) | pass | todo |
 
 | blocks.plants.chorus-support-vectors | Chorus flower/plant support across vertical and horizontal topologies, exact six-direction states, delayed invalidation and unchanged RNG | Real native `canSurvive/updateShape` | `plants::tests::chorus_survival_and_six_neighbor_updates_match_native_topologies` (20,160 vectors) | pass | todo |
+
+| blocks.plants.stem-bonemeal-light | Snapshot native sky/block light after draining the real light engine before stem bonemeal invokes randomTick | `StemBlock#performBonemeal/randomTick`, `ThreadedLevelLightEngine#waitForPendingTasks` | Extended dedicated ServerLevel oracle (fresh light capture pending) | - | todo |
