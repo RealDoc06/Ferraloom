@@ -38,7 +38,7 @@ pub fn travel<E: Entity + ?Sized>(
                     base.velocity + Vec3::new(0.0, (look_y - base.velocity.y) * multiplier, 0.0);
             }
         }
-        if level.entity::<ServerPlayer>(entity)?.flying {
+        if level.entity::<ServerPlayer>(entity)?.abilities.flying {
             let original_y = level.entity::<EntityData>(entity)?.velocity.y;
             // Explicit LivingEntity parent body; virtual speed/fluid predicates
             // continue to use the selected Player dispatcher.

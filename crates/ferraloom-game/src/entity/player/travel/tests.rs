@@ -85,7 +85,7 @@ fn native_virtual_travel_preserves_player_swim_flight_and_passenger_parent_calls
                 vector(row[4]),
                 GameType::Survival,
             );
-            player.flying = row[11].parse().unwrap();
+            player.abilities.flying = row[11].parse().unwrap();
             player.set_ability_flying_speed(float(row[12]));
             EntityState::Player(Box::new(player))
         } else {

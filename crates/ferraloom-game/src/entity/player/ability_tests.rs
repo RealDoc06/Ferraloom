@@ -25,7 +25,7 @@ fn native_flying_speed_uses_independent_ability_sprint_and_passenger_gates() {
     for row in rows("player-flying-speed\t") {
         let mut player = player();
         player.set_ability_flying_speed(f32::from_bits(u32::from_str_radix(row[1], 16).unwrap()));
-        player.flying = row[2].parse().unwrap();
+        player.abilities.flying = row[2].parse().unwrap();
         player
             .vehicle
             .set((row[3] == "true").then_some(EntityRef(2)));
@@ -46,7 +46,7 @@ fn native_saved_ability_speeds_survive_mode_updates_and_malformed_fields_default
             .unwrap();
         assert_eq!(bits(player.ability_flying_speed()), row[4], "{row:?}");
         assert_eq!(bits(player.ability_walking_speed()), row[5], "{row:?}");
-        assert_eq!(player.flying.to_string(), row[6], "{row:?}");
+        assert_eq!(player.abilities.flying.to_string(), row[6], "{row:?}");
         let saved = player.save_without_id();
         let abilities = saved.get_compound("abilities").unwrap();
         assert_eq!(bits(abilities.get_float("flySpeed").unwrap()), row[4]);

@@ -1225,7 +1225,7 @@ fn item_pickup_uses_mutable_instabuild_when_inventory_is_full() {
             let mut level = level(false);
             let mut player =
                 player::ServerPlayer::new(Uuid::new(1, 2), "pickup".into(), 1, Vec3::ZERO, mode);
-            player.instabuild = instabuild;
+            player.abilities.instabuild = instabuild;
             player
                 .inventory
                 .items
@@ -2178,11 +2178,11 @@ fn may_build_is_independent_and_game_mode_updates_match_native_abilities() {
                 player::GameType::Survival,
             );
             player.game_mode = mode;
-            player.flying = flying;
+            player.abilities.flying = flying;
             player.update_game_mode_abilities();
             let may_build = player.may_build();
-            let result_flying = player.flying;
-            player.may_build = !may_build;
+            let result_flying = player.abilities.flying;
+            player.abilities.may_build = !may_build;
             let saved = player.save();
             let saved_may_build = saved
                 .get_compound("abilities")

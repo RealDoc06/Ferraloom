@@ -143,7 +143,7 @@ pub fn handle_shoulder_entities(player: EntityRef, level: &mut Level) -> Result<
         let player = level.entity::<ServerPlayer>(player)?;
         player.fall_distance > 0.5
             || player.was_touching_water
-            || player.flying
+            || player.abilities.flying
             || player.entity_data.get(data::SLEEPING_POS).is_some()
             || player.is_in_powder_snow
     };

@@ -821,7 +821,7 @@ pub trait Entity: Sync {
     }
     fn is_pushed_by_fluid(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
         Ok(match level.entity_state(entity)? {
-            EntityState::Player(player) => !player.flying,
+            EntityState::Player(player) => !player.abilities.flying,
             _ => true,
         })
     }

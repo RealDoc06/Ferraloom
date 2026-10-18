@@ -114,7 +114,7 @@ fn native_player_ai_step_preserves_input_jump_travel_block_freeze_push_and_tail_
         p.jumping = row[2].parse().unwrap();
         p.on_ground = row[3].parse().unwrap();
         p.no_jump_delay = row[4].parse().unwrap();
-        p.flying = row[5].parse().unwrap();
+        p.abilities.flying = row[5].parse().unwrap();
         if row[6] == "true" {
             p.set_health(0.0);
         }

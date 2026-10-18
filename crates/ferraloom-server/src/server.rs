@@ -2034,8 +2034,8 @@ impl MinecraftServer {
                     .level
                     .entity_mut::<ServerPlayer>(entity)
                     .map_err(game_error)?;
-                if matches!(player.game_mode, GameType::Creative | GameType::Spectator) {
-                    player.flying = p.is_flying;
+                if player.abilities.mayfly {
+                    player.abilities.flying = p.is_flying;
                 }
             }
             sb::Packet::PingRequest(p) => {
@@ -3583,11 +3583,10 @@ fn protocol_game_type(mode: GameType) -> play::GameType {
     }
 }
 fn abilities(player: &ServerPlayer) -> cb::Packet {
-    let privileged = matches!(player.game_mode, GameType::Creative | GameType::Spectator);
     cb::Packet::PlayerAbilities(cb::PlayerAbilities {
-        invulnerable: privileged,
-        is_flying: player.flying,
-        can_fly: privileged,
+        invulnerable: player.abilities.invulnerable,
+        is_flying: player.abilities.flying,
+        can_fly: player.abilities.mayfly,
         instabuild: player.instabuild(),
         flying_speed: player.ability_flying_speed(),
         walking_speed: player.ability_walking_speed(),
@@ -3760,11 +3759,21 @@ mod live_level_tests {
             let mut player =
                 ServerPlayer::new(Uuid::new(1, 2), "abilities".into(), 1, Vec3::ZERO, mode);
             for value in [false, true] {
-                player.instabuild = value;
+                player.abilities.instabuild = value;
+                player.abilities.invulnerable = value;
+                player.abilities.mayfly = !value;
+                player.abilities.flying = value;
+                player.abilities.set_flying_speed(0.125);
+                player.abilities.set_walking_speed(-0.25);
                 let cb::Packet::PlayerAbilities(packet) = abilities(&player) else {
                     unreachable!()
                 };
                 assert_eq!(packet.instabuild, value);
+                assert_eq!(packet.invulnerable, value);
+                assert_eq!(packet.can_fly, !value);
+                assert_eq!(packet.is_flying, value);
+                assert_eq!(packet.flying_speed, 0.125);
+                assert_eq!(packet.walking_speed, -0.25);
             }
         }
     }

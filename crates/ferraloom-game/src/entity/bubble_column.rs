@@ -110,7 +110,11 @@ mod tests {
             };
             level.add_entity(id, state).unwrap();
             if fields[1] == "flying" {
-                level.entity_mut::<ServerPlayer>(id).unwrap().flying = true;
+                level
+                    .entity_mut::<ServerPlayer>(id)
+                    .unwrap()
+                    .abilities
+                    .flying = true;
             }
             level.random().set_seed(123);
             let base = level.entity_mut::<EntityData>(id).unwrap();

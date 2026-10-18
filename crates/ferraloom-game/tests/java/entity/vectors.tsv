@@ -318,6 +318,36 @@ player-ability-speeds	3	1	{abilities:{playerGameType:3},playerGameType:3}	3d4ccc
 player-ability-speeds	3	2	{abilities:{flySpeed:0.125f,flying:1b,walkSpeed:-0.25f},playerGameType:3}	3e000000	be800000	true
 player-ability-speeds	3	3	{abilities:{flySpeed:"bad",flying:"bad",walkSpeed:"bad"},playerGameType:3}	3d4ccccd	3dcccccd	true
 player-ability-speeds	3	4	{abilities:{flySpeed:0.15d,flying:256,walkSpeed:2},playerGameType:3}	3e19999a	40000000	true
+abilities-packed	0	{}	false,false,false,false,true,3d4ccccd,3dcccccd	{flySpeed:0.05f,flying:0b,instabuild:0b,invulnerable:0b,mayBuild:1b,mayfly:0b,walkSpeed:0.1f}
+abilities-packed	1	{invulnerable:1b}	true,false,false,false,true,3d4ccccd,3dcccccd	{flySpeed:0.05f,flying:0b,instabuild:0b,invulnerable:1b,mayBuild:1b,mayfly:0b,walkSpeed:0.1f}
+abilities-packed	2	{invulnerable:1b,flying:1b,mayfly:1b,instabuild:1b,mayBuild:0b,flySpeed:0.125f,walkSpeed:-0.25f}	true,true,true,true,false,3e000000,be800000	{flySpeed:0.125f,flying:1b,instabuild:1b,invulnerable:1b,mayBuild:0b,mayfly:1b,walkSpeed:-0.25f}
+abilities-packed	3	{invulnerable:256,flying:-0.0f,mayfly:-7,flySpeed:0.15d,walkSpeed:2}	true,false,true,false,true,3e19999a,40000000	{flySpeed:0.15f,flying:0b,instabuild:0b,invulnerable:1b,mayBuild:1b,mayfly:1b,walkSpeed:2.0f}
+abilities-packed	4	{flySpeed:NaNf,walkSpeed:Infinityf}	error	-
+abilities-packed	5	{invulnerable:'invalid',other:1}	error	-
+abilities-packed	6	{flying:'invalid',other:1}	error	-
+abilities-packed	7	{mayfly:'invalid',other:1}	error	-
+abilities-packed	8	{instabuild:'invalid',other:1}	error	-
+abilities-packed	9	{mayBuild:'invalid',other:1}	error	-
+abilities-packed	10	{flySpeed:'invalid',other:1}	error	-
+abilities-packed	11	{walkSpeed:'invalid',other:1}	error	-
+abilities-packed	12	[]	error	-
+abilities-packed	13	{invulnerable:1b,flySpeed:'invalid',walkSpeed:0.25f}	error	-
+abilities-game-type	0	false	false	false,false,false,false,true,3e000000,be800000
+abilities-game-type	0	false	true	false,false,false,false,true,3e000000,be800000
+abilities-game-type	0	true	false	false,false,false,false,true,3e000000,be800000
+abilities-game-type	0	true	true	false,false,false,false,true,3e000000,be800000
+abilities-game-type	1	false	false	true,false,true,true,true,3e000000,be800000
+abilities-game-type	1	false	true	true,false,true,true,true,3e000000,be800000
+abilities-game-type	1	true	false	true,true,true,true,true,3e000000,be800000
+abilities-game-type	1	true	true	true,true,true,true,true,3e000000,be800000
+abilities-game-type	2	false	false	false,false,false,false,false,3e000000,be800000
+abilities-game-type	2	false	true	false,false,false,false,false,3e000000,be800000
+abilities-game-type	2	true	false	false,false,false,false,false,3e000000,be800000
+abilities-game-type	2	true	true	false,false,false,false,false,3e000000,be800000
+abilities-game-type	3	false	false	true,true,true,false,false,3e000000,be800000
+abilities-game-type	3	false	true	true,true,true,false,false,3e000000,be800000
+abilities-game-type	3	true	false	true,true,true,false,false,3e000000,be800000
+abilities-game-type	3	true	true	true,true,true,false,false,3e000000,be800000
 travel-air	player	0	1	true	4021000000000000,4050000000000000,4021000000000000	3fbeb851eb851eb8,bfb47ae147ae147b,3f9eb851eb851eb8	3fe3333333333333,0,bfd3333333333333	42150000	false	false	3ff0000000000000	3ff0000000000000	3fb47ae147ae147b	3e2e147b	false	3e000000	false	false	false	false	-1	0	402176d0e5dfa112,4050000000000000,40211a2f4ff72884	3fc037e83487caf7,bfb41205c28f5c29,3f9c9804988fe623	10110	0
 travel-air	player	1	1	false	4021000000000000,40502ccccccccccd,4021000000000000	3fbeb851eb851eb8,bfb47ae147ae147b,3f9eb851eb851eb8	3fe3333333333333,0,bfd3333333333333	42150000	false	false	3ff0000000000000	3ff0000000000000	3fb47ae147ae147b	3e2e147b	false	3e000000	false	false	false	false	-1	0	40214430ab9817bc,405027ae147ae148,402110a22d8bcf79	3fbf06c9039062c4,bfc41205c28f5c29,3f9e45e24fa708c8	00000	0
 travel-air	player	2	8597	true	4021000000000000,4050000000000000,4021000000000000	3fbeb851eb851eb8,bfb47ae147ae147b,3f9eb851eb851eb8	3fe3333333333333,0,bfd3333333333333	42150000	false	false	3ff0000000000000	3ff0000000000000	3fb47ae147ae147b	3e2e147b	false	3e000000	false	false	false	false	-1	0	40214a9b8a29b975,4050000000000000,402111d82105f48c	3fc0a23e1abbb35d,bfb41205c28f5c29,3f9fd3b71dd9b24e	10110	0

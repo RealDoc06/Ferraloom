@@ -1,6 +1,7 @@
 //! ServerPlayer gameplay state. Connections retain handles, never another player copy.
 mod drop_item;
 pub use drop_item::{drop_item, drop_item_stack};
+pub mod abilities;
 mod ai_step;
 mod contact;
 pub mod cooldowns;
@@ -83,11 +84,7 @@ pub struct ServerPlayer {
     pub name: String,
     pub known_movement: Vec3,
     pub game_mode: GameType,
-    pub flying: bool,
-    pub may_build: bool,
-    pub instabuild: bool,
-    ability_flying_speed: f32,
-    ability_walking_speed: f32,
+    pub abilities: abilities::Abilities,
     pub last_client_input: ferraloom_protocol::play::Input,
     pub text_filtering_enabled: bool,
     pub cooldowns: cooldowns::ServerItemCooldowns,
@@ -137,38 +134,38 @@ impl ServerPlayer {
             .expect("player attribute supplier defines LUCK") as f32
     }
 
-    /// Port of Player#mayBuild. This ability can differ from the game mode.
+    /// Mirrors the vanilla Abilities.mayBuild field.
     pub fn may_build(&self) -> bool {
-        self.may_build
+        self.abilities.may_build
     }
 
-    /// Port of Abilities.instabuild.
+    /// Mirrors the vanilla Abilities.instabuild field.
     pub fn instabuild(&self) -> bool {
-        self.instabuild
+        self.abilities.instabuild
     }
 
-    /// Port of Abilities#getFlyingSpeed, independent of Player#getFlyingSpeed.
+    /// Mirrors vanilla Abilities#getFlyingSpeed, independent of movement speed.
     pub fn ability_flying_speed(&self) -> f32 {
-        self.ability_flying_speed
+        self.abilities.flying_speed()
     }
     pub fn set_ability_flying_speed(&mut self, speed: f32) {
-        self.ability_flying_speed = speed;
+        self.abilities.set_flying_speed(speed);
     }
-    /// Port of Abilities#getWalkingSpeed; aiStep publishes it to MOVEMENT_SPEED.
+    /// Mirrors vanilla Abilities#getWalkingSpeed.
     pub fn ability_walking_speed(&self) -> f32 {
-        self.ability_walking_speed
+        self.abilities.walking_speed()
     }
     pub fn set_ability_walking_speed(&mut self, speed: f32) {
-        self.ability_walking_speed = speed;
+        self.abilities.set_walking_speed(speed);
     }
     /// Port of Player#getFlyingSpeed. Passenger movement uses the ordinary
     /// sprint-dependent speed even when the independent flying ability is set.
     pub fn flying_movement_speed(&self) -> f32 {
-        if self.flying && self.vehicle.get().is_none() {
+        if self.abilities.flying && self.vehicle.get().is_none() {
             if self.shared_flag(3) {
-                self.ability_flying_speed * 2.0
+                self.abilities.flying_speed() * 2.0
             } else {
-                self.ability_flying_speed
+                self.abilities.flying_speed()
             }
         } else if self.shared_flag(3) {
             0.025999999
@@ -179,19 +176,13 @@ impl ServerPlayer {
 
     /// Port of Player#preventsBlockDrops, independent of the game mode.
     pub fn prevents_block_drops(&self) -> bool {
-        self.instabuild
+        self.abilities.instabuild
     }
 
-    /// Port of GameType#updatePlayerAbilities for the currently ported fields.
+    /// Port of GameType#updatePlayerAbilities over canonical Abilities.
     /// Runtime game-mode transitions also handle their packets and other effects.
     pub fn update_game_mode_abilities(&mut self) {
-        self.may_build = matches!(self.game_mode, GameType::Survival | GameType::Creative);
-        self.instabuild = self.game_mode == GameType::Creative;
-        match self.game_mode {
-            GameType::Creative => {}
-            GameType::Spectator => self.flying = true,
-            GameType::Survival | GameType::Adventure => self.flying = false,
-        }
+        self.abilities.update_game_mode(self.game_mode);
     }
 
     pub fn new(
@@ -251,11 +242,11 @@ impl ServerPlayer {
             last_recorded_level: i32::MIN,
             known_movement: Vec3::ZERO,
             game_mode,
-            flying: game_mode == GameType::Spectator,
-            may_build: matches!(game_mode, GameType::Survival | GameType::Creative),
-            instabuild: game_mode == GameType::Creative,
-            ability_flying_speed: 0.05,
-            ability_walking_speed: 0.1,
+            abilities: {
+                let mut abilities = abilities::Abilities::default();
+                abilities.update_game_mode(game_mode);
+                abilities
+            },
             last_client_input: ferraloom_protocol::play::Input {
                 forward: false,
                 backward: false,
@@ -352,33 +343,18 @@ impl ServerPlayer {
         self.experience_level = self.saved.get_int_or("XpLevel", 0);
         self.total_experience = self.saved.get_int_or("XpTotal", 0);
         self.set_score(self.saved.get_int_or("Score", 0));
-        if let Some((instabuild, flying, fly_speed, walk_speed)) =
-            self.saved.get_compound("abilities").map(|abilities| {
-                (
-                    abilities
-                        .get("instabuild")
-                        .and_then(|value| bool::from_nbt(value).ok())
-                        .unwrap_or(false),
-                    abilities
-                        .get("flying")
-                        .and_then(|value| bool::from_nbt(value).ok())
-                        .unwrap_or(false),
-                    abilities
-                        .get("flySpeed")
-                        .and_then(|value| f32::from_nbt(value).ok())
-                        .unwrap_or(0.05),
-                    abilities
-                        .get("walkSpeed")
-                        .and_then(|value| f32::from_nbt(value).ok())
-                        .unwrap_or(0.1),
-                )
-            })
-        {
-            self.instabuild = instabuild;
-            self.flying = flying;
-            self.ability_flying_speed = fly_speed;
-            self.ability_walking_speed = walk_speed;
+        if let Some(tag) = self.saved.get("abilities") {
+            match abilities::PackedAbilities::from_nbt(tag) {
+                Ok(packed) => self.abilities.apply(packed),
+                Err(error) => {
+                    eprintln!("Failed to load abilities for player {}: {error}", self.uuid)
+                }
+            }
         }
+        self.attributes
+            .get_instance(ferraloom_data::registries::attribute::Id::MOVEMENT_SPEED)
+            .expect("player supplier defines MOVEMENT_SPEED")
+            .set_base_value(f64::from(self.abilities.walking_speed()));
         self.game_mode =
             GameType::from_id(self.saved.get_int_or("playerGameType", self.game_mode.id()));
         // ServerPlayer reads saved abilities before applying its loaded game mode.
@@ -457,16 +433,10 @@ impl ServerPlayer {
                 Tag::Compound(self.shoulder_entity_right().clone()),
             );
         }
-        let creative = matches!(self.game_mode, GameType::Creative | GameType::Spectator);
-        let mut abilities = CompoundTag::new();
-        abilities.insert("invulnerable", Tag::Byte(i8::from(creative)));
-        abilities.insert("mayfly", Tag::Byte(i8::from(creative)));
-        abilities.insert("flying", Tag::Byte(i8::from(self.flying)));
-        abilities.insert("instabuild", Tag::Byte(i8::from(self.instabuild)));
-        abilities.insert("mayBuild", Tag::Byte(i8::from(self.may_build)));
-        abilities.insert("flySpeed", Tag::Float(self.ability_flying_speed));
-        abilities.insert("walkSpeed", Tag::Float(self.ability_walking_speed));
-        tag.insert("abilities", Tag::Compound(abilities));
+        tag.insert(
+            "abilities",
+            self.abilities.pack().to_nbt().expect("canonical abilities"),
+        );
         tag
     }
 }
@@ -863,7 +833,7 @@ impl crate::entity::Entity for PlayerBehavior {
         pos: BlockPos,
         level: &mut Level,
     ) -> Result<(), LevelError> {
-        if !level.entity::<ServerPlayer>(entity)?.flying {
+        if !level.entity::<ServerPlayer>(entity)?.abilities.flying {
             crate::entity::bubble_column::on_above_bubble_column(
                 self, entity, drag_down, pos, level,
             )?;
@@ -877,7 +847,7 @@ impl crate::entity::Entity for PlayerBehavior {
         drag_down: bool,
         level: &mut Level,
     ) -> Result<(), LevelError> {
-        if !level.entity::<ServerPlayer>(entity)?.flying {
+        if !level.entity::<ServerPlayer>(entity)?.abilities.flying {
             crate::entity::bubble_column::on_inside_bubble_column(self, entity, drag_down, level)?;
         }
         Ok(())
@@ -928,7 +898,9 @@ impl crate::entity::Entity for PlayerBehavior {
     }
     /// Port of Player#isSwimming. The final read invokes Entity's parent body.
     fn is_swimming(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
-        if level.entity::<ServerPlayer>(entity)?.flying || self.is_spectator(entity, level)? {
+        if level.entity::<ServerPlayer>(entity)?.abilities.flying
+            || self.is_spectator(entity, level)?
+        {
             return Ok(false);
         }
         Ok(level.entity::<super::EntityData>(entity)?.is_swimming())
@@ -1014,11 +986,11 @@ impl crate::entity::Entity for PlayerBehavior {
             .flying_movement_speed())
     }
     fn can_glide(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
-        Ok(!level.entity::<ServerPlayer>(entity)?.flying
+        Ok(!level.entity::<ServerPlayer>(entity)?.abilities.flying
             && crate::entity::living::gliding::can_glide(self, entity, level)?)
     }
     fn is_affected_by_fluids(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
-        Ok(!level.entity::<ServerPlayer>(entity)?.flying)
+        Ok(!level.entity::<ServerPlayer>(entity)?.abilities.flying)
     }
     fn max_up_step(
         &self,
@@ -1055,7 +1027,7 @@ impl crate::entity::Entity for PlayerBehavior {
         level: &crate::level::Level,
     ) -> Result<f32, crate::level::LevelError> {
         let player = level.entity::<ServerPlayer>(entity)?;
-        if player.flying || player.shared_flag(7) {
+        if player.abilities.flying || player.shared_flag(7) {
             Ok(1.0)
         } else {
             crate::entity::living::block_speed_factor(entity, level)
@@ -1100,7 +1072,7 @@ impl crate::entity::Entity for PlayerBehavior {
             delta,
             mover,
             max_step,
-            level.entity::<ServerPlayer>(entity)?.flying,
+            level.entity::<ServerPlayer>(entity)?.abilities.flying,
         )
     }
 }

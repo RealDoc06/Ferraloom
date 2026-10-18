@@ -166,10 +166,10 @@ mod tests {
             for flying in [false, true] {
                 let mut player = player();
                 player.game_mode = mode;
-                player.flying = flying;
+                player.abilities.flying = flying;
                 player.update_game_mode_abilities();
                 let applied = player.instabuild();
-                player.instabuild = !applied;
+                player.abilities.instabuild = !applied;
                 let prevents = player.prevents_block_drops();
                 let mut tag = player.save();
                 let saved = tag

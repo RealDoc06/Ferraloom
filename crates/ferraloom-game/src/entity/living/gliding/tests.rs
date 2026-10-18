@@ -93,7 +93,7 @@ fn fixture(row: &[&str]) -> (Level, EntityRef) {
         player.on_ground = true;
     }
     if kind == 2 {
-        player.flying = true;
+        player.abilities.flying = true;
     }
     if kind == 3 {
         let effect = MobEffectInstance::new(MobEffect::LEVITATION, 100, 0, false, true, true, None);

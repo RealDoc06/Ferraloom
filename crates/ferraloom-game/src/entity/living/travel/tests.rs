@@ -190,7 +190,7 @@ fn native_air_travel_matches_collision_positions_flags_effects_and_drag_bits() {
                 vector(row[5]),
                 GameType::Survival,
             );
-            player.flying = row[15].parse().unwrap();
+            player.abilities.flying = row[15].parse().unwrap();
             player.set_ability_flying_speed(float(row[16]));
             EntityState::Player(Box::new(player))
         };

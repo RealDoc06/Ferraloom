@@ -417,7 +417,11 @@ fn native_flags_use_living_virtuals_player_abilities_and_effective_fire_resistan
             level.entity_mut::<ItemEntity>(id).unwrap().set_item(stack);
         }
         if scenario == "player-flying" {
-            level.entity_mut::<ServerPlayer>(id).unwrap().flying = true;
+            level
+                .entity_mut::<ServerPlayer>(id)
+                .unwrap()
+                .abilities
+                .flying = true;
         }
         if scenario == "player-spectator" {
             level.entity_mut::<ServerPlayer>(id).unwrap().game_mode = GameType::Spectator;

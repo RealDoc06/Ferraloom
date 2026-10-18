@@ -105,7 +105,7 @@ fn native_complete_water_lava_and_flying_bodies_preserve_bits_and_exit_probes() 
                 vector(row[4]),
                 GameType::Survival,
             );
-            player.flying = row[14].parse().unwrap();
+            player.abilities.flying = row[14].parse().unwrap();
             EntityState::Player(Box::new(player))
         } else {
             EntityState::Cow(Box::default())

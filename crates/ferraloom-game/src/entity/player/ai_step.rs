@@ -156,7 +156,7 @@ pub(super) fn ai_step<E: Entity + ?Sized>(
     item_tick::tick_inventory(entity, level)?;
     {
         let player = level.entity_mut::<ServerPlayer>(entity)?;
-        if player.flying && player.vehicle.get().is_none() {
+        if player.abilities.flying && player.vehicle.get().is_none() {
             player.fall_distance = 0.0;
         }
     }
