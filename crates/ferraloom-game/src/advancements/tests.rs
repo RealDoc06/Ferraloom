@@ -364,6 +364,25 @@ fn vanilla_progress_award_revoke_dates_and_wire() {
         }
     }
 }
+#[test]
+fn vanilla_saved_progress_rebuilds_hashmap_wire_order() {
+    for row in oracle()["loaded_progress"].as_array().unwrap() {
+        let mut progress = AdvancementProgress::decode(&row["input"]).unwrap();
+        progress.update(&AdvancementRequirements::decode(&row["requirements"]).unwrap());
+        let network = progress.network(id("test"));
+        let mut writer = Writer::new();
+        writer.var_int(network.criteria.len() as i32);
+        for criterion in network.criteria {
+            criterion.encode(&mut writer).unwrap();
+        }
+        let actual: String = writer
+            .as_slice()
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect();
+        assert_eq!(actual, row["wire"].as_str().unwrap(), "{}", row["input"]);
+    }
+}
 fn synthetic_manager() -> ServerAdvancementManager {
     let fixture = &oracle()["player"];
     let mut manager = ServerAdvancementManager::new(holders(&fixture["inputs"]));

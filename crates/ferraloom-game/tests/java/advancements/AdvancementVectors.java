@@ -207,6 +207,14 @@ public final class AdvancementVectors {
         }
         OUT.add("progress",rows);
     }
+    static void loadedProgress() {
+        var rows=new JsonArray();
+        for(var names:List.of(List.of("distract_piglin","distract_piglin_directly"),List.of("Aa","BB","AaAa","BBBB"))) {
+            var criteria=new JsonObject();for(var name:names)criteria.addProperty(name,"1970-01-02 10:17:36 +0000");var input=new JsonObject();input.add("criteria",criteria);var requirements=new AdvancementRequirements(List.of(names));var progress=AdvancementProgress.CODEC.parse(JsonOps.INSTANCE,input).getOrThrow();progress.update(requirements);
+            var buffer=new net.minecraft.network.FriendlyByteBuf(Unpooled.buffer());AdvancementProgress.STREAM_CODEC.encode(buffer,progress);var bytes=new byte[buffer.readableBytes()];buffer.readBytes(bytes);buffer.release();var row=new JsonObject();row.add("input",input);row.add("requirements",AdvancementRequirements.CODEC.encodeStart(JsonOps.INSTANCE,requirements).getOrThrow());row.addProperty("wire",HexFormat.of().formatHex(bytes));rows.add(row);
+        }
+        OUT.add("loaded_progress",rows);
+    }
     static void treeMutation() {
         var input=new JsonArray();var holders=new ArrayList<AdvancementHolder>();
         for(String[] entry:List.of(new String[]{"child","root"},new String[]{"orphan","missing"},new String[]{"root",""},new String[]{"grandchild","child"},new String[]{"cycle_a","cycle_b"},new String[]{"cycle_b","cycle_a"})) {
@@ -300,7 +308,7 @@ public final class AdvancementVectors {
         OUT.add("inline_loot",rows);
     }
     public static void main(String[] args) throws Exception {
-        TimeZone.setDefault(TimeZone.getTimeZone("UTC"));setup();builtins();triggers();progress();inlineLoot();playerProgress();invalidAdvancements();validation();treeMutation();
+        TimeZone.setDefault(TimeZone.getTimeZone("UTC"));setup();builtins();triggers();progress();inlineLoot();playerProgress();invalidAdvancements();validation();treeMutation();loadedProgress();
         try(var output=new GZIPOutputStream(Files.newOutputStream(Path.of(args[0])))){output.write(JSON.toJson(OUT).getBytes(java.nio.charset.StandardCharsets.UTF_8));}
         for(var entry:OUT.entrySet())System.out.println(entry.getKey()+": "+(entry.getValue().isJsonArray()?entry.getValue().getAsJsonArray().size():1));
     }

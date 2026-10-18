@@ -191,14 +191,11 @@ pub struct AdvancementProgress {
 impl AdvancementProgress {
     pub fn update(&mut self, requirements: &AdvancementRequirements) {
         let names = requirements.names();
-        let removed: Vec<_> = self
-            .criteria
-            .iter()
-            .filter(|(name, _)| !names.contains(name.as_str()))
-            .map(|(name, _)| name.clone())
-            .collect();
-        for name in removed {
-            self.criteria.remove(&name);
+        let mut cursor = self.criteria.cursor();
+        while let Some((name, _)) = cursor.next_entry() {
+            if !names.contains(name.as_str()) {
+                cursor.remove();
+            }
         }
         // AdvancementRequirements#names uses ObjectOpenHashSet.
         let mut ordered = ferraloom_util::collections::ObjectOpenHashSet::new();
@@ -262,6 +259,15 @@ impl AdvancementProgress {
                     },
                 );
             }
+        }
+        // CRITERIA_CODEC first collects with Collectors.toMap, then the progress
+        // constructor copies that HashMap with putMapEntries' exact pre-sizing.
+        if !result.criteria.is_empty() {
+            let mut copied = JavaHashMap::with_capacity((result.criteria.len() * 4).div_ceil(3));
+            for (name, progress) in std::mem::take(&mut result.criteria) {
+                copied.insert(name, progress);
+            }
+            result.criteria = copied;
         }
         if let Some(done) = codec::object(v)?.get("done").filter(|v| !v.is_null()) {
             codec::boolean(done)?;
