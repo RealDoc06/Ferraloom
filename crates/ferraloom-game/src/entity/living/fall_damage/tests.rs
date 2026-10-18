@@ -82,7 +82,7 @@ fn native_landing_particles_precede_parent_events_and_clear_climb_cache_last() {
                             "particles:{}:{}:{}:{}:{:x}",
                             state.id(),
                             bits(Vec3::new(p.x, p.y, p.z)),
-                            p.count,
+                            p.count.0,
                             bits(Vec3::new(
                                 f64::from(p.x_dist),
                                 f64::from(p.y_dist),
