@@ -40,9 +40,9 @@ impl PrimedTnt {
         }
     }
     /// Constructor creation order consumes the common network ID before the
-    /// level's launch-angle random draw. Entity RNG has its own supplied seed.
-    pub fn new_at(level: &mut Level, position: Vec3, owner: Option<Uuid>, seed: i64) -> Self {
-        let mut entity = Self::new(level.next_entity_id(), seed);
+    /// level's launch-angle random draw. Entity RNG comes from RandomSource.create.
+    pub fn new_at(level: &mut Level, position: Vec3, owner: Option<Uuid>) -> Self {
+        let mut entity = Self::with_parent(level.create_entity_data(EntityType::TNT));
         entity.parent.set_pos(position);
         let angle = level.random().next_double() * f64::from(mth::TWO_PI);
         entity.parent.velocity = Vec3::new(
@@ -191,6 +191,39 @@ impl Entity for PrimedTntBehavior {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn vanilla_tnt_launch_uses_level_random_after_canonical_construction() {
+        let mut rows = 0;
+        for row in include_str!("../../../tests/java/entity/vectors.tsv")
+            .lines()
+            .filter(|row| row.starts_with("tnt-launch\t"))
+        {
+            let fields: Vec<_> = row.split('\t').collect();
+            static BEHAVIORS: crate::Behaviors = crate::Behaviors::EMPTY;
+            let mut level = Level::new(crate::level::Region::new(&BEHAVIORS));
+            level.random().set_seed(fields[1].parse().unwrap());
+            let tnt = PrimedTnt::new_at(&mut level, Vec3::new(1.0, 64.0, 1.0), None);
+            let expected: Vec<_> = fields[2]
+                .split(',')
+                .map(|v| u64::from_str_radix(v, 16).unwrap())
+                .collect();
+            assert_eq!(
+                [
+                    tnt.parent.velocity.x,
+                    tnt.parent.velocity.y,
+                    tnt.parent.velocity.z
+                ]
+                .map(f64::to_bits)
+                .as_slice(),
+                expected.as_slice(),
+                "{row}"
+            );
+            assert_eq!(tnt.parent.network_id, 1);
+            assert_eq!(level.next_entity_id(), 2);
+            rows += 1;
+        }
+        assert_eq!(rows, 3);
+    }
     #[test]
     fn tnt_nbt_uses_native_lowercase_fields_and_keeps_unknown_data() {
         let mut tnt = PrimedTnt::new(1, 123);

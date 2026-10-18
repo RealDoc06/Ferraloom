@@ -18,6 +18,11 @@ public final class PersistenceVectors {
     return Integer.toHexString(Float.floatToRawIntBits(entity.getYRot()))+","+Integer.toHexString(Float.floatToRawIntBits(entity.getXRot()))+","+Integer.toHexString(Float.floatToRawIntBits(entity.yRotO))+","+Integer.toHexString(Float.floatToRawIntBits(entity.xRotO));
   }
   public static void run(Level level) {
+    for(long seed:List.of(0L,123L,-1L)) {
+      level.getRandom().setSeed(seed);
+      var tnt=new PrimedTnt(level,1,64,1,null);
+      System.out.println("tnt-launch\t"+seed+"\t"+TrackingVectors.vec(tnt.getDeltaMovement()));
+    }
     float[][] rotations={{-721.25f,-721.25f},{721.25f,180},{-0.0f,-0.0f},{Float.NaN,Float.POSITIVE_INFINITY},{37.25f,-450.125f}};
     for(int i=0;i<rotations.length;i++) {
       var entity=new PrimedTnt(EntityTypes.TNT,level);entity.setYRot(11.25f);entity.setXRot(-12.5f);entity.setDeltaMovement(1,2,3);

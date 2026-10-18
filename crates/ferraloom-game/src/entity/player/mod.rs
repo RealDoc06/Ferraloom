@@ -80,8 +80,11 @@ impl ServerPlayer {
             parent: LivingEntity {
                 equipment: Default::default(),
                 parent: {
-                    let mut base =
-                        EntityData::new(ferraloom_data::EntityType::PLAYER, network_id, 0);
+                    let mut base = EntityData::from_random(
+                        ferraloom_data::EntityType::PLAYER,
+                        network_id,
+                        crate::level::entity::new_entity_random(),
+                    );
                     base.uuid = uuid;
                     base.set_pos(position);
                     base
