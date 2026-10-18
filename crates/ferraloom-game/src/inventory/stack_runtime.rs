@@ -63,9 +63,10 @@ impl Level {
                 .operation_stacks
                 .parts(slot.slot)
                 .ok_or(MenuError::InvalidSlot(slot.slot as i32)),
-            ContainerHandle::Entity(_) => {
-                Err(MenuError::Unsupported("entity stack generation storage"))
-            }
+            ContainerHandle::Entity(entity) => self
+                .entity::<crate::entity::item::ItemEntity>(entity)?
+                .stack_parts(slot.slot)
+                .ok_or(MenuError::InvalidSlot(slot.slot as i32)),
         }
     }
     fn stack_parts_mut(
@@ -115,9 +116,10 @@ impl Level {
                 .operation_stacks
                 .parts_mut(slot.slot)
                 .ok_or(MenuError::InvalidSlot(slot.slot as i32)),
-            ContainerHandle::Entity(_) => {
-                Err(MenuError::Unsupported("entity stack generation storage"))
-            }
+            ContainerHandle::Entity(entity) => self
+                .entity_mut::<crate::entity::item::ItemEntity>(entity)?
+                .stack_parts_mut(slot.slot)
+                .ok_or(MenuError::InvalidSlot(slot.slot as i32)),
         }
     }
     fn retain_stack_owner(&mut self, owner: ContainerHandle) -> Result<()> {
@@ -146,15 +148,14 @@ impl Level {
             ContainerHandle::PlayerInventory(_)
             | ContainerHandle::MenuListenerCopies { .. }
             | ContainerHandle::MenuOperationStacks { .. } => {}
-            ContainerHandle::Entity(_) => {
-                return Err(MenuError::Unsupported("entity stack generation storage"));
-            }
+            ContainerHandle::Entity(entity) => self.retain_entity(entity)?,
         }
         Ok(())
     }
     fn release_stack_owner(&mut self, owner: ContainerHandle) {
         match owner {
             ContainerHandle::BlockEntity(handle) => self.release_block_entity(handle),
+            ContainerHandle::Entity(entity) => self.release_entity(entity),
             ContainerHandle::MenuLocal { player, menu, .. }
             | ContainerHandle::MenuCarried { player, menu } => {
                 if let Ok(player) = self.entity_mut::<ServerPlayer>(player)
@@ -527,6 +528,56 @@ mod tests {
     };
     use ferraloom_data::Item;
     use ferraloom_util::{Uuid, Vec3};
+
+    #[test]
+    fn item_stack_roots_preserve_removed_owners_and_replaced_receivers() {
+        use crate::entity::item::ItemEntity;
+        let mut level = crate::entity::tests::level(false);
+        let item = ItemEntity::new_at(
+            &mut level,
+            Vec3::new(8.5, 64.0, 8.5),
+            ItemStack::new(Item::STONE, 7, Default::default()),
+        );
+        let entity = level.next_entity_ref();
+        let uuid = item.parent.uuid;
+        level
+            .add_entity(entity, EntityState::Item(Box::new(item)))
+            .unwrap();
+        let address = ContainerSlot {
+            container: ContainerHandle::Entity(entity),
+            slot: 0,
+        };
+        let held;
+        {
+            let mut operation = StackOperation::new(&mut level);
+            assert!(matches!(
+                operation.pin(ContainerSlot { slot: 1, ..address }),
+                Err(MenuError::InvalidSlot(1))
+            ));
+            held = operation.pin(address).unwrap();
+            operation.level.retain_stack(held).unwrap();
+            operation.level.remove_entity(entity).unwrap();
+            operation.level.finish_entity_management();
+            assert_eq!(operation.level.entity_by_uuid(uuid), None);
+            operation
+                .level
+                .entity_mut::<ItemEntity>(entity)
+                .unwrap()
+                .set_item(ItemStack::new(Item::DIRT, 3, Default::default()));
+            set_count(operation.level.stack_mut(held).unwrap(), 2);
+            assert_eq!(count(operation.level.stack(held).unwrap()), 2);
+            assert_eq!(
+                count(operation.level.entity::<ItemEntity>(entity).unwrap().item()),
+                3
+            );
+        }
+        level.finish_entity_management();
+        assert_eq!(count(level.stack(held).unwrap()), 2);
+        level.release_stack(held);
+        level.finish_entity_management();
+        assert!(level.entity_state(entity).is_err());
+        assert!(level.stack(held).is_err());
+    }
 
     #[test]
     fn fresh_operation_objects_follow_moves_and_retire_after_the_final_root() {
