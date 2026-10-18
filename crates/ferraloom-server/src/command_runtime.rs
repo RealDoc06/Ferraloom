@@ -164,6 +164,7 @@ impl MinecraftServer {
         let result = match command.command.as_str() {
             "gamerule" => builtins::gamerule(&mut self.game_rules, &command)?,
             "seed" => builtins::seed(self.world.seed),
+            "help" => self.commands.help(&command)?,
             "say" | "me" | "msg" => self.message_command(source, &command)?,
             "teammsg" => {
                 return Err(exceptions::error(
@@ -762,5 +763,56 @@ impl MinecraftServer {
                 chat_type,
             })));
         }
+    }
+}
+
+impl MinecraftServer {
+    pub(super) fn process_command_suggestions(&mut self) -> Result<()> {
+        let players = self.players.clone();
+        for connection in players {
+            let Some(request) = self
+                .connections
+                .get_mut(&connection)
+                .and_then(|c| c.command_suggestion.take())
+            else {
+                continue;
+            };
+            let Phase::Play(entity) = self.connections[&connection].phase else {
+                continue;
+            };
+            let player = self.player(entity)?;
+            let source =
+                CommandSourceStack::server(self.access.permission(player.uuid), player.position)
+                    .with_entity(entity);
+            let suggestions = self.commands.suggestions(&request.command.0, source);
+            let entries = suggestions
+                .list
+                .into_iter()
+                .map(|suggestion| {
+                    let tooltip = suggestion.tooltip.map(|message| {
+                        (message.as_ref() as &dyn std::any::Any)
+                            .downcast_ref::<exceptions::TranslatedMessage>()
+                            .map_or_else(
+                                || Component::literal(message.text()),
+                                |translated| translated.component.clone(),
+                            )
+                    });
+                    play::CommandSuggestion {
+                        text: suggestion.text,
+                        tooltip,
+                    }
+                })
+                .collect();
+            self.connections
+                .get_mut(&connection)
+                .unwrap()
+                .push(cb::Packet::CommandSuggestions(cb::CommandSuggestions {
+                    id: request.id,
+                    start: VarInt(suggestions.range.start as i32),
+                    length: VarInt(suggestions.range.length() as i32),
+                    suggestions: entries,
+                }));
+        }
+        Ok(())
     }
 }

@@ -183,6 +183,58 @@ impl Commands {
             _ => CommandAction::Run(Box::new(prepared)),
         })
     }
+    /// Port of HelpCommand, using Brigadier's smart usage and original reader text.
+    pub fn help(
+        &self,
+        command: &PreparedCommand,
+    ) -> Result<builtins::CommandResult, CommandSyntaxException> {
+        let (node, prefix) = if let Some(input) = command.string("command") {
+            let parse = self.dispatcher.parse(input, command.source.clone());
+            let node = parse
+                .context
+                .nodes
+                .last()
+                .ok_or_else(|| exceptions::error("commands.help.failed", &[]))?
+                .node;
+            (node, format!("/{input} "))
+        } else {
+            (self.dispatcher.root(), "/".into())
+        };
+        let usage = self.dispatcher.get_smart_usage(node, &command.source);
+        Ok(builtins::CommandResult {
+            value: usage.len() as i32,
+            feedback: usage
+                .into_iter()
+                .map(|(_, line)| builtins::Feedback {
+                    message: ferraloom_protocol::chat::Component::literal(format!(
+                        "{prefix}{line}"
+                    )),
+                    broadcast: false,
+                })
+                .collect(),
+            rule_change: None,
+        })
+    }
+    /// Port of ServerCommandSuggestionsProvider's optional slash and 1,000-entry cap.
+    pub fn suggestions(
+        &self,
+        text: &str,
+        source: CommandSourceStack,
+    ) -> ferraloom_brigadier::Suggestions {
+        let mut reader = ferraloom_brigadier::StringReader::with_provider(
+            text,
+            std::sync::Arc::new(exceptions::BrigadierExceptions),
+        );
+        if reader.can_read() && reader.peek() == 47 {
+            reader.skip();
+        }
+        let parsed = self
+            .dispatcher
+            .parse_reader(reader, std::sync::Arc::new(source));
+        let mut suggestions = self.dispatcher.get_completion_suggestions(&parsed);
+        suggestions.list.truncate(1000);
+        suggestions
+    }
     pub fn packet(&self, permission: i32) -> play::clientbound::Packet {
         play::clientbound::Packet::Commands(tree::packet(&CommandSourceStack::server(
             permission,

@@ -128,6 +128,7 @@ struct Connection {
     last_seen: LastSeenMessagesValidator,
     signature_cache: MessageSignatureCache,
     command_message: Option<(String, ValidatedMessage)>,
+    command_suggestion: Option<sb::CommandSuggestion>,
     next_chat_index: i32,
     network_ticks: u64,
     rate_packets: u64,
@@ -429,6 +430,7 @@ impl MinecraftServer {
                         last_seen: LastSeenMessagesValidator::default(),
                         signature_cache: MessageSignatureCache::default(),
                         command_message: None,
+                        command_suggestion: None,
                         next_chat_index: 0,
                         network_ticks: 0,
                         rate_packets: 0,
@@ -1128,6 +1130,12 @@ impl MinecraftServer {
                     Err(e) => self.feedback(Some(connection), &e.to_string()),
                 }
             }
+            sb::Packet::CommandSuggestion(request) => {
+                self.connections
+                    .get_mut(&connection)
+                    .unwrap()
+                    .command_suggestion = Some(request);
+            }
             sb::Packet::ChatCommand(p) => {
                 self.connections
                     .get_mut(&connection)
@@ -1438,6 +1446,7 @@ impl MinecraftServer {
         Ok(())
     }
     async fn tick_connections(&mut self) -> Result<()> {
+        self.process_command_suggestions()?;
         let now = Instant::now();
         let mut joining = Vec::new();
         for (&id, c) in &mut self.connections {
