@@ -353,9 +353,30 @@ public final class ExtractData {
         write(dir, "entity_types", entities);
     }
 
+    private static void attributeProperties(Path dir) throws Exception {
+        var attributes = new JsonArray();
+        for (var attribute : BuiltInRegistries.ATTRIBUTE) {
+            var out = new JsonObject();
+            out.addProperty("id", BuiltInRegistries.ATTRIBUTE.getId(attribute));
+            out.addProperty("name", BuiltInRegistries.ATTRIBUTE.getKey(attribute).toString());
+            out.addProperty("default_value", attribute.getDefaultValue());
+            out.addProperty("syncable", attribute.isClientSyncable());
+            if (attribute instanceof RangedAttribute ranged) {
+                out.addProperty("min_value", ranged.getMinValue());
+                out.addProperty("max_value", ranged.getMaxValue());
+            } else {
+                out.add("min_value", JsonNull.INSTANCE);
+                out.add("max_value", JsonNull.INSTANCE);
+            }
+            attributes.add(out);
+        }
+        write(dir, "attributes", attributes);
+    }
+
     public static void main(String[] args) throws Exception {
         SharedConstants.tryDetectVersion();
         Bootstrap.bootStrap();
+        if (args.length > 1 && args[1].equals("--attributes-only")) { attributeProperties(Path.of(args[0])); return; }
         if (args.length > 1 && args[1].equals("--entities-only")) { entityTypes(Path.of(args[0])); return; }
         if (args.length > 1 && args[1].equals("--fluid-random-ticking-only")) { fluidRandomTicking(Path.of(args[0])); return; }
         if (args.length > 1 && args[1].equals("--block-items-only")) { blockItems(Path.of(args[0])); return; }
@@ -435,5 +456,6 @@ public final class ExtractData {
         write(dir, "items", items);
 
         entityTypes(dir);
+        attributeProperties(dir);
     }
 }

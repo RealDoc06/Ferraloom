@@ -492,6 +492,54 @@ fn items(out: &mut String, items: &Value) {
     out.push_str("];\n");
 }
 
+fn attribute_properties(out: &mut String, attributes: &Value, registries: &Value) {
+    let attributes = attributes.as_array().unwrap();
+    assert_eq!(
+        attributes.len(),
+        registries["minecraft:attribute"]["entries"]
+            .as_object()
+            .unwrap()
+            .len()
+    );
+    writeln!(
+        out,
+        "const ATTRIBUTE_DATA: [AttributeData; {}] = [",
+        attributes.len()
+    )
+    .unwrap();
+    for (id, attribute) in attributes.iter().enumerate() {
+        assert_eq!(number(&attribute["id"]), id as u64);
+        assert_eq!(
+            number(
+                &registries["minecraft:attribute"]["entries"][string(&attribute["name"])]["protocol_id"]
+            ),
+            id as u64
+        );
+        write!(
+            out,
+            "AttributeData {{ default_value: {}, syncable: {}, range: ",
+            float(&attribute["default_value"]),
+            attribute["syncable"]
+        )
+        .unwrap();
+        match (&attribute["min_value"], &attribute["max_value"]) {
+            (Value::Null, Value::Null) => out.push_str("None"),
+            (min, max) => {
+                assert!(min.as_f64().unwrap() <= max.as_f64().unwrap());
+                write!(
+                    out,
+                    "Some(AttributeRange {{ min: {}, max: {} }})",
+                    float(min),
+                    float(max)
+                )
+                .unwrap();
+            }
+        }
+        out.push_str(" },\n");
+    }
+    out.push_str("];\n");
+}
+
 fn entities(out: &mut String, entities: &Value, registries: &Value) {
     out.push_str("pub const ENTITY_TYPES: &[EntityTypeData] = &[\n");
     for (id, entity) in entities.as_array().unwrap().iter().enumerate() {
@@ -709,6 +757,7 @@ fn main() {
     block_methods::generate(root, &block_properties);
     let item_report = load(root, "items");
     let entity_report = load(root, "entity_types");
+    let attribute_report = load(root, "attributes");
     for (name, count) in [
         (
             "block",
@@ -813,6 +862,7 @@ fn main() {
     .unwrap();
     items(&mut out, &item_report);
     entities(&mut out, &entity_report, &registries_report);
+    attribute_properties(&mut out, &attribute_report, &registries_report);
     let path = Path::new(&std::env::var_os("OUT_DIR").unwrap()).join("data.rs");
     std::fs::write(path, out).unwrap();
     let native = voxel_shapes(&load(root, "voxel_shapes"), &block_properties);

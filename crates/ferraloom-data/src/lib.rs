@@ -311,6 +311,24 @@ impl EntityAttachments {
     }
 }
 
+/// Native RangedAttribute limits; None on AttributeData preserves an unbounded
+/// base Attribute rather than inventing minimum and maximum values.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct AttributeRange {
+    pub min: f64,
+    pub max: f64,
+}
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct AttributeData {
+    pub default_value: f64,
+    pub range: Option<AttributeRange>,
+    pub syncable: bool,
+}
+impl registries::attribute::Id {
+    pub const fn data(self) -> &'static AttributeData {
+        &ATTRIBUTE_DATA[self.protocol_id() as usize]
+    }
+}
 #[derive(Clone, Copy, Debug)]
 pub struct EntityTypeData {
     pub width: f32,

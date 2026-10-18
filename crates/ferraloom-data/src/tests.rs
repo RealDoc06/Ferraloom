@@ -79,6 +79,55 @@ fn native_entity_attachments_preserve_registered_offsets_and_all_fallbacks() {
     }
 }
 
+#[test]
+fn native_attribute_defaults_ranges_and_sync_flags_remain_distinct_from_type_overrides() {
+    use registries::attribute::Id;
+    assert_eq!(
+        *Id::MAX_HEALTH.data(),
+        AttributeData {
+            default_value: 20.0,
+            range: Some(AttributeRange {
+                min: 1.0,
+                max: 1024.0
+            }),
+            syncable: true
+        }
+    );
+    assert_eq!(
+        *Id::GRAVITY.data(),
+        AttributeData {
+            default_value: 0.08,
+            range: Some(AttributeRange {
+                min: -1.0,
+                max: 1.0
+            }),
+            syncable: true
+        }
+    );
+    assert!(!Id::FOLLOW_RANGE.data().syncable);
+    assert_eq!(Id::MOVEMENT_SPEED.data().default_value, 0.7);
+    assert_eq!(
+        EntityType::PLAYER
+            .data()
+            .attributes
+            .iter()
+            .find(|(id, _)| *id == Id::MOVEMENT_SPEED)
+            .unwrap()
+            .1,
+        f64::from(0.1_f32)
+    );
+    for id in registries::attribute::ALL {
+        let data = id.data();
+        if let Some(range) = data.range {
+            assert!(
+                range.min <= data.default_value && data.default_value <= range.max,
+                "{}",
+                id.name()
+            );
+        }
+    }
+}
+
 fn check_property<T: PropertyValue + Debug>(
     state: BlockState,
     property: Property<T>,

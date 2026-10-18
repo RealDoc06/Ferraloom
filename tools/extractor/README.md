@@ -21,6 +21,10 @@ Each type also retains all four `EntityDimensions.attachments` lists. Extraction
 reads the immutable native map directly, preserving unrotated double coordinates
 and registered offsets independently of bounding-box dimensions.
 
+`ExtractData <output-dir> --attributes-only` writes `attributes.json`: each
+registered Attribute's default, optional RangedAttribute bounds and syncable
+flag. These registry defaults remain separate from entity-type base overrides.
+
 Shapes are AABB lists in block-local coordinates, queried with
 `EmptyBlockGetter.INSTANCE`, `BlockPos.ZERO`, and an empty collision context.
 The shared shape table deduplicates collision, outline and occlusion shapes.
