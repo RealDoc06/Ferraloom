@@ -5,7 +5,7 @@ use crate::{
     block::entity::{BlockEntityRef, BlockEntityState},
     entity::{
         EntityRef,
-        player::{GameType, ServerPlayer},
+        player::ServerPlayer,
     },
     level::Level,
 };
@@ -163,7 +163,7 @@ mod tests {
             containers::menu::ContainerMenuProvider,
             entity::{BlockEntityData, create},
         },
-        entity::EntityState,
+        entity::{EntityState, player::GameType},
         level::{Region, chunk::LevelChunk},
     };
     use ferraloom_data::{Block, Item};

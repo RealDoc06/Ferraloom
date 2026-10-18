@@ -291,6 +291,8 @@ impl BlockEntityState {
                 DataComponentMap::item_defaults(stack.item)?,
                 &stack.components,
             );
+        } else {
+            self.apply_components(&DataComponentMap::default(), &DataComponentPatch::default());
         }
         Ok(())
     }
