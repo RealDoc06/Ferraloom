@@ -578,3 +578,118 @@ parity_test!(
     parity_command_force_load_and_weather,
     force_load_and_weather
 );
+
+async fn player_state_commands(session: &mut Session) -> Result<ObservationLog> {
+    let operator = session.join("ParityBot").await?;
+    let guest = session.join("CommandGuest").await?;
+    let mut log = ObservationLog::default();
+    log.record(
+        "mode.self",
+        command(
+            session.bot(operator)?,
+            "gamemode creative",
+            "commands.gamemode.success.self",
+        )
+        .await?,
+    )?;
+    let bot = session.bot(operator)?;
+    bot.synchronize().await?;
+    let before = bot.snapshot().messages.len();
+    bot.command("gamemode creative").await?;
+    bot.synchronize().await?;
+    ensure!(
+        bot.snapshot().messages.len() == before,
+        "unchanged game mode emitted feedback"
+    );
+    log.record("mode.unchanged_feedback", 0)?;
+    log.record(
+        "mode.other",
+        command(
+            session.bot(operator)?,
+            "gamemode creative CommandGuest",
+            "commands.gamemode.success.other",
+        )
+        .await?,
+    )?;
+    log.record(
+        "mode.target",
+        feedback(session.bot(guest)?, "gameMode.changed").await?,
+    )?;
+    ensure!(
+        session.bot(guest)?.snapshot().game_mode
+            == Some(ferraloom_parity::protocol::play::GameType::Creative),
+        "target game-mode packet missing"
+    );
+    for (index, text, position, rotation) in [
+        (
+            0,
+            "tp @s 10.0 90.0 -10.0 450 30",
+            [10., 90., -10.],
+            [90., 30.],
+        ),
+        (
+            1,
+            "teleport @s ~1 ~-2 ~3 ~30 ~-20",
+            [11., 88., -7.],
+            [120., 10.],
+        ),
+    ] {
+        let bot = session.bot(operator)?;
+        bot.command(text).await?;
+        let packet = bot
+            .wait_for("teleport movement", Ticks::DEFAULT, |_, packet| {
+                matches!(packet, cb::Packet::PlayerPosition(_))
+            })
+            .await?;
+        let cb::Packet::PlayerPosition(packet) = packet.as_ref() else {
+            unreachable!()
+        };
+        log.record(format!("teleport.{index}.packet"), serde_json::json!({
+            "position": [packet.change.position.x,packet.change.position.y,packet.change.position.z],
+            "rotation": [packet.change.y_rot,packet.change.x_rot],
+            "movement": [packet.change.delta_movement.x,packet.change.delta_movement.y,packet.change.delta_movement.z],
+            "relatives": packet.relatives,
+        }))?;
+        log.record(
+            format!("teleport.{index}.feedback"),
+            feedback(bot, "commands.teleport.success.location.single").await?,
+        )?;
+        ensure!(
+            bot.snapshot().position == position && bot.snapshot().rotation == rotation,
+            "teleport destination mismatch: {:?}",
+            bot.snapshot().position
+        );
+    }
+    let before = session.bot(guest)?.snapshot().teleports;
+    log.record(
+        "teleport.entity.feedback",
+        command(
+            session.bot(operator)?,
+            "tp CommandGuest ParityBot",
+            "commands.teleport.success.entity.single",
+        )
+        .await?,
+    )?;
+    let guest = session.bot(guest)?;
+    guest
+        .wait_for("target teleport", Ticks::DEFAULT, |state, packet| {
+            state.teleports > before && matches!(packet, cb::Packet::PlayerPosition(_))
+        })
+        .await?;
+    ensure!(
+        guest.snapshot().position == [11., 88., -7.] && guest.snapshot().rotation == [120., 10.],
+        "entity destination mismatch"
+    );
+    log.record("teleport.entity.position", guest.snapshot().position)?;
+    log.record(
+        "teleport.bounds",
+        command(
+            session.bot(operator)?,
+            "tp @s 30000001 90 0",
+            "commands.teleport.invalidPosition",
+        )
+        .await?,
+    )?;
+    Ok(log)
+}
+parity_test!(parity_command_player_state, player_state_commands);
