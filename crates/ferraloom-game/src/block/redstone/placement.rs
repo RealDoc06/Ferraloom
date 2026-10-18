@@ -54,8 +54,8 @@ fn hinge(
     let left = pos.relative(direction.counter_clockwise(), 1);
     let right = pos.relative(direction.clockwise(), 1);
     let l = reader.get_block_state(left)?;
-    let r = reader.get_block_state(right)?;
     let la = reader.get_block_state(left.above(1))?;
+    let r = reader.get_block_state(right)?;
     let ra = reader.get_block_state(right.above(1))?;
     let balance = -i32::from(reader.is_collision_shape_full_block(l, left)?)
         - i32::from(reader.is_collision_shape_full_block(la, left.above(1))?)
