@@ -1951,3 +1951,5 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | advancements.progress.empty-obtained-map | Serialize an explicit empty criteria object when live criteria exist but none are granted | `AdvancementProgress.CRITERIA_CODEC; AdvancementProgress.CODEC` | `advancements::tests::vanilla_progress_award_revoke_dates_and_wire` | pass | pass |
 
 | advancements.matching.live-runtime | Shared listener matcher evaluates pure and canonical-runtime contexts with identical condition order and RNG use | `SimpleCriterionTrigger#trigger` | `advancements::tests::vanilla_trigger_codecs_and_synthetic_matches` | pass | partial |
+
+| advancements.player-food-unconstrained | Unconstrained food bounds need no runtime food state; constrained bounds remain Unsupported until food is available | `PlayerPredicate#matches` | `predicates::player::tests::unconstrained_food_needs_no_unavailable_state` | pass | partial |
