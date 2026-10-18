@@ -11,6 +11,7 @@
 mod block_methods;
 pub mod dispenser_properties;
 mod environment_attributes;
+mod item_names;
 pub mod note_properties;
 pub mod redstone_properties;
 mod sound_events;
@@ -501,6 +502,17 @@ impl BlockState {
             None
         } else {
             Some(bits & (1 << (3 + face as u8)) != 0)
+        }
+    }
+    /// Port of BlockStateBase.Cache#isFaceSturdy for SupportType.CENTER.
+    /// This reads only the native cache, initialized with EmptyBlockGetter at
+    /// ZERO; dynamic blocks retain None and require their contextual behavior.
+    pub const fn cached_center_support(self, face: ferraloom_util::Direction) -> Option<bool> {
+        let bits = CENTER_SUPPORT[self.0 as usize];
+        if bits & 64 == 0 {
+            None
+        } else {
+            Some(bits & (1 << face as u8) != 0)
         }
     }
     /// Port of BlockStateBase.Cache#isCollisionShapeFullBlock.

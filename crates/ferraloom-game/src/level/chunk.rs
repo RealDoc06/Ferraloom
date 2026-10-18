@@ -1,6 +1,10 @@
 use super::{distance_manager::FullChunkStatus, heightmap::Heightmap};
 use crate::ticks::LevelChunkTicks;
-use std::{cell::OnceCell, ops::Range};
+use ferraloom_worldgen::structure::pipeline::ChunkStructures;
+use std::{
+    cell::{Cell, OnceCell},
+    ops::Range,
+};
 
 pub use ferraloom_chunk::LevelChunkSection;
 use ferraloom_data::{Block, BlockState};
@@ -22,20 +26,22 @@ pub struct LevelChunk {
     pub(super) block_entities: super::block_entity::ChunkBlockEntities,
     inhabited_time: i64,
     pub(super) pending_generation: super::post_processing::PendingGenerationData,
-    pub unsaved: bool,
+    pub(super) structures: super::structure_manager::StructureVersions,
+    unsaved: Cell<bool>,
 }
 
 impl LevelChunk {
     /// Port of ChunkAccess#markUnsaved and tryMarkSaved. Clear immediately
     /// before capturing a save; later mutations set the flag again independently.
-    pub fn mark_unsaved(&mut self) {
-        self.unsaved = true;
+    pub fn mark_unsaved(&self) {
+        self.unsaved.set(true);
     }
     pub fn try_mark_saved(&mut self) -> bool {
-        std::mem::take(&mut self.unsaved)
+        self.collect_structure_versions();
+        self.unsaved.replace(false)
     }
     pub fn is_unsaved(&self) -> bool {
-        self.unsaved
+        self.unsaved.get()
     }
     pub fn new(pos: ChunkPos, sections: Range<i32>, empty_section: LevelChunkSection) -> Self {
         assert!(empty_section.has_only_air());
@@ -55,7 +61,8 @@ impl LevelChunk {
             block_entities: Default::default(),
             inhabited_time: 0,
             pending_generation: Default::default(),
-            unsaved: false,
+            structures: super::structure_manager::StructureVersions::new(pos),
+            unsaved: Cell::new(false),
         }
     }
     pub fn from_sections(
@@ -84,7 +91,8 @@ impl LevelChunk {
             block_entities: Default::default(),
             inhabited_time: 0,
             pending_generation: Default::default(),
-            unsaved: false,
+            structures: super::structure_manager::StructureVersions::new(pos),
+            unsaved: Cell::new(false),
         }
     }
     pub fn min_y(&self) -> i32 {
@@ -217,6 +225,39 @@ impl LevelChunk {
     }
     pub fn min_section(&self) -> i32 {
         self.min_section
+    }
+    /// Port of LevelChunk's proto constructor setAllStarts/setAllReferences.
+    /// Install the already decoded payload before attachment; no second decoder.
+    pub fn set_structures(
+        &mut self,
+        payload: ChunkStructures,
+        revision: u64,
+    ) -> Result<(), super::LevelError> {
+        self.structures.replace(self.pos, payload, revision)?;
+        self.mark_unsaved();
+        Ok(())
+    }
+    pub fn structures(&self) -> &ChunkStructures {
+        &self.structures.current().payload
+    }
+    pub fn structures_revision(&self) -> u64 {
+        self.structures.current().revision
+    }
+    pub(super) fn publish_structures(
+        &self,
+        payload: ChunkStructures,
+        revision: u64,
+    ) -> Result<bool, super::LevelError> {
+        let published = self.structures.publish(self.pos, payload, revision)?;
+        if published {
+            self.mark_unsaved();
+        }
+        Ok(published)
+    }
+    /// Exclusive phase boundary: previously returned structure references are no
+    /// longer live. Saves also collect these old immutable versions.
+    pub fn collect_structure_versions(&mut self) {
+        self.structures.collect();
     }
     pub fn pos(&self) -> ChunkPos {
         self.pos

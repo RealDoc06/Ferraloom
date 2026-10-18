@@ -31,7 +31,7 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | player.hunger.slow-regeneration | Regenerate one health every 80 ticks at food level at least 18 | `FoodData#tick` | | - | todo |
 | player.hunger.starvation | Apply starvation every 80 ticks with difficulty-dependent minimum health | `FoodData#tick` | | - | todo |
 | player.hunger.food-caps | Clamp food to 20 and saturation to current food level | `FoodData#add` | | - | todo |
-| player.xp.level-curve | Apply level-dependent experience point requirements and progress carry | `Player#getXpNeededForNextLevel; Player#giveExperiencePoints` | | - | todo |
+| player.xp.level-curve | Preserve canonical XP fields, score metadata, float carry/borrow, wrapped totals, saturated level changes, level-up sound timing and saved XP; doTick packet slot is ported for phase integration | `Player#getXpNeededForNextLevel; Player#giveExperiencePoints; Player#giveExperienceLevels; ServerPlayer` | `entity::player::experience::tests` (15 native curve, 25 award/sound and 5 NBT cases) | pass | partial |
 | player.xp.orb-pickup | Merge experience orbs, apply pickup delay and repair mending equipment before XP gain | `ExperienceOrb` | | - | todo |
 | player.xp.death | Drop experience and reset progress subject to keep-inventory and death rules | `ServerPlayer; Player` | | - | todo |
 | player.sleep.entry | Validate bed range, danger, dimension conditions and sleep eligibility | `ServerPlayer#startSleepInBed` | | - | todo |
@@ -74,3 +74,4 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 
 | player.inventory.correct-tool-drops | Query the selected stack through native ordered TOOL rules, component additions/removals and live typed block tags; preserve the per-state correct-tool short circuit and reject unresolvable named tags pending registry-aware component decoding (5a) | `Player#hasCorrectToolForDrops; ItemStack#isCorrectToolForDrops; Tool#isCorrectForDrops` | `entity::player::inventory::tool_tests` (128 real Java tool/state cases) | pass | partial |
 | player.spawn.initial-rotation | Select raw saved rotation or shared respawn yaw/pitch, then snap after loading without removing the constructor's RNG draw | `PrepareSpawnTask#start; PrepareSpawnTask.Ready#spawn; Entity#snapTo` | `entity::player::spawn::tests::native_spawn_rotation_uses_saved_or_shared_respawn_angles_then_snaps` (13 real Java cases) | pass | partial |
+| player.progress.canonical-state | Keep advancement progress/listeners and statistics on the canonical ServerPlayer; runtime manager hydration and native producers follow in the advancement adapter | `ServerPlayer#getAdvancements; ServerPlayer#getStats` | `ServerPlayer::new` | - | partial |

@@ -1,6 +1,6 @@
 //! PersistentEntitySectionManager's state machine. The server executes the
 //! owned requests on its IO worker and returns results at the management phase.
-use std::collections::VecDeque;
+use std::{cell::RefCell, collections::VecDeque};
 
 use super::Visibility;
 use crate::{
@@ -41,6 +41,7 @@ pub enum EntityStorageRequest {
 }
 #[derive(Debug)]
 pub enum EntityStorageError {
+    LoadIntegration(Box<EntityChunkLoadError>),
     Level(LevelError),
     Entity(EntityPersistenceError),
     Storage(ferraloom_storage::Error),
@@ -51,6 +52,17 @@ pub enum EntityStorageError {
         stored: ChunkPos,
     },
     SaveAlreadyInProgress,
+}
+
+/// Failed entity IO integration keeps its original owned chunk NBT. Preflight
+/// consumed no constructor draws; Publishing must never be replayed from NBT.
+#[derive(Debug)]
+pub struct EntityChunkLoadError {
+    pub id: EntityLoadRequestId,
+    pub pos: ChunkPos,
+    pub chunk: Option<CompoundTag>,
+    pub source: EntityStorageError,
+    pub stage: super::WorldgenEntityLoadStage,
 }
 impl From<LevelError> for EntityStorageError {
     fn from(error: LevelError) -> Self {
@@ -80,12 +92,18 @@ struct PendingLoad {
     response: Option<ferraloom_storage::Result<Option<CompoundTag>>>,
 }
 
-/// Port of PersistentEntitySectionManager and EntityStorage's empty-chunk cache.
-/// Completion order never chooses entity IDs, section insertion or tick order.
+/// Port of PersistentEntitySectionManager's IO/visibility indexes. No guard
+/// leaves this module or spans construction, registration or a world callback.
+/// Phase-5 region ownership replaces this single-region interior index access.
 #[derive(Default)]
 pub struct PersistentEntitySectionManager {
+    state: RefCell<PersistentState>,
+}
+#[derive(Default)]
+struct PersistentState {
+    chunk_visibility: Long2ObjectOpenHashMap<Visibility>,
     load_statuses: Long2ObjectOpenHashMap<ChunkLoadStatus>,
-    pub(super) chunks_to_unload: LongOpenHashSet,
+    chunks_to_unload: LongOpenHashSet,
     empty_chunks: LongOpenHashSet,
     chunk_remainders: Long2ObjectOpenHashMap<CompoundTag>,
     saving_all: Option<LongOpenHashSet>,
@@ -93,14 +111,14 @@ pub struct PersistentEntitySectionManager {
     loads: VecDeque<PendingLoad>,
     requests: Vec<EntityStorageRequest>,
 }
-impl PersistentEntitySectionManager {
-    pub(super) fn status(&self, pos: ChunkPos) -> ChunkLoadStatus {
+impl PersistentState {
+    fn status(&self, pos: ChunkPos) -> ChunkLoadStatus {
         self.load_statuses
             .get(&pos.pack())
             .copied()
             .unwrap_or_default()
     }
-    pub(super) fn ensure_chunk_queued_for_load(&mut self, pos: ChunkPos) {
+    fn ensure_chunk_queued_for_load(&mut self, pos: ChunkPos) {
         if self.status(pos) != ChunkLoadStatus::Fresh {
             return;
         }
@@ -147,24 +165,55 @@ impl PersistentEntitySectionManager {
     }
 }
 
+impl PersistentEntitySectionManager {
+    pub(super) fn status(&self, pos: ChunkPos) -> ChunkLoadStatus {
+        self.state.borrow().status(pos)
+    }
+    pub(super) fn visibility(&self, pos: ChunkPos) -> Visibility {
+        self.state
+            .borrow()
+            .chunk_visibility
+            .get(&pos.pack())
+            .copied()
+            .unwrap_or(Visibility::Hidden)
+    }
+    pub(super) fn update_visibility(&self, pos: ChunkPos, status: Visibility) {
+        let mut state = self.state.borrow_mut();
+        if status == Visibility::Hidden {
+            state.chunk_visibility.remove(&pos.pack());
+            state.chunks_to_unload.insert(pos.pack());
+        } else {
+            state.chunk_visibility.insert(pos.pack(), status);
+            state.chunks_to_unload.remove(&pos.pack());
+            state.ensure_chunk_queued_for_load(pos);
+        }
+    }
+}
+
 impl Level {
     pub fn entity_chunk_load_status(&self, pos: ChunkPos) -> ChunkLoadStatus {
         self.region().entities.persistent.status(pos)
     }
-    pub fn take_entity_storage_requests(&mut self) -> Vec<EntityStorageRequest> {
-        std::mem::take(&mut self.region_mut().entities.persistent.requests)
+    pub fn take_entity_storage_requests(&self) -> Vec<EntityStorageRequest> {
+        std::mem::take(
+            &mut self
+                .region()
+                .entities
+                .persistent
+                .state
+                .borrow_mut()
+                .requests,
+        )
     }
     /// IO responses may arrive in any order. Only process_pending_entity_loads
     /// makes them visible, in original request order, at the management phase.
     pub fn complete_entity_chunk_load(
-        &mut self,
+        &self,
         id: EntityLoadRequestId,
         response: ferraloom_storage::Result<Option<CompoundTag>>,
     ) -> Result<(), EntityStorageError> {
-        let load = self
-            .region_mut()
-            .entities
-            .persistent
+        let mut state = self.region().entities.persistent.state.borrow_mut();
+        let load = state
             .loads
             .iter_mut()
             .find(|load| load.id == id)
@@ -178,76 +227,123 @@ impl Level {
     /// Port of PersistentEntitySectionManager#processPendingLoads. Explicit
     /// decode/unsupported errors leave the chunk pending and prevent overwrites.
     pub fn process_pending_entity_loads(&mut self) -> Result<(), EntityStorageError> {
+        self.process_pending_entity_loads_shared()
+    }
+    /// Ordered IO publication while a chunk read is suspended. This only
+    /// integrates loads: no entity simulation, unloading, retirement or save-all
+    /// phase runs. The inbox entry is removed before callbacks, so a nested
+    /// integration can consume the next ready request without replaying this one.
+    pub fn process_pending_entity_loads_shared(&self) -> Result<(), EntityStorageError> {
         loop {
-            let manager = &mut self.region_mut().entities.persistent;
-            if !manager
-                .loads
-                .front()
-                .is_some_and(|load| load.response.is_some())
-            {
-                break;
-            }
-            let load = manager.loads.pop_front().unwrap();
-            let tag = load.response.unwrap()?;
-            let mut loaded = Vec::new();
-            if let Some(tag) = tag {
-                let chunk = EntityChunk::parse(tag)?;
-                let position = chunk.position.expect("validated position").0;
-                let stored = ChunkPos::new(position[0], position[1]);
-                if stored != load.pos {
-                    return Err(EntityStorageError::MisplacedChunk {
-                        expected: load.pos,
-                        stored,
-                    });
-                }
-                self.region_mut()
-                    .entities
-                    .persistent
-                    .chunk_remainders
-                    .insert(load.pos.pack(), chunk.extra);
-                for tag in chunk.entities.unwrap_or_default() {
-                    persistence::load_entity_tree(self, tag, &mut loaded)?;
-                }
-            } else {
-                self.region_mut()
-                    .entities
-                    .persistent
-                    .empty_chunks
-                    .insert(load.pos.pack());
-            }
-            // The stream includes passengers even if their vehicle's duplicate
-            // UUID prevents its registration. Keep that Java object reachable
-            // solely through held handles, with no index or level callback.
-            for (id, state) in loaded {
-                if self
-                    .region()
-                    .entities
-                    .known_uuids
-                    .contains(&state.as_entity().uuid)
+            let load = {
+                let mut manager = self.region().entities.persistent.state.borrow_mut();
+                if !manager
+                    .loads
+                    .front()
+                    .is_some_and(|load| load.response.is_some())
                 {
-                    self.retain_unmanaged_entity(id, state);
-                } else {
-                    self.add_entity_with_origin(id, state, true)?;
+                    break;
+                }
+                manager.loads.pop_front().unwrap()
+            };
+            let tag = load.response.unwrap().map_err(|source| {
+                EntityStorageError::LoadIntegration(Box::new(EntityChunkLoadError {
+                    id: load.id,
+                    pos: load.pos,
+                    chunk: None,
+                    source: source.into(),
+                    stage: super::WorldgenEntityLoadStage::Preflight,
+                }))
+            })?;
+            let mut stage = super::WorldgenEntityLoadStage::Preflight;
+            if let Err(source) =
+                self.integrate_entity_chunk_load(load.pos, tag.as_ref(), &mut stage)
+            {
+                return Err(EntityStorageError::LoadIntegration(Box::new(
+                    EntityChunkLoadError {
+                        id: load.id,
+                        pos: load.pos,
+                        chunk: tag,
+                        source,
+                        stage,
+                    },
+                )));
+            }
+        }
+        Ok(())
+    }
+
+    fn integrate_entity_chunk_load(
+        &self,
+        pos: ChunkPos,
+        tag: Option<&CompoundTag>,
+        stage: &mut super::WorldgenEntityLoadStage,
+    ) -> Result<(), EntityStorageError> {
+        let mut loaded = Vec::new();
+        let mut remainder = None;
+        if let Some(tag) = tag {
+            let chunk = EntityChunk::parse(tag.clone())?;
+            let position = chunk.position.expect("validated position").0;
+            let stored = ChunkPos::new(position[0], position[1]);
+            if stored != pos {
+                return Err(EntityStorageError::MisplacedChunk {
+                    expected: pos,
+                    stored,
+                });
+            }
+            let entities = chunk.entities.unwrap_or_default();
+            for tag in &entities {
+                super::worldgen::check_factories(tag, self)?;
+            }
+            *stage = super::WorldgenEntityLoadStage::Publishing;
+            for tag in entities {
+                if super::worldgen::entity_type(&tag).is_none() {
+                    eprintln!(
+                        "Skipping entity with unknown or missing id while loading entity chunk"
+                    );
+                    continue;
+                }
+                match persistence::load_entity_tree(self, tag, &mut loaded) {
+                    Ok(_) => (),
+                    Err(error @ EntityPersistenceError::Base(_)) => {
+                        eprintln!("Skipping invalid entity while loading entity chunk: {error}")
+                    }
+                    Err(error) => return Err(error.into()),
                 }
             }
-            self.region_mut()
-                .entities
-                .persistent
-                .load_statuses
-                .insert(load.pos.pack(), ChunkLoadStatus::Loaded);
+            remainder = Some(chunk.extra);
         }
+        // The stream includes passengers even if their vehicle's duplicate
+        // UUID prevents its registration. Keep that Java object reachable
+        // solely through held handles, with no index or level callback.
+        for (id, state) in loaded {
+            if self
+                .region()
+                .entities
+                .registration
+                .knows_uuid(state.as_entity().uuid)
+            {
+                self.retain_unmanaged_entity(id, state);
+            } else {
+                self.add_entity_with_origin(id, state, true)?;
+            }
+        }
+        let mut manager = self.region().entities.persistent.state.borrow_mut();
+        if let Some(remainder) = remainder {
+            manager.chunk_remainders.insert(pos.pack(), remainder);
+        } else {
+            manager.empty_chunks.insert(pos.pack());
+        }
+        manager
+            .load_statuses
+            .insert(pos.pack(), ChunkLoadStatus::Loaded);
         Ok(())
     }
     fn entity_chunk_roots_to_save(&self, pos: ChunkPos) -> Result<Vec<EntityRef>, LevelError> {
         let mut roots = Vec::new();
-        let sections = &self.region().entities.sections.sections;
-        let low = SectionPos::new(pos.x, 0, pos.z).as_long();
-        let high = SectionPos::new(pos.x, -1, pos.z).as_long();
-        for (_, section) in sections.range(low..=high) {
-            for &id in &section.entities {
-                if self.entity_should_be_saved(id)? {
-                    roots.push(id);
-                }
+        for id in self.region().entities.sections.chunk_entities(pos) {
+            if self.entity_should_be_saved(id)? {
+                roots.push(id);
             }
         }
         Ok(roots)
@@ -265,12 +361,19 @@ impl Level {
         let roots = self.entity_chunk_roots_to_save(pos)?;
         if roots.is_empty() {
             if status == ChunkLoadStatus::Loaded {
-                self.region_mut().entities.persistent.store(pos, Vec::new());
+                self.region_mut()
+                    .entities
+                    .persistent
+                    .state
+                    .get_mut()
+                    .store(pos, Vec::new());
             }
         } else if status == ChunkLoadStatus::Fresh {
             self.region_mut()
                 .entities
                 .persistent
+                .state
+                .get_mut()
                 .ensure_chunk_queued_for_load(pos);
             return Ok(false);
         } else {
@@ -280,7 +383,12 @@ impl Level {
                     tags.push(tag);
                 }
             }
-            self.region_mut().entities.persistent.store(pos, tags);
+            self.region_mut()
+                .entities
+                .persistent
+                .state
+                .get_mut()
+                .store(pos, tags);
             if unload {
                 for root in roots {
                     let mut unload_order = Vec::new();
@@ -295,6 +403,8 @@ impl Level {
             self.region_mut()
                 .entities
                 .persistent
+                .state
+                .get_mut()
                 .load_statuses
                 .remove(&pos.pack());
         }
@@ -320,6 +430,8 @@ impl Level {
             .region()
             .entities
             .persistent
+            .state
+            .borrow()
             .chunks_to_unload
             .iter()
             .copied()
@@ -337,6 +449,8 @@ impl Level {
             .region_mut()
             .entities
             .persistent
+            .state
+            .get_mut()
             .chunks_to_unload
             .cursor();
         while let Some((&key, _)) = cursor.next_entry() {
@@ -349,11 +463,18 @@ impl Level {
     }
     fn all_entity_chunks_to_save(&self) -> LongOpenHashSet {
         let mut chunks = LongOpenHashSet::new();
-        for (&section, _) in &self.region().entities.sections.section_keys {
+        for section in self.region().entities.sections.section_keys() {
             let section = SectionPos::of(section);
             chunks.insert(ChunkPos::new(section.x, section.z).pack());
         }
-        for (&key, &status) in &self.region().entities.persistent.load_statuses {
+        for (&key, &status) in &self
+            .region()
+            .entities
+            .persistent
+            .state
+            .borrow()
+            .load_statuses
+        {
             if status == ChunkLoadStatus::Loaded {
                 chunks.insert(key);
             }
@@ -377,11 +498,24 @@ impl Level {
     /// IoWorker::synchronize(false) before each subsequent poll, then performs
     /// synchronize(true) once poll_entity_save_all returns true.
     pub fn begin_entity_save_all(&mut self) -> Result<(), EntityStorageError> {
-        if self.region().entities.persistent.saving_all.is_some() {
+        if self
+            .region()
+            .entities
+            .persistent
+            .state
+            .borrow()
+            .saving_all
+            .is_some()
+        {
             return Err(EntityStorageError::SaveAlreadyInProgress);
         }
         let chunks = self.all_entity_chunks_to_save();
-        self.region_mut().entities.persistent.saving_all = Some(chunks);
+        self.region_mut()
+            .entities
+            .persistent
+            .state
+            .get_mut()
+            .saving_all = Some(chunks);
         Ok(())
     }
     pub fn poll_entity_save_all(&mut self) -> Result<bool, EntityStorageError> {
@@ -390,6 +524,8 @@ impl Level {
             .region()
             .entities
             .persistent
+            .state
+            .borrow()
             .saving_all
             .as_ref()
             .map(|chunks| chunks.iter().copied().collect())
@@ -404,7 +540,7 @@ impl Level {
                 completed.insert(key);
             }
         }
-        let manager = &mut self.region_mut().entities.persistent;
+        let manager = self.region_mut().entities.persistent.state.get_mut();
         let Some(chunks) = manager.saving_all.as_mut() else {
             return Ok(true);
         };

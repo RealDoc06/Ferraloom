@@ -13,9 +13,18 @@ pub static PLANT: Plant = Plant;
 pub fn supports(block: Block, method: BlockMethod) -> bool {
     use BlockClass as C;
     use BlockMethod as M;
+    if block == Block::MOSS_CARPET
+        && matches!(
+            method,
+            M::CanSurvive | M::UpdateShape | M::UpdateFromNeighbourShapes
+        )
+    {
+        return true;
+    }
     let survival = matches!(
         block.class(),
         C::FlowerBlock
+            | C::EyeblossomBlock
             | C::WitherRoseBlock
             | C::TallGrassBlock
             | C::BushBlock
@@ -26,6 +35,8 @@ pub fn supports(block: Block, method: BlockMethod) -> bool {
             | C::AzaleaBlock
             | C::MangrovePropaguleBlock
             | C::CropBlock
+            | C::CarrotBlock
+            | C::PotatoBlock
             | C::BeetrootBlock
             | C::TorchflowerCropBlock
             | C::PitcherCropBlock
@@ -87,7 +98,7 @@ fn water(level: &LevelReaderRef<'_, '_>, pos: BlockPos) -> Result<bool, LevelErr
         .fluid_tags()?
         .contains_key(F::WATER, level.get_fluid_state(pos)?.fluid_type))
 }
-fn facing(state: BlockState) -> Direction {
+pub(super) fn facing(state: BlockState) -> Direction {
     match state.get(p::FACING).expect("horizontal facing") {
         p::Facing::North => Direction::North,
         p::Facing::South => Direction::South,
@@ -117,9 +128,12 @@ fn may_place_on(
         }
         C::AzaleaBlock => T::SUPPORTS_AZALEA,
         C::MangrovePropaguleBlock => T::SUPPORTS_MANGROVE_PROPAGULE,
-        C::CropBlock | C::BeetrootBlock | C::TorchflowerCropBlock | C::PitcherCropBlock => {
-            T::SUPPORTS_CROPS
-        }
+        C::CropBlock
+        | C::CarrotBlock
+        | C::PotatoBlock
+        | C::BeetrootBlock
+        | C::TorchflowerCropBlock
+        | C::PitcherCropBlock => T::SUPPORTS_CROPS,
         C::StemBlock | C::AttachedStemBlock => {
             if matches!(
                 state.block(),
@@ -194,6 +208,7 @@ impl BlockBehavior for Plant {
             return Ok(below.block() == block && !upper(below));
         }
         match block.class() {
+            C::CarpetBlock => Ok(!level.get_block_state(below_pos)?.is_air()),
             C::MangrovePropaguleBlock if state.get(p::HANGING) == Some(true) => tagged(
                 level,
                 level.get_block_state(pos.above(1))?,
@@ -220,7 +235,12 @@ impl BlockBehavior for Plant {
                         || (level.get_raw_brightness(pos, 0)? < 13 && below.data().solid_render),
                 )
             }
-            C::CropBlock | C::BeetrootBlock | C::TorchflowerCropBlock | C::PitcherCropBlock => {
+            C::CropBlock
+            | C::CarrotBlock
+            | C::PotatoBlock
+            | C::BeetrootBlock
+            | C::TorchflowerCropBlock
+            | C::PitcherCropBlock => {
                 if !(level.get_raw_brightness(pos, 0)? >= 8) {
                     return Ok(false);
                 }
@@ -298,12 +318,15 @@ impl BlockBehavior for Plant {
                     )
                     || (below.block() == block && below.get(p::LAYERS) == Some(8)))
             }
-            C::BaseCoralWallFanBlock => {
+            C::BaseCoralWallFanBlock | C::CoralWallFanBlock => {
                 let d = facing(state);
                 let support = pos.relative(d.opposite(), 1);
                 level.is_face_sturdy(level.get_block_state(support)?, support, d)
             }
-            C::BaseCoralPlantBlock | C::BaseCoralFanBlock => {
+            C::BaseCoralPlantBlock
+            | C::BaseCoralFanBlock
+            | C::CoralPlantBlock
+            | C::CoralFanBlock => {
                 level.is_face_sturdy(level.get_block_state(below_pos)?, below_pos, Direction::Up)
             }
             _ => may_place_on(state, level.get_block_state(below_pos)?, below_pos, level),
@@ -375,9 +398,17 @@ impl BlockBehavior for Plant {
                     state
                 });
             }
-            C::BaseCoralPlantBlock | C::BaseCoralFanBlock | C::BaseCoralWallFanBlock => {
+            C::BaseCoralPlantBlock
+            | C::BaseCoralFanBlock
+            | C::BaseCoralWallFanBlock
+            | C::CoralPlantBlock
+            | C::CoralFanBlock
+            | C::CoralWallFanBlock => {
                 schedule_water(state, pos, level)?;
-                let check = if block.class() == C::BaseCoralWallFanBlock {
+                let check = if matches!(
+                    block.class(),
+                    C::BaseCoralWallFanBlock | C::CoralWallFanBlock
+                ) {
                     direction.opposite() == facing(state)
                 } else {
                     direction == Direction::Down

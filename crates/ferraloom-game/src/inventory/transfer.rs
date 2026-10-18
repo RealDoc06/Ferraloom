@@ -25,7 +25,150 @@ pub trait MenuTransferContext {
         stack: ItemStack,
         hooks: &mut dyn MenuHooks,
     ) -> Result<()>;
+    /// Slot#setByPlayer with its captured existing target, preserving identity.
+    fn reassign_by_player(
+        &mut self,
+        _index: usize,
+        _stack: Self::Stack,
+        _hooks: &mut dyn MenuHooks,
+    ) -> Result<()> {
+        Err(MenuError::Unsupported("existing slot receiver setter"))
+    }
     fn slot_changed(&mut self, index: usize) -> Result<()>;
+}
+
+/// Port of Slot#safeInsert. Count edits finish before the existing-target setter
+/// and its callbacks; doClick receives the original input object's identity.
+pub fn safe_insert_menu_item_stack<C: MenuTransferContext>(
+    context: &mut C,
+    index: usize,
+    input: C::Stack,
+    amount: i32,
+    hooks: &mut dyn MenuHooks,
+) -> Result<C::Stack> {
+    if context.stack(input)?.is_empty() || !context.may_place(index, input, hooks)? {
+        return Ok(input);
+    }
+    let target = context.slot_stack(index)?;
+    let transferable = amount.min(count(&context.stack(input)?));
+    let available = context
+        .stack_limit(index, input)?
+        .wrapping_sub(count(&context.stack(target)?));
+    let transferable = transferable.min(available);
+    if transferable <= 0 {
+        return Ok(input);
+    }
+    if context.stack(target)?.is_empty() {
+        let split = context.split_stack(input, transferable)?;
+        context.set_by_player(index, split, hooks)?;
+    } else if is_same_item_same_components(&context.stack(target)?, &context.stack(input)?) {
+        let remaining = count(&context.stack(input)?).wrapping_sub(transferable);
+        context.set_stack_count(input, remaining)?;
+        let total = count(&context.stack(target)?).wrapping_add(transferable);
+        context.set_stack_count(target, total)?;
+        context.reassign_by_player(index, target, hooks)?;
+    }
+    Ok(input)
+}
+
+/// Legacy Slot#safeInsert remains an adapter over the shared insertion kernel.
+pub(crate) fn safe_insert_container_item_stack(
+    slot: &Slot,
+    container: &mut dyn Container,
+    mut input: ItemStack,
+    amount: i32,
+    hooks: &dyn MenuHooks,
+) -> Result<ItemStack> {
+    struct PlacementHooks<'a>(&'a dyn MenuHooks);
+    impl MenuHooks for PlacementHooks<'_> {
+        fn may_place(&self, kind: SlotKind, stack: &ItemStack) -> Result<bool> {
+            self.0.may_place(kind, stack)
+        }
+    }
+    struct Insertion<'a, 'b> {
+        slot: &'a Slot,
+        container: &'b mut dyn Container,
+        input: &'b mut ItemStack,
+    }
+    impl MenuTransferContext for Insertion<'_, '_> {
+        type Stack = PureStackRef;
+        fn slot_stack(&mut self, index: usize) -> Result<PureStackRef> {
+            Ok(PureStackRef::Slot(index))
+        }
+        fn stack(&self, reference: PureStackRef) -> Result<ItemStack> {
+            Ok(match reference {
+                PureStackRef::Source => self.input.clone(),
+                PureStackRef::Slot(_) => self.container.get_item(self.slot.container_slot),
+            })
+        }
+        fn set_stack_count(&mut self, reference: PureStackRef, amount: i32) -> Result<()> {
+            match reference {
+                PureStackRef::Source => {
+                    set_count(self.input, amount);
+                    Ok(())
+                }
+                PureStackRef::Slot(_) => self
+                    .container
+                    .set_item_count(self.slot.container_slot, amount),
+            }
+        }
+        fn split_stack(&mut self, reference: PureStackRef, amount: i32) -> Result<ItemStack> {
+            match reference {
+                PureStackRef::Source => Ok(split(self.input, amount)),
+                PureStackRef::Slot(_) => Err(MenuError::Unsupported("split insertion target")),
+            }
+        }
+        fn stack_limit(&mut self, _: usize, reference: PureStackRef) -> Result<i32> {
+            Ok(self
+                .slot
+                .max_stack_size(self.container, &self.stack(reference)?))
+        }
+        fn may_place(
+            &mut self,
+            _: usize,
+            reference: PureStackRef,
+            hooks: &dyn MenuHooks,
+        ) -> Result<bool> {
+            self.slot.may_place(&self.stack(reference)?, hooks)
+        }
+        fn set_by_player(
+            &mut self,
+            _: usize,
+            stack: ItemStack,
+            _: &mut dyn MenuHooks,
+        ) -> Result<()> {
+            let _previous = self.container.get_item(self.slot.container_slot);
+            self.slot.set_by_player(self.container, stack);
+            Ok(())
+        }
+        fn reassign_by_player(
+            &mut self,
+            _: usize,
+            _: PureStackRef,
+            _: &mut dyn MenuHooks,
+        ) -> Result<()> {
+            let _previous = self.container.get_item(self.slot.container_slot);
+            self.container.reassign_item(self.slot.container_slot)?;
+            self.container.set_changed();
+            Ok(())
+        }
+        fn slot_changed(&mut self, _: usize) -> Result<()> {
+            self.container.set_changed();
+            Ok(())
+        }
+    }
+    safe_insert_menu_item_stack(
+        &mut Insertion {
+            slot,
+            container,
+            input: &mut input,
+        },
+        0,
+        PureStackRef::Source,
+        amount,
+        &mut PlacementHooks(hooks),
+    )?;
+    Ok(input)
 }
 
 /// Port of AbstractContainerMenu#moveItemStackTo. The occupied pass deliberately
@@ -160,6 +303,30 @@ impl MenuTransferContext for PureMenuTransfer<'_, '_, '_> {
         let _previous = self.menu.get_item(self.context, index);
         self.menu.set_item_live(self.context, index, stack, hooks)
     }
+    fn reassign_by_player(
+        &mut self,
+        index: usize,
+        reference: PureStackRef,
+        hooks: &mut dyn MenuHooks,
+    ) -> Result<()> {
+        let PureStackRef::Slot(target) = reference else {
+            return Err(MenuError::Unsupported("pure cross-slot assignment"));
+        };
+        assert_eq!(index, target);
+        let slot = self.menu.slots[index].clone();
+        // Slot#setByPlayer reads previous before Container#setItem.
+        let _previous = self.menu.get_item(self.context, index);
+        self.menu
+            .container_mut(self.context, slot.container)
+            .reassign_item(slot.container_slot)?;
+        if self.menu.crafting_grid_size().is_some() && slot.container == ContainerId::Local(0) {
+            self.menu.crafting_slots_changed(hooks, None)?;
+        }
+        self.menu
+            .container_mut(self.context, slot.container)
+            .set_changed();
+        Ok(())
+    }
     fn slot_changed(&mut self, index: usize) -> Result<()> {
         let container = self.menu.slots[index].container;
         self.menu
@@ -192,6 +359,79 @@ impl LiveMenuTransfer<'_> {
             .get(index)
             .cloned()
             .ok_or(MenuError::InvalidSlot(index as i32))
+    }
+    fn set_by_player_value(&mut self, index: usize, value: StackValue) -> Result<()> {
+        let slot = self.slot(index)?;
+        let address = self.context().slot_address(index)?;
+        if matches!(slot.kind, SlotKind::Armor(_) | SlotKind::MountEquipment(_))
+            || matches!(address.container, ContainerHandle::PlayerInventory(_))
+                && address.slot >= 36
+        {
+            return Err(MenuError::Unsupported(
+                "live equipment slot replacement hook",
+            ));
+        }
+        if let ContainerHandle::MenuLocal { player, menu, .. } = address.container {
+            let kind = self
+                .operation
+                .level
+                .entity::<crate::entity::player::ServerPlayer>(player)?
+                .menus
+                .menu(menu)?
+                .kind;
+            if !matches!(
+                kind,
+                MenuKind::Chest { .. }
+                    | MenuKind::Dispenser
+                    | MenuKind::Hopper
+                    | MenuKind::Crafter
+                    | MenuKind::ShulkerBox
+                    | MenuKind::Furnace
+                    | MenuKind::Smoker
+                    | MenuKind::BlastFurnace
+            ) {
+                return Err(MenuError::Unsupported("live recipe menu slotsChanged"));
+            }
+        }
+        self.operation.pin(address)?;
+        match address.container {
+            ContainerHandle::BlockEntity(handle) => {
+                crate::block::containers::access::set_item_value(
+                    handle,
+                    address.slot,
+                    value,
+                    self.operation.level,
+                )?;
+            }
+            ContainerHandle::PlayerInventory(player) => {
+                self.operation.level.replace_stack_object(address, value)?;
+                let player = self
+                    .operation
+                    .level
+                    .entity_mut::<crate::entity::player::ServerPlayer>(player)?;
+                PlayerContainer {
+                    inventory: &mut player.inventory,
+                    equipment: &mut player.parent.equipment,
+                }
+                .reassign_item(address.slot)?;
+            }
+            ContainerHandle::MenuLocal {
+                player,
+                menu,
+                container,
+            } => {
+                self.operation.level.replace_stack_object(address, value)?;
+                self.operation
+                    .level
+                    .entity_mut::<crate::entity::player::ServerPlayer>(player)?
+                    .menus
+                    .menu_mut(menu)?
+                    .local[container]
+                    .reassign_item(address.slot)?;
+            }
+            _ => return Err(MenuError::Unsupported("non-slot object assignment")),
+        }
+        self.context().set_changed(address.container)
     }
 }
 impl MenuTransferContext for LiveMenuTransfer<'_> {
@@ -242,42 +482,15 @@ impl MenuTransferContext for LiveMenuTransfer<'_> {
         stack: ItemStack,
         _: &mut dyn MenuHooks,
     ) -> Result<()> {
-        let slot = self.slot(index)?;
-        let address = self.context().slot_address(index)?;
-        if matches!(slot.kind, SlotKind::Armor(_) | SlotKind::MountEquipment(_))
-            || matches!(address.container, ContainerHandle::PlayerInventory(_))
-                && address.slot >= 36
-        {
-            return Err(MenuError::Unsupported(
-                "live equipment slot replacement hook",
-            ));
-        }
-        if let ContainerHandle::MenuLocal { player, menu, .. } = address.container {
-            let kind = self
-                .operation
-                .level
-                .entity::<crate::entity::player::ServerPlayer>(player)?
-                .menus
-                .menu(menu)?
-                .kind;
-            if !matches!(
-                kind,
-                MenuKind::Chest { .. }
-                    | MenuKind::Dispenser
-                    | MenuKind::Hopper
-                    | MenuKind::Crafter
-                    | MenuKind::ShulkerBox
-                    | MenuKind::Furnace
-                    | MenuKind::Smoker
-                    | MenuKind::BlastFurnace
-            ) {
-                return Err(MenuError::Unsupported("live recipe menu slotsChanged"));
-            }
-        }
-        // Slot#setByPlayer reads its previous receiver before Container#setItem.
-        self.operation.pin(address)?;
-        self.context().set_item(address, stack)?;
-        self.context().set_changed(address.container)
+        self.set_by_player_value(index, StackValue::New(stack))
+    }
+    fn reassign_by_player(
+        &mut self,
+        index: usize,
+        stack: StackRef,
+        _: &mut dyn MenuHooks,
+    ) -> Result<()> {
+        self.set_by_player_value(index, StackValue::Existing(stack))
     }
     fn slot_changed(&mut self, index: usize) -> Result<()> {
         let mut context = self.context();
@@ -312,6 +525,32 @@ pub fn move_live_menu_item_stack_to(
         move_menu_item_stack_to(&mut transfer, source, start, end, backwards, hooks)
     })
 }
+
+/// Live Slot#safeInsert uses the same kernel as legacy in-memory menus. The
+/// returned ref is the original input object, even if a callback replaces it.
+/// The caller roots that input for its surrounding clicked operation.
+pub fn safe_insert_live_menu_item_stack(
+    level: &mut crate::level::Level,
+    player: crate::entity::EntityRef,
+    menu: MenuRef,
+    index: usize,
+    input: StackRef,
+    amount: i32,
+    hooks: &mut dyn MenuHooks,
+) -> Result<StackRef> {
+    with_menu_callback(player, menu, level, |context| {
+        let mut transfer = LiveMenuTransfer {
+            operation: StackOperation::new(context.level),
+            player,
+            menu,
+        };
+        transfer.operation.pin_existing(input)?;
+        safe_insert_menu_item_stack(&mut transfer, index, input, amount, hooks)
+    })
+}
+
+#[cfg(test)]
+mod insertion_tests;
 
 #[cfg(test)]
 mod tests {

@@ -9,27 +9,6 @@ use crate::{
 };
 use ferraloom_protocol::{codec::VarInt, play::clientbound as cb};
 
-/// Packet-capture adapter over the live open path, for callers that deliver a
-/// returned batch. Gameplay calls open_menu_live so nested sends remain ordered.
-pub fn open_menu(
-    player: EntityRef,
-    provider: &dyn MenuProvider,
-    level: &mut Level,
-) -> Result<Vec<cb::Packet>> {
-    let start = level
-        .entity::<ServerPlayer>(player)?
-        .menus
-        .pending_packets
-        .len();
-    open_menu_live(player, provider, level)?;
-    Ok(level
-        .entity_mut::<ServerPlayer>(player)?
-        .menus
-        .pending_packets
-        .drain(start..)
-        .collect())
-}
-
 /// Port of ServerPlayer#openMenu. Sends OpenScreen before initMenu and publishes
 /// the new receiver only after initialization and its callbacks return.
 pub fn open_menu_live(
@@ -37,6 +16,7 @@ pub fn open_menu_live(
     provider: &dyn MenuProvider,
     level: &mut Level,
 ) -> Result<Option<MenuRef>> {
+    flush_container_packets(player, level)?;
     let roots = provider.block_entity_roots();
     for (index, &handle) in roots.iter().enumerate() {
         if let Err(error) = level.retain_block_entity(handle) {
@@ -63,12 +43,7 @@ fn open_menu_inner(
         .container_menu
         .is_some()
     {
-        let packets = close_container(player, level, true, false)?;
-        level
-            .entity_mut::<ServerPlayer>(player)?
-            .menus
-            .pending_packets
-            .extend(packets);
+        close_container_live(player, level, true, false)?;
     }
     let id = level
         .entity_mut::<ServerPlayer>(player)?
@@ -82,14 +57,14 @@ fn open_menu_inner(
             );
             content.style.color =
                 Some(ferraloom_protocol::chat::TextColor::parse("red").expect("native color"));
-            level
-                .entity_mut::<ServerPlayer>(player)?
-                .menus
-                .pending_packets
-                .push(cb::Packet::SystemChat(Box::new(cb::SystemChat {
+            emit_menu_packet(
+                player,
+                cb::Packet::SystemChat(Box::new(cb::SystemChat {
                     content,
                     overlay: true,
-                })));
+                })),
+                level,
+            );
         }
         return Ok(None);
     };
@@ -118,17 +93,12 @@ fn open_menu_inner(
         menu_type,
         title: provider.display_name(),
     }));
+    emit_menu_packet(player, packet, level);
     let reference = {
         let menus = &mut level.entity_mut::<ServerPlayer>(player)?.menus;
-        menus.pending_packets.push(packet);
         menus.register_container_menu(menu)
     };
-    let initial = with_menu_callback(player, reference, level, |context| {
-        broadcast_menu_changes(context)?;
-        set_menu_synchronizer(context)?;
-        context.menu_mut()?.changes.clear();
-        Ok(())
-    });
+    let initial = synchronize_menu(player, reference, MenuSynchronization::Initialize, level);
     if let Err(error) = initial {
         level
             .entity_mut::<ServerPlayer>(player)?
@@ -158,6 +128,76 @@ pub fn close_container(
     send_close: bool,
     disconnected: bool,
 ) -> Result<Vec<cb::Packet>> {
+    close_container_with_delivery(player, level, send_close, disconnected, false)
+}
+
+/// Port of the live closeContainer send point, before removed and item drops.
+pub fn close_container_live(
+    player: EntityRef,
+    level: &mut Level,
+    send_close: bool,
+    disconnected: bool,
+) -> Result<()> {
+    flush_container_packets(player, level)?;
+    close_container_with_delivery(player, level, send_close, disconnected, true)?;
+    Ok(())
+}
+
+/// Move already generated menu packets into the ordered Level packet stream.
+pub fn flush_container_packets(
+    player: EntityRef,
+    level: &mut Level,
+) -> std::result::Result<(), crate::level::LevelError> {
+    let packets = std::mem::take(
+        &mut level
+            .entity_mut::<ServerPlayer>(player)?
+            .menus
+            .pending_packets,
+    );
+    for packet in packets {
+        emit_menu_packet(player, packet, level);
+    }
+    Ok(())
+}
+fn emit_menu_packet(player: EntityRef, packet: cb::Packet, level: &mut Level) {
+    level.emit(crate::level::effects::LevelEffect::PlayerPacket {
+        recipients: vec![player],
+        packet: Box::new(packet),
+    });
+}
+/// Deliver already captured protocol updates before entering another native
+/// callback. This bridges legacy pure menu operations during their migration.
+pub fn send_container_packets(
+    player: EntityRef,
+    packets: impl IntoIterator<Item = cb::Packet>,
+    level: &mut Level,
+) -> Result<()> {
+    flush_container_packets(player, level)?;
+    for packet in packets {
+        emit_menu_packet(player, packet, level);
+    }
+    Ok(())
+}
+fn deliver_close_packet(
+    player: EntityRef,
+    packet: cb::Packet,
+    live: bool,
+    level: &mut Level,
+    packets: &mut Vec<cb::Packet>,
+) {
+    if live {
+        emit_menu_packet(player, packet, level);
+    } else {
+        packets.push(packet);
+    }
+}
+fn close_container_with_delivery(
+    player: EntityRef,
+    level: &mut Level,
+    send_close: bool,
+    disconnected: bool,
+    live: bool,
+) -> Result<Vec<cb::Packet>> {
     super::block_containers::ensure_unrooted_menu_values(player, level)?;
     let bound = level
         .entity::<ServerPlayer>(player)?
@@ -165,7 +205,7 @@ pub fn close_container(
         .current()
         .block_entities
         .clone();
-    let result = close_container_inner(player, level, send_close, disconnected, &bound);
+    let result = close_container_inner(player, level, send_close, disconnected, &bound, live);
     for handle in bound {
         level.release_block_entity(handle);
     }
@@ -177,15 +217,27 @@ fn close_container_inner(
     send_close: bool,
     disconnected: bool,
     bound: &[crate::block::entity::BlockEntityRef],
+    live: bool,
 ) -> Result<Vec<cb::Packet>> {
     let mut packets = Vec::new();
+    if send_close {
+        let container_id = level
+            .entity::<ServerPlayer>(player)?
+            .menus
+            .current()
+            .container_id;
+        deliver_close_packet(
+            player,
+            cb::Packet::ContainerClose(cb::ContainerClose {
+                container_id: VarInt(container_id),
+            }),
+            live,
+            level,
+            &mut packets,
+        );
+    }
     let effects = {
         let player = level.entity_mut::<ServerPlayer>(player)?;
-        if send_close {
-            packets.push(cb::Packet::ContainerClose(cb::ContainerClose {
-                container_id: VarInt(player.menus.current().container_id),
-            }));
-        }
         let infinite_materials = player.instabuild();
         let mut context = MenuContext::player_with_abilities(
             &mut player.inventory,
@@ -198,10 +250,16 @@ fn close_container_inner(
     for effect in effects {
         match effect {
             InventoryEffect::SetSlot { slot, stack } => {
-                packets.push(cb::Packet::SetPlayerInventory(cb::SetPlayerInventory {
-                    slot: VarInt(slot as i32),
-                    contents: stack,
-                }))
+                deliver_close_packet(
+                    player,
+                    cb::Packet::SetPlayerInventory(cb::SetPlayerInventory {
+                        slot: VarInt(slot as i32),
+                        contents: stack,
+                    }),
+                    live,
+                    level,
+                    &mut packets,
+                );
             }
             InventoryEffect::Drop(stack) => {
                 drop_item(player, stack, false, level)?;
@@ -215,25 +273,119 @@ fn close_container_inner(
 }
 
 /// Port of ServerPlayer#tick's opening container broadcast and validity check.
-/// Canonical entity ticking calls this; the server drains pending_packets in
-/// the same entity phase, preserving each player's native output order.
+/// Canonical entity ticking calls this; sends enter Level's ordered packet
+/// stream at their synchronizer callbacks.
 pub fn tick_container_menu(
     player: EntityRef,
     level: &mut Level,
 ) -> std::result::Result<(), crate::level::LevelError> {
-    tick_container_menu_inner(player, level).map_err(|error| match error {
+    broadcast_container_menu(player, level)?;
+    check_container_menu_still_valid(player, level)
+}
+fn menu_level_error(error: MenuError) -> crate::level::LevelError {
+    match error {
         MenuError::Level(error) => error,
         MenuError::Unsupported(operation) => crate::level::LevelError::Inventory(operation),
         _ => crate::level::LevelError::Inventory("container synchronization codec"),
-    })
+    }
 }
-fn tick_container_menu_inner(player: EntityRef, level: &mut Level) -> Result<()> {
+/// Port of the current containerMenu.broadcastChanges call used by rewards.
+/// The retained receiver finishes broadcasting even if a callback replaces it.
+pub fn broadcast_container_menu(
+    player: EntityRef,
+    level: &mut Level,
+) -> std::result::Result<(), crate::level::LevelError> {
     let reference = level.entity::<ServerPlayer>(player)?.menus.current_ref();
-    with_menu_callback(player, reference, level, |context| {
-        broadcast_menu_changes(context)?;
+    synchronize_menu(player, reference, MenuSynchronization::Changes, level)
+        .map_err(menu_level_error)
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum MenuSynchronization {
+    Changes,
+    FullState,
+    Contents,
+    Initialize,
+}
+/// Run the receiver captured at one native menu call. Reentrant replacements
+/// affect subsequent player.containerMenu reads, never this receiver.
+pub fn synchronize_menu(
+    player: EntityRef,
+    menu: MenuRef,
+    synchronization: MenuSynchronization,
+    level: &mut Level,
+) -> Result<()> {
+    flush_container_packets(player, level)?;
+    with_menu_callback(player, menu, level, |context| {
+        match synchronization {
+            MenuSynchronization::Changes => broadcast_menu_changes(context)?,
+            MenuSynchronization::FullState => broadcast_menu_full_state(context)?,
+            MenuSynchronization::Contents => send_all_menu_data(context)?,
+            MenuSynchronization::Initialize => {
+                if !context.menu()?.player_listener {
+                    context.menu_mut()?.player_listener = true;
+                    broadcast_menu_changes(context)?;
+                }
+                set_menu_synchronizer(context)?;
+            }
+        }
         context.menu_mut()?.changes.clear();
         Ok(())
-    })?;
+    })
+}
+
+/// Port of ServerPlayer#initInventoryMenu, after addNewPlayer on initial join.
+pub fn initialize_inventory_menu(player: EntityRef, level: &mut Level) -> Result<()> {
+    let menu = level
+        .entity::<ServerPlayer>(player)?
+        .menus
+        .inventory_menu
+        .reference();
+    synchronize_menu(player, menu, MenuSynchronization::Initialize, level)
+}
+
+/// Port of ServerGamePacketListenerImpl#tryPickItem. The selected-slot packet
+/// precedes inventoryMenu's synchronous listener and synchronizer callbacks.
+pub fn try_pick_item_live(player: EntityRef, stack: ItemStack, level: &mut Level) -> Result<()> {
+    if !stack.item().is_enabled_in_vanilla() {
+        return Ok(());
+    }
+    flush_container_packets(player, level)?;
+    let (selected, menu) = {
+        let player = level.entity_mut::<ServerPlayer>(player)?;
+        let infinite_materials = player.instabuild();
+        if let Some(slot) = player.inventory.find_slot_matching_item(&stack) {
+            if slot < 9 {
+                player.inventory.set_selected_slot(slot);
+            } else {
+                player.inventory.pick_slot(slot);
+            }
+        } else if infinite_materials {
+            player.inventory.add_and_pick_item(stack);
+        }
+        (
+            player.inventory.selected_slot(),
+            player.menus.inventory_menu.reference(),
+        )
+    };
+    emit_menu_packet(
+        player,
+        cb::Packet::SetHeldSlot(cb::SetHeldSlot {
+            slot: VarInt(selected as i32),
+        }),
+        level,
+    );
+    synchronize_menu(player, menu, MenuSynchronization::Changes, level)
+}
+
+/// Port of ServerPlayer#doTick's current menu validity check, with no broadcast.
+pub fn check_container_menu_still_valid(
+    player: EntityRef,
+    level: &mut Level,
+) -> std::result::Result<(), crate::level::LevelError> {
+    check_container_menu_still_valid_inner(player, level).map_err(menu_level_error)
+}
+fn check_container_menu_still_valid_inner(player: EntityRef, level: &mut Level) -> Result<()> {
     // Java reads containerMenu again after broadcasting: a synchronous slot
     // callback may have closed or replaced the menu just broadcast.
     let bound = &level
@@ -243,12 +395,21 @@ fn tick_container_menu_inner(player: EntityRef, level: &mut Level) -> Result<()>
         .block_entities;
     let valid = block_menu_still_valid(player, bound, level)?;
     if !valid {
-        let packets = close_container(player, level, true, false)?;
-        level
-            .entity_mut::<ServerPlayer>(player)?
-            .menus
-            .pending_packets
-            .extend(packets);
+        close_container_live(player, level, true, false)?;
     }
     Ok(())
+}
+
+/// Port of Player#addItem. The supplied receiver is caller-owned generated loot;
+/// native Inventory#add mutates its remainder before any subsequent world call.
+pub fn add_item(
+    player: EntityRef,
+    stack: &mut ItemStack,
+    level: &mut Level,
+) -> std::result::Result<bool, crate::level::LevelError> {
+    let player = level.entity_mut::<ServerPlayer>(player)?;
+    let infinite_materials = player.instabuild();
+    Ok(player
+        .inventory
+        .add(stack, &mut player.parent.equipment, infinite_materials))
 }

@@ -15,6 +15,7 @@ pub enum UnportedBehavior {
 pub enum UnportedOperation {
     EntityMethod(EntityType, crate::entity::EntityMethod),
     ItemUseOn(ferraloom_data::Item),
+    ItemCraftedPostProcess(ferraloom_data::Item),
     PortalUse(Block),
     AdvancementCriterion(crate::advancements::criteria::Trigger),
     WeatherStrike,
@@ -236,6 +237,13 @@ impl UnportedCalls {
                     item.name(),
                     self.stats.skipped_calls
                 ),
+                UnportedCall::Operation(UnportedOperation::ItemCraftedPostProcess(item)) => {
+                    eprintln!(
+                        "Unported crafted item effect skipped: {}#onCraftedPostProcess (skipped calls: {})",
+                        item.name(),
+                        self.stats.skipped_calls
+                    )
+                }
                 UnportedCall::Operation(UnportedOperation::PortalUse(block)) => eprintln!(
                     "Unported portal use effect skipped: {} (skipped calls: {})",
                     block.name(),
@@ -343,6 +351,9 @@ impl Level {
                     LevelError::UnsupportedEntityMethod(kind, method)
                 }
                 UnportedOperation::ItemUseOn(item) => LevelError::UnsupportedItemUseOn(item),
+                UnportedOperation::ItemCraftedPostProcess(item) => {
+                    LevelError::UnsupportedItemCraftedPostProcess(item)
+                }
                 UnportedOperation::PortalUse(block) => LevelError::UnsupportedPortalUse(block),
                 UnportedOperation::AdvancementCriterion(trigger) => {
                     LevelError::UnsupportedAdvancementCriterion(trigger)

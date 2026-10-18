@@ -1696,47 +1696,49 @@ impl MinecraftServer {
         c.push(cb::Packet::PostEffects(common_cb::PostEffects {
             post_effects: Vec::new(),
         }));
-        {
-            let infinite_materials = player.instabuild();
-            let context = MenuContext::player_with_abilities(
-                &mut player.inventory,
-                &mut player.parent.equipment,
-                player.game_mode == GameType::Creative,
-                infinite_materials,
-            );
-            player.menus.inventory_menu.set_synchronizer(&context);
-            for packet in player.menus.inventory_menu.drain_packets() {
-                c.push(packet);
-            }
-        }
-        use protocol::entity_data::{DataValue, EntityDataItems, EntityDataValue};
-        c.push(cb::Packet::SetEntityData(cb::SetEntityData {
-            id: VarInt(entity_id),
-            packed_items: EntityDataItems(vec![
-                DataValue {
-                    id: 9,
-                    value: EntityDataValue::Float(player.parent.health()),
-                },
-                DataValue {
-                    id: 16,
-                    value: EntityDataValue::Byte(c.information.model_customisation as i8),
-                },
-            ]),
-        }));
-        c.push(cb::Packet::SetHealth(cb::SetHealth {
-            health: player.parent.health(),
-            food: VarInt(20),
-            saturation: 5.,
-        }));
-        c.push(cb::Packet::SetExperience(cb::SetExperience {
-            experience_progress: 0.,
-            experience_level: VarInt(0),
-            total_experience: VarInt(0),
-        }));
         self.level
             .level
             .add_entity(entity, EntityState::Player(Box::new(player)))
-            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+            .map_err(game_error)?;
+        ferraloom_game::inventory::initialize_inventory_menu(entity, &mut self.level.level)?;
+        use protocol::entity_data::{DataValue, EntityDataItems, EntityDataValue};
+        let post_initialization = {
+            let player = self
+                .level
+                .level
+                .entity::<ServerPlayer>(entity)
+                .map_err(game_error)?;
+            [
+                cb::Packet::SetEntityData(cb::SetEntityData {
+                    id: VarInt(entity_id),
+                    packed_items: EntityDataItems(vec![
+                        DataValue {
+                            id: 9,
+                            value: EntityDataValue::Float(player.parent.health()),
+                        },
+                        DataValue {
+                            id: 16,
+                            value: EntityDataValue::Byte(c.information.model_customisation as i8),
+                        },
+                    ]),
+                }),
+                cb::Packet::SetHealth(cb::SetHealth {
+                    health: player.parent.health(),
+                    food: VarInt(20),
+                    saturation: 5.,
+                }),
+                cb::Packet::SetExperience(cb::SetExperience {
+                    experience_progress: 0.,
+                    experience_level: VarInt(0),
+                    total_experience: VarInt(0),
+                }),
+            ]
+        };
+        ferraloom_game::inventory::send_container_packets(
+            entity,
+            post_initialization,
+            &mut self.level.level,
+        )?;
         println!(
             "{} joined at {}, {}, {}",
             c.profile.name, pos.x, pos.y, pos.z
@@ -1744,7 +1746,7 @@ impl MinecraftServer {
         self.update_player_tickets(entity)?;
         self.players.push(connection);
         self.connections.insert(connection, c);
-        Ok(())
+        self.apply_level_effects()
     }
     async fn play_packet(&mut self, connection: ConnectionId, packet: sb::Packet) -> Result<()> {
         let Phase::Play(entity) = self.connections[&connection].phase else {
@@ -2174,7 +2176,7 @@ impl MinecraftServer {
                 .map_err(game_error)?;
             player.game_mode == GameType::Spectator || player.parent.health() <= 0.0
         };
-        let (packets, drops) = ferraloom_game::inventory::with_block_menu_context(
+        let (synchronization, packets, drops) = ferraloom_game::inventory::with_block_menu_context(
             entity,
             &mut self.level.level,
             |menus, book, context| {
@@ -2192,10 +2194,10 @@ impl MinecraftServer {
                 };
                 let menu = menus.current_mut();
                 if menu.container_id != packet.container_id.0 {
-                    return Ok((Vec::new(), Vec::new()));
+                    return Ok((None, Vec::new(), Vec::new()));
                 }
-                if spectator {
-                    menu.send_all_data_to_remote(context);
+                let synchronization = if spectator {
+                    Some(ferraloom_game::inventory::MenuSynchronization::Contents)
                 } else if menu.still_valid(context)
                     && menu.is_valid_slot_index(i32::from(packet.slot_num))
                 {
@@ -2208,42 +2210,61 @@ impl MinecraftServer {
                         packet.container_input,
                         &mut hooks,
                     );
-                    menu.resume_remote_updates();
                     result?;
                     for changed in packet.changed_slots.0 {
                         menu.set_remote_slot_unsafe(i32::from(changed.slot), changed.stack);
                     }
                     menu.set_remote_carried(packet.carried_item);
-                    if mismatch {
-                        menu.broadcast_full_state(context);
+                    menu.resume_remote_updates();
+                    Some(if mismatch {
+                        ferraloom_game::inventory::MenuSynchronization::FullState
                     } else {
-                        menu.broadcast_changes(context)?;
-                    }
-                }
-                menu.changes.clear();
-                Ok((menu.drain_packets(), std::mem::take(&mut context.drops)))
+                        ferraloom_game::inventory::MenuSynchronization::Changes
+                    })
+                } else {
+                    None
+                };
+                Ok((
+                    synchronization,
+                    menu.drain_packets(),
+                    std::mem::take(&mut context.drops),
+                ))
             },
         )?;
+        ferraloom_game::inventory::send_container_packets(entity, packets, &mut self.level.level)?;
         for drop in drops {
             self.drop_inventory_stack(entity, drop.stack, drop.thrown_from_hand)?;
         }
-        for packet in packets {
-            self.connections.get_mut(&connection).unwrap().push(packet);
+        if let Some(synchronization) = synchronization {
+            let menu = self
+                .level
+                .level
+                .entity::<ServerPlayer>(entity)
+                .map_err(game_error)?
+                .menus
+                .current_ref();
+            ferraloom_game::inventory::synchronize_menu(
+                entity,
+                menu,
+                synchronization,
+                &mut self.level.level,
+            )?;
         }
-        Ok(())
+        self.apply_level_effects()
     }
     /// Port of ServerGamePacketListenerImpl#handleContainerClose and ServerPlayer#doCloseContainer.
     fn handle_container_close(
         &mut self,
-        connection: ConnectionId,
+        _connection: ConnectionId,
         entity: EntityRef,
     ) -> Result<()> {
-        for packet in
-            ferraloom_game::inventory::close_container(entity, &mut self.level.level, false, false)?
-        {
-            self.connections.get_mut(&connection).unwrap().push(packet);
-        }
-        Ok(())
+        ferraloom_game::inventory::close_container_live(
+            entity,
+            &mut self.level.level,
+            false,
+            false,
+        )?;
+        self.apply_level_effects()
     }
     /// Port of ServerGamePacketListenerImpl#handleContainerButtonClick.
     fn handle_container_button_click(
@@ -2266,32 +2287,36 @@ impl MinecraftServer {
             }
             player.game_mode != GameType::Adventure
         };
-        let (packets, drops) = ferraloom_game::inventory::with_block_menu_context(
+        let (accepted, packets, drops) = ferraloom_game::inventory::with_block_menu_context(
             entity,
             &mut self.level.level,
             |menus, _book, context| {
                 let menu = menus.current_mut();
                 if !menu.still_valid(context) {
-                    return Ok((Vec::new(), Vec::new()));
+                    return Ok((false, Vec::new(), Vec::new()));
                 }
-                if menu.click_menu_button(
+                let accepted = menu.click_menu_button(
                     context,
                     packet.button_id.0,
                     may_build,
                     &mut UnsupportedMenuHooks,
-                )? {
-                    menu.broadcast_changes(context)?;
-                }
-                Ok((menu.drain_packets(), std::mem::take(&mut context.drops)))
+                )?;
+                Ok((
+                    accepted,
+                    menu.drain_packets(),
+                    std::mem::take(&mut context.drops),
+                ))
             },
         )?;
+        ferraloom_game::inventory::send_container_packets(entity, packets, &mut self.level.level)?;
         for drop in drops {
             self.drop_inventory_stack(entity, drop.stack, drop.thrown_from_hand)?;
         }
-        for packet in packets {
-            self.connections.get_mut(&connection).unwrap().push(packet);
+        if accepted {
+            ferraloom_game::inventory::broadcast_container_menu(entity, &mut self.level.level)
+                .map_err(game_error)?;
         }
-        Ok(())
+        self.apply_level_effects()
     }
     /// Port of ServerGamePacketListenerImpl#handlePlaceRecipe. Slot deltas are
     /// broadcast by ServerPlayer#tick; only direct result and ghost packets go now.
@@ -2427,7 +2452,7 @@ impl MinecraftServer {
                 <= ferraloom_game::entity::player::inventory::max_stack_size(&stack);
         let tick = self.connections[&connection].network_ticks;
         let mut drop = None;
-        let packets = {
+        let (synchronize, packets) = {
             let player = self
                 .level
                 .level
@@ -2464,23 +2489,35 @@ impl MinecraftServer {
                     &mut hooks,
                 )?;
                 menu.set_remote_slot(packet.slot_num as usize, &stack);
-                menu.broadcast_changes(&context)?;
-                menu.changes.clear();
-                menu.drain_packets()
+                (true, menu.drain_packets())
             } else {
                 if packet.slot_num < 0 && player.menus.allow_creative_drop(tick) {
                     drop = Some(stack);
                 }
-                Vec::new()
+                (false, Vec::new())
             }
         };
+        ferraloom_game::inventory::send_container_packets(entity, packets, &mut self.level.level)?;
         if let Some(stack) = drop {
             self.drop_inventory_stack(entity, stack, true)?;
         }
-        for packet in packets {
-            self.connections.get_mut(&connection).unwrap().push(packet);
+        if synchronize {
+            let menu = self
+                .level
+                .level
+                .entity::<ServerPlayer>(entity)
+                .map_err(game_error)?
+                .menus
+                .inventory_menu
+                .reference();
+            ferraloom_game::inventory::synchronize_menu(
+                entity,
+                menu,
+                ferraloom_game::inventory::MenuSynchronization::Changes,
+                &mut self.level.level,
+            )?;
         }
-        Ok(())
+        self.apply_level_effects()
     }
     /// Port of ServerGamePacketListenerImpl#handleSetCarriedItem.
     fn handle_set_carried_item(
@@ -2518,7 +2555,6 @@ impl MinecraftServer {
             if !player.loaded || player.game_mode == GameType::Spectator {
                 return Ok(());
             }
-            let infinite_materials = player.instabuild();
             let inventory = &mut player.inventory;
             let drop = if action == PlayerAction::SwapItemWithOffhand {
                 ferraloom_game::inventory::swap_player_hands(entity, &mut self.level.level)?;
@@ -2543,24 +2579,16 @@ impl MinecraftServer {
                 }
                 Some(stack)
             };
-            let context = MenuContext::player_with_abilities(
-                inventory,
-                &mut player.parent.equipment,
-                player.game_mode == GameType::Creative,
-                infinite_materials,
-            );
             let menu = player.menus.current_mut();
-            menu.broadcast_changes(&context)?;
-            menu.changes.clear();
             (drop, menu.drain_packets())
         };
+        ferraloom_game::inventory::send_container_packets(entity, packets, &mut self.level.level)?;
         if let Some(stack) = drop {
             self.drop_inventory_stack(entity, stack, true)?;
         }
-        for packet in packets {
-            self.connections.get_mut(&connection).unwrap().push(packet);
-        }
-        Ok(())
+        ferraloom_game::inventory::broadcast_container_menu(entity, &mut self.level.level)
+            .map_err(game_error)?;
+        self.apply_level_effects()
     }
     fn drop_inventory_stack(
         &mut self,
@@ -2700,29 +2728,12 @@ impl MinecraftServer {
     /// Port of ServerGamePacketListenerImpl#tryPickItem.
     fn try_pick_item(
         &mut self,
-        connection: ConnectionId,
+        _connection: ConnectionId,
         entity: EntityRef,
         stack: protocol::component::ItemStack,
     ) -> Result<()> {
-        let packets = {
-            let player = self
-                .level
-                .level
-                .entity_mut::<ServerPlayer>(entity)
-                .map_err(game_error)?;
-            let infinite_materials = player.instabuild();
-            let mut context = MenuContext::player_with_abilities(
-                &mut player.inventory,
-                &mut player.parent.equipment,
-                player.game_mode == GameType::Creative,
-                infinite_materials,
-            );
-            player.menus.try_pick_item(&mut context, stack)?
-        };
-        for packet in packets {
-            self.connections.get_mut(&connection).unwrap().push(packet);
-        }
-        Ok(())
+        ferraloom_game::inventory::try_pick_item_live(entity, stack, &mut self.level.level)?;
+        self.apply_level_effects()
     }
     fn player(&self, entity: EntityRef) -> Result<&ServerPlayer> {
         self.level

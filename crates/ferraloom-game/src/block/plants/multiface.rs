@@ -63,14 +63,20 @@ pub fn can_attach_to_neighbor(
     pos: BlockPos,
     toward: Direction,
 ) -> Result<bool, LevelError> {
-    let support = level
-        .required_behavior(neighbor.block(), BlockMethod::IsFaceSturdy)?
-        .support_shape(neighbor, pos, level)?;
-    Ok(shapes::is_face_full(&support, toward.opposite())
-        || shapes::is_face_full(
-            &level.collision_shape_without_context(neighbor, pos)?,
-            toward.opposite(),
-        ))
+    let face = toward.opposite();
+    // Native FULL support facts use the same face predicate. Vanilla's support
+    // overrides are constants or state-only shapes; contextual collision blocks
+    // have no cache and retain their required virtual below.
+    let support_full = if let Some(full) = neighbor.cached_sturdy_face(face) {
+        full
+    } else {
+        let support = level
+            .required_behavior(neighbor.block(), BlockMethod::IsFaceSturdy)?
+            .support_shape(neighbor, pos, level)?;
+        shapes::is_face_full(&support, face)
+    };
+    Ok(support_full
+        || shapes::is_face_full(&level.collision_shape_without_context(neighbor, pos)?, face))
 }
 /// Port of MultifaceBlock#getStateForPlacement(BlockState,BlockGetter,BlockPos,Direction).
 pub fn state_for_placement(

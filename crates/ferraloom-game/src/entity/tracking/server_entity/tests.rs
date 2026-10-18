@@ -259,7 +259,7 @@ fn real_player_pairing_and_updates_preserve_equipment_attributes_head_and_motion
 
 #[test]
 fn nonliving_damage_forces_native_velocity_sync_even_without_an_update_interval() {
-    use crate::entity::{DamageSource, experience_orb::ExperienceOrb};
+    use crate::entity::experience_orb::ExperienceOrb;
     let mut rows = 0;
     for row in VECTORS.lines().filter(|row| row.starts_with("hurt-sync\t")) {
         let fields: Vec<_> = row.split('\t').collect();
@@ -277,11 +277,12 @@ fn nonliving_damage_forces_native_velocity_sync_even_without_an_update_interval(
         let mut tracker = ServerEntity::new(id, &level, UpdateInterval::Never, true).unwrap();
         tracker.send_changes(&mut level).unwrap();
         level.entity_mut::<EntityData>(id).unwrap().velocity = Vec3::new(0.125, 0.25, 0.375);
+        let source = level.damage_sources().generic();
         assert!(
             level
                 .entity_behavior(id)
                 .unwrap()
-                .hurt_server(id, &mut level, DamageSource::default(), 1.0)
+                .hurt_server(id, &mut level, source, 1.0)
                 .unwrap()
         );
         let base = level.entity::<EntityData>(id).unwrap();

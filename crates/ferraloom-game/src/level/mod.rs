@@ -40,6 +40,9 @@ mod saved_ticks;
 pub mod server_level;
 pub mod simulation;
 pub(crate) mod store;
+pub mod structure_manager;
+mod structure_services;
+pub use structure_services::StructureServices;
 pub mod tick_rate;
 pub mod tickets;
 mod ticking;
@@ -48,6 +51,7 @@ pub mod weather;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum LevelError {
     UnsupportedItemUseOn(ferraloom_data::Item),
+    UnsupportedItemCraftedPostProcess(ferraloom_data::Item),
     UnsupportedPortalUse(Block),
     UnsupportedEntityMethod(EntityType, crate::entity::EntityMethod),
     UnsupportedAdvancementCriterion(crate::advancements::criteria::Trigger),
@@ -83,6 +87,7 @@ pub enum LevelError {
     MissingServerShared,
     MissingBlockTags,
     MissingBlockTag,
+    MissingDamageTypeTag,
     MissingFluidTags,
     MissingEntityTypeTags,
     MissingItemTags,
@@ -95,6 +100,8 @@ pub enum LevelError {
     InvalidPendingGenerationData,
     UnsupportedChunkUpgrade,
     WrongChunkHeight(ChunkPos),
+    InvalidChunkStructures(ChunkPos),
+    InvalidStructureHolderSet,
 }
 
 /// Dimension settings consumed by the live core. The server supplies the
@@ -106,6 +113,11 @@ pub struct LevelRules {
     pub show_advancement_messages: bool,
     pub tnt_explodes: bool,
     pub entity_drops: bool,
+    pub max_entity_cramming: i32,
+    pub drowning_damage: bool,
+    pub fall_damage: bool,
+    pub fire_damage: bool,
+    pub freeze_damage: bool,
     pub debug: bool,
     pub can_have_weather: bool,
     pub random_tick_speed: u32,
@@ -120,11 +132,23 @@ pub struct LevelRules {
 }
 impl Default for LevelRules {
     fn default() -> Self {
+        use crate::gamerules::{GameRule, RuleType};
+        let damage_default = |rule: GameRule| {
+            let RuleType::Boolean { default } = rule.definition().kind else {
+                unreachable!("damage game rules are boolean");
+            };
+            default
+        };
         Self {
             block_drops: None,
             show_advancement_messages: true,
             tnt_explodes: true,
             entity_drops: true,
+            max_entity_cramming: 24,
+            drowning_damage: damage_default(GameRule::DrowningDamage),
+            fall_damage: damage_default(GameRule::FallDamage),
+            fire_damage: damage_default(GameRule::FireDamage),
+            freeze_damage: damage_default(GameRule::FreezeDamage),
             debug: false,
             can_have_weather: true,
             random_tick_speed: 3,
@@ -231,6 +255,7 @@ pub struct Level {
     shared: Option<Box<crate::ServerShared>>,
     region: Option<Region>,
     context: Arc<LevelContext>,
+    difficulty: ferraloom_protocol::play::Difficulty,
 }
 
 impl Level {
@@ -238,6 +263,7 @@ impl Level {
         Self {
             shared: None,
             region: Some(region),
+            difficulty: context.initial_difficulty,
             context,
         }
     }
@@ -266,6 +292,13 @@ impl Level {
     }
     pub fn context(&self) -> &Arc<LevelContext> {
         &self.context
+    }
+    /// Port of Level#getDifficulty, published from canonical world data.
+    pub fn difficulty(&self) -> ferraloom_protocol::play::Difficulty {
+        self.difficulty
+    }
+    pub fn set_difficulty(&mut self, difficulty: ferraloom_protocol::play::Difficulty) {
+        self.difficulty = difficulty;
     }
     pub fn seed(&self) -> i64 {
         self.context.seed

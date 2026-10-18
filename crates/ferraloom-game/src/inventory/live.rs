@@ -23,6 +23,12 @@ pub enum ContainerHandle {
         player: EntityRef,
         menu: MenuRef,
     },
+    MenuListenerCopies {
+        player: EntityRef,
+    },
+    MenuOperationStacks {
+        player: EntityRef,
+    },
     Entity(EntityRef),
 }
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -145,6 +151,10 @@ impl MenuContainerAccess for LiveMenuContext<'_> {
             ContainerHandle::MenuCarried { .. } => Err(MenuError::Unsupported(
                 "cursor is a stack receiver, not a slot container",
             )),
+            ContainerHandle::MenuListenerCopies { .. }
+            | ContainerHandle::MenuOperationStacks { .. } => Err(MenuError::Unsupported(
+                "operation objects are not inventory containers",
+            )),
             ContainerHandle::Entity(_) => Err(MenuError::Unsupported("entity container resolver")),
         }
     }
@@ -165,6 +175,10 @@ impl MenuContainerAccess for LiveMenuContext<'_> {
             }),
             ContainerHandle::MenuCarried { .. } => Err(MenuError::Unsupported(
                 "cursor is a stack receiver, not a slot container",
+            )),
+            ContainerHandle::MenuListenerCopies { .. }
+            | ContainerHandle::MenuOperationStacks { .. } => Err(MenuError::Unsupported(
+                "operation objects are not inventory containers",
             )),
             ContainerHandle::Entity(_) => Err(MenuError::Unsupported("entity container resolver")),
         }
@@ -187,6 +201,10 @@ impl MenuContainerAccess for LiveMenuContext<'_> {
             ContainerHandle::MenuCarried { .. } => Err(MenuError::Unsupported(
                 "cursor is a stack receiver, not a slot container",
             )),
+            ContainerHandle::MenuListenerCopies { .. }
+            | ContainerHandle::MenuOperationStacks { .. } => Err(MenuError::Unsupported(
+                "operation objects are not inventory containers",
+            )),
             ContainerHandle::Entity(_) => Err(MenuError::Unsupported("entity container resolver")),
         }
     }
@@ -207,6 +225,10 @@ impl MenuContainerAccess for LiveMenuContext<'_> {
             }),
             ContainerHandle::MenuCarried { .. } => Err(MenuError::Unsupported(
                 "cursor is a stack receiver, not a slot container",
+            )),
+            ContainerHandle::MenuListenerCopies { .. }
+            | ContainerHandle::MenuOperationStacks { .. } => Err(MenuError::Unsupported(
+                "operation objects are not inventory containers",
             )),
             ContainerHandle::Entity(_) => Err(MenuError::Unsupported("entity container resolver")),
         }
@@ -234,6 +256,10 @@ impl MenuContainerAccess for LiveMenuContext<'_> {
             ContainerHandle::MenuCarried { .. } => Err(MenuError::Unsupported(
                 "cursor is a stack receiver, not a slot container",
             )),
+            ContainerHandle::MenuListenerCopies { .. }
+            | ContainerHandle::MenuOperationStacks { .. } => Err(MenuError::Unsupported(
+                "operation objects are not inventory containers",
+            )),
             ContainerHandle::Entity(_) => Err(MenuError::Unsupported("entity container resolver")),
         }
     }
@@ -256,6 +282,10 @@ impl MenuContainerAccess for LiveMenuContext<'_> {
             ContainerHandle::MenuCarried { .. } => Err(MenuError::Unsupported(
                 "cursor is a stack receiver, not a slot container",
             )),
+            ContainerHandle::MenuListenerCopies { .. }
+            | ContainerHandle::MenuOperationStacks { .. } => Err(MenuError::Unsupported(
+                "operation objects are not inventory containers",
+            )),
             ContainerHandle::Entity(_) => Err(MenuError::Unsupported("entity container resolver")),
         }
     }
@@ -275,6 +305,10 @@ impl MenuContainerAccess for LiveMenuContext<'_> {
             } => self.with_local(player, menu, container, |container| container.size()),
             ContainerHandle::MenuCarried { .. } => Err(MenuError::Unsupported(
                 "cursor is a stack receiver, not a slot container",
+            )),
+            ContainerHandle::MenuListenerCopies { .. }
+            | ContainerHandle::MenuOperationStacks { .. } => Err(MenuError::Unsupported(
+                "operation objects are not inventory containers",
             )),
             ContainerHandle::Entity(_) => Err(MenuError::Unsupported("entity container resolver")),
         }
@@ -297,6 +331,10 @@ impl MenuContainerAccess for LiveMenuContext<'_> {
             }),
             ContainerHandle::MenuCarried { .. } => Err(MenuError::Unsupported(
                 "cursor is a stack receiver, not a slot container",
+            )),
+            ContainerHandle::MenuListenerCopies { .. }
+            | ContainerHandle::MenuOperationStacks { .. } => Err(MenuError::Unsupported(
+                "operation objects are not inventory containers",
             )),
             ContainerHandle::Entity(_) => Err(MenuError::Unsupported("entity container resolver")),
         }
@@ -321,6 +359,10 @@ impl MenuContainerAccess for LiveMenuContext<'_> {
             ContainerHandle::MenuCarried { .. } => Err(MenuError::Unsupported(
                 "cursor is a stack receiver, not a slot container",
             )),
+            ContainerHandle::MenuListenerCopies { .. }
+            | ContainerHandle::MenuOperationStacks { .. } => Err(MenuError::Unsupported(
+                "operation objects are not inventory containers",
+            )),
             ContainerHandle::Entity(_) => Err(MenuError::Unsupported("entity container resolver")),
         }
     }
@@ -343,6 +385,10 @@ impl MenuContainerAccess for LiveMenuContext<'_> {
             ContainerHandle::MenuCarried { .. } => Err(MenuError::Unsupported(
                 "cursor is a stack receiver, not a slot container",
             )),
+            ContainerHandle::MenuListenerCopies { .. }
+            | ContainerHandle::MenuOperationStacks { .. } => Err(MenuError::Unsupported(
+                "operation objects are not inventory containers",
+            )),
             ContainerHandle::Entity(_) => Err(MenuError::Unsupported("entity container resolver")),
         }
     }
@@ -356,6 +402,10 @@ pub fn with_menu_callback<R>(
     level: &mut Level,
     operation: impl FnOnce(&mut LiveMenuContext<'_>) -> Result<R>,
 ) -> Result<R> {
+    level
+        .entity_mut::<ServerPlayer>(player)?
+        .menus
+        .bind_listener_copies(menu)?;
     let roots = level
         .entity::<ServerPlayer>(player)?
         .menus

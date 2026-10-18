@@ -29,6 +29,16 @@ impl BlockMenuContainer<'_> {
     }
 }
 impl Container for BlockMenuContainer<'_> {
+    fn reassign_item(&mut self, slot: usize) -> Result<()> {
+        let (index, slot) = self.locate(slot);
+        if let BlockEntityState::Crafter(crafter) = &mut *self.states[index] {
+            crafter.set_slot_state(slot, true);
+        }
+        self.states[index]
+            .container_mut()
+            .unwrap()
+            .reassign_item(slot)
+    }
     fn set_item_count(&mut self, slot: usize, amount: i32) -> Result<()> {
         let (index, slot) = self.locate(slot);
         self.states[index]
@@ -274,11 +284,36 @@ mod tests {
             kind: MenuKind::Chest { rows: 3 },
             title: ferraloom_protocol::chat::Component::literal("Chest"),
         };
-        let packets = super::super::open_menu(player, &provider, level).unwrap();
-        assert!(matches!(
-            packets[0],
-            ferraloom_protocol::play::clientbound::Packet::OpenScreen(_)
-        ));
+        assert!(
+            super::super::open_menu_live(player, &provider, level)
+                .unwrap()
+                .is_some()
+        );
+    }
+    #[test]
+    fn live_close_packet_precedes_container_close_callbacks() {
+        use crate::level::effects::LevelEffect;
+        use ferraloom_protocol::play::clientbound as cb;
+        let (mut level, player, handle) = setup();
+        open(&mut level, player, handle);
+        level.take_effects();
+        super::super::close_container_live(player, &mut level, true, false).unwrap();
+        let effects = level.take_effects();
+        let close = effects.iter().position(|effect| {
+            matches!(effect, LevelEffect::PlayerPacket { recipients, packet }
+                if recipients == &[player] && matches!(packet.as_ref(), cb::Packet::ContainerClose(_)))
+        }).unwrap();
+        let callback = effects
+            .iter()
+            .position(|effect| {
+                matches!(effect, LevelEffect::GameEvent { event, .. }
+                if *event == ferraloom_data::registries::game_event::Id::CONTAINER_CLOSE)
+            })
+            .unwrap();
+        assert!(close < callback);
+        let player = level.entity::<ServerPlayer>(player).unwrap();
+        assert!(player.menus.container_menu.is_none());
+        assert!(player.menus.pending_packets.is_empty());
     }
     #[test]
     fn loot_source_retains_the_original_generation_without_a_dynamic_provider() {
@@ -505,7 +540,7 @@ mod tests {
             kind: MenuKind::Furnace,
             title: ferraloom_protocol::chat::Component::literal("Furnace"),
         };
-        open_menu(player, &provider, &mut level).unwrap();
+        open_menu_live(player, &provider, &mut level).unwrap();
         let furnace = level
             .block_entity_mut::<AbstractFurnaceBlockEntity>(handle)
             .unwrap();
@@ -540,7 +575,7 @@ mod tests {
                 kind: MenuKind::Chest { rows: 3 },
                 title: ferraloom_protocol::chat::Component::literal("replacement"),
             };
-            open_menu(player, &provider, context.level)?;
+            open_menu_live(player, &provider, context.level)?;
             context.level.collect_detached_block_entities();
             let slot = ContainerSlot {
                 container: ContainerHandle::BlockEntity(old),
@@ -629,7 +664,19 @@ mod tests {
         super::super::tick_container_menu(player, &mut level).unwrap();
         let player_state = level.entity::<ServerPlayer>(player).unwrap();
         assert!(player_state.menus.container_menu.is_none());
-        let packets = &player_state.menus.pending_packets;
+        assert!(player_state.menus.pending_packets.is_empty());
+        let packets = level
+            .take_effects()
+            .into_iter()
+            .filter_map(|effect| match effect {
+                crate::level::effects::LevelEffect::PlayerPacket { recipients, packet }
+                    if recipients == [player] =>
+                {
+                    Some(*packet)
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>();
         let slot = packets.iter().position(|packet|matches!(packet,ferraloom_protocol::play::clientbound::Packet::ContainerSetSlot(slot) if slot.slot == 0 && count(&slot.item_stack) == 9)).unwrap();
         let close = packets
             .iter()
