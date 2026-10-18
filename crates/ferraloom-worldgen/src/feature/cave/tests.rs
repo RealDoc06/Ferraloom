@@ -13,6 +13,18 @@ use std::{collections::BTreeMap, io::Read, path::Path};
 
 struct FixtureBehavior;
 impl WorldgenBlockBehavior for FixtureBehavior {
+    fn can_survive(
+        &self,
+        state: BlockState,
+        _region: &WorldGenRegion<'_>,
+        _p: [i32; 3],
+    ) -> Result<bool, Error> {
+        Err(Error(format!(
+            "Unsupported: {}#canSurvive ({})",
+            state.block().class().java_name(),
+            state.block().name()
+        )))
+    }
     fn post_process_pos(
         &self,
         _state: BlockState,
@@ -168,7 +180,7 @@ fn check(
     feature: &dyn Feature,
     registry: &FeatureRegistry,
     base: &[RegionChunk],
-) {
+) -> Result<(), Error> {
     assert!(
         case.get("vanilla_pending").is_none(),
         "vanilla fixture incomplete: {case}"
@@ -197,7 +209,7 @@ fn check(
         generator,
         registry,
     };
-    let result = feature.place(&mut context).unwrap();
+    let result = feature.place(&mut context)?;
     let label = format!(
         "{} seed={seed} origin={origin:?} {terrain}",
         case["feature"]
@@ -300,6 +312,7 @@ fn check(
         group_ticks(case["ticks"].as_array().unwrap()),
         "scheduled tick order {label}"
     );
+    Ok(())
 }
 fn run(select: impl Fn(&Value) -> bool) {
     let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").expect("builder supplies vanilla jar");
@@ -316,6 +329,7 @@ fn run(select: impl Fn(&Value) -> bool) {
     }
     let registry = loader.finish();
     let mut templates = BTreeMap::new();
+    let mut unavailable = Vec::new();
     for case in selected {
         let terrain = case["terrain"].as_str().unwrap();
         let origin = point(&case["origin"]);
@@ -323,8 +337,14 @@ fn run(select: impl Fn(&Value) -> bool) {
             .entry((terrain.to_owned(), origin))
             .or_insert_with(|| chunks(&generator, terrain, origin));
         let feature = &features[case["feature"].as_str().unwrap()];
-        check(&case, &generator, feature.as_ref(), &registry, base);
+        if let Err(error) = check(&case, &generator, feature.as_ref(), &registry, base) {
+            unavailable.push(format!(
+                "{} {} seed={}: {}",
+                case["feature"], case["terrain"], case["seed"], error
+            ));
+        }
     }
+    assert!(unavailable.is_empty(), "{}", unavailable.join("\n"));
 }
 #[test]
 fn real_ore_and_cave_feature_placements_match_vanilla() {
