@@ -106,6 +106,19 @@ impl LevelReaderRef<'_> {
         self.shape_behavior(state, BlockMethod::CollisionShape)?
             .collision_shape(state, pos, context, self)
     }
+    /// Port of BlockStateBase#getCollisionShape(BlockGetter, BlockPos). This
+    /// overload uses the real state cache even for states whose contextual
+    /// overload needs a live query. Dynamic states dispatch with empty context.
+    pub fn collision_shape_without_context(
+        &self,
+        state: BlockState,
+        pos: BlockPos,
+    ) -> Result<VoxelShape, LevelError> {
+        if state.cached_collision_full_block().is_some() {
+            return Ok(state.cached_shapes().collision.get().clone());
+        }
+        self.collision_shape(state, pos, &BlockCollisionContext::empty())
+    }
     pub fn shape(&self, state: BlockState, pos: BlockPos) -> Result<VoxelShape, LevelError> {
         if let Some(shape) = state.shape() {
             return Ok(shape.clone());

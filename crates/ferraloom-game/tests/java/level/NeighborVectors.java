@@ -114,7 +114,16 @@ public final class NeighborVectors {
                 System.out.println("fluid-legacy:"+net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(block)+":"+liquidLevel+"\\t"+Block.getId(fluid.createLegacyBlock()));
               }
               var wall=net.minecraft.world.level.material.FlowingFluid.class.getDeclaredMethod("canPassThroughWall",Direction.class,net.minecraft.world.level.BlockGetter.class,BlockPos.class,BlockState.class,BlockPos.class,BlockState.class);wall.setAccessible(true);
-              var states=List.of(Blocks.AIR.defaultBlockState(),Blocks.STONE.defaultBlockState(),Blocks.STONE_SLAB.defaultBlockState(),Blocks.STONE_SLAB.defaultBlockState().setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.SLAB_TYPE,net.minecraft.world.level.block.state.properties.SlabType.TOP),Blocks.WATER.defaultBlockState());
+              // Moving piston's dynamic shape requires the real level's block
+              // entity query, which this minimal Level explicitly rejects.
+              var wallStates=List.of(Blocks.STONE.defaultBlockState(),Blocks.WATER.defaultBlockState(),Blocks.MOVING_PISTON.defaultBlockState());
+              for(var wallPositions:List.of(new int[]{2,0},new int[]{0,2},new int[]{1,1},new int[]{0,1})){
+                String result;
+                try{result=""+wall.invoke(null,Direction.EAST,f,new BlockPos(wallPositions[0],0,0),wallStates.get(wallPositions[0]),new BlockPos(wallPositions[1],0,0),wallStates.get(wallPositions[1]));}
+                catch(java.lang.reflect.InvocationTargetException error){if(!(error.getCause() instanceof UnsupportedOperationException))throw error;result="unsupported";}
+                System.out.println("dynamic-fluid-wall:"+wallPositions[0]+":"+wallPositions[1]+"\t"+result);
+              }
+              var states=List.of(Blocks.AIR.defaultBlockState(),Blocks.STONE.defaultBlockState(),Blocks.STONE_SLAB.defaultBlockState(),Blocks.STONE_SLAB.defaultBlockState().setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.SLAB_TYPE,net.minecraft.world.level.block.state.properties.SlabType.TOP),Blocks.WATER.defaultBlockState(),Blocks.SHORT_GRASS.defaultBlockState());
               for(var first:states)for(var second:states)for(var direction:Direction.values()){
                 boolean pass=(Boolean)wall.invoke(null,direction,f,BlockPos.ZERO,first,BlockPos.ZERO.relative(direction),second);
                 System.out.println("fluid-wall:"+Block.getId(first)+":"+Block.getId(second)+":"+direction.get3DDataValue()+"\\t"+pass);

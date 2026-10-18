@@ -938,7 +938,11 @@ fn water_slope_search_matches_real_vanilla_across_chunk_borders_and_at_its_limit
 
 #[test]
 fn fluid_wall_occlusion_matches_vanilla_native_partial_faces_in_all_directions() {
-    for line in include_str!("../../tests/java/level/walls.tsv").lines() {
+    let level = empty_level(&EMPTY);
+    for line in include_str!("../../tests/java/level/walls.tsv")
+        .lines()
+        .filter(|line| line.starts_with("fluid-wall:"))
+    {
         let (input, expected) = line.split_once('\t').unwrap();
         let mut ids = input
             .strip_prefix("fluid-wall:")
@@ -951,6 +955,7 @@ fn fluid_wall_occlusion_matches_vanilla_native_partial_faces_in_all_directions()
         assert_eq!(
             crate::block::fluid::can_pass_through_wall(
                 direction,
+                &level,
                 BlockPos::ZERO,
                 source,
                 BlockPos::ZERO.relative(direction, 1),
@@ -961,6 +966,76 @@ fn fluid_wall_occlusion_matches_vanilla_native_partial_faces_in_all_directions()
             "{input}"
         );
     }
+}
+
+struct DynamicFluidWall;
+impl BlockBehavior for DynamicFluidWall {
+    fn collision_shape(
+        &self,
+        state: BlockState,
+        pos: BlockPos,
+        _context: &crate::block::BlockCollisionContext<'_>,
+        _level: &crate::block::LevelReaderRef<'_>,
+    ) -> Result<ferraloom_util::VoxelShape, LevelError> {
+        match pos.x {
+            0 => Ok(ferraloom_util::shapes::block()),
+            1 => Ok(ferraloom_util::shapes::empty()),
+            _ => Err(LevelError::UnsupportedShape(state)),
+        }
+    }
+}
+static DYNAMIC_FLUID_WALL: Behaviors = Behaviors::EMPTY.with_block(Block::WATER, &DynamicFluidWall);
+
+#[test]
+fn fluid_wall_queries_share_dynamic_dispatch_and_match_vanilla_target_first_shortcuts() {
+    let level = empty_level(&DYNAMIC_FLUID_WALL);
+    let states = [Block::STONE, Block::WATER, Block::MOVING_PISTON].map(Block::default_state);
+    for line in include_str!("../../tests/java/level/walls.tsv")
+        .lines()
+        .filter(|line| line.starts_with("dynamic-fluid-wall:"))
+    {
+        let (input, expected) = line.split_once('\t').unwrap();
+        let mut positions = input
+            .strip_prefix("dynamic-fluid-wall:")
+            .unwrap()
+            .split(':')
+            .map(|x| x.parse::<usize>().unwrap());
+        let source = positions.next().unwrap();
+        let target = positions.next().unwrap();
+        let result = crate::block::fluid::can_pass_through_wall(
+            Direction::East,
+            &level,
+            BlockPos::new(source as i32, 0, 0),
+            states[source],
+            BlockPos::new(target as i32, 0, 0),
+            states[target],
+        );
+        if expected == "unsupported" {
+            assert_eq!(
+                result,
+                Err(LevelError::UnsupportedBlockMethod(
+                    Block::MOVING_PISTON,
+                    crate::block::BlockMethod::CollisionShape
+                )),
+                "{input}"
+            );
+        } else {
+            assert_eq!(result.unwrap().to_string(), expected, "{input}");
+        }
+    }
+    // A live override of LiquidBlock's empty-context shape must also be called;
+    // fluid queries cannot hard-code LiquidBlock as an empty shape.
+    assert!(
+        !crate::block::fluid::can_pass_through_wall(
+            Direction::East,
+            &level,
+            BlockPos::ZERO,
+            states[1],
+            BlockPos::new(1, 0, 0),
+            states[1],
+        )
+        .unwrap()
+    );
 }
 
 static ANALOG: Behaviors = Behaviors::EMPTY.with_block(Block::COMPARATOR, &Trace { nested: false });
