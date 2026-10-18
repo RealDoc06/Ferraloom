@@ -105,6 +105,17 @@ pub struct EffectPredicate {
 persistent_record!(EffectPredicate {amplifier=>"amplifier"[Some(IntBounds::default())],duration=>"duration"[Some(IntBounds::default())],ambient=>"ambient"[Some(None)],visible=>"visible"[Some(None)]});
 
 impl Persistent for HolderSet {
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        if let Tag::String(value) = v {
+            let value = value.to_string_lossy();
+            return if let Some(tag) = value.strip_prefix('#') {
+                Ok(Self::Named(Identifier::parse(tag)?))
+            } else {
+                Ok(Self::Direct(vec![Identifier::parse(&value)?]))
+            };
+        }
+        Ok(Self::Direct(Vec::<Identifier>::from_nbt(v)?))
+    }
     fn from_json(v: &Json) -> Result<Self> {
         set_from_json(v)
     }
@@ -117,29 +128,69 @@ pub struct DoubleBounds {
     pub min: Option<f64>,
     pub max: Option<f64>,
 }
+// Double.compare/equals canonicalize NaNs and distinguish signed zero.
+fn double_bits(value: f64) -> u64 {
+    if value.is_nan() {
+        f64::NAN.to_bits()
+    } else {
+        value.to_bits()
+    }
+}
 impl Persistent for DoubleBounds {
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        let result = if matches!(
+            v,
+            Tag::Byte(_)
+                | Tag::Short(_)
+                | Tag::Int(_)
+                | Tag::Long(_)
+                | Tag::Float(_)
+                | Tag::Double(_)
+        ) {
+            let value = f64::from_nbt(v)?;
+            Self {
+                min: Some(value),
+                max: Some(value),
+            }
+        } else {
+            if v.as_compound().is_none() {
+                return Err(invalid("double bounds"));
+            }
+            Self {
+                min: field_nbt(v, "min", Some(None))?,
+                max: field_nbt(v, "max", Some(None))?,
+            }
+        };
+        result.to_persistent()?;
+        Ok(result)
+    }
     fn from_json(v: &Json) -> Result<Self> {
-        if v.is_number() {
+        let result = if v.is_number() {
             let n = f64::from_json(v)?;
-            Ok(Self {
+            Self {
                 min: Some(n),
                 max: Some(n),
-            })
+            }
         } else {
-            Ok(Self {
+            object(v)?;
+            Self {
                 min: field(v, "min", Some(None))?,
                 max: field(v, "max", Some(None))?,
-            })
-        }
+            }
+        };
+        result.to_persistent()?;
+        Ok(result)
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
         if let (Some(min), Some(max)) = (self.min, self.max)
-            && min.total_cmp(&max).is_gt()
+            && f64::from_bits(double_bits(min))
+                .total_cmp(&f64::from_bits(double_bits(max)))
+                .is_gt()
         {
             return Err(invalid("swapped bounds"));
         }
         if let (Some(min), Some(max)) = (self.min, self.max)
-            && min == max
+            && double_bits(min) == double_bits(max)
         {
             return min.to_persistent();
         }
@@ -206,6 +257,20 @@ impl<P: Persistent + PartialEq> Persistent for CollectionPredicate<P> {
 #[derive(Clone, Debug, PartialEq)]
 pub struct MobEffectsPredicate(pub Vec<(MobEffect, EffectPredicate)>);
 impl Persistent for MobEffectsPredicate {
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        Ok(Self(
+            v.as_compound()
+                .ok_or_else(|| invalid("effect predicate map"))?
+                .iter()
+                .map(|(key, value)| {
+                    Ok((
+                        MobEffect(registry(&key.to_string_lossy())),
+                        EffectPredicate::from_nbt(value)?,
+                    ))
+                })
+                .collect::<Result<_>>()?,
+        ))
+    }
     fn from_json(v: &Json) -> Result<Self> {
         Ok(Self(
             object(v)?
