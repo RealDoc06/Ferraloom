@@ -1,9 +1,12 @@
 //! Exact command feedback and packet variants, using disposable single-region servers.
 use ferraloom_parity::{
-    Bot, ObservationLog, Result, Session, Ticks, ensure, parity_test,
+    Bot, ObservationLog, Result, Session, Ticks, ensure,
     protocol::{chat::Component, play::clientbound as cb},
 };
 use serde_json::Value;
+
+mod command_support;
+use command_support::command_test;
 
 fn json(component: &Component) -> Result<Value> {
     Ok(serde_json::from_str(&component.to_json()?)?)
@@ -247,7 +250,7 @@ async fn forced_default_game_mode(session: &mut Session) -> Result<ObservationLo
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[ignore = "requires builder vanilla jar/JDK; run with --ignored"]
 async fn parity_command_forced_default_game_mode() -> Result<()> {
-    let mut options = ferraloom_parity::LaunchOptions::default();
+    let mut options = command_support::options();
     options
         .properties
         .insert("force-gamemode".into(), "true".into());
@@ -358,10 +361,10 @@ async fn spawn_and_return(session: &mut Session) -> Result<ObservationLog> {
     Ok(log)
 }
 
-parity_test!(parity_command_game_rules, game_rules);
-parity_test!(parity_command_clocks_and_admin, clocks_and_admin);
-parity_test!(parity_command_message_arguments, message_arguments);
-parity_test!(parity_command_spawn_and_return, spawn_and_return);
+command_test!(parity_command_game_rules, game_rules);
+command_test!(parity_command_clocks_and_admin, clocks_and_admin);
+command_test!(parity_command_message_arguments, message_arguments);
+command_test!(parity_command_spawn_and_return, spawn_and_return);
 
 async fn access_commands(session: &mut Session) -> Result<ObservationLog> {
     let operator = session.join("ParityBot").await?;
@@ -493,7 +496,7 @@ async fn access_commands(session: &mut Session) -> Result<ObservationLog> {
     }
     Ok(log)
 }
-parity_test!(parity_command_access_lists, access_commands);
+command_test!(parity_command_access_lists, access_commands);
 
 async fn force_load_and_weather(session: &mut Session) -> Result<ObservationLog> {
     let id = session.join("ParityBot").await?;
@@ -575,7 +578,7 @@ async fn force_load_and_weather(session: &mut Session) -> Result<ObservationLog>
     )?;
     Ok(log)
 }
-parity_test!(
+command_test!(
     parity_command_force_load_and_weather,
     force_load_and_weather
 );
@@ -693,7 +696,7 @@ async fn player_state_commands(session: &mut Session) -> Result<ObservationLog> 
     )?;
     Ok(log)
 }
-parity_test!(parity_command_player_state, player_state_commands);
+command_test!(parity_command_player_state, player_state_commands);
 
 async fn limited_crafting(session: &mut Session) -> Result<ObservationLog> {
     use ferraloom_data::Item;
@@ -761,7 +764,7 @@ async fn limited_crafting(session: &mut Session) -> Result<ObservationLog> {
     }
     Ok(log)
 }
-parity_test!(parity_command_limited_crafting, limited_crafting);
+command_test!(parity_command_limited_crafting, limited_crafting);
 
 async fn tick_control(session: &mut Session) -> Result<ObservationLog> {
     let id = session.join("ParityBot").await?;
@@ -963,4 +966,4 @@ async fn tick_control(session: &mut Session) -> Result<ObservationLog> {
     )?;
     Ok(log)
 }
-parity_test!(parity_command_tick_control, tick_control);
+command_test!(parity_command_tick_control, tick_control);
