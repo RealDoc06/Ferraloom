@@ -84,58 +84,204 @@ impl Level {
     }
 }
 
-#[cfg(test)]
-mod carrier_tests {
-    use super::*;
-    use crate::level::{LevelContext, Region, chunk::LevelChunk};
-    use ferraloom_worldgen::structure::start::StructureStart;
-    static BEHAVIORS: crate::Behaviors = crate::Behaviors::EMPTY;
-    #[test]
-    fn publication_is_newer_only_dirty_and_keeps_existing_readers_stable() {
-        let pos = ChunkPos::new(-2, 3);
-        let id = "minecraft:mineshaft".parse().unwrap();
-        let mut payload = ChunkStructures::new([-2, 3]);
-        payload.starts.insert(id, StructureStart::invalid());
-        let mut chunk = LevelChunk::new(pos, 0, 1);
-        chunk.set_structures(payload, 7).unwrap();
-        assert!(chunk.try_mark_saved());
-        let mut level = Level::new(Region::new(&BEHAVIORS), LevelContext::fixture(0, 63));
-        level.add_chunk(chunk).unwrap();
-        let old = level.chunk(pos).unwrap().structures();
-        assert_eq!(old.starts.len(), 1);
-        for revision in 8..40 {
-            assert!(
-                level
-                    .publish_chunk_structures(pos, revision, ChunkStructures::new([-2, 3]))
-                    .unwrap()
-            );
-        }
-        let chunk = level.chunk(pos).unwrap();
-        assert!(chunk.structures().starts.is_empty());
-        assert_eq!(chunk.structures_revision(), 39);
-        assert_eq!(old.starts.len(), 1);
-        assert!(chunk.is_unsaved());
-        assert!(level.try_mark_chunk_saved(pos).unwrap());
-        assert!(
-            !level
-                .publish_chunk_structures(pos, 39, ChunkStructures::new([-2, 3]))
-                .unwrap()
-        );
-        assert!(
-            !level
-                .publish_chunk_structures(pos, 1, ChunkStructures::new([-2, 3]))
-                .unwrap()
-        );
-        assert!(!level.chunk(pos).unwrap().is_unsaved());
-        assert_eq!(
-            level.publish_chunk_structures(pos, 40, ChunkStructures::new([0, 0])),
-            Err(LevelError::InvalidChunkStructures(pos))
-        );
-        assert_eq!(
-            level.publish_chunk_structures(ChunkPos::new(9, 9), 1, ChunkStructures::new([9, 9])),
-            Err(LevelError::MissingChunk(ChunkPos::new(9, 9)))
-        );
-        level.collect_chunk_structure_versions();
-        assert_eq!(level.chunk(pos).unwrap().structures.0.len(), 1);
+use ferraloom_protocol::codec::HolderSet;
+use ferraloom_util::BlockPos;
+use ferraloom_worldgen::{
+    Identifier,
+    structure::{references::StructureReferences, start::StructureStart},
+};
+use std::collections::BTreeMap;
+
+/// Port of StructureManager. References belong to the queried chunk; starts
+/// are read from their source chunks, not inferred from geometry or a seed.
+#[derive(Clone, Copy)]
+pub struct StructureManager<'a> {
+    level: &'a Level,
+}
+impl Level {
+    pub fn structure_manager(&self) -> StructureManager<'_> {
+        StructureManager { level: self }
     }
 }
+impl<'a> StructureManager<'a> {
+    fn data(&self, pos: ChunkPos) -> Result<&'a ChunkStructures, LevelError> {
+        self.level
+            .chunk(pos)
+            .map(|chunk| chunk.structures())
+            .ok_or(LevelError::MissingChunk(pos))
+    }
+    pub fn get_start_for_structure(
+        &self,
+        pos: ChunkPos,
+        structure: &Identifier,
+    ) -> Result<Option<&'a StructureStart>, LevelError> {
+        Ok(self.data(pos)?.starts.get(structure))
+    }
+    pub fn get_references_for_structure(
+        &self,
+        pos: ChunkPos,
+        structure: &Identifier,
+    ) -> Result<Option<&'a StructureReferences>, LevelError> {
+        Ok(self.data(pos)?.references.get(structure))
+    }
+    /// Port of getAllStructuresAt; this is the reference map, not local starts.
+    pub fn get_all_structures_at(
+        &self,
+        pos: BlockPos,
+    ) -> Result<&'a BTreeMap<Identifier, StructureReferences>, LevelError> {
+        Ok(&self.data(ChunkPos::containing(pos))?.references)
+    }
+    pub fn has_any_structure_at(&self, pos: BlockPos) -> Result<bool, LevelError> {
+        Ok(!self.get_all_structures_at(pos)?.is_empty())
+    }
+    /// Port of fillStartsForStructure. A missing/invalid start is omitted, but
+    /// acquisition failure of its source chunk remains a required error.
+    pub fn fill_starts_for_structure(
+        &self,
+        structure: &Identifier,
+        references: &StructureReferences,
+        mut consumer: impl FnMut(&'a StructureStart),
+    ) -> Result<(), LevelError> {
+        for packed in references.iter() {
+            if let Some(start) =
+                self.get_start_for_structure(ChunkPos::unpack(packed), structure)?
+                && start.is_valid()
+            {
+                consumer(start);
+            }
+        }
+        Ok(())
+    }
+    pub fn starts_for_structure(
+        &self,
+        pos: ChunkPos,
+        structure: &Identifier,
+    ) -> Result<Vec<&'a StructureStart>, LevelError> {
+        let mut starts = Vec::new();
+        if let Some(references) = self.get_references_for_structure(pos, structure)? {
+            self.fill_starts_for_structure(structure, references, |start| starts.push(start))?;
+        }
+        Ok(starts)
+    }
+    /// Port of the matcher overload; value-defined LongOpenHashSet order is
+    /// preserved within each structure's reference set.
+    pub fn starts_for_structure_matching(
+        &self,
+        pos: ChunkPos,
+        mut matcher: impl FnMut(&Identifier) -> bool,
+    ) -> Result<Vec<&'a StructureStart>, LevelError> {
+        let mut starts = Vec::new();
+        // JVM identity-keyed map order is non-parity; use deterministic Identifier order.
+        for (structure, references) in &self.data(pos)?.references {
+            if matcher(structure) {
+                self.fill_starts_for_structure(structure, references, |start| starts.push(start))?;
+            }
+        }
+        Ok(starts)
+    }
+    fn resolve(&self, set: &HolderSet) -> Result<Vec<Identifier>, LevelError> {
+        let services = &self.level.context().structures;
+        match set {
+            HolderSet::Direct(ids) => ids
+                .iter()
+                .map(|id| {
+                    let id: Identifier = id
+                        .as_str()
+                        .parse()
+                        .map_err(|_| LevelError::InvalidStructureHolderSet)?;
+                    if services.registry.structures.contains_key(&id) {
+                        Ok(id)
+                    } else {
+                        Err(LevelError::InvalidStructureHolderSet)
+                    }
+                })
+                .collect(),
+            HolderSet::Named(tag) => {
+                let tag = tag
+                    .as_str()
+                    .parse()
+                    .map_err(|_| LevelError::InvalidStructureHolderSet)?;
+                services
+                    .tags
+                    .get(&tag)
+                    .cloned()
+                    .ok_or(LevelError::InvalidStructureHolderSet)
+            }
+        }
+    }
+    pub fn starts_for_structures(
+        &self,
+        pos: ChunkPos,
+        structures: &HolderSet,
+    ) -> Result<Vec<&'a StructureStart>, LevelError> {
+        let ids = self.resolve(structures)?;
+        self.starts_for_structure_matching(pos, |id| ids.contains(id))
+    }
+    pub fn get_structure_at(
+        &self,
+        pos: BlockPos,
+        structure: &Identifier,
+    ) -> Result<Option<&'a StructureStart>, LevelError> {
+        Self::containing(
+            pos,
+            self.starts_for_structure(ChunkPos::containing(pos), structure)?,
+        )
+    }
+    pub fn get_structure_at_in(
+        &self,
+        pos: BlockPos,
+        structures: &HolderSet,
+    ) -> Result<Option<&'a StructureStart>, LevelError> {
+        Self::containing(
+            pos,
+            self.starts_for_structures(ChunkPos::containing(pos), structures)?,
+        )
+    }
+    fn containing(
+        pos: BlockPos,
+        starts: Vec<&'a StructureStart>,
+    ) -> Result<Option<&'a StructureStart>, LevelError> {
+        for start in starts {
+            if start
+                .bounding_box()
+                .map_err(|_| LevelError::InvalidChunkStructures(ChunkPos::containing(pos)))?
+                .contains([pos.x, pos.y, pos.z])
+            {
+                return Ok(Some(start));
+            }
+        }
+        Ok(None)
+    }
+    pub fn get_structure_with_piece_at(
+        &self,
+        pos: BlockPos,
+        structure: &Identifier,
+    ) -> Result<Option<&'a StructureStart>, LevelError> {
+        Ok(self
+            .starts_for_structure(ChunkPos::containing(pos), structure)?
+            .into_iter()
+            .find(|start| Self::structure_has_piece_at(pos, start)))
+    }
+    pub fn get_structure_with_piece_at_in(
+        &self,
+        pos: BlockPos,
+        structures: &HolderSet,
+    ) -> Result<Option<&'a StructureStart>, LevelError> {
+        Ok(self
+            .starts_for_structures(ChunkPos::containing(pos), structures)?
+            .into_iter()
+            .find(|start| Self::structure_has_piece_at(pos, start)))
+    }
+    /// Port of structureHasPieceAt; bounds are inclusive and terrain adaptation
+    /// expands only the aggregate start box, never these individual piece boxes.
+    pub fn structure_has_piece_at(pos: BlockPos, start: &StructureStart) -> bool {
+        start
+            .pieces
+            .iter()
+            .any(|piece| piece.bounds().contains([pos.x, pos.y, pos.z]))
+    }
+}
+
+#[cfg(test)]
+#[path = "structure_manager_tests.rs"]
+mod tests;

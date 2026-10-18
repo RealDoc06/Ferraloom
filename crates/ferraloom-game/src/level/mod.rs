@@ -41,6 +41,8 @@ pub mod server_level;
 pub mod simulation;
 pub(crate) mod store;
 pub mod structure_manager;
+mod structure_services;
+pub use structure_services::StructureServices;
 pub mod tick_rate;
 pub mod tickets;
 mod ticking;
@@ -96,6 +98,7 @@ pub enum LevelError {
     UnsupportedChunkUpgrade,
     WrongChunkHeight(ChunkPos),
     InvalidChunkStructures(ChunkPos),
+    InvalidStructureHolderSet,
 }
 
 /// Dimension settings consumed by the live core. The server supplies the

@@ -928,6 +928,10 @@ impl World {
             self.generator.sea_level(),
             self.generator.clone(),
             Arc::new(features),
+            Arc::new(ferraloom_game::level::StructureServices::load(
+                resources,
+                self.generator.data(),
+            )?),
         )))
     }
     /// Attach immutable dimension layers after the sole server clock manager
