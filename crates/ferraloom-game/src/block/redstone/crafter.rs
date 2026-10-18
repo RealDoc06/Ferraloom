@@ -236,7 +236,7 @@ fn dispense_from(
     let mut operation = StackOperation::new(level);
     let input = CapturedInput::capture(receiver, &mut operation)?;
     let services = operation.level.container_resources()?;
-    let Some((recipe_id, mut result)) = operation
+    let Some((recipe_id, result)) = operation
         .level
         .crafter_potential_results(receiver)
         .map_err(super::stack_error)?
@@ -271,21 +271,14 @@ fn dispense_from(
         .recipes
         .by_key(&recipe_id)
         .expect("recipe from retained immutable services");
-    dispense_item(receiver, state, pos, &mut result, recipe, operation.level)?;
+    dispense_item(receiver, state, pos, &result, recipe, operation.level)?;
     let remaining = recipe
         .value
         .remaining_items(&input.borrow(operation.level)?)
         .map_err(|_| LevelError::Inventory("crafter recipe remainders"))?;
-    for mut remainder in remaining {
+    for remainder in remaining {
         if !remainder.is_empty() {
-            dispense_item(
-                receiver,
-                state,
-                pos,
-                &mut remainder,
-                recipe,
-                operation.level,
-            )?;
+            dispense_item(receiver, state, pos, &remainder, recipe, operation.level)?;
         }
     }
     let entity = operation
@@ -305,7 +298,7 @@ fn dispense_item(
     receiver: BlockEntityRef,
     state: BlockState,
     pos: BlockPos,
-    result: &mut ItemStack,
+    result: &ItemStack,
     recipe: &crate::crafting::RecipeHolder,
     level: &mut Level,
 ) -> Result<(), LevelError> {
@@ -316,13 +309,27 @@ fn dispense_item(
     if let Some(into) = into {
         let crafter = matches!(into,ContainerRef::Single(handle) if matches!(level.block_entity_state(handle)?,BlockEntityState::Crafter(_)));
         let source = ContainerRef::Single(receiver);
-        let capacity = level
-            .block_entity_state(into.handles()[0])?
-            .container()
-            .expect("canonical block container")
-            .max_stack_size()
-            .min(max_stack_size(result));
-        if crafter || count(result) > capacity {
+        let single_items = crafter || {
+            let size = count(result);
+            // CompoundContainer uses the lower capacity of its two receivers.
+            let capacity = into
+                .handles()
+                .iter()
+                .try_fold(i32::MAX, |limit, handle| {
+                    Ok::<_, LevelError>(
+                        limit.min(
+                            level
+                                .block_entity_state(*handle)?
+                                .container()
+                                .expect("canonical block container")
+                                .max_stack_size(),
+                        ),
+                    )
+                })?
+                .min(max_stack_size(result));
+            size > capacity
+        };
+        if single_items {
             while !remaining.is_empty() {
                 let copy = remaining.copy_with_count(1);
                 if !super::hopper::add_item(
@@ -373,7 +380,7 @@ fn dispense_item(
                 center.z + f64::from(step.z) * 0.7,
             ),
         )?;
-        let players = level.entities_in(
+        let candidates = level.entities_in(
             Aabb::new(
                 center.x - 8.5,
                 center.y - 8.5,
@@ -384,6 +391,14 @@ fn dispense_item(
             ),
             |_, entity| matches!(entity, EntityState::Player(_)),
         );
+        // The two-argument getEntitiesOfClass overload applies NO_SPECTATORS.
+        // Capture its entire filtered list before the first criterion callback.
+        let mut players = Vec::with_capacity(candidates.len());
+        for player in candidates {
+            if !level.entity_behavior(player)?.is_spectator(player, level)? {
+                players.push(player);
+            }
+        }
         for player in players {
             let mut operation = StackOperation::new(level);
             let mut ingredients = Vec::with_capacity(9);

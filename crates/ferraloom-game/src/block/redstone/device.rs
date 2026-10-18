@@ -45,7 +45,7 @@ fn center(pos: BlockPos) -> Vec3 {
 /// SUN_ANGLE is in degrees; the native adjustment precedes Mth's lookup-table cosine.
 pub(super) fn daylight_power(brightness: i32, angle: f32, inverted: bool) -> i32 {
     if inverted {
-        return (15 - brightness).clamp(0, 15);
+        return 15_i32.wrapping_sub(brightness).clamp(0, 15);
     }
     if brightness <= 0 {
         return brightness.clamp(0, 15);
