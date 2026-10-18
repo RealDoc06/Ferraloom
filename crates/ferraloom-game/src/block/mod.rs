@@ -2,6 +2,7 @@
 use crate::level::{Level, LevelError, redstone::Orientation};
 use ferraloom_data::{Block, BlockState, FluidState};
 use ferraloom_util::{BlockPos, Direction};
+pub mod breaking;
 mod clone_item;
 pub mod containers;
 pub mod dispatch;
@@ -171,6 +172,51 @@ impl<'chunks> LevelAccessRef<'_, 'chunks> {
 /// Port of BlockBehaviour's virtual methods. Defaults are vanilla base behavior;
 /// only classes explicitly registered by dispatch may inherit these defaults.
 pub trait BlockBehavior: Sync {
+    /// Port of BlockBehaviour#getDestroyProgress, including its hardness guard.
+    fn get_destroy_progress(
+        &self,
+        state: BlockState,
+        _pos: BlockPos,
+        player: crate::entity::EntityRef,
+        level: &mut Level,
+    ) -> Result<f32, LevelError> {
+        breaking::get_destroy_progress(state, player, level)
+    }
+    /// Port of BlockBehaviour#attack's inherited no-op.
+    fn attack(
+        &self,
+        _state: BlockState,
+        _pos: BlockPos,
+        _player: crate::entity::EntityRef,
+        _level: &mut Level,
+    ) -> Result<(), LevelError> {
+        Ok(())
+    }
+    /// Port of Block#destroy's inherited no-op. MovingPistonBlock overrides it.
+    fn destroy(
+        &self,
+        _state: BlockState,
+        _pos: BlockPos,
+        _level: &mut Level,
+    ) -> Result<(), LevelError> {
+        Ok(())
+    }
+    /// Block#playerDestroy's ABI. The base stats, exhaustion and drops body is
+    /// explicitly pending slice C; family overrides cannot inherit a fake no-op.
+    fn player_destroy(
+        &self,
+        state: BlockState,
+        _pos: BlockPos,
+        _player: crate::entity::EntityRef,
+        _block_entity: Option<entity::BlockEntityRef>,
+        _destroyed_with: &ferraloom_protocol::component::ItemStack,
+        _level: &mut Level,
+    ) -> Result<(), LevelError> {
+        Err(LevelError::UnsupportedBlockMethod(
+            state.block(),
+            BlockMethod::PlayerDestroy,
+        ))
+    }
     /// Port of BlockBehaviour#getMenuProvider's absent base provider.
     fn get_menu_provider(
         &self,

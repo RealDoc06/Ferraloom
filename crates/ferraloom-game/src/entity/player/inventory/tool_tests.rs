@@ -263,6 +263,59 @@ fn named_tool_rules_use_current_tags_and_preserve_missing_and_empty_sets() {
     // Native Tool.CODEC rejects this state before a tool can enter gameplay.
     assert!(VECTORS.lines().any(|line| line == "tool-missing-tag\ttrue"));
 }
+
+#[test]
+fn mining_speed_distinguishes_missing_empty_and_unobserved_named_rules() {
+    use crate::block::UnportedBehavior;
+    let state = Block::STONE.default_state();
+    for policy in [UnportedBehavior::Strict, UnportedBehavior::Warn] {
+        let mut level = level();
+        level.set_unported_behavior(policy);
+        let tool = custom(
+            Item::STICK,
+            vec![rule(named("mining_probe:live"), Some(true))],
+        );
+        assert_eq!(
+            get_destroy_speed(&tool, state, &level),
+            Err(LevelError::MissingBlockTags)
+        );
+        install_tags(
+            &mut level,
+            [("mining_probe:live".parse().unwrap(), vec![])].into(),
+        );
+        assert_eq!(get_destroy_speed(&tool, state, &level).unwrap(), 1.0);
+        install_tags(&mut level, Default::default());
+        assert_eq!(
+            get_destroy_speed(&tool, state, &level),
+            Err(LevelError::MissingBlockTag)
+        );
+        let ignored_missing = ToolRule {
+            blocks: named("mining_probe:missing"),
+            speed: None,
+            correct_for_drops: Some(false),
+        };
+        let tool = custom(
+            Item::STICK,
+            vec![ignored_missing, rule(direct(&[Block::STONE]), Some(true))],
+        );
+        assert_eq!(get_destroy_speed(&tool, state, &level).unwrap(), 2.0);
+        let tool = custom(
+            Item::STICK,
+            vec![
+                rule(direct(&[Block::STONE]), Some(false)),
+                rule(named("mining_probe:missing"), Some(true)),
+            ],
+        );
+        assert_eq!(get_destroy_speed(&tool, state, &level).unwrap(), 2.0);
+        assert!(!is_correct_tool_for_drops(&tool, state, &level).unwrap());
+        assert_eq!(level.unported_behavior_stats().skipped_calls, 0);
+    }
+    assert!(
+        include_str!("../../../../tests/java/level/mining.tsv")
+            .lines()
+            .any(|line| line == "missing-tag\ttrue")
+    );
+}
 #[test]
 fn tool_and_player_short_circuits_keep_later_required_tag_reads_unobserved() {
     let level = level();

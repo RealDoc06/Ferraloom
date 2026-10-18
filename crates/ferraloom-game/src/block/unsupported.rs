@@ -70,6 +70,10 @@ pub enum BlockMethod {
     PlayerWillDestroy,
     SpawnDestroyByEntityParticles,
     SpawnDestroyParticles,
+    GetDestroyProgress,
+    Attack,
+    Destroy,
+    PlayerDestroy,
 }
 impl BlockMethod {
     pub(crate) const fn vanilla_method(self) -> Option<ferraloom_data::BlockMethod> {
@@ -113,6 +117,10 @@ impl BlockMethod {
             Self::PlayerWillDestroy => Vanilla::PlayerWillDestroy,
             Self::SpawnDestroyByEntityParticles => Vanilla::SpawnDestroyByEntityParticles,
             Self::SpawnDestroyParticles => Vanilla::SpawnDestroyParticles,
+            Self::GetDestroyProgress => Vanilla::GetDestroyProgress,
+            Self::Attack => Vanilla::Attack,
+            Self::Destroy => Vanilla::Destroy,
+            Self::PlayerDestroy => Vanilla::PlayerDestroy,
             Self::CanPlaceLiquid => Vanilla::CanPlaceLiquid,
             Self::PlaceLiquid => Vanilla::PlaceLiquid,
             Self::PickupBlock => Vanilla::PickupBlock,
@@ -123,6 +131,7 @@ impl BlockMethod {
         !matches!(
             self,
             Self::GetMenuProvider
+                | Self::GetDestroyProgress
                 | Self::GetDrops
                 | Self::UseWithoutItem
                 | Self::UseItemOn
@@ -197,6 +206,10 @@ impl BlockMethod {
             Self::PlayerWillDestroy => "playerWillDestroy",
             Self::SpawnDestroyByEntityParticles => "spawnDestroyByEntityParticles",
             Self::SpawnDestroyParticles => "spawnDestroyParticles",
+            Self::GetDestroyProgress => "getDestroyProgress",
+            Self::Attack => "attack",
+            Self::Destroy => "destroy",
+            Self::PlayerDestroy => "playerDestroy",
         }
     }
 }

@@ -5,6 +5,7 @@ mod contact;
 pub mod cooldowns;
 pub mod equipment;
 mod experience;
+pub mod game_mode;
 mod interaction;
 mod spawn;
 pub use experience::{give_experience_levels, give_experience_points, send_experience_update};
