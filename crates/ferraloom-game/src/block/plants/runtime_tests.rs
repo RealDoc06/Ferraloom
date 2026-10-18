@@ -509,11 +509,15 @@ fn feature_services() -> Arc<crate::level::LevelContext> {
                 .unwrap()
                 .load_all()
                 .unwrap();
+            let base = crate::level::LevelContext::fixture(0, -63);
             Arc::new(crate::level::LevelContext::new(
                 0,
                 -63,
                 Arc::new(generator),
                 Arc::new(features),
+                base.structures.clone(),
+                base.damage_types().clone(),
+                base.initial_difficulty,
             ))
         })
         .clone()

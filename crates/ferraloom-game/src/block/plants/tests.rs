@@ -1175,6 +1175,9 @@ fn tree_growth_restores_captured_saplings_and_uses_the_live_random_stream() {
             63,
             services.generator.clone(),
             Arc::new(features),
+            services.structures.clone(),
+            services.damage_types().clone(),
+            services.initial_difficulty,
         ));
         let mut level = Level::new(original.into_region(), context);
         level.set_block_tags(blocks.clone());

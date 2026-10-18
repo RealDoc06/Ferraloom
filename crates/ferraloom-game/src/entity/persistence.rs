@@ -38,7 +38,7 @@ pub(crate) fn has_entity_factory(kind: ferraloom_data::EntityType) -> bool {
 /// Reuse the canonical loader for one constructor, allowing the stream consumer
 /// to register its state before recursively constructing its passengers.
 pub(crate) fn load_entity_state(
-    level: &mut crate::level::Level,
+    level: &crate::level::Level,
     mut tag: CompoundTag,
 ) -> Result<(super::EntityRef, super::EntityState), EntityPersistenceError> {
     let passengers = tag.remove("Passengers");
