@@ -103,6 +103,7 @@ pub struct Region {
     random: ferraloom_util::random::Random,
     rand_value: i32,
     block_ticking_chunks: HashSet<ChunkPos>,
+    entity_ticking_chunks: HashSet<ChunkPos>,
     neighbor_updater: redstone::CollectingNeighborUpdater,
     block_events: events::BlockEvents,
     effects: Vec<effects::LevelEffect>,
@@ -131,6 +132,7 @@ impl Region {
             random: random::new_level_random(),
             rand_value: random::new_position_seed(),
             block_ticking_chunks: HashSet::new(),
+            entity_ticking_chunks: HashSet::new(),
             neighbor_updater: redstone::CollectingNeighborUpdater::default(),
             block_events: events::BlockEvents::default(),
             effects: Vec::new(),
@@ -179,6 +181,7 @@ impl Level {
         chunk.block_ticks = region.block_ticks.remove_container(pos).unwrap_or_default();
         chunk.fluid_ticks = region.fluid_ticks.remove_container(pos).unwrap_or_default();
         region.block_ticking_chunks.remove(&pos);
+        region.entity_ticking_chunks.remove(&pos);
         Some(chunk)
     }
     pub fn add_chunk(&mut self, mut chunk: chunk::LevelChunk) -> Result<(), LevelError> {
