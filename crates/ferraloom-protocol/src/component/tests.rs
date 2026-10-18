@@ -683,9 +683,8 @@ fn native_component_float_equality_and_hashes() {
     let values: Vec<_> = rows
         .iter()
         .map(|row| {
-            let value = JavaF64::from_bits(
-                u64::from_str_radix(row["bits"].as_str().unwrap(), 16).unwrap(),
-            );
+            let value =
+                JavaF64::from_bits(u64::from_str_radix(row["bits"].as_str().unwrap(), 16).unwrap());
             DoubleBounds {
                 min: Some(value),
                 max: Some(value),

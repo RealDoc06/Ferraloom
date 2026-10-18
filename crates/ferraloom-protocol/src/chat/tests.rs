@@ -27,7 +27,11 @@ fn native_translation_floating_equality() {
             let value = DataComponent::CustomName(Box::new(component.clone()));
             let mut writer = Writer::new();
             value.encode_value(&mut writer).unwrap();
-            assert_eq!(writer.as_slice(), hex(row["wire"].as_str().unwrap()), "{input}");
+            assert_eq!(
+                writer.as_slice(),
+                hex(row["wire"].as_str().unwrap()),
+                "{input}"
+            );
             assert_eq!(
                 value.hash().ok().map(i64::from),
                 row["hash"].as_i64(),
@@ -35,7 +39,11 @@ fn native_translation_floating_equality() {
             );
             let mut writer = Writer::new();
             writer.nbt(&value.to_nbt().unwrap()).unwrap();
-            assert_eq!(writer.as_slice(), hex(row["nbt"].as_str().unwrap()), "{input} NBT");
+            assert_eq!(
+                writer.as_slice(),
+                hex(row["nbt"].as_str().unwrap()),
+                "{input} NBT"
+            );
             let stack = |count| {
                 ItemStack::new(
                     ferraloom_data::Item::STONE,
@@ -55,7 +63,11 @@ fn native_translation_floating_equality() {
         assert_eq!(equality.len(), values.len());
         assert_eq!(stacks.len(), values.len());
         for (j, other) in values.iter().enumerate() {
-            assert_eq!(values[i].0 == other.0, equality[j] == b'1', "{i}/{j} component");
+            assert_eq!(
+                values[i].0 == other.0,
+                equality[j] == b'1',
+                "{i}/{j} component"
+            );
             assert_eq!(
                 values[i].1.is_same_item_same_components(&other.2).unwrap(),
                 stacks[j] == b'1',

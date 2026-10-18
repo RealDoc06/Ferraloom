@@ -67,7 +67,7 @@ pub(super) fn apply_patch(target: &mut DataComponentPatch, patch: &DataComponent
     }
 }
 pub(super) fn same_item_components(a: &ItemStack, b: &ItemStack) -> Result<bool> {
-    a.is_same_item_same_components(b)
+    Ok(a.is_same_item_same_components(b)?)
 }
 
 /// Port of ItemStackTemplate#validate / ItemStack#validateStrict. These runtime
