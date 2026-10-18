@@ -27,7 +27,24 @@ public final class WorldgenVectors {
   static void load(PersistentEntitySectionManager<Entity> manager,Level level,CompoundTag... tags) {
     manager.addWorldGenChunkEntities(EntityType.loadEntitiesRecursive(TagValueInput.create(ProblemReporter.DISCARDING,level.registryAccess(),Arrays.asList(tags)),level,EntitySpawnReason.LOAD));
   }
+  static void creationOrder(Level level) {
+    try {
+      var flag=level.getClass().getDeclaredField("captureCreationIds");flag.setAccessible(true);
+      flag.setBoolean(level,true);
+      Entity[] entities={
+        new net.minecraft.world.entity.animal.cow.Cow(EntityTypes.COW,level),
+        new net.minecraft.world.entity.item.ItemEntity(EntityTypes.ITEM,level),
+        new net.minecraft.world.entity.item.PrimedTnt(EntityTypes.TNT,level),
+        new net.minecraft.world.entity.item.FallingBlockEntity(EntityTypes.FALLING_BLOCK,level),
+        new ExperienceOrb(EntityTypes.EXPERIENCE_ORB,level),
+        new LivingVectors(level)
+      };
+      for(Entity entity:entities) System.out.println("entity-creation-order\t"+net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType())+"\t"+entity.getId());
+      flag.setBoolean(level,false);
+    } catch(ReflectiveOperationException error) {throw new AssertionError(error);}
+  }
   public static void run(Level level) {
+    creationOrder(level);
     var callbacks=new Callbacks();var manager=new PersistentEntitySectionManager<>(Entity.class,callbacks,null);
     var root=tag("minecraft:tnt",1);root.put("Passengers",list(tag(":tnt",2),tag("missing:unknown",3)));
     load(manager,level,root,tag("minecraft:tnt",4));

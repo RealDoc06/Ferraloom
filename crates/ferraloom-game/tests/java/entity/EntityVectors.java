@@ -43,6 +43,10 @@ public final class EntityVectors {
       final net.minecraft.world.level.entity.EntitySectionStorage<Entity> contactSections=new net.minecraft.world.level.entity.EntitySectionStorage<>(Entity.class,key->net.minecraft.world.level.entity.Visibility.TICKING);
       final net.minecraft.world.level.entity.EntityLookup<Entity> contactLookup=new net.minecraft.world.level.entity.EntityLookup<>();
       final net.minecraft.world.level.entity.LevelEntityGetter<Entity> contactGetter=new net.minecraft.world.level.entity.LevelEntityGetterAdapter<>(contactLookup,contactSections);
+      // Controlled Level service: observe the real Entity constructor's ID calls.
+      boolean captureCreationIds;
+      int creationCounter;
+      @Override public int getNextEntityId(){return captureCreationIds?++creationCounter:super.getNextEntityId();}
       AABB lastContactBounds;
       void addContact(Entity entity){contactLookup.add(entity);contactSections.getOrCreateSection(SectionPos.asLong(entity.blockPosition())).add(entity);}
       void clearContacts(){for(Entity entity:List.copyOf(java.util.stream.StreamSupport.stream(contactLookup.getAllEntities().spliterator(),false).toList())){contactSections.getOrCreateSection(SectionPos.asLong(entity.blockPosition())).remove(entity);contactLookup.remove(entity);}lastContactBounds=null;}

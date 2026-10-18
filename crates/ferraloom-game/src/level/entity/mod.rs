@@ -1,5 +1,8 @@
 //! Region-owned canonical entity storage, vanilla ordered indexes and ticking.
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::{
+    cell::Cell,
+    collections::{BTreeMap, HashMap, HashSet},
+};
 
 use ferraloom_util::{
     Aabb, ChunkPos, SectionPos, Uuid, Vec3,
@@ -162,27 +165,28 @@ impl EntitySectionStorage {
 /// Port of ServerLevel's server-wide counter, or a barrier-assigned regional block.
 #[derive(Debug, Default)]
 pub struct EntityIdAllocator {
-    next: i32,
-    remaining: Option<u32>,
+    next: Cell<i32>,
+    remaining: Cell<Option<u32>>,
 }
 impl EntityIdAllocator {
     pub fn regional(first: i32, count: u32) -> Self {
         Self {
-            next: first.wrapping_sub(1),
-            remaining: Some(count),
+            next: Cell::new(first.wrapping_sub(1)),
+            remaining: Cell::new(Some(count)),
         }
     }
-    pub fn allocate(&mut self, lookup: &EntityLookup) -> Option<i32> {
+    pub fn allocate(&self, lookup: &EntityLookup) -> Option<i32> {
         loop {
-            if let Some(remaining) = &mut self.remaining {
-                if *remaining == 0 {
+            if let Some(remaining) = self.remaining.get() {
+                if remaining == 0 {
                     return None;
                 }
-                *remaining -= 1;
+                self.remaining.set(Some(remaining - 1));
             }
-            self.next = self.next.wrapping_add(1);
-            if self.next != 0 && lookup.by_id(self.next).is_none() {
-                return Some(self.next);
+            let next = self.next.get().wrapping_add(1);
+            self.next.set(next);
+            if next != 0 && lookup.by_id(next).is_none() {
+                return Some(next);
             }
         }
     }
@@ -198,7 +202,7 @@ pub struct EntityStorage {
     known_uuids: HashSet<Uuid>,
     chunk_visibility: Long2ObjectOpenHashMap<Visibility>,
     management_events: Vec<EntityManagementEvent>,
-    next_ref: u64,
+    next_ref: Cell<u64>,
     effects: Vec<crate::entity::effects::EntityEffect>,
     pending_retire: Vec<EntityRef>,
     pub border: crate::level::border::WorldBorder,
@@ -224,7 +228,7 @@ impl EntityStorage {
         if self.states.contains_key(&id) {
             return Err(LevelError::DuplicateEntity(id));
         }
-        self.next_ref = self.next_ref.max(id.0);
+        self.next_ref.set(self.next_ref.get().max(id.0));
         let base = state.as_entity_mut();
         if !base.network_id_allocated {
             base.network_id = self
@@ -291,16 +295,18 @@ impl Level {
 
     /// Server-lifetime handles never reuse a retired identity. Regional blocks
     /// are assigned by the scheduler before parallel execution is enabled.
-    pub fn next_entity_ref(&mut self) -> EntityRef {
-        let next = &mut self.region_mut().entities.next_ref;
-        *next = next
+    pub fn next_entity_ref(&self) -> EntityRef {
+        let counter = &self.region().entities.next_ref;
+        let next = counter
+            .get()
             .checked_add(1)
             .expect("entity reference space exhausted");
-        EntityRef(*next)
+        counter.set(next);
+        EntityRef(next)
     }
     /// Entity constructors share RandomSource.create's seed uniquifier with the
     /// level factory, while retaining a separate random stream per entity.
-    pub fn create_entity_data(&mut self, kind: ferraloom_data::EntityType) -> EntityData {
+    pub fn create_entity_data(&self, kind: ferraloom_data::EntityType) -> EntityData {
         let network_id = self.next_entity_id();
         EntityData::from_random(kind, network_id, new_entity_random())
     }
@@ -312,8 +318,8 @@ impl Level {
     }
     /// Port of ServerLevel#getNextEntityId. Every entity constructor, including
     /// players, draws from this region's canonical creation-order allocator.
-    pub fn next_entity_id(&mut self) -> i32 {
-        let storage = &mut self.region_mut().entities;
+    pub fn next_entity_id(&self) -> i32 {
+        let storage = &self.region().entities;
         storage
             .ids
             .allocate(&storage.lookup)
@@ -373,7 +379,7 @@ impl Level {
     fn retain_unmanaged_entity(&mut self, entity: EntityRef, state: EntityState) {
         let storage = &mut self.region_mut().entities;
         assert!(!storage.states.contains_key(&entity), "new entity handle");
-        storage.next_ref = storage.next_ref.max(entity.0);
+        storage.next_ref.set(storage.next_ref.get().max(entity.0));
         storage.states.insert(entity, state);
         storage.unmanaged.insert(entity);
         storage.pending_retire.push(entity);
@@ -866,6 +872,70 @@ mod removal_tests {
 mod identity_tests {
     use super::*;
     use crate::{Behaviors, level::Region};
+
+    #[test]
+    fn shared_constructor_preparation_keeps_native_ids_and_borrowed_states() {
+        use crate::entity::{
+            persistence::load_entity_state,
+            player::{GameType, ServerPlayer},
+        };
+        use ferraloom_data::EntityType;
+        use ferraloom_nbt::{CompoundTag, Tag};
+
+        let mut level = crate::entity::tests::level(false);
+        let original = level.next_entity_ref();
+        let base = level.create_entity_data(EntityType::TNT);
+        level
+            .add_entity(
+                original,
+                EntityState::PrimedTnt(Box::new(crate::entity::item::PrimedTnt::with_parent(base))),
+            )
+            .unwrap();
+        let borrowed = level.entity::<EntityData>(original).unwrap();
+        let before = borrowed.network_id;
+        let mut actual = Vec::new();
+        for kind in [
+            EntityType::COW,
+            EntityType::ITEM,
+            EntityType::TNT,
+            EntityType::FALLING_BLOCK,
+            EntityType::EXPERIENCE_ORB,
+        ] {
+            let mut tag = CompoundTag::new();
+            tag.insert("id", Tag::String(kind.name().into()));
+            let (entity, state) = load_entity_state(&level, tag).unwrap();
+            assert_eq!(entity.0 as i32, state.as_entity().network_id);
+            actual.push(format!(
+                "entity-creation-order\t{}\t{}",
+                kind.name(),
+                state.as_entity().network_id - before
+            ));
+        }
+        let player = ServerPlayer::new(
+            Uuid::new(1, 2),
+            "shared".into(),
+            level.next_entity_id(),
+            Vec3::ZERO,
+            GameType::Survival,
+        );
+        assert_eq!(level.next_entity_ref().0 as i32, player.network_id);
+        actual.push(format!(
+            "entity-creation-order\t{}\t{}",
+            EntityType::PLAYER.name(),
+            player.network_id - before
+        ));
+        assert!(std::ptr::eq(
+            borrowed,
+            level.entity::<EntityData>(original).unwrap()
+        ));
+        assert_eq!(borrowed.network_id, before);
+        let expected: Vec<_> = include_str!("../../../tests/java/entity/vectors.tsv")
+            .lines()
+            .filter(|line| line.starts_with("entity-creation-order\t"))
+            .collect();
+        assert_eq!(actual, expected);
+    }
+
     #[test]
     fn entity_refs_observe_existing_handles_and_never_reuse_retired_ids() {
         static BEHAVIORS: Behaviors = Behaviors::EMPTY;

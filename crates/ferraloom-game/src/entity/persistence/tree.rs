@@ -1,5 +1,5 @@
-//! Recursive entity storage codecs. Constructors run at the management polling
-//! point, in root/passenger order, before visibility callbacks can observe them.
+//! Recursive entity storage codecs. Owned construction needs shared Level reads;
+//! its caller controls root/passenger registration at the native load call site.
 use super::{EntityLoadError, vector_tag};
 use crate::{
     entity::{
@@ -41,7 +41,7 @@ impl std::error::Error for EntityPersistenceError {}
 /// Port of EntityType#loadEntitiesRecursive's pre-order constructor/stream order.
 /// The resulting owned states already contain riding links when added to Level.
 pub(crate) fn load_entity_tree(
-    level: &mut Level,
+    level: &Level,
     tag: CompoundTag,
     loaded: &mut Vec<(EntityRef, EntityState)>,
 ) -> Result<EntityRef, EntityPersistenceError> {

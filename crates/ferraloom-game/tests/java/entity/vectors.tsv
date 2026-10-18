@@ -250,6 +250,12 @@ player-tracking	3	-
 player-tracking	4	S:attributes:minecraft:max_health=4041800000000000[minecraft:bonus=4008000000000000:0]|T:head:64
 player-tracking	5	T:motion:3fc0000000000000,0,0|S:data:0:-128
 player-tracking	6	-
+entity-creation-order	minecraft:cow	1
+entity-creation-order	minecraft:item	2
+entity-creation-order	minecraft:tnt	3
+entity-creation-order	minecraft:falling_block	4
+entity-creation-order	minecraft:experience_orb	5
+entity-creation-order	minecraft:player	6
 worldgen-entities	preorder	1:0:false,2:0:false,4:0:false	1:1:none,2:0:1,4:0:none	false
 worldgen-entities	duplicate	1:0:false,2:0:false	1:true
 worldgen-entities	unknown-root	0
