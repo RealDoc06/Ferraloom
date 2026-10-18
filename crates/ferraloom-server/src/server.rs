@@ -36,7 +36,7 @@ use ferraloom_game::{
 use ferraloom_protocol::{
     self as protocol, Uuid,
     chat::Component,
-    codec::{BitSet, Holder, VarInt, VarLong},
+    codec::{BitSet, Holder, VarInt},
     common::{self, clientbound as common_cb},
     configuration as cfg,
     login::GameProfile,
