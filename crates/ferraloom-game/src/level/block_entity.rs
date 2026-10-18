@@ -52,7 +52,10 @@ impl ChunkBlockEntities {
             .iter()
             .enumerate()
             .filter_map(|(order, handle)| {
-                self.positions.get(&handle.pos).map(|&index| (index, order))
+                self.positions.get(&handle.pos).and_then(|&index| {
+                    (self.slots[index].as_ref().unwrap().data().reference() == *handle)
+                        .then_some((index, order))
+                })
             })
             .collect();
         indices.sort_unstable();
@@ -407,11 +410,40 @@ impl Level {
         player: EntityRef,
         refs: &[BlockEntityRef],
     ) -> Result<(&mut ServerPlayer, Vec<&mut BlockEntityState>), LevelError> {
+        self.player_and_block_entities_mut_impl(player, refs, false)
+    }
+    /// Existing menus broadcast their captured receivers before stillValid. A
+    /// pinned detached generation remains borrowable for that final broadcast.
+    pub fn player_and_retained_block_entities_mut(
+        &mut self,
+        player: EntityRef,
+        refs: &[BlockEntityRef],
+    ) -> Result<(&mut ServerPlayer, Vec<&mut BlockEntityState>), LevelError> {
+        self.player_and_block_entities_mut_impl(player, refs, true)
+    }
+    fn player_and_block_entities_mut_impl(
+        &mut self,
+        player: EntityRef,
+        refs: &[BlockEntityRef],
+        retained: bool,
+    ) -> Result<(&mut ServerPlayer, Vec<&mut BlockEntityState>), LevelError> {
         for (index, &handle) in refs.iter().enumerate() {
             if refs[..index].contains(&handle) {
                 return Err(LevelError::DuplicateBlockEntity(handle));
             }
-            if self.block_entity_ref(handle.pos)? != Some(handle) {
+            let current = self
+                .chunk(ChunkPos::containing(handle.pos))
+                .and_then(|chunk| chunk.block_entities.get(handle.pos))
+                .is_some_and(|state| state.data().reference() == handle);
+            if !current
+                && !(retained
+                    && self.region().block_entity_state.roots.contains_key(&handle)
+                    && self
+                        .region()
+                        .block_entity_state
+                        .detached
+                        .contains_key(&handle))
+            {
                 return Err(LevelError::MissingBlockEntity(handle));
             }
         }
@@ -430,6 +462,13 @@ impl Level {
                 .any(|handle| ChunkPos::containing(handle.pos) == *key)
             {
                 selected.extend(chunk.block_entities.select_mut(refs));
+            }
+        }
+        if retained {
+            for (handle, state) in &mut region.block_entity_state.detached {
+                if let Some(index) = refs.iter().position(|requested| requested == handle) {
+                    selected.push((index, state));
+                }
             }
         }
         selected.sort_unstable_by_key(|(index, _)| *index);
