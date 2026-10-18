@@ -73,7 +73,7 @@ fn argument_parser_vectors_match_java_errors_cursors_and_values() {
     let mut failures = Vec::new();
     for vector in vectors
         .iter()
-        .filter(|v| implemented.contains(&v.parser.as_str()))
+        .filter(|v| implemented.contains(&v.parser.as_str()) || reference_vector(v))
     {
         if let Err(failure) = std::panic::catch_unwind(|| check_vector(vector)) {
             failures.push(format!(
@@ -94,6 +94,23 @@ fn argument_parser_vectors_match_java_errors_cursors_and_values() {
         failures.len(),
         failures.join("\n")
     );
+}
+// Inline forms require the corresponding gameplay codec and remain explicitly pending.
+fn reference_vector(vector: &Vector) -> bool {
+    matches!(
+        vector.parser.as_str(),
+        "minecraft:loot_table"
+            | "minecraft:loot_predicate"
+            | "minecraft:loot_modifier"
+            | "minecraft:context_float_provider"
+            | "minecraft:context_int_provider"
+            | "minecraft:slot_source"
+            | "minecraft:dialog"
+            | "minecraft:feature"
+    ) && !vector
+        .input
+        .trim_start()
+        .starts_with(['{', '[', '\"', '\''])
 }
 fn check_vector(vector: &Vector) {
     let mut argument =

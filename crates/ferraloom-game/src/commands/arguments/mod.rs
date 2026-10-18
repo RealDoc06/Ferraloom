@@ -4,6 +4,7 @@ pub mod coordinates;
 pub mod items;
 pub mod operation;
 pub mod range;
+pub mod resources;
 pub mod scoreboard;
 pub mod selectors;
 pub mod slots;
@@ -39,6 +40,7 @@ pub enum ArgumentValue {
     DisplaySlot(u8),
     Criteria(scoreboard::ObjectiveCriteria),
     Resources(Vec<String>),
+    RegistryReference(resources::RegistryReference),
     Block(blocks::BlockInput),
     BlockPredicate(blocks::BlockPredicate),
     Item(items::ItemInput),
@@ -501,6 +503,52 @@ impl MinecraftArgument {
                     V::String(word(reader))
                 }
             }
+            A::LootTable {} => V::RegistryReference(resources::parse_reference(
+                reader,
+                &self.context,
+                "minecraft:loot_table",
+            )?),
+            A::LootPredicate {} => V::RegistryReference(resources::parse_reference(
+                reader,
+                &self.context,
+                "minecraft:predicate",
+            )?),
+            A::LootModifier {} => V::RegistryReference(resources::parse_reference(
+                reader,
+                &self.context,
+                "minecraft:item_modifier",
+            )?),
+            A::ContextFloatProvider {} => V::RegistryReference(resources::parse_reference(
+                reader,
+                &self.context,
+                "minecraft:context_float_provider",
+            )?),
+            A::ContextIntProvider {} => V::RegistryReference(resources::parse_reference(
+                reader,
+                &self.context,
+                "minecraft:context_int_provider",
+            )?),
+            A::Dialog {} => V::RegistryReference(resources::parse_reference(
+                reader,
+                &self.context,
+                "minecraft:dialog",
+            )?),
+            A::Feature {} => V::RegistryReference(resources::parse_reference(
+                reader,
+                &self.context,
+                "minecraft:worldgen/feature",
+            )?),
+            A::SlotSource {} => {
+                if let Some(slots) = resources::try_slots(reader) {
+                    V::Slots(slots)
+                } else {
+                    V::RegistryReference(resources::parse_reference(
+                        reader,
+                        &self.context,
+                        "minecraft:slot_source",
+                    )?)
+                }
+            }
             _ => {
                 return Err(error(
                     "ferraloom.argument.pending",
@@ -586,7 +634,7 @@ impl ArgumentType for MinecraftArgument {
             CommandArgument::ContextIntProvider {} => Some("minecraft:context_int_provider"),
             CommandArgument::SlotSource {} => Some("minecraft:slot_source"),
             CommandArgument::Dialog {} => Some("minecraft:dialog"),
-            CommandArgument::Feature {} => Some("minecraft:feature"),
+            CommandArgument::Feature {} => Some("minecraft:worldgen/feature"),
             _ => None,
         };
         if let Some(registry) = registry {

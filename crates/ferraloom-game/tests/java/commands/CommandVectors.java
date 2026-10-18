@@ -23,6 +23,9 @@ public final class CommandVectors {
     static CommandSourceStack source(int level) {
         return Commands.createCompilationContext(LevelBasedPermissionSet.forLevel(PermissionLevel.byId(level)));
     }
+    static <T> net.minecraft.core.HolderLookup.RegistryLookup<T> emptyRegistry(net.minecraft.resources.ResourceKey<? extends net.minecraft.core.Registry<T>> key) {
+        return new net.minecraft.core.MappedRegistry<T>(key, com.mojang.serialization.Lifecycle.stable()).freeze();
+    }
     static void write(Path out, String name, Object value) throws Exception {
         Files.writeString(out.resolve(name), JSON.toJson(value) + "\n");
     }
@@ -47,7 +50,18 @@ public final class CommandVectors {
     public static void main(String[] args) throws Exception {
         SharedConstants.tryDetectVersion();
         Bootstrap.bootStrap();
-        var registries = VanillaRegistries.createWorldLookup();
+        var baseRegistries = VanillaRegistries.createWorldLookup();
+        // ResourceOrIdArgument returns null when a registry is absent. Supply empty
+        // runtime registries so vectors exercise reference/codec validation instead.
+        var additional = java.util.stream.Stream.of(
+            emptyRegistry(net.minecraft.core.registries.Registries.LOOT_TABLE),
+            emptyRegistry(net.minecraft.core.registries.Registries.PREDICATE),
+            emptyRegistry(net.minecraft.core.registries.Registries.ITEM_MODIFIER),
+            emptyRegistry(net.minecraft.core.registries.Registries.CONTEXT_FLOAT_PROVIDER),
+            emptyRegistry(net.minecraft.core.registries.Registries.CONTEXT_INT_PROVIDER),
+            emptyRegistry(net.minecraft.core.registries.Registries.SLOT_SOURCE)
+        ).filter(registry -> baseRegistries.lookup(registry.key()).isEmpty());
+        var registries = net.minecraft.core.HolderLookup.Provider.create(java.util.stream.Stream.concat(baseRegistries.listRegistries(), additional));
         BuiltInRegistries.DATA_COMPONENT_INITIALIZERS.build(registries).forEach(p -> p.apply());
         var elements = new JsonObject();
         registries.listRegistries().forEach(registry -> {

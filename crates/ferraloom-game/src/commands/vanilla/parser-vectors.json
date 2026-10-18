@@ -5693,35 +5693,45 @@
     "parser": "minecraft:loot_predicate",
     "properties": {},
     "input": "foo",
-    "ok": true,
+    "ok": false,
+    "error_cursor": 3,
+    "message": "Can't find element 'minecraft:foo' in registry 'minecraft:predicate'",
     "cursor": 3
   },
   {
     "parser": "minecraft:loot_predicate",
     "properties": {},
     "input": "foo:bar",
-    "ok": true,
+    "ok": false,
+    "error_cursor": 7,
+    "message": "Can't find element 'foo:bar' in registry 'minecraft:predicate'",
     "cursor": 7
   },
   {
     "parser": "minecraft:loot_predicate",
     "properties": {},
     "input": "012",
-    "ok": true,
+    "ok": false,
+    "error_cursor": 3,
+    "message": "Can't find element 'minecraft:012' in registry 'minecraft:predicate'",
     "cursor": 3
   },
   {
     "parser": "minecraft:loot_predicate",
     "properties": {},
     "input": "{}",
-    "ok": true,
+    "ok": false,
+    "error_cursor": 2,
+    "message": "Failed to parse structure: No key type in MapLike[{}]",
     "cursor": 2
   },
   {
     "parser": "minecraft:loot_predicate",
     "properties": {},
     "input": "true",
-    "ok": true,
+    "ok": false,
+    "error_cursor": 4,
+    "message": "Can't find element 'minecraft:true' in registry 'minecraft:predicate'",
     "cursor": 4
   },
   {
@@ -5755,14 +5765,18 @@
     "parser": "minecraft:loot_predicate",
     "properties": {},
     "input": "-1",
-    "ok": true,
+    "ok": false,
+    "error_cursor": 2,
+    "message": "Can't find element 'minecraft:-1' in registry 'minecraft:predicate'",
     "cursor": 2
   },
   {
     "parser": "minecraft:loot_predicate",
     "properties": {},
     "input": "1.5",
-    "ok": true,
+    "ok": false,
+    "error_cursor": 3,
+    "message": "Can't find element 'minecraft:1.5' in registry 'minecraft:predicate'",
     "cursor": 3
   },
   {
@@ -5778,14 +5792,18 @@
     "parser": "minecraft:loot_predicate",
     "properties": {},
     "input": "0 1",
-    "ok": true,
+    "ok": false,
+    "error_cursor": 1,
+    "message": "Can't find element 'minecraft:0' in registry 'minecraft:predicate'",
     "cursor": 1
   },
   {
     "parser": "minecraft:loot_predicate",
     "properties": {},
     "input": "0 1 2",
-    "ok": true,
+    "ok": false,
+    "error_cursor": 1,
+    "message": "Can't find element 'minecraft:0' in registry 'minecraft:predicate'",
     "cursor": 1
   },
   {
@@ -5950,35 +5968,45 @@
     "parser": "minecraft:context_float_provider",
     "properties": {},
     "input": "foo",
-    "ok": true,
+    "ok": false,
+    "error_cursor": 3,
+    "message": "Can't find element 'minecraft:foo' in registry 'minecraft:context_float_provider'",
     "cursor": 3
   },
   {
     "parser": "minecraft:context_float_provider",
     "properties": {},
     "input": "foo:bar",
-    "ok": true,
+    "ok": false,
+    "error_cursor": 7,
+    "message": "Can't find element 'foo:bar' in registry 'minecraft:context_float_provider'",
     "cursor": 7
   },
   {
     "parser": "minecraft:context_float_provider",
     "properties": {},
     "input": "012",
-    "ok": true,
+    "ok": false,
+    "error_cursor": 3,
+    "message": "Can't find element 'minecraft:012' in registry 'minecraft:context_float_provider'",
     "cursor": 3
   },
   {
     "parser": "minecraft:context_float_provider",
     "properties": {},
     "input": "{}",
-    "ok": true,
+    "ok": false,
+    "error_cursor": 2,
+    "message": "Failed to parse structure: Failed to parse either. First: Not a number; Second: No key type in MapLike[{}]",
     "cursor": 2
   },
   {
     "parser": "minecraft:context_float_provider",
     "properties": {},
     "input": "true",
-    "ok": true,
+    "ok": false,
+    "error_cursor": 4,
+    "message": "Can't find element 'minecraft:true' in registry 'minecraft:context_float_provider'",
     "cursor": 4
   },
   {
@@ -6012,14 +6040,18 @@
     "parser": "minecraft:context_float_provider",
     "properties": {},
     "input": "-1",
-    "ok": true,
+    "ok": false,
+    "error_cursor": 2,
+    "message": "Can't find element 'minecraft:-1' in registry 'minecraft:context_float_provider'",
     "cursor": 2
   },
   {
     "parser": "minecraft:context_float_provider",
     "properties": {},
     "input": "1.5",
-    "ok": true,
+    "ok": false,
+    "error_cursor": 3,
+    "message": "Can't find element 'minecraft:1.5' in registry 'minecraft:context_float_provider'",
     "cursor": 3
   },
   {
@@ -6035,14 +6067,18 @@
     "parser": "minecraft:context_float_provider",
     "properties": {},
     "input": "0 1",
-    "ok": true,
+    "ok": false,
+    "error_cursor": 1,
+    "message": "Can't find element 'minecraft:0' in registry 'minecraft:context_float_provider'",
     "cursor": 1
   },
   {
     "parser": "minecraft:context_float_provider",
     "properties": {},
     "input": "0 1 2",
-    "ok": true,
+    "ok": false,
+    "error_cursor": 1,
+    "message": "Can't find element 'minecraft:0' in registry 'minecraft:context_float_provider'",
     "cursor": 1
   },
   {
@@ -6085,35 +6121,45 @@
     "parser": "minecraft:context_int_provider",
     "properties": {},
     "input": "foo",
-    "ok": true,
+    "ok": false,
+    "error_cursor": 3,
+    "message": "Can't find element 'minecraft:foo' in registry 'minecraft:context_int_provider'",
     "cursor": 3
   },
   {
     "parser": "minecraft:context_int_provider",
     "properties": {},
     "input": "foo:bar",
-    "ok": true,
+    "ok": false,
+    "error_cursor": 7,
+    "message": "Can't find element 'foo:bar' in registry 'minecraft:context_int_provider'",
     "cursor": 7
   },
   {
     "parser": "minecraft:context_int_provider",
     "properties": {},
     "input": "012",
-    "ok": true,
+    "ok": false,
+    "error_cursor": 3,
+    "message": "Can't find element 'minecraft:012' in registry 'minecraft:context_int_provider'",
     "cursor": 3
   },
   {
     "parser": "minecraft:context_int_provider",
     "properties": {},
     "input": "{}",
-    "ok": true,
+    "ok": false,
+    "error_cursor": 2,
+    "message": "Failed to parse structure: Failed to parse either. First: Not a number; Second: No key type in MapLike[{}]",
     "cursor": 2
   },
   {
     "parser": "minecraft:context_int_provider",
     "properties": {},
     "input": "true",
-    "ok": true,
+    "ok": false,
+    "error_cursor": 4,
+    "message": "Can't find element 'minecraft:true' in registry 'minecraft:context_int_provider'",
     "cursor": 4
   },
   {
@@ -6147,14 +6193,18 @@
     "parser": "minecraft:context_int_provider",
     "properties": {},
     "input": "-1",
-    "ok": true,
+    "ok": false,
+    "error_cursor": 2,
+    "message": "Can't find element 'minecraft:-1' in registry 'minecraft:context_int_provider'",
     "cursor": 2
   },
   {
     "parser": "minecraft:context_int_provider",
     "properties": {},
     "input": "1.5",
-    "ok": true,
+    "ok": false,
+    "error_cursor": 3,
+    "message": "Can't find element 'minecraft:1.5' in registry 'minecraft:context_int_provider'",
     "cursor": 3
   },
   {
@@ -6170,14 +6220,18 @@
     "parser": "minecraft:context_int_provider",
     "properties": {},
     "input": "0 1",
-    "ok": true,
+    "ok": false,
+    "error_cursor": 1,
+    "message": "Can't find element 'minecraft:0' in registry 'minecraft:context_int_provider'",
     "cursor": 1
   },
   {
     "parser": "minecraft:context_int_provider",
     "properties": {},
     "input": "0 1 2",
-    "ok": true,
+    "ok": false,
+    "error_cursor": 1,
+    "message": "Can't find element 'minecraft:0' in registry 'minecraft:context_int_provider'",
     "cursor": 1
   },
   {
@@ -7033,35 +7087,45 @@
     "parser": "minecraft:slot_source",
     "properties": {},
     "input": "foo",
-    "ok": true,
+    "ok": false,
+    "error_cursor": 3,
+    "message": "Can't find element 'minecraft:foo' in registry 'minecraft:slot_source'",
     "cursor": 3
   },
   {
     "parser": "minecraft:slot_source",
     "properties": {},
     "input": "foo:bar",
-    "ok": true,
+    "ok": false,
+    "error_cursor": 7,
+    "message": "Can't find element 'foo:bar' in registry 'minecraft:slot_source'",
     "cursor": 7
   },
   {
     "parser": "minecraft:slot_source",
     "properties": {},
     "input": "012",
-    "ok": true,
+    "ok": false,
+    "error_cursor": 3,
+    "message": "Can't find element 'minecraft:012' in registry 'minecraft:slot_source'",
     "cursor": 3
   },
   {
     "parser": "minecraft:slot_source",
     "properties": {},
     "input": "{}",
-    "ok": true,
+    "ok": false,
+    "error_cursor": 2,
+    "message": "Failed to parse structure: Failed to parse either. First: No key type in MapLike[{}]; Second: Failed to parse either. First: Not a string; Second: Failed to parse either. First: Not a list: {}; Second: No key type in MapLike[{}]",
     "cursor": 2
   },
   {
     "parser": "minecraft:slot_source",
     "properties": {},
     "input": "true",
-    "ok": true,
+    "ok": false,
+    "error_cursor": 4,
+    "message": "Can't find element 'minecraft:true' in registry 'minecraft:slot_source'",
     "cursor": 4
   },
   {
@@ -7116,14 +7180,18 @@
     "parser": "minecraft:slot_source",
     "properties": {},
     "input": "-1",
-    "ok": true,
+    "ok": false,
+    "error_cursor": 2,
+    "message": "Can't find element 'minecraft:-1' in registry 'minecraft:slot_source'",
     "cursor": 2
   },
   {
     "parser": "minecraft:slot_source",
     "properties": {},
     "input": "1.5",
-    "ok": true,
+    "ok": false,
+    "error_cursor": 3,
+    "message": "Can't find element 'minecraft:1.5' in registry 'minecraft:slot_source'",
     "cursor": 3
   },
   {
@@ -7139,14 +7207,18 @@
     "parser": "minecraft:slot_source",
     "properties": {},
     "input": "0 1",
-    "ok": true,
+    "ok": false,
+    "error_cursor": 1,
+    "message": "Can't find element 'minecraft:0' in registry 'minecraft:slot_source'",
     "cursor": 1
   },
   {
     "parser": "minecraft:slot_source",
     "properties": {},
     "input": "0 1 2",
-    "ok": true,
+    "ok": false,
+    "error_cursor": 1,
+    "message": "Can't find element 'minecraft:0' in registry 'minecraft:slot_source'",
     "cursor": 1
   },
   {
@@ -7313,21 +7385,27 @@
     "parser": "minecraft:loot_table",
     "properties": {},
     "input": "foo",
-    "ok": true,
+    "ok": false,
+    "error_cursor": 3,
+    "message": "Can't find element 'minecraft:foo' in registry 'minecraft:loot_table'",
     "cursor": 3
   },
   {
     "parser": "minecraft:loot_table",
     "properties": {},
     "input": "foo:bar",
-    "ok": true,
+    "ok": false,
+    "error_cursor": 7,
+    "message": "Can't find element 'foo:bar' in registry 'minecraft:loot_table'",
     "cursor": 7
   },
   {
     "parser": "minecraft:loot_table",
     "properties": {},
     "input": "012",
-    "ok": true,
+    "ok": false,
+    "error_cursor": 3,
+    "message": "Can't find element 'minecraft:012' in registry 'minecraft:loot_table'",
     "cursor": 3
   },
   {
@@ -7341,7 +7419,9 @@
     "parser": "minecraft:loot_table",
     "properties": {},
     "input": "true",
-    "ok": true,
+    "ok": false,
+    "error_cursor": 4,
+    "message": "Can't find element 'minecraft:true' in registry 'minecraft:loot_table'",
     "cursor": 4
   },
   {
@@ -7375,14 +7455,18 @@
     "parser": "minecraft:loot_table",
     "properties": {},
     "input": "-1",
-    "ok": true,
+    "ok": false,
+    "error_cursor": 2,
+    "message": "Can't find element 'minecraft:-1' in registry 'minecraft:loot_table'",
     "cursor": 2
   },
   {
     "parser": "minecraft:loot_table",
     "properties": {},
     "input": "1.5",
-    "ok": true,
+    "ok": false,
+    "error_cursor": 3,
+    "message": "Can't find element 'minecraft:1.5' in registry 'minecraft:loot_table'",
     "cursor": 3
   },
   {
@@ -7398,14 +7482,18 @@
     "parser": "minecraft:loot_table",
     "properties": {},
     "input": "0 1",
-    "ok": true,
+    "ok": false,
+    "error_cursor": 1,
+    "message": "Can't find element 'minecraft:0' in registry 'minecraft:loot_table'",
     "cursor": 1
   },
   {
     "parser": "minecraft:loot_table",
     "properties": {},
     "input": "0 1 2",
-    "ok": true,
+    "ok": false,
+    "error_cursor": 1,
+    "message": "Can't find element 'minecraft:0' in registry 'minecraft:loot_table'",
     "cursor": 1
   },
   {
@@ -7868,35 +7956,45 @@
     "parser": "minecraft:loot_modifier",
     "properties": {},
     "input": "foo",
-    "ok": true,
+    "ok": false,
+    "error_cursor": 3,
+    "message": "Can't find element 'minecraft:foo' in registry 'minecraft:item_modifier'",
     "cursor": 3
   },
   {
     "parser": "minecraft:loot_modifier",
     "properties": {},
     "input": "foo:bar",
-    "ok": true,
+    "ok": false,
+    "error_cursor": 7,
+    "message": "Can't find element 'foo:bar' in registry 'minecraft:item_modifier'",
     "cursor": 7
   },
   {
     "parser": "minecraft:loot_modifier",
     "properties": {},
     "input": "012",
-    "ok": true,
+    "ok": false,
+    "error_cursor": 3,
+    "message": "Can't find element 'minecraft:012' in registry 'minecraft:item_modifier'",
     "cursor": 3
   },
   {
     "parser": "minecraft:loot_modifier",
     "properties": {},
     "input": "{}",
-    "ok": true,
+    "ok": false,
+    "error_cursor": 2,
+    "message": "Failed to parse structure: Failed to parse either. First: No key type in MapLike[{}]; Second: Failed to parse either. First: Not a string; Second: Failed to parse either. First: Not a list: {}; Second: No key type in MapLike[{}]",
     "cursor": 2
   },
   {
     "parser": "minecraft:loot_modifier",
     "properties": {},
     "input": "true",
-    "ok": true,
+    "ok": false,
+    "error_cursor": 4,
+    "message": "Can't find element 'minecraft:true' in registry 'minecraft:item_modifier'",
     "cursor": 4
   },
   {
@@ -7930,14 +8028,18 @@
     "parser": "minecraft:loot_modifier",
     "properties": {},
     "input": "-1",
-    "ok": true,
+    "ok": false,
+    "error_cursor": 2,
+    "message": "Can't find element 'minecraft:-1' in registry 'minecraft:item_modifier'",
     "cursor": 2
   },
   {
     "parser": "minecraft:loot_modifier",
     "properties": {},
     "input": "1.5",
-    "ok": true,
+    "ok": false,
+    "error_cursor": 3,
+    "message": "Can't find element 'minecraft:1.5' in registry 'minecraft:item_modifier'",
     "cursor": 3
   },
   {
@@ -7953,14 +8055,18 @@
     "parser": "minecraft:loot_modifier",
     "properties": {},
     "input": "0 1",
-    "ok": true,
+    "ok": false,
+    "error_cursor": 1,
+    "message": "Can't find element 'minecraft:0' in registry 'minecraft:item_modifier'",
     "cursor": 1
   },
   {
     "parser": "minecraft:loot_modifier",
     "properties": {},
     "input": "0 1 2",
-    "ok": true,
+    "ok": false,
+    "error_cursor": 1,
+    "message": "Can't find element 'minecraft:0' in registry 'minecraft:item_modifier'",
     "cursor": 1
   },
   {
