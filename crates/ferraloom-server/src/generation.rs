@@ -203,7 +203,9 @@ impl GenerationState {
             for position in layer.positions {
                 let key = position.pack();
                 if layer.status == ChunkStatus::Empty {
-                    if !self.holders.contains_key(&key) {
+                    if let std::collections::btree_map::Entry::Vacant(entry) =
+                        self.holders.entry(key)
+                    {
                         let proto = if let Some(tag) = io.load(position).wait()? {
                             ProtoChunk::load(
                                 &self.context,
@@ -216,8 +218,7 @@ impl GenerationState {
                             ProtoChunk::empty(&self.context, position)?
                         };
                         let persisted = proto.region.status;
-                        self.holders
-                            .insert(key, GenerationChunkHolder::new(proto, persisted));
+                        entry.insert(GenerationChunkHolder::new(proto, persisted));
                     }
                     continue;
                 }
