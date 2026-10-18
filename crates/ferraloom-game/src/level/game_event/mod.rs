@@ -88,7 +88,7 @@ struct GameEventListenerRegistry {
     listeners_to_remove: HashSet<GameEventListenerRef>,
     listeners_to_add: Vec<GameEventListenerRef>,
     processing: bool,
-    modification_count: u64,
+    modification_count: i32,
     attached: bool,
     visits: usize,
 }
@@ -100,4 +100,21 @@ pub(super) struct GameEventListenerRegistries {
     next_registry: usize,
     owners: BTreeMap<usize, ChunkListenerRegistries>,
     registries: BTreeMap<usize, GameEventListenerRegistry>,
+    #[cfg(test)]
+    tests: test_support::ListenerTests,
 }
+
+mod dispatcher;
+pub use dispatcher::GameEventDispatcher;
+mod registry;
+#[expect(
+    unused_imports,
+    reason = "BE lifecycle owner consumes the register/unregister boundaries after the micro-landing"
+)]
+pub(crate) use registry::{
+    detach_chunk_listeners, register_block_entity_listener, unregister_block_entity_listener,
+};
+#[cfg(test)]
+pub(crate) mod test_support;
+#[cfg(test)]
+mod tests;

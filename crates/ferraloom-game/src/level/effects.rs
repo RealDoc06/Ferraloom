@@ -50,12 +50,6 @@ pub enum LevelEffect {
         recipients: Vec<crate::entity::EntityRef>,
         packet: Box<ferraloom_protocol::play::clientbound::Packet>,
     },
-    GameEvent {
-        event: ferraloom_data::registries::game_event::Id,
-        position: ferraloom_util::Vec3,
-        source: Option<crate::entity::EntityRef>,
-        affected_state: Option<BlockState>,
-    },
 }
 
 impl super::Level {

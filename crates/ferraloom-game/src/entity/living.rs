@@ -186,7 +186,7 @@ pub fn stop_using_item(
             position,
             Some(entity),
             None,
-        );
+        )?;
     }
     let state = level.entity_mut::<LivingEntity>(entity)?;
     state.use_item = ItemStack::default();

@@ -1,5 +1,7 @@
 //! Geometry and flow vectors captured from vanilla's real Entity.move/getFlow.
 use super::*;
+#[cfg(test)]
+use crate::level::game_event::test_support::{self as game_events, Observation};
 use crate::{
     Behaviors,
     block::{UnportedBehavior, fluid::FlowingFluid},
@@ -158,6 +160,7 @@ fn entity_sound_packets_rng_and_events_match_real_native_call_sites() {
     {
         let name = row.split('\t').nth(1).unwrap();
         let mut level = level(false);
+        game_events::observe(&mut level);
         let pos = BlockPos::new(8, 63, 8);
         level
             .set_block_state(pos, Block::STONE.default_state())
@@ -244,13 +247,13 @@ fn entity_sound_packets_rng_and_events_match_real_native_call_sites() {
                 .unwrap();
             start_riding(EntityRef(2), id, true, &mut level).unwrap();
         }
-        level.take_effects();
+        game_events::take(&mut level);
         let behavior = level.entity_behavior(id).unwrap();
         if name == "crystal" {
             level
                 .set_block_state(pos, Block::AMETHYST_BLOCK.default_state())
                 .unwrap();
-            level.take_effects();
+            game_events::take(&mut level);
             for tick in [0, 20, 21, 40, 100] {
                 level.entity_mut::<EntityData>(id).unwrap().tick_count = tick;
                 sounds::walking_step_sound(
@@ -304,7 +307,7 @@ fn entity_sound_packets_rng_and_events_match_real_native_call_sites() {
                 .entity_mut::<EntityData>(id)
                 .unwrap()
                 .set_shared_flag(3, true);
-            level.take_effects();
+            game_events::take(&mut level);
             sounds::maybe_spawn_sprint_particle(behavior, id, &mut level).unwrap();
         } else if name.starts_with("extinguish") {
             behavior
@@ -320,9 +323,9 @@ fn entity_sound_packets_rng_and_events_match_real_native_call_sites() {
             .next_int() as u32;
         let mut packets = Vec::new();
         let mut events = Vec::new();
-        for effect in level.take_effects() {
+        for effect in game_events::take(&mut level) {
             match effect {
-                LevelEffect::PlayerPacket { recipients, packet } => {
+                Observation::Effect(LevelEffect::PlayerPacket { recipients, packet }) => {
                     assert!(
                         recipients.contains(&observer),
                         "{name}: listener should be in range"
@@ -349,7 +352,7 @@ fn entity_sound_packets_rng_and_events_match_real_native_call_sites() {
                         packet.seed as u64
                     ));
                 }
-                LevelEffect::GameEvent {
+                Observation::GameEvent {
                     event,
                     position,
                     source,
@@ -1845,7 +1848,7 @@ fn push_entities_up_matches_native_shape_difference_query_order_and_spectators()
                 delta,
                 Some(entity),
                 None,
-            );
+            )?;
             teleport::base_teleport_relative(entity, delta, level)
         }
     }
@@ -1863,6 +1866,7 @@ fn push_entities_up_matches_native_shape_difference_query_order_and_spectators()
     let mut actual = Vec::new();
     for (index, (old, new)) in pairs.into_iter().enumerate() {
         let mut level = level_with_behaviors(false, &DISPATCH);
+        game_events::observe(&mut level);
         for (id, position) in [
             (2, Vec3::new(8.75, 63.5, 8.5)),
             (1, Vec3::new(8.5, 63.9375, 8.5)),
@@ -1891,11 +1895,10 @@ fn push_entities_up_matches_native_shape_difference_query_order_and_spectators()
                 BlockPos::new(8, 63, 8),
             )
             .unwrap();
-        let calls: Vec<_> = level
-            .take_effects()
+        let calls: Vec<_> = game_events::take(&mut level)
             .into_iter()
             .map(|effect| {
-                let crate::level::effects::LevelEffect::GameEvent {
+                let Observation::GameEvent {
                     position,
                     source: Some(entity),
                     ..

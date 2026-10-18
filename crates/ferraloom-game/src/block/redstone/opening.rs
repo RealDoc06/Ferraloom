@@ -67,7 +67,7 @@ fn event(level: &mut Level, pos: BlockPos, open: bool, source: Option<EntityRef>
         center(pos),
         source,
         None,
-    );
+    )?;
 }
 fn schedule_water(level: &mut Level, pos: BlockPos, state: BlockState) -> Result<(), LevelError> {
     if state.get(p::WATERLOGGED) == Some(true) {

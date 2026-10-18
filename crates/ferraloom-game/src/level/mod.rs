@@ -57,6 +57,8 @@ pub mod weather;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum LevelError {
+    /// Native ArrayList iterator ConcurrentModificationException during listener visitation.
+    ConcurrentGameEventListenerModification,
     UnsupportedItemUseOn(ferraloom_data::Item),
     UnsupportedItemCraftedPostProcess(ferraloom_data::Item),
     UnsupportedPortalUse(Block),

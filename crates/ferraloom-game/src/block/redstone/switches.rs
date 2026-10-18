@@ -67,7 +67,7 @@ fn event(level: &mut Level, pos: BlockPos, on: bool, source: Option<EntityRef>) 
         center(pos),
         source,
         None,
-    );
+    )?;
 }
 fn button_pressed(level: &mut Level, pos: BlockPos, state: BlockState) -> Result<(), LevelError> {
     let facts = state.block().redstone_properties();
