@@ -196,3 +196,24 @@ impl StructurePieceData {
         Ok(())
     }
 }
+
+impl StructurePieceData {
+    /// Port of StructurePiece#createChest at a transformed local position.
+    pub fn create_chest(
+        &self,
+        context: &mut crate::feature::FeatureContext<'_, '_>,
+        local: [i32; 3],
+        bounds: BoundingBox,
+        loot: &Identifier,
+    ) -> Result<bool, Error> {
+        use ferraloom_data::Block;
+        let p = self.world_position(local);
+        if !bounds.contains(p) || context.region.block(p)?.block() == Block::CHEST {
+            return Ok(false);
+        }
+        let state = super::structures::buried_treasure::reorient_chest(context.region, p)?;
+        context.region.set_block(p, state, 2)?;
+        context.region.set_loot_table(p, loot, context.random)?;
+        Ok(true)
+    }
+}

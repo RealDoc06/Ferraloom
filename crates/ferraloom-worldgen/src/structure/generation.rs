@@ -24,6 +24,7 @@ enum StructureGenerator {
     Igloo,
     EndCity,
     SwampHut,
+    DesertPyramid,
     OceanRuin(super::structures::ocean_ruin::OceanRuinStructure),
     Shipwreck { beached: bool },
     NetherFossil { height: HeightProvider },
@@ -70,6 +71,7 @@ impl StructureGenerators {
                     "minecraft:igloo" => StructureGenerator::Igloo,
                     "minecraft:end_city" => StructureGenerator::EndCity,
                     "minecraft:swamp_hut" => StructureGenerator::SwampHut,
+                    "minecraft:desert_pyramid" => StructureGenerator::DesertPyramid,
                     "minecraft:ocean_ruin" => StructureGenerator::OceanRuin(
                         super::structures::ocean_ruin::OceanRuinStructure::decode(
                             &resource.json()?,
@@ -161,11 +163,34 @@ impl StructureGenerators {
             kind @ (StructureGenerator::BuriedTreasure
             | StructureGenerator::Igloo
             | StructureGenerator::SwampHut
+            | StructureGenerator::DesertPyramid
             | StructureGenerator::Shipwreck { .. }
             | StructureGenerator::OceanRuin(_)) => {
                 let [x, z] = context.chunk.map(|c| c.wrapping_mul(16).wrapping_add(8));
                 if !could_exist(x, z, context.min_y - 1, context.min_y + context.height - 1)? {
                     return Ok(StructureStart::invalid());
+                }
+                if matches!(kind, StructureGenerator::DesertPyramid) {
+                    let mut lowest = i32::MAX;
+                    for [sx, sz] in [
+                        [x - 8, z - 8],
+                        [x - 8, z + 13],
+                        [x + 13, z - 8],
+                        [x + 13, z + 13],
+                    ] {
+                        lowest = lowest.min(
+                            generator.get_base_height(
+                                sx,
+                                sz,
+                                Heightmap::WorldSurfaceWg,
+                                context.min_y,
+                                context.height,
+                            )? - 1,
+                        );
+                    }
+                    if lowest < generator.sea_level() {
+                        return Ok(StructureStart::invalid());
+                    }
                 }
                 let map = if matches!(
                     kind,
@@ -197,6 +222,21 @@ impl StructureGenerators {
                     };
                     let mut random = WorldgenRandom::new(Algorithm::Legacy.new_instance(0));
                     random.set_large_feature_seed(context.seed, context.chunk[0], context.chunk[1]);
+                    if matches!(kind, StructureGenerator::DesertPyramid) {
+                        let piece = super::structures::desert_pyramid::DesertPyramidPiece::new(
+                            &mut random,
+                            x - 8,
+                            z - 8,
+                        );
+                        return Ok(StructureStart::new(
+                            id.clone(),
+                            settings.kind,
+                            context.chunk,
+                            references,
+                            settings.terrain,
+                            vec![StructurePiece::DesertPyramid(Box::new(piece))],
+                        ));
+                    }
                     if matches!(kind, StructureGenerator::SwampHut) {
                         let piece = super::structures::swamp_hut::SwampHutPiece::new(
                             &mut random,

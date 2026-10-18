@@ -25,6 +25,7 @@ pub enum StructurePiece {
     EndCity(Box<super::structures::end_city::EndCityPiece>),
     OceanRuin(Box<super::structures::ocean_ruin::OceanRuinPiece>),
     SwampHut(super::structures::swamp_hut::SwampHutPiece),
+    DesertPyramid(Box<super::structures::desert_pyramid::DesertPyramidPiece>),
 }
 impl StructurePiece {
     pub fn terrain_piece(&self, adjustment: TerrainAdjustment) -> super::TerrainPiece<'_> {
@@ -55,6 +56,7 @@ impl StructurePiece {
             Self::EndCity(p) => p.template.data.bounds,
             Self::OceanRuin(p) => p.template.data.bounds,
             Self::SwampHut(p) => p.scattered.data.bounds,
+            Self::DesertPyramid(p) => p.scattered.data.bounds,
         }
     }
     pub fn to_nbt(&self) -> Result<CompoundTag, Error> {
@@ -67,6 +69,7 @@ impl StructurePiece {
             Self::EndCity(p) => Ok(p.to_nbt()),
             Self::OceanRuin(p) => Ok(p.to_nbt()),
             Self::SwampHut(p) => Ok(p.to_nbt()),
+            Self::DesertPyramid(p) => Ok(p.to_nbt()),
         }
     }
 }
@@ -221,6 +224,13 @@ impl StructureStart {
                     return Ok(None);
                 };
                 match piece_id.to_string().as_str() {
+                    "minecraft:tedp" => {
+                        if let Ok(piece) =
+                            super::structures::desert_pyramid::DesertPyramidPiece::from_nbt(tag)
+                        {
+                            pieces.push(StructurePiece::DesertPyramid(Box::new(piece)));
+                        }
+                    }
                     "minecraft:tesh" => {
                         if let Ok(piece) =
                             super::structures::swamp_hut::SwampHutPiece::from_nbt(tag)

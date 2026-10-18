@@ -125,6 +125,7 @@ impl StructureStart {
                 continue;
             }
             match piece {
+                StructurePiece::DesertPyramid(piece) => piece.post_process(context, *bounds)?,
                 StructurePiece::SwampHut(piece) => piece.post_process(context, *bounds)?,
                 StructurePiece::OceanRuin(piece) => {
                     piece.post_process(context, templates, tags, *bounds, reference)?
@@ -157,7 +158,16 @@ impl StructureStart {
                 }
             }
         }
-        // JigsawStructure inherits the empty Structure#afterPlace method.
+        match self.kind.map(|kind| kind.name()) {
+            Some("minecraft:desert_pyramid") => {
+                super::structures::desert_pyramid::after_place(&self.pieces, context, *bounds)?
+            }
+            Some("minecraft:woodland_mansion") => {
+                return Err(Error("Unsupported woodland mansion afterPlace".into()));
+            }
+            Some(_) => {}
+            None => return Err(Error("valid start has no structure type".into())),
+        }
         Ok(())
     }
 }

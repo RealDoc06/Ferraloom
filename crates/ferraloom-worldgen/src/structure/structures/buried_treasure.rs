@@ -99,7 +99,10 @@ fn is_liquid(state: BlockState) -> bool {
     matches!(state.block(), Block::WATER | Block::LAVA)
 }
 /// Port of StructurePiece#reorient, using the extracted isSolidRender fact.
-fn reorient_chest(region: &WorldGenRegion<'_>, p: [i32; 3]) -> Result<BlockState, Error> {
+pub(in crate::structure) fn reorient_chest(
+    region: &WorldGenRegion<'_>,
+    p: [i32; 3],
+) -> Result<BlockState, Error> {
     let mut solid = None;
     for direction in [
         Direction::North,
