@@ -823,6 +823,18 @@ impl MinecraftServer {
                 .collect(),
             ..Default::default()
         };
+        data.default_clocks
+            .insert("minecraft:overworld".into(), "minecraft:overworld".into());
+        for clock in self.clocks.states.0.keys() {
+            data.clock_markers.insert(
+                clock.clone(),
+                self.clocks.time_markers(clock).map(str::to_owned).collect(),
+            );
+            data.clock_timelines.insert(
+                clock.clone(),
+                self.clocks.timelines(clock).map(str::to_owned).collect(),
+            );
+        }
         for connection in &self.players {
             let Phase::Play(entity) = self.connections[connection].phase else {
                 continue;

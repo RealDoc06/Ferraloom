@@ -24,6 +24,9 @@ pub struct SuggestionData {
     pub banned_ips: Vec<String>,
     pub op_candidates: Vec<String>,
     pub whitelist_candidates: Vec<String>,
+    pub default_clocks: std::collections::BTreeMap<String, String>,
+    pub clock_markers: std::collections::BTreeMap<String, Vec<String>>,
+    pub clock_timelines: std::collections::BTreeMap<String, Vec<String>>,
 }
 fn words<'a>(builder: &mut SuggestionsBuilder, values: impl IntoIterator<Item = &'a str>) {
     let remaining = builder.remaining_lower_case();
@@ -81,6 +84,36 @@ pub fn argument(
                     ),
                     ("whitelist", "remove") => {
                         words(&mut builder, data.whitelist.iter().map(String::as_str))
+                    }
+                    ("time", _) => {
+                        let clock = context
+                            .get_argument::<super::arguments::ArgumentValue>("clock")
+                            .and_then(|argument| {
+                                if let super::arguments::ArgumentValue::Identifier(id) = argument {
+                                    Some(id)
+                                } else {
+                                    None
+                                }
+                            })
+                            .or_else(|| data.default_clocks.get(&context.source.level.dimension));
+                        let clock = clock.ok_or_else(|| {
+                            super::exceptions::error(
+                                "commands.time.no_default_clock",
+                                &[context.source.level.dimension.clone()],
+                            )
+                        })?;
+                        let values = match &argument.wire {
+                            CommandArgument::ResourceLocation {} => data.clock_markers.get(clock),
+                            CommandArgument::Resource { registry }
+                                if registry.as_str() == "minecraft:timeline" =>
+                            {
+                                data.clock_timelines.get(clock)
+                            }
+                            _ => None,
+                        };
+                        if let Some(values) = values {
+                            resources(&mut builder, values.iter().map(String::as_str), "");
+                        }
                     }
                     ("tick", "rate") => words(&mut builder, ["20"]),
                     ("tick", "step") => words(&mut builder, ["1t", "1s"]),
@@ -250,13 +283,21 @@ mod tests {
         let vectors: Vec<Vector> =
             serde_json::from_str(include_str!("vanilla/context-suggestion-vectors.json")).unwrap();
         let commands = Commands::default();
-        let data = SuggestionData {
+        let mut data = SuggestionData {
             players: vec!["Alex".into(), "Alice".into(), "Doc".into()],
             ..Default::default()
         };
+        let clocks: serde_json::Value =
+            serde_json::from_str(include_str!("vanilla/clock-suggestion-data.json")).unwrap();
+        data.default_clocks = std::collections::BTreeMap::from([(
+            "minecraft:overworld".into(),
+            "minecraft:overworld".into(),
+        )]);
+        data.clock_markers = serde_json::from_value(clocks["markers"].clone()).unwrap();
+        data.clock_timelines = serde_json::from_value(clocks["timelines"].clone()).unwrap();
         for vector in vectors {
             let source = CommandSourceStack::server(vector.level, Vec3::ZERO);
-            let actual = if vector.kind == "command" {
+            let actual = if matches!(vector.kind.as_str(), "command" | "time_command") {
                 commands.suggestions_with(&vector.input, source, &data)
             } else if vector.kind.starts_with("resource_") {
                 let mut builder = SuggestionsBuilder::new(&vector.input, 0);

@@ -21335,5 +21335,296 @@
         "text": "example:thing"
       }
     ]
+  },
+  {
+    "kind": "time_command",
+    "input": "time ",
+    "level": 4,
+    "start": 5,
+    "end": 5,
+    "suggestions": [
+      {
+        "text": "add"
+      },
+      {
+        "text": "of"
+      },
+      {
+        "text": "pause"
+      },
+      {
+        "text": "query"
+      },
+      {
+        "text": "rate"
+      },
+      {
+        "text": "resume"
+      },
+      {
+        "text": "set"
+      }
+    ]
+  },
+  {
+    "kind": "time_command",
+    "input": "time set ",
+    "level": 4,
+    "start": 9,
+    "end": 9,
+    "suggestions": [
+      {
+        "text": "minecraft:day"
+      },
+      {
+        "text": "minecraft:midnight"
+      },
+      {
+        "text": "minecraft:night"
+      },
+      {
+        "text": "minecraft:noon"
+      }
+    ]
+  },
+  {
+    "kind": "time_command",
+    "input": "time set n",
+    "level": 4,
+    "start": 9,
+    "end": 10,
+    "suggestions": [
+      {
+        "text": "minecraft:night"
+      },
+      {
+        "text": "minecraft:noon"
+      }
+    ]
+  },
+  {
+    "kind": "time_command",
+    "input": "time set minecraft:",
+    "level": 4,
+    "start": 9,
+    "end": 19,
+    "suggestions": [
+      {
+        "text": "minecraft:day"
+      },
+      {
+        "text": "minecraft:midnight"
+      },
+      {
+        "text": "minecraft:night"
+      },
+      {
+        "text": "minecraft:noon"
+      }
+    ]
+  },
+  {
+    "kind": "time_command",
+    "input": "time set 1",
+    "level": 4,
+    "start": 10,
+    "end": 10,
+    "suggestions": [
+      {
+        "text": "d"
+      },
+      {
+        "text": "s"
+      },
+      {
+        "text": "t"
+      }
+    ]
+  },
+  {
+    "kind": "time_command",
+    "input": "time set -1",
+    "level": 4,
+    "start": 11,
+    "end": 11,
+    "suggestions": [
+      {
+        "text": "d"
+      },
+      {
+        "text": "s"
+      },
+      {
+        "text": "t"
+      }
+    ]
+  },
+  {
+    "kind": "time_command",
+    "input": "time set 1t",
+    "level": 4,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "time_command",
+    "input": "time add 1",
+    "level": 4,
+    "start": 10,
+    "end": 10,
+    "suggestions": [
+      {
+        "text": "d"
+      },
+      {
+        "text": "s"
+      },
+      {
+        "text": "t"
+      }
+    ]
+  },
+  {
+    "kind": "time_command",
+    "input": "time add 1s",
+    "level": 4,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "time_command",
+    "input": "time query ",
+    "level": 4,
+    "start": 11,
+    "end": 11,
+    "suggestions": [
+      {
+        "text": "gametime"
+      },
+      {
+        "text": "minecraft:day"
+      },
+      {
+        "text": "minecraft:early_game"
+      },
+      {
+        "text": "minecraft:moon"
+      },
+      {
+        "text": "minecraft:villager_schedule"
+      },
+      {
+        "text": "time"
+      }
+    ]
+  },
+  {
+    "kind": "time_command",
+    "input": "time query m",
+    "level": 4,
+    "start": 11,
+    "end": 12,
+    "suggestions": [
+      {
+        "text": "minecraft:day"
+      },
+      {
+        "text": "minecraft:early_game"
+      },
+      {
+        "text": "minecraft:moon"
+      },
+      {
+        "text": "minecraft:villager_schedule"
+      }
+    ]
+  },
+  {
+    "kind": "time_command",
+    "input": "time of overworld set ",
+    "level": 4,
+    "start": 22,
+    "end": 22,
+    "suggestions": [
+      {
+        "text": "minecraft:day"
+      },
+      {
+        "text": "minecraft:midnight"
+      },
+      {
+        "text": "minecraft:night"
+      },
+      {
+        "text": "minecraft:noon"
+      }
+    ]
+  },
+  {
+    "kind": "time_command",
+    "input": "time of overworld query ",
+    "level": 4,
+    "start": 24,
+    "end": 24,
+    "suggestions": [
+      {
+        "text": "minecraft:day"
+      },
+      {
+        "text": "minecraft:early_game"
+      },
+      {
+        "text": "minecraft:moon"
+      },
+      {
+        "text": "minecraft:villager_schedule"
+      },
+      {
+        "text": "time"
+      }
+    ]
+  },
+  {
+    "kind": "time_command",
+    "input": "time of overworld query minecraft:",
+    "level": 4,
+    "start": 24,
+    "end": 34,
+    "suggestions": [
+      {
+        "text": "minecraft:day"
+      },
+      {
+        "text": "minecraft:early_game"
+      },
+      {
+        "text": "minecraft:moon"
+      },
+      {
+        "text": "minecraft:villager_schedule"
+      }
+    ]
+  },
+  {
+    "kind": "time_command",
+    "input": "time of overworld set midnight",
+    "level": 4,
+    "start": 22,
+    "end": 30,
+    "suggestions": [
+      {
+        "text": "minecraft:midnight"
+      }
+    ]
+  },
+  {
+    "kind": "time_command",
+    "input": "time of overworld set bad",
+    "level": 4,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
   }
 ]

@@ -9,4 +9,4 @@ while IFS= read -r jar; do CP="$CP:$jar"; done < <(find "$VANILLA/libraries" "$V
 mkdir -p "$CLASSES"
 "$JDK/bin/javac" --release 25 -cp "$CP" -d "$CLASSES" "$ROOT/crates/ferraloom-game/tests/java/commands/SuggestionVector.java"
 cd "$VANILLA"
-"$JDK/bin/java" -Xmx512m -Dnet.bytebuddy.experimental=true -XX:+EnableDynamicAgentLoading -cp "$CLASSES:$CP" SuggestionVector "$ROOT/crates/ferraloom-game/src/commands/vanilla/context-suggestion-vectors.json"
+"$JDK/bin/java" -Xmx512m -Dnet.bytebuddy.experimental=true -XX:+EnableDynamicAgentLoading -cp "$CLASSES:$CP" SuggestionVector "$ROOT/crates/ferraloom-game/src/commands/vanilla/context-suggestion-vectors.json" "$ROOT/crates/ferraloom-game/src/commands/vanilla/clock-suggestion-data.json"

@@ -1,0 +1,20 @@
+{
+  "markers": {
+    "minecraft:overworld": [
+      "minecraft:day",
+      "minecraft:noon",
+      "minecraft:midnight",
+      "minecraft:night"
+    ],
+    "minecraft:the_end": []
+  },
+  "timelines": {
+    "minecraft:overworld": [
+      "minecraft:early_game",
+      "minecraft:villager_schedule",
+      "minecraft:day",
+      "minecraft:moon"
+    ],
+    "minecraft:the_end": []
+  }
+}

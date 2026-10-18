@@ -217,6 +217,12 @@ impl ServerClockManager {
             .filter(move |((owner, _), marker)| owner == clock && marker.show_in_commands)
             .map(|((_, name), _)| name.as_str())
     }
+    pub fn timelines<'a>(&'a self, clock: &'a str) -> impl Iterator<Item = &'a str> + 'a {
+        self.timelines
+            .iter()
+            .filter(move |(_, timeline)| timeline.clock == clock)
+            .map(|(id, _)| id.as_str())
+    }
     /// Returns the modified clock even when move-to-marker reports an error: vanilla still synchronizes it.
     pub fn command(
         &mut self,

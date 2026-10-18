@@ -94,6 +94,35 @@ public final class SuggestionVector {
             vectors.add(capture("resource_prefix",input,4,net.minecraft.commands.SharedSuggestionProvider.suggestResource(resources,new SuggestionsBuilder(input,0),"!#").join()));
             vectors.add(capture("resource_plain",input,4,net.minecraft.commands.SharedSuggestionProvider.suggestResource(resources,new SuggestionsBuilder(input,0)).join()));
         }
+        net.minecraft.core.Registry<net.minecraft.world.timeline.Timeline> timelines=mock(net.minecraft.core.Registry.class);
+        doAnswer(call->registries.lookupOrThrow(net.minecraft.core.registries.Registries.TIMELINE).listElements()).when(timelines).listElements();
+        net.minecraft.core.Registry<net.minecraft.world.clock.WorldClock> worldClocks=mock(net.minecraft.core.Registry.class);
+        doAnswer(call->registries.lookupOrThrow(net.minecraft.core.registries.Registries.WORLD_CLOCK).listElements()).when(worldClocks).listElements();
+        var registryAccess=mock(net.minecraft.core.RegistryAccess.Frozen.class);
+        doReturn(timelines).when(registryAccess).lookupOrThrow(net.minecraft.core.registries.Registries.TIMELINE);
+        doReturn(worldClocks).when(registryAccess).lookupOrThrow(net.minecraft.core.registries.Registries.WORLD_CLOCK);
+        var server=mock(net.minecraft.server.MinecraftServer.class);
+        doReturn(registryAccess).when(server).registryAccess();
+        var clocks=net.minecraft.world.clock.ServerClockManager.TYPE.constructor().get();clocks.init(server);
+        doReturn(clocks).when(server).clockManager();
+        var level=mock(net.minecraft.server.level.ServerLevel.class);
+        doReturn(registries.lookupOrThrow(net.minecraft.core.registries.Registries.DIMENSION_TYPE).getOrThrow(net.minecraft.world.level.dimension.BuiltinDimensionTypes.OVERWORLD)).when(level).dimensionTypeRegistration();
+        var timeSource=mock(CommandSourceStack.class);
+        doReturn(server).when(timeSource).getServer();doReturn(level).when(timeSource).getLevel();doReturn(registryAccess).when(timeSource).registryAccess();
+        doReturn(LevelBasedPermissionSet.forLevel(PermissionLevel.byId(4))).when(timeSource).permissions();
+        var timeDispatcher=new CommandDispatcher<CommandSourceStack>();net.minecraft.server.commands.TimeCommand.register(timeDispatcher,blocks);
+        for(var input:List.of("time ","time set ","time set n","time set minecraft:","time set 1","time set -1","time set 1t","time add 1","time add 1s","time query ","time query m","time of overworld set ","time of overworld query ","time of overworld query minecraft:","time of overworld set midnight","time of overworld set bad")) {
+            vectors.add(capture("time_command",input,4,timeDispatcher.getCompletionSuggestions(timeDispatcher.parse(input,timeSource)).join()));
+        }
+        var clockData=new JsonObject();var markerData=new JsonObject();var timelineData=new JsonObject();
+        registries.lookupOrThrow(net.minecraft.core.registries.Registries.WORLD_CLOCK).listElements().forEach(clock->{
+            var markersForClock=new JsonArray();clocks.commandTimeMarkersForClock(clock).forEach(marker->markersForClock.add(marker.identifier().toString()));
+            markerData.add(clock.key().identifier().toString(),markersForClock);
+            var timelinesForClock=new JsonArray();registries.lookupOrThrow(net.minecraft.core.registries.Registries.TIMELINE).listElements().filter(timeline->timeline.value().clock().equals(clock)).forEach(timeline->timelinesForClock.add(timeline.key().identifier().toString()));
+            timelineData.add(clock.key().identifier().toString(),timelinesForClock);
+        });
+        clockData.add("markers",markerData);clockData.add("timelines",timelineData);
+        Files.writeString(Path.of(args[1]),new GsonBuilder().setPrettyPrinting().create().toJson(clockData)+"\n");
         Files.writeString(Path.of(args[0]),new GsonBuilder().setPrettyPrinting().create().toJson(vectors)+"\n");
     }
 }

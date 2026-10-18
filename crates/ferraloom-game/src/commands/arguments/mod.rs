@@ -581,6 +581,18 @@ impl ArgumentType for MinecraftArgument {
                 matches!(self.wire, CommandArgument::BlockPredicate {}),
             ));
         }
+        if matches!(self.wire, CommandArgument::Time { .. }) {
+            let mut reader = StringReader::new(builder.remaining());
+            if reader.read_float().is_ok() {
+                builder = builder.create_offset(builder.start + reader.cursor());
+                for unit in ["d", "s", "t", ""] {
+                    if suggestions::matches_substring(&builder.remaining_lower_case(), unit) {
+                        builder.suggest(unit);
+                    }
+                }
+            }
+            return Ok(builder.build());
+        }
         if matches!(self.wire, CommandArgument::ItemPredicate {}) {
             return Ok(item_predicate::suggestions(&self.context, builder));
         }
