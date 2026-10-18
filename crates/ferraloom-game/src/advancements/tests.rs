@@ -474,6 +474,9 @@ impl RewardHarness {
                 AdvancementEffect::Announcement(component) => {
                     effects.push(json!(component.to_json().unwrap()))
                 }
+                AdvancementEffect::MarkVisibility(id) => {
+                    player.apply_mark_visibility(manager, &id);
+                }
             }
         }
         effects
@@ -802,5 +805,100 @@ fn vanilla_obtained_time_offsets_years_and_smart_midnight() {
                 .unwrap(),
             row["expected"].as_str().unwrap()
         );
+    }
+}
+
+#[test]
+fn vanilla_nested_reward_visibility_order_and_post_reward_revoke() {
+    struct Apply<'a> {
+        manager: &'a ServerAdvancementManager,
+        award: AwardContext<'a>,
+        packets: Vec<Value>,
+        effects: Vec<Value>,
+        revoke: bool,
+    }
+    impl Apply<'_> {
+        fn flush(&mut self, player: &mut PlayerAdvancements) {
+            if let Some(packet) = player.flush_dirty(self.manager, true) {
+                self.packets.push(json!(wire(&packet)));
+            }
+        }
+        fn apply(&mut self, player: &mut PlayerAdvancements, result: AwardResult) {
+            for effect in result.effects {
+                match effect {
+                    AdvancementEffect::Rewards {
+                        advancement,
+                        rewards,
+                    } => {
+                        self.effects.push(json!("xp"));
+                        for recipe in rewards.recipes {
+                            let origin = Vec3::new(1.0, 64.0, 2.0);
+                            let data = LootData::default();
+                            let mut random = LegacyRandomSource::new(42);
+                            let mut context = MatchContext {
+                                data: &data,
+                                facts: &Facts,
+                                random: &mut random,
+                                origin,
+                            };
+                            let matched = player
+                                .matching_listeners(
+                                    TriggerType::RecipeUnlocked,
+                                    &create_context(origin, EntityRef(0)),
+                                    &mut context,
+                                    |instance, context| {
+                                        instance.matches(
+                                            TriggerEvent::Recipe {
+                                                id: &recipe,
+                                                ingredients: &[],
+                                            },
+                                            context,
+                                        )
+                                    },
+                                )
+                                .unwrap();
+                            for key in matched {
+                                let nested = player.award(
+                                    self.manager,
+                                    &key.advancement,
+                                    &key.criterion,
+                                    self.award,
+                                );
+                                self.apply(player, nested);
+                            }
+                            if self.revoke {
+                                assert!(player.revoke(self.manager, &advancement, "a"));
+                                self.flush(player);
+                            }
+                        }
+                    }
+                    AdvancementEffect::Announcement(_) => self.effects.push(json!("chat")),
+                    AdvancementEffect::MarkVisibility(id) => {
+                        player.apply_mark_visibility(self.manager, &id);
+                    }
+                }
+            }
+        }
+    }
+    for row in oracle()["nested_visibility"].as_array().unwrap() {
+        let manager = ServerAdvancementManager::new(holders(&row["inputs"]));
+        let mut player = PlayerAdvancements::new(&manager);
+        let name = ferraloom_protocol::chat::Component::literal("Doc");
+        let mut apply = Apply {
+            manager: &manager,
+            award: AwardContext {
+                now: ObtainedTime::from_millis(123456789),
+                player_name: &name,
+                announce_advancements: true,
+            },
+            packets: Vec::new(),
+            effects: Vec::new(),
+            revoke: row["revoke"].as_bool().unwrap(),
+        };
+        let result = player.award(&manager, &id("test:an"), "a", apply.award);
+        apply.apply(&mut player, result);
+        apply.flush(&mut player);
+        assert_eq!(json!(apply.effects), row["effects"]);
+        assert_eq!(json!(apply.packets), row["packets"]);
     }
 }

@@ -307,6 +307,33 @@ public final class AdvancementVectors {
         var unknown=json(Files.readString(path)).getAsJsonObject();unknown.add("test:missing",json("{\"criteria\":{\"a\":\"2024-01-01 00:00:00 +0000\"},\"done\":true}"));Files.writeString(path,JSON.toJson(unknown));var restored=new PlayerAdvancements(fixer,players,manager,path,player);restored.flushDirty(player,true);output.add("loaded_packets",packets.deepCopy());restored.save();output.add("loaded_saved",json(Files.readString(path)));output.add("load_input",unknown);
         try(var paths=Files.walk(directory)){for(var file:paths.sorted(Comparator.reverseOrder()).toList())Files.delete(file);}
     }
+    static void fixedTimes(PlayerAdvancements advancements,List<AdvancementHolder> holders) throws Exception {
+        var field=AdvancementProgress.class.getDeclaredField("criteria");field.setAccessible(true);
+        for(var holder:holders){@SuppressWarnings("unchecked") var map=(Map<String,CriterionProgress>)field.get(advancements.getOrStartProgress(holder));for(var entry:map.entrySet())if(entry.getValue().isDone())entry.setValue(new CriterionProgress(Instant.ofEpochMilli(123456789)));}
+    }
+    static void nestedVisibility() throws Exception {
+        var observations=new JsonArray();
+        for(boolean revoke:new boolean[]{false,true}) {
+            var inputs=new JsonArray();var holders=new ArrayList<AdvancementHolder>();
+            for(String path:List.of("an","c0")) {
+                var definition=json("{\"display\":{\"icon\":{\"id\":\"stone\"},\"title\":\"Nested\",\"description\":\"Description\",\"background\":\"test:background\"},\"criteria\":{\"a\":{\"trigger\":\"tick\"}}}").getAsJsonObject();
+                if(path.equals("an"))definition.add("rewards",json("{\"recipes\":[\"crafting_table\"]}"));
+                else definition.add("criteria",json("{\"a\":{\"trigger\":\"recipe_unlocked\",\"conditions\":{\"recipes\":\"crafting_table\"}}}"));
+                var holder=new AdvancementHolder(id("test:"+path),Advancement.CODEC.parse(ops,definition).getOrThrow());holders.add(holder);var row=new JsonObject();row.addProperty("id",holder.id().toString());row.add("value",definition);inputs.add(row);
+            }
+            if(holders.get(0).hashCode()!=holders.get(1).hashCode())throw new AssertionError("root hashes must collide");
+            var tree=new AdvancementTree();tree.addAll(holders);tree.repositionNodes();var manager=mock(ServerAdvancementManager.class);doReturn(holders).when(manager).getAllAdvancements();doReturn(tree).when(manager).tree();doAnswer(call->holders.stream().filter(h->h.id().equals(call.getArgument(0))).findFirst().orElse(null)).when(manager).get(any());
+            var packets=new JsonArray();var connection=mock(net.minecraft.server.network.ServerGamePacketListenerImpl.class);player.connection=connection;doAnswer(call->{packets.add(wire(call.getArgument(0)));return null;}).when(connection).send(any(net.minecraft.network.protocol.game.ClientboundUpdateAdvancementsPacket.class));
+            var effects=new JsonArray();var players=mock(net.minecraft.server.players.PlayerList.class);doAnswer(call->{effects.add("chat");return null;}).when(players).broadcastSystemMessage(any(Component.class),eq(false));doAnswer(call->{effects.add("xp");return null;}).when(player).giveExperiencePoints(anyInt());
+            var fixer=mock(com.mojang.datafixers.DataFixer.class);var directory=Files.createTempDirectory("ferraloom-nested-visibility");var advancements=new PlayerAdvancements(fixer,players,manager,directory.resolve("missing.json"),player);doReturn(advancements).when(player).getAdvancements();
+            var recipeKey=ResourceKey.create(Registries.RECIPE,id("crafting_table"));var recipe=new RecipeHolder<>(recipeKey,lookup.lookupOrThrow(Registries.RECIPE).getOrThrow(recipeKey).value());
+            doAnswer(call->{CriteriaTriggers.RECIPE_UNLOCKED.trigger(player,recipe);if(revoke){advancements.revoke(holders.get(0),"a");fixedTimes(advancements,holders);advancements.flushDirty(player,true);}return null;}).when(player).awardRecipesByKey(anyList());
+            advancements.award(holders.get(0),"a");fixedTimes(advancements,holders);
+            var rootField=PlayerAdvancements.class.getDeclaredField("rootsToUpdate");rootField.setAccessible(true);@SuppressWarnings("unchecked")var roots=(Set<AdvancementNode>)rootField.get(advancements);var rootOrder=new JsonArray();for(var node:roots)rootOrder.add(node.holder().id().toString());
+            advancements.flushDirty(player,true);var row=new JsonObject();row.add("inputs",inputs);row.addProperty("revoke",revoke);row.add("root_order",rootOrder);row.add("packets",packets);row.add("effects",effects);observations.add(row);Files.delete(directory);
+        }
+        OUT.add("nested_visibility",observations);
+    }
     static void inlineLoot() {
         var rows=new JsonArray();var sequence=id("test:advancement_reward");
         for(boolean named:new boolean[]{false,true}) {
@@ -317,7 +344,7 @@ public final class AdvancementVectors {
         OUT.add("inline_loot",rows);
     }
     public static void main(String[] args) throws Exception {
-        TimeZone.setDefault(TimeZone.getTimeZone("UTC"));setup();builtins();triggers();progress();inlineLoot();playerProgress();invalidAdvancements();validation();treeMutation();loadedProgress();obtainedTimes();
+        TimeZone.setDefault(TimeZone.getTimeZone("UTC"));setup();builtins();triggers();progress();inlineLoot();playerProgress();invalidAdvancements();validation();treeMutation();loadedProgress();obtainedTimes();nestedVisibility();
         try(var output=new GZIPOutputStream(Files.newOutputStream(Path.of(args[0])))){output.write(JSON.toJson(OUT).getBytes(java.nio.charset.StandardCharsets.UTF_8));}
         for(var entry:OUT.entrySet())System.out.println(entry.getKey()+": "+(entry.getValue().isJsonArray()?entry.getValue().getAsJsonArray().size():1));
     }

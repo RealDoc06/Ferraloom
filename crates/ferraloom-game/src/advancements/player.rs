@@ -48,7 +48,8 @@ impl JavaHash for TriggerInstanceKey {
     }
 }
 /// Completion effects retain vanilla's call order. The live adapter applies each
-/// reward synchronously, including reentrant recipe_unlocked triggers, then chat.
+/// reward synchronously, including reentrant recipe_unlocked triggers, then chat
+/// and the final visibility check.
 #[derive(Clone, Debug, PartialEq)]
 pub enum AdvancementEffect {
     Rewards {
@@ -56,6 +57,8 @@ pub enum AdvancementEffect {
         rewards: AdvancementRewards,
     },
     Announcement(Component),
+    /// Apply after all preceding effects, rereading completion after callbacks.
+    MarkVisibility(Identifier),
 }
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct AwardResult {
@@ -232,9 +235,39 @@ impl PlayerAdvancements {
             }
         }
         if !was_done && done {
-            self.mark_visibility(manager, id);
+            effects.push(AdvancementEffect::MarkVisibility(id.clone()));
         }
         AwardResult { changed, effects }
+    }
+    /// Apply the final award effect after synchronous reward and chat callbacks.
+    /// Port of PlayerAdvancements#award's post-reward completion check.
+    pub fn apply_mark_visibility(&mut self, manager: &ServerAdvancementManager, id: &Identifier) {
+        if self
+            .get_progress(id)
+            .is_some_and(AdvancementProgress::is_done)
+        {
+            self.mark_visibility(manager, id);
+        }
+    }
+    /// State-only award convenience. Live adapters consume award's ordered list;
+    /// this applies visibility immediately and retains the external effects.
+    pub fn award_immediate(
+        &mut self,
+        manager: &ServerAdvancementManager,
+        id: &Identifier,
+        criterion: &str,
+        award: AwardContext<'_>,
+    ) -> AwardResult {
+        let mut result = self.award(manager, id, criterion, award);
+        result.effects.retain(|effect| {
+            if let AdvancementEffect::MarkVisibility(id) = effect {
+                self.apply_mark_visibility(manager, id);
+                false
+            } else {
+                true
+            }
+        });
+        result
     }
     pub fn revoke(
         &mut self,
@@ -301,7 +334,7 @@ impl PlayerAdvancements {
             })?;
         Ok(matched
             .into_iter()
-            .map(|key| self.award(manager, &key.advancement, &key.criterion, award))
+            .map(|key| self.award_immediate(manager, &key.advancement, &key.criterion, award))
             .collect())
     }
     /// Port of PlayerAdvancements#flushDirty. An empty first flush sends nothing
