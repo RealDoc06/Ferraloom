@@ -10,6 +10,8 @@ Fresh split/copy objects also move into a container, then remain independently
 mutable when a later setItem replaces them.
 Real Slot.safeInsert callbacks observe both count edits before setByPlayer,
 then replace or mutate the source/target while their original objects stay held.
+Ordinary real-menu PICKUP also records cursor/target identity through a merge,
+followed by swapping unlike items and mutating the original cursor receiver.
 
 Both scripts use the pinned jar, JDK 25 and libraries in the main checkout's
 shared cache. Crafting uses the Mockito jars already used by the recipe harness
@@ -25,3 +27,8 @@ server-only result calculation while avoiding a running world or sockets.
 The regular `InventoryVectors` fixture uses a concrete non-server Level and
 empty recipe property sets. Those vectors cover storage rules rather than
 recipe computation. All generated expected values come from vanilla execution.
+# Retained insertion
+
+`ListenerVectors` also captures Inventory.add's partial/full/infinite-materials
+returns, damaged-item copyAndClear, and a replaced source receiver. The same
+records drive the value and live-handle insertion adapters.

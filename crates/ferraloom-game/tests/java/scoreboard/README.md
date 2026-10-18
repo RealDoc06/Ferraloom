@@ -26,3 +26,9 @@ ServerPlayer.awardStat/resetStat methods (two cases).
 
 A real Commands.performCommand case captures a swap against a read-only source:
 the target is already written and broadcast when the source write throws.
+
+`TeamFeedbackVectors` adds nine real TeamCommand join/leave cases, including
+same-team rejoining, duplicate holders, transfers, and mixed fake/entity holders.
+Entity feedback-name access throws in the harness, proving that count-only
+feedback does not read it. Leave feedback counts successful removals rather than
+inputs, including a single fake-holder removal among unchanged entities.

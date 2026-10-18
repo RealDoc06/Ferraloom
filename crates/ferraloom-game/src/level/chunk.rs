@@ -13,6 +13,7 @@ use ferraloom_util::{BlockPos, ChunkPos};
 /// Port of LevelChunk's section ownership. Absent sections use the supplied
 /// empty-section template, including the dimension's default biome registry.
 pub struct LevelChunk {
+    pub(super) publication_generation: u64,
     pos: ChunkPos,
     min_section: i32,
     sections: Vec<Option<LevelChunkSection>>,
@@ -21,8 +22,8 @@ pub struct LevelChunk {
     generation_heightmaps: [OnceCell<[i32; 256]>; 2],
     pub(super) block_ticks: LevelChunkTicks,
     pub(super) fluid_ticks: LevelChunkTicks<ferraloom_data::registries::fluid::Id>,
-    pub(super) requested_full_status: FullChunkStatus,
-    pub(super) ticking_ready: bool,
+    requested_full_status: Cell<FullChunkStatus>,
+    ticking_ready: Cell<bool>,
     pub(super) block_entities: super::block_entity::ChunkBlockEntities,
     inhabited_time: i64,
     pub(super) pending_generation: super::post_processing::PendingGenerationData,
@@ -46,6 +47,7 @@ impl LevelChunk {
     pub fn new(pos: ChunkPos, sections: Range<i32>, empty_section: LevelChunkSection) -> Self {
         assert!(empty_section.has_only_air());
         Self {
+            publication_generation: 0,
             pos,
             min_section: sections.start,
             sections: sections.map(|_| None).collect(),
@@ -56,8 +58,8 @@ impl LevelChunk {
             fluid_ticks: LevelChunkTicks::default(),
             // LevelChunk#getFullStatus defaults to FULL until a holder's
             // supplier is attached. This alone never permits broadcasts.
-            requested_full_status: FullChunkStatus::Full,
-            ticking_ready: false,
+            requested_full_status: Cell::new(FullChunkStatus::Full),
+            ticking_ready: Cell::new(false),
             block_entities: Default::default(),
             inhabited_time: 0,
             pending_generation: Default::default(),
@@ -80,14 +82,15 @@ impl LevelChunk {
         Self {
             pos,
             min_section,
+            publication_generation: 0,
             sections: sections.into_iter().map(Some).collect(),
             empty_section,
             heightmaps: None,
             generation_heightmaps: std::array::from_fn(|_| OnceCell::new()),
             block_ticks: LevelChunkTicks::default(),
             fluid_ticks: LevelChunkTicks::default(),
-            requested_full_status: FullChunkStatus::Full,
-            ticking_ready: false,
+            requested_full_status: Cell::new(FullChunkStatus::Full),
+            ticking_ready: Cell::new(false),
             block_entities: Default::default(),
             inhabited_time: 0,
             pending_generation: Default::default(),
@@ -119,8 +122,17 @@ impl LevelChunk {
             .get(index)
             .map(|s| s.as_ref().unwrap_or(&self.empty_section))
     }
+    /// Port of LevelChunk#getFullStatus's holder-backed supplier. Requested
+    /// status is observable before the corresponding ticking future completes.
+    pub fn full_status(&self) -> FullChunkStatus {
+        self.requested_full_status.get()
+    }
     pub fn ticking_ready(&self) -> bool {
-        self.ticking_ready
+        self.ticking_ready.get()
+    }
+    pub(super) fn set_loading_status(&self, requested: FullChunkStatus, ticking_ready: bool) {
+        self.requested_full_status.set(requested);
+        self.ticking_ready.set(ticking_ready);
     }
     pub fn heightmap(&self, map: Heightmap) -> Option<&[i32; 256]> {
         self.heightmaps.as_ref().map(|maps| &maps[map as usize])

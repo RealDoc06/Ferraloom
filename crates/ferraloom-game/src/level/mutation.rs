@@ -113,61 +113,16 @@ impl Level {
     pub fn take_effects(&mut self) -> Vec<LevelEffect> {
         std::mem::take(&mut self.region_mut().effects)
     }
-    pub fn set_chunk_block_ticking(
-        &mut self,
-        pos: ChunkPos,
-        ticking: bool,
-    ) -> Result<(), LevelError> {
-        if self.chunk(pos).is_none() {
-            return Err(LevelError::MissingChunk(pos));
-        }
-        if ticking {
-            self.region_mut().block_ticking_chunks.insert(pos);
-        } else {
-            self.region_mut().block_ticking_chunks.remove(&pos);
-        }
-        Ok(())
-    }
-    pub fn should_tick_blocks_at(&self, pos: BlockPos) -> bool {
-        self.region()
-            .block_ticking_chunks
-            .contains(&ChunkPos::containing(pos))
-    }
-    /// SimulationChunkTracker's entity-ticking range, distinct from the loading
-    /// holder's full status and the entity section manager's visibility.
-    pub fn is_entity_ticking_chunk(&self, pos: ChunkPos) -> bool {
-        self.region().entity_ticking_chunks.contains(&pos)
-    }
-    pub fn set_chunk_entity_ticking(
-        &mut self,
-        pos: ChunkPos,
-        ticking: bool,
-    ) -> Result<(), LevelError> {
-        if self.chunk(pos).is_none() {
-            return Err(LevelError::MissingChunk(pos));
-        }
-        if ticking {
-            self.region_mut().entity_ticking_chunks.insert(pos);
-        } else {
-            self.region_mut().entity_ticking_chunks.remove(&pos);
-        }
-        Ok(())
-    }
     /// Attach the holder's loading-ticket status and current ticking future.
     /// Neither is implied by simulation tickets or by owning a block chunk.
     pub fn set_chunk_loading_status(
-        &mut self,
+        &self,
         pos: ChunkPos,
         requested: super::distance_manager::FullChunkStatus,
         ticking_ready: bool,
     ) -> Result<(), LevelError> {
-        let chunk = self
-            .region_mut()
-            .chunks
-            .get_mut(&pos)
-            .ok_or(LevelError::MissingChunk(pos))?;
-        chunk.requested_full_status = requested;
-        chunk.ticking_ready = ticking_ready;
+        let chunk = self.chunk(pos).ok_or(LevelError::MissingChunk(pos))?;
+        chunk.set_loading_status(requested, ticking_ready);
         Ok(())
     }
     /// Return false for vanilla's rejected placements (bounds/debug/identical
@@ -183,9 +138,7 @@ impl Level {
             return Ok(false);
         }
         let chunk_pos = ChunkPos::containing(pos);
-        let chunk = self
-            .chunk(chunk_pos)
-            .ok_or(LevelError::MissingChunk(chunk_pos))?;
+        let chunk = self.get_full_chunk(chunk_pos)?;
         if pos.y < chunk.min_y() || pos.y >= chunk.max_y() {
             return Ok(false);
         }
@@ -274,7 +227,7 @@ impl Level {
         let new = self.get_block_state(pos)?;
         if new == state {
             if flags.contains(UpdateFlags::CLIENTS)
-                && self.chunk(chunk_pos).unwrap().requested_full_status
+                && self.chunk(chunk_pos).unwrap().full_status()
                     >= super::distance_manager::FullChunkStatus::BlockTicking
             {
                 self.send_block_updated(pos, old, state);

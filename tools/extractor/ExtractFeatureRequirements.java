@@ -29,6 +29,21 @@ public final class ExtractFeatureRequirements {
       if(item instanceof HangingSignItem)hangingSigns.add(BuiltInRegistries.ITEM.getId(item));
     }
     result.add("sign_applicator_items",applicators);result.add("hanging_sign_items",hangingSigns);
+    var stackedOnOther=new JsonArray();var otherStackedOnMe=new JsonArray();
+    for(var item:BuiltInRegistries.ITEM) {
+      var type=item.getClass();
+      if(type.getMethod("overrideStackedOnOther",net.minecraft.world.item.ItemStack.class,
+        net.minecraft.world.inventory.Slot.class,net.minecraft.world.inventory.ClickAction.class,
+        net.minecraft.world.entity.player.Player.class).getDeclaringClass()!=net.minecraft.world.item.Item.class)
+        stackedOnOther.add(BuiltInRegistries.ITEM.getId(item));
+      if(type.getMethod("overrideOtherStackedOnMe",net.minecraft.world.item.ItemStack.class,
+        net.minecraft.world.item.ItemStack.class,net.minecraft.world.inventory.Slot.class,
+        net.minecraft.world.inventory.ClickAction.class,net.minecraft.world.entity.player.Player.class,
+        net.minecraft.world.entity.SlotAccess.class).getDeclaringClass()!=net.minecraft.world.item.Item.class)
+        otherStackedOnMe.add(BuiltInRegistries.ITEM.getId(item));
+    }
+    result.add("stacked_on_other_override_items",stackedOnOther);
+    result.add("other_stacked_on_me_override_items",otherStackedOnMe);
     Files.writeString(Path.of(args[0]),new GsonBuilder().setPrettyPrinting().create().toJson(result)+"\n");
   }
 }

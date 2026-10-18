@@ -2,7 +2,7 @@
 //! progress; it must publish canonical state before completing an acquisition.
 use super::{Level, LevelError, chunk_holder::ChunkStatus};
 use ferraloom_util::ChunkPos;
-use std::cell::Cell;
+use std::{any::Any, cell::Cell};
 
 /// Port of ChunkLevel#byStatus for the native 26.3 generation pyramid.
 pub const fn ticket_level(status: ChunkStatus) -> i32 {
@@ -57,6 +57,7 @@ pub enum AcquireProgress {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AcquireFailure {
     DriverUnavailable,
+    DriverAlreadyInstalled,
     MissingHolder,
     MissingResult,
     InvalidHandle,
@@ -73,13 +74,19 @@ pub enum AcquireFailure {
 /// no method may cast a suspended Level read into a mutable borrow. Polling must
 /// keep reentrant completions reachable, never evict, and never advance a tick.
 /// Worker failure/cancellation returns an error instead of an endless Pending.
-pub trait AcquireDriver: Send {
+pub trait AcquireDriver: Send + Any {
+    /// Cold access to the sole concrete runtime owner. Callers must finish this
+    /// borrow and return owned work before invoking a world callback.
+    fn as_any(&self) -> &dyn Any;
+    fn as_any_mut(&mut self) -> &mut dyn Any;
     fn is_owner_thread(&self) -> bool;
     fn visible_ticket_level(&self, pos: ChunkPos) -> Option<i32>;
     /// Apply TicketStorage#add_unknown; it refreshes the canonical signed timer.
     fn add_unknown_ticket(&self, pos: ChunkPos, status: ChunkStatus) -> Result<(), LevelError>;
     /// Propagate tickets, promote the visible map and dispatch generation. True
     /// means native runDistanceManagerUpdates would invalidate the source cache.
+    /// Clear Level's cache at visible-map publication, before any nested work;
+    /// the return value also invalidates the outer acquisition's cache.
     fn run_distance_manager_updates(&self, level: &Level) -> Result<bool, LevelError>;
     /// Called only with an eligible visible holder. Reuse its existing request
     /// identity or result; do not add a second ticket or wait for ticking status.
@@ -90,6 +97,9 @@ pub trait AcquireDriver: Send {
         status: ChunkStatus,
     ) -> Result<AcquireHandle, LevelError>;
     fn acquisition_result(&self, handle: AcquireHandle) -> Result<AcquireResult, LevelError>;
+    /// Visible-map changes clear Level's cache before callbacks, not merely
+    /// when DistanceUpdates is returned. Mutating ready tasks stay queued for
+    /// the next exclusive slot and are never run through this shared borrow.
     fn poll_acquisition_step(&self, level: &Level) -> Result<AcquireProgress, LevelError>;
     /// Wakeable wait, only after an idle poll and a second completion check.
     fn wait_for_progress(&self) -> Result<(), LevelError>;
@@ -110,6 +120,204 @@ pub trait AcquireDriver: Send {
         status: ChunkStatus,
         load_or_generate: bool,
     ) -> Result<Option<ChunkReference>, LevelError>;
+    /// Read an acquired proto's biome data. FULL reads stay concrete on Level.
+    fn proto_noise_biome(
+        &self,
+        _chunk: ChunkReference,
+        _quart: [i32; 3],
+    ) -> Result<ferraloom_chunk::BiomeId, LevelError> {
+        Err(LevelError::UnsupportedWorldgenEnvironment)
+    }
+    /// LevelReader#getUncachedNoiseBiome's absent-holder branch, using the
+    /// canonical generator's biome source and climate sampler.
+    fn uncached_noise_biome(
+        &self,
+        _quart: [i32; 3],
+    ) -> Result<ferraloom_chunk::BiomeId, LevelError> {
+        Err(LevelError::UnsupportedWorldgenEnvironment)
+    }
+}
+
+impl Level {
+    /// Single-region runtime installation. Dimension bounds are actual level
+    /// bounds, not generator noise bounds. No fallback driver is manufactured.
+    pub fn install_acquire_driver(
+        &mut self,
+        driver: Box<dyn AcquireDriver>,
+        build_height: std::ops::Range<i32>,
+    ) -> Result<(), LevelError> {
+        if self.acquire_driver.is_some() {
+            return Err(LevelError::ChunkAcquisition(
+                ChunkPos::ZERO,
+                ChunkStatus::Full,
+                AcquireFailure::DriverAlreadyInstalled,
+            ));
+        }
+        if build_height.start >= build_height.end
+            || build_height.start % 16 != 0
+            || build_height.end % 16 != 0
+        {
+            return Err(LevelError::OutsideBuildHeight);
+        }
+        let region = self.region_mut();
+        if let Some(chunk) = region
+            .chunks
+            .values()
+            .find(|chunk| chunk.min_y() != build_height.start || chunk.max_y() != build_height.end)
+        {
+            return Err(LevelError::WrongChunkHeight(chunk.pos()));
+        }
+        region.min_y = build_height.start;
+        region.max_y = build_height.end;
+        self.acquisition.clear_cache();
+        self.acquire_driver = Some(driver);
+        Ok(())
+    }
+
+    /// Cold runtime access; no take/restore operation can detach the driver
+    /// while a nested acquisition or callback still needs the canonical owner.
+    pub fn acquire_driver(&self) -> Option<&dyn AcquireDriver> {
+        self.acquire_driver.as_deref()
+    }
+    pub fn acquire_driver_mut(&mut self) -> Option<&mut (dyn AcquireDriver + 'static)> {
+        self.acquire_driver.as_deref_mut()
+    }
+
+    /// Port of Level#getChunk's status/creation overload. The handle identifies
+    /// the actual published object; only FULL handles resolve in live chunk storage.
+    pub fn get_chunk(
+        &self,
+        pos: ChunkPos,
+        status: ChunkStatus,
+        load_or_generate: bool,
+    ) -> Result<Option<ChunkReference>, LevelError> {
+        if let Some(driver) = &self.acquire_driver {
+            self.acquisition
+                .get_chunk(driver.as_ref(), self, pos, status, load_or_generate)
+        } else if let Some(chunk) = self.chunk(pos) {
+            Ok(Some(ChunkReference {
+                pos,
+                generation: chunk.publication_generation,
+                kind: ChunkKind::Full,
+            }))
+        } else if load_or_generate {
+            // Legacy attached-only levels cannot drive IO/generation. This is a
+            // required error under both policies until a real driver is installed.
+            Err(LevelError::MissingChunk(pos))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub fn get_full_chunk(&self, pos: ChunkPos) -> Result<&super::chunk::LevelChunk, LevelError> {
+        let reference =
+            self.get_chunk(pos, ChunkStatus::Full, true)?
+                .ok_or(LevelError::ChunkAcquisition(
+                    pos,
+                    ChunkStatus::Full,
+                    AcquireFailure::MissingResult,
+                ))?;
+        self.resolve_full_chunk(reference)
+    }
+
+    pub(super) fn resolve_full_chunk(
+        &self,
+        reference: ChunkReference,
+    ) -> Result<&super::chunk::LevelChunk, LevelError> {
+        self.chunk(reference.pos)
+            .filter(|chunk| {
+                reference.kind == ChunkKind::Full
+                    && chunk.publication_generation == reference.generation
+            })
+            .ok_or(LevelError::ChunkAcquisition(
+                reference.pos,
+                ChunkStatus::Full,
+                AcquireFailure::Publication,
+            ))
+    }
+
+    /// Port of ServerChunkCache#getChunkNow; does not invoke the acquisition loop.
+    pub fn get_chunk_now(
+        &self,
+        pos: ChunkPos,
+    ) -> Result<Option<&super::chunk::LevelChunk>, LevelError> {
+        if let Some(driver) = &self.acquire_driver {
+            self.acquisition
+                .get_chunk_now(driver.as_ref(), pos)
+                .map(|reference| self.resolve_full_chunk(reference))
+                .transpose()
+        } else {
+            Ok(self.chunk(pos))
+        }
+    }
+
+    pub fn has_chunk(&self, pos: ChunkPos) -> bool {
+        self.acquire_driver.as_ref().map_or_else(
+            || self.chunk(pos).is_some(),
+            |driver| self.acquisition.has_chunk(driver.as_ref(), pos),
+        )
+    }
+    pub fn has_chunk_at(&self, pos: ferraloom_util::BlockPos) -> bool {
+        self.has_chunk(ChunkPos::containing(pos))
+    }
+    pub fn is_loaded(&self, pos: ferraloom_util::BlockPos) -> bool {
+        self.is_in_valid_bounds(pos) && self.has_chunk_at(pos)
+    }
+    pub fn get_chunk_for_collisions(
+        &self,
+        pos: ChunkPos,
+    ) -> Result<Option<&super::chunk::LevelChunk>, LevelError> {
+        self.get_chunk(pos, ChunkStatus::Full, false)?
+            .map(|reference| self.resolve_full_chunk(reference))
+            .transpose()
+    }
+    /// Port of Level#loadedAndEntityCanStandOnFace, with the no-ticket FULL
+    /// query before capturing the entity's actual collision context.
+    pub fn loaded_and_entity_can_stand_on_face(
+        &self,
+        pos: ferraloom_util::BlockPos,
+        entity: crate::entity::EntityRef,
+        face: ferraloom_util::Direction,
+    ) -> Result<bool, LevelError> {
+        if !self.is_in_valid_bounds(pos) {
+            return Ok(false);
+        }
+        let Some(chunk) = self.get_chunk_for_collisions(ChunkPos::containing(pos))? else {
+            return Ok(false);
+        };
+        let state = chunk.get_block_state(pos);
+        let context = crate::block::BlockCollisionContext::Entity(
+            crate::entity::collision_context::EntityCollisionView::capture(entity, self, false)?,
+        );
+        let shape =
+            crate::block::LevelReaderRef::Server(self).collision_shape(state, pos, &context)?;
+        Ok(ferraloom_util::shapes::is_face_full(&shape, face))
+    }
+    pub fn get_chunk_for_lighting(&self, pos: ChunkPos) -> Option<ChunkReference> {
+        self.acquire_driver.as_ref().map_or_else(
+            || {
+                self.chunk(pos).map(|chunk| ChunkReference {
+                    pos,
+                    generation: chunk.publication_generation,
+                    kind: ChunkKind::Full,
+                })
+            },
+            |driver| {
+                self.acquisition
+                    .get_chunk_for_lighting(driver.as_ref(), pos)
+            },
+        )
+    }
+    /// Call after a successful distance/visible-map update outside managedBlock.
+    pub fn clear_chunk_source_cache(&self) {
+        self.acquisition.clear_cache();
+    }
+    /// Native end-of-ServerChunkCache#tick cache reset, with exclusive retirement
+    /// of light snapshots whose shared readers have all ended.
+    pub fn finish_chunk_source_tick(&mut self) {
+        self.acquisition.clear_cache();
+        self.prune_light_snapshots();
+    }
 }
 
 #[derive(Clone, Copy)]

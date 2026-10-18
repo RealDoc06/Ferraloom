@@ -152,6 +152,9 @@ against `FeatureFlags.VANILLA_SET` for every block and item. The dedicated serve
 currently advertises precisely that set. The generated const queries are named
 `is_enabled_in_vanilla` so a future experimental-feature runtime cannot mistake
 them for checks against an arbitrary live feature set.
+The same report reflects both item inventory-click virtuals independently.
+Generated `overrides_stacked_on_other` / `overrides_other_stacked_on_me` facts
+follow the actual Item subclass, including when stacks override components.
 
 `ExtractData <output-dir> --item-names-only` writes immutable item description IDs
 and potion effect-name suffixes to `item_names.json`. `Item#getDescriptionId` and

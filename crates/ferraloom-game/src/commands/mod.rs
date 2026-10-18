@@ -3,6 +3,7 @@
 pub mod arguments;
 pub mod builtins;
 pub mod clocks;
+pub mod components;
 pub mod context;
 pub mod exceptions;
 pub mod execution;
@@ -15,6 +16,7 @@ pub mod reload;
 pub mod scoreboard;
 pub mod source;
 pub mod spawn;
+pub mod storage;
 pub mod suggestions;
 pub mod team;
 pub mod teleport;

@@ -55,7 +55,6 @@ mod tests {
 /// Single-region DistanceManager state. Lookup maps never determine graph or
 /// chunk traversal order; every player section transition is applied at its call.
 pub struct DistanceManager {
-    pub simulation: super::simulation::SimulationChunkTracker,
     pub natural_spawn: super::simulation::FixedPlayerDistanceChunkTracker,
     pub loading: super::simulation::LoadingChunkTracker,
     player_tickets: super::simulation::PlayerTicketTracker,
@@ -72,7 +71,6 @@ pub struct DistanceManager {
 impl Default for DistanceManager {
     fn default() -> Self {
         Self {
-            simulation: Default::default(),
             natural_spawn: Default::default(),
             loading: super::simulation::LoadingChunkTracker::new(MAX_LOADED_LEVEL),
             player_tickets: Default::default(),
@@ -153,6 +151,7 @@ impl DistanceManager {
     pub fn run_all_updates(
         &mut self,
         tickets: &mut super::tickets::TicketStorage,
+        simulation: &mut super::simulation::SimulationChunkTracker,
     ) -> Vec<super::simulation::ChunkLevelChange> {
         for update in tickets.take_source_updates() {
             match update.tracker {
@@ -161,15 +160,13 @@ impl DistanceManager {
                     update.level,
                     update.only_decreased,
                 ),
-                super::tickets::TicketTracker::Simulation => self.simulation.update_source_level(
-                    update.pos,
-                    update.level,
-                    update.only_decreased,
-                ),
+                super::tickets::TicketTracker::Simulation => {
+                    simulation.update_source_level(update.pos, update.level, update.only_decreased)
+                }
             }
         }
         self.natural_spawn.run_all_updates();
-        self.simulation.run_all_updates();
+        simulation.run_all_updates();
         self.player_tickets.run_all_updates(&mut self.dispatcher);
         self.loading.run_all_updates();
         self.loading.take_level_changes()
@@ -252,6 +249,7 @@ mod player_tests {
     fn player_membership_retains_each_section_transition_and_shared_ticket() {
         let mut manager = DistanceManager::default();
         let mut tickets = TicketStorage::default();
+        let mut simulation = super::super::simulation::SimulationChunkTracker::default();
         let a = EntityRef(1);
         let b = EntityRef(2);
         let origin = SectionPos::new(0, 4, 0);
@@ -261,7 +259,7 @@ mod player_tests {
             tickets.source_level(ChunkPos::new(0, 0), TicketTracker::Simulation),
             21
         );
-        manager.run_all_updates(&mut tickets);
+        manager.run_all_updates(&mut tickets, &mut simulation);
         manager.update_player(a, None, &mut tickets);
         assert_eq!(
             tickets.source_level(ChunkPos::new(0, 0), TicketTracker::Simulation),
@@ -272,7 +270,7 @@ mod player_tests {
             tickets.source_level(ChunkPos::new(0, 0), TicketTracker::Simulation),
             21
         );
-        manager.run_all_updates(&mut tickets);
+        manager.run_all_updates(&mut tickets, &mut simulation);
         // A->B->A during one packet phase must disturb the queued graph, even
         // though a snapshot of only the final player chunk would be unchanged.
         manager.update_player(b, Some(SectionPos::new(1, 5, 0)), &mut tickets);
@@ -285,8 +283,8 @@ mod player_tests {
             tickets.source_level(ChunkPos::new(1, 0), TicketTracker::Simulation),
             45
         );
-        manager.run_all_updates(&mut tickets);
-        assert_eq!(manager.simulation.level(ChunkPos::new(0, 0)), 21);
-        assert_eq!(manager.simulation.level(ChunkPos::new(1, 0)), 22);
+        manager.run_all_updates(&mut tickets, &mut simulation);
+        assert_eq!(simulation.level(ChunkPos::new(0, 0)), 21);
+        assert_eq!(simulation.level(ChunkPos::new(1, 0)), 22);
     }
 }

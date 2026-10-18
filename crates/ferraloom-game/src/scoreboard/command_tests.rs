@@ -137,6 +137,62 @@ fn vanilla_registered_commands_feedback_and_packet_bytes() {
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
+
+#[test]
+fn vanilla_team_entity_count_feedback_and_packet_bytes() {
+    #[derive(Deserialize)]
+    struct TeamCase {
+        command: String,
+        members: Vec<String>,
+        value: i32,
+        feedback: Vec<Value>,
+        packets: Vec<Value>,
+    }
+    let cases: Vec<TeamCase> = serde_json::from_str(include_str!(
+        "../../tests/java/scoreboard/team-feedback.json"
+    ))
+    .unwrap();
+    assert_eq!(cases.len(), 9);
+    let commands = commands::Commands::default();
+    let mut board = ServerScoreboard::default();
+    board.add_player_team("count");
+    board.add_player_team("other");
+    board.drain_packets();
+    for (index, case) in cases.into_iter().enumerate() {
+        let command = commands
+            .prepare(
+                &case.command,
+                CommandSourceStack::server(4, ferraloom_util::Vec3::ZERO),
+            )
+            .unwrap();
+        let members: Vec<_> = case
+            .members
+            .into_iter()
+            .map(|name| Holder {
+                display: (!name.starts_with('#'))
+                    .then(|| Component::literal("pre-mutation entity display")),
+                name,
+            })
+            .collect();
+        let result = commands::team::execute(&mut board, &command, &members)
+            .unwrap_or_else(|error| panic!("case {index}: {error}"));
+        assert_eq!(result.value, case.value, "case {index} result");
+        let feedback: Vec<_> = result
+            .feedback
+            .iter()
+            .map(|feedback| {
+                json!({
+                    "message": serde_json::from_str::<Value>(&feedback.message.to_json().unwrap()).unwrap(),
+                    "broadcast": feedback.broadcast,
+                })
+            })
+            .collect();
+        assert_eq!(feedback, case.feedback, "case {index} feedback");
+        let packets: Vec<_> = board.drain_packets().iter().map(packet_json).collect();
+        assert_eq!(packets, case.packets, "case {index} packets");
+    }
+}
+
 #[test]
 fn criterion_adapters_preserve_independent_stat_and_score_values() {
     use crate::{

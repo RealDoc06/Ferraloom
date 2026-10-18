@@ -350,11 +350,14 @@ pub fn promote(
     pos: ChunkPos,
     sections: Vec<ferraloom_chunk::LevelChunkSection>,
     disk: &SerializableChunkData,
+    structures: ferraloom_worldgen::structure::pipeline::ChunkStructures,
+    structures_revision: u64,
 ) -> Result<LevelChunk, crate::level::LevelError> {
     let mut chunk = LevelChunk::from_sections(pos, disk.y_pos.unwrap_or(-4), sections);
     chunk.set_inhabited_time(disk.inhabited_time.unwrap_or(0));
     chunk.load_saved_ticks(disk)?;
     chunk.load_pending_generation_data(disk)?;
+    chunk.set_structures(structures, structures_revision)?;
     chunk.mark_unsaved();
     Ok(chunk)
 }

@@ -1,4 +1,4 @@
-use super::{CraftingInput, Error, Ingredient, PlacementInfo, RecipeInput, Result, stack};
+use super::{CraftingInputAccess, Error, Ingredient, PlacementInfo, RecipeInput, Result, stack};
 use ferraloom_data::{Item, datapack::TagSet};
 use ferraloom_protocol::component::{
     ComponentTypeId, DataComponentPatch, FireworkShape, ItemStack, ItemStackTemplate, Persistent,
@@ -418,7 +418,7 @@ impl ShapedRecipePattern {
             symmetrical,
         }
     }
-    pub fn matches(&self, input: &CraftingInput) -> bool {
+    pub fn matches(&self, input: &dyn CraftingInputAccess) -> bool {
         if input.width() != self.width
             || input.height() != self.height
             || input.ingredient_count() != self.ingredients.iter().flatten().count()

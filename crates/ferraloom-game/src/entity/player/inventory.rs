@@ -301,34 +301,13 @@ impl Inventory {
         }
         self.set_selected_item(stack);
     }
-    fn add_resource(
-        &mut self,
-        slot: usize,
-        stack: &ItemStack,
-        equipment: &mut EntityEquipment,
-    ) -> i32 {
-        if self.get_item(slot, equipment).is_empty() {
-            self.set_item(slot, copy_with_count(stack, 0), equipment);
-        }
-        let target = self.get_item_mut(slot, equipment);
-        // The first grow sees the empty stack's effective default maximum (1).
-        let max = max_stack_size(target).min(99);
-        let old = count(target);
-        let added = count(stack).min(max - old);
-        if added == 0 {
-            return count(stack);
-        }
-        set_count(target, old.wrapping_add(added));
-        self.pop_times[slot] = 5;
-        count(stack) - added
-    }
     pub fn add(
         &mut self,
         stack: &mut ItemStack,
         equipment: &mut EntityEquipment,
         infinite_materials: bool,
     ) -> bool {
-        self.add_to_slot(None, stack, equipment, infinite_materials)
+        crate::inventory::add_inventory_value(self, equipment, stack, None, infinite_materials)
     }
     /// Port of Inventory#add, including its last-iteration return value when an
     /// inventory fills after accepting only part of the incoming stack.
@@ -339,42 +318,11 @@ impl Inventory {
         equipment: &mut EntityEquipment,
         infinite_materials: bool,
     ) -> bool {
-        if stack.is_empty() {
-            return false;
-        }
-        if is_damaged(stack) {
-            if let Some(slot) = slot.or_else(|| self.get_free_slot()) {
-                self.stack_generations
-                    .replace(slot, &mut self.items[slot], stack.clone());
-                set_count(stack, 0);
-                self.pop_times[slot] = 5;
-                return true;
-            }
-            if infinite_materials {
-                set_count(stack, 0);
-                return true;
-            }
-            return false;
-        }
-        let last_size = loop {
-            let previous = count(stack);
-            let target = slot
-                .or_else(|| self.get_slot_with_remaining_space(stack, equipment))
-                .or_else(|| self.get_free_slot());
-            if let Some(target) = target {
-                let remaining = self.add_resource(target, stack, equipment);
-                set_count(stack, remaining);
-            }
-            if stack.is_empty() || count(stack) >= previous {
-                break previous;
-            }
-        };
-        if count(stack) == last_size && infinite_materials {
-            set_count(stack, 0);
-            true
-        } else {
-            count(stack) < last_size
-        }
+        crate::inventory::add_inventory_value(self, equipment, stack, slot, infinite_materials)
+    }
+    /// Transient ItemStack#setPopTime used by the shared insertion kernel.
+    pub(crate) fn set_pop_time(&mut self, slot: usize, ticks: i32) {
+        self.pop_times[slot] = ticks;
     }
     pub fn place_item_back_in_inventory(
         &mut self,

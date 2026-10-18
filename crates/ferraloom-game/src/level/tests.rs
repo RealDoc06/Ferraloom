@@ -169,6 +169,35 @@ fn empty_chunk(pos: ChunkPos) -> chunk::LevelChunk {
         ),
     )
 }
+
+#[test]
+fn shared_loading_status_changes_are_visible_to_an_existing_chunk_reader() {
+    use distance_manager::FullChunkStatus;
+    let mut level = Level::new(Region::new(&EMPTY), LevelContext::fixture(0, 63));
+    let pos = ChunkPos::ZERO;
+    level.add_chunk(empty_chunk(pos)).unwrap();
+    let reader = &level;
+    let chunk = reader.chunk(pos).unwrap();
+    for (requested, ready) in [
+        (FullChunkStatus::Full, false),
+        (FullChunkStatus::EntityTicking, false),
+        (FullChunkStatus::EntityTicking, true),
+        (FullChunkStatus::Full, false),
+    ] {
+        reader
+            .set_chunk_loading_status(pos, requested, ready)
+            .unwrap();
+        assert_eq!(chunk.full_status(), requested);
+        assert_eq!(chunk.ticking_ready(), ready);
+        assert!(!chunk.is_unsaved());
+    }
+    let absent = ChunkPos::new(1, 0);
+    assert_eq!(
+        reader.set_chunk_loading_status(absent, FullChunkStatus::Full, false),
+        Err(LevelError::MissingChunk(absent))
+    );
+}
+
 fn empty_level(behaviors: &'static Behaviors) -> Level {
     let mut level = Level::new(
         Region::new(behaviors),

@@ -78,6 +78,27 @@ public final class TickVector {
             }
             vectors.add(vector);
         }
+        var report = new JsonObject();
+        var reportSource = mock(CommandSourceStack.class);
+        var reportServer = mock(MinecraftServer.class);
+        doReturn(reportSource).when(reportServer).createCommandSourceStack();
+        doReturn(mock(net.minecraft.server.players.PlayerList.class)).when(reportServer).getPlayerList();
+        doAnswer(invocation -> {
+            var message = ((Supplier<Component>)invocation.getArgument(0)).get();
+            report.addProperty("broadcast", (boolean)invocation.getArgument(1));
+            report.add("message", ComponentSerialization.CODEC.encodeStart(JsonOps.INSTANCE,message).getOrThrow());
+            report.addProperty("text",message.getString());
+            report.addProperty("template",net.minecraft.locale.Language.getInstance().getOrDefault("commands.tick.sprint.report"));
+            return null;
+        }).when(reportSource).sendSuccess(any(),anyBoolean());
+        var reportManager = new ServerTickRateManager(reportServer);
+        for (var entry : Map.of("scheduledCurrentSprintTicks",100L,"remainingSprintTicks",0L,"sprintTimeSpend",1000000000L).entrySet()) {
+            var field = ServerTickRateManager.class.getDeclaredField(entry.getKey());
+            field.setAccessible(true); field.setLong(reportManager,entry.getValue());
+        }
+        var finish = ServerTickRateManager.class.getDeclaredMethod("finishTickSprint");
+        finish.setAccessible(true); finish.invoke(reportManager);
+        Files.writeString(Path.of(args[0]).resolveSibling("tick-report-vector.json"),new GsonBuilder().setPrettyPrinting().create().toJson(report)+"\n");
         Files.writeString(Path.of(args[0]), new GsonBuilder().setPrettyPrinting().create().toJson(vectors)+"\n");
     }
 }

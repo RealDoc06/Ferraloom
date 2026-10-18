@@ -1,7 +1,10 @@
 //! Vanilla container storage, slot rules, click simulation and remote synchronization.
+mod add;
 mod block_containers;
+mod click;
 mod container;
 mod crafted;
+mod in_memory;
 pub use block_containers::{block_menu_still_valid, with_block_menu_context};
 mod crafting;
 mod crafting_runtime;
@@ -11,6 +14,8 @@ mod menu;
 mod menus;
 mod operation;
 mod operation_stacks;
+mod remainders;
+mod result_slot;
 mod server_player;
 mod slot;
 mod stack_runtime;
@@ -18,6 +23,14 @@ mod stacks;
 mod sync;
 mod transfer;
 
+pub(crate) use add::add_inventory_value;
+pub use add::{InventoryAddContext, add_inventory_stack, add_item_stack};
+pub use click::{
+    MenuClickContext, can_quick_replace_menu_item, click_menu, clicked_live_menu,
+    drop_carried_menu_item, pickup_all_menu_items, pickup_live_menu_item, pickup_menu_item,
+    quick_craft_menu_items, quick_move_container_menu_item, quick_move_live_container_menu_item,
+    safe_take_menu_item_stack, swap_menu_item, throw_menu_item, try_remove_menu_item_stack,
+};
 pub use container::*;
 pub use crafted::crafted_item_post_process;
 pub use crafting::*;
@@ -29,6 +42,10 @@ pub use menus::*;
 pub use operation::{
     MenuSynchronizationContext, broadcast_menu_changes, broadcast_menu_full_state,
     send_all_menu_data, set_menu_synchronizer,
+};
+pub use remainders::{CraftingRemainders, apply_crafting_remainders};
+pub use result_slot::{
+    CraftingResultContext, check_crafting_take_achievements, take_crafting_result_stack,
 };
 pub use server_player::*;
 pub use slot::*;
@@ -52,6 +69,7 @@ pub type Result<T> = std::result::Result<T, MenuError>;
 
 #[derive(Debug)]
 pub enum MenuError {
+    ConcurrentQuickCraftModification,
     MissingListenerCopy(ListenerCopyRef),
     MissingStack(StackRef),
     MissingMenu(MenuRef),
@@ -65,6 +83,9 @@ pub enum MenuError {
 impl std::fmt::Display for MenuError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::ConcurrentQuickCraftModification => {
+                write!(f, "quick-craft slots changed during iteration")
+            }
             Self::MissingListenerCopy(reference) => {
                 write!(f, "missing listener copy {reference:?}")
             }

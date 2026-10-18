@@ -1,6 +1,6 @@
 //! ServerPlayer gameplay state. Connections retain handles, never another player copy.
 mod drop_item;
-pub use drop_item::drop_item;
+pub use drop_item::{drop_item, drop_item_stack};
 mod contact;
 pub mod cooldowns;
 pub mod equipment;
