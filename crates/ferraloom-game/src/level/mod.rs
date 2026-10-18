@@ -223,7 +223,6 @@ impl Region {
 /// A parked facade must be reattached before resuming any game method.
 pub struct Level {
     shared: Option<Box<crate::ServerShared>>,
-    scoreboard: Arc<crate::scoreboard::Scoreboard>,
     region: Option<Region>,
     context: Arc<LevelContext>,
 }
@@ -233,32 +232,31 @@ impl Level {
         Self {
             shared: None,
             region: Some(region),
-            scoreboard: Arc::default(),
             context,
         }
     }
     /// The server installs this canonical owner before entering a gameplay phase.
     pub fn shared(&self) -> Result<&crate::ServerShared, LevelError> {
-        self.shared.as_deref().ok_or(LevelError::MissingServerShared)
+        self.shared
+            .as_deref()
+            .ok_or(LevelError::MissingServerShared)
     }
     pub fn shared_mut(&mut self) -> Result<&mut crate::ServerShared, LevelError> {
-        self.shared.as_deref_mut().ok_or(LevelError::MissingServerShared)
+        self.shared
+            .as_deref_mut()
+            .ok_or(LevelError::MissingServerShared)
     }
     /// Phase-boundary lending only. Replacing an active owner is a scheduler error.
     pub fn install_shared(&mut self, shared: Box<crate::ServerShared>) {
-        assert!(self.shared.is_none(), "server shared owner already installed");
+        assert!(
+            self.shared.is_none(),
+            "server shared owner already installed"
+        );
         self.shared = Some(shared);
     }
     /// Return the same owner after the phase and all nested callbacks finish.
     pub fn take_shared(&mut self) -> Result<Box<crate::ServerShared>, LevelError> {
         self.shared.take().ok_or(LevelError::MissingServerShared)
-    }
-    /// Read-only snapshot published by the canonical ServerScoreboard at the phase barrier.
-    pub fn scoreboard(&self) -> &crate::scoreboard::Scoreboard {
-        &self.scoreboard
-    }
-    pub fn set_scoreboard(&mut self, scoreboard: Arc<crate::scoreboard::Scoreboard>) {
-        self.scoreboard = scoreboard;
     }
     pub fn context(&self) -> &Arc<LevelContext> {
         &self.context

@@ -1,4 +1,4 @@
-//! Canonical vanilla scoreboard state. The server publishes immutable phase snapshots to Levels.
+//! Canonical vanilla scoreboard state, lent to Levels through the server-owned ServerShared.
 mod save;
 mod server;
 pub use server::ServerScoreboard;

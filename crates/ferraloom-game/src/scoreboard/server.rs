@@ -4,11 +4,11 @@ use ferraloom_protocol::{
     codec::VarInt,
     play::{ObjectiveOperation, TeamOperation, TeamParameters, clientbound as cb},
 };
-use std::{collections::HashSet, sync::Arc};
+use std::collections::HashSet;
 
 #[derive(Default, Debug)]
 pub struct ServerScoreboard {
-    data: Arc<Scoreboard>,
+    data: Scoreboard,
     tracked: HashSet<String>,
     packets: Vec<cb::Packet>,
 }
@@ -16,7 +16,7 @@ impl ServerScoreboard {
     pub fn new(data: Scoreboard) -> Self {
         let tracked = data.display_slots.iter().flatten().cloned().collect();
         Self {
-            data: Arc::new(data),
+            data,
             tracked,
             packets: Vec::new(),
         }
@@ -24,11 +24,8 @@ impl ServerScoreboard {
     pub fn scoreboard(&self) -> &Scoreboard {
         &self.data
     }
-    pub fn snapshot(&self) -> Arc<Scoreboard> {
-        Arc::clone(&self.data)
-    }
     pub(crate) fn scoreboard_mut(&mut self) -> &mut Scoreboard {
-        Arc::make_mut(&mut self.data)
+        &mut self.data
     }
     /// Drain broadcasts in mutation order, including mutations preceding a command failure.
     pub fn drain_packets(&mut self) -> Vec<cb::Packet> {
@@ -270,7 +267,7 @@ impl ServerScoreboard {
         }
     }
     /// Port of Scoreboard#forAllObjectives and ServerPlayer's criterion setters.
-    /// The entity owner publishes snapshot() after its synchronous update batch.
+    /// Mutations are immediately visible through Level::shared within the current phase.
     pub fn set_criterion_score(
         &mut self,
         holder: &str,

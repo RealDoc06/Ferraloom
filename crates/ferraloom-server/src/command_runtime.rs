@@ -101,7 +101,7 @@ impl MinecraftServer {
         let mut data = SavedData::new(self.game_rules.map().clone());
         let mut clocks = SavedData::new(self.clocks.states.clone());
         let mut scoreboard = SavedData::new(ferraloom_game::scoreboard::ScoreboardSaveData(
-            self.scoreboard.scoreboard().clone(),
+            self.shared().scoreboard.scoreboard().clone(),
         ));
         async move {
             tokio::task::spawn_blocking(move || {
@@ -590,7 +590,9 @@ impl MinecraftServer {
                 );
             }
         }
+        let lent = self.lend_server_shared();
         let result = self.execute_command_inner(source, text).await;
+        self.return_server_shared(lent);
         if let Some(connection) = source
             && let Some(c) = self.connections.get_mut(&connection)
         {

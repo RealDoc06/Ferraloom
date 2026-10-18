@@ -11,10 +11,7 @@ impl MinecraftServer {
     ) -> Result<CommandResult, ferraloom_brigadier::CommandSyntaxException> {
         let result = self.execute_scoreboard_command(command);
         // Failed operations may already have changed earlier targets, exactly as vanilla's synchronous loop.
-        self.level.level.set_scoreboard(self.scoreboard.snapshot());
-        for packet in self.scoreboard.drain_packets() {
-            self.broadcast(packet);
-        }
+        self.drain_scoreboard_packets();
         result
     }
     fn execute_scoreboard_command(
@@ -37,7 +34,7 @@ impl MinecraftServer {
                     .is_some_and(|verb| verb == "operation")
                 {
                     scoreboard::objective(
-                        self.scoreboard.scoreboard(),
+                        self.shared().scoreboard.scoreboard(),
                         command.string("targetObjective").unwrap(),
                         true,
                     )?;
@@ -47,13 +44,24 @@ impl MinecraftServer {
                 } else {
                     Vec::new()
                 };
-                scoreboard::execute(&mut self.scoreboard, command, &targets, &sources)
+                scoreboard::execute(
+                    &mut self.shared_mut().scoreboard,
+                    command,
+                    &targets,
+                    &sources,
+                )
             }
             "team" => {
                 // TeamArgument#getTeam precedes either the member selector or getEntityOrException.
                 if command.literals[1] == "join" {
                     let name = command.string("team").unwrap();
-                    if self.scoreboard.scoreboard().get_player_team(name).is_none() {
+                    if self
+                        .shared()
+                        .scoreboard
+                        .scoreboard()
+                        .get_player_team(name)
+                        .is_none()
+                    {
                         return Err(exceptions::error("team.notFound", &[name.to_owned()]));
                     }
                 }
@@ -67,7 +75,7 @@ impl MinecraftServer {
                     } else {
                         Vec::new()
                     };
-                team::execute(&mut self.scoreboard, command, &members)
+                team::execute(&mut self.shared_mut().scoreboard, command, &members)
             }
             "trigger" => {
                 let entity = command
@@ -77,7 +85,7 @@ impl MinecraftServer {
                 self.player(entity)
                     .map_err(|_| exceptions::error("permissions.requires.player", &[]))?;
                 let holder = self.score_holder(entity)?;
-                trigger::execute(&mut self.scoreboard, command, &holder)
+                trigger::execute(&mut self.shared_mut().scoreboard, command, &holder)
             }
             _ => unreachable!("scoreboard command root"),
         }
@@ -117,7 +125,8 @@ impl MinecraftServer {
             }
             ArgumentValue::String(name) if name == "*" => {
                 let holders: Vec<_> = if wildcard {
-                    self.scoreboard
+                    self.shared()
+                        .scoreboard
                         .scoreboard()
                         .tracked_players()
                         .map(Holder::for_name)

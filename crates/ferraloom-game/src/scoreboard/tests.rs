@@ -163,7 +163,7 @@ fn vanilla_saved_file_and_codec_defaults() {
     assert_eq!(count, 5);
 }
 #[test]
-fn entity_names_snapshots_and_score_lifecycle() {
+fn entity_names_and_score_lifecycle() {
     use ferraloom_util::uuid::Uuid;
     let uuid = Uuid::new(0, 1);
     let mut server = ServerScoreboard::default();
@@ -196,9 +196,7 @@ fn entity_names_snapshots_and_score_lifecycle() {
         false
     ));
     assert!(!entity_is_allied_to(board, "Doc", None, true));
-    let snapshot = server.snapshot();
     server.scoreboard_mut().remove_player_from_team("Doc");
-    assert!(snapshot.get_players_team("Doc").is_some());
     assert!(server.scoreboard().get_players_team("Doc").is_none());
     let board = server.scoreboard_mut();
     board.add_objective("points".into(), objective()).unwrap();
