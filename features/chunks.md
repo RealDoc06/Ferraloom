@@ -5,19 +5,19 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | ID | Feature | Vanilla source | Test | Vanilla | Ferraloom |
 |---|---|---|---|---|---|
 | chunks.pipeline.dependencies | Generate chunk statuses with their required neighbor status and radius dependencies | `ChunkPyramid; ChunkStep; ChunkGenerationTask` | | - | todo |
-| chunks.pipeline.loading | Distinguish loading an existing chunk from generating missing stages | `ChunkStatusTasks; GenerationChunkHolder` | | - | todo |
-| chunks.pipeline.light-full | Promote chunks through light and full states before exposing ticking access | `ChunkStatusTasks; ChunkMap` | | - | todo |
+| chunks.pipeline.loading | Distinguish loading an existing chunk from generating missing stages | `ChunkStatusTasks; GenerationChunkHolder` | `join::offline_client_joins_walks_chats_and_saves` | - | partial |
+| chunks.pipeline.light-full | Promote chunks through light and full states before exposing ticking access | `ChunkStatusTasks; ChunkMap` | `join::offline_client_joins_walks_chats_and_saves` | - | partial |
 | chunks.tickets.level-propagation | Propagate ticket distance levels and choose loaded, block-ticking and entity-ticking states | `DistanceManager; ChunkLevel` | | - | todo |
 | chunks.tickets.expiry | Expire timeout-based tickets before distance-manager updates | `TicketStorage#purgeStaleTickets; ServerChunkCache#tick` | | - | todo |
-| chunks.tickets.player-view | Update player view-distance tracking and pending chunk sends after movement | `ChunkMap#move; PlayerChunkSender` | | - | todo |
+| chunks.tickets.player-view | Update player view-distance tracking and pending chunk sends after movement | `ChunkMap#move; PlayerChunkSender` | `join::offline_client_joins_walks_chats_and_saves` | - | partial |
 | chunks.tickets.simulation-distance | Use simulation distance independently from view distance for entity and block ticking | `DistanceManager; ChunkMap` | | - | todo |
 | chunks.tickets.forced | Add and remove persistent forced-chunk tickets | `ServerLevel#setChunkForced; ForceLoadCommand` | | - | todo |
 | chunks.tickets.portal | Keep destination portal chunks loaded while portal travel completes | `PortalForcer; TicketType` | | - | todo |
 | chunks.tickets.ender-pearl | Maintain owner-linked ender pearl tickets across entity ticks and loading | `ThrownEnderpearl` | | - | todo |
 | chunks.unload.safe | Defer chunk unload until pending saves and work are safe to complete | `ChunkMap#processUnloads` | | - | todo |
 | chunks.unload.entities | Persist and unload entity sections as chunk tracking visibility changes | `PersistentEntitySectionManager` | | - | todo |
-| chunks.save.dirty | Save dirty chunks and avoid overwriting full chunks with protochunks | `ChunkMap#save` | | - | todo |
-| chunks.network.batch-feedback | Adapt chunk batch sending using client batch feedback and pending acknowledgements | `PlayerChunkSender` | | - | todo |
+| chunks.save.dirty | Save dirty chunks and avoid overwriting full chunks with protochunks | `ChunkMap#save` | `join::offline_client_joins_walks_chats_and_saves` | - | partial |
+| chunks.network.batch-feedback | Adapt chunk batch sending using client batch feedback and pending acknowledgements | `PlayerChunkSender` | `chunk_map::tests::batches_wait_for_acknowledgement` | - | partial |
 | chunks.network.block-light-updates | Batch changed blocks, sections and light data for chunk watchers | `ChunkHolder#broadcastChanges` | | - | todo |
 | chunks.tracking.entities | Track entity range, passengers, metadata, movement deltas and removal per player | `ChunkMap; ServerEntity#sendChanges` | | - | todo |
 | chunks.tracking.chunk-cache | Clear the immediate chunk lookup cache after chunk-source tick | `ServerChunkCache#clearCache` | | - | todo |
@@ -40,3 +40,5 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | chunks.ticket-type.portal | `minecraft:portal` (ticket type) | `net.minecraft.server.level.TicketType#register` | | - | todo |
 | chunks.ticket-type.spawn-search | `minecraft:spawn_search` (ticket type) | `net.minecraft.server.level.TicketType#register` | | - | todo |
 | chunks.ticket-type.unknown | `minecraft:unknown` (ticket type) | `net.minecraft.server.level.TicketType#register` | | - | todo |
+
+| chunks.runtime.batch-quota | Apply PlayerChunkSender quota and acknowledgement window; pending-set tie traversal awaits shared collections | `PlayerChunkSender#sendNextChunks; #onChunkBatchReceivedByClient` | `chunk_map::tests::batches_wait_for_acknowledgement` | - | partial |

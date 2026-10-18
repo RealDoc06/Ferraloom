@@ -13,6 +13,10 @@ use std::{
     sync::Arc,
 };
 
+pub mod flat;
+pub mod preset;
+pub use preset::{ChunkGenerator, LevelStem, WorldDimensions, WorldPreset};
+
 #[derive(Clone, Debug)]
 pub struct GenerationData {
     pub density: Arc<DensityRegistry>,

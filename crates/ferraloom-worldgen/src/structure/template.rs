@@ -1,4 +1,5 @@
 //! StructureTemplate's resource loading, palette order and coordinate geometry.
+mod placement;
 use super::BoundingBox;
 use crate::{Error, Identifier};
 use ferraloom_data::{
@@ -191,16 +192,37 @@ impl StructureTemplate {
         )
         .moved(position)
     }
+    /// Port of StructureTemplate#getZeroPositionWithTransform.
+    pub fn zero_position_with_transform(
+        &self,
+        zero: [i32; 3],
+        mirror: Mirror,
+        rotation: Rotation,
+    ) -> [i32; 3] {
+        let sx = self.size[0].wrapping_sub(1);
+        let sz = self.size[2].wrapping_sub(1);
+        let mx = if mirror == Mirror::FrontBack { sx } else { 0 };
+        let mz = if mirror == Mirror::LeftRight { sz } else { 0 };
+        let delta = match rotation {
+            Rotation::None => [mx, 0, mz],
+            Rotation::Clockwise90 => [sz.wrapping_sub(mz), 0, mx],
+            Rotation::Clockwise180 => [sx.wrapping_sub(mx), 0, sz.wrapping_sub(mz)],
+            Rotation::CounterClockwise90 => [mz, 0, sx.wrapping_sub(mx)],
+        };
+        std::array::from_fn(|i| zero[i].wrapping_add(delta[i]))
+    }
     pub fn random_palette<'a>(
         &'a self,
         settings: &mut StructurePlaceSettings,
         position: [i32; 3],
+        shared: &mut impl RandomSource,
     ) -> Result<&'a Palette, Error> {
         if self.palettes.is_empty() {
             return Err(Error("No palettes".into()));
         }
-        let index = settings.with_random(position, |r| r.next_int_bound(self.palettes.len() as i32))
-            as usize;
+        let index = settings.with_random(position, shared, |r| {
+            r.next_int_bound(self.palettes.len() as i32)
+        }) as usize;
         Ok(&self.palettes[index])
     }
 }
@@ -215,16 +237,27 @@ impl StructureTemplateManager {
         resources: &ResourceManager,
         ids: impl IntoIterator<Item = Identifier>,
     ) -> Result<Self, Error> {
-        let templates = ids
-            .into_iter()
-            .map(|id| {
-                Ok((
+        let mut templates = BTreeMap::new();
+        for id in ids {
+            let file = id.with_path(format!("structure/{}.nbt", id.path()))?;
+            if resources.get(&file).is_some() {
+                templates.insert(
                     id.clone(),
                     Arc::new(StructureTemplate::load(resources, &id)?),
-                ))
-            })
-            .collect::<Result<_, Error>>()?;
+                );
+            }
+        }
         Ok(Self { templates })
+    }
+    /// Port of StructureTemplateManager#getOrCreate for pool element queries.
+    /// Empty templates are immutable, so missing resources need no cache write.
+    pub fn get_or_create(&self, id: &Identifier) -> &StructureTemplate {
+        static EMPTY: StructureTemplate = StructureTemplate {
+            size: [0; 3],
+            palettes: Vec::new(),
+            entities: Vec::new(),
+        };
+        self.templates.get(id).map_or(&EMPTY, Arc::as_ref)
     }
     pub fn get(&self, id: &Identifier) -> Result<&StructureTemplate, Error> {
         self.templates
@@ -240,7 +273,7 @@ pub enum LiquidSettings {
     IgnoreWaterlogging,
 }
 /// Port of StructurePlaceSettings. Processors are supplied to processing as a
-/// borrowed list; settings and its optional RNG belong to one placement job.
+/// borrowed list; settings and its RNG policy belong to one placement job.
 #[derive(Clone, Debug, Default)]
 pub struct StructurePlaceSettings {
     pub mirror: Mirror,
@@ -249,19 +282,34 @@ pub struct StructurePlaceSettings {
     pub ignore_entities: bool,
     pub bounding_box: Option<BoundingBox>,
     pub liquid_settings: LiquidSettings,
-    pub random: Option<Random>,
+    pub random: PlacementRandom,
     pub known_shape: bool,
     pub finalize_entities: bool,
 }
+/// RandomSource selection for StructurePlaceSettings#getRandom. Shared uses
+/// the caller's placement RNG for palette, processors and block-entity loot.
+#[derive(Clone, Debug, Default)]
+pub enum PlacementRandom {
+    #[default]
+    Positional,
+    Fixed(Random),
+    Shared,
+}
 impl StructurePlaceSettings {
-    pub fn with_random<T>(&mut self, position: [i32; 3], f: impl FnOnce(&mut Random) -> T) -> T {
+    pub fn with_random<T>(
+        &mut self,
+        position: [i32; 3],
+        shared: &mut impl RandomSource,
+        f: impl FnOnce(&mut dyn RandomSource) -> T,
+    ) -> T {
         match &mut self.random {
-            Some(random) => f(random),
-            None => f(&mut Random::Legacy(LegacyRandomSource::new(mth::get_seed(
+            PlacementRandom::Fixed(random) => f(random),
+            PlacementRandom::Shared => f(shared),
+            PlacementRandom::Positional => f(&mut LegacyRandomSource::new(mth::get_seed(
                 position[0],
                 position[1],
                 position[2],
-            )))),
+            ))),
         }
     }
 }

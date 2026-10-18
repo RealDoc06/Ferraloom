@@ -27,6 +27,7 @@ import com.mojang.serialization.JsonOps;
 
 /** Authored scenarios run against vanilla; no decompiled sources or assets. */
 public final class StructureGolden {
+    static net.minecraft.server.packs.resources.ResourceManager RESOURCES;
     static final Gson JSON = new GsonBuilder().disableHtmlEscaping().create();
     static JsonArray ints(int... values) { var a=new JsonArray(); for(int v:values)a.add(v); return a; }
     static void write(Path path, JsonElement value) throws Exception {
@@ -61,10 +62,11 @@ public final class StructureGolden {
     static RegistryAccess.Frozen load() {
         var location=new PackLocationInfo("vanilla",Component.literal("vanilla"),PackSource.BUILT_IN,Optional.empty());
         var pack=new VanillaPackResourcesBuilder().pushJarResources().exposeNamespace("minecraft").build(location).fullResources();
-        var manager=new MultiPackResourceManager(PackType.SERVER_DATA,List.of(pack));
+        var manager=new MultiPackResourceManager(PackType.SERVER_DATA,List.of(pack));RESOURCES=manager;
         var builtins=RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
         TagLoader.loadTagsForExistingRegistries(manager,builtins).forEach(Registry.PendingTags::apply);
-        return RegistryDataLoader.load(manager,builtins.registries().<HolderLookup.RegistryLookup<?>>map(e -> e.value()).toList(),RegistryDataLoader.WORLD_REGISTRIES,Runnable::run).join();
+        var loaded=RegistryDataLoader.load(manager,builtins.registries().<HolderLookup.RegistryLookup<?>>map(e -> e.value()).toList(),RegistryDataLoader.WORLD_REGISTRIES,Runnable::run).join();
+        return new RegistryAccess.ImmutableRegistryAccess(java.util.stream.Stream.concat(builtins.registries(),loaded.registries())).freeze();
     }
     static void placements(RegistryAccess.Frozen registries,Path directory) throws Exception {
         var out=new JsonArray(); var sets=registries.lookupOrThrow(Registries.STRUCTURE_SET);
@@ -170,8 +172,153 @@ public final class StructureGolden {
         }
         write(directory.resolve("template_geometry.json.gz"),geometry);
     }
+    static void processors(RegistryAccess.Frozen registries,Path directory) throws Exception {
+        var out=new JsonObject();var cases=new JsonArray();
+        String[] definitions={
+            "{processor_type:'minecraft:nop'}",
+            "{processor_type:'minecraft:blackstone_replace'}",
+            "{processor_type:'minecraft:block_age',mossiness:0.43}",
+            "{processor_type:'minecraft:block_ignore',blocks:['minecraft:air','minecraft:stone']}",
+            "{processor_type:'minecraft:block_rot',integrity:0.51}",
+            "{processor_type:'minecraft:block_rot',integrity:0.1,rottable_blocks:['minecraft:stone','minecraft:oak_stairs']}",
+            "{processor_type:'minecraft:gravity',heightmap:'WORLD_SURFACE_WG',offset:-1}",
+            "{processor_type:'minecraft:jigsaw_replacement'}",
+            "{processor_type:'minecraft:lava_submerged_block'}",
+            "{processor_type:'minecraft:protected_blocks',value:['minecraft:lava']}",
+            "{processor_type:'minecraft:rule',rules:[{input_predicate:{predicate_type:'minecraft:random_block_match',block:'minecraft:stone',probability:0.5},location_predicate:{predicate_type:'minecraft:always_true'},output_state:'minecraft:gold_block',block_entity_modifier:{type:'minecraft:append_loot',loot_table:'minecraft:chests/simple_dungeon'}}]}",
+            "{processor_type:'minecraft:capped',limit:3,delegate:{processor_type:'minecraft:block_age',mossiness:0.5}}"
+        };
+        var ops=RegistryOps.create(JsonOps.INSTANCE,registries);var inputs=new ArrayList<net.minecraft.world.level.block.state.BlockState>();
+        for(var block:List.of(net.minecraft.world.level.block.Blocks.STONE,net.minecraft.world.level.block.Blocks.STONE_BRICKS,net.minecraft.world.level.block.Blocks.CHISELED_STONE_BRICKS,net.minecraft.world.level.block.Blocks.OBSIDIAN,net.minecraft.world.level.block.Blocks.OAK_STAIRS,net.minecraft.world.level.block.Blocks.STONE_BRICK_STAIRS,net.minecraft.world.level.block.Blocks.MOSSY_COBBLESTONE_WALL,net.minecraft.world.level.block.Blocks.STONE_SLAB,net.minecraft.world.level.block.Blocks.MOSSY_COBBLESTONE_SLAB,net.minecraft.world.level.block.Blocks.IRON_BARS,net.minecraft.world.level.block.Blocks.AIR,net.minecraft.world.level.block.Blocks.JIGSAW))inputs.addAll(block.getStateDefinition().getPossibleStates());
+        for(var definition:definitions)for(boolean lava:new boolean[]{false,true})for(boolean external:new boolean[]{false,true}) {
+            var value=JsonParser.parseString(definition);var processor=StructureProcessorType.SINGLE_CODEC.parse(ops,value).getOrThrow();var settings=new StructurePlaceSettings();var supplied=new LegacyRandomSource(12345);if(external)settings.setRandom(supplied);
+            var world=(net.minecraft.world.level.LevelReader)java.lang.reflect.Proxy.newProxyInstance(StructureGolden.class.getClassLoader(),new Class<?>[]{net.minecraft.world.level.LevelReader.class},(proxy,method,args)->switch(method.getName()) {
+                case "getBlockState" -> (lava?net.minecraft.world.level.block.Blocks.LAVA:net.minecraft.world.level.block.Blocks.AIR).defaultBlockState();
+                case "getHeight" -> 67;
+                case "holderLookup" -> BuiltInRegistries.BLOCK;
+                default -> throw new UnsupportedOperationException(method.toString());
+            });
+            var item=new JsonObject();item.add("definition",value);item.addProperty("lava",lava);item.addProperty("external",external);var samples=new JsonArray();
+            int i=0;
+            for(var state:inputs) {
+                int[] p={i%31-15,52+i%27,i%19-9};i++;var tag=new net.minecraft.nbt.CompoundTag();tag.putString("final_state","minecraft:oak_stairs[facing=east,half=top]");tag.putInt("marker",17);
+                var info=new StructureTemplate.StructureBlockInfo(new BlockPos(p[0],p[1],p[2]),state,tag);
+                var result=processor.processBlock(world,new BlockPos(7,64,7),new BlockPos(3,65,4),new BlockPos(1,2,3),info,settings);
+                var sample=new JsonObject();sample.addProperty("state",Block.BLOCK_STATE_REGISTRY.getId(state));sample.add("pos",ints(p));sample.addProperty("result",result==null?-1:Block.BLOCK_STATE_REGISTRY.getId(result.state()));
+                if(result!=null) {sample.add("result_pos",ints(result.pos().getX(),result.pos().getY(),result.pos().getZ()));if(result.nbt()!=null)sample.addProperty("nbt",result.nbt().toString());}
+                samples.add(sample);
+            }
+            item.add("samples",samples);item.addProperty("next",supplied.nextInt());cases.add(item);
+        }
+        out.add("blocks",cases);
+        var modifiers=new JsonArray();
+        for(String definition:List.of("{type:'minecraft:passthrough'}","{type:'minecraft:clear'}","{type:'minecraft:append_loot',loot_table:'minecraft:chests/simple_dungeon'}","{type:'minecraft:append_static',data:{nested:{a:7,b:'new'},numbers:[1,2,3],large:123456,short:600,decimal:0.25}}"))for(boolean existing:new boolean[]{false,true}) {
+            var value=JsonParser.parseString(definition);var modifier=net.minecraft.world.level.levelgen.structure.templatesystem.rule.blockentity.RuleBlockEntityModifier.CODEC.parse(ops,value).getOrThrow();
+            var tag=existing?net.minecraft.nbt.TagParser.parseCompoundFully("{nested:{a:3,c:9},old:1}"):null;var random=new LegacyRandomSource(99);var result=modifier.apply(random,tag);var item=new JsonObject();item.add("definition",value);item.addProperty("existing",existing);if(result!=null)item.addProperty("result",result.toString());item.addProperty("next",random.nextInt());modifiers.add(item);
+        }
+        out.add("modifiers",modifiers);write(directory.resolve("processors.json.gz"),out);
+        // Exactly the classification used by template liquid preservation:
+        // non-source LiquidBlockContainers all have WATERLOGGED, and vice versa.
+        for(var state:Block.BLOCK_STATE_REGISTRY)if(!state.getFluidState().isSource()) {
+            boolean container=state.getBlock() instanceof net.minecraft.world.level.block.LiquidBlockContainer;
+            boolean property=state.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.WATERLOGGED);
+            if(container!=property)throw new IllegalStateException("LiquidBlockContainer classification: "+state);
+        }
+    }
+    static net.minecraft.nbt.ListTag nbtInts(int... values) {var list=new net.minecraft.nbt.ListTag();for(int v:values)list.add(net.minecraft.nbt.IntTag.valueOf(v));return list;}
+    static void placedTemplates(Path directory) throws Exception {
+        var tag=new net.minecraft.nbt.CompoundTag();tag.putInt("DataVersion",5023);tag.put("size",nbtInts(4,3,3));
+        var palettes=new net.minecraft.nbt.ListTag();
+        for(boolean variant:new boolean[]{false,true}) {
+            var palette=new net.minecraft.nbt.ListTag();
+            for(var state:List.of(net.minecraft.world.level.block.Blocks.STONE.defaultBlockState(),net.minecraft.world.level.block.Blocks.OAK_STAIRS.defaultBlockState(),net.minecraft.world.level.block.Blocks.STONE_BRICK_SLAB.defaultBlockState(),net.minecraft.world.level.block.Blocks.OAK_LOG.defaultBlockState(),net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(),variant?net.minecraft.world.level.block.Blocks.MOSSY_COBBLESTONE.defaultBlockState():net.minecraft.world.level.block.Blocks.STONE_BRICKS.defaultBlockState()))palette.add(net.minecraft.nbt.NbtUtils.writeBlockState(state));
+            palettes.add(palette);
+        }
+        tag.put("palettes",palettes);var blocks=new net.minecraft.nbt.ListTag();
+        for(int x=0;x<4;x++)for(int y=0;y<3;y++)for(int z=0;z<3;z++) {var block=new net.minecraft.nbt.CompoundTag();block.put("pos",nbtInts(x,y,z));block.putInt("state",(x*3+y+z)%6);blocks.add(block);}
+        tag.put("blocks",blocks);var template=new StructureTemplate();template.load(BuiltInRegistries.BLOCK,tag);var out=new JsonArray();
+        for(var mirror:net.minecraft.world.level.block.Mirror.values())for(var rotation:net.minecraft.world.level.block.Rotation.values())for(boolean external:new boolean[]{false,true})for(boolean shared:new boolean[]{false,true}) {
+            var settings=new StructurePlaceSettings().setMirror(mirror).setRotation(rotation).setRotationPivot(new BlockPos(1,0,-2)).setBoundingBox(new BoundingBox(2,63,2,13,69,13)).setKnownShape(true).setIgnoreEntities(true).setLiquidSettings(LiquidSettings.IGNORE_WATERLOGGING).addProcessor(new BlockIgnoreProcessor(List.of(net.minecraft.world.level.block.Blocks.AIR))).addProcessor(BlackstoneReplaceProcessor.INSTANCE).addProcessor(new BlockRotProcessor(0.8f));
+            var supplied=new LegacyRandomSource(91);if(external)settings.setRandom(supplied);var placed=new TreeMap<BlockPos,net.minecraft.world.level.block.state.BlockState>(Comparator.comparingInt((BlockPos p)->p.getX()).thenComparingInt(p->p.getY()).thenComparingInt(p->p.getZ()));
+            var world=(net.minecraft.world.level.WorldGenLevel)java.lang.reflect.Proxy.newProxyInstance(StructureGolden.class.getClassLoader(),new Class<?>[]{net.minecraft.world.level.WorldGenLevel.class},(proxy,method,args)->switch(method.getName()) {
+                case "setBlock" -> {placed.put(((BlockPos)args[0]).immutable(),(net.minecraft.world.level.block.state.BlockState)args[1]);yield true;}
+                default -> throw new UnsupportedOperationException(method.toString());
+            });
+            var random=new WorldgenRandom(new XoroshiroRandomSource(17));if(shared)settings.setRandom(random);boolean result=template.placeInWorld(world,new BlockPos(7,64,7),new BlockPos(3,65,4),settings,random,18);
+            var item=new JsonObject();item.addProperty("mirror",mirror.ordinal());item.addProperty("rotation",rotation.ordinal());item.addProperty("external",external);item.addProperty("shared",shared);item.addProperty("result",result);item.addProperty("settings_next",supplied.nextInt());item.addProperty("next",random.nextInt());var values=new JsonArray();for(var e:placed.entrySet())values.add(ints(e.getKey().getX(),e.getKey().getY(),e.getKey().getZ(),Block.BLOCK_STATE_REGISTRY.getId(e.getValue())));item.add("blocks",values);out.add(item);
+        }
+        write(directory.resolve("placed_templates.json.gz"),out);
+    }
+    static String elementName(StructurePoolElement element) {
+        if(element instanceof EmptyPoolElement)return "empty";
+        if(element instanceof ListPoolElement list)return "["+list.getElements().stream().map(StructureGolden::elementName).collect(java.util.stream.Collectors.joining(","))+"]";
+        if(element instanceof SinglePoolElement single)return (element instanceof LegacySinglePoolElement?"legacy:":"single:")+single.getTemplateLocation();
+        return "feature";
+    }
+    static void poolsAndAliases(RegistryAccess.Frozen registries,Path directory) throws Exception {
+        var out=new JsonArray();var pools=registries.lookupOrThrow(Registries.TEMPLATE_POOL);
+        for(var entry:pools.listElements().sorted(Comparator.comparing(h->h.key().identifier())).toList())for(long seed:new long[]{0,-1,8675309}) {
+            var item=new JsonObject();item.addProperty("pool",entry.key().identifier().toString());item.addProperty("seed",seed);var random=new LegacyRandomSource(seed);var samples=new JsonArray();
+            for(int i=0;i<32;i++)samples.add(elementName(entry.value().getRandomTemplate(random)));item.add("samples",samples);
+            var shuffled=new JsonArray();for(var e:entry.value().getShuffledTemplates(random))shuffled.add(elementName(e));item.add("shuffled",shuffled);item.addProperty("next",random.nextInt());out.add(item);
+        }
+        write(directory.resolve("pools.json.gz"),out);
+        var aliases=new JsonArray();var ops=RegistryOps.create(JsonOps.INSTANCE,registries);
+        var bindings=JsonParser.parseString("[{type:'minecraft:direct',alias:'test:a',target:'test:b'},{type:'minecraft:random',alias:'test:c',targets:[{data:'test:d',weight:3},{data:'test:e',weight:0},{data:'test:f',weight:8}]},{type:'minecraft:random_group',groups:[{weight:1,data:[{type:'minecraft:direct',alias:'test:g',target:'test:h'},{type:'minecraft:random',alias:'test:i',targets:[{data:'test:j',weight:1},{data:'test:k',weight:1}]}]},{weight:7,data:[{type:'minecraft:direct',alias:'test:g',target:'test:l'}]}]}]");
+        var decoded=net.minecraft.world.level.levelgen.structure.pools.alias.PoolAliasBinding.CODEC.listOf().parse(ops,bindings).getOrThrow();
+        for(long seed:new long[]{0,-1,8675309,Long.MIN_VALUE,Long.MAX_VALUE})for(int[] p:new int[][]{{0,64,0},{-17,-63,31},{123456,93,-54321}}) {
+            var lookup=net.minecraft.world.level.levelgen.structure.pools.alias.PoolAliasLookup.create(decoded,new BlockPos(p[0],p[1],p[2]),seed);var item=new JsonObject();item.addProperty("seed",seed);item.add("pos",ints(p));item.add("bindings",bindings);var values=new JsonObject();
+            for(String name:List.of("a","b","c","g","i","missing")) {var key=ResourceKey.create(Registries.TEMPLATE_POOL,Identifier.parse("test:"+name));values.addProperty("test:"+name,lookup.lookup(key).identifier().toString());}item.add("values",values);aliases.add(item);
+        }
+        write(directory.resolve("aliases.json.gz"),aliases);
+    }
+    static JsonArray bounds(BoundingBox b) {return ints(b.minX(),b.minY(),b.minZ(),b.maxX(),b.maxY(),b.maxZ());}
+    static void jigsaw(RegistryAccess.Frozen registries,Path directory) throws Exception {
+        var out=new JsonArray();var biomes=registries.lookupOrThrow(Registries.BIOME);var source=new FixedBiomeSource(biomes.getOrThrow(Biomes.PLAINS));
+        var structures=registries.lookupOrThrow(Registries.STRUCTURE);var accessor=net.minecraft.world.level.LevelHeightAccessor.create(-64,384);
+        var settings=registries.lookupOrThrow(Registries.NOISE_SETTINGS).getOrThrow(NoiseGeneratorSettings.OVERWORLD);
+        var flat=new FlatLevelSource(net.minecraft.world.level.levelgen.flat.FlatLevelGeneratorSettings.getDefault(biomes,registries.lookupOrThrow(Registries.STRUCTURE_SET),registries.lookupOrThrow(Registries.PLACED_FEATURE)));
+        var noise=new NoiseBasedChunkGenerator(source,settings);
+        try(var storage=net.minecraft.world.level.storage.LevelStorageSource.createDefault(Path.of("structures-world")).createAccess("test")) {
+            var templates=new StructureTemplateManager(RESOURCES,storage,net.minecraft.util.datafix.DataFixers.getDataFixer(),BuiltInRegistries.BLOCK);
+            for(String terrain:List.of("flat","noise"))for(long seed:new long[]{0,-1,8675309})for(int[] chunk:new int[][]{{0,0},{-7,11}}) {
+                var state=RandomState.create(registries.lookupOrThrow(Registries.NOISE),seed,settings.value());var generator=terrain.equals("flat")?flat:noise;
+                for(var entry:structures.listElements().sorted(Comparator.comparing(h->h.key().identifier())).toList())if(entry.value() instanceof net.minecraft.world.level.levelgen.structure.structures.JigsawStructure structure) {
+                    var context=new Structure.GenerationContext(registries,generator,source,state.createClimateSampler(SamplerContext.builder().enableCaches().build()),state,templates,seed,new ChunkPos(chunk[0],chunk[1]),accessor,b->true);
+                    var stub=structure.findGenerationPoint(context);var item=new JsonObject();item.addProperty("structure",entry.key().identifier().toString());item.addProperty("terrain",terrain);item.addProperty("seed",seed);item.add("chunk",ints(chunk));var pieces=new JsonArray();
+                    if(stub.isPresent()) {
+                        var p=stub.get().position();item.add("position",ints(p.getX(),p.getY(),p.getZ()));
+                        for(var piece:stub.get().getPiecesBuilder().build().pieces()) {
+                            var poolPiece=(PoolElementStructurePiece)piece;var value=new JsonObject();value.addProperty("element",elementName(poolPiece.getElement()));value.add("bounds",bounds(piece.getBoundingBox()));var pos=poolPiece.getPosition();value.add("position",ints(pos.getX(),pos.getY(),pos.getZ()));value.addProperty("rotation",poolPiece.getRotation().ordinal());value.addProperty("ground",poolPiece.getGroundLevelDelta());
+                            var junctions=new JsonArray();for(var junction:poolPiece.getJunctions()) {var j=new JsonObject();j.add("source",ints(junction.getSourceX(),junction.getSourceGroundY(),junction.getSourceZ()));j.addProperty("delta_y",junction.getDeltaY());j.addProperty("projection",junction.getDestProjection().getName());junctions.add(j);}value.add("junctions",junctions);pieces.add(value);
+                        }
+                    }
+                    item.add("pieces",pieces);out.add(item);
+                }
+            }
+        }
+        write(directory.resolve("jigsaw.json.gz"),out);
+    }
+    static void replacements(RegistryAccess.Frozen registries, Path directory) throws Exception {
+        var out=new JsonArray();
+        for(var text:List.of("stone","minecraft:stone junk","stone[ ]","stone []","stone{} trailing","stone{a:[1,2]}","stone{a:"," stone","#minecraft:logs","oak_stairs[facing=east]","oak_stairs[ facing = 'east' , half = top ]","oak_stairs[\"facing\"=\"west\"]","oak_stairs[facing=north,]","oak_stairs[facing=north, ]","oak_stairs[facing=north,facing=east]","oak_stairs[facing=up]","stone[missing=true]","oak_stairs[facing=north]extra","oak_stairs[facing=north]{a:1}x","STONE","stone!","stone/unknown","structure_void","oak_stairs[half=top,waterlogged=true]","oak_stairs[facing=north")) {
+            var item=new JsonObject();item.addProperty("input",text);
+            try { var result=net.minecraft.commands.arguments.blocks.BlockStateParser.parseForBlock(registries.lookupOrThrow(Registries.BLOCK),text,true);item.addProperty("state",Block.getId(result.blockState())); } catch(com.mojang.brigadier.exceptions.CommandSyntaxException e) {item.add("state",JsonNull.INSTANCE);}
+            out.add(item);
+        }
+        write(directory.resolve("replacements.json.gz"),out);
+    }
+    static void decoration(RegistryAccess.Frozen registries, Path directory) throws Exception {
+        var out=new JsonArray();var registry=registries.lookupOrThrow(Registries.STRUCTURE);
+        for(long seed:new long[]{0,-1,8675309})for(var step:GenerationStep.Decoration.values()) {
+            var entries=registry.listElements().filter(h->h.value().step()==step).toList();var item=new JsonObject();item.addProperty("seed",seed);item.addProperty("step",step.ordinal());var ids=new JsonArray();for(var e:entries)ids.add(e.key().identifier().toString());item.add("ids",ids);var next=new JsonArray();
+            for(int prefix=0;prefix<=entries.size();prefix++) {var random=new WorldgenRandom(new net.minecraft.world.level.levelgen.XoroshiroRandomSource(17));long decorationSeed=random.setDecorationSeed(seed,-112,176);for(int index=0;index<prefix;index++)random.setFeatureSeed(decorationSeed,index,step.ordinal());next.add(random.nextInt());}
+            item.add("next",next);out.add(item);
+        }
+        write(directory.resolve("decoration.json.gz"),out);
+    }
     public static void main(String[] args) throws Exception {
         SharedConstants.tryDetectVersion(); Bootstrap.bootStrap();
-        var directory=Path.of(args[0]);Files.createDirectories(directory);var registries=load();beardifier(directory);placements(registries,directory);rules(registries,directory);templates(directory);
+        var directory=Path.of(args[0]);Files.createDirectories(directory);var registries=load();beardifier(directory);placements(registries,directory);rules(registries,directory);templates(directory);processors(registries,directory);placedTemplates(directory);poolsAndAliases(registries,directory);jigsaw(registries,directory);replacements(registries,directory);decoration(registries,directory);
     }
 }

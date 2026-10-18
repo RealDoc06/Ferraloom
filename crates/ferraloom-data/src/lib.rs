@@ -218,7 +218,7 @@ pub struct SoundType {
     pub fall_sound: registries::sound_event::Id,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct FluidState {
     pub fluid_type: registries::fluid::Id,
     pub amount: u8,
@@ -418,6 +418,13 @@ impl BlockState {
             Some(bits & (1 << 9) != 0)
         }
     }
+    /// Port of BlockStateBase#getCollisionShape(BlockGetter, BlockPos): cached
+    /// states use Cache.collisionShape, initialized with EmptyBlockGetter at ZERO.
+    /// Dynamic shapes still need the level. Reuses the extracted collision shape.
+    pub fn cached_collision_empty(self) -> Option<bool> {
+        self.cached_collision_full_block()
+            .map(|_| self.data().collision.boxes().is_empty())
+    }
     /// Vanilla's registered PostProcess callbacks are null, self, and above.
     pub const fn post_process_y_offset(self) -> Option<i32> {
         match BLOCK_STATE_FACTS[self.0 as usize] >> 10 {
@@ -425,5 +432,25 @@ impl BlockState {
             2 => Some(1),
             _ => None,
         }
+    }
+}
+
+impl Block {
+    /// Concrete vanilla Java class, extracted from the registered block object.
+    pub const fn class(self) -> BlockClass {
+        BLOCK_CLASSES[self.protocol_id() as usize]
+    }
+
+    /// Java instanceof, including transitive superclasses and interfaces.
+    pub const fn is_instance_of(self, class: BlockClass) -> bool {
+        let index = class as usize;
+        BLOCK_CLASS_INSTANCES[self.class() as usize][index / 64] & (1u64 << (index % 64)) != 0
+    }
+}
+
+impl BlockState {
+    /// Port of BlockBehaviour.BlockStateBase#isAir (cached from Properties).
+    pub const fn is_air(self) -> bool {
+        STATE_IS_AIR[self.id() as usize]
     }
 }

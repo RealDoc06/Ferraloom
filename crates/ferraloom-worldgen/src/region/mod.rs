@@ -120,34 +120,6 @@ impl RegionChunk {
 /// Context-dependent block behavior is supplied by the game adapter. Baseline
 /// extracted collision shapes cannot answer survival or neighbor shape queries.
 pub trait WorldgenBlockBehavior: Sync {
-    // --- tree family ---
-    fn populate_worldgen_beehive(
-        &self,
-        _region: &mut WorldGenRegion<'_>,
-        _p: [i32; 3],
-        _random: &mut ferraloom_util::random::WorldgenRandom,
-    ) -> Result<(), Error> {
-        Err(Error("Unsupported: populate_worldgen_beehive".into()))
-    }
-    fn state_has_sturdy_face(
-        &self,
-        _region: &WorldGenRegion<'_>,
-        _state: BlockState,
-        _query_position: [i32; 3],
-        _face: ferraloom_util::Direction,
-    ) -> Result<bool, Error> {
-        Err(Error("Unsupported: state_has_sturdy_face".into()))
-    }
-    // --- end tree family ---
-
-    fn destroy_block(
-        &self,
-        _region: &mut WorldGenRegion<'_>,
-        _p: [i32; 3],
-        _drop: bool,
-    ) -> Result<bool, Error> {
-        Err(Error("Unsupported: destroy_block".into()))
-    }
     // --- ore and cave family ---
     fn multiface_state_for_placement(
         &self,
@@ -213,6 +185,26 @@ pub trait WorldgenBlockBehavior: Sync {
         Err(Error("Unsupported: SpawnerBlockEntity#setEntityId".into()))
     }
     // --- end ore and cave family ---
+    // --- tree family ---
+    fn populate_worldgen_beehive(
+        &self,
+        _region: &mut WorldGenRegion<'_>,
+        _p: [i32; 3],
+        _random: &mut ferraloom_util::random::WorldgenRandom,
+    ) -> Result<(), Error> {
+        Err(Error("Unsupported: populate_worldgen_beehive".into()))
+    }
+    fn state_has_sturdy_face(
+        &self,
+        _region: &WorldGenRegion<'_>,
+        _state: BlockState,
+        _query_position: [i32; 3],
+        _face: ferraloom_util::Direction,
+    ) -> Result<bool, Error> {
+        Err(Error("Unsupported: state_has_sturdy_face".into()))
+    }
+    // --- end tree family ---
+
     fn place_liquid(
         &self,
         _region: &mut WorldGenRegion<'_>,
@@ -239,14 +231,6 @@ pub trait WorldgenBlockBehavior: Sync {
     ) -> Result<BlockState, Error> {
         Err(Error("Unsupported: update_from_neighbor_shapes".into()))
     }
-    fn update_neighbors_at(
-        &self,
-        _region: &mut WorldGenRegion<'_>,
-        _p: [i32; 3],
-        _block: Block,
-    ) -> Result<(), Error> {
-        Err(Error("Unsupported: update_neighbors_at".into()))
-    }
     fn load_block_entity(
         &self,
         _region: &mut WorldGenRegion<'_>,
@@ -266,6 +250,51 @@ pub trait WorldgenBlockBehavior: Sync {
     ) -> Result<bool, Error> {
         Err(Error("Unsupported: finalize_template_entity".into()))
     }
+
+    // --- nether, end and misc family ---
+    /// Delegates ChorusFlowerBlock#generatePlant, including connected shapes.
+    fn generate_chorus_plant(
+        &self,
+        _region: &mut WorldGenRegion<'_>,
+        _p: [i32; 3],
+        _random: &mut ferraloom_util::random::WorldgenRandom,
+        _radius: i32,
+    ) -> Result<(), Error> {
+        Err(Error("Unsupported: ChorusFlowerBlock.generatePlant".into()))
+    }
+    fn configure_end_gateway(
+        &self,
+        _region: &mut WorldGenRegion<'_>,
+        _p: [i32; 3],
+        _exit: [i32; 3],
+        _exact: bool,
+    ) -> Result<(), Error> {
+        Err(Error(
+            "Unsupported: TheEndGatewayBlockEntity.setExitPosition".into(),
+        ))
+    }
+    fn is_collision_empty(
+        &self,
+        _region: &WorldGenRegion<'_>,
+        _p: [i32; 3],
+    ) -> Result<bool, Error> {
+        Err(Error("Unsupported: BlockState.getCollisionShape".into()))
+    }
+    /// Creates and inserts EndCrystal, draws its yaw only after successful
+    /// creation, then places bedrock and FireBlock#getState at its feet.
+    fn create_end_spike_crystal(
+        &self,
+        _region: &mut WorldGenRegion<'_>,
+        _p: [i32; 3],
+        _beam: Option<[i32; 3]>,
+        _invulnerable: bool,
+        _random: &mut ferraloom_util::random::WorldgenRandom,
+    ) -> Result<(), Error> {
+        Err(Error(
+            "Unsupported: EndCrystal creation and FireBlock.getState".into(),
+        ))
+    }
+    // --- end nether, end and misc family ---
 
     fn has_block_entity(&self, state: BlockState) -> bool {
         state.has_block_entity()
@@ -311,14 +340,6 @@ pub trait WorldgenBlockBehavior: Sync {
         _position: [i32; 3],
     ) -> Result<bool, Error> {
         Err(Error("block survival behavior is unavailable".into()))
-    }
-    fn is_unobstructed(
-        &self,
-        _state: BlockState,
-        _region: &WorldGenRegion<'_>,
-        _position: [i32; 3],
-    ) -> Result<bool, Error> {
-        Err(Error("block collision behavior is unavailable".into()))
     }
 }
 
@@ -683,8 +704,13 @@ impl<'a> WorldGenRegion<'a> {
         self.chunks[index].fluid_ticks.schedule(tick);
         Ok(())
     }
-    pub fn destroy_block(&mut self, p: [i32; 3], drop: bool) -> Result<bool, Error> {
-        self.behavior.destroy_block(self, p, drop)
+    /// Port of WorldGenRegion#destroyBlock. Generation ignores drops and the
+    /// breaker; only an existing non-air state triggers the normal region write.
+    pub fn destroy_block(&mut self, p: [i32; 3], _drop: bool) -> Result<bool, Error> {
+        if self.block(p)?.is_air() {
+            return Ok(false);
+        }
+        self.set_block(p, Block::AIR.default_state(), 3)
     }
     pub fn place_liquid(&mut self, p: [i32; 3], fluid: FluidState) -> Result<bool, Error> {
         self.behavior.place_liquid(self, p, fluid)
@@ -696,6 +722,13 @@ impl<'a> WorldGenRegion<'a> {
         neighbor_p: [i32; 3],
         neighbor_state: BlockState,
     ) -> Result<BlockState, Error> {
+        let state = self.block(p)?;
+        if !state
+            .block()
+            .overrides(ferraloom_data::BlockMethod::UpdateShape)
+        {
+            return Ok(state);
+        }
         self.behavior
             .update_shape(self, p, direction, neighbor_p, neighbor_state)
     }
@@ -704,10 +737,19 @@ impl<'a> WorldGenRegion<'a> {
         p: [i32; 3],
         state: BlockState,
     ) -> Result<BlockState, Error> {
+        // Block#updateFromNeighbourShapes applies updateShape in each direction.
+        // The base implementation is identity and consumes no random values.
+        if !state
+            .block()
+            .overrides(ferraloom_data::BlockMethod::UpdateShape)
+        {
+            return Ok(state);
+        }
         self.behavior.update_from_neighbor_shapes(self, p, state)
     }
-    pub fn update_neighbors_at(&mut self, p: [i32; 3], block: Block) -> Result<(), Error> {
-        self.behavior.update_neighbors_at(self, p, block)
+    /// WorldGenRegion inherits LevelAccessor's empty updateNeighborsAt.
+    pub fn update_neighbors_at(&mut self, _p: [i32; 3], _block: Block) -> Result<(), Error> {
+        Ok(())
     }
     pub fn load_block_entity(
         &mut self,
@@ -751,9 +793,51 @@ impl<'a> WorldGenRegion<'a> {
         }
     }
     pub fn can_survive(&self, state: BlockState, p: [i32; 3]) -> Result<bool, Error> {
+        if !state
+            .block()
+            .overrides(ferraloom_data::BlockMethod::CanSurvive)
+        {
+            return Ok(true);
+        }
         self.behavior.can_survive(state, self, p)
     }
-    pub fn is_unobstructed(&self, state: BlockState, p: [i32; 3]) -> Result<bool, Error> {
-        self.behavior.is_unobstructed(state, self, p)
+    /// EntityGetter#isUnobstructed always succeeds: WorldGenRegion#getEntities
+    /// returns an empty list, including for shapes spanning other chunks.
+    pub fn is_unobstructed(&self, _state: BlockState, _p: [i32; 3]) -> Result<bool, Error> {
+        Ok(true)
     }
+    // --- nether, end and misc family ---
+    pub fn generate_chorus_plant(
+        &mut self,
+        p: [i32; 3],
+        random: &mut ferraloom_util::random::WorldgenRandom,
+        radius: i32,
+    ) -> Result<(), Error> {
+        self.behavior.generate_chorus_plant(self, p, random, radius)
+    }
+    pub fn configure_end_gateway(
+        &mut self,
+        p: [i32; 3],
+        exit: [i32; 3],
+        exact: bool,
+    ) -> Result<(), Error> {
+        self.behavior.configure_end_gateway(self, p, exit, exact)
+    }
+    pub fn is_collision_empty(&self, p: [i32; 3]) -> Result<bool, Error> {
+        match self.block(p)?.cached_collision_empty() {
+            Some(empty) => Ok(empty),
+            None => self.behavior.is_collision_empty(self, p),
+        }
+    }
+    pub fn create_end_spike_crystal(
+        &mut self,
+        p: [i32; 3],
+        beam: Option<[i32; 3]>,
+        invulnerable: bool,
+        random: &mut ferraloom_util::random::WorldgenRandom,
+    ) -> Result<(), Error> {
+        self.behavior
+            .create_end_spike_crystal(self, p, beam, invulnerable, random)
+    }
+    // --- end nether, end and misc family ---
 }

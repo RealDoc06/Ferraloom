@@ -16,6 +16,9 @@ use std::{
     sync::Arc,
 };
 
+pub mod end;
+pub mod misc;
+pub mod nether;
 pub mod state_provider;
 pub mod tree;
 
@@ -96,6 +99,9 @@ impl<'a> FeatureLoader<'a> {
         };
         loader.register("no_op".parse()?, |_, _| Ok(Arc::new(NoOpFeature)))?;
         tree::register(&mut loader)?;
+        nether::register(&mut loader)?;
+        end::register(&mut loader)?;
+        misc::register(&mut loader)?;
         Ok(loader)
     }
     pub fn register(&mut self, kind: Identifier, factory: FeatureFactory) -> Result<(), Error> {
@@ -271,6 +277,9 @@ impl<'a> FeatureLoader<'a> {
     }
     pub fn finish(self) -> FeatureRegistry {
         self.registry
+    }
+    pub fn registry(&self) -> &FeatureRegistry {
+        &self.registry
     }
 }
 #[derive(Debug)]
