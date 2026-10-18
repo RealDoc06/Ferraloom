@@ -709,6 +709,24 @@ impl World {
         rules.fast_lava = self.dimension.fast_lava;
         rules.can_have_weather = self.dimension.has_skylight && !self.dimension.has_ceiling;
     }
+    /// Attach immutable dimension layers after the sole server clock manager
+    /// loads. Callers publish its actual snapshot; no local day counter exists.
+    pub fn install_live_environment(
+        &self,
+        level: &mut Level,
+        clocks: ferraloom_worldgen::environment::ClockSnapshot,
+    ) -> Result<()> {
+        let stem = self.dimensions.overworld();
+        level
+            .set_environment_attributes(
+                self.dimensions.environment.clone(),
+                &stem.environment,
+                stem.name.clone(),
+                &self.generator.data().biome_names,
+                clocks,
+            )
+            .map_err(|error| anyhow::anyhow!("{error:?}"))
+    }
     /// Capture level-owned inputs before constructing the IO future. Canonical
     /// simulation state is Send, and its single-owner lazy caches need not be Sync.
     pub fn save_live_level_context<'a>(

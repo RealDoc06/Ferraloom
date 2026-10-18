@@ -24,6 +24,20 @@ impl Level {
         };
         Ok(i32::from(self.brightness(LightLayer::Block, pos)?).max(sky))
     }
+    pub fn max_local_raw_brightness(&self, pos: BlockPos) -> Result<i32, LevelError> {
+        self.max_local_raw_brightness_with_sky(pos, self.sky_darken()?)
+    }
+    /// Port of LevelReader#getMaxLocalRawBrightness(BlockPos, int).
+    pub fn max_local_raw_brightness_with_sky(
+        &self,
+        pos: BlockPos,
+        sky_darken: i32,
+    ) -> Result<i32, LevelError> {
+        LevelReaderRef::Server(self).max_local_raw_brightness_with_sky(pos, sky_darken)
+    }
+    pub fn get_effective_sky_brightness(&self, pos: BlockPos) -> Result<i32, LevelError> {
+        LevelReaderRef::Server(self).get_effective_sky_brightness(pos)
+    }
 }
 impl LevelReaderRef<'_, '_> {
     pub fn has_skylight(&self) -> Result<bool, LevelError> {
@@ -33,6 +47,40 @@ impl LevelReaderRef<'_, '_> {
                 .has_skylight()
                 .map_err(|_| LevelError::UnsupportedWorldgenEnvironment),
         }
+    }
+    pub fn max_local_raw_brightness(&self, pos: BlockPos) -> Result<i32, LevelError> {
+        self.max_local_raw_brightness_with_sky(pos, self.sky_darken()?)
+    }
+    pub fn max_local_raw_brightness_with_sky(
+        &self,
+        pos: BlockPos,
+        sky_darken: i32,
+    ) -> Result<i32, LevelError> {
+        if pos.x < -30_000_000 || pos.z < -30_000_000 || pos.x >= 30_000_000 || pos.z >= 30_000_000
+        {
+            return Ok(15);
+        }
+        self.get_raw_brightness(pos, sky_darken)
+    }
+    /// Effective sky brightness subtracts even for an absent engine, unlike the
+    /// raw-light query. The shared skyDarken remains Level-owned.
+    pub fn get_effective_sky_brightness(&self, pos: BlockPos) -> Result<i32, LevelError> {
+        let sky = if self.has_skylight()? {
+            match self {
+                Self::Server(level) => i32::from(level.brightness(LightLayer::Sky, pos)?),
+                Self::Worldgen(region) => i32::from(
+                    region
+                        .brightness(
+                            ferraloom_worldgen::region::LightLayer::Sky,
+                            [pos.x, pos.y, pos.z],
+                        )
+                        .map_err(|_| LevelError::UnsupportedWorldgenEnvironment)?,
+                ),
+            }
+        } else {
+            0
+        };
+        Ok(sky.wrapping_sub(self.sky_darken()?).max(0))
     }
 }
 

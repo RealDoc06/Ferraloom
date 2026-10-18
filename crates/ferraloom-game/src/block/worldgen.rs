@@ -279,6 +279,33 @@ mod tests {
         )
         .unwrap();
         let p = [8, dimension.min_y + 1, 8];
+        let environment = Arc::new(
+            ferraloom_worldgen::environment::EnvironmentDefinitions::load(&resources).unwrap(),
+        );
+        let dimension_environment = environment
+            .dimension(
+                &resources
+                    .require(&"dimension_type/overworld.json".parse().unwrap())
+                    .unwrap()
+                    .json()
+                    .unwrap(),
+            )
+            .unwrap();
+        region
+            .set_environment_attributes(environment, &dimension_environment, &data.biome_names)
+            .unwrap();
+        region.set_has_skylight(dimension.has_skylight);
+        assert_eq!(LevelReaderRef::Worldgen(&region).sky_darken(), Ok(0));
+        assert_eq!(
+            LevelReaderRef::Worldgen(&region).get_dimension_value(
+                ferraloom_worldgen::environment::EnvironmentAttributes::SKY_LIGHT_LEVEL
+            ),
+            Ok(15.0)
+        );
+        assert_eq!(
+            LevelReaderRef::Worldgen(&region).max_local_raw_brightness(pos(p)),
+            Ok(15)
+        );
         let flower = Block::DANDELION.default_state();
         assert_eq!(
             LevelReaderRef::Worldgen(&region).can_survive(flower, pos(p)),

@@ -125,7 +125,7 @@ impl EnvironmentAttributeSystem {
     pub fn get_value<T: AttributeValue>(
         &self,
         key: AttributeKey<T>,
-        biome: &AttributeMap,
+        biome: Option<&AttributeMap>,
         spatial: Option<&SpatialAttributeInterpolator>,
         weather: WeatherSample,
     ) -> Result<T, UnsupportedAttribute> {
@@ -138,10 +138,10 @@ impl EnvironmentAttributeSystem {
         let base = if id.data().spatially_interpolated {
             match spatial {
                 Some(weights) => weights.apply(id, base)?,
-                None => biome.apply(id, base)?,
+                None => biome.ok_or(UnsupportedAttribute(id))?.apply(id, base)?,
             }
         } else {
-            biome.apply(id, base)?
+            biome.ok_or(UnsupportedAttribute(id))?.apply(id, base)?
         };
         let result = self.finish_layers(id, base, weather)?;
         T::project(result).ok_or(UnsupportedAttribute(id))
@@ -342,7 +342,7 @@ mod tests {
                         system
                             .get_value(
                                 key,
-                                definitions.biome(0).unwrap(),
+                                Some(definitions.biome(0).unwrap()),
                                 None,
                                 WeatherSample::default()
                             )
@@ -438,7 +438,7 @@ mod tests {
                         system
                             .get_value(
                                 AttributeKey::<f32>::new(id),
-                                &first,
+                                Some(&first),
                                 Some(&spatial),
                                 WeatherSample::default()
                             )
