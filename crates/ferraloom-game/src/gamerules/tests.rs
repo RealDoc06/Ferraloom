@@ -1,5 +1,39 @@
 use super::*;
 #[test]
+fn saved_rule_partial_values_and_errors_match_java() {
+    #[derive(serde::Deserialize)]
+    struct Vector {
+        input: String,
+        success: bool,
+        partial: Option<serde_json::Value>,
+        error: Option<String>,
+    }
+    let vectors: Vec<Vector> =
+        serde_json::from_str(include_str!("../commands/vanilla/saved-rule-vectors.json")).unwrap();
+    for vector in vectors {
+        let tag = ferraloom_nbt::parse(&vector.input).unwrap();
+        let result = GameRuleMap::decode_partial(&tag);
+        assert_eq!(result.error, vector.error, "{}", vector.input);
+        assert_eq!(result.error.is_none(), vector.success, "{}", vector.input);
+        let actual = result.value.map(|map| {
+            serde_json::Value::Object(
+                map.iter()
+                    .map(|(rule, value)| {
+                        (
+                            rule.definition().id.into(),
+                            match value {
+                                GameRuleValue::Boolean(value) => serde_json::json!(value),
+                                GameRuleValue::Integer(value) => serde_json::json!(value),
+                            },
+                        )
+                    })
+                    .collect(),
+            )
+        });
+        assert_eq!(actual, vector.partial, "{}", vector.input);
+    }
+}
+#[test]
 fn all_definitions_match_bootstrapped_java_registry() {
     let expected: Vec<serde_json::Value> =
         serde_json::from_str(include_str!("../commands/vanilla/rules.json")).unwrap();

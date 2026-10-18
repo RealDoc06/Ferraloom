@@ -14,10 +14,20 @@ use ferraloom_storage::{SavedData, SavedDataStorage};
 
 pub(super) fn load_game_rules(world: &World) -> Result<GameRules> {
     let storage = SavedDataStorage::new(world.access.path().join("data"));
-    let map = storage
-        .load::<GameRuleMap>(GameRuleMap::STORAGE_ID)?
-        .map(|data| data.value().clone())
-        .unwrap_or_default();
+    let map = match storage.load::<Tag>(GameRuleMap::STORAGE_ID) {
+        Ok(Some(data)) => {
+            let result = GameRuleMap::decode_partial(data.value());
+            if let Some(error) = result.error {
+                eprintln!("Failed to parse saved data for minecraft:game_rules: {error}");
+            }
+            result.value.unwrap_or_default()
+        }
+        Ok(None) => GameRuleMap::default(),
+        Err(error) => {
+            eprintln!("Error loading saved data minecraft:game_rules: {error}");
+            GameRuleMap::default()
+        }
+    };
     Ok(GameRules::new(rule_features(world), map))
 }
 /// GameRules and command registration share WorldData#enabledFeatures.

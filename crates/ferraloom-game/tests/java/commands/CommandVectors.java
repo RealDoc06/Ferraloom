@@ -250,6 +250,16 @@ public final class CommandVectors {
             var bytes = new byte[buf.readableBytes()]; buf.readBytes(bytes); buf.release();
             Files.write(out.resolve("tree-minecart-level-"+level+".bin"),bytes);
         }
+        var savedRules = new JsonArray();
+        for (var input : List.of("{}", "1", "[]", "{keep_inventory:true}", "{keep_inventory:0.5d}", "{keep_inventory:256}", "{keep_inventory:-0.5d}", "{'minecraft:keep_inventory':1b,'minecraft:random_tick_speed':2.9d}", "{'minecraft:keep_inventory':'true'}", "{'minecraft:keep_inventory':true,'minecraft:unknown':1}", "{'minecraft:keep_inventory':true,'minecraft:random_tick_speed':-1}", "{'minecraft:random_tick_speed':-1}", "{'minecraft:max_minecart_speed':0}", "{'minecraft:random_tick_speed':2147483648L}", "{'minecraft:random_tick_speed':-0.5d}")) {
+            var tag = net.minecraft.nbt.TagParser.create(net.minecraft.nbt.NbtOps.INSTANCE).parseFully(input);
+            var result = GameRuleMap.CODEC.parse(net.minecraft.nbt.NbtOps.INSTANCE,tag);
+            var vector = new JsonObject();vector.addProperty("input",input);vector.addProperty("success",result.isSuccess());
+            result.error().ifPresent(error -> vector.addProperty("error",error.message()));
+            result.resultOrPartial(error -> {}).ifPresent(value -> vector.add("partial",GameRuleMap.CODEC.encodeStart(com.mojang.serialization.JsonOps.INSTANCE,value).getOrThrow()));
+            savedRules.add(vector);
+        }
+        write(out,"saved-rule-vectors.json",savedRules);
         var ruleParsing = new JsonArray();
         for (var rule : BuiltInRegistries.GAME_RULE) {
             var values = new LinkedHashSet<>(List.of("", " ", "true", "false", "TRUE", "true false", "0", "-1", "1", "1.5", "0001", "2147483647", "2147483648"));

@@ -134,40 +134,86 @@ impl GameRuleMap {
             .filter_map(|rule| self.get(rule).map(|value| (rule, value)))
     }
 }
+/// DataResult may retain a partial rule map alongside a codec error.
+#[derive(Clone, Debug)]
+pub struct GameRuleMapResult {
+    pub value: Option<GameRuleMap>,
+    pub error: Option<String>,
+}
+impl GameRuleMap {
+    /// Port of GameRuleMap.CODEC's dispatched-map decode, including missed entries.
+    pub fn decode_partial(tag: &Tag) -> GameRuleMapResult {
+        let Some(compound) = tag.as_compound() else {
+            return GameRuleMapResult {
+                value: None,
+                error: Some(format!("Not a map: {tag}")),
+            };
+        };
+        let mut map = Self::default();
+        let mut errors = Vec::new();
+        let mut missed = CompoundTag::new();
+        for (key, value) in compound.iter() {
+            let key_text = key.to_string_lossy();
+            let Some(rule) = GameRule::by_id(&key_text) else {
+                let id = if key_text.contains(':') {
+                    key_text
+                } else {
+                    format!("minecraft:{key_text}")
+                };
+                let message = format!(
+                    "Unknown registry key in ResourceKey[minecraft:root / minecraft:game_rule]: {id}"
+                );
+                // DispatchedMapCodec reports both the key decode and codec lookup errors.
+                errors.push(message.clone());
+                errors.push(message);
+                missed.insert(key.clone(), value.clone());
+                continue;
+            };
+            match decode_rule_value(rule, value) {
+                Ok(value) => map.values[rule as usize] = Some(value),
+                Err(message) => {
+                    errors.push(message);
+                    missed.insert(key.clone(), value.clone());
+                }
+            }
+        }
+        let error =
+            (!errors.is_empty()).then(|| format!("{} missed input: {missed}", errors.join("; ")));
+        GameRuleMapResult {
+            value: Some(map),
+            error,
+        }
+    }
+}
+fn decode_rule_value(rule: GameRule, tag: &Tag) -> Result<GameRuleValue, String> {
+    match rule.definition().kind {
+        RuleType::Boolean { .. } => Ok(GameRuleValue::Boolean(
+            tag.as_double().ok_or("Not a number")? != 0.,
+        )),
+        RuleType::Integer { min, max, .. } => {
+            let value = match tag {
+                Tag::Byte(value) => i32::from(*value),
+                Tag::Short(value) => i32::from(*value),
+                Tag::Int(value) => *value,
+                Tag::Long(value) => *value as i32,
+                Tag::Float(value) => *value as i32,
+                Tag::Double(value) => *value as i32,
+                _ => return Err("Not a number".into()),
+            };
+            if !(min..=max).contains(&value) {
+                return Err(format!("Value {value} outside of range [{min}:{max}]"));
+            }
+            Ok(GameRuleValue::Integer(value))
+        }
+    }
+}
 impl SavedDataCodec for GameRuleMap {
     fn decode(tag: &Tag) -> ferraloom_storage::Result<Self> {
-        let compound = tag
-            .as_compound()
-            .ok_or_else(|| Error::Invalid("game rules are not a compound".into()))?;
-        let mut result = Self::default();
-        for (id, tag) in compound.iter() {
-            let id = id.to_string_lossy();
-            let rule = GameRule::by_id(&id)
-                .ok_or_else(|| Error::Invalid(format!("Unknown game rule: {id}")))?;
-            let value = match rule.definition().kind {
-                RuleType::Boolean { .. } => GameRuleValue::Boolean(
-                    tag.as_double().ok_or_else(|| {
-                        Error::Invalid(format!("Invalid value for game rule {id}"))
-                    })? != 0.,
-                ),
-                RuleType::Integer { .. } => GameRuleValue::Integer(match tag {
-                    Tag::Byte(value) => i32::from(*value),
-                    Tag::Short(value) => i32::from(*value),
-                    Tag::Int(value) => *value,
-                    Tag::Long(value) => *value as i32,
-                    Tag::Float(value) => *value as i32,
-                    Tag::Double(value) => *value as i32,
-                    _ => return Err(Error::Invalid(format!("Invalid value for game rule {id}"))),
-                }),
-            };
-            if !rule.definition().kind.accepts(value) {
-                return Err(Error::Invalid(format!(
-                    "Game rule {id} out of range: {value}"
-                )));
-            }
-            result.values[rule as usize] = Some(value);
+        let result = Self::decode_partial(tag);
+        if let Some(error) = result.error {
+            return Err(Error::Invalid(error));
         }
-        Ok(result)
+        Ok(result.value.expect("successful rule map codec has a value"))
     }
     fn encode(&self) -> ferraloom_storage::Result<Tag> {
         let mut tag = CompoundTag::new();
