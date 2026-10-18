@@ -599,6 +599,49 @@ fn block_and_location_acceptance_matches_java() {
 }
 
 #[test]
+fn named_modifier_registry_and_tags_match_inline_java_function() {
+    use ferraloom_data::datapack::{Pack, ResourceManager};
+    let vectors: serde_json::Value =
+        serde_json::from_str(include_str!("../../tests/java/loot/vectors.json")).unwrap();
+    for record in vectors["modifiers"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|record| record["definition"]["type"] == "limit_count")
+    {
+        let mut pack = Pack::new("modifiers");
+        pack.insert(
+            "test:item_modifier/direct.json".parse().unwrap(),
+            serde_json::to_vec(&record["definition"]).unwrap(),
+        );
+        pack.insert(
+            "test:item_modifier/alias.json".parse().unwrap(),
+            br##""#test:chain""##.to_vec(),
+        );
+        pack.insert(
+            "test:tags/item_modifier/chain.json".parse().unwrap(),
+            br#"{"values":["test:direct"]}"#.to_vec(),
+        );
+        let data = LootData::load(&ResourceManager::new(vec![pack])).unwrap();
+        let mut random = LegacyRandomSource::new(record["seed"].as_i64().unwrap());
+        let result = data
+            .apply_modifier(
+                &Holder::Reference(Identifier::parse("test:alias").unwrap()),
+                decode_stack(&record["input"]),
+                &LootParams::default(),
+                &mut random,
+                &VanillaFeatures,
+            )
+            .unwrap();
+        assert_native_stack(&result, &record["result_nbt"], &record.to_string());
+        assert_eq!(
+            random.next_long(),
+            record["next"].as_i64().unwrap(),
+            "{record}"
+        );
+    }
+}
+#[test]
 fn item_modifiers_and_float_arithmetic_match_java() {
     let vectors: serde_json::Value =
         serde_json::from_str(include_str!("../../tests/java/loot/vectors.json")).unwrap();
