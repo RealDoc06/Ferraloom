@@ -1984,7 +1984,7 @@ fn piston_effects_use_only_the_explicit_path_and_keep_recorded_movements() {
         .unwrap();
     let behavior = level.entity_behavior(id).unwrap();
     assert_eq!(
-        behavior.piston_push_reaction(),
+        behavior.piston_push_reaction(id, &level).unwrap(),
         ferraloom_data::PushReaction::PushPull
     );
     assert!(!behavior.is_ignoring_block_triggers(id, &level).unwrap());
