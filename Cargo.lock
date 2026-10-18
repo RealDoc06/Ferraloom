@@ -314,6 +314,8 @@ dependencies = [
  "ferraloom-storage",
  "ferraloom-util",
  "ferraloom-worldgen",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
