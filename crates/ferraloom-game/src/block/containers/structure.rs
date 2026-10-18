@@ -92,7 +92,9 @@ impl BlockEntity for StructureBehavior {
         };
         entity.structure_name = tag
             .get_string("name")
-            .and_then(|v| Identifier::parse(&v.to_string_lossy()).ok());
+            .map(|value| value.to_string_lossy())
+            .filter(|value| !value.is_empty())
+            .and_then(|value| Identifier::parse(&value).ok());
         entity.author = tag
             .get_string("author")
             .map(|v| v.to_string_lossy())

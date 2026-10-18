@@ -55,6 +55,13 @@ fn bare_level() -> Level {
             ),
         ))
         .unwrap();
+    let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").expect("builder supplies vanilla jar");
+    let resources = ferraloom_data::datapack::ResourceManager::new(vec![
+        ferraloom_data::datapack::Pack::vanilla_jar(std::path::Path::new(&jar)).unwrap(),
+    ]);
+    level.set_block_tags(Arc::new(
+        ferraloom_data::datapack::TagSet::<Block>::load(&resources).unwrap(),
+    ));
     level
 }
 fn install(level: &mut Level, state: BlockState) -> entity::BlockEntityRef {
