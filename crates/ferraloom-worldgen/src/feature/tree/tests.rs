@@ -9,15 +9,20 @@ use ferraloom_data::datapack::{Pack, ResourceManager};
 use ferraloom_util::random::{Random, WorldgenRandom, XoroshiroRandomSource};
 use std::{io::Read, path::Path};
 
-// The controlled vanilla registry contains the patch. Its implementation is
-// owned by the vegetation family; preserve registry presence and fail explicitly.
+// Preserve vanilla registry presence only when the actual patch factory has not
+// landed yet. An available feature always uses its real implementation.
 #[derive(Debug)]
-struct PendingMossPatch;
+struct PendingMossPatch(String);
+const MISSING_MOSS_PATCH: &str = concat!(
+    "Unsupported: configured feature minecraft:pale_moss_patch: ",
+    "unsupported feature type minecraft:vegetation_patch"
+);
 impl Feature for PendingMossPatch {
     fn place(&self, _: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
-        Err(Error(
-            "Unsupported: configured feature minecraft:pale_moss_patch".into(),
-        ))
+        Err(Error(format!(
+            "Unsupported: configured feature minecraft:pale_moss_patch: {}",
+            self.0
+        )))
     }
 }
 struct UnsupportedBehavior;
@@ -116,34 +121,33 @@ fn run_cases(require_pending: bool) {
         if !features.contains_key(name) {
             features.insert(
                 name.to_owned(),
-                loader.feature(&Value::String(name.into())).map_err(|e| e.0),
+                loader
+                    .feature(&Value::String(name.into()))
+                    .unwrap_or_else(|e| panic!("failed to load {name}: {e}")),
             );
         }
     }
+    let missing_patch = match loader.feature(&Value::String("minecraft:pale_moss_patch".into())) {
+        Ok(_) => None,
+        Err(Error(reason)) if reason.starts_with("unsupported feature type minecraft:") => {
+            Some(reason)
+        }
+        Err(e) => panic!("failed to load pale_moss_patch: {e}"),
+    };
     let mut registry = loader.finish();
-    registry.features.insert(
-        "pale_moss_patch".parse().unwrap(),
-        Arc::new(PendingMossPatch),
-    );
+    if let Some(reason) = missing_patch {
+        registry.features.insert(
+            "pale_moss_patch".parse().unwrap(),
+            Arc::new(PendingMossPatch(reason)),
+        );
+    }
     let mut baselines = std::collections::BTreeMap::new();
     let mut passed = 0;
     let mut geometry = 0;
     let mut pending = std::collections::BTreeMap::<String, usize>::new();
     for case in cases {
         let name = case["feature"].as_str().unwrap();
-        let feature = match &features[name] {
-            Ok(f) => f,
-            Err(message) => {
-                assert_eq!(name, "minecraft:rooted_sulfur_spring");
-                assert!(
-                    message.starts_with("unsupported feature type minecraft:"),
-                    "{message}"
-                );
-                assert!(!require_pending, "{name} pending: {message}");
-                *pending.entry(message.clone()).or_default() += 1;
-                continue;
-            }
-        };
+        let feature = &features[name];
         let origin = std::array::from_fn::<_, 3, _>(|i| case["origin"][i].as_i64().unwrap() as i32);
         let ground = BlockState::from_id(case["ground"].as_u64().unwrap() as u16).unwrap();
         let terrain = case["terrain"].as_str().unwrap();
@@ -205,8 +209,7 @@ fn run_cases(require_pending: bool) {
                         "Unsupported: update_shape"
                             | "Unsupported: populate_worldgen_beehive"
                             | "Unsupported: state_has_sturdy_face"
-                            | "Unsupported: destroy_block"
-                            | "Unsupported: configured feature minecraft:pale_moss_patch"
+                            | MISSING_MOSS_PATCH
                     ),
                     "unexpected pending behavior {label}: {message}"
                 );
@@ -214,10 +217,7 @@ fn run_cases(require_pending: bool) {
                 let prefix = match message.as_str() {
                     "Unsupported: update_shape" => Some("before_edge"),
                     "Unsupported: populate_worldgen_beehive" => Some("before_bees"),
-                    "Unsupported: destroy_block" => Some("before_destroy"),
-                    "Unsupported: configured feature minecraft:pale_moss_patch" => {
-                        Some("before_external")
-                    }
+                    MISSING_MOSS_PATCH => Some("before_external"),
                     _ => None,
                 };
                 if let Some(prefix) = prefix {
@@ -270,7 +270,7 @@ fn supported_controlled_level_cases_match_vanilla() {
     run_cases(false);
 }
 #[test]
-#[ignore = "pending game bridge: update_shape, state_has_sturdy_face, populate_worldgen_beehive, destroy_block; pale_moss_patch and root-system subfeatures"]
+#[ignore = "pending game bridge: update_shape, state_has_sturdy_face, populate_worldgen_beehive; vegetation_patch and root-system template behavior"]
 fn pending_controlled_level_cases_require_game_behavior() {
     run_cases(true);
 }
