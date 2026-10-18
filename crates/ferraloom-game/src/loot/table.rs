@@ -249,14 +249,14 @@ impl LootData {
     ) -> Result<Vec<ItemStack>> {
         let evaluate = |random: &mut dyn RandomSource| {
             let mut output = Vec::new();
+            let mut runtime = BorrowedRuntime::new(random, facts);
             let mut context = EvalContext {
                 params,
-                random,
-                facts,
+                runtime: &mut runtime,
                 visited: BTreeSet::new(),
             };
             table.raw(self, &mut context, &mut |stack, c| {
-                if c.facts.item_enabled(&stack)? {
+                if c.facts().item_enabled(&stack)? {
                     split_stack(stack, &mut output)?;
                 }
                 Ok(())
