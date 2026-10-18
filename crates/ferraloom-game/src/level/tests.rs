@@ -1914,7 +1914,10 @@ fn pending_block_entity_nbt_survives_full_without_claiming_live_factory_readines
         .set_block_state(pos, Block::CHEST.default_state())
         .unwrap();
     block_chunk.load_pending_generation_data(&data).unwrap();
-    assert_eq!(block_chunk.pending_block_entity_nbt(), &[tag.clone()]);
+    assert_eq!(
+        block_chunk.pending_block_entity_nbt(),
+        std::slice::from_ref(&tag)
+    );
     let mut level = Level::new(Region::new(&EMPTY));
     level.add_chunk(block_chunk).unwrap();
     assert_eq!(

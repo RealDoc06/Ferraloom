@@ -1084,7 +1084,9 @@ impl MinecraftServer {
         let positions: Vec<_> = self.level.chunks.holder_positions().collect();
         for pos in positions {
             let holder = self.level.chunks.holders.get_mut(&pos.pack()).unwrap();
-            if update_holder_full_status(holder, &self.world.ready, &mut self.level.level)? {
+            if update_holder_full_status(holder, &self.world.ready, &mut self.level.level)?
+                && self.level.distance_manager.has_pending_player_loading(pos)
+            {
                 self.level.distance_manager.complete_player_loading(pos);
             }
             if self.level.level.chunk(pos).is_some() {

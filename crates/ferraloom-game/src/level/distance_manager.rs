@@ -209,12 +209,33 @@ impl DistanceManager {
             }
         }
     }
-    /// Call only after the corresponding entity-ticking range future completes
+    /// DistanceManager#runAllUpdates registers these future callbacks only
+    /// after the holder update pass has settled. Preserve primitive-set order.
+    pub fn take_player_loading_waiters(
+        &mut self,
+        tickets: &super::tickets::TicketStorage,
+    ) -> Vec<ChunkPos> {
+        let waiters = self
+            .tickets_to_release
+            .iter()
+            .filter_map(|&key| {
+                let pos = ChunkPos::unpack(key);
+                tickets
+                    .contains_type(pos, super::tickets::TicketType::PlayerLoading)
+                    .then_some(pos)
+            })
+            .collect();
+        self.tickets_to_release.clear();
+        waiters
+    }
+    pub fn has_pending_player_loading(&self, pos: ChunkPos) -> bool {
+        self.tickets_to_release.contains(&pos.pack())
+    }
+    /// Call only after the registered entity-ticking range future completes
     /// (success or failure). A merely loaded chunk never releases this slot.
     pub fn complete_player_loading(&mut self, pos: ChunkPos) {
-        if self.tickets_to_release.remove(&pos.pack()) {
-            self.dispatcher.release(pos, false, None);
-        }
+        self.tickets_to_release.remove(&pos.pack());
+        self.dispatcher.release(pos, false, None);
     }
 }
 
