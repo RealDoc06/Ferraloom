@@ -1046,6 +1046,13 @@ impl MinecraftServer {
                     }
                 }
                 LevelEffect::GameEvent { .. } => self.pending_level_hooks.game_events += 1,
+                LevelEffect::PlayerSectionChange { player, section } => {
+                    self.level.distance_manager.update_player(
+                        player,
+                        Some(section),
+                        &mut self.level.tickets,
+                    );
+                }
             }
         }
         self.world
@@ -1056,6 +1063,13 @@ impl MinecraftServer {
     /// The commands branch supplies the current SpectatorsGenerateChunks rule
     /// when its canonical GameRules state lands (vanilla's default is true).
     pub(super) fn update_player_tickets(&mut self, entity: EntityRef) -> Result<()> {
+        for (player, section) in self.level.level.take_player_section_changes() {
+            self.level.distance_manager.update_player(
+                player,
+                Some(section),
+                &mut self.level.tickets,
+            );
+        }
         let section = ferraloom_util::SectionPos::from_position(self.player(entity)?.position);
         self.level
             .distance_manager
