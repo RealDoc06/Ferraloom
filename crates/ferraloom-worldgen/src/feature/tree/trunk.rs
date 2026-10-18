@@ -103,6 +103,10 @@ impl TrunkPlacer {
             },
         })
     }
+    /// Port of TrunkPlacer#getBaseHeight; no randomized height sampling.
+    pub(super) fn base_height(&self) -> i32 {
+        self.base
+    }
     pub fn height(&self, r: &mut impl RandomSource) -> i32 {
         self.base + r.next_int_bound(self.rand_a + 1) + r.next_int_bound(self.rand_b + 1)
     }

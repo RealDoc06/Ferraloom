@@ -322,6 +322,9 @@ impl TreeFeature {
     }
 }
 impl Feature for TreeFeature {
+    fn tree_minimum_height(&self) -> Option<i32> {
+        Some(self.trunk.base_height())
+    }
     fn place(&self, c: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
         let mut out = TreePositions::default();
         if !self.place_tree(c, &mut out)? || out.logs.is_empty() && out.leaves.is_empty() {

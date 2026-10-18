@@ -375,3 +375,23 @@ fn leaf_and_mushroom_property_identity_matches_every_vanilla_state() {
         );
     }
 }
+
+#[test]
+fn minimum_height_is_only_the_actual_tree_trunk_base() {
+    let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").expect("builder provides vanilla jar");
+    let resources = ResourceManager::new(vec![Pack::vanilla_jar(Path::new(&jar)).unwrap()]);
+    let mut loader = FeatureLoader::new(&resources).unwrap();
+    let mut oak = resources
+        .require(&"worldgen/feature/oak.json".parse().unwrap())
+        .unwrap()
+        .json()
+        .unwrap();
+    for base in [0, 4, 32] {
+        oak["trunk_placer"]["base_height"] = base.into();
+        let tree = loader.feature(&oak).unwrap();
+        assert_eq!(tree.tree_minimum_height(), Some(base));
+    }
+    // A similarly named field on another feature never supplies tree metadata.
+    oak["type"] = "minecraft:no_op".into();
+    assert_eq!(loader.feature(&oak).unwrap().tree_minimum_height(), None);
+}
