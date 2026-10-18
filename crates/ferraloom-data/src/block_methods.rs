@@ -5,7 +5,8 @@ include!(concat!(env!("OUT_DIR"), "/block_methods.rs"));
 impl Block {
     /// Whether the concrete vanilla block class overrides the base implementation
     /// of this exact signature. Bases live in BlockBehaviour, except placement,
-    /// stepping and falling methods whose vanilla base lives in Block.
+    /// stepping, falling and bouncing methods whose vanilla base lives in Block;
+    /// liquid interfaces use SimpleWaterloggedBlock's concrete defaults.
     pub const fn overrides(self, method: BlockMethod) -> bool {
         BLOCK_METHOD_OVERRIDES[self.protocol_id() as usize] & (1 << method as u8) != 0
     }

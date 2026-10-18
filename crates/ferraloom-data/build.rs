@@ -281,6 +281,8 @@ fn blocks(
             "friction",
             "speed_factor",
             "jump_factor",
+            "fall_distance_reduction",
+            "bounce_restitution",
         ] {
             write!(out, "{field}: {},", float(&block[field])).unwrap();
         }
@@ -625,7 +627,7 @@ fn block_state_facts(out: &mut String, values: &Value, state_count: usize) {
     write!(out, "static BLOCK_STATE_FACTS: [u16; {state_count}] = [").unwrap();
     for value in values {
         let bits = number(value);
-        assert!(bits < 4096);
+        assert!(bits < 32768);
         write!(out, "{bits},").unwrap();
     }
     out.push_str("];\n");
@@ -702,6 +704,24 @@ fn main() {
     }
     let mut out = String::from("// Generated from the pinned vanilla 26.3 server. Do not edit.\n");
     registries(&mut out, &registries_report);
+    let fluid_random_ticking = load(root, "fluid_random_ticking");
+    let fluid_random_ticking = fluid_random_ticking
+        .as_array()
+        .expect("fluid random-tick facts");
+    let fluid_count = registries_report["minecraft:fluid"]["entries"]
+        .as_object()
+        .unwrap()
+        .len();
+    assert_eq!(fluid_random_ticking.len(), fluid_count);
+    writeln!(
+        out,
+        "static FLUID_RANDOM_TICKING: [bool; {fluid_count}] = {:?};",
+        fluid_random_ticking
+            .iter()
+            .map(|v| v.as_bool().unwrap())
+            .collect::<Vec<_>>()
+    )
+    .unwrap();
     block_classes(
         &mut out,
         &load(root, "block_classes"),
@@ -736,6 +756,38 @@ fn main() {
         &load(root, "block_state_facts"),
         block_properties["states"].as_array().unwrap().len(),
     );
+    let collision_flags = load(root, "block_collision_flags");
+    let collision_flags = collision_flags.as_array().expect("block collision flags");
+    let block_count = block_properties["blocks"].as_array().unwrap().len();
+    assert_eq!(collision_flags.len(), block_count);
+    let block_items = load(root, "block_items");
+    let block_items = block_items.as_array().expect("block items");
+    assert_eq!(block_items.len(), block_count);
+    write!(out, "static BLOCK_ITEMS: [Item; {block_count}] = [").unwrap();
+    for item in block_items {
+        let item = number(item);
+        assert!((item as usize) < item_report.as_array().unwrap().len());
+        write!(out, "Item({item}),").unwrap();
+    }
+    out.push_str("];\n");
+    writeln!(
+        out,
+        "static BLOCK_HAS_COLLISION: [bool; {block_count}] = {:?};",
+        collision_flags
+            .iter()
+            .map(|v| v.as_bool().unwrap())
+            .collect::<Vec<_>>()
+    )
+    .unwrap();
+    let redstone = load(root, "redstone_state_facts");
+    let redstone = redstone.as_array().expect("redstone state facts array");
+    assert_eq!(redstone.len(), state_count);
+    writeln!(
+        out,
+        "static REDSTONE_STATE_FACTS: [u8; {state_count}] = {:?};",
+        redstone.iter().map(|v| number(v) as u8).collect::<Vec<_>>()
+    )
+    .unwrap();
     items(&mut out, &item_report);
     entities(&mut out, &entity_report, &registries_report);
     let path = Path::new(&std::env::var_os("OUT_DIR").unwrap()).join("data.rs");

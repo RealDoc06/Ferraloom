@@ -1,4 +1,8 @@
 //! ServerPlayer gameplay state. Connections retain handles, never another player copy.
+mod drop_item;
+pub use drop_item::drop_item;
+pub mod equipment;
+pub mod inventory;
 use crate::{
     entity::{EntityData, EntityDataView, EntityState, LivingEntity},
     level::{Level, LevelError},
@@ -35,21 +39,14 @@ impl GameType {
 #[derive(Debug)]
 pub struct ServerPlayer {
     pub parent: LivingEntity,
-    pub uuid: Uuid,
+    pub inventory: inventory::Inventory,
     pub name: String,
-    pub network_id: i32,
-    pub position: Vec3,
-    pub velocity: Vec3,
     pub known_movement: Vec3,
-    pub yaw: f32,
-    pub pitch: f32,
-    pub on_ground: bool,
     pub game_mode: GameType,
     pub flying: bool,
     pub view_distance: i32,
     pub loaded: bool,
     pub connection_ticks: u64,
-    pub saved: CompoundTag,
     pub first_good: Vec3,
     pub last_good: Vec3,
     pub received_moves: u32,
@@ -89,28 +86,28 @@ impl ServerPlayer {
     ) -> Self {
         Self {
             parent: LivingEntity {
-                parent: EntityData::default(),
+                equipment: Default::default(),
+                parent: {
+                    let mut base =
+                        EntityData::new(ferraloom_data::EntityType::PLAYER, network_id, 0);
+                    base.uuid = uuid;
+                    base.set_pos(position);
+                    base
+                },
                 health: 20.,
                 last_hurt: 0.,
                 damage_cooldown_time: 0,
                 hurt_time: 0,
                 hurt_duration: 0,
             },
-            uuid,
             name,
-            network_id,
-            position,
-            velocity: Vec3::ZERO,
+            inventory: Default::default(),
             known_movement: Vec3::ZERO,
-            yaw: 0.,
-            pitch: 0.,
-            on_ground: false,
             game_mode,
             flying: game_mode == GameType::Spectator,
             view_distance: 10,
             loaded: false,
             connection_ticks: 0,
-            saved: CompoundTag::new(),
             first_good: position,
             last_good: position,
             received_moves: 0,
@@ -131,26 +128,37 @@ impl ServerPlayer {
         self.received_moves = 0;
     }
     pub fn load(&mut self, tag: CompoundTag) {
-        if let Some(list) = tag.get_list("Pos")
-            && let [Tag::Double(x), Tag::Double(y), Tag::Double(z)] = list.0.as_slice()
-        {
-            self.position = Vec3::new(*x, *y, *z);
-        }
-        if let Some(list) = tag.get_list("Rotation")
-            && let [Tag::Float(yaw), Tag::Float(pitch)] = list.0.as_slice()
-        {
-            self.yaw = *yaw;
-            self.pitch = *pitch;
-        }
-        self.game_mode = GameType::from_id(tag.get_int_or("playerGameType", self.game_mode.id()));
-        self.on_ground = tag.get_boolean_or("OnGround", false);
+        self.try_load(tag)
+            .expect("invalid saved player entity data");
+    }
+    pub fn try_load(
+        &mut self,
+        tag: CompoundTag,
+    ) -> Result<(), super::persistence::EntityLoadError> {
+        self.parent.parent.load_nbt(tag)?;
+        self.game_mode =
+            GameType::from_id(self.saved.get_int_or("playerGameType", self.game_mode.id()));
+        self.parent.health = self.saved.get_float_or("Health", 20.0);
+        let inventory = self
+            .saved
+            .get_list("Inventory")
+            .cloned()
+            .unwrap_or_default();
+        let selected = self.saved.get_int_or("SelectedItemSlot", 0);
+        self.inventory.load(&inventory);
+        self.inventory.set_selected_slot(selected as usize);
+        self.parent.equipment = self
+            .saved
+            .get("equipment")
+            .and_then(|v| equipment::EntityEquipment::from_tag(v).ok())
+            .unwrap_or_default();
         self.first_good = self.position;
         self.last_good = self.position;
-        self.saved = tag;
+        Ok(())
     }
     /// Port of Entity#saveWithoutId, Player#addAdditionalSaveData and ServerPlayer.
     pub fn save(&self) -> CompoundTag {
-        let mut tag = self.saved.clone();
+        let mut tag = self.parent.parent.save_without_id();
         tag.insert("DataVersion", Tag::Int(5023));
         tag.insert("UUID", Tag::IntArray(self.uuid.to_int_array().to_vec()));
         tag.insert("Dimension", Tag::String("minecraft:overworld".into()));
@@ -177,10 +185,25 @@ impl ServerPlayer {
         tag.insert("playerGameType", Tag::Int(self.game_mode.id()));
         tag.insert("Health", Tag::Float(self.parent.health));
         tag.insert("OnGround", Tag::Byte(i8::from(self.on_ground)));
-        tag.insert("Air", Tag::Short(300));
-        tag.insert("Fire", Tag::Short(-20));
-        if !tag.contains_key("Inventory") {
-            tag.insert("Inventory", Tag::List(ListTag::default()));
+        tag.insert(
+            "Inventory",
+            Tag::List(self.inventory.save().expect("canonical inventory stacks")),
+        );
+        tag.insert(
+            "SelectedItemSlot",
+            Tag::Int(self.inventory.selected_slot() as i32),
+        );
+        tag.remove("equipment");
+        if !self.parent.equipment.is_empty() {
+            tag.insert(
+                "equipment",
+                Tag::Compound(
+                    self.parent
+                        .equipment
+                        .save()
+                        .expect("canonical equipment stacks"),
+                ),
+            );
         }
         tag.insert("foodLevel", Tag::Int(20));
         tag.insert("foodSaturationLevel", Tag::Float(5.));
@@ -198,6 +221,18 @@ impl ServerPlayer {
         abilities.insert("walkSpeed", Tag::Float(0.1));
         tag.insert("abilities", Tag::Compound(abilities));
         tag
+    }
+}
+/// Embedded-parent projection preserving the bring-up's public field access.
+impl std::ops::Deref for ServerPlayer {
+    type Target = LivingEntity;
+    fn deref(&self) -> &Self::Target {
+        &self.parent
+    }
+}
+impl std::ops::DerefMut for ServerPlayer {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.parent
     }
 }
 impl EntityDataView for ServerPlayer {
@@ -222,8 +257,39 @@ pub enum MovementResult {
     TooQuickly,
     Wrongly,
 }
-/// Port of ServerGamePacketListenerImpl#handleMovePlayer's ordinary terrain path.
-/// Missing chunks stay errors; callers resolve the synchronous load before retrying.
+/// Server-owned predicates used by the listener's movement checks. The tick-rate
+/// manager is canonical; this value never stores another freeze counter.
+pub struct MovementChecks<'a> {
+    pub tick_rate: &'a crate::level::tick_rate::TickRateManager,
+    pub singleplayer_owner: bool,
+    pub changing_dimension: bool,
+    pub player_movement_check: bool,
+    pub elytra_movement_check: bool,
+    pub post_impulse_grace: bool,
+}
+impl<'a> MovementChecks<'a> {
+    pub fn dedicated(tick_rate: &'a crate::level::tick_rate::TickRateManager) -> Self {
+        Self {
+            tick_rate,
+            singleplayer_owner: false,
+            changing_dimension: false,
+            player_movement_check: true,
+            elytra_movement_check: true,
+            post_impulse_grace: false,
+        }
+    }
+}
+#[derive(Clone, Copy, Debug)]
+pub struct PlayerMovement {
+    pub position: Vec3,
+    pub yaw: f32,
+    pub pitch: f32,
+    pub on_ground: bool,
+    pub horizontal_collision: bool,
+}
+/// Compatibility entry for the bring-up's normal-rate dedicated-server path.
+/// Packet routing supplies the canonical manager and packet collision flag to
+/// move_player_with_checks; all geometry is the actual Entity#move implementation.
 pub fn move_player(
     level: &mut Level,
     entity: crate::entity::EntityRef,
@@ -232,126 +298,250 @@ pub fn move_player(
     pitch: f32,
     on_ground: bool,
 ) -> Result<MovementResult, LevelError> {
-    if [target.x, target.y, target.z].iter().any(|v| v.is_nan())
-        || !yaw.is_finite()
-        || !pitch.is_finite()
+    let tick_rate = crate::level::tick_rate::TickRateManager::default();
+    move_player_with_checks(
+        level,
+        entity,
+        PlayerMovement {
+            position: target,
+            yaw,
+            pitch,
+            on_ground,
+            horizontal_collision: false,
+        },
+        &MovementChecks::dedicated(&tick_rate),
+    )
+}
+/// Port of ServerGamePacketListenerImpl#handlePlayerPositionChange. Missing
+/// ownership remains a synchronous-load error, including correction queries.
+pub fn move_player_with_checks(
+    level: &mut Level,
+    entity: crate::entity::EntityRef,
+    input: PlayerMovement,
+    checks: &MovementChecks<'_>,
+) -> Result<MovementResult, LevelError> {
+    use crate::entity::{
+        Entity, EntityData,
+        movement::{self, MoverType},
+    };
+    if [input.position.x, input.position.y, input.position.z]
+        .iter()
+        .any(|v| v.is_nan())
+        || !input.yaw.is_finite()
+        || !input.pitch.is_finite()
     {
         return Ok(MovementResult::Invalid);
     }
     let target = Vec3::new(
-        target.x.clamp(-30_000_000., 30_000_000.),
-        target.y.clamp(-20_000_000., 20_000_000.),
-        target.z.clamp(-30_000_000., 30_000_000.),
+        mth::clamp(input.position.x, -30_000_000.0, 30_000_000.0),
+        mth::clamp(input.position.y, -20_000_000.0, 20_000_000.0),
+        mth::clamp(input.position.z, -30_000_000.0, 30_000_000.0),
     );
-    let (from, mode, too_quickly) = {
+    let yaw = mth::wrap_degrees_f32(input.yaw);
+    let pitch = mth::wrap_degrees_f32(input.pitch);
+    let player = level.entity::<ServerPlayer>(entity)?;
+    if player.vehicle.is_some() {
         let player = level.entity_mut::<ServerPlayer>(entity)?;
-        player.received_moves += 1;
+        player.set_y_rot(yaw);
+        player.set_x_rot(pitch);
+        return Ok(MovementResult::Accepted);
+    }
+    let start = player.position;
+    let old_box = player.bounding_box;
+    let distance = target.distance_to_sqr(player.first_good);
+    let expected = player.velocity.length_sqr();
+    if player.pose() == ferraloom_protocol::entity_data::Pose::Sleeping {
+        if distance > 1.0 {
+            let player = level.entity_mut::<ServerPlayer>(entity)?;
+            player.set_y_rot(yaw);
+            player.set_x_rot(pitch);
+            return Ok(MovementResult::Wrongly);
+        }
+        return Ok(MovementResult::Accepted);
+    }
+    let fall_flying = player.shared_flag(7);
+    let mode = player.game_mode;
+    if checks.tick_rate.runs_normally() {
+        let player = level.entity_mut::<ServerPlayer>(entity)?;
+        player.received_moves = player.received_moves.wrapping_add(1);
         let packets = if player.received_moves > 5 {
             1
         } else {
             player.received_moves
         };
-        (
-            player.position,
-            player.game_mode,
-            target.distance_to_sqr(player.first_good) - player.velocity.length_sqr()
-                > 100. * f64::from(packets),
-        )
-    };
-    if too_quickly {
-        return Ok(MovementResult::TooQuickly);
-    }
-    // Entity#collideBoundingBox clips the swept movement before the listener
-    // checks its horizontal discrepancy and newly introduced terrain collisions.
-    if mode != GameType::Spectator {
-        let shapes = terrain_shapes(level, from, target)?;
-        let old = player_box(from);
-        let requested = player_box(target);
-        let mut clipped = old;
-        let mut delta = [target.x - from.x, target.y - from.y, target.z - from.z];
-        let horizontal = if delta[0].abs() < delta[2].abs() {
-            [2, 0]
-        } else {
-            [0, 2]
-        };
-        for axis in [1, horizontal[0], horizontal[1]] {
-            for shape in &shapes {
-                if (0..3)
-                    .filter(|&i| i != axis)
-                    .all(|i| clipped.1[i] > shape.0[i] + 1e-7 && clipped.0[i] < shape.1[i] - 1e-7)
-                {
-                    if delta[axis] > 0. && clipped.1[axis] <= shape.0[axis] + 1e-7 {
-                        delta[axis] = delta[axis].min(shape.0[axis] - clipped.1[axis]);
-                    } else if delta[axis] < 0. && clipped.0[axis] >= shape.1[axis] - 1e-7 {
-                        delta[axis] = delta[axis].max(shape.1[axis] - clipped.0[axis]);
-                    }
-                }
+        if !checks.singleplayer_owner
+            && !checks.changing_dimension
+            && checks.player_movement_check
+            && (!fall_flying || checks.elytra_movement_check)
+        {
+            let limit = if fall_flying { 300.0_f32 } else { 100.0_f32 };
+            if distance - expected > f64::from(limit * packets as f32) {
+                return Ok(MovementResult::TooQuickly);
             }
-            clipped.0[axis] += delta[axis];
-            clipped.1[axis] += delta[axis];
         }
-        let dx = target.x - from.x - delta[0];
-        let dz = target.z - from.z - delta[2];
-        // Vanilla 26.3's listener clears the vertical discrepancy unconditionally.
-        let wrongly = dx * dx + dz * dz > 0.0625 && mode != GameType::Creative;
-        let old_collides = shapes.iter().any(|shape| intersects(old, *shape));
-        let new_collision = shapes
-            .iter()
-            .any(|shape| intersects(requested, *shape) && !intersects(old, *shape));
-        if (wrongly && !old_collides) || new_collision {
-            return Ok(MovementResult::Wrongly);
+    }
+    let requested = target - level.entity::<ServerPlayer>(entity)?.last_good;
+    let moved_up = requested.y > 0.0;
+    if level.entity::<EntityData>(entity)?.on_ground && !input.on_ground && moved_up {
+        jump_from_ground(entity, level)?;
+    }
+    PlayerBehavior.move_by(entity, level, MoverType::Player, requested)?;
+    let discrepancy = target - level.entity::<EntityData>(entity)?.position;
+    // Vanilla's OR condition clears every finite vertical discrepancy.
+    let wrongly = discrepancy.x * discrepancy.x + discrepancy.z * discrepancy.z > 0.0625
+        && !checks.changing_dimension
+        && !matches!(mode, GameType::Creative | GameType::Spectator)
+        && !checks.post_impulse_grace;
+    let no_physics = level.entity::<EntityData>(entity)?.no_physics;
+    let accepted = no_physics
+        || (!wrongly || !level.no_collision(Some(entity), old_box, false)?)
+            && !colliding_with_anything_new(entity, level, old_box, target)?;
+    if accepted {
+        level.set_entity_pos(entity, target)?;
+        {
+            let player = level.entity_mut::<ServerPlayer>(entity)?;
+            player.set_y_rot(yaw);
+            player.set_x_rot(pitch);
+            player.horizontal_collision = input.horizontal_collision;
         }
+        let delta = target - start;
+        movement::set_on_ground(entity, input.on_ground, Some(delta), level)?;
+        movement::check_supporting_block(entity, input.on_ground, Some(delta), level)?;
+        let pos = movement::get_on_pos(entity, 0.2_f32, level)?;
+        let state = level.get_block_state(pos)?;
+        movement::check_fall_damage(entity, delta.y, input.on_ground, state, pos, level)?;
+        let player = level.entity_mut::<ServerPlayer>(entity)?;
+        player.known_movement = delta;
+        if moved_up {
+            player.fall_distance = 0.0;
+        }
+        player.last_good = target;
+        Ok(MovementResult::Accepted)
+    } else {
+        level.set_entity_pos(entity, start)?;
+        {
+            let player = level.entity_mut::<ServerPlayer>(entity)?;
+            player.set_y_rot(yaw);
+            player.set_x_rot(pitch);
+            player.velocity = Vec3::ZERO;
+        }
+        movement::check_supporting_block(entity, input.on_ground, Some(Vec3::ZERO), level)?;
+        let pos = movement::get_on_pos(entity, 0.2_f32, level)?;
+        let state = level.get_block_state(pos)?;
+        movement::check_fall_damage(entity, 0.0, input.on_ground, state, pos, level)?;
+        level
+            .entity_mut::<EntityData>(entity)?
+            .movement_this_tick
+            .pop_back();
+        Ok(MovementResult::Wrongly)
+    }
+}
+fn colliding_with_anything_new(
+    entity: crate::entity::EntityRef,
+    level: &Level,
+    old: ferraloom_util::Aabb,
+    target: Vec3,
+) -> Result<bool, LevelError> {
+    use crate::{
+        block::BlockCollisionContext,
+        entity::{EntityData, collision},
+    };
+    use ferraloom_util::shapes::{self, BooleanOp};
+    let base = level.entity::<EntityData>(entity)?;
+    let epsilon = f64::from(1e-5_f32);
+    let new = base
+        .bounding_box
+        .move_vec(target - base.position)
+        .deflate(epsilon, epsilon, epsilon);
+    let old_shape = shapes::create_aabb(old.deflate(epsilon, epsilon, epsilon));
+    let mut context = super::collision_context::EntityCollisionView::capture(entity, level, false)?;
+    context.entity_bottom = old.min_y;
+    context.placement = true;
+    let mut shapes = collision::entity_collisions(level, Some(entity), new)?;
+    shapes.extend(
+        collision::block_collisions_from_context(
+            level,
+            &BlockCollisionContext::Entity(context),
+            new,
+        )?
+        .into_iter()
+        .map(|(_, shape)| shape),
+    );
+    Ok(shapes
+        .iter()
+        .any(|shape| !shapes::join_is_not_empty(shape, &old_shape, BooleanOp::And)))
+}
+/// Port of LivingEntity#jumpFromGround with the player's base jump attribute.
+/// Effect/attribute ports feed the same primitive when those modifiers land.
+fn jump_from_ground(entity: crate::entity::EntityRef, level: &mut Level) -> Result<(), LevelError> {
+    let power = 0.42_f32 * crate::entity::movement::block_jump_factor(entity, level)?;
+    if power <= 1e-5_f32 {
+        return Ok(());
     }
     let player = level.entity_mut::<ServerPlayer>(entity)?;
-    player.position = target;
-    player.yaw = mth::wrap_degrees_f32(yaw);
-    player.pitch = mth::wrap_degrees_f32(pitch);
-    player.on_ground = on_ground;
-    player.last_good = target;
-    Ok(MovementResult::Accepted)
-}
-type CollisionBox = ([f64; 3], [f64; 3]);
-fn player_box(position: Vec3) -> CollisionBox {
-    (
-        [
-            position.x - 0.3 + 1e-5,
-            position.y + 1e-5,
-            position.z - 0.3 + 1e-5,
-        ],
-        [
-            position.x + 0.3 - 1e-5,
-            position.y + 1.8 - 1e-5,
-            position.z + 0.3 - 1e-5,
-        ],
-    )
-}
-fn intersects(a: CollisionBox, b: CollisionBox) -> bool {
-    (0..3).all(|i| a.1[i] > b.0[i] && a.0[i] < b.1[i])
-}
-fn terrain_shapes(level: &Level, from: Vec3, to: Vec3) -> Result<Vec<CollisionBox>, LevelError> {
-    let a = player_box(from);
-    let b = player_box(to);
-    let min = std::array::from_fn::<_, 3, _>(|i| a.0[i].min(b.0[i]));
-    let max = std::array::from_fn::<_, 3, _>(|i| a.1[i].max(b.1[i]));
-    let mut shapes = Vec::new();
-    for x in mth::floor(min[0])..=mth::floor(max[0]) {
-        for y in mth::floor(min[1])..=mth::floor(max[1]) {
-            for z in mth::floor(min[2])..=mth::floor(max[2]) {
-                let state = level.get_block_state(BlockPos::new(x, y, z))?;
-                let offset = [f64::from(x), f64::from(y), f64::from(z)];
-                for shape in state.data().collision.boxes() {
-                    shapes.push((
-                        std::array::from_fn(|i| shape.min[i] + offset[i]),
-                        std::array::from_fn(|i| shape.max[i] + offset[i]),
-                    ));
-                }
-            }
-        }
+    player.velocity.y = ferraloom_util::java::max(f64::from(power), player.velocity.y);
+    if player.shared_flag(3) {
+        let angle = player.yaw * 0.017_453_292_f32;
+        player.velocity = player.velocity.add_xyz(
+            f64::from(-mth::sin(f64::from(angle))) * 0.2,
+            0.0,
+            f64::from(mth::cos(f64::from(angle))) * 0.2,
+        );
     }
-    Ok(shapes)
+    player.needs_sync = true;
+    Ok(())
 }
 pub struct PlayerBehavior;
-impl crate::entity::Entity for PlayerBehavior {}
+impl crate::entity::Entity for PlayerBehavior {
+    fn trace_entity_refs(
+        &self,
+        state: &crate::entity::EntityState,
+        references: &mut Vec<crate::entity::EntityRef>,
+    ) {
+        crate::entity::trace_base_entity_refs(state.as_entity(), references);
+    }
+
+    fn fire_immune_ticks(&self) -> i32 {
+        20
+    }
+    fn default_gravity(&self) -> f64 {
+        0.08
+    }
+    fn tick(&self, entity: crate::entity::EntityRef, level: &mut Level) -> Result<(), LevelError> {
+        let (spectator, passenger) = {
+            let player = level.entity::<ServerPlayer>(entity)?;
+            (
+                player.game_mode == GameType::Spectator,
+                player.vehicle.is_some(),
+            )
+        };
+        level
+            .entity_mut::<crate::entity::EntityData>(entity)?
+            .no_physics = spectator;
+        if spectator || passenger {
+            crate::entity::movement::set_on_ground(entity, false, None, level)?;
+        }
+        crate::entity::base_tick(self, entity, level)
+    }
+
+    fn maybe_back_off_from_edge(
+        &self,
+        entity: crate::entity::EntityRef,
+        level: &Level,
+        delta: Vec3,
+        mover: crate::entity::movement::MoverType,
+    ) -> Result<Vec3, LevelError> {
+        let max_step = self.max_up_step(entity, level)?;
+        crate::entity::movement::player_back_off_from_edge(
+            entity,
+            level,
+            delta,
+            mover,
+            max_step,
+            level.entity::<ServerPlayer>(entity)?.flying,
+        )
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -403,6 +593,7 @@ mod tests {
         let biome = Strategy::biomes(Arc::new(IdMap::new(vec![BiomeId(0)]).unwrap()));
         let section = LevelChunkSection::new(Strategy::block_states(), biome, BiomeId(0));
         let mut level = Level::new(Region::new(&BEHAVIORS));
+        crate::entity::tests::tags(&mut level);
         level
             .add_chunk(LevelChunk::new(ChunkPos::new(0, 0), 0..16, section))
             .unwrap();
