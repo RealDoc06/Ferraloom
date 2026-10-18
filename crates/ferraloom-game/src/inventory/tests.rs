@@ -236,8 +236,8 @@ fn real_vanilla_click_sequences_slots_carried_state_and_remote_updates() {
             _ => {}
         }
     }
-    assert_eq!(scenarios, 32);
-    assert_eq!(clicks, 2956);
+    assert_eq!(scenarios, 33);
+    assert_eq!(clicks, 2958);
 }
 
 #[test]

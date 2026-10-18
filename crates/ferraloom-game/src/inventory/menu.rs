@@ -628,6 +628,32 @@ impl AbstractContainerMenu {
         let slot = self.slot(index)?;
         let mut source = ctx.player.get_item(button);
         let target = self.get_item(ctx, slot.index);
+        if slot.container == ContainerId::Player
+            && slot.container_slot == button
+            && !source.is_empty()
+        {
+            // Java's source and target references alias here. Splitting an
+            // oversized stack leaves the old target equal to the overflow,
+            // which Inventory.add reinserts after the slot receives its limit.
+            if slot.may_pickup(&source, ctx.creative, hooks)? && slot.may_place(&source, hooks)? {
+                let max = slot.max_stack_size(self.container(ctx, slot.container), &source);
+                if count(&source) > max {
+                    self.set_item(ctx, slot.index, split(&mut source, max));
+                    self.on_take(ctx, slot.index, &source, 0, hooks)?;
+                    if !ctx
+                        .player
+                        .inventory
+                        .add(&mut source, ctx.player.equipment, ctx.creative)
+                    {
+                        ctx.drop_item(source);
+                    }
+                } else {
+                    self.set_item(ctx, slot.index, source.clone());
+                    self.on_take(ctx, slot.index, &source, 0, hooks)?;
+                }
+            }
+            return Ok(());
+        }
         if source.is_empty() {
             if !target.is_empty() && slot.may_pickup(&target, ctx.creative, hooks)? {
                 ctx.player.set_item(button, target.clone());
