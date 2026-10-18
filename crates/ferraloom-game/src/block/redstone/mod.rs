@@ -4,6 +4,7 @@ use super::{BlockBehavior, BlockMethod};
 use ferraloom_data::{Block, BlockClass};
 
 pub mod comparator;
+pub mod crafter;
 pub mod device;
 pub mod diode;
 pub mod dispenser;
@@ -88,6 +89,9 @@ pub(crate) fn ported_behavior(
         ) {
             return Some(&rail::RAIL);
         }
+    }
+    if block.class() == BlockClass::CrafterBlock && matches!(method, M::NeighborChanged | M::Tick) {
+        return Some(&crafter::CRAFTER);
     }
     if device::supports(block, method) {
         return Some(&device::DEVICES);

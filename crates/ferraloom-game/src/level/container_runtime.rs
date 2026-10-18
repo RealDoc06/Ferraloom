@@ -23,6 +23,18 @@ impl Level {
             entity::{EntityDataView, player::ServerPlayer},
             inventory::{ItemStack, MenuContainer, MenuError},
         };
+        let handle = self
+            .entity::<ServerPlayer>(player)?
+            .menus
+            .menu(menu)?
+            .block_entities
+            .first()
+            .copied();
+        if let Some(handle) = handle {
+            return Ok(self
+                .crafter_potential_results(handle)?
+                .map_or_else(ItemStack::default, |(_, result)| result));
+        }
         let services = self.container_resources()?;
         let region = self.region_mut();
         let owner = region
@@ -31,24 +43,10 @@ impl Level {
             .and_then(ServerPlayer::view)
             .ok_or(LevelError::MissingEntity(player))?;
         let menu = owner.menus.menu(menu)?;
-        let grid: &[ItemStack] = if let Some(handle) = menu.block_entities.first() {
-            let state = region
-                .chunks
-                .get(&ChunkPos::containing(handle.pos))
-                .and_then(|chunk| chunk.block_entities.get(handle.pos))
-                .filter(|state| state.data().generation == handle.generation)
-                .or_else(|| region.block_entity_state.detached.get(handle))
-                .ok_or(LevelError::MissingBlockEntity(*handle))?;
-            &state
-                .container()
-                .ok_or(MenuError::Unsupported("crafter grid container"))?
-                .items
-        } else {
-            match &menu.local[0] {
-                MenuContainer::Simple(container) => container.items(),
-                MenuContainer::Crafting(container) => container.items(),
-                MenuContainer::Result(_) => return Err(MenuError::Unsupported("crafter grid")),
-            }
+        let grid = match &menu.local[0] {
+            MenuContainer::Simple(container) => container.items(),
+            MenuContainer::Crafting(container) => container.items(),
+            MenuContainer::Result(_) => return Err(MenuError::Unsupported("crafter grid")),
         };
         let input = CraftingInputView::of_positioned(3, 3, grid)?.input;
         match region.container_runtime.crafter_recipes.get(
@@ -60,6 +58,48 @@ impl Level {
                 .value
                 .assemble(RecipeInput::Crafting(&input), services.crafting.as_ref())?),
             None => Ok(ItemStack::default()),
+        }
+    }
+    /// Port of CrafterBlock#getPotentialResults and assemble over the canonical
+    /// grid. The menu and block share the region's native ten-entry cache.
+    /// The recipe ID refers to the immutable services retained by the caller.
+    pub(crate) fn crafter_potential_results(
+        &mut self,
+        crafter: BlockEntityRef,
+    ) -> crate::inventory::Result<
+        Option<(
+            ferraloom_data::datapack::Identifier,
+            crate::inventory::ItemStack,
+        )>,
+    > {
+        use crate::crafting::{CraftingInputView, RecipeInput};
+        let services = self.container_resources()?;
+        let region = self.region_mut();
+        let state = region
+            .chunks
+            .get(&ChunkPos::containing(crafter.pos))
+            .and_then(|chunk| chunk.block_entities.get(crafter.pos))
+            .filter(|state| state.data().generation == crafter.generation)
+            .or_else(|| region.block_entity_state.detached.get(&crafter))
+            .ok_or(LevelError::MissingBlockEntity(crafter))?;
+        let BlockEntityState::Crafter(state) = state else {
+            return Err(crate::inventory::MenuError::Unsupported(
+                "crafter canonical grid",
+            ));
+        };
+        let input = CraftingInputView::of_positioned(3, 3, &state.parent.parent.items)?.input;
+        match region.container_runtime.crafter_recipes.get(
+            &services.recipes,
+            &input,
+            services.crafting.as_ref(),
+        )? {
+            Some(recipe) => Ok(Some((
+                recipe.id.clone(),
+                recipe
+                    .value
+                    .assemble(RecipeInput::Crafting(&input), services.crafting.as_ref())?,
+            ))),
+            None => Ok(None),
         }
     }
     pub fn with_loot_sources<R>(
