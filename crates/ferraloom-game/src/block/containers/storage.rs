@@ -104,6 +104,10 @@ impl BaseContainerBlockEntity {
     }
 }
 impl Container for BaseContainerBlockEntity {
+    fn set_item_count(&mut self, slot: usize, amount: i32) -> crate::inventory::Result<()> {
+        set_count(&mut self.items[slot], amount);
+        Ok(())
+    }
     fn size(&self) -> usize {
         self.items.len()
     }

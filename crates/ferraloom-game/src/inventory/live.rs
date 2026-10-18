@@ -32,6 +32,7 @@ pub struct ContainerSlot {
 pub trait MenuContainerAccess {
     fn get_item(&mut self, slot: ContainerSlot) -> Result<ItemStack>;
     fn set_item(&mut self, slot: ContainerSlot, stack: ItemStack) -> Result<()>;
+    fn set_item_count(&mut self, slot: ContainerSlot, amount: i32) -> Result<()>;
     fn remove_item(&mut self, slot: ContainerSlot, amount: i32) -> Result<ItemStack>;
     fn remove_item_no_update(&mut self, slot: ContainerSlot) -> Result<ItemStack>;
     fn set_changed(&mut self, container: ContainerHandle) -> Result<()>;
@@ -78,6 +79,25 @@ impl LiveMenuContext<'_> {
     }
 }
 impl MenuContainerAccess for LiveMenuContext<'_> {
+    fn set_item_count(&mut self, slot: ContainerSlot, amount: i32) -> Result<()> {
+        match slot.container {
+            ContainerHandle::PlayerInventory(player) => self.with_player(player, |container| {
+                container.set_item_count(slot.slot, amount)
+            })?,
+            ContainerHandle::BlockEntity(handle) => self
+                .level
+                .block_entity_mut::<BaseContainerBlockEntity>(handle)?
+                .set_item_count(slot.slot, amount),
+            ContainerHandle::MenuLocal {
+                player,
+                menu,
+                container,
+            } => self.with_local(player, menu, container, |container| {
+                container.set_item_count(slot.slot, amount)
+            })?,
+            ContainerHandle::Entity(_) => Err(MenuError::Unsupported("entity container resolver")),
+        }
+    }
     fn get_item(&mut self, slot: ContainerSlot) -> Result<ItemStack> {
         match slot.container {
             ContainerHandle::PlayerInventory(player) => {

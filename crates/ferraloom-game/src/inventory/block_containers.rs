@@ -26,6 +26,13 @@ impl BlockMenuContainer<'_> {
     }
 }
 impl Container for BlockMenuContainer<'_> {
+    fn set_item_count(&mut self, slot: usize, amount: i32) -> Result<()> {
+        let (index, slot) = self.locate(slot);
+        self.states[index]
+            .container_mut()
+            .unwrap()
+            .set_item_count(slot, amount)
+    }
     fn size(&self) -> usize {
         self.states
             .iter()

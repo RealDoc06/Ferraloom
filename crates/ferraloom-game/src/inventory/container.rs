@@ -1,10 +1,18 @@
-use super::{ItemStack, count, is_same_item_same_components, max_stack_size, set_count, split};
+use super::{
+    ItemStack, MenuError, Result, count, is_same_item_same_components, max_stack_size, set_count,
+    split,
+};
 
 /// Port of Container. The owner supplies live storage; menus never snapshot it.
 pub trait Container {
     fn size(&self) -> usize;
     fn get_item(&self, slot: usize) -> ItemStack;
     fn set_item(&mut self, slot: usize, stack: ItemStack);
+    /// ItemStack#setCount on the existing receiver. Slot#setChanged is a
+    /// separate operation; this must not invoke Container#setItem callbacks.
+    fn set_item_count(&mut self, _slot: usize, _amount: i32) -> Result<()> {
+        Err(MenuError::Unsupported("direct container stack mutation"))
+    }
     fn set_changed(&mut self) {}
     fn max_stack_size(&self) -> i32 {
         99
@@ -127,6 +135,10 @@ impl SimpleContainer {
     }
 }
 impl Container for SimpleContainer {
+    fn set_item_count(&mut self, slot: usize, amount: i32) -> Result<()> {
+        set_count(&mut self.items[slot], amount);
+        Ok(())
+    }
     fn size(&self) -> usize {
         self.items.len()
     }
@@ -153,6 +165,10 @@ pub struct PlayerContainer<'a> {
     pub equipment: &'a mut crate::entity::player::equipment::EntityEquipment,
 }
 impl Container for PlayerContainer<'_> {
+    fn set_item_count(&mut self, slot: usize, amount: i32) -> Result<()> {
+        set_count(self.inventory.get_item_mut(slot, self.equipment), amount);
+        Ok(())
+    }
     fn size(&self) -> usize {
         43
     }
@@ -202,6 +218,10 @@ pub struct ResultContainer {
     stack: ItemStack,
 }
 impl Container for ResultContainer {
+    fn set_item_count(&mut self, _slot: usize, amount: i32) -> Result<()> {
+        set_count(&mut self.stack, amount);
+        Ok(())
+    }
     fn size(&self) -> usize {
         1
     }
@@ -240,6 +260,10 @@ impl TransientCraftingContainer {
     }
 }
 impl Container for TransientCraftingContainer {
+    fn set_item_count(&mut self, slot: usize, amount: i32) -> Result<()> {
+        set_count(&mut self.items[slot], amount);
+        Ok(())
+    }
     fn size(&self) -> usize {
         self.items.len()
     }
@@ -280,6 +304,13 @@ impl MenuContainer {
     }
 }
 impl Container for MenuContainer {
+    fn set_item_count(&mut self, slot: usize, amount: i32) -> Result<()> {
+        match self {
+            Self::Simple(container) => container.set_item_count(slot, amount),
+            Self::Crafting(container) => container.set_item_count(slot, amount),
+            Self::Result(container) => container.set_item_count(slot, amount),
+        }
+    }
     fn size(&self) -> usize {
         match self {
             Self::Simple(c) => c.size(),
