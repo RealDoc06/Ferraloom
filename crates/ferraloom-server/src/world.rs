@@ -122,6 +122,7 @@ impl SectionRegistry for RegistryAdapter {
 
 pub struct GenerationLightNeighbor {
     pub pos: ChunkPos,
+    pub(crate) revision: GenerationRevision,
     pub sections: Vec<LevelChunkSection>,
     pub disk: SerializableChunkData,
 }
@@ -176,6 +177,7 @@ pub struct LitChunk {
 enum LightJob {
     Initialize {
         request: u64,
+        revision: GenerationRevision,
         pos: ChunkPos,
         sections: Vec<LevelChunkSection>,
         saved_light: Option<Box<SerializableChunkData>>,
@@ -193,6 +195,11 @@ enum LightMutation {
     CheckBlock(BlockPos),
     SectionStatus(SectionPos, bool),
 }
+#[derive(Clone, Copy)]
+struct ImportedGenerationLight {
+    revision: GenerationRevision,
+    lighted: bool,
+}
 
 /// Off-tick ThreadedLevelLightEngine worker. Messages and dirty effects retain
 /// submission order; only owned section snapshots cross the worker boundary.
@@ -207,10 +214,12 @@ fn run_light_worker(
     let mut engine = LevelLightEngine::new(true, has_skylight);
     let mut lights: BTreeMap<i64, ChunkLight> = BTreeMap::new();
     let mut full_chunks = std::collections::HashSet::new();
+    let mut imported = BTreeMap::<i64, ImportedGenerationLight>::new();
     while let Ok(job) = light_in.recv() {
         let (initialized, changes) = match job {
             LightJob::Initialize {
                 request,
+                revision,
                 pos,
                 sections,
                 saved_light,
@@ -225,7 +234,12 @@ fn run_light_worker(
                 );
                 let neighbors = neighbors
                     .into_iter()
-                    .filter(|neighbor| !full_chunks.contains(&neighbor.pos))
+                    .filter(|neighbor| {
+                        !full_chunks.contains(&neighbor.pos)
+                            && imported
+                                .get(&neighbor.pos.pack())
+                                .is_none_or(|known| known.revision < neighbor.revision)
+                    })
                     .collect::<Vec<_>>();
                 for neighbor in &neighbors {
                     snapshots.insert_chunk(
@@ -240,6 +254,7 @@ fn run_light_worker(
                 }
                 let mut changes = Vec::new();
                 for neighbor in neighbors {
+                    let lighted = neighbor.disk.is_light_on == Some(true);
                     for section in neighbor.disk.sections.as_deref().unwrap_or_default() {
                         if let Some(y) = section.y {
                             for (layer, data) in [
@@ -270,18 +285,27 @@ fn run_light_worker(
                     }
                     changes.extend(
                         engine
-                            .initialize_light(
-                                &snapshots,
-                                neighbor.pos,
-                                neighbor.disk.is_light_on == Some(true),
-                            )
+                            .initialize_light(&snapshots, neighbor.pos, lighted)
                             .sections,
                     );
+                    imported.insert(
+                        neighbor.pos.pack(),
+                        ImportedGenerationLight {
+                            revision: neighbor.revision,
+                            lighted,
+                        },
+                    );
                 }
-                let lighted = saved_light
-                    .as_ref()
-                    .is_some_and(|disk| disk.is_light_on == Some(true));
-                if let Some(disk) = saved_light {
+                let known = imported.get(&pos.pack()).copied();
+                let import = known.is_none_or(|known| known.revision < revision);
+                let lighted = if import {
+                    saved_light
+                        .as_ref()
+                        .is_some_and(|disk| disk.is_light_on == Some(true))
+                } else {
+                    known.unwrap().lighted
+                };
+                if import && let Some(disk) = saved_light {
                     for section in disk.sections.as_deref().unwrap_or_default() {
                         if let Some(y) = section.y {
                             for (layer, data) in [
@@ -309,9 +333,17 @@ fn run_light_worker(
                 }
                 changes.extend(engine.initialize_light(&snapshots, pos, lighted).sections);
                 changes.extend(engine.light_chunk(&snapshots, pos, lighted).sections);
+                imported.insert(
+                    pos.pack(),
+                    ImportedGenerationLight {
+                        revision: known.map_or(revision, |known| known.revision.max(revision)),
+                        lighted: true,
+                    },
+                );
                 (Some((request, pos)), changes)
             }
             LightJob::Unload { pos } => {
+                imported.remove(&pos.pack());
                 for y in min_section..max_section {
                     engine.update_section_status(SectionPos::new(pos.x, y, pos.z), true);
                 }
@@ -1487,6 +1519,7 @@ impl World {
         Ok(())
     }
     pub fn integrate(&mut self, request: u64, mut terrain: Terrain) -> Result<LevelChunk> {
+        let light_revision = terrain.revision;
         if let Some(snapshot) = self.structure_snapshots.get(&terrain.pos.pack())
             && snapshot.revision > terrain.revision
         {
@@ -1511,6 +1544,7 @@ impl World {
         );
         self.light_tx.send(LightJob::Initialize {
             request,
+            revision: light_revision,
             pos: terrain.pos,
             sections: terrain.sections.clone(),
             saved_light: Some(Box::new(terrain.disk.clone())),
@@ -1954,6 +1988,85 @@ mod light_worker_tests {
     use super::*;
 
     #[test]
+    fn older_promotion_preserves_newer_neighbor_light_and_later_deltas() {
+        let (send, receive) = mpsc::channel();
+        let (reply, mut results) = tokio::sync::mpsc::unbounded_channel();
+        let worker = std::thread::spawn(move || run_light_worker(receive, reply, 0, 1, false));
+        let first = ChunkPos::new(1, 0);
+        let second = ChunkPos::new(0, 0);
+        let biome = BiomeId(0);
+        let empty = LevelChunkSection::new(
+            Strategy::block_states(),
+            Strategy::biomes(Arc::new(IdMap::new(vec![biome]).unwrap())),
+            biome,
+        );
+        let mut source = empty.clone();
+        source.set_block_state(8, 0, 8, Block::GLOWSTONE.default_state());
+        let disk = |light| {
+            let mut bytes = vec![0; 2048];
+            bytes[68] = light;
+            SerializableChunkData {
+                is_light_on: Some(true),
+                sections: Some(vec![storage::ChunkSection {
+                    y: Some(0),
+                    block_light: Some(ByteArray(bytes)),
+                    ..Default::default()
+                }]),
+                ..Default::default()
+            }
+        };
+        // B executed at revision 1; A then imported its updated light at 2.
+        send.send(LightJob::Initialize {
+            request: 0,
+            revision: GenerationRevision(2),
+            pos: first,
+            sections: vec![empty.clone()],
+            saved_light: None,
+            neighbors: vec![GenerationLightNeighbor {
+                pos: second,
+                revision: GenerationRevision(2),
+                sections: vec![source.clone()],
+                disk: disk(15),
+            }],
+        })
+        .unwrap();
+        let first_result = results.blocking_recv().unwrap();
+        assert_eq!(first_result.initialized, Some((0, first)));
+        assert_eq!(first_result.updates[&second.pack()].block[&0][68] & 15, 15);
+        send.send(LightJob::Initialize {
+            request: 1,
+            revision: GenerationRevision(1),
+            pos: second,
+            sections: vec![source],
+            saved_light: Some(Box::new(disk(0))),
+            neighbors: Vec::new(),
+        })
+        .unwrap();
+        let promoted = results.blocking_recv().unwrap();
+        assert_eq!(promoted.initialized, Some((1, second)));
+        assert_eq!(promoted.updates[&second.pack()].block[&0][68] & 15, 15);
+        send.send(LightJob::Changed {
+            chunks: vec![(second, vec![empty])],
+            changes: vec![
+                LightMutation::SectionStatus(SectionPos::new(0, 0, 0), true),
+                LightMutation::CheckBlock(BlockPos::new(8, 0, 8)),
+            ],
+        })
+        .unwrap();
+        let delta = results.blocking_recv().unwrap();
+        assert_eq!(delta.initialized, None);
+        assert_eq!(
+            delta.updates[&second.pack()]
+                .block
+                .get(&0)
+                .map_or(0, |data| data[68] & 15),
+            0
+        );
+        drop(send);
+        worker.join().unwrap();
+    }
+
+    #[test]
     fn block_light_deltas_update_real_sections_without_completing_generation() {
         let (send, receive) = mpsc::channel();
         let (reply, mut results) = tokio::sync::mpsc::unbounded_channel();
@@ -1971,6 +2084,7 @@ mod light_worker_tests {
             .collect();
         send.send(LightJob::Initialize {
             request: 7,
+            revision: GenerationRevision(1),
             pos,
             sections: sections.clone(),
             saved_light: None,

@@ -375,6 +375,7 @@ impl GenerationState {
                 {
                     Some(GenerationLightNeighbor {
                         pos: neighbor,
+                        revision: self.revision,
                         sections: holder.chunk.region.chunk.sections.clone(),
                         disk: holder.chunk.disk.clone(),
                     })
