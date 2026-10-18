@@ -53,7 +53,7 @@ fn no_collision_stops_at_first_shape_and_retains_later_required_reads() {
                     assert_eq!(pos, ChunkPos::new(0, 1));
                     "required-read".to_owned()
                 }
-                Err(error) => panic!("unexpected collision query error: {error}"),
+                Err(error) => panic!("unexpected collision query error: {error:?}"),
             };
             actual.push(format!(
                 "no-collision-order\t{}\t{liquids}\t{result}",
