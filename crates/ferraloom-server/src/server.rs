@@ -935,6 +935,8 @@ impl MinecraftServer {
             player.game_mode = mode;
         }
         player.view_distance = i32::from(self.connections[&connection].information.view_distance);
+        player.text_filtering_enabled =
+            self.connections[&connection].information.text_filtering_enabled;
         let center = player.chunk_position();
         self.request_area(center, 3)?;
         let c = self.connections.get_mut(&connection).unwrap();
