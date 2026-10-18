@@ -983,6 +983,9 @@ impl<'a> WorldGenRegion<'a> {
     }
     /// EntityGetter#isUnobstructed always succeeds: WorldGenRegion#getEntities
     /// returns an empty list, including for shapes spanning other chunks.
+    /// CollisionGetter first computes a contextual collision shape, but vanilla's
+    /// overrides only read state/context: no mutation or RNG draw. The discarded
+    /// shape therefore need not be evaluated (24 reflected owners spot-checked).
     pub fn is_unobstructed(&self, _state: BlockState, _p: [i32; 3]) -> Result<bool, Error> {
         Ok(true)
     }
