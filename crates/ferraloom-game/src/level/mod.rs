@@ -73,6 +73,7 @@ pub enum LevelError {
     MissingEnvironmentContext,
     MissingBlockTags,
     MissingBlockTag,
+    MissingDamageTypeTag,
     MissingFluidTags,
     MissingEntityTypeTags,
     MissingItemTags,
