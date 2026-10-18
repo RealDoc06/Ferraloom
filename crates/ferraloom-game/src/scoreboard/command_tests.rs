@@ -54,6 +54,19 @@ fn packet_json(packet: &cb::Packet) -> Value {
     let hex: String = bytes.iter().map(|byte| format!("{byte:02x}")).collect();
     json!({"type":name,"hex":hex})
 }
+fn comparable_feedback(command: &str, mut feedback: Vec<Value>) -> Vec<Value> {
+    // PlayerScores#listScores keys by Objective identity hash, so only these
+    // independent list entries have JVM-allocation-dependent ordering.
+    if command.starts_with("scoreboard players list ") && !feedback.is_empty() {
+        let entries = &mut feedback[1..];
+        if entries.iter().all(|entry| {
+            entry["message"]["translate"] == "commands.scoreboard.players.list.entity.entry"
+        }) {
+            entries.sort_by_key(Value::to_string);
+        }
+    }
+    feedback
+}
 #[test]
 fn vanilla_registered_commands_feedback_and_packet_bytes() {
     let cases: Vec<Case> =
@@ -101,7 +114,12 @@ fn vanilla_registered_commands_feedback_and_packet_bytes() {
                 );
                 assert_eq!(Some(result.value), case.value, "{} result", case.command);
                 let feedback: Vec<_> = result.feedback.iter().map(|feedback|json!({"message":serde_json::from_str::<Value>(&feedback.message.to_json().unwrap()).unwrap(),"broadcast":feedback.broadcast})).collect();
-                assert_eq!(feedback, case.feedback, "{} feedback", case.command);
+                assert_eq!(
+                    comparable_feedback(&case.command, feedback),
+                    comparable_feedback(&case.command, case.feedback),
+                    "{} feedback",
+                    case.command
+                );
             }
             Err(error) => {
                 let component = commands::exceptions::error_component(&error);
