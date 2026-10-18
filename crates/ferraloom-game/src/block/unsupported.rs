@@ -237,11 +237,13 @@ impl UnportedCalls {
                     item.name(),
                     self.stats.skipped_calls
                 ),
-                UnportedCall::Operation(UnportedOperation::ItemCraftedPostProcess(item)) => eprintln!(
-                    "Unported crafted item effect skipped: {}#onCraftedPostProcess (skipped calls: {})",
-                    item.name(),
-                    self.stats.skipped_calls
-                ),
+                UnportedCall::Operation(UnportedOperation::ItemCraftedPostProcess(item)) => {
+                    eprintln!(
+                        "Unported crafted item effect skipped: {}#onCraftedPostProcess (skipped calls: {})",
+                        item.name(),
+                        self.stats.skipped_calls
+                    )
+                }
                 UnportedCall::Operation(UnportedOperation::PortalUse(block)) => eprintln!(
                     "Unported portal use effect skipped: {} (skipped calls: {})",
                     block.name(),
