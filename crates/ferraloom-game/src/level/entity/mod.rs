@@ -271,6 +271,15 @@ impl Level {
             })
             .collect()
     }
+    pub fn entities_of_class<T: crate::entity::EntityDataView>(
+        &self,
+        bb: Aabb,
+        mut predicate: impl FnMut(EntityRef, &T) -> bool,
+    ) -> Vec<EntityRef> {
+        self.entities_in(bb, |id, state| {
+            T::view(state).is_some_and(|value| predicate(id, value))
+        })
+    }
     pub fn all_entities(&self) -> Vec<EntityRef> {
         self.region().entities.lookup.all()
     }

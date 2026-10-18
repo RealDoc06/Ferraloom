@@ -30,6 +30,7 @@ impl EntityRef {
 
 mod base;
 pub mod collision;
+pub mod collision_context;
 mod lifecycle;
 pub use lifecycle::{common_tick, eject_passengers, position_rider, start_riding, stop_riding};
 pub mod persistence;
