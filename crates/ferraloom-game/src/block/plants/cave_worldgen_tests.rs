@@ -266,8 +266,23 @@ fn check(
         .map(|v| (point(v), v[3].as_u64().unwrap() as u16))
         .collect::<BTreeMap<_, _>>();
     assert_eq!(blocks, expected, "blocks {label}");
-    assert!(entities.is_empty(), "unexpected block entity {label}");
-    assert!(case["block_entities"].as_array().unwrap().is_empty());
+    // OreCaveGolden's proxy saves live block entities. Real WorldGenRegion
+    // protochunks retain DUMMY position tags, covered by the real-region oracle.
+    let expected_entities = case["block_entities"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|row| {
+            let pos = point(&row[0]);
+            let mut marker = ferraloom_nbt::CompoundTag::new();
+            marker.insert("id", ferraloom_nbt::Tag::String("DUMMY".into()));
+            for (key, value) in [("x", pos[0]), ("y", pos[1]), ("z", pos[2])] {
+                marker.insert(key, ferraloom_nbt::Tag::Int(value));
+            }
+            (pos, marker)
+        })
+        .collect::<BTreeMap<_, _>>();
+    assert_eq!(entities, expected_entities, "protochunk block entities {label}");
     let group_ticks = |values: &[Value]| {
         let mut groups = BTreeMap::<_, Vec<_>>::new();
         for value in values {
