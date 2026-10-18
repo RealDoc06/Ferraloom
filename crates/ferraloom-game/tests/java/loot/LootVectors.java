@@ -57,6 +57,24 @@ public final class LootVectors {
     static JsonElement stackNbt(ItemStack stack) {return stack.isEmpty()?JsonNull.INSTANCE:new JsonPrimitive(ItemStack.CODEC.encodeStart(lookup.createSerializationContext(net.minecraft.nbt.NbtOps.INSTANCE),stack).getOrThrow().toString());}
     static JsonArray stacksNbt(List<ItemStack> stacks) {var a=new JsonArray();for(var stack:stacks)a.add(stackNbt(stack));return a;}
 
+    static final class RecordingContainer extends SimpleContainer {
+        final JsonArray placements=new JsonArray();
+        final boolean callbackRandom;
+        boolean recording;
+        RecordingContainer(int size,boolean callbackRandom){super(size);this.callbackRandom=callbackRandom;}
+        @Override public void setItem(int slot,ItemStack item){
+            super.setItem(slot,item);
+            if(recording){
+                var event=new JsonObject();event.addProperty("slot",slot);event.add("stack_nbt",stackNbt(getItem(slot)));
+                if(callbackRandom){
+                    event.addProperty("next",RANDOM.get().nextLong());
+                    var visible=new JsonArray();for(int i=0;i<getContainerSize();i++)visible.add(stackNbt(getItem(i)));event.add("visible_nbt",visible);
+                }
+                placements.add(event);
+            }
+        }
+    }
+
     static LootParams params(Identifier id,LootTable table) {
         var values=ContextMap.builder();
         var block=Blocks.STONE;
@@ -86,9 +104,11 @@ public final class LootVectors {
         var random=RandomSource.create(seed);RANDOM.set(random);
         var result=new JsonObject();result.add("definition",json);result.addProperty("seed",seed);
         var generated=table.getRandomItems(params,random);result.add("items",stacks(generated));result.add("items_nbt",stacksNbt(generated));result.addProperty("next",random.nextLong());
-        random=RandomSource.create(seed);RANDOM.set(random);var container=new SimpleContainer(9);container.setItem(3,new ItemStack(Items.APPLE));
+        random=RandomSource.create(seed);RANDOM.set(random);var container=new RecordingContainer(9,false);container.setItem(3,new ItemStack(Items.APPLE));container.recording=true;
         table.fill(container,params,0);var slots=new JsonArray();var slotsNbt=new JsonArray();for(int slot=0;slot<9;slot++){slots.add(stack(container.getItem(slot)));slotsNbt.add(stackNbt(container.getItem(slot)));}
-        result.add("slots",slots);result.add("slots_nbt",slotsNbt);result.addProperty("fill_next",random.nextLong());return result;
+        result.add("slots",slots);result.add("slots_nbt",slotsNbt);result.add("placements",container.placements);result.addProperty("fill_next",random.nextLong());
+        random=RandomSource.create(seed);RANDOM.set(random);var callbacks=new RecordingContainer(9,true);callbacks.setItem(3,new ItemStack(Items.APPLE));callbacks.recording=true;
+        table.fill(callbacks,params,0);result.add("deliveries",callbacks.placements);result.addProperty("delivery_next",random.nextLong());return result;
     }
     static void focused(JsonObject output) throws Exception {
         var focused=new JsonArray();
@@ -345,10 +365,10 @@ public final class LootVectors {
                 try {
                     var params=params(id,table);var random=RandomSource.create(seed);RANDOM.set(random);
                     var generated=table.getRandomItems(params,random);result.add("items",stacks(generated));result.add("items_nbt",stacksNbt(generated));result.addProperty("next",random.nextLong());
-                    random=RandomSource.create(seed);RANDOM.set(random);var container=new SimpleContainer(27);
+                    random=RandomSource.create(seed);RANDOM.set(random);var container=new RecordingContainer(27,false);container.recording=true;
                     table.fill(container,params,0);
                     var slots=new JsonArray();var slotsNbt=new JsonArray();for(int slot=0;slot<27;slot++){slots.add(stack(container.getItem(slot)));slotsNbt.add(stackNbt(container.getItem(slot)));}
-                    result.add("slots",slots);result.add("slots_nbt",slotsNbt);result.addProperty("fill_next",random.nextLong());vectors.add(result);
+                    result.add("slots",slots);result.add("slots_nbt",slotsNbt);result.add("placements",container.placements);result.addProperty("fill_next",random.nextLong());vectors.add(result);
                 } catch(UnsupportedOperationException e) {result.addProperty("missing_fact",e.getMessage());pending.add(result);}
             }
         }

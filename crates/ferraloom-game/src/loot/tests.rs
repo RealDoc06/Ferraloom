@@ -209,6 +209,96 @@ fn synthetic_tables_and_providers_match_real_java() {
     }
 }
 
+fn assert_placements(actual: &[(usize, ItemStack)], expected: &serde_json::Value) {
+    let expected = expected.as_array().unwrap();
+    assert_eq!(actual.len(), expected.len());
+    for ((slot, stack), event) in actual.iter().zip(expected) {
+        assert_eq!(*slot as u64, event["slot"].as_u64().unwrap());
+        assert_native_stack(stack, &event["stack_nbt"], &event.to_string());
+    }
+}
+
+#[test]
+fn fill_placements_preserve_java_delivery_visibility_and_callback_rng() {
+    use std::cell::Cell;
+    struct GenerationFacts(Cell<bool>);
+    impl crate::predicates::PredicateContext for GenerationFacts {}
+    impl LootFacts for GenerationFacts {
+        fn item_enabled(&self, _stack: &ItemStack) -> Result<bool> {
+            assert!(
+                !self.0.get(),
+                "feature checks precede the canonical slot scan"
+            );
+            Ok(true)
+        }
+    }
+    let vectors: serde_json::Value =
+        serde_json::from_str(include_str!("../../tests/java/loot/vectors.json")).unwrap();
+    for record in vectors["synthetic_tables"].as_array().unwrap() {
+        let id = Identifier::parse("test").unwrap();
+        let mut data = LootData::default();
+        data.tables.insert(
+            id.clone(),
+            LootTable::decode(&record["definition"]).unwrap(),
+        );
+        let params = LootParams {
+            luck: 0.75,
+            ..Default::default()
+        };
+        let mut random = LegacyRandomSource::new(record["seed"].as_i64().unwrap());
+        let mut sequences = RandomSequences::default();
+        let mut container = vec![ItemStack::default(); 9];
+        container[3] = ItemStack::new(Item::APPLE, 1, DataComponentPatch::default());
+        let facts = GenerationFacts(Cell::new(false));
+        let placements = data
+            .fill_seeded_placements(
+                &id,
+                &params,
+                0,
+                &mut LootRandomSources {
+                    world_seed: 0,
+                    sequences: &mut sequences,
+                    level_random: &mut random,
+                },
+                &facts,
+                || {
+                    assert!(!facts.0.replace(true));
+                    Ok(container
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(slot, stack)| stack.is_empty().then_some(slot))
+                        .collect())
+                },
+            )
+            .unwrap();
+        assert!(facts.0.get());
+        assert_placements(&placements, &record["placements"]);
+        assert_placements(&placements, &record["deliveries"]);
+        for ((slot, stack), event) in placements
+            .into_iter()
+            .zip(record["deliveries"].as_array().unwrap())
+        {
+            container[slot] = stack;
+            assert_eq!(
+                random.next_long(),
+                event["next"].as_i64().unwrap(),
+                "{record}"
+            );
+            for (stack, expected) in container
+                .iter()
+                .zip(event["visible_nbt"].as_array().unwrap())
+            {
+                assert_native_stack(stack, expected, &event.to_string());
+            }
+        }
+        assert_eq!(
+            random.next_long(),
+            record["delivery_next"].as_i64().unwrap(),
+            "{record}"
+        );
+    }
+}
+
 struct ItemFacts {
     items: ferraloom_data::datapack::TagSet<Item>,
     blocks: ferraloom_data::datapack::TagSet<ferraloom_data::Block>,
@@ -424,6 +514,12 @@ fn all_available_builtin_tables_match_real_java() {
             record["fill_next"].as_i64().unwrap(),
             "{id} seed {seed} fill RNG"
         );
+        let mut random = LegacyRandomSource::new(seed);
+        let placements = data
+            .fill_placements(&id, &params, &mut random, &facts, || Ok((0..27).collect()))
+            .unwrap();
+        assert_placements(&placements, &record["placements"]);
+        assert_eq!(random.next_long(), record["fill_next"].as_i64().unwrap());
         matched_tables.insert(id);
         matched += 1;
     }
