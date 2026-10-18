@@ -79,10 +79,21 @@ impl FoodData {
         self.exhaustion_level = tag.get_float_or("foodExhaustionLevel", 0.0);
     }
     pub fn save(&self, tag: &mut CompoundTag) {
+        // ValueOutput#putFloat uses FloatTag.valueOf's positive ZERO singleton.
+        let saturation = if self.saturation_level == 0.0 {
+            0.0
+        } else {
+            self.saturation_level
+        };
+        let exhaustion = if self.exhaustion_level == 0.0 {
+            0.0
+        } else {
+            self.exhaustion_level
+        };
         tag.insert("foodLevel", Tag::Int(self.food_level));
         tag.insert("foodTickTimer", Tag::Int(self.tick_timer));
-        tag.insert("foodSaturationLevel", Tag::Float(self.saturation_level));
-        tag.insert("foodExhaustionLevel", Tag::Float(self.exhaustion_level));
+        tag.insert("foodSaturationLevel", Tag::Float(saturation));
+        tag.insert("foodExhaustionLevel", Tag::Float(exhaustion));
     }
 }
 

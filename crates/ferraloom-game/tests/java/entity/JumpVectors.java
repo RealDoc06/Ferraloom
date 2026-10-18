@@ -30,7 +30,12 @@ public final class JumpVectors {
       var arbitrary=(Float)power.invoke(entity,multipliers[i%multipliers.length]);var ordinary=(Float)power.invoke(entity,1f);
       entity.jumpFromGround();var after=entity.getDeltaMovement();boolean sync=entity.needsSync;
       entity.setDeltaMovement(before);liquid.invoke(entity,FluidTags.WATER);
-      System.out.println("living-jump\t"+kind+"\t"+i+"\t"+Block.getId(surface.defaultBlockState())+"\t"+TravelVectors.d(strengths[i%strengths.length])+"\t"+TravelVectors.f(multipliers[i%multipliers.length])+"\t"+boost+"\t"+TravelVectors.f(entity.getYRot())+"\t"+entity.isSprinting()+"\t"+TrackingVectors.vec(before)+"\t"+TravelVectors.f(arbitrary)+"\t"+TravelVectors.f(ordinary)+"\t"+TrackingVectors.vec(after)+"\t"+sync+"\t"+TrackingVectors.vec(entity.getDeltaMovement()));
+      System.out.println("living-jump\t"+kind+"\t"+i+"\t"+Block.getId(surface.defaultBlockState())+"\t"+TravelVectors.d(strengths[i%strengths.length])+"\t"+TravelVectors.f(multipliers[i%multipliers.length])+"\t"+boost+"\t"+TravelVectors.f(entity.getYRot())+"\t"+entity.isSprinting()+"\t"+TrackingVectors.vec(before)+"\t"+TravelVectors.f(arbitrary)+"\t"+TravelVectors.f(ordinary)+"\t"+TrackingVectors.vec(after)+"\t"+sync+"\t"+TrackingVectors.vec(entity.getDeltaMovement())+"\t"+(entity instanceof Mob mob?mob.getNavigation().canFloat():"-"));
+    }
+    for(boolean canFloat:List.of(false,true))for(var before:List.of(new Vec3(-0.0,-0.0,-0.0),new Vec3(0.12,-0.08,0.03),new Vec3(1,0.9,-2))) {
+      var cow=new Cow(EntityTypes.COW,level);cow.getNavigation().setCanFloat(canFloat);cow.setDeltaMovement(before);
+      liquid.invoke(cow,FluidTags.WATER);
+      System.out.println("mob-liquid-jump\t"+canFloat+"\t"+TrackingVectors.vec(before)+"\t"+TrackingVectors.vec(cow.getDeltaMovement()));
     }
   }
 }

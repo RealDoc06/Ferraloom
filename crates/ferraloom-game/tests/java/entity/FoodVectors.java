@@ -38,6 +38,11 @@ public final class FoodVectors {
   static void load(FoodData food,CompoundTag tag){food.readAdditionalSaveData(TagValueInput.create(ProblemReporter.DISCARDING,lookup,tag));}
   public static void run(Level level)throws Exception {
     lookup=level.registryAccess();
+    for(float saturation:new float[]{0f,-0f,2.5f,Float.NaN,Float.POSITIVE_INFINITY}) {
+      var food=new FoodData();food.setSaturation(saturation);
+      ExperienceVectors.field(FoodData.class,"exhaustionLevel").setFloat(food,saturation);
+      System.out.println("food-save\t"+f(saturation)+"\t"+f(food.getSaturationLevel())+"\t"+state(food));
+    }
     for(String name:List.of("default","loaded","negative","wrong","numeric","nan")) {
       var tag=tag(7,1.25f,3.5f,17);
       switch(name){case "default"->tag=new CompoundTag();case "negative"->tag=tag(-8,-0f,-7.5f,-9);case "wrong"->{tag.putString("foodLevel","x");tag.putString("foodTickTimer","x");tag.putString("foodSaturationLevel","x");tag.putString("foodExhaustionLevel","x");}case "numeric"->{tag.putDouble("foodLevel",17.8);tag.putDouble("foodSaturationLevel",2.7);tag.putLong("foodTickTimer",Integer.MAX_VALUE+1L);}case "nan"->tag=tag(99,Float.NaN,Float.POSITIVE_INFINITY,Integer.MAX_VALUE);}

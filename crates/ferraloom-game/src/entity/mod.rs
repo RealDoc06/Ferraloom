@@ -13,6 +13,7 @@ pub mod effect;
 pub mod effects;
 pub mod experience_orb;
 pub mod item;
+pub mod mob;
 pub mod player;
 pub mod pushing;
 mod relationships;
@@ -227,6 +228,8 @@ pub enum EntityMethod {
     PlayShoulderEntityAmbientSound,
     RespawnEntityOnShoulder,
     CheckAutoSpinAttack,
+    RunLocationChangedEffects,
+    JumpInLiquid,
 }
 impl EntityMethod {
     pub const fn name(self) -> &'static str {
@@ -236,6 +239,8 @@ impl EntityMethod {
             Self::PlayShoulderEntityAmbientSound => "playShoulderEntityAmbientSound",
             Self::RespawnEntityOnShoulder => "respawnEntityOnShoulder",
             Self::CheckAutoSpinAttack => "checkAutoSpinAttack",
+            Self::RunLocationChangedEffects => "EnchantmentHelper#runLocationChangedEffects",
+            Self::JumpInLiquid => "jumpInLiquid",
         }
     }
 }
@@ -695,6 +700,30 @@ pub trait Entity: Sync {
     /// LivingEntity parent body; ServerPlayer's stat/exhaustion override follows.
     fn jump_from_ground(&self, entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
         living::jump::jump_from_ground(self, entity, level)
+    }
+    fn jump_in_liquid(&self, entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
+        living::jump::jump_in_liquid(entity, level)
+    }
+    /// Port of Entity#checkFallDamage; living subclasses select their parent body.
+    #[allow(clippy::too_many_arguments)]
+    fn check_fall_damage(
+        &self,
+        entity: EntityRef,
+        dy: f64,
+        on_ground: bool,
+        state: ferraloom_data::BlockState,
+        pos: ferraloom_util::BlockPos,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        movement::base_check_fall_damage(entity, dy, on_ground, state, pos, level)
+    }
+    fn on_changed_block(
+        &self,
+        _entity: EntityRef,
+        _pos: ferraloom_util::BlockPos,
+        _level: &mut Level,
+    ) -> Result<(), LevelError> {
+        Ok(())
     }
     fn ignite_for_ticks(
         &self,

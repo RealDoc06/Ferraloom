@@ -300,7 +300,7 @@ pub fn move_entity<E: Entity + ?Sized>(
     let effect_pos = get_on_pos(entity, 0.2_f32, level)?;
     let effect_state = level.get_block_state(effect_pos)?;
     if authoritative {
-        check_fall_damage(
+        behavior.check_fall_damage(
             entity,
             movement.y,
             level.entity::<EntityData>(entity)?.on_ground,
@@ -345,6 +345,19 @@ pub fn move_entity<E: Entity + ?Sized>(
 
 /// Port of Entity#checkFallDamage. fallOn runs before reset and can reenter.
 pub fn check_fall_damage(
+    entity: EntityRef,
+    dy: f64,
+    on_ground: bool,
+    state: BlockState,
+    pos: BlockPos,
+    level: &mut Level,
+) -> Result<(), LevelError> {
+    level
+        .entity_behavior(entity)?
+        .check_fall_damage(entity, dy, on_ground, state, pos, level)
+}
+/// Port of Entity#checkFallDamage, selected explicitly by living super calls.
+pub fn base_check_fall_damage(
     entity: EntityRef,
     dy: f64,
     on_ground: bool,

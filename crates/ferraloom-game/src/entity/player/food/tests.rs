@@ -89,6 +89,29 @@ impl Entity for StarveProbe {
     }
 }
 #[test]
+fn native_food_save_canonicalizes_signed_zero_without_changing_live_fields() {
+    let mut checked = 0;
+    for line in include_str!("../../../../tests/java/entity/vectors.tsv")
+        .lines()
+        .filter(|line| line.starts_with("food-save\t"))
+    {
+        let row: Vec<_> = line.split('\t').collect();
+        let mut food = FoodData::default();
+        food.set_saturation(f(row[1]));
+        food.exhaustion_level = f(row[1]);
+        let mut saved = CompoundTag::new();
+        food.save(&mut saved);
+        assert_eq!(format!("{:x}", food.saturation_level().to_bits()), row[2]);
+        assert_eq!(food.exhaustion_level().to_bits(), f(row[1]).to_bits());
+        let mut restored = FoodData::default();
+        restored.load(&saved);
+        assert_eq!(state(&restored), row[3]);
+        checked += 1;
+    }
+    assert_eq!(checked, 5);
+}
+
+#[test]
 fn native_food_state_numeric_load_defaults_roundtrip_and_float_arithmetic() {
     let mut checked = 0;
     for line in include_str!("../../../../tests/java/entity/vectors.tsv").lines() {

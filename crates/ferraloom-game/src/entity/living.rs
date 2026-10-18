@@ -8,6 +8,7 @@ use ferraloom_protocol::{codec::VarInt, component::ItemStack};
 use ferraloom_util::random::RandomSource;
 
 pub mod climbable;
+pub mod fall_damage;
 pub mod freezing;
 pub mod gliding;
 pub mod jump;

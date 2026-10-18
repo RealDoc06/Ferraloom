@@ -104,7 +104,12 @@ fn native_jump_power_ground_sync_and_liquid_impulse_preserve_bits() {
         assert_eq!(bits(base.velocity), row[12], "ground {row:?}");
         assert_eq!(base.needs_sync.to_string(), row[13], "sync {row:?}");
         level.entity_mut::<EntityData>(entity).unwrap().velocity = vector(row[9]);
-        jump_in_liquid(entity, &mut level).unwrap();
+        if row[1] == "cow" {
+            crate::entity::mob::jump_in_liquid(entity, row[15].parse().unwrap(), &mut level)
+                .unwrap();
+        } else {
+            behavior.jump_in_liquid(entity, &mut level).unwrap();
+        }
         assert_eq!(
             bits(level.entity::<EntityData>(entity).unwrap().velocity),
             row[14],
@@ -113,4 +118,28 @@ fn native_jump_power_ground_sync_and_liquid_impulse_preserve_bits() {
         checked += 1;
     }
     assert_eq!(checked, 48);
+}
+
+#[test]
+fn mob_liquid_jump_uses_both_native_navigation_capabilities() {
+    let mut checked = 0;
+    for line in include_str!("../../../../tests/java/entity/vectors.tsv")
+        .lines()
+        .filter(|line| line.starts_with("mob-liquid-jump\t"))
+    {
+        let row: Vec<_> = line.split('\t').collect();
+        let mut level = crate::entity::tests::level(false);
+        let id = level.next_entity_ref();
+        let mut state = EntityState::Cow(Box::default());
+        state.as_entity_mut().set_delta_movement(vector(row[2]));
+        level.add_entity(id, state).unwrap();
+        crate::entity::mob::jump_in_liquid(id, row[1].parse().unwrap(), &mut level).unwrap();
+        assert_eq!(
+            bits(level.entity::<EntityData>(id).unwrap().velocity),
+            row[3],
+            "{row:?}"
+        );
+        checked += 1;
+    }
+    assert_eq!(checked, 6);
 }

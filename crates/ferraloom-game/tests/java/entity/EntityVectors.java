@@ -138,6 +138,7 @@ public final class EntityVectors {
         WorldgenVectors.run(new EntityFixture(r));
         CollisionVectors.run();
         PlacementContextVectors.run(new EntityFixture(r));
+        LandingVectors.run(new EntityFixture(r));
         SoundVectors.run(new EntityFixture(r));
         TeleportVectors.run(new EntityFixture(r));
         PushVectors.run(new EntityFixture(r));

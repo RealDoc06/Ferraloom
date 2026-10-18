@@ -64,6 +64,7 @@ pub struct ServerPlayer {
     pub stats: crate::stats::ServerStatsCounter,
     pub food_data: food::FoodData,
     pub jump_trigger_time: i32,
+    pub(crate) spawn_extra_particles_on_fall: bool,
     shoulder_entity_left: CompoundTag,
     shoulder_entity_right: CompoundTag,
     time_entity_sat_on_shoulder: i64,
@@ -229,6 +230,7 @@ impl ServerPlayer {
             stats: Default::default(),
             food_data: Default::default(),
             jump_trigger_time: 0,
+            spawn_extra_particles_on_fall: false,
             shoulder_entity_left: CompoundTag::new(),
             shoulder_entity_right: CompoundTag::new(),
             time_entity_sat_on_shoulder: 0,
@@ -703,6 +705,30 @@ fn jump_from_ground(entity: crate::entity::EntityRef, level: &mut Level) -> Resu
 }
 pub struct PlayerBehavior;
 impl crate::entity::Entity for PlayerBehavior {
+    fn check_fall_damage(
+        &self,
+        entity: EntityRef,
+        dy: f64,
+        on_ground: bool,
+        state: ferraloom_data::BlockState,
+        pos: BlockPos,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        super::living::fall_damage::player_check_fall_damage(
+            self, entity, dy, on_ground, state, pos, level,
+        )
+    }
+    fn on_changed_block(
+        &self,
+        entity: EntityRef,
+        _pos: BlockPos,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        if !self.is_spectator(entity, level)? {
+            super::living::fall_damage::on_changed_block(entity, level)?;
+        }
+        Ok(())
+    }
     /// Port of PlayerEquipment#get's selected main-hand projection.
     fn item_by_slot<'level>(
         &self,

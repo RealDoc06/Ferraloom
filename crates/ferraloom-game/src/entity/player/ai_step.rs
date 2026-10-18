@@ -77,10 +77,10 @@ fn jump<E: Entity + ?Sized>(
                     level.entity_mut::<LivingEntity>(entity)?.no_jump_delay = 10;
                 }
             } else {
-                living::jump::jump_in_liquid(entity, level)?;
+                behavior.jump_in_liquid(entity, level)?;
             }
         } else {
-            living::jump::jump_in_liquid(entity, level)?;
+            behavior.jump_in_liquid(entity, level)?;
         }
     } else {
         level.entity_mut::<LivingEntity>(entity)?.no_jump_delay = 0;
