@@ -21,7 +21,7 @@ impl ChunkBlockEntities {
     pub(super) fn get(&self, pos: BlockPos) -> Option<&BlockEntityState> {
         self.slots[*self.positions.get(&pos)?].as_ref()
     }
-    fn get_mut(&mut self, pos: BlockPos) -> Option<&mut BlockEntityState> {
+    pub(super) fn get_mut(&mut self, pos: BlockPos) -> Option<&mut BlockEntityState> {
         self.slots[*self.positions.get(&pos)?].as_mut()
     }
     fn insert(&mut self, state: BlockEntityState) {
@@ -75,7 +75,7 @@ impl ChunkBlockEntities {
 #[derive(Default)]
 pub(super) struct BlockEntityRuntime {
     next_generation: u64,
-    detached: HashMap<BlockEntityRef, BlockEntityState>,
+    pub(super) detached: HashMap<BlockEntityRef, BlockEntityState>,
     roots: HashMap<BlockEntityRef, usize>,
     pub(super) tickers: BlockEntityTickers,
 }

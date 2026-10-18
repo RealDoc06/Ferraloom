@@ -19,6 +19,7 @@ pub mod chunk;
 pub mod chunk_holder;
 pub mod chunk_map;
 pub mod chunk_task_dispatcher;
+mod container_runtime;
 pub mod distance_manager;
 pub mod effects;
 pub mod emission;
@@ -128,6 +129,7 @@ pub struct Region {
     block_ticks: LevelTicks,
     fluid_ticks: LevelTicks<ferraloom_data::registries::fluid::Id>,
     block_entity_state: block_entity::BlockEntityRuntime,
+    container_runtime: crate::block::containers::runtime::ContainerRuntime,
     next_sub_tick_order: i64,
     game_time: i64,
     empty_time: i32,
@@ -167,6 +169,7 @@ impl Region {
             block_ticks: LevelTicks::default(),
             fluid_ticks: LevelTicks::default(),
             block_entity_state: block_entity::BlockEntityRuntime::default(),
+            container_runtime: crate::block::containers::runtime::ContainerRuntime::default(),
             next_sub_tick_order: 0,
             game_time: 0,
             empty_time: 0,
