@@ -94,10 +94,8 @@ impl<'context> ClipContext<'context> {
                     return Ok(shapes::block());
                 }
                 if let BlockCollisionContext::Entity(context) = &self.collision_context
-                    && level
-                        .entity::<EntityData>(context.entity.entity)?
-                        .entity_type
-                        == EntityType::PLAYER
+                    && let Some(entity) = context.entity.entity
+                    && level.entity::<EntityData>(entity)?.entity_type == EntityType::PLAYER
                     && (matches!(state.block(), Block::END_GATEWAY | Block::END_PORTAL)
                         || state.block() == Block::NETHER_PORTAL
                             && level.rules().players_nether_portal_default_delay == 0)

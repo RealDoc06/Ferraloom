@@ -125,17 +125,12 @@ impl<'stack> UseOnContext<'stack> {
     /// while LivingEntity's override reads its canonical head yaw.
     fn view_rotation(&self, reader: &LevelReaderRef<'_, '_>) -> Result<(f32, f32), LevelError> {
         let player = self.player.ok_or(LevelError::MissingPlacementPlayer)?;
-        match reader {
-            LevelReaderRef::Server(level) => {
-                let state = level.entity_state(player)?;
-                let entity = state.as_entity();
-                let yaw = state
-                    .as_living()
-                    .map_or(entity.yaw, |living| living.y_head_rot);
-                Ok((entity.pitch, yaw))
-            }
-            LevelReaderRef::Worldgen(_) => Err(LevelError::UnsupportedWorldgenEnvironment),
-        }
+        let state = reader.entity_state(player)?;
+        let entity = state.as_entity();
+        let yaw = state
+            .as_living()
+            .map_or(entity.yaw, |living| living.y_head_rot);
+        Ok((entity.pitch, yaw))
     }
     pub fn horizontal_direction(
         &self,
