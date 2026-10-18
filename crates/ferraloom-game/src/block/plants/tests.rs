@@ -1446,3 +1446,74 @@ fn chorus_survival_and_six_neighbor_updates_match_native_topologies() {
     }
     assert_eq!(count, 20160);
 }
+
+#[test]
+fn multiface_and_sculk_vein_configs_match_native_replacement_and_sources() {
+    use super::multiface_spreader::{SpreadPos, SpreaderConfig};
+    use std::io::Read;
+    let mut text = String::new();
+    flate2::read::GzDecoder::new(
+        include_bytes!("../../../tests/java/blocks/plants/spreader-config.tsv.gz").as_slice(),
+    )
+    .read_to_string(&mut text)
+    .unwrap();
+    let (blocks, fluids) = tags();
+    let pos = BlockPos::new(8, 5, 8);
+    let mut count = 0;
+    for line in text.lines() {
+        let f: Vec<_> = line.split('\t').collect();
+        let config = match f[1] {
+            "0" => SpreaderConfig::Default(Block::GLOW_LICHEN),
+            "1" => SpreaderConfig::SculkVein,
+            "2" => SpreaderConfig::SculkVeinSameSpace,
+            _ => unreachable!(),
+        };
+        if f[0] == "spreader-source" {
+            let state = BlockState::from_id(f[2].parse().unwrap()).unwrap();
+            let face = Direction::VALUES[f[3].parse::<usize>().unwrap()];
+            assert_eq!(
+                config.is_other_block_valid_as_source(state),
+                f[4] == "true",
+                "source {line}"
+            );
+            assert_eq!(
+                config.can_spread_from(state, face),
+                f[5] == "true",
+                "face {line}"
+            );
+        } else {
+            let mut level = level();
+            level.set_block_tags(blocks.clone());
+            level.set_fluid_tags(fluids.clone());
+            for cell in f[8].split(',') {
+                let c: Vec<i32> = cell.split(':').map(|s| s.parse().unwrap()).collect();
+                level
+                    .set_block_state(
+                        pos.offset(c[0], c[1], c[2]),
+                        BlockState::from_id(c[3] as u16).unwrap(),
+                    )
+                    .unwrap();
+            }
+            let spread = SpreadPos {
+                pos: pos.offset(f[2].parse().unwrap(), f[3].parse().unwrap(), 0),
+                face: Direction::VALUES[f[4].parse::<usize>().unwrap()],
+            };
+            let old = BlockState::from_id(f[5].parse().unwrap()).unwrap();
+            let reader = LevelReaderRef::Server(&level);
+            assert_eq!(
+                config
+                    .state_can_be_replaced(&reader, pos, spread, old)
+                    .unwrap(),
+                f[6] == "true",
+                "replacement {line}"
+            );
+            assert_eq!(
+                config.can_spread_into(&reader, pos, spread).unwrap(),
+                f[7] == "true",
+                "placement {line}"
+            );
+        }
+        count += 1;
+    }
+    assert_eq!(count, 8730);
+}

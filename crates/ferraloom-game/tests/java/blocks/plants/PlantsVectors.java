@@ -192,6 +192,35 @@ public final class PlantsVectors {
                 System.out.println("chorus-support\t"+Block.getId(state)+"\t"+Block.getId(below.defaultBlockState())+"\t"+above+"\t"+mode+"\t"+survives+"\t"+direction.ordinal()+"\t"+Block.getId(result)+"\t"+random.nextLong()+"\t"+String.join(",",level.trace));
             }
         }
+        var configField=MultifaceSpreader.class.getDeclaredField("config");configField.setAccessible(true);
+        var vein=(SculkVeinBlock)Blocks.SCULK_VEIN;
+        var lichen=(GlowLichenBlock)Blocks.GLOW_LICHEN;
+        var allConfigs=List.of(lichen.getSpreader(),vein.getSpreader(),vein.getSameSpaceSpreader());
+        var oldStates=List.of(Blocks.AIR.defaultBlockState(),Blocks.STONE.defaultBlockState(),Blocks.SHORT_GRASS.defaultBlockState(),
+            Blocks.FIRE.defaultBlockState(),Blocks.SOUL_FIRE.defaultBlockState(),Blocks.WATER.defaultBlockState(),
+            Blocks.WATER.defaultBlockState().setValue(BlockStateProperties.LEVEL,1),Blocks.LAVA.defaultBlockState(),
+            Blocks.SCULK_VEIN.defaultBlockState(),Blocks.GLOW_LICHEN.defaultBlockState());
+        for(int kind=0;kind<allConfigs.size();kind++) {
+            var spreader=allConfigs.get(kind);var config=(MultifaceSpreader.SpreadConfig)configField.get(spreader);
+            var replace=config.getClass().getDeclaredMethod("stateCanBeReplaced",BlockGetter.class,BlockPos.class,BlockPos.class,Direction.class,BlockState.class);replace.setAccessible(true);
+            for(var old:oldStates)for(var against:List.of(Blocks.STONE,Blocks.SCULK,Blocks.SCULK_CATALYST,Blocks.MOVING_PISTON,Blocks.GLASS,Blocks.OAK_LEAVES,Blocks.SOUL_SAND,Blocks.STONE_SLAB))
+                for(int distance=0;distance<3;distance++)for(var face:Direction.values())for(boolean blocked:new boolean[]{false,true}) {
+                level.chunks.clear();level.trace.clear();
+                var target=distance==0?pos:distance==1?pos.east():pos.east().above();
+                var cells=new LinkedHashMap<BlockPos,BlockState>();
+                cells.put(target,old);cells.put(target.relative(face),against.defaultBlockState());
+                if(blocked)cells.put(pos.relative(face.getOpposite()),Blocks.STONE.defaultBlockState());
+                for(var cell:cells.entrySet())level.getChunkAt(cell.getKey()).setBlockState(cell.getKey(),cell.getValue(),816);
+                var existing=level.getBlockState(target);
+                boolean replaceable=(boolean)replace.invoke(config,level,pos,target,face,existing);
+                boolean canSpread=config.canSpreadInto(level,pos,new MultifaceSpreader.SpreadPos(target,face));
+                var encoded=new ArrayList<String>();for(var cell:cells.entrySet())encoded.add((cell.getKey().getX()-pos.getX())+":"+(cell.getKey().getY()-pos.getY())+":"+(cell.getKey().getZ()-pos.getZ())+":"+Block.getId(cell.getValue()));
+                System.out.println("spreader-config\t"+kind+"\t"+(target.getX()-pos.getX())+"\t"+(target.getY()-pos.getY())+"\t"+face.ordinal()+"\t"+Block.getId(existing)+"\t"+replaceable+"\t"+canSpread+"\t"+String.join(",",encoded));
+            }
+            for(var input:List.of(Blocks.STONE.defaultBlockState(),Blocks.AIR.defaultBlockState(),Blocks.GLOW_LICHEN.defaultBlockState().setValue(BlockStateProperties.NORTH,true),Blocks.SCULK_VEIN.defaultBlockState(),Blocks.SCULK_VEIN.defaultBlockState().setValue(BlockStateProperties.NORTH,true)))for(var face:Direction.values()) {
+                System.out.println("spreader-source\t"+kind+"\t"+Block.getId(input)+"\t"+face.ordinal()+"\t"+config.isOtherBlockValidAsSource(input)+"\t"+config.canSpreadFrom(input,face));
+            }
+        }
         var shapeBlocks=new ArrayList<Block>(plants);shapeBlocks.add(Blocks.POWDER_SNOW);shapeBlocks.add(Blocks.OPEN_EYEBLOSSOM);
         for(var block:shapeBlocks)for(var state:block.getStateDefinition().getPossibleStates())for(var at:List.of(BlockPos.ZERO,pos,new BlockPos(-7,11,17))){
             for(boolean collision:new boolean[]{false,true}){

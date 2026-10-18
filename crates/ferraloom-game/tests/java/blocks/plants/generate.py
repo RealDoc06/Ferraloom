@@ -71,3 +71,7 @@ with tempfile.TemporaryDirectory(prefix='ferraloom-plants-java-') as directory:
     chorus='\n'.join(line for line in lines if line.startswith('chorus-support\t')) + '\n'
     (HERE/'chorus-support.tsv.gz').write_bytes(gzip.compress(chorus.encode(),mtime=0))
     print(f'{len(chorus.splitlines())} native chorus support and shape-update vectors')
+
+    spreader='\n'.join(line for line in lines if line.startswith(('spreader-config\t','spreader-source\t'))) + '\n'
+    (HERE/'spreader-config.tsv.gz').write_bytes(gzip.compress(spreader.encode(),mtime=0))
+    print(f'{len(spreader.splitlines())} native multiface/sculk-vein configuration vectors')

@@ -401,3 +401,5 @@ One class row per bootstrapped runtime Block class, listing every block id assig
 | blocks.plants.stem-bonemeal-light | Snapshot native sky/block light after draining the real light engine before stem bonemeal invokes randomTick | `StemBlock#performBonemeal/randomTick`, `ThreadedLevelLightEngine#waitForPendingTasks` | Extended dedicated ServerLevel oracle (fresh light capture pending) | - | todo |
 
 | blocks.plants.powder-context-shapes | Powder snow collision tests placement contexts, exact fall-distance threshold/NaN, descent, boots and entity bottom height; empty inside shape expands to a full cube | `PowderSnowBlock#getCollisionShape/getEntityInsideCollisionShape` | Native ServerLevel cow context oracle (capture pending) | - | todo |
+
+| blocks.plants.sculk-vein-spreader | Distinct vein/default configs preserve source rules, forbidden substrates, diagonal sturdy obstruction, fluid/fire rejection and same-space restriction | `SculkVeinSpreaderConfig`, `MultifaceSpreader.SpreadConfig` | `plants::tests::multiface_and_sculk_vein_configs_match_native_replacement_and_sources` (8,730 native vectors) | pass | todo |
