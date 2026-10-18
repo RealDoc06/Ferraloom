@@ -24,6 +24,7 @@ pub enum StructurePiece {
     NetherFossil(Box<super::structures::nether_fossil::NetherFossilPiece>),
     EndCity(Box<super::structures::end_city::EndCityPiece>),
     OceanRuin(Box<super::structures::ocean_ruin::OceanRuinPiece>),
+    Mineshaft(super::structures::mineshaft::MineshaftPiece),
     RuinedPortal(Box<super::structures::ruined_portal::RuinedPortalPiece>),
     JungleTemple(super::structures::jungle_temple::JungleTemplePiece),
     SwampHut(super::structures::swamp_hut::SwampHutPiece),
@@ -57,6 +58,7 @@ impl StructurePiece {
             Self::NetherFossil(p) => p.template.data.bounds,
             Self::EndCity(p) => p.template.data.bounds,
             Self::OceanRuin(p) => p.template.data.bounds,
+            Self::Mineshaft(p) => p.data.bounds,
             Self::RuinedPortal(p) => p.template.data.bounds,
             Self::JungleTemple(p) => p.scattered.data.bounds,
             Self::SwampHut(p) => p.scattered.data.bounds,
@@ -72,6 +74,7 @@ impl StructurePiece {
             Self::NetherFossil(p) => Ok(p.to_nbt()),
             Self::EndCity(p) => Ok(p.to_nbt()),
             Self::OceanRuin(p) => Ok(p.to_nbt()),
+            Self::Mineshaft(p) => Ok(p.to_nbt()),
             Self::RuinedPortal(p) => Ok(p.to_nbt()),
             Self::JungleTemple(p) => Ok(p.to_nbt()),
             Self::SwampHut(p) => Ok(p.to_nbt()),
@@ -230,6 +233,17 @@ impl StructureStart {
                     return Ok(None);
                 };
                 match piece_id.to_string().as_str() {
+                    "minecraft:msroom"
+                    | "minecraft:mscorridor"
+                    | "minecraft:msstairs"
+                    | "minecraft:mscrossing" => {
+                        if let Ok(piece) = super::structures::mineshaft::MineshaftPiece::from_nbt(
+                            &piece_id.to_string(),
+                            tag,
+                        ) {
+                            pieces.push(StructurePiece::Mineshaft(piece));
+                        }
+                    }
                     "minecraft:ruined_portal" => {
                         if let Ok(piece) =
                             super::structures::ruined_portal::RuinedPortalPiece::from_nbt(

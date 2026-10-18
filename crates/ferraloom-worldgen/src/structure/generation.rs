@@ -25,6 +25,7 @@ enum StructureGenerator {
     EndCity,
     SwampHut,
     JungleTemple,
+    Mineshaft(super::structures::mineshaft::MineshaftType),
     RuinedPortal(super::structures::ruined_portal::RuinedPortalStructure),
     DesertPyramid,
     OceanRuin(super::structures::ocean_ruin::OceanRuinStructure),
@@ -73,6 +74,9 @@ impl StructureGenerators {
                     "minecraft:buried_treasure" => StructureGenerator::BuriedTreasure,
                     "minecraft:igloo" => StructureGenerator::Igloo,
                     "minecraft:end_city" => StructureGenerator::EndCity,
+                    "minecraft:mineshaft" => StructureGenerator::Mineshaft(
+                        super::structures::mineshaft::MineshaftType::decode(&resource.json()?)?,
+                    ),
                     "minecraft:ruined_portal" => StructureGenerator::RuinedPortal(
                         super::structures::ruined_portal::RuinedPortalStructure::decode(
                             &resource.json()?,
@@ -456,6 +460,23 @@ impl StructureGenerators {
                     settings.terrain,
                     vec![StructurePiece::NetherFossil(Box::new(piece))],
                 ));
+            }
+            StructureGenerator::Mineshaft(mine_type) => {
+                use ferraloom_util::random::{Algorithm, WorldgenRandom};
+                let mut random = WorldgenRandom::new(Algorithm::Legacy.new_instance(0));
+                random.set_large_feature_seed(context.seed, context.chunk[0], context.chunk[1]);
+                let (position, pieces) = super::structures::mineshaft::generate(
+                    *mine_type,
+                    &mut random,
+                    generator,
+                    context.chunk,
+                    context.min_y,
+                    context.height,
+                )?;
+                (
+                    position,
+                    pieces.into_iter().map(StructurePiece::Mineshaft).collect(),
+                )
             }
             StructureGenerator::RuinedPortal(portal) => {
                 use ferraloom_util::random::{Algorithm, WorldgenRandom};
