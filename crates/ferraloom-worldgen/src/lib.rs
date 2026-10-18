@@ -42,3 +42,12 @@ pub mod generator;
 pub mod surface;
 
 pub mod blending;
+
+pub mod carver;
+pub mod decoration;
+pub mod placement;
+pub mod region;
+
+pub mod feature;
+pub mod spawn;
+pub mod structure;

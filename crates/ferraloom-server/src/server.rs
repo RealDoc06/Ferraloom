@@ -321,7 +321,7 @@ impl MinecraftServer {
     /// Port of MinecraftServer#runServer's 50ms deadline and overload catch-up.
     async fn run(mut self) -> Result<()> {
         println!(
-            "Ferraloom 26.3 running; single-region mode. Structures, carvers, features and spawn generation are passthrough."
+            "Ferraloom 26.3 running; single-region mode. Structure starts/references, general biome decoration and original mob spawning are passthrough."
         );
         let mut next = tokio::time::Instant::now();
         let mut last_overload = next;
