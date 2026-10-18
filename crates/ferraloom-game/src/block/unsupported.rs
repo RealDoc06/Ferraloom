@@ -60,6 +60,8 @@ pub enum BlockMethod {
     PickupBlock,
     CollisionShape,
     OutlineShape,
+    VisualShape,
+    InteractionShape,
     IsFaceSturdy,
     EntityInsideCollisionShape,
     UpdateFromNeighbourShapes,
@@ -104,6 +106,8 @@ impl BlockMethod {
             Self::CanSurvive => Vanilla::CanSurvive,
             Self::CollisionShape => Vanilla::GetCollisionShape,
             Self::OutlineShape => Vanilla::GetShape,
+            Self::VisualShape => Vanilla::GetVisualShape,
+            Self::InteractionShape => Vanilla::GetInteractionShape,
             Self::IsFaceSturdy => Vanilla::GetBlockSupportShape,
             Self::IsCollisionShapeFullBlock => Vanilla::IsCollisionShapeFullBlock,
             Self::EntityInsideCollisionShape => Vanilla::GetEntityInsideCollisionShape,
@@ -142,6 +146,8 @@ impl BlockMethod {
                 | Self::PickupBlock
                 | Self::CollisionShape
                 | Self::OutlineShape
+                | Self::VisualShape
+                | Self::InteractionShape
                 | Self::IsFaceSturdy
                 | Self::EntityInsideCollisionShape
                 | Self::UpdateFromNeighbourShapes
@@ -187,6 +193,8 @@ impl BlockMethod {
             Self::PickupBlock => "pickupBlock",
             Self::CollisionShape => "getCollisionShape",
             Self::OutlineShape => "getShape",
+            Self::VisualShape => "getVisualShape",
+            Self::InteractionShape => "getInteractionShape",
             Self::IsFaceSturdy => "isFaceSturdy",
             Self::EntityInsideCollisionShape => "getEntityInsideCollisionShape",
             Self::UpdateFromNeighbourShapes => "Block.updateFromNeighbourShapes",

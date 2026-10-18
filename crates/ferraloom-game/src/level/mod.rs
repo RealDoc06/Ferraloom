@@ -21,6 +21,7 @@ pub mod chunk;
 pub mod chunk_holder;
 pub mod chunk_map;
 pub mod chunk_task_dispatcher;
+pub mod clip;
 mod container_runtime;
 mod context;
 pub use context::LevelContext;
@@ -149,6 +150,7 @@ pub struct LevelRules {
     pub tnt_explodes: bool,
     pub entity_drops: bool,
     pub max_entity_cramming: i32,
+    pub players_nether_portal_default_delay: i32,
     pub drowning_damage: bool,
     pub fall_damage: bool,
     pub fire_damage: bool,
@@ -181,6 +183,13 @@ impl Default for LevelRules {
             tnt_explodes: true,
             entity_drops: true,
             max_entity_cramming: 24,
+            players_nether_portal_default_delay: match GameRule::PlayersNetherPortalDefaultDelay
+                .definition()
+                .kind
+            {
+                RuleType::Integer { default, .. } => default,
+                _ => unreachable!("portal delay is an integer game rule"),
+            },
             drowning_damage: damage_default(GameRule::DrowningDamage),
             fall_damage: damage_default(GameRule::FallDamage),
             fire_damage: damage_default(GameRule::FireDamage),
@@ -296,6 +305,7 @@ pub struct Level {
     difficulty: ferraloom_protocol::play::Difficulty,
     acquisition: acquisition::ChunkAcquisition,
     acquire_driver: Option<Box<dyn acquisition::AcquireDriver>>,
+    fluid_shapes: clip::FluidShapeCache,
 }
 
 impl Level {
@@ -308,6 +318,7 @@ impl Level {
             context,
             acquisition: Default::default(),
             acquire_driver: None,
+            fluid_shapes: Default::default(),
         }
     }
     /// Required server-owned storage view, absent until startup installs it.

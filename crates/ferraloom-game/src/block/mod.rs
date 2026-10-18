@@ -428,6 +428,36 @@ pub trait BlockBehavior: Sync {
     ) -> Result<ferraloom_util::VoxelShape, LevelError> {
         Ok(ferraloom_util::shapes::block())
     }
+    /// Contextual BlockBehaviour#getShape overload. Existing context-independent
+    /// family implementations share their no-context query.
+    fn shape_with_context(
+        &self,
+        state: BlockState,
+        pos: BlockPos,
+        _context: &BlockCollisionContext<'_>,
+        level: &LevelReaderRef<'_, '_>,
+    ) -> Result<ferraloom_util::VoxelShape, LevelError> {
+        self.shape(state, pos, level)
+    }
+    /// Port of BlockBehaviour#getVisualShape: redispatch the collision virtual.
+    fn visual_shape(
+        &self,
+        state: BlockState,
+        pos: BlockPos,
+        context: &BlockCollisionContext<'_>,
+        level: &LevelReaderRef<'_, '_>,
+    ) -> Result<ferraloom_util::VoxelShape, LevelError> {
+        level.collision_shape(state, pos, context)
+    }
+    /// Port of BlockBehaviour#getInteractionShape's empty base shape.
+    fn interaction_shape(
+        &self,
+        _state: BlockState,
+        _pos: BlockPos,
+        _level: &LevelReaderRef<'_, '_>,
+    ) -> Result<ferraloom_util::VoxelShape, LevelError> {
+        Ok(ferraloom_util::shapes::empty())
+    }
     fn is_collision_shape_full_block(
         &self,
         state: BlockState,
