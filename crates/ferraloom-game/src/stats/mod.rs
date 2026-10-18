@@ -105,7 +105,7 @@ impl StatType {
     }
 }
 /// Port of Stat. Variants prevent assigning items to block/entity stat types.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Stat {
     Mined(Block),
     Crafted(Item),
@@ -351,8 +351,8 @@ pub fn handle_client_command(
     }
 }
 
-/// Port of ServerPlayer#awardStat. Counter mutation precedes the synchronous
-/// scoreboard unit effect. The shared server bridge replaces this interim gate.
+/// Port of ServerPlayer#awardStat. The canonical counter saturates first;
+/// matching scoreboard objectives synchronously add the original delta.
 pub fn award_stat(
     level: &mut crate::level::Level,
     player: crate::entity::EntityRef,
@@ -363,7 +363,7 @@ pub fn award_stat(
         .entity_mut::<crate::entity::player::ServerPlayer>(player)?
         .stats
         .increment(stat, amount);
-    statistic_scoreboard(level, stat)
+    statistic_scoreboard(level, player, stat, ScoreboardUpdate::Add(amount))
 }
 /// Port of ServerPlayer#resetStat (ScoreAccess#reset writes zero).
 pub fn reset_stat(
@@ -375,21 +375,40 @@ pub fn reset_stat(
         .entity_mut::<crate::entity::player::ServerPlayer>(player)?
         .stats
         .set_value(stat, 0);
-    statistic_scoreboard(level, stat)
+    statistic_scoreboard(level, player, stat, ScoreboardUpdate::Reset)
+}
+enum ScoreboardUpdate {
+    Add(i32),
+    Reset,
 }
 fn statistic_scoreboard(
     level: &mut crate::level::Level,
+    player: crate::entity::EntityRef,
     stat: Stat,
+    update: ScoreboardUpdate,
 ) -> std::result::Result<(), crate::level::LevelError> {
     let criterion = stat.objective_name();
-    if level
-        .scoreboard()
-        .objectives()
-        .any(|(_, objective)| objective.criteria.name == criterion)
-    {
-        level.unported_operation(crate::block::UnportedOperation::StatisticScoreboard(stat))?;
+    let scoreboard = level.shared()?.scoreboard.scoreboard();
+    let needs_display = scoreboard.objectives_for_criterion(&criterion).any(|name| {
+        scoreboard
+            .get_objective(name)
+            .is_some_and(|objective| objective.display_auto_update)
+    });
+    // ScoreAccess#set only invokes the native display getter for auto-updated objectives.
+    let display = needs_display
+        .then(|| level.entity_display_name(player))
+        .transpose()?;
+    let holder = level.entity_scoreboard_name(player)?.into_owned();
+    let scoreboard = &mut level.shared_mut()?.scoreboard;
+    match update {
+        ScoreboardUpdate::Add(amount) => {
+            scoreboard.add_criterion_score(&holder, &criterion, amount, display.as_ref())
+        }
+        ScoreboardUpdate::Reset => {
+            scoreboard.set_criterion_score(&holder, &criterion, 0, display.as_ref())
+        }
     }
-    Ok(())
+    .map_err(|_| crate::level::LevelError::Inventory("statistic scoreboard objective"))
 }
 
 #[cfg(test)]

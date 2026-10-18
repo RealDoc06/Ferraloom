@@ -104,20 +104,18 @@ fn vanilla_dirty_packets_follow_jdk25_copy_capacity_boundaries() {
 }
 
 #[test]
-fn live_stat_counter_precedes_interim_scoreboard_policy() {
+fn live_stat_counter_and_scoreboard_update_in_native_order() {
     use crate::{
         Behaviors,
-        block::UnportedBehavior,
         entity::{
             EntityState,
             player::{GameType, ServerPlayer},
         },
-        level::{Level, Region},
-        scoreboard::{Objective, ObjectiveCriteria, Scoreboard},
+        level::{Level, LevelError, Region},
+        scoreboard::{Objective, ObjectiveCriteria},
     };
     use ferraloom_protocol::chat::Component;
     use ferraloom_util::{Uuid, Vec3};
-    use std::sync::Arc;
     static BEHAVIORS: Behaviors = Behaviors::EMPTY;
     let mut level = Level::new(
         Region::new(&BEHAVIORS),
@@ -137,28 +135,62 @@ fn live_stat_counter_precedes_interim_scoreboard_policy() {
         )
         .unwrap();
     let stat = Stat::Custom(custom::Id::OPEN_CHEST);
-    award_stat(&mut level, player, stat, 2).unwrap();
-    let mut scoreboard = Scoreboard::default();
-    scoreboard
-        .add_objective(
-            "opened".into(),
-            Objective::new(
-                ObjectiveCriteria::by_name(&stat.objective_name()).unwrap(),
-                Component::literal("opened"),
-            ),
-        )
-        .unwrap();
-    level.set_scoreboard(Arc::new(scoreboard));
-    assert!(award_stat(&mut level, player, stat, 3).is_err());
+    assert_eq!(
+        award_stat(&mut level, player, stat, 2),
+        Err(LevelError::MissingServerShared)
+    );
     assert_eq!(
         level
             .entity::<ServerPlayer>(player)
             .unwrap()
             .stats
             .get_value(stat),
-        5
+        2
     );
-    level.set_unported_behavior(UnportedBehavior::Warn);
+    level.install_shared(Box::default());
+    let mut objective = Objective::new(
+        ObjectiveCriteria::by_name(&stat.objective_name()).unwrap(),
+        Component::literal("opened"),
+    );
+    objective.display_auto_update = true;
+    level
+        .shared_mut()
+        .unwrap()
+        .scoreboard
+        .add_objective("opened".into(), objective)
+        .unwrap();
+    level
+        .shared_mut()
+        .unwrap()
+        .scoreboard
+        .set_score("Stats", "opened", i32::MAX, None, true)
+        .unwrap();
+    level
+        .entity_mut::<ServerPlayer>(player)
+        .unwrap()
+        .stats
+        .set_value(stat, i32::MAX - 1);
+    let display = level.entity_display_name(player).unwrap();
+    award_stat(&mut level, player, stat, 3).unwrap();
+    assert_eq!(
+        level
+            .entity::<ServerPlayer>(player)
+            .unwrap()
+            .stats
+            .get_value(stat),
+        i32::MAX
+    );
+    fn nested_read(level: &Level) -> &crate::scoreboard::Score {
+        level
+            .shared()
+            .unwrap()
+            .scoreboard
+            .scoreboard()
+            .get_player_score("Stats", "opened")
+            .unwrap()
+    }
+    assert_eq!(nested_read(&level).value, i32::MIN + 2);
+    assert_eq!(nested_read(&level).display.as_ref(), Some(&display));
     reset_stat(&mut level, player, stat).unwrap();
     assert_eq!(
         level
@@ -168,5 +200,6 @@ fn live_stat_counter_precedes_interim_scoreboard_policy() {
             .get_value(stat),
         0
     );
-    assert_eq!(level.unported_behavior_stats().skipped_calls, 1);
+    assert_eq!(nested_read(&level).value, 0);
+    assert_eq!(level.unported_behavior_stats().skipped_calls, 0);
 }

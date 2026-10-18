@@ -960,6 +960,7 @@ fn live_fixture(manager: ServerAdvancementManager) -> (crate::level::Level, Enti
         Region::new(&BEHAVIORS),
         crate::level::LevelContext::fixture(0, 63),
     );
+    level.install_shared(Box::default());
     let player = level.next_entity_ref();
     let mut state = ServerPlayer::new(
         ferraloom_util::Uuid::NIL,
@@ -1124,11 +1125,8 @@ fn retained_inventory_trigger_and_stats_request_read_canonical_player() {
 
 #[test]
 fn announcement_descriptor_reads_rule_and_team_at_application_time() {
-    use crate::{
-        entity::player::ServerPlayer, level::effects::LevelEffect, scoreboard::Scoreboard,
-    };
+    use crate::{entity::player::ServerPlayer, level::effects::LevelEffect};
     use ferraloom_protocol::{chat::Component, play::clientbound as cb};
-    use std::sync::Arc;
     let manager =
         ServerAdvancementManager::new(holders(&oracle()["nested_visibility"][0]["inputs"]));
     let (mut level, player) = live_fixture(manager);
@@ -1157,12 +1155,16 @@ fn announcement_descriptor_reads_rule_and_team_at_application_time() {
     )
     .unwrap();
     assert!(level.take_effects().is_empty());
-    let mut scoreboard = Scoreboard::default();
-    scoreboard.add_player_team("after_rewards").prefix = Component::literal("after ");
+    let scoreboard = &mut level.shared_mut().unwrap().scoreboard;
+    scoreboard.add_player_team("after_rewards");
+    scoreboard
+        .update_team("after_rewards", |team| {
+            team.prefix = Component::literal("after ")
+        })
+        .unwrap();
     scoreboard
         .add_player_to_team("Live", "after_rewards")
         .unwrap();
-    level.set_scoreboard(Arc::new(scoreboard));
     level.rules_mut().show_advancement_messages = true;
     let expected = announcement(
         resources.advancements.get(&id("test:an")).unwrap(),
