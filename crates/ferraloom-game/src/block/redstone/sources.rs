@@ -54,7 +54,9 @@ impl BlockBehavior for Sources {
         let class = state.block().class();
         let connected = match class {
             BlockClass::LeverBlock | BlockClass::ButtonBlock => connected_direction(state),
-            BlockClass::LightningRodBlock | BlockClass::TripWireHookBlock => facing(state),
+            BlockClass::LightningRodBlock
+            | BlockClass::WeatheringLightningRodBlock
+            | BlockClass::TripWireHookBlock => facing(state),
             _ => Direction::Up,
         };
         if direction == connected {

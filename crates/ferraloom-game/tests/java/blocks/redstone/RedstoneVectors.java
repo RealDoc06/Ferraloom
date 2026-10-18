@@ -73,7 +73,9 @@ public final class RedstoneVectors extends MutationFixture {
     static String positions(List<BlockPos> list) { return String.join(";",list.stream().map(BlockPos::toShortString).toList()); }
     static final BlockPos ORIGIN = new BlockPos(8,0,8);
     static void signals(RegistryAccess r) {
-        for (var block:List.of(Blocks.REDSTONE_BLOCK,Blocks.REDSTONE_TORCH,Blocks.REDSTONE_WALL_TORCH,Blocks.OBSERVER,Blocks.REPEATER,Blocks.LEVER,Blocks.STONE_BUTTON,Blocks.LIGHT_WEIGHTED_PRESSURE_PLATE)) {
+        var sources=new ArrayList<>(List.of(Blocks.REDSTONE_BLOCK,Blocks.REDSTONE_TORCH,Blocks.REDSTONE_WALL_TORCH,Blocks.OBSERVER,Blocks.REPEATER,Blocks.LEVER,Blocks.STONE_BUTTON,Blocks.LIGHT_WEIGHTED_PRESSURE_PLATE));
+        for(var block:BuiltInRegistries.BLOCK)if(block instanceof LightningRodBlock)sources.add(block);
+        for (var block:sources) {
             for (var state:block.getStateDefinition().getPossibleStates()) {
                 // Every direction, all powered/orientation/delay/button states.
                 var level=new RedstoneVectors(r);level.raw(ORIGIN,state);

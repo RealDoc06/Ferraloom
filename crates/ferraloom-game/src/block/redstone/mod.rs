@@ -193,6 +193,7 @@ pub(crate) fn ported_behavior(
         | BlockClass::PressurePlateBlock
         | BlockClass::WeightedPressurePlateBlock
         | BlockClass::LightningRodBlock
+        | BlockClass::WeatheringLightningRodBlock
         | BlockClass::TripWireHookBlock
         | BlockClass::LecternBlock
         | BlockClass::DaylightDetectorBlock
