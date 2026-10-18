@@ -1118,7 +1118,9 @@ impl MinecraftServer {
                 };
                 match message {
                     Ok(message) => self.broadcast_chat(message, id("chat"))?,
-                    Err(e) => self.feedback(Some(connection), &e.to_string()),
+                    Err(e) => {
+                        self.send_component(Some(connection), Component::literal(e.to_string()))
+                    }
                 }
             }
             sb::Packet::CommandSuggestion(request) => {

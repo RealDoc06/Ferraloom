@@ -11,6 +11,7 @@ use ferraloom_game::{
 };
 use ferraloom_nbt::Tag;
 use ferraloom_storage::{SavedData, SavedDataStorage};
+use std::net::IpAddr;
 
 pub(super) fn load_game_rules(world: &World) -> Result<GameRules> {
     let storage = SavedDataStorage::new(world.access.path().join("data"));
@@ -110,7 +111,7 @@ impl MinecraftServer {
             | None => {}
         }
     }
-    fn send_component(&mut self, source: Option<ConnectionId>, content: Component) {
+    pub(super) fn send_component(&mut self, source: Option<ConnectionId>, content: Component) {
         if let Some(source) = source {
             if let Some(c) = self.connections.get_mut(&source) {
                 c.push(cb::Packet::SystemChat(Box::new(cb::SystemChat {
