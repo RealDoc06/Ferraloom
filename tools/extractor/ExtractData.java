@@ -411,9 +411,32 @@ public final class ExtractData {
     }
 
 
+    /** Item#getDescriptionId and Potion#name read final immutable registry fields. */
+    private static void itemNames(Path dir) throws Exception {
+        var items = new JsonArray();
+        for (var item : BuiltInRegistries.ITEM) {
+            var row = new JsonObject();
+            row.addProperty("id", BuiltInRegistries.ITEM.getId(item));
+            row.addProperty("name", BuiltInRegistries.ITEM.getKey(item).toString());
+            row.addProperty("description_id", item.getDescriptionId());
+            items.add(row);
+        }
+        var potions = new JsonArray();
+        for (var potion : BuiltInRegistries.POTION) {
+            var row = new JsonObject();
+            row.addProperty("id", BuiltInRegistries.POTION.getId(potion));
+            row.addProperty("name", BuiltInRegistries.POTION.getKey(potion).toString());
+            row.addProperty("effect_name", potion.name());
+            potions.add(row);
+        }
+        var result = new JsonObject(); result.add("items", items); result.add("potions", potions);
+        write(dir, "item_names", result);
+    }
+
     public static void main(String[] args) throws Exception {
         SharedConstants.tryDetectVersion();
         Bootstrap.bootStrap();
+        if (args.length > 1 && args[1].equals("--item-names-only")) { itemNames(Path.of(args[0])); return; }
         if (args.length > 1 && args[1].equals("--attributes-only")) { attributeProperties(Path.of(args[0])); return; }
         if (args.length > 1 && args[1].equals("--entities-only")) { entityTypes(Path.of(args[0])); return; }
         if (args.length > 1 && args[1].equals("--sound-events-only")) { soundEvents(Path.of(args[0])); return; }
@@ -434,6 +457,7 @@ public final class ExtractData {
             itemCrafting(Path.of(args[0]), registries.createSerializationContext(JsonOps.INSTANCE));
             return;
         }
+        itemNames(Path.of(args[0]));
         blockRenderShapes(Path.of(args[0]));
         blockCollisionFlags(Path.of(args[0]));
         blockItems(Path.of(args[0]));

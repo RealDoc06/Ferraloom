@@ -22,14 +22,18 @@ pub fn start_riding(
     level: &mut Level,
 ) -> Result<bool, LevelError> {
     let rider = level.entity::<EntityData>(entity)?;
-    if rider.vehicle == Some(vehicle) || entity == vehicle {
+    if rider.vehicle.get() == Some(vehicle) || entity == vehicle {
         return Ok(false);
     }
     if !force && (rider.shared_flag(1) || rider.boarding_cooldown > 0) {
         return Ok(false);
     }
     let mount = level.entity::<EntityData>(vehicle)?;
-    if mount.removed || !force && !mount.passengers.is_empty() {
+    if !level
+        .entity_behavior(vehicle)?
+        .could_accept_passenger(vehicle, level)?
+        || !force && !mount.passengers.is_empty()
+    {
         return Ok(false);
     }
     // Server-side Entity#startRiding refuses nonserializable mounts (players).
@@ -37,7 +41,7 @@ pub fn start_riding(
         return Ok(false);
     }
     let mut ancestor = vehicle;
-    while let Some(parent) = level.entity::<EntityData>(ancestor)?.vehicle {
+    while let Some(parent) = level.entity::<EntityData>(ancestor)?.vehicle.get() {
         if parent == entity {
             return Ok(false);
         }
@@ -55,7 +59,7 @@ pub fn start_riding(
     super::dimensions::set_pose(entity, Pose::Standing, level)?;
     {
         let rider = level.entity_mut::<EntityData>(entity)?;
-        rider.vehicle = Some(vehicle);
+        rider.vehicle.set(Some(vehicle));
     }
     let passengers = &mut level.entity_mut::<EntityData>(vehicle)?.passengers;
     if player_first {
@@ -65,6 +69,48 @@ pub fn start_riding(
     }
     Ok(true)
 }
+
+/// EntityType#loadPassengersRecursive calls startRiding(force=true,
+/// sendEventAndTriggers=false) on a newly constructed root after loading all
+/// its descendants. Current factories leave the root unmounted and standing;
+/// setPose is therefore a no-op, with no dimensions/world callback to suspend.
+pub(crate) fn start_riding_loaded_shared(
+    entity: EntityRef,
+    vehicle: EntityRef,
+    level: &Level,
+) -> Result<bool, LevelError> {
+    let rider = level.entity::<EntityData>(entity)?;
+    assert!(
+        rider.vehicle.get().is_none(),
+        "fresh loaded root is unmounted"
+    );
+    assert_eq!(
+        *rider.entity_data.get(super::synched_data::POSE),
+        Pose::Standing,
+        "a factory producing another pose needs shared setPose support"
+    );
+    if !level
+        .entity_behavior(vehicle)?
+        .could_accept_passenger(vehicle, level)?
+        || matches!(level.entity_state(vehicle)?, EntityState::Player(_))
+    {
+        return Ok(false);
+    }
+    // Fresh handles cannot form the ancestor cycle checked by ordinary riding,
+    // even when a rejected duplicate UUID names an existing managed entity.
+    assert_ne!(entity, vehicle, "new child has a distinct handle");
+    assert!(
+        !matches!(level.entity_state(entity)?, EntityState::Player(_)),
+        "players have no entity NBT factory"
+    );
+    rider.vehicle.set(Some(vehicle));
+    let mount = level.entity::<EntityData>(vehicle)?;
+    let mut passengers = mount.passengers.clone();
+    passengers.push(entity);
+    mount.passengers.replace_shared(passengers);
+    Ok(true)
+}
+
 pub fn stop_riding(entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
     let Some(vehicle) = level.entity_mut::<EntityData>(entity)?.vehicle.take() else {
         return Ok(());
@@ -129,9 +175,24 @@ pub fn ride_tick<E: super::Entity + ?Sized>(
     entity: EntityRef,
     level: &mut Level,
 ) -> Result<(), LevelError> {
+    ride_tick_with_tick_rate(
+        behavior,
+        entity,
+        level,
+        &crate::level::tick_rate::TickRateManager::default(),
+    )
+}
+
+/// Entity#rideTick with the caller's borrowed entity-phase context.
+pub fn ride_tick_with_tick_rate<E: super::Entity + ?Sized>(
+    behavior: &E,
+    entity: EntityRef,
+    level: &mut Level,
+    tick_rate: &crate::level::tick_rate::TickRateManager,
+) -> Result<(), LevelError> {
     level.entity_mut::<EntityData>(entity)?.velocity = ferraloom_util::Vec3::ZERO;
-    behavior.tick(entity, level)?;
-    if let Some(vehicle) = level.entity::<EntityData>(entity)?.vehicle {
+    behavior.tick_with_tick_rate(entity, level, tick_rate)?;
+    if let Some(vehicle) = level.entity::<EntityData>(entity)?.vehicle.get() {
         position_rider(vehicle, entity, level)?;
     }
     Ok(())
@@ -144,7 +205,22 @@ pub fn living_ride_tick<E: super::Entity + ?Sized>(
     entity: EntityRef,
     level: &mut Level,
 ) -> Result<(), LevelError> {
-    ride_tick(behavior, entity, level)?;
+    living_ride_tick_with_tick_rate(
+        behavior,
+        entity,
+        level,
+        &crate::level::tick_rate::TickRateManager::default(),
+    )
+}
+
+/// LivingEntity#rideTick keeps the same context through the virtual tick call.
+pub fn living_ride_tick_with_tick_rate<E: super::Entity + ?Sized>(
+    behavior: &E,
+    entity: EntityRef,
+    level: &mut Level,
+    tick_rate: &crate::level::tick_rate::TickRateManager,
+) -> Result<(), LevelError> {
+    ride_tick_with_tick_rate(behavior, entity, level, tick_rate)?;
     level.entity_mut::<EntityData>(entity)?.fall_distance = 0.0;
     Ok(())
 }
@@ -160,9 +236,9 @@ pub fn base_tick<E: super::Entity + ?Sized>(
         let previous = base.last_known_position.unwrap_or(base.position);
         base.last_known_speed = base.position - previous;
         base.last_known_position = Some(base.position);
-        base.in_block_state = None;
+        base.in_block_state.set(None);
     }
-    let vehicle = level.entity::<EntityData>(entity)?.vehicle;
+    let vehicle = level.entity::<EntityData>(entity)?.vehicle.get();
     if let Some(vehicle) = vehicle
         && level.entity::<EntityData>(vehicle)?.removed
     {
@@ -189,14 +265,15 @@ pub fn base_tick<E: super::Entity + ?Sized>(
         base.was_eye_in_water = was_eye;
     }
     super::fluid::update_fluid_interaction(behavior, entity, level)?;
-    update_swimming(entity, level)?;
+    update_swimming(behavior, entity, level)?;
     let base = level.entity::<EntityData>(entity)?;
     if base.remaining_fire_ticks > 0 {
         if base.entity_type.data().fire_immune {
             level.entity_mut::<EntityData>(entity)?.clear_fire();
         } else {
             if base.remaining_fire_ticks % 20 == 0 && !base.is_in_lava(level)? {
-                behavior.hurt_server(entity, level, super::DamageSource::default(), 1.0)?;
+                let source = level.damage_sources().on_fire();
+                behavior.hurt_server(entity, level, source, 1.0)?;
             }
             level.entity_mut::<EntityData>(entity)?.remaining_fire_ticks -= 1;
         }
@@ -212,12 +289,16 @@ pub fn base_tick<E: super::Entity + ?Sized>(
     base.first_tick = false;
     Ok(())
 }
-fn update_swimming(entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
+fn update_swimming<E: super::Entity + ?Sized>(
+    behavior: &E,
+    entity: EntityRef,
+    level: &mut Level,
+) -> Result<(), LevelError> {
     let base = level.entity::<EntityData>(entity)?;
     let sprinting = base.shared_flag(3);
     let water = base.was_touching_water;
-    let passenger = base.vehicle.is_some();
-    let swimming = if base.shared_flag(4) {
+    let passenger = base.vehicle.get().is_some();
+    let swimming = if behavior.is_swimming(entity, level)? {
         sprinting && water && !passenger
     } else {
         sprinting

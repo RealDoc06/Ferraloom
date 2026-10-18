@@ -12,6 +12,9 @@ pub mod effects;
 pub mod experience_orb;
 pub mod item;
 pub mod player;
+pub mod pushing;
+mod relationships;
+pub use relationships::PassengerList;
 
 /// Server-lifetime identity, independent of storage location and network ID.
 /// The server allocator must never reuse a value, including after removal.
@@ -62,17 +65,22 @@ mod base;
 pub mod bubble_column;
 pub mod collision;
 pub mod collision_context;
+pub mod damage;
+pub use damage::DamageSource;
 pub mod dimensions;
 pub mod fluid;
 pub mod inside_block;
 mod lifecycle;
+pub(crate) use lifecycle::start_riding_loaded_shared;
 pub mod movement;
+mod names;
 pub mod sounds;
 pub mod teleport;
 mod trace;
 pub use lifecycle::{
     base_tick, common_tick, count_player_passengers, eject_passengers, living_ride_tick,
-    position_rider, ride_tick, start_riding, stop_riding,
+    living_ride_tick_with_tick_rate, position_rider, ride_tick, ride_tick_with_tick_rate,
+    start_riding, stop_riding,
 };
 pub mod persistence;
 pub mod reference;
@@ -224,16 +232,9 @@ impl EntityMethod {
     }
 }
 
-/// Narrow source used by the unarmored damage primitive; tags grow with ports.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct DamageSource {
-    pub attacker: Option<EntityRef>,
-    pub bypasses_cooldown: bool,
-}
-
 /// Shared embedded Entity parent references for the host lifetime tracer.
 pub fn trace_base_entity_refs(base: &EntityData, references: &mut Vec<EntityRef>) {
-    references.extend(base.vehicle);
+    references.extend(base.vehicle.get());
     references.extend(base.passengers.iter().copied());
 }
 
@@ -241,6 +242,38 @@ pub fn trace_base_entity_refs(base: &EntityData, references: &mut Vec<EntityRef>
 ///
 /// Dispatch objects are stateless. Never hold a state borrow across a world call.
 pub trait Entity: Sync {
+    /// Port of Entity#getName, with Player and ItemEntity virtual overrides.
+    fn name(
+        &self,
+        entity: EntityRef,
+        level: &Level,
+    ) -> Result<ferraloom_protocol::chat::Component, LevelError> {
+        names::base_name(self, entity, level)
+    }
+    fn type_name(
+        &self,
+        entity: EntityRef,
+        level: &Level,
+    ) -> Result<ferraloom_protocol::chat::Component, LevelError> {
+        names::type_name(entity, level)
+    }
+    fn display_name(
+        &self,
+        entity: EntityRef,
+        level: &Level,
+        scoreboard: &crate::scoreboard::Scoreboard,
+    ) -> Result<ferraloom_protocol::chat::Component, LevelError> {
+        names::display_name(self, entity, level, scoreboard)
+    }
+    /// Port of Entity#couldAcceptPassenger. Marker and OminousItemSpawner
+    /// override this independently of removal state.
+    fn could_accept_passenger(
+        &self,
+        _entity: EntityRef,
+        _level: &Level,
+    ) -> Result<bool, LevelError> {
+        Ok(true)
+    }
     /// Port of Entity#playerTouch; concrete pickup entities override this hook.
     fn player_touch(
         &self,
@@ -289,8 +322,88 @@ pub trait Entity: Sync {
     fn is_alive(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
         Ok(!level.entity::<EntityData>(entity)?.removed)
     }
+    /// Port of LivingEntity#getItemBySlot; None identifies a nonliving entity.
+    fn item_by_slot<'level>(
+        &self,
+        entity: EntityRef,
+        slot: ferraloom_protocol::component::EquipmentSlot,
+        level: &'level Level,
+    ) -> Result<Option<&'level ferraloom_protocol::component::ItemStack>, LevelError> {
+        Ok(level
+            .entity_state(entity)?
+            .as_living()
+            .map(|living| living.equipment.get(slot)))
+    }
+    /// Port of LivingEntity#isBaby; ageable entities override this read.
+    fn is_baby(&self, _entity: EntityRef, _level: &Level) -> Result<bool, LevelError> {
+        Ok(false)
+    }
+    /// Port of Entity#fireImmune; ItemEntity additionally queries its stack.
+    fn fire_immune(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
+        Ok(level
+            .entity::<EntityData>(entity)?
+            .entity_type
+            .data()
+            .fire_immune)
+    }
+    fn on_pos(
+        &self,
+        entity: EntityRef,
+        level: &Level,
+    ) -> Result<ferraloom_util::BlockPos, LevelError> {
+        movement::get_on_pos(entity, 1.0e-5_f32, level)
+    }
     fn is_spectator(&self, _entity: EntityRef, _level: &Level) -> Result<bool, LevelError> {
         Ok(false)
+    }
+    /// Port of Entity#isSwimming, dispatched through Player's override.
+    fn is_swimming(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
+        Ok(level.entity::<EntityData>(entity)?.is_swimming())
+    }
+    fn is_pushable(&self, _entity: EntityRef, _level: &Level) -> Result<bool, LevelError> {
+        Ok(false)
+    }
+    /// Port of Entity#push(Entity); LivingEntity adds its sleeping guard.
+    fn push(
+        &self,
+        entity: EntityRef,
+        other: EntityRef,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        pushing::push(self, entity, other, level)
+    }
+    fn push_impulse(
+        &self,
+        entity: EntityRef,
+        impulse: ferraloom_util::Vec3,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        level
+            .entity_mut::<EntityData>(entity)?
+            .push_impulse(impulse);
+        Ok(())
+    }
+    /// Port of LivingEntity#pushEntities. The player override reads the caller's
+    /// canonical tick manager, rather than keeping a second freeze flag.
+    fn push_entities(
+        &self,
+        entity: EntityRef,
+        level: &mut Level,
+        _tick_rate: &crate::level::tick_rate::TickRateManager,
+    ) -> Result<(), LevelError> {
+        if level.entity_state(entity)?.as_living().is_some() {
+            pushing::living_push_entities(self, entity, level)?;
+        }
+        Ok(())
+    }
+    /// Port of LivingEntity#doPush. Dispatch on the other entity as vanilla does.
+    fn do_push(
+        &self,
+        entity: EntityRef,
+        other: EntityRef,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        level.entity_behavior(other)?.push(other, entity, level)
     }
     fn controlling_passenger(
         &self,
@@ -391,8 +504,8 @@ pub trait Entity: Sync {
     ) -> Result<bool, LevelError> {
         Ok(false)
     }
-    fn can_freeze(&self, _entity: EntityRef, _level: &Level) -> Result<bool, LevelError> {
-        Ok(true)
+    fn can_freeze(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
+        living::freezing::entity_can_freeze(entity, level)
     }
     fn should_play_lava_hurt_sound(
         &self,
@@ -676,8 +789,28 @@ pub trait Entity: Sync {
         base_tick(self, entity, level)
     }
 
+    /// Entity phase context borrows the server's canonical manager. Dispatchers
+    /// that do not read tick-rate state retain their existing tick override.
+    fn tick_with_tick_rate(
+        &self,
+        entity: EntityRef,
+        level: &mut Level,
+        _tick_rate: &crate::level::tick_rate::TickRateManager,
+    ) -> Result<(), LevelError> {
+        self.tick(entity, level)
+    }
+
     fn ride_tick(&self, entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
         ride_tick(self, entity, level)
+    }
+
+    fn ride_tick_with_tick_rate(
+        &self,
+        entity: EntityRef,
+        level: &mut Level,
+        _tick_rate: &crate::level::tick_rate::TickRateManager,
+    ) -> Result<(), LevelError> {
+        self.ride_tick(entity, level)
     }
 
     fn hurt_server(
@@ -714,7 +847,9 @@ pub fn hurt_unarmored(
     }
     let damage = if damage < 0.0 { 0.0 } else { damage };
     let damage = if damage.is_finite() { damage } else { f32::MAX };
-    let applied = if living.damage_cooldown_time > 10 && !source.bypasses_cooldown {
+    let applied = if living.damage_cooldown_time > 10
+        && !source.is_tag(damage::DamageTypeTag::BypassesCooldown)
+    {
         if damage <= living.last_hurt {
             return Ok(false);
         }
@@ -744,4 +879,6 @@ pub fn vanilla_behavior(kind: EntityType) -> Option<&'static dyn Entity> {
 }
 
 #[cfg(test)]
-mod tests;
+mod predicate_facts;
+#[cfg(test)]
+pub(crate) mod tests;

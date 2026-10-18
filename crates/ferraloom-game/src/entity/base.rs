@@ -1,5 +1,5 @@
 //! Canonical Entity state, embedded exactly once in every concrete entity.
-use std::collections::VecDeque;
+use std::{cell::Cell, collections::VecDeque};
 
 use ferraloom_data::{BlockState, EntityType};
 use ferraloom_nbt::CompoundTag;
@@ -50,9 +50,9 @@ pub struct EntityData {
     pub uuid: Uuid,
     pub requires_precise_position: bool,
     pub blocks_building: bool,
-    pub passengers: Vec<EntityRef>,
+    pub passengers: super::PassengerList,
     pub boarding_cooldown: i32,
-    pub vehicle: Option<EntityRef>,
+    pub vehicle: Cell<Option<EntityRef>>,
     pub position: Vec3,
     pub block_position: BlockPos,
     pub chunk_position: ChunkPos,
@@ -107,7 +107,7 @@ pub struct EntityData {
     pub has_visual_fire: bool,
     pub last_known_speed: Vec3,
     pub last_known_position: Option<Vec3>,
-    pub in_block_state: Option<BlockState>,
+    pub in_block_state: Cell<Option<BlockState>>,
     pub movement_this_tick: VecDeque<Movement>,
     pub final_movements_this_tick: Vec<Movement>,
     pub inside_effect_collector: super::inside_block::StepBasedCollector,
@@ -134,9 +134,19 @@ impl EntityData {
     pub(crate) fn from_random(
         kind: EntityType,
         network_id: i32,
+        random: LegacyRandomSource,
+    ) -> Self {
+        Self::from_random_with_id(kind, random, || network_id)
+    }
+    /// Entity's random and UUID field initializers run before the constructor's
+    /// Level#getNextEntityId call; subclass RNG draws follow this base creation.
+    pub(crate) fn from_random_with_id(
+        kind: EntityType,
         mut random: LegacyRandomSource,
+        next_id: impl FnOnce() -> i32,
     ) -> Self {
         let uuid = Uuid::insecure(&mut random);
+        let network_id = next_id();
         let dimensions = EntityDimensions::for_type(kind);
         Self {
             entity_type: kind,
@@ -145,9 +155,9 @@ impl EntityData {
             uuid,
             requires_precise_position: false,
             blocks_building: false,
-            passengers: Vec::new(),
+            passengers: super::PassengerList::default(),
             boarding_cooldown: 0,
-            vehicle: None,
+            vehicle: Cell::new(None),
             position: Vec3::ZERO,
             block_position: BlockPos::ZERO,
             chunk_position: ChunkPos::new(0, 0),
@@ -202,7 +212,7 @@ impl EntityData {
             has_visual_fire: false,
             last_known_speed: Vec3::ZERO,
             last_known_position: None,
-            in_block_state: None,
+            in_block_state: Cell::new(None),
             movement_this_tick: VecDeque::with_capacity(100),
             final_movements_this_tick: Vec::new(),
             inside_effect_collector: super::inside_block::StepBasedCollector::default(),
@@ -218,7 +228,7 @@ impl EntityData {
             let block = BlockPos::new(mth::floor(pos.x), mth::floor(pos.y), mth::floor(pos.z));
             if block != self.block_position {
                 self.block_position = block;
-                self.in_block_state = None;
+                self.in_block_state.set(None);
                 self.chunk_position = ChunkPos::containing(block);
             }
         }
@@ -240,6 +250,35 @@ impl EntityData {
     }
     pub fn set_bounding_box(&mut self, bb: Aabb) {
         self.bounding_box = bb;
+    }
+    /// Port of Entity#getInBlockState. The cache belongs to this entity and is
+    /// invalidated on block-position changes and at the native base-tick point.
+    pub fn in_block_state(
+        &self,
+        level: &crate::level::Level,
+    ) -> Result<BlockState, crate::level::LevelError> {
+        if let Some(state) = self.in_block_state.get() {
+            return Ok(state);
+        }
+        let state = level.get_block_state(self.block_position)?;
+        self.in_block_state.set(Some(state));
+        Ok(state)
+    }
+    /// Port of Entity#moveRelative. Input acceleration does not mark needsSync.
+    pub fn move_relative(&mut self, speed: f32, input: Vec3) {
+        self.velocity = self.velocity + super::movement::input_vector(input, speed, self.yaw);
+    }
+    /// Port of Entity#push(double,double,double), including finite checks and
+    /// needsSync even when the accepted impulse is zero.
+    pub fn push_impulse(&mut self, impulse: Vec3) {
+        if impulse.is_finite() {
+            self.velocity = self.velocity + impulse;
+            self.needs_sync = true;
+        }
+    }
+    /// Port of Entity#getLookAngle using its current, uninterpolated rotation.
+    pub fn look_angle(&self) -> Vec3 {
+        super::movement::calculate_view_vector(self.pitch, self.yaw)
     }
     /// Port of Entity#setYRot. Non-finite input leaves the previous angle intact.
     pub fn set_y_rot(&mut self, yaw: f32) {
@@ -273,6 +312,10 @@ impl EntityData {
     pub fn shared_flag(&self, bit: u8) -> bool {
         *self.entity_data.get(synched_data::SHARED_FLAGS) as u8 & (1 << bit) != 0
     }
+    /// Parent body of Entity#isSwimming; Player adds its flight/spectator gates.
+    pub fn is_swimming(&self) -> bool {
+        self.shared_flag(4)
+    }
     pub fn set_shared_flag(&mut self, bit: u8, enabled: bool) {
         let flags = *self.entity_data.get(synched_data::SHARED_FLAGS) as u8;
         self.entity_data.set(
@@ -286,6 +329,20 @@ impl EntityData {
     }
     pub fn ticks_frozen(&self) -> i32 {
         self.entity_data.get(synched_data::TICKS_FROZEN).0
+    }
+    pub fn set_ticks_frozen(&mut self, ticks: i32) {
+        self.entity_data
+            .set(synched_data::TICKS_FROZEN, VarInt(ticks));
+    }
+    pub const fn ticks_required_to_freeze(&self) -> i32 {
+        140
+    }
+    pub fn percent_frozen(&self) -> f32 {
+        self.ticks_frozen().min(self.ticks_required_to_freeze()) as f32
+            / self.ticks_required_to_freeze() as f32
+    }
+    pub fn is_fully_frozen(&self) -> bool {
+        self.ticks_frozen() >= self.ticks_required_to_freeze()
     }
     /// Port of Entity#isInLava: the first base tick is deliberately excluded.
     pub fn is_in_lava(

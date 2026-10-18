@@ -156,6 +156,11 @@ The same report reflects both item inventory-click virtuals independently.
 Generated `overrides_stacked_on_other` / `overrides_other_stacked_on_me` facts
 follow the actual Item subclass, including when stacks override components.
 
+`ExtractData <output-dir> --item-names-only` writes immutable item description IDs
+and potion effect-name suffixes to `item_names.json`. `Item#getDescriptionId` and
+`Potion#name` return their final constructor fields, independent of stacks or
+world context. Potion suffixes deliberately differ from registry keys for strong
+and long variants. No state-fact bits are allocated.
 `ExtractBlockEntityTypes <output-json>` records valid blocks, OP-only NBT flags
 and whether each registered receiver implements `Nameable`. The last fact is
 checked against the actual factory receiver for every valid block, including

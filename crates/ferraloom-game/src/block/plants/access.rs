@@ -69,6 +69,9 @@ impl LevelReaderRef<'_, '_> {
         {
             return Ok(false);
         }
+        if let Some(sturdy) = state.cached_center_support(face) {
+            return Ok(sturdy);
+        }
         let support = self
             .required_behavior(state.block(), BlockMethod::IsFaceSturdy)?
             .support_shape(state, pos, self)?;

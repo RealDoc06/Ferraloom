@@ -6,9 +6,9 @@ use super::{
 };
 use crate::{
     block::{LevelReaderRef, entity::BlockEntityRef},
-    entity::{EntityData, EntityRef},
+    entity::{EntityData, EntityRef, EntityState},
     loot::{EnvironmentValue, Identifier, LootError, LootFacts, LootParams, Result},
-    predicates::{PredicateContext, PredicateRegistry},
+    predicates::{EntityFlags, PredicateContext, PredicateRegistry},
 };
 use ferraloom_data::{
     Block, BlockState, EntityType, Item,
@@ -16,7 +16,7 @@ use ferraloom_data::{
     registries::{attribute_type::Id as AttributeType, environment_attribute::Id as Attribute},
 };
 use ferraloom_nbt::Tag;
-use ferraloom_protocol::component::{DataComponentMap, ItemStack};
+use ferraloom_protocol::component::{DataComponentMap, EquipmentSlot, ItemStack};
 use ferraloom_util::{BlockPos, ChunkPos, Vec3};
 use std::collections::BTreeSet;
 
@@ -116,6 +116,17 @@ impl PredicateContext for Level {
     fn biome(&self, pos: BlockPos) -> Result<Identifier> {
         identifier(self.biome_at(pos).map_err(required)?)
     }
+    fn in_structure(
+        &self,
+        pos: BlockPos,
+        set: &ferraloom_protocol::codec::HolderSet,
+    ) -> Result<bool> {
+        Ok(self
+            .structure_manager()
+            .get_structure_with_piece_at_in(pos, set)
+            .map_err(required)?
+            .is_some())
+    }
     fn light(&self, pos: BlockPos) -> Result<i32> {
         self.max_local_raw_brightness(pos).map_err(required)
     }
@@ -136,6 +147,82 @@ impl PredicateContext for Level {
             .map_err(required)?
             .position)
     }
+    fn entity_has_equipment(&self, entity: EntityRef) -> Result<bool> {
+        Ok(self
+            .entity_state(entity)
+            .map_err(required)?
+            .as_living()
+            .is_some())
+    }
+    fn entity_equipment_slot(
+        &self,
+        entity: EntityRef,
+        slot: EquipmentSlot,
+    ) -> Result<Option<ItemStack>> {
+        Ok(self
+            .entity_behavior(entity)
+            .map_err(required)?
+            .item_by_slot(entity, slot, self)
+            .map_err(required)?
+            .cloned())
+    }
+    fn entity_equipment(
+        &self,
+        entity: EntityRef,
+    ) -> Result<Option<Vec<(EquipmentSlot, ItemStack)>>> {
+        if !self.entity_has_equipment(entity)? {
+            return Ok(None);
+        }
+        crate::entity::player::equipment::SLOTS
+            .into_iter()
+            .map(|slot| {
+                Ok((
+                    slot,
+                    self.entity_equipment_slot(entity, slot)?
+                        .expect("living equipment slot"),
+                ))
+            })
+            .collect::<Result<Vec<_>>>()
+            .map(Some)
+    }
+    fn entity_on_pos(&self, entity: EntityRef) -> Result<BlockPos> {
+        self.entity_behavior(entity)
+            .map_err(required)?
+            .on_pos(entity, self)
+            .map_err(required)
+    }
+    fn entity_movement_block_pos(&self, entity: EntityRef) -> Result<BlockPos> {
+        self.entity_behavior(entity)
+            .map_err(required)?
+            .block_pos_below_that_affects_my_movement(entity, self)
+            .map_err(required)
+    }
+    fn entity_flags(&self, entity: EntityRef) -> Result<EntityFlags> {
+        let state = self.entity_state(entity).map_err(required)?;
+        let base = state.as_entity();
+        let living = state.as_living().is_some();
+        let fall_flying = living && base.shared_flag(7);
+        Ok(EntityFlags {
+            on_ground: base.on_ground,
+            on_fire: crate::entity::inside_block::is_on_fire(entity, self).map_err(required)?,
+            crouching: base.pose() == ferraloom_protocol::entity_data::Pose::Crouching,
+            sprinting: base.shared_flag(3),
+            swimming: self
+                .entity_behavior(entity)
+                .map_err(required)?
+                .is_swimming(entity, self)
+                .map_err(required)?,
+            flying: fall_flying || matches!(state, EntityState::Player(player) if player.flying),
+            baby: self
+                .entity_behavior(entity)
+                .map_err(required)?
+                .is_baby(entity, self)
+                .map_err(required)?,
+            living,
+            in_water: base.was_touching_water,
+            fall_flying,
+        })
+    }
     fn entity_tick_count(&self, entity: EntityRef) -> Result<i32> {
         Ok(self
             .entity::<EntityData>(entity)
@@ -143,7 +230,11 @@ impl PredicateContext for Level {
             .tick_count)
     }
     fn entity_vehicle(&self, entity: EntityRef) -> Result<Option<EntityRef>> {
-        Ok(self.entity::<EntityData>(entity).map_err(required)?.vehicle)
+        Ok(self
+            .entity::<EntityData>(entity)
+            .map_err(required)?
+            .vehicle
+            .get())
     }
     fn entity_passengers(&self, entity: EntityRef) -> Result<Vec<EntityRef>> {
         Ok(self
