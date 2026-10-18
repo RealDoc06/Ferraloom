@@ -8,8 +8,10 @@ pub struct DroppedStack {
     pub thrown_from_hand: bool,
 }
 
-/// Live borrowed storage for one operation, supplied by the region owner.
+/// Standalone storage for the legacy menu adapters. Runtime operations resolve
+/// their handles through Level rather than retaining these field borrows.
 pub struct MenuContext<'a> {
+    pub(super) in_memory_stacks: super::in_memory::InMemoryStackState,
     pub player: PlayerContainer<'a>,
     pub external: &'a mut [&'a mut dyn Container],
     pub is_creative: bool,
@@ -32,6 +34,7 @@ impl<'a> MenuContext<'a> {
         infinite_materials: bool,
     ) -> Self {
         Self {
+            in_memory_stacks: Default::default(),
             player: PlayerContainer {
                 inventory,
                 equipment,
@@ -350,27 +353,6 @@ impl AbstractContainerMenu {
         }
         Ok(Some(result))
     }
-    fn safe_insert_live(
-        &mut self,
-        ctx: &mut MenuContext<'_>,
-        slot: &Slot,
-        mut input: ItemStack,
-        amount: i32,
-        hooks: &mut dyn MenuHooks,
-    ) -> Result<ItemStack> {
-        super::transfer::safe_insert_menu_item_stack(
-            &mut super::transfer::PureMenuTransfer {
-                menu: self,
-                context: ctx,
-                source: &mut input,
-            },
-            slot.index,
-            super::transfer::PureStackRef::Source,
-            amount,
-            hooks,
-        )?;
-        Ok(input)
-    }
     fn safe_take(
         &mut self,
         ctx: &mut MenuContext<'_>,
@@ -553,66 +535,12 @@ impl AbstractContainerMenu {
         button: i32,
         hooks: &mut dyn MenuHooks,
     ) -> Result<()> {
-        let clicked = self.get_item(ctx, slot.index);
-        // Bundle item overrides require their own contents/selection implementation.
-        if [&clicked, &self.carried].iter().any(|stack| {
-            crate::entity::player::inventory::component(
-                stack,
-                ferraloom_protocol::component::ComponentTypeId::BUNDLE_CONTENTS,
-            )
-            .is_some()
-        }) {
-            return Err(MenuError::Unsupported(
-                "BundleItem inventory click override",
-            ));
-        }
-        if clicked.is_empty() {
-            if !self.carried.is_empty() {
-                let amount = if button == 0 { count(&self.carried) } else { 1 };
-                let carried = self.carried.clone();
-                let remaining = self.safe_insert_live(ctx, &slot, carried, amount, hooks)?;
-                self.set_carried(remaining);
-            }
-        } else if slot.may_pickup(&clicked, ctx.is_creative, hooks)? {
-            if self.carried.is_empty() {
-                let amount = if button == 0 {
-                    count(&clicked)
-                } else {
-                    (count(&clicked) + 1) / 2
-                };
-                if let Some(taken) = self.try_remove_live(ctx, &slot, amount, i32::MAX, hooks)? {
-                    self.set_carried(taken.clone());
-                    self.on_take(ctx, slot.index, &taken, 0, hooks)?;
-                }
-            } else if slot.may_place(&self.carried, hooks)? {
-                if is_same_item_same_components(&clicked, &self.carried) {
-                    let amount = if button == 0 { count(&self.carried) } else { 1 };
-                    let carried = self.carried.clone();
-                    let remaining = self.safe_insert_live(ctx, &slot, carried, amount, hooks)?;
-                    self.set_carried(remaining);
-                } else if count(&self.carried)
-                    <= slot.max_stack_size(self.container(ctx, slot.container), &self.carried)
-                {
-                    let carried = self
-                        .carried_generations
-                        .replace(0, &mut self.carried, clicked)
-                        .into_owned()
-                        .expect("live cursor replacement uses StackRef");
-                    self.set_item_live(ctx, slot.index, carried, hooks)?;
-                }
-            } else if is_same_item_same_components(&clicked, &self.carried) {
-                let max = max_stack_size(&self.carried) - count(&self.carried);
-                if let Some(taken) =
-                    self.try_remove_live(ctx, &slot, count(&clicked), max, hooks)?
-                {
-                    let total = count(&self.carried) + count(&taken);
-                    set_count(&mut self.carried, total);
-                    self.on_take(ctx, slot.index, &taken, 0, hooks)?;
-                }
-            }
-        }
-        self.container_mut(ctx, slot.container).set_changed();
-        Ok(())
+        pickup_menu_item(
+            &mut super::in_memory::InMemoryMenuOperation::new(self, ctx),
+            slot.index,
+            button,
+            hooks,
+        )
     }
     fn swap(
         &mut self,

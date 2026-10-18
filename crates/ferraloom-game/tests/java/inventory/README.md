@@ -10,6 +10,8 @@ Fresh split/copy objects also move into a container, then remain independently
 mutable when a later setItem replaces them.
 Real Slot.safeInsert callbacks observe both count edits before setByPlayer,
 then replace or mutate the source/target while their original objects stay held.
+Ordinary real-menu PICKUP also records cursor/target identity through a merge,
+followed by swapping unlike items and mutating the original cursor receiver.
 
 Both scripts use the pinned jar, JDK 25 and libraries in the main checkout's
 shared cache. Crafting uses the Mockito jars already used by the recipe harness

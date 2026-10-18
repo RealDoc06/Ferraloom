@@ -1,7 +1,9 @@
 //! Vanilla container storage, slot rules, click simulation and remote synchronization.
 mod block_containers;
+mod click;
 mod container;
 mod crafted;
+mod in_memory;
 pub use block_containers::{block_menu_still_valid, with_block_menu_context};
 mod crafting;
 mod crafting_runtime;
@@ -18,6 +20,9 @@ mod stacks;
 mod sync;
 mod transfer;
 
+pub use click::{
+    MenuClickContext, pickup_live_menu_item, pickup_menu_item, try_remove_menu_item_stack,
+};
 pub use container::*;
 pub use crafted::crafted_item_post_process;
 pub use crafting::*;

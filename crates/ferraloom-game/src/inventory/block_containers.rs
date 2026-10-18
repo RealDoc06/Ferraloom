@@ -29,6 +29,20 @@ impl BlockMenuContainer<'_> {
     }
 }
 impl Container for BlockMenuContainer<'_> {
+    fn stack_parts(&self, slot: usize) -> Option<(&StackGenerations, &ItemStack, usize)> {
+        let (index, slot) = self.locate(slot);
+        self.states[index].container().unwrap().stack_parts(slot)
+    }
+    fn stack_parts_mut(
+        &mut self,
+        slot: usize,
+    ) -> Option<(&mut StackGenerations, &mut ItemStack, usize)> {
+        let (index, slot) = self.locate(slot);
+        self.states[index]
+            .container_mut()
+            .unwrap()
+            .stack_parts_mut(slot)
+    }
     fn reassign_item(&mut self, slot: usize) -> Result<()> {
         let (index, slot) = self.locate(slot);
         if let BlockEntityState::Crafter(crafter) = &mut *self.states[index] {
@@ -65,6 +79,20 @@ impl Container for BlockMenuContainer<'_> {
             .container_mut()
             .unwrap()
             .set_item(slot, stack);
+    }
+    fn remove_item(&mut self, slot: usize, amount: i32) -> ItemStack {
+        let (index, slot) = self.locate(slot);
+        let hopper = matches!(&*self.states[index], BlockEntityState::Hopper(_));
+        let container = self.states[index].container_mut().unwrap();
+        if hopper {
+            if amount <= 0 {
+                ItemStack::default()
+            } else {
+                split(&mut container.items[slot], amount)
+            }
+        } else {
+            container.remove_item(slot, amount)
+        }
     }
     fn remove_item_no_update(&mut self, slot: usize) -> ItemStack {
         let (i, slot) = self.locate(slot);

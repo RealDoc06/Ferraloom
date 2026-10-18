@@ -124,6 +124,31 @@ public final class ListenerVectors {
     container.events.add("heldTarget:" + InventoryVectors.item(container.oldTarget));
     System.out.println("listener\tinsert-" + (replace ? "replace" : "mutate") + "\t" + String.join(";", container.events));
   }
+  static void pickup(RegistryAccess registries) {
+    var player = new InventoryVectors.MenuPlayer(new InventoryVectors.MenuLevel(registries), false);
+    var menu = InventoryVectors.menu("chest1", player);
+    menu.getSlot(0).setByPlayer(new ItemStack(Items.STONE, 60));
+    menu.setCarried(new ItemStack(Items.STONE, 10));
+    var carried = menu.getCarried();
+    var target = menu.getSlot(0).getItem();
+    var events = new ArrayList<String>();
+    menu.clicked(0, 0, ContainerInput.PICKUP, player);
+    events.add("merge:" + (carried == menu.getCarried()) + ":" + (target == menu.getSlot(0).getItem())
+      + ":" + InventoryVectors.item(carried) + ":" + InventoryVectors.item(target));
+    menu.getSlot(0).setByPlayer(new ItemStack(Items.DIRT, 2));
+    menu.clicked(0, 0, ContainerInput.PICKUP, player);
+    events.add("swap:" + (carried == menu.getSlot(0).getItem()) + ":" + InventoryVectors.item(menu.getCarried())
+      + ":" + InventoryVectors.item(carried) + ":" + InventoryVectors.item(target));
+    carried.grow(1);
+    events.add("held:" + InventoryVectors.item(menu.getSlot(0).getItem()));
+    var patched = new ItemStack(Items.STONE, 3);
+    patched.set(DataComponents.BUNDLE_CONTENTS, net.minecraft.world.item.component.BundleContents.EMPTY);
+    menu.getSlot(1).setByPlayer(patched);
+    menu.setCarried(ItemStack.EMPTY);
+    menu.clicked(1, 0, ContainerInput.PICKUP, player);
+    events.add("component:" + menu.getCarried().has(DataComponents.BUNDLE_CONTENTS) + ":" + InventoryVectors.item(menu.getCarried()));
+    System.out.println("listener\tpickup\t" + String.join(";", events));
+  }
   public static void main(String[] args) throws Exception {
     var output = System.out;
     var errors = System.err;
@@ -143,5 +168,6 @@ public final class ListenerVectors {
     operationStack(true);
     safeInsert(false);
     safeInsert(true);
+    pickup(registries);
   }
 }
