@@ -11,7 +11,7 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Chunks and tickets](features/chunks.md) | 37 | 31 | 6 | 0 | 0 |
 | [Combat and damage](features/combat-damage.md) | 204 | 204 | 0 | 0 | 0 |
 | [Commands and argument types](features/commands.md) | 2642 | 2497 | 27 | 118 | 0 |
-| [Crafting and recipes](features/crafting-recipes.md) | 2135 | 2 | 30 | 2103 | 0 |
+| [Crafting and recipes](features/crafting-recipes.md) | 2136 | 2 | 29 | 2105 | 0 |
 | [Datapacks and resource reload](features/datapacks-reload.md) | 57 | 57 | 0 | 0 | 0 |
 | [Enchantments](features/enchantments.md) | 136 | 136 | 0 | 0 | 0 |
 | [Entities and AI](features/entities.md) | 696 | 673 | 23 | 0 | 0 |
@@ -49,4 +49,4 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Weather, time and environment](features/weather-time.md) | 85 | 85 | 0 | 0 | 0 |
 | [World storage and data fixing](features/world-storage.md) | 307 | 306 | 1 | 0 | 0 |
 | [World generation](features/worldgen.md) | 3110 | 2642 | 168 | 300 | 0 |
-| **Total** | **19095** | **12141** | **4087** | **2867** | **0** |
+| **Total** | **19096** | **12141** | **4086** | **2869** | **0** |
