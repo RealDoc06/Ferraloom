@@ -26,6 +26,8 @@ pub struct NodeDefinition {
     pub fork: bool,
     pub restricted: bool,
     pub permissions: [bool; 5],
+    /// Native CommandNode.equals classes after filtering at each permission level.
+    pub packet_equivalent: [usize; 5],
     pub redirect: Option<usize>,
     pub children: Vec<usize>,
     pub parser: Option<String>,
@@ -77,6 +79,7 @@ fn definitions_with_features(features: RuleFeatures) -> Cow<'static, [NodeDefini
             fork: false,
             restricted: false,
             permissions: [true; 5],
+            packet_equivalent: [literal; 5],
             redirect: None,
             children: vec![literal + 1],
             parser: None,
@@ -91,6 +94,7 @@ fn definitions_with_features(features: RuleFeatures) -> Cow<'static, [NodeDefini
             fork: false,
             restricted: false,
             permissions: [true; 5],
+            packet_equivalent: [literal + 1; 5],
             redirect: None,
             children: Vec::new(),
             parser: Some("brigadier:integer".into()),
@@ -213,11 +217,23 @@ pub fn packet(source: &CommandSourceStack, features: RuleFeatures) -> clientboun
     let mut queue = VecDeque::from([0]);
     let mut order = Vec::new();
     let mut ids = vec![None; definitions.len()];
+    let mut canonical_ids = vec![None; definitions.len()];
+    let permission = (0..=4)
+        .rev()
+        .find(|level| source.permissions.has_level(*level as i32))
+        .unwrap_or(0);
     while let Some(index) = queue.pop_front() {
         if ids[index].is_some() {
             continue;
         }
-        ids[index] = Some(order.len() as i32);
+        let equivalent = definitions[index].packet_equivalent[permission];
+        if let Some(id) = canonical_ids[equivalent] {
+            ids[index] = Some(id);
+            continue;
+        }
+        let id = order.len() as i32;
+        canonical_ids[equivalent] = Some(id);
+        ids[index] = Some(id);
         order.push(index);
         queue.extend(
             definitions[index]
@@ -229,6 +245,9 @@ pub fn packet(source: &CommandSourceStack, features: RuleFeatures) -> clientboun
         if let Some(redirect) = definitions[index].redirect.filter(|r| allowed.contains(r)) {
             queue.push_back(redirect);
         }
+    }
+    for (index, node) in definitions.iter().enumerate() {
+        ids[index] = canonical_ids[node.packet_equivalent[permission]];
     }
     let entries = order
         .into_iter()
@@ -269,6 +288,15 @@ mod tests {
     use super::*;
     use ferraloom_protocol::Wire;
     use ferraloom_util::Vec3;
+    fn assert_packet_bytes(actual: &[u8], expected: &[u8], label: &str) {
+        let first = actual.iter().zip(expected).position(|(a, b)| a != b);
+        assert!(
+            actual == expected,
+            "{label}: {} versus {} bytes; first difference {first:?}",
+            actual.len(),
+            expected.len()
+        );
+    }
     #[test]
     fn minecart_feature_gates_rule_parsing_and_vanilla_tree() {
         let features = RuleFeatures {
@@ -316,7 +344,11 @@ mod tests {
             } else {
                 bytes.to_vec()
             };
-            assert_eq!(actual, expected, "minecart feature, level {level}");
+            assert_packet_bytes(
+                &actual,
+                &expected,
+                &format!("minecart feature, level {level}"),
+            );
         }
     }
     #[test]
@@ -335,19 +367,20 @@ mod tests {
             } else {
                 expected.to_vec()
             };
-            assert_eq!(
-                packet.to_bytes().unwrap(),
-                expected,
-                "permission level {level}"
+            assert_packet_bytes(
+                &packet.to_bytes().unwrap(),
+                &expected,
+                &format!("permission level {level}"),
             );
             if level == 4 {
                 let second = clientbound::Commands::from_bytes(include_bytes!(
                     "vanilla/tree-level-4-second-jvm.bin"
                 ))
                 .unwrap();
-                assert_eq!(
-                    packet.to_bytes().unwrap(),
-                    normalize_game_rules(second).to_bytes().unwrap()
+                assert_packet_bytes(
+                    &packet.to_bytes().unwrap(),
+                    &normalize_game_rules(second).to_bytes().unwrap(),
+                    "second JVM",
                 );
             }
         }

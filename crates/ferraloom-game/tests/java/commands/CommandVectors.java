@@ -111,9 +111,27 @@ public final class CommandVectors {
             queue.addAll(node.getChildren());
             if (node.getRedirect() != null) queue.add(node.getRedirect());
         }
+        // Packet enumeration uses CommandNode.equals, unlike the identity map used
+        // to retain the dispatcher graph. Capture equality after permission filtering.
+        var equivalents = new int[5][nodes.size()];
+        for (int level = 0; level <= 4; level++) {
+            var filtered = new RootCommandNode<CommandSourceStack>();
+            var converted = new IdentityHashMap<CommandNode<CommandSourceStack>, CommandNode<CommandSourceStack>>();
+            converted.put(dispatcher.getRoot(), filtered);
+            fill(dispatcher.getRoot(), filtered, source(level), converted);
+            var first = new HashMap<CommandNode<CommandSourceStack>, Integer>();
+            for (int index = 0; index < nodes.size(); index++) {
+                final int originalIndex = index;
+                var copy = converted.get(nodes.get(index));
+                equivalents[level][index] = copy == null ? index : first.computeIfAbsent(copy, ignored -> originalIndex);
+            }
+        }
         var tree = new JsonArray();
         for (var node : nodes) {
             var entry = new JsonObject();
+            var equivalent = new JsonArray();
+            for (int level = 0; level <= 4; level++) equivalent.add(equivalents[level][ids.get(node)]);
+            entry.add("packet_equivalent", equivalent);
             entry.addProperty("name", node.getName());
             entry.addProperty("kind", node instanceof RootCommandNode ? "root" : node instanceof LiteralCommandNode ? "literal" : "argument");
             entry.addProperty("executable", node.getCommand() != null);
@@ -136,7 +154,8 @@ public final class CommandVectors {
             }
             tree.add(entry);
         }
-        write(out, "tree.json", tree);
+        var compact = new GsonBuilder().disableHtmlEscaping().create();
+        Files.writeString(out.resolve("tree.json"), "[\n" + java.util.stream.StreamSupport.stream(tree.spliterator(),false).map(compact::toJson).collect(java.util.stream.Collectors.joining(",\n")) + "\n]\n");
         var argumentTypes = new LinkedHashMap<String,ArgumentType<?>>();
         var propertiesByType = new LinkedHashMap<String,JsonObject>();
         for (var node : nodes) if (node instanceof ArgumentCommandNode<CommandSourceStack,?> argument) {
