@@ -2339,7 +2339,8 @@ fn worldgen_skips_share_policy_counters_and_deduplicate_owned_unit_behavior_pair
         Region::new(&EMPTY),
         crate::level::LevelContext::fixture(0, 63),
     );
-    let pair = ("minecraft:oak".to_owned(), "canSurvive".to_owned());
+    let pair =
+        crate::block::WorldgenSkip::from(("minecraft:oak".to_owned(), "canSurvive".to_owned()));
     level.record_worldgen_skips(Vec::new()).unwrap();
     assert_eq!(
         level.record_worldgen_skips(vec![pair.clone()]),
@@ -2350,21 +2351,31 @@ fn worldgen_skips_share_policy_counters_and_deduplicate_owned_unit_behavior_pair
     level
         .unported_operation(UnportedOperation::PackReload)
         .unwrap();
-    level
+    let shared = &level;
+    shared
         .record_worldgen_skips(vec![pair.clone(), pair.clone()])
         .unwrap();
-    level
+    shared
         .record_worldgen_skips(vec![
             pair,
-            ("minecraft:oak".to_owned(), "updateShape".to_owned()),
-            ("minecraft:birch".to_owned(), "canSurvive".to_owned()),
+            crate::block::WorldgenSkip::from((
+                "minecraft:oak".to_owned(),
+                "updateShape".to_owned(),
+            )),
+            crate::block::WorldgenSkip::from((
+                "minecraft:birch".to_owned(),
+                "canSurvive".to_owned(),
+            )),
         ])
         .unwrap();
     assert_eq!(level.unported_behavior_stats().skipped_calls, 6);
     assert_eq!(level.unported_behavior_stats().distinct_calls, 4);
     level.set_unported_behavior(UnportedBehavior::Strict);
     assert_eq!(
-        level.record_worldgen_skips(vec![("minecraft:oak".into(), "canSurvive".into())]),
+        level.record_worldgen_skips(vec![crate::block::WorldgenSkip::from((
+            "minecraft:oak".into(),
+            "canSurvive".into()
+        ))]),
         Err(LevelError::UnsupportedWorldgenBehavior)
     );
     assert_eq!(level.unported_behavior_stats().skipped_calls, 6);

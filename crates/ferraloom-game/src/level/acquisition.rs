@@ -66,6 +66,7 @@ pub enum AcquireFailure {
     Generation,
     Lighting,
     Publication,
+    ReentrantFull,
 }
 
 /// Cold runtime seam for ServerChunkCache#getChunk/getChunkFutureMainThread.
@@ -191,7 +192,18 @@ impl Level {
         status: ChunkStatus,
         load_or_generate: bool,
     ) -> Result<Option<ChunkReference>, LevelError> {
-        if let Some(driver) = &self.acquire_driver {
+        if status == ChunkStatus::Full
+            && self
+                .chunk(pos)
+                .is_some_and(|chunk| !chunk.full_publication_complete())
+        {
+            return Err(LevelError::ChunkAcquisition(
+                pos,
+                status,
+                AcquireFailure::ReentrantFull,
+            ));
+        }
+        let result = if let Some(driver) = &self.acquire_driver {
             self.acquisition
                 .get_chunk(driver.as_ref(), self, pos, status, load_or_generate)
         } else if let Some(chunk) = self.chunk(pos) {
@@ -206,7 +218,19 @@ impl Level {
             Err(LevelError::MissingChunk(pos))
         } else {
             Ok(None)
+        }?;
+        if status == ChunkStatus::Full
+            && self
+                .chunk(pos)
+                .is_some_and(|chunk| !chunk.full_publication_complete())
+        {
+            return Err(LevelError::ChunkAcquisition(
+                pos,
+                status,
+                AcquireFailure::ReentrantFull,
+            ));
         }
+        Ok(result)
     }
 
     pub fn get_full_chunk(&self, pos: ChunkPos) -> Result<&super::chunk::LevelChunk, LevelError> {
@@ -241,6 +265,12 @@ impl Level {
         &self,
         pos: ChunkPos,
     ) -> Result<Option<&super::chunk::LevelChunk>, LevelError> {
+        if self
+            .chunk(pos)
+            .is_some_and(|chunk| !chunk.full_publication_complete())
+        {
+            return Ok(None);
+        }
         if let Some(driver) = &self.acquire_driver {
             self.acquisition
                 .get_chunk_now(driver.as_ref(), pos)
