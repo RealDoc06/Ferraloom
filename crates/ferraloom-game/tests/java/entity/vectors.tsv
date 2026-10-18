@@ -1,3 +1,7 @@
+tnt	1	4021400000000000,40508a3d70a3d70a,4020f0a3d70a3d71	3fbf5c2900000000,3fc41205c28f5c29,bf9e1b08a3d70a3d	00000	3	false	false
+tnt	2	40217eb852000000,405091b7175c28f6,4020e19652b851ec	3fbebb98dbf48800,3fbd4d8356fb8f5c,bf9d80e4aa326e14	00000	2	false	false
+tnt	3	4021bc2f83b7e910,4050967b1c08f217,4020d2d5e06338b5	3fbe1e3ecce91c98,3fb2ae78bfe65f7b,bf9ce9d5e36f25b0	00000	1	false	false
+tnt	4	4021f86c0151bb49,405098975e0ff5ec,4020c460f5718122	3fbd840a61cf6870,3fa08b9f46a3d539,bf9c55cc86db9775	00000	0	true	false
 inventory	0	true	0	0:minecraft:stone:64:0;1:minecraft:stone:6:0
 inventory	1	false	1	0:minecraft:stone:64:0;1:minecraft:stone:64:0;2:minecraft:stone:64:0;3:minecraft:stone:64:0;4:minecraft:stone:64:0;5:minecraft:stone:64:0;6:minecraft:stone:64:0;7:minecraft:stone:64:0;8:minecraft:stone:64:0;9:minecraft:stone:64:0;10:minecraft:stone:64:0;11:minecraft:stone:64:0;12:minecraft:stone:64:0;13:minecraft:stone:64:0;14:minecraft:stone:64:0;15:minecraft:stone:64:0;16:minecraft:stone:64:0;17:minecraft:stone:64:0;18:minecraft:stone:64:0;19:minecraft:stone:64:0;20:minecraft:stone:64:0;21:minecraft:stone:64:0;22:minecraft:stone:64:0;23:minecraft:stone:64:0;24:minecraft:stone:64:0;25:minecraft:stone:64:0;26:minecraft:stone:64:0;27:minecraft:stone:64:0;28:minecraft:stone:64:0;29:minecraft:stone:64:0;30:minecraft:stone:64:0;31:minecraft:stone:64:0;32:minecraft:stone:64:0;33:minecraft:stone:64:0;34:minecraft:stone:64:0;35:minecraft:stone:64:0
 inventory	2	true	0	0:minecraft:dirt:64:0;1:minecraft:stone:4:0;40:minecraft:stone:64:0

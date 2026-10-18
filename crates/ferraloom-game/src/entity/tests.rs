@@ -417,3 +417,36 @@ fn vanilla_movement_path_block_contact_order_and_step_indices() {
     }
     assert_eq!(count, 14);
 }
+
+#[test]
+fn vanilla_primed_tnt_tick_motion_fuse_and_removal_bits() {
+    let mut level = level(true);
+    let mut tnt = item::PrimedTnt::new(level.next_entity_id(), 123);
+    tnt.parent.set_pos(Vec3::new(8.5, 66.0, 8.5));
+    tnt.parent.velocity = Vec3::new(0.125, 0.2, -0.03);
+    tnt.set_fuse(4);
+    let mut entity = EntityRef(1);
+    level
+        .add_entity(entity, EntityState::PrimedTnt(Box::new(tnt)))
+        .unwrap();
+    let mut n = 0;
+    for row in VECTORS.lines().filter(|s| s.starts_with("tnt\t")) {
+        let f: Vec<_> = row.split('\t').collect();
+        common_tick(entity, &mut level).unwrap();
+        entity.tick(&mut level).unwrap();
+        let tnt = level.entity::<item::PrimedTnt>(entity).unwrap();
+        assert_vector(tnt.parent.position, vector(f[2]), row);
+        assert_vector(tnt.parent.velocity, vector(f[3]), row);
+        assert_eq!(flags(&tnt.parent), f[4], "{row}");
+        assert_eq!(tnt.fuse(), f[5].parse::<i32>().unwrap());
+        assert_eq!(tnt.parent.removed, f[6] == "true");
+        assert_eq!(tnt.parent.requires_precise_position, f[7] == "true");
+        n += 1;
+    }
+    assert_eq!(n, 4);
+    let effects = level.take_entity_effects();
+    assert!(matches!(
+        effects.as_slice(),
+        [effects::EntityEffect::Explosion { power: 4.0, .. }]
+    ));
+}

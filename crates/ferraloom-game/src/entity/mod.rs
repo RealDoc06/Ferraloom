@@ -3,6 +3,8 @@ use ferraloom_data::EntityType;
 use crate::level::{Level, LevelError};
 
 pub mod animal;
+pub mod effects;
+pub mod item;
 pub mod player;
 
 /// Server-lifetime identity, independent of storage location and network ID.
@@ -95,6 +97,7 @@ pub struct AgeableMob {
 pub enum EntityState {
     Cow(animal::Cow),
     Player(Box<player::ServerPlayer>),
+    PrimedTnt(Box<item::PrimedTnt>),
 }
 
 impl EntityState {
@@ -102,20 +105,21 @@ impl EntityState {
         match self {
             Self::Cow(_) => EntityType::COW,
             Self::Player(_) => EntityType::PLAYER,
+            Self::PrimedTnt(_) => EntityType::TNT,
         }
     }
 
     pub fn as_mob(&self) -> Option<&Mob> {
         match self {
             Self::Cow(cow) => Some(cow.as_mob()),
-            Self::Player(_) => None,
+            _ => None,
         }
     }
 
     pub fn as_mob_mut(&mut self) -> Option<&mut Mob> {
         match self {
             Self::Cow(cow) => Some(cow.as_mob_mut()),
-            Self::Player(_) => None,
+            _ => None,
         }
     }
 
@@ -135,12 +139,14 @@ impl EntityState {
         match self {
             Self::Cow(cow) => &cow.as_living().parent,
             Self::Player(p) => &p.parent.parent,
+            Self::PrimedTnt(tnt) => &tnt.parent,
         }
     }
     pub fn as_entity_mut(&mut self) -> &mut EntityData {
         match self {
             Self::Cow(cow) => &mut cow.as_living_mut().parent,
             Self::Player(p) => &mut p.parent.parent,
+            Self::PrimedTnt(tnt) => &mut tnt.parent,
         }
     }
 }
@@ -155,13 +161,13 @@ impl EntityDataView for animal::Cow {
     fn view(state: &EntityState) -> Option<&Self> {
         match state {
             EntityState::Cow(cow) => Some(cow),
-            EntityState::Player(_) => None,
+            _ => None,
         }
     }
     fn view_mut(state: &mut EntityState) -> Option<&mut Self> {
         match state {
             EntityState::Cow(cow) => Some(cow),
-            EntityState::Player(_) => None,
+            _ => None,
         }
     }
 }
@@ -442,6 +448,7 @@ pub fn vanilla_behavior(kind: EntityType) -> Option<&'static dyn Entity> {
     match kind {
         EntityType::COW => Some(&animal::CowBehavior),
         EntityType::PLAYER => Some(&player::PlayerBehavior),
+        EntityType::TNT => Some(&item::PrimedTntBehavior),
         _ => None,
     }
 }

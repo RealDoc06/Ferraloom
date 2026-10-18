@@ -59,6 +59,8 @@ pub enum LevelError {
 /// dimension's FAST_LAVA attribute and synchronized game-rule snapshot.
 #[derive(Clone, Copy, Debug)]
 pub struct LevelRules {
+    pub tnt_explodes: bool,
+    pub entity_drops: bool,
     pub debug: bool,
     pub can_have_weather: bool,
     pub random_tick_speed: u32,
@@ -71,6 +73,8 @@ pub struct LevelRules {
 impl Default for LevelRules {
     fn default() -> Self {
         Self {
+            tnt_explodes: true,
+            entity_drops: true,
             debug: false,
             can_have_weather: true,
             random_tick_speed: 3,
