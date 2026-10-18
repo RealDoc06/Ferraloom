@@ -780,7 +780,7 @@ mod identity_tests {
         use ferraloom_data::EntityType;
         use ferraloom_nbt::{CompoundTag, Tag};
 
-        let level = crate::entity::tests::level(false);
+        let mut level = crate::entity::tests::level(false);
         let original = level.next_entity_ref();
         let base = level.create_entity_data(EntityType::TNT);
         level
