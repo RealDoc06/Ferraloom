@@ -14,6 +14,21 @@ use ferraloom_data::datapack::ResourceManager;
 use ferraloom_util::random::WorldgenRandom;
 use std::collections::BTreeMap;
 
+/// Port of WorldGenRegion's constructor RNG. Install this once on the region;
+/// level.getRandom callers share it independently of structure/feature seeds.
+pub fn region_random(
+    compiler: &crate::density::DensityFunctionCompiler,
+    chunk: [i32; 2],
+) -> ferraloom_util::random::Random {
+    compiler
+        .positional_random(
+            &"minecraft:worldgen_region_random"
+                .parse()
+                .expect("builtin random name"),
+        )
+        .at(chunk[0].wrapping_mul(16), 0, chunk[1].wrapping_mul(16))
+}
+
 /// One structure registry entry, including entries without any starts. Keeping
 /// those entries is necessary for vanilla's per-step feature seed indices.
 #[derive(Clone, Debug)]

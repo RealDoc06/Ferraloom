@@ -334,6 +334,6 @@ public final class StructureGolden {
     }
     public static void main(String[] args) throws Exception {
         SharedConstants.tryDetectVersion(); Bootstrap.bootStrap();
-        var directory=Path.of(args[0]);Files.createDirectories(directory);var registries=load();beardifier(directory);placements(registries,directory);rules(registries,directory);templates(directory);processors(registries,directory);placedTemplates(directory);poolsAndAliases(registries,directory);jigsaw(registries,directory);replacements(registries,directory);decoration(registries,directory);StructureCheckGolden.capture(registries,directory);referenceSets(directory);StructureCodecGolden.capture(registries,directory);
+        var directory=Path.of(args[0]);Files.createDirectories(directory);var registries=load();beardifier(directory);placements(registries,directory);rules(registries,directory);templates(directory);processors(registries,directory);placedTemplates(directory);poolsAndAliases(registries,directory);jigsaw(registries,directory);replacements(registries,directory);decoration(registries,directory);StructureCheckGolden.capture(registries,directory);referenceSets(directory);StructureCodecGolden.capture(registries,directory);RegionRandomGolden.capture(registries,directory);
     }
 }
