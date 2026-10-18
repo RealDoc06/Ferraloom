@@ -40,6 +40,44 @@ impl MovementEmission {
         matches!(self, Self::Events | Self::All)
     }
 }
+
+/// Port of Entity#getInputVector: normalize only inputs longer than one, then
+/// apply the float speed and lookup-table yaw before double vector arithmetic.
+pub fn input_vector(input: Vec3, speed: f32, yaw: f32) -> Vec3 {
+    let length = input.length_sqr();
+    if length < 1.0e-7 {
+        return Vec3::ZERO;
+    }
+    let movement = if length > 1.0 {
+        input.normalize()
+    } else {
+        input
+    } * f64::from(speed);
+    let angle = f64::from(yaw * mth::DEG_TO_RAD);
+    let sin = f64::from(mth::sin(angle));
+    let cos = f64::from(mth::cos(angle));
+    Vec3::new(
+        movement.x * cos - movement.z * sin,
+        movement.y,
+        movement.z * cos + movement.x * sin,
+    )
+}
+
+/// Port of Entity#calculateViewVector. Products round as floats before widening.
+pub fn calculate_view_vector(pitch: f32, yaw: f32) -> Vec3 {
+    let pitch = f64::from(pitch * mth::DEG_TO_RAD);
+    let yaw = f64::from(-yaw * mth::DEG_TO_RAD);
+    let y_cos = mth::cos(yaw);
+    let y_sin = mth::sin(yaw);
+    let x_cos = mth::cos(pitch);
+    let x_sin = mth::sin(pitch);
+    Vec3::new(
+        f64::from(y_sin * x_cos),
+        f64::from(-x_sin),
+        f64::from(y_cos * x_cos),
+    )
+}
+
 /// Port of Entity#limitPistonMovement, preserving first-nonzero-axis selection.
 pub fn limit_piston_movement(base: &mut EntityData, movement: Vec3, game_time: i64) -> Vec3 {
     if movement.length_sqr() <= 1e-7 {
@@ -69,7 +107,7 @@ pub fn get_on_pos(entity: EntityRef, offset: f32, level: &Level) -> Result<Block
     let base = level.entity::<EntityData>(entity)?;
     let pos = base.position;
     if let Some(support) = base.supporting_block_pos {
-        if offset <= 1e-5_f32 {
+        if offset <= 1e-5_f32 || offset.is_nan() {
             return Ok(support);
         }
         let state = level.get_block_state(support)?;
@@ -286,7 +324,9 @@ pub fn move_entity<E: Entity + ?Sized>(
         )?;
     }
     let emission = behavior.movement_emission();
-    if emission != MovementEmission::None && level.entity::<EntityData>(entity)?.vehicle.is_none() {
+    if emission != MovementEmission::None
+        && level.entity::<EntityData>(entity)?.vehicle.get().is_none()
+    {
         apply_movement_emission(
             behavior,
             entity,
@@ -490,7 +530,7 @@ fn emit_step<E: Entity + ?Sized>(
     if (base.on_ground
         || is_climbable
         || base.pose() == ferraloom_protocol::entity_data::Pose::Crouching && movement.y == 0.0)
-        && !base.shared_flag(4)
+        && !behavior.is_swimming(entity, level)?
     {
         if emission.emits_sounds() {
             super::sounds::walking_step_sound(behavior, entity, pos, state, level)?;

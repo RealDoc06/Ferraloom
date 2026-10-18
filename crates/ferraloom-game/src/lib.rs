@@ -7,6 +7,7 @@ pub mod crafting;
 pub mod entity;
 pub mod gamerules;
 pub mod inventory;
+pub mod item;
 pub mod level;
 pub mod loot;
 pub mod predicates;

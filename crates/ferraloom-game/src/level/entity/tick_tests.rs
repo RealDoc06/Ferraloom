@@ -32,8 +32,11 @@ fn level() -> Level {
     static BEHAVIORS: Behaviors = Behaviors::EMPTY
         .with_entity(EntityType::COW, &Probe)
         .with_entity(EntityType::PLAYER, &Probe);
+    level_with_behaviors(&BEHAVIORS)
+}
+fn level_with_behaviors(behaviors: &'static Behaviors) -> Level {
     let mut level = Level::new(
-        Region::new(&BEHAVIORS),
+        Region::new(behaviors),
         crate::level::LevelContext::fixture(0, 63),
     );
     level
@@ -51,6 +54,65 @@ fn level() -> Level {
         .update_entity_chunk_status(ChunkPos::ZERO, Visibility::Ticking)
         .unwrap();
     level
+}
+
+struct TickContextProbe;
+impl Entity for TickContextProbe {
+    fn trace_entity_refs(&self, state: &EntityState, references: &mut Vec<EntityRef>) {
+        crate::entity::trace_base_entity_refs(state.as_entity(), references);
+    }
+    fn tick_with_tick_rate(
+        &self,
+        entity: EntityRef,
+        level: &mut Level,
+        tick_rate: &TickRateManager,
+    ) -> Result<(), LevelError> {
+        level.entity_mut::<EntityData>(entity)?.custom_data.insert(
+            "runs_normally",
+            ferraloom_nbt::Tag::Byte(i8::from(tick_rate.runs_normally())),
+        );
+        Ok(())
+    }
+    fn ride_tick_with_tick_rate(
+        &self,
+        entity: EntityRef,
+        level: &mut Level,
+        tick_rate: &TickRateManager,
+    ) -> Result<(), LevelError> {
+        crate::entity::living_ride_tick_with_tick_rate(self, entity, level, tick_rate)
+    }
+}
+
+#[test]
+fn entity_and_passenger_ticks_borrow_the_callers_manager_without_freeze_state() {
+    static BEHAVIORS: Behaviors = Behaviors::EMPTY
+        .with_entity(EntityType::COW, &TickContextProbe)
+        .with_entity(EntityType::PLAYER, &TickContextProbe);
+    let mut level = level_with_behaviors(&BEHAVIORS);
+    level
+        .set_chunk_entity_ticking(ChunkPos::ZERO, true)
+        .unwrap();
+    let root = add_cow(&mut level);
+    let intermediate = add_cow(&mut level);
+    let player = add_player(&mut level);
+    crate::entity::start_riding(intermediate, root, true, &mut level).unwrap();
+    crate::entity::start_riding(player, intermediate, true, &mut level).unwrap();
+    let mut rate = TickRateManager::default();
+    for frozen in [true, false] {
+        rate.set_frozen(frozen);
+        rate.tick();
+        level.tick_entities_with_tick_rate(&rate).unwrap();
+        for entity in [root, intermediate, player] {
+            assert_eq!(
+                level
+                    .entity::<EntityData>(entity)
+                    .unwrap()
+                    .custom_data
+                    .get_boolean_or("runs_normally", frozen),
+                !frozen
+            );
+        }
+    }
 }
 fn add_cow(level: &mut Level) -> EntityRef {
     let id = level.next_entity_ref();
@@ -191,7 +253,13 @@ fn vanilla_ride_tick_uses_the_vehicle_after_derived_tick_and_resets_living_fall_
         let base = level.entity_mut::<EntityData>(rider).unwrap();
         base.velocity = Vec3::new(1.0, 2.0, 3.0);
         base.fall_distance = 8.0;
-        level.tick_passenger(old, rider).unwrap();
+        level
+            .tick_passenger(
+                old,
+                rider,
+                &crate::level::tick_rate::TickRateManager::default(),
+            )
+            .unwrap();
         let base = level.entity::<EntityData>(rider).unwrap();
         let bits = |value: Vec3| {
             format!(
@@ -208,7 +276,11 @@ fn vanilla_ride_tick_uses_the_vehicle_after_derived_tick_and_resets_living_fall_
             fields[4],
             "{row}"
         );
-        assert_eq!((base.vehicle == Some(next)).to_string(), fields[5], "{row}");
+        assert_eq!(
+            (base.vehicle.get() == Some(next)).to_string(),
+            fields[5],
+            "{row}"
+        );
         assert_eq!(base.tick_count, 1);
         rows += 1;
     }
@@ -228,7 +300,7 @@ fn sneaking_player_dismounts_before_riding_tick_without_zeroing_velocity_or_fall
     crate::entity::Entity::ride_tick(&crate::entity::player::PlayerBehavior, player, &mut level)
         .unwrap();
     let base = level.entity::<EntityData>(player).unwrap();
-    assert_eq!(base.vehicle, None);
+    assert_eq!(base.vehicle.get(), None);
     assert_eq!(base.velocity, Vec3::new(1.0, 2.0, 3.0));
     assert_eq!(base.fall_distance, 8.0);
     assert_eq!(base.boarding_cooldown, 0);

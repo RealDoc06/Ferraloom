@@ -1,5 +1,5 @@
-//! Recursive entity storage codecs. Constructors run at the management polling
-//! point, in root/passenger order, before visibility callbacks can observe them.
+//! Recursive entity storage codecs. Owned construction needs shared Level reads;
+//! its caller controls root/passenger registration at the native load call site.
 use super::{EntityLoadError, vector_tag};
 use crate::{
     entity::{
@@ -21,6 +21,9 @@ pub enum EntityPersistenceError {
     MissingType,
     UnsupportedType(String),
 }
+
+#[cfg(test)]
+mod read_tests;
 impl From<LevelError> for EntityPersistenceError {
     fn from(error: LevelError) -> Self {
         Self::Level(error)
@@ -41,7 +44,7 @@ impl std::error::Error for EntityPersistenceError {}
 /// Port of EntityType#loadEntitiesRecursive's pre-order constructor/stream order.
 /// The resulting owned states already contain riding links when added to Level.
 pub(crate) fn load_entity_tree(
-    level: &mut Level,
+    level: &Level,
     tag: CompoundTag,
     loaded: &mut Vec<(EntityRef, EntityState)>,
 ) -> Result<EntityRef, EntityPersistenceError> {
@@ -90,13 +93,27 @@ pub(crate) fn load_entity_tree(
     let index = loaded.len();
     loaded.push((entity, state));
     for tag in passengers.iter().filter_map(Tag::as_compound) {
-        let passenger = load_entity_tree(level, tag.clone(), loaded)?;
-        // Entity#startRiding(force=true) still refuses a removed vehicle.
-        if !loaded[index].1.as_entity().removed {
-            let passenger_state = loaded.iter_mut().find(|(id, _)| *id == passenger).unwrap();
-            passenger_state.1.as_entity_mut().vehicle = Some(entity);
-            loaded[index].1.as_entity_mut().passengers.push(passenger);
+        let known = tag
+            .get_string("id")
+            .and_then(|name| ferraloom_protocol::Identifier::parse(&name.to_string_lossy()).ok())
+            .and_then(|name| EntityType::from_name(name.as_str()));
+        if known.is_none() {
+            eprintln!("Skipping passenger with unknown or missing id while loading entity chunk");
+            continue;
         }
+        let passenger = match load_entity_tree(level, tag.clone(), loaded) {
+            Ok(passenger) => passenger,
+            Err(error @ EntityPersistenceError::Base(_)) => {
+                eprintln!("Skipping invalid passenger while loading entity chunk: {error}");
+                continue;
+            }
+            Err(error) => return Err(error),
+        };
+        // Every currently loaded factory inherits couldAcceptPassenger=true;
+        // Entity#startRiding does not reject a removed mount.
+        let passenger_state = loaded.iter_mut().find(|(id, _)| *id == passenger).unwrap();
+        passenger_state.1.as_entity_mut().vehicle.set(Some(entity));
+        loaded[index].1.as_entity_mut().passengers.push(passenger);
     }
     Ok(entity)
 }
@@ -110,13 +127,13 @@ impl Level {
             && base
                 .removal_reason
                 .is_none_or(|reason| reason.should_save())
-            && base.vehicle.is_none()
+            && base.vehicle.get().is_none()
             && (base.passengers.is_empty() || entity.count_player_passengers(self)? != 1))
     }
 
     /// Port of Entity#save; passengers are serialized only through their vehicle.
     pub fn save_entity(&self, entity: EntityRef) -> Result<Option<CompoundTag>, LevelError> {
-        if self.entity::<EntityData>(entity)?.vehicle.is_some() {
+        if self.entity::<EntityData>(entity)?.vehicle.get().is_some() {
             return Ok(None);
         }
         self.save_entity_as_passenger(entity)
@@ -135,6 +152,36 @@ impl Level {
         {
             return Ok(None);
         }
+        let mut tag = self.save_entity_without_id(entity)?;
+        tag.insert("id", Tag::String(state.entity_type().name().into()));
+        Ok(Some(tag))
+    }
+
+    /// Port of NbtPredicate#getEntityTagToCompare. Save eligibility is not
+    /// consulted, including for removed objects, passengers and players.
+    pub fn entity_nbt_to_compare(&self, entity: EntityRef) -> Result<CompoundTag, LevelError> {
+        use ferraloom_protocol::component::Persistent;
+        let mut tag = self.save_entity_without_id(entity)?;
+        if let EntityState::Player(player) = self.entity_state(entity)? {
+            tag.remove("SelectedItem");
+            let selected = player.inventory.selected_item();
+            if !selected.is_empty() {
+                tag.insert(
+                    "SelectedItem",
+                    selected
+                        .to_nbt()
+                        .map_err(|_| LevelError::Inventory("invalid selected item NBT"))?,
+                );
+            }
+        }
+        Ok(tag)
+    }
+
+    /// One full-subclass dispatcher serves both comparison NBT and persistent
+    /// saveAsPassenger, so the former does not inherit the latter's filters.
+    fn save_entity_without_id(&self, entity: EntityRef) -> Result<CompoundTag, LevelError> {
+        let state = self.entity_state(entity)?;
+        let base = state.as_entity();
         let mut tag = match state {
             EntityState::Cow(cow) => {
                 let mut tag = base.save_without_id();
@@ -148,10 +195,9 @@ impl Level {
             EntityState::Item(item) => item.save_without_id(self)?,
             EntityState::FallingBlock(block) => block.save_without_id(),
             EntityState::ExperienceOrb(orb) => orb.save_without_id(),
-            EntityState::Player(_) => unreachable!("player has no encode ID"),
+            EntityState::Player(player) => player.save_without_id(),
         };
-        tag.insert("id", Tag::String(state.entity_type().name().into()));
-        if let Some(vehicle) = base.vehicle {
+        if let Some(vehicle) = base.vehicle.get() {
             let mount = self.entity::<EntityData>(vehicle)?;
             tag.insert(
                 "Pos",
@@ -171,6 +217,6 @@ impl Level {
         if !passengers.is_empty() {
             tag.insert("Passengers", Tag::List(passengers));
         }
-        Ok(Some(tag))
+        Ok(tag)
     }
 }

@@ -7,6 +7,10 @@ use ferraloom_nbt::{CompoundTag, Tag};
 use ferraloom_protocol::{codec::VarInt, component::ItemStack};
 use ferraloom_util::random::RandomSource;
 
+pub mod climbable;
+pub mod freezing;
+pub mod travel;
+
 /// Port of LivingEntity's canonical attributes, metadata, equipment and current
 /// unarmored damage primitive. Every concrete subclass embeds this state once.
 #[derive(Debug)]
@@ -16,6 +20,13 @@ pub struct LivingEntity {
     pub equipment: EntityEquipment,
     pub use_item: ItemStack,
     pub use_item_remaining: i32,
+    pub jumping: bool,
+    pub xxa: f32,
+    pub yya: f32,
+    pub zza: f32,
+    pub no_jump_delay: i32,
+    pub speed: f32,
+    pub last_climbable_pos: std::cell::Cell<Option<ferraloom_util::BlockPos>>,
     pub y_head_rot: f32,
     pub old_y_head_rot: f32,
     pub y_body_rot: f32,
@@ -43,6 +54,13 @@ impl LivingEntity {
             equipment: EntityEquipment::default(),
             use_item: ItemStack::default(),
             use_item_remaining: 0,
+            jumping: false,
+            xxa: 0.0,
+            yya: 0.0,
+            zza: 0.0,
+            no_jump_delay: 0,
+            speed: 0.0,
+            last_climbable_pos: std::cell::Cell::new(None),
             y_head_rot: 0.0,
             old_y_head_rot: 0.0,
             y_body_rot: 0.0,
@@ -238,7 +256,7 @@ pub fn air_drag(
     level: &crate::level::Level,
 ) -> Result<f32, crate::level::LevelError> {
     let modifier = attribute(entity, Attribute::AIR_DRAG_MODIFIER, level)? as f32;
-    Ok((1.0_f32 - (1.0_f32 - 0.98_f32) * modifier).clamp(0.0, 1.0))
+    Ok(travel::compute_modified_friction(0.98, modifier))
 }
 /// Port of LivingEntity#igniteForTicks followed by the Entity parent body.
 pub fn ignite_for_ticks(

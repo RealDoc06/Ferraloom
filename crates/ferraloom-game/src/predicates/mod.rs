@@ -154,6 +154,24 @@ pub trait PredicateContext {
     ) -> Result<Vec<ferraloom_protocol::component::ItemStack>> {
         Err(LootError::Unsupported("entity.slots".into()))
     }
+    /// Per-slot reads let the live context preserve equipment predicate order.
+    /// Standalone contexts can retain their existing owned equipment adapter.
+    fn entity_has_equipment(&self, entity: EntityRef) -> Result<bool> {
+        Ok(self.entity_equipment(entity)?.is_some())
+    }
+    fn entity_equipment_slot(
+        &self,
+        entity: EntityRef,
+        slot: ferraloom_protocol::component::EquipmentSlot,
+    ) -> Result<Option<ferraloom_protocol::component::ItemStack>> {
+        Ok(self.entity_equipment(entity)?.map(|items| {
+            items
+                .into_iter()
+                .find(|(current, _)| *current == slot)
+                .map(|(_, stack)| stack)
+                .unwrap_or_default()
+        }))
+    }
     fn entity_effects(
         &self,
         _entity: EntityRef,
