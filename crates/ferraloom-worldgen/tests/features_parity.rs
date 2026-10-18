@@ -286,9 +286,12 @@ impl ferraloom_worldgen::feature::Feature for RecordingFeature {
         );
         tag.insert(
             "random",
-            ferraloom_nbt::Tag::Long(context.random.next_long()),
+            ferraloom_nbt::Tag::Long(context.random()?.next_long()),
         );
-        context.region.add_entity(context.region.center(), tag)?;
+        let ferraloom_worldgen::feature::WorldGenLevel::Region(region) = &mut context.level else {
+            panic!("region-only decoration recorder");
+        };
+        region.add_entity(region.center(), tag)?;
         Ok(context.origin[1] & 1 == 0)
     }
 }
@@ -332,8 +335,10 @@ fn placement_stack_positions_and_rng_match_vanilla() {
         let result = placed
             .place(
                 &mut FeatureContext {
-                    region: &mut region,
-                    random: &mut random,
+                    level: ferraloom_worldgen::feature::WorldGenLevel::Region(&mut region),
+                    random: ferraloom_worldgen::feature::FeatureRandomSelector::External(
+                        ferraloom_worldgen::feature::FeatureRandom::Region(&mut random),
+                    ),
                     origin: p,
                     generator: &generator,
                     registry: &registry,
@@ -393,8 +398,10 @@ fn all_state_providers_match_vanilla_optional_values_and_rng() {
         let seed = case["seed"].as_i64().unwrap();
         let mut random = WorldgenRandom::new(Random::Xoroshiro(XoroshiroRandomSource::new(seed)));
         let mut context = FeatureContext {
-            region: &mut region,
-            random: &mut random,
+            level: ferraloom_worldgen::feature::WorldGenLevel::Region(&mut region),
+            random: ferraloom_worldgen::feature::FeatureRandomSelector::External(
+                ferraloom_worldgen::feature::FeatureRandom::Region(&mut random),
+            ),
             origin: [0, 70, 0],
             generator: &generator,
             registry: &registry,
@@ -441,8 +448,10 @@ fn all_state_providers_match_vanilla_optional_values_and_rng() {
     .unwrap();
     let mut random = WorldgenRandom::new(Random::Xoroshiro(XoroshiroRandomSource::new(0)));
     let mut context = FeatureContext {
-        region: &mut region,
-        random: &mut random,
+        level: ferraloom_worldgen::feature::WorldGenLevel::Region(&mut region),
+        random: ferraloom_worldgen::feature::FeatureRandomSelector::External(
+            ferraloom_worldgen::feature::FeatureRandom::Region(&mut random),
+        ),
         origin: [0, 70, 0],
         generator: &generator,
         registry: &registry,
@@ -502,9 +511,12 @@ impl ferraloom_worldgen::feature::Feature for DecorationRecord {
         tag.insert("feature", ferraloom_nbt::Tag::Int(self.0 as i32));
         tag.insert(
             "random",
-            ferraloom_nbt::Tag::Long(context.random.next_long()),
+            ferraloom_nbt::Tag::Long(context.random()?.next_long()),
         );
-        context.region.add_entity(context.region.center(), tag)?;
+        let ferraloom_worldgen::feature::WorldGenLevel::Region(region) = &mut context.level else {
+            panic!("region-only decoration recorder");
+        };
+        region.add_entity(region.center(), tag)?;
         Ok(true)
     }
 }
@@ -1196,4 +1208,325 @@ fn protochunk_heightmap_priming_freezing_and_bulk_writes_match_vanilla() {
         }
         assert_eq!(serde_json::to_value(output).unwrap(), case["output"]);
     }
+}
+
+#[test]
+fn live_configured_features_use_live_writes_ticks_behavior_and_the_callers_rng() {
+    use ferraloom_data::{Block, BlockState};
+    use ferraloom_worldgen::{
+        Error, Identifier,
+        feature::{
+            Feature, FeatureContext, FeatureLoader, FeatureRandomSelector, LiveWorldGenLevel,
+            place_configured_feature, place_configured_feature_with_external_random,
+        },
+        region::SavedTick,
+    };
+    use std::{collections::BTreeMap, sync::Arc};
+    #[derive(Default)]
+    struct Live {
+        blocks: BTreeMap<[i32; 3], BlockState>,
+        writes: Vec<([i32; 3], BlockState, u32)>,
+        ticks: Vec<(SavedTick<Block>, i32)>,
+        random: Option<ferraloom_util::random::Random>,
+        callback_draws: Vec<i64>,
+        loot_seeds: Vec<i64>,
+    }
+    impl LiveWorldGenLevel for Live {
+        fn min_y(&self) -> i32 {
+            -64
+        }
+        fn height(&self) -> i32 {
+            384
+        }
+        fn seed(&self) -> i64 {
+            123
+        }
+        fn sea_level(&self) -> i32 {
+            63
+        }
+        fn block(&self, p: [i32; 3]) -> Result<BlockState, Error> {
+            Ok(self
+                .blocks
+                .get(&p)
+                .copied()
+                .unwrap_or(Block::AIR.default_state()))
+        }
+        fn set_block(&mut self, p: [i32; 3], state: BlockState, flags: u32) -> Result<bool, Error> {
+            self.blocks.insert(p, state);
+            self.writes.push((p, state, flags));
+            if let Some(random) = &mut self.random {
+                self.callback_draws.push(random.next_long());
+            }
+            Ok(true)
+        }
+        fn can_survive(&self, _: BlockState, _: [i32; 3]) -> Result<bool, Error> {
+            Ok(true)
+        }
+        fn is_unobstructed(&self, _: BlockState, _: [i32; 3]) -> Result<bool, Error> {
+            Ok(false)
+        }
+        fn random_mut(&mut self) -> Result<&mut ferraloom_util::random::Random, Error> {
+            self.random
+                .as_mut()
+                .ok_or_else(|| Error("Unsupported: mock canonical random".into()))
+        }
+        fn set_loot_table(
+            &mut self,
+            _: [i32; 3],
+            _: &Identifier,
+            random: &mut FeatureRandomSelector<'_>,
+        ) -> Result<(), Error> {
+            let seed = match random {
+                FeatureRandomSelector::Canonical => self.random_mut()?.next_long(),
+                FeatureRandomSelector::External(random) => random.next_long(),
+            };
+            self.loot_seeds.push(seed);
+            Ok(())
+        }
+        fn schedule_block_tick(&mut self, tick: SavedTick<Block>, delay: i32) -> Result<(), Error> {
+            self.ticks.push((tick, delay));
+            Ok(())
+        }
+    }
+    #[derive(Debug)]
+    struct WriteAndCheckObstruction;
+    impl Feature for WriteAndCheckObstruction {
+        fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
+            assert_eq!(ctx.level.seed(), 123);
+            assert!(ctx.generator.gen_depth() > 0);
+            assert!(!ctx.registry.features.is_empty());
+            ctx.level
+                .set_block(ctx.origin, Block::STONE.default_state(), 3)?;
+            // Region's empty-entity fast path must never replace a live query.
+            ctx.level
+                .is_unobstructed(Block::STONE.default_state(), ctx.origin)
+        }
+    }
+    #[derive(Debug)]
+    struct Destroy;
+    impl Feature for Destroy {
+        fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
+            ctx.level.destroy_block(ctx.origin, true)
+        }
+    }
+    #[derive(Debug)]
+    struct CanonicalCallbacks;
+    impl Feature for CanonicalCallbacks {
+        fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
+            let _before = ctx.random()?.next_float();
+            ctx.level
+                .set_block(ctx.origin, Block::STONE.default_state(), 3)?;
+            ctx.level.set_loot_table(
+                ctx.origin,
+                &"ferraloom:live_loot".parse()?,
+                &mut ctx.random,
+            )?;
+            let _after = ctx.random()?.next_double();
+            Ok(true)
+        }
+    }
+    #[derive(Debug)]
+    struct TemplateProbe {
+        template: ferraloom_worldgen::structure::template::StructureTemplate,
+        tags: ferraloom_worldgen::structure::rule::BlockTags,
+    }
+    impl Feature for TemplateProbe {
+        fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
+            use ferraloom_worldgen::structure::template::{
+                PlacementRandom, StructurePlaceSettings,
+            };
+            let origin = ctx.origin;
+            self.template.place_with_access(
+                &mut ctx.placement(),
+                origin,
+                origin,
+                &mut StructurePlaceSettings {
+                    random: PlacementRandom::Shared,
+                    known_shape: true,
+                    ignore_entities: true,
+                    ..StructurePlaceSettings::default()
+                },
+                &[],
+                &self.tags,
+                3,
+            )
+        }
+    }
+    let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").unwrap();
+    let resources = ResourceManager::new(vec![Pack::vanilla_jar(Path::new(&jar)).unwrap()]);
+    let generator = fixture_generator(&resources);
+    let mut loader = FeatureLoader::new(&resources).unwrap();
+    let feature = loader
+        .feature(&serde_json::json!({
+            "type": "simple_block",
+            "to_place": {"type": "weighted", "entries": [
+                {"data": {"id": "stone"}, "weight": 1},
+                {"data": {"id": "dirt"}, "weight": 2}
+            ]},
+            "schedule_tick": true
+        }))
+        .unwrap();
+    let mut registry = loader.finish();
+    let simple: Identifier = "ferraloom:live_simple".parse().unwrap();
+    let probe: Identifier = "ferraloom:live_probe".parse().unwrap();
+    let destroy: Identifier = "ferraloom:live_destroy".parse().unwrap();
+    registry.features.insert(simple.clone(), feature);
+    registry
+        .features
+        .insert(probe.clone(), Arc::new(WriteAndCheckObstruction));
+    registry.features.insert(destroy.clone(), Arc::new(Destroy));
+    for seed in [0, 1, -1, 8675309] {
+        let mut live = Live::default();
+        let mut actual = XoroshiroRandomSource::new(seed);
+        let mut expected = actual.clone();
+        for x in 0..32 {
+            let p = [x, 70, -x];
+            let state = if expected.next_int_bound(3) == 0 {
+                Block::STONE
+            } else {
+                Block::DIRT
+            }
+            .default_state();
+            assert!(
+                place_configured_feature_with_external_random(
+                    &mut live,
+                    &generator,
+                    &registry,
+                    &simple,
+                    p,
+                    &mut actual
+                )
+                .unwrap()
+            );
+            assert_eq!(live.writes.last(), Some(&(p, state, 2)));
+            let (tick, delay) = live.ticks.last().unwrap();
+            assert_eq!(
+                (tick.position, tick.kind, tick.priority, *delay),
+                (p, state.block(), 0, 1)
+            );
+        }
+        assert!(
+            !place_configured_feature_with_external_random(
+                &mut live,
+                &generator,
+                &registry,
+                &probe,
+                [0, 80, 0],
+                &mut actual
+            )
+            .unwrap()
+        );
+        assert_eq!(
+            live.writes.last(),
+            Some(&([0, 80, 0], Block::STONE.default_state(), 3))
+        );
+        let writes = live.writes.len();
+        let error = place_configured_feature_with_external_random(
+            &mut live,
+            &generator,
+            &registry,
+            &destroy,
+            [0, 80, 0],
+            &mut actual,
+        )
+        .unwrap_err();
+        assert!(error.0.starts_with("Unsupported:"));
+        assert_eq!(live.writes.len(), writes);
+        assert!(
+            place_configured_feature_with_external_random(
+                &mut live,
+                &generator,
+                &registry,
+                &"ferraloom:missing".parse().unwrap(),
+                [0; 3],
+                &mut actual
+            )
+            .is_err()
+        );
+        assert_eq!(
+            actual.next_long(),
+            expected.next_long(),
+            "live RNG seed={seed}"
+        );
+    }
+    let canonical: Identifier = "ferraloom:live_canonical".parse().unwrap();
+    registry
+        .features
+        .insert(canonical.clone(), Arc::new(CanonicalCallbacks));
+    for algorithm in [
+        ferraloom_util::random::Algorithm::Legacy,
+        ferraloom_util::random::Algorithm::Xoroshiro,
+    ] {
+        let mut expected = algorithm.new_instance(8675309);
+        let mut live = Live {
+            random: Some(expected.clone()),
+            ..Live::default()
+        };
+        for x in 0..32 {
+            let _before = expected.next_float();
+            let callback = expected.next_long();
+            let loot = expected.next_long();
+            let _after = expected.next_double();
+            assert!(
+                place_configured_feature(
+                    &mut live,
+                    &generator,
+                    &registry,
+                    &canonical,
+                    [x, 80, 0],
+                    FeatureRandomSelector::Canonical
+                )
+                .unwrap()
+            );
+            assert_eq!(live.callback_draws.last(), Some(&callback));
+            assert_eq!(live.loot_seeds.last(), Some(&loot));
+            assert_eq!(live.writes.last().unwrap().2, 3);
+        }
+        assert_eq!(live.random_mut().unwrap().next_long(), expected.next_long());
+    }
+    use ferraloom_worldgen::structure::template::{Palette, StructureBlockInfo, StructureTemplate};
+    let template: Identifier = "ferraloom:live_template".parse().unwrap();
+    registry.features.insert(
+        template.clone(),
+        Arc::new(TemplateProbe {
+            template: StructureTemplate {
+                size: [1; 3],
+                entities: Vec::new(),
+                palettes: [Block::STONE, Block::DIRT]
+                    .map(|block| Palette {
+                        blocks: vec![StructureBlockInfo {
+                            position: [0; 3],
+                            state: block.default_state(),
+                            nbt: None,
+                        }],
+                    })
+                    .to_vec(),
+            },
+            tags: ferraloom_worldgen::structure::rule::BlockTags(Default::default()),
+        }),
+    );
+    let mut expected = ferraloom_util::random::Algorithm::Xoroshiro.new_instance(123);
+    let mut live = Live {
+        random: Some(expected.clone()),
+        ..Live::default()
+    };
+    for x in 0..32 {
+        let state =
+            [Block::STONE, Block::DIRT][expected.next_int_bound(2) as usize].default_state();
+        let callback = expected.next_long();
+        assert!(
+            place_configured_feature(
+                &mut live,
+                &generator,
+                &registry,
+                &template,
+                [x, 90, 0],
+                FeatureRandomSelector::Canonical
+            )
+            .unwrap()
+        );
+        assert_eq!(live.writes.last(), Some(&([x, 90, 0], state, 3)));
+        assert_eq!(live.callback_draws.last(), Some(&callback));
+    }
+    assert_eq!(live.random_mut().unwrap().next_long(), expected.next_long());
 }
