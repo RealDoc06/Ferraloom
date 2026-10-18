@@ -110,6 +110,7 @@ impl StructureStart {
                 continue;
             }
             match piece {
+                StructurePiece::SwampHut(piece) => piece.post_process(context, *bounds)?,
                 StructurePiece::OceanRuin(piece) => {
                     piece.post_process(context, templates, tags, *bounds, reference)?
                 }

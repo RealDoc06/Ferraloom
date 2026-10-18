@@ -59,3 +59,140 @@ impl StructurePieceData {
         })
     }
 }
+
+impl StructurePieceData {
+    /// Port of StructurePiece#getWorldPos.
+    pub fn world_position(&self, [x, y, z]: [i32; 3]) -> [i32; 3] {
+        let Some(direction) = self.orientation else {
+            return [x, y, z];
+        };
+        let b = self.bounds;
+        let wx = match direction {
+            Direction::North | Direction::South => b.min[0] + x,
+            Direction::West => b.max[0] - z,
+            Direction::East => b.min[0] + z,
+            _ => x,
+        };
+        let wz = match direction {
+            Direction::North => b.max[2] - z,
+            Direction::South => b.min[2] + z,
+            Direction::West | Direction::East => b.min[2] + x,
+            _ => z,
+        };
+        [wx, b.min[1] + y, wz]
+    }
+    pub fn transformed_state(
+        &self,
+        state: ferraloom_data::BlockState,
+    ) -> ferraloom_data::BlockState {
+        use ferraloom_util::{Mirror, Rotation};
+        let (mirror, rotation) = match self.orientation {
+            Some(Direction::South) => (Mirror::LeftRight, Rotation::None),
+            Some(Direction::West) => (Mirror::LeftRight, Rotation::Clockwise90),
+            Some(Direction::East) => (Mirror::None, Rotation::Clockwise90),
+            _ => (Mirror::None, Rotation::None),
+        };
+        state.mirror(mirror).rotate(rotation)
+    }
+    /// StructurePiece#placeBlock for pieces inheriting canBeReplaced=true.
+    pub fn place_block(
+        &self,
+        region: &mut crate::region::WorldGenRegion<'_>,
+        state: ferraloom_data::BlockState,
+        local: [i32; 3],
+        bounds: BoundingBox,
+    ) -> Result<(), Error> {
+        use ferraloom_data::Block;
+        let p = self.world_position(local);
+        if !bounds.contains(p) {
+            return Ok(());
+        }
+        let state = self.transformed_state(state);
+        region.set_block(p, state, 2)?;
+        let fluid = region.fluid(p)?;
+        if !fluid.empty {
+            region.schedule_fluid_tick(crate::region::SavedTick {
+                position: p,
+                kind: fluid.fluid_type,
+                priority: 0,
+            })?;
+        }
+        if matches!(
+            state.block(),
+            Block::NETHER_BRICK_FENCE
+                | Block::TORCH
+                | Block::WALL_TORCH
+                | Block::OAK_FENCE
+                | Block::SPRUCE_FENCE
+                | Block::DARK_OAK_FENCE
+                | Block::PALE_OAK_FENCE
+                | Block::ACACIA_FENCE
+                | Block::BIRCH_FENCE
+                | Block::JUNGLE_FENCE
+                | Block::LADDER
+                | Block::IRON_BARS
+        ) {
+            region.mark_post_processing(p)?;
+        }
+        Ok(())
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub fn generate_box(
+        &self,
+        region: &mut crate::region::WorldGenRegion<'_>,
+        bounds: BoundingBox,
+        min: [i32; 3],
+        max: [i32; 3],
+        edge: ferraloom_data::BlockState,
+        fill: ferraloom_data::BlockState,
+        skip_air: bool,
+    ) -> Result<(), Error> {
+        for y in min[1]..=max[1] {
+            for x in min[0]..=max[0] {
+                for z in min[2]..=max[2] {
+                    let local = [x, y, z];
+                    let p = self.world_position(local);
+                    if skip_air && (!bounds.contains(p) || region.block(p)?.is_air()) {
+                        continue;
+                    }
+                    let inner = (0..3).all(|i| local[i] != min[i] && local[i] != max[i]);
+                    self.place_block(region, if inner { fill } else { edge }, local, bounds)?;
+                }
+            }
+        }
+        Ok(())
+    }
+    /// Port of StructurePiece#fillColumnDown. The initial position alone is
+    /// clipped; subsequent downward writes continue below the supplied box.
+    pub fn fill_column_down(
+        &self,
+        region: &mut crate::region::WorldGenRegion<'_>,
+        state: ferraloom_data::BlockState,
+        local: [i32; 3],
+        bounds: BoundingBox,
+    ) -> Result<(), Error> {
+        use ferraloom_data::Block;
+        let mut p = self.world_position(local);
+        if !bounds.contains(p) {
+            return Ok(());
+        }
+        loop {
+            let old = region.block(p)?;
+            let replaceable = old.is_air()
+                || matches!(
+                    old.block(),
+                    Block::WATER
+                        | Block::LAVA
+                        | Block::GLOW_LICHEN
+                        | Block::SEAGRASS
+                        | Block::TALL_SEAGRASS
+                );
+            if !replaceable || p[1] <= region.min_y() + 1 {
+                break;
+            }
+            region.set_block(p, state, 2)?;
+            p[1] -= 1;
+        }
+        Ok(())
+    }
+}

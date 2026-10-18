@@ -23,6 +23,7 @@ enum StructureGenerator {
     BuriedTreasure,
     Igloo,
     EndCity,
+    SwampHut,
     OceanRuin(super::structures::ocean_ruin::OceanRuinStructure),
     Shipwreck { beached: bool },
     NetherFossil { height: HeightProvider },
@@ -68,6 +69,7 @@ impl StructureGenerators {
                     "minecraft:buried_treasure" => StructureGenerator::BuriedTreasure,
                     "minecraft:igloo" => StructureGenerator::Igloo,
                     "minecraft:end_city" => StructureGenerator::EndCity,
+                    "minecraft:swamp_hut" => StructureGenerator::SwampHut,
                     "minecraft:ocean_ruin" => StructureGenerator::OceanRuin(
                         super::structures::ocean_ruin::OceanRuinStructure::decode(
                             &resource.json()?,
@@ -158,6 +160,7 @@ impl StructureGenerators {
             }
             kind @ (StructureGenerator::BuriedTreasure
             | StructureGenerator::Igloo
+            | StructureGenerator::SwampHut
             | StructureGenerator::Shipwreck { .. }
             | StructureGenerator::OceanRuin(_)) => {
                 let [x, z] = context.chunk.map(|c| c.wrapping_mul(16).wrapping_add(8));
@@ -194,6 +197,20 @@ impl StructureGenerators {
                     };
                     let mut random = WorldgenRandom::new(Algorithm::Legacy.new_instance(0));
                     random.set_large_feature_seed(context.seed, context.chunk[0], context.chunk[1]);
+                    if matches!(kind, StructureGenerator::SwampHut) {
+                        let piece = super::structures::swamp_hut::SwampHutPiece::new(
+                            &mut random,
+                            x - 8,
+                            z - 8,
+                        );
+                        return Ok(StructureStart::new(
+                            id.clone(),
+                            context.chunk,
+                            references,
+                            settings.terrain,
+                            vec![StructurePiece::SwampHut(piece)],
+                        ));
+                    }
                     let rotation = Rotation::VALUES[random.next_int_bound(4) as usize];
                     match kind {
                         StructureGenerator::Igloo => super::structures::igloo::add_pieces(

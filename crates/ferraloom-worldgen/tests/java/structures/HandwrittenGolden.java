@@ -25,7 +25,7 @@ public final class HandwrittenGolden {
         try(var storage=net.minecraft.world.level.storage.LevelStorageSource.createDefault(Path.of("handwritten-world")).createAccess("test")) {
             var templates=new StructureTemplateManager(StructureGolden.RESOURCES,storage,net.minecraft.util.datafix.DataFixers.getDataFixer(),BuiltInRegistries.BLOCK);
             var serialization=new StructurePieceSerializationContext(StructureGolden.RESOURCES,registries,templates);
-            for(String name:List.of("buried_treasure","igloo","shipwreck","shipwreck_beached","nether_fossil","end_city","ocean_ruin_warm","ocean_ruin_cold","village_plains","trial_chambers","ancient_city"))for(long seed:new long[]{0,-1,8675309})for(int[] p:new int[][]{{0,0},{-7,11}})for(boolean accept:new boolean[]{true,false}) {
+            for(String name:List.of("buried_treasure","igloo","shipwreck","shipwreck_beached","nether_fossil","end_city","ocean_ruin_warm","ocean_ruin_cold","swamp_hut","village_plains","trial_chambers","ancient_city"))for(long seed:new long[]{0,-1,8675309})for(int[] p:new int[][]{{0,0},{-7,11}})for(boolean accept:new boolean[]{true,false}) {
                 var selected=registries.lookupOrThrow(Registries.STRUCTURE).getOrThrow(ResourceKey.create(Registries.STRUCTURE,Identifier.withDefaultNamespace(name)));
                 var useSettings=name.equals("end_city")?registries.lookupOrThrow(Registries.NOISE_SETTINGS).getOrThrow(NoiseGeneratorSettings.END):name.equals("nether_fossil")?registries.lookupOrThrow(Registries.NOISE_SETTINGS).getOrThrow(NoiseGeneratorSettings.NETHER):settings;
                 var selectedGenerator=(name.equals("nether_fossil")||name.equals("end_city"))?new NoiseBasedChunkGenerator(source,useSettings):generator;

@@ -16,6 +16,7 @@ pub mod pool;
 pub mod processor;
 pub mod references;
 pub mod rule;
+pub mod scattered_piece;
 pub mod start;
 pub mod structures;
 pub mod template;
