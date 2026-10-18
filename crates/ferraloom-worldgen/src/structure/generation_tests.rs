@@ -246,15 +246,16 @@ fn assert_start_nbt(
     use ferraloom_nbt::Tag;
     assert_eq!(actual.len(), expected.len(), "{label}");
     for (key, value) in expected.iter() {
+        let key = key.to_string_lossy();
         if key == "Children" {
-            let actual = actual.get(key).and_then(Tag::as_list).unwrap();
+            let actual = actual.get(&key).and_then(Tag::as_list).unwrap();
             let expected = value.as_list().unwrap();
             assert_eq!(actual.len(), expected.len(), "{label} pieces");
             for (i, (a, e)) in actual.iter().zip(expected.iter()).enumerate() {
                 assert_eq!(a, e, "{label} piece={i}");
             }
         } else {
-            assert_eq!(actual.get(key), Some(value), "{label} field={key}");
+            assert_eq!(actual.get(&key), Some(value), "{label} field={key}");
         }
     }
 }
