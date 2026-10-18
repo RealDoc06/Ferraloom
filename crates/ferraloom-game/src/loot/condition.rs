@@ -296,25 +296,34 @@ impl LootItemCondition {
                 if !test.matches_state(state, c.facts())? {
                     return Ok(false);
                 }
-                if (!test.0.components.exact.is_empty() || !test.0.components.partial.0.is_empty())
-                    && c.params.block_entity_components.is_none()
-                    && c.params.block_entity.is_some()
+                let nbt = if let Some(expected) = &test.0.nbt {
+                    let nbt = c.runtime.block_entity_nbt(c.params)?;
+                    if nbt.is_none() && c.params.block_entity_components.is_some() {
+                        return Err(LootError::Unsupported("loot.block_entity_nbt".into()));
+                    }
+                    // BlockPredicate reads NBT first and skips collectComponents
+                    // when it fails. Both reads must observe the retained source.
+                    if !ferraloom_nbt::compare_nbt(Some(&expected.0.0), nbt.as_ref(), true) {
+                        return Ok(false);
+                    }
+                    nbt
+                } else {
+                    None
+                };
+                let components = if !test.0.components.exact.is_empty()
+                    || !test.0.components.partial.0.is_empty()
                 {
-                    return Err(LootError::Unsupported(
-                        "loot.block_entity_components".into(),
-                    ));
-                }
-                if test.0.nbt.is_some()
-                    && c.params.block_entity.is_none()
-                    && c.params.block_entity_components.is_some()
-                {
-                    return Err(LootError::Unsupported("loot.block_entity_nbt".into()));
-                }
-                test.matches_entity(
-                    c.params.block_entity.as_ref(),
-                    c.params.block_entity_components.as_ref(),
-                    c.facts(),
-                )
+                    let components = c.runtime.block_entity_components(c.params)?;
+                    if components.is_none() && c.params.block_entity.is_some() {
+                        return Err(LootError::Unsupported(
+                            "loot.block_entity_components".into(),
+                        ));
+                    }
+                    components
+                } else {
+                    None
+                };
+                test.matches_entity(nbt.as_ref(), components.as_ref(), c.facts())
             }
             Self::EntityProperties(target, test) => {
                 let entity = c.params.entity(*target);

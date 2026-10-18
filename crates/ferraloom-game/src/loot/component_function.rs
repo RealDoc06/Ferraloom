@@ -174,15 +174,13 @@ impl ComponentFunction {
                         .map(ItemStack::components)
                         .transpose()?,
                     ComponentSource::BlockEntity => {
-                        if let Some(map) = &c.params.block_entity_components {
-                            Some(map.clone())
-                        } else if c.params.block_entity.is_some() {
+                        let map = c.runtime.block_entity_components(c.params)?;
+                        if map.is_none() && c.params.block_entity.is_some() {
                             return Err(LootError::Unsupported(
                                 "loot.block_entity_components".into(),
                             ));
-                        } else {
-                            None
                         }
+                        map
                     }
                     ComponentSource::Entity(target) => c
                         .params

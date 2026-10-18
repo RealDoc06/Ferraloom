@@ -1,6 +1,7 @@
 //! Per-invocation access to canonical facts, random streams and dynamic drops.
 use super::{EnchantmentOperation, Identifier, LootError, LootFacts, LootParams, Result};
-use ferraloom_protocol::component::ItemStack;
+use ferraloom_nbt::Tag;
+use ferraloom_protocol::component::{DataComponentMap, ItemStack};
 use ferraloom_util::random::{PositionalRandomFactory, Random, RandomSource};
 
 /// Port of LootContext's selected random source and LootParams.DynamicDrop.
@@ -13,6 +14,18 @@ pub trait LootRuntime {
     /// The stream must be the same on successive calls, including its Gaussian
     /// cache. No source borrow survives the callback.
     fn with_random(&mut self, operation: &mut dyn FnMut(&mut dyn RandomSource));
+
+    /// Port of ContextNbtProvider.BlockEntitySource#get. Live adapters read the
+    /// retained context receiver at this call, even after removal or replacement.
+    fn block_entity_nbt(&self, params: &LootParams) -> Result<Option<Tag>> {
+        Ok(params.block_entity.clone())
+    }
+
+    /// Port of ComponentSource.BlockEntitySource#get. A live implementation
+    /// collects components afresh from the same retained context receiver.
+    fn block_entity_components(&self, params: &LootParams) -> Result<Option<DataComponentMap>> {
+        Ok(params.block_entity_components.clone())
+    }
 
     /// Read one dynamic drop lazily. Ordinals start at zero for each expansion;
     /// its consumer completes before the next ordinal is requested. Some(empty)
@@ -140,4 +153,149 @@ pub enum LootRandomSelection {
     Level,
     Sequence(Identifier),
     Seeded(i64),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::loot::{Holder, LootData, LootItemCondition, LootTable};
+    use ferraloom_data::{Block, Item};
+    use ferraloom_nbt::CompoundTag;
+    use ferraloom_protocol::{chat::Component, component::*};
+    use ferraloom_util::random::LegacyRandomSource;
+    use serde_json::json;
+    use std::cell::RefCell;
+
+    struct Facts;
+    impl crate::predicates::PredicateContext for Facts {}
+    impl LootFacts for Facts {
+        fn item_enabled(&self, _stack: &ItemStack) -> Result<bool> {
+            Ok(true)
+        }
+    }
+
+    struct RetainedSource {
+        random: LegacyRandomSource,
+        phase: i32,
+        reads: RefCell<Vec<&'static str>>,
+    }
+    impl RetainedSource {
+        fn new() -> Self {
+            Self {
+                random: LegacyRandomSource::new(42),
+                phase: 0,
+                reads: RefCell::new(Vec::new()),
+            }
+        }
+    }
+    impl LootRuntime for RetainedSource {
+        fn facts(&self) -> &dyn LootFacts {
+            &Facts
+        }
+        fn with_random(&mut self, operation: &mut dyn FnMut(&mut dyn RandomSource)) {
+            operation(&mut self.random);
+        }
+        fn dynamic_drop_next(
+            &mut self,
+            _id: &Identifier,
+            ordinal: usize,
+            _params: &LootParams,
+        ) -> Result<Option<ItemStack>> {
+            if ordinal >= 2 {
+                return Ok(None);
+            }
+            self.phase += 1;
+            Ok(Some(ItemStack::new(Item::STONE, 1, Default::default())))
+        }
+        fn block_entity_nbt(&self, _params: &LootParams) -> Result<Option<Tag>> {
+            self.reads.borrow_mut().push("nbt");
+            let mut tag = CompoundTag::new();
+            tag.insert("phase", Tag::Int(self.phase));
+            Ok(Some(Tag::Compound(tag)))
+        }
+        fn block_entity_components(
+            &self,
+            _params: &LootParams,
+        ) -> Result<Option<DataComponentMap>> {
+            self.reads.borrow_mut().push("components");
+            Ok(Some(DataComponentMap {
+                entries: vec![DataComponent::CustomName(Box::new(Component::literal(
+                    self.phase.to_string(),
+                )))],
+            }))
+        }
+    }
+
+    #[test]
+    fn dynamic_consumers_read_retained_block_entity_at_call_time() {
+        let mut data = LootData::default();
+        let id = Identifier::parse("test").unwrap();
+        data.tables.insert(
+            id.clone(),
+            LootTable::decode(&json!({
+                "pools":[{"rolls":1,"entries":[{"type":"dynamic","name":"contents",
+                    "modifier":[
+                        {"type":"copy_custom_data","source":"block_entity",
+                         "ops":[{"source":"phase","target":"phase","op":"replace"}]},
+                        {"type":"copy_components","source":"block_entity","include":["custom_name"]}
+                    ]
+                }]}]
+            }))
+            .unwrap(),
+        );
+        let params = LootParams {
+            block_entity: Some(Tag::Compound(CompoundTag::new())),
+            block_entity_components: Some(DataComponentMap::default()),
+            ..Default::default()
+        };
+        let mut runtime = RetainedSource::new();
+        let stacks = data
+            .get_random_items_with_runtime(&id, &params, &mut runtime)
+            .unwrap();
+        assert_eq!(stacks.len(), 2);
+        for (index, stack) in stacks.iter().enumerate() {
+            let phase = index as i32 + 1;
+            let expected = ItemStack::from_json(&json!({"id":"stone","count":1,"components":{
+                "minecraft:custom_data":format!("{{phase:{phase}}}"),
+                "minecraft:custom_name":phase.to_string()
+            }}))
+            .unwrap();
+            assert_eq!(stack, &expected);
+        }
+        assert_eq!(
+            *runtime.reads.borrow(),
+            ["nbt", "components", "nbt", "components"]
+        );
+    }
+
+    #[test]
+    fn match_block_reads_nbt_before_components_and_short_circuits() {
+        let data = LootData::default();
+        let params = LootParams {
+            block_state: Some(Block::CHEST.default_state()),
+            block_entity: Some(Tag::Compound(CompoundTag::new())),
+            block_entity_components: Some(DataComponentMap::default()),
+            ..Default::default()
+        };
+        let mut runtime = RetainedSource::new();
+        for (phase, expected, reads) in [
+            (1, false, vec!["nbt"]),
+            (0, true, vec!["nbt", "components"]),
+        ] {
+            let predicate = Holder::direct(
+                LootItemCondition::decode(&json!({
+                    "type":"match_block","nbt":format!("{{phase:{phase}}}"),
+                    "components":{"minecraft:custom_name":"0"}
+                }))
+                .unwrap(),
+            );
+            runtime.reads.borrow_mut().clear();
+            assert_eq!(
+                data.test_predicate_with_runtime(&predicate, &params, &mut runtime)
+                    .unwrap(),
+                expected
+            );
+            assert_eq!(*runtime.reads.borrow(), reads);
+        }
+    }
 }
