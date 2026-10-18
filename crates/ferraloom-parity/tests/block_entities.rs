@@ -240,13 +240,13 @@ async fn smelt_furnace(session: &mut Session) -> Result<ObservationLog> {
     command(
         bot,
         "item replace block 8 79 9 container.0 with minecraft:iron_ore",
-        "commands.item.block.set.success",
+        "commands.item.block.replace.success.known_item",
     )
     .await?;
     command(
         bot,
         "item replace block 8 79 9 container.1 with minecraft:coal",
-        "commands.item.block.set.success",
+        "commands.item.block.replace.success.known_item",
     )
     .await?;
     step(bot, 200).await?;
