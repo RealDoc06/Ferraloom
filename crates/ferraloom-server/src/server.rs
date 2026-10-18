@@ -3166,15 +3166,17 @@ impl MinecraftServer {
         self.world
             .save_entities(&mut self.level.level, &self.properties, flush)
             .await?;
-        let snapshots = self
+        let positions = self
             .level
             .chunks
-            .holders
-            .values()
-            .filter_map(|holder| self.level.level.chunk(holder.position))
-            .map(|chunk| {
+            .holder_positions()
+            .filter(|&pos| self.level.level.chunk(pos).is_some())
+            .collect::<Vec<_>>();
+        let snapshots = positions
+            .into_iter()
+            .map(|pos| {
                 self.world
-                    .capture_chunk(&self.level.level, chunk.pos(), self.level.game_time)
+                    .capture_chunk_for_save(&mut self.level.level, pos, self.level.game_time)
             })
             .collect::<Result<Vec<_>>>()?;
         let encoded = self.world.encode_saves(snapshots).await?;

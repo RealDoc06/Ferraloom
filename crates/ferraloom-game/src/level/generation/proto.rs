@@ -326,5 +326,6 @@ pub fn promote(
     chunk.set_inhabited_time(disk.inhabited_time.unwrap_or(0));
     chunk.load_saved_ticks(disk)?;
     chunk.load_pending_generation_data(disk)?;
+    chunk.mark_unsaved();
     Ok(chunk)
 }

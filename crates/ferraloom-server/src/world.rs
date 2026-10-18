@@ -1198,18 +1198,7 @@ impl World {
         if self.generation_pins(pos) || self.unloading.iter().any(|job| job.pos == pos) {
             return Ok(());
         }
-        level
-            .try_mark_chunk_saved(pos)
-            .map_err(|error| anyhow::anyhow!("{error:?}"))?;
-        let snapshot = match self.capture_chunk(level, pos, game_time) {
-            Ok(snapshot) => snapshot,
-            Err(error) => {
-                level
-                    .mark_chunk_unsaved(pos)
-                    .map_err(|e| anyhow::anyhow!("{e:?}"))?;
-                return Err(error);
-            }
-        };
+        let snapshot = self.capture_chunk_for_save(level, pos, game_time)?;
         let registry = self.registry.clone();
         let io = self.io.clone();
         let saving = self.saving.submit(move || -> Result<()> {
@@ -1505,6 +1494,26 @@ impl World {
         Ok(chunk)
     }
     /// Capture owned sections here; palette/NBT encoding runs in the save pool.
+    /// Clear the marker before capture so a later mutation remains unsaved.
+    pub fn capture_chunk_for_save(
+        &self,
+        level: &mut Level,
+        pos: ChunkPos,
+        game_time: i64,
+    ) -> Result<ChunkSaveSnapshot> {
+        level
+            .try_mark_chunk_saved(pos)
+            .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        match self.capture_chunk(level, pos, game_time) {
+            Ok(snapshot) => Ok(snapshot),
+            Err(error) => {
+                level
+                    .mark_chunk_unsaved(pos)
+                    .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+                Err(error)
+            }
+        }
+    }
     pub fn capture_chunk(
         &self,
         level: &Level,
@@ -2269,7 +2278,7 @@ mod generation_order_tests {
             ChunkStatus::Features
         );
         for (request, terrain) in chunks {
-            world.integrate(request, terrain).unwrap();
+            assert!(world.integrate(request, terrain).unwrap().is_unsaved());
         }
         assert_eq!(
             world.saved[&second.pack()].structures,
