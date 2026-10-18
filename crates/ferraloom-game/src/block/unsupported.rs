@@ -30,12 +30,21 @@ pub enum BlockMethod {
     CanPlaceLiquid,
     PlaceLiquid,
     PickupBlock,
+    CollisionShape,
+    OutlineShape,
+    IsFaceSturdy,
 }
 impl BlockMethod {
     const fn can_skip(self) -> bool {
         !matches!(
             self,
-            Self::CanSurvive | Self::CanPlaceLiquid | Self::PlaceLiquid | Self::PickupBlock
+            Self::CanSurvive
+                | Self::CanPlaceLiquid
+                | Self::PlaceLiquid
+                | Self::PickupBlock
+                | Self::CollisionShape
+                | Self::OutlineShape
+                | Self::IsFaceSturdy
         )
     }
     pub const fn name(self) -> &'static str {
@@ -58,6 +67,9 @@ impl BlockMethod {
             Self::CanPlaceLiquid => "canPlaceLiquid",
             Self::PlaceLiquid => "placeLiquid",
             Self::PickupBlock => "pickupBlock",
+            Self::CollisionShape => "getCollisionShape",
+            Self::OutlineShape => "getShape",
+            Self::IsFaceSturdy => "isFaceSturdy",
         }
     }
 }

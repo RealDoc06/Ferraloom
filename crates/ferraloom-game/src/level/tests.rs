@@ -916,3 +916,52 @@ fn comparator_notifications_match_vanilla_direct_and_through_conductors() {
     let expected = vector("analog-neighbors").replace("analog:", "");
     assert_eq!(trace(&mut level), expected);
 }
+
+#[test]
+fn shared_collision_queries_use_native_faces_and_liquid_context_without_warn_fallbacks() {
+    use crate::block::{BlockCollisionContext, LevelReaderRef, UnportedBehavior};
+    let mut level = flat_pool();
+    let pos = BlockPos::new(8, 0, 8);
+    let reader = LevelReaderRef::Server(&level);
+    let slab = Block::STONE_SLAB.default_state();
+    assert!(!reader.is_face_sturdy(slab, pos, Direction::Up).unwrap());
+    assert!(reader.is_face_sturdy(slab, pos, Direction::Down).unwrap());
+    assert_eq!(
+        reader
+            .collision_shape(slab, pos, &BlockCollisionContext::empty())
+            .unwrap()
+            .to_aabbs(),
+        slab.collision_shape().unwrap().to_aabbs()
+    );
+    let water = Block::WATER.default_state();
+    assert!(
+        reader
+            .collision_shape(water, pos, &BlockCollisionContext::empty())
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        reader
+            .collision_shape(
+                water,
+                pos,
+                &BlockCollisionContext::empty_with_fluid_collisions(true)
+            )
+            .unwrap()
+            .ptr_eq(&ferraloom_util::shapes::block())
+    );
+    level.set_unported_behavior(UnportedBehavior::Warn);
+    let dynamic = Block::SCAFFOLDING.default_state();
+    assert!(matches!(
+        LevelReaderRef::Server(&level).collision_shape(
+            dynamic,
+            pos,
+            &BlockCollisionContext::empty()
+        ),
+        Err(LevelError::UnsupportedBlockMethod(
+            _,
+            crate::block::BlockMethod::CollisionShape
+        ))
+    ));
+    assert_eq!(level.unported_behavior_stats().skipped_calls, 0);
+}
