@@ -1028,7 +1028,11 @@ fn live_rewards_nest_recipe_awards_before_outer_announcement_and_visibility() {
         })
         .collect();
     assert_eq!(announcements, expected);
-    assert!(matches!(packets.last(), Some(cb::Packet::RecipeBookAdd(_))));
+    assert!(matches!(
+        packets.as_slice(),
+        [cb::Packet::SystemChat(_), cb::Packet::RecipeBookAdd(packet), cb::Packet::SystemChat(_)]
+            if !packet.replace && packet.entries.len() == 1
+    ));
     flush_dirty(&mut level, player).unwrap();
     let packet = level
         .take_effects()
