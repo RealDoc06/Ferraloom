@@ -135,6 +135,25 @@ pub struct StructureEntitySpawnFlags {
 /// extracted collision shapes cannot answer survival or neighbor shape queries.
 pub trait WorldgenBlockBehavior: Sync {
     // --- structures family ---
+    pub fn is_collision_face_full(
+        &self,
+        state: BlockState,
+        position: [i32; 3],
+        face: ferraloom_util::Direction,
+    ) -> Result<bool, Error> {
+        self.behavior
+            .is_collision_face_full(self, state, position, face)
+    }
+    /// Port of Block#isFaceFull on the live collision shape, used by portal vines.
+    fn is_collision_face_full(
+        &self,
+        _region: &WorldGenRegion<'_>,
+        _state: BlockState,
+        _position: [i32; 3],
+        _face: ferraloom_util::Direction,
+    ) -> Result<bool, Error> {
+        Err(Error("Unsupported: collision shape full face".into()))
+    }
     /// Set an explicit loot seed. Absent or non-loot-capable block entities are
     /// a silent no-op once the game adapter implements this operation.
     fn set_loot_table_seed(
