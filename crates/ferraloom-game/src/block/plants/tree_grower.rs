@@ -1,5 +1,5 @@
 //! Port of TreeGrower's species, weighted feature selection and sapling queries.
-//! Feature placement is wired through the live worldgen boundary separately.
+//! Growth uses the live configured-feature boundary and the canonical Level RNG.
 use super::super::{LevelAccessRef, LevelReaderRef};
 use crate::level::LevelError;
 use ferraloom_data::{Block, BlockState, tags::BlockTags};
@@ -48,6 +48,52 @@ fn choose(random: &mut Random, choices: &[(&'static str, i32)]) -> Option<&'stat
 }
 
 impl TreeGrower {
+    /// Port of TreeGrower#growTree. Failed placement restores each captured
+    /// sapling, while errors propagate without pretending placement completed.
+    pub fn grow_tree(
+        self,
+        state: BlockState,
+        pos: BlockPos,
+        level: &mut crate::level::Level,
+    ) -> Result<bool, LevelError> {
+        use super::super::{UpdateFlags, fluid};
+        let mega = self.configured_mega_feature(level.random());
+        if let Some(name) = mega {
+            let id = name.parse().expect("builtin feature identifier");
+            if level.context().features.features.contains_key(&id)
+                && let Some(square) = find_two_by_two(state, pos, &LevelReaderRef::Server(level))?
+            {
+                for (_, at) in square.blocks {
+                    let empty =
+                        fluid::legacy_block(LevelReaderRef::Server(level).get_fluid_state(at)?);
+                    LevelAccessRef::Server(level).set_block(at, empty, UpdateFlags(818))?;
+                }
+                if place_feature(level, &id, pos.offset(square.offset_x, 0, square.offset_z))? {
+                    return Ok(true);
+                }
+                for (original, at) in square.blocks {
+                    LevelAccessRef::Server(level).set_block(at, original, UpdateFlags(260))?;
+                }
+                return Ok(false);
+            }
+        }
+        let flowers = has_flowers(pos, &LevelReaderRef::Server(level))?;
+        let Some(name) = self.configured_feature(level.random(), flowers) else {
+            return Ok(false);
+        };
+        let id = name.parse().expect("builtin feature identifier");
+        if !level.context().features.features.contains_key(&id) {
+            return Ok(false);
+        }
+        let empty = fluid::legacy_block(LevelReaderRef::Server(level).get_fluid_state(pos)?);
+        LevelAccessRef::Server(level).set_block(pos, empty, UpdateFlags(818))?;
+        if place_feature(level, &id, pos)? {
+            return Ok(true);
+        }
+        LevelAccessRef::Server(level).set_block(pos, state, UpdateFlags(260))?;
+        Ok(false)
+    }
+
     pub fn for_block(block: Block) -> Option<Self> {
         Some(match block {
             Block::OAK_SAPLING => Self::Oak,
@@ -186,4 +232,23 @@ pub fn find_two_by_two(
         }
     }
     Ok(None)
+}
+
+/// Shared canonical feature call for vegetation growth. A missing dependency is
+/// an error under both policies; successful growth is never fabricated.
+pub(super) fn place_feature(
+    level: &mut crate::level::Level,
+    id: &ferraloom_worldgen::Identifier,
+    pos: BlockPos,
+) -> Result<bool, LevelError> {
+    level
+        .place_configured_feature(
+            id,
+            pos,
+            ferraloom_worldgen::feature::FeatureRandomSelector::Canonical,
+        )
+        .map_err(|error| {
+            eprintln!("plant feature {id} at {pos:?}: {error}");
+            LevelError::WorldgenMutationFailed(pos)
+        })
 }

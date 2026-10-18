@@ -24,6 +24,7 @@ mod nylium;
 mod pitcher;
 mod placement;
 mod powder_snow;
+mod sapling;
 mod sea_pickle;
 mod snow;
 mod survival;
@@ -115,6 +116,7 @@ pub fn ported_behavior(block: Block, method: BlockMethod) -> Option<&'static dyn
 
         C::BambooStalkBlock | C::BambooSaplingBlock if method == M::RandomTick => &bamboo::BAMBOO,
 
+        C::SaplingBlock | C::MangrovePropaguleBlock if method == M::RandomTick => &sapling::SAPLING,
         C::MushroomBlock if method == M::RandomTick => &spread::MUSHROOM,
         C::StemBlock if method == M::RandomTick => &spread::STEM,
         C::CactusBlock | C::SugarCaneBlock if method == M::RandomTick => &column::COLUMN_PLANT,

@@ -4,7 +4,7 @@ use crate::{
     block::{BlockBehavior, LevelAccessRef, LevelReaderRef},
     level::{Level, Region, chunk::LevelChunk, effects::LevelEffect},
 };
-use ferraloom_data::properties as p;
+use ferraloom_data::{BlockState, properties as p};
 use ferraloom_util::{BlockPos, ChunkPos, Direction};
 use std::sync::Arc;
 static EMPTY: Behaviors = Behaviors::EMPTY;
@@ -1132,5 +1132,89 @@ fn farmland_trampling_preserves_draw_order_permission_size_and_actor() {
             level.entity::<EntityData>(actor).unwrap().position.y,
             if tramples { 6.0 } else { location.y }
         );
+    }
+}
+
+#[test]
+fn tree_growth_restores_captured_saplings_and_uses_the_live_random_stream() {
+    use crate::level::LevelContext;
+    use ferraloom_util::random::{LegacyRandomSource, Random, RandomSource};
+    use ferraloom_worldgen::feature::{Feature, FeatureContext, FeatureRegistry};
+    #[derive(Debug)]
+    struct RejectedTree;
+    impl Feature for RejectedTree {
+        fn place(
+            &self,
+            context: &mut FeatureContext<'_, '_>,
+        ) -> Result<bool, ferraloom_worldgen::Error> {
+            // A feature can fail after consuming RNG and writing outside the
+            // captured saplings. TreeGrower only restores those saplings.
+            context.random()?.next_int_bound(17);
+            context
+                .level
+                .set_block([10, 5, 8], Block::STONE.default_state(), 260)?;
+            Ok(false)
+        }
+    }
+    let (blocks, fluids) = tags();
+    let pos = BlockPos::new(8, 5, 8);
+    for mega in [false, true] {
+        let original = level();
+        let mut features = FeatureRegistry::default();
+        for id in ["oak", "fancy_oak", "mega_spruce", "mega_pine"] {
+            features
+                .features
+                .insert(id.parse().unwrap(), Arc::new(RejectedTree));
+        }
+        let services = original.context();
+        let context = Arc::new(LevelContext::new(
+            0,
+            63,
+            services.generator.clone(),
+            Arc::new(features),
+        ));
+        let mut level = Level::new(original.into_region(), context);
+        level.set_block_tags(blocks.clone());
+        level.set_fluid_tags(fluids.clone());
+        let block = if mega {
+            Block::SPRUCE_SAPLING
+        } else {
+            Block::OAK_SAPLING
+        };
+        let grower = tree_grower::TreeGrower::for_block(block).unwrap();
+        let mut captured = Vec::new();
+        for (x, z) in if mega {
+            vec![(0, 0), (1, 0), (0, 1), (1, 1)]
+        } else {
+            vec![(0, 0)]
+        } {
+            let at = pos.offset(x, 0, z);
+            let state = block
+                .default_state()
+                .with(p::STAGE, ((x + z) % 2) as u8)
+                .unwrap();
+            level
+                .set_block_state(at.below(1), Block::DIRT.default_state())
+                .unwrap();
+            level.set_block_state(at, state).unwrap();
+            captured.push((at, state));
+        }
+        level.set_random_streams(Random::Legacy(LegacyRandomSource::new(42)), 0);
+        let mut expected = LegacyRandomSource::new(42);
+        expected.next_int_bound(if mega { 2 } else { 10 });
+        expected.next_int_bound(17);
+        assert!(
+            !grower
+                .grow_tree(block.default_state(), pos, &mut level)
+                .unwrap()
+        );
+        for (at, state) in captured {
+            assert_eq!(level.get_block_state(at).unwrap(), state);
+        }
+        assert_eq!(
+            level.get_block_state(pos.east(2)).unwrap(),
+            Block::STONE.default_state()
+        );
+        assert_eq!(level.random().next_long(), expected.next_long());
     }
 }

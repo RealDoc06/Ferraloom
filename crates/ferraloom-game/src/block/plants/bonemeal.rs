@@ -3,7 +3,8 @@
 use super::{
     super::{LevelAccessRef, LevelReaderRef, UpdateFlags},
     bamboo, crops, dripleaf, growing, hanging_moss, moss, multiface_spreader, nylium, pitcher,
-    sea_pickle, spread, survival,
+    sapling, sea_pickle, spread, survival,
+    tree_grower::TreeGrower,
 };
 use crate::level::LevelError;
 use ferraloom_data::{Block, BlockClass, BlockState, properties as p};
@@ -83,7 +84,10 @@ pub fn bonemealable_behavior(block: Block) -> Option<&'static dyn BonemealableBl
     }
     matches!(
         block.class(),
-        C::MossyCarpetBlock
+        C::SaplingBlock
+            | C::MangrovePropaguleBlock
+            | C::AzaleaBlock
+            | C::MossyCarpetBlock
             | C::BigDripleafBlock
             | C::BigDripleafStemBlock
             | C::SmallDripleafBlock
@@ -119,9 +123,9 @@ pub fn bonemealable_behavior(block: Block) -> Option<&'static dyn BonemealableBl
 }
 pub(super) fn inside_height(level: &LevelReaderRef<'_, '_>, pos: BlockPos) -> bool {
     match level {
-        LevelReaderRef::Server(level) => level
-            .chunk(ferraloom_util::ChunkPos::containing(pos))
-            .is_some_and(|chunk| pos.y >= chunk.min_y() && pos.y < chunk.max_y()),
+        LevelReaderRef::Server(level) => {
+            pos.y >= level.min_build_height() && pos.y <= level.max_build_height()
+        }
         LevelReaderRef::Worldgen(region) => {
             pos.y >= region.min_y() && pos.y < region.min_y() + region.height()
         }
@@ -148,8 +152,44 @@ impl BonemealableBlock for PlantBonemeal {
         access: &mut LevelAccessRef<'_, '_>,
         _source: BonemealSource,
     ) -> Result<bool, LevelError> {
-        let level = &access.as_reader();
         use BlockClass as C;
+        match state.block().class() {
+            C::MangrovePropaguleBlock => {
+                return Ok(state.get(p::HANGING) != Some(true) || state.get(p::AGE) != Some(4));
+            }
+            C::SaplingBlock => {
+                let LevelAccessRef::Server(level) = access else {
+                    return Ok(false);
+                };
+                let grower = TreeGrower::for_block(state.block()).expect("sapling grower");
+                if !grower.can_grow(state, pos, &mut LevelAccessRef::Server(level))? {
+                    return Ok(false);
+                }
+                let height = grower
+                    .minimum_height(&level.context().features)
+                    .unwrap_or(0);
+                return Ok(inside_height(
+                    &LevelReaderRef::Server(level),
+                    pos.above(height),
+                ));
+            }
+            C::AzaleaBlock => {
+                let LevelAccessRef::Server(level) = access else {
+                    return Ok(false);
+                };
+                let height = TreeGrower::Azalea
+                    .minimum_height(&level.context().features)
+                    .unwrap_or(0);
+                return Ok(
+                    inside_height(&LevelReaderRef::Server(level), pos.above(height + 2))
+                        && LevelReaderRef::Server(level)
+                            .get_fluid_state(pos.above(1))?
+                            .empty,
+                );
+            }
+            _ => {}
+        }
+        let level = &access.as_reader();
         match state.block().class() {
             C::MangroveLeavesBlock => Ok(level.get_block_state(pos.below(1))?.is_air()),
             C::NetherrackBlock => nylium::netherrack_target(pos, level),
@@ -262,6 +302,26 @@ impl BonemealableBlock for PlantBonemeal {
             _ => unreachable!("registered bonemeal class"),
         }
     }
+    fn is_bonemeal_success(
+        &self,
+        state: BlockState,
+        _pos: BlockPos,
+        level: &mut LevelAccessRef<'_, '_>,
+        _source: BonemealSource,
+    ) -> Result<bool, LevelError> {
+        if state.block().class() == BlockClass::MangrovePropaguleBlock
+            && state.get(p::HANGING) == Some(true)
+        {
+            return Ok(state.get(p::AGE) != Some(4));
+        }
+        if matches!(
+            state.block().class(),
+            BlockClass::SaplingBlock | BlockClass::MangrovePropaguleBlock | BlockClass::AzaleaBlock
+        ) {
+            return Ok(f64::from(level.random()?.next_float()) < 0.45);
+        }
+        Ok(true)
+    }
     fn perform_bonemeal(
         &self,
         state: BlockState,
@@ -271,6 +331,25 @@ impl BonemealableBlock for PlantBonemeal {
     ) -> Result<(), LevelError> {
         use BlockClass as C;
         match state.block().class() {
+            C::MangrovePropaguleBlock
+                if state.get(p::HANGING) == Some(true) && state.get(p::AGE) != Some(4) =>
+            {
+                level.set_block(
+                    pos,
+                    state.with(p::AGE, state.get(p::AGE).unwrap() + 1).unwrap(),
+                    UpdateFlags::CLIENTS,
+                )?;
+            }
+            C::SaplingBlock | C::MangrovePropaguleBlock | C::AzaleaBlock => {
+                let LevelAccessRef::Server(level) = level else {
+                    return Err(LevelError::UnsupportedWorldgenBehavior);
+                };
+                if state.block().class() == C::AzaleaBlock {
+                    TreeGrower::Azalea.grow_tree(state, pos, level)?;
+                } else {
+                    sapling::advance_tree(state, pos, level)?;
+                }
+            }
             C::MangroveLeavesBlock => {
                 level.set_block(
                     pos.below(1),
