@@ -383,3 +383,5 @@ One class row per bootstrapped runtime Block class, listing every block id assig
 | blocks.plants.feature-bonemeal | Nether fungus support/probability and nylium/moss feature placement use optional native registry holders and the canonical stream | `NetherFungusBlock`, `NyliumBlock#performBonemeal`, `BonemealableFeaturePlacerBlock` | Native Java targets and live configured-feature bridge | - | todo |
 
 | blocks.plants.bonemeal-runtime | Real ServerLevel bonemeal target/success/perform snapshots and post-callback canonical RNG for pitcher, pickles, stems, kelp, vines, propagules and spreading grasses | `BonemealableBlock` real native dispatch | `plants::tests::native_bonemeal_snapshots_and_rng_match_registered_growth` (5,808 native cases, explicit drops/redstone dependencies) | pass | todo |
+
+| blocks.plants.mushroom-bonemeal | Typed huge-mushroom radius bounds, 0.4 probability, fluid removal and original mushroom restoration on failed live placement | `MushroomBlock#isValidBonemealTarget; growMushroom` | Typed native feature-radius vectors and live feature bridge | pass | todo |

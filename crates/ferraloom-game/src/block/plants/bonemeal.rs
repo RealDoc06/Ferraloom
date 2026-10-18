@@ -87,7 +87,8 @@ pub fn bonemealable_behavior(block: Block) -> Option<&'static dyn BonemealableBl
     }
     matches!(
         block.class(),
-        C::NetherFungusBlock
+        C::MushroomBlock
+            | C::NetherFungusBlock
             | C::SaplingBlock
             | C::MangrovePropaguleBlock
             | C::AzaleaBlock
@@ -158,6 +159,7 @@ impl BonemealableBlock for PlantBonemeal {
     ) -> Result<bool, LevelError> {
         use BlockClass as C;
         match state.block().class() {
+            C::MushroomBlock => return Ok(feature_bonemeal::mushroom_target(state, pos, access)),
             C::MangrovePropaguleBlock => {
                 return Ok(state.get(p::HANGING) != Some(true) || state.get(p::AGE) != Some(4));
             }
@@ -184,12 +186,12 @@ impl BonemealableBlock for PlantBonemeal {
                 let height = TreeGrower::Azalea
                     .minimum_height(&level.context().features)
                     .unwrap_or(0);
-                return Ok(
-                    inside_height(&LevelReaderRef::Server(level), pos.above(height + 2))
-                        && LevelReaderRef::Server(level)
-                            .get_fluid_state(pos.above(1))?
-                            .empty,
-                );
+                return Ok(inside_height(
+                    &LevelReaderRef::Server(level),
+                    pos.above(height.wrapping_add(2)),
+                ) && LevelReaderRef::Server(level)
+                    .get_fluid_state(pos.above(1))?
+                    .empty);
             }
             _ => {}
         }
@@ -327,7 +329,10 @@ impl BonemealableBlock for PlantBonemeal {
         ) {
             return Ok(f64::from(level.random()?.next_float()) < 0.45);
         }
-        if state.block().class() == BlockClass::NetherFungusBlock {
+        if matches!(
+            state.block().class(),
+            BlockClass::NetherFungusBlock | BlockClass::MushroomBlock
+        ) {
             return Ok(f64::from(level.random()?.next_float()) < 0.4);
         }
         Ok(true)
@@ -341,6 +346,7 @@ impl BonemealableBlock for PlantBonemeal {
     ) -> Result<(), LevelError> {
         use BlockClass as C;
         match state.block().class() {
+            C::MushroomBlock => feature_bonemeal::grow_mushroom(state, pos, level)?,
             C::NetherFungusBlock | C::NyliumBlock | C::BonemealableFeaturePlacerBlock => {
                 feature_bonemeal::perform(state, pos, level)?;
             }
