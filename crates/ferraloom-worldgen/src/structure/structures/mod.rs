@@ -12,3 +12,4 @@ pub mod ruined_portal;
 pub mod shipwreck;
 pub mod stronghold;
 pub mod swamp_hut;
+pub mod woodland_mansion;
