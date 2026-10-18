@@ -53,7 +53,7 @@ public final class PlantsTickOracle {
                 state.randomTick(level,pos,level.getRandom());
                 lines.add("random-crop\t"+net.minecraft.world.level.block.Block.getId(state)+"\t"+moisture+"\t"+pattern+"\t"+seed+"\t"+light+"\t"+net.minecraft.world.level.block.Block.getId(level.getBlockState(pos))+"\t"+level.getRandom().nextLong());
             }
-            if (Boolean.getBoolean("ferraloom.plants.extended")) { extended(level,pos,lines); saplingTargets(level,pos,lines); grassBonemeal(level,pos,lines); chorusTicks(level,pos,lines); groundTicks(level,pos,lines); eyeblossomTicks(level,pos,lines); }
+            if (Boolean.getBoolean("ferraloom.plants.extended")) { extended(level,pos,lines); saplingTargets(level,pos,lines); grassBonemeal(level,pos,lines); chorusTicks(level,pos,lines); powderShapes(level,pos,lines); groundTicks(level,pos,lines); eyeblossomTicks(level,pos,lines); }
             Files.write(output,lines);
             Files.writeString(output.resolveSibling("oracle-done"),"done\n");
         }catch(Throwable error){error.printStackTrace();try{Files.writeString(output.resolveSibling("oracle-error.txt"),error.toString());}catch(Exception ignored){}}
@@ -121,6 +121,28 @@ public final class PlantsTickOracle {
             if(scheduled)block.defaultBlockState().tick(level,pos,level.getRandom());else block.defaultBlockState().randomTick(level,pos,level.getRandom());
             String blocks=ticks((net.minecraft.world.ticks.LevelChunkTicks<Block>)level.getChunkAt(pos).getBlockTicks(),net.minecraft.core.registries.BuiltInRegistries.BLOCK::getId,level,pos);
             lines.add("eyeblossom-tick\t"+Block.getId(block.defaultBlockState())+"\t"+seed+"\t"+scheduled+"\t"+attribute.getSerializedName()+"\t"+before+"\t"+snapshot(level,pos)+"\t"+blocks+"\t"+level.getRandom().nextLong());
+        }
+    }
+    static String shape(net.minecraft.world.phys.shapes.VoxelShape shape) {
+        var boxes=new ArrayList<String>();
+        for(var box:shape.toAabbs()) {
+            var coordinates=new ArrayList<String>();
+            for(double value:new double[]{box.minX,box.minY,box.minZ,box.maxX,box.maxY,box.maxZ})coordinates.add(Long.toUnsignedString(Double.doubleToRawLongBits(value),16));
+            boxes.add(String.join(":",coordinates));
+        }
+        return String.join(";",boxes);
+    }
+    static void powderShapes(ServerLevel level,BlockPos pos,List<String> lines) {
+        var cow=new net.minecraft.world.entity.animal.cow.Cow(net.minecraft.world.entity.EntityTypes.COW,level);
+        for(boolean boots:new boolean[]{false,true})for(double fall:new double[]{0.0,2.5,Math.nextUp(2.5),Double.NaN})
+            for(boolean descending:new boolean[]{false,true})for(double offset:new double[]{0.0,1.0,1.0001})for(boolean placement:new boolean[]{false,true}) {
+            cow.setPos(pos.getX()+0.5,pos.getY()+offset,pos.getZ()+0.5);cow.fallDistance=fall;cow.setShiftKeyDown(descending);
+            cow.setItemSlot(net.minecraft.world.entity.EquipmentSlot.FEET,boots?new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.LEATHER_BOOTS):net.minecraft.world.item.ItemStack.EMPTY);
+            var context=placement?net.minecraft.world.phys.shapes.CollisionContext.withPosition(cow,cow.getY()):net.minecraft.world.phys.shapes.CollisionContext.of(cow);
+            level.getRandom().setSeed(42);
+            var collision=POWDER_SNOW.defaultBlockState().getCollisionShape(level,pos,context);
+            var inside=POWDER_SNOW.defaultBlockState().getEntityInsideCollisionShape(level,pos,cow);
+            lines.add("powder-shape\t"+boots+"\t"+Long.toUnsignedString(Double.doubleToRawLongBits(fall),16)+"\t"+descending+"\t"+Long.toUnsignedString(Double.doubleToRawLongBits(offset),16)+"\t"+placement+"\t"+shape(collision)+"\t"+shape(inside)+"\t"+level.getRandom().nextLong());
         }
     }
     static void settleLight(ServerLevel level,BlockPos pos) {

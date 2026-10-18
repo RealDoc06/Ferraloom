@@ -399,3 +399,5 @@ One class row per bootstrapped runtime Block class, listing every block id assig
 | blocks.plants.chorus-support-vectors | Chorus flower/plant support across vertical and horizontal topologies, exact six-direction states, delayed invalidation and unchanged RNG | Real native `canSurvive/updateShape` | `plants::tests::chorus_survival_and_six_neighbor_updates_match_native_topologies` (20,160 vectors) | pass | todo |
 
 | blocks.plants.stem-bonemeal-light | Snapshot native sky/block light after draining the real light engine before stem bonemeal invokes randomTick | `StemBlock#performBonemeal/randomTick`, `ThreadedLevelLightEngine#waitForPendingTasks` | Extended dedicated ServerLevel oracle (fresh light capture pending) | - | todo |
+
+| blocks.plants.powder-context-shapes | Powder snow collision tests placement contexts, exact fall-distance threshold/NaN, descent, boots and entity bottom height; empty inside shape expands to a full cube | `PowderSnowBlock#getCollisionShape/getEntityInsideCollisionShape` | Native ServerLevel cow context oracle (capture pending) | - | todo |
