@@ -5,7 +5,7 @@ use crate::block::LevelReaderRef;
 use ferraloom_util::{BlockPos, Vec3, mth};
 pub use ferraloom_worldgen::environment::{
     AttributeKey, AttributeValue, ClockSnapshot, DimensionEnvironment, EnvironmentAttributes,
-    EnvironmentDefinitions, SpatialAttributeInterpolator,
+    EnvironmentDefinitions, SpatialAttributeInterpolator, TriState,
 };
 use ferraloom_worldgen::environment::{EnvironmentAttributeSystem, WeatherSample};
 use ferraloom_worldgen::{Identifier, biome_manager::zoom_quart};
@@ -78,6 +78,12 @@ impl Level {
     }
     pub fn dimension_key(&self) -> Result<&Identifier, LevelError> {
         Ok(&self.environment_runtime()?.dimension)
+    }
+    pub fn clock_ticks(&self, clock: &Identifier) -> Result<i64, LevelError> {
+        self.environment_runtime()?
+            .system
+            .clock_ticks(clock)
+            .ok_or(LevelError::MissingEnvironmentContext)
     }
     fn environment_runtime(&self) -> Result<&EnvironmentRuntime, LevelError> {
         self.region()
@@ -288,6 +294,23 @@ mod tests {
         assert_eq!(
             level.get_dimension_value(EnvironmentAttributes::SKY_LIGHT_LEVEL),
             Ok(7.5)
+        );
+        assert_eq!(
+            crate::loot::LootFacts::clock_ticks(
+                &level,
+                &ferraloom_protocol::Identifier::parse("overworld").unwrap()
+            )
+            .unwrap(),
+            5
+        );
+        assert_eq!(
+            crate::loot::LootFacts::environment_float(
+                &level,
+                &ferraloom_protocol::Identifier::parse("gameplay/sky_light_level").unwrap(),
+                &crate::loot::LootParams::default()
+            )
+            .unwrap(),
+            7.5
         );
         assert_eq!(level.sky_darken(), Ok(0));
         level.update_sky_brightness().unwrap();

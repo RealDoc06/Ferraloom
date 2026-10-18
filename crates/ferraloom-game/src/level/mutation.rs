@@ -51,6 +51,15 @@ impl Level {
     pub fn set_entity_type_tags(&mut self, tags: Arc<TagSet<ferraloom_data::EntityType>>) {
         self.region_mut().entity_type_tags = Some(tags);
     }
+    pub fn set_item_tags(&mut self, tags: Arc<TagSet<ferraloom_data::Item>>) {
+        self.region_mut().item_tags = Some(tags);
+    }
+    pub fn item_tags(&self) -> Result<&TagSet<ferraloom_data::Item>, LevelError> {
+        self.region()
+            .item_tags
+            .as_deref()
+            .ok_or(LevelError::MissingItemTags)
+    }
     pub fn entity_type_tags(&self) -> Result<&TagSet<ferraloom_data::EntityType>, LevelError> {
         self.region()
             .entity_type_tags

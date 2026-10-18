@@ -28,6 +28,7 @@ pub mod environment;
 pub mod events;
 pub mod heightmap;
 mod lighting;
+pub mod loot_facts;
 mod mutation;
 mod post_processing;
 mod random;
@@ -69,6 +70,7 @@ pub enum LevelError {
     MissingBlockTags,
     MissingFluidTags,
     MissingEntityTypeTags,
+    MissingItemTags,
     UnsupportedShape(BlockState),
     UnsupportedFluidRandomTick,
     UnsupportedWeatherQuery,
@@ -156,6 +158,7 @@ pub struct Region {
     fluid_tags:
         Option<Arc<ferraloom_data::datapack::TagSet<ferraloom_data::registries::fluid::Id>>>,
     entity_type_tags: Option<Arc<ferraloom_data::datapack::TagSet<EntityType>>>,
+    item_tags: Option<Arc<ferraloom_data::datapack::TagSet<ferraloom_data::Item>>>,
     pub(crate) unported: crate::block::UnportedCalls,
     behaviors: &'static Behaviors,
 }
@@ -193,6 +196,7 @@ impl Region {
             tags: None,
             fluid_tags: None,
             entity_type_tags: None,
+            item_tags: None,
             unported: crate::block::UnportedCalls::default(),
             behaviors,
         }

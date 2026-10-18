@@ -278,6 +278,9 @@ impl Level {
     ) -> std::result::Result<u8, LevelError> {
         let chunk = ChunkPos::containing(pos);
         self.chunk(chunk).ok_or(LevelError::MissingChunk(chunk))?;
+        if layer == LightLayer::Sky && !self.has_skylight()? {
+            return Ok(0);
+        }
         self.region()
             .weather
             .lights
