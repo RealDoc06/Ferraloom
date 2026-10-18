@@ -167,7 +167,12 @@ pub fn ported_behavior(block: Block, method: BlockMethod) -> Option<&'static dyn
         C::VineBlock
             if matches!(
                 method,
-                M::CanSurvive | M::UpdateShape | M::UpdateFromNeighbourShapes
+                M::CanSurvive
+                    | M::UpdateShape
+                    | M::UpdateFromNeighbourShapes
+                    | M::RandomTick
+                    | M::CanBeReplaced
+                    | M::GetStateForPlacement
             ) =>
         {
             &vines::VINES

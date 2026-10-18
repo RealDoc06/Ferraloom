@@ -67,6 +67,16 @@ public final class PlantsVectors {
             level.getChunkAt(pos).setBlockState(pos.above(),above,816);
             System.out.println("nylium-alive\t"+Block.getId(block.defaultBlockState())+"\t"+Block.getId(above)+"\t"+canBeNylium.invoke(null,block.defaultBlockState(),level,pos));
         }
+        var clickedVines=new ArrayList<BlockState>(Blocks.VINE.getStateDefinition().getPossibleStates());clickedVines.add(Blocks.AIR.defaultBlockState());
+        for(var clicked:clickedVines)for(var direction:Direction.values())for(int mode=0;mode<4;mode++) {
+            level.chunks.clear();level.getChunkAt(pos).setBlockState(pos,clicked,816);
+            if(mode==1)level.getChunkAt(pos.north()).setBlockState(pos.north(),Blocks.STONE.defaultBlockState(),816);
+            if(mode==2)level.getChunkAt(pos.above()).setBlockState(pos.above(),Blocks.STONE.defaultBlockState(),816);
+            if(mode==3)level.getChunkAt(pos.above()).setBlockState(pos.above(),Blocks.VINE.defaultBlockState().setValue(BlockStateProperties.NORTH,true),816);
+            var context=new net.minecraft.world.item.context.DirectionalPlaceContext(level,pos,direction,net.minecraft.world.item.ItemStack.EMPTY,Direction.UP);
+            var placed=Blocks.VINE.getStateForPlacement(context);
+            System.out.println("vine-place\t"+Block.getId(clicked)+"\t"+direction.ordinal()+"\t"+mode+"\t"+(placed==null?-1:Block.getId(placed)));
+        }
         for(var block:plants) {
             var states=new ArrayList<BlockState>();states.add(block.defaultBlockState());
             if(block.defaultBlockState().hasProperty(BlockStateProperties.DOUBLE_BLOCK_HALF)) states.add(block.defaultBlockState().setValue(BlockStateProperties.DOUBLE_BLOCK_HALF,net.minecraft.world.level.block.state.properties.DoubleBlockHalf.UPPER));

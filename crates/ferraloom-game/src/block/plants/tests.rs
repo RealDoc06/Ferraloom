@@ -595,3 +595,80 @@ fn nylium_occlusion_and_bonemeal_metadata_match_vanilla() {
     }
     assert_eq!(count, 816);
 }
+
+#[test]
+fn vine_placement_adds_the_first_supported_unoccupied_looking_face() {
+    use crate::block::DirectionalPlaceContext;
+    use ferraloom_protocol::component::ItemStack;
+    use std::io::Read;
+    let mut text = String::new();
+    flate2::read::GzDecoder::new(
+        include_bytes!("../../../tests/java/blocks/plants/placement.tsv.gz").as_slice(),
+    )
+    .read_to_string(&mut text)
+    .unwrap();
+    let pos = BlockPos::new(8, 5, 8);
+    let mut count = 0;
+    for line in text.lines() {
+        let f = line.split('\t').collect::<Vec<_>>();
+        let mut level = level();
+        let clicked = BlockState::from_id(f[1].parse().unwrap()).unwrap();
+        level.set_block_state(pos, clicked).unwrap();
+        match f[3] {
+            "1" => {
+                level
+                    .set_block_state(pos.north(1), Block::STONE.default_state())
+                    .unwrap();
+            }
+            "2" => {
+                level
+                    .set_block_state(pos.above(1), Block::STONE.default_state())
+                    .unwrap();
+            }
+            "3" => {
+                level
+                    .set_block_state(
+                        pos.above(1),
+                        multiface::with_face(Block::VINE.default_state(), Direction::North, true)
+                            .unwrap(),
+                    )
+                    .unwrap();
+            }
+            _ => {}
+        }
+        let reader = LevelReaderRef::Server(&level);
+        let stack = ItemStack::default();
+        let direction = Direction::VALUES[f[2].parse::<usize>().unwrap()];
+        let context =
+            DirectionalPlaceContext::new(&reader, pos, direction, &stack, Direction::Up).unwrap();
+        let actual = reader
+            .get_state_for_placement(Block::VINE, &context)
+            .unwrap();
+        assert_eq!(
+            actual.map_or(-1, |state| i32::from(state.id())),
+            f[4].parse::<i32>().unwrap(),
+            "{line}"
+        );
+        count += 1;
+    }
+    assert_eq!(count, 792);
+}
+
+#[test]
+fn disabled_vine_spreading_does_not_consume_random() {
+    use ferraloom_util::random::{LegacyRandomSource, Random, RandomSource};
+    let mut level = level();
+    level.rules_mut().spread_vines = false;
+    level.set_random_streams(Random::Legacy(LegacyRandomSource::new(1234)), 0);
+    vines::VINES
+        .random_tick(
+            Block::VINE.default_state(),
+            BlockPos::new(8, 5, 8),
+            &mut level,
+        )
+        .unwrap();
+    assert_eq!(
+        level.random().next_long(),
+        LegacyRandomSource::new(1234).next_long()
+    );
+}
