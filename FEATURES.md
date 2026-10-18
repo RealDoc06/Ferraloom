@@ -24,7 +24,7 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Item modifiers](features/item-modifiers.md) | 4 | 1 | 3 | 0 | 0 |
 | [Items and data components](features/items.md) | 242 | 116 | 123 | 3 | 0 |
 | [Lighting](features/lighting.md) | 13 | 2 | 0 | 11 | 0 |
-| [Loot](features/loot.md) | 1668 | 162 | 1506 | 0 | 0 |
+| [Loot](features/loot.md) | 1671 | 159 | 1512 | 0 | 0 |
 | [Management JSON-RPC](features/management.md) | 101 | 101 | 0 | 0 | 0 |
 | [Maps, decoration and variants](features/maps-decoration.md) | 255 | 255 | 0 | 0 | 0 |
 | [Networking and login](features/networking-login.md) | 46 | 10 | 36 | 0 | 0 |
@@ -49,4 +49,4 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Weather, time and environment](features/weather-time.md) | 85 | 85 | 0 | 0 | 0 |
 | [World storage and data fixing](features/world-storage.md) | 307 | 306 | 1 | 0 | 0 |
 | [World generation](features/worldgen.md) | 3107 | 2641 | 167 | 299 | 0 |
-| **Total** | **19021** | **14123** | **2048** | **2850** | **0** |
+| **Total** | **19024** | **14120** | **2054** | **2850** | **0** |
