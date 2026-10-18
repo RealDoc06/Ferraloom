@@ -73,10 +73,16 @@ impl LootPoolEntryContainer {
                         .ok_or_else(|| codec::error(format!("unknown loot item {id}")))?,
                 )
             }
-            "minecraft:tag" => EntryKind::Tag {
-                items: ItemSet::from_json(codec::field(v, "items")?)?,
-                expand: expand()?,
-            },
+            "minecraft:tag" => {
+                let items = ItemSet::from_json(codec::field(v, "items")?)?;
+                crate::predicates::validate_static_holders(&items, "item", |id| {
+                    Item::from_name(id).is_some()
+                })?;
+                EntryKind::Tag {
+                    items,
+                    expand: expand()?,
+                }
+            }
             "minecraft:loot_table" => EntryKind::Table {
                 tables: HolderSet::decode(codec::field(v, "value")?, LootTable::decode)?,
                 expand: expand()?,

@@ -692,6 +692,7 @@ fn fixed_registry_rejection_and_normalized_keys_match_java() {
     for record in vectors["registry_codecs"].as_array().unwrap() {
         let value = &record["definition"];
         let accepted = match record["kind"].as_str().unwrap() {
+            "entry" => LootPoolEntryContainer::decode(value).is_ok(),
             "item" => crate::predicates::ItemPredicate::decode(value).is_ok(),
             "block" => crate::predicates::BlockPredicate::decode(value).is_ok(),
             "entity" => crate::predicates::EntityPredicate::decode(value).is_ok(),

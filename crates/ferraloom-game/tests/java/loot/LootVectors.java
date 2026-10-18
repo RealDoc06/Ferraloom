@@ -218,6 +218,7 @@ public final class LootVectors {
         }output.add("double_matches",doubleMatches);
         var registryCodecs=new JsonArray();
         for(String[] test:new String[][]{
+            {"entry","{\"type\":\"tag\",\"items\":[\"stone\",\"not_an_item\"]}"},{"entry","{\"type\":\"tag\",\"items\":[\"stone\",\"apple\"]}"},
             {"item","{\"items\":\"not_an_item\"}"},{"item","{\"items\":\"stone\"}"},{"item","{\"items\":[\"stone\",\"not_an_item\"]}"},
             {"block","{\"blocks\":\"not_a_block\"}"},{"block","{\"blocks\":\"stone\"}"},
             {"entity","{\"entity_type\":\"not_an_entity\"}"},{"entity","{\"entity_type\":\"pig\"}"},{"entity","{\"entity_type\":\"pig\",\"minecraft:entity_type\":\"sheep\"}"},
@@ -230,6 +231,7 @@ public final class LootVectors {
         }) {
             var definition=JsonParser.parseString(test[1]);var ops=lookup.createSerializationContext(JsonOps.INSTANCE);
             boolean accepted=switch(test[0]) {
+                case "entry" -> net.minecraft.world.level.storage.loot.entries.LootPoolEntries.CODEC.parse(ops,definition).isSuccess();
                 case "item" -> net.minecraft.advancements.predicates.ItemPredicate.CODEC.parse(ops,definition).isSuccess();
                 case "block" -> net.minecraft.advancements.predicates.BlockPredicate.CODEC.parse(ops,definition).isSuccess();
                 case "entity" -> net.minecraft.advancements.predicates.entity.EntityPredicate.CODEC.parse(ops,definition).isSuccess();
