@@ -189,6 +189,7 @@ pub struct MinecraftServer {
     enforces_secure_chat: bool,
     listener_task: Option<JoinHandle<Result<()>>>,
     pending_level_hooks: PendingLevelHooks,
+    player_loading_futures: Vec<ChunkPos>,
 }
 /// Subsystems with explicit pending effects retain visible counters. Their
 /// eventual ports consume the ordered effects at these same native slots.
@@ -352,6 +353,7 @@ impl MinecraftServer {
             enforces_secure_chat,
             listener_task: Some(listener_task),
             pending_level_hooks: PendingLevelHooks::default(),
+            player_loading_futures: Vec::new(),
         };
         let task = tokio::spawn(server.run());
         Ok(RunningServer {
@@ -1092,15 +1094,12 @@ impl MinecraftServer {
         let positions: Vec<_> = self.level.chunks.holder_positions().collect();
         for pos in positions {
             let holder = self.level.chunks.holders.get_mut(&pos.pack()).unwrap();
-            if update_holder_full_status(
+            update_holder_full_status(
                 holder,
                 &self.world.light_ready,
                 &self.world.generation_statuses,
                 &mut self.level.level,
-            )? && self.level.distance_manager.has_pending_player_loading(pos)
-            {
-                self.level.distance_manager.complete_player_loading(pos);
-            }
+            )?;
             if self.level.level.chunk(pos).is_some() {
                 let requested = holder.requested_full_status();
                 let ticking = requested >= FullChunkStatus::BlockTicking
@@ -1125,10 +1124,40 @@ impl MinecraftServer {
                     .map_err(game_error)?;
             }
         }
+        self.player_loading_futures.extend(
+            self.level
+                .distance_manager
+                .take_player_loading_waiters(&self.level.tickets),
+        );
+        let mut index = 0;
+        while index < self.player_loading_futures.len() {
+            let pos = self.player_loading_futures[index];
+            let future = ferraloom_game::level::generation::ChunkRangeFuture::for_full_status(
+                pos,
+                FullChunkStatus::EntityTicking,
+            );
+            if future.is_ready(|p| {
+                self.world
+                    .light_ready
+                    .contains(&p)
+                    .then_some(ChunkStatus::Full)
+            }) || self.world.failed_generation.contains(&pos)
+            {
+                self.level.distance_manager.complete_player_loading(pos);
+                self.player_loading_futures.remove(index);
+            } else {
+                index += 1;
+            }
+        }
         Ok(())
     }
     fn integrate_jobs(&mut self) -> Result<()> {
-        let completed = self.world.poll_terrain()?;
+        let completed = self.world.poll_terrain();
+        for pos in &self.world.failed_generation {
+            self.level.distance_manager.complete_player_loading(*pos);
+        }
+        self.world.failed_generation.clear();
+        let completed = completed?;
         self.level
             .level
             .record_worldgen_skips(std::mem::take(&mut self.world.generation_skips))

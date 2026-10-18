@@ -1,6 +1,6 @@
 //! World snapshots cross worker boundaries; only tick integration mutates Level.
 use crate::{
-    generation::{GenerationOutput, GenerationState},
+    generation::{GenerationCompletion, GenerationRequest, GenerationState},
     jobs::JobPool,
     properties::ServerProperties,
     registries::RegistrySet,
@@ -36,7 +36,11 @@ use std::{
     future::Future,
     path::Path,
     pin::Pin,
-    sync::{Arc, mpsc},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+        mpsc,
+    },
     task::{Context as TaskContext, Poll, Waker},
 };
 use tokio::sync::oneshot;
@@ -337,7 +341,7 @@ impl SpawnWorld for SpawnChunks {
         {
             let generated = self
                 .state
-                .generate(0, pos, ChunkStatus::Full, &self.registry, &self.io)
+                .generate(0, pos, ChunkStatus::Full, &self.registry, &self.io, None)
                 .map_err(|error| ferraloom_worldgen::Error(error.to_string()))?;
             for (neighbor, disk) in generated.neighbors {
                 self.io
@@ -473,17 +477,10 @@ pub struct World {
     initial_chunks: BTreeMap<i64, Terrain>,
     generation: Arc<JobPool>,
     generation_state: Option<GenerationState>,
-    generation_work: Option<
-        oneshot::Receiver<(
-            GenerationState,
-            Result<GenerationOutput>,
-            u64,
-            ChunkPos,
-            oneshot::Sender<Result<Terrain>>,
-        )>,
-    >,
-    generation_dispatcher:
-        ThrottlingChunkTaskDispatcher<(u64, ChunkPos, oneshot::Sender<Result<Terrain>>)>,
+    generation_work: Option<oneshot::Receiver<GenerationCompletion>>,
+    generation_dispatcher: ThrottlingChunkTaskDispatcher<GenerationRequest>,
+    active_generation: BTreeMap<ChunkPos, (u64, Arc<AtomicBool>)>,
+    pub failed_generation: Vec<ChunkPos>,
     proto_saves: VecDeque<storage::IoTask<()>>,
     saving: JobPool,
     pub pending: BTreeMap<u64, oneshot::Receiver<Result<Terrain>>>,
@@ -709,6 +706,8 @@ impl World {
             generation_state: Some(generation_state),
             generation_work: None,
             generation_dispatcher: ThrottlingChunkTaskDispatcher::new(4),
+            active_generation: BTreeMap::new(),
+            failed_generation: Vec::new(),
             proto_saves: VecDeque::new(),
             saving: JobPool::new("ferraloom-save", 1)?,
             pending: BTreeMap::new(),
@@ -839,14 +838,33 @@ impl World {
     pub fn update_generation_priority(&mut self, pos: ChunkPos, level: i32) {
         self.generation_dispatcher
             .on_level_change(pos, level.clamp(0, 45));
+        if level > 44 {
+            self.cancel_generation(pos);
+        }
+    }
+    pub fn cancel_generation(&mut self, pos: ChunkPos) {
+        if let Some((request, cancelled)) = self.active_generation.remove(&pos) {
+            cancelled.store(true, Ordering::Relaxed);
+            self.pending.remove(&request);
+            self.failed_generation.push(pos);
+            self.generation_dispatcher.release(pos, true, None);
+        }
     }
     pub fn request(&mut self, request: u64, pos: ChunkPos) {
         let (reply, answer) = oneshot::channel();
         self.pending.insert(request, answer);
+        let cancelled = Arc::new(AtomicBool::new(false));
+        self.active_generation
+            .insert(pos, (request, cancelled.clone()));
         self.generation_dispatcher.submit(
             pos,
             self.generation_dispatcher.queue_level(pos),
-            (request, pos, reply),
+            GenerationRequest {
+                id: request,
+                pos,
+                reply,
+                cancelled,
+            },
         );
     }
     fn start_generation(&mut self) -> Result<()> {
@@ -866,36 +884,50 @@ impl World {
                 }
             }
         }
-        let Some((request, pos, reply)) = next else {
+        let Some(request) = next else {
             return Ok(());
         };
         let mut state = self
             .generation_state
             .take()
             .context("generation state in flight")?;
-        self.initial_chunks.remove(&pos.pack());
+        self.initial_chunks.remove(&request.pos.pack());
         let registry = self.registry.clone();
         let io = self.io.clone();
         self.generation_work = Some(self.generation.submit(move || {
-            let result = state.generate(request, pos, ChunkStatus::Full, &registry, &io);
-            (state, result, request, pos, reply)
+            let result = state.generate(
+                request.id,
+                request.pos,
+                ChunkStatus::Full,
+                &registry,
+                &io,
+                Some(&request.cancelled),
+            );
+            GenerationCompletion {
+                state,
+                result,
+                request,
+            }
         }));
         Ok(())
     }
-    fn complete_generation(
-        &mut self,
-        output: (
-            GenerationState,
-            Result<GenerationOutput>,
-            u64,
-            ChunkPos,
-            oneshot::Sender<Result<Terrain>>,
-        ),
-    ) -> Result<()> {
-        let (state, result, _request, pos, reply) = output;
+    fn complete_generation(&mut self, output: GenerationCompletion) -> Result<()> {
+        let GenerationCompletion {
+            state,
+            result,
+            request,
+        } = output;
+        let pos = request.pos;
         self.generation_state = Some(state);
         self.generation_dispatcher.release(pos, false, None);
         self.generation_dispatcher.complete_batch();
+        if request.cancelled.load(Ordering::Relaxed) {
+            return Ok(());
+        }
+        self.active_generation.remove(&pos);
+        if result.is_err() {
+            self.failed_generation.push(pos);
+        }
         let result = result.and_then(|output| {
             self.generation_skips.extend(output.skips);
             self.generation_statuses.extend(output.statuses);
@@ -905,7 +937,7 @@ impl World {
             }
             Ok(output.terrain)
         });
-        let _ = reply.send(result);
+        let _ = request.reply.send(result);
         Ok(())
     }
     /// Pause dispatch while save captures canonical data. No worker owns live

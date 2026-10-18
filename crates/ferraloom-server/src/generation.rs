@@ -16,9 +16,23 @@ use ferraloom_worldgen::structure::check::StructureCheck;
 use std::{
     borrow::Cow,
     collections::{BTreeMap, BTreeSet},
-    sync::Arc,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
 };
 
+pub(crate) struct GenerationRequest {
+    pub id: u64,
+    pub pos: ChunkPos,
+    pub reply: tokio::sync::oneshot::Sender<Result<Terrain>>,
+    pub cancelled: Arc<AtomicBool>,
+}
+pub(crate) struct GenerationCompletion {
+    pub state: GenerationState,
+    pub result: Result<GenerationOutput>,
+    pub request: GenerationRequest,
+}
 pub struct GenerationOutput {
     pub terrain: Terrain,
     pub neighbors: Vec<(ChunkPos, SerializableChunkData)>,
@@ -63,11 +77,15 @@ impl GenerationState {
         target: ChunkStatus,
         registry: &RegistryAdapter,
         io: &IoWorker,
+        cancelled: Option<&AtomicBool>,
     ) -> Result<GenerationOutput> {
         let mut task = ChunkGenerationTask::new(request, pos, target);
         let mut touched = BTreeSet::new();
         let mut skips = Vec::new();
         loop {
+            if cancelled.is_some_and(|token| token.load(Ordering::Relaxed)) {
+                task.cancel();
+            }
             let Some(layer) = task
                 .next_layer(|p| self.holders.get(&p.pack()).map(|h| h.persisted))
                 .map_err(|e| anyhow::anyhow!("{e:?}"))?

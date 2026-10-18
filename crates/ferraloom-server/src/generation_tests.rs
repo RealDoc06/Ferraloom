@@ -143,7 +143,7 @@ fn twenty_full_feature_chunks_match_vanilla_blocks_and_structure_nbt() {
                 expected["chunk"][1].as_i64().unwrap() as i32,
             );
             let actual = state
-                .generate(0, pos, ChunkStatus::Features, &registry, &io)
+                .generate(0, pos, ChunkStatus::Features, &registry, &io, None)
                 .unwrap();
             let min_y = expected["min_y"].as_i64().unwrap() as i32;
             for (index, block) in expected["blocks"].as_array().unwrap().iter().enumerate() {
