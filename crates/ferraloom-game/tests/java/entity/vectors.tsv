@@ -895,6 +895,14 @@ entity-equipment-order	3	false	head,chest,legs,feet
 entity-equipment-order	4	false	head,chest,legs,feet,body
 entity-equipment-order	5	false	head,chest,legs,feet,body,mainhand
 entity-equipment-order	6	false	head,chest,legs,feet,body,mainhand,offhand
+entity-leather-boots-location	0	7,63,9	true
+entity-leather-boots-location	1	7,63,9	false
+entity-leather-boots-location	2	7,63,9	false
+entity-leather-boots-location	3	7,63,9	false
+entity-leather-boots-location	4	7,63,9	false
+entity-leather-boots-location	5	7,63,9	false
+entity-leather-boots-location	6	7,63,9	false
+entity-leather-boots-location	7	8,63,8	true
 entity-position-fact	player	-1	4050000000000000	true	8,63,8	8,63,8	8,63,8	8,0,8	false	false
 entity-position-fact	player	-1	4050333333333333	false	8,64,8	8,64,8	8,64,8	8,0,8	false	false
 entity-position-fact	player	1	4050000000000000	true	7,63,9	7,63,9	7,63,9	7,63,9	true	true
