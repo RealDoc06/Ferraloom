@@ -22,6 +22,7 @@ mod fire_powder;
 mod fire_powder_tests;
 mod orientation;
 mod scaffolding;
+pub use scaffolding::scaffolding_distance;
 mod slab;
 mod speleothem;
 #[cfg(test)]

@@ -23,12 +23,15 @@ pub(super) fn supports(block: Block, method: BlockMethod) -> bool {
         )
 }
 /// Port of ScaffoldingBlock#getDistance, including its distance==1 early exit.
-fn distance(pos: BlockPos, level: &LevelReaderRef<'_, '_>) -> Result<u8, LevelError> {
+pub fn scaffolding_distance(
+    level: &LevelReaderRef<'_, '_>,
+    pos: BlockPos,
+) -> Result<i32, LevelError> {
     let at = pos.below(1);
     let below = level.get_block_state(at)?;
     let mut distance = 7;
     if below.block() == Block::SCAFFOLDING {
-        distance = below.get(p::DISTANCE).unwrap();
+        distance = i32::from(below.get(p::DISTANCE).unwrap());
     } else if level.is_face_sturdy(below, at, Direction::Up)? {
         return Ok(0);
     }
@@ -40,7 +43,7 @@ fn distance(pos: BlockPos, level: &LevelReaderRef<'_, '_>) -> Result<u8, LevelEr
     ] {
         let neighbor = level.get_block_state(pos.relative(side, 1))?;
         if neighbor.block() == Block::SCAFFOLDING {
-            distance = distance.min(neighbor.get(p::DISTANCE).unwrap() + 1);
+            distance = distance.min(i32::from(neighbor.get(p::DISTANCE).unwrap()) + 1);
             if distance == 1 {
                 break;
             }
@@ -59,7 +62,7 @@ impl BlockBehavior for Scaffolding {
     ) -> Result<Option<BlockState>, LevelError> {
         let reader = level.as_reader();
         let pos = context.clicked_pos();
-        let distance = distance(pos, &reader)?;
+        let distance = scaffolding_distance(&reader, pos)?;
         let water = reader.get_fluid_state(pos)?.fluid_type == Fluid::WATER;
         let bottom = distance > 0 && reader.get_block_state(pos.below(1))?.block() != block;
         Ok(Some(
@@ -67,7 +70,10 @@ impl BlockBehavior for Scaffolding {
                 .default_state()
                 .with(p::WATERLOGGED, water)
                 .unwrap()
-                .with(p::DISTANCE, distance)
+                .with(
+                    p::DISTANCE,
+                    u8::try_from(distance).expect("scaffolding distance 0..=7"),
+                )
                 .unwrap()
                 .with(p::BOTTOM, bottom)
                 .unwrap(),
@@ -87,7 +93,7 @@ impl BlockBehavior for Scaffolding {
         pos: BlockPos,
         level: &LevelReaderRef<'_, '_>,
     ) -> Result<bool, LevelError> {
-        Ok(distance(pos, level)? < 7)
+        Ok(scaffolding_distance(level, pos)? < 7)
     }
     /// Port of ScaffoldingBlock#updateShape; both concrete adapters are server
     /// access, and schedule the native one-tick block update after the water.

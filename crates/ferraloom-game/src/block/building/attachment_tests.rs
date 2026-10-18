@@ -329,6 +329,11 @@ fn scaffold_all_below_and_four_neighbor_distance_combinations_match_native() {
             .unwrap()
             .unwrap();
         assert_eq!(actual.id(), f[3].parse::<u16>().unwrap(), "{line}");
+        assert_eq!(
+            super::scaffolding_distance(&LevelReaderRef::Server(&level), POS).unwrap(),
+            i32::from(state(f[3]).get(p::DISTANCE).unwrap()),
+            "distance {line}"
+        );
         if !water {
             assert_eq!(
                 level
