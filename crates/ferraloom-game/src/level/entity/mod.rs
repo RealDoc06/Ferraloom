@@ -146,18 +146,10 @@ impl EntitySectionStorage {
 }
 
 /// Port of ServerLevel's server-wide counter, or a barrier-assigned regional block.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct EntityIdAllocator {
     next: i32,
     remaining: Option<u32>,
-}
-impl Default for EntityIdAllocator {
-    fn default() -> Self {
-        Self {
-            next: 0,
-            remaining: None,
-        }
-    }
 }
 impl EntityIdAllocator {
     pub fn regional(first: i32, count: u32) -> Self {
@@ -741,7 +733,7 @@ mod tests {
         level
             .add_entity(
                 EntityRef(2),
-                EntityState::Cow(crate::entity::animal::Cow::default()),
+                EntityState::Cow(Box::new(crate::entity::animal::Cow::default())),
             )
             .unwrap();
         assert_eq!(
@@ -762,7 +754,7 @@ mod removal_tests {
         let mut level = Level::new(Region::new(&BEHAVIORS));
         let id = EntityRef(1);
         level
-            .add_entity(id, EntityState::Cow(Cow::default()))
+            .add_entity(id, EntityState::Cow(Box::new(Cow::default())))
             .unwrap();
         let base = level.entity::<EntityData>(id).unwrap();
         let (uuid, network, bounds) = (base.uuid, base.network_id, base.bounding_box);
@@ -798,7 +790,7 @@ mod identity_tests {
         assert_eq!(level.next_entity_ref(), EntityRef(1));
         let existing = EntityRef(40);
         level
-            .add_entity(existing, EntityState::Cow(Cow::default()))
+            .add_entity(existing, EntityState::Cow(Box::new(Cow::default())))
             .unwrap();
         level.remove_entity(existing).unwrap();
         level.finish_entity_management();
@@ -825,7 +817,7 @@ mod visibility_tests {
         let pos = ChunkPos::new(0, 0);
         for n in 1..=2 {
             level
-                .add_entity(EntityRef(n), EntityState::Cow(Cow::default()))
+                .add_entity(EntityRef(n), EntityState::Cow(Box::new(Cow::default())))
                 .unwrap();
         }
         let player = EntityRef(3);
@@ -847,7 +839,7 @@ mod visibility_tests {
         let mut duplicate = Cow::default();
         duplicate.as_living_mut().parent.uuid = uuid;
         assert_eq!(
-            level.add_entity(EntityRef(4), EntityState::Cow(duplicate)),
+            level.add_entity(EntityRef(4), EntityState::Cow(Box::new(duplicate))),
             Err(LevelError::DuplicateEntity(EntityRef(4)))
         );
         level.take_entity_management_events();
@@ -895,7 +887,7 @@ mod visibility_tests {
             .unwrap();
         let id = EntityRef(1);
         level
-            .add_entity(id, EntityState::Cow(Cow::default()))
+            .add_entity(id, EntityState::Cow(Box::new(Cow::default())))
             .unwrap();
         level
             .set_entity_pos(id, Vec3::new(16.5, 64.0, 0.5))
@@ -913,7 +905,7 @@ mod visibility_tests {
             .set_pos(Vec3::new(16.5, 64.0, 0.5));
         let new = EntityRef(2);
         level
-            .add_entity(new, EntityState::Cow(replacement))
+            .add_entity(new, EntityState::Cow(Box::new(replacement)))
             .unwrap();
         level.finish_entity_management();
         assert_eq!(level.entity_by_uuid(uuid), Some(new));

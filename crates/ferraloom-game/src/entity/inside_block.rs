@@ -371,40 +371,6 @@ pub fn collect_movements(
     Ok(base.final_movements_this_tick.clone())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn effects_coalesce_per_step_and_keep_before_after_declaration_order() {
-        let mut c = StepBasedCollector::default();
-        c.advance_step(0);
-        c.apply(InsideBlockEffectType::Extinguish);
-        c.run_after(
-            InsideBlockEffectType::LavaIgnite,
-            InsideBlockAction::LavaHurt,
-        );
-        c.apply(InsideBlockEffectType::LavaIgnite);
-        c.apply(InsideBlockEffectType::LavaIgnite);
-        c.run_before(
-            InsideBlockEffectType::LavaIgnite,
-            InsideBlockAction::InFireHurt(1.0),
-        );
-        c.advance_step(1);
-        c.apply(InsideBlockEffectType::Freeze);
-        assert_eq!(
-            c.drain(),
-            vec![
-                InsideBlockAction::InFireHurt(1.0),
-                InsideBlockAction::Effect(InsideBlockEffectType::LavaIgnite),
-                InsideBlockAction::LavaHurt,
-                InsideBlockAction::Effect(InsideBlockEffectType::Extinguish),
-                InsideBlockAction::Effect(InsideBlockEffectType::Freeze)
-            ]
-        );
-        assert!(c.drain().is_empty());
-    }
-}
-
 /// Port of Entity#applyEffectsFromBlocks(List). Rain remains a required world
 /// query; the Level implementation short-circuits dry weather before precipitation.
 pub fn apply_effects<E: Entity + ?Sized>(
@@ -449,4 +415,38 @@ pub fn apply_effects<E: Entity + ?Sized>(
             -behavior.fire_immune_ticks();
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn effects_coalesce_per_step_and_keep_before_after_declaration_order() {
+        let mut c = StepBasedCollector::default();
+        c.advance_step(0);
+        c.apply(InsideBlockEffectType::Extinguish);
+        c.run_after(
+            InsideBlockEffectType::LavaIgnite,
+            InsideBlockAction::LavaHurt,
+        );
+        c.apply(InsideBlockEffectType::LavaIgnite);
+        c.apply(InsideBlockEffectType::LavaIgnite);
+        c.run_before(
+            InsideBlockEffectType::LavaIgnite,
+            InsideBlockAction::InFireHurt(1.0),
+        );
+        c.advance_step(1);
+        c.apply(InsideBlockEffectType::Freeze);
+        assert_eq!(
+            c.drain(),
+            vec![
+                InsideBlockAction::InFireHurt(1.0),
+                InsideBlockAction::Effect(InsideBlockEffectType::LavaIgnite),
+                InsideBlockAction::LavaHurt,
+                InsideBlockAction::Effect(InsideBlockEffectType::Extinguish),
+                InsideBlockAction::Effect(InsideBlockEffectType::Freeze)
+            ]
+        );
+        assert!(c.drain().is_empty());
+    }
 }

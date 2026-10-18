@@ -169,7 +169,7 @@ fn vanilla_entity_move_positions_flags_fall_distance_and_velocity_bits() {
         } else {
             let mut cow = animal::Cow::default();
             cow.as_living_mut().parent.set_pos(position);
-            EntityState::Cow(cow)
+            EntityState::Cow(Box::new(cow))
         };
         level.add_entity(id, state).unwrap();
         movement::set_on_ground(id, f[6] == "true", None, &mut level).unwrap();
@@ -370,7 +370,9 @@ fn vanilla_fluid_interaction_heights_eyes_and_current_bits() {
         cow.as_living_mut().parent.set_pos(vector(f[3]));
         cow.as_living_mut().parent.fall_distance = 12.5;
         let id = EntityRef(1);
-        level.add_entity(id, EntityState::Cow(cow)).unwrap();
+        level
+            .add_entity(id, EntityState::Cow(Box::new(cow)))
+            .unwrap();
         let any = fluid::update_fluid_interaction(&animal::CowBehavior, id, &mut level).unwrap();
         let base = level.entity::<EntityData>(id).unwrap();
         assert_eq!(any, f[4] == "true", "{row}");
@@ -583,7 +585,7 @@ fn pick_result_preserves_null_and_cow_spawn_egg() {
     let mut level = level(false);
     let cow = EntityRef(1);
     level
-        .add_entity(cow, EntityState::Cow(animal::Cow::default()))
+        .add_entity(cow, EntityState::Cow(Box::new(animal::Cow::default())))
         .unwrap();
     let result = level
         .entity_behavior(cow)

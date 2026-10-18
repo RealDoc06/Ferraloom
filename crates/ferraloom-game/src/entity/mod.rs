@@ -95,7 +95,7 @@ pub struct AgeableMob {
 /// Concrete stored subclasses. Parent accessors never copy canonical state.
 #[derive(Debug)]
 pub enum EntityState {
-    Cow(animal::Cow),
+    Cow(Box<animal::Cow>),
     Player(Box<player::ServerPlayer>),
     PrimedTnt(Box<item::PrimedTnt>),
     Item(Box<item::ItemEntity>),
