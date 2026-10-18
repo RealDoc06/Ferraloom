@@ -131,6 +131,8 @@ public final class EntityVectors {
         CrammingVectors.run(new EntityFixture(r));
         DimensionVectors.run(new EntityFixture(r));
         PlayerTrackingVectors.run(new EntityFixture(r));
+        PlayerTickVectors.run(new EntityFixture(r));
+        PlayerSyncVectors.run(new EntityFixture(r));
         WorldgenVectors.run(new EntityFixture(r));
         CollisionVectors.run();
         SoundVectors.run(new EntityFixture(r));

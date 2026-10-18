@@ -1727,6 +1727,26 @@ player-tracking	3	-
 player-tracking	4	S:attributes:minecraft:max_health=4041800000000000[minecraft:bonus=4008000000000000:0]|T:head:64
 player-tracking	5	T:motion:3fc0000000000000,0,0|S:data:0:-128
 player-tracking	6	-
+player-loaded-neighbors	c040000000000000	true
+player-loaded-neighbors	c03f000000000000	true
+player-loaded-neighbors	c03eb33333333333	true
+player-loaded-neighbors	c03eb32ca57a786c	false
+player-loaded-neighbors	c03e000000000000	false
+player-loaded-neighbors	0	false
+player-loaded-neighbors	4046800000000000	false
+player-loaded-neighbors	4046d99652bd3c36	false
+player-loaded-neighbors	4046d9999999999a	true
+player-loaded-neighbors	4047000000000000	true
+player-loaded-neighbors	404759999999999a	true
+player-loaded-neighbors	4047800000000000	true
+player-loaded-neighbors	4048000000000000	true
+player-connection-frame	false	9:4021000000000000,4050000000000000,4021000000000000	4021000000000000,4050000000000000,4021000000000000	4021000000000000,4050000000000000,4021000000000000	428e0000,c2b40000,428e0000,c2b40000	3fd0000000000000,bfe0000000000000,3fc0000000000000	10
+player-connection-frame	true	9:4021000000000000,4050000000000000,4021000000000000	417c9c3800000000,4054000000000000,c17c9c3800000000	417c9c3800000000,4054000000000000,c17c9c3800000000	c2200000,42b40000,c2200000,42b40000	3fd0000000000000,bfe0000000000000,3fc0000000000000	10
+player-sync-order	0	health:418a0000:20:40a00000;score:health:20;score:food:20;score:air:300;score:armor:2;score:xp:123;score:level:7;xp:7:123:3e800000	score:health:20;score:food:20;score:air:300;score:armor:2;score:xp:123;score:level:7
+player-sync-order	1	-	-
+player-sync-order	2	-	-
+player-sync-order	3	score:xp:124;xp:7:124:3f000000	score:xp:124
+player-sync-order	4	health:41400000:7:0;score:health:12;score:food:7;score:air:8;score:armor:5;score:xp:24;score:level:8;xp:8:24:3f000000	score:health:12;score:food:7;score:air:8;score:armor:5;score:xp:24;score:level:8
 entity-visibility	TRACKED	TrackingStart:1,TrackingStart:2	3,1,2
 entity-visibility	TICKING	TickingStart:1,TickingStart:2	3,1,2
 entity-visibility	TRACKED	TickingEnd:1,TickingEnd:2	3,1,2

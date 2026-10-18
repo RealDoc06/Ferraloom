@@ -2921,12 +2921,40 @@ impl MinecraftServer {
                     self.level.tickets.add_player_spawn(center, self.tick);
                 }
                 Phase::Play(entity) => {
-                    let player = self
-                        .level
-                        .level
-                        .entity_mut::<ServerPlayer>(entity)
+                    if !self.was_paused {
+                        let player = self
+                            .level
+                            .level
+                            .entity_mut::<ServerPlayer>(entity)
+                            .map_err(game_error)?;
+                        player.reset_position();
+                        player.old_position = player.position;
+                        ferraloom_game::entity::player::player_do_tick_with_tick_rate(
+                            entity,
+                            &mut self.level.level,
+                            &self.tick_rate_manager,
+                        )
                         .map_err(game_error)?;
-                    player.do_tick();
+                        let player = self
+                            .level
+                            .level
+                            .entity::<ServerPlayer>(entity)
+                            .map_err(game_error)?;
+                        let (position, yaw, pitch) = (player.first_good, player.yaw, player.pitch);
+                        ferraloom_game::entity::teleport::abs_snap_to(
+                            entity,
+                            position,
+                            yaw,
+                            pitch,
+                            &mut self.level.level,
+                        )
+                        .map_err(game_error)?;
+                        self.level
+                            .level
+                            .entity_mut::<ServerPlayer>(entity)
+                            .map_err(game_error)?
+                            .finish_connection_tick();
+                    }
                     let idle = self.idle_timeout;
                     if idle > 0
                         && now.duration_since(c.last_action) > Duration::from_secs(idle as u64 * 60)
@@ -2947,6 +2975,8 @@ impl MinecraftServer {
                 cfg::FinishConfiguration {},
             ));
         }
+        self.broadcast_container_changes()?;
+        self.apply_level_effects()?;
         Ok(())
     }
     fn keepalive_reply(&mut self, connection: ConnectionId, key: i64) -> Result<()> {

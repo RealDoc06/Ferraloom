@@ -11,6 +11,8 @@ mod interaction;
 pub(crate) mod item_tick;
 pub mod shoulders;
 mod spawn;
+mod tick;
+pub use tick::{award_stat, player_do_tick_with_tick_rate, reset_stat};
 pub mod travel;
 pub use experience::{give_experience_levels, give_experience_points, send_experience_update};
 pub use interaction::swing_and_reset_attack_strength;
@@ -69,6 +71,15 @@ pub struct ServerPlayer {
     pub total_experience: i32,
     last_level_up_time: i32,
     last_sent_experience: i32,
+    last_sent_health: f32,
+    last_sent_food: i32,
+    last_food_saturation_zero: bool,
+    last_recorded_health_and_absorption: f32,
+    last_recorded_food_level: i32,
+    last_recorded_air_level: i32,
+    last_recorded_armor: i32,
+    last_recorded_experience: i32,
+    last_recorded_level: i32,
     pub name: String,
     pub known_movement: Vec3,
     pub game_mode: GameType,
@@ -229,6 +240,15 @@ impl ServerPlayer {
             total_experience: 0,
             last_level_up_time: 0,
             last_sent_experience: -99_999_999,
+            last_sent_health: -1.0e8,
+            last_sent_food: -99_999_999,
+            last_food_saturation_zero: true,
+            last_recorded_health_and_absorption: f32::from_bits(1),
+            last_recorded_food_level: i32::MIN,
+            last_recorded_air_level: i32::MIN,
+            last_recorded_armor: i32::MIN,
+            last_recorded_experience: i32::MIN,
+            last_recorded_level: i32::MIN,
             known_movement: Vec3::ZERO,
             game_mode,
             flying: game_mode == GameType::Spectator,
@@ -264,11 +284,14 @@ impl ServerPlayer {
             mth::floor(self.position.z),
         ))
     }
-    /// Port of ServerGamePacketListenerImpl#resetPosition at connection tick.
-    pub fn do_tick(&mut self) {
-        self.connection_ticks += 1;
+    /// Port of ServerGamePacketListenerImpl#resetPosition, before player doTick.
+    pub fn reset_position(&mut self) {
         self.first_good = self.position;
         self.last_good = self.position;
+    }
+    /// Port of tickPlayer's listener bookkeeping after doTick and absSnapTo.
+    pub fn finish_connection_tick(&mut self) {
+        self.connection_ticks += 1;
         self.received_moves = 0;
     }
     pub fn load(&mut self, tag: CompoundTag) {
@@ -1047,29 +1070,19 @@ impl crate::entity::Entity for PlayerBehavior {
         crate::entity::living::ignite_for_ticks(entity, ticks, level)
     }
     fn tick(&self, entity: crate::entity::EntityRef, level: &mut Level) -> Result<(), LevelError> {
-        crate::inventory::tick_container_menu(entity, level)?;
-        let (spectator, passenger) = {
-            let player = level.entity::<ServerPlayer>(entity)?;
-            (
-                player.game_mode == GameType::Spectator,
-                player.vehicle.get().is_some(),
-            )
-        };
-        level
-            .entity_mut::<crate::entity::EntityData>(entity)?
-            .no_physics = spectator;
-        if spectator || passenger {
-            crate::entity::movement::set_on_ground(entity, false, None, level)?;
+        let player = level.entity_mut::<ServerPlayer>(entity)?;
+        if player.damage_cooldown_time > 0 {
+            player.damage_cooldown_time -= 1;
         }
-        crate::entity::base_tick(self, entity, level)?;
-        // Known slice-1 gap before Player#aiStep's touch point: LivingEntity
-        // server travel, block effects, freezing/damage and pushing are unported.
-        // Slice 2 ports these predecessors; live pickup parity remains pending.
-        contact::touch_entities(entity, level)?;
-        cooldowns::tick(entity, level)?;
+        crate::inventory::tick_container_menu(entity, level)?;
+        // Pending camera following precedes TICK.
+        crate::advancements::criteria::tick(level, entity)?;
+        // Pending levitation/falling/vehicle-lava tracking precedes attributes.
         level
             .entity_mut::<ServerPlayer>(entity)?
             .update_interaction_range_attributes();
+        crate::advancements::flush_dirty(level, entity)?;
+        // Pending native post-effects synchronization follows flushDirty.
         Ok(())
     }
 
