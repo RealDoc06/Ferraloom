@@ -53,7 +53,7 @@ impl Level {
         self.block_behavior(block)
             .map_err(|_| LevelError::UnsupportedBlockMethod(block, method))
     }
-    pub(super) fn emit(&mut self, effect: LevelEffect) {
+    pub(crate) fn emit(&mut self, effect: LevelEffect) {
         self.region_mut().effects.push(effect);
     }
     pub fn take_effects(&mut self) -> Vec<LevelEffect> {
