@@ -3,6 +3,8 @@
 mod command_level;
 #[path = "command_runtime.rs"]
 mod command_runtime;
+#[path = "generation_completion.rs"]
+pub(crate) mod generation_completion;
 use crate::{
     access::AccessLists,
     assets,
@@ -1308,109 +1310,14 @@ impl MinecraftServer {
         }
         self.world.failed_generation.clear();
         let completed = completed?;
-        self.level
-            .level
-            .record_worldgen_skips(std::mem::take(&mut self.world.generation_skips))
-            .map_err(game_error)?;
-        for (&key, &status) in &self.world.generation_statuses {
-            let pos = ChunkPos::unpack(key);
-            let attached = self.level.level.chunk(pos).is_some();
-            self.level.chunks.ensure_holder(pos).status =
-                if status == ChunkStatus::Full && !attached {
-                    ChunkStatus::Spawn
-                } else {
-                    status
-                };
-        }
-        for (request, mut terrain) in completed {
-            // A released holder can be recreated at the same position. Neither
-            // entity post-load nor FULL attachment may target its newer request.
-            if self
-                .level
-                .chunks
-                .holders
-                .get(&terrain.pos.pack())
-                .is_none_or(|holder| holder.request_id != request || !holder.generation_requested)
-            {
-                continue;
-            }
-            let entities = terrain.disk.entities.take().unwrap_or_default();
-            if let Err(error) = self
-                .level
-                .level
-                .add_worldgen_chunk_entities(terrain.pos, entities)
-            {
-                terrain.disk.entities = Some(error.entities);
-                self.world.saved.insert(terrain.pos.pack(), terrain.disk);
-                return Err(error.source.into());
-            }
-            let pos = terrain.pos;
-            if pos == ChunkPos::containing(self.world.spawn)
-                && !self.world.level_data.data.contains_key("spawn")
-            {
-                self.world.spawn.y = terrain.surface
-                    [((self.world.spawn.z & 15) * 16 + (self.world.spawn.x & 15)) as usize];
-            }
-            let chunk = self.world.integrate(request, terrain)?;
-            self.level
-                .level
-                .add_chunk(chunk)
-                .map_err(|e| anyhow::anyhow!("{e:?}"))?;
-            self.level
-                .level
-                .prime_chunk_heightmaps(pos)
-                .map_err(game_error)?;
-            self.level
-                .chunks
-                .holders
-                .get_mut(&pos.pack())
-                .unwrap()
-                .status = ChunkStatus::Full;
+        generation_completion::integrate_metadata(&mut self.level, &mut self.world)?;
+        for (request, terrain) in completed {
+            self.integrate_command_terrain(request, terrain)?;
         }
         while let Ok(light) = self.world.light_rx.try_recv() {
-            if let Some((request, pos)) = light.initialized {
-                let holder = self
-                    .level
-                    .chunks
-                    .holders
-                    .get_mut(&pos.pack())
-                    .context("unknown light job")?;
-                ensure!(holder.request_id == request, "stale light completion");
-                holder.status = ChunkStatus::Full;
-                self.world.light_ready.insert(pos);
-            }
-            for (key, data) in light.updates {
-                self.level
-                    .level
-                    .set_light_snapshot(ChunkPos::unpack(key), data.snapshot());
-                self.world.lights.insert(key, data);
-            }
-            for (key, mask) in light.dirty {
-                self.world.light_chunks_to_broadcast.insert(key);
-                let dirty = self
-                    .world
-                    .pending_light_updates
-                    .entry(ChunkPos::unpack(key))
-                    .or_default();
-                dirty.sky |= mask.sky;
-                dirty.block |= mask.block;
-            }
+            self.integrate_command_light(light)?;
         }
-        let positions = self.level.chunks.holder_positions().collect::<Vec<_>>();
-        for pos in positions {
-            if self.level.chunks.holders[&pos.pack()].requested_full_status()
-                >= FullChunkStatus::BlockTicking
-                && !self.world.ready.contains(&pos)
-                && self.world.light_ready.contains(&pos)
-                && full_chunk_range_ready(&self.world.light_ready, pos, 1)
-            {
-                self.level
-                    .level
-                    .post_process_generation(pos)
-                    .map_err(game_error)?;
-                self.world.ready.insert(pos);
-            }
-        }
+        generation_completion::finish_promotions(&mut self.level, &mut self.world)?;
         for (pos, request_id, result) in self.world.poll_unloads()? {
             if let Err(error) = result {
                 self.level

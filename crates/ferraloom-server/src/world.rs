@@ -2323,6 +2323,8 @@ mod generation_order_tests {
 
     #[tokio::test]
     async fn priority_completion_keeps_statuses_skips_and_chunks_in_request_order() {
+        use ferraloom_game::{Behaviors, level::Region, level::server_level::ServerLevel};
+        static BEHAVIORS: Behaviors = Behaviors::EMPTY;
         let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").expect("builder vanilla jar");
         let resources = ResourceManager::new(vec![
             ferraloom_data::datapack::Pack::vanilla_jar(Path::new(&jar)).unwrap(),
@@ -2339,6 +2341,17 @@ mod generation_order_tests {
             ferraloom_game::block::UnportedBehavior::Strict,
         )
         .unwrap();
+        let mut level = ServerLevel::new(
+            Region::new(&BEHAVIORS),
+            "minecraft:overworld",
+            world.level_context(&resources).unwrap(),
+        );
+        level
+            .level
+            .set_block_tags(world.generator.data().block_tags.clone());
+        level
+            .level
+            .set_unported_behavior(ferraloom_game::block::UnportedBehavior::Warn);
         let empty_sections = world
             .generation_state
             .as_ref()
@@ -2383,6 +2396,17 @@ mod generation_order_tests {
         };
         let first = ChunkPos::new(0, 0);
         let second = ChunkPos::new(1, 0);
+        // The forceload command publishes the ticket before awaiting generation.
+        assert!(level.set_chunk_forced(second, true));
+        for change in level.distance_manager.run_all_updates(&mut level.tickets) {
+            level.chunks.ensure_holder(change.pos).ticket_level = change.level;
+        }
+        assert_eq!(level.chunks.request(first), Some(0));
+        assert_eq!(level.chunks.request(second), Some(1));
+        assert!(
+            level.chunks.holders[&second.pack()].requested_full_status()
+                >= ferraloom_game::level::distance_manager::FullChunkStatus::BlockTicking
+        );
         let (first_reply, first_result) = oneshot::channel();
         let (second_reply, second_result) = oneshot::channel();
         world.pending.insert(0, (first, first_result));
@@ -2416,6 +2440,8 @@ mod generation_order_tests {
         assert!(world.generation_skips.is_empty());
         assert!(world.pending_initial_spawns.is_empty());
         assert!(world.structure_snapshots.is_empty());
+        assert_eq!(level.level.unported_behavior_stats().skipped_calls, 0);
+        assert!(level.level.chunk(second).is_none());
         let mut first_output = output(first, "first");
         first_output.terrain.revision = GenerationRevision(2);
         first_output
@@ -2452,9 +2478,16 @@ mod generation_order_tests {
             world.generation_statuses[&proto.pack()],
             ChunkStatus::Features
         );
+        crate::server::generation_completion::integrate_metadata(&mut level, &mut world).unwrap();
         for (request, terrain) in chunks {
-            assert!(world.integrate(request, terrain).unwrap().is_unsaved());
+            crate::server::generation_completion::integrate_terrain(
+                &mut level, &mut world, request, terrain,
+            )
+            .unwrap();
         }
+        assert_eq!(level.level.unported_behavior_stats().skipped_calls, 2);
+        assert!(level.level.chunk(second).unwrap().is_unsaved());
+        assert!(!world.ready.contains(&second));
         assert_eq!(
             world.saved[&second.pack()].structures,
             Some(structure_data(true))
