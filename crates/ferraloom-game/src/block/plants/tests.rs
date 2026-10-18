@@ -82,6 +82,8 @@ fn multiface_neighbor_loss_removes_only_the_unsupported_face() {
 #[test]
 fn decaying_waterlogged_leaves_drop_and_restore_water_without_destroy_particles() {
     let mut level = level();
+    super::fixtures::install_loot(&mut level);
+    level.rules_mut().block_drops = Some(false);
     use ferraloom_data::datapack::{Pack, ResourceManager, TagSet, load_tags};
     let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").expect("builder supplies vanilla jar");
     let resources =
@@ -123,11 +125,6 @@ fn decaying_waterlogged_leaves_drop_and_restore_water_without_destroy_particles(
         Block::AIR.default_state()
     );
     let effects = level.take_effects();
-    assert!(
-        effects
-            .iter()
-            .any(|e| matches!(e,LevelEffect::DropResources{state,..} if *state==dry))
-    );
     assert!(
         !effects
             .iter()

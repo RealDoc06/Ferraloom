@@ -7,7 +7,7 @@ use crate::{
         synched_data,
     },
     level::Region,
-    scoreboard::{Scoreboard, TeamColor},
+    scoreboard::{Scoreboard, ServerScoreboard, TeamColor},
 };
 use ferraloom_data::Item;
 use ferraloom_protocol::{
@@ -15,7 +15,6 @@ use ferraloom_protocol::{
     component::{DataComponent, DataComponentPatch, ItemStack},
 };
 use ferraloom_util::{Uuid, Vec3};
-use std::sync::Arc;
 
 fn action_name() -> Component {
     let mut name = Component::literal("named");
@@ -74,6 +73,11 @@ fn virtual_names_team_formatting_and_hover_decorations_match_native_components()
         }
         let entity = EntityRef(1);
         level.add_entity(entity, state).unwrap();
+        assert_eq!(
+            level.entity_display_name(entity),
+            Err(LevelError::MissingServerShared)
+        );
+        level.install_shared(Box::default());
         let before = level.entity_display_name(entity).unwrap();
         if fields[2] == "true" {
             let mut scoreboard = Scoreboard::default();
@@ -97,9 +101,9 @@ fn virtual_names_team_formatting_and_hover_decorations_match_native_components()
             assert_eq!(
                 level.entity_display_name(entity).unwrap(),
                 before,
-                "old level snapshot"
+                "explicit reader does not replace the canonical scoreboard"
             );
-            level.set_scoreboard(Arc::new(scoreboard));
+            level.shared_mut().unwrap().scoreboard = ServerScoreboard::new(scoreboard);
         }
         assert_eq!(level.entity_scoreboard_name(entity).unwrap(), fields[3]);
         assert_eq!(

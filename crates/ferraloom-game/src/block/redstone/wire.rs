@@ -435,7 +435,7 @@ impl BlockBehavior for RedstoneWireBlock {
             if self.can_survive(state, pos, &LevelReaderRef::Server(level))? {
                 update_power(level, pos, state, orientation, false)?;
             } else {
-                level.emit(crate::level::effects::LevelEffect::DropResources { pos, state });
+                crate::block::drops::drop_resources_simple(state, pos, level)?;
                 level.remove_block(pos, false)?;
             }
         }

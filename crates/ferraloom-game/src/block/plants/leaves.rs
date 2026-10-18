@@ -3,7 +3,7 @@ use super::super::{
     BlockBehavior, LevelAccessRef, LevelReaderRef, UPDATE_LIMIT, UpdateFlags,
     fluid::SimpleWaterloggedBlock,
 };
-use crate::level::{Level, LevelError, effects::LevelEffect};
+use crate::level::{Level, LevelError};
 use ferraloom_data::{
     BlockState, FluidState, Item, properties as p, registries::fluid::Id, tags::BlockTags,
 };
@@ -69,7 +69,7 @@ impl BlockBehavior for Leaves {
         level: &mut Level,
     ) -> Result<(), LevelError> {
         if state.get(p::PERSISTENT) == Some(false) && state.get(p::DISTANCE) == Some(7) {
-            level.emit(LevelEffect::DropResources { pos, state });
+            super::super::drops::drop_resources_simple(state, pos, level)?;
             level.remove_block(pos, false)?;
         }
         Ok(())

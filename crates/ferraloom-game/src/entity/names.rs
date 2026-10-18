@@ -103,7 +103,7 @@ impl Level {
         self.entity_behavior(entity)?.name(entity, self)
     }
     pub fn entity_display_name(&self, entity: EntityRef) -> Result<Component, LevelError> {
-        self.entity_display_name_with_scoreboard(entity, self.scoreboard())
+        self.entity_display_name_with_scoreboard(entity, self.shared()?.scoreboard.scoreboard())
     }
     pub fn entity_display_name_with_scoreboard(
         &self,

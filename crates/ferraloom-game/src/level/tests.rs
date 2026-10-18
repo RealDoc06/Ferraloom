@@ -1017,12 +1017,7 @@ fn shape_updates_skip_wire_and_apply_drop_suppression_at_the_shape_call() {
         )
         .unwrap();
     assert!(level.get_block_state(pos).unwrap().is_air());
-    assert!(
-        !level
-            .take_effects()
-            .iter()
-            .any(|e| matches!(e, LevelEffect::DropResources { .. }))
-    );
+    assert!(level.all_entities().is_empty());
 }
 
 #[test]

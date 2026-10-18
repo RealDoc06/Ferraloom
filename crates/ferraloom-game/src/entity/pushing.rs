@@ -137,7 +137,7 @@ pub fn living_push<E: Entity + ?Sized>(
 /// the section query; target virtual queries retain the native traversal order.
 pub fn pushable_entities(entity: EntityRef, level: &Level) -> Result<Vec<EntityRef>, LevelError> {
     let bounds = level.entity::<EntityData>(entity)?.bounding_box;
-    let predicate = PushableBy::new(entity, level, level.scoreboard())?;
+    let predicate = PushableBy::new(entity, level, level.shared()?.scoreboard.scoreboard())?;
     let mut pushable = Vec::new();
     for other in level.entities_in(bounds, |id, _| id != entity) {
         if predicate.test(other, level)? {

@@ -368,6 +368,11 @@ fn server_player_push_queries_follow_the_borrowed_manager_current_run_flag() {
         level
             .add_entity(EntityRef(1), EntityState::Player(Box::new(player)))
             .unwrap();
+        assert_eq!(
+            pushable_entities(EntityRef(1), &level),
+            Err(LevelError::MissingServerShared)
+        );
+        level.install_shared(Box::default());
         add(
             &mut level,
             2,

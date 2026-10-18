@@ -219,27 +219,19 @@ pub trait BlockBehavior: Sync {
         source: Option<crate::entity::EntityRef>,
         level: &mut Level,
     ) -> Result<(), LevelError> {
-        use ferraloom_protocol::play::clientbound as cb;
-        let point = ferraloom_util::Vec3::new(f64::from(pos.x), f64::from(pos.y), f64::from(pos.z));
-        let mut recipients = Vec::new();
-        for entity in level.all_entities() {
-            if Some(entity) != source
-                && let crate::entity::EntityState::Player(player) = level.entity_state(entity)?
-                && player.position.distance_to_sqr(point) < 64.0 * 64.0
-            {
-                recipients.push(entity);
-            }
-        }
-        level.emit(crate::level::effects::LevelEffect::PlayerPacket {
-            recipients,
-            packet: Box::new(cb::Packet::LevelEvent(cb::LevelEvent {
-                event_type: 2001,
-                pos,
-                data: i32::from(state.id()),
-                global_event: false,
-            })),
-        });
-        Ok(())
+        level.level_event(source, 2001, pos, i32::from(state.id()))
+    }
+    /// Port of Block#spawnDestroyParticles. The breaker is intentionally absent;
+    /// subclasses can override this separately from the entity-specific hook.
+    fn spawn_destroy_particles(
+        &self,
+        state: BlockState,
+        pos: BlockPos,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        level
+            .required_block_behavior(state.block(), BlockMethod::SpawnDestroyByEntityParticles)?
+            .spawn_destroy_by_entity_particles(state, pos, None, level)
     }
     /// Port of Block#playerWillDestroy. The guarded-piglin AI side effect
     /// remains a required unported call until PiglinAi is implemented.
@@ -638,3 +630,17 @@ impl BlockBehavior for NoDestroyParticles {
     }
 }
 static NO_DESTROY_PARTICLES: NoDestroyParticles = NoDestroyParticles;
+
+/// Port of StrawBedBlock#spawnDestroyParticles's distinct level event.
+struct StrawBedParticles;
+impl BlockBehavior for StrawBedParticles {
+    fn spawn_destroy_particles(
+        &self,
+        state: BlockState,
+        pos: BlockPos,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        level.level_event(None, 2014, pos, i32::from(state.id()))
+    }
+}
+static STRAW_BED_PARTICLES: StrawBedParticles = StrawBedParticles;
