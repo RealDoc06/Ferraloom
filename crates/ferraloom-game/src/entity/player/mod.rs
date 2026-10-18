@@ -265,11 +265,16 @@ impl ServerPlayer {
         self.last_good = self.position;
         Ok(())
     }
-    /// Port of Entity#saveWithoutId, Player#addAdditionalSaveData and ServerPlayer.
+    /// PlayerDataStorage's payload uses the same full player save chain.
     pub fn save(&self) -> CompoundTag {
+        self.save_without_id()
+    }
+    /// Port of Entity#saveWithoutId, Player#addAdditionalSaveData and ServerPlayer.
+    pub fn save_without_id(&self) -> CompoundTag {
         let mut tag = self.parent.parent.save_without_id();
-        tag.insert("recipeBook", self.recipe_book.to_nbt());
+        // Player#addAdditionalSaveData writes the version even for predicate NBT.
         tag.insert("DataVersion", Tag::Int(5023));
+        tag.insert("recipeBook", self.recipe_book.to_nbt());
         tag.insert("UUID", Tag::IntArray(self.uuid.to_int_array().to_vec()));
         tag.insert("Dimension", Tag::String("minecraft:overworld".into()));
         tag.insert(
