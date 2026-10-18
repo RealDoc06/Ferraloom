@@ -282,7 +282,7 @@ mod tests {
     }
     #[test]
     fn live_close_packet_precedes_container_close_callbacks() {
-        use crate::level::LevelEffect;
+        use crate::level::effects::LevelEffect;
         use ferraloom_protocol::play::clientbound as cb;
         let (mut level, player, handle) = setup();
         open(&mut level, player, handle);
@@ -659,7 +659,7 @@ mod tests {
             .take_effects()
             .into_iter()
             .filter_map(|effect| match effect {
-                crate::level::LevelEffect::PlayerPacket { recipients, packet }
+                crate::level::effects::LevelEffect::PlayerPacket { recipients, packet }
                     if recipients == [player] =>
                 {
                     Some(*packet)

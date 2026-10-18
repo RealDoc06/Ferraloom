@@ -190,7 +190,7 @@ pub fn flush_container_packets(
     Ok(())
 }
 fn emit_menu_packet(player: EntityRef, packet: cb::Packet, level: &mut Level) {
-    level.emit(crate::level::LevelEffect::PlayerPacket {
+    level.emit(crate::level::effects::LevelEffect::PlayerPacket {
         recipients: vec![player],
         packet: Box::new(packet),
     });
