@@ -434,6 +434,14 @@ impl MenuClickContext for InMemoryMenuOperation<'_, '_, '_> {
         }
         Ok(copy)
     }
+    fn quick_move_stack(
+        &mut self,
+        index: usize,
+        hooks: &mut dyn MenuHooks,
+    ) -> Result<MemoryStackRef> {
+        let copy = self.menu.quick_move_stack(self.context, index, hooks)?;
+        Ok(self.own(copy))
+    }
     fn set_slot_stack(
         &mut self,
         index: usize,

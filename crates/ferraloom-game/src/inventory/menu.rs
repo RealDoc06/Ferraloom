@@ -183,12 +183,7 @@ impl AbstractContainerMenu {
         // modes ignore them and which fail when they actually index a slot.
         index < self.slots.len() as i32
     }
-    fn slot(&self, index: i32) -> Result<Slot> {
-        self.slots
-            .get(index as usize)
-            .cloned()
-            .ok_or(MenuError::InvalidSlot(index))
-    }
+
     pub(crate) fn container<'a>(
         &'a self,
         ctx: &'a MenuContext<'_>,
@@ -394,125 +389,15 @@ impl AbstractContainerMenu {
         {
             hooks.prepare_recipe_click(self.kind)?;
         }
-        if input == ContainerInput::QuickCraft {
-            return self.quick_craft(ctx, slot_index, button, hooks);
-        }
-        if self.quickcraft_status != 0 {
-            self.reset_quick_craft();
-            return Ok(());
-        }
-        match input {
-            ContainerInput::Pickup | ContainerInput::QuickMove if button == 0 || button == 1 => {
-                if slot_index == -999 {
-                    drop_carried_menu_item(
-                        &mut super::in_memory::InMemoryMenuOperation::new(self, ctx),
-                        button,
-                    )?;
-                } else if slot_index >= 0 {
-                    let slot = self.slot(slot_index)?;
-                    let clicked = self.get_item(ctx, slot.index);
-                    if input == ContainerInput::QuickMove {
-                        if slot.may_pickup(&clicked, ctx.is_creative, hooks)? {
-                            let mut moved = self.quick_move_stack(ctx, slot.index, hooks)?;
-                            while !moved.is_empty()
-                                && same_item(&self.get_item(ctx, slot.index), &moved)
-                            {
-                                moved = self.quick_move_stack(ctx, slot.index, hooks)?;
-                            }
-                        }
-                    } else {
-                        self.pickup(ctx, slot, button, hooks)?;
-                    }
-                }
-            }
-            ContainerInput::Swap if (0..9).contains(&button) || button == 40 => {
-                self.swap(ctx, slot_index, button as usize, hooks)?
-            }
-            ContainerInput::Clone
-                if ctx.infinite_materials && self.carried.is_empty() && slot_index >= 0 =>
-            {
-                let slot = self.slot(slot_index)?;
-                if !self.get_item(ctx, slot.index).is_empty() {
-                    let mut context = super::in_memory::InMemoryMenuOperation::new(self, ctx);
-                    let cloned = context.clone_slot_stack(slot.index, hooks)?;
-                    context.set_carried_stack(cloned)?;
-                }
-            }
-            ContainerInput::Throw if self.carried.is_empty() && slot_index >= 0 => {
-                let slot = self.slot(slot_index)?;
-                throw_menu_item(
-                    &mut super::in_memory::InMemoryMenuOperation::new(self, ctx),
-                    slot.index,
-                    button,
-                    hooks,
-                )?;
-            }
-            ContainerInput::PickupAll if slot_index >= 0 => {
-                self.pickup_all(ctx, slot_index, button, hooks)?
-            }
-            _ => {}
-        }
-        Ok(())
-    }
-    fn pickup(
-        &mut self,
-        ctx: &mut MenuContext<'_>,
-        slot: Slot,
-        button: i32,
-        hooks: &mut dyn MenuHooks,
-    ) -> Result<()> {
-        pickup_menu_item(
+        click_menu(
             &mut super::in_memory::InMemoryMenuOperation::new(self, ctx),
-            slot.index,
+            slot_index,
             button,
-            hooks,
-        )
-    }
-    fn swap(
-        &mut self,
-        ctx: &mut MenuContext<'_>,
-        index: i32,
-        button: usize,
-        hooks: &mut dyn MenuHooks,
-    ) -> Result<()> {
-        let slot = self.slot(index)?;
-        swap_menu_item(
-            &mut super::in_memory::InMemoryMenuOperation::new(self, ctx),
-            slot.index,
-            button,
-            hooks,
-        )
-    }
-    fn quick_craft(
-        &mut self,
-        ctx: &mut MenuContext<'_>,
-        index: i32,
-        button: i32,
-        hooks: &mut dyn MenuHooks,
-    ) -> Result<()> {
-        quick_craft_menu_items(
-            &mut super::in_memory::InMemoryMenuOperation::new(self, ctx),
-            index,
-            button,
+            input,
             hooks,
         )
     }
     pub(super) fn can_drag_to(&self, _slot: &Slot) -> bool {
         true
-    }
-    fn pickup_all(
-        &mut self,
-        ctx: &mut MenuContext<'_>,
-        index: i32,
-        button: i32,
-        hooks: &mut dyn MenuHooks,
-    ) -> Result<()> {
-        let slot = self.slot(index)?;
-        pickup_all_menu_items(
-            &mut super::in_memory::InMemoryMenuOperation::new(self, ctx),
-            slot.index,
-            button,
-            hooks,
-        )
     }
 }

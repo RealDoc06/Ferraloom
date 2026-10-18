@@ -1,5 +1,6 @@
 //! One click algorithm over live Level handles or the standalone object arena.
 use super::*;
+use ferraloom_protocol::play::ContainerInput;
 
 pub trait MenuClickContext: MenuTransferContext {
     fn menu(&self) -> Result<&AbstractContainerMenu>;
@@ -19,6 +20,7 @@ pub trait MenuClickContext: MenuTransferContext {
     fn can_take_for_pick_all(&self, index: usize) -> Result<bool>;
     fn can_drop_items(&self) -> Result<bool>;
     fn clone_slot_stack(&mut self, index: usize, hooks: &mut dyn MenuHooks) -> Result<Self::Stack>;
+    fn quick_move_stack(&mut self, index: usize, hooks: &mut dyn MenuHooks) -> Result<Self::Stack>;
     /// The explicit previous receiver covers native Slot#setByPlayer's overload
     /// used by tryRemove, and callback-free swaps whose objects have moved.
     fn set_slot_stack(
@@ -41,6 +43,103 @@ pub trait MenuClickContext: MenuTransferContext {
         stack: Self::Stack,
         hooks: &mut dyn MenuHooks,
     ) -> Result<()>;
+}
+
+/// Port of AbstractContainerMenu#doClick. The same dispatcher runs over live
+/// positional/generation handles and the standalone retained object context.
+pub fn click_menu<C: MenuClickContext>(
+    context: &mut C,
+    slot: i32,
+    button: i32,
+    input: ContainerInput,
+    hooks: &mut dyn MenuHooks,
+) -> Result<()> {
+    if input == ContainerInput::QuickCraft {
+        return quick_craft_menu_items(context, slot, button, hooks);
+    }
+    if context.menu()?.quickcraft_status != 0 {
+        context.menu_mut()?.reset_quick_craft();
+        return Ok(());
+    }
+    match input {
+        ContainerInput::Pickup | ContainerInput::QuickMove if button == 0 || button == 1 => {
+            if slot == -999 {
+                drop_carried_menu_item(context, button)?;
+            } else if slot >= 0 {
+                let index = slot as usize;
+                if index >= context.slot_count()? {
+                    return Err(MenuError::InvalidSlot(slot));
+                }
+                if input == ContainerInput::QuickMove {
+                    if !context.may_pickup(index, hooks)? {
+                        return Ok(());
+                    }
+                    let mut moved = context.quick_move_stack(index, hooks)?;
+                    while !context.stack(moved)?.is_empty() {
+                        let current = context.slot_stack(index)?;
+                        if !same_item(&context.stack(current)?, &context.stack(moved)?) {
+                            break;
+                        }
+                        moved = context.quick_move_stack(index, hooks)?;
+                    }
+                } else {
+                    pickup_menu_item(context, index, button, hooks)?;
+                }
+            }
+        }
+        ContainerInput::Swap if (0..9).contains(&button) || button == 40 => {
+            let index = usize::try_from(slot).map_err(|_| MenuError::InvalidSlot(slot))?;
+            swap_menu_item(context, index, button as usize, hooks)?;
+        }
+        ContainerInput::Clone if context.infinite_materials()? => {
+            let carried = context.carried_stack()?;
+            if context.stack(carried)?.is_empty() && slot >= 0 {
+                let index = slot as usize;
+                let current = context.slot_stack(index)?;
+                if !context.stack(current)?.is_empty() {
+                    let cloned = context.clone_slot_stack(index, hooks)?;
+                    context.set_carried_stack(cloned)?;
+                }
+            }
+        }
+        ContainerInput::Throw => {
+            let carried = context.carried_stack()?;
+            if context.stack(carried)?.is_empty() && slot >= 0 {
+                throw_menu_item(context, slot as usize, button, hooks)?;
+            }
+        }
+        ContainerInput::PickupAll if slot >= 0 => {
+            pickup_all_menu_items(context, slot as usize, button, hooks)?;
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+/// Live click frame. Individual unported slot/recipe/entity virtuals fail at
+/// their own native call sites; handlers do not snapshot menu or player state.
+pub fn clicked_live_menu(
+    player: crate::entity::EntityRef,
+    menu: MenuRef,
+    slot: i32,
+    button: i32,
+    input: ContainerInput,
+    hooks: &mut dyn MenuHooks,
+    level: &mut crate::level::Level,
+) -> Result<()> {
+    with_menu_callback(player, menu, level, |context| {
+        click_menu(
+            &mut super::transfer::LiveMenuTransfer {
+                operation: StackOperation::new(context.level),
+                player,
+                menu,
+            },
+            slot,
+            button,
+            input,
+            hooks,
+        )
+    })
 }
 
 /// Ports of ChestMenu, HopperMenu, ShulkerBoxMenu and DispenserMenu#quickMoveStack.
@@ -284,6 +383,9 @@ pub fn pickup_all_menu_items<C: MenuClickContext>(
     button: i32,
     hooks: &mut dyn MenuHooks,
 ) -> Result<()> {
+    if index >= context.slot_count()? {
+        return Err(MenuError::InvalidSlot(index as i32));
+    }
     let carried = context.carried_stack()?;
     if context.stack(carried)?.is_empty() {
         return Ok(());
@@ -666,6 +768,10 @@ impl MenuClickContext for super::transfer::LiveMenuTransfer<'_> {
             crafted_item_post_process(self.operation.level, copy)?;
         }
         Ok(copy)
+    }
+    fn quick_move_stack(&mut self, index: usize, hooks: &mut dyn MenuHooks) -> Result<StackRef> {
+        let copy = quick_move_container_menu_item(self, index, hooks)?;
+        self.operation.own(self.player, copy)
     }
     fn set_slot_stack(
         &mut self,
