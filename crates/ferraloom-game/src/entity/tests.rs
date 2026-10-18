@@ -105,6 +105,12 @@ fn level(floor: bool) -> Level {
                     template.clone(),
                 ))
                 .unwrap();
+            level
+                .update_entity_chunk_status(
+                    ChunkPos::new(x, z),
+                    crate::level::entity::Visibility::Ticking,
+                )
+                .unwrap();
         }
     }
     tags(&mut level);

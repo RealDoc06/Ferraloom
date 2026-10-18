@@ -98,6 +98,20 @@ fn region() -> Level {
         ))
         .unwrap();
     region
+        .update_entity_chunk_status(
+            ChunkPos::containing(PLACED),
+            crate::level::entity::Visibility::Ticking,
+        )
+        .unwrap();
+    // The adversarial entities live at the fixture origin; ticking eligibility
+    // is independent of the block chunk needed by their reentrant callback.
+    region
+        .update_entity_chunk_status(
+            ChunkPos::new(0, 0),
+            crate::level::entity::Visibility::Ticking,
+        )
+        .unwrap();
+    region
 }
 
 #[test]
