@@ -281,6 +281,31 @@ mod tests {
         ));
     }
     #[test]
+    fn live_close_packet_precedes_container_close_callbacks() {
+        use crate::level::LevelEffect;
+        use ferraloom_protocol::play::clientbound as cb;
+        let (mut level, player, handle) = setup();
+        open(&mut level, player, handle);
+        level.take_effects();
+        super::super::close_container_live(player, &mut level, true, false).unwrap();
+        let effects = level.take_effects();
+        let close = effects.iter().position(|effect| {
+            matches!(effect, LevelEffect::PlayerPacket { recipients, packet }
+                if recipients == &[player] && matches!(packet.as_ref(), cb::Packet::ContainerClose(_)))
+        }).unwrap();
+        let callback = effects
+            .iter()
+            .position(|effect| {
+                matches!(effect, LevelEffect::GameEvent { event, .. }
+                if *event == ferraloom_data::registries::game_event::Id::CONTAINER_CLOSE)
+            })
+            .unwrap();
+        assert!(close < callback);
+        let player = level.entity::<ServerPlayer>(player).unwrap();
+        assert!(player.menus.container_menu.is_none());
+        assert!(player.menus.pending_packets.is_empty());
+    }
+    #[test]
     fn loot_source_retains_the_original_generation_without_a_dynamic_provider() {
         use crate::{
             block::containers::loot_runtime::LiveLootRuntime,
