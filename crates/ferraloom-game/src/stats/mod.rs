@@ -1,5 +1,6 @@
 //! Vanilla statistic identities, counters and player JSON. Gameplay hooks apply
 //! the returned values to scoreboard objectives in the owning player adapter.
+mod live;
 use crate::loot::{Identifier, LootError, Result, codec};
 use ferraloom_data::{Block, EntityType, Item, registries::custom_stat};
 use ferraloom_protocol::{
@@ -12,6 +13,7 @@ use ferraloom_protocol::{
 use ferraloom_util::collections::{
     HashMap as JavaHashMap, HashSet as JavaHashSet, JavaHash, Object2IntOpenHashMap,
 };
+pub use live::request_stats;
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 

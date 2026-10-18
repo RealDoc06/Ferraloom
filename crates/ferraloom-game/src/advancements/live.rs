@@ -302,9 +302,3 @@ pub fn seen_advancements(
     }
     Ok(())
 }
-/// Port of ServerGamePacketListenerImpl's REQUEST_STATS branch.
-pub fn request_stats(level: &mut Level, player: EntityRef) -> Result<(), LevelError> {
-    let packet = level.entity_mut::<ServerPlayer>(player)?.stats.send_stats();
-    send(level, player, cb::Packet::AwardStats(packet));
-    Ok(())
-}

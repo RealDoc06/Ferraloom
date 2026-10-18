@@ -1104,8 +1104,8 @@ fn retained_inventory_trigger_and_stats_request_read_canonical_player() {
         PredicateContext::player_stat(&level, player, &id("custom"), &id("open_chest")).unwrap(),
         2
     );
-    request_stats(&mut level, player).unwrap();
-    request_stats(&mut level, player).unwrap();
+    crate::stats::request_stats(&mut level, player).unwrap();
+    crate::stats::request_stats(&mut level, player).unwrap();
     let packets: Vec<_> = level
         .take_effects()
         .into_iter()

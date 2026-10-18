@@ -1995,7 +1995,7 @@ impl MinecraftServer {
             sb::Packet::ClientCommand(packet)
                 if packet.action == play::ClientCommandAction::RequestStats =>
             {
-                ferraloom_game::advancements::request_stats(&mut self.level.level, entity)
+                ferraloom_game::stats::request_stats(&mut self.level.level, entity)
                     .map_err(game_error)?;
             }
             sb::Packet::CustomPayload(_) | sb::Packet::Pong(_) | sb::Packet::PlayerCommand(_) => {}
