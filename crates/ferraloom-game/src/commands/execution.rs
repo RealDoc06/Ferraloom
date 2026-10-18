@@ -221,7 +221,7 @@ mod tests {
     use std::sync::{Arc, Mutex};
     #[test]
     fn next_commands_run_before_siblings_in_insertion_order() {
-        let mut context = ExecutionContext::new(10, 10);
+        let mut context = ExecutionContext::<Vec<i32>>::new(10, 10);
         let frame = context.top_frame(CommandResultCallback::default());
         let child_frame = frame.clone();
         context.queue_next(CommandQueueEntry::new(
@@ -258,7 +258,7 @@ mod tests {
         let callback = CommandResultCallback::new(move |success, value| {
             callback_results.lock().unwrap().push((success, value))
         });
-        let mut context = ExecutionContext::new(1, 2);
+        let mut context = ExecutionContext::<Vec<i32>>::new(1, 2);
         let frame = context.top_frame(callback.clone());
         context.queue_next(CommandQueueEntry::new(
             frame.clone(),
