@@ -17,6 +17,7 @@ mod leaves;
 mod moss;
 pub mod multiface;
 pub mod multiface_spreader;
+mod nylium;
 mod pitcher;
 mod powder_snow;
 mod sea_pickle;
@@ -142,6 +143,7 @@ pub fn ported_behavior(block: Block, method: BlockMethod) -> Option<&'static dyn
             &crops::CROP
         }
         C::NetherWartBlock if method == M::RandomTick => &crops::NETHER_WART,
+        C::NyliumBlock if method == M::RandomTick => &nylium::NYLIUM,
         C::SweetBerryBushBlock if method == M::RandomTick => &crops::SWEET_BERRY,
         C::PitcherCropBlock if method == M::RandomTick => &pitcher::PITCHER,
         C::LeavesBlock

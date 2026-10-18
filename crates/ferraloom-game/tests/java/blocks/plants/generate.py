@@ -40,3 +40,6 @@ with tempfile.TemporaryDirectory(prefix='ferraloom-plants-java-') as directory:
     clones='\n'.join(line for line in lines if line.startswith('clone\t')) + '\n'
     (HERE/'clone-items.tsv.gz').write_bytes(gzip.compress(clones.encode(),mtime=0))
     print(f'{len(clones.splitlines())} vanilla plant clone-item vectors')
+    ground='\n'.join(line for line in lines if line.startswith(('nylium-alive\t','bonemeal-kind\t'))) + '\n'
+    (HERE/'ground.tsv.gz').write_bytes(gzip.compress(ground.encode(),mtime=0))
+    print(f'{len(ground.splitlines())} vanilla nylium and bonemeal metadata vectors')

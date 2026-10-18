@@ -549,3 +549,49 @@ fn plant_clone_items_match_vanilla_for_all_registered_states() {
     }
     assert_eq!(count, 260);
 }
+
+#[test]
+fn nylium_occlusion_and_bonemeal_metadata_match_vanilla() {
+    use std::io::Read;
+    let mut text = String::new();
+    flate2::read::GzDecoder::new(
+        include_bytes!("../../../tests/java/blocks/plants/ground.tsv.gz").as_slice(),
+    )
+    .read_to_string(&mut text)
+    .unwrap();
+    let pos = BlockPos::new(8, 5, 8);
+    let mut level = level();
+    let mut count = 0;
+    for line in text.lines() {
+        let f = line.split('\t').collect::<Vec<_>>();
+        if f[0] == "nylium-alive" {
+            let state = BlockState::from_id(f[1].parse().unwrap()).unwrap();
+            let above = BlockState::from_id(f[2].parse().unwrap()).unwrap();
+            level.set_block_state(pos.above(1), above).unwrap();
+            assert_eq!(
+                nylium::can_be_nylium(state, pos, &LevelReaderRef::Server(&level)).unwrap(),
+                f[3] == "true",
+                "{line}"
+            );
+        } else {
+            let block = Block::from_protocol_id(f[1].parse().unwrap()).unwrap();
+            let behavior = bonemealable_behavior(block).unwrap();
+            assert_eq!(
+                behavior.bonemeal_type(),
+                if f[2] == "NEIGHBOR_SPREADER" {
+                    BonemealType::NeighborSpreader
+                } else {
+                    BonemealType::Grower
+                },
+                "{line}"
+            );
+            assert_eq!(
+                behavior.particle_pos(pos),
+                pos.above(f[3].parse().unwrap()),
+                "{line}"
+            );
+        }
+        count += 1;
+    }
+    assert_eq!(count, 816);
+}

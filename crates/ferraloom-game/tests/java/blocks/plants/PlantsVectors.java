@@ -55,6 +55,18 @@ public final class PlantsVectors {
                 System.out.println("clone\t"+Block.getId(state)+"\t"+BuiltInRegistries.ITEM.getId(stack.getItem())+"\t"+stack.getCount()+"\t"+includeData);
             }
         }
+        for(var block:List.of(Blocks.NETHERRACK,Blocks.ROOTED_DIRT,Blocks.WHEAT,Blocks.SEAGRASS,Blocks.GLOW_LICHEN,
+            Blocks.PALE_MOSS_CARPET,Blocks.BAMBOO,Blocks.CAVE_VINES,Blocks.BIG_DRIPLEAF,Blocks.SEA_PICKLE)) {
+            var bonemeal=(BonemealableBlock)block;
+            System.out.println("bonemeal-kind\t"+BuiltInRegistries.BLOCK.getId(block)+"\t"+String.valueOf((Object)bonemeal.getType())+"\t"+(bonemeal.getParticlePos(pos).getY()-pos.getY()));
+        }
+        var canBeNylium=NyliumBlock.class.getDeclaredMethod("canBeNylium",BlockState.class,LevelReader.class,BlockPos.class);
+        canBeNylium.setAccessible(true);
+        for(var block:List.of(Blocks.CRIMSON_NYLIUM,Blocks.WARPED_NYLIUM))for(var support:supports)for(var above:support.getStateDefinition().getPossibleStates()) {
+            level.chunks.clear();level.getChunkAt(pos).setBlockState(pos,block.defaultBlockState(),816);
+            level.getChunkAt(pos).setBlockState(pos.above(),above,816);
+            System.out.println("nylium-alive\t"+Block.getId(block.defaultBlockState())+"\t"+Block.getId(above)+"\t"+canBeNylium.invoke(null,block.defaultBlockState(),level,pos));
+        }
         for(var block:plants) {
             var states=new ArrayList<BlockState>();states.add(block.defaultBlockState());
             if(block.defaultBlockState().hasProperty(BlockStateProperties.DOUBLE_BLOCK_HALF)) states.add(block.defaultBlockState().setValue(BlockStateProperties.DOUBLE_BLOCK_HALF,net.minecraft.world.level.block.state.properties.DoubleBlockHalf.UPPER));

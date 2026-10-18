@@ -2,8 +2,8 @@
 //! storing mutable behavior objects or losing the world's canonical RNG stream.
 use super::{
     super::{LevelAccessRef, LevelReaderRef, UpdateFlags},
-    bamboo, crops, dripleaf, growing, hanging_moss, moss, multiface_spreader, pitcher, sea_pickle,
-    spread, survival,
+    bamboo, crops, dripleaf, growing, hanging_moss, moss, multiface_spreader, nylium, pitcher,
+    sea_pickle, spread, survival,
 };
 use crate::level::LevelError;
 use ferraloom_data::{Block, BlockClass, BlockState, properties as p};
@@ -55,12 +55,32 @@ pub trait BonemealableBlock: Sync {
         }
     }
 }
-pub struct PlantBonemeal;
-static PLANT_BONEMEAL: PlantBonemeal = PlantBonemeal;
+pub struct PlantBonemeal {
+    kind: BonemealType,
+    particle_offset: i32,
+}
+static PLANT_BONEMEAL: PlantBonemeal = PlantBonemeal {
+    kind: BonemealType::Grower,
+    particle_offset: 0,
+};
+static NEIGHBOR_BONEMEAL: PlantBonemeal = PlantBonemeal {
+    kind: BonemealType::NeighborSpreader,
+    particle_offset: 1,
+};
+static ROOTED_BONEMEAL: PlantBonemeal = PlantBonemeal {
+    kind: BonemealType::Grower,
+    particle_offset: -1,
+};
 /// None for an unported class is distinct from not implementing vanilla's
 /// interface; callers can test BlockClass::BonemealableBlock before dispatch.
 pub fn bonemealable_behavior(block: Block) -> Option<&'static dyn BonemealableBlock> {
     use BlockClass as C;
+    if block.class() == C::NetherrackBlock {
+        return Some(&NEIGHBOR_BONEMEAL);
+    }
+    if block.class() == C::RootedDirtBlock {
+        return Some(&ROOTED_BONEMEAL);
+    }
     matches!(
         block.class(),
         C::MossyCarpetBlock
@@ -114,6 +134,12 @@ fn grown_grass(state: BlockState) -> BlockState {
     }
 }
 impl BonemealableBlock for PlantBonemeal {
+    fn bonemeal_type(&self) -> BonemealType {
+        self.kind
+    }
+    fn particle_pos(&self, pos: BlockPos) -> BlockPos {
+        pos.above(self.particle_offset)
+    }
     fn is_valid_bonemeal_target(
         &self,
         state: BlockState,
@@ -123,6 +149,11 @@ impl BonemealableBlock for PlantBonemeal {
     ) -> Result<bool, LevelError> {
         use BlockClass as C;
         match state.block().class() {
+            C::NetherrackBlock => nylium::netherrack_target(pos, level),
+            C::RootedDirtBlock => {
+                Ok(level.get_block_state(pos.below(1))?.is_air()
+                    && inside_height(level, pos.below(1)))
+            }
             C::SmallDripleafBlock => Ok(true),
             C::BigDripleafBlock | C::BigDripleafStemBlock => {
                 let Some(head) = dripleaf::head_pos(state, pos, level)? else {
@@ -232,6 +263,14 @@ impl BonemealableBlock for PlantBonemeal {
     ) -> Result<(), LevelError> {
         use BlockClass as C;
         match state.block().class() {
+            C::NetherrackBlock => nylium::spread_to_netherrack(pos, level)?,
+            C::RootedDirtBlock => {
+                level.set_block(
+                    pos.below(1),
+                    Block::HANGING_ROOTS.default_state(),
+                    UpdateFlags::ALL,
+                )?;
+            }
             C::BigDripleafBlock | C::BigDripleafStemBlock | C::SmallDripleafBlock => {
                 dripleaf::bonemeal(state, pos, level)?
             }
