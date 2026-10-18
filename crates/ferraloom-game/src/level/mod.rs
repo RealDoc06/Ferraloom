@@ -29,6 +29,7 @@ pub mod server_level;
 pub mod simulation;
 pub mod tickets;
 mod ticking;
+pub mod weather;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum LevelError {
@@ -55,6 +56,7 @@ pub enum LevelError {
 #[derive(Clone, Copy, Debug)]
 pub struct LevelRules {
     pub debug: bool,
+    pub can_have_weather: bool,
     pub random_tick_speed: u32,
     pub water_source_conversion: bool,
     pub lava_source_conversion: bool,
@@ -66,6 +68,7 @@ impl Default for LevelRules {
     fn default() -> Self {
         Self {
             debug: false,
+            can_have_weather: true,
             random_tick_speed: 3,
             water_source_conversion: true,
             lava_source_conversion: false,
@@ -85,6 +88,7 @@ pub struct Region {
     fluid_ticks: LevelTicks<ferraloom_data::registries::fluid::Id>,
     next_sub_tick_order: i64,
     game_time: i64,
+    weather: weather::Weather,
     min_y: i32,
     max_y: i32,
     rules: LevelRules,
@@ -112,6 +116,7 @@ impl Region {
             fluid_ticks: LevelTicks::default(),
             next_sub_tick_order: 0,
             game_time: 0,
+            weather: weather::Weather::default(),
             min_y: -64,
             max_y: 320,
             rules: LevelRules::default(),

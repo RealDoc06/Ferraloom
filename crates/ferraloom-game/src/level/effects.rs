@@ -44,4 +44,8 @@ pub enum LevelEffect {
         data: i32,
     },
     BlockEvent(BlockEvent),
+    WeatherEvent {
+        event: u8,
+        param: f32,
+    },
 }
