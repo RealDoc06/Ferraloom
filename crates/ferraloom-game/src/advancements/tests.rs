@@ -1390,3 +1390,115 @@ fn recipe_crafted_releases_roots_on_capture_and_predicate_errors() {
             .is_done()
     );
 }
+
+#[test]
+fn award_recipes_counts_displays_after_synchronous_nested_unlocks() {
+    use crate::{
+        block::containers::runtime::ContainerResources,
+        crafting::{Recipe, RecipeHolder, RecipeManager, RecipeSynchronization},
+        entity::player::ServerPlayer,
+        level::effects::LevelEffect,
+    };
+    use ferraloom_protocol::play::clientbound as cb;
+    use std::sync::Arc;
+
+    let manager = ServerAdvancementManager::new(holders(&json!([
+        {"id":"test:outer","value":{
+            "criteria":{"unlocked":{"trigger":"recipe_unlocked","conditions":{"recipes":"test:multi"}}},
+            "rewards":{"recipes":["crafting_table"]}
+        }},
+        {"id":"test:nested","value":{
+            "criteria":{"unlocked":{"trigger":"recipe_unlocked","conditions":{"recipes":"crafting_table"}}}
+        }}
+    ])));
+    let (mut level, player) = live_fixture(manager);
+    let previous = level.container_resources().unwrap();
+    let tags = ferraloom_data::datapack::TagSet::<Item>::load(
+        &ferraloom_data::datapack::ResourceManager::new(Vec::new()),
+    )
+    .unwrap();
+    let recipes = Arc::new(
+        RecipeManager::new(vec![
+            RecipeHolder {
+                id: "test:multi".parse().unwrap(),
+                value: Recipe::decode(
+                    &json!({"type":"crafting_transmute","input":"stone","material":"dirt","material_count":{"min":1,"max":3},"result":"diamond","show_notification":false}),
+                    &tags,
+                ).unwrap(),
+            },
+            previous.recipes.recipes()[0].clone(),
+            RecipeHolder {
+                id: "test:special".parse().unwrap(),
+                value: Recipe::decode(&json!({"type":"crafting_special_repairitem"}), &tags).unwrap(),
+            },
+        ]).unwrap(),
+    );
+    let sync = Arc::new(RecipeSynchronization::new(&recipes, |_| true));
+    level.set_container_resources(
+        Arc::new(ContainerResources {
+            recipes: Arc::clone(&recipes),
+            loot: Arc::clone(&previous.loot),
+            advancements: Arc::clone(&previous.advancements),
+            recipe_tags: previous.recipe_tags.clone(),
+            recipe_synchronization: Arc::clone(&sync),
+        }),
+        0,
+    );
+    let ordered = [
+        &recipes.recipes()[0],
+        &recipes.recipes()[1],
+        &recipes.recipes()[2],
+        &recipes.recipes()[0],
+    ];
+    // The nested award unlocks crafting_table before the outer loop reaches it.
+    assert_eq!(award_recipes(&mut level, player, ordered).unwrap(), 3);
+    let owner = level.entity::<ServerPlayer>(player).unwrap();
+    assert_eq!(
+        owner.recipe_book.known(),
+        &[
+            recipes.recipes()[0].id.clone(),
+            recipes.recipes()[1].id.clone()
+        ]
+    );
+    for advancement in ["test:outer", "test:nested"] {
+        assert!(
+            owner
+                .advancements
+                .get_progress(&id(advancement))
+                .unwrap()
+                .is_done()
+        );
+    }
+    let packets: Vec<_> = level
+        .take_effects()
+        .into_iter()
+        .filter_map(|effect| match effect {
+            LevelEffect::PlayerPacket { packet, .. } => Some(*packet),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(packets.len(), 2);
+    for (packet, recipe) in packets
+        .iter()
+        .zip([&recipes.recipes()[1], &recipes.recipes()[0]])
+    {
+        let cb::Packet::RecipeBookAdd(packet) = packet else {
+            panic!("expected recipe book packet")
+        };
+        assert!(!packet.replace);
+        let expected: Vec<_> = sync
+            .displays_for_recipe(&recipe.id)
+            .map(|entry| entry.id)
+            .collect();
+        assert_eq!(
+            packet
+                .entries
+                .iter()
+                .map(|entry| entry.contents.id)
+                .collect::<Vec<_>>(),
+            expected
+        );
+    }
+    assert_eq!(award_recipes(&mut level, player, ordered).unwrap(), 0);
+    assert!(level.take_effects().is_empty());
+}

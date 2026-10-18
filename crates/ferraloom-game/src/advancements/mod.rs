@@ -3,7 +3,7 @@
 pub mod criteria;
 mod data;
 mod live;
-pub use live::{flush_dirty, seen_advancements};
+pub use live::{award_recipes, flush_dirty, seen_advancements};
 mod persistence;
 pub use persistence::*;
 mod player;

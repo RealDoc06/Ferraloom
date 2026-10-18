@@ -9,6 +9,7 @@ use super::{
 };
 use crate::{
     block::{UnportedOperation, containers::loot_runtime::LiveLootRuntime, entity::BlockEntityRef},
+    crafting::RecipeHolder,
     entity::{EntityData, EntityRef, item::ItemEntity, player::ServerPlayer},
     inventory::{MenuError, StackRef},
     level::{Level, LevelError, effects::LevelEffect},
@@ -239,8 +240,25 @@ fn grant_rewards(
     if changes {
         crate::inventory::broadcast_container_menu(player, level)?;
     }
+    award_recipes(level, player, rewards.recipe_holders(&resources.recipes))?;
+    if rewards.function.is_some() {
+        level.unported_operation(UnportedOperation::AdvancementCriterion(
+            super::criteria::Trigger::RewardFunction,
+        ))?;
+    }
+    Ok(())
+}
+/// Port of ServerPlayer#awardRecipes and ServerRecipeBook#addRecipes. Each
+/// successful unlock finishes its synchronous criterion effects before the next
+/// holder. The aggregate packet and return value count recipe display entries.
+pub fn award_recipes<'a>(
+    level: &mut Level,
+    player: EntityRef,
+    recipes: impl IntoIterator<Item = &'a RecipeHolder>,
+) -> Result<usize, LevelError> {
+    let resources = level.container_resources()?;
     let mut entries = Vec::new();
-    for recipe in rewards.recipe_holders(&resources.recipes) {
+    for recipe in recipes {
         let addition = level
             .entity_mut::<ServerPlayer>(player)?
             .recipe_book
@@ -250,7 +268,8 @@ fn grant_rewards(
             super::criteria::recipe_unlocked(level, player, recipe)?;
         }
     }
-    if !entries.is_empty() {
+    let count = entries.len();
+    if count != 0 {
         send(
             level,
             player,
@@ -260,12 +279,7 @@ fn grant_rewards(
             }),
         );
     }
-    if rewards.function.is_some() {
-        level.unported_operation(UnportedOperation::AdvancementCriterion(
-            super::criteria::Trigger::RewardFunction,
-        ))?;
-    }
-    Ok(())
+    Ok(count)
 }
 /// Capture outbound packets at the native call site; no connection is borrowed.
 fn send(level: &mut Level, player: EntityRef, packet: cb::Packet) {
