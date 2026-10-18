@@ -1121,6 +1121,2283 @@
     "cursor": 0
   },
   {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:rain",
+    "ok": true,
+    "particle_wire": "47",
+    "cursor": 14
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:rain{}",
+    "ok": true,
+    "particle_wire": "47",
+    "cursor": 16
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:dolphin",
+    "ok": true,
+    "particle_wire": "56",
+    "cursor": 17
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:dolphin{}",
+    "ok": true,
+    "particle_wire": "56",
+    "cursor": 19
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:glow",
+    "ok": true,
+    "particle_wire": "6e",
+    "cursor": 14
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:glow{}",
+    "ok": true,
+    "particle_wire": "6e",
+    "cursor": 16
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:heart",
+    "ok": true,
+    "particle_wire": "37",
+    "cursor": 15
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:heart{}",
+    "ok": true,
+    "particle_wire": "37",
+    "cursor": 17
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:bubble_pop",
+    "ok": true,
+    "particle_wire": "52",
+    "cursor": 20
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:bubble_pop{}",
+    "ok": true,
+    "particle_wire": "52",
+    "cursor": 22
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:falling_dripstone_water",
+    "ok": true,
+    "particle_wire": "6c",
+    "cursor": 33
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:falling_dripstone_water{}",
+    "ok": true,
+    "particle_wire": "6c",
+    "cursor": 35
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:flame",
+    "ok": true,
+    "particle_wire": "27",
+    "cursor": 15
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:flame{}",
+    "ok": true,
+    "particle_wire": "27",
+    "cursor": 17
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:geyser_base",
+    "ok": false,
+    "error_cursor": -1,
+    "message": "Can't parse particle options: No key burst_impulse_base in MapLike[{}]; No key water_blocks in MapLike[{}]",
+    "cursor": 21
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:geyser_base{}",
+    "ok": false,
+    "error_cursor": -1,
+    "message": "Can't parse particle options: No key burst_impulse_base in MapLike[{}]; No key water_blocks in MapLike[{}]",
+    "cursor": 23
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:sculk_charge_pop",
+    "ok": true,
+    "particle_wire": "31",
+    "cursor": 26
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:sculk_charge_pop{}",
+    "ok": true,
+    "particle_wire": "31",
+    "cursor": 28
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:item_snowball",
+    "ok": true,
+    "particle_wire": "40",
+    "cursor": 23
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:item_snowball{}",
+    "ok": true,
+    "particle_wire": "40",
+    "cursor": 25
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:orange_poplar_leaves",
+    "ok": true,
+    "particle_wire": "2c",
+    "cursor": 30
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:orange_poplar_leaves{}",
+    "ok": true,
+    "particle_wire": "2c",
+    "cursor": 32
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:nautilus",
+    "ok": true,
+    "particle_wire": "55",
+    "cursor": 18
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:nautilus{}",
+    "ok": true,
+    "particle_wire": "55",
+    "cursor": 20
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:trail",
+    "ok": false,
+    "error_cursor": -1,
+    "message": "Can't parse particle options: No key duration in MapLike[{}]; No key color in MapLike[{}]; No key target in MapLike[{}]",
+    "cursor": 15
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:trail{}",
+    "ok": false,
+    "error_cursor": -1,
+    "message": "Can't parse particle options: No key duration in MapLike[{}]; No key color in MapLike[{}]; No key target in MapLike[{}]",
+    "cursor": 17
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:raid_omen",
+    "ok": true,
+    "particle_wire": "7b",
+    "cursor": 19
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:raid_omen{}",
+    "ok": true,
+    "particle_wire": "7b",
+    "cursor": 21
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:tinted_leaves",
+    "ok": false,
+    "error_cursor": -1,
+    "message": "Can't parse particle options: No key color in MapLike[{}]",
+    "cursor": 23
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:tinted_leaves{}",
+    "ok": false,
+    "error_cursor": -1,
+    "message": "Can't parse particle options: No key color in MapLike[{}]",
+    "cursor": 25
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:spore_blossom_air",
+    "ok": true,
+    "particle_wire": "61",
+    "cursor": 27
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:spore_blossom_air{}",
+    "ok": true,
+    "particle_wire": "61",
+    "cursor": 29
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:falling_obsidian_tear",
+    "ok": true,
+    "particle_wire": "63",
+    "cursor": 31
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:falling_obsidian_tear{}",
+    "ok": true,
+    "particle_wire": "63",
+    "cursor": 33
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:pale_oak_leaves",
+    "ok": true,
+    "particle_wire": "2a",
+    "cursor": 25
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:pale_oak_leaves{}",
+    "ok": true,
+    "particle_wire": "2a",
+    "cursor": 27
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:dripping_lava",
+    "ok": true,
+    "particle_wire": "10",
+    "cursor": 23
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:dripping_lava{}",
+    "ok": true,
+    "particle_wire": "10",
+    "cursor": 25
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:dust",
+    "ok": false,
+    "error_cursor": -1,
+    "message": "Can't parse particle options: No key scale in MapLike[{}]; No key color in MapLike[{}]",
+    "cursor": 14
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:dust{}",
+    "ok": false,
+    "error_cursor": -1,
+    "message": "Can't parse particle options: No key scale in MapLike[{}]; No key color in MapLike[{}]",
+    "cursor": 16
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:bubble_column_up",
+    "ok": true,
+    "particle_wire": "54",
+    "cursor": 26
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:bubble_column_up{}",
+    "ok": true,
+    "particle_wire": "54",
+    "cursor": 28
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:block_marker",
+    "ok": false,
+    "error_cursor": -1,
+    "message": "Can't parse particle options: No key block_state in MapLike[{}]",
+    "cursor": 22
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:block_marker{}",
+    "ok": false,
+    "error_cursor": -1,
+    "message": "Can't parse particle options: No key block_state in MapLike[{}]",
+    "cursor": 24
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:gust_emitter_small",
+    "ok": true,
+    "particle_wire": "22",
+    "cursor": 28
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:gust_emitter_small{}",
+    "ok": true,
+    "particle_wire": "22",
+    "cursor": 30
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:happy_villager",
+    "ok": true,
+    "particle_wire": "35",
+    "cursor": 24
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:happy_villager{}",
+    "ok": true,
+    "particle_wire": "35",
+    "cursor": 26
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:yellow_poplar_leaves",
+    "ok": true,
+    "particle_wire": "2d",
+    "cursor": 30
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:yellow_poplar_leaves{}",
+    "ok": true,
+    "particle_wire": "2d",
+    "cursor": 32
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:enchant",
+    "ok": true,
+    "particle_wire": "1a",
+    "cursor": 17
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:enchant{}",
+    "ok": true,
+    "particle_wire": "1a",
+    "cursor": 19
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:wax_on",
+    "ok": true,
+    "particle_wire": "6f",
+    "cursor": 16
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:wax_on{}",
+    "ok": true,
+    "particle_wire": "6f",
+    "cursor": 18
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:campfire_signal_smoke",
+    "ok": true,
+    "particle_wire": "58",
+    "cursor": 31
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:campfire_signal_smoke{}",
+    "ok": true,
+    "particle_wire": "58",
+    "cursor": 33
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:wax_off",
+    "ok": true,
+    "particle_wire": "70",
+    "cursor": 17
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:wax_off{}",
+    "ok": true,
+    "particle_wire": "70",
+    "cursor": 19
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:sculk_soul",
+    "ok": true,
+    "particle_wire": "2f",
+    "cursor": 20
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:sculk_soul{}",
+    "ok": true,
+    "particle_wire": "2f",
+    "cursor": 22
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:falling_spore_blossom",
+    "ok": true,
+    "particle_wire": "5d",
+    "cursor": 31
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:falling_spore_blossom{}",
+    "ok": true,
+    "particle_wire": "5d",
+    "cursor": 33
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:damage_indicator",
+    "ok": true,
+    "particle_wire": "0e",
+    "cursor": 26
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:damage_indicator{}",
+    "ok": true,
+    "particle_wire": "0e",
+    "cursor": 28
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:infested",
+    "ok": true,
+    "particle_wire": "28",
+    "cursor": 18
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:infested{}",
+    "ok": true,
+    "particle_wire": "28",
+    "cursor": 20
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:ash",
+    "ok": true,
+    "particle_wire": "5e",
+    "cursor": 13
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:ash{}",
+    "ok": true,
+    "particle_wire": "5e",
+    "cursor": 15
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:explosion",
+    "ok": true,
+    "particle_wire": "1e",
+    "cursor": 19
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:explosion{}",
+    "ok": true,
+    "particle_wire": "1e",
+    "cursor": 21
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:gust",
+    "ok": true,
+    "particle_wire": "1f",
+    "cursor": 14
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:gust{}",
+    "ok": true,
+    "particle_wire": "1f",
+    "cursor": 16
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:electric_spark",
+    "ok": true,
+    "particle_wire": "71",
+    "cursor": 24
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:electric_spark{}",
+    "ok": true,
+    "particle_wire": "71",
+    "cursor": 26
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:gust_emitter_large",
+    "ok": true,
+    "particle_wire": "21",
+    "cursor": 28
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:gust_emitter_large{}",
+    "ok": true,
+    "particle_wire": "21",
+    "cursor": 30
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:dust_color_transition",
+    "ok": false,
+    "error_cursor": -1,
+    "message": "Can't parse particle options: No key scale in MapLike[{}]; No key to_color in MapLike[{}]; No key from_color in MapLike[{}]",
+    "cursor": 31
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:dust_color_transition{}",
+    "ok": false,
+    "error_cursor": -1,
+    "message": "Can't parse particle options: No key scale in MapLike[{}]; No key to_color in MapLike[{}]; No key from_color in MapLike[{}]",
+    "cursor": 33
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:falling_dust",
+    "ok": false,
+    "error_cursor": -1,
+    "message": "Can't parse particle options: No key block_state in MapLike[{}]",
+    "cursor": 22
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:falling_dust{}",
+    "ok": false,
+    "error_cursor": -1,
+    "message": "Can't parse particle options: No key block_state in MapLike[{}]",
+    "cursor": 24
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:current_down",
+    "ok": true,
+    "particle_wire": "53",
+    "cursor": 22
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:current_down{}",
+    "ok": true,
+    "particle_wire": "53",
+    "cursor": 24
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:dust_plume",
+    "ok": true,
+    "particle_wire": "75",
+    "cursor": 20
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:dust_plume{}",
+    "ok": true,
+    "particle_wire": "75",
+    "cursor": 22
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:item_cobweb",
+    "ok": true,
+    "particle_wire": "3f",
+    "cursor": 21
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:item_cobweb{}",
+    "ok": true,
+    "particle_wire": "3f",
+    "cursor": 23
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:lava",
+    "ok": true,
+    "particle_wire": "42",
+    "cursor": 14
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:lava{}",
+    "ok": true,
+    "particle_wire": "42",
+    "cursor": 16
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:reverse_portal",
+    "ok": true,
+    "particle_wire": "65",
+    "cursor": 24
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:reverse_portal{}",
+    "ok": true,
+    "particle_wire": "65",
+    "cursor": 26
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:trial_spawner_detection",
+    "ok": true,
+    "particle_wire": "76",
+    "cursor": 33
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:trial_spawner_detection{}",
+    "ok": true,
+    "particle_wire": "76",
+    "cursor": 35
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:bubble",
+    "ok": true,
+    "particle_wire": "03",
+    "cursor": 16
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:bubble{}",
+    "ok": true,
+    "particle_wire": "03",
+    "cursor": 18
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:landing_lava",
+    "ok": true,
+    "particle_wire": "12",
+    "cursor": 22
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:landing_lava{}",
+    "ok": true,
+    "particle_wire": "12",
+    "cursor": 24
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:sneeze",
+    "ok": true,
+    "particle_wire": "4a",
+    "cursor": 16
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:sneeze{}",
+    "ok": true,
+    "particle_wire": "4a",
+    "cursor": 18
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:dripping_water",
+    "ok": true,
+    "particle_wire": "13",
+    "cursor": 24
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:dripping_water{}",
+    "ok": true,
+    "particle_wire": "13",
+    "cursor": 26
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:landing_honey",
+    "ok": true,
+    "particle_wire": "5b",
+    "cursor": 23
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:landing_honey{}",
+    "ok": true,
+    "particle_wire": "5b",
+    "cursor": 25
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:soul",
+    "ok": true,
+    "particle_wire": "33",
+    "cursor": 14
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:soul{}",
+    "ok": true,
+    "particle_wire": "33",
+    "cursor": 16
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:note",
+    "ok": true,
+    "particle_wire": "44",
+    "cursor": 14
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:note{}",
+    "ok": true,
+    "particle_wire": "44",
+    "cursor": 16
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:mycelium",
+    "ok": true,
+    "particle_wire": "43",
+    "cursor": 18
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:mycelium{}",
+    "ok": true,
+    "particle_wire": "43",
+    "cursor": 20
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:explosion_emitter",
+    "ok": true,
+    "particle_wire": "1d",
+    "cursor": 27
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:explosion_emitter{}",
+    "ok": true,
+    "particle_wire": "1d",
+    "cursor": 29
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:underwater",
+    "ok": true,
+    "particle_wire": "4f",
+    "cursor": 20
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:underwater{}",
+    "ok": true,
+    "particle_wire": "4f",
+    "cursor": 22
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:small_gust",
+    "ok": true,
+    "particle_wire": "20",
+    "cursor": 20
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:small_gust{}",
+    "ok": true,
+    "particle_wire": "20",
+    "cursor": 22
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:block",
+    "ok": false,
+    "error_cursor": -1,
+    "message": "Can't parse particle options: No key block_state in MapLike[{}]",
+    "cursor": 15
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:block{}",
+    "ok": false,
+    "error_cursor": -1,
+    "message": "Can't parse particle options: No key block_state in MapLike[{}]",
+    "cursor": 17
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:totem_of_undying",
+    "ok": true,
+    "particle_wire": "4e",
+    "cursor": 26
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:totem_of_undying{}",
+    "ok": true,
+    "particle_wire": "4e",
+    "cursor": 28
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:large_smoke",
+    "ok": true,
+    "particle_wire": "41",
+    "cursor": 21
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:large_smoke{}",
+    "ok": true,
+    "particle_wire": "41",
+    "cursor": 23
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:ominous_spawning",
+    "ok": true,
+    "particle_wire": "7a",
+    "cursor": 26
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:ominous_spawning{}",
+    "ok": true,
+    "particle_wire": "7a",
+    "cursor": 28
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:geyser_poof",
+    "ok": false,
+    "error_cursor": -1,
+    "message": "Can't parse particle options: No key burst_impulse_base in MapLike[{}]; No key water_blocks in MapLike[{}]",
+    "cursor": 21
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:geyser_poof{}",
+    "ok": false,
+    "error_cursor": -1,
+    "message": "Can't parse particle options: No key burst_impulse_base in MapLike[{}]; No key water_blocks in MapLike[{}]",
+    "cursor": 23
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:item_slime",
+    "ok": true,
+    "particle_wire": "3e",
+    "cursor": 20
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:item_slime{}",
+    "ok": true,
+    "particle_wire": "3e",
+    "cursor": 22
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:instant_effect",
+    "ok": true,
+    "particle_wire": "38ffffffff3f800000",
+    "cursor": 24
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:instant_effect{}",
+    "ok": true,
+    "particle_wire": "38ffffffff3f800000",
+    "cursor": 26
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:entity_effect",
+    "ok": false,
+    "error_cursor": -1,
+    "message": "Can't parse particle options: No key color in MapLike[{}]",
+    "cursor": 23
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:entity_effect{}",
+    "ok": false,
+    "error_cursor": -1,
+    "message": "Can't parse particle options: No key color in MapLike[{}]",
+    "cursor": 25
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:falling_nectar",
+    "ok": true,
+    "particle_wire": "5c",
+    "cursor": 24
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:falling_nectar{}",
+    "ok": true,
+    "particle_wire": "5c",
+    "cursor": 26
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:cherry_leaves",
+    "ok": true,
+    "particle_wire": "29",
+    "cursor": 23
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:cherry_leaves{}",
+    "ok": true,
+    "particle_wire": "29",
+    "cursor": 25
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:item",
+    "ok": false,
+    "error_cursor": -1,
+    "message": "Can't parse particle options: No key item in MapLike[{}]",
+    "cursor": 14
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:item{}",
+    "ok": false,
+    "error_cursor": -1,
+    "message": "Can't parse particle options: No key item in MapLike[{}]",
+    "cursor": 16
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:sculk_charge",
+    "ok": false,
+    "error_cursor": -1,
+    "message": "Can't parse particle options: No key roll in MapLike[{}]",
+    "cursor": 22
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:sculk_charge{}",
+    "ok": false,
+    "error_cursor": -1,
+    "message": "Can't parse particle options: No key roll in MapLike[{}]",
+    "cursor": 24
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:elder_guardian",
+    "ok": true,
+    "particle_wire": "18",
+    "cursor": 24
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:elder_guardian{}",
+    "ok": true,
+    "particle_wire": "18",
+    "cursor": 26
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:pause_mob_growth",
+    "ok": true,
+    "particle_wire": "3c",
+    "cursor": 26
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:pause_mob_growth{}",
+    "ok": true,
+    "particle_wire": "3c",
+    "cursor": 28
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:vault_connection",
+    "ok": true,
+    "particle_wire": "78",
+    "cursor": 26
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:vault_connection{}",
+    "ok": true,
+    "particle_wire": "78",
+    "cursor": 28
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:copper_fire_flame",
+    "ok": true,
+    "particle_wire": "0c",
+    "cursor": 27
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:copper_fire_flame{}",
+    "ok": true,
+    "particle_wire": "0c",
+    "cursor": 29
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:poof",
+    "ok": true,
+    "particle_wire": "45",
+    "cursor": 14
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:poof{}",
+    "ok": true,
+    "particle_wire": "45",
+    "cursor": 16
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:reset_mob_growth",
+    "ok": true,
+    "particle_wire": "3d",
+    "cursor": 26
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:reset_mob_growth{}",
+    "ok": true,
+    "particle_wire": "3d",
+    "cursor": 28
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:scrape",
+    "ok": true,
+    "particle_wire": "72",
+    "cursor": 16
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:scrape{}",
+    "ok": true,
+    "particle_wire": "72",
+    "cursor": 18
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:sonic_boom",
+    "ok": true,
+    "particle_wire": "23",
+    "cursor": 20
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:sonic_boom{}",
+    "ok": true,
+    "particle_wire": "23",
+    "cursor": 22
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:sweep_attack",
+    "ok": true,
+    "particle_wire": "4d",
+    "cursor": 22
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:sweep_attack{}",
+    "ok": true,
+    "particle_wire": "4d",
+    "cursor": 24
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:shriek",
+    "ok": false,
+    "error_cursor": -1,
+    "message": "Can't parse particle options: No key delay in MapLike[{}]",
+    "cursor": 16
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:shriek{}",
+    "ok": false,
+    "error_cursor": -1,
+    "message": "Can't parse particle options: No key delay in MapLike[{}]",
+    "cursor": 18
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:portal",
+    "ok": true,
+    "particle_wire": "46",
+    "cursor": 16
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:portal{}",
+    "ok": true,
+    "particle_wire": "46",
+    "cursor": 18
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:falling_lava",
+    "ok": true,
+    "particle_wire": "11",
+    "cursor": 22
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:falling_lava{}",
+    "ok": true,
+    "particle_wire": "11",
+    "cursor": 24
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:dragon_breath",
+    "ok": true,
+    "particle_wire": "0f3f800000",
+    "cursor": 23
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:dragon_breath{}",
+    "ok": true,
+    "particle_wire": "0f3f800000",
+    "cursor": 25
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:small_flame",
+    "ok": true,
+    "particle_wire": "67",
+    "cursor": 21
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:small_flame{}",
+    "ok": true,
+    "particle_wire": "67",
+    "cursor": 23
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:egg_crack",
+    "ok": true,
+    "particle_wire": "74",
+    "cursor": 19
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:egg_crack{}",
+    "ok": true,
+    "particle_wire": "74",
+    "cursor": 21
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:angry_villager",
+    "ok": true,
+    "particle_wire": "00",
+    "cursor": 24
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:angry_villager{}",
+    "ok": true,
+    "particle_wire": "00",
+    "cursor": 26
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:block_crumble",
+    "ok": false,
+    "error_cursor": -1,
+    "message": "Can't parse particle options: No key block_state in MapLike[{}]",
+    "cursor": 23
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:block_crumble{}",
+    "ok": false,
+    "error_cursor": -1,
+    "message": "Can't parse particle options: No key block_state in MapLike[{}]",
+    "cursor": 25
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:splash",
+    "ok": true,
+    "particle_wire": "50",
+    "cursor": 16
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:splash{}",
+    "ok": true,
+    "particle_wire": "50",
+    "cursor": 18
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:crit",
+    "ok": true,
+    "particle_wire": "0d",
+    "cursor": 14
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:crit{}",
+    "ok": true,
+    "particle_wire": "0d",
+    "cursor": 16
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:soul_fire_flame",
+    "ok": true,
+    "particle_wire": "32",
+    "cursor": 25
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:soul_fire_flame{}",
+    "ok": true,
+    "particle_wire": "32",
+    "cursor": 27
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:witch",
+    "ok": true,
+    "particle_wire": "51",
+    "cursor": 15
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:witch{}",
+    "ok": true,
+    "particle_wire": "51",
+    "cursor": 17
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:smoke",
+    "ok": true,
+    "particle_wire": "48",
+    "cursor": 15
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:smoke{}",
+    "ok": true,
+    "particle_wire": "48",
+    "cursor": 17
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:glow_squid_ink",
+    "ok": true,
+    "particle_wire": "6d",
+    "cursor": 24
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:glow_squid_ink{}",
+    "ok": true,
+    "particle_wire": "6d",
+    "cursor": 26
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:spit",
+    "ok": true,
+    "particle_wire": "4b",
+    "cursor": 14
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:spit{}",
+    "ok": true,
+    "particle_wire": "4b",
+    "cursor": 16
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:falling_honey",
+    "ok": true,
+    "particle_wire": "5a",
+    "cursor": 23
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:falling_honey{}",
+    "ok": true,
+    "particle_wire": "5a",
+    "cursor": 25
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:campfire_cosy_smoke",
+    "ok": true,
+    "particle_wire": "57",
+    "cursor": 29
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:campfire_cosy_smoke{}",
+    "ok": true,
+    "particle_wire": "57",
+    "cursor": 31
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:red_poplar_leaves",
+    "ok": true,
+    "particle_wire": "2b",
+    "cursor": 27
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:red_poplar_leaves{}",
+    "ok": true,
+    "particle_wire": "2b",
+    "cursor": 29
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:snowflake",
+    "ok": true,
+    "particle_wire": "68",
+    "cursor": 19
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:snowflake{}",
+    "ok": true,
+    "particle_wire": "68",
+    "cursor": 21
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:fishing",
+    "ok": true,
+    "particle_wire": "26",
+    "cursor": 17
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:fishing{}",
+    "ok": true,
+    "particle_wire": "26",
+    "cursor": 19
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:flash",
+    "ok": false,
+    "error_cursor": -1,
+    "message": "Can't parse particle options: No key color in MapLike[{}]",
+    "cursor": 15
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:flash{}",
+    "ok": false,
+    "error_cursor": -1,
+    "message": "Can't parse particle options: No key color in MapLike[{}]",
+    "cursor": 17
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:geyser",
+    "ok": false,
+    "error_cursor": -1,
+    "message": "Can't parse particle options: No key water_blocks in MapLike[{}]",
+    "cursor": 16
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:geyser{}",
+    "ok": false,
+    "error_cursor": -1,
+    "message": "Can't parse particle options: No key water_blocks in MapLike[{}]",
+    "cursor": 18
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:white_smoke",
+    "ok": true,
+    "particle_wire": "49",
+    "cursor": 21
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:white_smoke{}",
+    "ok": true,
+    "particle_wire": "49",
+    "cursor": 23
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:sulfur_cube_goo",
+    "ok": true,
+    "particle_wire": "7f",
+    "cursor": 25
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:sulfur_cube_goo{}",
+    "ok": true,
+    "particle_wire": "7f",
+    "cursor": 27
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:sulfur_bubbles",
+    "ok": true,
+    "particle_wire": "04",
+    "cursor": 24
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:sulfur_bubbles{}",
+    "ok": true,
+    "particle_wire": "04",
+    "cursor": 26
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:falling_water",
+    "ok": true,
+    "particle_wire": "14",
+    "cursor": 23
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:falling_water{}",
+    "ok": true,
+    "particle_wire": "14",
+    "cursor": 25
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:squid_ink",
+    "ok": true,
+    "particle_wire": "4c",
+    "cursor": 19
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:squid_ink{}",
+    "ok": true,
+    "particle_wire": "4c",
+    "cursor": 21
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:dust_pillar",
+    "ok": false,
+    "error_cursor": -1,
+    "message": "Can't parse particle options: No key block_state in MapLike[{}]",
+    "cursor": 21
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:dust_pillar{}",
+    "ok": false,
+    "error_cursor": -1,
+    "message": "Can't parse particle options: No key block_state in MapLike[{}]",
+    "cursor": 23
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:dripping_honey",
+    "ok": true,
+    "particle_wire": "59",
+    "cursor": 24
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:dripping_honey{}",
+    "ok": true,
+    "particle_wire": "59",
+    "cursor": 26
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:enchanted_hit",
+    "ok": true,
+    "particle_wire": "19",
+    "cursor": 23
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:enchanted_hit{}",
+    "ok": true,
+    "particle_wire": "19",
+    "cursor": 25
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:warped_spore",
+    "ok": true,
+    "particle_wire": "60",
+    "cursor": 22
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:warped_spore{}",
+    "ok": true,
+    "particle_wire": "60",
+    "cursor": 24
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:dripping_obsidian_tear",
+    "ok": true,
+    "particle_wire": "62",
+    "cursor": 32
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:dripping_obsidian_tear{}",
+    "ok": true,
+    "particle_wire": "62",
+    "cursor": 34
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:cloud",
+    "ok": true,
+    "particle_wire": "0b",
+    "cursor": 15
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:cloud{}",
+    "ok": true,
+    "particle_wire": "0b",
+    "cursor": 17
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:end_rod",
+    "ok": true,
+    "particle_wire": "1b",
+    "cursor": 17
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:end_rod{}",
+    "ok": true,
+    "particle_wire": "1b",
+    "cursor": 19
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:firefly",
+    "ok": true,
+    "particle_wire": "7e",
+    "cursor": 17
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:firefly{}",
+    "ok": true,
+    "particle_wire": "7e",
+    "cursor": 19
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:trial_omen",
+    "ok": true,
+    "particle_wire": "7c",
+    "cursor": 20
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:trial_omen{}",
+    "ok": true,
+    "particle_wire": "7c",
+    "cursor": 22
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:composter",
+    "ok": true,
+    "particle_wire": "36",
+    "cursor": 19
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:composter{}",
+    "ok": true,
+    "particle_wire": "36",
+    "cursor": 21
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:landing_obsidian_tear",
+    "ok": true,
+    "particle_wire": "64",
+    "cursor": 31
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:landing_obsidian_tear{}",
+    "ok": true,
+    "particle_wire": "64",
+    "cursor": 33
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:white_ash",
+    "ok": true,
+    "particle_wire": "66",
+    "cursor": 19
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:white_ash{}",
+    "ok": true,
+    "particle_wire": "66",
+    "cursor": 21
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:crimson_spore",
+    "ok": true,
+    "particle_wire": "5f",
+    "cursor": 23
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:crimson_spore{}",
+    "ok": true,
+    "particle_wire": "5f",
+    "cursor": 25
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:dripping_dripstone_water",
+    "ok": true,
+    "particle_wire": "6b",
+    "cursor": 34
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:dripping_dripstone_water{}",
+    "ok": true,
+    "particle_wire": "6b",
+    "cursor": 36
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:noxious_gas",
+    "ok": true,
+    "particle_wire": "05",
+    "cursor": 21
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:noxious_gas{}",
+    "ok": true,
+    "particle_wire": "05",
+    "cursor": 23
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:effect",
+    "ok": true,
+    "particle_wire": "17ffffffff3f800000",
+    "cursor": 16
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:effect{}",
+    "ok": true,
+    "particle_wire": "17ffffffff3f800000",
+    "cursor": 18
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:trial_spawner_detection_ominous",
+    "ok": true,
+    "particle_wire": "77",
+    "cursor": 41
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:trial_spawner_detection_ominous{}",
+    "ok": true,
+    "particle_wire": "77",
+    "cursor": 43
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:vibration",
+    "ok": false,
+    "error_cursor": -1,
+    "message": "Can't parse particle options: No key arrival_in_ticks in MapLike[{}]; No key destination in MapLike[{}]",
+    "cursor": 19
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:vibration{}",
+    "ok": false,
+    "error_cursor": -1,
+    "message": "Can't parse particle options: No key arrival_in_ticks in MapLike[{}]; No key destination in MapLike[{}]",
+    "cursor": 21
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:noxious_gas_cloud",
+    "ok": true,
+    "particle_wire": "06",
+    "cursor": 27
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:noxious_gas_cloud{}",
+    "ok": true,
+    "particle_wire": "06",
+    "cursor": 29
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:falling_dripstone_lava",
+    "ok": true,
+    "particle_wire": "6a",
+    "cursor": 32
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:falling_dripstone_lava{}",
+    "ok": true,
+    "particle_wire": "6a",
+    "cursor": 34
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:geyser_plume",
+    "ok": false,
+    "error_cursor": -1,
+    "message": "Can't parse particle options: No key water_blocks in MapLike[{}]",
+    "cursor": 22
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:geyser_plume{}",
+    "ok": false,
+    "error_cursor": -1,
+    "message": "Can't parse particle options: No key water_blocks in MapLike[{}]",
+    "cursor": 24
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:dripping_dripstone_lava",
+    "ok": true,
+    "particle_wire": "69",
+    "cursor": 33
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:dripping_dripstone_lava{}",
+    "ok": true,
+    "particle_wire": "69",
+    "cursor": 35
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:firework",
+    "ok": true,
+    "particle_wire": "25",
+    "cursor": 18
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "minecraft:firework{}",
+    "ok": true,
+    "particle_wire": "25",
+    "cursor": 20
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "dust{color:[1f,0f,0.5f],scale:1f}",
+    "ok": true,
+    "particle_wire": "15ffff007f3f800000",
+    "cursor": 33
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "dust{color:16711680,scale:0.001f}",
+    "ok": false,
+    "error_cursor": -1,
+    "message": "Can't parse particle options: Value must be within range [0.01;4.0]: 0.001",
+    "cursor": 33
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "dust{color:1,scale:5f}",
+    "ok": false,
+    "error_cursor": -1,
+    "message": "Can't parse particle options: Value must be within range [0.01;4.0]: 5.0",
+    "cursor": 22
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "dust{color:1,scale:'x'}",
+    "ok": false,
+    "error_cursor": -1,
+    "message": "Can't parse particle options: Not a number",
+    "cursor": 23
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "dust{color:'red',scale:1f}",
+    "ok": false,
+    "error_cursor": -1,
+    "message": "Can't parse particle options: Failed to parse either. First: Not a number; Second: Not a list: \"red\"",
+    "cursor": 26
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "dust_color_transition{from_color:1,to_color:2,scale:2f}",
+    "ok": true,
+    "particle_wire": "16000000010000000240000000",
+    "cursor": 55
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "geyser{water_blocks:3}",
+    "ok": true,
+    "particle_wire": "0700000003",
+    "cursor": 22
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "geyser{water_blocks:0}",
+    "ok": false,
+    "error_cursor": -1,
+    "message": "Can't parse particle options: Value must be positive: 0",
+    "cursor": 22
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "geyser_base{water_blocks:3,burst_impulse_base:1f}",
+    "ok": true,
+    "particle_wire": "08000000033f800000",
+    "cursor": 49
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "dragon_breath{power:2.5f}",
+    "ok": true,
+    "particle_wire": "0f40200000",
+    "cursor": 25
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "effect{color:[0.5f,0.25f,1f],power:2f}",
+    "ok": true,
+    "particle_wire": "17ff7f3fff40000000",
+    "cursor": 38
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "entity_effect{color:[1f,0f,0f,0.5f]}",
+    "ok": true,
+    "particle_wire": "1c7fff0000",
+    "cursor": 36
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "sculk_charge{roll:0.5f}",
+    "ok": true,
+    "particle_wire": "303f000000",
+    "cursor": 23
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "shriek{delay:-2}",
+    "ok": true,
+    "particle_wire": "73feffffff0f",
+    "cursor": 16
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "trail{target:[1d,2d,3d],color:1,duration:5}",
+    "ok": true,
+    "particle_wire": "3b3ff0000000000000400000000000000040080000000000000000000105",
+    "cursor": 43
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "trail{target:[1d,2d],color:1,duration:0}",
+    "ok": false,
+    "error_cursor": -1,
+    "message": "Can't parse particle options: Value must be positive: 0; Input is not a list of 3 elements",
+    "cursor": 40
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "item{item:'minecraft:stone'}",
+    "ok": true,
+    "particle_wire": "3901010000",
+    "cursor": 28
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "item{item:{id:'minecraft:stone',count:2}}",
+    "ok": true,
+    "particle_wire": "3901020000",
+    "cursor": 41
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "block{block_state:'minecraft:stone'}",
+    "ok": true,
+    "particle_wire": "0101",
+    "cursor": 36
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "block{block_state:{Name:'minecraft:oak_log',Properties:{axis:'x'}}}",
+    "ok": false,
+    "error_cursor": -1,
+    "message": "Can't parse particle options: Failed to parse either. First: Failed to parse either. First: Not a string; Second: No key id in MapLike[{Name:\"minecraft:oak_log\",Properties:{axis:\"x\"}}]; Second: Not a string",
+    "cursor": 67
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "block{block_state:{id:'minecraft:oak_log',properties:{axis:'x'}}}",
+    "ok": true,
+    "particle_wire": "018b01",
+    "cursor": 65
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "vibration{destination:{type:'minecraft:block',pos:[1,2,3]},arrival_in_ticks:5}",
+    "ok": true,
+    "particle_wire": "3a00000000400000300205",
+    "cursor": 78
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "input": "flame{ignored:1}",
+    "ok": true,
+    "particle_wire": "27",
+    "cursor": 16
+  },
+  {
     "parser": "minecraft:resource_location",
     "properties": {},
     "input": "foo",

@@ -13,6 +13,7 @@ struct Vector {
     value: Option<serde_json::Value>,
     world_coordinates: Option<serde_json::Value>,
     local_coordinates: Option<[f64; 3]>,
+    particle_wire: Option<String>,
 }
 #[test]
 fn argument_parser_vectors_match_java_errors_cursors_and_values() {
@@ -36,6 +37,7 @@ fn argument_parser_vectors_match_java_errors_cursors_and_values() {
         "minecraft:block_predicate",
         "minecraft:item_stack",
         "minecraft:item_predicate",
+        "minecraft:particle",
         "minecraft:team_color",
         "minecraft:hex_color",
         "minecraft:message",
@@ -141,6 +143,19 @@ fn check_vector(vector: &Vector) {
                 ArgumentValue::Style(v) => serde_json::from_str(&v.to_json().unwrap()).unwrap(),
                 _ => expected.clone(),
             };
+            assert_eq!(actual, *expected, "{label}");
+        }
+        if let Some(expected) = &vector.particle_wire {
+            use ferraloom_protocol::Wire;
+            let ArgumentValue::Particle(particle) = &value else {
+                panic!("{label}: expected particle")
+            };
+            let actual = particle
+                .to_bytes()
+                .unwrap()
+                .iter()
+                .map(|b| format!("{b:02x}"))
+                .collect::<String>();
             assert_eq!(actual, *expected, "{label}");
         }
         if let Some(expected) = &vector.world_coordinates {

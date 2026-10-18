@@ -5,6 +5,7 @@ pub mod coordinates;
 pub mod item_predicate;
 pub mod items;
 pub mod operation;
+pub mod particles;
 pub mod range;
 pub mod resources;
 pub mod scoreboard;
@@ -47,6 +48,7 @@ pub enum ArgumentValue {
     BlockPredicate(blocks::BlockPredicate),
     Item(items::ItemInput),
     ItemPredicate(item_predicate::ItemPredicate),
+    Particle(ferraloom_protocol::entity_data::Particle),
     Boolean(bool),
     Integer(i32),
     Long(i64),
@@ -291,6 +293,7 @@ impl MinecraftArgument {
             A::BlockPredicate {} => V::BlockPredicate(blocks::predicate(reader, &self.context)?),
             A::ItemStack {} => V::Item(items::parse(reader)?),
             A::ItemPredicate {} => V::ItemPredicate(item_predicate::parse(reader, &self.context)?),
+            A::Particle {} => V::Particle(particles::parse(reader, &self.context)?),
             A::ItemSlot {} => V::Integer(slots::parse(reader, true)?.slots[0]),
             A::ItemSlots {} => V::Slots(slots::parse(reader, false)?),
             A::NbtTag {} => V::Tag(nbt(reader, false)?),
@@ -540,12 +543,6 @@ impl MinecraftArgument {
                         "minecraft:slot_source",
                     )?)
                 }
-            }
-            _ => {
-                return Err(error(
-                    "ferraloom.argument.pending",
-                    &[format!("{:?}", self.wire)],
-                ));
             }
         })
     }
