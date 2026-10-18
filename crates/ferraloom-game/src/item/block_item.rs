@@ -134,7 +134,13 @@ pub fn apply_block_state(
     properties: &BlockItemStateProperties,
     mut state: BlockState,
 ) -> BlockState {
-    for (name, value) in &properties.0 {
+    // Native map decoding retains the last value for each key. Independent
+    // state properties commute, so reverse traversal can discard earlier keys.
+    let mut applied = std::collections::BTreeSet::new();
+    for (name, value) in properties.0.iter().rev() {
+        if !applied.insert(name) {
+            continue;
+        }
         if state.has_integer_property(name) {
             if let Some(value) = crate::predicates::block::java_integer(value)
                 && let Ok(modified) = state.with_integer_property(name, value)

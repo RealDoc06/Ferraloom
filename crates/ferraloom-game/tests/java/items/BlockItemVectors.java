@@ -84,6 +84,17 @@ public final class BlockItemVectors {
                 System.out.println("property\t" + Block.getId(state) + "\t" + entry.getValue() + "\t" + value + "\t" + Block.getId(patch.apply(state)));
             }
         }
+        for (var state : Blocks.COCOA.getStateDefinition().getPossibleStates()) {
+            for (var values : List.of(List.of("1", "invalid"), List.of("invalid", "+1"), List.of("1", "2"), List.of("+1", "١"), List.of("invalid", "invalid"), List.of("2", "-0"))) {
+                var buffer = new net.minecraft.network.FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+                try {
+                    buffer.writeVarInt(2);
+                    for (var value : values) { buffer.writeUtf("age"); buffer.writeUtf(value); }
+                    var decoded = BlockItemStateProperties.STREAM_CODEC.decode(buffer);
+                    System.out.println("duplicate\t" + Block.getId(state) + "\t" + values.get(0) + "\t" + values.get(1) + "\t" + Block.getId(decoded.apply(state)));
+                } finally { buffer.release(); }
+            }
+        }
         for (int kind = 0; kind < 3; kind++) for (int patch = 0; patch < 5; patch++) {
             var level = new Fixture(registries);
             var block = List.of(Blocks.CHEST, Blocks.BARREL, Blocks.FURNACE).get(kind);

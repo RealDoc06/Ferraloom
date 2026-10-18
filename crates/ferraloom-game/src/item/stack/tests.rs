@@ -208,22 +208,27 @@ fn native_block_item_placement_matches_states_context_consumption_effects_and_rn
 
 #[test]
 fn native_block_item_state_properties_preserve_typed_values_and_invalid_inputs() {
-    let mut calls = 0;
+    let mut calls = [0; 2];
     for line in native_vectors()
         .lines()
-        .filter(|line| line.starts_with("property\t"))
+        .filter(|line| line.starts_with("property\t") || line.starts_with("duplicate\t"))
     {
         let f: Vec<_> = line.split('\t').collect();
         let state = BlockState::from_id(f[1].parse().unwrap()).unwrap();
-        let properties = BlockItemStateProperties(vec![(f[2].into(), f[3].into())]);
+        let duplicate = f[0] == "duplicate";
+        let properties = BlockItemStateProperties(if duplicate {
+            vec![("age".into(), f[2].into()), ("age".into(), f[3].into())]
+        } else {
+            vec![(f[2].into(), f[3].into())]
+        });
         assert_eq!(
             super::super::block_item::apply_block_state(&properties, state).id(),
             f[4].parse::<u16>().unwrap(),
             "{line}"
         );
-        calls += 1;
+        calls[usize::from(duplicate)] += 1;
     }
-    assert_eq!(calls, 3806);
+    assert_eq!(calls, [3806, 72]);
 }
 
 #[test]
