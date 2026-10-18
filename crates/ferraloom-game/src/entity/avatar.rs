@@ -28,6 +28,29 @@ impl Avatar {
     pub fn is_model_part_shown(&self, mask: i8) -> bool {
         self.entity_data.get(data::PLAYER_MODEL_CUSTOMISATION) & mask == mask
     }
+    /// Port of Avatar.POSES. Standing and crouching retain the explicit vehicle
+    /// attachment; low poses use EntityAttachments' fallback at the feet.
+    pub fn default_dimensions(
+        pose: ferraloom_protocol::entity_data::Pose,
+    ) -> super::EntityDimensions {
+        use super::dimensions::{EntityAttachment, EntityAttachments};
+        use ferraloom_protocol::entity_data::Pose;
+        let vehicle = ferraloom_util::Vec3::new(0.0, 0.6, 0.0);
+        match pose {
+            Pose::Sleeping => super::EntityDimensions::fixed(0.2, 0.2).with_eye_height(0.2),
+            Pose::FallFlying | Pose::Swimming | Pose::SpinAttack => {
+                super::EntityDimensions::scalable(0.6, 0.6).with_eye_height(0.4)
+            }
+            Pose::Crouching => super::EntityDimensions::scalable(0.6, 1.5)
+                .with_eye_height(1.27)
+                .with_attachments(
+                    EntityAttachments::create_default(0.6, 1.5)
+                        .with_points(EntityAttachment::Vehicle, vec![vehicle]),
+                ),
+            Pose::Dying => super::EntityDimensions::fixed(0.2, 0.2).with_eye_height(1.62),
+            _ => super::EntityDimensions::for_type(ferraloom_data::EntityType::PLAYER),
+        }
+    }
 }
 impl std::ops::Deref for Avatar {
     type Target = LivingEntity;

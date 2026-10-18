@@ -52,9 +52,9 @@ pub fn start_riding(
         .copied();
     let player_first = player
         && first.is_some_and(|id| !matches!(level.entity_state(id), Ok(EntityState::Player(_))));
+    super::dimensions::set_pose(entity, Pose::Standing, level)?;
     {
         let rider = level.entity_mut::<EntityData>(entity)?;
-        rider.entity_data.set(synched_data::POSE, Pose::Standing);
         rider.vehicle = Some(vehicle);
     }
     let passengers = &mut level.entity_mut::<EntityData>(vehicle)?.passengers;

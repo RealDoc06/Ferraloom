@@ -259,7 +259,7 @@ fn check_segment<E: Entity + ?Sized>(
     budget: i32,
     level: &mut Level,
 ) -> Result<i32, LevelError> {
-    let dimensions = level.entity::<EntityData>(entity)?.dimensions;
+    let dimensions = &level.entity::<EntityData>(entity)?.dimensions;
     let bb = dimensions.make_bounding_box(to).deflate(
         f64::from(1e-5_f32),
         f64::from(1e-5_f32),

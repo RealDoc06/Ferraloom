@@ -54,6 +54,7 @@ mod base;
 pub mod bubble_column;
 pub mod collision;
 pub mod collision_context;
+pub mod dimensions;
 pub mod fluid;
 pub mod inside_block;
 mod lifecycle;
@@ -394,24 +395,70 @@ pub trait Entity: Sync {
     ) -> Result<bool, LevelError> {
         Ok(false)
     }
+    fn dimensions(
+        &self,
+        entity: EntityRef,
+        _pose: ferraloom_protocol::entity_data::Pose,
+        level: &Level,
+    ) -> Result<EntityDimensions, LevelError> {
+        Ok(EntityDimensions::for_type(
+            level.entity_state(entity)?.entity_type(),
+        ))
+    }
+    fn default_dimensions(
+        &self,
+        entity: EntityRef,
+        _pose: ferraloom_protocol::entity_data::Pose,
+        level: &Level,
+    ) -> Result<EntityDimensions, LevelError> {
+        Ok(EntityDimensions::for_type(
+            level.entity_state(entity)?.entity_type(),
+        ))
+    }
     fn passenger_riding_position(
         &self,
         entity: EntityRef,
-        _passenger: EntityRef,
+        passenger: EntityRef,
+        level: &Level,
+    ) -> Result<ferraloom_util::Vec3, LevelError> {
+        let (position, dimensions) = {
+            let base = level.entity::<EntityData>(entity)?;
+            (base.position, base.dimensions.clone())
+        };
+        Ok(position
+            + self.passenger_attachment_point(entity, passenger, &dimensions, 1.0, level)?)
+    }
+    fn passenger_attachment_point(
+        &self,
+        entity: EntityRef,
+        passenger: EntityRef,
+        dimensions: &EntityDimensions,
+        _scale: f32,
+        level: &Level,
+    ) -> Result<ferraloom_util::Vec3, LevelError> {
+        let base = level.entity::<EntityData>(entity)?;
+        let index = base
+            .passengers
+            .iter()
+            .position(|id| *id == passenger)
+            .map_or(-1, |index| index as i32);
+        Ok(dimensions.attachments.get_clamped(
+            dimensions::EntityAttachment::Passenger,
+            index,
+            base.yaw,
+        ))
+    }
+    fn vehicle_attachment_point(
+        &self,
+        entity: EntityRef,
+        _vehicle: EntityRef,
         level: &Level,
     ) -> Result<ferraloom_util::Vec3, LevelError> {
         let base = level.entity::<EntityData>(entity)?;
         Ok(base
-            .position
-            .add_xyz(0.0, f64::from(base.dimensions.height), 0.0))
-    }
-    fn vehicle_attachment_point(
-        &self,
-        _entity: EntityRef,
-        _vehicle: EntityRef,
-        _level: &Level,
-    ) -> Result<ferraloom_util::Vec3, LevelError> {
-        Ok(ferraloom_util::Vec3::ZERO)
+            .dimensions
+            .attachments
+            .get(dimensions::EntityAttachment::Vehicle, 0, base.yaw))
     }
 
     fn fluid_interaction_box(

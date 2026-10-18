@@ -69,6 +69,37 @@ impl Cow {
 /// Shared Cow dispatcher for the foundation's Entity/LivingEntity primitives.
 pub struct CowBehavior;
 impl Entity for CowBehavior {
+    fn dimensions(
+        &self,
+        entity: super::EntityRef,
+        pose: ferraloom_protocol::entity_data::Pose,
+        level: &crate::level::Level,
+    ) -> Result<super::EntityDimensions, crate::level::LevelError> {
+        super::living::dimensions(self, entity, pose, level)
+    }
+    fn default_dimensions(
+        &self,
+        entity: super::EntityRef,
+        _pose: ferraloom_protocol::entity_data::Pose,
+        level: &crate::level::Level,
+    ) -> Result<super::EntityDimensions, crate::level::LevelError> {
+        let dimensions = super::EntityDimensions::for_type(ferraloom_data::EntityType::COW);
+        Ok(
+            if level.entity::<Cow>(entity)?.parent.parent.parent.age < 0 {
+                dimensions.scale(0.5, 0.5).with_eye_height(0.665)
+            } else {
+                dimensions
+            },
+        )
+    }
+    fn passenger_riding_position(
+        &self,
+        entity: super::EntityRef,
+        passenger: super::EntityRef,
+        level: &crate::level::Level,
+    ) -> Result<ferraloom_util::Vec3, crate::level::LevelError> {
+        super::living::passenger_riding_position(self, entity, passenger, level)
+    }
     fn ride_tick(
         &self,
         entity: super::EntityRef,

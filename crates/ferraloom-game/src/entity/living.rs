@@ -114,3 +114,60 @@ impl std::ops::DerefMut for LivingEntity {
         &mut self.parent
     }
 }
+
+/// Port of LivingEntity#getDimensions, retaining the subclass's default pose
+/// dimensions and applying the live SCALE attribute as a separate float step.
+pub fn dimensions<E: super::Entity + ?Sized>(
+    behavior: &E,
+    entity: super::EntityRef,
+    pose: ferraloom_protocol::entity_data::Pose,
+    level: &crate::level::Level,
+) -> Result<super::EntityDimensions, crate::level::LevelError> {
+    if pose == ferraloom_protocol::entity_data::Pose::Sleeping {
+        return Ok(super::EntityDimensions::fixed(0.2, 0.2).with_eye_height(0.2));
+    }
+    let dimensions = behavior.default_dimensions(entity, pose, level)?;
+    let scale = level
+        .entity::<LivingEntity>(entity)?
+        .attributes
+        .value(Attribute::SCALE)
+        .expect("living supplier defines SCALE") as f32;
+    Ok(dimensions.scale(scale, scale))
+}
+
+/// Port of LivingEntity#getPassengerRidingPosition's current dimension query.
+pub fn passenger_riding_position<E: super::Entity + ?Sized>(
+    behavior: &E,
+    entity: super::EntityRef,
+    passenger: super::EntityRef,
+    level: &crate::level::Level,
+) -> Result<ferraloom_util::Vec3, crate::level::LevelError> {
+    let (position, pose, scale, age_scale) = {
+        let state = level.entity_state(entity)?;
+        let base = state.as_entity();
+        let living = state
+            .as_living()
+            .ok_or(crate::level::LevelError::WrongEntityType(entity))?;
+        let scale = living
+            .attributes
+            .value(Attribute::SCALE)
+            .expect("living supplier defines SCALE") as f32;
+        let baby =
+            matches!(state, super::EntityState::Cow(cow) if cow.parent.parent.parent.age < 0);
+        (
+            base.position,
+            *base.entity_data.get(data::POSE),
+            scale,
+            if baby { 0.5 } else { 1.0 },
+        )
+    };
+    let dimensions = behavior.dimensions(entity, pose, level)?;
+    Ok(position
+        + behavior.passenger_attachment_point(
+            entity,
+            passenger,
+            &dimensions,
+            scale * age_scale,
+            level,
+        )?)
+}

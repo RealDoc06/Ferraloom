@@ -10,6 +10,7 @@ import net.minecraft.network.syncher.*;
 public final class LivingVectors extends Player {
   LivingVectors(Level level) { super(level,new GameProfile(new UUID(1,2),"metadata")); }
   @Override public GameType gameMode() { return GameType.SURVIVAL; }
+  void leaveFirstTick() {this.firstTick=false;}
   static String value(Object value) {
     if(value instanceof Float number) return Integer.toHexString(Float.floatToRawIntBits(number));
     if(value instanceof Enum<?> entry) return Integer.toString(entry.ordinal());

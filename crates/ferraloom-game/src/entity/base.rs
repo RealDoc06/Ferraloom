@@ -13,36 +13,7 @@ use super::{
     synched_data::{self, SynchedEntityData},
 };
 
-/// Port of EntityDimensions. Width arithmetic is deliberately performed as float.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct EntityDimensions {
-    pub width: f32,
-    pub height: f32,
-    pub eye_height: f32,
-    pub fixed: bool,
-}
-impl EntityDimensions {
-    pub fn for_type(kind: EntityType) -> Self {
-        let data = kind.data();
-        Self {
-            width: data.width,
-            height: data.height,
-            eye_height: data.eye_height,
-            fixed: data.fixed_dimensions,
-        }
-    }
-    pub fn make_bounding_box(self, pos: Vec3) -> Aabb {
-        let radius = f64::from(self.width / 2.0);
-        Aabb::new(
-            pos.x - radius,
-            pos.y,
-            pos.z - radius,
-            pos.x + radius,
-            pos.y + f64::from(self.height),
-            pos.z + radius,
-        )
-    }
-}
+pub use super::dimensions::EntityDimensions;
 
 /// Port of Entity.RemovalReason, including chunk unload's persistence semantics.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -220,8 +191,8 @@ impl EntityData {
             tags: JavaHashSet::new(),
             piston_deltas: [0.0; 3],
             piston_deltas_game_time: 0,
-            dimensions,
             eye_height: dimensions.eye_height,
+            dimensions,
             is_in_powder_snow: false,
             was_in_powder_snow: false,
             supporting_block_pos: None,

@@ -509,6 +509,30 @@ fn jump_from_ground(entity: crate::entity::EntityRef, level: &mut Level) -> Resu
 }
 pub struct PlayerBehavior;
 impl crate::entity::Entity for PlayerBehavior {
+    fn dimensions(
+        &self,
+        entity: crate::entity::EntityRef,
+        pose: ferraloom_protocol::entity_data::Pose,
+        level: &Level,
+    ) -> Result<crate::entity::EntityDimensions, LevelError> {
+        super::living::dimensions(self, entity, pose, level)
+    }
+    fn default_dimensions(
+        &self,
+        _entity: crate::entity::EntityRef,
+        pose: ferraloom_protocol::entity_data::Pose,
+        _level: &Level,
+    ) -> Result<crate::entity::EntityDimensions, LevelError> {
+        Ok(Avatar::default_dimensions(pose))
+    }
+    fn passenger_riding_position(
+        &self,
+        entity: crate::entity::EntityRef,
+        passenger: crate::entity::EntityRef,
+        level: &Level,
+    ) -> Result<Vec3, LevelError> {
+        super::living::passenger_riding_position(self, entity, passenger, level)
+    }
     /// Player#rideTick's server dismount gate precedes LivingEntity#rideTick.
     fn ride_tick(
         &self,
