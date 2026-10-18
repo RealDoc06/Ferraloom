@@ -1,6 +1,8 @@
 //! Turns pinned vanilla reports and extracted facts into allocation-free tables.
 #[path = "build/block_methods.rs"]
 mod block_methods;
+#[path = "build/center_support.rs"]
+mod center_support;
 #[path = "build/environment_attributes.rs"]
 mod environment_attributes;
 
@@ -904,6 +906,11 @@ fn main() {
     block_state_facts(
         &mut out,
         &load(root, "block_state_facts"),
+        block_properties["states"].as_array().unwrap().len(),
+    );
+    center_support::generate(
+        &mut out,
+        &load(root, "block_center_support"),
         block_properties["states"].as_array().unwrap().len(),
     );
     let collision_flags = load(root, "block_collision_flags");

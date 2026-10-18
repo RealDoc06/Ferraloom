@@ -489,6 +489,17 @@ impl BlockState {
             Some(bits & (1 << (3 + face as u8)) != 0)
         }
     }
+    /// Port of BlockStateBase.Cache#isFaceSturdy for SupportType.CENTER.
+    /// This reads only the native cache, initialized with EmptyBlockGetter at
+    /// ZERO; dynamic blocks retain None and require their contextual behavior.
+    pub const fn cached_center_support(self, face: ferraloom_util::Direction) -> Option<bool> {
+        let bits = CENTER_SUPPORT[self.0 as usize];
+        if bits & 64 == 0 {
+            None
+        } else {
+            Some(bits & (1 << face as u8) != 0)
+        }
+    }
     /// Port of BlockStateBase.Cache#isCollisionShapeFullBlock.
     pub const fn cached_collision_full_block(self) -> Option<bool> {
         let bits = BLOCK_STATE_FACTS[self.0 as usize];

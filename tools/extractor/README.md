@@ -141,3 +141,11 @@ are immutable registry facts: dimension, biome, clock and weather sampling does
 not participate. Float limits are measured with sanitizeValue at both infinities;
 unbounded ends remain null. The Rust build consumes this committed table without
 Java. No environment value is sampled from a fabricated live level.
+
+`ExtractCenterSupport <output-file>` extracts `BlockStateBase.Cache` support
+entries for `SupportType.CENTER` into `block_center_support.json`. The native
+cache is initialized once with `EmptyBlockGetter` at `BlockPos.ZERO`, alongside
+its existing FULL entries. Extraction calls the cached query only when
+`!block.hasDynamicShape()`; dynamic states record no cached result. No live
+level, biome, position, collision context or tag membership is sampled. Bit six
+marks cache presence, and bits zero through five follow native direction order.
