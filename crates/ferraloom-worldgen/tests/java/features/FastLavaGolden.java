@@ -1,6 +1,9 @@
 import com.google.gson.*;
 import java.lang.reflect.Proxy;
 import java.nio.file.Path;
+import java.nio.file.Files;
+import java.nio.charset.StandardCharsets;
+import java.util.zip.GZIPOutputStream;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.attribute.EnvironmentAttributeSystem;
@@ -49,6 +52,9 @@ public final class FastLavaGolden {
         }
         var alias=overworld.deepCopy();var attributes=new JsonObject();attributes.addProperty("gameplay/fast_lava",true);alias.add("attributes",attributes);capture(registries,cases,"short_key",alias);
         attributes.addProperty("minecraft:gameplay/fast_lava",false);capture(registries,cases,"duplicate_key",alias.deepCopy());
-        WorldgenGolden.write(out.resolve("fast_lava.json.gz"),cases);
+        // Explicit null entries are codec inputs, so the golden must retain them.
+        try(var stream=new GZIPOutputStream(Files.newOutputStream(out.resolve("fast_lava.json.gz")))) {
+            stream.write(new GsonBuilder().serializeNulls().create().toJson(cases).getBytes(StandardCharsets.UTF_8));
+        }
     }
 }
