@@ -260,4 +260,7 @@ mod worldgen_tests;
 mod tree_worldgen_tests;
 
 #[cfg(test)]
+mod cave_worldgen_tests;
+
+#[cfg(test)]
 mod runtime_tests;
