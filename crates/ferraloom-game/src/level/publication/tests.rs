@@ -99,6 +99,13 @@ impl PublishingDriver {
     }
 }
 impl AcquireDriver for PublishingDriver {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+
     fn is_owner_thread(&self) -> bool {
         true
     }
@@ -289,4 +296,59 @@ fn duplicate_publication_keeps_the_canonical_receiver_and_returns_the_new_payloa
     assert!(std::ptr::eq(original, level.chunk(TARGET).unwrap()));
     assert_eq!(original.publication_generation, reference.generation);
     assert_eq!(error.prepared.chunk.pos(), TARGET);
+}
+
+#[test]
+fn exclusive_attachment_registers_prepared_receivers_without_unpacking_saved_ticks() {
+    let mut level = level();
+    level.add_chunk(prepared().chunk).unwrap();
+    let handle = level.block_entity_ref(PORTAL).unwrap().unwrap();
+    assert_ne!(handle.generation, 0);
+    assert!(level.block_entity_state(handle).unwrap().data().has_level);
+    let ticks = level.region().block_ticks.container(TARGET).unwrap();
+    assert!(ticks.has_scheduled_tick(STONE, Block::SAND));
+    assert!(ticks.peek().is_none());
+}
+
+#[test]
+fn driver_is_one_owned_runtime_and_cold_access_never_replaces_it() {
+    let mut level = level();
+    level
+        .install_acquire_driver(
+            Box::new(PublishingDriver::new(Some(prepared()), false)),
+            0..16,
+        )
+        .unwrap();
+    assert_eq!(
+        level.install_acquire_driver(Box::new(PublishingDriver::new(None, true)), 0..16),
+        Err(LevelError::ChunkAcquisition(
+            ChunkPos::ZERO,
+            super::super::chunk_holder::ChunkStatus::Full,
+            AcquireFailure::DriverAlreadyInstalled,
+        ))
+    );
+    let runtime = level
+        .acquire_driver()
+        .unwrap()
+        .as_any()
+        .downcast_ref::<PublishingDriver>()
+        .unwrap();
+    assert!(!runtime.absent);
+    assert!(runtime.prepared.borrow().is_some());
+    level
+        .acquire_driver_mut()
+        .unwrap()
+        .as_any_mut()
+        .downcast_mut::<PublishingDriver>()
+        .unwrap()
+        .absent = true;
+    assert!(
+        level
+            .acquire_driver()
+            .unwrap()
+            .as_any()
+            .downcast_ref::<PublishingDriver>()
+            .unwrap()
+            .absent
+    );
 }

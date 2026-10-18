@@ -87,7 +87,10 @@ impl super::chunk::LevelChunk {
     /// Pending raw NBT stays separate and is not activated by this operation.
     pub fn add_prepared_block_entity(&mut self, state: BlockEntityState) -> Result<(), LevelError> {
         let data = state.data();
-        if self.publication_generation != 0 || data.generation != 0 {
+        if self.publication_generation != 0
+            || data.generation != 0
+            || ChunkPos::containing(data.pos) != self.pos()
+        {
             return Err(LevelError::InvalidPendingGenerationData);
         }
         if !data.kind.is_valid(self.get_block_state(data.pos)) {
@@ -107,14 +110,16 @@ impl BlockEntityRuntime {
         let mut tickers = self.tickers.borrow_mut();
         for &index in chunk.block_entities.positions.values() {
             let state = chunk.block_entities.slots[index].as_mut().unwrap();
-            let generation = self
-                .next_generation
-                .get()
-                .checked_add(1)
-                .expect("block entity generations exhausted");
-            self.next_generation.set(generation);
             let data = state.data_mut();
-            data.generation = generation;
+            if data.generation == 0 {
+                let generation = self
+                    .next_generation
+                    .get()
+                    .checked_add(1)
+                    .expect("block entity generations exhausted");
+                self.next_generation.set(generation);
+                data.generation = generation;
+            }
             data.has_level = true;
             data.removed = false;
             let handle = data.reference();

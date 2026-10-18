@@ -2,7 +2,7 @@
 //! progress; it must publish canonical state before completing an acquisition.
 use super::{Level, LevelError, chunk_holder::ChunkStatus};
 use ferraloom_util::ChunkPos;
-use std::cell::Cell;
+use std::{any::Any, cell::Cell};
 
 /// Port of ChunkLevel#byStatus for the native 26.3 generation pyramid.
 pub const fn ticket_level(status: ChunkStatus) -> i32 {
@@ -57,6 +57,7 @@ pub enum AcquireProgress {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AcquireFailure {
     DriverUnavailable,
+    DriverAlreadyInstalled,
     MissingHolder,
     MissingResult,
     InvalidHandle,
@@ -73,13 +74,19 @@ pub enum AcquireFailure {
 /// no method may cast a suspended Level read into a mutable borrow. Polling must
 /// keep reentrant completions reachable, never evict, and never advance a tick.
 /// Worker failure/cancellation returns an error instead of an endless Pending.
-pub trait AcquireDriver: Send {
+pub trait AcquireDriver: Send + Any {
+    /// Cold access to the sole concrete runtime owner. Callers must finish this
+    /// borrow and return owned work before invoking a world callback.
+    fn as_any(&self) -> &dyn Any;
+    fn as_any_mut(&mut self) -> &mut dyn Any;
     fn is_owner_thread(&self) -> bool;
     fn visible_ticket_level(&self, pos: ChunkPos) -> Option<i32>;
     /// Apply TicketStorage#add_unknown; it refreshes the canonical signed timer.
     fn add_unknown_ticket(&self, pos: ChunkPos, status: ChunkStatus) -> Result<(), LevelError>;
     /// Propagate tickets, promote the visible map and dispatch generation. True
     /// means native runDistanceManagerUpdates would invalidate the source cache.
+    /// Clear Level's cache at visible-map publication, before any nested work;
+    /// the return value also invalidates the outer acquisition's cache.
     fn run_distance_manager_updates(&self, level: &Level) -> Result<bool, LevelError>;
     /// Called only with an eligible visible holder. Reuse its existing request
     /// identity or result; do not add a second ticket or wait for ticking status.
@@ -90,6 +97,9 @@ pub trait AcquireDriver: Send {
         status: ChunkStatus,
     ) -> Result<AcquireHandle, LevelError>;
     fn acquisition_result(&self, handle: AcquireHandle) -> Result<AcquireResult, LevelError>;
+    /// Visible-map changes clear Level's cache before callbacks, not merely
+    /// when DistanceUpdates is returned. Mutating ready tasks stay queued for
+    /// the next exclusive slot and are never run through this shared borrow.
     fn poll_acquisition_step(&self, level: &Level) -> Result<AcquireProgress, LevelError>;
     /// Wakeable wait, only after an idle poll and a second completion check.
     fn wait_for_progress(&self) -> Result<(), LevelError>;
@@ -136,6 +146,13 @@ impl Level {
         driver: Box<dyn AcquireDriver>,
         build_height: std::ops::Range<i32>,
     ) -> Result<(), LevelError> {
+        if self.acquire_driver.is_some() {
+            return Err(LevelError::ChunkAcquisition(
+                ChunkPos::ZERO,
+                ChunkStatus::Full,
+                AcquireFailure::DriverAlreadyInstalled,
+            ));
+        }
         if build_height.start >= build_height.end
             || build_height.start % 16 != 0
             || build_height.end % 16 != 0
@@ -155,6 +172,15 @@ impl Level {
         self.acquisition.clear_cache();
         self.acquire_driver = Some(driver);
         Ok(())
+    }
+
+    /// Cold runtime access; no take/restore operation can detach the driver
+    /// while a nested acquisition or callback still needs the canonical owner.
+    pub fn acquire_driver(&self) -> Option<&dyn AcquireDriver> {
+        self.acquire_driver.as_deref()
+    }
+    pub fn acquire_driver_mut(&mut self) -> Option<&mut (dyn AcquireDriver + 'static)> {
+        self.acquire_driver.as_deref_mut()
     }
 
     /// Port of Level#getChunk's status/creation overload. The handle identifies

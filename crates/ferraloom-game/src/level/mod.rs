@@ -1,4 +1,7 @@
-use std::{cell::{Cell, RefCell}, sync::Arc};
+use std::{
+    cell::{Cell, RefCell},
+    sync::Arc,
+};
 
 use ferraloom_data::{Block, BlockState, EntityType};
 use ferraloom_util::{BlockPos, ChunkPos};
@@ -328,6 +331,9 @@ impl Level {
         region
             .next_chunk_generation
             .set(chunk.publication_generation);
+        region
+            .block_entity_state
+            .register_published_chunk(&mut chunk);
         region
             .block_ticks
             .add_container(pos, std::mem::take(&mut chunk.block_ticks));

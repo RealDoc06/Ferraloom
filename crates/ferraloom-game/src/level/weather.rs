@@ -256,7 +256,13 @@ impl Level {
     pub fn set_weather_environment(&mut self, environment: WeatherEnvironment) {
         self.region_mut().weather.environment = Some(environment);
     }
-    pub fn set_light_snapshot(&self, pos: ChunkPos, snapshot: ChunkLightSnapshot) {
+    /// Exclusive imports retire obsolete snapshots immediately. Managed imports
+    /// use the same store and retain versions until an exclusive boundary.
+    pub fn set_light_snapshot(&mut self, pos: ChunkPos, snapshot: ChunkLightSnapshot) {
+        self.publish_light_snapshot(pos, snapshot);
+        self.prune_light_snapshots();
+    }
+    pub fn publish_light_snapshot(&self, pos: ChunkPos, snapshot: ChunkLightSnapshot) {
         self.region().weather.lights.insert(pos, snapshot);
     }
     pub(super) fn prune_light_snapshots(&mut self) {

@@ -70,7 +70,7 @@ impl Level {
                 .publish_container(pos, std::mem::take(&mut prepared.chunk.fluid_ticks))
                 .is_ok()
         );
-        self.set_light_snapshot(pos, prepared.light);
+        self.publish_light_snapshot(pos, prepared.light);
         assert!(region.chunks.publish(pos, prepared.chunk).is_ok());
         Ok(ChunkReference {
             pos,
