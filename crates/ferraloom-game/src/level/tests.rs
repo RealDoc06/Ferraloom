@@ -1230,7 +1230,7 @@ fn slab_waterlogging_matches_vanilla_interface_overrides_and_source_identity() {
         let pos = BlockPos::new(8, 0, 8);
         let slab = Block::STONE_SLAB
             .default_state()
-            .with(properties::TYPE, slab_type)
+            .with(properties::TYPE_, slab_type)
             .unwrap();
         level.set_block_state(pos, slab).unwrap();
         let can = level

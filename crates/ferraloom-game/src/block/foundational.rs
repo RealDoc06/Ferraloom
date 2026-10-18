@@ -172,7 +172,7 @@ impl BlockBehavior for SlabWaterlogging {
         state: BlockState,
         fluid: ferraloom_data::registries::fluid::Id,
     ) -> bool {
-        state.get(ferraloom_data::properties::TYPE)
+        state.get(ferraloom_data::properties::TYPE_)
             != Some(ferraloom_data::properties::Type::Double)
             && fluid == ferraloom_data::registries::fluid::Id::WATER
     }
@@ -183,7 +183,7 @@ impl BlockBehavior for SlabWaterlogging {
         fluid: ferraloom_data::FluidState,
         level: &mut LevelAccessRef<'_>,
     ) -> Result<bool, LevelError> {
-        if state.get(ferraloom_data::properties::TYPE)
+        if state.get(ferraloom_data::properties::TYPE_)
             == Some(ferraloom_data::properties::Type::Double)
         {
             return Ok(false);
