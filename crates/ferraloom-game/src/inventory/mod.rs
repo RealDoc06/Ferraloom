@@ -26,7 +26,8 @@ pub(crate) use add::add_inventory_value;
 pub use add::{InventoryAddContext, add_inventory_stack, add_item_stack};
 pub use click::{
     MenuClickContext, can_quick_replace_menu_item, drop_carried_menu_item, pickup_all_menu_items,
-    pickup_live_menu_item, pickup_menu_item, quick_craft_menu_items, safe_take_menu_item_stack,
+    pickup_live_menu_item, pickup_menu_item, quick_craft_menu_items,
+    quick_move_container_menu_item, quick_move_live_container_menu_item, safe_take_menu_item_stack,
     swap_menu_item, throw_menu_item, try_remove_menu_item_stack,
 };
 pub use container::*;

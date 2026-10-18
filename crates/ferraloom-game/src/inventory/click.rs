@@ -43,6 +43,73 @@ pub trait MenuClickContext: MenuTransferContext {
     ) -> Result<()>;
 }
 
+/// Ports of ChestMenu, HopperMenu, ShulkerBoxMenu and DispenserMenu#quickMoveStack.
+/// The returned stack is vanilla's explicit copy; the source remains a retained
+/// receiver through transfer callbacks, empty replacement and onTake.
+pub fn quick_move_container_menu_item<C: MenuClickContext>(
+    context: &mut C,
+    index: usize,
+    hooks: &mut dyn MenuHooks,
+) -> Result<ItemStack> {
+    let kind = context.menu()?.kind;
+    let boundary = match kind {
+        MenuKind::Chest { rows } => usize::from(rows) * 9,
+        MenuKind::Hopper => 5,
+        MenuKind::ShulkerBox => 27,
+        MenuKind::Dispenser => 9,
+        _ => return Err(MenuError::Unsupported("retained quick-move menu family")),
+    };
+    let source = context.slot_stack(index)?;
+    if context.stack(source)?.is_empty() {
+        return Ok(ItemStack::default());
+    }
+    let source = context.slot_stack(index)?;
+    let original = context.stack(source)?;
+    let (start, end, backwards) = if index < boundary {
+        (boundary, context.slot_count()?, true)
+    } else {
+        (0, boundary, false)
+    };
+    if !move_menu_item_stack_to(context, source, start, end, backwards, hooks)? {
+        return Ok(ItemStack::default());
+    }
+    if context.stack(source)?.is_empty() {
+        let empty = context.own_stack(ItemStack::default())?;
+        context.set_slot_stack(index, empty, None, hooks)?;
+    } else {
+        context.slot_changed(index)?;
+    }
+    if kind == MenuKind::Dispenser {
+        if count(&context.stack(source)?) == count(&original) {
+            return Ok(ItemStack::default());
+        }
+        context.take_slot_stack(index, source, hooks)?;
+    }
+    Ok(original)
+}
+
+/// Live simple-container QUICK_MOVE shares the same source/slot algorithm as
+/// the standalone adapter; the menu root survives every synchronous callback.
+pub fn quick_move_live_container_menu_item(
+    player: crate::entity::EntityRef,
+    menu: MenuRef,
+    index: usize,
+    hooks: &mut dyn MenuHooks,
+    level: &mut crate::level::Level,
+) -> Result<ItemStack> {
+    with_menu_callback(player, menu, level, |context| {
+        quick_move_container_menu_item(
+            &mut super::transfer::LiveMenuTransfer {
+                operation: StackOperation::new(context.level),
+                player,
+                menu,
+            },
+            index,
+            hooks,
+        )
+    })
+}
+
 /// Port of AbstractContainerMenu#doClick's QUICK_CRAFT state machine. Only the
 /// native source copy is new; every current-carried and slot access is live.
 pub fn quick_craft_menu_items<C: MenuClickContext>(
