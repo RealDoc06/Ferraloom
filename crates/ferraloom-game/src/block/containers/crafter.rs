@@ -61,9 +61,7 @@ impl BlockEntity for CrafterBehavior {
         entity: crate::block::entity::BlockEntityRef,
         level: &mut crate::level::Level,
     ) -> Result<(), crate::level::LevelError> {
-        Err(crate::level::LevelError::UnsupportedBlockEntity(
-            level.get_block_state(entity.pos)?.block(),
-        ))
+        super::drops::drop_contents(entity, level)
     }
     fn load_additional(&self, state: &mut BlockEntityState, tag: &CompoundTag) {
         let BlockEntityState::Crafter(crafter) = state else {
