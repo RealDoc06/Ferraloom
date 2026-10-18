@@ -177,6 +177,7 @@ pub struct RandomState {
     pub router: CompiledRouter,
     pub aquifer: Option<CompiledAquifer>,
     pub surface: SurfaceSystem,
+    pub spawn_targets: Vec<Vec<(NodeId, crate::climate::Parameter)>>,
 }
 #[derive(Debug)]
 pub struct NoiseBasedChunkGenerator {
@@ -210,8 +211,14 @@ pub trait ChunkGeneratorAccess: std::fmt::Debug + Send + Sync {
     fn get_spawn_height(&self, _min_y: i32, _height: i32) -> i32 {
         64
     }
+    fn get_origin(&self) -> Result<[i32; 2], Error> {
+        Ok([0, 0])
+    }
 }
 impl ChunkGeneratorAccess for NoiseBasedChunkGenerator {
+    fn get_origin(&self) -> Result<[i32; 2], Error> {
+        Ok(crate::spawn::noise_spawn_position(&self.random).map(|value| value >> 4))
+    }
     fn data(&self) -> &GenerationData {
         &self.data
     }
@@ -271,6 +278,16 @@ impl NoiseBasedChunkGenerator {
             &possible,
             router.functions[6],
         )?;
+        let spawn_targets = settings
+            .spawn_target
+            .iter()
+            .map(|point| {
+                point
+                    .iter()
+                    .map(|(function, range)| Ok((compiler.compile_reference(function)?, *range)))
+                    .collect::<Result<Vec<_>, Error>>()
+            })
+            .collect::<Result<Vec<_>, _>>()?;
         Ok(Self {
             data,
             settings,
@@ -281,6 +298,7 @@ impl NoiseBasedChunkGenerator {
                 router,
                 aquifer,
                 surface,
+                spawn_targets,
             },
         })
     }
