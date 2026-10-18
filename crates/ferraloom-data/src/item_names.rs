@@ -21,8 +21,12 @@ mod tests {
             "block.minecraft.player_head"
         );
         assert_eq!(Item::SHIELD.description_id(), "item.minecraft.shield");
-        assert_eq!(potion::HEALING.effect_name(), "healing");
-        assert_eq!(potion::STRONG_HEALING.effect_name(), "healing");
-        assert_eq!(potion::LONG_SWIFTNESS.effect_name(), "swiftness");
+        for (name, effect) in [
+            ("minecraft:healing", "healing"),
+            ("minecraft:strong_healing", "healing"),
+            ("minecraft:long_swiftness", "swiftness"),
+        ] {
+            assert_eq!(potion::from_name(name).unwrap().effect_name(), effect);
+        }
     }
 }
