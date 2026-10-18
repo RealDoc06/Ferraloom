@@ -5,10 +5,12 @@ use crate::{
     inventory::StackOperation,
     level::effects::LevelEffect,
 };
-use ferraloom_data::Block;
+use ferraloom_data::{Block, BlockState};
 use ferraloom_protocol::{
     codec::Holder,
-    component::{BlockItemStateProperties, DataComponentPatch, ItemStack},
+    component::{
+        BlockItemStateProperties, CustomData, DataComponentPatch, ItemStack, TypedBlockEntityData,
+    },
     play::{InteractionHand, clientbound as cb},
 };
 use ferraloom_util::{
@@ -53,14 +55,19 @@ fn context(receiver: StackRef, face: Direction) -> UseOnContext<'static> {
     )
 }
 
-#[test]
-fn native_block_item_placement_matches_states_context_consumption_effects_and_rng() {
+fn native_vectors() -> String {
     let mut text = String::new();
     flate2::read::GzDecoder::new(
         include_bytes!("../../../tests/java/items/block-item.tsv.gz").as_slice(),
     )
     .read_to_string(&mut text)
     .unwrap();
+    text
+}
+
+#[test]
+fn native_block_item_placement_matches_states_context_consumption_effects_and_rng() {
+    let text = native_vectors();
     let (mut level, player) = level();
     let pos = BlockPos::new(8, 5, 8);
     let mut calls = 0;
@@ -197,6 +204,118 @@ fn native_block_item_placement_matches_states_context_consumption_effects_and_rn
         calls += 1;
     }
     assert_eq!(calls, 540);
+}
+
+#[test]
+fn native_block_item_state_properties_preserve_typed_values_and_invalid_inputs() {
+    let mut calls = 0;
+    for line in native_vectors()
+        .lines()
+        .filter(|line| line.starts_with("property\t"))
+    {
+        let f: Vec<_> = line.split('\t').collect();
+        let state = BlockState::from_id(f[1].parse().unwrap()).unwrap();
+        let properties = BlockItemStateProperties(vec![(f[2].into(), f[3].into())]);
+        assert_eq!(
+            super::super::block_item::apply_block_state(&properties, state).id(),
+            f[4].parse::<u16>().unwrap(),
+            "{line}"
+        );
+        calls += 1;
+    }
+    assert_eq!(calls, 3806);
+}
+
+#[test]
+fn native_block_item_custom_data_merges_and_retains_the_block_entity_receiver() {
+    use crate::block::{StackView, UPDATE_LIMIT, UpdateFlags, entity::BlockEntityType};
+    use ferraloom_nbt::{CompoundTag, Tag};
+    let (mut level, player) = level();
+    let pos = BlockPos::new(8, 5, 8);
+    let mut calls = 0;
+    let mut original = None;
+    for line in native_vectors()
+        .lines()
+        .filter(|line| line.starts_with("be\t"))
+    {
+        let f: Vec<_> = line.split('\t').collect();
+        let kind = f[1].parse::<usize>().unwrap();
+        let block = [Block::CHEST, Block::BARREL, Block::FURNACE][kind];
+        let entity_type = [
+            BlockEntityType::CHEST,
+            BlockEntityType::BARREL,
+            BlockEntityType::FURNACE,
+        ][kind];
+        if f[3] == "0" {
+            for block in [Block::AIR, block] {
+                level
+                    .set_block(
+                        pos,
+                        block.default_state(),
+                        UpdateFlags::SKIP_ALL_SIDEEFFECTS,
+                        UPDATE_LIMIT,
+                    )
+                    .unwrap();
+            }
+            original = level.block_entity_ref(pos).unwrap();
+        }
+        let mut tag = CompoundTag::new();
+        if matches!(f[2], "1" | "2") {
+            tag.insert("CustomName", Tag::String("native".into()));
+        }
+        if f[2] == "3" {
+            tag.insert("ignored", Tag::Int(1));
+        }
+        if f[2] == "4" {
+            tag.insert("id", Tag::String("minecraft:furnace".into()));
+        }
+        let mut operation = StackOperation::new(&mut level);
+        let receiver = operation
+            .own(
+                player,
+                ItemStack::new(
+                    block.as_item(),
+                    3,
+                    DataComponentPatch {
+                        added: vec![DataComponent::BlockEntityData(TypedBlockEntityData {
+                            entity_type: if f[2] == "2" {
+                                BlockEntityType::SIGN
+                            } else {
+                                entity_type
+                            },
+                            tag: CustomData(Tag::Compound(tag)),
+                        })],
+                        removed: Vec::new(),
+                    },
+                ),
+            )
+            .unwrap();
+        let result = super::super::block_item::update_custom_block_entity_tag(
+            block.as_item(),
+            None,
+            pos,
+            StackView::Retained(receiver),
+            operation.level,
+        )
+        .unwrap();
+        assert_eq!(result, f[4].parse::<bool>().unwrap(), "{line}");
+        let current = operation.level.block_entity_ref(pos).unwrap();
+        assert_eq!(current, original, "{line}");
+        let actual = &operation
+            .level
+            .block_entity_state(current.unwrap())
+            .unwrap()
+            .container()
+            .unwrap()
+            .custom_name;
+        assert_eq!(
+            *actual,
+            (!f[5].is_empty()).then(|| ferraloom_protocol::chat::Component::literal(f[5])),
+            "{line}"
+        );
+        calls += 1;
+    }
+    assert_eq!(calls, 30);
 }
 
 #[test]

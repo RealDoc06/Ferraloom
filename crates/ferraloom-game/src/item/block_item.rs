@@ -225,9 +225,7 @@ pub fn update_custom_block_entity_tag(
     if merged == old {
         return Ok(false);
     }
-    level
-        .block_entity_state_mut(entity)?
-        .load_custom_only(&merged);
+    entity.load_custom_only(&merged, level)?;
     entity.set_changed(level)?;
     Ok(true)
 }
