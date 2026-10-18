@@ -206,6 +206,7 @@ impl Region {
 /// lets the scheduler temporarily park ownership without moving this call facade.
 /// A parked facade must be reattached before resuming any game method.
 pub struct Level {
+    command_storage: Option<Arc<crate::commands::storage::CommandStorageSnapshot>>,
     region: Option<Region>,
 }
 
@@ -213,7 +214,18 @@ impl Level {
     pub fn new(region: Region) -> Self {
         Self {
             region: Some(region),
+            command_storage: None,
         }
+    }
+    /// Required server-owned storage view, absent until startup installs it.
+    pub fn command_storage(&self) -> Option<&crate::commands::storage::CommandStorageSnapshot> {
+        self.command_storage.as_deref()
+    }
+    pub fn set_command_storage(
+        &mut self,
+        snapshot: Arc<crate::commands::storage::CommandStorageSnapshot>,
+    ) {
+        self.command_storage = Some(snapshot);
     }
     pub fn into_region(self) -> Region {
         self.region.expect("level is parked")

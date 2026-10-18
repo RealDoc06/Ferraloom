@@ -187,6 +187,7 @@ pub struct MinecraftServer {
     commands: Commands,
     game_rules: ferraloom_game::gamerules::GameRules,
     clocks: ferraloom_game::commands::clocks::ServerClockManager,
+    command_storage: ferraloom_game::commands::storage::CommandStorage,
     saving_enabled: bool,
     idle_timeout: i32,
     default_game_mode: GameType,
@@ -251,6 +252,11 @@ impl MinecraftServer {
         let world = World::open(&options.root, &properties, &resources, &registries)?;
         let game_rules = command_runtime::load_game_rules(&world)?;
         let clocks = command_runtime::load_clocks(&world, &resources)?;
+        let command_storage_folder = world.access.path().join("data");
+        let command_storage = tokio::task::spawn_blocking(move || {
+            ferraloom_game::commands::storage::CommandStorage::preload(&command_storage_folder)
+        })
+        .await?;
         let command_context = command_runtime::command_build_context(
             &registries,
             &resources,
@@ -267,6 +273,7 @@ impl MinecraftServer {
         let game_time = world.level_data.data.get_long_or("Time", 0);
         let mut level = ServerLevel::new(Region::new(&BEHAVIORS), "minecraft:overworld");
         level.game_time = game_time;
+        level.level.set_command_storage(command_storage.snapshot());
         initialize_live_level(
             &mut level,
             &world,
@@ -375,6 +382,7 @@ impl MinecraftServer {
             world,
             game_rules,
             clocks,
+            command_storage,
             command_entity_tags,
             selector_random: None,
             saving_enabled: true,
@@ -3061,6 +3069,7 @@ impl MinecraftServer {
     }
     async fn save_all(&mut self, flush: bool, force: bool) -> Result<()> {
         self.save_game_rules().await?;
+        self.save_command_storage().await?;
         self.save_command_tickets().await?;
         self.world
             .save_live_level_context(&self.level.level)

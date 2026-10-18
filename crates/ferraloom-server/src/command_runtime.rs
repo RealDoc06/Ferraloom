@@ -107,6 +107,23 @@ impl MinecraftServer {
             Ok(())
         }
     }
+    /// Capture dirty storage before constructing Send IO, as for rules/clocks.
+    pub(super) fn save_command_storage(
+        &mut self,
+    ) -> impl std::future::Future<Output = Result<()>> + Send + 'static {
+        let storage = SavedDataStorage::new(self.world.access.path().join("data"));
+        let dirty = self.command_storage.take_dirty();
+        async move {
+            tokio::task::spawn_blocking(move || {
+                for (id, mut data) in dirty {
+                    storage.save(&id, &mut data)?;
+                }
+                Ok::<_, ferraloom_storage::Error>(())
+            })
+            .await??;
+            Ok(())
+        }
+    }
     pub(super) fn on_game_rule_changed(&mut self, change: GameRuleChange) {
         self.game_rules
             .update_level_rules(self.level.level.rules_mut());
@@ -2036,5 +2053,29 @@ mod command_context_tests {
             context.tag("minecraft:worldgen/biome", "minecraft:empty"),
             Some([].as_slice())
         );
+    }
+}
+
+impl ferraloom_game::commands::components::ComponentResolver for MinecraftServer {
+    fn nbt_data(
+        &mut self,
+        _source: &CommandSourceStack,
+        data: &protocol::chat::DataSource,
+    ) -> std::result::Result<
+        Vec<ferraloom_nbt::CompoundTag>,
+        ferraloom_game::commands::components::ResolutionError,
+    > {
+        use ferraloom_game::commands::components::{ResolutionError, UnsupportedContent};
+        match data {
+            protocol::chat::DataSource::Storage(id) => {
+                let storage = self
+                    .level
+                    .level
+                    .command_storage()
+                    .ok_or(ResolutionError::Unsupported(UnsupportedContent::NbtData))?;
+                Ok(vec![storage.get(id)?])
+            }
+            _ => Err(ResolutionError::Unsupported(UnsupportedContent::NbtData)),
+        }
     }
 }

@@ -15,6 +15,7 @@ pub mod placement;
 pub mod reload;
 pub mod source;
 pub mod spawn;
+pub mod storage;
 pub mod suggestions;
 pub mod teleport;
 pub mod tick;

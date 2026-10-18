@@ -23,6 +23,7 @@ pub enum UnsupportedContent {
 pub enum ResolutionError {
     Syntax(CommandSyntaxException),
     Unsupported(UnsupportedContent),
+    Storage(super::storage::StorageReadError),
     InvalidContent(String),
 }
 impl fmt::Display for ResolutionError {
@@ -32,11 +33,25 @@ impl fmt::Display for ResolutionError {
             Self::Unsupported(content) => {
                 write!(f, "Component {content:?} resolution is not yet supported")
             }
+            Self::Storage(error) => write!(f, "{error}"),
             Self::InvalidContent(message) => f.write_str(message),
         }
     }
 }
-impl std::error::Error for ResolutionError {}
+impl std::error::Error for ResolutionError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Syntax(error) => Some(error),
+            Self::Storage(error) => Some(error),
+            _ => None,
+        }
+    }
+}
+impl From<super::storage::StorageReadError> for ResolutionError {
+    fn from(error: super::storage::StorageReadError) -> Self {
+        Self::Storage(error)
+    }
+}
 impl From<CommandSyntaxException> for ResolutionError {
     fn from(error: CommandSyntaxException) -> Self {
         Self::Syntax(error)
@@ -258,7 +273,10 @@ fn resolve_contents<R: ComponentResolver>(
                             Ok(component) => {
                                 match resolve_at_depth(context, &component, resolver, depth) {
                                     Ok(component) => values.push(component),
-                                    Err(error @ ResolutionError::Unsupported(_)) => {
+                                    Err(
+                                        error @ (ResolutionError::Unsupported(_)
+                                        | ResolutionError::Storage(_)),
+                                    ) => {
                                         return Err(error);
                                     }
                                     Err(error) => resolver
