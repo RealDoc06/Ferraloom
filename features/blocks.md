@@ -327,3 +327,5 @@ One class row per bootstrapped runtime Block class, listing every block id assig
 | blocks.plants.shared-brightness | Shared reader requires canonical light context | `BlockAndLightGetter#getRawBrightness` | `plants::tests::shared_raw_brightness_requires_light_context` | - | todo |
 
 | blocks.containers.interaction-core | Chest/copper/trapped, barrel, furnace/smoker/blast and crafter menu bindings; comparator fill; chest joining shapes and neighbor maintenance | `ChestBlock; BarrelBlock; AbstractFurnaceBlock; CrafterBlock; DoubleBlockCombiner` | `inventory::block_containers::tests` (2 focused canonical storage/menu tests; full interactions pending) | - | partial |
+
+| blocks.interaction.feature-eligibility | Check every block and item against the dedicated server advertised VANILLA_SET | `FeatureElement#isEnabled` | `tools/extractor/ExtractFeatureRequirements.java` (all native registry entries) | pass | partial |
