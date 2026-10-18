@@ -9,6 +9,7 @@
 //! ```
 
 mod block_methods;
+pub mod redstone_properties;
 mod sound_events;
 pub use block_methods::BlockMethod;
 

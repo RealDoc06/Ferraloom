@@ -1,6 +1,8 @@
 //! Turns pinned vanilla reports and extracted facts into allocation-free tables.
 #[path = "build/block_methods.rs"]
 mod block_methods;
+#[path = "build/redstone_properties.rs"]
+mod redstone_properties;
 
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
@@ -825,6 +827,7 @@ fn main() {
     let block_report = load(root, "blocks");
     let block_properties = load(root, "block_properties");
     block_methods::generate(root, &block_properties);
+    redstone_properties::generate(root);
     let item_report = load(root, "items");
     let entity_report = load(root, "entity_types");
     let attribute_report = load(root, "attributes");
