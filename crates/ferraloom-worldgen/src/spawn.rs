@@ -20,18 +20,18 @@ pub fn cached_collision_up_face_full(state: ferraloom_data::BlockState) -> Optio
         .collision
         .boxes()
         .iter()
-        .filter(|bounds| bounds.min_y <= 0.9999999 && bounds.max_y > 0.9999999)
+        .filter(|bounds| bounds.min[1] <= 0.9999999 && bounds.max[1] > 0.9999999)
         .collect::<Vec<_>>();
     if boxes.iter().any(|bounds| {
-        bounds.min_x < 0.0 || bounds.max_x > 1.0 || bounds.min_z < 0.0 || bounds.max_z > 1.0
+        bounds.min[0] < 0.0 || bounds.max[0] > 1.0 || bounds.min[2] < 0.0 || bounds.max[2] > 1.0
     }) {
         return Some(false);
     }
     let mut xs = vec![0.0, 1.0];
     let mut zs = vec![0.0, 1.0];
     for bounds in &boxes {
-        xs.extend([bounds.min_x, bounds.max_x]);
-        zs.extend([bounds.min_z, bounds.max_z]);
+        xs.extend([bounds.min[0], bounds.max[0]]);
+        zs.extend([bounds.min[2], bounds.max[2]]);
     }
     xs.sort_by(f64::total_cmp);
     xs.dedup();
@@ -40,10 +40,10 @@ pub fn cached_collision_up_face_full(state: ferraloom_data::BlockState) -> Optio
     Some(xs.windows(2).all(|x| {
         zs.windows(2).all(|z| {
             boxes.iter().any(|bounds| {
-                bounds.min_x <= x[0]
-                    && bounds.max_x >= x[1]
-                    && bounds.min_z <= z[0]
-                    && bounds.max_z >= z[1]
+                bounds.min[0] <= x[0]
+                    && bounds.max[0] >= x[1]
+                    && bounds.min[2] <= z[0]
+                    && bounds.max[2] >= z[1]
             })
         })
     }))
@@ -78,7 +78,7 @@ pub fn noise_spawn_position(random: &RandomState) -> [i32; 2] {
             .wrapping_add(i64::from(position[0]).pow(2))
             .wrapping_add(i64::from(position[1]).pow(2))
     };
-    let mut best = ([0, 0], fitness([0, 0]));
+    let mut best = ([0i32, 0i32], fitness([0, 0]));
     for (max_radius, increment) in [(2048f32, 512f32), (512f32, 32f32)] {
         let origin = best.0;
         let mut angle = 0f32;
