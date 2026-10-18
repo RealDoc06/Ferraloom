@@ -210,18 +210,14 @@ impl Level {
         region.chunks.insert(pos, chunk);
         Ok(())
     }
-    /// Port of ServerLevel's blockTicks phase: collect first, then invoke callbacks.
+    /// Compatibility entry for the scheduled block phase. It uses the same
+    /// native simulation, ticking-future and entity-load gates as the runtime.
     pub fn tick_scheduled_blocks(
         &mut self,
         game_time: i64,
         budget: usize,
     ) -> Result<(), LevelError> {
-        self.region_mut().game_time = game_time;
-        let region = self.region_mut();
-        region.block_ticks.collect(game_time, budget, |_| true);
-        let result = self.run_collected_blocks();
-        self.region_mut().block_ticks.cleanup_after_tick();
-        result
+        self.tick_block_phase(game_time, budget)
     }
     fn run_collected_blocks(&mut self) -> Result<(), LevelError> {
         while let Some(tick) = self.region_mut().block_ticks.poll_this_tick() {
