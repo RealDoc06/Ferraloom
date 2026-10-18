@@ -52,6 +52,49 @@ pub struct LiveMenuContext<'a> {
     pub menu: MenuRef,
 }
 impl LiveMenuContext<'_> {
+    pub fn slot_address(&self, index: usize) -> Result<ContainerSlot> {
+        let menu = self
+            .level
+            .entity::<ServerPlayer>(self.player)?
+            .menus
+            .menu(self.menu)?;
+        let slot = menu
+            .slots
+            .get(index)
+            .ok_or(MenuError::InvalidSlot(index as i32))?;
+        let container = match slot.container {
+            super::ContainerId::Player => ContainerHandle::PlayerInventory(self.player),
+            super::ContainerId::Local(container) => ContainerHandle::MenuLocal {
+                player: self.player,
+                menu: self.menu,
+                container,
+            },
+            super::ContainerId::External(0) => {
+                let mut offset = slot.container_slot;
+                for &handle in &menu.block_entities {
+                    let size = self
+                        .level
+                        .block_entity::<BaseContainerBlockEntity>(handle)?
+                        .size();
+                    if offset < size {
+                        return Ok(ContainerSlot {
+                            container: ContainerHandle::BlockEntity(handle),
+                            slot: offset,
+                        });
+                    }
+                    offset -= size;
+                }
+                return Err(MenuError::Unsupported("unbound external menu container"));
+            }
+            super::ContainerId::External(_) => {
+                return Err(MenuError::Unsupported("entity container resolver"));
+            }
+        };
+        Ok(ContainerSlot {
+            container,
+            slot: slot.container_slot,
+        })
+    }
     fn with_player<R>(
         &mut self,
         player: EntityRef,

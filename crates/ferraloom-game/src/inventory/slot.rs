@@ -225,25 +225,39 @@ impl Slot {
             _ => Ok(true),
         }
     }
-    pub fn get_max_stack_size(&self, container: &dyn Container) -> i32 {
+    fn fixed_stack_limit(&self) -> Option<i32> {
         match self.kind {
             SlotKind::Armor(_)
             | SlotKind::BrewingBottle
             | SlotKind::EnchantmentItem
             | SlotKind::BeaconPayment
-            | SlotKind::MountEquipment(_) => 1,
-            _ => container.max_stack_size(),
+            | SlotKind::MountEquipment(_) => Some(1),
+            _ => None,
         }
     }
-    pub fn max_stack_size(&self, container: &dyn Container, stack: &ItemStack) -> i32 {
+    pub fn get_max_stack_size(&self, container: &dyn Container) -> i32 {
+        self.fixed_stack_limit()
+            .unwrap_or_else(|| container.max_stack_size())
+    }
+    pub(crate) fn max_stack_size_with_limit(
+        &self,
+        stack: &ItemStack,
+        container_limit: impl FnOnce() -> Result<i32>,
+    ) -> Result<i32> {
         if self.kind == SlotKind::FurnaceFuel
             && stack.0.as_ref().is_some_and(|s| s.item == Item::BUCKET)
         {
-            1
-        } else {
-            self.get_max_stack_size(container)
-                .min(max_stack_size(stack))
+            return Ok(1);
         }
+        let limit = match self.fixed_stack_limit() {
+            Some(limit) => limit,
+            None => container_limit()?,
+        };
+        Ok(limit.min(max_stack_size(stack)))
+    }
+    pub fn max_stack_size(&self, container: &dyn Container, stack: &ItemStack) -> i32 {
+        self.max_stack_size_with_limit(stack, || Ok(container.max_stack_size()))
+            .expect("pure container stack limit")
     }
     pub fn allow_modification(
         &self,

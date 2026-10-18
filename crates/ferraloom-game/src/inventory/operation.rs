@@ -44,48 +44,9 @@ impl MenuSynchronizationContext for LiveMenuContext<'_> {
             .menu_mut(self.menu)
     }
     fn item_at(&mut self, index: usize) -> Result<ItemStack> {
-        let slot = self
-            .menu()?
-            .slots
-            .get(index)
-            .cloned()
-            .ok_or(MenuError::InvalidSlot(index as i32))?;
-        let container = match slot.container {
-            ContainerId::Player => ContainerHandle::PlayerInventory(self.player),
-            ContainerId::Local(container) => ContainerHandle::MenuLocal {
-                player: self.player,
-                menu: self.menu,
-                container,
-            },
-            ContainerId::External(0) => {
-                let handles = self.menu()?.block_entities.clone();
-                let mut offset = slot.container_slot;
-                for handle in handles {
-                    let size = self
-                        .level
-                        .block_entity_state(handle)?
-                        .container()
-                        .ok_or(MenuError::Unsupported("non-container block receiver"))?
-                        .size();
-                    if offset < size {
-                        return self.get_item(ContainerSlot {
-                            container: ContainerHandle::BlockEntity(handle),
-                            slot: offset,
-                        });
-                    }
-                    offset -= size;
-                }
-                return Err(MenuError::Unsupported("unbound external menu container"));
-            }
-            ContainerId::External(_) => {
-                return Err(MenuError::Unsupported("entity container resolver"));
-            }
-        };
-        self.get_item(ContainerSlot {
-            container,
-            slot: slot.container_slot,
-        })
+        self.get_item(self.slot_address(index)?)
     }
+
     fn data_at(&mut self, index: usize) -> Result<i32> {
         use crate::block::entity::BlockEntityState;
         if let Some(&handle) = self.menu()?.block_entities.first() {

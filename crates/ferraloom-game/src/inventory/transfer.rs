@@ -169,6 +169,150 @@ impl MenuTransferContext for PureMenuTransfer<'_, '_, '_> {
     }
 }
 
+struct LiveMenuTransfer<'a> {
+    operation: StackOperation<'a>,
+    player: crate::entity::EntityRef,
+    menu: MenuRef,
+}
+impl LiveMenuTransfer<'_> {
+    fn context(&mut self) -> LiveMenuContext<'_> {
+        LiveMenuContext {
+            level: self.operation.level,
+            player: self.player,
+            menu: self.menu,
+        }
+    }
+    fn slot(&self, index: usize) -> Result<Slot> {
+        self.operation
+            .level
+            .entity::<crate::entity::player::ServerPlayer>(self.player)?
+            .menus
+            .menu(self.menu)?
+            .slots
+            .get(index)
+            .cloned()
+            .ok_or(MenuError::InvalidSlot(index as i32))
+    }
+}
+impl MenuTransferContext for LiveMenuTransfer<'_> {
+    type Stack = StackRef;
+
+    fn slot_stack(&mut self, index: usize) -> Result<StackRef> {
+        let address = self.context().slot_address(index)?;
+        self.operation.pin(address)
+    }
+    fn stack(&self, reference: StackRef) -> Result<ItemStack> {
+        self.operation.level.stack(reference).cloned()
+    }
+    fn set_stack_count(&mut self, reference: StackRef, amount: i32) -> Result<()> {
+        set_count(self.operation.level.stack_mut(reference)?, amount);
+        Ok(())
+    }
+    fn split_stack(&mut self, reference: StackRef, amount: i32) -> Result<ItemStack> {
+        Ok(split(self.operation.level.stack_mut(reference)?, amount))
+    }
+    fn stack_limit(&mut self, index: usize, reference: StackRef) -> Result<i32> {
+        let slot = self.slot(index)?;
+        let value = self.stack(reference)?;
+        let mut context = self.context();
+        let address = context.slot_address(index)?;
+        slot.max_stack_size_with_limit(&value, || context.max_stack_size(address.container))
+    }
+    fn may_place(
+        &mut self,
+        index: usize,
+        reference: StackRef,
+        hooks: &dyn MenuHooks,
+    ) -> Result<bool> {
+        let mut slot = self.slot(index)?;
+        if slot.kind == SlotKind::Crafter {
+            let address = self.context().slot_address(index)?;
+            if let ContainerHandle::BlockEntity(handle) = address.container
+                && let crate::block::entity::BlockEntityState::Crafter(crafter) =
+                    self.operation.level.block_entity_state(handle)?
+            {
+                slot.disabled = crafter.disabled_slots[address.slot];
+            }
+        }
+        slot.may_place(&self.stack(reference)?, hooks)
+    }
+    fn set_by_player(
+        &mut self,
+        index: usize,
+        stack: ItemStack,
+        _: &mut dyn MenuHooks,
+    ) -> Result<()> {
+        let slot = self.slot(index)?;
+        let address = self.context().slot_address(index)?;
+        if matches!(slot.kind, SlotKind::Armor(_) | SlotKind::MountEquipment(_))
+            || matches!(address.container, ContainerHandle::PlayerInventory(_))
+                && address.slot >= 36
+        {
+            return Err(MenuError::Unsupported(
+                "live equipment slot replacement hook",
+            ));
+        }
+        if let ContainerHandle::MenuLocal { player, menu, .. } = address.container {
+            let kind = self
+                .operation
+                .level
+                .entity::<crate::entity::player::ServerPlayer>(player)?
+                .menus
+                .menu(menu)?
+                .kind;
+            if !matches!(
+                kind,
+                MenuKind::Chest { .. }
+                    | MenuKind::Dispenser
+                    | MenuKind::Hopper
+                    | MenuKind::Crafter
+                    | MenuKind::ShulkerBox
+                    | MenuKind::Furnace
+                    | MenuKind::Smoker
+                    | MenuKind::BlastFurnace
+            ) {
+                return Err(MenuError::Unsupported("live recipe menu slotsChanged"));
+            }
+        }
+        // Slot#setByPlayer reads its previous receiver before Container#setItem.
+        self.operation.pin(address)?;
+        self.context().set_item(address, stack)?;
+        self.context().set_changed(address.container)
+    }
+    fn slot_changed(&mut self, index: usize) -> Result<()> {
+        let mut context = self.context();
+        let address = context.slot_address(index)?;
+        context.set_changed(address.container)
+    }
+}
+
+/// The live adapter uses the same transfer algorithm as standalone menus. Its
+/// source, targets and menu remain rooted through all synchronous callbacks.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "native transfer range and canonical receiver addresses"
+)]
+pub fn move_live_menu_item_stack_to(
+    level: &mut crate::level::Level,
+    player: crate::entity::EntityRef,
+    menu: MenuRef,
+    source: StackRef,
+    start: usize,
+    end: usize,
+    backwards: bool,
+    hooks: &mut dyn MenuHooks,
+) -> Result<bool> {
+    with_menu_callback(player, menu, level, |context| {
+        let mut transfer = LiveMenuTransfer {
+            operation: StackOperation::new(context.level),
+            player,
+            menu,
+        };
+        transfer.operation.pin_existing(source)?;
+        move_menu_item_stack_to(&mut transfer, source, start, end, backwards, hooks)
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -347,5 +491,82 @@ mod tests {
             checked += 1;
         }
         assert_eq!(checked, 2);
+    }
+    #[test]
+    fn live_transfer_mutates_player_and_menu_receivers_before_notifications() {
+        use crate::{
+            entity::{
+                EntityRef, EntityState,
+                player::{GameType, ServerPlayer},
+            },
+            level::{Level, Region},
+        };
+        use ferraloom_util::{Uuid, Vec3};
+        static BEHAVIORS: crate::Behaviors = crate::Behaviors::EMPTY;
+        let mut level = Level::new(
+            Region::new(&BEHAVIORS),
+            crate::level::LevelContext::fixture(0, 63),
+        );
+        let player = EntityRef(1);
+        let mut state = ServerPlayer::new(
+            Uuid::from_int_array([0, 0, 0, 1]),
+            "transfer".into(),
+            1,
+            Vec3::ZERO,
+            GameType::Survival,
+        );
+        state
+            .inventory
+            .set_selected_item(ItemStack::new(Item::STONE, 10, Default::default()));
+        level
+            .add_entity(player, EntityState::Player(Box::new(state)))
+            .unwrap();
+        let mut menu = AbstractContainerMenu::new(MenuKind::Chest { rows: 1 }, 7).unwrap();
+        menu.local[0].set_item(0, ItemStack::new(Item::STONE, 60, Default::default()));
+        menu.local[0].set_item(1, ItemStack::new(Item::STONE, 63, Default::default()));
+        let menu = level
+            .entity_mut::<ServerPlayer>(player)
+            .unwrap()
+            .menus
+            .install_container_menu(menu);
+        {
+            let mut operation = StackOperation::new(&mut level);
+            let source = operation
+                .pin(ContainerSlot {
+                    container: ContainerHandle::PlayerInventory(player),
+                    slot: 0,
+                })
+                .unwrap();
+            assert!(
+                move_live_menu_item_stack_to(
+                    operation.level,
+                    player,
+                    menu,
+                    source,
+                    0,
+                    9,
+                    false,
+                    &mut UnsupportedMenuHooks
+                )
+                .unwrap()
+            );
+            assert!(operation.level.stack(source).unwrap().is_empty());
+        }
+        let menu = level
+            .entity::<ServerPlayer>(player)
+            .unwrap()
+            .menus
+            .menu(menu)
+            .unwrap();
+        assert_eq!(
+            (0..3)
+                .map(|slot| count(&menu.local[0].get_item(slot)))
+                .collect::<Vec<_>>(),
+            [64, 64, 5]
+        );
+        let MenuContainer::Simple(target) = &menu.local[0] else {
+            unreachable!()
+        };
+        assert_eq!(target.times_changed, 7); // two setup writes, then five native notifications
     }
 }

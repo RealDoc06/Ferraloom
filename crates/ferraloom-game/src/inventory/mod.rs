@@ -32,7 +32,7 @@ pub use stacks::{
     StackForward, StackGenerations, StackRef, StackReplacement, StackSlotRef, StackValue,
 };
 pub use sync::*;
-pub use transfer::{MenuTransferContext, move_menu_item_stack_to};
+pub use transfer::{MenuTransferContext, move_live_menu_item_stack_to, move_menu_item_stack_to};
 
 use crate::entity::player::inventory::{
     copy_with_count as with_count, count, is_same_item_same_components, is_stackable,
