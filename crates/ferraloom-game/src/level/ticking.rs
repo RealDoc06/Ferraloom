@@ -11,6 +11,20 @@ use ferraloom_util::{
     random::{Random, RandomSource},
 };
 impl Level {
+    /// Port of ServerLevel#tick's inactivity gate, after block events. Active
+    /// tickets reset it even during freeze; only running simulation advances it.
+    /// The returned flag gates dragon/entity/block-entity phases, never entity
+    /// storage management.
+    pub fn update_empty_time(&mut self, active_tickets: bool, running: bool) -> bool {
+        let region = self.region_mut();
+        if active_tickets {
+            region.empty_time = 0;
+        }
+        if running {
+            region.empty_time = region.empty_time.wrapping_add(1);
+        }
+        region.empty_time < 300
+    }
     pub fn set_game_time(&mut self, game_time: i64) {
         self.region_mut().game_time = game_time;
     }

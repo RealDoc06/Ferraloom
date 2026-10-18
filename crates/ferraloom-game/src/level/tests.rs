@@ -31,6 +31,20 @@ impl BlockBehavior for Trace {
 static EMPTY: Behaviors = Behaviors::EMPTY;
 static PLAIN: Behaviors = Behaviors::EMPTY.with_block(Block::STONE, &Trace { nested: false });
 static NESTED: Behaviors = Behaviors::EMPTY.with_block(Block::STONE, &Trace { nested: true });
+#[test]
+fn inactive_entity_phase_stops_after_300_running_ticks_and_active_tickets_reset_it_during_freeze() {
+    let mut level = Level::new(Region::new(&EMPTY));
+    for _ in 1..300 {
+        assert!(level.update_empty_time(false, true));
+    }
+    assert!(!level.update_empty_time(false, true));
+    assert!(!level.update_empty_time(false, false));
+    assert!(level.update_empty_time(true, false));
+    for _ in 0..400 {
+        assert!(level.update_empty_time(false, false));
+    }
+    assert!(level.update_empty_time(true, true));
+}
 fn empty_level(behaviors: &'static Behaviors) -> Level {
     let mut level = Level::new(Region::new(behaviors));
     for x in -1..=1 {
