@@ -99,7 +99,7 @@ impl Advancement {
                 count: Default::default(),
                 components: DataComponentMatchers {
                     exact: display.icon.components.added.clone(),
-                    partial: Default::default(),
+                    partial: ferraloom_protocol::component::BoundedList(Vec::new()),
                 },
             });
             bindings.extend(test.bind_registries(context.lookup)?);
