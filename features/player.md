@@ -31,7 +31,7 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | player.hunger.slow-regeneration | Regenerate one health every 80 ticks at food level at least 18 | `FoodData#tick` | | - | todo |
 | player.hunger.starvation | Apply starvation every 80 ticks with difficulty-dependent minimum health | `FoodData#tick` | | - | todo |
 | player.hunger.food-caps | Clamp food to 20 and saturation to current food level | `FoodData#add` | | - | todo |
-| player.xp.level-curve | Apply level-dependent experience point requirements and progress carry | `Player#getXpNeededForNextLevel; Player#giveExperiencePoints` | | - | todo |
+| player.xp.level-curve | Preserve canonical XP fields, score metadata, float carry/borrow, wrapped totals, saturated level changes, level-up sound timing and saved XP; doTick packet slot is ported for phase integration | `Player#getXpNeededForNextLevel; Player#giveExperiencePoints; Player#giveExperienceLevels; ServerPlayer` | `entity::player::experience::tests` (15 native curve, 25 award/sound and 5 NBT cases) | pass | partial |
 | player.xp.orb-pickup | Merge experience orbs, apply pickup delay and repair mending equipment before XP gain | `ExperienceOrb` | | - | todo |
 | player.xp.death | Drop experience and reset progress subject to keep-inventory and death rules | `ServerPlayer; Player` | | - | todo |
 | player.sleep.entry | Validate bed range, danger, dimension conditions and sleep eligibility | `ServerPlayer#startSleepInBed` | | - | todo |

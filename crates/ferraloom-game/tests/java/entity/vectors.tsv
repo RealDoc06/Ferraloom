@@ -346,6 +346,51 @@ difficulty-initial	true	true	peaceful	hard	true
 difficulty-initial	true	true	easy	hard	true
 difficulty-initial	true	true	normal	hard	true
 difficulty-initial	true	true	hard	hard	true
+xp-curve	-2147483648	7
+xp-curve	-4	-1
+xp-curve	-3	1
+xp-curve	-1	5
+xp-curve	0	7
+xp-curve	1	9
+xp-curve	14	35
+xp-curve	15	37
+xp-curve	16	42
+xp-curve	29	107
+xp-curve	30	112
+xp-curve	31	121
+xp-curve	100	742
+xp-curve	238609312	-2147483646
+xp-curve	2147483647	2147483481
+xp-award	points	0	0	0	0	0	0	0	0	0	0	0	0	23	-
+xp-award	points	0	0	0	0	1	0	0	0	3e124925	1	1	0	-1	-
+xp-award	points	0	0	0	0	7	0	0	1	0	7	7	0	-1	-
+xp-award	points	0	0	0	0	8	0	0	1	3de38e3e	8	8	0	-1	-
+xp-award	points	14	0.75	200	5	37	0	0	15	3f43759f	237	42	0	-1	-
+xp-award	points	29	0.99	10000	100	100	0	0	30	3f62202e	10100	200	0	-1	-
+xp-award	points	32	0.2	12000	300	-200	0	0	30	3f06db6e	11800	100	0	-1	-
+xp-award	points	1	0.01	1	0	-500	0	0	0	0	0	-500	0	-1	-
+xp-award	points	0	0	2147483647	2147483647	1	0	0	0	3e124925	0	-2147483648	0	-1	-
+xp-award	points	0	0	1	-2147483648	-2	0	0	0	0	0	2147483646	0	-1	-
+xp-award	points	0	-0.0	0	0	0	0	0	0	80000000	0	0	0	23	-
+xp-award	points	0	NaN	0	0	1	0	0	0	7fc00000	1	1	0	-1	-
+xp-award	points	0	1.5	0	0	0	0	0	0	3fc00000	0	0	0	23	-
+xp-award	points	0	0	0	0	10000	201	0	63	3ec4895f	10000	10000	201	-1	minecraft:entity.player.levelup:7:3e000000:3f800000:bb20b45fd4d95138
+xp-award	levels	4	0.25	100	20	1	100	0	5	3e800000	100	20	0	-1	-
+xp-award	levels	4	0.25	100	20	1	101	0	5	3e800000	100	20	101	-1	minecraft:entity.player.levelup:7:3e000000:3f800000:bb20b45fd4d95138
+xp-award	levels	4	0.25	100	20	1	301	201	5	3e800000	100	20	201	-1	-
+xp-award	levels	4	0.25	100	20	1	302	201	5	3e800000	100	20	302	-1	minecraft:entity.player.levelup:7:3e000000:3f800000:bb20b45fd4d95138
+xp-award	levels	29	0.25	100	20	1	201	0	30	3e800000	100	20	201	-1	minecraft:entity.player.levelup:7:3f400000:3f800000:bb20b45fd4d95138
+xp-award	levels	34	0.25	100	20	1	201	0	35	3e800000	100	20	201	-1	minecraft:entity.player.levelup:7:3f400000:3f800000:bb20b45fd4d95138
+xp-award	levels	2147483645	0.5	100	20	10	201	0	2147483647	3f000000	100	20	0	-1	-
+xp-award	levels	10	0.5	100	20	-20	201	0	0	0	0	20	0	-1	-
+xp-award	levels	-5	0.5	100	20	0	201	0	-5	3f000000	100	20	0	23	-
+xp-award	levels	2147483647	0.5	100	20	-2147483648	201	0	0	0	0	20	0	-1	-
+xp-award	levels	4	0.25	100	20	1	16777316	16777216	5	3e800000	100	20	16777216	-1	-
+xp-nbt	absent	0	0	0	0
+xp-nbt	normal	17	3f400000	777	123
+xp-nbt	negative	-5	0	-9	-20
+xp-nbt	wrong	0	0	0	0
+xp-nbt	nan	0	7fc00000	0	0
 entity-nbt	player-empty	false	true	{Air:300s,Fire:0s,Health:20.0f,Inventory:[],Invulnerable:0b,Motion:[0.0d,0.0d,0.0d],OnGround:0b,PortalCooldown:0,Pos:[1.0d,64.0d,2.0d],Rotation:[0.0f,0.0f],SelectedItemSlot:0,UUID:[I;0,0,0,1],abilities:{flySpeed:0.05f,flying:0b,instabuild:0b,invulnerable:0b,mayBuild:1b,mayfly:0b,walkSpeed:0.1f},fall_distance:0.0d}
 entity-nbt	player-selected	false	true	{Air:300s,Fire:0s,Health:20.0f,Inventory:[{Slot:0b,count:3,id:"minecraft:stone"}],Invulnerable:0b,Motion:[0.0d,0.0d,0.0d],OnGround:0b,PortalCooldown:0,Pos:[1.0d,64.0d,2.0d],Rotation:[0.0f,0.0f],SelectedItem:{count:3,id:"minecraft:stone"},SelectedItemSlot:0,UUID:[I;0,0,0,1],abilities:{flySpeed:0.05f,flying:0b,instabuild:0b,invulnerable:0b,mayBuild:1b,mayfly:0b,walkSpeed:0.1f},fall_distance:0.0d}
 entity-nbt	player-zero	false	true	{Air:300s,Fire:0s,Health:20.0f,Inventory:[],Invulnerable:0b,Motion:[0.0d,0.0d,0.0d],OnGround:0b,PortalCooldown:0,Pos:[1.0d,64.0d,2.0d],Rotation:[0.0f,0.0f],SelectedItemSlot:0,UUID:[I;0,0,0,1],abilities:{flySpeed:0.05f,flying:0b,instabuild:0b,invulnerable:0b,mayBuild:1b,mayfly:0b,walkSpeed:0.1f},fall_distance:0.0d}

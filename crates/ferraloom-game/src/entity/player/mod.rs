@@ -4,8 +4,10 @@ pub use drop_item::drop_item;
 mod contact;
 pub mod cooldowns;
 pub mod equipment;
+mod experience;
 mod interaction;
 mod spawn;
+pub use experience::{give_experience_levels, give_experience_points};
 pub use interaction::swing_and_reset_attack_strength;
 pub mod inventory;
 use crate::{
@@ -51,6 +53,11 @@ pub struct ServerPlayer {
     pub recipe_book: crate::crafting::ServerRecipeBook,
     pub advancements: crate::advancements::PlayerAdvancements,
     pub stats: crate::stats::ServerStatsCounter,
+    pub experience_level: i32,
+    pub experience_progress: f32,
+    pub total_experience: i32,
+    last_level_up_time: i32,
+    last_sent_experience: i32,
     pub name: String,
     pub known_movement: Vec3,
     pub game_mode: GameType,
@@ -169,6 +176,11 @@ impl ServerPlayer {
             recipe_book: Default::default(),
             advancements: Default::default(),
             stats: Default::default(),
+            experience_level: 0,
+            experience_progress: 0.0,
+            total_experience: 0,
+            last_level_up_time: 0,
+            last_sent_experience: -99_999_999,
             known_movement: Vec3::ZERO,
             game_mode,
             flying: game_mode == GameType::Spectator,
@@ -250,6 +262,10 @@ impl ServerPlayer {
         self.parent.parent.load_nbt(tag)?;
         // Player#readAdditionalSaveData restores the profile UUID after super.
         self.uuid = self.profile_id;
+        self.experience_progress = self.saved.get_float_or("XpP", 0.0);
+        self.experience_level = self.saved.get_int_or("XpLevel", 0);
+        self.total_experience = self.saved.get_int_or("XpTotal", 0);
+        self.set_score(self.saved.get_int_or("Score", 0));
         if let Some(abilities) = self.saved.get_compound("abilities") {
             self.instabuild = abilities.get_boolean_or("instabuild", false);
         }
@@ -279,6 +295,10 @@ impl ServerPlayer {
         // Player#addAdditionalSaveData writes the version even for predicate NBT.
         tag.insert("DataVersion", Tag::Int(5023));
         tag.insert("recipeBook", self.recipe_book.to_nbt());
+        tag.insert("XpP", Tag::Float(self.experience_progress));
+        tag.insert("XpLevel", Tag::Int(self.experience_level));
+        tag.insert("XpTotal", Tag::Int(self.total_experience));
+        tag.insert("Score", Tag::Int(self.score()));
         tag.insert("UUID", Tag::IntArray(self.uuid.to_int_array().to_vec()));
         tag.insert("Dimension", Tag::String("minecraft:overworld".into()));
         tag.insert(
