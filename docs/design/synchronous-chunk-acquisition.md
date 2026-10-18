@@ -33,8 +33,7 @@ Return on requested-status completion, not confirmed full status or
 token, integrates ordered metadata/skips and latest structure revision, runs
 entity post-load, preserves pending BE/upgrade/post-processing and saved state,
 registers block entities/tick containers, and primes heightmaps. Saved ticks
-unpack only in `startTickingChunk` at its game time; today's `add_chunk` unpacks
-too early for a prolonged FULL-only acquire. Preserve entity input on failure.
+unpack only in `startTickingChunk` at its game time. Preserve entity input on failure.
 FULL does not imply pending
 activation, entity IO/visibility or ticking post-processing completed.
 
@@ -79,6 +78,23 @@ exclusive point in their captured queue order. Vanilla can execute those tasks
 inside `managedBlock`, so their interleaving is an explicit parity deviation
 until the phase-5 continuation model supplies safe exclusive resumption.
 FULL/UNKNOWN33 acquisition never waits on them.
+
+`stage_full_chunk` installs the center and light with `loaded=false`, returning
+an opaque Copy stage token and owned entity NBT. The runtime replaces parent
+status futures before calling shared entity postLoad without backend guards.
+Only below-FULL status requests observe that center. A nested FULL request
+returns typed `ReentrantFull`: vanilla would wait forever on the unsettled
+future, and no reachable native call chain requiring it is claimed. Now-lookups
+remain absent until finalization completes; the token is not a read accessor.
+
+The runtime retains the actual entity error and its Preflight/Publishing stage.
+Only explicit Preflight retries are safe; successful entity registration is a
+permanent continuation checkpoint. `finalize_full_chunk` resumes native
+`setLoaded -> BEs -> block ticks -> fluid ticks -> completion` steps, never
+entities. Successful finalization cannot repeat (`AlreadyFinalized`); removed,
+recreated or foreign tokens fail. Canonical pending queues survive errors and
+exclusive save/unload. Typed `WorldgenSkip` records share the existing policy,
+counters and deduplication before the runtime reports completion.
 
 ## Ownership in each mode
 

@@ -395,6 +395,7 @@ mod tests {
         ));
         level.set_container_resources(
             Arc::new(ContainerResources {
+                crafting: crate::inventory::RuntimeCraftingContext::fixture(),
                 recipes: Arc::clone(&recipes),
                 loot: Arc::new(LootData::default()),
                 advancements: Arc::new(crate::advancements::ServerAdvancementManager::new(

@@ -26,7 +26,9 @@ mod unsupported;
 mod worldgen;
 pub use flags::{UPDATE_LIMIT, UpdateFlags};
 pub(crate) use unsupported::UnportedCalls;
-pub use unsupported::{BlockMethod, UnportedBehavior, UnportedBehaviorStats, UnportedOperation};
+pub use unsupported::{
+    BlockMethod, UnportedBehavior, UnportedBehaviorStats, UnportedOperation, WorldgenSkip,
+};
 pub use worldgen::GameWorldgenBlockBehavior;
 
 /// Shared LevelReader/LevelAccessor surface. The borrow of the region is

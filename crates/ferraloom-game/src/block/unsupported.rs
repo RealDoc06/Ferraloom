@@ -3,7 +3,10 @@
 use super::BlockBehavior;
 use crate::level::{Level, LevelError};
 use ferraloom_data::{Block, EntityType};
-use std::collections::HashSet;
+use std::{
+    cell::{Cell, RefCell},
+    collections::HashSet,
+};
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum UnportedBehavior {
     #[default]
@@ -208,93 +211,111 @@ pub struct UnportedBehaviorStats {
 #[derive(Default)]
 pub(crate) struct UnportedCalls {
     pub policy: UnportedBehavior,
-    seen: HashSet<UnportedCall>,
-    stats: UnportedBehaviorStats,
+    seen: RefCell<HashSet<UnportedCall>>,
+    stats: Cell<UnportedBehaviorStats>,
 }
-#[derive(Eq, Hash, PartialEq)]
+/// Named public form of the canonical worldgen unit/behavior deduplication key.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct WorldgenSkip {
+    pub unit: String,
+    pub behavior: String,
+}
+impl From<(String, String)> for WorldgenSkip {
+    fn from((unit, behavior): (String, String)) -> Self {
+        Self { unit, behavior }
+    }
+}
+#[derive(Clone, Eq, Hash, PartialEq)]
 enum UnportedCall {
     Block(Block, BlockMethod),
     Operation(UnportedOperation),
-    Worldgen(String, String),
+    Worldgen(WorldgenSkip),
     BlockEntity(Block, ferraloom_nbt::NbtString),
     PostProcessing(Block, &'static str),
 }
 impl UnportedCalls {
-    fn record(&mut self, call: UnportedCall) {
-        self.stats.skipped_calls = self.stats.skipped_calls.saturating_add(1);
-        if !self.seen.contains(&call) {
+    fn record(&self, call: UnportedCall) {
+        let mut stats = self.stats.get();
+        stats.skipped_calls = stats.skipped_calls.saturating_add(1);
+        let fresh = !self.seen.borrow().contains(&call);
+        if fresh {
+            let mut seen = self.seen.borrow_mut();
+            seen.insert(call.clone());
+            stats.distinct_calls = seen.len();
+        }
+        self.stats.set(stats);
+        // No private metadata guard reaches logging or any world callback.
+        if fresh {
             match &call {
                 UnportedCall::Operation(UnportedOperation::EntityMethod(kind, method)) => {
                     eprintln!(
                         "Unported entity effect skipped: {}#{} (skipped calls: {})",
                         kind.name(),
                         method.name(),
-                        self.stats.skipped_calls
+                        stats.skipped_calls
                     )
                 }
                 UnportedCall::Operation(UnportedOperation::ItemUseOn(item)) => eprintln!(
                     "Unported item use effect skipped: {}#useOn (skipped calls: {})",
                     item.name(),
-                    self.stats.skipped_calls
+                    stats.skipped_calls
                 ),
                 UnportedCall::Operation(UnportedOperation::ItemCraftedPostProcess(item)) => {
                     eprintln!(
                         "Unported crafted item effect skipped: {}#onCraftedPostProcess (skipped calls: {})",
                         item.name(),
-                        self.stats.skipped_calls
+                        stats.skipped_calls
                     )
                 }
                 UnportedCall::Operation(UnportedOperation::PortalUse(block)) => eprintln!(
                     "Unported portal use effect skipped: {} (skipped calls: {})",
                     block.name(),
-                    self.stats.skipped_calls
+                    stats.skipped_calls
                 ),
                 UnportedCall::Operation(UnportedOperation::AdvancementCriterion(trigger)) => {
                     eprintln!(
                         "Unported advancement criterion skipped: {} (skipped calls: {})",
                         trigger.name(),
-                        self.stats.skipped_calls
+                        stats.skipped_calls
                     )
                 }
                 UnportedCall::Block(block, method) => eprintln!(
                     "Unported behavior skipped: {}#{} (skipped calls: {})",
                     block.name(),
                     method.name(),
-                    self.stats.skipped_calls
+                    stats.skipped_calls
                 ),
                 UnportedCall::Operation(UnportedOperation::WeatherStrike) => eprintln!(
                     "Unported behavior skipped: ServerLevel#tickThunder strike (skipped calls: {}; RNG parity pending)",
-                    self.stats.skipped_calls
+                    stats.skipped_calls
                 ),
                 UnportedCall::Operation(UnportedOperation::SnowAccumulation) => eprintln!(
                     "Unported behavior skipped: ServerLevel#tickPrecipitation snow accumulation (skipped calls: {})",
-                    self.stats.skipped_calls
+                    stats.skipped_calls
                 ),
                 UnportedCall::Operation(UnportedOperation::PushEntitiesUp) => eprintln!(
                     "Unported behavior skipped: Block#pushEntitiesUp (skipped calls: {})",
-                    self.stats.skipped_calls
+                    stats.skipped_calls
                 ),
                 UnportedCall::Operation(UnportedOperation::PackReload) => eprintln!(
                     "Pack reload not yet supported (skipped calls: {})",
-                    self.stats.skipped_calls
+                    stats.skipped_calls
                 ),
-                UnportedCall::Worldgen(unit, behavior) => eprintln!(
+                UnportedCall::Worldgen(WorldgenSkip { unit, behavior }) => eprintln!(
                     "Unported worldgen unit skipped: {unit}#{behavior} (skipped calls: {})",
-                    self.stats.skipped_calls
+                    stats.skipped_calls
                 ),
                 UnportedCall::BlockEntity(block, factory) => eprintln!(
                     "Pending block entity activation skipped: {}#{factory} (skipped calls: {}; raw NBT retained)",
                     block.name(),
-                    self.stats.skipped_calls
+                    stats.skipped_calls
                 ),
                 UnportedCall::PostProcessing(block, behavior) => eprintln!(
                     "Post-processing unit skipped: {}#{behavior} (skipped calls: {})",
                     block.name(),
-                    self.stats.skipped_calls
+                    stats.skipped_calls
                 ),
             }
-            self.seen.insert(call);
-            self.stats.distinct_calls = self.seen.len();
         }
     }
 }
@@ -316,16 +337,13 @@ impl Level {
     }
     /// Integrate owned generation-unit skips on the game thread. Strict rejects
     /// any skipped unit; Warn shares the live counters and logs each pair once.
-    pub fn record_worldgen_skips(
-        &mut self,
-        skips: Vec<(String, String)>,
-    ) -> Result<(), LevelError> {
-        let calls = &mut self.region_mut().unported;
+    pub fn record_worldgen_skips(&self, skips: Vec<WorldgenSkip>) -> Result<(), LevelError> {
+        let calls = &self.region().unported;
         if !skips.is_empty() && calls.policy == UnportedBehavior::Strict {
             return Err(LevelError::UnsupportedWorldgenBehavior);
         }
-        for (unit, behavior) in skips {
-            calls.record(UnportedCall::Worldgen(unit, behavior));
+        for skip in skips {
+            calls.record(UnportedCall::Worldgen(skip));
         }
         Ok(())
     }
@@ -426,7 +444,7 @@ impl Level {
         self.region().unported.policy
     }
     pub fn unported_behavior_stats(&self) -> UnportedBehaviorStats {
-        self.region().unported.stats
+        self.region().unported.stats.get()
     }
     #[inline]
     pub(crate) fn optional_block_call<T>(

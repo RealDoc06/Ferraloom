@@ -70,6 +70,7 @@ pub struct AbstractContainerMenu {
     pub(super) last_slots: Vec<Option<ListenerCopyRef>>,
     pub(super) standalone_listener_copies: Option<ListenerCopyArena>,
     pub(super) player_listener: bool,
+    pub(super) crafter_listener: bool,
     pub(super) last_data: Vec<i32>,
     pub(super) remote_slots: Vec<RemoteSlot>,
     pub(super) remote_carried: RemoteSlot,
@@ -80,6 +81,7 @@ pub struct AbstractContainerMenu {
     pub updates: Vec<ContainerUpdate>,
     pub(crate) crafting_recipe_used: Option<ferraloom_data::datapack::Identifier>,
     pub(crate) crafting_remove_count: i32,
+    pub(crate) furnace_remove_count: i32,
     pub(crate) placing_recipe: bool,
 }
 impl AbstractContainerMenu {
@@ -102,6 +104,7 @@ impl AbstractContainerMenu {
             last_slots: Vec::new(),
             standalone_listener_copies: Some(ListenerCopyArena::default()),
             player_listener: false,
+            crafter_listener: false,
             last_data: Vec::new(),
             remote_slots: Vec::new(),
             remote_carried: RemoteSlot::Placeholder,
@@ -112,6 +115,7 @@ impl AbstractContainerMenu {
             updates: Vec::new(),
             crafting_recipe_used: None,
             crafting_remove_count: 0,
+            furnace_remove_count: 0,
             placing_recipe: false,
         }
     }

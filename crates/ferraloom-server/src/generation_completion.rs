@@ -20,7 +20,12 @@ pub(crate) struct PromotionContinuation {
 pub(crate) fn integrate_metadata(level: &mut ServerLevel, world: &mut World) -> Result<()> {
     level
         .level
-        .record_worldgen_skips(std::mem::take(&mut world.generation_skips))
+        .record_worldgen_skips(
+            std::mem::take(&mut world.generation_skips)
+                .into_iter()
+                .map(ferraloom_game::block::WorldgenSkip::from)
+                .collect(),
+        )
         .map_err(game_error)?;
     publish_structure_updates(&level.level, world)?;
     for (&key, &status) in &world.generation_statuses {
