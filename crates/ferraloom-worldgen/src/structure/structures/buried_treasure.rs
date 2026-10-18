@@ -151,14 +151,43 @@ mod tests {
     use super::*;
     use crate::{
         feature::FeatureRegistry,
-        region::{ChunkStatus, RegionChunk},
-        structure::processor::tests::{StaticBlocks, generator},
+        region::{ChunkStatus, RegionChunk, WorldgenBlockBehavior},
+        structure::processor::tests::generator,
     };
     use ferraloom_util::random::{Algorithm, RandomSource, WorldgenRandom};
     use serde_json::Value;
     use std::io::Read;
     fn point(value: &Value) -> [i32; 3] {
         std::array::from_fn(|i| value[i].as_i64().unwrap() as i32)
+    }
+    // The Java accessor returns null for every block entity, so assigning loot
+    // is a no-op and consumes no RNG. Real chest entities stay game-backed.
+    struct AbsentBlockEntities;
+    impl WorldgenBlockBehavior for AbsentBlockEntities {
+        fn has_block_entity(&self, _state: BlockState) -> bool {
+            false
+        }
+        fn post_process_pos(
+            &self,
+            _state: BlockState,
+            _region: &WorldGenRegion<'_>,
+            _p: [i32; 3],
+        ) -> Result<Option<[i32; 3]>, Error> {
+            Ok(None)
+        }
+        fn set_loot_table(
+            &self,
+            region: &mut WorldGenRegion<'_>,
+            p: [i32; 3],
+            _table: &crate::Identifier,
+            _random: &mut WorldgenRandom,
+        ) -> Result<(), Error> {
+            assert!(
+                region.block_entity(p)?.is_none(),
+                "fixture has no block entities"
+            );
+            Ok(())
+        }
     }
     #[test]
     fn bounded_buried_treasure_fill_and_piece_mutation_match_vanilla() {
@@ -189,7 +218,7 @@ mod tests {
                 &[ChunkStatus::Terrain],
                 0,
                 None,
-                &StaticBlocks,
+                &AbsentBlockEntities,
                 0,
                 63,
             )
