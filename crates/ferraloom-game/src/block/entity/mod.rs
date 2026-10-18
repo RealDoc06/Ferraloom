@@ -109,6 +109,7 @@ static THE_END_PORTAL: TheEndPortal = TheEndPortal;
 #[derive(Clone, Debug)]
 pub enum BlockEntityState {
     EndPortal(BlockEntityData),
+    Comparator(Box<super::redstone::comparator::ComparatorBlockEntity>),
     Chest(Box<ChestBlockEntity>),
     Barrel(Box<BarrelBlockEntity>),
     ShulkerBox(Box<ShulkerBoxBlockEntity>),
@@ -118,6 +119,7 @@ impl BlockEntityState {
     pub fn data(&self) -> &BlockEntityData {
         match self {
             Self::EndPortal(data) => data,
+            Self::Comparator(entity) => &entity.parent,
             Self::Chest(entity) => &entity.parent.parent.parent,
             Self::Barrel(entity) => &entity.parent.parent.parent,
             Self::ShulkerBox(entity) => &entity.parent.parent.parent,
@@ -127,6 +129,7 @@ impl BlockEntityState {
     pub fn data_mut(&mut self) -> &mut BlockEntityData {
         match self {
             Self::EndPortal(data) => data,
+            Self::Comparator(entity) => &mut entity.parent,
             Self::Chest(entity) => &mut entity.parent.parent.parent,
             Self::Barrel(entity) => &mut entity.parent.parent.parent,
             Self::ShulkerBox(entity) => &mut entity.parent.parent.parent,
@@ -136,6 +139,7 @@ impl BlockEntityState {
     pub fn behavior(&self) -> &'static dyn BlockEntity {
         match self {
             Self::EndPortal(_) => &THE_END_PORTAL,
+            Self::Comparator(_) => &super::redstone::comparator::COMPARATOR_ENTITY,
             Self::Crafter(_) => &super::containers::crafter::CRAFTER_ENTITY,
             _ => &super::containers::chest::STORAGE_ENTITY,
         }
@@ -274,6 +278,9 @@ pub fn create(pos: BlockPos, state: BlockState) -> Result<BlockEntityState, Leve
     let data = BlockEntityData::new(kind, pos, state)?;
     match kind {
         BlockEntityType::END_PORTAL => Ok(BlockEntityState::EndPortal(data)),
+        BlockEntityType::COMPARATOR => Ok(BlockEntityState::Comparator(Box::new(
+            super::redstone::comparator::ComparatorBlockEntity::new(data),
+        ))),
         BlockEntityType::CHEST | BlockEntityType::TRAPPED_CHEST => Ok(BlockEntityState::Chest(
             Box::new(ChestBlockEntity::new(data)),
         )),
@@ -326,6 +333,7 @@ pub fn supports(block: Block) -> bool {
         registry::for_block(block),
         Some(
             BlockEntityType::END_PORTAL
+                | BlockEntityType::COMPARATOR
                 | BlockEntityType::CHEST
                 | BlockEntityType::TRAPPED_CHEST
                 | BlockEntityType::BARREL
@@ -376,3 +384,8 @@ impl BlockEntityDataView for RandomizableContainerBlockEntity {
         state.randomizable_mut()
     }
 }
+
+projection!(
+    super::redstone::comparator::ComparatorBlockEntity,
+    Comparator
+);
