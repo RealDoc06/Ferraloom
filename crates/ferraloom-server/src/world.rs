@@ -3,6 +3,7 @@ use crate::{jobs::JobPool, properties::ServerProperties, registries::RegistrySet
 use anyhow::{Context, Result, ensure};
 use ferraloom_chunk::{BiomeId, IdMap, LevelChunkSection, Strategy};
 use ferraloom_data::{Block, BlockClass, BlockState, EntityType, datapack::ResourceManager};
+use ferraloom_game::block::GameWorldgenBlockBehavior as LocalBlockBehavior;
 use ferraloom_game::level::chunk::LevelChunk;
 use ferraloom_light::{LevelLightEngine, LightLayer, SectionSnapshots};
 use ferraloom_nbt::{CompoundTag, ListTag, NbtString, Tag};
@@ -17,7 +18,7 @@ use ferraloom_worldgen::{
     generator::{
         ChunkGenerator, ChunkGeneratorAccess, GenerationData, WorldDimensions, WorldPreset,
     },
-    region::{ChunkStatus, Heightmap, RegionChunk, WorldGenRegion, WorldgenBlockBehavior},
+    region::{ChunkStatus, Heightmap, RegionChunk, WorldGenRegion},
     settings::DimensionType,
     spawn::{self, SpawnWorld},
 };
@@ -286,19 +287,6 @@ fn spawn_tag(p: BlockPos) -> Tag {
         .into_iter()
         .collect(),
     )
-}
-struct LocalBlockBehavior;
-impl WorldgenBlockBehavior for LocalBlockBehavior {
-    fn post_process_pos(
-        &self,
-        _: BlockState,
-        _: &WorldGenRegion<'_>,
-        _: [i32; 3],
-    ) -> std::result::Result<Option<[i32; 3]>, ferraloom_worldgen::Error> {
-        Err(ferraloom_worldgen::Error(
-            "Unsupported: dynamic generation postprocessing requires game block behavior".into(),
-        ))
-    }
 }
 struct NoStructures;
 impl StructureDecoration for NoStructures {

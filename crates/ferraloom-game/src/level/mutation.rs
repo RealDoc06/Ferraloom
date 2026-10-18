@@ -56,19 +56,7 @@ impl Level {
         if let Some(custom) = self.custom_block_behavior(block) {
             return Ok(custom);
         }
-        if method
-            .vanilla_method()
-            .is_some_and(|method| !block.overrides(method))
-        {
-            if matches!(
-                method,
-                BlockMethod::CanPlaceLiquid | BlockMethod::PlaceLiquid | BlockMethod::PickupBlock
-            ) {
-                return Ok(&crate::block::fluid::SIMPLE_WATERLOGGED_BLOCK);
-            }
-            return Ok(&crate::block::BASE_BLOCK);
-        }
-        crate::block::dispatch::ported_behavior(block, method)
+        crate::block::dispatch::registered_behavior(block, method)
             .ok_or(LevelError::UnsupportedBlock(block))
     }
     pub fn required_block_behavior(

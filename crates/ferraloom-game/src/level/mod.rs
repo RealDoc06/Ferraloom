@@ -37,6 +37,8 @@ pub mod weather;
 pub enum LevelError {
     Inventory(&'static str),
     MissingChunk(ChunkPos),
+    WorldgenMutationFailed(BlockPos),
+    UnsupportedWorldgenEnvironment,
     OutsideBuildHeight,
     MissingEntity(EntityRef),
     WrongEntityType(EntityRef),

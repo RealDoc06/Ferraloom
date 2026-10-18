@@ -1059,7 +1059,7 @@ impl BlockBehavior for DynamicFluidWall {
         state: BlockState,
         pos: BlockPos,
         _context: &crate::block::BlockCollisionContext<'_>,
-        _level: &crate::block::LevelReaderRef<'_>,
+        _level: &crate::block::LevelReaderRef<'_, '_>,
     ) -> Result<ferraloom_util::VoxelShape, LevelError> {
         match pos.x {
             0 => Ok(ferraloom_util::shapes::block()),
