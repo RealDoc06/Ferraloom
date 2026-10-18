@@ -108,6 +108,7 @@ public final class EntityVectors {
         AirTravelVectors.run(new EntityFixture(r));
         FluidTravelVectors.run(new EntityFixture(r));
         FallFlyingVectors.run(new EntityFixture(r));
+        GlidingVectors.run(new EntityFixture(r));
         TravelDispatchVectors.run(new EntityFixture(r));
         JumpVectors.run(new EntityFixture(r));
         ItemTickVectors.run();

@@ -562,6 +562,10 @@ pub trait Entity: Sync {
             EntityState::Player(_)
         ))
     }
+    /// Port of LivingEntity#canGlide; Player supplies its abilities guard.
+    fn can_glide(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
+        living::gliding::can_glide(self, entity, level)
+    }
     /// Port of Entity#canSimulateMovement's server AUTHORITATIVE_SIDE branch.
     /// Player overrides the AUTHORITATIVE_SIDE_AND_SERVER result.
     fn can_simulate_movement(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {

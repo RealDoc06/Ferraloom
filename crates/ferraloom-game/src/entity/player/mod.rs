@@ -951,6 +951,10 @@ impl crate::entity::Entity for PlayerBehavior {
             .entity::<ServerPlayer>(entity)?
             .flying_movement_speed())
     }
+    fn can_glide(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
+        Ok(!level.entity::<ServerPlayer>(entity)?.flying
+            && crate::entity::living::gliding::can_glide(self, entity, level)?)
+    }
     fn is_affected_by_fluids(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
         Ok(!level.entity::<ServerPlayer>(entity)?.flying)
     }

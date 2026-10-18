@@ -522,6 +522,200 @@ fall-flying-hit	cow	8	true	7ff0000000000000	0	sound:minecraft:entity.generic.big
 fall-flying-hit	cow	9	true	3ff0000000000000	7ff0000000000000	-
 fall-flying-hit	cow	10	true	3ff0000000000000	3fb999999999999a	sound:minecraft:entity.generic.big_fall:3f800000:3f800000,hurt:flyIntoWall:40c00000
 fall-flying-hit	cow	11	false	4024000000000000	0	-
+glider-eligibility	0	mainhand	true
+glider-eligibility	0	offhand	true
+glider-eligibility	0	feet	true
+glider-eligibility	0	legs	true
+glider-eligibility	0	chest	true
+glider-eligibility	0	head	true
+glider-eligibility	0	body	true
+glider-eligibility	0	saddle	true
+glider-eligibility	1	mainhand	false
+glider-eligibility	1	offhand	false
+glider-eligibility	1	feet	false
+glider-eligibility	1	legs	false
+glider-eligibility	1	chest	false
+glider-eligibility	1	head	false
+glider-eligibility	1	body	false
+glider-eligibility	1	saddle	false
+glider-eligibility	2	mainhand	false
+glider-eligibility	2	offhand	false
+glider-eligibility	2	feet	false
+glider-eligibility	2	legs	false
+glider-eligibility	2	chest	false
+glider-eligibility	2	head	false
+glider-eligibility	2	body	false
+glider-eligibility	2	saddle	false
+glider-eligibility	3	mainhand	false
+glider-eligibility	3	offhand	false
+glider-eligibility	3	feet	false
+glider-eligibility	3	legs	false
+glider-eligibility	3	chest	true
+glider-eligibility	3	head	false
+glider-eligibility	3	body	false
+glider-eligibility	3	saddle	false
+glider-eligibility	4	mainhand	false
+glider-eligibility	4	offhand	false
+glider-eligibility	4	feet	false
+glider-eligibility	4	legs	false
+glider-eligibility	4	chest	false
+glider-eligibility	4	head	false
+glider-eligibility	4	body	false
+glider-eligibility	4	saddle	false
+glider-eligibility	5	mainhand	false
+glider-eligibility	5	offhand	false
+glider-eligibility	5	feet	false
+glider-eligibility	5	legs	false
+glider-eligibility	5	chest	false
+glider-eligibility	5	head	false
+glider-eligibility	5	body	false
+glider-eligibility	5	saddle	false
+glider-eligibility	6	mainhand	true
+glider-eligibility	6	offhand	true
+glider-eligibility	6	feet	true
+glider-eligibility	6	legs	true
+glider-eligibility	6	chest	true
+glider-eligibility	6	head	true
+glider-eligibility	6	body	true
+glider-eligibility	6	saddle	true
+glider-eligibility	7	mainhand	true
+glider-eligibility	7	offhand	true
+glider-eligibility	7	feet	true
+glider-eligibility	7	legs	true
+glider-eligibility	7	chest	true
+glider-eligibility	7	head	true
+glider-eligibility	7	body	true
+glider-eligibility	7	saddle	true
+glider-eligibility	8	mainhand	true
+glider-eligibility	8	offhand	true
+glider-eligibility	8	feet	true
+glider-eligibility	8	legs	true
+glider-eligibility	8	chest	true
+glider-eligibility	8	head	true
+glider-eligibility	8	body	true
+glider-eligibility	8	saddle	true
+glider-eligibility	9	mainhand	true
+glider-eligibility	9	offhand	true
+glider-eligibility	9	feet	true
+glider-eligibility	9	legs	true
+glider-eligibility	9	chest	true
+glider-eligibility	9	head	true
+glider-eligibility	9	body	true
+glider-eligibility	9	saddle	true
+glider-eligibility	10	mainhand	false
+glider-eligibility	10	offhand	false
+glider-eligibility	10	feet	false
+glider-eligibility	10	legs	false
+glider-eligibility	10	chest	false
+glider-eligibility	10	head	false
+glider-eligibility	10	body	false
+glider-eligibility	10	saddle	false
+glider-eligibility	11	mainhand	false
+glider-eligibility	11	offhand	false
+glider-eligibility	11	feet	false
+glider-eligibility	11	legs	false
+glider-eligibility	11	chest	false
+glider-eligibility	11	head	false
+glider-eligibility	11	body	false
+glider-eligibility	11	saddle	false
+glider-cadence	0	0	-2147483648	0	12345	true	true	3ff0000000000000	0	mainhand	6674089274190705457
+glider-cadence	1	1	-2147483648	bfe0000000000000	12346	false	false	4024000000000000	0	-	6679046728135725137
+glider-cadence	2	2	-2147483648	bfdfffffffffffff	12347	false	false	3ff0000000000000	0	-	6677394244919041009
+glider-cadence	3	3	-2147483648	8000000000000000	12348	false	false	3ff0000000000000	0	-	6669131828835620368
+glider-cadence	4	4	-2147483648	0	12349	false	false	3ff0000000000000	0	saddle	6667479341323968944
+glider-cadence	5	5	-2147483648	bfe0000000000000	12350	false	false	4024000000000000	0	-	6672436790974021329
+glider-cadence	6	6	-2147483648	bfdfffffffffffff	12351	false	false	3ff0000000000000	0	saddle	6670784307757337201
+glider-cadence	7	0	-21	8000000000000000	12352	true	true	3ff0000000000000	1	chest	100830226540649598
+glider-cadence	8	1	-21	0	12353	false	false	3ff0000000000000	0	-	6607989919753536559
+glider-cadence	9	2	-21	bfe0000000000000	12354	false	false	4024000000000000	0	-	6612947373698556239
+glider-cadence	10	3	-21	bfdfffffffffffff	12355	false	false	3ff0000000000000	0	-	6611294886186904815
+glider-cadence	11	4	-21	8000000000000000	12356	false	false	3ff0000000000000	0	saddle	6603032470103484175
+glider-cadence	12	5	-21	0	12357	false	false	3ff0000000000000	0	-	6601379986886800047
+glider-cadence	13	6	-21	bfe0000000000000	12358	false	false	4024000000000000	0	saddle	6606337432241885135
+glider-cadence	14	0	-20	bfdfffffffffffff	12359	true	true	3ff0000000000000	0	mainhand	6604684949025201007
+glider-cadence	15	1	-20	8000000000000000	12360	false	false	3ff0000000000000	0	-	6596422532941780367
+glider-cadence	16	2	-20	0	12361	false	false	3ff0000000000000	0	-	6594770049725096239
+glider-cadence	17	3	-20	bfe0000000000000	12362	false	false	4024000000000000	0	-	6599727499375148623
+glider-cadence	18	4	-20	bfdfffffffffffff	12363	false	false	3ff0000000000000	0	saddle	6598075016158464495
+glider-cadence	19	5	-20	8000000000000000	12364	false	false	3ff0000000000000	0	-	6589812595780076559
+glider-cadence	20	6	-20	0	12365	false	false	3ff0000000000000	0	saddle	6588160108268425134
+glider-cadence	21	0	-11	bfe0000000000000	12366	true	true	4024000000000000	1	mainhand	6593117562213444815
+glider-cadence	22	1	-11	bfdfffffffffffff	12367	false	false	3ff0000000000000	0	-	6591465078996760687
+glider-cadence	23	2	-11	8000000000000000	12368	false	false	3ff0000000000000	0	-	6636082147322068624
+glider-cadence	24	3	-11	0	12369	false	false	3ff0000000000000	0	-	6634429664105384496
+glider-cadence	25	4	-11	bfe0000000000000	12370	false	false	4024000000000000	0	saddle	6639387113755436880
+glider-cadence	26	5	-11	bfdfffffffffffff	12371	false	false	3ff0000000000000	0	-	6637734630538752752
+glider-cadence	27	6	-11	8000000000000000	12372	false	false	3ff0000000000000	0	saddle	6629472210160364815
+glider-cadence	28	0	-1	0	12373	true	true	3ff0000000000000	1	chest	850609333772483572
+glider-cadence	29	1	-1	bfe0000000000000	12374	false	false	4024000000000000	0	-	6632777180888700368
+glider-cadence	30	2	-1	bfdfffffffffffff	12375	false	false	3ff0000000000000	0	-	6631124693377048944
+glider-cadence	31	3	-1	8000000000000000	12376	false	false	3ff0000000000000	0	-	6622862272998661007
+glider-cadence	32	4	-1	0	12377	false	false	3ff0000000000000	0	saddle	6621209789781976879
+glider-cadence	33	5	-1	bfe0000000000000	12378	false	false	4024000000000000	0	-	6626167243726996559
+glider-cadence	34	6	-1	bfdfffffffffffff	12379	false	false	3ff0000000000000	0	saddle	6624514756215345135
+glider-cadence	35	0	0	8000000000000000	12380	true	true	3ff0000000000000	0	mainhand	6616252340131924495
+glider-cadence	36	1	0	0	12381	false	false	3ff0000000000000	0	-	6614599856915240367
+glider-cadence	37	2	0	bfe0000000000000	12382	false	false	4024000000000000	0	-	6619557310860260047
+glider-cadence	38	3	0	bfdfffffffffffff	12383	false	false	3ff0000000000000	0	-	6617904823348608623
+glider-cadence	39	4	0	8000000000000000	12384	false	false	3ff0000000000000	0	saddle	6556762914266524814
+glider-cadence	40	5	0	0	12385	false	false	3ff0000000000000	0	-	6555110431049840686
+glider-cadence	41	6	0	bfe0000000000000	12386	false	false	4024000000000000	0	saddle	6560067884994860366
+glider-cadence	42	0	8	bfdfffffffffffff	12387	true	true	3ff0000000000000	0	mainhand	6558415401778176238
+glider-cadence	43	1	8	8000000000000000	12388	false	false	3ff0000000000000	0	-	6550152981399788302
+glider-cadence	44	2	8	0	12389	false	false	3ff0000000000000	0	-	6548500498183104174
+glider-cadence	45	3	8	bfe0000000000000	12390	false	false	4024000000000000	0	-	6553457952128123854
+glider-cadence	46	4	8	bfdfffffffffffff	12391	false	false	3ff0000000000000	0	saddle	6551805468911439726
+glider-cadence	47	5	8	8000000000000000	12392	false	false	3ff0000000000000	0	-	6543543044238084493
+glider-cadence	48	6	8	0	12393	false	false	3ff0000000000000	0	saddle	6541890561021400365
+glider-cadence	49	0	9	bfe0000000000000	12394	true	true	4024000000000000	1	mainhand	6546848014966420045
+glider-cadence	50	1	9	bfdfffffffffffff	12395	false	false	3ff0000000000000	0	-	6545195531749735917
+glider-cadence	51	2	9	8000000000000000	12396	false	false	3ff0000000000000	0	-	6536933111371347981
+glider-cadence	52	3	9	0	12397	false	false	3ff0000000000000	0	-	6535280628154663853
+glider-cadence	53	4	9	bfe0000000000000	12398	false	false	4024000000000000	0	saddle	6540238077804716237
+glider-cadence	54	5	9	bfdfffffffffffff	12399	false	false	3ff0000000000000	0	-	6538585590293064813
+glider-cadence	55	6	9	8000000000000000	12400	false	false	3ff0000000000000	0	saddle	6583202662913340046
+glider-cadence	56	0	18	0	12401	true	true	3ff0000000000000	0	mainhand	6581550175401688622
+glider-cadence	57	1	18	bfe0000000000000	12402	false	false	4024000000000000	0	-	6586507629346708302
+glider-cadence	58	2	18	bfdfffffffffffff	12403	false	false	3ff0000000000000	0	-	6584855146130024174
+glider-cadence	59	3	18	8000000000000000	12404	false	false	3ff0000000000000	0	-	6576592725751636238
+glider-cadence	60	4	18	0	12405	false	false	3ff0000000000000	0	saddle	6574940238239984814
+glider-cadence	61	5	18	bfe0000000000000	12406	false	false	4024000000000000	0	-	6579897692185004494
+glider-cadence	62	6	18	bfdfffffffffffff	12407	false	false	3ff0000000000000	0	saddle	6578245208968320366
+glider-cadence	63	0	19	8000000000000000	12408	true	true	3ff0000000000000	1	mainhand	8526808939143242619
+glider-cadence	64	1	19	0	12409	false	false	3ff0000000000000	0	-	6568330305373248302
+glider-cadence	65	2	19	bfe0000000000000	12410	false	false	4024000000000000	0	-	6573287755023300686
+glider-cadence	66	3	19	bfdfffffffffffff	12411	false	false	3ff0000000000000	0	-	6571635271806616558
+glider-cadence	67	4	19	8000000000000000	12412	false	false	3ff0000000000000	0	saddle	6563372851428228622
+glider-cadence	68	5	19	0	12413	false	false	3ff0000000000000	0	-	6561720368211544494
+glider-cadence	69	6	19	bfe0000000000000	12414	false	false	4024000000000000	0	saddle	6566677822156564174
+glider-cadence	70	0	20	bfdfffffffffffff	12415	true	true	3ff0000000000000	0	mainhand	6565025338939880046
+glider-cadence	71	1	20	8000000000000000	12416	false	false	3ff0000000000000	0	-	6926919322307494039
+glider-cadence	72	2	20	0	12417	false	false	3ff0000000000000	0	-	6925266834795842615
+glider-cadence	73	3	20	bfe0000000000000	12418	false	false	4024000000000000	0	-	6930224288740862295
+glider-cadence	74	4	20	bfdfffffffffffff	12419	false	false	3ff0000000000000	0	saddle	6928571805524178167
+glider-cadence	75	5	20	8000000000000000	12420	false	false	3ff0000000000000	0	-	6920309385145790231
+glider-cadence	76	6	20	0	12421	false	false	3ff0000000000000	0	saddle	6918656897634138807
+glider-cadence	77	0	29	bfe0000000000000	12422	true	true	4024000000000000	1	mainhand	6923614351579158487
+glider-cadence	78	1	29	bfdfffffffffffff	12423	false	false	3ff0000000000000	0	-	6921961868362474359
+glider-cadence	79	2	29	8000000000000000	12424	false	false	3ff0000000000000	0	-	6913699447984086422
+glider-cadence	80	3	29	0	12425	false	false	3ff0000000000000	0	-	6912046964767402294
+glider-cadence	81	4	29	bfe0000000000000	12426	false	false	4024000000000000	0	saddle	6917004418712421975
+glider-cadence	82	5	29	bfdfffffffffffff	12427	false	false	3ff0000000000000	0	-	6915351935495737847
+glider-cadence	83	6	29	8000000000000000	12428	false	false	3ff0000000000000	0	saddle	6907089510822382614
+glider-cadence	84	0	39	0	12429	true	true	3ff0000000000000	1	head	-2791009429022045435
+glider-cadence	85	1	39	bfe0000000000000	12430	false	false	4024000000000000	0	-	6910394481550718166
+glider-cadence	86	2	39	bfdfffffffffffff	12431	false	false	3ff0000000000000	0	-	6908741998334034038
+glider-cadence	87	3	39	8000000000000000	12432	false	false	3ff0000000000000	0	-	6953359062364374679
+glider-cadence	88	4	39	0	12433	false	false	3ff0000000000000	0	saddle	6951706579147690551
+glider-cadence	89	5	39	bfe0000000000000	12434	false	false	4024000000000000	0	-	6956664028797742936
+glider-cadence	90	6	39	bfdfffffffffffff	12435	false	false	3ff0000000000000	0	saddle	6955011545581058808
+glider-cadence	91	0	2147483647	8000000000000000	12436	true	true	3ff0000000000000	0	mainhand	6946749129497638167
+glider-cadence	92	1	2147483647	0	12437	false	false	3ff0000000000000	0	-	6945096646280954039
+glider-cadence	93	2	2147483647	bfe0000000000000	12438	false	false	4024000000000000	0	-	6950054095931006423
+glider-cadence	94	3	2147483647	bfdfffffffffffff	12439	false	false	3ff0000000000000	0	-	6948401612714322295
+glider-cadence	95	4	2147483647	8000000000000000	12440	false	false	3ff0000000000000	0	saddle	6940139192335934359
+glider-cadence	96	5	2147483647	0	12441	false	false	3ff0000000000000	0	-	6938486709119250231
+glider-cadence	97	6	2147483647	bfe0000000000000	12442	false	false	4024000000000000	0	saddle	6943444158769302615
 travel-dispatch	player	0	1	4021000000000000,4050000000000000,4021000000000000	3fbeb851eb851eb8,bfb47ae147ae147b,3f9eb851eb851eb8	3fe3333333333333,3fc999999999999a,bfd3333333333333	42150000	0	true	false	false	3e000000	false	false	false	402176d0e5dfa112,4050000000000000,40211a2f4ff72884	3fc037e83487caf7,bfb41205c28f5c29,3f9c9804988fe623	10110	0	false
 travel-dispatch	player	1	1	4021000000000000,4051200000000000,4021000000000000	3fbeb851eb851eb8,bfb47ae147ae147b,3f9eb851eb851eb8	3fe3333333333333,3fc999999999999a,bfd3333333333333	42150000	0	false	false	false	3e000000	false	false	false	40214430ab9817bc,40511b22d0e547ae,402110a22d8bcf79	3fbf06c9039062c4,bfc391926aaf251c,3f9e45e24fa708c8	00000	0	false
 travel-dispatch	player	2	8597	4021000000000000,4050000000000000,4021000000000000	3fbeb851eb851eb8,bfb47ae147ae147b,3f9eb851eb851eb8	3fe3333333333333,3fc999999999999a,bfd3333333333333	42150000	0	true	false	false	3e000000	false	false	false	40214a9b8a29b975,4050000000000000,402111d82105f48c	3fc0a23e1abbb35d,bfb41205c28f5c29,3f9fd3b71dd9b24e	10110	0	false

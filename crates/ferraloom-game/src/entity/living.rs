@@ -9,6 +9,7 @@ use ferraloom_util::random::RandomSource;
 
 pub mod climbable;
 pub mod freezing;
+pub mod gliding;
 pub mod jump;
 pub mod travel;
 
@@ -35,6 +36,7 @@ pub struct LivingEntity {
     pub yya: f32,
     pub zza: f32,
     pub no_jump_delay: i32,
+    pub fall_fly_ticks: i32,
     pub speed: f32,
     pub discard_friction: bool,
     pub last_climbable_pos: std::cell::Cell<Option<ferraloom_util::BlockPos>>,
@@ -72,6 +74,7 @@ impl LivingEntity {
             yya: 0.0,
             zza: 0.0,
             no_jump_delay: 0,
+            fall_fly_ticks: 0,
             speed: 0.0,
             discard_friction: false,
             last_climbable_pos: std::cell::Cell::new(None),
