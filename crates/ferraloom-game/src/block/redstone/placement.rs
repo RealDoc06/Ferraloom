@@ -6,12 +6,39 @@ use super::{
 };
 use crate::{
     block::{BlockBehavior, BlockPlaceContext, LevelAccessRef, LevelReaderRef},
-    level::LevelError,
+    level::{Level, LevelError},
 };
 use ferraloom_data::{
     Block, BlockClass, BlockState, properties as p, registries::fluid::Id as Fluid, tags::BlockTags,
 };
 use ferraloom_util::{Axis, Direction};
+
+impl Level {
+    /// Port of Block#setPlacedBy dispatch. BlockItem's production caller is
+    /// supplied by the item-placement port.
+    pub fn set_placed_by(
+        &mut self,
+        state: BlockState,
+        pos: ferraloom_util::BlockPos,
+        by: Option<crate::entity::EntityRef>,
+        stack: &ferraloom_protocol::component::ItemStack,
+    ) -> Result<(), LevelError> {
+        self.required_block_behavior(state.block(), crate::block::BlockMethod::SetPlacedBy)?
+            .set_placed_by(state, pos, by, stack, self)
+    }
+
+    /// Port of Block#playerWillDestroy dispatch. Its return value remains
+    /// required under both Strict and Warn unported-behavior policies.
+    pub fn player_will_destroy(
+        &mut self,
+        state: BlockState,
+        pos: ferraloom_util::BlockPos,
+        player: crate::entity::EntityRef,
+    ) -> Result<BlockState, LevelError> {
+        self.required_block_behavior(state.block(), crate::block::BlockMethod::PlayerWillDestroy)?
+            .player_will_destroy(state, pos, player, self)
+    }
+}
 
 pub struct RedstonePlacement;
 pub static PLACEMENT: RedstonePlacement = RedstonePlacement;
