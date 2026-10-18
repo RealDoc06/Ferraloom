@@ -28,6 +28,13 @@ impl BlockCollisionContext<'_> {
     pub const fn empty_with_fluid_collisions(always_collide: bool) -> Self {
         Self::Empty(EmptyCollisionContext::new(always_collide))
     }
+    /// Port of CollisionContext#placementContext, including a nullable player.
+    pub fn placement_context(
+        player: Option<crate::entity::EntityRef>,
+        level: &Level,
+    ) -> Result<Self, LevelError> {
+        EntityCollisionView::placement_context(player, level).map(Self::Entity)
+    }
 }
 impl CollisionContext for BlockCollisionContext<'_> {
     type Item = Item;

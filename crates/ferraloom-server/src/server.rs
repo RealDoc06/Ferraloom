@@ -1314,6 +1314,7 @@ impl MinecraftServer {
                 LevelEffect::DestroyParticles { .. } => self.pending_level_hooks.particles += 1,
                 LevelEffect::BlockDestroyed { .. } => self.pending_level_hooks.game_events += 1,
                 LevelEffect::PendingPrecipitation(_) => {}
+                LevelEffect::BroadcastAll(packet) => self.broadcast(*packet),
                 LevelEffect::PlayerPacket { recipients, packet } => {
                     for entity in recipients {
                         for &connection in &self.players {
@@ -1742,8 +1743,8 @@ impl MinecraftServer {
                 }),
                 cb::Packet::SetHealth(cb::SetHealth {
                     health: player.parent.health(),
-                    food: VarInt(20),
-                    saturation: 5.,
+                    food: VarInt(player.food_data.food_level()),
+                    saturation: player.food_data.saturation_level(),
                 }),
                 cb::Packet::SetExperience(cb::SetExperience {
                     experience_progress: 0.,
@@ -2090,8 +2091,8 @@ impl MinecraftServer {
                     .level
                     .entity_mut::<ServerPlayer>(entity)
                     .map_err(game_error)?;
-                if matches!(player.game_mode, GameType::Creative | GameType::Spectator) {
-                    player.flying = p.is_flying;
+                if player.abilities.mayfly {
+                    player.abilities.flying = p.is_flying;
                 }
             }
             sb::Packet::PingRequest(p) => {
@@ -3006,12 +3007,40 @@ impl MinecraftServer {
                     self.level.tickets.add_player_spawn(center, self.tick);
                 }
                 Phase::Play(entity) => {
-                    let player = self
-                        .level
-                        .level
-                        .entity_mut::<ServerPlayer>(entity)
+                    if !self.was_paused {
+                        let player = self
+                            .level
+                            .level
+                            .entity_mut::<ServerPlayer>(entity)
+                            .map_err(game_error)?;
+                        player.reset_position();
+                        player.old_position = player.position;
+                        ferraloom_game::entity::player::player_do_tick_with_tick_rate(
+                            entity,
+                            &mut self.level.level,
+                            &self.tick_rate_manager,
+                        )
                         .map_err(game_error)?;
-                    player.do_tick();
+                        let player = self
+                            .level
+                            .level
+                            .entity::<ServerPlayer>(entity)
+                            .map_err(game_error)?;
+                        let (position, yaw, pitch) = (player.first_good, player.yaw, player.pitch);
+                        ferraloom_game::entity::teleport::abs_snap_to(
+                            entity,
+                            position,
+                            yaw,
+                            pitch,
+                            &mut self.level.level,
+                        )
+                        .map_err(game_error)?;
+                        self.level
+                            .level
+                            .entity_mut::<ServerPlayer>(entity)
+                            .map_err(game_error)?
+                            .finish_connection_tick();
+                    }
                     let idle = self.idle_timeout;
                     if idle > 0
                         && now.duration_since(c.last_action) > Duration::from_secs(idle as u64 * 60)
@@ -3032,6 +3061,8 @@ impl MinecraftServer {
                 cfg::FinishConfiguration {},
             ));
         }
+        self.broadcast_container_changes()?;
+        self.apply_level_effects()?;
         Ok(())
     }
     fn keepalive_reply(&mut self, connection: ConnectionId, key: i64) -> Result<()> {
@@ -3654,14 +3685,13 @@ fn protocol_game_type(mode: GameType) -> play::GameType {
     }
 }
 fn abilities(player: &ServerPlayer) -> cb::Packet {
-    let privileged = matches!(player.game_mode, GameType::Creative | GameType::Spectator);
     cb::Packet::PlayerAbilities(cb::PlayerAbilities {
-        invulnerable: privileged,
-        is_flying: player.flying,
-        can_fly: privileged,
+        invulnerable: player.abilities.invulnerable,
+        is_flying: player.abilities.flying,
+        can_fly: player.abilities.mayfly,
         instabuild: player.instabuild(),
-        flying_speed: 0.05,
-        walking_speed: 0.1,
+        flying_speed: player.ability_flying_speed(),
+        walking_speed: player.ability_walking_speed(),
     })
 }
 fn player_info(profile: &GameProfile, player: &ServerPlayer) -> PlayerInfoEntry {
@@ -3831,11 +3861,21 @@ mod live_level_tests {
             let mut player =
                 ServerPlayer::new(Uuid::new(1, 2), "abilities".into(), 1, Vec3::ZERO, mode);
             for value in [false, true] {
-                player.instabuild = value;
+                player.abilities.instabuild = value;
+                player.abilities.invulnerable = value;
+                player.abilities.mayfly = !value;
+                player.abilities.flying = value;
+                player.abilities.set_flying_speed(0.125);
+                player.abilities.set_walking_speed(-0.25);
                 let cb::Packet::PlayerAbilities(packet) = abilities(&player) else {
                     unreachable!()
                 };
                 assert_eq!(packet.instabuild, value);
+                assert_eq!(packet.invulnerable, value);
+                assert_eq!(packet.can_fly, !value);
+                assert_eq!(packet.is_flying, value);
+                assert_eq!(packet.flying_speed, 0.125);
+                assert_eq!(packet.walking_speed, -0.25);
             }
         }
     }

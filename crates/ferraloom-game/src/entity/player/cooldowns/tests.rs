@@ -1,8 +1,5 @@
 use super::*;
-use crate::entity::{
-    Entity, EntityState,
-    player::{GameType, PlayerBehavior},
-};
+use crate::entity::{EntityState, player::GameType};
 use ferraloom_protocol::component::{DataComponentPatch, UseCooldown};
 use ferraloom_util::{Uuid, Vec3};
 
@@ -149,6 +146,7 @@ fn native_cooldown_groups_float_percent_wrapping_and_ordered_expiry_packets() {
 #[test]
 fn player_tick_expires_cooldowns_and_runtime_state_is_not_persisted() {
     let mut level = crate::entity::tests::level(false);
+    level.install_shared(Box::default());
     let player = EntityRef(92);
     level
         .add_entity(
@@ -172,7 +170,18 @@ fn player_tick_expires_cooldowns_and_runtime_state_is_not_persisted() {
             .is_on_cooldown(stack)
     );
     level.take_effects();
-    PlayerBehavior.tick(player, &mut level).unwrap();
+    // ServerPlayer's entity-phase tick owns attributes, while the connection's
+    // doTick owns Player's cooldown tick. Keep both native slots explicit.
+    level
+        .entity_mut::<ServerPlayer>(player)
+        .unwrap()
+        .update_interaction_range_attributes();
+    super::super::player_do_tick_with_tick_rate(
+        player,
+        &mut level,
+        &crate::level::tick_rate::TickRateManager::default(),
+    )
+    .unwrap();
     let player_data = level.entity::<ServerPlayer>(player).unwrap();
     assert!(!player_data.cooldowns.is_on_cooldown(stack));
     assert_eq!(player_data.block_interaction_range(), 5.0);

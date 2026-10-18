@@ -43,11 +43,11 @@ impl BlockBehavior for PowderSnow {
     ) -> Result<VoxelShape, LevelError> {
         if !context.is_placement()
             && let BlockCollisionContext::Entity(entity_context) = context
+            && let Some(entity) = entity_context.entity.entity
         {
             let LevelReaderRef::Server(level) = reader else {
                 return Err(LevelError::UnsupportedWorldgenEnvironment);
             };
-            let entity = entity_context.entity.entity;
             let base = level.entity::<EntityData>(entity)?;
             if base.fall_distance > 2.5 {
                 return Ok(shapes::create(0.0, 0.0, 0.0, 1.0, 0.8999999761581421, 1.0));

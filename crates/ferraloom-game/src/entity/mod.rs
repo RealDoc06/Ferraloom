@@ -1,4 +1,5 @@
 use ferraloom_data::EntityType;
+use ferraloom_util::Vec3;
 
 use crate::level::{Level, LevelError};
 
@@ -8,9 +9,11 @@ pub mod avatar;
 pub use avatar::Avatar;
 pub mod living;
 pub use living::LivingEntity;
+pub mod effect;
 pub mod effects;
 pub mod experience_orb;
 pub mod item;
+pub mod mob;
 pub mod player;
 pub mod pushing;
 mod relationships;
@@ -222,12 +225,22 @@ impl EntityDataView for LivingEntity {
 pub enum EntityMethod {
     PlayerTouch,
     SwingAndResetAttackStrength,
+    PlayShoulderEntityAmbientSound,
+    RespawnEntityOnShoulder,
+    CheckAutoSpinAttack,
+    RunLocationChangedEffects,
+    JumpInLiquid,
 }
 impl EntityMethod {
     pub const fn name(self) -> &'static str {
         match self {
             Self::PlayerTouch => "playerTouch",
             Self::SwingAndResetAttackStrength => "swingAndResetAttackStrength",
+            Self::PlayShoulderEntityAmbientSound => "playShoulderEntityAmbientSound",
+            Self::RespawnEntityOnShoulder => "respawnEntityOnShoulder",
+            Self::CheckAutoSpinAttack => "checkAutoSpinAttack",
+            Self::RunLocationChangedEffects => "EnchantmentHelper#runLocationChangedEffects",
+            Self::JumpInLiquid => "jumpInLiquid",
         }
     }
 }
@@ -418,6 +431,14 @@ pub trait Entity: Sync {
     fn swim_sound(&self) -> ferraloom_data::registries::sound_event::Id {
         ferraloom_data::registries::sound_event::Id::ENTITY_GENERIC_SWIM
     }
+    /// Port of LivingEntity#getFallSounds's inherited selection.
+    fn fall_sounds(&self) -> living::FallSounds {
+        use ferraloom_data::registries::sound_event::Id as Sound;
+        living::FallSounds {
+            small: Sound::ENTITY_GENERIC_SMALL_FALL,
+            big: Sound::ENTITY_GENERIC_BIG_FALL,
+        }
+    }
     fn swim_splash_sound(&self) -> ferraloom_data::registries::sound_event::Id {
         ferraloom_data::registries::sound_event::Id::ENTITY_GENERIC_SPLASH
     }
@@ -553,6 +574,10 @@ pub trait Entity: Sync {
             EntityState::Player(_)
         ))
     }
+    /// Port of LivingEntity#canGlide; Player supplies its abilities guard.
+    fn can_glide(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
+        living::gliding::can_glide(self, entity, level)
+    }
     /// Port of Entity#canSimulateMovement's server AUTHORITATIVE_SIDE branch.
     /// Player overrides the AUTHORITATIVE_SIDE_AND_SERVER result.
     fn can_simulate_movement(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
@@ -597,23 +622,108 @@ pub trait Entity: Sync {
         Ok(0.0)
     }
     fn effective_gravity(&self, entity: EntityRef, level: &Level) -> Result<f64, LevelError> {
-        Ok(
-            if *level
-                .entity::<EntityData>(entity)?
-                .entity_data
-                .get(synched_data::NO_GRAVITY)
-            {
-                0.0
-            } else {
-                self.default_gravity(entity, level)?
-            },
-        )
+        base_effective_gravity(self, entity, level)
+    }
+    /// Port of LivingEntity#getSpeed; Player overrides its attribute read.
+    /// Port of LivingEntity#travel; Player preserves its explicit parent call.
+    fn travel(&self, entity: EntityRef, input: Vec3, level: &mut Level) -> Result<(), LevelError> {
+        living::travel::travel(self, entity, input, level)
+    }
+    fn get_speed(&self, entity: EntityRef, level: &Level) -> Result<f32, LevelError> {
+        Ok(level.entity::<LivingEntity>(entity)?.speed)
+    }
+    fn get_flying_speed(&self, entity: EntityRef, level: &Level) -> Result<f32, LevelError> {
+        if let Some(passenger) = self.controlling_passenger(entity, level)?
+            && level.entity::<EntityData>(passenger)?.entity_type == EntityType::PLAYER
+        {
+            Ok(self.get_speed(entity, level)? * 0.1)
+        } else {
+            Ok(0.02)
+        }
+    }
+    /// Port of LivingEntity#isAffectedByFluids; Player checks its flying ability.
+    fn is_affected_by_fluids(
+        &self,
+        _entity: EntityRef,
+        _level: &Level,
+    ) -> Result<bool, LevelError> {
+        Ok(true)
+    }
+    /// Port of LivingEntity#canStandOnFluid's inherited default.
+    fn can_stand_on_fluid(
+        &self,
+        _entity: EntityRef,
+        _fluid: ferraloom_data::FluidState,
+        _level: &Level,
+    ) -> Result<bool, LevelError> {
+        Ok(false)
+    }
+    /// Port of LivingEntity#getWaterSlowDown's inherited default.
+    fn water_slow_down(&self) -> f32 {
+        0.8
+    }
+    /// Port of Entity#isFree: fluid scanning runs only after collision succeeds.
+    fn is_free(
+        &self,
+        entity: EntityRef,
+        movement: Vec3,
+        level: &Level,
+    ) -> Result<bool, LevelError> {
+        let bounds = level
+            .entity::<EntityData>(entity)?
+            .bounding_box
+            .move_vec(movement);
+        Ok(level.no_collision(Some(entity), bounds, false)?
+            && !level.contains_any_liquid(bounds)?)
+    }
+    /// Port of Entity#omnidirectionalAirMover's inherited default.
+    fn omnidirectional_air_mover(&self) -> bool {
+        false
     }
     fn air_drag(&self, _entity: EntityRef, _level: &Level) -> Result<f32, LevelError> {
         Ok(0.98)
     }
     fn block_speed_factor(&self, entity: EntityRef, level: &Level) -> Result<f32, LevelError> {
         movement::block_speed_factor(entity, level)
+    }
+    fn block_jump_factor(&self, entity: EntityRef, level: &Level) -> Result<f32, LevelError> {
+        movement::block_jump_factor(entity, level)
+    }
+    fn jump_power(
+        &self,
+        entity: EntityRef,
+        multiplier: f32,
+        level: &Level,
+    ) -> Result<f32, LevelError> {
+        living::jump::jump_power(self, entity, multiplier, level)
+    }
+    /// LivingEntity parent body; ServerPlayer's stat/exhaustion override follows.
+    fn jump_from_ground(&self, entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
+        living::jump::jump_from_ground(self, entity, level)
+    }
+    fn jump_in_liquid(&self, entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
+        living::jump::jump_in_liquid(entity, level)
+    }
+    /// Port of Entity#checkFallDamage; living subclasses select their parent body.
+    #[allow(clippy::too_many_arguments)]
+    fn check_fall_damage(
+        &self,
+        entity: EntityRef,
+        dy: f64,
+        on_ground: bool,
+        state: ferraloom_data::BlockState,
+        pos: ferraloom_util::BlockPos,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        movement::base_check_fall_damage(entity, dy, on_ground, state, pos, level)
+    }
+    fn on_changed_block(
+        &self,
+        _entity: EntityRef,
+        _pos: ferraloom_util::BlockPos,
+        _level: &mut Level,
+    ) -> Result<(), LevelError> {
+        Ok(())
     }
     fn ignite_for_ticks(
         &self,
@@ -741,7 +851,7 @@ pub trait Entity: Sync {
     }
     fn is_pushed_by_fluid(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
         Ok(match level.entity_state(entity)? {
-            EntityState::Player(player) => !player.flying,
+            EntityState::Player(player) => !player.abilities.flying,
             _ => true,
         })
     }
@@ -825,6 +935,23 @@ pub trait Entity: Sync {
         } else {
             Ok(false)
         }
+    }
+}
+
+/// Entity#getEffectiveGravity's parent body, for LivingEntity's explicit super call.
+pub(crate) fn base_effective_gravity<E: Entity + ?Sized>(
+    behavior: &E,
+    entity: EntityRef,
+    level: &Level,
+) -> Result<f64, LevelError> {
+    if *level
+        .entity::<EntityData>(entity)?
+        .entity_data
+        .get(synched_data::NO_GRAVITY)
+    {
+        Ok(0.0)
+    } else {
+        behavior.default_gravity(entity, level)
     }
 }
 
