@@ -286,7 +286,9 @@ pub fn move_entity<E: Entity + ?Sized>(
         )?;
     }
     let emission = behavior.movement_emission();
-    if emission != MovementEmission::None && level.entity::<EntityData>(entity)?.vehicle.is_none() {
+    if emission != MovementEmission::None
+        && level.entity::<EntityData>(entity)?.vehicle.get().is_none()
+    {
         apply_movement_emission(
             behavior,
             entity,

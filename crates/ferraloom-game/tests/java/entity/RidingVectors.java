@@ -11,6 +11,16 @@ public final class RidingVectors extends Cow {
   RidingVectors(Level level,Entity next) {super(EntityTypes.COW,level);this.next=next;}
   @Override public void tick() {if(next==null)stopRiding();else startRiding(next,true,false);}
   public static void run(Level level) {
+    var mount=new PrimedTnt(EntityTypes.TNT,level);
+    var first=new PrimedTnt(EntityTypes.TNT,level);first.setId(2);
+    var second=new PrimedTnt(EntityTypes.TNT,level);second.setId(3);
+    var empty=mount.getPassengers();
+    first.startRiding(mount,true,false);var one=mount.getPassengers();
+    second.startRiding(mount,true,false);var both=mount.getPassengers();
+    first.stopRiding();
+    var snapshots=java.util.List.of(empty,one,both,mount.getPassengers()).stream()
+      .map(list->String.join(",",list.stream().map(e->Integer.toString(e.getId())).toList())).toList();
+    System.out.println("passenger-lists\t"+String.join("\t",snapshots));
     for(boolean change:java.util.List.of(false,true)) {
       var old=new PrimedTnt(EntityTypes.TNT,level);old.setId(1);old.setPos(1,64,1);
       var next=new PrimedTnt(EntityTypes.TNT,level);next.setId(2);next.setPos(5,67,8);

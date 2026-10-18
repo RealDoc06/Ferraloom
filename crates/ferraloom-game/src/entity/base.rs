@@ -1,5 +1,5 @@
 //! Canonical Entity state, embedded exactly once in every concrete entity.
-use std::collections::VecDeque;
+use std::{cell::Cell, collections::VecDeque};
 
 use ferraloom_data::{BlockState, EntityType};
 use ferraloom_nbt::CompoundTag;
@@ -50,9 +50,9 @@ pub struct EntityData {
     pub uuid: Uuid,
     pub requires_precise_position: bool,
     pub blocks_building: bool,
-    pub passengers: Vec<EntityRef>,
+    pub passengers: super::PassengerList,
     pub boarding_cooldown: i32,
-    pub vehicle: Option<EntityRef>,
+    pub vehicle: Cell<Option<EntityRef>>,
     pub position: Vec3,
     pub block_position: BlockPos,
     pub chunk_position: ChunkPos,
@@ -145,9 +145,9 @@ impl EntityData {
             uuid,
             requires_precise_position: false,
             blocks_building: false,
-            passengers: Vec::new(),
+            passengers: super::PassengerList::default(),
             boarding_cooldown: 0,
-            vehicle: None,
+            vehicle: Cell::new(None),
             position: Vec3::ZERO,
             block_position: BlockPos::ZERO,
             chunk_position: ChunkPos::new(0, 0),

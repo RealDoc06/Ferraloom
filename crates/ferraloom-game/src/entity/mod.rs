@@ -12,6 +12,8 @@ pub mod effects;
 pub mod experience_orb;
 pub mod item;
 pub mod player;
+mod relationships;
+pub use relationships::PassengerList;
 
 /// Server-lifetime identity, independent of storage location and network ID.
 /// The server allocator must never reuse a value, including after removal.
@@ -233,7 +235,7 @@ pub struct DamageSource {
 
 /// Shared embedded Entity parent references for the host lifetime tracer.
 pub fn trace_base_entity_refs(base: &EntityData, references: &mut Vec<EntityRef>) {
-    references.extend(base.vehicle);
+    references.extend(base.vehicle.get());
     references.extend(base.passengers.iter().copied());
 }
 

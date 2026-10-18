@@ -22,7 +22,7 @@ pub fn start_riding(
     level: &mut Level,
 ) -> Result<bool, LevelError> {
     let rider = level.entity::<EntityData>(entity)?;
-    if rider.vehicle == Some(vehicle) || entity == vehicle {
+    if rider.vehicle.get() == Some(vehicle) || entity == vehicle {
         return Ok(false);
     }
     if !force && (rider.shared_flag(1) || rider.boarding_cooldown > 0) {
@@ -37,7 +37,7 @@ pub fn start_riding(
         return Ok(false);
     }
     let mut ancestor = vehicle;
-    while let Some(parent) = level.entity::<EntityData>(ancestor)?.vehicle {
+    while let Some(parent) = level.entity::<EntityData>(ancestor)?.vehicle.get() {
         if parent == entity {
             return Ok(false);
         }
@@ -55,7 +55,7 @@ pub fn start_riding(
     super::dimensions::set_pose(entity, Pose::Standing, level)?;
     {
         let rider = level.entity_mut::<EntityData>(entity)?;
-        rider.vehicle = Some(vehicle);
+        rider.vehicle.set(Some(vehicle));
     }
     let passengers = &mut level.entity_mut::<EntityData>(vehicle)?.passengers;
     if player_first {
@@ -131,7 +131,7 @@ pub fn ride_tick<E: super::Entity + ?Sized>(
 ) -> Result<(), LevelError> {
     level.entity_mut::<EntityData>(entity)?.velocity = ferraloom_util::Vec3::ZERO;
     behavior.tick(entity, level)?;
-    if let Some(vehicle) = level.entity::<EntityData>(entity)?.vehicle {
+    if let Some(vehicle) = level.entity::<EntityData>(entity)?.vehicle.get() {
         position_rider(vehicle, entity, level)?;
     }
     Ok(())
@@ -162,7 +162,7 @@ pub fn base_tick<E: super::Entity + ?Sized>(
         base.last_known_position = Some(base.position);
         base.in_block_state = None;
     }
-    let vehicle = level.entity::<EntityData>(entity)?.vehicle;
+    let vehicle = level.entity::<EntityData>(entity)?.vehicle.get();
     if let Some(vehicle) = vehicle
         && level.entity::<EntityData>(vehicle)?.removed
     {
@@ -216,7 +216,7 @@ fn update_swimming(entity: EntityRef, level: &mut Level) -> Result<(), LevelErro
     let base = level.entity::<EntityData>(entity)?;
     let sprinting = base.shared_flag(3);
     let water = base.was_touching_water;
-    let passenger = base.vehicle.is_some();
+    let passenger = base.vehicle.get().is_some();
     let swimming = if base.shared_flag(4) {
         sprinting && water && !passenger
     } else {

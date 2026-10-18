@@ -208,7 +208,11 @@ fn vanilla_ride_tick_uses_the_vehicle_after_derived_tick_and_resets_living_fall_
             fields[4],
             "{row}"
         );
-        assert_eq!((base.vehicle == Some(next)).to_string(), fields[5], "{row}");
+        assert_eq!(
+            (base.vehicle.get() == Some(next)).to_string(),
+            fields[5],
+            "{row}"
+        );
         assert_eq!(base.tick_count, 1);
         rows += 1;
     }
@@ -228,7 +232,7 @@ fn sneaking_player_dismounts_before_riding_tick_without_zeroing_velocity_or_fall
     crate::entity::Entity::ride_tick(&crate::entity::player::PlayerBehavior, player, &mut level)
         .unwrap();
     let base = level.entity::<EntityData>(player).unwrap();
-    assert_eq!(base.vehicle, None);
+    assert_eq!(base.vehicle.get(), None);
     assert_eq!(base.velocity, Vec3::new(1.0, 2.0, 3.0));
     assert_eq!(base.fall_distance, 8.0);
     assert_eq!(base.boarding_cooldown, 0);

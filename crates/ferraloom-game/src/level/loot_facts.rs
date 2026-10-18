@@ -143,7 +143,11 @@ impl PredicateContext for Level {
             .tick_count)
     }
     fn entity_vehicle(&self, entity: EntityRef) -> Result<Option<EntityRef>> {
-        Ok(self.entity::<EntityData>(entity).map_err(required)?.vehicle)
+        Ok(self
+            .entity::<EntityData>(entity)
+            .map_err(required)?
+            .vehicle
+            .get())
     }
     fn entity_passengers(&self, entity: EntityRef) -> Result<Vec<EntityRef>> {
         Ok(self

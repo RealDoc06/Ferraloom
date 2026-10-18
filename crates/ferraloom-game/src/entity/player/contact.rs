@@ -14,7 +14,7 @@ fn pickup_area(player: EntityRef, level: &Level) -> Result<Option<Aabb>, LevelEr
         return Ok(None);
     }
     let bounds = state.bounding_box;
-    if let Some(vehicle) = state.vehicle {
+    if let Some(vehicle) = state.vehicle.get() {
         let vehicle = level.entity::<EntityData>(vehicle)?;
         if !vehicle.removed {
             return Ok(Some(

@@ -435,7 +435,7 @@ pub fn move_player_with_checks(
     let yaw = mth::wrap_degrees_f32(input.yaw);
     let pitch = mth::wrap_degrees_f32(input.pitch);
     let player = level.entity::<ServerPlayer>(entity)?;
-    if player.vehicle.is_some() {
+    if player.vehicle.get().is_some() {
         let player = level.entity_mut::<ServerPlayer>(entity)?;
         player.set_y_rot(yaw);
         player.set_x_rot(pitch);
@@ -625,7 +625,7 @@ impl crate::entity::Entity for PlayerBehavior {
         level: &mut Level,
     ) -> Result<(), LevelError> {
         let player = level.entity::<ServerPlayer>(entity)?;
-        if player.shared_flag(1) && player.vehicle.is_some() {
+        if player.shared_flag(1) && player.vehicle.get().is_some() {
             crate::entity::stop_riding(entity, level)
         } else {
             crate::entity::living_ride_tick(self, entity, level)
@@ -816,7 +816,7 @@ impl crate::entity::Entity for PlayerBehavior {
             let player = level.entity::<ServerPlayer>(entity)?;
             (
                 player.game_mode == GameType::Spectator,
-                player.vehicle.is_some(),
+                player.vehicle.get().is_some(),
             )
         };
         level

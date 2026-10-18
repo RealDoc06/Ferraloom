@@ -674,7 +674,7 @@ impl Level {
             if !self.always_ticking(entity) && !self.is_entity_ticking_chunk(base.chunk_position) {
                 continue;
             }
-            if let Some(vehicle) = base.vehicle {
+            if let Some(vehicle) = base.vehicle.get() {
                 if self.entity_state(vehicle).is_ok_and(|state| {
                     !state.as_entity().removed && state.as_entity().passengers.contains(&entity)
                 }) {
@@ -702,7 +702,7 @@ impl Level {
         passenger: EntityRef,
     ) -> Result<(), LevelError> {
         let base = self.entity::<EntityData>(passenger)?;
-        if base.removed || base.vehicle != Some(vehicle) {
+        if base.removed || base.vehicle.get() != Some(vehicle) {
             crate::entity::stop_riding(passenger, self)?;
             return Ok(());
         }

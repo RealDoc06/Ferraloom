@@ -94,7 +94,7 @@ pub(crate) fn load_entity_tree(
         // Entity#startRiding(force=true) still refuses a removed vehicle.
         if !loaded[index].1.as_entity().removed {
             let passenger_state = loaded.iter_mut().find(|(id, _)| *id == passenger).unwrap();
-            passenger_state.1.as_entity_mut().vehicle = Some(entity);
+            passenger_state.1.as_entity_mut().vehicle.set(Some(entity));
             loaded[index].1.as_entity_mut().passengers.push(passenger);
         }
     }
@@ -110,13 +110,13 @@ impl Level {
             && base
                 .removal_reason
                 .is_none_or(|reason| reason.should_save())
-            && base.vehicle.is_none()
+            && base.vehicle.get().is_none()
             && (base.passengers.is_empty() || entity.count_player_passengers(self)? != 1))
     }
 
     /// Port of Entity#save; passengers are serialized only through their vehicle.
     pub fn save_entity(&self, entity: EntityRef) -> Result<Option<CompoundTag>, LevelError> {
-        if self.entity::<EntityData>(entity)?.vehicle.is_some() {
+        if self.entity::<EntityData>(entity)?.vehicle.get().is_some() {
             return Ok(None);
         }
         self.save_entity_as_passenger(entity)
@@ -151,7 +151,7 @@ impl Level {
             EntityState::Player(_) => unreachable!("player has no encode ID"),
         };
         tag.insert("id", Tag::String(state.entity_type().name().into()));
-        if let Some(vehicle) = base.vehicle {
+        if let Some(vehicle) = base.vehicle.get() {
             let mount = self.entity::<EntityData>(vehicle)?;
             tag.insert(
                 "Pos",

@@ -167,7 +167,7 @@ fn recursive_passengers_load_before_callbacks_and_save_vehicle_horizontal_positi
         vec![passenger]
     );
     assert_eq!(
-        level.entity::<EntityData>(passenger).unwrap().vehicle,
+        level.entity::<EntityData>(passenger).unwrap().vehicle.get(),
         Some(root)
     );
     assert!(level.save_entity(passenger).unwrap().is_none());
@@ -294,6 +294,7 @@ fn duplicate_vehicle_uuid_keeps_held_object_without_stealing_the_visible_identit
         .entity::<EntityData>(passenger)
         .unwrap()
         .vehicle
+        .get()
         .unwrap();
     assert_ne!(original, duplicate);
     assert_eq!(level.all_entities(), vec![original, passenger]);

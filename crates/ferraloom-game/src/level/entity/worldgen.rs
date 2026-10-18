@@ -205,7 +205,7 @@ mod tests {
         let links = [EntityRef(1), EntityRef(2), EntityRef(3)]
             .map(|id| {
                 let base = level.entity::<EntityData>(id).unwrap();
-                let vehicle = base.vehicle.map_or_else(
+                let vehicle = base.vehicle.get().map_or_else(
                     || "none".to_owned(),
                     |vehicle| {
                         level
@@ -226,7 +226,11 @@ mod tests {
             [EntityRef(2)]
         );
         assert_eq!(
-            level.entity::<EntityData>(EntityRef(2)).unwrap().vehicle,
+            level
+                .entity::<EntityData>(EntityRef(2))
+                .unwrap()
+                .vehicle
+                .get(),
             Some(EntityRef(1))
         );
         assert_eq!(
@@ -312,7 +316,11 @@ mod tests {
             .add_worldgen_chunk_entities(pos, vec![duplicate])
             .unwrap();
         assert_eq!(
-            level.entity::<EntityData>(EntityRef(3)).unwrap().vehicle,
+            level
+                .entity::<EntityData>(EntityRef(3))
+                .unwrap()
+                .vehicle
+                .get(),
             Some(EntityRef(2))
         );
         assert_eq!(
@@ -324,7 +332,7 @@ mod tests {
         let native = oracle("duplicate");
         assert_eq!(created_ids(&level, &events), expected_created(&native));
         let child = level.entity::<EntityData>(EntityRef(3)).unwrap();
-        let vehicle = child.vehicle.unwrap();
+        let vehicle = child.vehicle.get().unwrap();
         assert_eq!(
             format!(
                 "{}:{}",
