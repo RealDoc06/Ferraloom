@@ -17,15 +17,7 @@ pub trait MenuSynchronizationContext {
         Ok(())
     }
     fn slot_changed(&mut self, slot: usize, copy: ListenerCopyRef) -> Result<()> {
-        let stack = self
-            .listener_copies()?
-            .get(copy)
-            .ok_or(MenuError::MissingListenerCopy(copy))?
-            .clone();
-        self.menu_mut()?
-            .changes
-            .push(ContainerChange::Slot(slot, stack));
-        Ok(())
+        record_slot_change(self, slot, copy)
     }
     fn data_changed(&mut self, index: usize, value: i32) -> Result<()> {
         self.menu_mut()?
@@ -155,6 +147,31 @@ impl MenuSynchronizationContext for LiveMenuContext<'_> {
         }
         Ok(())
     }
+    fn slot_changed(&mut self, index: usize, copy: ListenerCopyRef) -> Result<()> {
+        let notify = {
+            let menu = self.menu()?;
+            let slot = &menu.slots[index];
+            menu.player_listener
+                && slot.kind != SlotKind::Result(ResultKind::Crafting)
+                && slot.container == ContainerId::Player
+        };
+        if notify {
+            // ServerPlayer's listener receives the retained lastSlots copy,
+            // not a fresh lookup of the slot that nested rewards may replace.
+            crate::advancements::criteria::inventory_changed(
+                self.level,
+                self.player,
+                StackRef {
+                    container: ContainerHandle::MenuListenerCopies {
+                        player: self.player,
+                    },
+                    slot: copy.slot,
+                    generation: copy.generation,
+                },
+            )?;
+        }
+        record_slot_change(self, index, copy)
+    }
     fn send_update(&mut self, update: ContainerUpdate) -> Result<()> {
         flush_container_packets(self.player, self.level)?;
         for packet in update.into_packets() {
@@ -166,6 +183,23 @@ impl MenuSynchronizationContext for LiveMenuContext<'_> {
         }
         Ok(())
     }
+}
+
+fn record_slot_change<C: MenuSynchronizationContext + ?Sized>(
+    context: &mut C,
+    index: usize,
+    copy: ListenerCopyRef,
+) -> Result<()> {
+    let stack = context
+        .listener_copies()?
+        .get(copy)
+        .ok_or(MenuError::MissingListenerCopy(copy))?
+        .clone();
+    context
+        .menu_mut()?
+        .changes
+        .push(ContainerChange::Slot(index, stack));
+    Ok(())
 }
 
 /// Port of ItemStack#copy, including its shared EMPTY result.

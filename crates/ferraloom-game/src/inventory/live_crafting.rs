@@ -10,13 +10,49 @@ use crate::{
 use std::sync::Arc;
 
 /// Immutable recipe services and the actual rule captured by the packet owner.
-/// Achievement producers remain explicit until the advancements slice lands.
+/// Recipe criteria complete synchronously before the next menu callback.
 pub struct LiveRecipeMenuHooks {
     pub resources: Arc<ContainerResources>,
     pub kind: MenuKind,
     pub limited_crafting: bool,
 }
 impl MenuHooks for LiveRecipeMenuHooks {
+    fn live_award_recipe(
+        &mut self,
+        player: EntityRef,
+        _menu: MenuRef,
+        id: &ferraloom_data::datapack::Identifier,
+        input: &[StackRef],
+        level: &mut Level,
+    ) -> Result<bool> {
+        let recipe = self
+            .resources
+            .recipes
+            .by_key(id)
+            .ok_or(MenuError::Unsupported(
+                "recipe used from a retired recipe snapshot",
+            ))?;
+        crate::advancements::criteria::recipe_crafted(level, player, recipe, input)?;
+        if recipe.value.is_special() {
+            return Ok(false);
+        }
+        // award_recipes invokes recipe_unlocked after each successful unlock,
+        // before the aggregate book packet. Never trigger it a second time.
+        crate::advancements::award_recipes(level, player, std::iter::once(recipe))?;
+        Ok(true)
+    }
+    fn live_award_furnace(
+        &mut self,
+        player: EntityRef,
+        furnace: crate::block::entity::BlockEntityRef,
+        level: &mut Level,
+    ) -> Result<()> {
+        Ok(
+            crate::block::containers::furnace::award_used_recipes_and_pop_experience(
+                furnace, player, level,
+            )?,
+        )
+    }
     fn has_crafting(&self) -> bool {
         matches!(self.kind, MenuKind::Inventory | MenuKind::Crafting)
     }
