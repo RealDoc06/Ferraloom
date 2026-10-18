@@ -11,6 +11,7 @@ mod foundational;
 mod placement;
 pub mod plants;
 pub use placement::DirectionalPlaceContext;
+pub use plants::multiface_spreader;
 mod shapes;
 pub use shapes::BlockCollisionContext;
 mod unsupported;
