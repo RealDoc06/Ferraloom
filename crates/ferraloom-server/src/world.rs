@@ -11,6 +11,7 @@ use ferraloom_data::{Block, BlockClass, BlockState, EntityType, datapack::Resour
 use ferraloom_game::level::{
     Level,
     chunk::LevelChunk,
+    chunk_task_dispatcher::{ChunkTaskDispatch, ThrottlingChunkTaskDispatcher},
     entity::{EntityLoadRequestId, EntityStorageRequest},
 };
 use ferraloom_light::{LevelLightEngine, LightLayer, SectionSnapshots};
@@ -481,7 +482,8 @@ pub struct World {
             oneshot::Sender<Result<Terrain>>,
         )>,
     >,
-    generation_queue: VecDeque<(u64, ChunkPos, oneshot::Sender<Result<Terrain>>)>,
+    generation_dispatcher:
+        ThrottlingChunkTaskDispatcher<(u64, ChunkPos, oneshot::Sender<Result<Terrain>>)>,
     proto_saves: VecDeque<storage::IoTask<()>>,
     saving: JobPool,
     pub pending: BTreeMap<u64, oneshot::Receiver<Result<Terrain>>>,
@@ -705,7 +707,7 @@ impl World {
             generation,
             generation_state: Some(generation_state),
             generation_work: None,
-            generation_queue: VecDeque::new(),
+            generation_dispatcher: ThrottlingChunkTaskDispatcher::new(4),
             proto_saves: VecDeque::new(),
             saving: JobPool::new("ferraloom-save", 1)?,
             pending: BTreeMap::new(),
@@ -832,16 +834,37 @@ impl World {
         }
         Ok(())
     }
+    pub fn update_generation_priority(&mut self, pos: ChunkPos, level: i32) {
+        self.generation_dispatcher
+            .on_level_change(pos, level.clamp(0, 45));
+    }
     pub fn request(&mut self, request: u64, pos: ChunkPos) {
         let (reply, answer) = oneshot::channel();
         self.pending.insert(request, answer);
-        self.generation_queue.push_back((request, pos, reply));
+        self.generation_dispatcher.submit(
+            pos,
+            self.generation_dispatcher.queue_level(pos),
+            (request, pos, reply),
+        );
     }
     fn start_generation(&mut self) -> Result<()> {
         if self.generation_work.is_some() {
             return Ok(());
         }
-        let Some((request, pos, reply)) = self.generation_queue.pop_front() else {
+        let mut next = None;
+        while let Some(dispatch) = self.generation_dispatcher.next_dispatch() {
+            match dispatch {
+                ChunkTaskDispatch::Batch { pos: _, mut tasks } => {
+                    next = tasks.pop();
+                    ensure!(tasks.is_empty(), "duplicate generation request");
+                    break;
+                }
+                ChunkTaskDispatch::Released(_) => {
+                    unreachable!("generation release has no callback")
+                }
+            }
+        }
+        let Some((request, pos, reply)) = next else {
             return Ok(());
         };
         let mut state = self
@@ -867,8 +890,10 @@ impl World {
             oneshot::Sender<Result<Terrain>>,
         ),
     ) -> Result<()> {
-        let (state, result, _request, _pos, reply) = output;
+        let (state, result, _request, pos, reply) = output;
         self.generation_state = Some(state);
+        self.generation_dispatcher.release(pos, false, None);
+        self.generation_dispatcher.complete_batch();
         let result = result.and_then(|output| {
             self.generation_skips.extend(output.skips);
             self.generation_statuses.extend(output.statuses);

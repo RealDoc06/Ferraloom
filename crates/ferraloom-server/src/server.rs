@@ -1064,6 +1064,8 @@ impl MinecraftServer {
             for change in changes {
                 let holder = self.level.chunks.ensure_holder(change.pos);
                 holder.ticket_level = change.level;
+                self.world
+                    .update_generation_priority(change.pos, change.level);
                 if change.level <= 33
                     && let Some(request) = self.level.chunks.request(change.pos)
                 {
@@ -1120,7 +1122,25 @@ impl MinecraftServer {
         Ok(())
     }
     fn integrate_jobs(&mut self) -> Result<()> {
-        for (request, terrain) in self.world.poll_terrain()? {
+        let completed = self.world.poll_terrain()?;
+        self.level
+            .level
+            .record_worldgen_skips(std::mem::take(&mut self.world.generation_skips))
+            .map_err(game_error)?;
+        for (&pos, &status) in &self.world.generation_statuses {
+            self.level.chunks.ensure_holder(pos).status = status;
+        }
+        for (request, mut terrain) in completed {
+            let entities = terrain.disk.entities.take().unwrap_or_default();
+            if let Err(error) = self
+                .level
+                .level
+                .add_worldgen_chunk_entities(terrain.pos, entities)
+            {
+                terrain.disk.entities = Some(error.entities);
+                self.world.saved.insert(terrain.pos.pack(), terrain.disk);
+                return Err(error.source.into());
+            }
             let pos = terrain.pos;
             if pos == ChunkPos::containing(self.world.spawn)
                 && !self.world.level_data.data.contains_key("spawn")
@@ -1162,7 +1182,7 @@ impl MinecraftServer {
                     .level
                     .level
                     .chunk(pos)
-                    .is_some_and(|chunk| chunk.post_processing_complete())
+                    .is_some_and(|chunk| chunk.generation_callbacks_drained())
                 {
                     self.world.ready.insert(pos);
                 }
