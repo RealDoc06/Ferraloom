@@ -17,13 +17,17 @@ pub use registry::BlockEntityType;
 
 /// A positional call handle. It never owns or takes canonical data out of a chunk.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct BlockEntityRef(pub BlockPos);
+pub struct BlockEntityRef {
+    pub pos: BlockPos,
+    pub generation: u64,
+}
 
 /// Port of BlockEntity's shared state. Mutable behavior belongs to the chunk.
 #[derive(Clone, Debug)]
 pub struct BlockEntityData {
     pub kind: BlockEntityType,
     pub pos: BlockPos,
+    pub generation: u64,
     pub block_state: BlockState,
     pub removed: bool,
     pub has_level: bool,
@@ -41,11 +45,18 @@ impl BlockEntityData {
         Ok(Self {
             kind,
             pos,
+            generation: 0,
             block_state: state,
             removed: false,
             has_level: false,
             components: DataComponentMap::default(),
         })
+    }
+    pub fn reference(&self) -> BlockEntityRef {
+        BlockEntityRef {
+            pos: self.pos,
+            generation: self.generation,
+        }
     }
     pub fn set_block_state(&mut self, state: BlockState) -> Result<(), LevelError> {
         if !registry::is_valid(self.kind, state) {
@@ -95,6 +106,15 @@ pub trait BlockEntity: Sync {
         false
     }
     fn tick(&self, _entity: BlockEntityRef, _level: &mut Level) -> Result<(), LevelError> {
+        Ok(())
+    }
+    /// Port of BlockEntity#preRemoveSideEffects. Non-container base has no effects;
+    /// registered container dispatchers override this before allowing removal.
+    fn pre_remove_side_effects(
+        &self,
+        _entity: BlockEntityRef,
+        _level: &mut Level,
+    ) -> Result<(), LevelError> {
         Ok(())
     }
     fn trigger_event(&self, _state: &mut BlockEntityState, _event: i32, _value: i32) -> bool {

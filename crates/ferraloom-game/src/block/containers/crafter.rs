@@ -56,6 +56,15 @@ impl CrafterBlockEntity {
 pub struct CrafterBehavior;
 pub static CRAFTER_ENTITY: CrafterBehavior = CrafterBehavior;
 impl BlockEntity for CrafterBehavior {
+    fn pre_remove_side_effects(
+        &self,
+        entity: crate::block::entity::BlockEntityRef,
+        level: &mut crate::level::Level,
+    ) -> Result<(), crate::level::LevelError> {
+        Err(crate::level::LevelError::UnsupportedBlockEntity(
+            level.get_block_state(entity.pos)?.block(),
+        ))
+    }
     fn load_additional(&self, state: &mut BlockEntityState, tag: &CompoundTag) {
         let BlockEntityState::Crafter(crafter) = state else {
             unreachable!()
