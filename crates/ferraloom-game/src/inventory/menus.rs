@@ -381,6 +381,11 @@ impl AbstractContainerMenu {
         if stack.is_empty() {
             return Ok(ItemStack::default());
         }
+        if let SlotKind::Result(kind) = self.slots[index].kind
+            && !hooks.result_available(kind, &stack)?
+        {
+            return Ok(ItemStack::default());
+        }
         let original = stack.clone();
         let slots = self.slots.len();
         let moved = match self.kind {
@@ -624,7 +629,10 @@ impl AbstractContainerMenu {
             || (self.kind == MenuKind::Stonecutter && index == 1))
             && !stack.is_empty()
         {
-            ctx.drops.push(stack);
+            ctx.drops.push(DroppedStack {
+                stack,
+                thrown_from_hand: false,
+            });
         }
         Ok(original)
     }

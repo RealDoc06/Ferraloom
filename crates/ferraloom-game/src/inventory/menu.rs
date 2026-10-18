@@ -1,14 +1,20 @@
 use super::*;
 use ferraloom_protocol::{component::HashedStack, play::ContainerInput};
 
-/// Live borrowed storage for one menu operation. External block/mount inventories
-/// are supplied by their region owner, never retained behind a shared pointer.
+/// Port of the stack and thrown-from-hand argument at a LivingEntity#drop call.
+#[derive(Clone, Debug)]
+pub struct DroppedStack {
+    pub stack: ItemStack,
+    pub thrown_from_hand: bool,
+}
+
+/// Live borrowed storage for one operation, supplied by the region owner.
 pub struct MenuContext<'a> {
     pub player: PlayerContainer<'a>,
     pub external: &'a mut [&'a mut dyn Container],
     pub creative: bool,
     pub can_drop: bool,
-    pub drops: Vec<ItemStack>,
+    pub drops: Vec<DroppedStack>,
 }
 impl<'a> MenuContext<'a> {
     pub fn player(
@@ -29,7 +35,10 @@ impl<'a> MenuContext<'a> {
     }
     fn drop_item(&mut self, stack: ItemStack) {
         if !stack.is_empty() {
-            self.drops.push(stack);
+            self.drops.push(DroppedStack {
+                stack,
+                thrown_from_hand: true,
+            });
         }
     }
 }
@@ -134,7 +143,9 @@ impl AbstractContainerMenu {
         self.state_id
     }
     pub fn is_valid_slot_index(&self, index: i32) -> bool {
-        index == -1 || index == -999 || index >= 0 && (index as usize) < self.slots.len()
+        // Vanilla accepts all negative values here; doClick decides which input
+        // modes ignore them and which fail when they actually index a slot.
+        index < self.slots.len() as i32
     }
     fn slot(&self, index: i32) -> Result<Slot> {
         self.slots

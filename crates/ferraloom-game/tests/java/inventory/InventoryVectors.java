@@ -97,7 +97,7 @@ public final class InventoryVectors {
       for(var slot:m.slots)layout.add(slot.getContainerSlot()+","+slot.x+","+slot.y);
       System.out.println("layout\t"+BuiltInRegistries.MENU.getId(type)+"\t"+String.join(";",layout));
     }
-    var edge=List.of(new int[]{0,1,0},new int[]{1,0,0},new int[]{2,0,0},new int[]{-999,1,0},new int[]{3,0,0},new int[]{4,0,0},new int[]{4,0,0},new int[]{5,0,5},new int[]{5,1,5},new int[]{6,1,5},new int[]{7,1,5},new int[]{-999,2,5},new int[]{8,0,0},new int[]{-999,0,0},new int[]{0,40,2},new int[]{1,0,2},new int[]{0,1,4},new int[]{2,0,3},new int[]{-999,0,0},new int[]{2,1,4});
+    var edge=List.of(new int[]{-2,0,0},new int[]{-2,0,1},new int[]{0,1,0},new int[]{1,0,0},new int[]{2,0,0},new int[]{-999,1,0},new int[]{3,0,0},new int[]{4,0,0},new int[]{4,0,0},new int[]{5,0,5},new int[]{5,1,5},new int[]{6,1,5},new int[]{7,1,5},new int[]{-999,2,5},new int[]{8,0,0},new int[]{-999,0,0},new int[]{0,40,2},new int[]{1,0,2},new int[]{0,1,4},new int[]{2,0,3},new int[]{-999,0,0},new int[]{2,1,4});
     scenario(registries,"edges","chest1",true,edge,false);
     scenario(registries,"crafted-result","inventory",false,List.of(new int[]{0,1,0},new int[]{-999,0,0}),false);
     scenario(registries,"furnace-result","furnace",false,List.of(new int[]{2,0,1},new int[]{3,1,0},new int[]{4,0,0},new int[]{2,0,6}),false);

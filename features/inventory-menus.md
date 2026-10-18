@@ -56,3 +56,4 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | inventory-menus.menu.stonecutter | `minecraft:stonecutter` (menu); implementation `StonecutterMenu` | `net.minecraft.world.inventory.MenuType#register; StonecutterMenu` | `inventory::tests::all_registered_menu_slot_layouts_match_real_vanilla_constructors` (layout only) | pass | partial |
 
 | inventory-menus.menu.layout-registry | Match all 25 registered menu constructors slot indices and coordinates | `MenuType; concrete menu constructors` | `inventory::tests::all_registered_menu_slot_layouts_match_real_vanilla_constructors` | pass | partial |
+| inventory-menus.click.negative-slot | Preserve negative-index validation followed by input-specific handling | `AbstractContainerMenu#isValidSlotIndex; AbstractContainerMenu#doClick` | `inventory::tests::real_vanilla_click_sequences_slots_carried_state_and_remote_updates` | pass | partial |

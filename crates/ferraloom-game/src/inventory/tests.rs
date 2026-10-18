@@ -218,7 +218,11 @@ fn real_vanilla_click_sequences_slots_carried_state_and_remote_updates() {
                     if ctx.drops.is_empty() {
                         "-".into()
                     } else {
-                        ctx.drops.iter().map(item).collect::<Vec<_>>().join(";")
+                        ctx.drops
+                            .iter()
+                            .map(|drop| item(&drop.stack))
+                            .collect::<Vec<_>>()
+                            .join(";")
                     },
                 ];
                 assert_eq!(
@@ -233,7 +237,7 @@ fn real_vanilla_click_sequences_slots_carried_state_and_remote_updates() {
         }
     }
     assert_eq!(scenarios, 32);
-    assert_eq!(clicks, 2954);
+    assert_eq!(clicks, 2956);
 }
 
 #[test]

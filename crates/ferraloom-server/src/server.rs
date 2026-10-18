@@ -1321,8 +1321,8 @@ impl MinecraftServer {
             menu.changes.clear();
             (menu.drain_packets(), context.drops)
         };
-        for stack in drops {
-            self.drop_inventory_stack(entity, stack, true)?;
+        for drop in drops {
+            self.drop_inventory_stack(entity, drop.stack, drop.thrown_from_hand)?;
         }
         for packet in packets {
             self.connections.get_mut(&connection).unwrap().push(packet);
