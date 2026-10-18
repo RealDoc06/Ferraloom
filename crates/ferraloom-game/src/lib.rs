@@ -6,6 +6,8 @@
 pub mod block;
 pub mod entity;
 pub mod level;
+pub mod loot;
+pub mod predicates;
 pub mod ticks;
 
 /// Immutable virtual dispatch tables. Unsupported behavior is an explicit error.
