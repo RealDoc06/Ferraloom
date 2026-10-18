@@ -1,0 +1,262 @@
+[
+  {
+    "name": "air",
+    "read_only": true,
+    "hearts": false
+  },
+  {
+    "name": "armor",
+    "read_only": true,
+    "hearts": false
+  },
+  {
+    "name": "deathCount",
+    "read_only": false,
+    "hearts": false
+  },
+  {
+    "name": "dummy",
+    "read_only": false,
+    "hearts": false
+  },
+  {
+    "name": "food",
+    "read_only": true,
+    "hearts": false
+  },
+  {
+    "name": "health",
+    "read_only": true,
+    "hearts": true
+  },
+  {
+    "name": "killedByTeam.aqua",
+    "read_only": false,
+    "hearts": false
+  },
+  {
+    "name": "killedByTeam.black",
+    "read_only": false,
+    "hearts": false
+  },
+  {
+    "name": "killedByTeam.blue",
+    "read_only": false,
+    "hearts": false
+  },
+  {
+    "name": "killedByTeam.dark_aqua",
+    "read_only": false,
+    "hearts": false
+  },
+  {
+    "name": "killedByTeam.dark_blue",
+    "read_only": false,
+    "hearts": false
+  },
+  {
+    "name": "killedByTeam.dark_gray",
+    "read_only": false,
+    "hearts": false
+  },
+  {
+    "name": "killedByTeam.dark_green",
+    "read_only": false,
+    "hearts": false
+  },
+  {
+    "name": "killedByTeam.dark_purple",
+    "read_only": false,
+    "hearts": false
+  },
+  {
+    "name": "killedByTeam.dark_red",
+    "read_only": false,
+    "hearts": false
+  },
+  {
+    "name": "killedByTeam.gold",
+    "read_only": false,
+    "hearts": false
+  },
+  {
+    "name": "killedByTeam.gray",
+    "read_only": false,
+    "hearts": false
+  },
+  {
+    "name": "killedByTeam.green",
+    "read_only": false,
+    "hearts": false
+  },
+  {
+    "name": "killedByTeam.light_purple",
+    "read_only": false,
+    "hearts": false
+  },
+  {
+    "name": "killedByTeam.red",
+    "read_only": false,
+    "hearts": false
+  },
+  {
+    "name": "killedByTeam.white",
+    "read_only": false,
+    "hearts": false
+  },
+  {
+    "name": "killedByTeam.yellow",
+    "read_only": false,
+    "hearts": false
+  },
+  {
+    "name": "level",
+    "read_only": true,
+    "hearts": false
+  },
+  {
+    "name": "minecraft.broken:minecraft.wooden_pickaxe",
+    "read_only": false,
+    "hearts": false
+  },
+  {
+    "name": "minecraft.crafted:minecraft.stick",
+    "read_only": false,
+    "hearts": false
+  },
+  {
+    "name": "minecraft.custom:minecraft.jump",
+    "read_only": false,
+    "hearts": false
+  },
+  {
+    "name": "minecraft.dropped:minecraft.stone",
+    "read_only": false,
+    "hearts": false
+  },
+  {
+    "name": "minecraft.killed:minecraft.zombie",
+    "read_only": false,
+    "hearts": false
+  },
+  {
+    "name": "minecraft.killed_by:minecraft.zombie",
+    "read_only": false,
+    "hearts": false
+  },
+  {
+    "name": "minecraft.mined:minecraft.stone",
+    "read_only": false,
+    "hearts": false
+  },
+  {
+    "name": "minecraft.picked_up:minecraft.stone",
+    "read_only": false,
+    "hearts": false
+  },
+  {
+    "name": "minecraft.used:minecraft.stick",
+    "read_only": false,
+    "hearts": false
+  },
+  {
+    "name": "playerKillCount",
+    "read_only": false,
+    "hearts": false
+  },
+  {
+    "name": "teamkill.aqua",
+    "read_only": false,
+    "hearts": false
+  },
+  {
+    "name": "teamkill.black",
+    "read_only": false,
+    "hearts": false
+  },
+  {
+    "name": "teamkill.blue",
+    "read_only": false,
+    "hearts": false
+  },
+  {
+    "name": "teamkill.dark_aqua",
+    "read_only": false,
+    "hearts": false
+  },
+  {
+    "name": "teamkill.dark_blue",
+    "read_only": false,
+    "hearts": false
+  },
+  {
+    "name": "teamkill.dark_gray",
+    "read_only": false,
+    "hearts": false
+  },
+  {
+    "name": "teamkill.dark_green",
+    "read_only": false,
+    "hearts": false
+  },
+  {
+    "name": "teamkill.dark_purple",
+    "read_only": false,
+    "hearts": false
+  },
+  {
+    "name": "teamkill.dark_red",
+    "read_only": false,
+    "hearts": false
+  },
+  {
+    "name": "teamkill.gold",
+    "read_only": false,
+    "hearts": false
+  },
+  {
+    "name": "teamkill.gray",
+    "read_only": false,
+    "hearts": false
+  },
+  {
+    "name": "teamkill.green",
+    "read_only": false,
+    "hearts": false
+  },
+  {
+    "name": "teamkill.light_purple",
+    "read_only": false,
+    "hearts": false
+  },
+  {
+    "name": "teamkill.red",
+    "read_only": false,
+    "hearts": false
+  },
+  {
+    "name": "teamkill.white",
+    "read_only": false,
+    "hearts": false
+  },
+  {
+    "name": "teamkill.yellow",
+    "read_only": false,
+    "hearts": false
+  },
+  {
+    "name": "totalKillCount",
+    "read_only": false,
+    "hearts": false
+  },
+  {
+    "name": "trigger",
+    "read_only": false,
+    "hearts": false
+  },
+  {
+    "name": "xp",
+    "read_only": true,
+    "hearts": false
+  }
+]

@@ -126,11 +126,10 @@ pub fn criteria(reader: &mut StringReader) -> Result<ObjectiveCriteria, CommandS
     }
     Ok(ObjectiveCriteria {
         hearts: name == "health",
-        read_only: stat
-            || matches!(
-                name.as_str(),
-                "health" | "food" | "air" | "armor" | "xp" | "level"
-            ),
+        read_only: matches!(
+            name.as_str(),
+            "health" | "food" | "air" | "armor" | "xp" | "level"
+        ),
         name,
     })
 }
@@ -139,4 +138,29 @@ fn by_separator(value: &str) -> String {
         || format!("minecraft:{value}"),
         |(namespace, path)| format!("{namespace}:{path}"),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn native_criteria_metadata_includes_writable_stats() {
+        #[derive(serde::Deserialize)]
+        struct Vector {
+            name: String,
+            read_only: bool,
+            hearts: bool,
+        }
+        let vectors: Vec<Vector> =
+            serde_json::from_str(include_str!("../vanilla/criteria-vectors.json")).unwrap();
+        for vector in vectors {
+            let mut reader = StringReader::new(&vector.name);
+            let actual = criteria(&mut reader).unwrap();
+            assert_eq!(reader.cursor(), vector.name.len(), "{}", vector.name);
+            assert_eq!(actual.read_only, vector.read_only, "{}", vector.name);
+            assert_eq!(actual.hearts, vector.hearts, "{}", vector.name);
+            assert_eq!(actual.name, vector.name);
+        }
+    }
 }
