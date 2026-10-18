@@ -132,8 +132,13 @@ impl BlockEntity for FurnaceBehavior {
         entity: BlockEntityRef,
         level: &mut Level,
     ) -> Result<(), LevelError> {
-        Err(LevelError::UnsupportedBlockEntity(
-            level.get_block_state(entity.pos)?.block(),
-        ))
+        if !level
+            .block_entity::<AbstractFurnaceBlockEntity>(entity)?
+            .recipes_used
+            .is_empty()
+        {
+            return Err(LevelError::Inventory("furnace recipe experience hook"));
+        }
+        super::drops::drop_contents(entity, level)
     }
 }
