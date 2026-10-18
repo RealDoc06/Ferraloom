@@ -1840,6 +1840,7 @@ fn creative_double_plant_destruction_matches_native_states_and_rng() {
         let f: Vec<_> = line.split('\t').collect();
         let state = BlockState::from_id(f[1].parse().unwrap()).unwrap();
         let mut level = level();
+        super::fixtures::install_loot(&mut level);
         level.set_block_tags(blocks.clone());
         level.set_fluid_tags(fluids.clone());
         level
