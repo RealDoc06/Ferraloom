@@ -2,8 +2,8 @@
 //! storing mutable behavior objects or losing the world's canonical RNG stream.
 use super::{
     super::{LevelAccessRef, LevelReaderRef, UpdateFlags},
-    bamboo, crops, dripleaf, growing, hanging_moss, moss, multiface_spreader, nylium, pitcher,
-    sapling, sea_pickle, spread, survival,
+    bamboo, crops, dripleaf, feature_bonemeal, growing, hanging_moss, moss, multiface_spreader,
+    nylium, pitcher, sapling, sea_pickle, spread, survival,
     tree_grower::TreeGrower,
 };
 use crate::level::LevelError;
@@ -76,7 +76,10 @@ static ROOTED_BONEMEAL: PlantBonemeal = PlantBonemeal {
 /// interface; callers can test BlockClass::BonemealableBlock before dispatch.
 pub fn bonemealable_behavior(block: Block) -> Option<&'static dyn BonemealableBlock> {
     use BlockClass as C;
-    if block.class() == C::NetherrackBlock {
+    if matches!(
+        block.class(),
+        C::NetherrackBlock | C::NyliumBlock | C::BonemealableFeaturePlacerBlock
+    ) {
         return Some(&NEIGHBOR_BONEMEAL);
     }
     if matches!(block.class(), C::RootedDirtBlock | C::MangroveLeavesBlock) {
@@ -84,7 +87,8 @@ pub fn bonemealable_behavior(block: Block) -> Option<&'static dyn BonemealableBl
     }
     matches!(
         block.class(),
-        C::SaplingBlock
+        C::NetherFungusBlock
+            | C::SaplingBlock
             | C::MangrovePropaguleBlock
             | C::AzaleaBlock
             | C::MossyCarpetBlock
@@ -191,6 +195,9 @@ impl BonemealableBlock for PlantBonemeal {
         }
         let level = &access.as_reader();
         match state.block().class() {
+            C::NetherFungusBlock | C::NyliumBlock | C::BonemealableFeaturePlacerBlock => {
+                feature_bonemeal::target(state, pos, level)
+            }
             C::MangroveLeavesBlock => Ok(level.get_block_state(pos.below(1))?.is_air()),
             C::NetherrackBlock => nylium::netherrack_target(pos, level),
             C::RootedDirtBlock => {
@@ -320,6 +327,9 @@ impl BonemealableBlock for PlantBonemeal {
         ) {
             return Ok(f64::from(level.random()?.next_float()) < 0.45);
         }
+        if state.block().class() == BlockClass::NetherFungusBlock {
+            return Ok(f64::from(level.random()?.next_float()) < 0.4);
+        }
         Ok(true)
     }
     fn perform_bonemeal(
@@ -331,6 +341,9 @@ impl BonemealableBlock for PlantBonemeal {
     ) -> Result<(), LevelError> {
         use BlockClass as C;
         match state.block().class() {
+            C::NetherFungusBlock | C::NyliumBlock | C::BonemealableFeaturePlacerBlock => {
+                feature_bonemeal::perform(state, pos, level)?;
+            }
             C::MangrovePropaguleBlock
                 if state.get(p::HANGING) == Some(true) && state.get(p::AGE) != Some(4) =>
             {

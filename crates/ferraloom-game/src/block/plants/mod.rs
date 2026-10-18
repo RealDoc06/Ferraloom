@@ -8,6 +8,7 @@ mod coral;
 mod crops;
 mod dripleaf;
 mod eyeblossom;
+mod feature_bonemeal;
 mod spread;
 mod spreading;
 pub use bonemeal::{BonemealSource, BonemealType, BonemealableBlock, bonemealable_behavior};
