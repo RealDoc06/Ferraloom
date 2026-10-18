@@ -77,7 +77,7 @@ fn multiface_neighbor_loss_removes_only_the_unsupported_face() {
     }
 }
 #[test]
-fn decaying_waterlogged_leaves_drop_and_restore_water_without_destroy_particles() {
+fn leaf_decay_gates_preserve_persistent_and_connected_leaves() {
     let mut level = level();
     let pos = BlockPos::new(8, 5, 8);
     let decaying = Block::OAK_LEAVES
@@ -121,4 +121,109 @@ fn shared_raw_brightness_requires_light_context() {
             .get_raw_brightness(BlockPos::new(8, 5, 8), 0)
             .is_err()
     );
+}
+
+fn tags() -> (
+    Arc<ferraloom_data::datapack::TagSet<Block>>,
+    Arc<ferraloom_data::datapack::TagSet<ferraloom_data::registries::fluid::Id>>,
+) {
+    use ferraloom_data::datapack::{Pack, ResourceManager, TagSet, load_tags};
+    let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").expect("builder supplies vanilla jar");
+    let resources =
+        ResourceManager::new(vec![Pack::vanilla_jar(std::path::Path::new(&jar)).unwrap()]);
+    let blocks = load_tags(&resources, "block", |id, _| {
+        Block::from_name(&id.to_string())
+    });
+    let fluids = load_tags(&resources, "fluid", |id, _| {
+        ferraloom_data::registries::fluid::Id::from_name(&id.to_string())
+    });
+    assert!(blocks.diagnostics.is_empty());
+    assert!(fluids.diagnostics.is_empty());
+    (
+        Arc::new(TagSet::from_tags(blocks, ferraloom_data::BLOCKS.len()).unwrap()),
+        Arc::new(TagSet::from_tags(fluids, ferraloom_data::registries::fluid::ALL.len()).unwrap()),
+    )
+}
+#[test]
+fn survival_and_six_direction_shape_updates_match_vanilla_levels() {
+    use ferraloom_util::random::{LegacyRandomSource, Random, RandomSource};
+    use std::io::Read;
+    let mut text = String::new();
+    flate2::read::GzDecoder::new(
+        include_bytes!("../../../tests/java/blocks/plants/survival.tsv.gz").as_slice(),
+    )
+    .read_to_string(&mut text)
+    .unwrap();
+    let (blocks, fluids) = tags();
+    let pos = BlockPos::new(8, 5, 8);
+    let chunk = ChunkPos::new(0, 0);
+    let mut count = 0;
+    for line in text.lines() {
+        let fields = line.split('\t').collect::<Vec<_>>();
+        let state = BlockState::from_id(fields[1].parse().unwrap()).unwrap();
+        let support = BlockState::from_id(fields[2].parse().unwrap()).unwrap();
+        let light = fields[3].parse().unwrap();
+        let mut level = level();
+        level.set_block_tags(blocks.clone());
+        level.set_fluid_tags(fluids.clone());
+        level.set_light_snapshot(
+            chunk,
+            crate::level::weather::ChunkLightSnapshot {
+                sky: [(0, ferraloom_light::DataLayer::new(light))].into(),
+                block: Default::default(),
+            },
+        );
+        level.set_random_streams(Random::Legacy(LegacyRandomSource::new(1234)), 0);
+        level.set_block_state(pos, state).unwrap();
+        level.set_block_state(pos.below(1), support).unwrap();
+        if fields[0] == "survive" {
+            assert_eq!(
+                level.can_survive(state, pos).unwrap(),
+                fields[4] == "true",
+                "{line}"
+            );
+        } else {
+            let direction = Direction::VALUES[fields[4].parse::<usize>().unwrap()];
+            let neighbor_pos = pos.relative(direction, 1);
+            let neighbor = level.get_block_state(neighbor_pos).unwrap();
+            let behavior = level
+                .required_block_behavior(state.block(), BlockMethod::UpdateShape)
+                .unwrap();
+            let next = behavior
+                .update_shape(
+                    state,
+                    pos,
+                    direction,
+                    neighbor_pos,
+                    neighbor,
+                    &mut LevelAccessRef::Server(&mut level),
+                )
+                .unwrap();
+            assert_eq!(next.id(), fields[5].parse::<u16>().unwrap(), "{line}");
+            assert_eq!(
+                level.random().next_long(),
+                fields[6].parse::<i64>().unwrap(),
+                "RNG {line}"
+            );
+            let mut saved = ferraloom_storage::SerializableChunkData::default();
+            level.save_chunk_ticks(chunk, &mut saved).unwrap();
+            let mut ticks = Vec::new();
+            for tick in saved.block_ticks.unwrap() {
+                ticks.push(format!("schedule:{}", tick.delay.unwrap()));
+            }
+            for tick in saved.fluid_ticks.unwrap() {
+                ticks.push(format!("fluid:{}", tick.delay.unwrap()));
+            }
+            let mut expected = fields[7]
+                .split(',')
+                .filter(|s| !s.is_empty())
+                .map(str::to_owned)
+                .collect::<Vec<_>>();
+            ticks.sort();
+            expected.sort();
+            assert_eq!(ticks, expected, "ticks {line}");
+        }
+        count += 1;
+    }
+    assert_eq!(count, 75040);
 }

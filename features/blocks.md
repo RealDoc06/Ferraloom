@@ -323,5 +323,8 @@ One class row per bootstrapped runtime Block class, listing every block id assig
 
 | blocks.plants.double-plant-upper-support | Double plants require the matching lower half | `DoublePlantBlock#canSurvive` | `plants::tests::upper_double_plant_requires_its_own_lower_half` | - | todo |
 | blocks.plants.multiface-support-loss | Remove unsupported faces, preserving other attachments | `MultifaceBlock#updateShape` | `plants::tests::multiface_neighbor_loss_removes_only_the_unsupported_face` | - | todo |
-| blocks.plants.leaves-decay-callback | Persistent/distance gates, drops and removal without destroy particles | `LeavesBlock#randomTick` | `plants::tests::decaying_waterlogged_leaves_drop_and_restore_water_without_destroy_particles` | - | todo |
+| blocks.plants.leaves-decay-callback | Persistent/distance gates, drops and removal without destroy particles | `LeavesBlock#randomTick` | `plants::tests::leaf_decay_gates_preserve_persistent_and_connected_leaves` | - | todo |
 | blocks.plants.shared-brightness | Shared reader requires canonical light context | `BlockAndLightGetter#getRawBrightness` | `plants::tests::shared_raw_brightness_requires_light_context` | - | todo |
+
+| blocks.plants.support-and-neighbor-vectors | Plant survival and all six neighbor directions over relevant supports and light thresholds | Real vanilla `Level` methods | `plants::tests::survival_and_six_direction_shape_updates_match_vanilla_levels` (75,040 vectors) | pass | todo |
+| blocks.plants.worldgen-bridge | Replay vegetation placement through the real shared block registry | Vanilla feature fixtures | `plants::worldgen_tests::vegetation_fixtures_use_real_game_bridge` | pass | todo |

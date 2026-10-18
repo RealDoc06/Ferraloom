@@ -1,5 +1,6 @@
 //! Shared vanilla vegetation, foliage and ground behavior, on live and generation levels.
 mod access;
+mod growing;
 mod leaves;
 mod moss;
 pub mod multiface;
@@ -17,6 +18,32 @@ use ferraloom_data::{Block, BlockClass};
 pub fn ported_behavior(block: Block, method: BlockMethod) -> Option<&'static dyn BlockBehavior> {
     use BlockClass as C;
     use BlockMethod as M;
+    if matches!(
+        block,
+        Block::KELP
+            | Block::KELP_PLANT
+            | Block::TWISTING_VINES
+            | Block::TWISTING_VINES_PLANT
+            | Block::WEEPING_VINES
+            | Block::WEEPING_VINES_PLANT
+            | Block::CAVE_VINES
+            | Block::CAVE_VINES_PLANT
+    ) && (matches!(
+        method,
+        M::CanSurvive
+            | M::UpdateShape
+            | M::UpdateFromNeighbourShapes
+            | M::Tick
+            | M::CanPlaceLiquid
+            | M::PlaceLiquid
+    ) || (method == M::RandomTick
+        && block
+            .default_state()
+            .get(ferraloom_data::properties::AGE)
+            .is_some()))
+    {
+        return Some(&growing::GROWING_PLANT);
+    }
     let behavior: &'static dyn BlockBehavior = match block.class() {
         C::LeavesBlock
         | C::TintedParticleLeavesBlock
@@ -80,3 +107,6 @@ pub(super) fn source_water(fluid: ferraloom_data::FluidState) -> bool {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod worldgen_tests;
