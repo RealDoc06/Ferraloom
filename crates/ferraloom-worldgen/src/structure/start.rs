@@ -232,21 +232,23 @@ impl StructureStart {
         else {
             return Ok(None);
         };
-        if start
+        start.rebuild_after_load(seed)?;
+        Ok(Some(start))
+    }
+    pub(super) fn rebuild_after_load(&mut self, seed: i64) -> Result<(), Error> {
+        if self
             .kind
             .is_some_and(|kind| kind.name() == "minecraft:ocean_monument")
-            && let Some(first) = start.pieces.first()
+            && let Some(first) = self.pieces.first()
         {
             let saved = super::piece::StructurePieceData::from_nbt(&first.to_nbt()?)?;
             let building = super::structures::ocean_monument::MonumentBuilding::regenerate(
-                seed,
-                start.chunk,
-                &saved,
+                seed, self.chunk, &saved,
             );
-            start.pieces = vec![StructurePiece::OceanMonument(Box::new(building))];
-            start.cached_bounds = OnceLock::new();
+            self.pieces = vec![StructurePiece::OceanMonument(Box::new(building))];
+            self.cached_bounds = OnceLock::new();
         }
-        Ok(Some(start))
+        Ok(())
     }
     /// Decode the structure compound without seed-dependent reconstruction.
     /// This codec preserves the persisted representation for storage round trips;

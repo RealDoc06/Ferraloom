@@ -273,6 +273,45 @@ mod reload_tests {
                 ferraloom_nbt::parse_compound(case["loaded"].as_str().unwrap()).unwrap(),
                 "seed={seed} initial={tag:?}"
             );
+            let structures_tag: ferraloom_nbt::CompoundTag = [
+                (
+                    "starts",
+                    ferraloom_nbt::Tag::Compound(
+                        [(
+                            "minecraft:monument",
+                            ferraloom_nbt::Tag::Compound(tag.clone()),
+                        )]
+                        .into_iter()
+                        .collect(),
+                    ),
+                ),
+                (
+                    "References",
+                    ferraloom_nbt::Tag::Compound(ferraloom_nbt::CompoundTag::new()),
+                ),
+            ]
+            .into_iter()
+            .collect();
+            let chunk = crate::structure::pipeline::ChunkStructures::load_from_nbt(
+                start.chunk,
+                seed,
+                &structures_tag,
+                &registry,
+                &templates,
+                &resources,
+                &mut |_| Err(crate::Error("no inline features".into())),
+            )
+            .unwrap();
+            let monument_id: crate::Identifier = "minecraft:monument".parse().unwrap();
+            let chunk_start = &chunk.starts[&monument_id];
+            assert_eq!(
+                chunk_start.to_nbt(start.chunk).unwrap(),
+                start.to_nbt(start.chunk).unwrap()
+            );
+            let StructurePiece::OceanMonument(chunk_building) = &chunk_start.pieces[0] else {
+                panic!("loaded monument chunk");
+            };
+            assert!(chunk_building.graph.is_some());
             let StructurePiece::OceanMonument(building) = &start.pieces[0] else {
                 panic!("loaded monument");
             };

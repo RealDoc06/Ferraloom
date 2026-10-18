@@ -139,6 +139,31 @@ impl ChunkStructures {
         .into_iter()
         .collect())
     }
+    /// Restore chunk structures for generation/decoration, rebuilding monuments
+    /// with the owning world's seed. from_nbt remains the raw storage codec.
+    pub fn load_from_nbt(
+        position: [i32; 2],
+        seed: i64,
+        tag: &CompoundTag,
+        registry: &StructureRegistry,
+        templates: &StructureTemplateManager,
+        resources: &ResourceManager,
+        decode_feature: &mut impl FnMut(&serde_json::Value) -> Result<Arc<PlacedFeature>, Error>,
+    ) -> Result<Self, Error> {
+        let mut chunk = Self::from_nbt(
+            position,
+            tag,
+            registry,
+            templates,
+            resources,
+            decode_feature,
+        )?;
+        for start in chunk.starts.values_mut() {
+            start.rebuild_after_load(seed)?;
+        }
+        Ok(chunk)
+    }
+    /// Decode the persisted compound without seed-dependent reconstruction.
     pub fn from_nbt(
         position: [i32; 2],
         tag: &CompoundTag,
