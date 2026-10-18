@@ -1,2 +1,8 @@
 listener	replace	A:1,5,64:false;A:55,2,64:false;B:55,2,64;held:1,8,64;B:1,8,64	S:2:36:55,2,64;S:3:36:1,8,64;S:4:36:55,2,64	55,2,64
 listener	mutate	A:1,5,64:false;A:1,6,64:false;B:1,6,64;held:1,8,64;B:1,8,64	S:2:36:1,6,64	1,6,64
+listener	alias-source	alias:true;shared:1,8,64:1,8,64;owners:false:true;held:1,9,64;final:55,2,64:1,9,64
+listener	alias-target	alias:true;shared:1,8,64:1,8,64;owners:true:false;held:1,9,64;final:1,9,64:1,5,64
+listener	operation-split	source:1,6,64;alias:true;destination:55,3,64;held:1,6,64
+listener	operation-copy	source:1,10,64;alias:true;destination:55,3,64;held:1,6,64
+listener	insert-mutate	changed:1,6,64:1,6,64:1,64,64:true;changed:1,7,64:1,7,64:1,64,64:true;returned:true:1,7,64;heldTarget:1,64,64
+listener	insert-replace	changed:1,6,64:1,6,64:1,64,64:true;changed:1,6,64:1012,7,64:55,2,64:false;changed:1,7,64:1012,7,64:55,2,64:false;returned:true:1,7,64;heldTarget:1,64,64
