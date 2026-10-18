@@ -1,5 +1,6 @@
 mod level_support;
 
+use anyhow::Context;
 use ferraloom_data::{Block, EntityType, Item};
 use ferraloom_parity::{
     BotState, ObservationLog, Result, RunMode, Session, Ticks, ensure,
@@ -111,7 +112,8 @@ async fn item_drop_delay_and_pickup(session: &mut Session) -> Result<Observation
                     .any(|item| item.2 == 1)
         },
     )
-    .await?;
+    .await
+    .context("drop packet did not produce one tracked stone and two retained stones")?;
     step(bot, 20).await?;
     let dropped = dropped_items(&bot.snapshot(), Item::STONE);
     ensure!(
@@ -130,7 +132,7 @@ async fn item_drop_delay_and_pickup(session: &mut Session) -> Result<Observation
     bot.command("tick step 2").await?;
     let packet = bot.wait_for("take dropped stone", Ticks::DEFAULT, |_, packet| {
         matches!(packet, cb::Packet::TakeItemEntity(take) if take.item_id.0 == item && take.amount.0 == 1)
-    }).await?;
+    }).await.with_context(|| format!("pickup after 41 ticks: inventory={}, player={:?}, items={:?}", inventory_count(&bot.snapshot(), Item::STONE), bot.snapshot().position, dropped_items(&bot.snapshot(), Item::STONE)))?;
     let cb::Packet::TakeItemEntity(take) = packet.as_ref() else {
         unreachable!()
     };
@@ -177,10 +179,12 @@ async fn player_slab_stair_chunk_edge(session: &mut Session) -> Result<Observati
     let teleports = bot.snapshot().teleports;
     let path = [
         [14.5, -59.5, 8.5],
-        [15.25, -59.5, 8.5],
+        // Keep the player's 0.6-wide box below the upper stair until the rise.
+        [15.125, -59.5, 8.5],
         [15.75, -59.0, 8.5],
         [16.5, -59.0, 8.5],
         [17.5, -59.0, 8.5],
+        [18.5, -59.0, 8.5],
         [18.5, -60.0, 8.5],
     ];
     for target in path {
