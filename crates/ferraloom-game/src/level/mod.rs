@@ -35,6 +35,7 @@ pub mod weather;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum LevelError {
+    Inventory(&'static str),
     MissingChunk(ChunkPos),
     OutsideBuildHeight,
     MissingEntity(EntityRef),
