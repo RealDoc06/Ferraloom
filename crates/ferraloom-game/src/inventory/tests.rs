@@ -351,3 +351,75 @@ fn real_vanilla_button_acceptance_and_lectern_data_updates() {
     }
     assert_eq!(cases, 42);
 }
+
+#[test]
+fn real_vanilla_specialized_slot_component_predicates() {
+    use ferraloom_protocol::{
+        Identifier,
+        codec::HolderSet,
+        component::{EntityTypeSet, EquipmentSlot, Unit},
+    };
+    let mut cases = 0;
+    for row in include_str!("../../tests/java/inventory/vectors.tsv")
+        .lines()
+        .filter(|line| line.starts_with("slot-rule\t"))
+    {
+        let f: Vec<_> = row.split('\t').collect();
+        let armor = f[1].starts_with("armor-") || f[1] == "helmet";
+        let item = if armor {
+            Item::DIAMOND_HELMET
+        } else {
+            Item::DIAMOND_PICKAXE
+        };
+        let mut stack = ItemStack::new(item, 1, DataComponentPatch::default());
+        if f[1] == "unbreakable" {
+            stack
+                .0
+                .as_mut()
+                .unwrap()
+                .components
+                .added
+                .push(DataComponent::Unbreakable(Unit));
+        }
+        if f[1] == "removed-damage" {
+            stack
+                .0
+                .as_mut()
+                .unwrap()
+                .components
+                .removed
+                .push(ComponentTypeId::DAMAGE);
+        }
+        if f[1].starts_with("armor-") {
+            let mut equippable = component(&stack, ComponentTypeId::EQUIPPABLE)
+                .unwrap()
+                .clone();
+            let DataComponent::Equippable(value) = &mut equippable else {
+                unreachable!()
+            };
+            value.allowed_entities = Some(EntityTypeSet(HolderSet::Direct(vec![
+                Identifier::parse(if f[1] == "armor-cow" {
+                    "minecraft:cow"
+                } else {
+                    "minecraft:player"
+                })
+                .unwrap(),
+            ])));
+            stack.0.as_mut().unwrap().components.added.push(equippable);
+        }
+        let rule = if armor {
+            SlotKind::Armor(EquipmentSlot::Head)
+        } else {
+            SlotKind::GrindstoneInput
+        };
+        let slot = Slot::new(ContainerId::Local(0), 0, 0, 0).with_kind(rule);
+        assert_eq!(
+            slot.may_place(&stack, &UnsupportedMenuHooks).unwrap(),
+            f[2] == "true",
+            "{}",
+            f[1]
+        );
+        cases += 1;
+    }
+    assert_eq!(cases, 6);
+}

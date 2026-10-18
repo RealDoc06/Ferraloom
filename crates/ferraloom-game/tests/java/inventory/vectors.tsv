@@ -65,6 +65,12 @@ button	lectern	2	true	1	D:0:1
 button	lectern	3	true	1	-
 button	lectern	100	true	1	-
 button	lectern	103	true	1	D:0:3
+slot-rule	damageable	true
+slot-rule	unbreakable	false
+slot-rule	removed-damage	false
+slot-rule	helmet	true
+slot-rule	armor-cow	false
+slot-rule	armor-player	true
 start	edges	chest1	true	0:1,63,64;1:1,5,64;2:55,12,64;3:1,4,7
 click	edges	0	-2	0	0	0:1,63,64;1:1,5,64;2:55,12,64;3:1,4,7	-	1		-
 click	edges	1	-2	0	1	0:1,63,64;1:1,5,64;2:55,12,64;3:1,4,7	-	1		-

@@ -153,14 +153,29 @@ impl Slot {
             SlotKind::Banner => item.is_some_and(|i| i.name().ends_with("_banner")),
             SlotKind::GrindstoneInput => {
                 let c = stack.components()?;
-                c.get(ComponentTypeId::MAX_DAMAGE).is_some() || [ComponentTypeId::ENCHANTMENTS,ComponentTypeId::STORED_ENCHANTMENTS].into_iter().any(|key| matches!(c.get(key),Some(DataComponent::Enchantments(v)|DataComponent::StoredEnchantments(v)) if !v.0.is_empty()))
+                (c.get(ComponentTypeId::MAX_DAMAGE).is_some() && c.get(ComponentTypeId::DAMAGE).is_some() && c.get(ComponentTypeId::UNBREAKABLE).is_none()) || [ComponentTypeId::ENCHANTMENTS,ComponentTypeId::STORED_ENCHANTMENTS].into_iter().any(|key| matches!(c.get(key),Some(DataComponent::Enchantments(v)|DataComponent::StoredEnchantments(v)) if !v.0.is_empty()))
             }
             SlotKind::Result(_) | SlotKind::NonInteractiveResult => false,
             SlotKind::Crafter => !self.disabled,
-            SlotKind::Armor(slot) => stack
-                .components()?
-                .get(ComponentTypeId::EQUIPPABLE)
-                .is_some_and(|c| matches!(c,DataComponent::Equippable(v) if v.slot==slot)),
+            SlotKind::Armor(slot) => match crate::entity::player::inventory::component(
+                stack,
+                ComponentTypeId::EQUIPPABLE,
+            ) {
+                Some(DataComponent::Equippable(value)) if value.slot == slot => {
+                    match &value.allowed_entities {
+                        None => true,
+                        Some(allowed) => match &allowed.0 {
+                            ferraloom_protocol::codec::HolderSet::Direct(types) => types
+                                .iter()
+                                .any(|entity| entity.as_str() == "minecraft:player"),
+                            ferraloom_protocol::codec::HolderSet::Named(_) => {
+                                hooks.may_place(self.kind, stack)?
+                            }
+                        },
+                    }
+                }
+                _ => false,
+            },
             SlotKind::ShulkerBox => !item.is_some_and(|i| i.name().ends_with("shulker_box")),
             SlotKind::FurnaceFuel => {
                 stack

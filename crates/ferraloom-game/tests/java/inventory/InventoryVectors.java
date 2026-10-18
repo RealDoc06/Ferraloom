@@ -102,6 +102,15 @@ public final class InventoryVectors {
       boolean accepted=m.clickMenuButton(p,button);if(accepted)m.broadcastChanges();
       System.out.println("button\t"+type+"\t"+button+"\t"+accepted+"\t"+m.getStateId()+"\t"+(sync.events.isEmpty()?"-":String.join(";",sync.events)));
     }
+    for(String test:List.of("damageable","unbreakable","removed-damage","helmet","armor-cow","armor-player")){
+      var p=new MenuPlayer(new MenuLevel(registries),false);boolean armor=test.startsWith("armor-")||test.equals("helmet");
+      var item=new ItemStack(armor?Items.DIAMOND_HELMET:Items.DIAMOND_PICKAXE);
+      if(test.equals("unbreakable"))item.set(DataComponents.UNBREAKABLE,net.minecraft.util.Unit.INSTANCE);
+      if(test.equals("removed-damage"))item.remove(DataComponents.DAMAGE);
+      if(test.startsWith("armor-"))item.set(DataComponents.EQUIPPABLE,net.minecraft.world.item.equipment.Equippable.builder(net.minecraft.world.entity.EquipmentSlot.HEAD).setAllowedEntities(test.equals("armor-cow")?net.minecraft.world.entity.EntityTypes.COW:net.minecraft.world.entity.EntityTypes.PLAYER).build());
+      Slot slot=armor?p.inventoryMenu.getSlot(5):new GrindstoneMenu(7,p.getInventory()).getSlot(0);
+      System.out.println("slot-rule\t"+test+"\t"+slot.mayPlace(item));
+    }
     var edge=List.of(new int[]{-2,0,0},new int[]{-2,0,1},new int[]{0,1,0},new int[]{1,0,0},new int[]{2,0,0},new int[]{-999,1,0},new int[]{3,0,0},new int[]{4,0,0},new int[]{4,0,0},new int[]{5,0,5},new int[]{5,1,5},new int[]{6,1,5},new int[]{7,1,5},new int[]{-999,2,5},new int[]{8,0,0},new int[]{-999,0,0},new int[]{0,40,2},new int[]{1,0,2},new int[]{0,1,4},new int[]{2,0,3},new int[]{-999,0,0},new int[]{2,1,4});
     scenario(registries,"edges","chest1",true,edge,false);
     scenario(registries,"crafted-result","inventory",false,List.of(new int[]{0,1,0},new int[]{-999,0,0}),false);
