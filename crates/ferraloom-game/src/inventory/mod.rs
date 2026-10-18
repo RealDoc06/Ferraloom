@@ -1,6 +1,7 @@
 //! Vanilla container storage, slot rules, click simulation and remote synchronization.
 mod block_containers;
 mod container;
+mod crafted;
 pub use block_containers::{block_menu_still_valid, with_block_menu_context};
 mod crafting;
 mod crafting_runtime;
@@ -17,6 +18,7 @@ mod sync;
 mod transfer;
 
 pub use container::*;
+pub use crafted::crafted_item_post_process;
 pub use crafting::*;
 pub use crafting_runtime::*;
 pub use listener_copies::{ListenerCopyArena, ListenerCopyRef};
