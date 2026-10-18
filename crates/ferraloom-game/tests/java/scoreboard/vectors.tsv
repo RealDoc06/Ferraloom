@@ -83,3 +83,6 @@ codec	{Teams:[{Name:'defaults'}]}	{Teams:[{Name:"defaults"}]}
 codec	{Objectives:[{Name:'minimal',DisplayName:'Minimal'}],PlayerScores:[{Name:'Doc',Objective:'minimal'}]}	{Objectives:[{DisplayName:"Minimal",Name:"minimal"}],PlayerScores:[{Name:"Doc",Objective:"minimal"}]}
 codec	{Objectives:[{Name:'numeric',DisplayName:'Numeric'}],PlayerScores:[{Name:'Doc',Objective:'numeric',Score:-0.5d,Locked:-0.5d}],Teams:[{Name:'numeric',AllowFriendlyFire:0.5d,SeeFriendlyInvisibles:256}]}	{Objectives:[{DisplayName:"Numeric",Name:"numeric"}],PlayerScores:[{Locked:1b,Name:"Doc",Objective:"numeric"}],Teams:[{Name:"numeric"}]}
 criterion	minecraft.mined:minecraft.stone	false
+criterion-alias	mined:stone	minecraft.mined:minecraft.stone
+criterion-alias	minecraft.mined:stone	minecraft.mined:minecraft.stone
+criterion-alias	mined:minecraft.stone	minecraft.mined:minecraft.stone

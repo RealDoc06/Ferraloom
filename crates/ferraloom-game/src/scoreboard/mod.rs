@@ -48,7 +48,18 @@ impl ObjectiveCriteria {
             return None;
         }
         Some(Self {
-            name: parsed.name,
+            name: if let Some((kind, value)) = parsed.name.split_once(':') {
+                let qualified = |part: &str| {
+                    if part.contains('.') {
+                        part.to_owned()
+                    } else {
+                        format!("minecraft.{part}")
+                    }
+                };
+                format!("{}:{}", qualified(kind), qualified(value))
+            } else {
+                parsed.name
+            },
             read_only: matches!(name, "health" | "food" | "air" | "armor" | "xp" | "level"),
             default_render_type: if parsed.hearts {
                 RenderType::Hearts

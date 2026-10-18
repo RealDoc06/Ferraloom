@@ -1187,14 +1187,70 @@
     "packets": []
   },
   {
+    "command": "scoreboard objectives add stat mined:stone",
+    "value": 4,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.scoreboard.objectives.add.success",
+          "with": [
+            {
+              "translate": "chat.square_brackets",
+              "with": [
+                {
+                  "text": "stat",
+                  "hover_event": {
+                    "value": "stat",
+                    "action": "show_text"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "packets": []
+  },
+  {
+    "command": "scoreboard players set #one stat 99",
+    "value": 99,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.scoreboard.players.set.success.single",
+          "with": [
+            {
+              "translate": "chat.square_brackets",
+              "with": [
+                {
+                  "text": "stat",
+                  "hover_event": {
+                    "value": "stat",
+                    "action": "show_text"
+                  }
+                }
+              ]
+            },
+            "#one",
+            99
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "packets": []
+  },
+  {
     "command": "scoreboard objectives list",
-    "value": 3,
+    "value": 4,
     "feedback": [
       {
         "message": {
           "translate": "commands.scoreboard.objectives.list.success",
           "with": [
-            3,
+            4,
             {
               "text": "",
               "extra": [
@@ -1241,6 +1297,22 @@
                       }
                     }
                   ]
+                },
+                {
+                  "text": ", ",
+                  "color": "gray"
+                },
+                {
+                  "translate": "chat.square_brackets",
+                  "with": [
+                    {
+                      "text": "stat",
+                      "hover_event": {
+                        "value": "stat",
+                        "action": "show_text"
+                      }
+                    }
+                  ]
                 }
               ]
             }
@@ -1253,11 +1325,15 @@
   },
   {
     "command": "scoreboard players list",
-    "value": 0,
+    "value": 1,
     "feedback": [
       {
         "message": {
-          "translate": "commands.scoreboard.players.list.empty"
+          "translate": "commands.scoreboard.players.list.success",
+          "with": [
+            1,
+            "#one"
+          ]
         },
         "broadcast": false
       }
@@ -1396,14 +1472,14 @@
   },
   {
     "command": "scoreboard players list #one",
-    "value": 1,
+    "value": 2,
     "feedback": [
       {
         "message": {
           "translate": "commands.scoreboard.players.list.entity.success",
           "with": [
             "#one",
-            1
+            2
           ]
         },
         "broadcast": false
@@ -1425,6 +1501,27 @@
               ]
             },
             -3
+          ]
+        },
+        "broadcast": false
+      },
+      {
+        "message": {
+          "translate": "commands.scoreboard.players.list.entity.entry",
+          "with": [
+            {
+              "translate": "chat.square_brackets",
+              "with": [
+                {
+                  "text": "stat",
+                  "hover_event": {
+                    "value": "stat",
+                    "action": "show_text"
+                  }
+                }
+              ]
+            },
+            99
           ]
         },
         "broadcast": false
@@ -1980,7 +2077,7 @@
   },
   {
     "command": "scoreboard objectives add toggle trigger",
-    "value": 4,
+    "value": 5,
     "feedback": [
       {
         "message": {
@@ -2733,7 +2830,7 @@
     "packets": [
       {
         "type": "ClientboundResetScorePacket",
-        "hex": "04236f6e6500"
+        "hex": "04236f6e650106706f696e7473"
       }
     ]
   },
@@ -2755,16 +2852,21 @@
   },
   {
     "command": "scoreboard players list",
-    "value": 2,
+    "value": 3,
     "feedback": [
       {
         "message": {
           "translate": "commands.scoreboard.players.list.success",
           "with": [
-            2,
+            3,
             {
               "text": "",
               "extra": [
+                "#one",
+                {
+                  "text": ", ",
+                  "color": "gray"
+                },
                 "Doc",
                 {
                   "text": ", ",
@@ -2828,7 +2930,7 @@
   },
   {
     "command": "scoreboard objectives remove points",
-    "value": 3,
+    "value": 4,
     "feedback": [
       {
         "message": {
@@ -2871,7 +2973,7 @@
   },
   {
     "command": "scoreboard objectives remove other",
-    "value": 2,
+    "value": 3,
     "feedback": [
       {
         "message": {
@@ -2898,7 +3000,7 @@
   },
   {
     "command": "scoreboard objectives remove health",
-    "value": 1,
+    "value": 2,
     "feedback": [
       {
         "message": {
@@ -2925,7 +3027,7 @@
   },
   {
     "command": "scoreboard objectives remove toggle",
-    "value": 0,
+    "value": 1,
     "feedback": [
       {
         "message": {
@@ -2938,6 +3040,33 @@
                   "text": "toggle",
                   "hover_event": {
                     "value": "toggle",
+                    "action": "show_text"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "packets": []
+  },
+  {
+    "command": "scoreboard objectives remove stat",
+    "value": 0,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.scoreboard.objectives.remove.success",
+          "with": [
+            {
+              "translate": "chat.square_brackets",
+              "with": [
+                {
+                  "text": "stat",
+                  "hover_event": {
+                    "value": "stat",
                     "action": "show_text"
                   }
                 }

@@ -83,5 +83,6 @@ public class ScoreboardVectors extends Scoreboard {
       row("codec",minimal,output);
     }
     row("criterion", "minecraft.mined:minecraft.stone",ObjectiveCriteria.byName("minecraft.mined:minecraft.stone").orElseThrow().isReadOnly());
+    for (String alias : List.of("mined:stone","minecraft.mined:stone","mined:minecraft.stone")) row("criterion-alias",alias,ObjectiveCriteria.byName(alias).orElseThrow().getName());
   }
 }

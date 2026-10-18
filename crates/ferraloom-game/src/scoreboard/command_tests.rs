@@ -58,7 +58,7 @@ fn packet_json(packet: &cb::Packet) -> Value {
 fn vanilla_registered_commands_feedback_and_packet_bytes() {
     let cases: Vec<Case> =
         serde_json::from_str(include_str!("../../tests/java/scoreboard/commands.json")).unwrap();
-    assert_eq!(cases.len(), 115);
+    assert_eq!(cases.len(), 118);
     let commands = commands::Commands::default();
     let mut board = ServerScoreboard::default();
     for case in cases {

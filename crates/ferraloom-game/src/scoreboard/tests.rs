@@ -286,3 +286,19 @@ fn vanilla_fastutil_iterator_and_stream_orders() {
         assert_eq!(actual, fields[2], "{row}");
     }
 }
+
+#[test]
+fn vanilla_stat_criteria_names_are_canonicalized() {
+    let rows: Vec<_> = VECTORS
+        .lines()
+        .filter(|row| row.starts_with("criterion-alias\t"))
+        .collect();
+    assert_eq!(rows.len(), 3);
+    for row in rows {
+        let fields: Vec<_> = row.split('\t').collect();
+        assert_eq!(
+            ObjectiveCriteria::by_name(fields[1]).unwrap().name,
+            fields[2]
+        );
+    }
+}
