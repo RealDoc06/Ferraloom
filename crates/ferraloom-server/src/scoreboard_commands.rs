@@ -168,6 +168,7 @@ impl MinecraftServer {
         use ferraloom_game::commands::components::ResolutionError;
         scoreboard::resolve_components(command, self).map_err(|error| match error {
             ResolutionError::Syntax(error) => error,
+            ResolutionError::EntityData(error) => scoreboard_entity_error(error),
             ResolutionError::Unsupported(kind) => {
                 exceptions::error("ferraloom.component.unsupported", &[format!("{kind:?}")])
             }
