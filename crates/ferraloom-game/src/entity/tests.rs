@@ -105,6 +105,12 @@ fn level(floor: bool) -> Level {
                     template.clone(),
                 ))
                 .unwrap();
+            level
+                .update_entity_chunk_status(
+                    ChunkPos::new(x, z),
+                    crate::level::entity::Visibility::Ticking,
+                )
+                .unwrap();
         }
     }
     tags(&mut level);
@@ -163,7 +169,7 @@ fn vanilla_entity_move_positions_flags_fall_distance_and_velocity_bits() {
         } else {
             let mut cow = animal::Cow::default();
             cow.as_living_mut().parent.set_pos(position);
-            EntityState::Cow(cow)
+            EntityState::Cow(Box::new(cow))
         };
         level.add_entity(id, state).unwrap();
         movement::set_on_ground(id, f[6] == "true", None, &mut level).unwrap();
@@ -364,7 +370,9 @@ fn vanilla_fluid_interaction_heights_eyes_and_current_bits() {
         cow.as_living_mut().parent.set_pos(vector(f[3]));
         cow.as_living_mut().parent.fall_distance = 12.5;
         let id = EntityRef(1);
-        level.add_entity(id, EntityState::Cow(cow)).unwrap();
+        level
+            .add_entity(id, EntityState::Cow(Box::new(cow)))
+            .unwrap();
         let any = fluid::update_fluid_interaction(&animal::CowBehavior, id, &mut level).unwrap();
         let base = level.entity::<EntityData>(id).unwrap();
         assert_eq!(any, f[4] == "true", "{row}");
@@ -449,4 +457,203 @@ fn vanilla_primed_tnt_tick_motion_fuse_and_removal_bits() {
         effects.as_slice(),
         [effects::EntityEffect::Explosion { power: 4.0, .. }]
     ));
+}
+
+#[test]
+fn vanilla_item_ticks_preserve_friction_gravity_flags_and_pickup_delay() {
+    use ferraloom_protocol::component::ItemStack;
+    let mut level = level(true);
+    let mut item = item::ItemEntity::new(2, 123);
+    item.set_item(ItemStack::new(
+        ferraloom_data::Item::STONE,
+        64,
+        Default::default(),
+    ));
+    item.parent.set_pos(Vec3::new(8.5, 64.7, 8.5));
+    item.parent.velocity = Vec3::new(0.15, 0.0, 0.03);
+    item.pickup_delay = 7;
+    let mut entity = EntityRef(1);
+    level
+        .add_entity(entity, EntityState::Item(Box::new(item)))
+        .unwrap();
+    let mut n = 0;
+    for row in VECTORS.lines().filter(|s| s.starts_with("item-tick\t")) {
+        let f: Vec<_> = row.split('\t').collect();
+        common_tick(entity, &mut level).unwrap();
+        entity.tick(&mut level).unwrap();
+        let item = level.entity::<item::ItemEntity>(entity).unwrap();
+        assert_vector(item.parent.position, vector(f[2]), row);
+        assert_vector(item.parent.velocity, vector(f[3]), row);
+        assert_eq!(flags(&item.parent), f[4], "{row}");
+        assert_eq!(item.age, f[5].parse::<i32>().unwrap(), "{row}");
+        assert_eq!(item.pickup_delay > 0, f[6] == "true", "{row}");
+        assert_eq!(
+            item.parent.fall_distance.to_bits(),
+            double(f[7]).to_bits(),
+            "{row}"
+        );
+        n += 1;
+    }
+    assert_eq!(n, 12);
+}
+
+#[test]
+fn item_merge_equal_counts_choose_other_and_partial_pickup_preserves_native_return() {
+    use ferraloom_protocol::component::ItemStack;
+    use player::inventory::{count, set_count};
+    let mut level = level(false);
+    for n in 1..=3 {
+        let mut item = item::ItemEntity::new(n as i32, n);
+        item.parent.set_pos(Vec3::new(8.5, 64.0, 8.5));
+        item.set_item(ItemStack::new(
+            ferraloom_data::Item::STONE,
+            10,
+            Default::default(),
+        ));
+        level
+            .add_entity(EntityRef(n as u64), EntityState::Item(Box::new(item)))
+            .unwrap();
+    }
+    item::item_entity::merge_with_neighbours(EntityRef(1), &mut level).unwrap();
+    assert!(level.entity::<EntityData>(EntityRef(1)).unwrap().removed);
+    assert_eq!(
+        count(
+            level
+                .entity::<item::ItemEntity>(EntityRef(2))
+                .unwrap()
+                .item()
+        ),
+        20
+    );
+    assert_eq!(
+        count(
+            level
+                .entity::<item::ItemEntity>(EntityRef(3))
+                .unwrap()
+                .item()
+        ),
+        10
+    );
+    let player_id = EntityRef(4);
+    let mut player = player::ServerPlayer::new(
+        Uuid::new(1, 2),
+        "fixture".into(),
+        4,
+        Vec3::ZERO,
+        player::GameType::Survival,
+    );
+    player
+        .inventory
+        .items
+        .fill_with(|| ItemStack::new(ferraloom_data::Item::STONE, 64, Default::default()));
+    set_count(&mut player.inventory.items[0], 63);
+    level
+        .add_entity(player_id, EntityState::Player(Box::new(player)))
+        .unwrap();
+    let pickup = EntityRef(3);
+    set_count(
+        level
+            .entity_mut::<item::ItemEntity>(pickup)
+            .unwrap()
+            .item_mut(),
+        2,
+    );
+    item::item_entity::player_touch(pickup, player_id, &mut level).unwrap();
+    assert_eq!(
+        count(level.entity::<item::ItemEntity>(pickup).unwrap().item()),
+        1
+    );
+    assert!(level.take_entity_effects().is_empty());
+    level
+        .entity_mut::<player::ServerPlayer>(player_id)
+        .unwrap()
+        .inventory
+        .items[1] = ItemStack::default();
+    item::item_entity::player_touch(pickup, player_id, &mut level).unwrap();
+    let item = level.entity::<item::ItemEntity>(pickup).unwrap();
+    assert!(item.parent.removed);
+    assert_eq!(count(item.item()), 1);
+    assert!(matches!(
+        level.take_entity_effects().first(),
+        Some(effects::EntityEffect::TakeItem { count: 1, .. })
+    ));
+}
+
+#[test]
+fn pick_result_preserves_null_and_cow_spawn_egg() {
+    use ferraloom_protocol::component::ItemStack;
+    let mut level = level(false);
+    let cow = EntityRef(1);
+    level
+        .add_entity(cow, EntityState::Cow(Box::new(animal::Cow::default())))
+        .unwrap();
+    let result = level
+        .entity_behavior(cow)
+        .unwrap()
+        .get_pick_result(cow, &level)
+        .unwrap();
+    assert_eq!(
+        result,
+        Some(ItemStack::new(
+            ferraloom_data::Item::COW_SPAWN_EGG,
+            1,
+            Default::default()
+        ))
+    );
+    let item = EntityRef(2);
+    level
+        .add_entity(
+            item,
+            EntityState::Item(Box::new(item::ItemEntity::new(2, 123))),
+        )
+        .unwrap();
+    assert_eq!(
+        level
+            .entity_behavior(item)
+            .unwrap()
+            .get_pick_result(item, &level)
+            .unwrap(),
+        None
+    );
+}
+
+#[test]
+fn vanilla_player_dropped_item_position_and_velocity_bits() {
+    use ferraloom_protocol::component::ItemStack;
+    use ferraloom_util::random::RandomSource;
+    let mut n = 0;
+    for row in VECTORS.lines().filter(|s| s.starts_with("drop\t")) {
+        let f: Vec<_> = row.split('\t').collect();
+        let mut level = level(false);
+        let player_id = level.next_entity_ref();
+        let mut player = player::ServerPlayer::new(
+            Uuid::new(1, 2),
+            "fixture".into(),
+            level.next_entity_id(),
+            Vec3::new(8.5, 64.0, 8.5),
+            player::GameType::Survival,
+        );
+        player.yaw = f[1].parse().unwrap();
+        player.pitch = f[2].parse().unwrap();
+        player.random.set_seed(123);
+        level
+            .add_entity(player_id, EntityState::Player(Box::new(player)))
+            .unwrap();
+        let id = player::drop_item(
+            player_id,
+            ItemStack::new(ferraloom_data::Item::STONE, 3, Default::default()),
+            true,
+            &mut level,
+        )
+        .unwrap()
+        .unwrap();
+        let dropped = level.entity::<item::ItemEntity>(id).unwrap();
+        assert_vector(dropped.parent.position, vector(f[3]), row);
+        assert_vector(dropped.parent.velocity, vector(f[4]), row);
+        assert_eq!(dropped.parent.network_id, 2);
+        assert_eq!(dropped.pickup_delay, 40);
+        assert_eq!(dropped.thrower, Some(Uuid::new(1, 2)));
+        n += 1;
+    }
+    assert_eq!(n, 3);
 }

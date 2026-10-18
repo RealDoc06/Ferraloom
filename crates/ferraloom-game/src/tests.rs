@@ -98,6 +98,20 @@ fn region() -> Level {
         ))
         .unwrap();
     region
+        .update_entity_chunk_status(
+            ChunkPos::containing(PLACED),
+            crate::level::entity::Visibility::Ticking,
+        )
+        .unwrap();
+    // The adversarial entities live at the fixture origin; ticking eligibility
+    // is independent of the block chunk needed by their reentrant callback.
+    region
+        .update_entity_chunk_status(
+            ChunkPos::new(0, 0),
+            crate::level::entity::Visibility::Ticking,
+        )
+        .unwrap();
+    region
 }
 
 #[test]
@@ -105,9 +119,11 @@ fn entity_tick_reenters_attacker_and_places_a_scheduled_block() {
     let mut region = region();
     let mut cow = Cow::default();
     cow.as_mob_mut().target = Some(TARGET);
-    region.add_entity(ATTACKER, EntityState::Cow(cow)).unwrap();
     region
-        .add_entity(TARGET, EntityState::Cow(Cow::default()))
+        .add_entity(ATTACKER, EntityState::Cow(Box::new(cow)))
+        .unwrap();
+    region
+        .add_entity(TARGET, EntityState::Cow(Box::new(Cow::default())))
         .unwrap();
     region.tick_entities().unwrap();
     assert_eq!(
@@ -137,7 +153,7 @@ fn entity_tick_reenters_attacker_and_places_a_scheduled_block() {
 fn living_damage_cooldown_applies_only_the_increase() {
     let mut region = region();
     region
-        .add_entity(TARGET, EntityState::Cow(Cow::default()))
+        .add_entity(TARGET, EntityState::Cow(Box::new(Cow::default())))
         .unwrap();
     let mut entity = TARGET;
     assert!(
@@ -195,7 +211,7 @@ fn scheduled_ticks_use_container_then_intra_tick_order_and_deduplicate() {
 fn removed_entities_are_visible_until_management_and_never_tick() {
     let mut region = region();
     region
-        .add_entity(TARGET, EntityState::Cow(Cow::default()))
+        .add_entity(TARGET, EntityState::Cow(Box::new(Cow::default())))
         .unwrap();
     region.remove_entity(TARGET).unwrap();
     region.tick_entities().unwrap();

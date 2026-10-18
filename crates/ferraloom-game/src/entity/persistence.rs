@@ -187,6 +187,46 @@ pub(super) fn vector_tag(value: Vec3) -> Tag {
     ]))
 }
 
+/// Port of BlockState.CODEC: default states use the registry string shorthand.
+pub(crate) fn save_block_state(state: ferraloom_data::BlockState) -> Tag {
+    if state == state.block().default_state() {
+        return Tag::String(state.block().name().into());
+    }
+    let mut tag = CompoundTag::new();
+    tag.insert("id", Tag::String(state.block().name().into()));
+    let mut properties = CompoundTag::new();
+    for (name, value) in state.properties() {
+        properties.insert(name, Tag::String(value.into()));
+    }
+    tag.insert("properties", Tag::Compound(properties));
+    Tag::Compound(tag)
+}
+pub(crate) fn load_block_state(tag: &Tag) -> Option<ferraloom_data::BlockState> {
+    use ferraloom_data::{Block, BlockState};
+    if let Some(name) = tag.as_string() {
+        return Block::from_name(&name.to_string_lossy()).map(Block::default_state);
+    }
+    let tag = tag.as_compound()?;
+    let block = Block::from_name(&tag.get_string("id")?.to_string_lossy())?;
+    let properties: Vec<_> = tag
+        .get_compound("properties")
+        .map(|props| {
+            props
+                .iter()
+                .filter_map(|(key, value)| {
+                    Some((key.to_string_lossy(), value.as_string()?.to_string_lossy()))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    BlockState::from_properties(
+        block,
+        properties
+            .iter()
+            .map(|(name, value)| (name.as_str(), value.as_str())),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -240,44 +280,4 @@ mod tests {
         tag.insert("Pos", vector_tag(Vec3::new(f64::NAN, 0.0, 0.0)));
         assert_eq!(base.load_nbt(tag), Err(EntityLoadError::InvalidPosition));
     }
-}
-
-/// Port of BlockState.CODEC: default states use the registry string shorthand.
-pub(crate) fn save_block_state(state: ferraloom_data::BlockState) -> Tag {
-    if state == state.block().default_state() {
-        return Tag::String(state.block().name().into());
-    }
-    let mut tag = CompoundTag::new();
-    tag.insert("id", Tag::String(state.block().name().into()));
-    let mut properties = CompoundTag::new();
-    for (name, value) in state.properties() {
-        properties.insert(name, Tag::String(value.into()));
-    }
-    tag.insert("properties", Tag::Compound(properties));
-    Tag::Compound(tag)
-}
-pub(crate) fn load_block_state(tag: &Tag) -> Option<ferraloom_data::BlockState> {
-    use ferraloom_data::{Block, BlockState};
-    if let Some(name) = tag.as_string() {
-        return Block::from_name(&name.to_string_lossy()).map(Block::default_state);
-    }
-    let tag = tag.as_compound()?;
-    let block = Block::from_name(&tag.get_string("id")?.to_string_lossy())?;
-    let properties: Vec<_> = tag
-        .get_compound("properties")
-        .map(|props| {
-            props
-                .iter()
-                .filter_map(|(key, value)| {
-                    Some((key.to_string_lossy(), value.as_string()?.to_string_lossy()))
-                })
-                .collect()
-        })
-        .unwrap_or_default();
-    BlockState::from_properties(
-        block,
-        properties
-            .iter()
-            .map(|(name, value)| (name.as_str(), value.as_str())),
-    )
 }

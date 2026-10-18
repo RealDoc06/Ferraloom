@@ -165,7 +165,6 @@ pub struct MinecraftServer {
     commands: Commands,
     connections: BTreeMap<ConnectionId, Connection>,
     players: Vec<ConnectionId>,
-    next_entity: u64,
     ingress: mpsc::Receiver<Ingress>,
     status: watch::Sender<status::ServerStatus>,
     shutdown: watch::Sender<bool>,
@@ -298,7 +297,6 @@ impl MinecraftServer {
             commands: Commands::default(),
             connections: BTreeMap::new(),
             players: Vec::new(),
-            next_entity: 0,
             ingress,
             status,
             shutdown,
@@ -681,7 +679,6 @@ impl MinecraftServer {
             ),
             mode,
         );
-        self.next_entity += 1;
         if let Some(saved) = saved {
             player.load(saved);
         }
@@ -763,8 +760,7 @@ impl MinecraftServer {
             player.first_good = player.position;
             player.last_good = player.position;
         }
-        let entity = EntityRef(self.next_entity);
-        self.next_entity += 1;
+        let entity = self.level.level.next_entity_ref();
         let pos = player.position;
         let yaw = player.yaw;
         let pitch = player.pitch;

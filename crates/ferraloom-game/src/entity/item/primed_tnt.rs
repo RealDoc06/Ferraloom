@@ -42,7 +42,7 @@ impl PrimedTnt {
     pub fn new_at(level: &mut Level, position: Vec3, owner: Option<Uuid>, seed: i64) -> Self {
         let mut entity = Self::new(level.next_entity_id(), seed);
         entity.parent.set_pos(position);
-        let angle = level.random().next_double() * 6.2831854820251465;
+        let angle = level.random().next_double() * f64::from(mth::TWO_PI);
         entity.parent.velocity = Vec3::new(
             -angle.sin() * 0.02,
             0.20000000298023224,
