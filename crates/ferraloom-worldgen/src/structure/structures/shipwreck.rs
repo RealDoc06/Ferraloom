@@ -152,12 +152,20 @@ impl ShipwreckPiece {
         let b = self.template.data.bounds;
         let sx = b.max[0] - b.min[0] + 1;
         let sz = b.max[2] - b.min[2] + 1;
+        // ShipwreckStructure passes (minX, spanX, minZ, spanZ) to both
+        // helpers. getLowestY's parameter order differs from getMean...:
+        // vanilla's beached branch therefore uses spanX as the minimum Z.
+        let (min_z, size_x) = if self.beached {
+            (sx, b.min[2])
+        } else {
+            (b.min[2], sx)
+        };
         let mut heights = [0; 4];
         for (i, [x, z]) in [
-            [b.min[0], b.min[2]],
-            [b.min[0], b.min[2] + sz],
-            [b.min[0] + sx, b.min[2]],
-            [b.min[0] + sx, b.min[2] + sz],
+            [b.min[0], min_z],
+            [b.min[0], min_z + sz],
+            [b.min[0] + size_x, min_z],
+            [b.min[0] + size_x, min_z + sz],
         ]
         .into_iter()
         .enumerate()

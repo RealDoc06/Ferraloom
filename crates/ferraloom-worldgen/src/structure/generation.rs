@@ -113,7 +113,7 @@ impl StructureGenerators {
             Ok(false)
         };
         let generator = context.generator;
-        let (position, pieces) = match self
+        let (position, pieces): ([i32; 3], Vec<StructurePiece>) = match self
             .generators
             .get(id)
             .ok_or_else(|| Error(format!("unknown structure {id}")))?
