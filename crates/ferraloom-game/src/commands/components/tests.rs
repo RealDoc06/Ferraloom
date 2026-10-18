@@ -14,7 +14,7 @@ impl EntityQuery for Backend {
     }
     fn info(&self, _: EntityRef) -> Option<SelectorEntity<'_>> {
         Some(SelectorEntity {
-            name: "Alice",
+            name: "Alice".into(),
             uuid: Uuid::NIL,
             player: true,
             dimension: "minecraft:overworld",

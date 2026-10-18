@@ -12,8 +12,9 @@ use crate::{
 use ferraloom_brigadier::{CommandSyntaxException, StringReader};
 use ferraloom_data::EntityType;
 use ferraloom_nbt::Tag;
-use ferraloom_util::{Uuid, Vec3, mth};
+use ferraloom_util::{Aabb, Uuid, Vec3, mth};
 pub use player::player_nbt;
+use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -652,15 +653,44 @@ impl EntitySelector {
         {
             return Err(error("argument.entity.selector.not_allowed", &[]));
         }
+        let players_only = players_only || !self.includes_entities;
+        if let Some(uuid) = self.uuid {
+            return Ok(query
+                .entity_by_uuid(uuid, players_only)
+                .into_iter()
+                .collect());
+        }
         let origin = Vec3::new(
             self.position[0].unwrap_or(source.position.x),
             self.position[1].unwrap_or(source.position.y),
             self.position[2].unwrap_or(source.position.z),
         );
+        let bounds = if self.delta.iter().any(Option::is_some) {
+            let [x, y, z] = self.delta.map(|delta| delta.unwrap_or(0.));
+            Some(Aabb::new(
+                origin.x + x.min(0.),
+                origin.y + y.min(0.),
+                origin.z + z.min(0.),
+                origin.x + x.max(0.) + 1.,
+                origin.y + y.max(0.) + 1.,
+                origin.z + z.max(0.) + 1.,
+            ))
+        } else {
+            self.distance.and_then(|range| range.max).map(|max| {
+                Aabb::new(
+                    origin.x - max,
+                    origin.y - max,
+                    origin.z - max,
+                    origin.x + max + 1.,
+                    origin.y + max + 1.,
+                    origin.z + max + 1.,
+                )
+            })
+        };
         let candidates = if self.current_entity {
             source.entity.into_iter().collect()
         } else {
-            query.candidates(players_only || !self.includes_entities)
+            query.candidates_in(players_only, bounds)
         };
         let mut result = Vec::new();
         'candidate: for entity in candidates {
@@ -674,7 +704,7 @@ impl EntitySelector {
                 || self
                     .player_name
                     .as_ref()
-                    .is_some_and(|name| !name.eq_ignore_ascii_case(info.name))
+                    .is_some_and(|name| !name.eq_ignore_ascii_case(info.name.as_ref()))
                 || self.uuid.is_some_and(|uuid| uuid != info.uuid)
             {
                 continue;
@@ -691,18 +721,12 @@ impl EntitySelector {
             let dy = info.position.y - origin.y;
             let dz = info.position.z - origin.z;
             let distance = dx * dx + dy * dy + dz * dz;
-            if self.delta.iter().any(Option::is_some) {
-                let pos = [info.position.x, info.position.y, info.position.z];
-                let origin = [origin.x, origin.y, origin.z];
-                let widths = [info.width / 2., 0., info.width / 2.];
-                let heights = [info.width / 2., info.height, info.width / 2.];
-                if (0..3).any(|i| {
-                    let delta = self.delta[i].unwrap_or(0.);
-                    pos[i] + heights[i] <= origin[i] + delta.min(0.)
-                        || pos[i] - widths[i] >= origin[i] + delta.max(0.) + 1.
-                }) {
-                    continue;
-                }
+            if let Some(bounds) = bounds
+                && !query
+                    .bounding_box(entity)
+                    .is_some_and(|entity_box| entity_box.intersects(bounds))
+            {
+                continue;
             }
             if self.distance.is_some_and(|range| {
                 range.min.is_some_and(|v| distance < v * v)
@@ -753,7 +777,7 @@ fn parse_map<K: Ord, V>(
 }
 /// Immutable facts fetched at evaluation time, not stored in a command source.
 pub struct SelectorEntity<'a> {
-    pub name: &'a str,
+    pub name: Cow<'a, str>,
     pub uuid: Uuid,
     pub player: bool,
     pub dimension: &'a str,
@@ -761,12 +785,37 @@ pub struct SelectorEntity<'a> {
     pub width: f64,
     pub height: f64,
 }
-/// Entity/query hook for players now and canonical non-player indexes later.
+/// Live entity queries capture owned handles in native lookup/section order.
 pub trait EntityQuery {
     fn candidates(&self, players_only: bool) -> Vec<EntityRef>;
+    /// Unbounded queries use the linked entity lookup; bounded queries use the
+    /// section index. Player queries retain PlayerList order in either case.
+    fn candidates_in(&self, players_only: bool, _bounds: Option<Aabb>) -> Vec<EntityRef> {
+        self.candidates(players_only)
+    }
+    fn entity_by_uuid(&self, uuid: Uuid, players_only: bool) -> Option<EntityRef> {
+        self.candidates(players_only).into_iter().find(|entity| {
+            self.info(*entity)
+                .is_some_and(|info| info.uuid == uuid && (!players_only || info.player))
+        })
+    }
     fn info(&self, entity: EntityRef) -> Option<SelectorEntity<'_>>;
+    fn bounding_box(&self, entity: EntityRef) -> Option<Aabb> {
+        let info = self.info(entity)?;
+        Some(Aabb::new(
+            info.position.x - info.width / 2.,
+            info.position.y,
+            info.position.z - info.width / 2.,
+            info.position.x + info.width / 2.,
+            info.position.y + info.height,
+            info.position.z + info.width / 2.,
+        ))
+    }
     fn display_name(&self, entity: EntityRef) -> ferraloom_protocol::chat::Component {
-        ferraloom_protocol::chat::Component::literal(self.info(entity).map_or("", |info| info.name))
+        ferraloom_protocol::chat::Component::literal(
+            self.info(entity)
+                .map_or_else(String::new, |info| info.name.into_owned()),
+        )
     }
     fn matches(
         &mut self,
@@ -857,7 +906,7 @@ mod capture_tests {
         fn info(&self, entity: EntityRef) -> Option<SelectorEntity<'_>> {
             let index = entity.0 as usize;
             Some(SelectorEntity {
-                name: &self.names[index],
+                name: self.names[index].as_str().into(),
                 uuid: Uuid::NIL,
                 player: true,
                 dimension: "minecraft:overworld",
@@ -942,3 +991,6 @@ mod capture_tests {
         }
     }
 }
+
+#[cfg(test)]
+mod mixed_tests;

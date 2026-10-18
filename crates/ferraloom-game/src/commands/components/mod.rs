@@ -305,7 +305,7 @@ fn scoreboard_name<R: EntityQuery>(
         .info(entity)
         .ok_or_else(|| exceptions::error("argument.entity.notfound.entity", &[]))?;
     Ok(if info.player {
-        info.name.to_owned()
+        info.name.into_owned()
     } else {
         info.uuid.to_string()
     })

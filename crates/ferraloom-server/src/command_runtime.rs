@@ -468,7 +468,10 @@ use ferraloom_game::commands::arguments::selectors::{
     EntityQuery, SelectorEntity, SelectorPredicate, rotation_matches,
 };
 impl EntityQuery for MinecraftServer {
-    fn candidates(&self, _players_only: bool) -> Vec<EntityRef> {
+    fn candidates(&self, players_only: bool) -> Vec<EntityRef> {
+        if !players_only {
+            return self.level.level.all_entities();
+        }
         self.players
             .iter()
             .filter_map(|id| match self.connections[id].phase {
@@ -477,10 +480,39 @@ impl EntityQuery for MinecraftServer {
             })
             .collect()
     }
+    fn candidates_in(
+        &self,
+        players_only: bool,
+        bounds: Option<ferraloom_util::Aabb>,
+    ) -> Vec<EntityRef> {
+        if players_only {
+            return self.candidates(true);
+        }
+        bounds.map_or_else(
+            || self.level.level.all_entities(),
+            |bounds| self.level.level.entities_in(bounds, |_, _| true),
+        )
+    }
+    fn entity_by_uuid(&self, uuid: Uuid, players_only: bool) -> Option<EntityRef> {
+        if players_only {
+            self.candidates(true)
+                .into_iter()
+                .find(|entity| self.player(*entity).is_ok_and(|player| player.uuid == uuid))
+        } else {
+            self.level.level.entity_by_uuid(uuid)
+        }
+    }
+    fn bounding_box(&self, entity: EntityRef) -> Option<ferraloom_util::Aabb> {
+        self.level
+            .level
+            .entity_state(entity)
+            .ok()
+            .map(|state| state.as_entity().bounding_box)
+    }
     fn info(&self, entity: EntityRef) -> Option<SelectorEntity<'_>> {
         let player = self.player(entity).ok()?;
         Some(SelectorEntity {
-            name: &player.name,
+            name: player.name.as_str().into(),
             uuid: player.uuid,
             player: true,
             dimension: "minecraft:overworld",
