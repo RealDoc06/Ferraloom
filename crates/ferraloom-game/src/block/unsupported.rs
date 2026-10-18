@@ -2,7 +2,7 @@
 //! remain strict; Warn records a skipped call, never a fabricated return value.
 use super::BlockBehavior;
 use crate::level::{Level, LevelError};
-use ferraloom_data::Block;
+use ferraloom_data::{Block, EntityType};
 use std::collections::HashSet;
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum UnportedBehavior {
@@ -13,6 +13,7 @@ pub enum UnportedBehavior {
 /// Approved whole-effect skips, distinct from queries that require a value.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum UnportedOperation {
+    EntityMethod(EntityType, crate::entity::EntityMethod),
     ItemUseOn(ferraloom_data::Item),
     PortalUse(Block),
     AdvancementCriterion(crate::advancements::criteria::Trigger),
@@ -209,6 +210,14 @@ impl UnportedCalls {
         self.stats.skipped_calls = self.stats.skipped_calls.saturating_add(1);
         if !self.seen.contains(&call) {
             match &call {
+                UnportedCall::Operation(UnportedOperation::EntityMethod(kind, method)) => {
+                    eprintln!(
+                        "Unported entity effect skipped: {}#{} (skipped calls: {})",
+                        kind.name(),
+                        method.name(),
+                        self.stats.skipped_calls
+                    )
+                }
                 UnportedCall::Operation(UnportedOperation::ItemUseOn(item)) => eprintln!(
                     "Unported item use effect skipped: {}#useOn (skipped calls: {})",
                     item.name(),
@@ -317,6 +326,9 @@ impl Level {
         let calls = &mut self.region_mut().unported;
         if calls.policy == UnportedBehavior::Strict {
             return Err(match operation {
+                UnportedOperation::EntityMethod(kind, method) => {
+                    LevelError::UnsupportedEntityMethod(kind, method)
+                }
                 UnportedOperation::ItemUseOn(item) => LevelError::UnsupportedItemUseOn(item),
                 UnportedOperation::PortalUse(block) => LevelError::UnsupportedPortalUse(block),
                 UnportedOperation::AdvancementCriterion(trigger) => {
