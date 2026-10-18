@@ -18,9 +18,12 @@ use std::sync::Arc;
 const ORIGIN: BlockPos = BlockPos::new(8, 0, 8);
 static EMPTY: Behaviors = Behaviors::EMPTY;
 fn level() -> Level {
+    level_in_radius(1)
+}
+fn level_in_radius(radius: i32) -> Level {
     let mut level = Level::new(Region::new(&EMPTY));
-    for x in -1..=1 {
-        for z in -1..=1 {
+    for x in -radius..=radius {
+        for z in -radius..=radius {
             let pos = ChunkPos::new(x, z);
             level
                 .add_chunk(LevelChunk::new(
@@ -166,6 +169,214 @@ fn note_instrument(name: &str) -> ferraloom_data::properties::Instrument {
         .filter_map(Instrument::from_index)
         .find(|v| v.as_str() == name)
         .unwrap()
+}
+#[test]
+fn tripwire_hooks_attachment_removal_and_length_limits_match_vanilla() {
+    use ferraloom_data::properties as p;
+    use ferraloom_util::random::RandomSource;
+    for (name, expected) in cases("tripwire-calc:") {
+        let mut args = name.split(':').skip(1);
+        let direction = Direction::VALUES[args.next().unwrap().parse::<usize>().unwrap()];
+        let length = args.next().unwrap().parse::<i32>().unwrap();
+        let mode = args.next().unwrap().parse::<u8>().unwrap();
+        let mut level = level_in_radius(3);
+        let middle = (length / 2).max(1);
+        let attached = mode == 4 || mode == 5;
+        let state = state::with_facing(Block::TRIPWIRE_HOOK.default_state(), direction)
+            .with(p::ATTACHED, attached)
+            .unwrap()
+            .with(p::POWERED, mode == 5)
+            .unwrap();
+        level
+            .set_block_state(
+                ORIGIN.relative(direction.opposite(), 1),
+                Block::STONE.default_state(),
+            )
+            .unwrap();
+        level
+            .set_block_state(
+                ORIGIN.relative(direction, length + 1),
+                Block::STONE.default_state(),
+            )
+            .unwrap();
+        let targets = (0..=length)
+            .map(|i| ORIGIN.relative(direction, i))
+            .collect::<Vec<_>>();
+        for (i, &pos) in targets.iter().enumerate() {
+            let placed = if i == 0 {
+                state
+            } else if i == length as usize {
+                state::with_facing(
+                    state,
+                    if mode == 8 {
+                        direction
+                    } else {
+                        direction.opposite()
+                    },
+                )
+            } else {
+                Block::TRIPWIRE
+                    .default_state()
+                    .with(p::ATTACHED, attached)
+                    .unwrap()
+                    .with(p::POWERED, (mode == 1 || mode == 2) && i == middle as usize)
+                    .unwrap()
+                    .with(p::DISARMED, mode == 2 && i == middle as usize)
+                    .unwrap()
+            };
+            level.set_block_state(pos, placed).unwrap();
+        }
+        if matches!(mode, 3 | 7 | 10) {
+            level
+                .set_block_state(
+                    ORIGIN.relative(direction, middle),
+                    Block::AIR.default_state(),
+                )
+                .unwrap();
+        }
+        if mode == 6 {
+            level
+                .set_block_state(ORIGIN, Block::AIR.default_state())
+                .unwrap();
+        }
+        if mode == 9 {
+            level
+                .set_block_state(
+                    ORIGIN.relative(direction, length),
+                    Block::AIR.default_state(),
+                )
+                .unwrap();
+        }
+        let replacement = Block::TRIPWIRE
+            .default_state()
+            .with(p::POWERED, true)
+            .unwrap()
+            .with(p::DISARMED, mode == 10)
+            .unwrap();
+        level.take_effects();
+        tripwire::calculate_state(
+            &mut level,
+            ORIGIN,
+            state,
+            mode == 6,
+            true,
+            matches!(mode, 7 | 10).then_some((middle as usize, Some(replacement))),
+        )
+        .unwrap();
+        let mut parts = expected.split('|');
+        assert_eq!(
+            snapshot(&level, &targets),
+            parts.next().unwrap(),
+            "{name} states"
+        );
+        assert_eq!(
+            rail_mutations(&mut level),
+            native_mutations(parts.next().unwrap()),
+            "{name} mutation order"
+        );
+        assert_eq!(
+            format!(
+                "{}:{}",
+                level.has_scheduled_block_tick(ORIGIN, Block::TRIPWIRE_HOOK),
+                level.has_scheduled_block_tick(
+                    ORIGIN.relative(direction, length),
+                    Block::TRIPWIRE_HOOK
+                )
+            ),
+            parts.next().unwrap(),
+            "{name} hook checks"
+        );
+        assert_eq!(
+            level.random().next_long().to_string(),
+            parts.next().unwrap(),
+            "{name} detach pitch RNG"
+        );
+    }
+}
+#[test]
+fn tripwire_entity_press_and_release_scheduled_timelines_match_vanilla() {
+    use crate::entity::{EntityRef, EntityState, item::PrimedTnt};
+    use ferraloom_util::Vec3;
+    for (name, expected) in cases("tripwire-timeline:") {
+        let direction =
+            Direction::VALUES[name.split(':').nth(1).unwrap().parse::<usize>().unwrap()];
+        let mut level = level_in_radius(3);
+        let hook = state::with_facing(Block::TRIPWIRE_HOOK.default_state(), direction);
+        level
+            .set_block_state(
+                ORIGIN.relative(direction.opposite(), 1),
+                Block::STONE.default_state(),
+            )
+            .unwrap();
+        level
+            .set_block_state(ORIGIN.relative(direction, 5), Block::STONE.default_state())
+            .unwrap();
+        let targets = (0..=4)
+            .map(|i| ORIGIN.relative(direction, i))
+            .collect::<Vec<_>>();
+        for (i, &pos) in targets.iter().enumerate() {
+            level
+                .set_block_state(
+                    pos,
+                    if i == 0 {
+                        hook
+                    } else if i == 4 {
+                        state::with_facing(hook, direction.opposite())
+                    } else {
+                        Block::TRIPWIRE.default_state()
+                    },
+                )
+                .unwrap();
+        }
+        tripwire::calculate_state(&mut level, ORIGIN, hook, false, true, None).unwrap();
+        let pos = ORIGIN.relative(direction, 2);
+        let actor = EntityRef(1);
+        let mut tnt = PrimedTnt::new(1, 123);
+        tnt.parent.set_pos(Vec3::new(
+            f64::from(pos.x) + 0.5,
+            f64::from(pos.y) + 0.1,
+            f64::from(pos.z) + 0.5,
+        ));
+        level
+            .add_entity(actor, EntityState::PrimedTnt(Box::new(tnt)))
+            .unwrap();
+        let mut samples = Vec::new();
+        for tick in 0..=22 {
+            level.set_game_time(tick);
+            level.take_effects();
+            if tick == 0 {
+                tripwire::WIRE
+                    .entity_inside(level.get_block_state(pos).unwrap(), pos, actor, &mut level)
+                    .unwrap();
+            }
+            if tick == 7 {
+                level.remove_entity(actor).unwrap();
+            }
+            level.tick_scheduled_blocks(tick, 65536).unwrap();
+            samples.push(format!(
+                "{}/{}/{}/{}",
+                snapshot(&level, &targets),
+                level.has_scheduled_block_tick(pos, Block::TRIPWIRE),
+                level.has_scheduled_block_tick(ORIGIN, Block::TRIPWIRE_HOOK),
+                rail_mutations(&mut level)
+            ));
+        }
+        let expected = expected
+            .split('|')
+            .map(|sample| {
+                let mut parts = sample.splitn(4, '/');
+                format!(
+                    "{}/{}/{}/{}",
+                    parts.next().unwrap(),
+                    parts.next().unwrap(),
+                    parts.next().unwrap(),
+                    native_mutations(parts.next().unwrap())
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("|");
+        assert_eq!(samples.join("|"), expected, "{name}");
+    }
 }
 #[test]
 fn note_instruments_pitch_and_seeded_sound_events_match_vanilla() {

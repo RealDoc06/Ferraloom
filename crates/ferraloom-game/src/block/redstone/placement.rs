@@ -33,6 +33,8 @@ pub(super) fn supports(block: Block) -> bool {
             | BlockClass::PoweredRailBlock
             | BlockClass::DetectorRailBlock
             | BlockClass::NoteBlock
+            | BlockClass::TripWireBlock
+            | BlockClass::TripWireHookBlock
     ) || block.is_instance_of(BlockClass::DoorBlock)
         || block.is_instance_of(BlockClass::TrapDoorBlock)
         || block.is_instance_of(BlockClass::FenceGateBlock)
@@ -93,6 +95,29 @@ impl BlockBehavior for RedstonePlacement {
         let pos = context.clicked_pos();
         let state = block.default_state();
         let result = match block.class() {
+            BlockClass::TripWireBlock => {
+                let mut placed = state;
+                for direction in HORIZONTAL {
+                    placed = super::tripwire::with_connection(
+                        placed,
+                        direction,
+                        reader.get_block_state(pos.relative(direction, 1))?,
+                    );
+                }
+                placed
+            }
+            BlockClass::TripWireHookBlock => {
+                for direction in context.nearest_looking_directions(&reader)? {
+                    if direction.axis() == Axis::Y {
+                        continue;
+                    }
+                    let placed = with_facing(state, direction.opposite());
+                    if super::tripwire::HOOK.can_survive(placed, pos, &reader)? {
+                        return Ok(Some(placed));
+                    }
+                }
+                return Ok(None);
+            }
             BlockClass::NoteBlock => super::note::set_instrument(&reader, pos, state)?,
             BlockClass::RedstoneWireBlock => {
                 let cross = HORIZONTAL

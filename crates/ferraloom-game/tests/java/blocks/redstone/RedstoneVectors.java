@@ -319,13 +319,53 @@ public final class RedstoneVectors extends MutationFixture {
             }
         }
     }
+    static RedstoneVectors tripwireLevel(RegistryAccess r){
+        var level=new RedstoneVectors(r);
+        for(int x=-3;x<=3;x++)for(int z=-3;z<=3;z++)if(x < -1 || x>1 || z < -1 || z>1){level.blockTicks.addContainer(new net.minecraft.world.level.ChunkPos(x,z),new net.minecraft.world.ticks.LevelChunkTicks<>());level.getChunkAt(new BlockPos(x*16,0,z*16)).setLoaded(true);}
+        return level;
+    }
+    static void tripwires(RegistryAccess r) throws Exception {
+        for(var direction:Direction.Plane.HORIZONTAL)for(int length:new int[]{1,2,3,16,41,42})for(int mode=0;mode<12;mode++){
+            var level=tripwireLevel(r);level.random.setSeed(0);int middle=Math.max(1,length/2);
+            boolean attached=mode==4||mode==5;boolean powered=mode==5;
+            var state=Blocks.TRIPWIRE_HOOK.defaultBlockState().setValue(TripWireHookBlock.FACING,direction).setValue(TripWireHookBlock.ATTACHED,attached).setValue(TripWireHookBlock.POWERED,powered);
+            level.raw(ORIGIN.relative(direction.getOpposite()),Blocks.STONE.defaultBlockState());level.raw(ORIGIN.relative(direction,length+1),Blocks.STONE.defaultBlockState());
+            var positions=new ArrayList<BlockPos>();
+            for(int i=0;i<=length;i++){var pos=ORIGIN.relative(direction,i);positions.add(pos);level.raw(pos,i==0?state:i==length?state.setValue(TripWireHookBlock.FACING,mode==8?direction:direction.getOpposite()):Blocks.TRIPWIRE.defaultBlockState().setValue(TripWireBlock.ATTACHED,attached).setValue(TripWireBlock.POWERED,(mode==1||mode==2)&&i==middle).setValue(TripWireBlock.DISARMED,mode==2&&i==middle));}
+            if(mode==3||mode==7||mode==10)level.raw(ORIGIN.relative(direction,middle),Blocks.AIR.defaultBlockState());
+            if(mode==6)level.raw(ORIGIN,Blocks.AIR.defaultBlockState());if(mode==9)level.raw(ORIGIN.relative(direction,length),Blocks.AIR.defaultBlockState());
+            var override=Blocks.TRIPWIRE.defaultBlockState().setValue(TripWireBlock.POWERED,true).setValue(TripWireBlock.DISARMED,mode==10);
+            level.begin();TripWireHookBlock.calculateState(level,ORIGIN,state,mode==6,true,mode==7||mode==10?middle:-1,override);
+            var states=new ArrayList<String>();for(var pos:positions)states.add(pos.toShortString()+"="+Block.getId(level.getBlockState(pos)));
+            System.out.println("tripwire-calc:"+direction.get3DDataValue()+":"+length+":"+mode+"\t"+String.join(";",states)+"|"+String.join(";",level.changes)+"|"+level.blockTicks.hasScheduledTick(ORIGIN,Blocks.TRIPWIRE_HOOK)+":"+level.blockTicks.hasScheduledTick(ORIGIN.relative(direction,length),Blocks.TRIPWIRE_HOOK)+"|"+level.random.nextLong());
+        }
+        var check=TripWireBlock.class.getDeclaredMethod("checkPressed",net.minecraft.world.level.Level.class,BlockPos.class);check.setAccessible(true);
+        for(var direction:Direction.Plane.HORIZONTAL){
+            var level=tripwireLevel(r);level.random.setSeed(0);var positions=new ArrayList<BlockPos>();
+            var hook=Blocks.TRIPWIRE_HOOK.defaultBlockState().setValue(TripWireHookBlock.FACING,direction);
+            level.raw(ORIGIN.relative(direction.getOpposite()),Blocks.STONE.defaultBlockState());level.raw(ORIGIN.relative(direction,5),Blocks.STONE.defaultBlockState());
+            for(int i=0;i<=4;i++){var pos=ORIGIN.relative(direction,i);positions.add(pos);level.raw(pos,i==0?hook:i==4?hook.setValue(TripWireHookBlock.FACING,direction.getOpposite()):Blocks.TRIPWIRE.defaultBlockState());}
+            TripWireHookBlock.calculateState(level,ORIGIN,hook,false,true,-1,null);
+            var pos=ORIGIN.relative(direction,2);var actor=new net.minecraft.world.entity.item.PrimedTnt(net.minecraft.world.entity.EntityTypes.TNT,level);actor.setPos(pos.getX()+0.5,pos.getY()+0.1,pos.getZ()+0.5);level.addFreshEntity(actor);
+            var samples=new ArrayList<String>();
+            for(int tick=0;tick<=22;tick++){
+                level.time=tick;level.begin();
+                if(tick==0)level.getBlockState(pos).entityInside(level,pos,actor,net.minecraft.world.entity.InsideBlockEffectApplier.NOOP,true);
+                if(tick==7){actor.discard();level.actors.remove(actor);level.sections.getOrCreateSection(SectionPos.asLong(actor.blockPosition())).remove(actor);}
+                level.blockTicks.tick(tick,65536,(target,block)->{var current=level.getBlockState(target);if(current.is(block)){if(block==Blocks.TRIPWIRE_HOOK)TripWireHookBlock.calculateState(level,target,current,false,true,-1,null);else if(block==Blocks.TRIPWIRE&&current.getValue(TripWireBlock.POWERED))try{check.invoke(block,level,target);}catch(Exception error){throw new RuntimeException(error);}}});
+                var states=new ArrayList<String>();for(var target:positions)states.add(target.toShortString()+"="+Block.getId(level.getBlockState(target)));
+                samples.add(String.join(";",states)+"/"+level.blockTicks.hasScheduledTick(pos,Blocks.TRIPWIRE)+"/"+level.blockTicks.hasScheduledTick(ORIGIN,Blocks.TRIPWIRE_HOOK)+"/"+String.join(";",level.changes));
+            }
+            System.out.println("tripwire-timeline:"+direction.get3DDataValue()+"\t"+String.join("|",samples));
+        }
+    }
     public static void main(String[] args) {
         var out=System.out;var err=System.err;SharedConstants.tryDetectVersion();Bootstrap.bootStrap();System.setOut(out);System.setErr(err);
         var registries=NeighborVectors.load();
         var builtin=RegistryAccess.fromRegistryOfRegistries(net.minecraft.core.registries.BuiltInRegistries.REGISTRY);
         var lookup=HolderLookup.Provider.create(java.util.stream.Stream.concat(builtin.listRegistries(),registries.listRegistries()));
         net.minecraft.core.registries.BuiltInRegistries.DATA_COMPONENT_INITIALIZERS.build(lookup).forEach(net.minecraft.core.component.DataComponentInitializers.PendingComponents::apply);
-        signals(registries);piston(registries);wires(registries);try{moving(registries);pushing(registries);comparators(registries);placements(registries);hoppers(registries);pistonTimelines(registries);dispensing(registries);dispenserTriggers(registries);rails(registries);notes(registries);}catch(Exception error){throw new RuntimeException(error);}
+        signals(registries);piston(registries);wires(registries);try{moving(registries);pushing(registries);comparators(registries);placements(registries);hoppers(registries);pistonTimelines(registries);dispensing(registries);dispenserTriggers(registries);rails(registries);notes(registries);tripwires(registries);}catch(Exception error){throw new RuntimeException(error);}
     }
 }
 

@@ -21,6 +21,7 @@ mod state;
 pub mod storage;
 pub mod switches;
 pub mod torch;
+pub mod tripwire;
 pub mod wire;
 
 /// Region-local counterpart of mutable redstone block state in the Java
@@ -102,6 +103,32 @@ pub(crate) fn ported_behavior(
         }
         BlockClass::RedstoneLampBlock if matches!(method, M::NeighborChanged | M::Tick) => {
             Some(&lamp::LAMP)
+        }
+        BlockClass::TripWireBlock
+            if matches!(
+                method,
+                M::UpdateShape
+                    | M::UpdateFromNeighbourShapes
+                    | M::OnPlace
+                    | M::AffectNeighborsAfterRemoval
+                    | M::EntityInside
+                    | M::EntityInsideCollisionShape
+                    | M::Tick
+            ) =>
+        {
+            Some(&tripwire::WIRE)
+        }
+        BlockClass::TripWireHookBlock
+            if matches!(
+                method,
+                M::CanSurvive
+                    | M::UpdateShape
+                    | M::UpdateFromNeighbourShapes
+                    | M::AffectNeighborsAfterRemoval
+                    | M::Tick
+            ) =>
+        {
+            Some(&tripwire::HOOK)
         }
         BlockClass::NoteBlock
             if matches!(
