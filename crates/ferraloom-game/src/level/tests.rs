@@ -968,9 +968,37 @@ fn shared_collision_queries_use_native_faces_and_liquid_context_without_warn_fal
 
 #[test]
 fn reflected_method_ownership_ports_inherited_defaults_without_masking_overrides() {
-    use crate::block::{BlockMethod, LevelReaderRef, UnportedBehavior};
+    use crate::block::{
+        BlockBehavior, BlockCollisionContext, BlockMethod, LevelReaderRef, UnportedBehavior,
+    };
     let mut level = flat_pool();
     let pos = BlockPos::new(8, 0, 8);
+    let reader = LevelReaderRef::Server(&level);
+    assert!(
+        crate::block::BASE_BLOCK
+            .shape(Block::AIR.default_state(), pos, &reader)
+            .unwrap()
+            .ptr_eq(&ferraloom_util::shapes::block())
+    );
+    assert!(
+        crate::block::BASE_BLOCK
+            .collision_shape(
+                Block::AIR.default_state(),
+                pos,
+                &BlockCollisionContext::empty(),
+                &reader
+            )
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        level
+            .required_block_behavior(Block::AIR, BlockMethod::OutlineShape)
+            .unwrap()
+            .shape(Block::AIR.default_state(), pos, &reader)
+            .unwrap()
+            .is_empty()
+    );
     // Leaves override random/updateShape, but inherit the full-cube inside
     // query and base survival. These are individually proven vanilla methods.
     let leaves = Block::OAK_LEAVES.default_state();
@@ -1009,4 +1037,103 @@ fn reflected_method_ownership_ports_inherited_defaults_without_masking_overrides
         ))
     ));
     assert_eq!(level.unported_behavior_stats().skipped_calls, 0);
+}
+
+#[test]
+fn precipitation_selection_slots_match_vanilla_random_and_position_streams_when_dry() {
+    use ferraloom_util::random::{LegacyRandomSource, Random, RandomSource};
+    for line in include_str!("../../tests/java/level/precipitation.tsv").lines() {
+        let (case, expected) = line.split_once('\t').unwrap();
+        let (seed, speed) = case
+            .strip_prefix("precipitation-slots:")
+            .unwrap()
+            .split_once(':')
+            .unwrap();
+        let mut level = empty_level(&EMPTY);
+        level.set_random_streams(
+            Random::Legacy(LegacyRandomSource::new(seed.parse().unwrap())),
+            0,
+        );
+        level.rules_mut().random_tick_speed = speed.parse().unwrap();
+        for _ in 0..30 {
+            level.tick_random_chunk(ChunkPos::new(0, 0)).unwrap();
+        }
+        let precipitation = level
+            .take_effects()
+            .into_iter()
+            .map(|effect| match effect {
+                LevelEffect::PendingPrecipitation(pos) => {
+                    format!("{}, {}, {}", pos.x, pos.y, pos.z)
+                }
+                other => panic!("unexpected effect {other:?}"),
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            level.pending_precipitation_calls(),
+            precipitation.len() as u64
+        );
+        let next_random = level.random().next_int();
+        let next_pos = level.get_block_random_pos(BlockPos::ZERO, 15);
+        assert_eq!(
+            format!(
+                "{}|{next_random}|{}, {}, {}",
+                precipitation.join(";"),
+                next_pos.x,
+                next_pos.y,
+                next_pos.z
+            ),
+            expected,
+            "{case}"
+        );
+    }
+}
+
+#[test]
+fn thunder_gate_and_position_draw_match_vanilla_before_the_pending_required_query() {
+    use crate::block::UnportedBehavior;
+    use ferraloom_util::random::{LegacyRandomSource, Random, RandomSource};
+    for line in include_str!("../../tests/java/level/thunder.tsv").lines() {
+        let (case, expected) = line.split_once('\t').unwrap();
+        let (seed, weather) = case
+            .strip_prefix("thunder-slots:")
+            .unwrap()
+            .split_once(':')
+            .unwrap();
+        for policy in [UnportedBehavior::Strict, UnportedBehavior::Warn] {
+            let mut level = empty_level(&EMPTY);
+            level.set_random_streams(
+                Random::Legacy(LegacyRandomSource::new(seed.parse().unwrap())),
+                0,
+            );
+            level.set_unported_behavior(policy);
+            level.load_weather(weather::WeatherData {
+                raining: weather != "0",
+                thundering: weather == "2",
+                ..weather::WeatherData::default()
+            });
+            let strike = expected.starts_with("true|");
+            assert_eq!(
+                level.tick_thunder(ChunkPos::new(0, 0)),
+                if strike && policy == UnportedBehavior::Strict {
+                    Err(LevelError::UnsupportedWeatherQuery)
+                } else {
+                    Ok(())
+                }
+            );
+            let next_random = level.random().next_int();
+            let next_pos = level.get_block_random_pos(BlockPos::ZERO, 15);
+            assert_eq!(
+                format!(
+                    "{strike}|{next_random}|{}, {}, {}",
+                    next_pos.x, next_pos.y, next_pos.z
+                ),
+                expected,
+                "{case}"
+            );
+            assert_eq!(
+                level.unported_behavior_stats().skipped_calls,
+                u64::from(strike && policy == UnportedBehavior::Warn)
+            );
+        }
+    }
 }

@@ -130,26 +130,35 @@ pub trait BlockBehavior: Sync {
     fn collision_shape(
         &self,
         state: BlockState,
-        _pos: BlockPos,
+        pos: BlockPos,
         _context: &BlockCollisionContext<'_>,
-        _level: &LevelReaderRef<'_>,
+        level: &LevelReaderRef<'_>,
     ) -> Result<ferraloom_util::VoxelShape, LevelError> {
-        if state.cached_collision_full_block().is_some() {
-            Ok(state.cached_shapes().collision.get().clone())
+        if state.block().has_collision() {
+            level.shape(state, pos)
         } else {
-            Err(LevelError::UnsupportedShape(state))
+            Ok(ferraloom_util::shapes::empty())
         }
     }
+    /// Port of BlockBehaviour#getShape's base full cube. Overriding families
+    /// are dispatched separately, so this is never a baseline guess.
     fn shape(
         &self,
-        state: BlockState,
+        _state: BlockState,
         _pos: BlockPos,
         _level: &LevelReaderRef<'_>,
     ) -> Result<ferraloom_util::VoxelShape, LevelError> {
-        state
-            .shape()
-            .cloned()
-            .ok_or(LevelError::UnsupportedShape(state))
+        Ok(ferraloom_util::shapes::block())
+    }
+    fn is_collision_shape_full_block(
+        &self,
+        state: BlockState,
+        pos: BlockPos,
+        level: &LevelReaderRef<'_>,
+    ) -> Result<bool, LevelError> {
+        Ok(ferraloom_util::shapes::is_shape_full_block(
+            &level.collision_shape(state, pos, &BlockCollisionContext::empty())?,
+        ))
     }
     fn support_shape(
         &self,

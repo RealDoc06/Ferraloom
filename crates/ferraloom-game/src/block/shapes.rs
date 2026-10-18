@@ -135,11 +135,8 @@ impl LevelReaderRef<'_> {
         if let Some(full) = state.cached_collision_full_block() {
             return Ok(full);
         }
-        Ok(shapes::is_shape_full_block(&self.collision_shape(
-            state,
-            pos,
-            &BlockCollisionContext::empty(),
-        )?))
+        self.shape_behavior(state, BlockMethod::IsCollisionShapeFullBlock)?
+            .is_collision_shape_full_block(state, pos, self)
     }
 }
 impl Level {

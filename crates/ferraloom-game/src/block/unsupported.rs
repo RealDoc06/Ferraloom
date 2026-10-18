@@ -122,10 +122,45 @@ pub struct UnportedBehaviorStats {
 #[derive(Default)]
 pub(crate) struct UnportedCalls {
     pub policy: UnportedBehavior,
-    seen: HashSet<(Block, BlockMethod)>,
+    seen: HashSet<UnportedCall>,
     stats: UnportedBehaviorStats,
 }
+#[derive(Clone, Copy, Eq, Hash, PartialEq)]
+enum UnportedCall {
+    Block(Block, BlockMethod),
+    WeatherStrike,
+}
+impl UnportedCalls {
+    fn record(&mut self, call: UnportedCall) {
+        self.stats.skipped_calls = self.stats.skipped_calls.saturating_add(1);
+        if self.seen.insert(call) {
+            self.stats.distinct_calls = self.seen.len();
+            match call {
+                UnportedCall::Block(block, method) => eprintln!(
+                    "Unported behavior skipped: {}#{} (skipped calls: {})",
+                    block.name(),
+                    method.name(),
+                    self.stats.skipped_calls
+                ),
+                UnportedCall::WeatherStrike => eprintln!(
+                    "Unported behavior skipped: ServerLevel#tickThunder strike (skipped calls: {}; RNG parity pending)",
+                    self.stats.skipped_calls
+                ),
+            }
+        }
+    }
+}
 impl Level {
+    /// Temporary whole-effect exception approved for the thunder strike path.
+    /// Required position queries elsewhere keep their Unsupported result.
+    pub(crate) fn unported_weather_strike(&mut self) -> Result<(), LevelError> {
+        let calls = &mut self.region_mut().unported;
+        if calls.policy == UnportedBehavior::Strict {
+            return Err(LevelError::UnsupportedWeatherQuery);
+        }
+        calls.record(UnportedCall::WeatherStrike);
+        Ok(())
+    }
     /// Dispatch the captured inside-block state with the configured unsupported
     /// behavior policy. Movement must not call a silent superclass substitute.
     pub fn call_entity_inside(
@@ -219,16 +254,7 @@ impl Level {
         if calls.policy == UnportedBehavior::Strict {
             return Err(error);
         }
-        calls.stats.skipped_calls = calls.stats.skipped_calls.saturating_add(1);
-        if calls.seen.insert((block, method)) {
-            calls.stats.distinct_calls = calls.seen.len();
-            eprintln!(
-                "Unported behavior skipped: {}#{} (skipped calls: {})",
-                block.name(),
-                method.name(),
-                calls.stats.skipped_calls
-            );
-        }
+        calls.record(UnportedCall::Block(block, method));
         Ok(None)
     }
 }

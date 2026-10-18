@@ -514,3 +514,19 @@ fn entity_inside_and_landing_virtual_owners_are_extracted_by_signature() {
     assert!(Block::SLIME_BLOCK.overrides(BlockMethod::BounceOn));
     assert!(!Block::HAY_BLOCK.overrides(BlockMethod::FallOn));
 }
+
+#[test]
+fn collision_property_is_independent_of_the_empty_context_shape() {
+    assert!(Block::STONE.has_collision());
+    assert!(!Block::WATER.has_collision());
+    assert!(!Block::AIR.has_collision());
+    assert!(Block::POWDER_SNOW.has_collision());
+    assert!(
+        Block::POWDER_SNOW
+            .default_state()
+            .data()
+            .collision
+            .boxes()
+            .is_empty()
+    );
+}

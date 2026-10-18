@@ -49,6 +49,7 @@ pub enum LevelError {
     MissingFluidTags,
     UnsupportedShape(BlockState),
     UnsupportedFluidRandomTick,
+    UnsupportedWeatherQuery,
     InvalidSavedTick,
     WrongChunkHeight(ChunkPos),
 }

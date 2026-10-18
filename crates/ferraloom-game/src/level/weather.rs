@@ -1,7 +1,8 @@
 //! Ports of WeatherData, ServerLevel#advanceWeatherCycle and prepareWeather.
-use super::{Level, effects::LevelEffect};
+use super::{Level, LevelError, effects::LevelEffect};
 use ferraloom_nbt::{CompoundTag, Tag};
 use ferraloom_storage::{Error, Result, SavedDataCodec};
+use ferraloom_util::BlockPos;
 use ferraloom_util::random::{Random, RandomSource};
 
 /// Shared server weather save, stored in data/minecraft/weather.dat in 26.3.
@@ -53,6 +54,7 @@ pub(super) struct Weather {
     rain: f32,
     old_thunder: f32,
     thunder: f32,
+    pending_precipitation_calls: u64,
 }
 impl Weather {
     fn from_saved(data: WeatherData) -> Self {
@@ -201,6 +203,24 @@ impl Level {
             .weather
             .is_raining(self.rules().can_have_weather)
     }
+    /// Port of Level#isRainingAt. The dry short circuit is complete. Rain still
+    /// requires the pending live skylight and biome-precipitation queries.
+    pub fn is_raining_at(&self, _pos: BlockPos) -> std::result::Result<bool, LevelError> {
+        if !self.is_raining() {
+            return Ok(false);
+        }
+        Err(LevelError::UnsupportedWeatherQuery)
+    }
+    /// ServerLevel#tickPrecipitation integration point. Selection and randValue
+    /// advancement run now; snow, ice and cauldron effects await biome helpers.
+    pub fn tick_precipitation(&mut self, pos: BlockPos) {
+        let weather = &mut self.region_mut().weather;
+        weather.pending_precipitation_calls = weather.pending_precipitation_calls.wrapping_add(1);
+        self.emit(LevelEffect::PendingPrecipitation(pos));
+    }
+    pub fn pending_precipitation_calls(&self) -> u64 {
+        self.region().weather.pending_precipitation_calls
+    }
     pub fn is_thundering(&self) -> bool {
         self.region()
             .weather
@@ -222,6 +242,23 @@ mod tests {
     use ferraloom_util::random::LegacyRandomSource;
     fn random() -> Random {
         Random::Legacy(LegacyRandomSource::new(0))
+    }
+    #[test]
+    fn rain_query_short_circuits_only_canonical_dry_weather() {
+        static BEHAVIORS: crate::Behaviors = crate::Behaviors::EMPTY;
+        let mut level = Level::new(super::super::Region::new(&BEHAVIORS));
+        let pos = BlockPos::new(0, 0, 0);
+        assert_eq!(level.is_raining_at(pos), Ok(false));
+        level.load_weather(WeatherData {
+            raining: true,
+            ..WeatherData::default()
+        });
+        assert_eq!(
+            level.is_raining_at(pos),
+            Err(LevelError::UnsupportedWeatherQuery)
+        );
+        level.rules_mut().can_have_weather = false;
+        assert_eq!(level.is_raining_at(pos), Ok(false));
     }
     #[test]
     fn clear_time_overrides_targets_without_sampling_and_rule_false_still_smooths() {

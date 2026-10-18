@@ -254,6 +254,16 @@ public final class ExtractData {
         write(dir, "redstone_state_facts", table);
     }
 
+    // BlockBehaviour caches Properties.hasCollision in a final field. No public
+    // getter exists; reflect that exact field rather than infer it from shapes.
+    private static void blockCollisionFlags(Path dir) throws Exception {
+        var field = net.minecraft.world.level.block.state.BlockBehaviour.class.getDeclaredField("hasCollision");
+        field.setAccessible(true);
+        var table = new JsonArray();
+        for (var block : BuiltInRegistries.BLOCK) table.add(field.getBoolean(block));
+        write(dir, "block_collision_flags", table);
+    }
+
     private static void collectClasses(Class<?> type, Set<Class<?>> classes) {
         if (type == null || !classes.add(type)) return;
         collectClasses(type.getSuperclass(), classes);
@@ -292,6 +302,7 @@ public final class ExtractData {
     public static void main(String[] args) throws Exception {
         SharedConstants.tryDetectVersion();
         Bootstrap.bootStrap();
+        if (args.length > 1 && args[1].equals("--block-collision-flags-only")) { blockCollisionFlags(Path.of(args[0])); return; }
         if (args.length > 1 && args[1].equals("--redstone-facts-only")) { redstoneStateFacts(Path.of(args[0])); return; }
         if (args.length > 1 && args[1].equals("--state-facts-only")) { stateFacts(Path.of(args[0])); return; }
         if (args.length > 1 && args[1].equals("--face-occlusion-only")) { faceOcclusion(Path.of(args[0])); return; }
@@ -299,6 +310,7 @@ public final class ExtractData {
             stateTransforms(Path.of(args[0]));
             return;
         }
+        blockCollisionFlags(Path.of(args[0]));
         redstoneStateFacts(Path.of(args[0]));
         airStates(Path.of(args[0]));
         if (args.length > 1 && args[1].equals("--air-states-only")) return;

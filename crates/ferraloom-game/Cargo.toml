@@ -11,7 +11,6 @@ repository.workspace = true
 ferraloom-util.workspace = true
 ferraloom-nbt.workspace = true
 ferraloom-data.workspace = true
-ferraloom-protocol = { path = "../ferraloom-protocol" }
 ferraloom-chunk.workspace = true
 ferraloom-worldgen.workspace = true
 ferraloom-storage.workspace = true

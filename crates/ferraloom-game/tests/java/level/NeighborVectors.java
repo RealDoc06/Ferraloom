@@ -76,6 +76,22 @@ public final class NeighborVectors {
               var positions=new ArrayList<String>();
               for(int i=0;i<4;i++)positions.add(f.getBlockRandomPos(-16,-64,32,15).toShortString());
               System.out.println("random-positions\\t"+String.join(";",positions));
+              // Slot oracle uses real Level#random and getBlockRandomPos. The
+              // tickChunk body has no section samples in an all-air chunk.
+              for(long seed:new long[]{0,1,12345})for(int speed:new int[]{0,1,3,48}){
+                var slots=new NeighborFixture(r,100);slots.random.setSeed(seed);slots.randValue=0;
+                var precipitation=new ArrayList<String>();
+                for(int tick=0;tick<30;tick++)for(int i=0;i<speed;i++)if(slots.random.nextInt(48)==0)precipitation.add(slots.getBlockRandomPos(0,0,0,15).toShortString());
+                System.out.println("precipitation-slots:"+seed+":"+speed+"\\t"+String.join(";",precipitation)+"|"+slots.random.nextInt()+"|"+slots.getBlockRandomPos(0,0,0,15).toShortString());
+              }
+              long strikeSeed=0;
+              while(net.minecraft.util.RandomSource.create(strikeSeed).nextInt(100000)!=0)strikeSeed++;
+              for(long seed:new long[]{0,strikeSeed})for(int weather=0;weather<3;weather++){
+                var slots=new NeighborFixture(r,100);slots.random.setSeed(seed);slots.randValue=0;
+                boolean strike=weather==2&&slots.random.nextInt(100000)==0;
+                if(strike)slots.getBlockRandomPos(0,0,0,15);
+                System.out.println("thunder-slots:"+seed+":"+weather+"\\t"+strike+"|"+slots.random.nextInt()+"|"+slots.getBlockRandomPos(0,0,0,15).toShortString());
+              }
               System.out.println("valid-chunk-bound\\t"+net.minecraft.world.level.chunk.status.ChunkPyramid.MAX_CHUNK_COORDINATE_VALUE);
 
               for(var block:List.of(Blocks.WATER,Blocks.LAVA))for(int liquidLevel=0;liquidLevel<16;liquidLevel++){

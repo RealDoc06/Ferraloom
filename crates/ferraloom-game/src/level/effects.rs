@@ -48,4 +48,5 @@ pub enum LevelEffect {
         event: u8,
         param: f32,
     },
+    PendingPrecipitation(BlockPos),
 }

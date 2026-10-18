@@ -48,7 +48,7 @@ static VANILLA_CLASSES: [Option<&'static dyn super::BlockBehavior>;
     let mut classes: [Option<&'static dyn super::BlockBehavior>; BlockClass::ALL.len()] =
         [None; BlockClass::ALL.len()];
     classes[BlockClass::Block as usize] = Some(&super::BASE_BLOCK);
-    classes[BlockClass::AirBlock as usize] = Some(&super::BASE_BLOCK);
+    classes[BlockClass::AirBlock as usize] = Some(&super::foundational::AIR_BLOCK);
     classes[BlockClass::RotatedPillarBlock as usize] = Some(&super::BASE_BLOCK);
     classes[BlockClass::SandBlock as usize] = Some(&super::foundational::FALLING_BLOCK);
     classes[BlockClass::ColoredFallingBlock as usize] = Some(&super::foundational::FALLING_BLOCK);

@@ -16,6 +16,14 @@ a value still fail explicitly. Use `--unported-behavior strict` to fail on every
 unsupported call. Library callers, integration tests and parity runs default to
 Strict. This temporary mode will be removed when the block families are ported.
 
+Thunder strike targeting, lightning rods, difficulty and lightning/skeleton-trap
+spawns remain pending. Strict fails at the required target query after vanilla's
+strike gate and position draw. Warn counts and logs the remaining strike as one
+skipped effect and continues; its RNG stream is consequently not vanilla parity.
+Precipitation selections consume their vanilla RNG slots and increment the
+pending precipitation statistic; snow, ice and cauldron effects await live biome
+queries. Rain-at-position queries fail explicitly while those queries are absent.
+
 Level's canonical random source follows vanilla's nondeterministic unique-seed
 construction, independently of the world seed. Controlled tests install a fixed
 stream and block-position seed.

@@ -493,3 +493,11 @@ impl BlockState {
         }
     }
 }
+
+impl Block {
+    /// BlockBehaviour's final hasCollision property, independent of every shape
+    /// query and context. An empty collision shape does not imply false here.
+    pub const fn has_collision(self) -> bool {
+        BLOCK_HAS_COLLISION[self.protocol_id() as usize]
+    }
+}
