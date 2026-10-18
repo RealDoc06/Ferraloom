@@ -238,10 +238,10 @@ fn removed_entities_are_visible_until_management_and_never_tick() {
 #[test]
 fn block_access_does_not_hide_missing_neighbors_or_overwrite_replacements() {
     let mut region = region();
-    let missing = BlockPos::new(0, 64, 0);
+    let missing = BlockPos::new(16, 64, 0);
     assert_eq!(
         region.get_block_state(missing),
-        Err(LevelError::MissingChunk(ChunkPos::new(0, 0)))
+        Err(LevelError::MissingChunk(ChunkPos::new(1, 0)))
     );
     region
         .set_block_state(PLACED, Block::STONE.default_state())
