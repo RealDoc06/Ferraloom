@@ -2,6 +2,7 @@
 use super::super::{BlockBehavior, LevelAccessRef, LevelReaderRef};
 use crate::{
     block::UpdateFlags,
+    entity::{EntityData, EntityRef, EntityState},
     level::{Level, LevelError},
 };
 use ferraloom_data::{
@@ -9,13 +10,14 @@ use ferraloom_data::{
     registries::game_event::Id as GameEvent,
     tags::{BlockTags, FluidTags},
 };
-use ferraloom_util::{BlockPos, Direction, Vec3};
+use ferraloom_util::{BlockPos, Direction, Vec3, random::RandomSource};
 pub struct Ground;
 pub static GROUND: Ground = Ground;
 
 /// Port of FarmlandBlock/PathBlock#turnToBaseBlock, including entity lifting
 /// before the new collision shape is installed.
 pub(super) fn turn_to_base_block(
+    source: Option<EntityRef>,
     state: BlockState,
     pos: BlockPos,
     level: &mut Level,
@@ -25,7 +27,7 @@ pub(super) fn turn_to_base_block(
     level.game_event(
         GameEvent::BLOCK_CHANGE,
         Vec3::at_center_of(pos.into()),
-        None,
+        source,
         Some(new_state),
     );
     Ok(())
@@ -60,7 +62,7 @@ impl BlockBehavior for Ground {
         if state.block().class() == BlockClass::PathBlock
             || !self.can_survive(state, pos, &LevelReaderRef::Server(level))?
         {
-            turn_to_base_block(state, pos, level)?;
+            turn_to_base_block(None, state, pos, level)?;
         }
         Ok(())
     }
@@ -82,7 +84,7 @@ impl BlockBehavior for Ground {
                     UpdateFlags::CLIENTS,
                 )?;
             } else if !maintains_farmland(&LevelReaderRef::Server(level), pos)? {
-                turn_to_base_block(state, pos, level)?;
+                turn_to_base_block(None, state, pos, level)?;
             }
         } else if moisture < 7 {
             LevelAccessRef::Server(level).set_block(
@@ -92,6 +94,33 @@ impl BlockBehavior for Ground {
             )?;
         }
         Ok(())
+    }
+    /// Port of FarmlandBlock#fallOn, including the draw before instanceof and
+    /// the player's spawn-protection check without a world-border restriction.
+    fn fall_on(
+        &self,
+        state: BlockState,
+        pos: BlockPos,
+        entity: EntityRef,
+        fall_distance: f64,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        if f64::from(level.random().next_float()) < fall_distance - 0.5
+            && level.entity_state(entity)?.as_living().is_some()
+        {
+            let can_trample = if matches!(level.entity_state(entity)?, EntityState::Player(_)) {
+                !level.is_under_spawn_protection(entity, pos)?
+            } else {
+                level.rules().mob_griefing
+            };
+            if can_trample && {
+                let dimensions = &level.entity::<EntityData>(entity)?.dimensions;
+                dimensions.width * dimensions.width * dimensions.height > 0.512_f32
+            } {
+                turn_to_base_block(Some(entity), state, pos, level)?;
+            }
+        }
+        super::super::BASE_BLOCK.fall_on(state, pos, entity, fall_distance, level)
     }
 
     fn can_survive(

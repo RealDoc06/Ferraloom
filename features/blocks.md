@@ -375,3 +375,5 @@ One class row per bootstrapped runtime Block class, listing every block id assig
 | blocks.drops.registry | Optional native block loot-table identities and exact getDrops/spawnAfterBreak virtual ownership | `BlockBehaviour#getLootTable; getDrops; spawnAfterBreak` | `ExtractBlockDropTables; ExtractBlockMethods` (1286 block registry entries) | pass | partial |
 
 | blocks.interaction.feature-eligibility | Check every block and item against the dedicated server advertised VANILLA_SET | `FeatureElement#isEnabled` | `tools/extractor/ExtractFeatureRequirements.java` (all native registry entries) | pass | partial |
+
+| blocks.plants.farmland-trampling | Farmland fall draw before LivingEntity check, mob griefing, player spawn protection, volume threshold, entity lifting and attributed change event | `FarmlandBlock#fallOn; turnToBaseBlock` | `plants::tests::farmland_trampling_preserves_draw_order_permission_size_and_actor` | - | todo |

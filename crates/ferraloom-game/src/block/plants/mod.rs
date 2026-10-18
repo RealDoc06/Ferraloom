@@ -148,7 +148,7 @@ pub fn ported_behavior(block: Block, method: BlockMethod) -> Option<&'static dyn
         {
             &ground::GROUND
         }
-        C::FarmlandBlock if method == M::RandomTick => &ground::GROUND,
+        C::FarmlandBlock if matches!(method, M::RandomTick | M::FallOn) => &ground::GROUND,
         C::SnowyBlock | C::SpreadingSnowyBlock | C::GrassBlock | C::MyceliumBlock
             if matches!(method, M::UpdateShape | M::UpdateFromNeighbourShapes) =>
         {

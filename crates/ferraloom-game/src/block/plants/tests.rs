@@ -1037,3 +1037,100 @@ fn nearby_flower_scan_preserves_native_section_and_cell_order() {
     }
     assert_eq!(count, 6);
 }
+
+#[test]
+fn farmland_trampling_preserves_draw_order_permission_size_and_actor() {
+    use crate::{
+        entity::{
+            EntityData, EntityRef, EntityState,
+            animal::Cow,
+            dimensions::EntityDimensions,
+            experience_orb::ExperienceOrb,
+            player::{GameType, ServerPlayer},
+        },
+        level::interaction::SpawnProtectionSnapshot,
+    };
+    use ferraloom_data::{EntityType, registries::game_event::Id as GameEvent};
+    use ferraloom_util::{
+        Uuid, Vec3,
+        random::{LegacyRandomSource, Random, RandomSource},
+    };
+    let (blocks, fluids) = tags();
+    let pos = BlockPos::new(8, 5, 8);
+    let actor = EntityRef(1);
+    // kind: 0 nonliving, 1 cow, 2 small cow, 3 player.
+    for (kind, mob_griefing, protected, distance, tramples) in [
+        (0, true, false, 1.5, false),
+        (1, true, false, 1.5, true),
+        (1, false, false, 1.5, false),
+        (2, true, false, 1.5, false),
+        (3, false, true, 1.5, false),
+        (3, false, false, 1.5, true),
+        (3, true, false, 0.0, false),
+    ] {
+        let mut level = level();
+        level.set_block_tags(blocks.clone());
+        level.set_fluid_tags(fluids.clone());
+        level.rules_mut().mob_griefing = mob_griefing;
+        let state = Block::FARMLAND.default_state();
+        level.set_block_state(pos, state).unwrap();
+        let location = Vec3::new(8.5, 5.9375, 8.5);
+        let entity = match kind {
+            0 => {
+                let mut orb = ExperienceOrb::new(1, 0);
+                orb.parent.set_pos(location);
+                EntityState::ExperienceOrb(Box::new(orb))
+            }
+            1 | 2 => {
+                let mut data = EntityData::new(EntityType::COW, 1, 0);
+                if kind == 2 {
+                    data.dimensions = EntityDimensions::scalable(0.25, 0.25);
+                }
+                data.set_pos(location);
+                EntityState::Cow(Box::new(Cow::with_parent(data)))
+            }
+            _ => EntityState::Player(Box::new(ServerPlayer::new(
+                Uuid::new(1, 2),
+                "Farmer".into(),
+                1,
+                location,
+                GameType::Creative,
+            ))),
+        };
+        level.add_entity(actor, entity).unwrap();
+        level.set_spawn_protection(SpawnProtectionSnapshot::new(
+            "minecraft:overworld".parse().unwrap(),
+            "minecraft:overworld".parse().unwrap(),
+            pos,
+            if protected { 10 } else { 0 },
+            [Uuid::new(3, 4)],
+        ));
+        level.set_random_streams(Random::Legacy(LegacyRandomSource::new(42)), 0);
+        let mut expected_random = LegacyRandomSource::new(42);
+        expected_random.next_float();
+        ground::GROUND
+            .fall_on(state, pos, actor, distance, &mut level)
+            .unwrap();
+        assert_eq!(
+            level.get_block_state(pos).unwrap(),
+            if tramples {
+                Block::DIRT.default_state()
+            } else {
+                state
+            }
+        );
+        assert_eq!(level.random().next_long(), expected_random.next_long());
+        let effects = level.take_effects();
+        assert_eq!(
+            effects.iter().any(|effect| matches!(effect,
+            LevelEffect::GameEvent { event: GameEvent::BLOCK_CHANGE, source: Some(source),
+                affected_state: Some(new_state), .. }
+                if *source == actor && new_state.block() == Block::DIRT)),
+            tramples
+        );
+        assert_eq!(
+            level.entity::<EntityData>(actor).unwrap().position.y,
+            if tramples { 6.0 } else { location.y }
+        );
+    }
+}
