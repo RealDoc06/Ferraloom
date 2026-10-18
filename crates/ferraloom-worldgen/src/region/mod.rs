@@ -823,6 +823,18 @@ impl<'a> WorldGenRegion<'a> {
             .block()
             .overrides(ferraloom_data::BlockMethod::UpdateShape)
         {
+            use ferraloom_util::Direction;
+            for direction in [
+                Direction::West,
+                Direction::East,
+                Direction::North,
+                Direction::South,
+                Direction::Down,
+                Direction::Up,
+            ] {
+                let step = direction.step();
+                self.block([p[0] + step.x, p[1] + step.y, p[2] + step.z])?;
+            }
             return Ok(state);
         }
         self.behavior.update_from_neighbor_shapes(self, p, state)

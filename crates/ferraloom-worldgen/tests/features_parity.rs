@@ -666,6 +666,11 @@ fn region_write_bounds_bulk_writes_and_tick_deduplication() {
     )
     .unwrap();
     assert!(region.block([32, 0, 0]).is_err());
+    assert!(
+        region
+            .update_from_neighbor_shapes([0, 0, 0], Block::STONE.default_state())
+            .is_err()
+    );
     let start = region
         .take_structure_start([1, 0], &structure)
         .unwrap()
@@ -755,7 +760,7 @@ fn region_write_bounds_bulk_writes_and_tick_deduplication() {
     );
     assert_eq!(
         region
-            .update_from_neighbor_shapes([0, 0, 0], Block::STONE.default_state())
+            .update_from_neighbor_shapes([1, 0, 1], Block::STONE.default_state())
             .unwrap(),
         Block::STONE.default_state()
     );
