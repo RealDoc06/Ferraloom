@@ -8,6 +8,7 @@ use ferraloom_protocol::{
         ComponentTypeId, DataComponent, DataComponentMap, DyeColor, Persistent, SignText, Unit,
     },
 };
+use ferraloom_util::{Vec3, mth};
 
 fn empty_text() -> SignText {
     SignText {
@@ -27,6 +28,28 @@ pub struct SignBlockEntity {
     pub allowed_player_editor: Option<Uuid>,
 }
 impl SignBlockEntity {
+    /// Port of SignBlockEntity#getSlotPlayerIsFacing. Wall signs measure from
+    /// their offset board center; hanging and standing signs use block center.
+    pub fn player_is_facing_front(&self, position: Vec3) -> bool {
+        use ferraloom_data::{BlockClass, properties as p};
+        let state = self.parent.block_state;
+        let facing = state.get(p::FACING).map(|_| super::menu::facing(state));
+        let rotation = if let Some(facing) = facing {
+            facing.to_y_rot()
+        } else {
+            state.get(p::ROTATION).expect("standing sign rotation") as f32 * 22.5
+        };
+        let (mut x, mut z) = (0.5, 0.5);
+        if state.block().class() == BlockClass::WallSignBlock {
+            let offset = facing.expect("wall sign facing").step();
+            x -= f64::from(offset.x) * 7.0 / 16.0;
+            z -= f64::from(offset.z) * 7.0 / 16.0;
+        }
+        let xd = position.x - (f64::from(self.parent.pos.x) + x);
+        let zd = position.z - (f64::from(self.parent.pos.z) + z);
+        let player_rotation = (mth::atan2(zd, xd) * 57.2957763671875) as f32 - 90.0;
+        mth::degrees_difference_abs(rotation, player_rotation) <= 90.0
+    }
     pub fn new(parent: BlockEntityData) -> Self {
         Self {
             parent,
@@ -158,5 +181,41 @@ impl BlockEntity for SignBehavior {
         if sign.is_waxed {
             super::storage::set(map, DataComponent::Waxed(Unit));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::block::entity::{BlockEntityType, create};
+    use ferraloom_data::BlockState;
+    use ferraloom_util::BlockPos;
+    #[test]
+    fn sign_facing_matches_native_rotations_and_offset_wall_boards() {
+        let mut checked = 0;
+        for line in include_str!("../../../tests/java/blocks/entities/vectors.tsv")
+            .lines()
+            .filter(|line| line.starts_with("sign-facing\t"))
+        {
+            let fields: Vec<_> = line.split('\t').collect();
+            let state = BlockState::from_id(fields[1].parse().unwrap()).unwrap();
+            let entity = create(BlockPos::ZERO, state).unwrap();
+            assert!(matches!(
+                entity.data().kind,
+                BlockEntityType::SIGN | BlockEntityType::HANGING_SIGN
+            ));
+            let BlockEntityState::Sign(sign) = entity else {
+                panic!("sign fixture");
+            };
+            let x = f64::from_bits(u64::from_str_radix(fields[2], 16).unwrap());
+            let z = f64::from_bits(u64::from_str_radix(fields[3], 16).unwrap());
+            assert_eq!(
+                sign.player_is_facing_front(Vec3::new(x, 0.0, z)),
+                fields[4] == "true",
+                "{line}"
+            );
+            checked += 1;
+        }
+        assert_eq!(checked, 320);
     }
 }

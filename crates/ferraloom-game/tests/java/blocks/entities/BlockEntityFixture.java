@@ -39,6 +39,21 @@ class BlockEntityFixture extends MutationFixture {
       System.out.println("sign-edit\t"+waxed+"\t"+allowed+"\t"+filtered+"\t"+sign.saveWithoutMetadata(r)+"\t"+(sign.getPlayerWhoMayEdit()==null));
     }
   }
+  static void signFacing(RegistryAccess r){
+    var level=new BlockEntityFixture(r);var player=new SignPlayer(level,false);
+    for(var block:List.of(net.minecraft.world.level.block.Blocks.OAK_SIGN,net.minecraft.world.level.block.Blocks.OAK_WALL_SIGN,net.minecraft.world.level.block.Blocks.OAK_HANGING_SIGN,net.minecraft.world.level.block.Blocks.OAK_WALL_HANGING_SIGN)){
+      var visited=new HashSet<String>();
+      for(var state:block.getStateDefinition().getPossibleStates()){
+        var orientation=state.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.ROTATION_16)?state.getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.ROTATION_16).toString():state.getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.HORIZONTAL_FACING).toString();
+        if(!visited.add(orientation))continue;
+        var sign=(SignBlockEntity)((net.minecraft.world.level.block.EntityBlock)block).newBlockEntity(BlockPos.ZERO,state);
+        for(var offset:new double[][]{{0.5,3.5},{3.5,3.5},{3.5,0.5},{3.5,-2.5},{0.5,-2.5},{-2.5,-2.5},{-2.5,0.5},{-2.5,3.5}}){
+          player.setPos(offset[0],0.0,offset[1]);
+          System.out.println("sign-facing\t"+net.minecraft.world.level.block.Block.BLOCK_STATE_REGISTRY.getId(state)+"\t"+bits(offset[0])+"\t"+bits(offset[1])+"\t"+(sign.getSlotPlayerIsFacing(player)==SignTextSlot.FRONT));
+        }
+      }
+    }
+  }
   static void tickerPhases(RegistryAccess r){
     var level=new BlockEntityFixture(r);var events=new ArrayList<String>();
     class Ticker implements TickingBlockEntity {
