@@ -97,7 +97,10 @@ fn affected(entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
 }
 pub fn is_on_fire(entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
     let base = level.entity::<EntityData>(entity)?;
-    Ok(!base.entity_type.data().fire_immune && base.remaining_fire_ticks > 0)
+    Ok(
+        !level.entity_behavior(entity)?.fire_immune(entity, level)?
+            && base.remaining_fire_ticks > 0,
+    )
 }
 pub fn ignite_for_ticks(
     entity: EntityRef,

@@ -384,16 +384,13 @@ impl EntityPredicate {
                     matches
                 }
                 EntitySubPredicate::Equipment(tests) => {
-                    let Some(items) = facts.entity_equipment(entity)? else {
+                    if !facts.entity_has_equipment(entity)? {
                         return Ok(false);
-                    };
+                    }
                     let mut matched = true;
                     for (slot, test) in tests {
-                        let stack = items
-                            .iter()
-                            .find(|(s, _)| s == slot)
-                            .map(|(_, stack)| stack)
-                            .cloned()
+                        let stack = facts
+                            .entity_equipment_slot(entity, *slot)?
                             .unwrap_or_default();
                         if !test.matches(&stack, facts)? {
                             matched = false;

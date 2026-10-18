@@ -266,6 +266,40 @@ pub fn player_touch(
 
 pub struct ItemEntityBehavior;
 impl Entity for ItemEntityBehavior {
+    /// Port of ItemEntity#fireImmune and ItemStack#canBeHurtBy(inFire).
+    fn fire_immune(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
+        use ferraloom_protocol::{
+            codec::HolderSet,
+            component::{ComponentTypeId, DataComponent},
+        };
+        let item = level.entity::<ItemEntity>(entity)?;
+        let source = level.damage_sources().in_fire();
+        let resistant = match item
+            .item()
+            .component(ComponentTypeId::DAMAGE_RESISTANT)
+            .expect("canonical item components")
+        {
+            Some(DataComponent::DamageResistant(types)) => match &types.0 {
+                HolderSet::Direct(ids) => {
+                    let source_name = source.type_holder().name().to_string();
+                    ids.iter().any(|id| id.as_str() == source_name)
+                }
+                HolderSet::Named(name) => {
+                    let name =
+                        ferraloom_data::datapack::Identifier::new(name.namespace(), name.path())
+                            .map_err(|_| LevelError::MissingDamageTypeTag)?;
+                    let tags = level.damage_types().tags();
+                    // Registry-aware decoder 5a will reject an unbound named set before this query.
+                    let tag = tags
+                        .resolve_name(&name)
+                        .ok_or(LevelError::MissingDamageTypeTag)?;
+                    tags.contains(tag, source.type_holder().id())
+                }
+            },
+            _ => false,
+        };
+        Ok(resistant || item.parent.entity_type.data().fire_immune)
+    }
     fn name(
         &self,
         entity: EntityRef,

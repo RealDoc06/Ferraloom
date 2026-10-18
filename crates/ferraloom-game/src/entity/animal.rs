@@ -69,6 +69,14 @@ impl Cow {
 /// Shared Cow dispatcher for the foundation's Entity/LivingEntity primitives.
 pub struct CowBehavior;
 impl Entity for CowBehavior {
+    /// Port of AgeableMob#isBaby; AbstractCow permits baby ages.
+    fn is_baby(
+        &self,
+        entity: super::EntityRef,
+        level: &crate::level::Level,
+    ) -> Result<bool, crate::level::LevelError> {
+        Ok(level.entity::<Cow>(entity)?.parent.parent.parent.age < 0)
+    }
     fn can_freeze(
         &self,
         entity: super::EntityRef,

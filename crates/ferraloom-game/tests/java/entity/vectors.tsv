@@ -391,6 +391,120 @@ xp-nbt	normal	17	3f400000	777	123
 xp-nbt	negative	-5	0	-9	-20
 xp-nbt	wrong	0	0	0	0
 xp-nbt	nan	0	7fc00000	0	0
+entity-equipment-fact	player	head	1	minecraft:leather_boots	true
+entity-equipment-fact	player	head	0	minecraft:air	false
+entity-equipment-fact	player	head	-1	minecraft:air	false
+entity-equipment-fact	player	chest	1	minecraft:leather_boots	true
+entity-equipment-fact	player	chest	0	minecraft:air	false
+entity-equipment-fact	player	chest	-1	minecraft:air	false
+entity-equipment-fact	player	legs	1	minecraft:leather_boots	true
+entity-equipment-fact	player	legs	0	minecraft:air	false
+entity-equipment-fact	player	legs	-1	minecraft:air	false
+entity-equipment-fact	player	feet	1	minecraft:leather_boots	true
+entity-equipment-fact	player	feet	0	minecraft:air	false
+entity-equipment-fact	player	feet	-1	minecraft:air	false
+entity-equipment-fact	player	body	1	minecraft:leather_boots	true
+entity-equipment-fact	player	body	0	minecraft:air	false
+entity-equipment-fact	player	body	-1	minecraft:air	false
+entity-equipment-fact	player	mainhand	1	minecraft:leather_boots	true
+entity-equipment-fact	player	mainhand	0	minecraft:air	false
+entity-equipment-fact	player	mainhand	-1	minecraft:air	false
+entity-equipment-fact	player	offhand	1	minecraft:leather_boots	true
+entity-equipment-fact	player	offhand	0	minecraft:air	false
+entity-equipment-fact	player	offhand	-1	minecraft:air	false
+entity-equipment-fact	cow	head	1	minecraft:leather_boots	true
+entity-equipment-fact	cow	head	0	minecraft:air	false
+entity-equipment-fact	cow	head	-1	minecraft:air	false
+entity-equipment-fact	cow	chest	1	minecraft:leather_boots	true
+entity-equipment-fact	cow	chest	0	minecraft:air	false
+entity-equipment-fact	cow	chest	-1	minecraft:air	false
+entity-equipment-fact	cow	legs	1	minecraft:leather_boots	true
+entity-equipment-fact	cow	legs	0	minecraft:air	false
+entity-equipment-fact	cow	legs	-1	minecraft:air	false
+entity-equipment-fact	cow	feet	1	minecraft:leather_boots	true
+entity-equipment-fact	cow	feet	0	minecraft:air	false
+entity-equipment-fact	cow	feet	-1	minecraft:air	false
+entity-equipment-fact	cow	body	1	minecraft:leather_boots	true
+entity-equipment-fact	cow	body	0	minecraft:air	false
+entity-equipment-fact	cow	body	-1	minecraft:air	false
+entity-equipment-fact	cow	mainhand	1	minecraft:leather_boots	true
+entity-equipment-fact	cow	mainhand	0	minecraft:air	false
+entity-equipment-fact	cow	mainhand	-1	minecraft:air	false
+entity-equipment-fact	cow	offhand	1	minecraft:leather_boots	true
+entity-equipment-fact	cow	offhand	0	minecraft:air	false
+entity-equipment-fact	cow	offhand	-1	minecraft:air	false
+entity-equipment-fact	tnt	head	1	minecraft:air	false
+entity-equipment-fact	tnt	head	0	minecraft:air	false
+entity-equipment-fact	tnt	head	-1	minecraft:air	false
+entity-equipment-fact	tnt	chest	1	minecraft:air	false
+entity-equipment-fact	tnt	chest	0	minecraft:air	false
+entity-equipment-fact	tnt	chest	-1	minecraft:air	false
+entity-equipment-fact	tnt	legs	1	minecraft:air	false
+entity-equipment-fact	tnt	legs	0	minecraft:air	false
+entity-equipment-fact	tnt	legs	-1	minecraft:air	false
+entity-equipment-fact	tnt	feet	1	minecraft:air	false
+entity-equipment-fact	tnt	feet	0	minecraft:air	false
+entity-equipment-fact	tnt	feet	-1	minecraft:air	false
+entity-equipment-fact	tnt	body	1	minecraft:air	false
+entity-equipment-fact	tnt	body	0	minecraft:air	false
+entity-equipment-fact	tnt	body	-1	minecraft:air	false
+entity-equipment-fact	tnt	mainhand	1	minecraft:air	false
+entity-equipment-fact	tnt	mainhand	0	minecraft:air	false
+entity-equipment-fact	tnt	mainhand	-1	minecraft:air	false
+entity-equipment-fact	tnt	offhand	1	minecraft:air	false
+entity-equipment-fact	tnt	offhand	0	minecraft:air	false
+entity-equipment-fact	tnt	offhand	-1	minecraft:air	false
+entity-equipment-order	-2	true	-
+entity-equipment-order	-1	true	head,chest,legs,feet,body,mainhand,offhand
+entity-equipment-order	0	false	head
+entity-equipment-order	1	false	head,chest
+entity-equipment-order	2	false	head,chest,legs
+entity-equipment-order	3	false	head,chest,legs,feet
+entity-equipment-order	4	false	head,chest,legs,feet,body
+entity-equipment-order	5	false	head,chest,legs,feet,body,mainhand
+entity-equipment-order	6	false	head,chest,legs,feet,body,mainhand,offhand
+entity-position-fact	player	-1	4050000000000000	true	8,63,8	8,63,8	8,63,8	8,0,8	false	false
+entity-position-fact	player	-1	4050333333333333	false	8,64,8	8,64,8	8,64,8	8,0,8	false	false
+entity-position-fact	player	1	4050000000000000	true	7,63,9	7,63,9	7,63,9	7,63,9	true	true
+entity-position-fact	player	1	4050333333333333	false	7,63,9	7,64,9	7,64,9	7,63,9	false	false
+entity-position-fact	player	8666	4050000000000000	true	7,63,9	7,63,9	7,63,9	7,63,9	true	true
+entity-position-fact	player	8666	4050333333333333	false	7,63,9	7,63,9	7,64,9	7,63,9	false	false
+entity-position-fact	player	11726	4050000000000000	true	7,63,9	7,63,9	7,63,9	7,63,9	true	true
+entity-position-fact	player	11726	4050333333333333	false	7,63,9	7,63,9	7,63,9	7,63,9	false	true
+entity-position-fact	player	10387	4050000000000000	true	7,63,9	7,63,9	7,63,9	7,63,9	true	true
+entity-position-fact	player	10387	4050333333333333	false	7,63,9	7,63,9	7,63,9	7,63,9	false	true
+entity-position-fact	tnt	-1	4050000000000000	true	8,63,8	8,63,8	8,63,8	8,0,8	false	false
+entity-position-fact	tnt	-1	4050333333333333	false	8,64,8	8,64,8	8,64,8	8,0,8	false	false
+entity-position-fact	tnt	1	4050000000000000	true	7,63,9	7,63,9	7,63,9	7,63,9	true	true
+entity-position-fact	tnt	1	4050333333333333	false	7,63,9	7,64,9	7,64,9	7,63,9	false	false
+entity-position-fact	tnt	8666	4050000000000000	true	7,63,9	7,63,9	7,63,9	7,63,9	true	true
+entity-position-fact	tnt	8666	4050333333333333	false	7,63,9	7,63,9	7,64,9	7,63,9	false	false
+entity-position-fact	tnt	11726	4050000000000000	true	7,63,9	7,63,9	7,63,9	7,63,9	true	true
+entity-position-fact	tnt	11726	4050333333333333	false	7,63,9	7,63,9	7,63,9	7,63,9	false	true
+entity-position-fact	tnt	10387	4050000000000000	true	7,63,9	7,63,9	7,63,9	7,63,9	true	true
+entity-position-fact	tnt	10387	4050333333333333	false	7,63,9	7,63,9	7,63,9	7,63,9	false	true
+entity-position-fact	orb	-1	4050000000000000	true	8,63,8	8,63,8	8,63,8	8,0,8	false	false
+entity-position-fact	orb	-1	4050333333333333	false	8,64,8	8,64,8	8,63,8	8,0,8	false	false
+entity-position-fact	orb	1	4050000000000000	true	7,63,9	7,63,9	7,63,9	7,63,9	true	true
+entity-position-fact	orb	1	4050333333333333	false	7,63,9	7,64,9	7,63,9	7,63,9	false	true
+entity-position-fact	orb	8666	4050000000000000	true	7,63,9	7,63,9	7,63,9	7,63,9	true	true
+entity-position-fact	orb	8666	4050333333333333	false	7,63,9	7,63,9	7,63,9	7,63,9	false	true
+entity-position-fact	orb	11726	4050000000000000	true	7,63,9	7,63,9	7,63,9	7,63,9	true	true
+entity-position-fact	orb	11726	4050333333333333	false	7,63,9	7,63,9	7,63,9	7,63,9	false	true
+entity-position-fact	orb	10387	4050000000000000	true	7,63,9	7,63,9	7,63,9	7,63,9	true	true
+entity-position-fact	orb	10387	4050333333333333	false	7,63,9	7,63,9	7,63,9	7,63,9	false	true
+entity-flags-fact	base	true,false,true,true,true,false,false,false,true,false	true
+entity-flags-fact	player-flying	true,true,true,true,false,true,false,true,true,false	false
+entity-flags-fact	player-glide	true,true,true,true,true,true,false,true,true,true	false
+entity-flags-fact	cow-baby	true,true,true,true,true,false,true,true,true,false	false
+entity-flags-fact	cow-glide	true,true,true,true,true,true,false,true,true,true	false
+entity-flags-fact	tnt-glide	true,false,true,true,true,false,false,false,true,false	true
+entity-flags-fact	item-stone	true,true,true,true,true,false,false,false,true,false	false
+entity-flags-fact	item-netherite	true,false,true,true,true,false,false,false,true,false	true
+entity-flags-fact	item-zero	true,true,true,true,true,false,false,false,true,false	false
+entity-flags-fact	item-negative	true,true,true,true,true,false,false,false,true,false	false
+entity-flags-fact	item-direct	true,false,true,true,true,false,false,false,true,false	true
+entity-flags-fact	item-other	true,true,true,true,true,false,false,false,true,false	false
 entity-nbt	player-empty	false	true	{Air:300s,Fire:0s,Health:20.0f,Inventory:[],Invulnerable:0b,Motion:[0.0d,0.0d,0.0d],OnGround:0b,PortalCooldown:0,Pos:[1.0d,64.0d,2.0d],Rotation:[0.0f,0.0f],SelectedItemSlot:0,UUID:[I;0,0,0,1],abilities:{flySpeed:0.05f,flying:0b,instabuild:0b,invulnerable:0b,mayBuild:1b,mayfly:0b,walkSpeed:0.1f},fall_distance:0.0d}
 entity-nbt	player-selected	false	true	{Air:300s,Fire:0s,Health:20.0f,Inventory:[{Slot:0b,count:3,id:"minecraft:stone"}],Invulnerable:0b,Motion:[0.0d,0.0d,0.0d],OnGround:0b,PortalCooldown:0,Pos:[1.0d,64.0d,2.0d],Rotation:[0.0f,0.0f],SelectedItem:{count:3,id:"minecraft:stone"},SelectedItemSlot:0,UUID:[I;0,0,0,1],abilities:{flySpeed:0.05f,flying:0b,instabuild:0b,invulnerable:0b,mayBuild:1b,mayfly:0b,walkSpeed:0.1f},fall_distance:0.0d}
 entity-nbt	player-zero	false	true	{Air:300s,Fire:0s,Health:20.0f,Inventory:[],Invulnerable:0b,Motion:[0.0d,0.0d,0.0d],OnGround:0b,PortalCooldown:0,Pos:[1.0d,64.0d,2.0d],Rotation:[0.0f,0.0f],SelectedItemSlot:0,UUID:[I;0,0,0,1],abilities:{flySpeed:0.05f,flying:0b,instabuild:0b,invulnerable:0b,mayBuild:1b,mayfly:0b,walkSpeed:0.1f},fall_distance:0.0d}

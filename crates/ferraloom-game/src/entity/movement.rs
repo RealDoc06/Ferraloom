@@ -107,7 +107,7 @@ pub fn get_on_pos(entity: EntityRef, offset: f32, level: &Level) -> Result<Block
     let base = level.entity::<EntityData>(entity)?;
     let pos = base.position;
     if let Some(support) = base.supporting_block_pos {
-        if offset <= 1e-5_f32 {
+        if offset <= 1e-5_f32 || offset.is_nan() {
             return Ok(support);
         }
         let state = level.get_block_state(support)?;

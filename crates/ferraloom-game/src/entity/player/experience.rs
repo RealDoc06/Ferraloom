@@ -128,10 +128,7 @@ pub fn give_experience_points(
 }
 
 /// Port of ServerPlayer#doTick's SetExperience slot, before LOCATION criteria.
-pub fn send_experience_update(
-    player: EntityRef,
-    level: &mut Level,
-) -> Result<(), LevelError> {
+pub fn send_experience_update(player: EntityRef, level: &mut Level) -> Result<(), LevelError> {
     let state = level.entity_mut::<ServerPlayer>(player)?;
     if state.total_experience == state.last_sent_experience {
         return Ok(());

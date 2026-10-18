@@ -616,6 +616,22 @@ fn jump_from_ground(entity: crate::entity::EntityRef, level: &mut Level) -> Resu
 }
 pub struct PlayerBehavior;
 impl crate::entity::Entity for PlayerBehavior {
+    /// Port of PlayerEquipment#get's selected main-hand projection.
+    fn item_by_slot<'level>(
+        &self,
+        entity: crate::entity::EntityRef,
+        slot: ferraloom_protocol::component::EquipmentSlot,
+        level: &'level Level,
+    ) -> Result<Option<&'level ferraloom_protocol::component::ItemStack>, LevelError> {
+        let player = level.entity::<ServerPlayer>(entity)?;
+        Ok(Some(
+            if slot == ferraloom_protocol::component::EquipmentSlot::Mainhand {
+                player.get_main_hand_item()
+            } else {
+                player.equipment.get(slot)
+            },
+        ))
+    }
     fn can_freeze(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
         super::living::freezing::can_freeze(self, entity, level)
     }

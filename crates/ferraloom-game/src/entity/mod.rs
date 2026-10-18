@@ -322,6 +322,37 @@ pub trait Entity: Sync {
     fn is_alive(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
         Ok(!level.entity::<EntityData>(entity)?.removed)
     }
+    /// Port of LivingEntity#getItemBySlot; None identifies a nonliving entity.
+    fn item_by_slot<'level>(
+        &self,
+        entity: EntityRef,
+        slot: ferraloom_protocol::component::EquipmentSlot,
+        level: &'level Level,
+    ) -> Result<Option<&'level ferraloom_protocol::component::ItemStack>, LevelError> {
+        Ok(level
+            .entity_state(entity)?
+            .as_living()
+            .map(|living| living.equipment.get(slot)))
+    }
+    /// Port of LivingEntity#isBaby; ageable entities override this read.
+    fn is_baby(&self, _entity: EntityRef, _level: &Level) -> Result<bool, LevelError> {
+        Ok(false)
+    }
+    /// Port of Entity#fireImmune; ItemEntity additionally queries its stack.
+    fn fire_immune(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
+        Ok(level
+            .entity::<EntityData>(entity)?
+            .entity_type
+            .data()
+            .fire_immune)
+    }
+    fn on_pos(
+        &self,
+        entity: EntityRef,
+        level: &Level,
+    ) -> Result<ferraloom_util::BlockPos, LevelError> {
+        movement::get_on_pos(entity, 1.0e-5_f32, level)
+    }
     fn is_spectator(&self, _entity: EntityRef, _level: &Level) -> Result<bool, LevelError> {
         Ok(false)
     }
@@ -843,5 +874,7 @@ pub fn vanilla_behavior(kind: EntityType) -> Option<&'static dyn Entity> {
     }
 }
 
+#[cfg(test)]
+mod predicate_facts;
 #[cfg(test)]
 mod tests;
