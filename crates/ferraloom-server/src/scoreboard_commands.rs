@@ -169,6 +169,12 @@ impl MinecraftServer {
         scoreboard::resolve_components(command, self).map_err(|error| match error {
             ResolutionError::Syntax(error) => error,
             ResolutionError::EntityData(error) => scoreboard_entity_error(error),
+            ResolutionError::BlockData(error) => {
+                exceptions::error("ferraloom.scoreboard.block_read", &[format!("{error:?}")])
+            }
+            ResolutionError::Serialization(error) => {
+                exceptions::error("ferraloom.component.serialization", &[error.to_string()])
+            }
             ResolutionError::Unsupported(kind) => {
                 exceptions::error("ferraloom.component.unsupported", &[format!("{kind:?}")])
             }

@@ -168,7 +168,7 @@ fn missing_live_score_service_remains_explicitly_unsupported() {
 #[test]
 fn required_selector_name_failure_retains_the_level_error() {
     let failure = crate::level::LevelError::MissingEntity(EntityRef(99));
-    let syntax = crate::commands::arguments::selectors::selector_read_error(failure);
+    let syntax = crate::commands::arguments::selectors::selector_read_error(failure.clone());
     assert!(
         matches!(ResolutionError::from(syntax), ResolutionError::EntityData(error) if error == failure)
     );
