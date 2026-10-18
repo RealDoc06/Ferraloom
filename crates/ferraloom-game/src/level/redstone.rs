@@ -283,6 +283,10 @@ impl Level {
             updater.max_chained_updates >= 0 && updater.count >= updater.max_chained_updates;
         if excess && updater.count == updater.max_chained_updates {
             updater.first_skipped = Some(pos);
+            eprintln!(
+                "Too many chained neighbor updates. Skipping the rest. First skipped position: {}, {}, {}",
+                pos.x, pos.y, pos.z
+            );
         }
         updater.count = updater.count.wrapping_add(1);
         if !excess {
@@ -458,5 +462,64 @@ impl Level {
             )?;
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ferraloom_util::random::{LegacyRandomSource, Random};
+
+    #[test]
+    fn orientation_indices_transforms_and_initial_random_draw_match_vanilla() {
+        static BEHAVIORS: crate::Behaviors = crate::Behaviors::EMPTY;
+        for line in include_str!("../../tests/java/level/orientation.tsv").lines() {
+            let (case, expected) = line.split_once('\t').unwrap();
+            if let Some(index) = case.strip_prefix("orientation:") {
+                let index = index.parse::<u8>().unwrap();
+                let orientation = Orientation::from_index(index).unwrap();
+                assert_eq!(orientation.index(), index);
+                let indices = |transform: fn(Orientation, Direction) -> Orientation| {
+                    Direction::VALUES
+                        .map(|direction| transform(orientation, direction).index().to_string())
+                        .join(",")
+                };
+                assert_eq!(
+                    format!(
+                        "{}:{}:{}|{}|{}",
+                        orientation.up() as u8,
+                        orientation.front() as u8,
+                        u8::from(orientation.side_bias() == SideBias::Right),
+                        indices(Orientation::with_front),
+                        indices(Orientation::with_up)
+                    ),
+                    expected,
+                    "{case}"
+                );
+            } else {
+                let (experiments, front) = case
+                    .strip_prefix("initial-orientation:")
+                    .unwrap()
+                    .split_once(':')
+                    .unwrap();
+                let front = front.parse::<i32>().unwrap();
+                let front = if front < 0 {
+                    None
+                } else {
+                    Some(Direction::VALUES[front as usize])
+                };
+                let mut level = Level::new(super::super::Region::new(&BEHAVIORS));
+                level.set_random_streams(Random::Legacy(LegacyRandomSource::new(0)), 0);
+                level.rules_mut().redstone_experiments = experiments.parse().unwrap();
+                let orientation = level
+                    .initial_orientation(front)
+                    .map_or(-1, |orientation| i32::from(orientation.index()));
+                assert_eq!(
+                    format!("{orientation}:{}", level.random().next_int()),
+                    expected,
+                    "{case}"
+                );
+            }
+        }
     }
 }
