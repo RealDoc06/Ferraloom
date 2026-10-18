@@ -588,7 +588,7 @@ fn pick_result_preserves_null_and_cow_spawn_egg() {
     let mut level = level(false);
     let cow = EntityRef(1);
     level
-        .add_entity(cow, EntityState::Cow(Box::new(animal::Cow::default())))
+        .add_entity(cow, EntityState::Cow(Box::default()))
         .unwrap();
     let result = level
         .entity_behavior(cow)

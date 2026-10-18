@@ -777,10 +777,7 @@ mod tests {
             .add_entity(EntityRef(1), EntityState::Player(Box::new(player)))
             .unwrap();
         level
-            .add_entity(
-                EntityRef(2),
-                EntityState::Cow(Box::new(crate::entity::animal::Cow::default())),
-            )
+            .add_entity(EntityRef(2), EntityState::Cow(Box::default()))
             .unwrap();
         assert_eq!(
             level.entity::<EntityData>(EntityRef(2)).unwrap().network_id,
@@ -793,14 +790,14 @@ mod tests {
 #[cfg(test)]
 mod removal_tests {
     use super::*;
-    use crate::{Behaviors, entity::animal::Cow, level::Region};
+    use crate::{Behaviors, level::Region};
     #[test]
     fn removal_hides_indexes_before_canonical_retirement() {
         static BEHAVIORS: Behaviors = Behaviors::EMPTY;
         let mut level = Level::new(Region::new(&BEHAVIORS));
         let id = EntityRef(1);
         level
-            .add_entity(id, EntityState::Cow(Box::new(Cow::default())))
+            .add_entity(id, EntityState::Cow(Box::default()))
             .unwrap();
         let base = level.entity::<EntityData>(id).unwrap();
         let (uuid, network, bounds) = (base.uuid, base.network_id, base.bounding_box);
@@ -828,7 +825,7 @@ mod removal_tests {
 #[cfg(test)]
 mod identity_tests {
     use super::*;
-    use crate::{Behaviors, entity::animal::Cow, level::Region};
+    use crate::{Behaviors, level::Region};
     #[test]
     fn entity_refs_observe_existing_handles_and_never_reuse_retired_ids() {
         static BEHAVIORS: Behaviors = Behaviors::EMPTY;
@@ -836,7 +833,7 @@ mod identity_tests {
         assert_eq!(level.next_entity_ref(), EntityRef(1));
         let existing = EntityRef(40);
         level
-            .add_entity(existing, EntityState::Cow(Box::new(Cow::default())))
+            .add_entity(existing, EntityState::Cow(Box::default()))
             .unwrap();
         level.remove_entity(existing).unwrap();
         level.finish_entity_management();
@@ -863,7 +860,7 @@ mod visibility_tests {
         let pos = ChunkPos::new(0, 0);
         for n in 1..=2 {
             level
-                .add_entity(EntityRef(n), EntityState::Cow(Box::new(Cow::default())))
+                .add_entity(EntityRef(n), EntityState::Cow(Box::default()))
                 .unwrap();
         }
         let player = EntityRef(3);
@@ -933,7 +930,7 @@ mod visibility_tests {
             .unwrap();
         let id = EntityRef(1);
         level
-            .add_entity(id, EntityState::Cow(Box::new(Cow::default())))
+            .add_entity(id, EntityState::Cow(Box::default()))
             .unwrap();
         level
             .set_entity_pos(id, Vec3::new(16.5, 64.0, 0.5))
