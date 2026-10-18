@@ -27,7 +27,7 @@ pub struct ExperienceOrb {
     pub following_player: Option<EntityRef>,
 }
 impl ExperienceOrb {
-    fn with_parent(mut parent: EntityData) -> Self {
+    pub(crate) fn with_parent(mut parent: EntityData) -> Self {
         parent.entity_data.define(VALUE, VarInt(0));
         Self {
             parent,

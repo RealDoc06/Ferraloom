@@ -36,7 +36,7 @@ pub enum FallingBlockLoadError {
     Level(LevelError),
 }
 impl FallingBlockEntity {
-    fn with_parent(mut parent: EntityData) -> Self {
+    pub(crate) fn with_parent(mut parent: EntityData) -> Self {
         parent.entity_data.define(START_POS, BlockPos::ZERO);
         Self {
             parent,

@@ -21,6 +21,12 @@ pub struct Cow {
 
 impl Default for Cow {
     fn default() -> Self {
+        Self::with_parent(EntityData::default())
+    }
+}
+
+impl Cow {
+    pub(crate) fn with_parent(parent: EntityData) -> Self {
         Self {
             parent: AbstractCow {
                 parent: Animal {
@@ -29,7 +35,7 @@ impl Default for Cow {
                             parent: Mob {
                                 parent: LivingEntity {
                                     equipment: Default::default(),
-                                    parent: EntityData::default(),
+                                    parent,
                                     // AbstractCow#createAttributes, not a guessed mob default.
                                     health: 10.0,
                                     last_hurt: 0.0,

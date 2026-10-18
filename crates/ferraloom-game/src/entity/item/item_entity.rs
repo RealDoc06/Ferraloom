@@ -31,7 +31,7 @@ pub struct ItemEntity {
     pub bob_offs: f32,
 }
 impl ItemEntity {
-    fn with_parent(mut parent: EntityData) -> Self {
+    pub(crate) fn with_parent(mut parent: EntityData) -> Self {
         parent.entity_data.define(ITEM, ItemStack::default());
         let bob_offs = parent.random.next_float() * std::f32::consts::PI * 2.0;
         parent.yaw = parent.random.next_float() * 360.0;

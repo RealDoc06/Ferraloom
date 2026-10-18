@@ -9,6 +9,12 @@ use ferraloom_util::{
 use super::{Level, LevelError};
 use crate::entity::{EntityData, EntityRef, EntityState, RemovalReason};
 
+mod persistent;
+pub use persistent::{
+    ChunkLoadStatus, EntityLoadRequestId, EntityStorageError, EntityStorageRequest,
+    PersistentEntitySectionManager,
+};
+
 pub(crate) fn new_entity_random() -> ferraloom_util::random::LegacyRandomSource {
     let ferraloom_util::random::Random::Legacy(random) = super::random::new_level_random() else {
         unreachable!("RandomSource.create uses LegacyRandomSource")
@@ -92,6 +98,9 @@ pub struct EntitySection {
 #[derive(Default)]
 pub struct EntitySectionStorage {
     sections: BTreeMap<i64, EntitySection>,
+    // The AVL order serves spatial queries; the original open-map key order
+    // independently determines the save-chunk set's insertion history.
+    section_keys: Long2ObjectOpenHashMap<()>,
     membership: HashMap<EntityRef, i64>,
 }
 impl EntitySectionStorage {
@@ -101,6 +110,7 @@ impl EntitySectionStorage {
             return;
         }
         self.remove(entity);
+        self.section_keys.insert(key, ());
         self.sections
             .entry(key)
             .or_insert_with(|| EntitySection {
@@ -118,6 +128,7 @@ impl EntitySectionStorage {
             section.entities.retain(|id| *id != entity);
             if section.entities.is_empty() {
                 self.sections.remove(&key);
+                self.section_keys.remove(&key);
             }
         }
     }
@@ -177,6 +188,7 @@ impl EntityIdAllocator {
 /// Canonical data is never removed while a callback frame is active.
 #[derive(Default)]
 pub struct EntityStorage {
+    persistent: PersistentEntitySectionManager,
     known_uuids: HashSet<Uuid>,
     chunk_visibility: Long2ObjectOpenHashMap<Visibility>,
     management_events: Vec<EntityManagementEvent>,
@@ -312,6 +324,14 @@ impl Level {
         self.region_mut().entities.border = border;
     }
     pub fn add_entity(&mut self, entity: EntityRef, state: EntityState) -> Result<(), LevelError> {
+        self.add_entity_with_origin(entity, state, false)
+    }
+    fn add_entity_with_origin(
+        &mut self,
+        entity: EntityRef,
+        state: EntityState,
+        loaded: bool,
+    ) -> Result<(), LevelError> {
         let region = self.region_mut();
         let network_id = region.entities.add(entity, state)?;
         let base = region.entities.get(&entity).unwrap().as_entity();
@@ -320,10 +340,12 @@ impl Level {
         } else {
             region.entities.visibility(base.chunk_position)
         };
-        region
-            .entities
-            .management_events
-            .push(EntityManagementEvent::Created(entity));
+        if !loaded {
+            region
+                .entities
+                .management_events
+                .push(EntityManagementEvent::Created(entity));
+        }
         if status.is_accessible() {
             region
                 .entities
@@ -410,8 +432,11 @@ impl Level {
         let storage = &mut self.region_mut().entities;
         if status == Visibility::Hidden {
             storage.chunk_visibility.remove(&pos.pack());
+            storage.persistent.chunks_to_unload.insert(pos.pack());
         } else {
             storage.chunk_visibility.insert(pos.pack(), status);
+            storage.persistent.chunks_to_unload.remove(&pos.pack());
+            storage.persistent.ensure_chunk_queued_for_load(pos);
         }
         let sections: Vec<_> = storage
             .sections
