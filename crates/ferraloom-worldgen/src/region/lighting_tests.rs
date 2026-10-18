@@ -13,7 +13,18 @@ use std::{
 };
 
 struct Behavior;
-impl WorldgenBlockBehavior for Behavior {}
+impl WorldgenBlockBehavior for Behavior {
+    fn post_process_pos(
+        &self,
+        state: BlockState,
+        _region: &WorldGenRegion<'_>,
+        position: [i32; 3],
+    ) -> Result<Option<[i32; 3]>, Error> {
+        Ok(state
+            .post_process_y_offset()
+            .map(|offset| [position[0], position[1] + offset, position[2]]))
+    }
+}
 static BEHAVIOR: Behavior = Behavior;
 
 fn fixtures() -> &'static Value {
