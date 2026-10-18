@@ -4,6 +4,7 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 
 | ID | Feature | Vanilla source | Test | Vanilla | Ferraloom |
 |---|---|---|---|---|---|
+| ticking.rules.block-drops | Require the canonical published BLOCK_DROPS value, observing same-phase changes without a default or Warn query fallback | `GameRules.BLOCK_DROPS; Block#popResource; Block#dropResources` | `level::tests::block_drops_requires_the_published_rule_and_observes_each_change` | - | todo |
 | ticking.runtime.worldgen-policy | Integrate owned worldgen skips into the live policy; Strict rejects any unit and Warn counts each skip with one log per unit/behavior pair | `temporary UnportedBehavior policy` | `level::tests::worldgen_skips_share_policy_counters_and_deduplicate_owned_unit_behavior_pairs` | - | todo |
 | ticking.sound.registry-range | Resolve sound broadcast ranges from native optional fixedRange and float volume semantics | `SoundEvent#getRange` | `ferraloom-data: sound_events::tests::sound_ranges_match_registry_facts_and_native_float_boundaries` | - | todo |
 | ticking.sound.native-stream | Draw sound seeds at the call site from vanilla's separate soundSeedGenerator, preserving simulation RNG; capture native range and except-player audiences before later movement | `Level#playSound; ServerLevel#playSeededSound; ClientboundSoundPacket` | `level::emission::tests (22 real Java sound/particle vectors)` | pass | todo |

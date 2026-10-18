@@ -1,4 +1,5 @@
 use super::*;
+
 use crate::{Behaviors, block::BlockBehavior};
 use effects::LevelEffect;
 use ferraloom_util::Direction;
@@ -29,6 +30,25 @@ impl BlockBehavior for Trace {
     }
 }
 static EMPTY: Behaviors = Behaviors::EMPTY;
+#[test]
+fn block_drops_requires_the_published_rule_and_observes_each_change() {
+    let mut level = Level::new(Region::new(&EMPTY));
+    for policy in [
+        crate::block::UnportedBehavior::Strict,
+        crate::block::UnportedBehavior::Warn,
+    ] {
+        level.set_unported_behavior(policy);
+        assert_eq!(
+            level.block_drops_enabled(),
+            Err(LevelError::UnsupportedGameRule("minecraft:block_drops"))
+        );
+    }
+    for enabled in [true, false, true] {
+        level.rules_mut().block_drops = Some(enabled);
+        assert_eq!(level.block_drops_enabled(), Ok(enabled));
+    }
+    assert_eq!(level.unported_behavior_stats().skipped_calls, 0);
+}
 static PLAIN: Behaviors = Behaviors::EMPTY.with_block(Block::STONE, &Trace { nested: false });
 static NESTED: Behaviors = Behaviors::EMPTY.with_block(Block::STONE, &Trace { nested: true });
 #[test]
