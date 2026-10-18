@@ -284,3 +284,177 @@ fn fill<A: PlacementAccess>(
         true,
     ))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::commands::{CommandSourceStack, Commands};
+    use ferraloom_util::Vec3;
+    use std::collections::BTreeMap;
+    #[derive(serde::Deserialize)]
+    struct Vector {
+        command: String,
+        limit: i32,
+        debug: bool,
+        shape: i32,
+        trace: serde_json::Value,
+        blocks: serde_json::Value,
+        feedback: serde_json::Value,
+        value: Option<i32>,
+        error: Option<String>,
+    }
+    #[derive(Default)]
+    struct World {
+        blocks: BTreeMap<(i32, i32, i32), BlockState>,
+        trace: Vec<serde_json::Value>,
+        limit: i32,
+        debug: bool,
+        shape: Option<BlockState>,
+    }
+    fn key(pos: BlockPos) -> (i32, i32, i32) {
+        (pos.x, pos.y, pos.z)
+    }
+    impl World {
+        fn record(
+            &mut self,
+            kind: &str,
+            pos: BlockPos,
+            state: Option<BlockState>,
+            flags: Option<u32>,
+        ) {
+            let mut value = serde_json::json!({"call":kind,"pos":[pos.x,pos.y,pos.z]});
+            if let Some(state) = state {
+                value["state"] = serde_json::json!(state.id());
+            }
+            if let Some(flags) = flags {
+                value["flags"] = serde_json::json!(flags);
+            }
+            self.trace.push(value);
+        }
+    }
+    impl PlacementAccess for World {
+        fn is_debug(&self) -> bool {
+            self.debug
+        }
+        fn max_block_modifications(&self) -> i32 {
+            self.limit
+        }
+        fn has_chunk_at(&self, _pos: BlockPos) -> bool {
+            true
+        }
+        fn in_world_bounds(&self, _pos: BlockPos) -> bool {
+            true
+        }
+        fn block_state(&mut self, pos: BlockPos) -> Result<BlockState, LevelError> {
+            Ok(self
+                .blocks
+                .get(&key(pos))
+                .copied()
+                .unwrap_or(Block::AIR.default_state()))
+        }
+        fn block_entity_data(&mut self, pos: BlockPos) -> Result<Option<Tag>, LevelError> {
+            self.record("nbt", pos, None, None);
+            Ok(None)
+        }
+        fn set_block(
+            &mut self,
+            pos: BlockPos,
+            state: BlockState,
+            flags: u32,
+        ) -> Result<bool, LevelError> {
+            self.record("set", pos, Some(state), Some(flags));
+            let old = self.block_state(pos)?;
+            if state.is_air() {
+                self.blocks.remove(&key(pos));
+            } else {
+                self.blocks.insert(key(pos), state);
+            }
+            Ok(old != state)
+        }
+        fn destroy_block(&mut self, pos: BlockPos, drop: bool) -> Result<bool, LevelError> {
+            assert!(drop);
+            self.record("destroy", pos, None, None);
+            Ok(self.blocks.remove(&key(pos)).is_some())
+        }
+        fn update_from_neighbor_shapes(
+            &mut self,
+            state: BlockState,
+            pos: BlockPos,
+        ) -> Result<BlockState, LevelError> {
+            self.record("shapes", pos, Some(state), None);
+            Ok(self.shape.unwrap_or(state))
+        }
+        fn update_neighbors_on_block_set(
+            &mut self,
+            pos: BlockPos,
+            old: BlockState,
+        ) -> Result<(), LevelError> {
+            self.record("neighbors", pos, Some(old), None);
+            Ok(())
+        }
+        fn load_block_entity_data(
+            &mut self,
+            pos: BlockPos,
+            _tag: &Tag,
+        ) -> Result<bool, LevelError> {
+            self.record("load_nbt", pos, None, None);
+            Ok(false)
+        }
+    }
+    #[test]
+    fn placement_modes_call_order_flags_mutations_and_feedback_match_java() {
+        let vectors: Vec<Vector> =
+            serde_json::from_str(include_str!("vanilla/placement-vectors.json")).unwrap();
+        let commands = Commands::default();
+        let source = CommandSourceStack::server(4, Vec3::ZERO);
+        let mut world = World::default();
+        for vector in vectors {
+            world.trace.clear();
+            world.limit = vector.limit;
+            world.debug = vector.debug;
+            world.shape = u16::try_from(vector.shape)
+                .ok()
+                .and_then(BlockState::from_id);
+            let command = commands.prepare(&vector.command, source.clone()).unwrap();
+            match (run(&command, &mut world), vector.error) {
+                (Err(PlacementError::Syntax(error)), Some(expected)) => {
+                    assert_eq!(error.raw_message.text(), expected, "{}", vector.command)
+                }
+                (Ok(result), None) => {
+                    assert_eq!(Some(result.value), vector.value, "{}", vector.command);
+                    let feedback=result.feedback.into_iter().map(|feedback|serde_json::json!({
+                        "broadcast":feedback.broadcast,
+                        "message":serde_json::from_str::<serde_json::Value>(&feedback.message.to_json().unwrap()).unwrap(),
+                    })).collect::<Vec<_>>();
+                    assert_eq!(
+                        serde_json::json!(feedback),
+                        vector.feedback,
+                        "{}",
+                        vector.command
+                    );
+                }
+                (result, error) => panic!(
+                    "{}: unexpected {result:?}, expected error {error:?}",
+                    vector.command
+                ),
+            }
+            assert_eq!(
+                serde_json::json!(world.trace),
+                vector.trace,
+                "{}",
+                vector.command
+            );
+            let blocks = world
+                .blocks
+                .iter()
+                .map(|((x, y, z), state)| serde_json::json!({"pos":[x,y,z],"state":state.id()}))
+                .collect::<Vec<_>>();
+            assert_eq!(
+                serde_json::json!(blocks),
+                vector.blocks,
+                "{}",
+                vector.command
+            );
+        }
+    }
+}
