@@ -177,6 +177,13 @@ public final class NeighborVectors {
                 analog.trace.clear();analog.updateNeighbourForOutputSignal(center,Blocks.CAKE);
                 System.out.println("analog-neighbors\\t"+String.join(";",analog.trace));
                 var waterlogged=new MutationFixture(r);var pos=new BlockPos(8,0,8);
+                for(var block:List.of(Blocks.AIR,Blocks.STONE,Blocks.WATER,Blocks.SHORT_GRASS))for(int held=0;held<3;held++){
+                  var placementLevel=new MutationFixture(r);var state=block.defaultBlockState();placementLevel.setBlock(pos,state,816,512);
+                  var item=held==0?net.minecraft.world.item.Items.AIR:held==1?block.asItem():net.minecraft.world.item.Items.DIRT;
+                  var stack=new net.minecraft.world.item.ItemStack(item);
+                  var context=new net.minecraft.world.item.context.DirectionalPlaceContext(placementLevel,pos,Direction.DOWN,stack,Direction.UP);
+                  System.out.println("directional-replacement:"+net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(block)+":"+held+"\\t"+state.canBeReplaced(context));
+                }
                 for(var type:net.minecraft.world.level.block.state.properties.SlabType.values())for(var liquid:List.of(net.minecraft.world.level.material.Fluids.WATER.getSource(false),net.minecraft.world.level.material.Fluids.FLOWING_WATER.getFlowing(7,false),net.minecraft.world.level.material.Fluids.LAVA.getSource(false))){
                   var slabLevel=new MutationFixture(r);var slab=Blocks.STONE_SLAB.defaultBlockState().setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.SLAB_TYPE,type);
                   slabLevel.setBlock(pos,slab,816,512);

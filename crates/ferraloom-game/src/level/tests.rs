@@ -1311,3 +1311,64 @@ fn clone_item_query_matches_vanilla_base_and_rejects_unported_overrides() {
     );
     assert_eq!(level.unported_behavior_stats().skipped_calls, 0);
 }
+
+#[test]
+fn directional_replacement_matches_vanilla_and_keeps_required_override_errors() {
+    use crate::block::{BlockMethod, DirectionalPlaceContext, LevelReaderRef, UnportedBehavior};
+    use ferraloom_protocol::component::{DataComponentPatch, ItemStack};
+    for line in include_str!("../../tests/java/level/placement.tsv").lines() {
+        let (case, expected) = line.split_once('\t').unwrap();
+        let (block, held) = case
+            .strip_prefix("directional-replacement:")
+            .unwrap()
+            .rsplit_once(':')
+            .unwrap();
+        let block = Block::from_name(block).unwrap();
+        let item = match held {
+            "0" => ferraloom_data::Item::AIR,
+            "1" => block.as_item(),
+            "2" => ferraloom_data::Item::DIRT,
+            _ => unreachable!(),
+        };
+        let stack = ItemStack::new(item, 1, DataComponentPatch::default());
+        let mut level = empty_level(&EMPTY);
+        let pos = BlockPos::new(8, 0, 8);
+        let state = block.default_state();
+        level.set_block_state(pos, state).unwrap();
+        let context = DirectionalPlaceContext::new(
+            &LevelReaderRef::Server(&level),
+            pos,
+            Direction::Down,
+            &stack,
+            Direction::Up,
+        )
+        .unwrap();
+        assert_eq!(
+            level.can_be_replaced(state, &context).unwrap().to_string(),
+            expected,
+            "{case}"
+        );
+        assert!(level.can_survive(Block::SAND.default_state(), pos).unwrap());
+    }
+    let mut level = empty_level(&EMPTY);
+    level.set_unported_behavior(UnportedBehavior::Warn);
+    let pos = BlockPos::new(8, 0, 8);
+    level
+        .set_block_state(pos, Block::SNOW.default_state())
+        .unwrap();
+    let stack = ItemStack::default();
+    assert!(matches!(
+        DirectionalPlaceContext::new(
+            &LevelReaderRef::Server(&level),
+            pos,
+            Direction::Down,
+            &stack,
+            Direction::Up
+        ),
+        Err(LevelError::UnsupportedBlockMethod(
+            Block::SNOW,
+            BlockMethod::CanBeReplaced
+        ))
+    ));
+    assert_eq!(level.unported_behavior_stats().skipped_calls, 0);
+}

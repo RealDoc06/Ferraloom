@@ -14,11 +14,12 @@ use crate::{
 };
 use anyhow::{Context, Result, bail, ensure};
 use ferraloom_data::{
-    EntityType,
-    datapack::{Pack, ResourceManager},
+    Block, EntityType,
+    datapack::{Pack, ResourceManager, TagSet},
 };
 use ferraloom_game::{
     Behaviors,
+    block::UnportedBehavior,
     entity::{
         EntityRef, EntityState,
         player::{GameType, MovementResult, PlayerBehavior, ServerPlayer, move_player},
@@ -61,6 +62,7 @@ pub struct ServerOptions {
     pub port: Option<u16>,
     pub ip: Option<String>,
     pub console: bool,
+    pub unported_behavior: UnportedBehavior,
 }
 impl ServerOptions {
     pub fn new(root: impl Into<PathBuf>) -> Self {
@@ -72,6 +74,7 @@ impl ServerOptions {
             port: None,
             ip: None,
             console: true,
+            unported_behavior: UnportedBehavior::Strict,
         }
     }
 }
@@ -201,6 +204,13 @@ impl MinecraftServer {
         let game_time = world.level_data.data.get_long_or("Time", 0);
         let mut level = ServerLevel::new(Region::new(&BEHAVIORS), "minecraft:overworld");
         level.game_time = game_time;
+        initialize_live_level(
+            &mut level,
+            &world,
+            &resources,
+            &properties,
+            options.unported_behavior,
+        )?;
         let access = AccessLists::load(&options.root)?;
         let favicon = std::fs::read(options.root.join("server-icon.png")).ok();
         if let Some(icon) = &favicon {
@@ -862,16 +872,12 @@ impl MinecraftServer {
         });
         self.broadcast(initialize.clone());
         c.push(initialize);
-        c.push(cb::Packet::InitializeBorder(cb::InitializeBorder {
-            new_center_x: 0.,
-            new_center_z: 0.,
-            old_size: 59_999_968.,
-            new_size: 59_999_968.,
-            lerp_time: VarLong(0),
-            new_absolute_max_size: VarInt(self.properties.int("max-world-size")),
-            warning_blocks: VarInt(5),
-            warning_time: VarInt(15),
-        }));
+        c.push(cb::Packet::InitializeBorder(
+            self.level
+                .level
+                .entity_world_border()
+                .initialization_packet(),
+        ));
         c.push(self.time_packet());
         c.push(cb::Packet::SetDefaultSpawnPosition(
             cb::SetDefaultSpawnPosition {
@@ -2341,6 +2347,41 @@ impl MinecraftServer {
         );
         Ok(())
     }
+}
+/// Attach the live simulation's datapack and saved collision/weather context
+/// before configuration can finish and a player's movement can be applied.
+fn initialize_live_level(
+    level: &mut ServerLevel,
+    world: &World,
+    resources: &ResourceManager,
+    properties: &ServerProperties,
+    unported_behavior: UnportedBehavior,
+) -> Result<()> {
+    use ferraloom_game::level::{
+        border::{self, WorldBorder},
+        weather::WeatherData,
+    };
+    use ferraloom_storage::SavedDataStorage;
+    level
+        .level
+        .set_block_tags(Arc::new(TagSet::<Block>::load(resources)?));
+    level.level.set_fluid_tags(Arc::new(
+        TagSet::<ferraloom_data::registries::fluid::Id>::load(resources)?,
+    ));
+    level.level.set_game_time(level.game_time);
+    level.level.set_unported_behavior(unported_behavior);
+    let saved = SavedDataStorage::new(world.access.path().join("data"));
+    let mut border = saved
+        .load::<WorldBorder>(border::SAVED_DATA_ID)?
+        .map_or_else(WorldBorder::default, |data| data.value().clone());
+    let _ = border.apply_initial_settings(level.game_time);
+    border.set_absolute_max_size(properties.int("max-world-size"));
+    level.level.set_entity_world_border(border);
+    let weather = saved
+        .load::<WeatherData>("minecraft:weather")?
+        .map_or_else(WeatherData::default, |data| *data.value());
+    level.level.load_weather(weather);
+    Ok(())
 }
 fn game_error(error: LevelError) -> anyhow::Error {
     anyhow::anyhow!("{error:?}")

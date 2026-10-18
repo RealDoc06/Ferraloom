@@ -44,6 +44,7 @@ pub enum BlockMethod {
     TriggerEvent,
     IsCollisionShapeFullBlock,
     CloneItemStack,
+    CanBeReplaced,
 }
 impl BlockMethod {
     pub(crate) const fn vanilla_method(self) -> Option<ferraloom_data::BlockMethod> {
@@ -68,6 +69,7 @@ impl BlockMethod {
             Self::EntityInsideCollisionShape => Vanilla::GetEntityInsideCollisionShape,
             Self::TriggerEvent => Vanilla::TriggerEvent,
             Self::CloneItemStack => Vanilla::GetCloneItemStack,
+            Self::CanBeReplaced => Vanilla::CanBeReplaced,
             Self::CanPlaceLiquid => Vanilla::CanPlaceLiquid,
             Self::PlaceLiquid => Vanilla::PlaceLiquid,
             Self::PickupBlock => Vanilla::PickupBlock,
@@ -89,6 +91,7 @@ impl BlockMethod {
                 | Self::TriggerEvent
                 | Self::IsCollisionShapeFullBlock
                 | Self::CloneItemStack
+                | Self::CanBeReplaced
         )
     }
     pub const fn name(self) -> &'static str {
@@ -119,6 +122,7 @@ impl BlockMethod {
             Self::TriggerEvent => "triggerEvent",
             Self::IsCollisionShapeFullBlock => "isCollisionShapeFullBlock",
             Self::CloneItemStack => "getCloneItemStack",
+            Self::CanBeReplaced => "canBeReplaced(BlockPlaceContext)",
         }
     }
 }

@@ -7,6 +7,8 @@ pub mod dispatch;
 pub mod flags;
 pub mod fluid;
 mod foundational;
+mod placement;
+pub use placement::DirectionalPlaceContext;
 mod shapes;
 pub use shapes::BlockCollisionContext;
 mod unsupported;
@@ -115,6 +117,21 @@ impl LevelAccessRef<'_> {
 /// Port of BlockBehaviour's virtual methods. Defaults are vanilla base behavior;
 /// only classes explicitly registered by dispatch may inherit these defaults.
 pub trait BlockBehavior: Sync {
+    /// Port of BlockBehaviour#canBeReplaced(BlockState, BlockPlaceContext).
+    fn can_be_replaced(
+        &self,
+        state: BlockState,
+        context: &DirectionalPlaceContext<'_>,
+        _level: &LevelReaderRef<'_>,
+    ) -> Result<bool, LevelError> {
+        Ok(state.data().replaceable
+            && (context.item_in_hand().is_empty()
+                || context
+                    .item_in_hand()
+                    .0
+                    .as_ref()
+                    .is_none_or(|stack| stack.item != state.block().as_item())))
+    }
     /// Port of BlockBehaviour#getCloneItemStack's base item constructor. Only
     /// inherited implementations select this default through method dispatch.
     fn get_clone_item_stack(

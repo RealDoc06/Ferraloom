@@ -556,3 +556,12 @@ fn clone_item_ownership_and_block_items_preserve_wall_aliases() {
     assert!(!Block::CHEST.overrides(BlockMethod::GetCloneItemStack));
     assert!(Block::BEEHIVE.overrides(BlockMethod::GetCloneItemStack));
 }
+
+#[test]
+fn placement_replacement_signature_preserves_contextual_overrides() {
+    assert!(!Block::AIR.overrides(BlockMethod::CanBeReplaced));
+    assert!(!Block::STONE.overrides(BlockMethod::CanBeReplaced));
+    assert!(Block::SNOW.overrides(BlockMethod::CanBeReplaced));
+    assert!(Block::STONE_SLAB.overrides(BlockMethod::CanBeReplaced));
+    assert!(Block::SEA_PICKLE.overrides(BlockMethod::CanBeReplaced));
+}
