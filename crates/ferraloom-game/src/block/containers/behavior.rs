@@ -1,18 +1,12 @@
 //! Method-specific registration for the container block family.
-use super::{
-    menu::{self, ContainerMenuProvider},
-    storage::BaseContainerBlockEntity,
-};
+use super::menu;
 use crate::{
     block::{
         BlockBehavior, BlockMethod, InteractionResult, LevelAccessRef, LevelReaderRef, UseContext,
-        entity::BlockEntityType,
     },
-    inventory::MenuKind,
     level::{Level, LevelError},
 };
 use ferraloom_data::{Block, BlockClass, BlockState, properties as p};
-use ferraloom_protocol::chat::Component;
 use ferraloom_util::{BlockPos, Direction, VoxelShape, shapes};
 
 pub struct ContainerBlock;
@@ -42,13 +36,16 @@ pub(crate) fn ported_behavior(
     method: BlockMethod,
 ) -> Option<&'static dyn BlockBehavior> {
     use BlockMethod as M;
-    if block.class() == BlockClass::ShulkerBoxBlock && method == M::AnalogOutputSignal {
+    if block.class() == BlockClass::ShulkerBoxBlock
+        && matches!(method, M::AnalogOutputSignal | M::GetMenuProvider)
+    {
         return Some(&CONTAINER_BLOCK);
     }
     if supported(block)
         && matches!(
             method,
             M::UseWithoutItem
+                | M::GetMenuProvider
                 | M::TriggerEvent
                 | M::AffectNeighborsAfterRemoval
                 | M::AnalogOutputSignal
@@ -69,6 +66,15 @@ pub(crate) fn ported_behavior(
     None
 }
 impl BlockBehavior for ContainerBlock {
+    fn get_menu_provider(
+        &self,
+        state: BlockState,
+        pos: BlockPos,
+        level: &Level,
+    ) -> Result<Option<Box<dyn crate::inventory::MenuProvider>>, LevelError> {
+        Ok(menu::provider(state, pos, level)?
+            .map(|provider| Box::new(provider) as Box<dyn crate::inventory::MenuProvider>))
+    }
     fn use_without_item(
         &self,
         state: BlockState,
@@ -76,46 +82,8 @@ impl BlockBehavior for ContainerBlock {
         context: &UseContext,
         level: &mut Level,
     ) -> Result<InteractionResult, LevelError> {
-        let refs = if chest(state.block()) {
-            menu::combine_chest(state, pos, false, level)?
-        } else {
-            level.block_entity_ref(pos)?.into_iter().collect()
-        };
-        if refs.is_empty() {
+        let Some(provider) = menu::provider(state, pos, level)? else {
             return Ok(InteractionResult::SUCCESS);
-        }
-        let kind = match state.block().block_entity_type().unwrap() {
-            BlockEntityType::CHEST | BlockEntityType::TRAPPED_CHEST | BlockEntityType::BARREL => {
-                MenuKind::Chest {
-                    rows: if refs.len() == 2 { 6 } else { 3 },
-                }
-            }
-            BlockEntityType::FURNACE => MenuKind::Furnace,
-            BlockEntityType::SMOKER => MenuKind::Smoker,
-            BlockEntityType::BLAST_FURNACE => MenuKind::BlastFurnace,
-            BlockEntityType::CRAFTER => MenuKind::Crafter,
-            _ => return Err(LevelError::UnsupportedBlockEntity(state.block())),
-        };
-        let custom = refs.iter().find_map(|&handle| {
-            level
-                .block_entity::<BaseContainerBlockEntity>(handle)
-                .ok()
-                .and_then(|entity| entity.custom_name.clone())
-        });
-        let key = match kind {
-            MenuKind::Chest { rows: 6 } => "container.chestDouble",
-            MenuKind::Chest { .. } if state.block() == Block::BARREL => "container.barrel",
-            MenuKind::Chest { .. } => "container.chest",
-            MenuKind::Furnace => "container.furnace",
-            MenuKind::Smoker => "container.smoker",
-            MenuKind::BlastFurnace => "container.blast_furnace",
-            MenuKind::Crafter => "container.crafter",
-            _ => unreachable!(),
-        };
-        let provider = ContainerMenuProvider {
-            entities: refs,
-            kind,
-            title: custom.unwrap_or_else(|| Component::translatable(key, Vec::new())),
         };
         let packets =
             crate::inventory::open_menu(context.player, &provider, level).map_err(|error| {

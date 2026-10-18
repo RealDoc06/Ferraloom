@@ -335,3 +335,5 @@ One class row per bootstrapped runtime Block class, listing every block id assig
 | blocks.drops.context | Native BLOCK context and named loot sequences; reflected per-method getDrops dispatch, optional canonical block-entity NBT/components | `Block#getDrops; BlockBehaviour#getDrops` | Native loot engine vectors; block runtime integration pending | pass | partial |
 
 | blocks.drops.spawn | Eager native offsets and face velocities, deferred canonical item construction, live BLOCK_DROPS, default pickup delay and ordered dropResources/spawnAfterBreak | `Block#popResource; popResourceFromFace; dropResources` | `eager_pop_random_draws_match_native_when_construction_is_suppressed` (18 Java cases); spawn parity pending | pass | partial |
+
+| blocks.interaction.menu-provider | Reflect exact native getMenuProvider ownership; share live container providers between block use and spectator access | `BlockBehaviour#getMenuProvider; ServerPlayerGameMode#useItemOn` | `block_containers` canonical menu binding tests; spectator integration pending | pass | partial |

@@ -24,6 +24,59 @@ pub struct ContainerMenuProvider {
     pub kind: MenuKind,
     pub title: Component,
 }
+/// Port of the container blocks' getMenuProvider overrides.
+pub fn provider(
+    state: BlockState,
+    pos: BlockPos,
+    level: &Level,
+) -> Result<Option<ContainerMenuProvider>, LevelError> {
+    let refs = if matches!(
+        state.block().block_entity_type(),
+        Some(BlockEntityType::CHEST | BlockEntityType::TRAPPED_CHEST)
+    ) {
+        combine_chest(state, pos, false, level)?
+    } else {
+        level.block_entity_ref(pos)?.into_iter().collect()
+    };
+    if refs.is_empty() {
+        return Ok(None);
+    }
+    let kind = match state.block().block_entity_type().unwrap() {
+        BlockEntityType::CHEST | BlockEntityType::TRAPPED_CHEST | BlockEntityType::BARREL => {
+            MenuKind::Chest {
+                rows: if refs.len() == 2 { 6 } else { 3 },
+            }
+        }
+        BlockEntityType::FURNACE => MenuKind::Furnace,
+        BlockEntityType::SMOKER => MenuKind::Smoker,
+        BlockEntityType::BLAST_FURNACE => MenuKind::BlastFurnace,
+        BlockEntityType::CRAFTER => MenuKind::Crafter,
+        BlockEntityType::SHULKER_BOX => MenuKind::ShulkerBox,
+        _ => return Err(LevelError::UnsupportedBlockEntity(state.block())),
+    };
+    let custom = refs.iter().find_map(|&handle| {
+        level
+            .block_entity::<BaseContainerBlockEntity>(handle)
+            .ok()
+            .and_then(|entity| entity.custom_name.clone())
+    });
+    let key = match kind {
+        MenuKind::Chest { rows: 6 } => "container.chestDouble",
+        MenuKind::Chest { .. } if state.block() == Block::BARREL => "container.barrel",
+        MenuKind::Chest { .. } => "container.chest",
+        MenuKind::Furnace => "container.furnace",
+        MenuKind::Smoker => "container.smoker",
+        MenuKind::BlastFurnace => "container.blast_furnace",
+        MenuKind::Crafter => "container.crafter",
+        MenuKind::ShulkerBox => "container.shulkerBox",
+        _ => unreachable!(),
+    };
+    Ok(Some(ContainerMenuProvider {
+        entities: refs,
+        kind,
+        title: custom.unwrap_or_else(|| Component::translatable(key, Vec::new())),
+    }))
+}
 impl MenuProvider for ContainerMenuProvider {
     fn block_entity_roots(&self) -> &[BlockEntityRef] {
         &self.entities
@@ -40,8 +93,7 @@ impl MenuProvider for ContainerMenuProvider {
         let spectator = level.entity::<ServerPlayer>(player)?.game_mode == GameType::Spectator;
         let hand = level
             .entity::<ServerPlayer>(player)?
-            .inventory
-            .selected_item()
+            .get_main_hand_item()
             .clone();
         for &handle in &self.entities {
             let state = level.block_entity_state(handle)?;
@@ -63,6 +115,8 @@ impl MenuProvider for ContainerMenuProvider {
                     return Ok(None);
                 }
             }
+        }
+        for &handle in &self.entities {
             super::loot::unpack_loot_table(handle, Some(player), level)?;
         }
         let mut menu = AbstractContainerMenu::new(self.kind, id)?;

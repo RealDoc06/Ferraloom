@@ -21,6 +21,7 @@ pub enum UnportedOperation {
 }
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum BlockMethod {
+    GetMenuProvider,
     GetDrops,
     SpawnAfterBreak,
     OnPlace,
@@ -66,6 +67,7 @@ impl BlockMethod {
     pub(crate) const fn vanilla_method(self) -> Option<ferraloom_data::BlockMethod> {
         use ferraloom_data::BlockMethod as Vanilla;
         Some(match self {
+            Self::GetMenuProvider => Vanilla::GetMenuProvider,
             Self::GetDrops => Vanilla::GetDrops,
             Self::SpawnAfterBreak => Vanilla::SpawnAfterBreak,
             Self::OnPlace => Vanilla::OnPlace,
@@ -108,7 +110,8 @@ impl BlockMethod {
     const fn can_skip(self) -> bool {
         !matches!(
             self,
-            Self::GetDrops
+            Self::GetMenuProvider
+                | Self::GetDrops
                 | Self::UseWithoutItem
                 | Self::UseItemOn
                 | Self::CanSurvive
@@ -136,6 +139,7 @@ impl BlockMethod {
     }
     pub const fn name(self) -> &'static str {
         match self {
+            Self::GetMenuProvider => "getMenuProvider",
             Self::GetDrops => "getDrops",
             Self::SpawnAfterBreak => "spawnAfterBreak",
             Self::OnPlace => "onPlace",

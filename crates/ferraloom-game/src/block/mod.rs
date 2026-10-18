@@ -171,6 +171,15 @@ impl<'chunks> LevelAccessRef<'_, 'chunks> {
 /// Port of BlockBehaviour's virtual methods. Defaults are vanilla base behavior;
 /// only classes explicitly registered by dispatch may inherit these defaults.
 pub trait BlockBehavior: Sync {
+    /// Port of BlockBehaviour#getMenuProvider's absent base provider.
+    fn get_menu_provider(
+        &self,
+        _state: BlockState,
+        _pos: BlockPos,
+        _level: &Level,
+    ) -> Result<Option<Box<dyn crate::inventory::MenuProvider>>, LevelError> {
+        Ok(None)
+    }
     /// Port of BlockBehaviour#getDrops. Subclass ownership is dispatched separately.
     fn get_drops(
         &self,
