@@ -21,6 +21,7 @@ pub mod chunk;
 pub mod chunk_holder;
 pub mod chunk_map;
 pub mod chunk_task_dispatcher;
+pub mod clip;
 mod container_runtime;
 mod context;
 pub use context::LevelContext;
@@ -296,6 +297,7 @@ pub struct Level {
     difficulty: ferraloom_protocol::play::Difficulty,
     acquisition: acquisition::ChunkAcquisition,
     acquire_driver: Option<Box<dyn acquisition::AcquireDriver>>,
+    fluid_shapes: clip::FluidShapeCache,
 }
 
 impl Level {
@@ -308,6 +310,7 @@ impl Level {
             context,
             acquisition: Default::default(),
             acquire_driver: None,
+            fluid_shapes: Default::default(),
         }
     }
     /// Required server-owned storage view, absent until startup installs it.
