@@ -17,7 +17,11 @@ public final class BlockEntityVectors {
       for(var block:BuiltInRegistries.BLOCK)if(type.isValid(block.defaultBlockState()))blocks.add(BuiltInRegistries.BLOCK.getKey(block).toString());
       System.out.println("registry\t"+BuiltInRegistries.BLOCK_ENTITY_TYPE.getKey(type)+"\t"+String.join(",",blocks));
     }
-    var registries=RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
+    var dynamic=NeighborVectors.load();var builtin=RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
+    var registries=HolderLookup.Provider.create(java.util.stream.Stream.concat(builtin.listRegistries(),dynamic.listRegistries()));
+    BuiltInRegistries.DATA_COMPONENT_INITIALIZERS.build(registries).forEach(DataComponentInitializers.PendingComponents::apply);
+    BlockEntityFixture.tickerPhases(dynamic);
+    var level=new BlockEntityFixture(dynamic);
     for(var block:List.of(Blocks.CHEST,Blocks.COPPER_CHEST.asList().getFirst(),Blocks.TRAPPED_CHEST,Blocks.BARREL,Blocks.SHULKER_BOX,Blocks.CRAFTER,Blocks.FURNACE,Blocks.SMOKER,Blocks.BLAST_FURNACE,Blocks.OAK_SIGN,Blocks.OAK_HANGING_SIGN)){
       var state=block.defaultBlockState();var entity=((EntityBlock)block).newBlockEntity(new BlockPos(1,64,2),state);
       System.out.println("default-save\t"+BuiltInRegistries.BLOCK.getKey(block)+"\t"+entity.saveWithoutMetadata(registries));
@@ -30,6 +34,7 @@ public final class BlockEntityVectors {
       System.out.println("filled-save\t"+BuiltInRegistries.BLOCK.getKey(block)+"\t"+saved);
       System.out.println("roundtrip\t"+BuiltInRegistries.BLOCK.getKey(block)+"\t"+loaded.saveWithFullMetadata(registries).equals(saved));
       System.out.println("update-tag\t"+BuiltInRegistries.BLOCK.getKey(block)+"\t"+entity.getUpdateTag(registries));
+      entity.setLevel(level);
       System.out.println("update-packet\t"+BuiltInRegistries.BLOCK.getKey(block)+"\t"+(entity.getUpdatePacket()!=null));
       if(entity instanceof RandomizableContainerBlockEntity random){
         random.setLootTable(net.minecraft.resources.ResourceKey.create(Registries.LOOT_TABLE,net.minecraft.resources.Identifier.withDefaultNamespace("chests/simple_dungeon")),-9123456789L);

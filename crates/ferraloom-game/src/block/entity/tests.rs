@@ -173,3 +173,157 @@ fn ticker_add_remove_and_rebind_preserve_phase_membership() {
     tickers.end_phase();
     assert!(tickers.wrapper(first).is_some());
 }
+
+#[test]
+fn container_and_sign_persistence_matches_real_block_entities() {
+    use crate::inventory::Container;
+    for line in include_str!("../../../tests/java/blocks/entities/vectors.tsv").lines() {
+        let fields: Vec<_> = line.split('\t').collect();
+        if !matches!(
+            fields[0],
+            "default-save"
+                | "filled-save"
+                | "update-tag"
+                | "update-packet"
+                | "loot-save"
+                | "loot-zero"
+        ) {
+            continue;
+        }
+        let block = Block::from_name(fields[1]).unwrap();
+        let mut entity = create(BlockPos::new(1, 64, 2), block.default_state()).unwrap();
+        match fields[0] {
+            "filled-save" => {
+                if let Some(container) = entity.container_mut() {
+                    let size = container.size();
+                    container.set_item(
+                        0,
+                        ItemStack::new(ferraloom_data::Item::STONE, 31, Default::default()),
+                    );
+                    container.set_item(
+                        size - 1,
+                        ItemStack::new(ferraloom_data::Item::DIAMOND, 3, Default::default()),
+                    );
+                }
+                let expected = ferraloom_nbt::parse_compound(fields[2]).unwrap();
+                assert_eq!(
+                    entity.save_with_full_metadata().unwrap(),
+                    expected,
+                    "{line}"
+                );
+                let mut loaded = create(entity.data().pos, block.default_state()).unwrap();
+                loaded.load_with_components(&expected);
+                assert_eq!(
+                    loaded.save_with_full_metadata().unwrap(),
+                    expected,
+                    "roundtrip {}",
+                    fields[1]
+                );
+            }
+            "loot-save" | "loot-zero" => {
+                let container = entity.randomizable_mut().unwrap();
+                container.loot_table = Some(
+                    ferraloom_protocol::Identifier::parse("minecraft:chests/simple_dungeon")
+                        .unwrap(),
+                );
+                container.loot_table_seed = if fields[0] == "loot-zero" {
+                    0
+                } else {
+                    -9123456789
+                };
+                let expected = ferraloom_nbt::parse_compound(fields[2]).unwrap();
+                assert_eq!(entity.save_without_metadata().unwrap(), expected, "{line}");
+                entity.load_with_components(&expected);
+                assert!(entity.container().unwrap().is_empty());
+            }
+            "default-save" => assert_eq!(
+                entity.save_without_metadata().unwrap(),
+                ferraloom_nbt::parse_compound(fields[2]).unwrap(),
+                "{line}"
+            ),
+            "update-tag" => assert_eq!(
+                entity.get_update_tag().unwrap(),
+                ferraloom_nbt::parse_compound(fields[2]).unwrap(),
+                "{line}"
+            ),
+            "update-packet" => assert_eq!(
+                entity.get_update_packet().unwrap().is_some(),
+                fields[2] == "true",
+                "{line}"
+            ),
+            _ => unreachable!(),
+        }
+    }
+}
+#[test]
+fn shulker_items_and_names_are_components_in_the_dropped_stack() {
+    use crate::inventory::Container;
+    let mut entity = create(BlockPos::ZERO, Block::SHULKER_BOX.default_state()).unwrap();
+    let container = entity.container_mut().unwrap();
+    container.custom_name = Some(ferraloom_protocol::chat::Component::literal("Box"));
+    container.set_item(
+        26,
+        ItemStack::new(ferraloom_data::Item::DIAMOND, 7, Default::default()),
+    );
+    let components = entity.collect_components();
+    let Some(DataComponent::Container(items)) = components.get(ComponentTypeId::CONTAINER) else {
+        panic!("container component");
+    };
+    assert_eq!(items.0.len(), 27);
+    assert_eq!(items.0[26].as_ref().unwrap().count, 7);
+    let mut patch = DataComponentPatch::default();
+    for component in components.entries {
+        patch.set(component);
+    }
+    let mut placed = create(BlockPos::ZERO, Block::SHULKER_BOX.default_state()).unwrap();
+    placed.apply_components(&DataComponentMap::default(), &patch);
+    assert_eq!(placed.collect_components(), entity.collect_components());
+    assert!(placed.data().components.entries.is_empty());
+}
+#[test]
+fn native_ticker_additions_wait_and_removed_tickers_skip_even_when_frozen() {
+    use ticking::BlockEntityTickers;
+    let mut tickers = BlockEntityTickers::default();
+    let a = BlockEntityRef {
+        pos: BlockPos::ZERO,
+        generation: 1,
+    };
+    let b = BlockEntityRef {
+        pos: BlockPos::new(1, 0, 0),
+        generation: 2,
+    };
+    let c = BlockEntityRef {
+        pos: BlockPos::new(2, 0, 0),
+        generation: 3,
+    };
+    tickers.bind(a, BlockEntityType::FURNACE);
+    tickers.bind(b, BlockEntityType::FURNACE);
+    let mut traces = Vec::new();
+    tickers.begin_phase();
+    let mut first = Vec::new();
+    while let Some(ticker) = tickers.next_ticker() {
+        first.push(if ticker.entity == a { "a" } else { "b" });
+        tickers.unbind(b.pos);
+        tickers.bind(c, BlockEntityType::FURNACE);
+    }
+    tickers.end_phase();
+    traces.push(first.join(","));
+    tickers.begin_phase();
+    let mut second = Vec::new();
+    while let Some(ticker) = tickers.next_ticker() {
+        second.push(if ticker.entity == a { "a" } else { "c" });
+    }
+    tickers.end_phase();
+    traces.push(second.join(","));
+    tickers.unbind(a.pos);
+    tickers.begin_phase();
+    while tickers.next_ticker().is_some() {}
+    tickers.end_phase();
+    traces.push(String::new());
+    let expected: Vec<_> = include_str!("../../../tests/java/blocks/entities/vectors.tsv")
+        .lines()
+        .filter(|line| line.starts_with("ticker-phase\t"))
+        .map(|line| line.split('\t').nth(2).unwrap())
+        .collect();
+    assert_eq!(traces, expected);
+}
