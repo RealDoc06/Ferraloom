@@ -383,11 +383,90 @@ fn synthetic_manager() -> ServerAdvancementManager {
     manager.tree.reposition_nodes();
     manager
 }
+struct RewardHarness {
+    recipes: crate::crafting::RecipeManager,
+    sync: crate::crafting::RecipeSynchronization,
+}
+impl RewardHarness {
+    fn new() -> Self {
+        let tags = ferraloom_data::datapack::TagSet::<Item>::load(
+            &ferraloom_data::datapack::ResourceManager::new(Vec::new()),
+        )
+        .unwrap();
+        let recipe=crate::crafting::Recipe::decode(&json!({"type":"crafting_shapeless","ingredients":["stone"],"result":{"id":"crafting_table"}}),&tags).unwrap();
+        let recipes = crate::crafting::RecipeManager::new(vec![crate::crafting::RecipeHolder {
+            id: "minecraft:crafting_table".parse().unwrap(),
+            value: recipe,
+        }])
+        .unwrap();
+        let mut sync = crate::crafting::RecipeSynchronization::new(&recipes, |_| true);
+        sync.displays.clear();
+        Self { recipes, sync }
+    }
+    fn effects(
+        &self,
+        result: AwardResult,
+        player: &mut PlayerAdvancements,
+        book: &mut crate::crafting::ServerRecipeBook,
+        manager: &ServerAdvancementManager,
+        award: AwardContext<'_>,
+    ) -> Vec<Value> {
+        let mut effects = Vec::new();
+        for effect in result.effects {
+            match effect {
+                AdvancementEffect::Rewards { rewards, .. } => {
+                    effects.push(json!(format!("xp:{}", rewards.experience)));
+                    let addition = rewards.grant_recipes(book, &self.recipes, &self.sync);
+                    for recipe in addition.unlocked {
+                        let recipe = id(&recipe.to_string());
+                        let origin = Vec3::new(1.0, 64.0, 2.0);
+                        let params = create_context(origin, EntityRef(0));
+                        let data = LootData::default();
+                        let mut random = LegacyRandomSource::new(42);
+                        let mut context = MatchContext {
+                            data: &data,
+                            facts: &Facts,
+                            random: &mut random,
+                            origin,
+                        };
+                        let matched = player
+                            .matching_listeners(
+                                TriggerType::RecipeUnlocked,
+                                &params,
+                                &mut context,
+                                |instance, context| {
+                                    instance.matches(
+                                        TriggerEvent::Recipe {
+                                            id: &recipe,
+                                            ingredients: &[],
+                                        },
+                                        context,
+                                    )
+                                },
+                            )
+                            .unwrap();
+                        for key in matched {
+                            let result =
+                                player.award(manager, &key.advancement, &key.criterion, award);
+                            effects.extend(self.effects(result, player, book, manager, award));
+                        }
+                    }
+                }
+                AdvancementEffect::Announcement(component) => {
+                    effects.push(json!(component.to_json().unwrap()))
+                }
+            }
+        }
+        effects
+    }
+}
 #[test]
 fn vanilla_player_listeners_visibility_packets_rewards_and_persistence() {
     let manager = synthetic_manager();
     let mut player = PlayerAdvancements::new(&manager);
     let fixture = &oracle()["player"];
+    let rewards = RewardHarness::new();
+    let mut book = crate::crafting::ServerRecipeBook::default();
     let name = ferraloom_protocol::chat::Component::literal("Doc");
     let award = AwardContext {
         now: ObtainedTime::from_millis(123456789),
@@ -405,18 +484,32 @@ fn vanilla_player_listeners_visibility_packets_rewards_and_persistence() {
             if parts[0] == "award" {
                 let result = player.award(&manager, &key, parts[3], award);
                 changed = result.changed;
-                for effect in result.effects {
-                    match effect {
-                        AdvancementEffect::Rewards { rewards, .. } => {
-                            effects.push(Value::String(format!("xp:{}", rewards.experience)))
-                        }
-                        AdvancementEffect::Announcement(component) => {
-                            effects.push(Value::String(component.to_json().unwrap()))
-                        }
-                    }
-                }
+                effects.extend(rewards.effects(result, &mut player, &mut book, &manager, award));
             } else {
                 changed = player.revoke(&manager, &key, parts[3]);
+            }
+        } else if action == "trigger:tick" {
+            let origin = Vec3::new(1.0, 64.0, 2.0);
+            let params = create_context(origin, EntityRef(0));
+            let data = LootData::default();
+            let mut random = LegacyRandomSource::new(42);
+            let mut context = MatchContext {
+                data: &data,
+                facts: &Facts,
+                random: &mut random,
+                origin,
+            };
+            let matched = player
+                .matching_listeners(
+                    TriggerType::Tick,
+                    &params,
+                    &mut context,
+                    |instance, context| instance.matches(TriggerEvent::Player, context),
+                )
+                .unwrap();
+            for key in matched {
+                let result = player.award(&manager, &key.advancement, &key.criterion, award);
+                effects.extend(rewards.effects(result, &mut player, &mut book, &manager, award));
             }
         } else if let Some(key) = action.strip_prefix("tab:") {
             if let Some(packet) = player.set_selected_tab(if key == "null" {
@@ -456,6 +549,19 @@ fn vanilla_player_listeners_visibility_packets_rewards_and_persistence() {
             .collect();
         assert_eq!(actual, expected, "{action}");
         assert_eq!(player.to_json(|_| 0).unwrap(), step["saved"], "{action}");
+        let mut registered: Vec<_> = TriggerType::ALL
+            .iter()
+            .flat_map(|&trigger| {
+                player.listeners(trigger).map(move |(key, _)| {
+                    format!("{}/{}/{}", trigger.name(), key.advancement, key.criterion)
+                })
+            })
+            .collect();
+        registered.sort();
+        assert_eq!(json!(registered), step["listeners"], "{action}");
+        let mut known: Vec<_> = book.known().iter().map(ToString::to_string).collect();
+        known.sort();
+        assert_eq!(json!(known), step["known_recipes"], "{action}");
         for holder in &manager.advancements {
             let progress = player.get_progress(&holder.id).unwrap();
             for (criterion, definition) in &holder.value.criteria {
@@ -604,5 +710,44 @@ fn vanilla_validation_reports_context_paths_and_retains_advancements() {
             .map(|p| json!({"path":p["path"],"fatal":p["fatal"]}))
             .collect();
         assert_eq!(actual, expected, "{}", row["input"]);
+    }
+}
+
+#[test]
+fn vanilla_tree_parent_resolution_removal_and_clear() {
+    let fixture = &oracle()["tree"];
+    let mut tree = AdvancementTree::default();
+    let unresolved = tree.add_all(&holders(&fixture["inputs"]));
+    assert_eq!(
+        unresolved,
+        vec![id("test:orphan"), id("test:cycle_a"), id("test:cycle_b")]
+    );
+    for row in fixture["steps"].as_array().unwrap() {
+        let action = row["action"].as_str().unwrap();
+        if let Some(key) = action.strip_prefix("remove:") {
+            tree.remove(&[id(key)]);
+        } else if action == "clear" {
+            tree.clear();
+        }
+        let nodes: Vec<_> = tree
+            .nodes()
+            .map(|node| json!(node.holder.id.to_string()))
+            .collect();
+        assert_eq!(Value::Array(nodes), row["nodes"]);
+        let children: serde_json::Map<_, _> = tree
+            .nodes()
+            .map(|node| {
+                (
+                    node.holder.id.to_string(),
+                    Value::Array(
+                        node.children
+                            .iter()
+                            .map(|id| json!(id.to_string()))
+                            .collect(),
+                    ),
+                )
+            })
+            .collect();
+        assert_eq!(Value::Object(children), row["children"]);
     }
 }

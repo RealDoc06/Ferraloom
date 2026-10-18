@@ -66,7 +66,7 @@ public final class AdvancementVectors {
         level=missing(ServerLevel.class);server=missing(MinecraftServer.class);player=missing(ServerPlayer.class);pig=entity(EntityTypes.PIG);cow=entity(EntityTypes.COW);
         doReturn(net.minecraft.world.flag.FeatureFlags.VANILLA_SET).when(level).enabledFeatures();doReturn(server).when(level).getServer();doReturn(RandomSource.create(42)).when(level).getRandom();doReturn(lookup).when(level).registryAccess();doReturn(Level.OVERWORLD).when(level).dimension();doReturn(true).when(level).isLoaded(any());
         var reloadable=mock(ReloadableServerRegistries.Holder.class);doReturn(lookup).when(reloadable).lookup();doReturn(reloadable).when(server).reloadableRegistries();
-        doReturn(level).when(player).level();doReturn(ORIGIN).when(player).position();doReturn(1.0).when(player).getX();doReturn(64.0).when(player).getY();doReturn(2.0).when(player).getZ();doReturn(Map.of()).when(player).getActiveEffectsMap();doReturn(Component.literal("Doc")).when(player).getDisplayName();
+        doReturn(EntityTypes.PLAYER).when(player).getType();doReturn(EntityTypes.PLAYER.builtInRegistryHolder()).when(player).typeHolder();doReturn(level).when(player).level();doReturn(ORIGIN).when(player).position();doReturn(1.0).when(player).getX();doReturn(64.0).when(player).getY();doReturn(2.0).when(player).getZ();doReturn(Map.of()).when(player).getActiveEffectsMap();doReturn(Component.literal("Doc")).when(player).getDisplayName();
     }
     static LootContext ctx(Entity entity) {return EntityPredicate.createContext(player,entity);}
     static ItemStack stack(int n) {if(n==2)return ItemStack.EMPTY;var s=new ItemStack(n==0?Items.STONE:Items.DIAMOND_PICKAXE,n==0?5:1);if(n==1)s.setDamageValue(17);return s;}
@@ -205,6 +205,17 @@ public final class AdvancementVectors {
         }
         OUT.add("progress",rows);
     }
+    static void treeMutation() {
+        var input=new JsonArray();var holders=new ArrayList<AdvancementHolder>();
+        for(String[] entry:List.of(new String[]{"child","root"},new String[]{"orphan","missing"},new String[]{"root",""},new String[]{"grandchild","child"},new String[]{"cycle_a","cycle_b"},new String[]{"cycle_b","cycle_a"})) {
+            var definition=json("{\"criteria\":{\"a\":{\"trigger\":\"tick\"}}}").getAsJsonObject();if(!entry[1].isEmpty())definition.addProperty("parent","test:"+entry[1]);var key=id("test:"+entry[0]);holders.add(new AdvancementHolder(key,Advancement.CODEC.parse(ops,definition).getOrThrow()));var row=new JsonObject();row.addProperty("id",key.toString());row.add("value",definition);input.add(row);
+        }
+        var tree=new AdvancementTree();tree.addAll(holders);var steps=new JsonArray();
+        for(String action:List.of("initial","remove:test:child","remove:test:unknown","clear")) {
+            if(action.startsWith("remove:"))tree.remove(Set.of(id(action.substring(7))));else if(action.equals("clear"))tree.clear();var row=new JsonObject();row.addProperty("action",action);var nodes=new JsonArray();var children=new JsonObject();for(var node:tree.nodes()){nodes.add(node.holder().id().toString());var list=new JsonArray();for(var child:node.children())list.add(child.holder().id().toString());children.add(node.holder().id().toString(),list);}row.add("nodes",nodes);row.add("children",children);steps.add(row);
+        }
+        var output=new JsonObject();output.add("inputs",input);output.add("steps",steps);OUT.add("tree",output);
+    }
     static void validation() {
         var rows=new JsonArray();
         for(String trigger:List.of("tick","default_block_use","any_block_use")) {
@@ -240,9 +251,12 @@ public final class AdvancementVectors {
         definitions.put("test:hidden","{\"parent\":\"test:root\",\"display\":{\"icon\":{\"id\":\"stone\"},\"title\":\"Hidden\",\"description\":\"Description\",\"hidden\":true},\"criteria\":{\"a\":{\"trigger\":\"tick\"}}}");
         definitions.put("test:grandchild","{\"parent\":\"test:child\",\"display\":{\"icon\":{\"id\":\"stone\"},\"title\":\"Grandchild\",\"description\":\"Description\"},\"criteria\":{\"a\":{\"trigger\":\"tick\"}}}");
         definitions.put("test:great_grandchild","{\"parent\":\"test:grandchild\",\"display\":{\"icon\":{\"id\":\"stone\"},\"title\":\"Great grandchild\",\"description\":\"Description\"},\"criteria\":{\"a\":{\"trigger\":\"tick\"}}}");
+        definitions.put("test:recipe","{\"criteria\":{\"a\":{\"trigger\":\"recipe_unlocked\",\"conditions\":{\"recipes\":\"crafting_table\"}}}}");
         definitions.put("test:invisible","{\"parent\":\"test:hidden\",\"criteria\":{\"a\":{\"trigger\":\"tick\"}}}");
         var holders=new ArrayList<AdvancementHolder>();var inputs=new JsonArray();
-        for(var entry:definitions.entrySet()){var holder=new AdvancementHolder(id(entry.getKey()),Advancement.CODEC.parse(ops,json(entry.getValue())).getOrThrow());holders.add(holder);var row=new JsonObject();row.addProperty("id",entry.getKey());row.add("value",json(entry.getValue()));inputs.add(row);}
+        for(var entry:definitions.entrySet()){var definition=json(entry.getValue()).getAsJsonObject();
+            if(entry.getKey().equals("test:root")){definition.getAsJsonObject("rewards").add("recipes",json("[\"crafting_table\"]"));definition.getAsJsonObject("criteria").getAsJsonObject("a").add("conditions",json("{\"player\":{\"type\":\"entity_properties\",\"entity\":\"this\",\"predicate\":{\"entity_type\":\"cow\"}}}"));}
+            var holder=new AdvancementHolder(id(entry.getKey()),Advancement.CODEC.parse(ops,definition).getOrThrow());holders.add(holder);var row=new JsonObject();row.addProperty("id",entry.getKey());row.add("value",definition);inputs.add(row);}
         var tree=new AdvancementTree();tree.addAll(holders);tree.repositionNodes();
         var children=new JsonObject();for(var node:tree.nodes()){var keys=new JsonArray();for(var child:node.children())keys.add(child.holder().id().toString());children.add(node.holder().id().toString(),keys);}
         var manager=mock(ServerAdvancementManager.class);doReturn(holders).when(manager).getAllAdvancements();doReturn(tree).when(manager).tree();doAnswer(call->holders.stream().filter(h->h.id().equals(call.getArgument(0))).findFirst().orElse(null)).when(manager).get(any());
@@ -252,13 +266,22 @@ public final class AdvancementVectors {
         var players=mock(net.minecraft.server.players.PlayerList.class);doAnswer(call->{effects.add(net.minecraft.network.chat.ComponentSerialization.CODEC.encodeStart(ops,(Component)call.getArgument(0)).getOrThrow().toString());return null;}).when(players).broadcastSystemMessage(any(Component.class),eq(false));
         doAnswer(call->{Object packet=call.getArgument(0);if(packet instanceof net.minecraft.network.protocol.game.ClientboundUpdateAdvancementsPacket update)packets.add(wire(update));else if(packet instanceof net.minecraft.network.protocol.game.ClientboundSelectAdvancementsTabPacket tab){var b=new RegistryFriendlyByteBuf(Unpooled.buffer(),lookup);net.minecraft.network.protocol.game.ClientboundSelectAdvancementsTabPacket.STREAM_CODEC.encode(b,tab);var bytes=new byte[b.readableBytes()];b.readBytes(bytes);b.release();packets.add(HexFormat.of().formatHex(bytes));}else throw new AssertionError(packet);return null;}).when(connection).send(any(net.minecraft.network.protocol.Packet.class));
         var fixer=mock(com.mojang.datafixers.DataFixer.class);doAnswer(call->call.getArgument(1)).when(fixer).update(any(),any(),eq(5023),eq(5023));
-        var directory=Files.createTempDirectory("ferraloom-advancements");var path=directory.resolve("player.json");var advancement=new PlayerAdvancements(fixer,players,manager,path,player);var steps=new JsonArray();
-        for(String action:List.of("flush","award:test:root:a","award:test:root:a","award:test:root:b","revoke:test:root:a","revoke:test:root:b","award:test:child:a","award:test:child:b","revoke:test:child:a","award:test:hidden:a","award:test:invisible:a","tab:test:root","tab:test:child","tab:null")) {
+        var directory=Files.createTempDirectory("ferraloom-advancements");var path=directory.resolve("player.json");var advancement=new PlayerAdvancements(fixer,players,manager,path,player);doReturn(advancement).when(player).getAdvancements();
+        var book=new net.minecraft.stats.ServerRecipeBook((key,output)->{});
+        doAnswer(call->{@SuppressWarnings("unchecked") var keys=(List<ResourceKey<Recipe<?>>>)call.getArgument(0);var rewards=new ArrayList<RecipeHolder<?>>();for(var key:keys){var recipe=lookup.lookupOrThrow(Registries.RECIPE).get(key);if(recipe.isPresent())rewards.add(new RecipeHolder<>(key,recipe.get().value()));}book.addRecipes(rewards,player);return null;}).when(player).awardRecipesByKey(anyList());
+        var steps=new JsonArray();
+        for(String action:List.of("flush","award:test:root:a","award:test:root:a","award:test:root:b","revoke:test:root:a","revoke:test:root:b","award:test:child:a","award:test:child:b","revoke:test:child:a","award:test:hidden:a","award:test:invisible:a","tab:test:root","tab:test:child","tab:null","trigger:tick")) {
             var row=new JsonObject();row.addProperty("action",action);boolean changed=false;
             if(action.startsWith("award:")||action.startsWith("revoke:")) {var a=action.split(":");var holder=holders.stream().filter(h->h.id().equals(id(a[1]+":"+a[2]))).findFirst().orElseThrow();changed=action.startsWith("award")?advancement.award(holder,a[3]):advancement.revoke(holder,a[3]);
                 if(action.startsWith("award")&&changed){var progress=advancement.getOrStartProgress(holder);var f=AdvancementProgress.class.getDeclaredField("criteria");f.setAccessible(true);@SuppressWarnings("unchecked") var map=(Map<String,CriterionProgress>)f.get(progress);map.put(a[3],new CriterionProgress(Instant.ofEpochMilli(123456789)));}
+            } else if(action.equals("trigger:tick")) {CriteriaTriggers.TICK.trigger(player);
+                for(var holder:holders){var progress=advancement.getOrStartProgress(holder);var f=AdvancementProgress.class.getDeclaredField("criteria");f.setAccessible(true);@SuppressWarnings("unchecked") var map=(Map<String,CriterionProgress>)f.get(progress);for(var entry:map.entrySet())if(entry.getValue().isDone())entry.setValue(new CriterionProgress(Instant.ofEpochMilli(123456789)));}
             } else if(action.startsWith("tab:")) {var name=action.substring(4);advancement.setSelectedTab(holders.stream().filter(h->h.id().toString().equals(name)).findFirst().orElse(null));}
-            advancement.flushDirty(player,true);row.addProperty("changed",changed);row.add("packets",packets.deepCopy());packets.asList().clear();row.add("effects",effects.deepCopy());effects.asList().clear();advancement.save();row.add("saved",json(Files.readString(path)));steps.add(row);
+            for(var holder:holders){var progress=advancement.getOrStartProgress(holder);var f=AdvancementProgress.class.getDeclaredField("criteria");f.setAccessible(true);@SuppressWarnings("unchecked") var map=(Map<String,CriterionProgress>)f.get(progress);for(var entry:map.entrySet())if(entry.getValue().isDone())entry.setValue(new CriterionProgress(Instant.ofEpochMilli(123456789)));}
+            advancement.flushDirty(player,true);row.addProperty("changed",changed);
+            var listeners=new ArrayList<String>();for(var type:BuiltInRegistries.TRIGGER_TYPES){var map=advancement.getTriggerMapForType(type);if(map!=null)for(var key:map.keySet())listeners.add(BuiltInRegistries.TRIGGER_TYPES.getKey(type)+"/"+key.advancement().id()+"/"+key.criterion());}Collections.sort(listeners);row.add("listeners",JSON.toJsonTree(listeners));
+            var known=book.pack().known().stream().map(key->key.identifier().toString()).sorted().toList();row.add("known_recipes",JSON.toJsonTree(known));
+            row.add("packets",packets.deepCopy());packets.asList().clear();row.add("effects",effects.deepCopy());effects.asList().clear();advancement.save();row.add("saved",json(Files.readString(path)));steps.add(row);
         }
         var output=new JsonObject();output.add("inputs",inputs);output.add("children",children);output.add("steps",steps);OUT.add("player",output);
         var unknown=json(Files.readString(path)).getAsJsonObject();unknown.add("test:missing",json("{\"criteria\":{\"a\":\"2024-01-01 00:00:00 +0000\"},\"done\":true}"));Files.writeString(path,JSON.toJson(unknown));var restored=new PlayerAdvancements(fixer,players,manager,path,player);restored.flushDirty(player,true);output.add("loaded_packets",packets.deepCopy());restored.save();output.add("loaded_saved",json(Files.readString(path)));output.add("load_input",unknown);
@@ -274,7 +297,7 @@ public final class AdvancementVectors {
         OUT.add("inline_loot",rows);
     }
     public static void main(String[] args) throws Exception {
-        TimeZone.setDefault(TimeZone.getTimeZone("UTC"));setup();builtins();triggers();progress();inlineLoot();playerProgress();invalidAdvancements();validation();
+        TimeZone.setDefault(TimeZone.getTimeZone("UTC"));setup();builtins();triggers();progress();inlineLoot();playerProgress();invalidAdvancements();validation();treeMutation();
         try(var output=new GZIPOutputStream(Files.newOutputStream(Path.of(args[0])))){output.write(JSON.toJson(OUT).getBytes(java.nio.charset.StandardCharsets.UTF_8));}
         for(var entry:OUT.entrySet())System.out.println(entry.getKey()+": "+(entry.getValue().isJsonArray()?entry.getValue().getAsJsonArray().size():1));
     }
