@@ -256,6 +256,7 @@ impl BlockBehavior for RedstonePlacement {
             _ if block.is_instance_of(BlockClass::DoorBlock) => {
                 let max_y = match reader {
                     LevelReaderRef::Server(level) => level.max_build_height(),
+                    LevelReaderRef::PathNavigation(reader) => reader.max_build_height(),
                     LevelReaderRef::Worldgen(region) => region.min_y() + region.height() - 1,
                 };
                 if pos.y >= max_y

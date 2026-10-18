@@ -730,6 +730,9 @@ impl BlockBehavior for LiquidBlock {
                 super::LevelReaderRef::Server(level) => {
                     entity_context.entity.liquid_collision_shape(level)?
                 }
+                super::LevelReaderRef::PathNavigation(reader) => {
+                    reader.liquid_collision_shape(&entity_context.entity)?
+                }
                 super::LevelReaderRef::Worldgen(_) => {
                     return Err(LevelError::UnsupportedBlockMethod(
                         state.block(),

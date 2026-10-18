@@ -32,6 +32,11 @@ impl StackView<'_> {
                     })
                 }
                 LevelReaderRef::Worldgen(_) => Err(LevelError::UnsupportedWorldgenEnvironment),
+                LevelReaderRef::PathNavigation(_) => {
+                    Err(LevelError::UnsupportedPathNavigationQuery(
+                        crate::level::path_navigation_region::PathNavigationQuery::RetainedStack,
+                    ))
+                }
             },
         }
     }
@@ -113,6 +118,7 @@ impl<'stack> UseOnContext<'stack> {
         match reader {
             LevelReaderRef::Server(level) => level.entity::<EntityData>(player),
             LevelReaderRef::Worldgen(_) => Err(LevelError::UnsupportedWorldgenEnvironment),
+            LevelReaderRef::PathNavigation(reader) => Ok(reader.entity_state(player)?.as_entity()),
         }
     }
     /// Entity#getViewXRot(1) reads pitch. Entity#getViewYRot(1) reads yaw,

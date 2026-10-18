@@ -38,6 +38,7 @@ pub mod interaction;
 mod lighting;
 pub mod loot_facts;
 mod mutation;
+pub mod path_navigation_region;
 mod post_processing;
 pub mod publication;
 mod random;
@@ -119,6 +120,8 @@ pub enum LevelError {
     WrongChunkHeight(ChunkPos),
     InvalidChunkStructures(ChunkPos),
     InvalidStructureHolderSet,
+    PathNavigation(path_navigation_region::PathNavigationError),
+    UnsupportedPathNavigationQuery(path_navigation_region::PathNavigationQuery),
 }
 
 impl std::fmt::Display for LevelError {
@@ -210,8 +213,26 @@ impl Default for LevelRules {
     }
 }
 
+/// Identity of the owner of canonical chunk/entity stores. Reads compare only
+/// the copied integer; the monotonic counter runs once during construction.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct RegionId(u64);
+impl RegionId {
+    fn new() -> Self {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static NEXT: AtomicU64 = AtomicU64::new(1);
+        Self(
+            NEXT.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |next| {
+                next.checked_add(1)
+            })
+            .expect("region identities exhausted"),
+        )
+    }
+}
+
 /// Owned portion of ServerLevel. The scheduler moves this value between workers.
 pub struct Region {
+    id: RegionId,
     chunks: store::InsertOnlyMap<ChunkPos, chunk::LevelChunk>,
     next_chunk_generation: Cell<u64>,
     entities: entity::EntityStorage,
@@ -254,6 +275,7 @@ pub struct Region {
 impl Region {
     pub fn new(behaviors: &'static Behaviors) -> Self {
         Self {
+            id: RegionId::new(),
             chunks: store::InsertOnlyMap::default(),
             next_chunk_generation: Cell::new(0),
             entities: entity::EntityStorage::default(),
