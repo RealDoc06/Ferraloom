@@ -133,13 +133,31 @@ async fn chunk_loading_while_walking(s: &mut Session) -> Result<ObservationLog> 
     .await?;
     bot.teleport([0.5, 150., 0.5]).await?;
     let start = bot.snapshot().position;
+    let initial_chunk = (start[0].floor() as i32 >> 4, start[2].floor() as i32 >> 4);
+    if !bot.snapshot().chunks.contains(&initial_chunk) {
+        bot.wait_for("walking start chunk", Ticks(1200), |state, _| {
+            state.chunks.contains(&initial_chunk)
+        })
+        .await?;
+    }
+    let unloads_before = bot.snapshot().unloads;
     let target = [start[0] + 100., start[1], start[2]];
     bot.move_to(target, false).await?;
     let chunk = (target[0].floor() as i32 >> 4, target[2].floor() as i32 >> 4);
-    if !bot.snapshot().chunks.contains(&chunk) || bot.snapshot().unloads == 0 {
-        bot.wait_for("destination chunk and unload", Ticks(1200), |state, _| {
-            state.chunks.contains(&chunk) && state.unloads > 0
-        })
+    let state = bot.snapshot();
+    if !state.chunks.contains(&chunk)
+        || state.chunks.contains(&initial_chunk)
+        || state.unloads <= unloads_before
+    {
+        bot.wait_for(
+            "destination chunk and walking start unload",
+            Ticks(1200),
+            |state, _| {
+                state.chunks.contains(&chunk)
+                    && !state.chunks.contains(&initial_chunk)
+                    && state.unloads > unloads_before
+            },
+        )
         .await?;
     }
     bot.synchronize().await?;
@@ -152,7 +170,10 @@ async fn chunk_loading_while_walking(s: &mut Session) -> Result<ObservationLog> 
     let mut log = ObservationLog::default();
     log.record("position", state.position)?;
     log.record("destination_loaded", state.chunks.contains(&chunk))?;
-    log.record("old_chunks_unloaded", state.unloads > 0)?;
+    log.record(
+        "walking_start_unloaded",
+        !state.chunks.contains(&initial_chunk) && state.unloads > unloads_before,
+    )?;
     Ok(log)
 }
 async fn chat_formatting(s: &mut Session) -> Result<ObservationLog> {
