@@ -17,5 +17,8 @@ serde_json = "1"
 flate2 = "1"
 sha2 = "0.10"
 
+[dev-dependencies]
+ferraloom-storage = { path = "../ferraloom-storage" }
+
 [lints]
 workspace = true

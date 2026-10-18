@@ -88,7 +88,7 @@ pub fn register(loader: &mut FeatureLoader<'_>) -> Result<(), Error> {
                 .iter()
                 .map(|id| Value::String(id.to_string()))
                 .collect()
-        } else if value.is_string() {
+        } else if value.is_string() || value.is_object() {
             vec![value.clone()]
         } else {
             list(value)?.to_vec()

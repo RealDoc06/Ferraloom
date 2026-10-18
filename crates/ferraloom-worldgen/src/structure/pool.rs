@@ -38,7 +38,12 @@ impl LiquidSettings {
 #[derive(Clone, Debug)]
 pub enum PoolFeature {
     Reference(Identifier),
-    Direct(Arc<PlacedFeature>),
+    Direct {
+        feature: Arc<PlacedFeature>,
+        /// Retained for inline-holder saves. Vanilla codec re-encoding can add
+        /// defaults; canonical inline-feature NBT exactness remains pending.
+        source: Value,
+    },
 }
 #[derive(Clone, Debug)]
 pub struct ProcessorList {
@@ -129,7 +134,10 @@ impl StructurePoolElement {
                     feature: if feature.is_string() {
                         PoolFeature::Reference(id(feature)?)
                     } else {
-                        PoolFeature::Direct(decode_feature(feature)?)
+                        PoolFeature::Direct {
+                            feature: decode_feature(feature)?,
+                            source: feature.clone(),
+                        }
                     },
                     projection,
                 })
@@ -357,7 +365,7 @@ impl StructurePoolElement {
             }
             Self::Feature { feature, .. } => {
                 let feature = match feature {
-                    PoolFeature::Direct(f) => f.clone(),
+                    PoolFeature::Direct { feature, .. } => feature.clone(),
                     PoolFeature::Reference(id) => context
                         .registry
                         .placed

@@ -195,6 +195,48 @@ fn every_jigsaw_structure_piece_and_junction_matches_vanilla_flat_and_noise() {
                     );
                 }
             }
+            if let Some(expected) = case["start_nbt"].as_str() {
+                use crate::structure::start::StructureStart;
+                let terrain = crate::structure::TerrainAdjustment::decode(
+                    case["terrain_adjustment"].as_str().unwrap(),
+                )
+                .unwrap();
+                let start = StructureStart::from_jigsaw(name.clone(), chunk, 3, terrain, result);
+                let saved = start.to_nbt([17, -19]).unwrap();
+                assert_eq!(
+                    saved,
+                    ferraloom_nbt::parse_compound(expected).unwrap(),
+                    "{description}: saved start NBT"
+                );
+                let expected_bounds = |value: &Value| {
+                    BoundingBox::new(
+                        std::array::from_fn(|i| value[i].as_i64().unwrap() as i32),
+                        std::array::from_fn(|i| value[i + 3].as_i64().unwrap() as i32),
+                    )
+                };
+                assert_eq!(
+                    start.bounding_box().unwrap(),
+                    expected_bounds(&case["start_bounds"])
+                );
+                let loaded = StructureStart::from_nbt(
+                    &saved,
+                    &BTreeMap::from([(name.clone(), terrain)]),
+                    &templates,
+                    &resources,
+                    &mut |_| Err(Error("builtin starts have no inline feature".into())),
+                )
+                .unwrap()
+                .unwrap();
+                assert_eq!(
+                    loaded.to_nbt([17, -19]).unwrap(),
+                    ferraloom_nbt::parse_compound(case["loaded_nbt"].as_str().unwrap()).unwrap(),
+                    "{description}: loaded start NBT"
+                );
+                assert_eq!(
+                    loaded.bounding_box().unwrap(),
+                    expected_bounds(&case["loaded_bounds"])
+                );
+            }
         }
     }
 }

@@ -2,7 +2,7 @@
 use super::*;
 use crate::{
     codec::*,
-    feature::{Feature, FeatureContext, FeatureRegistry, PlacedFeature},
+    feature::{FeatureRegistry, PlacedFeature},
     region::Heightmap,
 };
 use ferraloom_data::{Block, datapack::ResourceManager};
@@ -279,7 +279,7 @@ impl FlatLevelSource {
                 id.clone(),
                 Arc::new(PlacedFeature {
                     id: Some(id.clone()),
-                    feature: Arc::new(FlatFillLayer { height, state }),
+                    feature: crate::feature::surface::fill_layer(height, state),
                     placement: Vec::new(),
                 }),
             );
@@ -374,27 +374,5 @@ impl ChunkGeneratorAccess for FlatLevelSource {
                 .map(|state| state.unwrap_or(Block::AIR.default_state()))
                 .collect(),
         }))
-    }
-}
-#[derive(Debug)]
-struct FlatFillLayer {
-    height: i32,
-    state: BlockState,
-}
-impl Feature for FlatFillLayer {
-    fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
-        for dx in 0..16 {
-            for dz in 0..16 {
-                let p = [
-                    ctx.origin[0] + dx,
-                    ctx.region.min_y() + self.height,
-                    ctx.origin[2] + dz,
-                ];
-                if ctx.region.block(p)?.is_air() {
-                    ctx.region.set_block(p, self.state, 2)?;
-                }
-            }
-        }
-        Ok(true)
     }
 }
