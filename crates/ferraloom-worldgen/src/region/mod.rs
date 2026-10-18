@@ -868,8 +868,9 @@ impl<'a> WorldGenRegion<'a> {
         }
         let index = self.index([p[0] >> 4, p[2] >> 4], ChunkStatus::Empty)?;
         if self.chunks[index].status == ChunkStatus::Full {
-            // ImposterProtoChunk#setBlockState with allowWrites=false.
-            return Ok(false);
+            // ImposterProtoChunk ignores the write, but WorldGenRegion#setBlock
+            // still reports true once its write bounds accepted the position.
+            return Ok(true);
         }
         if self.chunks[index].status >= ChunkStatus::InitializeLight {
             return Err(Error(
@@ -955,6 +956,11 @@ impl<'a> WorldGenRegion<'a> {
         let index = self.index([p[0] >> 4, p[2] >> 4], ChunkStatus::Empty)?;
         if self.chunks[index].status == ChunkStatus::Full {
             return Ok(());
+        }
+        if self.chunks[index].status >= ChunkStatus::InitializeLight {
+            return Err(Error(
+                "Unsupported: lit ProtoChunk mutation needs the relight adapter".into(),
+            ));
         }
         let chunk = &mut self.chunks[index].chunk;
         if p[1] < chunk.min_y || p[1] >= chunk.min_y + chunk.height {
@@ -1289,7 +1295,7 @@ mod imposter_tests {
             )
             .unwrap();
             assert!(
-                !region
+                region
                     .set_block([1, 0, 1], Block::STONE.default_state(), 3)
                     .unwrap()
             );
@@ -1329,6 +1335,13 @@ mod imposter_tests {
         assert!(
             region
                 .set_block([1, 0, 1], Block::STONE.default_state(), 3)
+                .unwrap_err()
+                .0
+                .starts_with("Unsupported: lit ProtoChunk")
+        );
+        assert!(
+            region
+                .set_block_in_section([1, 0, 1], Block::STONE.default_state())
                 .unwrap_err()
                 .0
                 .starts_with("Unsupported: lit ProtoChunk")
