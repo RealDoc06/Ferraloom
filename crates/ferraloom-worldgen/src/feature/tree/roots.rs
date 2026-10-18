@@ -194,7 +194,7 @@ impl RootSystem {
         for y in 1..=self.space {
             let s = c.region.block(add(p, [0, y, 0]))?;
             if !is_air(s)
-                && !(y + 1 <= self.water_height && self.water.contains(&s.data().fluid.fluid_type))
+                && !(y < self.water_height && self.water.contains(&s.data().fluid.fluid_type))
             {
                 return Ok(false);
             }
