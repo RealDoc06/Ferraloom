@@ -409,7 +409,7 @@ impl MinecraftServer {
             _ => {
                 return Err(exceptions::error(
                     "ferraloom.command.pending",
-                    &[command.command.clone()],
+                    std::slice::from_ref(&command.command),
                 ));
             }
         };
@@ -560,10 +560,10 @@ impl MinecraftServer {
             }
         }
         let result = self.execute_command_inner(source, text).await;
-        if let Some(connection) = source {
-            if let Some(c) = self.connections.get_mut(&connection) {
-                c.command_message = None;
-            }
+        if let Some(connection) = source
+            && let Some(c) = self.connections.get_mut(&connection)
+        {
+            c.command_message = None;
         }
         if let Err(error) = result {
             if error.to_string() == "disconnect.spam"
@@ -808,11 +808,11 @@ impl MinecraftServer {
             return;
         }
         if let Some(message) = signed {
-            if let Some(signature) = &message.signature {
-                if let Err(error) = c.last_seen.add_pending(signature) {
-                    c.disconnect(error.to_string());
-                    return;
-                }
+            if let Some(signature) = &message.signature
+                && let Err(error) = c.last_seen.add_pending(signature)
+            {
+                c.disconnect(error.to_string());
+                return;
             }
             let global_index = c.next_chat_index;
             c.next_chat_index += 1;
