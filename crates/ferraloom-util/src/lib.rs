@@ -10,6 +10,7 @@ pub mod mth;
 pub mod noise;
 pub mod phys;
 pub mod random;
+pub mod shapes;
 pub mod uuid;
 
 pub use core::{
@@ -21,6 +22,7 @@ pub use random::{
     LegacyRandomSource, RandomSource, SingleThreadedRandomSource, WorldgenRandom,
     XoroshiroRandomSource,
 };
+pub use shapes::{BooleanOp, CollisionContext, VoxelShape};
 pub use uuid::Uuid;
 
 #[cfg(test)]
