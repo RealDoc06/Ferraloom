@@ -158,6 +158,63 @@ pub fn close_container(
     send_close: bool,
     disconnected: bool,
 ) -> Result<Vec<cb::Packet>> {
+    close_container_with_delivery(player, level, send_close, disconnected, false)
+}
+
+/// Port of the live closeContainer send point, before removed and item drops.
+pub fn close_container_live(
+    player: EntityRef,
+    level: &mut Level,
+    send_close: bool,
+    disconnected: bool,
+) -> Result<()> {
+    flush_container_packets(player, level)?;
+    close_container_with_delivery(player, level, send_close, disconnected, true)?;
+    Ok(())
+}
+
+/// Move already generated menu packets into the ordered Level packet stream.
+pub fn flush_container_packets(
+    player: EntityRef,
+    level: &mut Level,
+) -> std::result::Result<(), crate::level::LevelError> {
+    let packets = std::mem::take(
+        &mut level
+            .entity_mut::<ServerPlayer>(player)?
+            .menus
+            .pending_packets,
+    );
+    for packet in packets {
+        emit_menu_packet(player, packet, level);
+    }
+    Ok(())
+}
+fn emit_menu_packet(player: EntityRef, packet: cb::Packet, level: &mut Level) {
+    level.emit(crate::level::effects::LevelEffect::PlayerPacket {
+        recipients: vec![player],
+        packet: Box::new(packet),
+    });
+}
+fn deliver_close_packet(
+    player: EntityRef,
+    packet: cb::Packet,
+    live: bool,
+    level: &mut Level,
+    packets: &mut Vec<cb::Packet>,
+) {
+    if live {
+        emit_menu_packet(player, packet, level);
+    } else {
+        packets.push(packet);
+    }
+}
+fn close_container_with_delivery(
+    player: EntityRef,
+    level: &mut Level,
+    send_close: bool,
+    disconnected: bool,
+    live: bool,
+) -> Result<Vec<cb::Packet>> {
     super::block_containers::ensure_unrooted_menu_values(player, level)?;
     let bound = level
         .entity::<ServerPlayer>(player)?
@@ -165,7 +222,7 @@ pub fn close_container(
         .current()
         .block_entities
         .clone();
-    let result = close_container_inner(player, level, send_close, disconnected, &bound);
+    let result = close_container_inner(player, level, send_close, disconnected, &bound, live);
     for handle in bound {
         level.release_block_entity(handle);
     }
@@ -177,15 +234,27 @@ fn close_container_inner(
     send_close: bool,
     disconnected: bool,
     bound: &[crate::block::entity::BlockEntityRef],
+    live: bool,
 ) -> Result<Vec<cb::Packet>> {
     let mut packets = Vec::new();
+    if send_close {
+        let container_id = level
+            .entity::<ServerPlayer>(player)?
+            .menus
+            .current()
+            .container_id;
+        deliver_close_packet(
+            player,
+            cb::Packet::ContainerClose(cb::ContainerClose {
+                container_id: VarInt(container_id),
+            }),
+            live,
+            level,
+            &mut packets,
+        );
+    }
     let effects = {
         let player = level.entity_mut::<ServerPlayer>(player)?;
-        if send_close {
-            packets.push(cb::Packet::ContainerClose(cb::ContainerClose {
-                container_id: VarInt(player.menus.current().container_id),
-            }));
-        }
         let infinite_materials = player.instabuild();
         let mut context = MenuContext::player_with_abilities(
             &mut player.inventory,
@@ -198,10 +267,16 @@ fn close_container_inner(
     for effect in effects {
         match effect {
             InventoryEffect::SetSlot { slot, stack } => {
-                packets.push(cb::Packet::SetPlayerInventory(cb::SetPlayerInventory {
-                    slot: VarInt(slot as i32),
-                    contents: stack,
-                }))
+                deliver_close_packet(
+                    player,
+                    cb::Packet::SetPlayerInventory(cb::SetPlayerInventory {
+                        slot: VarInt(slot as i32),
+                        contents: stack,
+                    }),
+                    live,
+                    level,
+                    &mut packets,
+                );
             }
             InventoryEffect::Drop(stack) => {
                 drop_item(player, stack, false, level)?;
@@ -221,19 +296,40 @@ pub fn tick_container_menu(
     player: EntityRef,
     level: &mut Level,
 ) -> std::result::Result<(), crate::level::LevelError> {
-    tick_container_menu_inner(player, level).map_err(|error| match error {
+    broadcast_container_menu(player, level)?;
+    check_container_menu_still_valid(player, level)
+}
+fn menu_level_error(error: MenuError) -> crate::level::LevelError {
+    match error {
         MenuError::Level(error) => error,
         MenuError::Unsupported(operation) => crate::level::LevelError::Inventory(operation),
         _ => crate::level::LevelError::Inventory("container synchronization codec"),
-    })
+    }
 }
-fn tick_container_menu_inner(player: EntityRef, level: &mut Level) -> Result<()> {
+/// Port of the current containerMenu.broadcastChanges call used by rewards.
+/// The retained receiver finishes broadcasting even if a callback replaces it.
+pub fn broadcast_container_menu(
+    player: EntityRef,
+    level: &mut Level,
+) -> std::result::Result<(), crate::level::LevelError> {
     let reference = level.entity::<ServerPlayer>(player)?.menus.current_ref();
     with_menu_callback(player, reference, level, |context| {
         broadcast_menu_changes(context)?;
         context.menu_mut()?.changes.clear();
         Ok(())
-    })?;
+    })
+    .map_err(menu_level_error)?;
+    Ok(())
+}
+
+/// Port of ServerPlayer#doTick's current menu validity check, with no broadcast.
+pub fn check_container_menu_still_valid(
+    player: EntityRef,
+    level: &mut Level,
+) -> std::result::Result<(), crate::level::LevelError> {
+    check_container_menu_still_valid_inner(player, level).map_err(menu_level_error)
+}
+fn check_container_menu_still_valid_inner(player: EntityRef, level: &mut Level) -> Result<()> {
     // Java reads containerMenu again after broadcasting: a synchronous slot
     // callback may have closed or replaced the menu just broadcast.
     let bound = &level
@@ -243,12 +339,21 @@ fn tick_container_menu_inner(player: EntityRef, level: &mut Level) -> Result<()>
         .block_entities;
     let valid = block_menu_still_valid(player, bound, level)?;
     if !valid {
-        let packets = close_container(player, level, true, false)?;
-        level
-            .entity_mut::<ServerPlayer>(player)?
-            .menus
-            .pending_packets
-            .extend(packets);
+        close_container_live(player, level, true, false)?;
     }
     Ok(())
+}
+
+/// Port of Player#addItem. The supplied receiver is caller-owned generated loot;
+/// native Inventory#add mutates its remainder before any subsequent world call.
+pub fn add_item(
+    player: EntityRef,
+    stack: &mut ItemStack,
+    level: &mut Level,
+) -> std::result::Result<bool, crate::level::LevelError> {
+    let player = level.entity_mut::<ServerPlayer>(player)?;
+    let infinite_materials = player.instabuild();
+    Ok(player
+        .inventory
+        .add(stack, &mut player.parent.equipment, infinite_materials))
 }

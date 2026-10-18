@@ -400,7 +400,7 @@ pending_scenario!(
 pending_scenario!(
     furnace_smelt_timeline,
     smelt_furnace,
-    "pending integrated recipes, live container resources and item command path"
+    "Ferraloom Strict pending item command path"
 );
 pending_scenario!(
     sign_edit_round_trip,
@@ -410,5 +410,5 @@ pending_scenario!(
 pending_scenario!(
     generated_structure_loot_chest,
     structure_loot_chest,
-    "Ferraloom Strict pending structure placement, advancement criteria, statistics and live loot resources"
+    "Ferraloom Strict pending structure placement, advancement criteria and statistics"
 );
