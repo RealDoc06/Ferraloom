@@ -190,7 +190,7 @@ pub trait BlockBehavior: Sync {
         level: &LevelReaderRef<'_>,
     ) -> Result<bool, LevelError> {
         Ok(ferraloom_util::shapes::is_shape_full_block(
-            &level.collision_shape(state, pos, &BlockCollisionContext::empty())?,
+            &level.collision_shape_without_context(state, pos)?,
         ))
     }
     fn support_shape(

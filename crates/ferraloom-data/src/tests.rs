@@ -565,3 +565,29 @@ fn placement_replacement_signature_preserves_contextual_overrides() {
     assert!(Block::STONE_SLAB.overrides(BlockMethod::CanBeReplaced));
     assert!(Block::SEA_PICKLE.overrides(BlockMethod::CanBeReplaced));
 }
+
+#[test]
+fn fluid_random_ticks_follow_the_fluid_type_and_preserve_waterlogged_states() {
+    for (block, ticks) in [(Block::WATER, false), (Block::LAVA, true)] {
+        for level in 0..16 {
+            let state = block
+                .default_state()
+                .with(properties::LEVEL, level)
+                .unwrap();
+            assert_eq!(state.data().fluid.is_randomly_ticking(), ticks);
+        }
+    }
+    let wet = Block::OAK_SLAB
+        .default_state()
+        .with(properties::WATERLOGGED, true)
+        .unwrap();
+    assert!(!wet.data().fluid.empty);
+    assert!(!wet.data().fluid.is_randomly_ticking());
+    assert!(
+        !Block::AIR
+            .default_state()
+            .data()
+            .fluid
+            .is_randomly_ticking()
+    );
+}

@@ -88,3 +88,8 @@ from that default even when the slab is currently a single half.
 Reversing the item's single block field loses those aliases. The clone-stack
 method's reflected base is `BlockBehaviour`; it creates one item and ignores
 the include-data flag. Overriding block families still require their own port.
+
+`fluid_random_ticking` records `FluidState#isRandomlyTicking`, which delegates
+only to the fluid type's virtual `isRandomlyTicking`. It has no level, position
+or state-property inputs. Source and flowing variants retain their own registry
+entries; waterlogged states use the same fluid fact as ordinary water.
