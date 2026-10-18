@@ -76,8 +76,10 @@ impl PlayerTeam {
     }
     /// Port of PlayerTeam#getFormattedName, retaining component style inheritance.
     pub fn formatted_name(&self, name: Component) -> Component {
-        let mut result = Component::default();
-        result.extra = vec![self.prefix.clone(), name, self.suffix.clone()];
+        let mut result = Component {
+            extra: vec![self.prefix.clone(), name, self.suffix.clone()],
+            ..Component::default()
+        };
         if let Some(color) = self.color {
             result.style.color = Some(
                 ferraloom_protocol::chat::TextColor::parse(

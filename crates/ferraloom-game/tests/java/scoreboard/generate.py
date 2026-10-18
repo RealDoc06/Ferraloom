@@ -19,6 +19,6 @@ with tempfile.TemporaryDirectory(prefix='scoreboard-vectors-') as temp:
         return result.stdout
     run([str(java/'javac'),'-cp',cp,'-d',str(classes),str(source/'ScoreboardVectors.java')])
     output = run([str(java/'java'),'-Xmx512m','-XX:+EnableDynamicAgentLoading','-Dnet.bytebuddy.experimental=true','-cp',f'{classes}:{cp}','ScoreboardVectors',str(classes/'scoreboard.dat')])
-    rows = [line for line in output.splitlines() if line.split('\t')[0] in {'membership','allied','collision','saved','codec','criterion'}]
+    rows = [line for line in output.splitlines() if line.split('\t')[0] in {'membership','allied','collision','saved','codec','criterion','ordering'}]
     (source/'vectors.tsv').write_text('\n'.join(rows)+'\n')
     print(f'{len(rows)} vanilla scoreboard cases')
