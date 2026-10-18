@@ -285,8 +285,14 @@ mod tests {
     }
     #[test]
     fn contextual_ranges_text_and_tooltips_match_java() {
-        let vectors: Vec<Vector> =
+        let mut vectors: Vec<Vector> =
             serde_json::from_str(include_str!("vanilla/context-suggestion-vectors.json")).unwrap();
+        vectors.extend(
+            serde_json::from_str::<Vec<Vector>>(include_str!(
+                "vanilla/nbt-suggestion-vectors.json"
+            ))
+            .unwrap(),
+        );
         let commands = Commands::default();
         let mut data = SuggestionData {
             players: vec!["Alex".into(), "Alice".into(), "Doc".into()],
@@ -317,7 +323,9 @@ mod tests {
                 );
                 builder.build()
             } else {
-                let wire = if vector.kind == "block" {
+                let wire = if vector.kind == "nbt" {
+                    CommandArgument::NbtTag {}
+                } else if vector.kind == "block" {
                     CommandArgument::BlockState {}
                 } else if vector.kind == "block_predicate" {
                     CommandArgument::BlockPredicate {}

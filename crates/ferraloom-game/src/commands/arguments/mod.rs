@@ -571,6 +571,17 @@ impl ArgumentType for MinecraftArgument {
         _context: &CommandContext<S>,
         mut builder: SuggestionsBuilder,
     ) -> Result<Suggestions, CommandSyntaxException> {
+        if matches!(self.wire, CommandArgument::NbtTag {}) {
+            let expected = ferraloom_nbt::parse_suggestions(&builder.remaining());
+            builder = builder.create_offset(builder.start + expected.cursor);
+            let remaining = builder.remaining_lower_case();
+            for value in expected.suggestions {
+                if suggestions::matches_substring(&remaining, &value.to_lowercase()) {
+                    builder.suggest(value);
+                }
+            }
+            return Ok(builder.build());
+        }
         if matches!(
             self.wire,
             CommandArgument::BlockState {} | CommandArgument::BlockPredicate {}

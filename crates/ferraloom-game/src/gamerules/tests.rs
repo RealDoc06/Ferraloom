@@ -4,14 +4,21 @@ fn saved_rule_partial_values_and_errors_match_java() {
     #[derive(serde::Deserialize)]
     struct Vector {
         input: String,
+        #[serde(default)]
         success: bool,
         #[serde(default)]
         empty_key: bool,
         partial: Option<serde_json::Value>,
         error: Option<String>,
     }
-    let vectors: Vec<Vector> =
+    let mut vectors: Vec<Vector> =
         serde_json::from_str(include_str!("../commands/vanilla/saved-rule-vectors.json")).unwrap();
+    vectors.extend(
+        serde_json::from_str::<Vec<Vector>>(include_str!(
+            "../commands/vanilla/saved-rule-error-vectors.json"
+        ))
+        .unwrap(),
+    );
     for vector in vectors {
         let tag = if vector.empty_key {
             let mut map = CompoundTag::new();

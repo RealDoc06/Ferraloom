@@ -152,7 +152,7 @@ impl GameRuleMap {
         let mut map = Self::default();
         let mut errors = Vec::new();
         let mut missed = CompoundTag::new();
-        for (key, value) in compound.iter() {
+        for (key, value) in compound.iter_java_order() {
             let rule = match saved_rule_key(&key.to_string_lossy()) {
                 Ok(rule) => rule,
                 Err(message) => {
