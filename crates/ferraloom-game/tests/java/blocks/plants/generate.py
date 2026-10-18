@@ -79,3 +79,7 @@ with tempfile.TemporaryDirectory(prefix='ferraloom-plants-java-') as directory:
     candidates='\n'.join(line for line in lines if line.startswith('spreader-candidate\t')) + '\n'
     (HERE/'spreader-candidates.tsv.gz').write_bytes(gzip.compress(candidates.encode(),mtime=0))
     print(f'{len(candidates.splitlines())} native ordered multiface spread candidate vectors')
+
+    special='\n'.join(line for line in lines if line.startswith('special-place\t')) + '\n'
+    (HERE/'special-placement.tsv.gz').write_bytes(gzip.compress(special.encode(),mtime=0))
+    print(f'{len(special.splitlines())} native coral/root placement vectors')

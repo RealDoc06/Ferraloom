@@ -144,6 +144,7 @@ pub fn ported_behavior(block: Block, method: BlockMethod) -> Option<&'static dyn
             &powder_snow::POWDER_SNOW
         }
 
+        C::CoralBlock if method == M::GetStateForPlacement => &coral::CORAL,
         C::CoralBlock | C::CoralPlantBlock | C::CoralFanBlock | C::CoralWallFanBlock
             if matches!(
                 method,

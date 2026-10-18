@@ -1577,3 +1577,79 @@ fn multiface_spread_candidate_order_matches_vanilla() {
     }
     assert_eq!(count, 4320);
 }
+
+#[test]
+fn coral_and_hanging_roots_placement_match_native_states_schedules_and_rng() {
+    use crate::block::DirectionalPlaceContext;
+    use ferraloom_protocol::component::ItemStack;
+    use ferraloom_util::random::{LegacyRandomSource, Random, RandomSource};
+    use std::io::Read;
+    let mut text = String::new();
+    flate2::read::GzDecoder::new(
+        include_bytes!("../../../tests/java/blocks/plants/special-placement.tsv.gz").as_slice(),
+    )
+    .read_to_string(&mut text)
+    .unwrap();
+    let (blocks, fluids) = tags();
+    let pos = BlockPos::new(8, 5, 8);
+    let stack = ItemStack::default();
+    let mut count = 0;
+    for line in text.lines() {
+        let f: Vec<_> = line.split('\t').collect();
+        let block = Block::from_protocol_id(f[1].parse().unwrap()).unwrap();
+        let fluid = BlockState::from_id(f[4].parse().unwrap()).unwrap();
+        let mut level = level();
+        level.set_block_tags(blocks.clone());
+        level.set_fluid_tags(fluids.clone());
+        level.set_block_state(pos, fluid).unwrap();
+        let neighbor: usize = f[3].parse().unwrap();
+        if neighbor < 6 {
+            level
+                .set_block_state(pos.relative(Direction::VALUES[neighbor], 1), fluid)
+                .unwrap();
+        }
+        level.set_random_streams(
+            Random::Legacy(LegacyRandomSource::new(f[2].parse().unwrap())),
+            0,
+        );
+        let context = DirectionalPlaceContext::new(
+            &LevelReaderRef::Server(&level),
+            pos,
+            Direction::North,
+            &stack,
+            Direction::Up,
+        )
+        .unwrap();
+        let actual = LevelAccessRef::Server(&mut level)
+            .get_state_for_placement(block, &context)
+            .unwrap();
+        assert_eq!(
+            actual.map_or(-1, |state| i32::from(state.id())),
+            f[5].parse::<i32>().unwrap(),
+            "state {line}"
+        );
+        assert_eq!(
+            level.random().next_long(),
+            f[6].parse::<i64>().unwrap(),
+            "RNG {line}"
+        );
+        let mut saved = ferraloom_storage::SerializableChunkData::default();
+        level
+            .save_chunk_ticks(ChunkPos::new(0, 0), &mut saved)
+            .unwrap();
+        let delays = saved
+            .block_ticks
+            .unwrap_or_default()
+            .into_iter()
+            .map(|tick| tick.delay.unwrap())
+            .collect::<Vec<_>>();
+        let expected = f[7]
+            .split(',')
+            .filter(|s| !s.is_empty())
+            .map(|s| s.parse::<i32>().unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(delays, expected, "scheduled death {line}");
+        count += 1;
+    }
+    assert_eq!(count, 1680);
+}

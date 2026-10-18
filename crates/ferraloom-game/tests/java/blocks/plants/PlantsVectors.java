@@ -149,6 +149,16 @@ public final class PlantsVectors {
                 System.out.println("plant-place\t"+BuiltInRegistries.BLOCK.getId(block)+"\t"+seed+"\t"+Block.getId(below.defaultBlockState())+"\t"+Block.getId(clicked)+"\t"+Block.getId(above)+"\t"+direction.ordinal()+"\t"+(result==null?-1:Block.getId(result))+"\t"+level.getRandom().nextLong());
             }
         }
+        for(var block:List.of(Blocks.HANGING_ROOTS,Blocks.TUBE_CORAL_BLOCK,Blocks.BRAIN_CORAL_BLOCK,Blocks.BUBBLE_CORAL_BLOCK,Blocks.FIRE_CORAL_BLOCK,Blocks.HORN_CORAL_BLOCK))
+            for(int neighbor=0;neighbor<=6;neighbor++)for(var fluid:List.of(Blocks.AIR.defaultBlockState(),Blocks.WATER.defaultBlockState(),Blocks.WATER.defaultBlockState().setValue(BlockStateProperties.LEVEL,1),Blocks.WATER.defaultBlockState().setValue(BlockStateProperties.LEVEL,8),Blocks.LAVA.defaultBlockState()))for(int seed=0;seed<8;seed++) {
+            level.chunks.clear();level.getChunkAt(pos).setBlockState(pos,fluid,816);
+            if(neighbor<6)level.getChunkAt(pos).setBlockState(pos.relative(Direction.values()[neighbor]),fluid,816);
+            level.trace.clear();level.getRandom().setSeed(seed);
+            var context=new net.minecraft.world.item.context.DirectionalPlaceContext(level,pos,Direction.NORTH,net.minecraft.world.item.ItemStack.EMPTY,Direction.UP);
+            var result=block.getStateForPlacement(context);
+            String scheduled=level.trace.stream().filter(t->t.startsWith("schedule:")).map(t->t.substring("schedule:".length())).collect(java.util.stream.Collectors.joining(","));
+            System.out.println("special-place\t"+BuiltInRegistries.BLOCK.getId(block)+"\t"+seed+"\t"+neighbor+"\t"+Block.getId(fluid)+"\t"+(result==null?-1:Block.getId(result))+"\t"+level.getRandom().nextLong()+"\t"+scheduled);
+        }
         for(var block:plants) {
             var states=new ArrayList<BlockState>();states.add(block.defaultBlockState());
             if(block.defaultBlockState().hasProperty(BlockStateProperties.DOUBLE_BLOCK_HALF)) states.add(block.defaultBlockState().setValue(BlockStateProperties.DOUBLE_BLOCK_HALF,net.minecraft.world.level.block.state.properties.DoubleBlockHalf.UPPER));

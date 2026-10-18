@@ -1,5 +1,5 @@
 //! Ports of living coral's water scan, delayed death and dead-state conversion.
-use super::super::{BlockBehavior, LevelAccessRef, LevelReaderRef, UpdateFlags};
+use super::super::{BlockBehavior, BlockPlaceContext, LevelAccessRef, LevelReaderRef, UpdateFlags};
 use crate::level::{Level, LevelError};
 use ferraloom_data::{Block, BlockClass, BlockState, properties as p, tags::FluidTags};
 use ferraloom_util::{BlockPos, Direction, random::RandomSource};
@@ -60,6 +60,16 @@ fn schedule_die(
     Ok(())
 }
 impl BlockBehavior for Coral {
+    fn get_state_for_placement(
+        &self,
+        block: Block,
+        context: &BlockPlaceContext<'_>,
+        level: &mut LevelAccessRef<'_, '_>,
+    ) -> Result<Option<BlockState>, LevelError> {
+        let state = block.default_state();
+        schedule_die(state, context.clicked_pos(), level)?;
+        Ok(Some(state))
+    }
     fn on_place(
         &self,
         state: BlockState,

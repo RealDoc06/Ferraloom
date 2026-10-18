@@ -44,6 +44,7 @@ pub(super) fn supports(block: Block, method: BlockMethod) -> bool {
                 | C::FarmlandBlock
                 | C::BambooStalkBlock
                 | C::MangrovePropaguleBlock
+                | C::HangingRootsBlock
                 | C::SeaPickleBlock
                 | C::SeagrassBlock
                 | C::BigDripleafBlock
@@ -225,6 +226,14 @@ impl BlockBehavior for PlantPlacement {
         }
         match block.class() {
             C::PitcherCropBlock => {}
+            C::HangingRootsBlock => {
+                state = state
+                    .with(
+                        p::WATERLOGGED,
+                        super::source_water(reader.get_fluid_state(pos)?),
+                    )
+                    .unwrap();
+            }
             C::MangrovePropaguleBlock => {
                 state = state
                     .with(
