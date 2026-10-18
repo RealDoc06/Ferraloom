@@ -221,19 +221,40 @@ pub fn tick_container_menu(
     player: EntityRef,
     level: &mut Level,
 ) -> std::result::Result<(), crate::level::LevelError> {
-    tick_container_menu_inner(player, level).map_err(|error| match error {
+    broadcast_container_menu(player, level)?;
+    check_container_menu_still_valid(player, level)
+}
+fn menu_level_error(error: MenuError) -> crate::level::LevelError {
+    match error {
         MenuError::Level(error) => error,
         MenuError::Unsupported(operation) => crate::level::LevelError::Inventory(operation),
         _ => crate::level::LevelError::Inventory("container synchronization codec"),
-    })
+    }
 }
-fn tick_container_menu_inner(player: EntityRef, level: &mut Level) -> Result<()> {
+/// Port of the current containerMenu.broadcastChanges call used by rewards.
+/// The retained receiver finishes broadcasting even if a callback replaces it.
+pub fn broadcast_container_menu(
+    player: EntityRef,
+    level: &mut Level,
+) -> std::result::Result<(), crate::level::LevelError> {
     let reference = level.entity::<ServerPlayer>(player)?.menus.current_ref();
     with_menu_callback(player, reference, level, |context| {
         broadcast_menu_changes(context)?;
         context.menu_mut()?.changes.clear();
         Ok(())
-    })?;
+    })
+    .map_err(menu_level_error)?;
+    Ok(())
+}
+
+/// Port of ServerPlayer#doTick's current menu validity check, with no broadcast.
+pub fn check_container_menu_still_valid(
+    player: EntityRef,
+    level: &mut Level,
+) -> std::result::Result<(), crate::level::LevelError> {
+    check_container_menu_still_valid_inner(player, level).map_err(menu_level_error)
+}
+fn check_container_menu_still_valid_inner(player: EntityRef, level: &mut Level) -> Result<()> {
     // Java reads containerMenu again after broadcasting: a synchronous slot
     // callback may have closed or replaced the menu just broadcast.
     let bound = &level
@@ -251,4 +272,18 @@ fn tick_container_menu_inner(player: EntityRef, level: &mut Level) -> Result<()>
             .extend(packets);
     }
     Ok(())
+}
+
+/// Port of Player#addItem. The supplied receiver is caller-owned generated loot;
+/// native Inventory#add mutates its remainder before any subsequent world call.
+pub fn add_item(
+    player: EntityRef,
+    stack: &mut ItemStack,
+    level: &mut Level,
+) -> std::result::Result<bool, crate::level::LevelError> {
+    let player = level.entity_mut::<ServerPlayer>(player)?;
+    let infinite_materials = player.instabuild();
+    Ok(player
+        .inventory
+        .add(stack, &mut player.parent.equipment, infinite_materials))
 }
