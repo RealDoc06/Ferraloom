@@ -301,14 +301,14 @@ mod tests {
             .unwrap()
             .parent
             .parent
-            .set_pos(Vec3::new(11.5, 1.0, 2.5));
+            .set_pos(Vec3::new(11.5, 0.0, 2.5));
         assert!(!block_menu_still_valid(player, &[handle], &level).unwrap());
         level
             .entity_mut::<ServerPlayer>(player)
             .unwrap()
             .parent
             .parent
-            .set_pos(Vec3::new(11.49, 1.0, 2.5));
+            .set_pos(Vec3::new(11.49, 0.0, 2.5));
         assert!(block_menu_still_valid(player, &[handle], &level).unwrap());
         level.remove_block_entity(handle.pos).unwrap();
         assert!(!block_menu_still_valid(player, &[handle], &level).unwrap());
