@@ -44,6 +44,19 @@ pub fn swing_and_reset_attack_strength(
 }
 
 impl ServerPlayer {
+    /// Port of Player#hasCorrectToolForDrops, including the native short circuit.
+    pub fn has_correct_tool_for_drops(
+        &self,
+        state: ferraloom_data::BlockState,
+        level: &crate::level::Level,
+    ) -> Result<bool, crate::level::LevelError> {
+        Ok(!state.data().requires_correct_tool
+            || super::inventory::is_correct_tool_for_drops(
+                self.inventory.selected_item(),
+                state,
+                level,
+            )?)
+    }
     /// Port of LivingEntity#getItemInHand with Player's main-hand inventory slot.
     pub fn get_item_in_hand(&self, hand: InteractionHand) -> &ItemStack {
         match hand {

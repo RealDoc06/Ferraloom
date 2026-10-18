@@ -105,6 +105,7 @@ public final class EntityVectors {
         TeleportVectors.run(new EntityFixture(r));
         PushVectors.run(new EntityFixture(r));
         InteractionVectors.run(new EntityFixture(r));
+        ToolVectors.run(new EntityFixture(r));
         ContactVectors.run(new EntityFixture(r));
         for(String kind:List.of("tnt","player","flying"))for(boolean above:List.of(false,true))for(boolean drag:List.of(false,true))for(double speed:new double[]{-1,-0.25,0.65,2}){
           var f=new EntityFixture(r);Entity e=kind.equals("tnt")?new net.minecraft.world.entity.item.PrimedTnt(EntityTypes.TNT,f):new TestPlayer(f);

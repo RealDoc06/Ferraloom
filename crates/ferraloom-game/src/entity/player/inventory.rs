@@ -1,4 +1,6 @@
 //! Port of Player's Inventory and the ItemStack operations used by containers.
+#[cfg(test)]
+mod tool_tests;
 use super::equipment::EntityEquipment;
 use ferraloom_data::registries::data_component_type::Id as ComponentType;
 use ferraloom_nbt::{ListTag, Tag};
@@ -25,6 +27,44 @@ pub fn component(stack: &ItemStack, key: ComponentType) -> Option<&DataComponent
     DataComponentMap::item_defaults(stack.item)
         .expect("generated vanilla item components")
         .get(key)
+}
+/// Port of ItemStack#isCorrectToolForDrops, Item#isCorrectToolForDrops and
+/// Tool#isCorrectForDrops. Membership uses the current datapack's block tags.
+pub fn is_correct_tool_for_drops(
+    stack: &ItemStack,
+    state: ferraloom_data::BlockState,
+    level: &crate::level::Level,
+) -> std::result::Result<bool, crate::level::LevelError> {
+    use crate::level::LevelError;
+    use ferraloom_protocol::codec::HolderSet;
+    if stack.is_empty() {
+        return Ok(false);
+    }
+    let Some(DataComponent::Tool(tool)) = component(stack, ComponentType::TOOL) else {
+        return Ok(false);
+    };
+    for rule in &tool.rules {
+        let Some(correct) = rule.correct_for_drops else {
+            continue;
+        };
+        let matches = match &rule.blocks.0 {
+            HolderSet::Direct(blocks) => {
+                blocks.iter().any(|id| id.as_str() == state.block().name())
+            }
+            HolderSet::Named(name) => {
+                let tags = level.block_tags()?;
+                let key = ferraloom_data::datapack::Identifier::new(name.namespace(), name.path())
+                    .map_err(|_| LevelError::MissingBlockTag)?;
+                // TODO(5a): registry-aware component decoding must reject missing tags.
+                let tag = tags.resolve_name(&key).ok_or(LevelError::MissingBlockTag)?;
+                tags.contains(tag, state.block())
+            }
+        };
+        if matches {
+            return Ok(correct);
+        }
+    }
+    Ok(false)
 }
 pub fn count(stack: &ItemStack) -> i32 {
     if stack.is_empty() {
