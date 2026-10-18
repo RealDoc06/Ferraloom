@@ -8,3 +8,5 @@ pub use definition::{EnchantmentCost, EnchantmentDefinition};
 mod attribute;
 pub mod helper;
 pub use attribute::EnchantmentAttributeEffect;
+mod value_component;
+pub use value_component::EnchantmentValueEffectComponent;

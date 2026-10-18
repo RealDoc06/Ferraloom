@@ -125,9 +125,11 @@ impl<T> TargetedConditionalEffect<T> {
     }
 }
 fn requirements(value: &Value) -> Result<Option<Holder<LootItemCondition>>> {
-    codec::optional(value, "requirements", |value| {
-        Holder::decode(value, LootItemCondition::decode)
-    })
+    value
+        .get("requirements")
+        .filter(|value| !value.is_null())
+        .map(|value| Holder::decode(value, LootItemCondition::decode))
+        .transpose()
 }
 fn validate(
     requirement: Option<&Holder<LootItemCondition>>,
