@@ -7,6 +7,11 @@ use ferraloom_data::{Block, BlockState, FluidState};
 use ferraloom_nbt::{CompoundTag, Tag};
 use std::{cell::OnceCell, collections::BTreeMap};
 
+mod lighting;
+pub use lighting::ProtoChunkLightEngine;
+#[cfg(test)]
+mod lighting_tests;
+
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum ChunkStatus {
     Empty,
@@ -94,6 +99,7 @@ pub struct RegionChunk {
     pub block_ticks: ProtoChunkTicks<Block>,
     pub fluid_ticks: ProtoChunkTicks<ferraloom_data::registries::fluid::Id>,
     pub poi_changes: Vec<([i32; 3], BlockState, BlockState)>,
+    sky_light_sources: ferraloom_light::ChunkSkyLightSources,
     heightmaps: [OnceCell<[i32; 256]>; 6],
 }
 impl RegionChunk {
@@ -106,6 +112,7 @@ impl RegionChunk {
             .set(chunk.ocean_floor)
             .unwrap();
         Self {
+            sky_light_sources: ferraloom_light::ChunkSkyLightSources::new(chunk.min_y),
             structures: crate::structure::pipeline::ChunkStructures::new(chunk.position),
             chunk,
             status,
@@ -487,6 +494,7 @@ struct RegionEnvironment {
     biome_indices: Vec<usize>,
 }
 pub struct WorldGenRegion<'a> {
+    light_engine: Option<&'a mut dyn ProtoChunkLightEngine>,
     environment: Option<RegionEnvironment>,
     random: Option<ferraloom_util::random::Random>,
     fast_lava: Option<bool>,
@@ -580,6 +588,7 @@ impl<'a> WorldGenRegion<'a> {
             return Err(Error("duplicate worldgen chunk".into()));
         }
         Ok(Self {
+            light_engine: None,
             environment: None,
             random: None,
             skip_unsupported: false,
@@ -597,6 +606,11 @@ impl<'a> WorldGenRegion<'a> {
             seed,
             sea_level,
         })
+    }
+    /// Lend the executor's canonical proto light engine for this region call.
+    /// The executor drains its checks before any changed proto save/transport.
+    pub fn set_light_engine(&mut self, engine: &'a mut dyn ProtoChunkLightEngine) {
+        self.light_engine = Some(engine);
     }
     // --- ore and cave family ---
     pub fn multiface_state_for_placement(
@@ -879,26 +893,54 @@ impl<'a> WorldGenRegion<'a> {
             // still reports true once its write bounds accepted the position.
             return Ok(true);
         }
-        if self.chunks[index].status >= ChunkStatus::InitializeLight {
+        if self.chunks[index].status >= ChunkStatus::InitializeLight && self.light_engine.is_none()
+        {
             return Err(Error(
                 "Unsupported: lit ProtoChunk mutation needs the relight adapter".into(),
             ));
         }
-        let old = self.block(p)?;
         let in_height = p[1] >= self.chunks[index].chunk.min_y
             && p[1] < self.chunks[index].chunk.min_y + self.chunks[index].chunk.height;
         let section_y = in_height.then(|| ((p[1] - self.chunks[index].chunk.min_y) >> 4) as usize);
         let skip_heightmaps = section_y.is_some_and(|section| {
             self.chunks[index].chunk.sections[section].has_only_air() && state.block() == Block::AIR
         });
+        // ProtoChunk returns AIR without touching even a stored cave-air cell
+        // when this section is entirely air. WorldGenRegion still runs its own
+        // POI/BE/post-processing tail with that returned state.
+        let old = if skip_heightmaps {
+            state
+        } else {
+            self.block(p)?
+        };
+        let was_empty =
+            section_y.map(|section| self.chunks[index].chunk.sections[section].has_only_air());
         if self.chunks[index].status >= ChunkStatus::Terrain {
-            if in_height {
+            if in_height && !skip_heightmaps {
                 self.set_block_in_section(p, state)?;
             }
-        } else {
+        } else if !skip_heightmaps {
             self.chunks[index]
                 .chunk
                 .set_block((p[0] & 15) as u8, p[1], (p[2] & 15) as u8, state);
+        }
+        if self.chunks[index].status >= ChunkStatus::InitializeLight
+            && !skip_heightmaps
+            && let Some(section) = section_y
+        {
+            let pos = ferraloom_util::BlockPos::new(p[0], p[1], p[2]);
+            let empty = self.chunks[index].chunk.sections[section].has_only_air();
+            let engine = self
+                .light_engine
+                .as_mut()
+                .expect("lit proto adapter checked");
+            if was_empty != Some(empty) {
+                engine.update_section_status(ferraloom_util::SectionPos::from_block(pos), empty);
+            }
+            if ferraloom_light::has_different_light_properties(old, state) {
+                self.chunks[index].update_sky_light_sources(pos);
+                engine.check_block(pos);
+            }
         }
         if in_height && !skip_heightmaps {
             let region_chunk = &mut self.chunks[index];
@@ -964,7 +1006,8 @@ impl<'a> WorldGenRegion<'a> {
         if self.chunks[index].status == ChunkStatus::Full {
             return Ok(());
         }
-        if self.chunks[index].status >= ChunkStatus::InitializeLight {
+        if self.chunks[index].status >= ChunkStatus::InitializeLight && self.light_engine.is_none()
+        {
             return Err(Error(
                 "Unsupported: lit ProtoChunk mutation needs the relight adapter".into(),
             ));
