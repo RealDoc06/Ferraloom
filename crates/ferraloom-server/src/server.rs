@@ -1034,6 +1034,18 @@ impl MinecraftServer {
                 LevelEffect::DestroyParticles { .. } => self.pending_level_hooks.particles += 1,
                 LevelEffect::BlockDestroyed { .. } => self.pending_level_hooks.game_events += 1,
                 LevelEffect::PendingPrecipitation(_) => {}
+                LevelEffect::PlayerPacket { recipients, packet } => {
+                    for entity in recipients {
+                        for &connection in &self.players {
+                            let c = self.connections.get_mut(&connection).unwrap();
+                            if matches!(c.phase, Phase::Play(id) if id == entity) && !c.close {
+                                c.push(*packet.clone());
+                                break;
+                            }
+                        }
+                    }
+                }
+                LevelEffect::GameEvent { .. } => self.pending_level_hooks.game_events += 1,
             }
         }
         self.world
