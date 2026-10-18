@@ -53,6 +53,26 @@ pub(crate) struct ReadyGeneration {
     pub pos: ChunkPos,
     pub result: Result<GenerationOutput>,
 }
+/// Identity captured by a main-executor continuation. Request IDs identify
+/// submissions; the epoch also rejects a holder removed and recreated in place.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct GenerationIdentity {
+    pub pos: ChunkPos,
+    pub request: u64,
+    pub holder_epoch: u64,
+}
+impl GenerationIdentity {
+    pub fn of(holder: &ferraloom_game::level::chunk_holder::ChunkHolder) -> Self {
+        Self {
+            pos: holder.position,
+            request: holder.request_id,
+            holder_epoch: holder.epoch,
+        }
+    }
+    pub fn matches(&self, holder: &ferraloom_game::level::chunk_holder::ChunkHolder) -> bool {
+        *self == Self::of(holder)
+    }
+}
 pub(crate) struct GenerationCompletion {
     pub state: GenerationState,
     pub result: Result<GenerationOutput>,

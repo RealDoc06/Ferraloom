@@ -1,8 +1,8 @@
 //! World snapshots cross worker boundaries; only tick integration mutates Level.
 use crate::{
     generation::{
-        GenerationCompletion, GenerationOutput, GenerationRequest, GenerationRevision,
-        GenerationState, ReadyGeneration, StructureSnapshot,
+        GenerationCompletion, GenerationIdentity, GenerationOutput, GenerationRequest,
+        GenerationRevision, GenerationState, ReadyGeneration, StructureSnapshot,
     },
     jobs::JobPool,
     properties::ServerProperties,
@@ -622,6 +622,7 @@ pub struct World {
     saving: JobPool,
     pending: BTreeMap<u64, (ChunkPos, oneshot::Receiver<Result<GenerationOutput>>)>,
     completed_generation: VecDeque<ReadyGeneration>,
+    pub(crate) exclusive_ready_tasks: VecDeque<GenerationIdentity>,
     light_tx: mpsc::Sender<LightJob>,
     pub light_rx: tokio::sync::mpsc::UnboundedReceiver<LitChunk>,
     pub saved: BTreeMap<i64, SerializableChunkData>,
@@ -890,6 +891,7 @@ impl World {
             saving: JobPool::new("ferraloom-save", 1)?,
             pending: BTreeMap::new(),
             completed_generation: VecDeque::new(),
+            exclusive_ready_tasks: VecDeque::new(),
             light_tx,
             light_rx,
             saved: BTreeMap::new(),
@@ -2559,6 +2561,32 @@ mod generation_order_tests {
             world.structure_snapshots[&second.pack()].revision,
             GenerationRevision(2)
         );
+        for x in second.x - 1..=second.x + 1 {
+            for z in second.z - 1..=second.z + 1 {
+                world.light_ready.insert(ChunkPos::new(x, z));
+            }
+        }
+        crate::server::generation_completion::queue_ready_promotions(&level, &mut world);
+        assert!(!world.ready.contains(&second));
+        assert_eq!(world.exclusive_ready_tasks.len(), 1);
+        // A queued ready task cannot prepare a recreated/demoted holder. It
+        // stays inert until the exclusive slot checks its captured identity.
+        let holder = level.chunks.holders.get_mut(&second.pack()).unwrap();
+        holder.epoch += 1;
+        holder.ticket_level = 45;
+        crate::server::generation_completion::finish_promotions(&mut level, &mut world).unwrap();
+        assert!(!world.ready.contains(&second));
+        assert!(world.exclusive_ready_tasks.is_empty());
+        level
+            .chunks
+            .holders
+            .get_mut(&second.pack())
+            .unwrap()
+            .ticket_level = 31;
+        crate::server::generation_completion::queue_ready_promotions(&level, &mut world);
+        assert!(!world.ready.contains(&second));
+        crate::server::generation_completion::finish_promotions(&mut level, &mut world).unwrap();
+        assert!(world.ready.contains(&second));
         // Cancel a completed later result while it is still held behind an
         // earlier request. It must save its payload without promoting a holder.
         let cancelled = ChunkPos::new(2, 0);

@@ -1277,6 +1277,7 @@ impl MinecraftServer {
     }
     fn integrate_jobs(&mut self) -> Result<()> {
         self.progress_chunk_jobs()?;
+        generation_completion::finish_promotions(&mut self.level, &mut self.world)?;
         self.evict_unloaded_chunks()
     }
     /// Progress without eviction. The shared-publication driver uses this split
@@ -1304,7 +1305,7 @@ impl MinecraftServer {
         while let Ok(light) = self.world.light_rx.try_recv() {
             self.integrate_command_light(light)?;
         }
-        generation_completion::finish_promotions(&mut self.level, &mut self.world)?;
+        generation_completion::queue_ready_promotions(&self.level, &mut self.world);
         Ok(())
     }
     fn evict_unloaded_chunks(&mut self) -> Result<()> {

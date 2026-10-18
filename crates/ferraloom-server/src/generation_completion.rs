@@ -91,7 +91,9 @@ fn integrate_light(level: &mut ServerLevel, world: &mut World, light: LitChunk) 
     Ok(())
 }
 
-pub(crate) fn finish_promotions(level: &mut ServerLevel, world: &mut World) -> Result<()> {
+/// Queue prepareTickingChunk continuations without mutating Level. A managed
+/// shared read may progress FULL without executing these exclusive callbacks.
+pub(crate) fn queue_ready_promotions(level: &ServerLevel, world: &mut World) {
     let positions = level.chunks.holder_positions().collect::<Vec<_>>();
     for pos in positions {
         if level.chunks.holders[&pos.pack()].requested_full_status()
@@ -100,12 +102,36 @@ pub(crate) fn finish_promotions(level: &mut ServerLevel, world: &mut World) -> R
             && world.light_ready.contains(&pos)
             && full_chunk_range_ready(&world.light_ready, pos, 1)
         {
-            level
-                .level
-                .post_process_generation(pos)
-                .map_err(game_error)?;
-            world.ready.insert(pos);
+            let identity =
+                crate::generation::GenerationIdentity::of(&level.chunks.holders[&pos.pack()]);
+            if !world.exclusive_ready_tasks.contains(&identity) {
+                world.exclusive_ready_tasks.push_back(identity);
+            }
         }
+    }
+}
+
+/// Exclusive prepareTickingChunk slot. Never called by the shared managed pump;
+/// the documented single-region deviation ends at phase-5 continuations.
+pub(crate) fn finish_promotions(level: &mut ServerLevel, world: &mut World) -> Result<()> {
+    queue_ready_promotions(level, world);
+    while let Some(identity) = world.exclusive_ready_tasks.pop_front() {
+        let current = level
+            .chunks
+            .holders
+            .get(&identity.pos.pack())
+            .is_some_and(|holder| {
+                identity.matches(holder)
+                    && holder.requested_full_status() >= FullChunkStatus::BlockTicking
+            });
+        if !current || world.ready.contains(&identity.pos) {
+            continue;
+        }
+        if let Err(error) = level.level.post_process_generation(identity.pos) {
+            world.exclusive_ready_tasks.push_front(identity);
+            return Err(game_error(error));
+        }
+        world.ready.insert(identity.pos);
     }
     Ok(())
 }
@@ -127,6 +153,9 @@ impl MinecraftServer {
         self.request_area(position, 0)?;
         loop {
             self.progress_chunk_jobs()?;
+            // This command caller owns exclusive Level access. A parked shared
+            // acquisition must only pump progress and must never run this slot.
+            finish_promotions(&mut self.level, &mut self.world)?;
             self.update_chunk_tickets()?;
             if self.world.ready.contains(&position) {
                 return Ok(());
