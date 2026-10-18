@@ -43,10 +43,10 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Spawning, trial spawners and vaults](features/spawning.md) | 138 | 138 | 0 | 0 | 0 |
 | [Statistics](features/statistics.md) | 96 | 3 | 90 | 3 | 0 |
 | [Tags](features/tags.md) | 907 | 907 | 0 | 0 | 0 |
-| [Ticking, game events and vibrations](features/ticking.md) | 183 | 175 | 8 | 0 | 0 |
+| [Ticking, game events and vibrations](features/ticking.md) | 187 | 179 | 8 | 0 | 0 |
 | [Villages, trading and POI](features/villages-trading-poi.md) | 599 | 599 | 0 | 0 | 0 |
 | [Wandering traders](features/wandering-traders.md) | 5 | 5 | 0 | 0 | 0 |
 | [Weather, time and environment](features/weather-time.md) | 85 | 85 | 0 | 0 | 0 |
 | [World storage and data fixing](features/world-storage.md) | 307 | 306 | 1 | 0 | 0 |
 | [World generation](features/worldgen.md) | 3113 | 2640 | 173 | 300 | 0 |
-| **Total** | **19205** | **12077** | **4259** | **2869** | **0** |
+| **Total** | **19209** | **12081** | **4259** | **2869** | **0** |

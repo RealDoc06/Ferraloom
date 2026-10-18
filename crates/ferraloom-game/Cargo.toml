@@ -8,6 +8,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+elsa = "1.11.2"
 ferraloom-util.workspace = true
 ferraloom-nbt.workspace = true
 ferraloom-data.workspace = true
