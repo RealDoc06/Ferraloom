@@ -1,5 +1,7 @@
 # Blocks
 
+Generic player interaction follows `ServerPlayerGameMode#useItemOn` through the block use virtuals, canonical hands and cooldowns. Item `useOn` and spectator portal effects remain explicit Strict/Warn policy seams until their owning ports land; live interaction parity is pending.
+
 One class row per bootstrapped runtime Block class, listing every block id assigned to it. Class membership covers all 1,286 report block ids. Additional rows isolate shared mechanics and edge cases.
 
 | ID | Feature | Vanilla source | Test | Vanilla | Ferraloom |

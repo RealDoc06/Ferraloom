@@ -40,6 +40,8 @@ pub mod weather;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum LevelError {
+    UnsupportedItemUseOn(ferraloom_data::Item),
+    UnsupportedPortalUse(Block),
     UnsupportedAdvancementCriterion(crate::advancements::criteria::Trigger),
     Inventory(&'static str),
     MissingBlockEntity(crate::block::entity::BlockEntityRef),

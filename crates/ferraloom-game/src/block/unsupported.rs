@@ -13,6 +13,8 @@ pub enum UnportedBehavior {
 /// Approved whole-effect skips, distinct from queries that require a value.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum UnportedOperation {
+    ItemUseOn(ferraloom_data::Item),
+    PortalUse(Block),
     AdvancementCriterion(crate::advancements::criteria::Trigger),
     WeatherStrike,
     PackReload,
@@ -207,6 +209,16 @@ impl UnportedCalls {
         self.stats.skipped_calls = self.stats.skipped_calls.saturating_add(1);
         if !self.seen.contains(&call) {
             match &call {
+                UnportedCall::Operation(UnportedOperation::ItemUseOn(item)) => eprintln!(
+                    "Unported item use effect skipped: {}#useOn (skipped calls: {})",
+                    item.name(),
+                    self.stats.skipped_calls
+                ),
+                UnportedCall::Operation(UnportedOperation::PortalUse(block)) => eprintln!(
+                    "Unported portal use effect skipped: {} (skipped calls: {})",
+                    block.name(),
+                    self.stats.skipped_calls
+                ),
                 UnportedCall::Operation(UnportedOperation::AdvancementCriterion(trigger)) => {
                     eprintln!(
                         "Unported advancement criterion skipped: {} (skipped calls: {})",
@@ -305,6 +317,8 @@ impl Level {
         let calls = &mut self.region_mut().unported;
         if calls.policy == UnportedBehavior::Strict {
             return Err(match operation {
+                UnportedOperation::ItemUseOn(item) => LevelError::UnsupportedItemUseOn(item),
+                UnportedOperation::PortalUse(block) => LevelError::UnsupportedPortalUse(block),
                 UnportedOperation::AdvancementCriterion(trigger) => {
                     LevelError::UnsupportedAdvancementCriterion(trigger)
                 }
