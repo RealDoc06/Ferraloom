@@ -15,7 +15,7 @@ pub enum EnvironmentValue {
         can_set_spawn: String,
         destroy_on_use: bool,
         destroy_on_leave: bool,
-        error_message: Option<Component>,
+        error_message: Option<Box<Component>>,
     },
 }
 impl EnvironmentValue {

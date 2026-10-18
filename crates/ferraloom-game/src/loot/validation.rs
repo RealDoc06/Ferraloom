@@ -67,11 +67,11 @@ impl ValidationContext<'_> {
                 }
                 _ => None,
             };
-            if let Some(key) = &key {
-                if !c.visited.insert(key.clone()) {
-                    c.problem("recursive element reference", true);
-                    return;
-                }
+            if let Some(key) = &key
+                && !c.visited.insert(key.clone())
+            {
+                c.problem("recursive element reference", true);
+                return;
             }
             match holder.resolve(c.data) {
                 Ok(value) => value.validate(c),
@@ -98,11 +98,11 @@ impl ValidationContext<'_> {
                 HolderSet::Tag(id) => Some(ValidationReference::Tag(T::REGISTRY, id.clone())),
                 _ => None,
             };
-            if let Some(key) = &tag_key {
-                if !c.visited.insert(key.clone()) {
-                    c.problem("recursive tag reference", true);
-                    return;
-                }
+            if let Some(key) = &tag_key
+                && !c.visited.insert(key.clone())
+            {
+                c.problem("recursive tag reference", true);
+                return;
             }
             match set.resolve(c.data) {
                 Ok(holders) => {
@@ -274,10 +274,10 @@ impl Validatable for LootItemFunction {
             },
             FunctionKind::Component(function) => {
                 c.params(function.params());
-                if let super::ComponentFunction::SetLootTable { table, .. } = function {
-                    if !c.data.tables.contains_key(table) {
-                        c.problem(format!("unknown loot_table {table}"), true);
-                    }
+                if let super::ComponentFunction::SetLootTable { table, .. } = function
+                    && !c.data.tables.contains_key(table)
+                {
+                    c.problem(format!("unknown loot_table {table}"), true);
                 }
             }
             FunctionKind::Sequence(functions) => c.set("functions", functions, 0),

@@ -47,7 +47,7 @@ pub enum ComponentFunction {
         properties: Vec<String>,
     },
     SetName {
-        name: Option<Component>,
+        name: Option<Box<Component>>,
         entity: Option<EntityTarget>,
         item_name: bool,
     },
@@ -92,7 +92,9 @@ impl ComponentFunction {
                 Self::CopyState { block, properties }
             }
             "minecraft:set_name" => Self::SetName {
-                name: codec::optional(v, "name", |v| Ok(<Component as Persistent>::from_json(v)?))?,
+                name: codec::optional(v, "name", |v| {
+                    Ok(Box::new(<Component as Persistent>::from_json(v)?))
+                })?,
                 entity: codec::optional(v, "entity", EntityTarget::decode)?,
                 item_name: match codec::optional(v, "target", codec::string)?
                     .unwrap_or("custom_name")
@@ -221,10 +223,8 @@ impl ComponentFunction {
                 };
                 if let Some(name) = name {
                     set(&mut stack, DataComponent::CustomName(Box::new(name)));
-                } else if present {
-                    if let Some(s) = &mut stack.0 {
-                        s.components.remove(ComponentTypeId::CUSTOM_NAME);
-                    }
+                } else if present && let Some(s) = &mut stack.0 {
+                    s.components.remove(ComponentTypeId::CUSTOM_NAME);
                 }
             }
             Self::CopyState { block, properties } => {
@@ -263,7 +263,7 @@ impl ComponentFunction {
                         if let Some(entity) = entity.and_then(|target| c.params.entity(target)) {
                             c.facts.resolve_component(name, entity)?
                         } else {
-                            name.clone()
+                            name.as_ref().clone()
                         };
                     set(
                         &mut stack,

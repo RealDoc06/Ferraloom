@@ -111,10 +111,10 @@ impl LootPool {
         c: &mut EvalContext<'_>,
         output: &mut Output<'_>,
     ) -> Result<()> {
-        if let Some(condition) = &self.condition {
-            if !condition.test(data, c)? {
-                return Ok(());
-            }
+        if let Some(condition) = &self.condition
+            && !condition.test(data, c)?
+        {
+            return Ok(());
         }
         let count = self.rolls.get(data, c)?.wrapping_add(mth::floor(f64::from(
             self.bonus_rolls.get(data, c)? * c.params.luck,

@@ -194,10 +194,10 @@ impl LootItemFunction {
         data: &LootData,
         c: &mut EvalContext<'_>,
     ) -> Result<ItemStack> {
-        if let Some(condition) = &self.condition {
-            if !condition.test(data, c)? {
-                return Ok(stack);
-            }
+        if let Some(condition) = &self.condition
+            && !condition.test(data, c)?
+        {
+            return Ok(stack);
         }
         match &self.kind {
             FunctionKind::Item(function) => stack = function.apply(stack, data, c)?,
@@ -243,24 +243,22 @@ impl LootItemFunction {
                 let components = stack.components()?;
                 if let Some(DataComponent::MaxDamage(max)) =
                     components.get(ComponentTypeId::MAX_DAMAGE)
+                    && components.get(ComponentTypeId::DAMAGE).is_some()
+                    && components.get(ComponentTypeId::UNBREAKABLE).is_none()
                 {
-                    if components.get(ComponentTypeId::DAMAGE).is_some()
-                        && components.get(ComponentTypeId::UNBREAKABLE).is_none()
-                    {
-                        let old = match components.get(ComponentTypeId::DAMAGE) {
-                            Some(DataComponent::Damage(v)) => v.0.clamp(0, max.0),
-                            _ => 0,
-                        };
-                        let base = if *add {
-                            1.0 - old as f32 / max.0 as f32
-                        } else {
-                            0.0
-                        };
-                        let pct = 1.0 - (damage.get(data, c)? + base).clamp(0.0, 1.0);
-                        let value = ferraloom_util::mth::floor(f64::from(pct * max.0 as f32))
-                            .clamp(0, max.0);
-                        set_component(&mut stack, DataComponent::Damage(VarInt(value)));
-                    }
+                    let old = match components.get(ComponentTypeId::DAMAGE) {
+                        Some(DataComponent::Damage(v)) => v.0.clamp(0, max.0),
+                        _ => 0,
+                    };
+                    let base = if *add {
+                        1.0 - old as f32 / max.0 as f32
+                    } else {
+                        0.0
+                    };
+                    let pct = 1.0 - (damage.get(data, c)? + base).clamp(0.0, 1.0);
+                    let value =
+                        ferraloom_util::mth::floor(f64::from(pct * max.0 as f32)).clamp(0, max.0);
+                    set_component(&mut stack, DataComponent::Damage(VarInt(value)));
                 }
             }
             FunctionKind::SetComponents(patch) => {

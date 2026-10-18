@@ -48,15 +48,15 @@ macro_rules! range {
                 Ok(match self {
                     Self::Point(point) => point.get(data, c)? == value,
                     Self::Line { min, max } => {
-                        if let Some(min) = min {
-                            if value < min.get(data, c)? {
-                                return Ok(false);
-                            }
+                        if let Some(min) = min
+                            && value < min.get(data, c)?
+                        {
+                            return Ok(false);
                         }
-                        if let Some(max) = max {
-                            if value > max.get(data, c)? {
-                                return Ok(false);
-                            }
+                        if let Some(max) = max
+                            && value > max.get(data, c)?
+                        {
+                            return Ok(false);
                         }
                         true
                     }

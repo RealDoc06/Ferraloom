@@ -134,11 +134,10 @@ fn match_partial(
                     if level.0 == 0 || !bounds(&test.levels, level.0) {
                         continue;
                     }
-                    if let Some(set) = &test.enchantments {
-                        if !matches_set(set, &enchantment.0, PredicateRegistry::Enchantment, facts)?
-                        {
-                            continue;
-                        }
+                    if let Some(set) = &test.enchantments
+                        && !matches_set(set, &enchantment.0, PredicateRegistry::Enchantment, facts)?
+                    {
+                        continue;
                     }
                     found = true;
                     break;
@@ -288,10 +287,10 @@ fn match_partial(
             match &test.modifiers {
                 None => true,
                 Some(test) => match_collection(test, value, |p, v| {
-                    if let Some(set) = &p.attribute {
-                        if !matches_set(set, &v.attribute.0, PredicateRegistry::Attribute, facts)? {
-                            return Ok(false);
-                        }
+                    if let Some(set) = &p.attribute
+                        && !matches_set(set, &v.attribute.0, PredicateRegistry::Attribute, facts)?
+                    {
+                        return Ok(false);
                     }
                     Ok(p.id.as_ref().is_none_or(|id| *id == v.modifier.id)
                         && super::DoubleBounds {

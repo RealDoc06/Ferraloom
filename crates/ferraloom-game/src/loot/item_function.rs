@@ -108,17 +108,15 @@ impl ItemFunction {
                         .0
                         .as_ref()
                         .is_some_and(|s| s.item == Item::PLAYER_HEAD)
+                    && let Some(entity) = c.params.entity(*target)
+                    && let Some(profile) = c.facts.player_profile(entity)?
                 {
-                    if let Some(entity) = c.params.entity(*target) {
-                        if let Some(profile) = c.facts.player_profile(entity)? {
-                            stack
-                                .0
-                                .as_mut()
-                                .expect("nonempty")
-                                .components
-                                .set(DataComponent::Profile(profile));
-                        }
-                    }
+                    stack
+                        .0
+                        .as_mut()
+                        .expect("nonempty")
+                        .components
+                        .set(DataComponent::Profile(profile));
                 }
             }
             Self::SetRandomDyes(rolls) => {

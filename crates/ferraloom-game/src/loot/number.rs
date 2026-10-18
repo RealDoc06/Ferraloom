@@ -336,10 +336,10 @@ where
                     .expect("validated path")
                     .get(&storage)
                     .unwrap_or_default();
-                if let [value] = selected.as_slice() {
-                    if let Some(value) = T::from_tag(value) {
-                        return Ok(value);
-                    }
+                if let [value] = selected.as_slice()
+                    && let Some(value) = T::from_tag(value)
+                {
+                    return Ok(value);
                 }
                 eval(fallback, c)
             }

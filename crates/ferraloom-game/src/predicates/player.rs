@@ -171,10 +171,10 @@ impl PlayerPredicate {
         if !self.food.matches(food, saturation) {
             return Ok(false);
         }
-        if let Some(test) = &self.gamemode {
-            if !test.matches(facts.player_gamemode(entity)?) {
-                return Ok(false);
-            }
+        if let Some(test) = &self.gamemode
+            && !test.matches(facts.player_gamemode(entity)?)
+        {
+            return Ok(false);
         }
         for stat in &self.stats {
             if !stat
@@ -213,10 +213,10 @@ impl PlayerPredicate {
                 return Ok(false);
             }
         }
-        if let Some(test) = &self.input {
-            if !test.matches(facts.player_input(entity)?) {
-                return Ok(false);
-            }
+        if let Some(test) = &self.input
+            && !test.matches(facts.player_input(entity)?)
+        {
+            return Ok(false);
         }
         Ok(true)
     }

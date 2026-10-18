@@ -126,10 +126,10 @@ impl BlockPredicate {
         components: Option<&component::DataComponentMap>,
         facts: &dyn PredicateContext,
     ) -> Result<bool> {
-        if let Some(test) = &self.0.nbt {
-            if !compare_nbt(Some(&test.0.0), nbt, true) {
-                return Ok(false);
-            }
+        if let Some(test) = &self.0.nbt
+            && !compare_nbt(Some(&test.0.0), nbt, true)
+        {
+            return Ok(false);
         }
         if !self.0.components.exact.is_empty() || !self.0.components.partial.0.is_empty() {
             return components.map_or(Ok(false), |map| {
@@ -191,11 +191,10 @@ impl FluidPredicate {
             return Ok(false);
         }
         let fluid = facts.fluid(pos)?;
-        if let Some(set) = &self.fluids {
-            if !super::item::matches_set(set, &fluid.fluid, super::PredicateRegistry::Fluid, facts)?
-            {
-                return Ok(false);
-            }
+        if let Some(set) = &self.fluids
+            && !super::item::matches_set(set, &fluid.fluid, super::PredicateRegistry::Fluid, facts)?
+        {
+            return Ok(false);
         }
         if let Some(test) = &self.state {
             for property in &test.properties {

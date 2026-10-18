@@ -95,14 +95,14 @@ impl CopyCustomData {
                 }
             }
         }
-        if let Some(Tag::Compound(result)) = result {
-            if let Some(s) = &mut stack.0 {
-                if result.is_empty() {
-                    s.components.remove(ComponentTypeId::CUSTOM_DATA);
-                } else {
-                    s.components
-                        .set(DataComponent::CustomData(CustomData(Tag::Compound(result))));
-                }
+        if let Some(Tag::Compound(result)) = result
+            && let Some(s) = &mut stack.0
+        {
+            if result.is_empty() {
+                s.components.remove(ComponentTypeId::CUSTOM_DATA);
+            } else {
+                s.components
+                    .set(DataComponent::CustomData(CustomData(Tag::Compound(result))));
             }
         }
         Ok(stack)

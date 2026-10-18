@@ -61,10 +61,10 @@ impl LocationPredicate {
         }) {
             return Ok(false);
         }
-        if let Some(dimension) = &self.dimension {
-            if *dimension != facts.dimension()? {
-                return Ok(false);
-            }
+        if let Some(dimension) = &self.dimension
+            && *dimension != facts.dimension()?
+        {
+            return Ok(false);
         }
         let pos = BlockPos::new(
             mth::floor(point.x),
@@ -72,47 +72,46 @@ impl LocationPredicate {
             mth::floor(point.z),
         );
         let loaded = facts.loaded(pos)?;
-        if let Some(biomes) = &self.biomes {
-            if !loaded
+        if let Some(biomes) = &self.biomes
+            && (!loaded
                 || !super::item::matches_set(
                     biomes,
                     &facts.biome(pos)?,
                     PredicateRegistry::Biome,
                     facts,
-                )?
-            {
-                return Ok(false);
-            }
+                )?)
+        {
+            return Ok(false);
         }
-        if let Some(structures) = &self.structures {
-            if !loaded || !facts.in_structure(pos, structures)? {
-                return Ok(false);
-            }
+        if let Some(structures) = &self.structures
+            && (!loaded || !facts.in_structure(pos, structures)?)
+        {
+            return Ok(false);
         }
-        if let Some(smokey) = self.smokey {
-            if !loaded || smokey != facts.smokey(pos)? {
-                return Ok(false);
-            }
+        if let Some(smokey) = self.smokey
+            && (!loaded || smokey != facts.smokey(pos)?)
+        {
+            return Ok(false);
         }
-        if let Some(light) = &self.light {
-            if !light.matches(pos, facts)? {
-                return Ok(false);
-            }
+        if let Some(light) = &self.light
+            && !light.matches(pos, facts)?
+        {
+            return Ok(false);
         }
-        if let Some(block) = &self.block {
-            if !block.matches(pos, facts)? {
-                return Ok(false);
-            }
+        if let Some(block) = &self.block
+            && !block.matches(pos, facts)?
+        {
+            return Ok(false);
         }
-        if let Some(fluid) = &self.fluid {
-            if !fluid.matches(pos, facts)? {
-                return Ok(false);
-            }
+        if let Some(fluid) = &self.fluid
+            && !fluid.matches(pos, facts)?
+        {
+            return Ok(false);
         }
-        if let Some(sky) = self.can_see_sky {
-            if sky != facts.can_see_sky(pos)? {
-                return Ok(false);
-            }
+        if let Some(sky) = self.can_see_sky
+            && sky != facts.can_see_sky(pos)?
+        {
+            return Ok(false);
         }
         Ok(true)
     }

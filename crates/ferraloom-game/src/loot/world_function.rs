@@ -94,28 +94,27 @@ impl WorldFunction {
     ) -> Result<ItemStack> {
         match self {
             Self::FurnaceSmelt { use_input_count } => {
-                if !stack.is_empty() {
-                    if let Some(mut result) = c.facts.smelting_recipe_result(&stack)? {
-                        if !result.is_empty() {
-                            let count = if *use_input_count {
-                                stack_count(&stack)
-                            } else {
-                                1
-                            };
-                            let count = count
-                                .wrapping_mul(stack_count(&result))
-                                .min(max_stack_size(&result)?);
-                            result.0.as_mut().expect("nonempty").count = count;
-                            return Ok(result);
-                        }
-                    }
+                if !stack.is_empty()
+                    && let Some(mut result) = c.facts.smelting_recipe_result(&stack)?
+                    && !result.is_empty()
+                {
+                    let count = if *use_input_count {
+                        stack_count(&stack)
+                    } else {
+                        1
+                    };
+                    let count = count
+                        .wrapping_mul(stack_count(&result))
+                        .min(max_stack_size(&result)?);
+                    result.0.as_mut().expect("nonempty").count = count;
+                    return Ok(result);
                 }
             }
             Self::ExplorationMap(options) => {
-                if !stack.is_empty() {
-                    if let Some(origin) = c.params.origin {
-                        return c.facts.exploration_map(options, stack, origin);
-                    }
+                if !stack.is_empty()
+                    && let Some(origin) = c.params.origin
+                {
+                    return c.facts.exploration_map(options, stack, origin);
                 }
             }
             Self::SetEnchantments { enchantments, add } => {

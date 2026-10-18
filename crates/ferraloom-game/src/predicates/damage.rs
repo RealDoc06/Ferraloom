@@ -54,15 +54,15 @@ impl DamageSourcePredicate {
                 return Ok(false);
             }
         }
-        if let Some(test) = &self.direct_entity {
-            if !test.matches(source.direct, Some(origin), facts)? {
-                return Ok(false);
-            }
+        if let Some(test) = &self.direct_entity
+            && !test.matches(source.direct, Some(origin), facts)?
+        {
+            return Ok(false);
         }
-        if let Some(test) = &self.source_entity {
-            if !test.matches(source.source, Some(origin), facts)? {
-                return Ok(false);
-            }
+        if let Some(test) = &self.source_entity
+            && !test.matches(source.source, Some(origin), facts)?
+        {
+            return Ok(false);
         }
         Ok(self
             .is_direct
@@ -102,10 +102,10 @@ impl DamagePredicate {
         if !self.dealt.matches(f64::from(original)) || !self.taken.matches(f64::from(actual)) {
             return Ok(false);
         }
-        if let Some(test) = &self.source_entity {
-            if !test.matches(source.source, Some(origin), facts)? {
-                return Ok(false);
-            }
+        if let Some(test) = &self.source_entity
+            && !test.matches(source.source, Some(origin), facts)?
+        {
+            return Ok(false);
         }
         if self.blocked.is_some_and(|expected| expected != blocked) {
             return Ok(false);

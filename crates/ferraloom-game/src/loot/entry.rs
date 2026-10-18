@@ -138,10 +138,10 @@ impl LootPoolEntryContainer {
         c: &mut EvalContext<'_>,
         output: &mut dyn FnMut(ExpandedEntry, &mut EvalContext<'_>) -> Result<()>,
     ) -> Result<bool> {
-        if let Some(condition) = &self.condition {
-            if !condition.test(data, c)? {
-                return Ok(false);
-            }
+        if let Some(condition) = &self.condition
+            && !condition.test(data, c)?
+        {
+            return Ok(false);
         }
         let weight = mth::floor(f64::from(
             self.weight as f32 + self.quality as f32 * c.params.luck,
