@@ -416,6 +416,65 @@ fn shapes(out: &mut String, shapes: &Value) {
     out.push_str("];\n");
 }
 
+fn voxel_shapes(data: &Value, block_properties: &Value) -> String {
+    let snapshots = data["snapshots"].as_array().unwrap();
+    let instances = data["shapes"].as_array().unwrap();
+    let states = data["states"].as_array().unwrap();
+    let contexts = data["context_dependent"].as_array().unwrap();
+    let properties = block_properties["states"].as_array().unwrap();
+    assert!(snapshots.len() <= u16::MAX as usize && instances.len() <= u16::MAX as usize);
+    assert_eq!(states.len(), properties.len());
+    assert_eq!(contexts.len(), states.len());
+    let mut out = String::from(
+        "// Generated native vanilla 26.3 geometry.\nstatic SNAPSHOTS: &[NativeSnapshot] = &[\n",
+    );
+    for snapshot in snapshots {
+        writeln!(out, "NativeSnapshot {{ kind: VoxelShapeKind::{}, singleton: Singleton::{}, size: {}, bounds: {}, coordinates: [",
+            pascal(string(&snapshot["kind"])), pascal(string(&snapshot["singleton"])), snapshot["size"], snapshot["bounds"]).unwrap();
+        for coords in snapshot["coordinates"].as_array().unwrap() {
+            if let Some(size) = coords["cube"].as_u64() {
+                write!(out, "NativeCoordinates::Cube({size}),").unwrap();
+            } else {
+                out.push_str("NativeCoordinates::Array(&[");
+                for bits in coords.as_array().unwrap() {
+                    let bits = u64::from_str_radix(string(bits), 16).unwrap();
+                    write!(out, "0x{bits:x},").unwrap();
+                }
+                out.push_str("]),");
+            }
+        }
+        out.push_str("], bits: &[");
+        for word in snapshot["bits"].as_array().unwrap() {
+            let word = u64::from_str_radix(string(word), 16).unwrap();
+            write!(out, "0x{word:x},").unwrap();
+        }
+        out.push_str("] },\n");
+    }
+    out.push_str("];\nstatic SHAPE_SNAPSHOTS: &[u16] = &[");
+    for instance in instances {
+        assert!((number(instance) as usize) < snapshots.len());
+        write!(out, "{instance},").unwrap();
+    }
+    writeln!(out, "];\nstatic NATIVE_SHAPES: [OnceLock<VoxelShape>; {}] = [const {{ OnceLock::new() }}; {}];\nstatic STATE_SHAPES: &[BlockStateShapes] = &[", instances.len(), instances.len()).unwrap();
+    for (id, row) in states.iter().enumerate() {
+        let indexes = row.as_array().unwrap();
+        assert_eq!(indexes.len(), 9);
+        assert!(
+            indexes
+                .iter()
+                .all(|v| (number(v) as usize) < instances.len())
+        );
+        assert_eq!(contexts[id], properties[id]["context_dependent_shape"]);
+        write!(out, "BlockStateShapes {{ collision: NativeShapeId({}), outline: NativeShapeId({}), occlusion: NativeShapeId({}), face_occlusion: [",indexes[0],indexes[1],indexes[2]).unwrap();
+        for face in &indexes[3..] {
+            write!(out, "NativeShapeId({face}),").unwrap();
+        }
+        writeln!(out, "], context_dependent: {} }},", contexts[id]).unwrap();
+    }
+    out.push_str("];\n");
+    out
+}
+
 fn items(out: &mut String, items: &Value) {
     out.push_str("pub const ITEMS: &[ItemData] = &[\n");
     for (id, item) in items.as_array().unwrap().iter().enumerate() {
@@ -579,15 +638,15 @@ fn tag_keys(root: &Path, registries: &Value) {
         let registry_path = registry.strip_prefix("minecraft:").unwrap();
         let entry = if registries.get(registry).is_some() {
             let entry = format!("crate::registries::{}::Id", ident(registry));
-            writeln!(out, "impl TagEntry for {entry} {{ const VANILLA_TAG_KEYS: &'static [TagKey<Self>] = {class}::ALL; fn tag_index(self) -> usize {{ self.protocol_id() as usize }} }}").unwrap();
-            writeln!(out, "impl StaticTagEntry for {entry} {{ const REGISTRY: &'static str = {registry_path:?}; const REGISTRY_SIZE: usize = crate::registries::{}::NAMES.len(); fn from_tag_name(name: &Identifier) -> Option<Self> {{ Self::from_name(&name.to_string()) }} }}", ident(registry)).unwrap();
+            writeln!(out, "impl TagElement for {entry} {{ const VANILLA_TAG_KEYS: &'static [TagKey<Self>] = {class}::ALL; fn tag_index(self) -> usize {{ self.protocol_id() as usize }} }}").unwrap();
+            writeln!(out, "impl StaticTagElement for {entry} {{ const REGISTRY: &'static str = {registry_path:?}; const REGISTRY_SIZE: usize = crate::registries::{}::NAMES.len(); fn from_tag_name(name: &Identifier) -> Option<Self> {{ Self::from_name(&name.to_string()) }} }}", ident(registry)).unwrap();
             entry
         } else {
             let entry = format!("{}Entry", class.trim_end_matches("Tags"));
             writeln!(out, "/// Runtime id in the loaded {registry} registry.\n#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)] pub struct {entry}(pub u32);").unwrap();
             writeln!(
                 out,
-                "impl TagEntry for {entry} {{ const VANILLA_TAG_KEYS: &'static [TagKey<Self>] = {class}::ALL; fn tag_index(self) -> usize {{ self.0 as usize }} }}"
+                "impl TagElement for {entry} {{ const VANILLA_TAG_KEYS: &'static [TagKey<Self>] = {class}::ALL; fn tag_index(self) -> usize {{ self.0 as usize }} }}"
             )
             .unwrap();
             entry
@@ -677,4 +736,7 @@ fn main() {
     entities(&mut out, &entity_report, &registries_report);
     let path = Path::new(&std::env::var_os("OUT_DIR").unwrap()).join("data.rs");
     std::fs::write(path, out).unwrap();
+    let native = voxel_shapes(&load(root, "voxel_shapes"), &block_properties);
+    let path = Path::new(&std::env::var_os("OUT_DIR").unwrap()).join("voxel_shapes.rs");
+    std::fs::write(path, native).unwrap();
 }

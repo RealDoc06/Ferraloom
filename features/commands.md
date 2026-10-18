@@ -1494,7 +1494,7 @@ Every literal and argument node from `reports/commands.json` has a row, includin
 | commands.path.function.arg-name.with.storage.arg-source | `/function <name> with storage <source>`; executable; parser `minecraft:resource_location` | `net.minecraft.server.commands.DebugCommand#register` | | - | todo |
 | commands.path.function.arg-name.with.storage.arg-source.arg-path | `/function <name> with storage <source> <path>`; executable; parser `minecraft:nbt_path` | `net.minecraft.server.commands.DebugCommand#register` | | - | todo |
 | commands.path.gamemode | `/gamemode` | `net.minecraft.server.commands.GameModeCommand#register` | | - | todo |
-| commands.path.gamemode.arg-gamemode | `/gamemode <gamemode>`; executable; parser `minecraft:gamemode` | `net.minecraft.server.commands.GameModeCommand#register` | | - | todo |
+| commands.path.gamemode.arg-gamemode | `/gamemode <gamemode>`; executable; parser `minecraft:gamemode` | `net.minecraft.server.commands.GameModeCommand#register` | `ferraloom-parity::starter::parity_commands` | pass | partial |
 | commands.path.gamemode.arg-gamemode.arg-target | `/gamemode <gamemode> <target>`; executable; parser `minecraft:entity` {"amount":"multiple","type":"players"} | `net.minecraft.server.commands.GameModeCommand#register` | | - | todo |
 | commands.path.gamerule | `/gamerule` | `net.minecraft.server.commands.GameRuleCommand#register` | | - | todo |
 | commands.path.gamerule.advance-time | `/gamerule advance_time`; executable | `net.minecraft.server.commands.GameRuleCommand#register` | | - | todo |
@@ -2154,7 +2154,7 @@ Every literal and argument node from `reports/commands.json` has a row, includin
 | commands.path.save-off | `/save-off`; executable | `net.minecraft.server.commands.SaveOffCommand#register` | | - | todo |
 | commands.path.save-on | `/save-on`; executable | `net.minecraft.server.commands.SaveOnCommand#register` | | - | todo |
 | commands.path.say | `/say` | `net.minecraft.server.commands.SayCommand#register` | | - | todo |
-| commands.path.say.arg-message | `/say <message>`; executable; parser `minecraft:message` | `net.minecraft.server.commands.SayCommand#register` | | - | todo |
+| commands.path.say.arg-message | `/say <message>`; executable; parser `minecraft:message` | `net.minecraft.server.commands.SayCommand#register` | `ferraloom-parity::starter::parity_commands` | pass | partial |
 | commands.path.schedule | `/schedule` | `net.minecraft.server.commands.ScheduleCommand#register` | | - | todo |
 | commands.path.schedule.clear | `/schedule clear` | `net.minecraft.server.commands.ScheduleCommand#register` | | - | todo |
 | commands.path.schedule.clear.arg-function | `/schedule clear <function>`; executable; parser `minecraft:resource_location` | `net.minecraft.server.commands.ScheduleCommand#register` | | - | todo |
@@ -2368,7 +2368,7 @@ Every literal and argument node from `reports/commands.json` has a row, includin
 | commands.path.teammsg.arg-message | `/teammsg <message>`; executable; parser `minecraft:message` | `net.minecraft.server.commands.TeamMsgCommand#register` | | - | todo |
 | commands.path.teleport | `/teleport` | `net.minecraft.server.commands.TeleportCommand#register` | | - | todo |
 | commands.path.teleport.arg-destination | `/teleport <destination>`; executable; parser `minecraft:entity` {"amount":"single","type":"entities"} | `net.minecraft.server.commands.TeleportCommand#register` | | - | todo |
-| commands.path.teleport.arg-location | `/teleport <location>`; executable; parser `minecraft:vec3` | `net.minecraft.server.commands.TeleportCommand#register` | | - | todo |
+| commands.path.teleport.arg-location | `/teleport <location>`; executable; parser `minecraft:vec3` | `net.minecraft.server.commands.TeleportCommand#register` | `ferraloom-parity::starter::parity_commands` | pass | partial |
 | commands.path.teleport.arg-targets | `/teleport <targets>`; parser `minecraft:entity` {"amount":"multiple","type":"entities"} | `net.minecraft.server.commands.TeleportCommand#register` | | - | todo |
 | commands.path.teleport.arg-targets.arg-destination | `/teleport <targets> <destination>`; executable; parser `minecraft:entity` {"amount":"single","type":"entities"} | `net.minecraft.server.commands.TeleportCommand#register` | | - | todo |
 | commands.path.teleport.arg-targets.arg-location | `/teleport <targets> <location>`; executable; parser `minecraft:vec3` | `net.minecraft.server.commands.TeleportCommand#register` | | - | todo |
@@ -2565,23 +2565,25 @@ Every literal and argument node from `reports/commands.json` has a row, includin
 | commands.message.resolve-selectors | Resolve selector components at message delivery time and retain the actual signable argument name (message, action, reason) | `MessageArgument#resolveChatMessage; MessageArgument.Message#toComponent` | `commands::message::tests::unsigned_player_argument_and_absent_argument_match_java_packet_variants` | pass | todo |
 
 | commands.framework.suggestion-packets | Handle latest command-suggestion request per player tick, retaining full-input UTF-16 ranges and tooltips | `ServerCommandSuggestionsProvider; ClientboundCommandSuggestionsPacket` | | - | todo |
-| StoredUserList Java HashMap traversal, identity replacement and invalid-user loading | `server::access::tests::stored_user_lists_replace_duplicate_identities_and_skip_invalid_users`; util Java collection vectors | pass | todo |
-| `/op` and `/deop`: live permission event, filtered tree refresh and persisted operator list | pending command parity scenarios | todo | todo |
-| `/kick`: selector capture, decorated name and translated disconnect reason | pending command parity scenarios | todo | todo |
-| Objective criteria, scoreboard display slots and resource wildcard selectors | `commands::arguments::tests::argument_parser_vectors_match_java_errors_cursors_and_values` | pass | todo |
-| `/gamemode`: live target selection, unchanged-mode return zero and self/other feedback | pending command parity scenarios | todo | todo |
-| `/ban`, `/ban-ip`, `/pardon`, `/pardon-ip`, `/banlist`: persisted lists, feedback and live disconnects | pending command parity scenarios | todo | todo |
-| `/whitelist`: on/off/list/add/remove/reload and enforced live admission | pending command parity scenarios | todo | todo |
-| NBT path parser preserves nested parser errors and reader cursor separately | `commands::arguments::tests::argument_parser_vectors_match_java_errors_cursors_and_values` | pass | todo |
-| `/save-off` disables automatic chunk saves; `/save-all` still forces saving | pending saved-world parity scenario | pass | todo |
-| Item-stack argument component assignments, removals and duplicate detection | `commands::arguments::tests::argument_parser_vectors_match_java_errors_cursors_and_values` | pass | todo |
-| Resource-or-tag argument validates both branches against the live registry lookup | `commands::arguments::tests::argument_parser_vectors_match_java_errors_cursors_and_values` | pass | todo |
-| Block predicates preserve explicit properties, NBT matching and bound block tags | `commands::arguments::tests::argument_parser_vectors_match_java_errors_cursors_and_values` | pass | todo |
-| All 62 ArgumentTypeInfos wire templates, including bounds, flags and registry keys | `commands::arguments::wire::tests::every_argument_network_template_matches_java` | pass | todo |
-| Static argument and coordinate suggestions use vanilla substring boundaries and partial coordinates | `commands::arguments::tests::static_and_coordinate_suggestions_match_java` | pass | todo |
-| `/teleport` and `/tp`: relative flags, wrapped rotation and spawnable bounds | `commands::teleport::tests::relative_flags_wrapped_rotations_and_bounds_match_java` (18 Java cases); command parity pending | pass | todo |
-| `/teleport`: live player destinations and facing entity/position packets | pending command parity scenarios | todo | todo |
-| `/setworldspawn`: rotation clamping, native spawn codec and exact feedback component | `commands::spawn::tests::spawn_rotation_persistence_and_feedback_match_java` | pass | todo |
-| `/spawnpoint`: live player capture and persisted forced respawn config | pending saved-player command parity scenario | todo | todo |
-| `/forceload`: limits, capture order, unchanged sets and exact success/failure feedback | `commands::forceload::tests::force_load_feedback_limits_and_mutation_sequence_match_java` (12 Java steps); live ticket adapter pending level merge | pass | todo |
-| `/return`, `/return fail`, `/return run`: same-call-site queue, callbacks and quota | `commands::execution::command_tests::return_commands_share_the_live_queue_and_compose_callbacks`; parity pending | pass | todo |
+| commands.admin.stored-user-lists | StoredUserList Java HashMap traversal, identity replacement and invalid-user loading | `StoredUserList` | `server::access::tests::stored_user_lists_replace_duplicate_identities_and_skip_invalid_users`; util Java collection vectors | pass | todo |
+| commands.admin.operator-permissions | `/op` and `/deop`: live permission event, filtered tree refresh and persisted operator list | `OpCommand; DeOpCommands; PlayerList` | pending command parity scenarios | - | todo |
+| commands.admin.kick-feedback | `/kick`: selector capture, decorated name and translated disconnect reason | `KickCommand` | pending command parity scenarios | - | todo |
+| commands.arguments.scoreboard-resource-selectors | Objective criteria, scoreboard display slots and resource wildcard selectors | `ObjectiveCriteriaArgument; ScoreboardSlotArgument; ResourceSelectorArgument` | `commands::arguments::tests::argument_parser_vectors_match_java_errors_cursors_and_values` | pass | todo |
+| commands.gamemode.feedback-and-noop | `/gamemode`: live target selection, unchanged-mode return zero and self/other feedback | `GameModeCommand` | pending command parity scenarios | - | todo |
+| commands.admin.ban-persistence | `/ban`, `/ban-ip`, `/pardon`, `/pardon-ip`, `/banlist`: persisted lists, feedback and live disconnects | `BanPlayerCommands; BanIpCommands; PardonCommand; PardonIpCommand; BanListCommands` | pending command parity scenarios | - | todo |
+| commands.admin.whitelist-persistence | `/whitelist`: on/off/list/add/remove/reload and enforced live admission | `WhitelistCommand` | pending command parity scenarios | - | todo |
+| commands.arguments.nbt-path-errors | NBT path parser preserves nested parser errors and reader cursor separately | `NbtPathArgument` | `commands::arguments::tests::argument_parser_vectors_match_java_errors_cursors_and_values` | pass | todo |
+| commands.save.automatic-chunk-saves | `/save-off` disables automatic chunk saves; `/save-all` still forces saving | `MinecraftServer#saveAllChunks; SaveOffCommand` | pending saved-world parity scenario | - | todo |
+| commands.arguments.item-component-patches | Item-stack argument component assignments, removals and duplicate detection | `ItemParser` | `commands::arguments::tests::argument_parser_vectors_match_java_errors_cursors_and_values` | pass | todo |
+| commands.arguments.resource-tag-validation | Resource-or-tag argument validates both branches against the live registry lookup | `ResourceOrTagArgument` | `commands::arguments::tests::argument_parser_vectors_match_java_errors_cursors_and_values` | pass | todo |
+| commands.arguments.block-predicates | Block predicates preserve explicit properties, NBT matching and bound block tags | `BlockPredicateArgument; BlockStateParser` | `commands::arguments::tests::argument_parser_vectors_match_java_errors_cursors_and_values` | pass | todo |
+| commands.arguments.wire-templates | All 62 ArgumentTypeInfos wire templates, including bounds, flags and registry keys | `ArgumentTypeInfos` | `commands::arguments::wire::tests::every_argument_network_template_matches_java` | pass | todo |
+| commands.arguments.static-coordinate-suggestions | Static argument and coordinate suggestions use vanilla substring boundaries and partial coordinates | `SharedSuggestionProvider` | `commands::arguments::tests::static_and_coordinate_suggestions_match_java` | pass | todo |
+| commands.teleport.relative-movement | `/teleport` and `/tp`: relative flags, wrapped rotation and spawnable bounds | `TeleportCommand` | `commands::teleport::tests::relative_flags_wrapped_rotations_and_bounds_match_java` (18 Java cases); command parity pending | pass | todo |
+| commands.teleport.facing-targets | `/teleport`: live player destinations and facing entity/position packets | `TeleportCommand; LookAt` | pending command parity scenarios | - | todo |
+| commands.spawn.world-persistence | `/setworldspawn`: rotation clamping, native spawn codec and exact feedback component | `SetWorldSpawnCommand; LevelData.RespawnData` | `commands::spawn::tests::spawn_rotation_persistence_and_feedback_match_java` | pass | todo |
+| commands.spawn.player-persistence | `/spawnpoint`: live player capture and persisted forced respawn config | `SetSpawnCommand; ServerPlayer.RespawnConfig` | pending saved-player command parity scenario | - | todo |
+| commands.forceload.mutation-feedback | `/forceload`: limits, capture order, unchanged sets and exact success/failure feedback | `ForceLoadCommand` | `commands::forceload::tests::force_load_feedback_limits_and_mutation_sequence_match_java` (12 Java steps); live ticket adapter pending level merge | pass | todo |
+| commands.execution.return-queue | `/return`, `/return fail`, `/return run`: same-call-site queue, callbacks and quota | `ReturnCommand; BuildContexts` | `commands::execution::command_tests::return_commands_share_the_live_queue_and_compose_callbacks`; parity pending | - | todo |
+| commands.say.unsigned-packet | Unsigned ChatCommand /say has no signing context and broadcasts DisguisedChat; known Ferraloom mismatch until `e52040c` + `b120a6f` | `MessageArgument#resolveChatMessage; SayCommand` | `ferraloom-parity::starter::parity_commands` | pass | fail |
+| commands.say.signable-packet | ChatCommandSigned with unsigned offline arguments broadcasts PlayerChat | `ServerGamePacketListenerImpl#collectUnsignedArguments; MessageArgument#resolveChatMessage` | `ferraloom-parity::starter::parity_commands` | pass | partial |
