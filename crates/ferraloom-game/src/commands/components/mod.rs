@@ -65,7 +65,7 @@ impl From<CommandSyntaxException> for ResolutionError {
     fn from(error: CommandSyntaxException) -> Self {
         let raw = error.raw_message.as_ref() as &dyn std::any::Any;
         if let Some(required) = raw.downcast_ref::<super::arguments::selectors::EntityReadError>() {
-            Self::EntityData(required.error)
+            Self::EntityData(required.error.clone())
         } else {
             Self::Syntax(error)
         }
