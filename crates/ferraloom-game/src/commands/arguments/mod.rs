@@ -331,7 +331,9 @@ impl MinecraftArgument {
                     "t" | "" => 1.,
                     _ => return Err(error_at(reader, "argument.time.invalid_unit", &[])),
                 };
-                let ticks = (value * factor + 0.5).floor() as i32;
+                // Math.round(float) rounds the represented value, without first
+                // rounding value + 0.5 back to float near a half-tick boundary.
+                let ticks = (f64::from(value * factor) + 0.5).floor() as i32;
                 if ticks < *min {
                     return Err(crate::commands::exceptions::error_with_arguments(
                         "argument.time.tick_count_too_low",

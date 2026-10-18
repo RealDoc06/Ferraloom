@@ -200,6 +200,7 @@ public final class CommandVectors {
         for (var entry : argumentTypes.entrySet()) {
             var inputs = new LinkedHashSet<String>(entry.getValue().getExamples());
             inputs.addAll(List.of("", " ", "?", "-1", "1.5", "~ ~ ~", "0 1", "0 1 2", "^ ^ ^", "~ ^ ~", "@a", "@e[type=minecraft:player,limit=1]"));
+            if (entry.getKey().equals("minecraft:time")) inputs.addAll(List.of("0.49999997t","0.5t","0.50000006t","-0.50000006t","8388609t","16777216t","0.024999999s"));
             if (entry.getKey().equals("minecraft:message")) inputs.addAll(List.of("a".repeat(256),"a".repeat(257),"🦀".repeat(128),"🦀".repeat(129)));
             if (entry.getKey().equals("minecraft:entity")) inputs.addAll(List.of("@", "@z", "@a[", "@a[limit=0]", "@a[x=1,x=2]", "@a[name=!A,name=B]", "@e[type=#minecraft:undead,type=minecraft:player]", "@a[distance=3..1]", "@a[scores={foo=1..2}]", "@a[advancements={minecraft:story/root={foo=true}}]"));
             if (entry.getKey().equals("minecraft:nbt_tag") || entry.getKey().equals("minecraft:nbt_compound_tag")) inputs.addAll(List.of("{", "{a", "{a:", "{a:1", "[B;", "[B;1s]", "\"abc", "\"\\q", "\"\\xG0", "\"\\Uffffffff\"", "\"\\N{NOT A CHARACTER}\"", "1_", "01", "-1ub", "999999999999999999999999999999l", "1e999", "{'':1}", "uuid(1)", "bool('abc')", "bad(1)"));

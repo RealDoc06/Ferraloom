@@ -15953,5 +15953,99 @@
       ]
     },
     "cursor": 0
+  },
+  {
+    "parser": "minecraft:time",
+    "properties": {
+      "min": 1
+    },
+    "input": "0.49999997t",
+    "ok": false,
+    "error_cursor": 11,
+    "message": "The tick count must not be less than 1: found 0",
+    "error_component": {
+      "translate": "argument.time.tick_count_too_low",
+      "with": [
+        1,
+        0
+      ]
+    },
+    "cursor": 11
+  },
+  {
+    "parser": "minecraft:time",
+    "properties": {
+      "min": 1
+    },
+    "input": "0.5t",
+    "ok": true,
+    "value": 1,
+    "cursor": 4
+  },
+  {
+    "parser": "minecraft:time",
+    "properties": {
+      "min": 1
+    },
+    "input": "0.50000006t",
+    "ok": true,
+    "value": 1,
+    "cursor": 11
+  },
+  {
+    "parser": "minecraft:time",
+    "properties": {
+      "min": 1
+    },
+    "input": "-0.50000006t",
+    "ok": false,
+    "error_cursor": 12,
+    "message": "The tick count must not be less than 1: found -1",
+    "error_component": {
+      "translate": "argument.time.tick_count_too_low",
+      "with": [
+        1,
+        -1
+      ]
+    },
+    "cursor": 12
+  },
+  {
+    "parser": "minecraft:time",
+    "properties": {
+      "min": 1
+    },
+    "input": "8388609t",
+    "ok": true,
+    "value": 8388609,
+    "cursor": 8
+  },
+  {
+    "parser": "minecraft:time",
+    "properties": {
+      "min": 1
+    },
+    "input": "16777216t",
+    "ok": true,
+    "value": 16777216,
+    "cursor": 9
+  },
+  {
+    "parser": "minecraft:time",
+    "properties": {
+      "min": 1
+    },
+    "input": "0.024999999s",
+    "ok": false,
+    "error_cursor": 12,
+    "message": "The tick count must not be less than 1: found 0",
+    "error_component": {
+      "translate": "argument.time.tick_count_too_low",
+      "with": [
+        1,
+        0
+      ]
+    },
+    "cursor": 12
   }
 ]
