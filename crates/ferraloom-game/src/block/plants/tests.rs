@@ -641,7 +641,7 @@ fn vine_placement_adds_the_first_supported_unoccupied_looking_face() {
         let direction = Direction::VALUES[f[2].parse::<usize>().unwrap()];
         let context =
             DirectionalPlaceContext::new(&reader, pos, direction, &stack, Direction::Up).unwrap();
-        let actual = reader
+        let actual = LevelAccessRef::Server(&mut level)
             .get_state_for_placement(Block::VINE, &context)
             .unwrap();
         assert_eq!(

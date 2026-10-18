@@ -106,8 +106,9 @@ impl BlockBehavior for Vines {
         &self,
         block: Block,
         context: &BlockPlaceContext<'_>,
-        level: &LevelReaderRef<'_, '_>,
+        access: &mut LevelAccessRef<'_, '_>,
     ) -> Result<Option<BlockState>, LevelError> {
+        let level = &access.as_reader();
         let pos = context.clicked_pos();
         let clicked = level.get_block_state(pos)?;
         let same = clicked.block() == block;
