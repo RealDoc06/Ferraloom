@@ -17,7 +17,7 @@ use ferraloom_data::{
 };
 use ferraloom_nbt::Tag;
 use ferraloom_protocol::component::{DataComponentMap, ItemStack};
-use ferraloom_util::{BlockPos, ChunkPos, Vec3};
+use ferraloom_util::{BlockPos, Vec3};
 use std::collections::BTreeSet;
 
 // The per-invocation runtime returns its held Level through the existing cold
@@ -224,6 +224,7 @@ mod tests {
         level::{Region, chunk::LevelChunk},
     };
     use ferraloom_data::datapack::ResourceManager;
+    use ferraloom_util::ChunkPos;
     use std::sync::Arc;
     static EMPTY: Behaviors = Behaviors::EMPTY;
 
