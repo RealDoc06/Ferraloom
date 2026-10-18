@@ -2565,3 +2565,4 @@ Every literal and argument node from `reports/commands.json` has a row, includin
 | commands.message.resolve-selectors | Resolve selector components at message delivery time and retain the actual signable argument name (message, action, reason) | `MessageArgument#resolveChatMessage; MessageArgument.Message#toComponent` | `commands::message::tests::unsigned_player_argument_and_absent_argument_match_java_packet_variants` | pass | todo |
 
 | commands.framework.suggestion-packets | Handle latest command-suggestion request per player tick, retaining full-input UTF-16 ranges and tooltips | `ServerCommandSuggestionsProvider; ClientboundCommandSuggestionsPacket` | | - | todo |
+| StoredUserList Java HashMap traversal, identity replacement and invalid-user loading | `server::access::tests::stored_user_lists_replace_duplicate_identities_and_skip_invalid_users`; util Java collection vectors | pass | todo |

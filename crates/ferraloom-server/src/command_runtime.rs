@@ -126,7 +126,7 @@ impl MinecraftServer {
                 .copied()
                 .filter(|id| {
                     Some(*id) != source
-                        && self.access.ops.iter().any(|op| {
+                        && self.access.ops.values().any(|op| {
                             op.uuid
                                 .eq_ignore_ascii_case(&self.connections[id].profile.id.to_string())
                         })
