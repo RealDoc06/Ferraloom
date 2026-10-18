@@ -170,7 +170,6 @@ impl ServerPlayer {
         self.parent.parent.load_nbt(tag)?;
         self.game_mode =
             GameType::from_id(self.saved.get_int_or("playerGameType", self.game_mode.id()));
-        self.parent.parent.read_additional_save_data();
         let inventory = self
             .saved
             .get_list("Inventory")

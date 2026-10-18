@@ -69,6 +69,41 @@ fn no_collision_stops_at_first_shape_and_retains_later_required_reads() {
 }
 
 #[test]
+fn loaded_living_head_and_body_yaw_precede_base_yaw_wrapping() {
+    use ferraloom_nbt::{CompoundTag, ListTag, Tag};
+    let mut actual = Vec::new();
+    for (index, rotation) in [721.25, -721.25, f32::NAN, 37.25].into_iter().enumerate() {
+        let mut player = player::ServerPlayer::new(
+            Uuid::new(1, 2),
+            "rotation".into(),
+            1,
+            Vec3::ZERO,
+            player::GameType::Survival,
+        );
+        player.set_y_rot(11.25);
+        let mut tag = CompoundTag::new();
+        tag.insert(
+            "Rotation",
+            Tag::List(ListTag(vec![Tag::Float(rotation), Tag::Float(0.0)])),
+        );
+        player.try_load(tag).unwrap();
+        actual.push(format!(
+            "living-load-rotation\t{index}\t{:x},{:x},{:x},{:x},{:x}",
+            player.yaw.to_bits(),
+            player.y_head_rot.to_bits(),
+            player.y_body_rot.to_bits(),
+            player.old_y_head_rot.to_bits(),
+            player.old_y_body_rot.to_bits()
+        ));
+    }
+    let expected: Vec<_> = VECTORS
+        .lines()
+        .filter(|line| line.starts_with("living-load-rotation\t"))
+        .collect();
+    assert_eq!(actual, expected);
+}
+
+#[test]
 fn living_movement_and_ignition_use_live_attributes_with_native_float_steps() {
     use ferraloom_data::registries::attribute::Id as Attribute;
     use ferraloom_protocol::codec::VarInt;

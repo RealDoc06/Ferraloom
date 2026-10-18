@@ -70,7 +70,19 @@ impl LivingEntity {
             .entity_data
             .set(data::HEALTH, health.clamp(0.0, self.max_health()));
     }
-    pub(crate) fn read_additional_save_data(&mut self) {
+    /// Port of Entity#load's LivingEntity head/body setters followed by the
+    /// inherited LivingEntity save-data body.
+    pub(crate) fn load_nbt(
+        &mut self,
+        tag: CompoundTag,
+    ) -> Result<(), super::persistence::EntityLoadError> {
+        let rotation = self.parent.load_nbt_with_head_rotation(tag)?;
+        self.y_head_rot = rotation;
+        self.y_body_rot = rotation;
+        self.read_additional_save_data();
+        Ok(())
+    }
+    fn read_additional_save_data(&mut self) {
         if let Some(attributes) = self.parent.saved.get("attributes") {
             for error in self.attributes.load_nbt(attributes) {
                 eprintln!(

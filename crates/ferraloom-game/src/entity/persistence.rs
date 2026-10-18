@@ -55,6 +55,14 @@ pub(crate) fn load_entity_state(
 impl EntityData {
     /// Port of Entity#load. Passengers are instantiated by the section manager.
     pub fn load_nbt(&mut self, tag: CompoundTag) -> Result<(), EntityLoadError> {
+        self.load_nbt_with_head_rotation(tag).map(|_| ())
+    }
+
+    /// Entity#load calls the derived head/body setters before wrapping yaw.
+    pub(crate) fn load_nbt_with_head_rotation(
+        &mut self,
+        tag: CompoundTag,
+    ) -> Result<f32, EntityLoadError> {
         let position = vector(&tag, "Pos");
         let motion = vector(&tag, "Motion");
         let velocity = Vec3::new(
@@ -75,6 +83,7 @@ impl EntityData {
         self.set_y_rot(rotation.and_then(|v| v[0].as_float()).unwrap_or(0.0));
         self.set_x_rot(rotation.and_then(|v| v[1].as_float()).unwrap_or(0.0));
         self.set_old_pos_and_rot();
+        let head_rotation = self.yaw;
         self.fall_distance = tag.get_double_or("fall_distance", 0.0);
         self.remaining_fire_ticks = i32::from(tag.get_short_or("Fire", 0));
         self.entity_data
@@ -127,7 +136,7 @@ impl EntityData {
             }
         }
         self.saved = tag;
-        Ok(())
+        Ok(head_rotation)
     }
     /// Port of Entity#saveWithoutId. The Level facade supplies vehicle X/Z and riders.
     pub fn save_without_id(&self) -> CompoundTag {

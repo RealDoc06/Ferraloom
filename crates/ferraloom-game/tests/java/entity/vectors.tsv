@@ -167,6 +167,10 @@ living-health	4	7fc00000	false
 living-health	5	41f00000	true
 living-health	6	0	true
 living-health	7	40f00000	true
+living-load-rotation	0	3fa00000,44345000,44345000,0,0
+living-load-rotation	1	bfa00000,c4345000,c4345000,0,0
+living-load-rotation	2	41340000,41340000,41340000,0,0
+living-load-rotation	3	42150000,42150000,42150000,0,0
 living-movement	0	3f19999a,3fb47ae147ae147b,3f7ae148,0,3ecccccd,123,0
 living-movement	1	3fa00000,3f8eb851eb851eb8,3f75c290,3fe8000000000000,3f333334,16,0
 living-movement	2	0,0,3f800000,3ff0000000000000,3f800000,246,0

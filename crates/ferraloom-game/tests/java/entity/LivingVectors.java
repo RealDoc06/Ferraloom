@@ -29,6 +29,13 @@ public final class LivingVectors extends Player {
     data.packDirty();player.getAttribute(Attributes.MAX_HEALTH).setBaseValue(30);
     float[] health={20,30,-0.0f,Float.NaN,Float.intBitsToFloat(0x7f800001),Float.POSITIVE_INFINITY,Float.NEGATIVE_INFINITY,7.5f};
     for(int i=0;i<health.length;i++) {player.setHealth(health[i]);System.out.println("living-health\t"+i+"\t"+Integer.toHexString(Float.floatToRawIntBits(player.getHealth()))+"\t"+(data.packDirty()!=null));}
+    float[] rotations={721.25f,-721.25f,Float.NaN,37.25f};
+    for(int i=0;i<rotations.length;i++) {
+      var loaded=new LivingVectors(level);loaded.setYRot(11.25f);
+      var tag=new net.minecraft.nbt.CompoundTag();tag.put("Rotation",PersistenceVectors.floats(rotations[i],0));
+      loaded.load(net.minecraft.world.level.storage.TagValueInput.create(net.minecraft.util.ProblemReporter.DISCARDING,level.registryAccess(),tag));
+      System.out.println("living-load-rotation\t"+i+"\t"+Integer.toHexString(Float.floatToRawIntBits(loaded.getYRot()))+","+Integer.toHexString(Float.floatToRawIntBits(loaded.yHeadRot))+","+Integer.toHexString(Float.floatToRawIntBits(loaded.yBodyRot))+","+Integer.toHexString(Float.floatToRawIntBits(loaded.yHeadRotO))+","+Integer.toHexString(Float.floatToRawIntBits(loaded.yBodyRotO)));
+    }
     var pos=new BlockPos(8,63,8);
     level.getChunkAt(pos).getSection(level.getSectionIndex(pos.getY())).setBlockState(8,15,8,Blocks.SOUL_SAND.defaultBlockState());
     player.setPos(8.5,64,8.5);

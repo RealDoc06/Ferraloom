@@ -64,8 +64,7 @@ pub(crate) fn load_entity_tree(
         let mut cow = Cow::with_parent(parent);
         cow.parent.parent.parent.age = tag.get_int_or("Age", 0);
         cow.parent.parent.in_love = tag.get_int_or("InLove", 0);
-        cow.as_living_mut().parent.load_nbt(tag)?;
-        cow.as_living_mut().read_additional_save_data();
+        cow.as_living_mut().load_nbt(tag)?;
         EntityState::Cow(Box::new(cow))
     } else if kind == EntityType::ITEM {
         let mut item = ItemEntity::with_parent(parent);
