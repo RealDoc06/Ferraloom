@@ -148,9 +148,11 @@ pub struct EntityData {
 }
 impl Default for EntityData {
     fn default() -> Self {
-        let mut base = Self::new(EntityType::COW, 0, 0);
-        base.network_id_allocated = false;
-        base
+        Self::from_random(
+            EntityType::COW,
+            0,
+            crate::level::entity::new_entity_random(),
+        )
     }
 }
 impl EntityData {
@@ -168,7 +170,7 @@ impl EntityData {
         Self {
             entity_type: kind,
             network_id,
-            network_id_allocated: true,
+            network_id_allocated: network_id != 0,
             uuid,
             requires_precise_position: false,
             blocks_building: false,
