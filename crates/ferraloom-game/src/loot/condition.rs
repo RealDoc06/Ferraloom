@@ -109,6 +109,11 @@ pub enum LootItemCondition {
         Holder<ContextFloatProvider>,
         ProviderRange<ContextFloatProvider>,
     ),
+    EnvironmentAttribute {
+        attribute: super::Identifier,
+        value: super::EnvironmentValue,
+        positional: bool,
+    },
 }
 impl LootItemCondition {
     pub fn decode(v: &Value) -> Result<Self> {
@@ -209,7 +214,14 @@ impl LootItemCondition {
                 ProviderRange::decode(codec::field(v, "test")?, ContextFloatProvider::decode)?,
             ),
             "minecraft:environment_attribute_check" => {
-                return Err(LootError::Unsupported(format!("loot_condition.{kind}")));
+                let attribute = codec::id(codec::field(v, "attribute")?)?;
+                let (value, positional) =
+                    super::environment::check_value(&attribute, codec::field(v, "value")?)?;
+                Self::EnvironmentAttribute {
+                    attribute,
+                    value,
+                    positional,
+                }
             }
             _ => return Err(codec::error(format!("unknown loot condition {kind}"))),
         })
@@ -384,6 +396,9 @@ impl LootItemCondition {
                 let value = input.get(data, c)?;
                 test.test(value, data, c)
             }
+            Self::EnvironmentAttribute {
+                attribute, value, ..
+            } => Ok(value.same_value(&c.facts.environment_value(attribute, c.params)?)),
         }
     }
     pub(crate) fn params(&self) -> Vec<ContextParam> {
@@ -407,6 +422,9 @@ impl LootItemCondition {
             Self::LocationCheck(..) => vec![Origin],
             Self::DamageSource(_) => vec![DamageSource, Origin],
             Self::EnchantmentActive(_) => vec![EnchantmentActive],
+            Self::EnvironmentAttribute {
+                positional: true, ..
+            } => vec![Origin],
             _ => vec![],
         }
     }

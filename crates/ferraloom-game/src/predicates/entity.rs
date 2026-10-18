@@ -25,7 +25,17 @@ pub struct EntityFlags {
 pub enum EntitySubPredicate {
     Type(HolderSet),
     Distance(DistancePredicate),
-    Location(LocationPredicate),
+    Location(Box<LocationPredicate>),
+    SteppingOn(Box<LocationPredicate>),
+    MovementAffectedBy(Box<LocationPredicate>),
+    Movement(super::MovementPredicate),
+    Effects(ferraloom_protocol::component::MobEffectsPredicate),
+    Slots(Vec<(crate::loot::SlotRange, super::ItemPredicate)>),
+    Lightning {
+        blocks_set_on_fire: super::IntBounds,
+        entity_struck: Option<Box<EntityPredicate>>,
+    },
+    Player(Box<super::PlayerPredicate>),
     Nbt(NbtPredicate),
     Flags(Vec<(EntityFlag, bool)>),
     Equipment(
@@ -75,9 +85,46 @@ impl EntityPredicate {
                     EntitySubPredicate::Distance(DistancePredicate::decode(value)?)
                 }
                 "minecraft:location" => {
-                    EntitySubPredicate::Location(LocationPredicate::decode(value)?)
+                    EntitySubPredicate::Location(Box::new(LocationPredicate::decode(value)?))
                 }
                 "minecraft:nbt" => EntitySubPredicate::Nbt(NbtPredicate::decode(value)?),
+                "minecraft:stepping_on" => {
+                    EntitySubPredicate::SteppingOn(Box::new(LocationPredicate::decode(value)?))
+                }
+                "minecraft:movement_affected_by" => EntitySubPredicate::MovementAffectedBy(
+                    Box::new(LocationPredicate::decode(value)?),
+                ),
+                "minecraft:movement" => {
+                    EntitySubPredicate::Movement(super::MovementPredicate::decode(value)?)
+                }
+                "minecraft:effects" => EntitySubPredicate::Effects(
+                    ferraloom_protocol::component::MobEffectsPredicate::from_json(value)?,
+                ),
+                "minecraft:slots" => EntitySubPredicate::Slots(
+                    codec::object(value)?
+                        .iter()
+                        .map(|(key, value)| {
+                            Ok((
+                                crate::loot::SlotRange::decode(&Value::String(key.clone()))?,
+                                super::ItemPredicate::decode(value)?,
+                            ))
+                        })
+                        .collect::<Result<_>>()?,
+                ),
+                "minecraft:type_specific/player" => {
+                    EntitySubPredicate::Player(Box::new(super::PlayerPredicate::decode(value)?))
+                }
+                "minecraft:type_specific/lightning" => EntitySubPredicate::Lightning {
+                    blocks_set_on_fire: codec::optional(
+                        value,
+                        "blocks_set_on_fire",
+                        super::IntBounds::decode,
+                    )?
+                    .unwrap_or_default(),
+                    entity_struck: codec::optional(value, "entity_struck", |v| {
+                        Ok(Box::new(Self::decode(v)?))
+                    })?,
+                },
                 "minecraft:equipment" => {
                     use ferraloom_protocol::component::EquipmentSlot::*;
                     let mut tests = Vec::new();
@@ -185,6 +232,11 @@ impl EntityPredicate {
         parts.sort_by_key(|p| match p {
             EntitySubPredicate::Type(_) => -1,
             EntitySubPredicate::Nbt(_) => 2,
+            EntitySubPredicate::Vehicle(_)
+            | EntitySubPredicate::Passenger(_)
+            | EntitySubPredicate::TargetedEntity(_)
+            | EntitySubPredicate::Player(_)
+            | EntitySubPredicate::Lightning { .. } => 1,
             _ => 0,
         });
         Ok(Self { parts })
@@ -232,6 +284,95 @@ impl EntityPredicate {
                     p.matches(facts.entity_position(entity)?, facts)?
                 }
                 EntitySubPredicate::Nbt(p) => p.matches(Some(&facts.entity_nbt(entity)?)),
+                EntitySubPredicate::Movement(test) => {
+                    let (movement, fall) = facts.entity_movement(entity)?;
+                    test.matches(movement, fall)
+                }
+                EntitySubPredicate::SteppingOn(test) => {
+                    if !facts.entity_flags(entity)?.on_ground {
+                        false
+                    } else {
+                        let p = facts.entity_on_pos(entity)?;
+                        test.matches(
+                            Vec3::new(
+                                f64::from(p.x) + 0.5,
+                                f64::from(p.y) + 0.5,
+                                f64::from(p.z) + 0.5,
+                            ),
+                            facts,
+                        )?
+                    }
+                }
+                EntitySubPredicate::MovementAffectedBy(test) => {
+                    let p = facts.entity_movement_block_pos(entity)?;
+                    test.matches(
+                        Vec3::new(
+                            f64::from(p.x) + 0.5,
+                            f64::from(p.y) + 0.5,
+                            f64::from(p.z) + 0.5,
+                        ),
+                        facts,
+                    )?
+                }
+                EntitySubPredicate::Player(test) => test.matches(entity, facts)?,
+                EntitySubPredicate::Lightning {
+                    blocks_set_on_fire,
+                    entity_struck,
+                } => {
+                    let Some((blocks, hit)) = facts.lightning_state(entity)? else {
+                        return Ok(false);
+                    };
+                    if !blocks_set_on_fire.matches(blocks) {
+                        false
+                    } else if let Some(test) = entity_struck {
+                        let mut found = false;
+                        for hit in hit {
+                            if test.matches(Some(hit), origin, facts)? {
+                                found = true;
+                                break;
+                            }
+                        }
+                        found
+                    } else {
+                        true
+                    }
+                }
+                EntitySubPredicate::Effects(test) => {
+                    let Some(effects) = facts.entity_effects(entity)? else {
+                        return Ok(false);
+                    };
+                    test.0.iter().all(|(kind, test)| {
+                        effects
+                            .iter()
+                            .find(|value| value.effect == *kind)
+                            .is_some_and(|value| {
+                                let value = &value.details;
+                                test.amplifier.min.is_none_or(|v| value.amplifier.0 >= v)
+                                    && test.amplifier.max.is_none_or(|v| value.amplifier.0 <= v)
+                                    && test.duration.min.is_none_or(|v| value.duration.0 >= v)
+                                    && test.duration.max.is_none_or(|v| value.duration.0 <= v)
+                                    && test.ambient.is_none_or(|v| v == value.ambient)
+                                    && test.visible.is_none_or(|v| v == value.show_particles)
+                            })
+                    })
+                }
+                EntitySubPredicate::Slots(tests) => {
+                    let mut matches = true;
+                    for (range, test) in tests {
+                        let mut any = false;
+                        for item in facts.entity_slots(entity, &range.slots)? {
+                            if test.matches(&item, facts)? {
+                                any = true;
+                                break;
+                            }
+                        }
+                        if !any {
+                            matches = false;
+                            break;
+                        }
+                    }
+                    matches
+                }
                 EntitySubPredicate::Equipment(tests) => {
                     let Some(items) = facts.entity_equipment(entity)? else {
                         return Ok(false);

@@ -159,7 +159,7 @@ pub struct FluidState {
     pub fluid: Identifier,
     pub properties: Vec<(String, String)>,
 }
-/// Port of FluidPredicate. Fluid property matching awaits the level fluid adapter.
+/// Port of FluidPredicate over the five built-in fluid types and their properties.
 #[derive(Clone, Debug, PartialEq)]
 pub struct FluidPredicate {
     pub fluids: Option<HolderSet>,
@@ -185,8 +185,61 @@ impl FluidPredicate {
                 return Ok(false);
             }
         }
-        if self.state.is_some() {
-            return Err(LootError::Unsupported("fluid.property_definition".into()));
+        if let Some(test) = &self.state {
+            for property in &test.properties {
+                let Some((_, actual)) = fluid
+                    .properties
+                    .iter()
+                    .find(|(name, _)| *name == property.name)
+                else {
+                    return Ok(false);
+                };
+                let falling = property.name == "falling"
+                    && matches!(
+                        fluid.fluid.as_str(),
+                        "minecraft:water"
+                            | "minecraft:flowing_water"
+                            | "minecraft:lava"
+                            | "minecraft:flowing_lava"
+                    );
+                let level = property.name == "level"
+                    && matches!(
+                        fluid.fluid.as_str(),
+                        "minecraft:flowing_water" | "minecraft:flowing_lava"
+                    );
+                let index = |value: &str| -> Option<i32> {
+                    if falling {
+                        match value {
+                            "false" => Some(0),
+                            "true" => Some(1),
+                            _ => None,
+                        }
+                    } else if level {
+                        java_integer(value).filter(|n| (1..=8).contains(n))
+                    } else {
+                        None
+                    }
+                };
+                let Some(actual) = index(actual) else {
+                    return Ok(false);
+                };
+                let matches = match &property.matcher {
+                    Either::Left(value) => index(value) == Some(actual),
+                    Either::Right(range) => {
+                        range
+                            .min
+                            .as_ref()
+                            .is_none_or(|v| index(v).is_some_and(|v| actual >= v))
+                            && range
+                                .max
+                                .as_ref()
+                                .is_none_or(|v| index(v).is_some_and(|v| actual <= v))
+                    }
+                };
+                if !matches {
+                    return Ok(false);
+                }
+            }
         }
         Ok(true)
     }

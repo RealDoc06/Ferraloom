@@ -296,6 +296,13 @@ pub trait LootFacts: PredicateContext {
     fn environment_float(&self, _attribute: &Identifier, _params: &LootParams) -> Result<f32> {
         Err(LootError::Unsupported("level.environment_attribute".into()))
     }
+    fn environment_value(
+        &self,
+        _attribute: &Identifier,
+        _params: &LootParams,
+    ) -> Result<super::EnvironmentValue> {
+        Err(LootError::Unsupported("level.environment_attribute".into()))
+    }
     fn bundle_contents(
         &self,
         _items: Vec<ItemStack>,

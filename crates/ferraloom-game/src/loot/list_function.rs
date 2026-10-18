@@ -2,11 +2,7 @@ use super::{
     ContextFloatProvider, ContextIntProvider, EntityTarget, EvalContext, Holder, ListEdit,
     ListOperation, LootData, Result, codec,
 };
-use ferraloom_protocol::{
-    chat::Component,
-    codec::{BoundedList, VarInt},
-    component::*,
-};
+use ferraloom_protocol::{chat::Component, codec::VarInt, component::*};
 use serde_json::Value;
 
 /// Ports of list- and page-editing loot functions using shared ListOperation.

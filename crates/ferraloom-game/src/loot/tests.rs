@@ -294,6 +294,17 @@ fn all_available_builtin_tables_match_real_java() {
         if allowed.contains(&ContextParam::ThisEntity) {
             params.this_entity = Some(crate::entity::EntityRef(1));
         }
+        if allowed.contains(&ContextParam::DamageSource) {
+            params.damage_source = Some(DamageSource {
+                damage_type: Identifier::parse("generic").unwrap(),
+                source: None,
+                direct: None,
+                position: None,
+            });
+        }
+        if allowed.contains(&ContextParam::TargetEntity) {
+            params.target_entity = Some(crate::entity::EntityRef(2));
+        }
         if allowed.contains(&ContextParam::Tool) {
             params.tool = Some(ItemStack::new(
                 Item::DIAMOND_PICKAXE,
@@ -443,6 +454,9 @@ fn item_modifiers_and_float_arithmetic_match_java() {
         let modifier = Holder::direct(LootItemFunction::decode(&record["definition"]).unwrap());
         let params = LootParams {
             tool: Some(decode_stack(&record["tool"])),
+            block_entity: record
+                .get("block_entity")
+                .map(|v| ferraloom_nbt::parse(v.as_str().unwrap()).unwrap()),
             block_state: Some(ferraloom_data::Block::WHEAT.default_state()),
             explosion_radius: Some(3.0),
             ..Default::default()
@@ -481,5 +495,73 @@ fn item_modifiers_and_float_arithmetic_match_java() {
             "{record}"
         );
         assert_eq!(random.next_long(), record["next"].as_i64().unwrap());
+    }
+}
+
+#[test]
+fn movement_distance_fluid_and_environment_codecs_match_java() {
+    use crate::predicates::{
+        DistancePredicate, FluidPredicate, FluidState, MovementPredicate, PredicateContext,
+    };
+    let vectors: serde_json::Value =
+        serde_json::from_str(include_str!("../../tests/java/loot/vectors.json")).unwrap();
+    for record in vectors["movement_predicates"].as_array().unwrap() {
+        assert_eq!(
+            MovementPredicate::decode(&record["predicate"])
+                .unwrap()
+                .matches(
+                    ferraloom_util::Vec3::new(record["x"].as_f64().unwrap(), -0.1, 0.05),
+                    0.75
+                ),
+            record["matches"].as_bool().unwrap(),
+            "{record}"
+        );
+    }
+    for record in vectors["distance_predicates"].as_array().unwrap() {
+        assert_eq!(
+            DistancePredicate::decode(&record["predicate"])
+                .unwrap()
+                .matches(
+                    ferraloom_util::Vec3::new(0.0, 0.0, 0.0),
+                    ferraloom_util::Vec3::new(record["x"].as_f64().unwrap(), 0.5, 0.0)
+                ),
+            record["matches"].as_bool().unwrap(),
+            "{record}"
+        );
+    }
+    struct FluidFacts(FluidState);
+    impl PredicateContext for FluidFacts {
+        fn loaded(&self, _pos: ferraloom_util::BlockPos) -> Result<bool> {
+            Ok(true)
+        }
+        fn fluid(&self, _pos: ferraloom_util::BlockPos) -> Result<FluidState> {
+            Ok(self.0.clone())
+        }
+    }
+    for record in vectors["fluid_predicates"].as_array().unwrap() {
+        let facts = FluidFacts(FluidState {
+            fluid: Identifier::parse(record["fluid"].as_str().unwrap()).unwrap(),
+            properties: record["properties"]
+                .as_object()
+                .unwrap()
+                .iter()
+                .map(|(k, v)| (k.clone(), v.as_str().unwrap().to_owned()))
+                .collect(),
+        });
+        assert_eq!(
+            FluidPredicate::decode(&record["predicate"])
+                .unwrap()
+                .matches(ferraloom_util::BlockPos::new(0, 0, 0), &facts)
+                .unwrap(),
+            record["matches"].as_bool().unwrap(),
+            "{record}"
+        );
+    }
+    for record in vectors["environment_codecs"].as_array().unwrap() {
+        assert_eq!(
+            LootItemCondition::decode(&record["definition"]).is_ok(),
+            record["accepts"].as_bool().unwrap(),
+            "{record}"
+        );
     }
 }

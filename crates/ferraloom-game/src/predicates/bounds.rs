@@ -53,10 +53,17 @@ impl IntBounds {
             min: codec::optional(v, "min", codec::int)?,
             max: codec::optional(v, "max", codec::int)?,
         };
-        if matches!((result.min,result.max),(Some(a),Some(b)) if a.total_cmp(&b).is_gt()) {
+        if matches!((result.min,result.max),(Some(a),Some(b)) if a > b) {
             return Err(codec::error("swapped bounds"));
         }
         Ok(result)
+    }
+    pub fn matches_sqr(self, value: i64) -> bool {
+        self.min
+            .is_none_or(|v| value >= i64::from(v) * i64::from(v))
+            && self
+                .max
+                .is_none_or(|v| value <= i64::from(v) * i64::from(v))
     }
     pub fn matches(self, value: i32) -> bool {
         self.min.is_none_or(|v| value >= v) && self.max.is_none_or(|v| value <= v)
@@ -93,5 +100,28 @@ impl DistancePredicate {
             && self.z.matches(f64::from(z.abs()))
             && self.horizontal.matches_sqr(f64::from(x * x + z * z))
             && self.absolute.matches_sqr(f64::from(x * x + y * y + z * z))
+    }
+}
+
+/// Port of MinMaxBounds.FloatDegrees' codec. Reversed endpoints are permitted.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct FloatDegrees {
+    pub min: Option<f32>,
+    pub max: Option<f32>,
+}
+impl FloatDegrees {
+    pub fn decode(v: &Value) -> Result<Self> {
+        if v.is_number() {
+            let value = codec::float(v)?;
+            Ok(Self {
+                min: Some(value),
+                max: Some(value),
+            })
+        } else {
+            Ok(Self {
+                min: codec::optional(v, "min", codec::float)?,
+                max: codec::optional(v, "max", codec::float)?,
+            })
+        }
     }
 }

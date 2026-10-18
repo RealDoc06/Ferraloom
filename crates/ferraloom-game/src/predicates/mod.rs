@@ -5,6 +5,8 @@ mod damage;
 mod entity;
 mod item;
 mod location;
+mod movement;
+mod player;
 pub(crate) use block::property_values;
 pub use block::*;
 pub use bounds::*;
@@ -12,6 +14,8 @@ pub use damage::*;
 pub use entity::*;
 pub use item::*;
 pub use location::*;
+pub use movement::*;
+pub use player::*;
 
 use crate::{
     entity::EntityRef,
@@ -143,6 +147,75 @@ pub trait PredicateContext {
         >,
     > {
         Err(LootError::Unsupported("entity.living_equipment".into()))
+    }
+    fn entity_slots(
+        &self,
+        _entity: EntityRef,
+        _slots: &[i32],
+    ) -> Result<Vec<ferraloom_protocol::component::ItemStack>> {
+        Err(LootError::Unsupported("entity.slots".into()))
+    }
+    fn entity_effects(
+        &self,
+        _entity: EntityRef,
+    ) -> Result<Option<Vec<ferraloom_protocol::component::MobEffectInstance>>> {
+        Err(LootError::Unsupported("entity.living_effects".into()))
+    }
+    fn entity_movement(&self, _entity: EntityRef) -> Result<(Vec3, f64)> {
+        Err(LootError::Unsupported(
+            "entity.known_movement_and_fall_distance".into(),
+        ))
+    }
+    fn entity_on_pos(&self, _entity: EntityRef) -> Result<BlockPos> {
+        Err(LootError::Unsupported("entity.on_pos".into()))
+    }
+    fn entity_movement_block_pos(&self, _entity: EntityRef) -> Result<BlockPos> {
+        Err(LootError::Unsupported(
+            "entity.block_pos_below_movement".into(),
+        ))
+    }
+    fn lightning_state(&self, _entity: EntityRef) -> Result<Option<(i32, Vec<EntityRef>)>> {
+        Err(LootError::Unsupported("entity.lightning_state".into()))
+    }
+    fn player_experience_level(&self, _entity: EntityRef) -> Result<Option<i32>> {
+        Err(LootError::Unsupported(
+            "entity.server_player_experience_level".into(),
+        ))
+    }
+    fn player_food(&self, _entity: EntityRef) -> Result<(i32, f32)> {
+        Err(LootError::Unsupported("player.food".into()))
+    }
+    fn player_gamemode(&self, _entity: EntityRef) -> Result<ferraloom_protocol::play::GameType> {
+        Err(LootError::Unsupported("player.gamemode".into()))
+    }
+    fn player_stat(
+        &self,
+        _entity: EntityRef,
+        _stat_type: &Identifier,
+        _stat: &Identifier,
+    ) -> Result<i32> {
+        Err(LootError::Unsupported("player.stat".into()))
+    }
+    fn player_recipe(&self, _entity: EntityRef, _recipe: &Identifier) -> Result<bool> {
+        Err(LootError::Unsupported("player.recipe_book".into()))
+    }
+    fn player_advancement(
+        &self,
+        _entity: EntityRef,
+        _advancement: &Identifier,
+    ) -> Result<Option<AdvancementFacts>> {
+        Err(LootError::Unsupported("player.advancement_progress".into()))
+    }
+    fn player_looking_at(&self, _entity: EntityRef) -> Result<Option<EntityRef>> {
+        Err(LootError::Unsupported(
+            "player.looking_at_raycast_100".into(),
+        ))
+    }
+    fn player_has_line_of_sight(&self, _entity: EntityRef, _target: EntityRef) -> Result<bool> {
+        Err(LootError::Unsupported("player.line_of_sight".into()))
+    }
+    fn player_input(&self, _entity: EntityRef) -> Result<[bool; 7]> {
+        Err(LootError::Unsupported("player.last_client_input".into()))
     }
     fn entity_specific(&self, _entity: EntityRef) -> Result<EntitySpecificFacts> {
         Err(LootError::Unsupported("entity.class_specific_state".into()))

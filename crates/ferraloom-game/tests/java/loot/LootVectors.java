@@ -70,6 +70,8 @@ public final class LootVectors {
             else if(key==LootContextParams.TOOL) values.set(LootContextParams.TOOL,new ItemStack(Items.DIAMOND_PICKAXE));
             else if(key==LootContextParams.BLOCK_STATE) values.set(LootContextParams.BLOCK_STATE,block.defaultBlockState());
             else if(key==LootContextParams.THIS_ENTITY) values.set(LootContextParams.THIS_ENTITY,entity);
+            else if(key==LootContextParams.DAMAGE_SOURCE) values.set(LootContextParams.DAMAGE_SOURCE,new net.minecraft.world.damagesource.DamageSource(lookup.lookupOrThrow(Registries.DAMAGE_TYPE).getOrThrow(net.minecraft.world.damagesource.DamageTypes.GENERIC)));
+            else if(key==LootContextParams.TARGET_ENTITY) values.set(LootContextParams.TARGET_ENTITY,entity);
             else if(table.getParamSet().required().contains(key)) throw new UnsupportedOperationException("required_context."+key.name());
         }
         return new LootParams(level,values.buildAndValidate(table.getParamSet()),Map.of(),0);
@@ -108,6 +110,20 @@ public final class LootVectors {
         output.add("item_predicates",predicates);
         var modifiers=new JsonArray();
         var functionDefinitions=List.of(
+            "{\"type\":\"set_lore\",\"lore\":[\"one\",\"two\"],\"mode\":\"replace_all\"}",
+            "{\"type\":\"set_book_cover\",\"title\":\"Title\",\"author\":\"Doc\",\"generation\":2}",
+            "{\"type\":\"set_written_book_pages\",\"pages\":[\"hello\"],\"mode\":\"append\"}",
+            "{\"type\":\"set_writable_book_pages\",\"pages\":[\"draft\"],\"mode\":\"insert\",\"offset\":0}",
+            "{\"type\":\"set_firework_explosion\",\"shape\":\"creeper\",\"colors\":[16711680],\"trail\":true}",
+            "{\"type\":\"set_fireworks\",\"flight_duration\":256,\"explosions\":{\"values\":[{\"shape\":\"star\",\"colors\":[65280]}],\"mode\":\"append\"}}",
+            "{\"type\":\"set_custom_model_data\",\"floats\":{\"values\":[{\"type\":\"uniform\",\"min\":0,\"max\":1},2],\"mode\":\"append\"},\"colors\":{\"values\":[[1,0.5,0]],\"mode\":\"replace_all\"},\"flags\":{\"values\":[true,false],\"mode\":\"append\"}}",
+            "{\"type\":\"set_attributes\",\"replace\":false,\"modifiers\":[{\"id\":\"test\",\"attribute\":\"attack_damage\",\"operation\":\"add_value\",\"amount\":{\"type\":\"uniform\",\"min\":1,\"max\":3},\"slot\":[\"mainhand\",\"offhand\"]},{\"id\":\"test\",\"attribute\":\"attack_damage\",\"operation\":\"add_value\",\"amount\":5,\"slot\":\"any\"}]}",
+            "{\"type\":\"set_random_dyes\",\"number_of_dyes\":3}",
+            "{\"type\":\"set_contents\",\"component\":\"container\",\"entries\":[{\"type\":\"group\",\"children\":[{\"type\":\"item\",\"name\":\"stone\",\"modifier\":{\"type\":\"set_count\",\"count\":{\"type\":\"uniform\",\"min\":1,\"max\":8}}},{\"type\":\"item\",\"name\":\"apple\",\"condition\":{\"type\":\"random_chance\",\"chance\":0.5}}]}]}",
+            "{\"type\":\"modify_contents\",\"component\":\"container\",\"modifier\":{\"type\":\"set_count\",\"count\":70}}",
+            "{\"type\":\"copy_custom_data\",\"source\":\"block_entity\",\"ops\":[{\"source\":\"data.x\",\"target\":\"copy\",\"op\":\"replace\"},{\"source\":\"data.obj\",\"target\":\"nested\",\"op\":\"merge\"},{\"source\":\"data.values[]\",\"target\":\"list\",\"op\":\"append\"}]}",
+            "{\"type\":\"fill_player_head\",\"entity\":\"this\"}",
+
             "{\"type\":\"copy_components\",\"source\":\"tool\",\"include\":[\"damage\"]}",
             "{\"type\":\"set_enchantments\",\"enchantments\":{\"sharpness\":3}}",
             "{\"type\":\"set_stew_effect\",\"effects\":[{\"type\":\"poison\",\"duration\":{\"type\":\"uniform\",\"min\":2,\"max\":5}},{\"type\":\"instant_health\",\"duration\":3}]}",
@@ -121,15 +137,17 @@ public final class LootVectors {
             "{\"type\":\"apply_bonus\",\"enchantment\":\"fortune\",\"formula\":\"uniform_bonus_count\",\"parameters\":{\"bonusMultiplier\":2}}",
             "{\"type\":\"explosion_decay\"}"
         );
-        for(var definition:functionDefinitions)for(String input:List.of("{\"id\":\"book\",\"count\":2}","{\"id\":\"suspicious_stew\"}","{\"id\":\"stone\",\"count\":16}"))for(long seed:SEEDS){
+        for(var definition:functionDefinitions)for(String input:List.of("{\"id\":\"book\",\"count\":2}","{\"id\":\"suspicious_stew\"}","{\"id\":\"stone\",\"count\":16}","{\"id\":\"chest\",\"components\":{\"container\":[{\"slot\":1,\"item\":{\"id\":\"stone\",\"count\":3}}]}}"))for(long seed:SEEDS){
             var functionJson=JsonParser.parseString(definition);var inputJson=JsonParser.parseString(input);
             var function=net.minecraft.world.level.storage.loot.functions.LootItemFunctions.DIRECT_CODEC.parse(lookup.createSerializationContext(JsonOps.INSTANCE),functionJson).getOrThrow();
             var item=ItemStack.CODEC.parse(lookup.createSerializationContext(JsonOps.INSTANCE),inputJson).getOrThrow();
             var toolJson=JsonParser.parseString("{\"id\":\"diamond_pickaxe\",\"components\":{\"damage\":17,\"enchantments\":{\"fortune\":3}}}");
             var tool=ItemStack.CODEC.parse(lookup.createSerializationContext(JsonOps.INSTANCE),toolJson).getOrThrow();
-            var params=new LootParams(level,ContextMap.builder().set(LootContextParams.TOOL,tool).set(LootContextParams.BLOCK_STATE,Blocks.WHEAT.defaultBlockState()).set(LootContextParams.EXPLOSION_RADIUS,3f).build(),Map.of(),0);
+            var sourceTag=new net.minecraft.nbt.CompoundTag();var sourceData=new net.minecraft.nbt.CompoundTag();sourceData.putInt("x",17);var obj=new net.minecraft.nbt.CompoundTag();obj.putInt("a",3);sourceData.put("obj",obj);var values=new net.minecraft.nbt.ListTag();values.add(net.minecraft.nbt.IntTag.valueOf(2));values.add(net.minecraft.nbt.IntTag.valueOf(4));sourceData.put("values",values);sourceTag.put("data",sourceData);
+            var blockEntity=missing(net.minecraft.world.level.block.entity.BlockEntity.class);doReturn(level).when(blockEntity).getLevel();doReturn(RegistryAccess.EMPTY).when(level).registryAccess();doReturn(sourceTag).when(blockEntity).saveWithFullMetadata(any(HolderLookup.Provider.class));
+            var params=new LootParams(level,ContextMap.builder().set(LootContextParams.BLOCK_ENTITY,blockEntity).set(LootContextParams.TOOL,tool).set(LootContextParams.BLOCK_STATE,Blocks.WHEAT.defaultBlockState()).set(LootContextParams.EXPLOSION_RADIUS,3f).build(),Map.of(),0);
             var random=RandomSource.create(seed);RANDOM.set(random);var context=new LootContext.Builder(params).withOptionalRandomSource(random).create(Optional.empty());
-            var record=new JsonObject();record.add("definition",functionJson);record.add("input",inputJson);record.add("tool",toolJson);record.addProperty("seed",seed);record.add("result",stack(function.apply(item,context)));record.addProperty("next",random.nextLong());modifiers.add(record);
+            var record=new JsonObject();record.add("definition",functionJson);record.add("input",inputJson);record.add("tool",toolJson);record.addProperty("block_entity",sourceTag.toString());record.addProperty("seed",seed);record.add("result",stack(function.apply(item,context)));record.addProperty("next",random.nextLong());modifiers.add(record);
         }output.add("modifiers",modifiers);
         var numbers=new JsonArray();
         for(String definition:List.of("9223372036854775808","1e100","2147483647.9","-2147483649.99","{\"type\":\"uniform\",\"min\":-4,\"max\":9}","{\"type\":\"binomial\",\"n\":12,\"p\":0.3}","{\"type\":\"add\",\"inputs\":[5,{\"type\":\"div\",\"left\":1,\"right\":0}]}","{\"type\":\"floor_div\",\"left\":-7,\"right\":3}","{\"type\":\"from_float\",\"input\":-2.9}","{\"type\":\"pow\",\"base\":0,\"exponent\":0}")) {
@@ -167,6 +185,27 @@ public final class LootVectors {
             var json=JsonParser.parseString(test);var predicate=net.minecraft.advancements.predicates.LocationPredicate.CODEC.parse(lookup.createSerializationContext(JsonOps.INSTANCE),json).getOrThrow();
             var record=new JsonObject();record.add("predicate",json);record.addProperty("y",y);record.addProperty("matches",predicate.matches(level,0.5,y,-0.5));locations.add(record);
         }output.add("location_predicates",locations);
+        var movements=new JsonArray();
+        for(String test:List.of("{}","{\"x\":{\"max\":0}}","{\"speed\":{\"min\":-3,\"max\":5}}","{\"horizontal_speed\":2}","{\"vertical_speed\":{\"min\":2}}","{\"fall_distance\":{\"max\":0.5}}"))for(double x:new double[]{-0.1,0,0.3}) {
+            var json=JsonParser.parseString(test);var predicate=net.minecraft.advancements.predicates.entity.MovementPredicate.CODEC.parse(JsonOps.INSTANCE,json).getOrThrow();
+            var record=new JsonObject();record.add("predicate",json);record.addProperty("x",x);record.addProperty("matches",predicate.matches(x*20,-0.1*20,0.05*20,0.75));movements.add(record);
+        }output.add("movement_predicates",movements);
+        var distances=new JsonArray();
+        for(String test:List.of("{}","{\"x\":0.1}","{\"absolute\":{\"max\":1}}","{\"horizontal\":{\"min\":-1,\"max\":2}}"))for(double x:new double[]{0.1,1.00000001,3.0}) {
+            var json=JsonParser.parseString(test);var predicate=net.minecraft.advancements.predicates.DistancePredicate.CODEC.parse(JsonOps.INSTANCE,json).getOrThrow();
+            var record=new JsonObject();record.add("predicate",json);record.addProperty("x",x);record.addProperty("matches",predicate.matches(0,0,0,x,0.5,0));distances.add(record);
+        }output.add("distance_predicates",distances);
+        var fluids=new JsonArray();
+        for(String fluid:List.of("empty","water","flowing_water","lava","flowing_lava"))for(String test:List.of("{}","{\"fluids\":\"water\"}","{\"state\":{\"falling\":\"false\"}}","{\"state\":{\"level\":{\"min\":\"+1\",\"max\":\"8\"}}}")) {
+            var state=BuiltInRegistries.FLUID.getValue(Identifier.parse(fluid)).defaultFluidState();doReturn(state).when(level).getFluidState(any(net.minecraft.core.BlockPos.class));
+            var json=JsonParser.parseString(test);var predicate=net.minecraft.advancements.predicates.FluidPredicate.CODEC.parse(lookup.createSerializationContext(JsonOps.INSTANCE),json).getOrThrow();
+            var record=new JsonObject();record.add("predicate",json);record.addProperty("fluid",fluid);var properties=new JsonObject();state.getValues().forEach(value->properties.addProperty(value.property().getName(),value.valueName()));record.add("properties",properties);record.addProperty("matches",predicate.matches(level,net.minecraft.core.BlockPos.ZERO));fluids.add(record);
+        }output.add("fluid_predicates",fluids);
+        var checks=new JsonArray();
+        for(String test:List.of("{\"attribute\":\"gameplay/water_evaporates\",\"value\":true}","{\"attribute\":\"gameplay/water_evaporates\",\"value\":1}","{\"attribute\":\"visual/star_brightness\",\"value\":1.1}","{\"attribute\":\"visual/fog_start_distance\",\"value\":-1}","{\"attribute\":\"gameplay/eyeblossom_open\",\"value\":\"default\"}","{\"attribute\":\"visual/moon_phase\",\"value\":\"full_moon\"}","{\"attribute\":\"visual/moon_phase\",\"value\":0}","{\"attribute\":\"visual/fog_color\",\"value\":\"#010203\"}","{\"attribute\":\"visual/cloud_color\",\"value\":[0,0.5,1,0.75]}","{\"attribute\":\"gameplay/bed_rule\",\"value\":{\"can_sleep\":\"always\",\"can_set_spawn\":\"never\"}}")) {
+            var json=JsonParser.parseString(test).getAsJsonObject();json.addProperty("type","environment_attribute_check");var record=new JsonObject();record.add("definition",json);record.addProperty("accepts",net.minecraft.world.level.storage.loot.predicates.LootItemCondition.DIRECT_CODEC.parse(lookup.createSerializationContext(JsonOps.INSTANCE),json).result().isPresent());checks.add(record);
+        }output.add("environment_codecs",checks);
+
 
     }
     public static void main(String[] args) throws Exception {

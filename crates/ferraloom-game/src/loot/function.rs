@@ -117,9 +117,9 @@ impl LootItemFunction {
                     })?,
                 }
             }
-            "minecraft:set_components" => FunctionKind::SetComponents(
-                DataComponentPatch::from_json(codec::field(v, "components")?)?,
-            ),
+            "minecraft:set_components" => {
+                FunctionKind::SetComponents(codec::persistent(codec::field(v, "components")?)?)
+            }
             "minecraft:set_custom_data" => {
                 FunctionKind::SetCustomData(CustomData::from_json(codec::field(v, "tag")?)?)
             }

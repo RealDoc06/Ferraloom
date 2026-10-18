@@ -32,6 +32,7 @@ pub use container_function::{ContainerComponent, ContainerFunction};
 pub use context::*;
 pub use enchantment::{EnchantmentOperation, LevelBasedValue};
 pub use entry::{EntryKind, LootPoolEntryContainer};
+pub use environment::EnvironmentValue;
 pub use function::{FunctionKind, LootItemFunction};
 pub use item_function::{ItemFunction, LootAttributeModifier};
 pub use list_function::ListFunction;

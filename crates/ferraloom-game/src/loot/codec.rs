@@ -103,3 +103,11 @@ pub(crate) fn list<T>(v: &Value, decode: impl Fn(&Value) -> Result<T>) -> Result
 pub(crate) fn error(message: impl Into<String>) -> LootError {
     LootError::Decode(message.into())
 }
+
+/// Apply the shared persistent codec's value constraints once during decoding.
+/// Several protocol value types validate their range on persistent encoding.
+pub(crate) fn persistent<T: ferraloom_protocol::component::Persistent>(v: &Value) -> Result<T> {
+    let value = T::from_json(v)?;
+    value.to_persistent()?;
+    Ok(value)
+}

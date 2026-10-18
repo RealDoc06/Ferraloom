@@ -2,7 +2,7 @@ use super::function::{max_stack_size, stack_count};
 use super::{
     EvalContext, Holder, LootData, LootItemFunction, LootPoolEntryContainer, Result, codec,
 };
-use ferraloom_protocol::{codec::BoundedList, component::*};
+use ferraloom_protocol::component::*;
 use serde_json::Value;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
