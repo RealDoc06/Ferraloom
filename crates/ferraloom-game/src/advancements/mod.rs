@@ -2,6 +2,8 @@
 //! and apply returned effects synchronously at the triggering call site.
 pub mod criteria;
 mod data;
+mod live;
+pub use live::{flush_dirty, request_stats, seen_advancements};
 mod player;
 mod progress;
 mod tree;
