@@ -178,3 +178,5 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 
 | ticking.block-entity.identity | Keep canonical per-chunk receivers with fresh generations; reentrant old-reference writes target detached receivers, with explicit callback/menu roots | `LevelChunk#setBlockEntity; LevelChunk#removeBlockEntity` | `level::block_entity::tests::reentrant_replacement_preserves_old_receiver_and_pinned_menu_roots` | - | todo |
 | ticking.block-entity.menu-borrows | Borrow a canonical player and ordered distinct current block entities across chunks without taking state out | `AbstractContainerMenu; LevelChunk` | `level::block_entity::tests::menu_borrow_preserves_order_and_rejects_duplicate_or_stale_generations` | - | todo |
+
+| ticking.level.handling-tick | Expose the native handling-tick flag through weather, scheduled ticks and block events, clearing it before entity work | `ServerLevel#tick; ServerLevel#isHandlingTick` | `runtime source-order integration; piston short-pulse scenario pending` | - | todo |

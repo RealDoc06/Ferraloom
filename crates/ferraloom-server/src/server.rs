@@ -621,6 +621,7 @@ impl MinecraftServer {
         if !paused {
             self.tick = self.tick.wrapping_add(1);
             self.tick_rate_manager.tick();
+            self.level.level.set_handling_tick(true);
             // Functions and server clocks occupy this serial slot as their ports arrive.
             if self.tick.is_multiple_of(20) {
                 let packet = self.time_packet();
@@ -661,6 +662,7 @@ impl MinecraftServer {
             if self.tick_rate_manager.runs_normally() {
                 self.level.level.run_block_events().map_err(game_error)?;
             }
+            self.level.level.set_handling_tick(false);
             let active = self.level.tickets.should_keep_dimension_active();
             if self
                 .level
