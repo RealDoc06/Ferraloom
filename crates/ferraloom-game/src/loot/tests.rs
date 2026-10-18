@@ -111,7 +111,20 @@ fn decode_stack(value: &serde_json::Value) -> ItemStack {
         ItemStack::from_json(value).unwrap()
     }
 }
-fn assert_stacks(actual: &[ItemStack], expected: &serde_json::Value, label: &str) {
+fn assert_stacks(
+    actual: &[ItemStack],
+    expected: &serde_json::Value,
+    expected_nbt: &serde_json::Value,
+    label: &str,
+) {
+    assert_eq!(
+        actual.len(),
+        expected_nbt.as_array().unwrap().len(),
+        "{label}"
+    );
+    for (actual, expected) in actual.iter().zip(expected_nbt.as_array().unwrap()) {
+        assert_native_stack(actual, expected, label);
+    }
     let actual = actual.iter().map(canonical).collect::<Vec<_>>();
     let expected = expected
         .as_array()
@@ -120,6 +133,18 @@ fn assert_stacks(actual: &[ItemStack], expected: &serde_json::Value, label: &str
         .map(|v| canonical(&decode_stack(v)))
         .collect::<Vec<_>>();
     assert_eq!(actual, expected, "{label}");
+}
+fn assert_native_stack(actual: &ItemStack, expected: &serde_json::Value, label: &str) {
+    use ferraloom_protocol::component::Persistent;
+    if expected.is_null() {
+        assert!(actual.is_empty(), "{label}");
+    } else {
+        assert_eq!(
+            actual.to_nbt().unwrap(),
+            ferraloom_nbt::parse(expected.as_str().unwrap()).unwrap(),
+            "{label}"
+        );
+    }
 }
 #[test]
 fn synthetic_tables_and_providers_match_real_java() {
@@ -139,14 +164,24 @@ fn synthetic_tables_and_providers_match_real_java() {
         let items = data
             .get_random_items(&id, &params, &mut random, &VanillaFeatures)
             .unwrap();
-        assert_stacks(&items, &record["items"], &record.to_string());
+        assert_stacks(
+            &items,
+            &record["items"],
+            &record["items_nbt"],
+            &record.to_string(),
+        );
         assert_eq!(random.next_long(), record["next"].as_i64().unwrap());
         let mut random = LegacyRandomSource::new(seed);
         let mut container = vec![ItemStack::default(); 9];
         container[3] = ItemStack::new(Item::APPLE, 1, DataComponentPatch::default());
         data.fill(&id, &mut container, &params, &mut random, &VanillaFeatures)
             .unwrap();
-        assert_stacks(&container, &record["slots"], &record.to_string());
+        assert_stacks(
+            &container,
+            &record["slots"],
+            &record["slots_nbt"],
+            &record.to_string(),
+        );
         assert_eq!(random.next_long(), record["fill_next"].as_i64().unwrap());
     }
     let data = LootData::default();
@@ -361,7 +396,12 @@ fn all_available_builtin_tables_match_real_java() {
             }
             Err(e) => panic!("{id}, seed {seed}: {e}"),
         };
-        assert_stacks(&items, &record["items"], &format!("{id} seed {seed}"));
+        assert_stacks(
+            &items,
+            &record["items"],
+            &record["items_nbt"],
+            &format!("{id} seed {seed}"),
+        );
         assert_eq!(
             random.next_long(),
             record["next"].as_i64().unwrap(),
@@ -374,6 +414,7 @@ fn all_available_builtin_tables_match_real_java() {
         assert_stacks(
             &container,
             &record["slots"],
+            &record["slots_nbt"],
             &format!("{id} seed {seed} fill"),
         );
         assert_eq!(
@@ -510,6 +551,7 @@ fn item_modifiers_and_float_arithmetic_match_java() {
                 &VanillaFeatures,
             )
             .unwrap();
+        assert_native_stack(&result, &record["result_nbt"], &record.to_string());
         assert_eq!(
             canonical(&result),
             canonical(&decode_stack(&record["result"])),

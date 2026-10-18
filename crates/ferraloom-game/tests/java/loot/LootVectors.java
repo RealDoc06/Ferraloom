@@ -54,6 +54,9 @@ public final class LootVectors {
         return stack.isEmpty()?JsonNull.INSTANCE:ItemStack.CODEC.encodeStart(lookup.createSerializationContext(JsonOps.INSTANCE),stack).getOrThrow();
     }
     static JsonArray stacks(List<ItemStack> stacks) {var a=new JsonArray();for(var stack:stacks)a.add(stack(stack));return a;}
+    static JsonElement stackNbt(ItemStack stack) {return stack.isEmpty()?JsonNull.INSTANCE:new JsonPrimitive(ItemStack.CODEC.encodeStart(lookup.createSerializationContext(net.minecraft.nbt.NbtOps.INSTANCE),stack).getOrThrow().toString());}
+    static JsonArray stacksNbt(List<ItemStack> stacks) {var a=new JsonArray();for(var stack:stacks)a.add(stackNbt(stack));return a;}
+
     static LootParams params(Identifier id,LootTable table) {
         var values=ContextMap.builder();
         var block=Blocks.STONE;
@@ -82,10 +85,10 @@ public final class LootVectors {
         var params=new LootParams(level,ContextMap.EMPTY,Map.of(),0.75f);
         var random=RandomSource.create(seed);RANDOM.set(random);
         var result=new JsonObject();result.add("definition",json);result.addProperty("seed",seed);
-        result.add("items",stacks(table.getRandomItems(params,random)));result.addProperty("next",random.nextLong());
+        var generated=table.getRandomItems(params,random);result.add("items",stacks(generated));result.add("items_nbt",stacksNbt(generated));result.addProperty("next",random.nextLong());
         random=RandomSource.create(seed);RANDOM.set(random);var container=new SimpleContainer(9);container.setItem(3,new ItemStack(Items.APPLE));
-        table.fill(container,params,0);var slots=new JsonArray();for(int slot=0;slot<9;slot++)slots.add(stack(container.getItem(slot)));
-        result.add("slots",slots);result.addProperty("fill_next",random.nextLong());return result;
+        table.fill(container,params,0);var slots=new JsonArray();var slotsNbt=new JsonArray();for(int slot=0;slot<9;slot++){slots.add(stack(container.getItem(slot)));slotsNbt.add(stackNbt(container.getItem(slot)));}
+        result.add("slots",slots);result.add("slots_nbt",slotsNbt);result.addProperty("fill_next",random.nextLong());return result;
     }
     static void focused(JsonObject output) {
         var focused=new JsonArray();
@@ -151,7 +154,7 @@ public final class LootVectors {
             var blockEntity=missing(net.minecraft.world.level.block.entity.BlockEntity.class);doReturn(level).when(blockEntity).getLevel();doReturn(RegistryAccess.EMPTY).when(level).registryAccess();doReturn(sourceTag).when(blockEntity).saveWithFullMetadata(any(HolderLookup.Provider.class));
             var params=new LootParams(level,ContextMap.builder().set(LootContextParams.BLOCK_ENTITY,blockEntity).set(LootContextParams.TOOL,tool).set(LootContextParams.BLOCK_STATE,Blocks.WHEAT.defaultBlockState()).set(LootContextParams.EXPLOSION_RADIUS,3f).build(),Map.of(),0);
             var random=RandomSource.create(seed);RANDOM.set(random);var context=new LootContext.Builder(params).withOptionalRandomSource(random).create(Optional.empty());
-            var record=new JsonObject();record.add("definition",functionJson);record.add("input",inputJson);record.add("tool",toolJson);record.addProperty("block_entity",sourceTag.toString());record.addProperty("seed",seed);record.add("result",stack(function.apply(item,context)));record.addProperty("next",random.nextLong());modifiers.add(record);
+            var record=new JsonObject();record.add("definition",functionJson);record.add("input",inputJson);record.add("tool",toolJson);record.addProperty("block_entity",sourceTag.toString());record.addProperty("seed",seed);var modified=function.apply(item,context);record.add("result",stack(modified));record.add("result_nbt",stackNbt(modified));record.addProperty("next",random.nextLong());modifiers.add(record);
         }output.add("modifiers",modifiers);
         var numbers=new JsonArray();
         for(String definition:List.of("9223372036854775808","1e100","2147483647.9","-2147483649.99","{\"type\":\"uniform\",\"min\":-4,\"max\":9}","{\"type\":\"binomial\",\"n\":12,\"p\":0.3}","{\"type\":\"add\",\"inputs\":[5,{\"type\":\"div\",\"left\":1,\"right\":0}]}","{\"type\":\"floor_div\",\"left\":-7,\"right\":3}","{\"type\":\"from_float\",\"input\":-2.9}","{\"type\":\"pow\",\"base\":0,\"exponent\":0}")) {
@@ -279,11 +282,11 @@ public final class LootVectors {
                 var result=new JsonObject();result.addProperty("table",id.toString());result.addProperty("seed",seed);
                 try {
                     var params=params(id,table);var random=RandomSource.create(seed);RANDOM.set(random);
-                    result.add("items",stacks(table.getRandomItems(params,random)));result.addProperty("next",random.nextLong());
+                    var generated=table.getRandomItems(params,random);result.add("items",stacks(generated));result.add("items_nbt",stacksNbt(generated));result.addProperty("next",random.nextLong());
                     random=RandomSource.create(seed);RANDOM.set(random);var container=new SimpleContainer(27);
                     table.fill(container,params,0);
-                    var slots=new JsonArray();for(int slot=0;slot<27;slot++)slots.add(stack(container.getItem(slot)));
-                    result.add("slots",slots);result.addProperty("fill_next",random.nextLong());vectors.add(result);
+                    var slots=new JsonArray();var slotsNbt=new JsonArray();for(int slot=0;slot<27;slot++){slots.add(stack(container.getItem(slot)));slotsNbt.add(stackNbt(container.getItem(slot)));}
+                    result.add("slots",slots);result.add("slots_nbt",slotsNbt);result.addProperty("fill_next",random.nextLong());vectors.add(result);
                 } catch(UnsupportedOperationException e) {result.addProperty("missing_fact",e.getMessage());pending.add(result);}
             }
         }
