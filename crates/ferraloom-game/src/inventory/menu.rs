@@ -81,6 +81,7 @@ pub struct AbstractContainerMenu {
     pub updates: Vec<ContainerUpdate>,
     pub(crate) crafting_recipe_used: Option<ferraloom_data::datapack::Identifier>,
     pub(crate) crafting_remove_count: i32,
+    pub(crate) furnace_remove_count: i32,
     pub(crate) placing_recipe: bool,
 }
 impl AbstractContainerMenu {
@@ -114,6 +115,7 @@ impl AbstractContainerMenu {
             updates: Vec::new(),
             crafting_recipe_used: None,
             crafting_remove_count: 0,
+            furnace_remove_count: 0,
             placing_recipe: false,
         }
     }

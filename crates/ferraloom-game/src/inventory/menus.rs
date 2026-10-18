@@ -378,6 +378,27 @@ impl AbstractContainerMenu {
     ) -> Result<ItemStack> {
         if matches!(
             self.kind,
+            MenuKind::Furnace | MenuKind::Smoker | MenuKind::BlastFurnace
+        ) {
+            let mut operation = super::in_memory::InMemoryMenuOperation::new(self, ctx);
+            let stack = super::quick_move_furnace::quick_move_furnace_menu_item(
+                &mut operation,
+                index,
+                hooks,
+            )?;
+            return operation.read(stack).cloned();
+        }
+        if matches!(self.kind, MenuKind::Inventory | MenuKind::Crafting) {
+            let mut operation = super::in_memory::InMemoryMenuOperation::new(self, ctx);
+            let stack = super::quick_move_crafting::quick_move_crafting_menu_item(
+                &mut operation,
+                index,
+                hooks,
+            )?;
+            return operation.read(stack).cloned();
+        }
+        if matches!(
+            self.kind,
             MenuKind::Chest { .. }
                 | MenuKind::Hopper
                 | MenuKind::ShulkerBox

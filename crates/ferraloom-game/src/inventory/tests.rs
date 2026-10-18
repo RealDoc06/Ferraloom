@@ -901,3 +901,282 @@ fn player_tick_broadcasts_external_inventory_mutation_in_entity_phase() {
             .is_empty()
     );
 }
+
+struct LiveCraftingObservations {
+    query: LiveRecipeMenuHooks,
+    synchronization: crate::crafting::RecipeSynchronization,
+    stats: Vec<String>,
+    awards: Vec<String>,
+}
+impl MenuHooks for LiveCraftingObservations {
+    fn has_crafting(&self) -> bool {
+        true
+    }
+    fn prepare_recipe_click(&mut self, _: MenuKind) -> Result<()> {
+        Ok(())
+    }
+    fn validate_live_result(&self, _: ResultKind) -> Result<()> {
+        Ok(())
+    }
+    fn result_available(&self, _: ResultKind, _: &ItemStack) -> Result<bool> {
+        Ok(true)
+    }
+    fn live_grid_changed(
+        &mut self,
+        player: crate::entity::EntityRef,
+        menu: MenuRef,
+        level: &mut crate::level::Level,
+    ) -> Result<()> {
+        self.query.live_grid_changed(player, menu, level)
+    }
+    fn live_item_crafted(
+        &mut self,
+        _player: crate::entity::EntityRef,
+        _menu: MenuRef,
+        stack: StackRef,
+        amount: i32,
+        level: &mut crate::level::Level,
+    ) -> Result<()> {
+        self.stats.push(format!(
+            "{}:{amount}",
+            level.stack(stack)?.item().protocol_id()
+        ));
+        crafted_item_post_process(level, stack)
+    }
+    fn live_award_recipe(
+        &mut self,
+        player: crate::entity::EntityRef,
+        _menu: MenuRef,
+        recipe: &ferraloom_data::datapack::Identifier,
+        _input: &[StackRef],
+        level: &mut crate::level::Level,
+    ) -> Result<bool> {
+        use crate::entity::player::ServerPlayer;
+        let recipe = self.query.resources.recipes.by_key(recipe).unwrap();
+        // The actual Java oracle controls these two effect boundaries too;
+        // production advancement/stat producers are a separate integration slice.
+        self.awards.push(recipe.id.to_string());
+        if recipe.value.is_special() {
+            return Ok(false);
+        }
+        let entries = level
+            .entity_mut::<ServerPlayer>(player)?
+            .recipe_book
+            .unlock_recipe(recipe, &self.synchronization);
+        if let Some(entries) = entries
+            && !entries.is_empty()
+        {
+            send_container_packets(
+                player,
+                ContainerUpdate::RecipeBookAdd(
+                    ferraloom_protocol::play::clientbound::RecipeBookAdd {
+                        entries,
+                        replace: false,
+                    },
+                )
+                .into_packets(),
+                level,
+            )?;
+        }
+        Ok(true)
+    }
+}
+fn live_crafting_packets(level: &mut crate::level::Level) -> String {
+    use crate::level::effects::LevelEffect;
+    use ferraloom_protocol::play::clientbound::Packet;
+    level
+        .take_effects()
+        .into_iter()
+        .filter_map(|effect| {
+            let LevelEffect::PlayerPacket { packet, .. } = effect else {
+                return None;
+            };
+            match *packet {
+                Packet::RecipeBookAdd(packet) => Some(format!("B:{}", packet.entries.len())),
+                Packet::ContainerSetSlot(packet) => Some(format!(
+                    "S:{}:{}:{}",
+                    packet.state_id.0,
+                    packet.slot,
+                    item(&packet.item_stack)
+                )),
+                Packet::SetCursorItem(packet) => Some(format!("C:{}", item(&packet.contents))),
+                Packet::ContainerSetContent(packet) => Some(format!("I:{}", packet.state_id.0)),
+                _ => None,
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(";")
+}
+fn live_crafting_slots(
+    player: crate::entity::EntityRef,
+    menu: MenuRef,
+    level: &mut crate::level::Level,
+) -> String {
+    with_menu_callback(player, menu, level, |context| {
+        let mut items = Vec::new();
+        for index in 0..context.menu()?.slots.len() {
+            let address = context.slot_address(index)?;
+            let stack = context.level.stack_ref(address)?;
+            let stack = context.level.stack(stack)?;
+            if !stack.is_empty() {
+                items.push(format!("{index}:{}", item(stack)));
+            }
+        }
+        Ok(nonempty_events(items.join(";")))
+    })
+    .unwrap()
+}
+
+#[test]
+fn live_crafting_clicks_match_the_unchanged_native_result_and_packet_timelines() {
+    use crate::entity::{
+        EntityState,
+        player::{GameType, ServerPlayer},
+    };
+    use ferraloom_util::{Uuid, Vec3};
+    let mut level = crate::entity::tests::level(false);
+    crate::level::drop_fixtures::install(&mut level);
+    let resources = level.container_resources().unwrap();
+    let mut player = level.next_entity_ref();
+    let mut menu = MenuRef {
+        container_id: 0,
+        generation: 0,
+    };
+    let mut hooks = LiveCraftingObservations {
+        query: LiveRecipeMenuHooks {
+            resources: resources.clone(),
+            kind: MenuKind::Inventory,
+            limited_crafting: false,
+        },
+        synchronization: crate::crafting::RecipeSynchronization::new(&resources.recipes, |_| true),
+        stats: Vec::new(),
+        awards: Vec::new(),
+    };
+    let mut checked = 0;
+    for row in include_str!("../../tests/java/inventory/crafting.tsv").lines() {
+        let f: Vec<_> = row.split('\t').collect();
+        if f[0] == "start" {
+            level = crate::entity::tests::level(false);
+            level.set_container_resources(resources.clone(), 0);
+            player = level.next_entity_ref();
+            let mut state = ServerPlayer::new(
+                Uuid::new(1, 2),
+                "craft".into(),
+                1,
+                Vec3::new(8.5, 64.0, 8.5),
+                GameType::Survival,
+            );
+            if f[2] == "crafting" {
+                state.menus.install_container_menu(
+                    AbstractContainerMenu::new(MenuKind::Crafting, 7).unwrap(),
+                );
+            }
+            menu = state.menus.current_ref();
+            hooks.query.kind = kind(f[2]);
+            level
+                .add_entity(player, EntityState::Player(Box::new(state)))
+                .unwrap();
+            synchronize_menu(player, menu, MenuSynchronization::Initialize, &mut level).unwrap();
+            let mut output = ItemStack::default();
+            with_menu_callback(player, menu, &mut level, |context| {
+                let mut context = super::transfer::LiveMenuTransfer {
+                    operation: StackOperation::new(context.level),
+                    player,
+                    menu,
+                };
+                for entry in f[3].split(';').filter(|entry| *entry != "-") {
+                    let (index, value) = entry.split_once(':').unwrap();
+                    let index: usize = index.parse().unwrap();
+                    if index == 0 {
+                        output = parse_item(value);
+                    } else {
+                        context.set_by_player(index, parse_item(value), &mut hooks)?;
+                    }
+                }
+                if f[1].starts_with("fallback") {
+                    let address = context.context().slot_address(0)?;
+                    context
+                        .operation
+                        .level
+                        .replace_stack_object(address, StackValue::New(output))?;
+                }
+                Ok(())
+            })
+            .unwrap();
+            synchronize_menu(player, menu, MenuSynchronization::FullState, &mut level).unwrap();
+            assert_eq!(live_crafting_slots(player, menu, &mut level), f[3]);
+            assert_eq!(
+                level
+                    .entity::<ServerPlayer>(player)
+                    .unwrap()
+                    .menus
+                    .menu(menu)
+                    .unwrap()
+                    .state_id()
+                    .to_string(),
+                f[4]
+            );
+            live_crafting_packets(&mut level);
+            hooks.stats.clear();
+            hooks.awards.clear();
+        } else if f[0] == "click" {
+            let input = match f[5] {
+                "0" => ContainerInput::Pickup,
+                "1" => ContainerInput::QuickMove,
+                "2" => ContainerInput::Swap,
+                "4" => ContainerInput::Throw,
+                "5" => ContainerInput::QuickCraft,
+                _ => unreachable!(),
+            };
+            level
+                .entity_mut::<ServerPlayer>(player)
+                .unwrap()
+                .menus
+                .menu_mut(menu)
+                .unwrap()
+                .suppress_remote_updates();
+            clicked_live_menu(
+                player,
+                menu,
+                f[3].parse().unwrap(),
+                f[4].parse().unwrap(),
+                input,
+                &mut hooks,
+                &mut level,
+            )
+            .unwrap_or_else(|error| panic!("{} step {}: {error}", f[1], f[2]));
+            level
+                .entity_mut::<ServerPlayer>(player)
+                .unwrap()
+                .menus
+                .menu_mut(menu)
+                .unwrap()
+                .resume_remote_updates();
+            synchronize_menu(player, menu, MenuSynchronization::Changes, &mut level).unwrap();
+            let actual_slots = live_crafting_slots(player, menu, &mut level);
+            let receiver = level
+                .entity::<ServerPlayer>(player)
+                .unwrap()
+                .menus
+                .menu(menu)
+                .unwrap();
+            let actual = [
+                actual_slots,
+                item(&receiver.carried),
+                receiver.state_id().to_string(),
+                nonempty_events(live_crafting_packets(&mut level)),
+                nonempty_events(std::mem::take(&mut hooks.stats).join(";")),
+                nonempty_events(std::mem::take(&mut hooks.awards).join(";")),
+            ];
+            assert_eq!(
+                actual.iter().map(String::as_str).collect::<Vec<_>>(),
+                f[6..],
+                "{} live click {}",
+                f[1],
+                f[2]
+            );
+            checked += 1;
+        }
+    }
+    assert_eq!(checked, 239);
+}

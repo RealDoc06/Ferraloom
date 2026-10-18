@@ -4,6 +4,8 @@ use super::*;
 use ferraloom_data::datapack::Identifier;
 
 pub trait CraftingResultContext: MenuClickContext {
+    fn validate_crafting_take(&self, hooks: &dyn MenuHooks) -> Result<()>;
+    fn crafted_item_only(&mut self, stack: Self::Stack, hooks: &mut dyn MenuHooks) -> Result<()>;
     fn crafted_item(
         &mut self,
         stack: Self::Stack,
@@ -65,6 +67,19 @@ pub fn take_crafting_result_stack<C: CraftingResultContext>(
 }
 
 impl CraftingResultContext for super::in_memory::InMemoryMenuOperation<'_, '_, '_> {
+    fn validate_crafting_take(&self, hooks: &dyn MenuHooks) -> Result<()> {
+        hooks
+            .crafting_ref()
+            .ok_or(MenuError::Unsupported("crafting callbacks"))?
+            .validate_take_result()
+    }
+    fn crafted_item_only(&mut self, stack: Self::Stack, hooks: &mut dyn MenuHooks) -> Result<()> {
+        let stack = self.read(stack)?.clone();
+        hooks
+            .crafting()
+            .ok_or(MenuError::Unsupported("crafting callbacks"))?
+            .item_crafted(self.menu, self.context, &stack, None)
+    }
     fn crafted_item(
         &mut self,
         stack: super::in_memory::MemoryStackRef,
@@ -267,5 +282,142 @@ mod tests {
             cases += 1;
         }
         assert_eq!(cases, 2);
+    }
+}
+
+#[cfg(test)]
+mod live_tests {
+    use super::*;
+    use crate::{
+        entity::{
+            EntityState,
+            player::{GameType, ServerPlayer},
+        },
+        level::Level,
+    };
+    use ferraloom_data::Item;
+    use ferraloom_util::{Uuid, Vec3};
+
+    #[derive(Default)]
+    struct Reentrant(Vec<String>);
+    fn describe(stack: &ItemStack) -> String {
+        format!(
+            "{},{},{}",
+            stack.item().protocol_id(),
+            count(stack),
+            max_stack_size(stack)
+        )
+    }
+    impl MenuHooks for Reentrant {
+        fn live_item_crafted(
+            &mut self,
+            player: crate::entity::EntityRef,
+            menu: MenuRef,
+            _stack: StackRef,
+            amount: i32,
+            level: &mut Level,
+        ) -> Result<()> {
+            self.0.push(format!("crafted:{amount}"));
+            level.replace_stack_object(
+                ContainerSlot {
+                    container: ContainerHandle::MenuLocal {
+                        player,
+                        menu,
+                        container: 0,
+                    },
+                    slot: 0,
+                },
+                StackValue::New(ItemStack::new(Item::DIRT, 3, Default::default())),
+            )?;
+            level
+                .entity_mut::<ServerPlayer>(player)?
+                .menus
+                .menu_mut(menu)?
+                .crafting_remove_count = 19;
+            Ok(())
+        }
+        fn live_award_recipe(
+            &mut self,
+            player: crate::entity::EntityRef,
+            menu: MenuRef,
+            _recipe: &Identifier,
+            input: &[StackRef],
+            level: &mut Level,
+        ) -> Result<bool> {
+            self.0.push(format!(
+                "award:{}:{}:{}",
+                level
+                    .entity::<ServerPlayer>(player)?
+                    .menus
+                    .menu(menu)?
+                    .crafting_remove_count,
+                input.len(),
+                describe(level.stack(input[0])?)
+            ));
+            level.replace_stack_object(
+                ContainerSlot {
+                    container: ContainerHandle::MenuLocal {
+                        player,
+                        menu,
+                        container: 0,
+                    },
+                    slot: 0,
+                },
+                StackValue::New(ItemStack::new(Item::DIAMOND, 7, Default::default())),
+            )?;
+            self.0
+                .push(format!("captured:{}", describe(level.stack(input[0])?)));
+            Ok(true)
+        }
+    }
+    #[test]
+    fn live_result_achievements_keep_native_input_receivers_across_reentry() {
+        let mut checked = 0;
+        for line in include_str!("../../tests/java/inventory/listeners.tsv").lines() {
+            let fields: Vec<_> = line.split('\t').collect();
+            let Some(amount) = fields[1].strip_prefix("result-achievements-") else {
+                continue;
+            };
+            let mut level = crate::entity::tests::level(false);
+            let player = level.next_entity_ref();
+            let mut state = ServerPlayer::new(
+                Uuid::new(1, 2),
+                "result".into(),
+                1,
+                Vec3::ZERO,
+                GameType::Survival,
+            );
+            let menu = state.menus.current_ref();
+            let receiver = state.menus.menu_mut(menu).unwrap();
+            receiver.local[0].set_item(0, ItemStack::new(Item::STONE, 5, Default::default()));
+            receiver.crafting_remove_count = amount.parse().unwrap();
+            receiver.crafting_recipe_used = Some("test:used".parse().unwrap());
+            level
+                .add_entity(player, EntityState::Player(Box::new(state)))
+                .unwrap();
+            let mut hooks = Reentrant::default();
+            with_menu_callback(player, menu, &mut level, |context| {
+                let mut context = super::super::transfer::LiveMenuTransfer {
+                    operation: StackOperation::new(context.level),
+                    player,
+                    menu,
+                };
+                let stack =
+                    context.own_stack(ItemStack::new(Item::STONE, 4, Default::default()))?;
+                check_crafting_take_achievements(&mut context, stack, &mut hooks)?;
+                assert!(context.menu()?.crafting_recipe_used.is_none());
+                let input = context.slot_stack(1)?;
+                hooks.0.push(format!(
+                    "after:{}:{}",
+                    context.menu()?.crafting_remove_count,
+                    describe(context.operation.level.stack(input)?)
+                ));
+                Ok(())
+            })
+            .unwrap();
+            assert_eq!(hooks.0.join(";"), fields[2]);
+            checked += 1;
+        }
+        assert_eq!(checked, 2);
     }
 }
