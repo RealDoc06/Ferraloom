@@ -9,6 +9,9 @@ use ferraloom_util::{BlockPos, ChunkPos, Direction};
 use std::sync::Arc;
 static EMPTY: Behaviors = Behaviors::EMPTY;
 fn level() -> Level {
+    level_with_height(2)
+}
+fn level_with_height(sections: i32) -> Level {
     let mut level = Level::new(
         Region::new(&EMPTY),
         crate::level::LevelContext::fixture(0, 63),
@@ -17,7 +20,7 @@ fn level() -> Level {
     level
         .add_chunk(LevelChunk::new(
             ChunkPos::new(0, 0),
-            0..2,
+            0..sections,
             ferraloom_chunk::LevelChunkSection::new(
                 ferraloom_chunk::Strategy::block_states(),
                 ferraloom_chunk::Strategy::biomes(Arc::new(
@@ -1217,4 +1220,108 @@ fn tree_growth_restores_captured_saplings_and_uses_the_live_random_stream() {
         );
         assert_eq!(level.random().next_long(), expected.next_long());
     }
+}
+
+#[test]
+fn native_bonemeal_snapshots_and_rng_match_registered_growth() {
+    use ferraloom_util::random::{LegacyRandomSource, Random, RandomSource};
+    use std::{collections::BTreeMap, io::Read};
+    let mut text = String::new();
+    flate2::read::GzDecoder::new(
+        include_bytes!("../../../tests/java/blocks/plants/bonemeal.tsv.gz").as_slice(),
+    )
+    .read_to_string(&mut text)
+    .unwrap();
+    let (blocks, fluids) = tags();
+    let pos = BlockPos::new(8, 100, 8);
+    let mut matched = 0;
+    let mut pending = 0;
+    let cells = |text: &str| -> BTreeMap<(i32, i32, i32), BlockState> {
+        text.split(',')
+            .filter(|cell| !cell.is_empty())
+            .map(|cell| {
+                let fields: Vec<i32> = cell
+                    .split(':')
+                    .map(|value| value.parse().unwrap())
+                    .collect();
+                (
+                    (fields[0], fields[1], fields[2]),
+                    BlockState::from_id(fields[3] as u16).unwrap(),
+                )
+            })
+            .collect()
+    };
+    for line in text.lines() {
+        let f: Vec<_> = line.split('\t').collect();
+        let state = BlockState::from_id(f[1].parse().unwrap()).unwrap();
+        if matches!(
+            state.block().class(),
+            BlockClass::TallFlowerBlock
+                | BlockClass::FlowerBedBlock
+                | BlockClass::BigDripleafBlock
+                | BlockClass::BigDripleafStemBlock
+                | BlockClass::SmallDripleafBlock
+        ) {
+            // Drops and redstone queries arrive from their family owners.
+            pending += 1;
+            continue;
+        }
+        let mut level = level_with_height(8);
+        level.set_block_tags(blocks.clone());
+        level.set_fluid_tags(fluids.clone());
+        level.rules_mut().block_drops = Some(false);
+        for ((x, y, z), state) in cells(f[5]) {
+            level.set_block_state(pos.offset(x, y, z), state).unwrap();
+        }
+        level.set_random_streams(
+            Random::Legacy(LegacyRandomSource::new(f[2].parse().unwrap())),
+            0,
+        );
+        let behavior = bonemealable_behavior(state.block()).expect("ported fixture class");
+        let mut access = LevelAccessRef::Server(&mut level);
+        let valid = behavior
+            .is_valid_bonemeal_target(state, pos, &mut access, BonemealSource::Interaction)
+            .unwrap();
+        assert_eq!(valid, f[3] == "true", "target {line}");
+        let success = valid
+            && behavior
+                .is_bonemeal_success(state, pos, &mut access, BonemealSource::Interaction)
+                .unwrap();
+        assert_eq!(success, f[4] == "true", "success {line}");
+        if success {
+            behavior
+                .perform_bonemeal(state, pos, &mut access, BonemealSource::Interaction)
+                .unwrap();
+        }
+        let mut actual = BTreeMap::new();
+        for z in -3..=3 {
+            for y in -20..=20 {
+                for x in -3..=3 {
+                    let at = pos.offset(x, y, z);
+                    let state = level.get_block_state(at).unwrap();
+                    if !state.is_air() {
+                        actual.insert((x, y, z), state);
+                    }
+                }
+            }
+        }
+        assert_eq!(
+            actual,
+            cells(f[6]),
+            "snapshot state={state:?} seed={} before={}",
+            f[2],
+            f[5]
+        );
+        assert_eq!(
+            level.random().next_long(),
+            f[7].parse::<i64>().unwrap(),
+            "random {line}"
+        );
+        matched += 1;
+    }
+    assert_eq!(matched + pending, 5808);
+    assert!(matched > 0);
+    eprintln!(
+        "plant bonemeal: {matched} complete matches; {pending} awaiting drops/redstone owners"
+    );
 }
