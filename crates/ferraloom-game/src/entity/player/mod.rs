@@ -5,6 +5,7 @@ mod contact;
 pub mod cooldowns;
 pub mod equipment;
 mod interaction;
+mod spawn;
 pub use interaction::swing_and_reset_attack_strength;
 pub mod inventory;
 use crate::{

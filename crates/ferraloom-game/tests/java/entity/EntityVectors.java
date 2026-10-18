@@ -92,6 +92,7 @@ public final class EntityVectors {
       public static void run(RegistryAccess r)throws Exception {
         TrackingVectors.run(new EntityFixture(r));
         PersistenceVectors.run(new EntityFixture(r));
+        SpawnVectors.run(new EntityFixture(r));
         BorderVectors.run(new EntityFixture(r));
         RidingVectors.run(new EntityFixture(r));
         SynchedDataVectors.run(new EntityFixture(r));

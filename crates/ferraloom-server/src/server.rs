@@ -901,6 +901,9 @@ impl MinecraftServer {
         let access = self.world.access.clone();
         let uuid = profile.id.to_string();
         let saved = tokio::task::spawn_blocking(move || access.player_data().load(&uuid)).await??;
+        let respawn = self.default_spawn_data();
+        let (yaw, pitch) = ServerPlayer::saved_spawn_rotation(saved.as_ref())
+            .unwrap_or((respawn.rotation.yaw, respawn.rotation.pitch));
         let mode = self.default_game_mode;
         let mut player = ServerPlayer::new(
             profile.id,
@@ -920,6 +923,8 @@ impl MinecraftServer {
             player.game_mode = mode;
             player.update_game_mode_abilities();
         }
+        let spawn_position = player.position;
+        player.snap_to(spawn_position, yaw, pitch);
         player.view_distance = i32::from(self.connections[&connection].information.view_distance);
         let center = player.chunk_position();
         self.request_area(center, 3)?;
