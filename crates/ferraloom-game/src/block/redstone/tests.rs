@@ -117,6 +117,32 @@ fn native_mutations(value: &str) -> String {
 }
 
 #[test]
+fn piston_push_reactions_entities_height_and_border_rules_match_vanilla() {
+    let mut level = level();
+    let mut border = crate::level::border::WorldBorder::default();
+    border.set_center(8.0, 8.0);
+    border.set_size(10.0);
+    level.set_entity_world_border(border);
+    for (name, expected) in cases("piston-pushable:") {
+        let mut args = name.split(':').skip(1);
+        let state = BlockState::from_id(args.next().unwrap().parse().unwrap()).unwrap();
+        let direction = Direction::VALUES[args.next().unwrap().parse::<usize>().unwrap()];
+        let connection = Direction::VALUES[args.next().unwrap().parse::<usize>().unwrap()];
+        let allow = args.next().unwrap().parse().unwrap();
+        let pos = BlockPos::new(
+            args.next().unwrap().parse().unwrap(),
+            args.next().unwrap().parse().unwrap(),
+            args.next().unwrap().parse().unwrap(),
+        );
+        assert_eq!(
+            piston::is_pushable(state, &level, pos, direction, allow, connection).to_string(),
+            expected,
+            "{name}"
+        );
+    }
+}
+
+#[test]
 fn pressure_plate_sensitivity_weighted_rounding_and_release_ticks_match_vanilla() {
     use crate::entity::{
         EntityData, EntityRef, EntityState,

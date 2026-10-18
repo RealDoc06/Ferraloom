@@ -117,6 +117,21 @@ public final class RedstoneVectors extends MutationFixture {
             var resolver=new PistonStructureResolver(level,ORIGIN,Direction.EAST,true);boolean ok=resolver.resolve();
             System.out.println("piston-branch:"+(sticky==Blocks.SLIME_BLOCK?"slime":"honey")+":"+kind+"\t"+ok+"|"+positions(resolver.getToPush())+"|"+positions(resolver.getToDestroy()));
         }
+        var level=new RedstoneVectors(r);level.border.setCenter(8,8);level.border.setSize(10);
+        var states=new ArrayList<BlockState>();
+        for(var block:List.of(Blocks.AIR,Blocks.STONE,Blocks.OBSIDIAN,Blocks.BEDROCK,Blocks.BARRIER,Blocks.REDSTONE_WIRE,Blocks.SLIME_BLOCK,Blocks.HONEY_BLOCK,Blocks.CHEST,Blocks.FURNACE,Blocks.HOPPER,Blocks.DISPENSER,Blocks.DROPPER,Blocks.COMPARATOR,Blocks.MOVING_PISTON,Blocks.PISTON_HEAD,Blocks.PISTON,Blocks.STICKY_PISTON,Blocks.REINFORCED_DEEPSLATE,Blocks.GLAZED_TERRACOTTA.pick(net.minecraft.world.item.DyeColor.BLUE),Blocks.SHULKER_BOX,Blocks.LECTERN,Blocks.DAYLIGHT_DETECTOR))states.add(block.defaultBlockState());
+        states.add(Blocks.PISTON.defaultBlockState().setValue(net.minecraft.world.level.block.piston.PistonBaseBlock.EXTENDED,true));
+        states.add(Blocks.STICKY_PISTON.defaultBlockState().setValue(net.minecraft.world.level.block.piston.PistonBaseBlock.EXTENDED,true));
+        var positions=new ArrayList<BlockPos>();positions.add(ORIGIN);
+        for(int y:new int[]{level.getMinY()-1,level.getMinY(),level.getMinY()+1,level.getMaxY()-1,level.getMaxY(),level.getMaxY()+1})positions.add(ORIGIN.atY(y));
+        for(int x:new int[]{2,3,12,13,14})positions.add(new BlockPos(x,0,8));
+        for(var state:states)for(var pos:positions){
+            if(!pos.equals(ORIGIN)&&!state.isAir()&&!state.is(Blocks.STONE)&&!state.is(Blocks.PISTON))continue;
+            for(var direction:Direction.values())for(var connection:pos.equals(ORIGIN)?Direction.values():new Direction[]{direction})for(boolean allow:new boolean[]{false,true}){
+                boolean result=net.minecraft.world.level.block.piston.PistonBaseBlock.isPushable(state,level,pos,direction,allow,connection);
+                System.out.println("piston-pushable:"+Block.getId(state)+":"+direction.get3DDataValue()+":"+connection.get3DDataValue()+":"+allow+":"+pos.getX()+":"+pos.getY()+":"+pos.getZ()+"\t"+result);
+            }
+        }
     }
     static void wires(RegistryAccess r) {
         for(boolean experimental:new boolean[]{false,true})for(int shape=0;shape<3;shape++) {
