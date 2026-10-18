@@ -77,7 +77,7 @@ mod tests {
         );
         assert_eq!(
             Item::POWDER_SNOW_BUCKET.place_sound(),
-            Some(crate::registries::sound_event::Id::BUCKET_EMPTY_POWDER_SNOW)
+            Some(crate::registries::sound_event::Id::ITEM_BUCKET_EMPTY_POWDER_SNOW)
         );
         assert_eq!(Item::STONE.wall_block(), None);
         assert_eq!(Item::STONE.place_sound(), None);
