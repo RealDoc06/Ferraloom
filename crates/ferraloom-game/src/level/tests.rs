@@ -80,6 +80,19 @@ fn empty_chunk(pos: ChunkPos) -> chunk::LevelChunk {
 }
 fn empty_level(behaviors: &'static Behaviors) -> Level {
     let mut level = Level::new(Region::new(behaviors));
+    // Controlled test dimension: no timelines and native constant attributes.
+    let resources = ferraloom_data::datapack::ResourceManager::new(vec![]);
+    let environment = Arc::new(environment::EnvironmentDefinitions::load(&resources).unwrap());
+    let dimension = environment.dimension(&serde_json::json!({})).unwrap();
+    level
+        .set_environment_attributes(
+            environment,
+            &dimension,
+            "test".parse().unwrap(),
+            &[],
+            environment::ClockSnapshot::default(),
+        )
+        .unwrap();
     for x in -1..=1 {
         for z in -1..=1 {
             let pos = ChunkPos::new(x, z);

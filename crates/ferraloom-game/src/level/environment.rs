@@ -163,6 +163,9 @@ impl Level {
     pub fn water_evaporates(&self, pos: BlockPos) -> Result<bool, LevelError> {
         self.get_value(EnvironmentAttributes::WATER_EVAPORATES, pos)
     }
+    pub fn fast_lava(&self) -> Result<bool, LevelError> {
+        self.get_dimension_value(EnvironmentAttributes::FAST_LAVA)
+    }
     /// Port of Level#updateSkyBrightness, independent of the simulation freeze gate.
     pub fn update_sky_brightness(&mut self) -> Result<(), LevelError> {
         let value = self.get_dimension_value(EnvironmentAttributes::SKY_LIGHT_LEVEL)?;
@@ -249,11 +252,12 @@ mod tests {
         }
         let definitions =
             Arc::new(EnvironmentDefinitions::load(&ResourceManager::new(vec![pack])).unwrap());
-        let dimension = definitions
+        let mut dimension = definitions
             .dimension(
                 &json!({"attributes":{"gameplay/water_evaporates":false},"timelines":["day"]}),
             )
             .unwrap();
+        dimension.timelines.push(Arc::new(ferraloom_worldgen::environment::Timeline::decode(&json!({"clock":"overworld","tracks":{"gameplay/fast_lava":{"keyframes":[{"ticks":0,"value":false},{"ticks":10,"value":true}]}}})).unwrap()));
         let clocks = |tick| ClockSnapshot::new([("overworld".parse().unwrap(), tick)]);
         level
             .set_environment_attributes(
@@ -266,6 +270,10 @@ mod tests {
             .unwrap();
         level.set_has_skylight(true);
         assert_eq!(level.sky_darken(), Ok(0));
+        assert_eq!(
+            crate::block::fluid::FlowingFluid::Lava.tick_delay_for(&level),
+            Ok(30)
+        );
         assert_eq!(
             level.get_dimension_value(EnvironmentAttributes::WATER_EVAPORATES),
             Ok(false)
@@ -327,6 +335,11 @@ mod tests {
         assert_eq!(
             level.dimension_key().unwrap().to_string(),
             "minecraft:overworld"
+        );
+        level.refresh_environment_attributes(clocks(10)).unwrap();
+        assert_eq!(
+            crate::block::fluid::FlowingFluid::Lava.tick_delay_for(&level),
+            Ok(10)
         );
 
         let source =
