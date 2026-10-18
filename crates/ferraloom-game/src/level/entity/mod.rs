@@ -225,6 +225,15 @@ impl EntityStorage {
 }
 
 impl Level {
+    /// Port of ServerLevel#getNextEntityId. Every entity constructor, including
+    /// players, draws from this region's canonical creation-order allocator.
+    pub fn next_entity_id(&mut self) -> i32 {
+        let storage = &mut self.region_mut().entities;
+        storage
+            .ids
+            .allocate(&storage.lookup)
+            .expect("regional entity ID block exhausted at barrier")
+    }
     pub fn min_build_height(&self) -> i32 {
         self.region().min_y
     }
@@ -419,5 +428,34 @@ mod tests {
             base.save_without_id().get_int_array("UUID").unwrap(),
             uuid.to_int_array()
         );
+    }
+
+    #[test]
+    fn first_player_gets_one_and_shares_allocation_with_other_entities() {
+        static BEHAVIORS: Behaviors = Behaviors::EMPTY;
+        let mut level = Level::new(Region::new(&BEHAVIORS));
+        let id = level.next_entity_id();
+        let player = ServerPlayer::new(
+            Uuid::offline_player("JoinBot"),
+            "JoinBot".into(),
+            id,
+            Vec3::ZERO,
+            GameType::Survival,
+        );
+        assert_eq!(player.network_id, 1);
+        level
+            .add_entity(EntityRef(1), EntityState::Player(Box::new(player)))
+            .unwrap();
+        level
+            .add_entity(
+                EntityRef(2),
+                EntityState::Cow(crate::entity::animal::Cow::default()),
+            )
+            .unwrap();
+        assert_eq!(
+            level.entity::<EntityData>(EntityRef(2)).unwrap().network_id,
+            2
+        );
+        assert_eq!(level.next_entity_id(), 3);
     }
 }
