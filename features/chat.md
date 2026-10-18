@@ -19,11 +19,11 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | chat.components.translation | Resolve translation arguments, fallback text and invalid argument cases | `TranslatableContents` | | - | todo |
 | chat.commands.private-team | Route private and team messages with their distinct chat types and signed argument context | `MsgCommand; TeamMsgCommand` | | - | todo |
 | chat.death-messages.rules | Publish death messages according to gamerule and team death-message visibility | `ServerPlayer#die; PlayerTeam` | | - | todo |
-| chat.chat-type.chat | `minecraft:chat` (chat type) | `data/minecraft/chat_type/chat.json`; `ChatType#DIRECT_CODEC` | `ferraloom-parity::starter::parity_chat_formatting` | - | todo |
+| chat.chat-type.chat | `minecraft:chat` (chat type) | `data/minecraft/chat_type/chat.json`; `ChatType#DIRECT_CODEC` | `ferraloom-parity::starter::parity_chat_formatting` | pass | partial |
 | chat.chat-type.emote-command | `minecraft:emote_command` (chat type) | `data/minecraft/chat_type/emote_command.json`; `ChatType#DIRECT_CODEC` | | - | todo |
 | chat.chat-type.msg-command-incoming | `minecraft:msg_command_incoming` (chat type) | `data/minecraft/chat_type/msg_command_incoming.json`; `ChatType#DIRECT_CODEC` | | - | todo |
 | chat.chat-type.msg-command-outgoing | `minecraft:msg_command_outgoing` (chat type) | `data/minecraft/chat_type/msg_command_outgoing.json`; `ChatType#DIRECT_CODEC` | | - | todo |
 | chat.chat-type.say-command | `minecraft:say_command` (chat type) | `data/minecraft/chat_type/say_command.json`; `ChatType#DIRECT_CODEC` | | - | todo |
 | chat.chat-type.team-msg-command-incoming | `minecraft:team_msg_command_incoming` (chat type) | `data/minecraft/chat_type/team_msg_command_incoming.json`; `ChatType#DIRECT_CODEC` | | - | todo |
 | chat.chat-type.team-msg-command-outgoing | `minecraft:team_msg_command_outgoing` (chat type) | `data/minecraft/chat_type/team_msg_command_outgoing.json`; `ChatType#DIRECT_CODEC` | | - | todo |
-| chat.broadcast.offline-multiple-clients | Deliver unsigned offline chat to a second client with exact sender display-name decoration | `PlayerList#broadcastChatMessage; ChatType#bind; Player#getDisplayName` | `ferraloom-parity::starter::parity_chat_formatting` | - | partial |
+| chat.broadcast.offline-multiple-clients | Deliver unsigned offline chat to a second client with exact sender display-name decoration | `PlayerList#broadcastChatMessage; ChatType#bind; Player#getDisplayName` | `ferraloom-parity::starter::parity_chat_formatting` | pass | partial |

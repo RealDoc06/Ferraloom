@@ -9,7 +9,7 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | chunks.pipeline.light-full | Promote chunks through light and full states before exposing ticking access | `ChunkStatusTasks; ChunkMap` | `join::offline_client_joins_walks_chats_and_saves` | - | partial |
 | chunks.tickets.level-propagation | Propagate ticket distance levels and choose loaded, block-ticking and entity-ticking states | `DistanceManager; ChunkLevel` | | - | todo |
 | chunks.tickets.expiry | Expire timeout-based tickets before distance-manager updates | `TicketStorage#purgeStaleTickets; ServerChunkCache#tick` | | - | todo |
-| chunks.tickets.player-view | Update player view-distance tracking and pending chunk sends after movement | `ChunkMap#move; PlayerChunkSender` | `join::offline_client_joins_walks_chats_and_saves`; `ferraloom-parity::starter::parity_chunk_loading_while_walking` | - | partial |
+| chunks.tickets.player-view | Update player view-distance tracking and pending chunk sends after movement | `ChunkMap#move; PlayerChunkSender` | `join::offline_client_joins_walks_chats_and_saves`; `ferraloom-parity::starter::parity_chunk_loading_while_walking` | pass | partial |
 | chunks.tickets.simulation-distance | Use simulation distance independently from view distance for entity and block ticking | `DistanceManager; ChunkMap` | | - | todo |
 | chunks.tickets.forced | Add and remove persistent forced-chunk tickets | `ServerLevel#setChunkForced; ForceLoadCommand` | | - | todo |
 | chunks.tickets.portal | Keep destination portal chunks loaded while portal travel completes | `PortalForcer; TicketType` | | - | todo |

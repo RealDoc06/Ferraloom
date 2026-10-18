@@ -20,7 +20,7 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | server-operations.console.gui | Provide the optional dedicated-server GUI and console command entry | `MinecraftServerGui` | | - | todo |
 | server-operations.save.autosave | Autosave players and worlds on the tick-rate-aware interval with minimum interval | `MinecraftServer#autoSave; MinecraftServer#computeNextAutosaveInterval` |  | - | partial |
 | server-operations.save.manual | Save all levels and players with explicit flush and save-enabled flags | `MinecraftServer#saveEverything; SaveAllCommand` | `join::offline_client_joins_walks_chats_and_saves` | - | partial |
-| server-operations.shutdown.flush | Disconnect players and flush world and storage state during orderly shutdown | `MinecraftServer#stopServer` | `join::offline_client_joins_walks_chats_and_saves`; `ferraloom-parity::starter::parity_save_and_reload_player_position` | - | partial |
+| server-operations.shutdown.flush | Disconnect players and flush world and storage state during orderly shutdown | `MinecraftServer#stopServer` | `join::offline_client_joins_walks_chats_and_saves`; `ferraloom-parity::starter::parity_save_and_reload_player_position` | pass | partial |
 | server-operations.watchdog.stall | Produce a crash report and terminate after max-tick-time is exceeded | `ServerWatchdog#run` | | - | todo |
 | server-operations.monitor.jmx | Expose dedicated-server tick metrics through the optional JMX bean | `MinecraftServerStatistics` | | - | todo |
 | server-operations.monitor.jfr | Start and stop flight recording and publish profiling results | `JvmProfiler; JfrCommand` | | - | todo |
