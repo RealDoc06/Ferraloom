@@ -212,7 +212,7 @@ impl Feature for DiskFeature {
                 for y in (ctx.origin[1] - self.half_height..=ctx.origin[1] + self.half_height).rev()
                 {
                     let p = [ctx.origin[0] + dx, y, ctx.origin[2] + dz];
-                    if self.target.test(&mut ctx.level, p, ctx.generator)? {
+                    if self.target.test(&ctx.level, p, ctx.generator)? {
                         if let Some(state) = self.provider.get_optional_state(ctx, p)? {
                             ctx.level.set_block(p, state, 2)?;
                             if !above {
@@ -297,7 +297,7 @@ struct UnderwaterMagmaFeature {
 impl Feature for UnderwaterMagmaFeature {
     fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
         let Some(Column { floor: Some(y), .. }) = scan(
-            &mut ctx.level,
+            &ctx.level,
             ctx.origin,
             self.range,
             |s| s.block() == Block::WATER,

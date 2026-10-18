@@ -83,7 +83,7 @@ impl Feature for LakeFeature {
                     if y < 4 && !ctx.level.is_solid(p)? && old != fluid {
                         return Ok(false);
                     }
-                    if !self.can_place.test(&mut ctx.level, p, ctx.generator)? {
+                    if !self.can_place.test(&ctx.level, p, ctx.generator)? {
                         return Ok(false);
                     }
                 }
@@ -94,7 +94,7 @@ impl Feature for LakeFeature {
                 for y in 0..8 {
                     let p = offset(origin, [x as i32, y as i32, z as i32]);
                     if grid[index(x, y, z)]
-                        && self.replace_fluid.test(&mut ctx.level, p, ctx.generator)?
+                        && self.replace_fluid.test(&ctx.level, p, ctx.generator)?
                     {
                         let air = y >= 4;
                         ctx.level.set_block(
@@ -131,9 +131,7 @@ impl Feature for LakeFeature {
                         {
                             let p = offset(origin, [x as i32, y as i32, z as i32]);
                             if ctx.level.is_solid(p)?
-                                && self
-                                    .replace_barrier
-                                    .test(&mut ctx.level, p, ctx.generator)?
+                                && self.replace_barrier.test(&ctx.level, p, ctx.generator)?
                             {
                                 ctx.level.set_block(p, barrier, 2)?;
                                 mark_above(&mut ctx.level, p)?;
@@ -153,12 +151,12 @@ impl Feature for LakeFeature {
                     );
                     let biome = ctx.level.noise_biome(quart)?;
                     let biome = &ctx.generator.data().biome_names[biome.0 as usize];
-                    if ctx.generator.data().temperatures.should_freeze(
-                        biome,
-                        &mut ctx.level,
-                        p,
-                        false,
-                    )? && self.replace_fluid.test(&mut ctx.level, p, ctx.generator)?
+                    if ctx
+                        .generator
+                        .data()
+                        .temperatures
+                        .should_freeze(biome, &ctx.level, p, false)?
+                        && self.replace_fluid.test(&ctx.level, p, ctx.generator)?
                     {
                         ctx.level.set_block(p, Block::ICE.default_state(), 2)?;
                     }

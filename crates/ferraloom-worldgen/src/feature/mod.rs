@@ -60,13 +60,13 @@ impl<'a, 'r> FeatureContext<'a, 'r> {
 /// Port of Feature#place on a live ServerLevel, with the caller's RNG and
 /// registered configured feature. TreeGrower performs its sapling removal and
 /// restoration around this call; placement itself does not reseed or decorate.
-pub fn place_configured_feature(
-    live: &mut dyn LiveWorldGenLevel,
-    generator: &dyn ChunkGeneratorAccess,
-    registry: &FeatureRegistry,
+pub fn place_configured_feature<'a>(
+    live: &'a mut dyn LiveWorldGenLevel,
+    generator: &'a dyn ChunkGeneratorAccess,
+    registry: &'a FeatureRegistry,
     feature_id: &Identifier,
     origin: [i32; 3],
-    random: FeatureRandomSelector<'_>,
+    random: FeatureRandomSelector<'a>,
 ) -> Result<bool, Error> {
     let feature = registry
         .features
@@ -81,13 +81,13 @@ pub fn place_configured_feature(
     })
 }
 /// Convenience for a stream independent from the live level's own RNG.
-pub fn place_configured_feature_with_external_random(
-    live: &mut dyn LiveWorldGenLevel,
-    generator: &dyn ChunkGeneratorAccess,
-    registry: &FeatureRegistry,
+pub fn place_configured_feature_with_external_random<'a>(
+    live: &'a mut dyn LiveWorldGenLevel,
+    generator: &'a dyn ChunkGeneratorAccess,
+    registry: &'a FeatureRegistry,
     feature_id: &Identifier,
     origin: [i32; 3],
-    random: &mut dyn RandomSource,
+    random: &'a mut dyn RandomSource,
 ) -> Result<bool, Error> {
     place_configured_feature(
         live,

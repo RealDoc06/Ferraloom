@@ -213,7 +213,7 @@ impl Feature for BlockColumnFeature {
         for y in 0..total {
             if !self
                 .allowed_placement
-                .test(&mut ctx.level, next, ctx.generator)?
+                .test(&ctx.level, next, ctx.generator)?
             {
                 let mut remove = total - y;
                 for index in 0..heights.len() {
@@ -372,7 +372,7 @@ impl Feature for RandomNeighborSpreadFeature {
                     self.xz_offset.sample(&mut ctx.random()?),
                 ],
             );
-            if self.can_replace.test(&mut ctx.level, p, ctx.generator)? {
+            if self.can_replace.test(&ctx.level, p, ctx.generator)? {
                 let mut count = 0;
                 for d in Direction::VALUES {
                     if self
@@ -412,7 +412,7 @@ impl Feature for ProjectedRandomPatchySquare {
                     let mut p = offset(ctx.origin, [x, 0, z]);
                     let mut drop = self.max_projection_height;
                     while self.project_through.test(
-                        &mut ctx.level,
+                        &ctx.level,
                         relative(p, Direction::Down),
                         ctx.generator,
                     )? {
@@ -457,7 +457,7 @@ struct SingleBlockPillarFeature {
 impl Feature for SingleBlockPillarFeature {
     fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
         let mut p = ctx.origin;
-        while self.can_replace.test(&mut ctx.level, p, ctx.generator)?
+        while self.can_replace.test(&ctx.level, p, ctx.generator)?
             && ctx.random()?.next_float() < self.chance
             && p[1] >= ctx.level.min_y()
             && p[1] < ctx.level.min_y() + ctx.level.height()

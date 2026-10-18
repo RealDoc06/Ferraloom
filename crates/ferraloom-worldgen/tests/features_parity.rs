@@ -286,9 +286,12 @@ impl ferraloom_worldgen::feature::Feature for RecordingFeature {
         );
         tag.insert(
             "random",
-            ferraloom_nbt::Tag::Long(context.random.next_long()),
+            ferraloom_nbt::Tag::Long(context.random()?.next_long()),
         );
-        context.region.add_entity(context.region.center(), tag)?;
+        let ferraloom_worldgen::feature::WorldGenLevel::Region(region) = &mut context.level else {
+            panic!("region-only decoration recorder");
+        };
+        region.add_entity(region.center(), tag)?;
         Ok(context.origin[1] & 1 == 0)
     }
 }
@@ -508,9 +511,12 @@ impl ferraloom_worldgen::feature::Feature for DecorationRecord {
         tag.insert("feature", ferraloom_nbt::Tag::Int(self.0 as i32));
         tag.insert(
             "random",
-            ferraloom_nbt::Tag::Long(context.random.next_long()),
+            ferraloom_nbt::Tag::Long(context.random()?.next_long()),
         );
-        context.region.add_entity(context.region.center(), tag)?;
+        let ferraloom_worldgen::feature::WorldGenLevel::Region(region) = &mut context.level else {
+            panic!("region-only decoration recorder");
+        };
+        region.add_entity(region.center(), tag)?;
         Ok(true)
     }
 }

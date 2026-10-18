@@ -218,7 +218,7 @@ impl RootSystem {
             if c.level.height_at(Heightmap::WorldSurface, p[0], p[2])? < p[1] {
                 return Ok(false);
             }
-            if self.allowed.test(&mut c.level, p, c.generator)? && self.space(c, p)? {
+            if self.allowed.test(&c.level, p, c.generator)? && self.space(c, p)? {
                 let below = add(p, [0, -1, 0]);
                 if self.lava.contains(&c.level.fluid(below)?.fluid_type)
                     || !c.level.block(below)?.is_solid()

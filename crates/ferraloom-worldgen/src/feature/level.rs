@@ -43,15 +43,15 @@ macro_rules! level_operations {
         /// Level; defaults for unavailable game behavior return Unsupported.
         pub trait LiveWorldGenLevel {
 
-            $( level_method! { $(#[$attr])* $mode fn $name($this: $receiver, $($arg: $ty),*) -> $ret [$default] } )*
+            $( level_method! { $(#[$attr])* $mode fn $name($this: $receiver $(, $arg: $ty)*) -> $ret [$default] } )*
         }
         #[allow(clippy::too_many_arguments)]
         impl LiveWorldGenLevel for WorldGenRegion<'_> {
-            $( level_method! { $mode fn $name($this: $receiver, $($arg: $ty),*) -> $ret [$region] } )*
+            $( level_method! { $mode fn $name($this: $receiver $(, $arg: $ty)*) -> $ret [$region] } )*
         }
         #[allow(clippy::too_many_arguments)]
         impl WorldGenLevel<'_, '_> {
-            $( level_method! { $mode pub fn $name($this: $receiver, $($arg: $ty),*) -> $ret [{
+            $( level_method! { $mode pub fn $name($this: $receiver $(, $arg: $ty)*) -> $ret [{
                 match $this {
                     Self::Region(region) => level_region_call!($name, $mode, region $(, $arg)*),
                     Self::Live(level) => level.$name($($arg),*),
@@ -60,7 +60,7 @@ macro_rules! level_operations {
         }
         #[allow(clippy::too_many_arguments)]
         impl LiveWorldGenLevel for WorldGenLevel<'_, '_> {
-            $( level_method! { $mode fn $name($this: $receiver, $($arg: $ty),*) -> $ret [{ WorldGenLevel::$name($this, $($arg),*) }] } )*
+            $( level_method! { $mode fn $name($this: $receiver $(, $arg: $ty)*) -> $ret [{ WorldGenLevel::$name($this, $($arg),*) }] } )*
         }
     };
 }

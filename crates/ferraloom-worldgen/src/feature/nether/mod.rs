@@ -177,7 +177,7 @@ struct SteppedColumnClusterFeature {
 }
 impl SteppedColumnClusterFeature {
     fn can_place_at(&self, ctx: &mut FeatureContext<'_, '_>, p: [i32; 3]) -> Result<bool, Error> {
-        if !self.can_replace.test(&mut ctx.level, p, ctx.generator)? {
+        if !self.can_replace.test(&ctx.level, p, ctx.generator)? {
             return Ok(false);
         }
         let below = ctx.level.block(offset(p, [0, -1, 0]))?;
@@ -229,25 +229,21 @@ impl SteppedColumnClusterFeature {
             for x in -reach..=reach {
                 let p = offset(origin, [x, 0, z]);
                 let steps = x.abs() + z.abs();
-                let start = if self.can_replace.test(&mut ctx.level, p, ctx.generator)? {
+                let start = if self.can_replace.test(&ctx.level, p, ctx.generator)? {
                     self.find_surface(ctx, p, steps)?
                 } else {
                     self.find_air(ctx, p, steps)?
                 };
                 if let Some(mut cursor) = start {
                     for _ in 0..=height - steps / 2 {
-                        if self
-                            .can_replace
-                            .test(&mut ctx.level, cursor, ctx.generator)?
-                        {
+                        if self.can_replace.test(&ctx.level, cursor, ctx.generator)? {
                             let state = self.block.get_state(ctx, cursor)?;
                             ctx.level.set_block(cursor, state, 2)?;
                             placed = true;
-                        } else if !self.continue_through.test(
-                            &mut ctx.level,
-                            cursor,
-                            ctx.generator,
-                        )? {
+                        } else if !self
+                            .continue_through
+                            .test(&ctx.level, cursor, ctx.generator)?
+                        {
                             break;
                         }
                         cursor[1] += 1;

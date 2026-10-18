@@ -269,7 +269,7 @@ impl BlockStateProvider {
             }
             Self::RuleBased { fallback, rules } => {
                 for (predicate, then) in rules {
-                    if predicate.test(&mut context.level, p, context.generator)?
+                    if predicate.test(&context.level, p, context.generator)?
                         && let Some(state) = then.get_optional_state(context, p)?
                     {
                         return Ok(Some(state));

@@ -50,7 +50,7 @@ impl Feature for HugeMushroom {
             || origin[1] + height + 1 > ctx.level.min_y() + ctx.level.height() - 1
             || !self
                 .can_place_on
-                .test(&mut ctx.level, add(origin, [0, -1, 0]), ctx.generator)?
+                .test(&ctx.level, add(origin, [0, -1, 0]), ctx.generator)?
         {
             return Ok(false);
         }
@@ -189,7 +189,7 @@ impl HugeFungus {
     }
     fn replaceable(&self, c: &FeatureContext<'_, '_>, p: Pos, plants: bool) -> Result<bool, Error> {
         Ok(c.level.block(p)?.data().replaceable
-            || plants && self.replaceable.test(&mut c.level, p, c.generator)?)
+            || plants && self.replaceable.test(&c.level, p, c.generator)?)
     }
     fn hat_block(
         &self,

@@ -79,11 +79,9 @@ impl Feature for BlockBlobFeature {
     fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
         let mut p = ctx.origin;
         while p[1] > ctx.level.min_y() + 3
-            && !self.can_place_on.test(
-                &mut ctx.level,
-                relative(p, Direction::Down),
-                ctx.generator,
-            )?
+            && !self
+                .can_place_on
+                .test(&ctx.level, relative(p, Direction::Down), ctx.generator)?
         {
             p[1] -= 1;
         }
@@ -129,10 +127,7 @@ impl Feature for SpikeFeature {
         while ctx.level.block(origin)?.is_air() && origin[1] > ctx.level.min_y() + 2 {
             origin[1] -= 1;
         }
-        if !self
-            .can_place_on
-            .test(&mut ctx.level, origin, ctx.generator)?
-        {
+        if !self.can_place_on.test(&ctx.level, origin, ctx.generator)? {
             return Ok(false);
         }
         origin[1] += ctx.random()?.next_int_bound(4);
@@ -154,14 +149,14 @@ impl Feature for SpikeFeature {
                     {
                         let p = offset(origin, [x, y, z]);
                         if ctx.level.block(p)?.is_air()
-                            || self.can_replace.test(&mut ctx.level, p, ctx.generator)?
+                            || self.can_replace.test(&ctx.level, p, ctx.generator)?
                         {
                             ctx.level.set_block(p, self.state, 3)?;
                         }
                         if y != 0 && radius > 1 {
                             let p = offset(origin, [x, -y, z]);
                             if ctx.level.block(p)?.is_air()
-                                || self.can_replace.test(&mut ctx.level, p, ctx.generator)?
+                                || self.can_replace.test(&ctx.level, p, ctx.generator)?
                             {
                                 ctx.level.set_block(p, self.state, 3)?;
                             }
@@ -182,7 +177,7 @@ impl Feature for SpikeFeature {
                 while p[1] > 50 {
                     let state = ctx.level.block(p)?;
                     if !state.is_air()
-                        && !self.can_replace.test(&mut ctx.level, p, ctx.generator)?
+                        && !self.can_replace.test(&ctx.level, p, ctx.generator)?
                         && state != self.state
                     {
                         break;
@@ -218,10 +213,10 @@ impl Feature for SnowAndFreezeFeature {
                 let id =
                     &ctx.generator.data().biome_names[ctx.level.noise_biome(quart)?.0 as usize];
                 let climate = &ctx.generator.data().temperatures;
-                if climate.should_freeze(id, &mut ctx.level, below, false)? {
+                if climate.should_freeze(id, &ctx.level, below, false)? {
                     ctx.level.set_block(below, Block::ICE.default_state(), 2)?;
                 }
-                if climate.should_snow(id, &mut ctx.level, top)? {
+                if climate.should_snow(id, &ctx.level, top)? {
                     ctx.level.set_block(top, Block::SNOW.default_state(), 2)?;
                     let state = ctx.level.block(below)?;
                     if let Some(state) = state.with(properties::SNOWY, true) {
