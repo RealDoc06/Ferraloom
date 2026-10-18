@@ -301,16 +301,17 @@ fn check_if_extend(level: &mut Level, pos: BlockPos, state: BlockState) -> Resul
         let pushed = pos.relative(direction, 2);
         let pushed_state = level.get_block_state(pushed)?;
         let mut event = 1;
-        if pushed_state.block() == Block::MOVING_PISTON && facing(pushed_state) == direction {
-            if let Some(handle) = moving_entity_at(level, pushed)? {
-                let e = level.block_entity::<PistonMovingBlockEntity>(handle)?;
-                if e.extending
-                    && (e.get_progress(0.0) < 0.5
-                        || level.game_time() == e.last_ticked
-                        || level.is_handling_tick())
-                {
-                    event = 2;
-                }
+        if pushed_state.block() == Block::MOVING_PISTON
+            && facing(pushed_state) == direction
+            && let Some(handle) = moving_entity_at(level, pushed)?
+        {
+            let e = level.block_entity::<PistonMovingBlockEntity>(handle)?;
+            if e.extending
+                && (e.get_progress(0.0) < 0.5
+                    || level.game_time() == e.last_ticked
+                    || level.is_handling_tick())
+            {
+                event = 2;
             }
         }
         level.block_event(BlockEvent {
@@ -604,13 +605,13 @@ impl BlockBehavior for PistonBaseBlock {
                 let two = pos.relative(direction, 2);
                 let moving = level.get_block_state(two)?;
                 let mut piece = false;
-                if moving.block() == Block::MOVING_PISTON {
-                    if let Some(handle) = moving_entity_at(level, two)? {
-                        let entity = level.block_entity::<PistonMovingBlockEntity>(handle)?;
-                        if entity.direction == direction && entity.extending {
-                            moving_piston::final_tick(level, handle)?;
-                            piece = true;
-                        }
+                if moving.block() == Block::MOVING_PISTON
+                    && let Some(handle) = moving_entity_at(level, two)?
+                {
+                    let entity = level.block_entity::<PistonMovingBlockEntity>(handle)?;
+                    if entity.direction == direction && entity.extending {
+                        moving_piston::final_tick(level, handle)?;
+                        piece = true;
                     }
                 }
                 if !piece {

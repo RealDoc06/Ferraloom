@@ -162,18 +162,15 @@ pub fn add_item(
                             },
                             _ => None,
                         };
-                        if let ContainerRef::Single(destination) = into {
-                            if let BlockEntityState::Hopper(hopper) =
+                        if let ContainerRef::Single(destination) = into
+                            && let BlockEntityState::Hopper(hopper) =
                                 level.block_entity_state_mut(*destination)?
-                            {
-                                if !hopper.is_on_custom_cooldown() {
-                                    let skip = i32::from(
-                                        source_time
-                                            .is_some_and(|time| hopper.ticked_game_time >= time),
-                                    );
-                                    hopper.cooldown_time = 8 - skip;
-                                }
-                            }
+                            && !hopper.is_on_custom_cooldown()
+                        {
+                            let skip = i32::from(
+                                source_time.is_some_and(|time| hopper.ticked_game_time >= time),
+                            );
+                            hopper.cooldown_time = 8 - skip;
                         }
                     }
                     set_changed(into, level)?;
