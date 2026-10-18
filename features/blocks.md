@@ -371,3 +371,7 @@ One class row per bootstrapped runtime Block class, listing every block id assig
 | blocks.state.center-support-cache | Preserve native cached CENTER support separately from FULL faces, including soul sand, fences, leaves and explicit dynamic fallback | `BlockStateBase.Cache#isFaceSturdy`, `SupportType.CENTER` | `ferraloom-data: tests::center_support_cache_keeps_support_type_and_dynamic_shape_distinctions` (35,723 real cached-state records) | pass | todo |
 
 | blocks.plants.center-support | Shared canSupportCenter applies the unstable bottom tag before native cached CENTER support, retaining dynamic shape dispatch | `Block#canSupportCenter` | Plant survival and six-direction shape fixtures (soul sand and fence supports included) | pass | todo |
+
+| blocks.drops.registry | Optional native block loot-table identities and exact getDrops/spawnAfterBreak virtual ownership | `BlockBehaviour#getLootTable; getDrops; spawnAfterBreak` | `ExtractBlockDropTables; ExtractBlockMethods` (1286 block registry entries) | pass | partial |
+
+| blocks.interaction.feature-eligibility | Check every block and item against the dedicated server advertised VANILLA_SET | `FeatureElement#isEnabled` | `tools/extractor/ExtractFeatureRequirements.java` (all native registry entries) | pass | partial |

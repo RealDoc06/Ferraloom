@@ -1,10 +1,14 @@
 //! Turns pinned vanilla reports and extracted facts into allocation-free tables.
+#[path = "build/block_drop_tables.rs"]
+mod block_drop_tables;
 #[path = "build/block_methods.rs"]
 mod block_methods;
 #[path = "build/center_support.rs"]
 mod center_support;
 #[path = "build/environment_attributes.rs"]
 mod environment_attributes;
+#[path = "build/feature_requirements.rs"]
+mod feature_requirements;
 
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
@@ -946,6 +950,14 @@ fn main() {
     )
     .unwrap();
     items(&mut out, &item_report, &load(root, "item_crafting"));
+    block_drop_tables::generate(&mut out, &load(root, "block_drop_tables"), block_count);
+
+    feature_requirements::generate(
+        &mut out,
+        &load(root, "feature_requirements"),
+        block_count,
+        item_report.as_array().expect("item report").len(),
+    );
     sound_events(
         &mut out,
         &load(root, "sound_events"),

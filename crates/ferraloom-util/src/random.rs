@@ -278,6 +278,14 @@ pub struct XoroshiroRandomSource {
     gaussian: MarsagliaPolarGaussian,
 }
 impl XoroshiroRandomSource {
+    /// Port of XoroshiroRandomSource.CODEC: persist the two raw generator words.
+    /// Gaussian cache is intentionally omitted, as in vanilla saved random sequences.
+    pub fn seed_state(&self) -> Seed128bit {
+        Seed128bit {
+            seed_lo: self.generator.seed_lo as i64,
+            seed_hi: self.generator.seed_hi as i64,
+        }
+    }
     pub fn new(seed: i64) -> Self {
         Self::from_seed(upgrade_seed_to_128bit(seed))
     }
@@ -569,4 +577,19 @@ pub fn seed_slime_chunk(x: i32, z: i32, seed: i64, salt: i64) -> SingleThreadedR
         .wrapping_add(i64::from(z.wrapping_mul(389711)))
         ^ salt;
     SingleThreadedRandomSource::new(seed)
+}
+
+#[cfg(test)]
+mod state_tests {
+    use super::*;
+    #[test]
+    fn xoroshiro_saved_state_resumes_next_draw() {
+        let mut source = XoroshiroRandomSource::new(-90210);
+        source.next_int_bound(79);
+        source.next_double();
+        let mut restored = XoroshiroRandomSource::from_seed(source.seed_state());
+        for _ in 0..32 {
+            assert_eq!(source.next_long(), restored.next_long());
+        }
+    }
 }

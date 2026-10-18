@@ -236,7 +236,10 @@ mod tests {
     use ferraloom_util::Uuid;
     static EMPTY: Behaviors = Behaviors::EMPTY;
     fn level() -> Level {
-        Level::new(Region::new(&EMPTY))
+        Level::new(
+            Region::new(&EMPTY),
+            crate::level::LevelContext::fixture(0, 63),
+        )
     }
     fn player(level: &mut Level, id: u64, position: Vec3) -> EntityRef {
         let handle = EntityRef(id);

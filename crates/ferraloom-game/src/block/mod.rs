@@ -157,7 +157,7 @@ impl<'chunks> LevelAccessRef<'_, 'chunks> {
     }
     pub fn fast_lava(&self) -> Result<bool, LevelError> {
         match self {
-            Self::Server(level) => Ok(level.rules().fast_lava),
+            Self::Server(level) => level.fast_lava(),
             Self::Worldgen(region) => region
                 .fast_lava()
                 .map_err(|_| LevelError::UnsupportedWorldgenEnvironment),

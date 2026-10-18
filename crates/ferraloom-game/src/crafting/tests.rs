@@ -812,3 +812,34 @@ fn vanilla_simple_stacked_contents_use_effective_damageability() {
         );
     }
 }
+
+#[test]
+fn vanilla_packed_recipe_book_required_lists_and_boolean_defaults() {
+    let manager = builtins();
+    let cases: serde_json::Value =
+        serde_json::from_str(include_str!("book-fixtures.json")).unwrap();
+    for case in cases.as_array().unwrap() {
+        let input = ferraloom_nbt::parse(case["input"].as_str().unwrap()).unwrap();
+        let mut book = ServerRecipeBook::default();
+        let before = book.to_nbt();
+        let result = book.load_untrusted(&input, &manager);
+        assert_eq!(
+            result.is_ok(),
+            case["accepted"].as_bool().unwrap(),
+            "{input:?}"
+        );
+        if let Some(expected) = case["expected"].as_str() {
+            assert_eq!(
+                book.to_nbt(),
+                ferraloom_nbt::parse(expected).unwrap(),
+                "{input:?}"
+            );
+        } else {
+            assert_eq!(
+                book.to_nbt(),
+                before,
+                "malformed Packed must not partially mutate the book"
+            );
+        }
+    }
+}

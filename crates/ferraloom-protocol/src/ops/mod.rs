@@ -70,10 +70,11 @@ impl EncodeOps for NbtOps {
         Tag::Long(v)
     }
     fn create_float(&self, v: f32) -> Tag {
-        Tag::Float(v)
+        // FloatTag.valueOf and DoubleTag.valueOf share their positive-zero tag.
+        Tag::Float(if v == 0.0 { 0.0 } else { v })
     }
     fn create_double(&self, v: f64) -> Tag {
-        Tag::Double(v)
+        Tag::Double(if v == 0.0 { 0.0 } else { v })
     }
     fn create_string_utf16(&self, v: &[u16]) -> Tag {
         Tag::String(NbtString::from_utf16(v.to_vec()))
