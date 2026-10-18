@@ -1835,6 +1835,14 @@ placement-context	4	false,true,4050000000000000,true,false,false,false,false,tru
 placement-context	5	false,true,c004000000000000,false,true,false,false,false,true,false,false,true,true
 placement-context	6	false,true,4050000000000000,true,false,false,false,false,true,true,true,true,true
 placement-context	7	false,true,4050000000000000,false,true,false,false,false,true,true,true,true,true
+entity-collision-context	0	404fc00000000000,4051c00000000000,404fc00000000000,false,false,true,false,true,false
+entity-collision-context	1	4050000000000000,4051c00000000000,4050000000000000,true,false,false,true,false,true
+entity-collision-context	2	404fc00000000000,4051c00000000000,404fc00000000000,false,false,true,false,false,false
+entity-collision-context	3	4050000000000000,4051c00000000000,4050000000000000,true,false,true,false,true,true
+entity-collision-context	4	404fc00000000000,4051c00000000000,404fc00000000000,false,false,true,false,false,false
+entity-collision-context	5	4050000000000000,4051c00000000000,4050000000000000,true,false,true,false,false,true
+entity-collision-context	6	404fc00000000000,4051c00000000000,404fc00000000000,false,false,true,false,true,false
+entity-collision-context	7	4050000000000000,4051c00000000000,4050000000000000,true,false,true,false,false,true
 living-landing	0	0	false	-
 living-landing	1	0	true	event:minecraft:step;event:minecraft:hit_ground
 living-landing	2	0	true	event:minecraft:step;event:minecraft:hit_ground

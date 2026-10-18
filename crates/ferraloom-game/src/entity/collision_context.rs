@@ -70,11 +70,11 @@ impl EntityCollisionView {
         Ok(EntityCollisionContext {
             descending: base.shared_flag(1),
             placement: false,
-            entity_bottom: base.bounding_box.min_y,
+            entity_bottom: base.position.y,
             always_collide_with_fluid,
-            held_item: held_item
-                .filter(|stack| !stack.is_empty())
-                .map(ferraloom_protocol::component::ItemStack::item),
+            held_item: Some(
+                held_item.map_or(Item::AIR, ferraloom_protocol::component::ItemStack::item),
+            ),
             entity: Self {
                 entity: Some(entity),
                 living: level.entity_state(entity)?.as_living().is_some(),
@@ -120,9 +120,9 @@ impl EntityCollisionView {
         EntityCollisionContext {
             descending: base.shared_flag(1),
             placement: false,
-            entity_bottom: base.bounding_box.min_y,
+            entity_bottom: base.position.y,
             always_collide_with_fluid: false,
-            held_item: None,
+            held_item: Some(Item::AIR),
             entity: Self {
                 entity: Some(entity),
                 living: false,
