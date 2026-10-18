@@ -437,6 +437,9 @@ struct OverlayFeature {
     features: Vec<Arc<PlacedFeature>>,
 }
 impl Feature for OverlayFeature {
+    fn sub_features(&self) -> Vec<&PlacedFeature> {
+        self.features.iter().map(Arc::as_ref).collect()
+    }
     fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
         let mut placed = false;
         for feature in &self.features {

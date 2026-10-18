@@ -16,6 +16,7 @@ use std::{
 };
 
 pub mod access;
+mod bonemeal;
 pub use access::{FeaturePlacementAccess, FeatureRandomSelector};
 pub mod level;
 pub mod random;
@@ -34,6 +35,10 @@ pub mod tree;
 pub mod vegetation;
 
 pub trait Feature: Debug + Send + Sync {
+    /// Placed branches contributing to Feature#getSubFeatures, in source order.
+    fn sub_features(&self) -> Vec<&PlacedFeature> {
+        Vec::new()
+    }
     /// MushroomBlock#isValidBonemealTarget: only huge mushroom features supply a radius.
     fn huge_mushroom_foliage_radius(&self) -> Option<i32> {
         None
@@ -150,6 +155,7 @@ pub struct FeatureRegistry {
     pub features: BTreeMap<Identifier, Arc<dyn Feature>>,
     pub placed: BTreeMap<Identifier, Arc<PlacedFeature>>,
     pub biome_features: BTreeMap<Identifier, Vec<Vec<Identifier>>>,
+    pub biome_bone_meal_features: BTreeMap<Identifier, Vec<Arc<dyn Feature>>>,
 }
 /// Loader caches named holders, preserving canonical placed feature identity.
 /// Unsupported feature types are errors; there is no fallback placement.
@@ -296,6 +302,7 @@ impl<'a> FeatureLoader<'a> {
             self.placed(&Value::String(id.to_string()))?;
         }
         self.load_biome_features()?;
+        self.load_bone_meal_features()?;
         Ok(self.registry)
     }
     pub fn load_biome_features(&mut self) -> Result<(), Error> {
