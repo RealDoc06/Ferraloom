@@ -120,7 +120,7 @@ fn tracking_range_includes_transitive_passengers_before_server_percentage_scalin
     let viewer = player(&mut level, Vec3::new(100.0, 64.0, 0.0));
     let rider = player(&mut level, Vec3::new(0.0, 64.0, 0.0));
     let mount = level.next_entity_ref();
-    let tnt = PrimedTnt::new(level.next_entity_id(), 1);
+    let tnt = PrimedTnt::new(level.next_entity_id(), 2);
     level
         .add_entity(mount, EntityState::PrimedTnt(Box::new(tnt)))
         .unwrap();
