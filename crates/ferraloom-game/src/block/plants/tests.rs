@@ -10,6 +10,7 @@ use std::sync::Arc;
 static EMPTY: Behaviors = Behaviors::EMPTY;
 fn level() -> Level {
     let mut level = Level::new(Region::new(&EMPTY));
+    level.set_has_skylight(true);
     level
         .add_chunk(LevelChunk::new(
             ChunkPos::new(0, 0),
