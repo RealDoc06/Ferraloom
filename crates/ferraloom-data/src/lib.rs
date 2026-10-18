@@ -9,8 +9,10 @@
 //! ```
 
 mod block_methods;
+mod environment_attributes;
 mod sound_events;
 pub use block_methods::BlockMethod;
+pub use environment_attributes::EnvironmentAttributeData;
 
 pub mod datapack;
 pub use datapack::tags;

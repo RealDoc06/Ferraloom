@@ -109,3 +109,11 @@ crafting checks.
 only to the fluid type's virtual `isRandomlyTicking`. It has no level, position
 or state-property inputs. Source and flowing variants retain their own registry
 entries; waterlogged states use the same fluid fact as ordinary water.
+
+`ExtractEnvironmentAttributes <output-dir>` independently extracts all native
+EnvironmentAttribute defaults through their real value codecs, attribute-type
+registry IDs, allowed modifier names, flags and float sanitization bounds. These
+are immutable registry facts: dimension, biome, clock and weather sampling does
+not participate. Float limits are measured with sanitizeValue at both infinities;
+unbounded ends remain null. The Rust build consumes this committed table without
+Java. No environment value is sampled from a fabricated live level.
