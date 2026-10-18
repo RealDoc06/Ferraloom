@@ -26,6 +26,19 @@ pub enum RegistryKey {
     DamageType,
     WorldClock,
     EnvironmentAttribute,
+    WolfVariant,
+    WolfSoundVariant,
+    CowVariant,
+    CowSoundVariant,
+    PigVariant,
+    PigSoundVariant,
+    ChickenVariant,
+    ChickenSoundVariant,
+    CatVariant,
+    CatSoundVariant,
+    FrogVariant,
+    ZombieNautilusVariant,
+    PaintingVariant,
 }
 impl RegistryKey {
     pub const fn name(self) -> &'static str {
@@ -49,6 +62,19 @@ impl RegistryKey {
             Self::DamageType => "damage_type",
             Self::WorldClock => "world_clock",
             Self::EnvironmentAttribute => "environment_attribute",
+            Self::WolfVariant => "wolf_variant",
+            Self::WolfSoundVariant => "wolf_sound_variant",
+            Self::CowVariant => "cow_variant",
+            Self::CowSoundVariant => "cow_sound_variant",
+            Self::PigVariant => "pig_variant",
+            Self::PigSoundVariant => "pig_sound_variant",
+            Self::ChickenVariant => "chicken_variant",
+            Self::ChickenSoundVariant => "chicken_sound_variant",
+            Self::CatVariant => "cat_variant",
+            Self::CatSoundVariant => "cat_sound_variant",
+            Self::FrogVariant => "frog_variant",
+            Self::ZombieNautilusVariant => "zombie_nautilus_variant",
+            Self::PaintingVariant => "painting_variant",
         }
     }
 }
@@ -268,6 +294,23 @@ impl<'a> BindingContext<'a> {
                 }
             }
             C::VillagerVariant(value) => self.value(RegistryKey::VillagerType, &value.0)?,
+            C::WolfVariant(value) => self.value(RegistryKey::WolfVariant, &value.0)?,
+            C::WolfSoundVariant(value) => self.value(RegistryKey::WolfSoundVariant, &value.0)?,
+            C::CowVariant(value) => self.value(RegistryKey::CowVariant, &value.0)?,
+            C::CowSoundVariant(value) => self.value(RegistryKey::CowSoundVariant, &value.0)?,
+            C::PigVariant(value) => self.value(RegistryKey::PigVariant, &value.0)?,
+            C::PigSoundVariant(value) => self.value(RegistryKey::PigSoundVariant, &value.0)?,
+            C::ChickenVariant(value) => self.value(RegistryKey::ChickenVariant, &value.0)?,
+            C::ChickenSoundVariant(value) => {
+                self.value(RegistryKey::ChickenSoundVariant, &value.0)?
+            }
+            C::CatVariant(value) => self.value(RegistryKey::CatVariant, &value.0)?,
+            C::CatSoundVariant(value) => self.value(RegistryKey::CatSoundVariant, &value.0)?,
+            C::FrogVariant(value) => self.value(RegistryKey::FrogVariant, &value.0)?,
+            C::ZombieNautilusVariant(value) => {
+                self.value(RegistryKey::ZombieNautilusVariant, &value.0)?
+            }
+            C::PaintingVariant(value) => self.holder(RegistryKey::PaintingVariant, &value.0)?,
             C::EntityData(value) => self.value(RegistryKey::EntityType, &value.entity_type.0)?,
             C::Lock(value) => self.item(value)?,
             C::CanPlaceOn(value) | C::CanBreak(value) => {
@@ -301,25 +344,17 @@ impl<'a> BindingContext<'a> {
             | C::BlocksAttacks(_)
             | C::PiercingWeapon(_)
             | C::KineticWeapon(_)
-            | C::WolfVariant(_)
-            | C::WolfSoundVariant(_)
-            | C::PigVariant(_)
-            | C::CowVariant(_)
-            | C::ChickenVariant(_)
-            | C::FrogVariant(_)
-            | C::CatVariant(_)
-            | C::PaintingVariant(_)
             | C::ProvidesPotteryPattern(_)
             | C::BreakSound(_)
             | C::MapDecorations(_) => {
-                return Err(LootError::Unsupported(
-                    if self.lookup.is_none() {
-                        "registry.binding"
-                    } else {
-                        "registry.binding.component_values"
-                    }
-                    .into(),
-                ));
+                return Err(LootError::Unsupported(if self.lookup.is_none() {
+                    "registry.binding".into()
+                } else {
+                    format!(
+                        "registry.binding.component_values.{}",
+                        value.component_type().name()
+                    )
+                }));
             }
             _ => {}
         }
