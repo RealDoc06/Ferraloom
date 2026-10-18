@@ -32,7 +32,7 @@ fn assert_vector(actual: Vec3, expected: Vec3, label: &str) {
         "{label}: {actual:?} != {expected:?}"
     );
 }
-fn tags(level: &mut Level) {
+pub(super) fn tags(level: &mut Level) {
     let block_values = VECTORS
         .lines()
         .filter_map(|line| {
@@ -320,4 +320,100 @@ fn piston_budget_resets_per_tick_and_uses_first_nonzero_axis() {
         movement::limit_piston_movement(&mut base, Vec3::new(0.4, 0.0, 0.0), 2),
         Vec3::new(0.4, 0.0, 0.0)
     );
+}
+
+#[test]
+fn vanilla_fluid_interaction_heights_eyes_and_current_bits() {
+    use ferraloom_data::tags::FluidTags;
+    let mut count = 0;
+    for row in VECTORS.lines().filter(|s| s.starts_with("interaction\t")) {
+        let f: Vec<_> = row.split('\t').collect();
+        let mut level = level(false);
+        let kind = if f[1] == "minecraft:water" {
+            FlowingFluid::Water
+        } else {
+            FlowingFluid::Lava
+        };
+        let case: i32 = f[2].parse().unwrap();
+        let pos = BlockPos::new(8, 64, 8);
+        level
+            .set_block_state(pos, crate::block::fluid::legacy_block(kind.source()))
+            .unwrap();
+        if case == 1 {
+            level
+                .set_block_state(
+                    pos.above(1),
+                    crate::block::fluid::legacy_block(kind.source()),
+                )
+                .unwrap();
+        }
+        if case == 2 {
+            level
+                .set_block_state(
+                    pos.east(1),
+                    crate::block::fluid::legacy_block(kind.flowing(4, false)),
+                )
+                .unwrap();
+        }
+        if case == 4 {
+            level
+                .set_block_state(pos.above(1), Block::STONE.default_state())
+                .unwrap();
+        }
+        let mut cow = animal::Cow::default();
+        cow.as_living_mut().parent.set_pos(vector(f[3]));
+        cow.as_living_mut().parent.fall_distance = 12.5;
+        let id = EntityRef(1);
+        level.add_entity(id, EntityState::Cow(cow)).unwrap();
+        let any = fluid::update_fluid_interaction(&animal::CowBehavior, id, &mut level).unwrap();
+        let base = level.entity::<EntityData>(id).unwrap();
+        assert_eq!(any, f[4] == "true", "{row}");
+        assert_vector(base.velocity, vector(f[5]), row);
+        for (tag, height, eyes) in [(FluidTags::WATER, 6, 8), (FluidTags::LAVA, 7, 9)] {
+            assert_eq!(
+                base.fluid_interaction
+                    .height(tag, &level)
+                    .unwrap()
+                    .to_bits(),
+                double(f[height]).to_bits(),
+                "{row}"
+            );
+            assert_eq!(
+                base.fluid_interaction.eyes_inside(tag, &level).unwrap(),
+                f[eyes] == "true",
+                "{row}"
+            );
+        }
+        assert_eq!(
+            base.fall_distance.to_bits(),
+            double(f[10]).to_bits(),
+            "{row}"
+        );
+        count += 1;
+    }
+    assert_eq!(count, 10);
+}
+
+#[test]
+fn vanilla_movement_path_block_contact_order_and_step_indices() {
+    let mut count = 0;
+    let dimensions = EntityDimensions::for_type(ferraloom_data::EntityType::COW);
+    for row in VECTORS.lines().filter(|s| s.starts_with("trace\t")) {
+        let f: Vec<_> = row.split('\t').collect();
+        let from = vector(f[2]);
+        let to = vector(f[3]);
+        let epsilon = f64::from(1e-5_f32);
+        let bb = dimensions
+            .make_bounding_box(to)
+            .deflate(epsilon, epsilon, epsilon);
+        let mut contacts = Vec::new();
+        trace::for_each_intersected_block(from, to, bb, |pos, step| {
+            contacts.push(format!("{},{},{},{}", pos.x, pos.y, pos.z, step));
+            Ok(true)
+        })
+        .unwrap();
+        assert_eq!(contacts.join(";"), f[4], "trace {}", f[1]);
+        count += 1;
+    }
+    assert_eq!(count, 14);
 }

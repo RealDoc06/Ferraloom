@@ -61,6 +61,7 @@ public final class EntityVectors {
       @Override public java.util.List<? extends net.minecraft.world.entity.player.Player> players(){return List.of();}
       @Override public net.minecraft.world.scores.Scoreboard getScoreboard(){return new net.minecraft.world.scores.Scoreboard();}
       @Override public long getGameTime(){return 0;}
+      @Override public net.minecraft.world.attribute.EnvironmentAttributeSystem environmentAttributes(){return net.minecraft.world.attribute.EnvironmentAttributeSystem.builder().build();}
       @Override public void scheduleTick(BlockPos pos,Block block,int delay){}
       @Override public void scheduleTick(BlockPos pos,net.minecraft.world.level.material.Fluid fluid,int delay){}
       void put(BlockPos pos,BlockState state){getChunkAt(pos).getSection(getSectionIndex(pos.getY())).setBlockState(pos.getX()&15,pos.getY()&15,pos.getZ()&15,state);}
@@ -77,6 +78,12 @@ public final class EntityVectors {
         System.out.println("move\\t"+name+"\\t"+(player?"player":"cow")+"\\t"+(obstacle==null?-1:Block.getId(obstacle))+"\\t"+vec(from)+"\\t"+vec(delta)+"\\t"+ground+"\\t"+sneak+"\\t"+bits(fall)+"\\t"+vec(e.position())+"\\t"+flags(e)+"\\t"+bits(e.fallDistance)+"\\t"+vec(e.getDeltaMovement()));
       }
       public static void run(RegistryAccess r)throws Exception {
+        int traceIndex=0;
+        for(var start:List.of(new Vec3(0.5,64,0.5),new Vec3(-0.3,64.00001,15.8)))for(var delta:List.of(Vec3.ZERO,new Vec3(0.000001,0,0),new Vec3(3.2,-0.7,1.1),new Vec3(-4.5,2.3,-2.3),new Vec3(1,1,1),new Vec3(0,-8,0),new Vec3(0,0,20))){
+          var end=start.add(delta);var radius=(double)(EntityTypes.COW.getDimensions().width()/2f);var box=new AABB(end.x-radius,end.y,end.z-radius,end.x+radius,end.y+EntityTypes.COW.getDimensions().height(),end.z+radius).deflate(9.999999747378752E-6);
+          var contacts=new ArrayList<String>();BlockGetter.forEachBlockIntersectedBetween(start,end,box,(pos,step)->{contacts.add(pos.getX()+","+pos.getY()+","+pos.getZ()+","+step);return true;});
+          System.out.println("trace\\t"+(traceIndex++)+"\\t"+vec(start)+"\\t"+vec(end)+"\\t"+String.join(";",contacts));
+        }
         for(var tag:List.of(net.minecraft.tags.BlockTags.FENCES,net.minecraft.tags.BlockTags.WALLS,net.minecraft.tags.BlockTags.CLIMBABLE,net.minecraft.tags.BlockTags.SUPPRESSES_BOUNCE,net.minecraft.tags.BlockTags.FALL_DAMAGE_RESETTING,net.minecraft.tags.BlockTags.BLOCKS_FLUID_FLOW)){
           var names=new ArrayList<String>();for(var block:BuiltInRegistries.BLOCK)if(block.defaultBlockState().is(tag))names.add(BuiltInRegistries.BLOCK.getKey(block).toString());
           System.out.println("block-tag\\t"+tag.location()+"\\t"+String.join(",",names));
@@ -96,6 +103,15 @@ public final class EntityVectors {
         var p=new TestPlayer(edge);var from=new Vec3(3.5,64,4.5);var delta=new Vec3(1.1,0,0.7);p.setPos(from);p.setOnGround(true);p.setShiftKeyDown(true);p.setDeltaMovement(delta);p.move(MoverType.SELF,delta);
         System.out.println("edge\\t"+vec(p.position())+"\\t"+flags(p)+"\\t"+vec(p.getDeltaMovement()));
         for(var kind:List.of(net.minecraft.world.level.material.Fluids.WATER,net.minecraft.world.level.material.Fluids.LAVA))for(int test=0;test<5;test++){
+          var f=new EntityFixture(r);var pos=new BlockPos(8,64,8);f.put(pos,kind.getSource(false).createLegacyBlock());
+          if(test==1)f.put(pos.above(),kind.getSource(false).createLegacyBlock());
+          if(test==2)f.put(pos.east(),kind.getFlowing(4,false).createLegacyBlock());
+          if(test==4)f.put(pos.above(),Blocks.STONE.defaultBlockState());
+          var e=new TestEntity(f);var fluidFrom=new Vec3(8.5,test==3?64.9:test==4?63.7:64.0,8.5);e.setPos(fluidFrom);e.fallDistance=12.5;
+          boolean any=e.refreshFluid();
+          System.out.println("interaction\\t"+BuiltInRegistries.FLUID.getKey(kind)+"\\t"+test+"\\t"+vec(fluidFrom)+"\\t"+any+"\\t"+vec(e.getDeltaMovement())+"\\t"+bits(e.getFluidHeight(net.minecraft.tags.FluidTags.WATER))+"\\t"+bits(e.getFluidHeight(net.minecraft.tags.FluidTags.LAVA))+"\\t"+e.isEyeInFluid(net.minecraft.tags.FluidTags.WATER)+"\\t"+e.isEyeInFluid(net.minecraft.tags.FluidTags.LAVA)+"\\t"+bits(e.fallDistance));
+        }
+        for(var kind:List.of(net.minecraft.world.level.material.Fluids.WATER,net.minecraft.world.level.material.Fluids.LAVA))for(int test=0;test<5;test++){
           var f=new EntityFixture(r);var pos=new BlockPos(8,65,8);var fluid=kind.getSource(test==4);f.put(pos,fluid.createLegacyBlock());
           if(test==0)f.put(pos.east(),kind.getFlowing(4,false).createLegacyBlock());
           if(test==1)f.put(pos.west().below(),kind.getSource(false).createLegacyBlock());
@@ -112,6 +128,7 @@ public final class EntityVectors {
         @Override protected void addAdditionalSaveData(net.minecraft.world.level.storage.ValueOutput o){}
         @Override public boolean hurtServer(net.minecraft.server.level.ServerLevel l,net.minecraft.world.damagesource.DamageSource s,float f){return false;}
         @Override public float maxUpStep(){return 0.6F;}
+        boolean refreshFluid(){return updateFluidInteraction();}
       }
       static final class TestPlayer extends Player {
         TestPlayer(Level level){super(level,new com.mojang.authlib.GameProfile(new java.util.UUID(1,2),"fixture"));}
@@ -122,7 +139,7 @@ public final class EntityVectors {
     Files.writeString(path,out.toString());
   }
   static void stub(StringBuilder out,Method m,Set<String> seen){
-    var skip=Set.of("enabledFeatures","getChunkSource","getWorldBorder","getBlockEntity","players","getScoreboard","getGameTime");
+    var skip=Set.of("enabledFeatures","getChunkSource","getWorldBorder","getBlockEntity","players","getScoreboard","getGameTime","environmentAttributes");
     var params=m.getParameterTypes();var key=m.getName()+Arrays.toString(params);if(!seen.add(key)||skip.contains(m.getName()))return;
     out.append("@Override public ").append(m.getReturnType().getCanonicalName()).append(' ').append(m.getName()).append('(');
     for(int i=0;i<params.length;i++){if(i>0)out.append(',');out.append(params[i].getCanonicalName()).append(" p").append(i);}

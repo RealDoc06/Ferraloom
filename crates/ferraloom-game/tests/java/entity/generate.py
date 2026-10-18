@@ -15,7 +15,7 @@ source = Path(__file__).resolve().parent
 def run(args, **kwargs):
     result = subprocess.run(args, cwd=classes, text=True, capture_output=True, **kwargs)
     if result.returncode:
-        print(result.stdout)
+        print(result.stdout[-1500:])
         print(result.stderr)
         raise SystemExit(result.returncode)
     return result.stdout
@@ -24,6 +24,6 @@ run([str(java / 'javac'), '-cp', cp, '-d', str(classes), str(source / 'EntityVec
 run([str(java / 'java'), '-Xmx512m', '-cp', f'{classes}:{cp}', 'EntityVectors', 'generate', str(classes / 'EntityFixture.java')])
 run([str(java / 'javac'), '-cp', f'{classes}:{cp}', '-d', str(classes), str(classes / 'EntityFixture.java')])
 output = run([str(java / 'java'), '-Xmx768m', '-cp', f'{classes}:{cp}', 'EntityVectors'])
-rows = [line for line in output.splitlines() if line.split('\t', 1)[0] in {'move', 'edge', 'flow', 'block-tag', 'fluid-tag'}]
+rows = [line for line in output.splitlines() if line.split('\t', 1)[0] in {'trace', 'move', 'edge', 'flow', 'interaction', 'block-tag', 'fluid-tag'}]
 (source / 'vectors.tsv').write_text('\n'.join(rows) + '\n')
 print(f'{len(rows)} vanilla entity vectors')

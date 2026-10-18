@@ -34,6 +34,14 @@ impl MovementEmission {
 }
 #[derive(Clone, Debug)]
 pub enum MovementEffect {
+    LavaHurtSound {
+        entity: EntityRef,
+        pitch: f32,
+    },
+    ExtinguishSound {
+        entity: EntityRef,
+        pitch: f32,
+    },
     HitGround {
         entity: EntityRef,
         pos: Vec3,
@@ -270,7 +278,14 @@ pub fn move_entity<E: Entity + ?Sized>(
     let effect_pos = get_on_pos(entity, 0.2_f32, level)?;
     let effect_state = level.get_block_state(effect_pos)?;
     if authoritative {
-        check_fall_damage(entity, movement.y, effect_state, effect_pos, level)?;
+        check_fall_damage(
+            entity,
+            movement.y,
+            level.entity::<EntityData>(entity)?.on_ground,
+            effect_state,
+            effect_pos,
+            level,
+        )?;
     }
     if level.entity::<EntityData>(entity)?.removed {
         return Ok(());
@@ -300,6 +315,7 @@ pub fn move_entity<E: Entity + ?Sized>(
 pub fn check_fall_damage(
     entity: EntityRef,
     dy: f64,
+    on_ground: bool,
     state: BlockState,
     pos: BlockPos,
     level: &mut Level,
@@ -308,7 +324,7 @@ pub fn check_fall_damage(
         .entity_mut::<EntityData>(entity)?
         .accumulate_fall_distance(dy);
     let base = level.entity::<EntityData>(entity)?;
-    if !base.on_ground {
+    if !on_ground {
         return Ok(());
     }
     let distance = base.fall_distance;

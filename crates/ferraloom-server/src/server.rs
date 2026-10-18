@@ -663,7 +663,7 @@ impl MinecraftServer {
         let mut player = ServerPlayer::new(
             profile.id,
             profile.name,
-            self.next_entity as i32,
+            self.level.level.next_entity_id(),
             Vec3::new(
                 f64::from(self.world.spawn.x) + 0.5,
                 f64::from(self.world.spawn.y),
