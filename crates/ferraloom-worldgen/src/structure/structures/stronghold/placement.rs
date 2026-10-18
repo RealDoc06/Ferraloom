@@ -197,7 +197,7 @@ impl StrongholdPiece {
                     context,
                     bounds,
                     [5, 5, 7, 7, 5, 9],
-                    slab.with(properties::TYPE, Type::Double)
+                    slab.with(properties::TYPE_, Type::Double)
                         .expect("slab type"),
                 )?;
                 self.data
@@ -936,7 +936,7 @@ mod tests {
             for z in 0..16 {
                 for x in 0..16 {
                     for y in -64..=100 {
-                        let v = x * 3 + y * 5 + z * 7;
+                        let v: i32 = x * 3 + y * 5 + z * 7;
                         let block = if mode == 1 && (50..=65).contains(&y) && v.rem_euclid(11) == 0
                         {
                             Block::AIR
