@@ -9,6 +9,7 @@ mod furnace_tick;
 pub mod loot;
 pub mod loot_runtime;
 pub mod menu;
+mod pathfinding;
 pub mod runtime;
 pub mod sign;
 mod sign_block;

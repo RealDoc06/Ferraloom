@@ -42,6 +42,15 @@ pub enum LevelReaderRef<'call, 'chunks> {
     Worldgen(&'call ferraloom_worldgen::region::WorldGenRegion<'chunks>),
 }
 impl LevelReaderRef<'_, '_> {
+    /// Port of BlockStateBase#isPathfindable. Queries remain required even under Warn.
+    pub fn is_pathfindable(
+        &self,
+        state: BlockState,
+        computation: crate::entity::ai::pathfinder::PathComputationType,
+    ) -> Result<bool, LevelError> {
+        self.required_behavior(state.block(), BlockMethod::IsPathfindable)?
+            .is_pathfindable(state, computation, self)
+    }
     pub fn get_block_state(&self, pos: BlockPos) -> Result<BlockState, LevelError> {
         match self {
             Self::Server(level) => level.get_block_state(pos),
@@ -172,9 +181,40 @@ impl<'chunks> LevelAccessRef<'_, 'chunks> {
     }
 }
 
+/// Port of BlockBehaviour#isPathfindable. The extracted collision shape uses
+/// EmptyBlockGetter at ZERO, exactly as this body does. Dynamic states normally
+/// fall through isCollisionShapeFullBlock to the Block virtual; its only
+/// overrides, SpeleothemBlock and BambooStalkBlock, override isPathfindable too
+/// (both false), so neither reaches this base computation.
+fn base_is_pathfindable(
+    state: BlockState,
+    computation: crate::entity::ai::pathfinder::PathComputationType,
+    level: &LevelReaderRef<'_, '_>,
+) -> Result<bool, LevelError> {
+    use crate::entity::ai::pathfinder::PathComputationType;
+    match computation {
+        PathComputationType::Land | PathComputationType::Air => Ok(
+            !ferraloom_util::shapes::is_shape_full_block(state.cached_shapes().collision.get()),
+        ),
+        PathComputationType::Water => Ok(level.fluid_tags()?.contains_key(
+            ferraloom_data::tags::FluidTags::WATER,
+            state.data().fluid.fluid_type,
+        )),
+    }
+}
+
 /// Port of BlockBehaviour's virtual methods. Defaults are vanilla base behavior;
 /// only classes explicitly registered by dispatch may inherit these defaults.
 pub trait BlockBehavior: Sync {
+    /// Port of BlockBehaviour#isPathfindable; the reader supplies live tag membership.
+    fn is_pathfindable(
+        &self,
+        state: BlockState,
+        computation: crate::entity::ai::pathfinder::PathComputationType,
+        level: &LevelReaderRef<'_, '_>,
+    ) -> Result<bool, LevelError> {
+        base_is_pathfindable(state, computation, level)
+    }
     /// Port of BlockBehaviour#getMenuProvider's absent base provider.
     fn get_menu_provider(
         &self,

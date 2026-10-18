@@ -702,6 +702,19 @@ impl LiquidBlock {
     }
 }
 impl BlockBehavior for LiquidBlock {
+    /// Port of LiquidBlock#isPathfindable. Test the block's source fluid, not
+    /// the flowing state at LEVEL>0, including when fluid tags are reloaded.
+    fn is_pathfindable(
+        &self,
+        state: BlockState,
+        _computation: crate::entity::ai::pathfinder::PathComputationType,
+        level: &super::LevelReaderRef<'_, '_>,
+    ) -> Result<bool, LevelError> {
+        Ok(!level.fluid_tags()?.contains_key(
+            FluidTags::LAVA,
+            state.block().default_state().data().fluid.fluid_type,
+        ))
+    }
     /// Port of LiquidBlock#getDrops's empty override, without a loot lookup.
     fn get_drops(
         &self,

@@ -16,3 +16,10 @@ Rust unit tests consume every case and compare full state and debug bytes.
 PathData is the explicit owner of NodeId and PathNodesId identities. Keep it
 alongside returned paths and their cursor copies. The pure slice has no live
 Mob, chunk acquisition, movement-control or navigation integration yet.
+
+Run `python3 pathfindability.py` to capture the real `isPathfindable` virtual
+for every registered block state and all three PathComputationTypes. The
+compressed vectors cover 35,723 states, including all 118 concrete override
+classes and their 60 native bodies. Another 64 liquid-state records distinguish
+source from flowing fluid membership under real registry tag reloads. These
+queries use no live block, chunk or entity data.

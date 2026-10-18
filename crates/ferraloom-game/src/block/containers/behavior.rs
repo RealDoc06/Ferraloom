@@ -36,6 +36,9 @@ pub(crate) fn ported_behavior(
     method: BlockMethod,
 ) -> Option<&'static dyn BlockBehavior> {
     use BlockMethod as M;
+    if method == M::IsPathfindable {
+        return super::pathfinding::behavior(block);
+    }
     if matches!(
         block.block_entity_type(),
         Some(
