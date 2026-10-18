@@ -98,9 +98,16 @@ impl MinecraftServer {
         let storage = SavedDataStorage::new(self.world.access.path().join("data"));
         let mut data = SavedData::new(self.game_rules.map().clone());
         let mut clocks = SavedData::new(self.clocks.states.clone());
+        let mut scoreboard = SavedData::new(ferraloom_game::scoreboard::ScoreboardSaveData(
+            self.scoreboard.scoreboard().clone(),
+        ));
         async move {
             tokio::task::spawn_blocking(move || {
                 storage.save(GameRuleMap::STORAGE_ID, &mut data)?;
+                storage.save(
+                    ferraloom_game::scoreboard::ScoreboardSaveData::STORAGE_ID,
+                    &mut scoreboard,
+                )?;
                 storage.save(PackedClockStates::STORAGE_ID, &mut clocks)
             })
             .await??;
