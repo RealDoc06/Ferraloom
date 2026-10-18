@@ -566,9 +566,9 @@ pub struct World {
     generation_state: Option<GenerationState>,
     generation_work: Option<oneshot::Receiver<GenerationCompletion>>,
     generation_dispatcher: ThrottlingChunkTaskDispatcher<GenerationRequest>,
-    active_generation: BTreeMap<ChunkPos, (u64, Arc<AtomicBool>)>,
+    active_generation: BTreeMap<i64, (u64, Arc<AtomicBool>)>,
     running_generation: Option<(u64, ChunkPos)>,
-    retained_generation: BTreeSet<ChunkPos>,
+    retained_generation: BTreeSet<i64>,
     pub failed_generation: Vec<(ChunkPos, u64)>,
     proto_saves: VecDeque<storage::IoTask<()>>,
     cancelled_outputs: Vec<GenerationOutput>,
@@ -583,8 +583,8 @@ pub struct World {
     pub ready: std::collections::HashSet<ChunkPos>,
     pub light_ready: std::collections::HashSet<ChunkPos>,
     pub generation_skips: Vec<(String, String)>,
-    pub pending_initial_spawns: BTreeSet<ChunkPos>,
-    pub generation_statuses: BTreeMap<ChunkPos, ChunkStatus>,
+    pub pending_initial_spawns: BTreeSet<i64>,
+    pub generation_statuses: BTreeMap<i64, ChunkStatus>,
     pub pending_light_updates: std::collections::HashMap<ChunkPos, LightDirtySections>,
     pub light_chunks_to_broadcast: ferraloom_util::collections::LongLinkedOpenHashSet,
 }
@@ -951,13 +951,13 @@ impl World {
         self.generation_dispatcher
             .on_level_change(pos, level.clamp(0, 45));
         if level <= 44 {
-            self.retained_generation.insert(pos);
+            self.retained_generation.insert(pos.pack());
         } else {
-            self.retained_generation.remove(&pos);
+            self.retained_generation.remove(&pos.pack());
         }
     }
     pub fn cancel_generation(&mut self, pos: ChunkPos) -> Option<u64> {
-        if let Some((request, cancelled)) = self.active_generation.get(&pos) {
+        if let Some((request, cancelled)) = self.active_generation.get(&pos.pack()) {
             let request = *request;
             if !cancelled.swap(true, Ordering::Relaxed) {
                 if let Some((_, mut answer)) = self.pending.remove(&request)
@@ -969,7 +969,7 @@ impl World {
                 self.generation_dispatcher.release(pos, true, None);
             }
             if self.running_generation != Some((request, pos)) {
-                self.active_generation.remove(&pos);
+                self.active_generation.remove(&pos.pack());
             }
             return Some(request);
         }
@@ -980,7 +980,7 @@ impl World {
         self.pending.insert(request, (pos, answer));
         let cancelled = Arc::new(AtomicBool::new(false));
         self.active_generation
-            .insert(pos, (request, cancelled.clone()));
+            .insert(pos.pack(), (request, cancelled.clone()));
         self.generation_dispatcher.submit(
             pos,
             self.generation_dispatcher.queue_level(pos),
@@ -1032,10 +1032,11 @@ impl World {
         let registry = self.registry.clone();
         let io = self.io.clone();
         let mut retained = self.retained_generation.clone();
-        for center in self.active_generation.keys() {
+        for &key in self.active_generation.keys() {
+            let center = ChunkPos::unpack(key);
             for x in center.x - 11..=center.x + 11 {
                 for z in center.z - 11..=center.z + 11 {
-                    retained.insert(ChunkPos::new(x, z));
+                    retained.insert(ChunkPos::new(x, z).pack());
                 }
             }
         }
@@ -1101,10 +1102,10 @@ impl World {
             }
             if self
                 .active_generation
-                .get(&pos)
+                .get(&pos.pack())
                 .is_some_and(|(id, _)| *id == request.id)
             {
-                self.active_generation.remove(&pos);
+                self.active_generation.remove(&pos.pack());
             }
             return Ok(());
         }
@@ -1123,7 +1124,7 @@ impl World {
         self.proto_saves.is_empty() && self.cancelled_outputs.is_empty()
     }
     pub fn forget_proto_holder(&mut self, pos: ChunkPos) {
-        self.generation_statuses.remove(&pos);
+        self.generation_statuses.remove(&pos.pack());
         if let Some(state) = self.generation_state.as_mut() {
             state.forget(pos);
         } else {
@@ -1144,9 +1145,10 @@ impl World {
                 || self.ready.contains(&holder.position))
     }
     pub fn generation_pins(&self, pos: ChunkPos) -> bool {
-        self.active_generation
-            .keys()
-            .any(|center| center.x.abs_diff(pos.x).max(center.z.abs_diff(pos.z)) <= 11)
+        self.active_generation.keys().any(|&key| {
+            let center = ChunkPos::unpack(key);
+            center.x.abs_diff(pos.x).max(center.z.abs_diff(pos.z)) <= 11
+        })
     }
     pub fn schedule_unload(
         &mut self,
@@ -1202,7 +1204,7 @@ impl World {
         self.light_ready.remove(&pos);
         self.saved.remove(&pos.pack());
         self.lights.remove(&pos.pack());
-        self.generation_statuses.remove(&pos);
+        self.generation_statuses.remove(&pos.pack());
         if let Some(state) = self.generation_state.as_mut() {
             state.forget(pos);
         } else {
@@ -1279,20 +1281,26 @@ impl World {
                     self.pending.remove(&request);
                     if self
                         .active_generation
-                        .get(&position)
+                        .get(&position.pack())
                         .is_some_and(|(id, _)| *id == request)
                     {
-                        self.active_generation.remove(&position);
+                        self.active_generation.remove(&position.pack());
                     }
                     if result.is_err() {
                         self.failed_generation.push((position, request));
                     }
                     let output = result?;
                     if output.initial_mob_spawning_pending {
-                        self.pending_initial_spawns.insert(output.terrain.pos);
+                        self.pending_initial_spawns
+                            .insert(output.terrain.pos.pack());
                     }
                     self.generation_skips.extend(output.skips);
-                    self.generation_statuses.extend(output.statuses);
+                    self.generation_statuses.extend(
+                        output
+                            .statuses
+                            .into_iter()
+                            .map(|(pos, status)| (pos.pack(), status)),
+                    );
                     for (pos, structures) in output.full_structures {
                         if let Some(disk) = self.saved.get_mut(&pos.pack()) {
                             disk.structures = Some(structures);
@@ -1409,7 +1417,7 @@ impl World {
         })
     }
     pub async fn encode_saves(
-        &self,
+        &mut self,
         snapshots: Vec<ChunkSaveSnapshot>,
     ) -> Result<Vec<(ChunkPos, CompoundTag)>> {
         let registry = self.registry.clone();
@@ -1974,8 +1982,8 @@ mod generation_order_tests {
         assert_eq!(chunks.iter().map(|(id, _)| *id).collect::<Vec<_>>(), [0, 1]);
         assert_eq!(world.generation_skips[0].0, "first");
         assert_eq!(world.generation_skips[1].0, "second");
-        assert_eq!(world.generation_statuses[&second], ChunkStatus::Full);
-        assert!(world.pending_initial_spawns.contains(&second));
+        assert_eq!(world.generation_statuses[&second.pack()], ChunkStatus::Full);
+        assert!(world.pending_initial_spawns.contains(&second.pack()));
         // Cancel a completed later result while it is still held behind an
         // earlier request. It must save its payload without promoting a holder.
         let cancelled = ChunkPos::new(2, 0);
@@ -1985,7 +1993,7 @@ mod generation_order_tests {
         world.pending.insert(3, (cancelled, cancelled_result));
         world
             .active_generation
-            .insert(cancelled, (3, Arc::new(AtomicBool::new(false))));
+            .insert(cancelled.pack(), (3, Arc::new(AtomicBool::new(false))));
         assert!(
             cancelled_reply
                 .send(Ok(output(cancelled, "cancelled")))
@@ -1994,7 +2002,7 @@ mod generation_order_tests {
         assert!(world.generation_pins(cancelled));
         assert_eq!(world.cancel_generation(cancelled), Some(3));
         assert!(world.poll_terrain().unwrap().is_empty());
-        assert!(!world.generation_statuses.contains_key(&cancelled));
+        assert!(!world.generation_statuses.contains_key(&cancelled.pack()));
         assert!(
             !world
                 .generation_skips

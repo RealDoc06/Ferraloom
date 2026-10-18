@@ -1244,7 +1244,8 @@ impl MinecraftServer {
             .level
             .record_worldgen_skips(std::mem::take(&mut self.world.generation_skips))
             .map_err(game_error)?;
-        for (&pos, &status) in &self.world.generation_statuses {
+        for (&key, &status) in &self.world.generation_statuses {
+            let pos = ChunkPos::unpack(key);
             let attached = self.level.level.chunk(pos).is_some();
             self.level.chunks.ensure_holder(pos).status =
                 if status == ChunkStatus::Full && !attached {
@@ -3270,7 +3271,7 @@ fn initialize_live_level(
 fn update_holder_full_status(
     holder: &mut ferraloom_game::level::chunk_holder::ChunkHolder,
     ready: &HashSet<ChunkPos>,
-    completed: &BTreeMap<ChunkPos, ChunkStatus>,
+    completed: &BTreeMap<i64, ChunkStatus>,
     post_processed: &HashSet<ChunkPos>,
     level: &mut ferraloom_game::level::Level,
 ) -> Result<bool> {
@@ -3287,7 +3288,7 @@ fn update_holder_full_status(
                     Some(ChunkStatus::Full)
                 } else {
                     completed
-                        .get(&pos)
+                        .get(&pos.pack())
                         .copied()
                         .filter(|status| *status < ChunkStatus::Full)
                 }
@@ -3541,7 +3542,7 @@ mod live_level_tests {
         ready.insert(pos);
         for x in -1..=1 {
             for z in -1..=1 {
-                completed.insert(ChunkPos::new(x, z), ChunkStatus::InitializeLight);
+                completed.insert(ChunkPos::new(x, z).pack(), ChunkStatus::InitializeLight);
             }
         }
         update_holder_full_status(&mut holder, &ready, &completed, &ready, &mut level).unwrap();

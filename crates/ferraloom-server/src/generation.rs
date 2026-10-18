@@ -79,15 +79,10 @@ impl GenerationState {
             .map(|(&key, holder)| (ChunkPos::unpack(key), holder.completed))
             .collect()
     }
-    pub fn pending_initial_spawns(&self) -> BTreeSet<ChunkPos> {
+    pub fn pending_initial_spawns(&self) -> BTreeSet<i64> {
         self.holders
             .iter()
-            .filter_map(|(&key, holder)| {
-                holder
-                    .chunk
-                    .initial_mob_spawning_pending
-                    .then_some(ChunkPos::unpack(key))
-            })
+            .filter_map(|(&key, holder)| holder.chunk.initial_mob_spawning_pending.then_some(key))
             .collect()
     }
     pub fn refresh_full_chunks(&mut self, level: &ferraloom_game::level::Level) {
@@ -128,7 +123,7 @@ impl GenerationState {
     }
     pub fn save_unclaimed_protos(
         &mut self,
-        retained: &std::collections::BTreeSet<ChunkPos>,
+        retained: &std::collections::BTreeSet<i64>,
         registry: &RegistryAdapter,
         io: &IoWorker,
     ) -> Result<()> {
@@ -137,7 +132,7 @@ impl GenerationState {
             .iter()
             .filter_map(|(&key, holder)| {
                 let pos = ChunkPos::unpack(key);
-                (holder.chunk.region.status < ChunkStatus::Full && !retained.contains(&pos))
+                (holder.chunk.region.status < ChunkStatus::Full && !retained.contains(&pos.pack()))
                     .then_some(pos)
             })
             .collect::<Vec<_>>();
