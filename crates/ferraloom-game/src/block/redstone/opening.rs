@@ -57,7 +57,12 @@ fn play_sound(
     let pitch = level.random().next_float() * 0.1 + 0.9;
     level.play_sound(source, center(pos), sound, SoundSource::Blocks, 1.0, pitch)
 }
-fn event(level: &mut Level, pos: BlockPos, open: bool, source: Option<EntityRef>) {
+fn event(
+    level: &mut Level,
+    pos: BlockPos,
+    open: bool,
+    source: Option<EntityRef>,
+) -> Result<(), LevelError> {
     level.game_event(
         if open {
             GameEvent::BLOCK_OPEN
@@ -67,7 +72,7 @@ fn event(level: &mut Level, pos: BlockPos, open: bool, source: Option<EntityRef>
         center(pos),
         source,
         None,
-    )?;
+    )
 }
 fn schedule_water(level: &mut Level, pos: BlockPos, state: BlockState) -> Result<(), LevelError> {
     if state.get(p::WATERLOGGED) == Some(true) {
@@ -127,7 +132,7 @@ impl BlockBehavior for OpeningBlock {
             schedule_water(level, pos, changed)?;
         }
         play_sound(level, pos, changed, open, Some(context.player))?;
-        event(level, pos, open, Some(context.player));
+        event(level, pos, open, Some(context.player))?;
         Ok(InteractionResult::SUCCESS)
     }
     fn neighbor_changed(
@@ -156,7 +161,7 @@ impl BlockBehavior for OpeningBlock {
             let changes_open = signal != state.get(p::OPEN).unwrap();
             if !is_gate(state) && changes_open {
                 play_sound(level, pos, state, signal, None)?;
-                event(level, pos, signal, None);
+                event(level, pos, signal, None)?;
             }
             let changed = state
                 .with(p::POWERED, signal)
@@ -166,7 +171,7 @@ impl BlockBehavior for OpeningBlock {
             level.set_block(pos, changed, UpdateFlags::CLIENTS, UPDATE_LIMIT)?;
             if is_gate(state) && changes_open {
                 play_sound(level, pos, state, signal, None)?;
-                event(level, pos, signal, None);
+                event(level, pos, signal, None)?;
             }
             if !is_door(state) && !is_gate(state) {
                 schedule_water(level, pos, state)?;
