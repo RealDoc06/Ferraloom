@@ -135,6 +135,43 @@ pub struct StructureEntitySpawnFlags {
 /// extracted collision shapes cannot answer survival or neighbor shape queries.
 pub trait WorldgenBlockBehavior: Sync {
     // --- structures family ---
+    pub fn can_support_center(
+        &self,
+        position: [i32; 3],
+        face: ferraloom_util::Direction,
+    ) -> Result<bool, Error> {
+        self.behavior.can_support_center(self, position, face)
+    }
+    pub fn spawn_structure_chest_minecart(
+        &mut self,
+        position: [f64; 3],
+        table: &crate::Identifier,
+        random: &mut ferraloom_util::random::WorldgenRandom,
+    ) -> Result<bool, Error> {
+        self.behavior
+            .spawn_structure_chest_minecart(self, position, table, random)
+    }
+    /// Block#canSupportCenter includes the unstable-bottom-center tag and the
+    /// live SupportType.CENTER face query.
+    fn can_support_center(
+        &self,
+        _region: &WorldGenRegion<'_>,
+        _position: [i32; 3],
+        _face: ferraloom_util::Direction,
+    ) -> Result<bool, Error> {
+        Err(Error("Unsupported: Block#canSupportCenter".into()))
+    }
+    /// Minecart creation uses CHUNK_GENERATION rather than STRUCTURE. A null
+    /// entity returns false; only a created minecart consumes the loot seed.
+    fn spawn_structure_chest_minecart(
+        &self,
+        _region: &mut WorldGenRegion<'_>,
+        _position: [f64; 3],
+        _table: &crate::Identifier,
+        _random: &mut ferraloom_util::random::WorldgenRandom,
+    ) -> Result<bool, Error> {
+        Err(Error("Unsupported: structure chest minecart".into()))
+    }
     pub fn is_collision_face_full(
         &self,
         state: BlockState,
