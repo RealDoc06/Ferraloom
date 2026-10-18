@@ -105,6 +105,7 @@ public final class EntityVectors {
         LivingVectors.run(new EntityFixture(r));
         TravelVectors.run(new EntityFixture(r));
         EffectVectors.run();
+        EffectReadVectors.run(new EntityFixture(r));
         DamageVectors.run(new EntityFixture(r));
         DifficultyVectors.run();
         ExperienceVectors.run(new EntityFixture(r));

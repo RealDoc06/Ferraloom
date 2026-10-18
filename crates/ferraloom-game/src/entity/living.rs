@@ -18,6 +18,8 @@ pub struct LivingEntity {
     pub parent: EntityData,
     pub attributes: AttributeMap,
     pub equipment: EntityEquipment,
+    pub(crate) active_effects: super::effect::ActiveEffects,
+    pub effects_dirty: bool,
     pub use_item: ItemStack,
     pub use_item_remaining: i32,
     pub jumping: bool,
@@ -52,6 +54,8 @@ impl LivingEntity {
             parent,
             attributes,
             equipment: EntityEquipment::default(),
+            active_effects: super::effect::ActiveEffects::default(),
+            effects_dirty: true,
             use_item: ItemStack::default(),
             use_item_remaining: 0,
             jumping: false,
@@ -105,6 +109,16 @@ impl LivingEntity {
     pub fn health(&self) -> f32 {
         *self.parent.entity_data.get(data::HEALTH)
     }
+    /// Port of LivingEntity#getEffect over the canonical holder-keyed map.
+    pub fn get_effect(
+        &self,
+        effect: ferraloom_data::registries::mob_effect::Id,
+    ) -> Option<&super::effect::MobEffectInstance> {
+        self.active_effects.get(effect)
+    }
+    pub fn has_effect(&self, effect: ferraloom_data::registries::mob_effect::Id) -> bool {
+        self.active_effects.contains(effect)
+    }
     pub fn max_health(&self) -> f32 {
         self.attributes
             .value(Attribute::MAX_HEALTH)
@@ -137,6 +151,18 @@ impl LivingEntity {
                 );
             }
         }
+        for error in self
+            .active_effects
+            .load(self.parent.saved.get("active_effects"))
+        {
+            eprintln!(
+                "Failed to load active effects for entity {}: {error}",
+                self.parent.uuid
+            );
+        }
+        if !self.active_effects.is_empty() {
+            self.effects_dirty = true;
+        }
         self.set_health(self.parent.saved.get_float_or("Health", self.max_health()));
         self.hurt_time = i32::from(self.parent.saved.get_short_or("HurtTime", 0));
         self.equipment = self
@@ -150,6 +176,11 @@ impl LivingEntity {
         tag.insert("Health", Tag::Float(self.health()));
         tag.insert("HurtTime", Tag::Short(self.hurt_time as i16));
         tag.insert("attributes", self.attributes.save_nbt());
+        tag.remove("active_effects");
+        if !self.active_effects.is_empty() {
+            // Deterministic identity-map order, not native holder hash iteration.
+            tag.insert("active_effects", self.active_effects.save());
+        }
         tag.remove("equipment");
         if !self.equipment.is_empty() {
             tag.insert(

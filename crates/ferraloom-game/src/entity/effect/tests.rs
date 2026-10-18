@@ -118,3 +118,59 @@ fn native_hidden_chain_copies_scaling_and_duration_promotion_match() {
     }
     assert_eq!(checked, 4);
 }
+
+#[test]
+fn native_living_load_keeps_valid_partial_effects_and_saves_the_full_hidden_chain() {
+    use crate::entity::player::{GameType, ServerPlayer};
+    use ferraloom_nbt::{ListTag, Tag};
+    use ferraloom_util::{Uuid, Vec3};
+
+    let mut player = ServerPlayer::new(
+        Uuid::new(1, 2),
+        "effects".into(),
+        1,
+        Vec3::ZERO,
+        GameType::Survival,
+    );
+    let mut checked = 0;
+    for row in rows("mob-effect-load\t") {
+        player
+            .try_load(ferraloom_nbt::parse_compound(row[2]).unwrap())
+            .unwrap();
+        let mut effects: Vec<_> = player.active_effects.values().collect();
+        // Observations sort registry keys; native holder iteration is not parity.
+        effects.sort_by_key(|effect| effect.effect().name());
+        let actual = effects
+            .iter()
+            .map(|effect| format!("{}={}", effect.effect().name(), state(effect)))
+            .collect::<Vec<_>>()
+            .join(",");
+        assert_eq!(actual, row[3], "{row:?}");
+        for effect in &effects {
+            assert!(player.has_effect(effect.effect()));
+            assert_eq!(player.get_effect(effect.effect()).unwrap(), *effect);
+        }
+        let saved = player.save_without_id();
+        let mut saved_effects = saved
+            .get_list("active_effects")
+            .cloned()
+            .unwrap_or_default()
+            .0;
+        saved_effects.sort_by_key(|effect| {
+            effect
+                .as_compound()
+                .unwrap()
+                .get_string("id")
+                .unwrap()
+                .to_string_lossy()
+        });
+        assert_eq!(
+            Tag::List(ListTag(saved_effects)),
+            ferraloom_nbt::parse(row[4]).unwrap(),
+            "{row:?}"
+        );
+        assert_eq!(saved.contains_key("active_effects"), !effects.is_empty());
+        checked += 1;
+    }
+    assert_eq!(checked, 8);
+}

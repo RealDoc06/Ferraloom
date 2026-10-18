@@ -349,6 +349,14 @@ mob-effect-negative	-1	-1:0:false:true:true/-	-1:0:false:true:true/-
 mob-effect-negative	0	0:0:false:true:true/-	0:0:false:true:true/-
 mob-effect-negative	-2	-3:0:false:true:true/-	1:0:false:true:true/-
 mob-effect-negative	-2147483648	2147483647:0:false:true:true/-	1073741824:0:false:true:true/-
+mob-effect-load	0	{}		[]
+mob-effect-load	1	{active_effects:[]}		[]
+mob-effect-load	2	{active_effects:[{amplifier:2b,duration:100,id:"minecraft:speed"},{duration:-1,id:"minecraft:slow_falling"}]}	minecraft:slow_falling=-1:0:false:true:true/-,minecraft:speed=100:2:false:true:true/-	[{duration:-1,id:"minecraft:slow_falling",show_icon:1b},{amplifier:2b,duration:100,id:"minecraft:speed",show_icon:1b}]
+mob-effect-load	3	{active_effects:[{duration:20,hidden_effect:{amplifier:4b,duration:100},id:"minecraft:levitation"},{amplifier:1b,duration:40,id:"minecraft:levitation"}]}	minecraft:levitation=40:1:false:true:true/-	[{amplifier:1b,duration:40,id:"minecraft:levitation",show_icon:1b}]
+mob-effect-load	4	{active_effects:[{duration:10,id:"minecraft:speed"},{duration:40,id:"missing:effect"},{duration:30,id:"minecraft:slow_falling"}]}	minecraft:slow_falling=30:0:false:true:true/-,minecraft:speed=10:0:false:true:true/-	[{duration:30,id:"minecraft:slow_falling",show_icon:1b},{duration:10,id:"minecraft:speed",show_icon:1b}]
+mob-effect-load	5	{active_effects:[{duration:10,id:"minecraft:speed"},{duration:"bad",id:"minecraft:levitation"},{duration:30,id:"minecraft:slow_falling"}]}	minecraft:levitation=0:0:false:true:true/-,minecraft:slow_falling=30:0:false:true:true/-,minecraft:speed=10:0:false:true:true/-	[{id:"minecraft:levitation",show_icon:1b},{duration:30,id:"minecraft:slow_falling",show_icon:1b},{duration:10,id:"minecraft:speed",show_icon:1b}]
+mob-effect-load	6	{active_effects:[{duration:20,hidden_effect:{amplifier:4b,duration:100,show_particles:0b},id:"minecraft:levitation"}]}	minecraft:levitation=20:0:false:true:true/100:4:false:false:false/-	[{duration:20,hidden_effect:{amplifier:4b,duration:100,show_icon:0b,show_particles:0b},id:"minecraft:levitation",show_icon:1b}]
+mob-effect-load	7	{active_effects:"bad"}		[]
 damage-type	minecraft:arrow	arrow	when_caused_by_living_non_player	3dcccccd	hurt	default	minecraft:always_kills_armor_stands,minecraft:is_projectile,minecraft:panic_causes,minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt
 damage-type	minecraft:bad_respawn_point	badRespawnPoint	always	3dcccccd	hurt	intentional_game_design	minecraft:always_hurts_ender_dragons,minecraft:avoids_guardian_thorns,minecraft:is_explosion,minecraft:no_knockback,minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt
 damage-type	minecraft:cactus	cactus	when_caused_by_living_non_player	3dcccccd	hurt	default	minecraft:bypasses_shield,minecraft:no_knockback,minecraft:panic_causes,minecraft:panic_environmental_causes,minecraft:sulfur_cube_with_block_immune_to	minecraft:entity.player.hurt

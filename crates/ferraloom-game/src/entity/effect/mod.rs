@@ -3,6 +3,9 @@ use ferraloom_data::registries::mob_effect::Id as MobEffect;
 use ferraloom_protocol::{Error, Result, codec::VarInt, component};
 use ferraloom_util::mth;
 
+mod active;
+pub use active::ActiveEffects;
+
 /// Port of MobEffectInstance's server state, including its hidden-effect chain.
 #[derive(Debug)]
 pub struct MobEffectInstance {
