@@ -185,7 +185,7 @@ impl TrunkPlacer {
                 for d in [[0, -1, 0], [1, -1, 0], [0, -1, 1], [1, -1, 1]] {
                     t.below(c, add(o, d), out)?;
                 }
-                let d = horizontal(c);
+                let d = horizontal(&mut c.random()?);
                 let lean = h - c.random()?.next_int_bound(4);
                 let mut steps = 2 - c.random()?.next_int_bound(3);
                 let mut p = o;
@@ -219,7 +219,7 @@ impl TrunkPlacer {
             }
             Kind::Forking => {
                 t.below(c, add(o, [0, -1, 0]), out)?;
-                let d = horizontal(c);
+                let d = horizontal(&mut c.random()?);
                 let lean = h - c.random()?.next_int_bound(4) - 1;
                 let mut steps = 3 - c.random()?.next_int_bound(3);
                 let mut p = o;
@@ -238,7 +238,7 @@ impl TrunkPlacer {
                     attachments.push(Attachment::new([p[0], y, p[2]], 1, false));
                 }
                 let mut p = o;
-                let b = horizontal(c);
+                let b = horizontal(&mut c.random()?);
                 if b != d {
                     let start = lean - c.random()?.next_int_bound(2) - 1;
                     let steps = 1 + c.random()?.next_int_bound(3);
@@ -258,7 +258,7 @@ impl TrunkPlacer {
                 }
             }
             Kind::Bending { min_leaves, length } => {
-                let d = horizontal(c);
+                let d = horizontal(&mut c.random()?);
                 let mut p = o;
                 t.below(c, add(p, [0, -1, 0]), out)?;
                 for y in 0..h {
@@ -310,7 +310,7 @@ impl TrunkPlacer {
                 if count == 3 {
                     attachments.push(Attachment::new(add(o, [0, trunk_h, 0]), 0, false));
                 }
-                let d = horizontal(c);
+                let d = horizontal(&mut c.random()?);
                 for (start, d) in std::iter::once((first, d))
                     .chain((count >= 2).then_some((second, d.opposite())))
                 {
@@ -369,7 +369,7 @@ impl TrunkPlacer {
                         && y < h - 1
                         && c.random()?.next_float() < *probability
                     {
-                        let d = horizontal(c);
+                        let d = horizontal(&mut c.random()?);
                         let len = length.sample(&mut c.random()?);
                         let start = (len - length.sample(&mut c.random()?) - 1).max(0);
                         let steps = steps.sample(&mut c.random()?);

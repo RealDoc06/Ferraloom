@@ -285,13 +285,13 @@ impl SpeleothemClusterFeature {
     }
     fn height(
         &self,
-        ctx: &mut FeatureContext<'_, '_>,
+        random: &mut impl RandomSource,
         dx: i32,
         dz: i32,
         density: f32,
         max: i32,
     ) -> i32 {
-        if ctx.random()?.next_float() > density {
+        if random.next_float() > density {
             return 0;
         }
         let distance = (dx.abs() + dz.abs()) as f64;
@@ -302,8 +302,7 @@ impl SpeleothemClusterFeature {
             max as f64 / 2.0,
             0.0,
         ) as f32;
-        (mean + ctx.random()?.next_gaussian() as f32 * self.deviation as f32).clamp(0.0, max as f32)
-            as i32
+        (mean + random.next_gaussian() as f32 * self.deviation as f32).clamp(0.0, max as f32) as i32
     }
     #[allow(clippy::too_many_arguments)]
     fn column(
@@ -345,7 +344,7 @@ impl SpeleothemClusterFeature {
             let n = self.thickness.sample(&mut ctx.random()?);
             self.replace_base(ctx, [p[0], y, p[2]], n, Direction::Up)?;
             let max = floor.map_or(height, |f| height.min(y - f));
-            down = self.height(ctx, dx, dz, density, max);
+            down = self.height(&mut ctx.random()?, dx, dz, density, max);
         }
         let want = ctx.random()?.next_double() < chance;
         let mut up = 0;
@@ -364,7 +363,7 @@ impl SpeleothemClusterFeature {
                     ))
                 .max(0)
             } else {
-                self.height(ctx, dx, dz, density, height)
+                self.height(&mut ctx.random()?, dx, dz, density, height)
             };
         }
         if let (Some(f), Some(c)) = (floor, ceiling)

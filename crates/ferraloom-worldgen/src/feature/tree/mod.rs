@@ -71,8 +71,8 @@ fn chance(v: &Value, name: &str) -> Result<f32, Error> {
         Err(Error(format!("{name} outside [0,1]")))
     }
 }
-fn horizontal(c: &mut FeatureContext<'_, '_>) -> Direction {
-    HORIZONTAL[c.random()?.next_int_bound(4) as usize]
+fn horizontal(random: &mut impl RandomSource) -> Direction {
+    HORIZONTAL[random.next_int_bound(4) as usize]
 }
 fn relative(p: Pos, d: Direction, n: i32) -> Pos {
     let q = step([0; 3], d);

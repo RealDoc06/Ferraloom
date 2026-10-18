@@ -59,7 +59,7 @@ impl Feature for FallenTree {
             &Positions::default(),
             &mut Positions::default(),
         )?;
-        let d = horizontal(c);
+        let d = horizontal(&mut c.random()?);
         let length = self.length.sample(&mut c.random()?) - 2;
         let distance = 2 + c.random()?.next_int_bound(2);
         let mut p = add(relative(c.origin, d, distance), [0, 1, 0]);

@@ -3,7 +3,7 @@ use crate::{
     biome::BiomeSource,
     feature::{FeatureLoader, FeatureRegistry},
     generator::{GenerationData, NoiseBasedChunkGenerator},
-    region::{ChunkStatus, RegionChunk, WorldgenBlockBehavior},
+    region::{ChunkStatus, RegionChunk, WorldGenRegion, WorldgenBlockBehavior},
     settings::{DimensionType, NoiseGeneratorSettings},
 };
 use ferraloom_data::datapack::{Pack, ResourceManager};

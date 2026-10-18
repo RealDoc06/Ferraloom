@@ -412,7 +412,7 @@ impl Decorator {
                         [Direction::East, Direction::West]
                     }
                 } else {
-                    let d = horizontal(c);
+                    let d = horizontal(&mut c.random()?);
                     [d, d.clockwise()]
                 };
                 for &p in logs {
