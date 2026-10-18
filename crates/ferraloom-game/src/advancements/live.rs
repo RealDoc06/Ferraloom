@@ -222,7 +222,7 @@ fn grant_rewards(
                 level.play_sound(
                     None,
                     position,
-                    ferraloom_data::registries::sound_event::Id::ITEM_PICKUP,
+                    ferraloom_data::registries::sound_event::Id::ENTITY_ITEM_PICKUP,
                     ferraloom_protocol::play::SoundSource::Players,
                     0.2,
                     pitch,
