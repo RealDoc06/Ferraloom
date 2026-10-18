@@ -1399,10 +1399,12 @@ impl MinecraftServer {
             post_effects: Vec::new(),
         }));
         {
-            let context = MenuContext::player(
+            let infinite_materials = player.instabuild();
+            let context = MenuContext::player_with_abilities(
                 &mut player.inventory,
                 &mut player.parent.equipment,
                 player.game_mode == GameType::Creative,
+                infinite_materials,
             );
             player.menus.inventory_menu.set_synchronizer(&context);
             for packet in player.menus.inventory_menu.drain_packets() {
@@ -2021,10 +2023,12 @@ impl MinecraftServer {
             {
                 return Ok(());
             }
-            let mut context = MenuContext::player(
+            let infinite_materials = player.instabuild();
+            let mut context = MenuContext::player_with_abilities(
                 &mut player.inventory,
                 &mut player.parent.equipment,
                 player.game_mode == GameType::Creative,
+                infinite_materials,
             );
             let menu = player.menus.current_mut();
             if !menu.still_valid(&context) {
@@ -2131,6 +2135,7 @@ impl MinecraftServer {
                 return Ok(());
             }
             if (1..=45).contains(&packet.slot_num) {
+                let infinite_materials = player.instabuild();
                 let mut callbacks = PendingCraftingCallbacks;
                 let mut hooks = RecipeMenuHooks {
                     manager: &self.recipe_manager,
@@ -2143,8 +2148,12 @@ impl MinecraftServer {
                     ),
                     callbacks: &mut callbacks,
                 };
-                let mut context =
-                    MenuContext::player(&mut player.inventory, &mut player.parent.equipment, true);
+                let mut context = MenuContext::player_with_abilities(
+                    &mut player.inventory,
+                    &mut player.parent.equipment,
+                    true,
+                    infinite_materials,
+                );
                 let menu = &mut player.menus.inventory_menu;
                 menu.set_item_live(
                     &mut context,
@@ -2207,6 +2216,7 @@ impl MinecraftServer {
             if !player.loaded || player.game_mode == GameType::Spectator {
                 return Ok(());
             }
+            let infinite_materials = player.instabuild();
             let inventory = &mut player.inventory;
             let mut drop = None;
             if action == PlayerAction::SwapItemWithOffhand {
@@ -2232,10 +2242,11 @@ impl MinecraftServer {
                 }
                 drop = Some(stack);
             }
-            let context = MenuContext::player(
+            let context = MenuContext::player_with_abilities(
                 inventory,
                 &mut player.parent.equipment,
                 player.game_mode == GameType::Creative,
+                infinite_materials,
             );
             let menu = player.menus.current_mut();
             menu.broadcast_changes(&context)?;
@@ -2398,10 +2409,12 @@ impl MinecraftServer {
                 .level
                 .entity_mut::<ServerPlayer>(entity)
                 .map_err(game_error)?;
-            let mut context = MenuContext::player(
+            let infinite_materials = player.instabuild();
+            let mut context = MenuContext::player_with_abilities(
                 &mut player.inventory,
                 &mut player.parent.equipment,
                 player.game_mode == GameType::Creative,
+                infinite_materials,
             );
             player.menus.try_pick_item(&mut context, stack)?
         };
