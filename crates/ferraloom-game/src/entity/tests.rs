@@ -778,6 +778,26 @@ pub(super) fn tags(level: &mut Level) {
 pub(super) fn level(floor: bool) -> Level {
     level_with_behaviors(floor, &BEHAVIORS)
 }
+fn install_test_environment(level: &mut Level, fast_lava: bool) {
+    use crate::level::environment::{ClockSnapshot, EnvironmentDefinitions};
+    let resources = ferraloom_data::datapack::ResourceManager::new(Vec::new());
+    let definitions = Arc::new(EnvironmentDefinitions::load(&resources).unwrap());
+    let dimension = definitions
+        .dimension(&serde_json::json!({
+            "attributes": {"gameplay/fast_lava": fast_lava}, "timelines": [],
+        }))
+        .unwrap();
+    level
+        .set_environment_attributes(
+            definitions,
+            &dimension,
+            "test".parse().unwrap(),
+            &[],
+            ClockSnapshot::default(),
+        )
+        .unwrap();
+}
+
 fn level_with_behaviors(floor: bool, behaviors: &'static Behaviors) -> Level {
     use ferraloom_chunk::{BiomeId, IdMap, LevelChunkSection, Strategy};
     let template = LevelChunkSection::new(
@@ -786,6 +806,8 @@ fn level_with_behaviors(floor: bool, behaviors: &'static Behaviors) -> Level {
         BiomeId(0),
     );
     let mut level = Level::new(Region::new(behaviors));
+    // Explicit controlled dimension with native constants and no timelines.
+    install_test_environment(&mut level, false);
     for x in -2..=2 {
         for z in -2..=2 {
             level
@@ -2142,4 +2164,41 @@ fn may_build_is_independent_and_game_mode_updates_match_native_abilities() {
         .filter(|row| row.starts_with("player-may-build\t"))
         .collect();
     assert_eq!(actual, expected);
+}
+
+#[test]
+fn lava_entity_force_reads_the_live_dimension_instead_of_the_legacy_rule_input() {
+    let mut level = level(false);
+    let pos = BlockPos::new(8, 64, 8);
+    level
+        .set_block_state(pos, Block::LAVA.default_state())
+        .unwrap();
+    level
+        .set_block_state(
+            pos.east(1),
+            crate::block::fluid::legacy_block(FlowingFluid::Lava.flowing(4, false)),
+        )
+        .unwrap();
+    let mut entity = item::PrimedTnt::new(1, 123);
+    entity.parent.set_pos(Vec3::new(8.5, 64.0, 8.5));
+    let id = EntityRef(1);
+    level
+        .add_entity(id, EntityState::PrimedTnt(Box::new(entity)))
+        .unwrap();
+    for fast in [false, true, false] {
+        install_test_environment(&mut level, fast);
+        level.rules_mut().fast_lava = !fast;
+        level.entity_mut::<EntityData>(id).unwrap().velocity = Vec3::new(0.1, 0.0, 0.0);
+        fluid::update_fluid_interaction(&item::PrimedTntBehavior, id, &mut level).unwrap();
+        let scale = if fast {
+            0.007
+        } else {
+            0.002_333_333_333_333_333_5
+        };
+        assert_vector(
+            level.entity::<EntityData>(id).unwrap().velocity,
+            Vec3::new(0.1 + scale, 0.0, 0.0),
+            "live FAST_LAVA",
+        );
+    }
 }
