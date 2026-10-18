@@ -276,6 +276,9 @@ impl<'a> FeatureLoader<'a> {
     pub fn finish(self) -> FeatureRegistry {
         self.registry
     }
+    pub fn registry(&self) -> &FeatureRegistry {
+        &self.registry
+    }
 }
 #[derive(Debug)]
 struct NoOpFeature;

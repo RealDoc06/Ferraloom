@@ -4,7 +4,7 @@ use serde_json::Value;
 mod block_state;
 pub use block_state::decode_block_state;
 pub mod tags;
-pub use tags::{StaticTagEntry, TagEntry, TagId, TagKey, TagSet};
+pub use tags::{StaticTagElement, TagElement, TagId, TagKey, TagSet};
 
 use std::{
     collections::{BTreeMap, BTreeSet},

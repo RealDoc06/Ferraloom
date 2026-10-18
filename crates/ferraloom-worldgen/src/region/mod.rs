@@ -722,6 +722,13 @@ impl<'a> WorldGenRegion<'a> {
         neighbor_p: [i32; 3],
         neighbor_state: BlockState,
     ) -> Result<BlockState, Error> {
+        let state = self.block(p)?;
+        if !state
+            .block()
+            .overrides(ferraloom_data::BlockMethod::UpdateShape)
+        {
+            return Ok(state);
+        }
         self.behavior
             .update_shape(self, p, direction, neighbor_p, neighbor_state)
     }
@@ -730,6 +737,14 @@ impl<'a> WorldGenRegion<'a> {
         p: [i32; 3],
         state: BlockState,
     ) -> Result<BlockState, Error> {
+        // Block#updateFromNeighbourShapes applies updateShape in each direction.
+        // The base implementation is identity and consumes no random values.
+        if !state
+            .block()
+            .overrides(ferraloom_data::BlockMethod::UpdateShape)
+        {
+            return Ok(state);
+        }
         self.behavior.update_from_neighbor_shapes(self, p, state)
     }
     /// WorldGenRegion inherits LevelAccessor's empty updateNeighborsAt.
@@ -778,6 +793,12 @@ impl<'a> WorldGenRegion<'a> {
         }
     }
     pub fn can_survive(&self, state: BlockState, p: [i32; 3]) -> Result<bool, Error> {
+        if !state
+            .block()
+            .overrides(ferraloom_data::BlockMethod::CanSurvive)
+        {
+            return Ok(true);
+        }
         self.behavior.can_survive(state, self, p)
     }
     /// EntityGetter#isUnobstructed always succeeds: WorldGenRegion#getEntities
