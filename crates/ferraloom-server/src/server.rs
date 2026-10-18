@@ -372,7 +372,7 @@ impl MinecraftServer {
                     }
                 })?;
         }
-        let server = Self {
+        let mut server = Self {
             properties: properties.clone(),
             root: options.root,
             registries,
@@ -410,6 +410,7 @@ impl MinecraftServer {
             listener_task: Some(listener_task),
             pending_level_hooks: PendingLevelHooks::default(),
         };
+        server.publish_spawn_protection();
         let task = tokio::spawn(server.run());
         Ok(RunningServer {
             address,
