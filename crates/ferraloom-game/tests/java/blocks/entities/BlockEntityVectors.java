@@ -45,6 +45,7 @@ public final class BlockEntityVectors {
     }
     BlockEntityFixture.tickerPhases(dynamic);
     BlockEntityFixture.scatter(dynamic);
+    BlockEntityFixture.popResourceRng(dynamic);
     BlockEntityFixture.signEdits(dynamic);
     BlockEntityFixture.signFacing(dynamic);
     var level=new BlockEntityFixture(dynamic);

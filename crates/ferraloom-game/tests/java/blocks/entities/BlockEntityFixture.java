@@ -24,6 +24,17 @@ class BlockEntityFixture extends MutationFixture {
       System.out.println("scatter\t"+seed+"\t"+count+"\t"+String.join(";",drops)+"\t"+level.random.nextInt());
     }
   }
+  static void popResourceRng(RegistryAccess r){
+    // This real Level has no ServerLevel services, so native's deferred entity
+    // supplier is suppressed after the public helper's eager random draws.
+    for(long seed:new long[]{0,1,9123456})for(int count:new int[]{0,3})for(var face:new net.minecraft.core.Direction[]{null,Direction.UP,Direction.EAST}){
+      var level=new BlockEntityFixture(r);level.random.setSeed(seed);
+      var stack=new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.STONE,count);
+      if(face==null)net.minecraft.world.level.block.Block.popResource(level,new BlockPos(-2,64,3),stack);
+      else net.minecraft.world.level.block.Block.popResourceFromFace(level,new BlockPos(-2,64,3),face,stack);
+      System.out.println("pop-resource-rng\t"+seed+"\t"+(face==null?"NONE":face)+"\t"+count+"\t"+level.random.nextInt());
+    }
+  }
   static final class SignPlayer extends net.minecraft.world.entity.player.Player {
     final boolean filtered;
     SignPlayer(BlockEntityFixture level,boolean filtered){super(level,new com.mojang.authlib.GameProfile(new UUID(1,2),"sign"));this.filtered=filtered;}

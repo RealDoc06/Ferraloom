@@ -326,6 +326,24 @@ scatter	9123456	0		1426726698
 scatter	9123456	1	1|bff8f20eda609679,40500995195efff6,4001c113a3040f7a|3fa33a82fe1d73d4,3fc33a21a9a5a256,bfb0fdd25254d043	-492929270
 scatter	9123456	64	16|bff8f20eda609679,40500995195efff6,4001c113a3040f7a|3fa33a82fe1d73d4,3fc33a21a9a5a256,bfb0fdd25254d043;29|bff8f20eda609679,40500995195efff6,4001c113a3040f7a|3fb7c1cf702a66ed,3fc4007e62b638a0,3f6ecbba2db733b1;17|bff8f20eda609679,40500995195efff6,4001c113a3040f7a|3f8c40c4b8d3b233,3fd103b17596cae1,bf9bd598cc42350a;2|bff8f20eda609679,40500995195efff6,4001c113a3040f7a|bfaefa8d0cab9277,3fc10e544b31dc3e,3fb4c2e316ede380	-2132503002
 scatter	9123456	99	16|bff8f20eda609679,40500995195efff6,4001c113a3040f7a|3fa33a82fe1d73d4,3fc33a21a9a5a256,bfb0fdd25254d043;29|bff8f20eda609679,40500995195efff6,4001c113a3040f7a|3fb7c1cf702a66ed,3fc4007e62b638a0,3f6ecbba2db733b1;17|bff8f20eda609679,40500995195efff6,4001c113a3040f7a|3f8c40c4b8d3b233,3fd103b17596cae1,bf9bd598cc42350a;26|bff8f20eda609679,40500995195efff6,4001c113a3040f7a|bfaefa8d0cab9277,3fc10e544b31dc3e,3fb4c2e316ede380;11|bff8f20eda609679,40500995195efff6,4001c113a3040f7a|3fb09566c4e108b4,3fcc00c3733487b5,bf54cb66c1bc1dd5	282012429
+pop-resource-rng	0	NONE	0	-1930858313
+pop-resource-rng	0	up	0	-1728529858
+pop-resource-rng	0	east	0	-1728529858
+pop-resource-rng	0	NONE	3	-1930858313
+pop-resource-rng	0	up	3	-1728529858
+pop-resource-rng	0	east	3	-1728529858
+pop-resource-rng	1	NONE	0	1429008869
+pop-resource-rng	1	up	0	-138487339
+pop-resource-rng	1	east	0	-138487339
+pop-resource-rng	1	NONE	3	1429008869
+pop-resource-rng	1	up	3	-138487339
+pop-resource-rng	1	east	3	-138487339
+pop-resource-rng	9123456	NONE	0	1426726698
+pop-resource-rng	9123456	up	0	-1503499307
+pop-resource-rng	9123456	east	0	-1503499307
+pop-resource-rng	9123456	NONE	3	1426726698
+pop-resource-rng	9123456	up	3	-1503499307
+pop-resource-rng	9123456	east	3	-1503499307
 sign-edit	false	false	false	{back_text:{color:"black",has_glowing_text:0b,messages:["","","",""]},components:{},front_text:{color:"black",has_glowing_text:0b,messages:["","","",""]},is_waxed:0b}	false
 sign-edit	false	false	true	{back_text:{color:"black",has_glowing_text:0b,messages:["","","",""]},components:{},front_text:{color:"black",has_glowing_text:0b,messages:["","","",""]},is_waxed:0b}	false
 sign-edit	false	true	false	{back_text:{color:"black",has_glowing_text:0b,messages:["","","",""]},components:{},front_text:{color:"black",filtered_messages:["first","","third","fourth"],has_glowing_text:0b,messages:["first","second","third","fourth"]},is_waxed:0b}	true
