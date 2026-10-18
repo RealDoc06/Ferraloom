@@ -10,8 +10,10 @@ async fn record_torch_burnout(
 ) -> Result<()> {
     let support = BlockPos::new(12, -59, 5);
     let torch = BlockPos::new(12, -58, 5);
-    let input = BlockPos::new(11, -59, 5);
+    let wire = BlockPos::new(11, -59, 5);
+    let input = BlockPos::new(10, -59, 5);
     set(bot, support, Block::STONE).await?;
+    set(bot, wire, Block::REDSTONE_WIRE).await?;
     set(bot, torch, Block::REDSTONE_TORCH).await?;
     for cycle in 0..8 {
         for (edge, source) in [("rise", Block::REDSTONE_BLOCK), ("fall", Block::AIR)] {

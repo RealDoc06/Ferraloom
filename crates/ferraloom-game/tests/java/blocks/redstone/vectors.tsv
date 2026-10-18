@@ -19333,3 +19333,6 @@ target-place:15:false:false	25109|8, 0, 8=25109/18|false
 target-place:15:false:true	25124||false
 target-place:15:true:false	25124||true
 target-place:15:true:true	25124||true
+torch-input:true	true|6429|true
+torch-input:false	false|6147|true
+torch-input:true	true|6429|true

@@ -229,6 +229,15 @@ public final class RedstoneVectors extends MutationFixture {
             System.out.println("target-place:"+power+":"+scheduled+":"+same+"\t"+Block.getId(level.getBlockState(ORIGIN))+"|"+String.join(";",level.changes)+"|"+level.blockTicks.hasScheduledTick(ORIGIN,Blocks.TARGET));
         }
     }
+    static void torchInputs(RegistryAccess r){
+        var level=new RedstoneVectors(r);var support=ORIGIN.below();var wire=support.west();var input=support.west(2);
+        level.raw(support,Blocks.STONE.defaultBlockState());level.raw(wire.below(),Blocks.STONE.defaultBlockState());level.raw(input.below(),Blocks.STONE.defaultBlockState());
+        level.setBlock(wire,Blocks.REDSTONE_WIRE.defaultBlockState(),3);level.setBlock(ORIGIN,Blocks.REDSTONE_TORCH.defaultBlockState(),3);
+        for(boolean powered:new boolean[]{true,false,true}){
+            level.setBlock(input,(powered?Blocks.REDSTONE_BLOCK:Blocks.AIR).defaultBlockState(),3);
+            System.out.println("torch-input:"+powered+"\t"+level.hasSignal(support,Direction.DOWN)+"|"+Block.getId(level.getBlockState(wire))+"|"+level.blockTicks.hasScheduledTick(ORIGIN,Blocks.REDSTONE_TORCH));
+        }
+    }
     static void placements(RegistryAccess r) {
         var blocks=new ArrayList<>(List.<Block>of(Blocks.REDSTONE_WIRE,Blocks.REPEATER,Blocks.COMPARATOR,Blocks.OBSERVER,Blocks.REDSTONE_WALL_TORCH,Blocks.LEVER,Blocks.STONE_BUTTON,Blocks.OAK_BUTTON,Blocks.PISTON,Blocks.STICKY_PISTON,Blocks.DISPENSER,Blocks.DROPPER,Blocks.HOPPER,Blocks.OAK_DOOR,Blocks.IRON_DOOR,Blocks.COPPER_DOOR.weathering().unaffected(),Blocks.OAK_TRAPDOOR,Blocks.IRON_TRAPDOOR,Blocks.COPPER_TRAPDOOR.weathering().unaffected(),Blocks.OAK_FENCE_GATE,Blocks.REDSTONE_LAMP,Blocks.RAIL,Blocks.POWERED_RAIL,Blocks.ACTIVATOR_RAIL,Blocks.DETECTOR_RAIL,Blocks.NOTE_BLOCK,Blocks.TRIPWIRE,Blocks.TRIPWIRE_HOOK));
         for(var block:BuiltInRegistries.BLOCK)if(block instanceof LightningRodBlock)blocks.add(block);
@@ -517,7 +526,7 @@ public final class RedstoneVectors extends MutationFixture {
         var builtin=RegistryAccess.fromRegistryOfRegistries(net.minecraft.core.registries.BuiltInRegistries.REGISTRY);
         var lookup=HolderLookup.Provider.create(java.util.stream.Stream.concat(builtin.listRegistries(),registries.listRegistries()));
         net.minecraft.core.registries.BuiltInRegistries.DATA_COMPONENT_INITIALIZERS.build(lookup).forEach(net.minecraft.core.component.DataComponentInitializers.PendingComponents::apply);
-        signals(registries);piston(registries);wires(registries);try{moving(registries);pushing(registries);comparators(registries);placements(registries);hoppers(registries);pistonTimelines(registries);dispensing(registries);dispenserTriggers(registries);rails(registries);notes(registries);tripwires(registries);placedBy(registries);interactions(registries);plates(registries);targets(registries);}catch(Exception error){throw new RuntimeException(error);}
+        signals(registries);piston(registries);wires(registries);try{moving(registries);pushing(registries);comparators(registries);placements(registries);hoppers(registries);pistonTimelines(registries);dispensing(registries);dispenserTriggers(registries);rails(registries);notes(registries);tripwires(registries);placedBy(registries);interactions(registries);plates(registries);targets(registries);torchInputs(registries);}catch(Exception error){throw new RuntimeException(error);}
     }
 }
 

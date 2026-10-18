@@ -1239,6 +1239,45 @@ fn signal_sources_directions_and_conductor_relays_match_vanilla() {
             "{name}"
         );
     }
+    let mut level = level();
+    let support = ORIGIN.below(1);
+    let wire = support.west(1);
+    let input = support.west(2);
+    for pos in [support, wire.below(1), input.below(1)] {
+        level
+            .set_block_state(pos, Block::STONE.default_state())
+            .unwrap();
+    }
+    level
+        .set_block_and_update(wire, Block::REDSTONE_WIRE.default_state())
+        .unwrap();
+    level
+        .set_block_and_update(ORIGIN, Block::REDSTONE_TORCH.default_state())
+        .unwrap();
+    for (name, expected) in cases("torch-input:") {
+        let powered = name.split(':').nth(1).unwrap().parse::<bool>().unwrap();
+        level
+            .set_block_and_update(
+                input,
+                if powered {
+                    Block::REDSTONE_BLOCK
+                } else {
+                    Block::AIR
+                }
+                .default_state(),
+            )
+            .unwrap();
+        assert_eq!(
+            format!(
+                "{}|{}|{}",
+                level.has_signal(support, Direction::Down).unwrap(),
+                level.get_block_state(wire).unwrap().id(),
+                level.has_scheduled_block_tick(ORIGIN, Block::REDSTONE_TORCH),
+            ),
+            expected,
+            "{name} strong input"
+        );
+    }
 }
 #[test]
 fn piston_limits_sticky_branches_and_collision_order_match_vanilla() {
