@@ -18,7 +18,7 @@ impl StatePropertiesPredicate {
     }
     pub fn matches(&self, state: BlockState) -> bool {
         self.0.properties.iter().all(|p| {
-            let Some(values) = property_values(state.block(), &p.name) else {
+            let Some(values) = state.property_values(&p.name) else {
                 return false;
             };
             let Some((_, actual)) = state.properties().find(|(name, _)| *name == p.name) else {
@@ -245,42 +245,6 @@ impl FluidPredicate {
     }
 }
 
-/// Derive the private data layout from public registry states once per block.
-/// This can use the data crate's read-only property accessor when it is exposed.
-pub(crate) fn property_values(
-    block: ferraloom_data::Block,
-    name: &str,
-) -> Option<&'static [&'static str]> {
-    type Properties = Vec<(&'static str, Vec<&'static str>)>;
-    static VALUES: std::sync::OnceLock<Vec<std::sync::OnceLock<Properties>>> =
-        std::sync::OnceLock::new();
-    let cache = VALUES.get_or_init(|| {
-        (0..ferraloom_data::BLOCKS.len())
-            .map(|_| std::sync::OnceLock::new())
-            .collect()
-    });
-    let properties = cache[block.protocol_id() as usize].get_or_init(|| {
-        let data = block.data();
-        let mut properties = block
-            .default_state()
-            .properties()
-            .map(|(name, _)| (name, Vec::new()))
-            .collect::<Properties>();
-        for offset in 0..data.state_count {
-            let state = BlockState::from_id(data.first_state + offset).expect("block state range");
-            for ((_, values), (_, value)) in properties.iter_mut().zip(state.properties()) {
-                if !values.contains(&value) {
-                    values.push(value);
-                }
-            }
-        }
-        properties
-    });
-    properties
-        .iter()
-        .find(|(key, _)| *key == name)
-        .map(|(_, values)| values.as_slice())
-}
 /// IntegerProperty uses Integer.parseInt, including BMP decimal digits and '+';
 /// supplementary digits are rejected because Java traverses UTF-16 chars.
 fn java_integer(input: &str) -> Option<i32> {

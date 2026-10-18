@@ -234,8 +234,8 @@ impl ComponentFunction {
                         _ => Vec::new(),
                     };
                     for name in properties {
-                        if crate::predicates::property_values(*block, name)
-                            != crate::predicates::property_values(state.block(), name)
+                        if block.default_state().property_values(name)
+                            != state.property_values(name)
                         {
                             continue;
                         }

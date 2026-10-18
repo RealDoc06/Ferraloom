@@ -22,6 +22,7 @@ use std::marker::PhantomData;
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct BlockState(u16);
 
+
 impl BlockState {
     pub const fn from_id(id: u16) -> Option<Self> {
         if (id as usize) < BLOCK_STATES.len() {
@@ -50,6 +51,17 @@ impl BlockState {
             let index = (self.0 - block.first_state) / layout.stride % layout.names.len() as u16;
             (layout.name, layout.names[index as usize])
         })
+    }
+
+    /// Port of Property#getPossibleValues for a named property on this state.
+    /// Values retain vanilla's order; comparison rules belong to the caller.
+    pub fn property_values(self, name: &str) -> Option<&'static [&'static str]> {
+        self.block()
+            .data()
+            .properties
+            .iter()
+            .find(|property| property.name == name)
+            .map(|property| property.names)
     }
 
     /// Port of StateDefinition#appendPropertyCodec and NbtUtils#readBlockState.
@@ -456,3 +468,27 @@ impl BlockState {
         STATE_IS_AIR[self.id() as usize]
     }
 }
+
+#[cfg(test)]
+mod property_value_tests {
+    use super::Block;
+    #[test]
+    fn possible_values_preserve_vanilla_order_and_absence() {
+        assert_eq!(
+            Block::OAK_STAIRS
+                .default_state()
+                .property_values("waterlogged"),
+            Some(["true", "false"].as_slice())
+        );
+        assert_eq!(
+            Block::OAK_LOG.default_state().property_values("axis"),
+            Some(["x", "y", "z"].as_slice())
+        );
+        assert_eq!(
+            Block::WHEAT.default_state().property_values("age"),
+            Some(["0", "1", "2", "3", "4", "5", "6", "7"].as_slice())
+        );
+        assert_eq!(Block::STONE.default_state().property_values("age"), None);
+    }
+}
+

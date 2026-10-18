@@ -7,7 +7,6 @@ mod item;
 mod location;
 mod movement;
 mod player;
-pub(crate) use block::property_values;
 pub use block::*;
 pub use bounds::*;
 pub use damage::*;
