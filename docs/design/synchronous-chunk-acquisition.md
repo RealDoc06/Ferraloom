@@ -1,6 +1,6 @@
 # Synchronous live chunk acquisition
 
-Proposal only; follows [game-core](game-core.md). Source: vanilla 26.3 `Level`,
+Approved single-region design; follows [game-core](game-core.md). Source: vanilla 26.3 `Level`,
 `LevelReader`, `ServerChunkCache`, `ChunkLevel`, `TicketStorage`,
 `ChunkStatusTasks#full` and `BlockableEventLoop#managedBlock`.
 
@@ -71,14 +71,30 @@ from eviction, which stays at boundaries. Advance no time, ticket expiry or
 packet/random/scheduled phases. Preserve side effects and RNG draws inside
 permitted promotion callbacks. These are required new contracts.
 
+Single-region limitation: while a shared Level read is suspended, the managed
+pump progresses distance updates, generation, IO, light and shared FULL/entity
+publication, but defers mutating `prepareTickingChunk` tasks
+(`postProcessGeneration`, `startTickingChunk` and sendSync readiness) to the next
+exclusive point in their captured queue order. Vanilla can execute those tasks
+inside `managedBlock`, so their interleaving is an explicit parity deviation
+until the phase-5 continuation model supplies safe exclusive resumption.
+FULL/UNKNOWN33 acquisition never waits on them.
+
 ## Ownership in each mode
 
 Single-region: a safe insert-only store gives stable chunk references and
 publication through `&self`; reads stay `&Level`, mutation requires `&mut Level`,
-removal/unload only at phase boundaries. No hot-read `RefCell`, game locks or
-unsafe casts. Publication must register new canonical records through disjoint
-stores; it cannot turn the parked `&Level` into `&mut Level`. Refactoring whole-
-`ServerLevel` integration is prerequisite; registration cannot be deferred.
+removal/unload only at phase boundaries. Block/chunk lookups have no `RefCell`;
+game logic has no locks or unsafe casts. Requested full status and ticking-ready
+use separate typed `Cell` fields. Simulation eligibility and entity section
+status use canonical trackers behind module-private `RefCell`s with short guards;
+queries read those trackers directly, with no mirrored eligibility sets. Publish
+distance/status transitions in native order, including entity lifecycle and
+storage requests, and release every guard before a callback. Publication must
+register new canonical records through disjoint stores; it cannot turn the
+parked `&Level` into `&mut Level`. Refactoring whole-`ServerLevel` integration is
+prerequisite; shared status/registration cannot be deferred with mutating ready
+tasks.
 
 Parallel: end state borrows, park at the call site, yield ownership and enter the
 exclusive lane in phase/region/operation order. Acquire/merge the dependency
