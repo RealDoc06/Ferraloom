@@ -23,7 +23,7 @@ public final class ExtractBlockMethods {
         "useShapeForLightOcclusion", "isPathfindable", "getLightDampening",
         "getEntityInsideCollisionShape", "bounceOn", "triggerEvent",
         "getAnalogOutputSignal", "hasAnalogOutputSignal",
-        "canPlaceLiquid", "placeLiquid", "pickupBlock", "getCloneItemStack"
+        "canPlaceLiquid", "placeLiquid", "pickupBlock", "getCloneItemStack", "canBeReplaced"
     );
 
     private static Method baseMethod(String name) {
@@ -33,7 +33,13 @@ public final class ExtractBlockMethods {
                 int modifiers = method.getModifiers();
                 if (method.getName().equals(name) && !method.isSynthetic()
                     && !Modifier.isStatic(modifiers) && !Modifier.isPrivate(modifiers)
-                    && !Modifier.isFinal(modifiers)) candidates.add(method);
+                    && !Modifier.isFinal(modifiers)) {
+                    // The other overload takes Fluid. Placement must retain its
+                    // own exact signature, including all subclass overrides.
+                    if (name.equals("canBeReplaced") && method.getParameterTypes()[1]
+                        != net.minecraft.world.item.context.BlockPlaceContext.class) continue;
+                    candidates.add(method);
+                }
             }
         }
         if (candidates.size() != 1) throw new AssertionError("Ambiguous base method: " + name + candidates);
