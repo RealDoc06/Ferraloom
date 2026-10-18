@@ -1340,7 +1340,6 @@ impl MinecraftServer {
                         }
                     }
                 }
-                LevelEffect::GameEvent { .. } => self.pending_level_hooks.game_events += 1,
                 LevelEffect::PlayerSectionChange { player, section } => {
                     self.level.generation().update_player(player, Some(section));
                 }

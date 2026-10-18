@@ -389,7 +389,7 @@ pub trait BlockBehavior: Sync {
             ),
             Some(player),
             Some(state),
-        );
+        )?;
         Ok(state)
     }
     /// Port of Block#getStateForPlacement's inherited implementation.

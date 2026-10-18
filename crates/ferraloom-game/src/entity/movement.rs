@@ -388,7 +388,7 @@ pub fn base_check_fall_damage(
             position,
             Some(entity),
             Some(support_state),
-        );
+        )?;
     }
     level.entity_mut::<EntityData>(entity)?.fall_distance = 0.0;
     Ok(())
@@ -518,7 +518,7 @@ fn apply_movement_emission<E: Entity + ?Sized>(
                     level.entity::<EntityData>(entity)?.position,
                     Some(entity),
                     None,
-                );
+                )?;
             }
         }
         let base = level.entity_mut::<EntityData>(entity)?;
@@ -554,7 +554,7 @@ fn emit_step<E: Entity + ?Sized>(
                 level.entity::<EntityData>(entity)?.position,
                 Some(entity),
                 Some(state),
-            );
+            )?;
         }
         Ok(true)
     } else {

@@ -1,7 +1,10 @@
 use super::*;
 use crate::{
     entity::{EntityState, animal::CowBehavior},
-    level::effects::LevelEffect,
+    level::{
+        effects::LevelEffect,
+        game_event::test_support::{self as game_events, Observation},
+    },
 };
 use ferraloom_data::{Block, registries::game_event::Id as GameEvent};
 use ferraloom_protocol::play::clientbound as cb;
@@ -18,7 +21,7 @@ impl Entity for LandingProbe {
         level: &mut Level,
     ) -> Result<(), LevelError> {
         let position = level.entity::<EntityData>(entity)?.position;
-        level.game_event(GameEvent::STEP, position, Some(entity), None);
+        level.game_event(GameEvent::STEP, position, Some(entity), None)?;
         Ok(())
     }
 }
@@ -36,6 +39,7 @@ fn native_landing_particles_precede_parent_events_and_clear_climb_cache_last() {
     let mut actual = Vec::new();
     for scenario in 0..12 {
         let mut level = crate::entity::tests::level(true);
+        game_events::observe(&mut level);
         let id = level.next_entity_ref();
         let mut state = EntityState::Cow(Box::default());
         let living = state.as_living_mut().unwrap();
@@ -46,7 +50,7 @@ fn native_landing_particles_precede_parent_events_and_clear_climb_cache_last() {
         ][scenario];
         living.last_climbable_pos.set(Some(BlockPos::new(8, 64, 8)));
         level.add_entity(id, state).unwrap();
-        level.take_effects();
+        game_events::take(&mut level);
         let ground = scenario % 3 != 0;
         let block = if scenario % 4 == 0 {
             Block::AIR
@@ -68,12 +72,11 @@ fn native_landing_particles_precede_parent_events_and_clear_climb_cache_last() {
             &mut level,
         )
         .unwrap();
-        let calls = level
-            .take_effects()
+        let calls = game_events::take(&mut level)
             .into_iter()
-            .filter_map(|effect| match effect {
-                LevelEffect::GameEvent { event, .. } => Some(format!("event:{}", event.name())),
-                LevelEffect::PlayerPacket { packet, .. } => match *packet {
+            .filter_map(|observation| match observation {
+                Observation::GameEvent { event, .. } => Some(format!("event:{}", event.name())),
+                Observation::Effect(LevelEffect::PlayerPacket { packet, .. }) => match *packet {
                     cb::Packet::LevelParticles(p) => {
                         let Particle::Block(state) = p.particle else {
                             panic!("block particle")

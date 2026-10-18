@@ -32,6 +32,7 @@ pub mod entity;
 pub mod environment;
 pub mod events;
 mod features;
+pub mod game_event;
 pub mod generation;
 pub mod heightmap;
 pub mod interaction;
@@ -58,6 +59,8 @@ pub mod weather;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum LevelError {
+    /// Native ArrayList iterator ConcurrentModificationException during listener visitation.
+    ConcurrentGameEventListenerModification,
     UnsupportedItemUseOn(ferraloom_data::Item),
     UnsupportedItemCraftedPostProcess(ferraloom_data::Item),
     UnsupportedItemInventoryTick(ferraloom_data::Item),
@@ -240,6 +243,7 @@ pub struct Region {
     block_ticks: LevelTicks,
     fluid_ticks: LevelTicks<ferraloom_data::registries::fluid::Id>,
     block_entity_state: block_entity::BlockEntityRuntime,
+    game_event_listeners: game_event::GameEventListenerRegistries,
     container_runtime: crate::block::containers::runtime::ContainerRuntime,
     next_sub_tick_order: i64,
     game_time: i64,
@@ -283,6 +287,7 @@ impl Region {
             block_ticks: LevelTicks::default(),
             fluid_ticks: LevelTicks::default(),
             block_entity_state: block_entity::BlockEntityRuntime::default(),
+            game_event_listeners: Default::default(),
             container_runtime: crate::block::containers::runtime::ContainerRuntime::default(),
             next_sub_tick_order: 0,
             game_time: 0,

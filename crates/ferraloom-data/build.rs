@@ -11,6 +11,8 @@ mod center_support;
 mod environment_attributes;
 #[path = "build/feature_requirements.rs"]
 mod feature_requirements;
+#[path = "build/game_events.rs"]
+mod game_events;
 
 #[path = "build/dispenser_properties.rs"]
 mod dispenser_properties;
@@ -1037,6 +1039,11 @@ fn main() {
         &load(root, "feature_requirements"),
         block_count,
         item_report.as_array().expect("item report").len(),
+    );
+    game_events::generate(
+        &mut out,
+        &load(root, "game_events"),
+        &registries_report["minecraft:game_event"],
     );
     sound_events(
         &mut out,
