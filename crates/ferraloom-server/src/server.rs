@@ -3540,8 +3540,8 @@ fn abilities(player: &ServerPlayer) -> cb::Packet {
         is_flying: player.flying,
         can_fly: privileged,
         instabuild: player.instabuild(),
-        flying_speed: 0.05,
-        walking_speed: 0.1,
+        flying_speed: player.ability_flying_speed(),
+        walking_speed: player.ability_walking_speed(),
     })
 }
 fn player_info(profile: &GameProfile, player: &ServerPlayer) -> PlayerInfoEntry {
