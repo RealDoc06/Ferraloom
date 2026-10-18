@@ -13,6 +13,7 @@ pub mod permissions;
 pub mod source;
 pub mod spawn;
 pub mod teleport;
+pub mod tick;
 mod tree;
 use arguments::{ArgumentValue, coordinates::Coordinates};
 use ferraloom_brigadier::{
