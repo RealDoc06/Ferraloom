@@ -1,0 +1,1942 @@
+[
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:angry_villager'}",
+    "wire": "00"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:angry_villager\"}",
+    "wire": "00"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:ash'}",
+    "wire": "5e"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:ash\"}",
+    "wire": "5e"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:block'}",
+    "error": "No key block_state in MapLike[{type:\"minecraft:block\"}]"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:block\"}",
+    "error": "No key block_state in MapLike[{\"type\":\"minecraft:block\"}]"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:block_crumble'}",
+    "error": "No key block_state in MapLike[{type:\"minecraft:block_crumble\"}]"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:block_crumble\"}",
+    "error": "No key block_state in MapLike[{\"type\":\"minecraft:block_crumble\"}]"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:block_marker'}",
+    "error": "No key block_state in MapLike[{type:\"minecraft:block_marker\"}]"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:block_marker\"}",
+    "error": "No key block_state in MapLike[{\"type\":\"minecraft:block_marker\"}]"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:bubble'}",
+    "wire": "03"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:bubble\"}",
+    "wire": "03"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:bubble_column_up'}",
+    "wire": "54"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:bubble_column_up\"}",
+    "wire": "54"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:bubble_pop'}",
+    "wire": "52"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:bubble_pop\"}",
+    "wire": "52"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:campfire_cosy_smoke'}",
+    "wire": "57"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:campfire_cosy_smoke\"}",
+    "wire": "57"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:campfire_signal_smoke'}",
+    "wire": "58"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:campfire_signal_smoke\"}",
+    "wire": "58"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:cherry_leaves'}",
+    "wire": "29"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:cherry_leaves\"}",
+    "wire": "29"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:cloud'}",
+    "wire": "0b"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:cloud\"}",
+    "wire": "0b"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:composter'}",
+    "wire": "36"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:composter\"}",
+    "wire": "36"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:copper_fire_flame'}",
+    "wire": "0c"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:copper_fire_flame\"}",
+    "wire": "0c"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:crimson_spore'}",
+    "wire": "5f"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:crimson_spore\"}",
+    "wire": "5f"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:crit'}",
+    "wire": "0d"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:crit\"}",
+    "wire": "0d"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:current_down'}",
+    "wire": "53"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:current_down\"}",
+    "wire": "53"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:damage_indicator'}",
+    "wire": "0e"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:damage_indicator\"}",
+    "wire": "0e"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:dolphin'}",
+    "wire": "56"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:dolphin\"}",
+    "wire": "56"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:dragon_breath'}",
+    "wire": "0f3f800000"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:dragon_breath\"}",
+    "wire": "0f3f800000"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:dripping_dripstone_lava'}",
+    "wire": "69"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:dripping_dripstone_lava\"}",
+    "wire": "69"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:dripping_dripstone_water'}",
+    "wire": "6b"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:dripping_dripstone_water\"}",
+    "wire": "6b"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:dripping_honey'}",
+    "wire": "59"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:dripping_honey\"}",
+    "wire": "59"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:dripping_lava'}",
+    "wire": "10"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:dripping_lava\"}",
+    "wire": "10"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:dripping_obsidian_tear'}",
+    "wire": "62"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:dripping_obsidian_tear\"}",
+    "wire": "62"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:dripping_water'}",
+    "wire": "13"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:dripping_water\"}",
+    "wire": "13"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:dust'}",
+    "error": "No key scale in MapLike[{type:\"minecraft:dust\"}]; No key color in MapLike[{type:\"minecraft:dust\"}]"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:dust\"}",
+    "error": "No key scale in MapLike[{\"type\":\"minecraft:dust\"}]; No key color in MapLike[{\"type\":\"minecraft:dust\"}]"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:dust_color_transition'}",
+    "error": "No key scale in MapLike[{type:\"minecraft:dust_color_transition\"}]; No key to_color in MapLike[{type:\"minecraft:dust_color_transition\"}]; No key from_color in MapLike[{type:\"minecraft:dust_color_transition\"}]"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:dust_color_transition\"}",
+    "error": "No key scale in MapLike[{\"type\":\"minecraft:dust_color_transition\"}]; No key to_color in MapLike[{\"type\":\"minecraft:dust_color_transition\"}]; No key from_color in MapLike[{\"type\":\"minecraft:dust_color_transition\"}]"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:dust_pillar'}",
+    "error": "No key block_state in MapLike[{type:\"minecraft:dust_pillar\"}]"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:dust_pillar\"}",
+    "error": "No key block_state in MapLike[{\"type\":\"minecraft:dust_pillar\"}]"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:dust_plume'}",
+    "wire": "75"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:dust_plume\"}",
+    "wire": "75"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:effect'}",
+    "wire": "17ffffffff3f800000"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:effect\"}",
+    "wire": "17ffffffff3f800000"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:egg_crack'}",
+    "wire": "74"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:egg_crack\"}",
+    "wire": "74"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:elder_guardian'}",
+    "wire": "18"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:elder_guardian\"}",
+    "wire": "18"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:electric_spark'}",
+    "wire": "71"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:electric_spark\"}",
+    "wire": "71"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:enchant'}",
+    "wire": "1a"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:enchant\"}",
+    "wire": "1a"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:enchanted_hit'}",
+    "wire": "19"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:enchanted_hit\"}",
+    "wire": "19"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:end_rod'}",
+    "wire": "1b"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:end_rod\"}",
+    "wire": "1b"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:entity_effect'}",
+    "error": "No key color in MapLike[{type:\"minecraft:entity_effect\"}]"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:entity_effect\"}",
+    "error": "No key color in MapLike[{\"type\":\"minecraft:entity_effect\"}]"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:explosion'}",
+    "wire": "1e"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:explosion\"}",
+    "wire": "1e"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:explosion_emitter'}",
+    "wire": "1d"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:explosion_emitter\"}",
+    "wire": "1d"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:falling_dripstone_lava'}",
+    "wire": "6a"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:falling_dripstone_lava\"}",
+    "wire": "6a"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:falling_dripstone_water'}",
+    "wire": "6c"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:falling_dripstone_water\"}",
+    "wire": "6c"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:falling_dust'}",
+    "error": "No key block_state in MapLike[{type:\"minecraft:falling_dust\"}]"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:falling_dust\"}",
+    "error": "No key block_state in MapLike[{\"type\":\"minecraft:falling_dust\"}]"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:falling_honey'}",
+    "wire": "5a"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:falling_honey\"}",
+    "wire": "5a"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:falling_lava'}",
+    "wire": "11"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:falling_lava\"}",
+    "wire": "11"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:falling_nectar'}",
+    "wire": "5c"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:falling_nectar\"}",
+    "wire": "5c"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:falling_obsidian_tear'}",
+    "wire": "63"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:falling_obsidian_tear\"}",
+    "wire": "63"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:falling_spore_blossom'}",
+    "wire": "5d"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:falling_spore_blossom\"}",
+    "wire": "5d"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:falling_water'}",
+    "wire": "14"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:falling_water\"}",
+    "wire": "14"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:firefly'}",
+    "wire": "7e"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:firefly\"}",
+    "wire": "7e"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:firework'}",
+    "wire": "25"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:firework\"}",
+    "wire": "25"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:fishing'}",
+    "wire": "26"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:fishing\"}",
+    "wire": "26"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:flame'}",
+    "wire": "27"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:flame\"}",
+    "wire": "27"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:flash'}",
+    "error": "No key color in MapLike[{type:\"minecraft:flash\"}]"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:flash\"}",
+    "error": "No key color in MapLike[{\"type\":\"minecraft:flash\"}]"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:geyser'}",
+    "error": "No key water_blocks in MapLike[{type:\"minecraft:geyser\"}]"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:geyser\"}",
+    "error": "No key water_blocks in MapLike[{\"type\":\"minecraft:geyser\"}]"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:geyser_base'}",
+    "error": "No key burst_impulse_base in MapLike[{type:\"minecraft:geyser_base\"}]; No key water_blocks in MapLike[{type:\"minecraft:geyser_base\"}]"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:geyser_base\"}",
+    "error": "No key burst_impulse_base in MapLike[{\"type\":\"minecraft:geyser_base\"}]; No key water_blocks in MapLike[{\"type\":\"minecraft:geyser_base\"}]"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:geyser_plume'}",
+    "error": "No key water_blocks in MapLike[{type:\"minecraft:geyser_plume\"}]"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:geyser_plume\"}",
+    "error": "No key water_blocks in MapLike[{\"type\":\"minecraft:geyser_plume\"}]"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:geyser_poof'}",
+    "error": "No key burst_impulse_base in MapLike[{type:\"minecraft:geyser_poof\"}]; No key water_blocks in MapLike[{type:\"minecraft:geyser_poof\"}]"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:geyser_poof\"}",
+    "error": "No key burst_impulse_base in MapLike[{\"type\":\"minecraft:geyser_poof\"}]; No key water_blocks in MapLike[{\"type\":\"minecraft:geyser_poof\"}]"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:glow'}",
+    "wire": "6e"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:glow\"}",
+    "wire": "6e"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:glow_squid_ink'}",
+    "wire": "6d"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:glow_squid_ink\"}",
+    "wire": "6d"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:gust'}",
+    "wire": "1f"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:gust\"}",
+    "wire": "1f"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:gust_emitter_large'}",
+    "wire": "21"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:gust_emitter_large\"}",
+    "wire": "21"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:gust_emitter_small'}",
+    "wire": "22"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:gust_emitter_small\"}",
+    "wire": "22"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:happy_villager'}",
+    "wire": "35"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:happy_villager\"}",
+    "wire": "35"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:heart'}",
+    "wire": "37"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:heart\"}",
+    "wire": "37"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:infested'}",
+    "wire": "28"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:infested\"}",
+    "wire": "28"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:instant_effect'}",
+    "wire": "38ffffffff3f800000"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:instant_effect\"}",
+    "wire": "38ffffffff3f800000"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:item'}",
+    "error": "No key item in MapLike[{type:\"minecraft:item\"}]"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:item\"}",
+    "error": "No key item in MapLike[{\"type\":\"minecraft:item\"}]"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:item_cobweb'}",
+    "wire": "3f"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:item_cobweb\"}",
+    "wire": "3f"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:item_slime'}",
+    "wire": "3e"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:item_slime\"}",
+    "wire": "3e"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:item_snowball'}",
+    "wire": "40"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:item_snowball\"}",
+    "wire": "40"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:landing_honey'}",
+    "wire": "5b"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:landing_honey\"}",
+    "wire": "5b"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:landing_lava'}",
+    "wire": "12"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:landing_lava\"}",
+    "wire": "12"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:landing_obsidian_tear'}",
+    "wire": "64"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:landing_obsidian_tear\"}",
+    "wire": "64"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:large_smoke'}",
+    "wire": "41"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:large_smoke\"}",
+    "wire": "41"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:lava'}",
+    "wire": "42"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:lava\"}",
+    "wire": "42"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:mycelium'}",
+    "wire": "43"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:mycelium\"}",
+    "wire": "43"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:nautilus'}",
+    "wire": "55"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:nautilus\"}",
+    "wire": "55"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:note'}",
+    "wire": "44"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:note\"}",
+    "wire": "44"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:noxious_gas'}",
+    "wire": "05"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:noxious_gas\"}",
+    "wire": "05"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:noxious_gas_cloud'}",
+    "wire": "06"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:noxious_gas_cloud\"}",
+    "wire": "06"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:ominous_spawning'}",
+    "wire": "7a"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:ominous_spawning\"}",
+    "wire": "7a"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:orange_poplar_leaves'}",
+    "wire": "2c"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:orange_poplar_leaves\"}",
+    "wire": "2c"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:pale_oak_leaves'}",
+    "wire": "2a"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:pale_oak_leaves\"}",
+    "wire": "2a"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:pause_mob_growth'}",
+    "wire": "3c"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:pause_mob_growth\"}",
+    "wire": "3c"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:poof'}",
+    "wire": "45"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:poof\"}",
+    "wire": "45"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:portal'}",
+    "wire": "46"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:portal\"}",
+    "wire": "46"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:raid_omen'}",
+    "wire": "7b"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:raid_omen\"}",
+    "wire": "7b"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:rain'}",
+    "wire": "47"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:rain\"}",
+    "wire": "47"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:red_poplar_leaves'}",
+    "wire": "2b"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:red_poplar_leaves\"}",
+    "wire": "2b"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:reset_mob_growth'}",
+    "wire": "3d"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:reset_mob_growth\"}",
+    "wire": "3d"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:reverse_portal'}",
+    "wire": "65"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:reverse_portal\"}",
+    "wire": "65"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:scrape'}",
+    "wire": "72"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:scrape\"}",
+    "wire": "72"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:sculk_charge'}",
+    "error": "No key roll in MapLike[{type:\"minecraft:sculk_charge\"}]"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:sculk_charge\"}",
+    "error": "No key roll in MapLike[{\"type\":\"minecraft:sculk_charge\"}]"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:sculk_charge_pop'}",
+    "wire": "31"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:sculk_charge_pop\"}",
+    "wire": "31"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:sculk_soul'}",
+    "wire": "2f"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:sculk_soul\"}",
+    "wire": "2f"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:shriek'}",
+    "error": "No key delay in MapLike[{type:\"minecraft:shriek\"}]"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:shriek\"}",
+    "error": "No key delay in MapLike[{\"type\":\"minecraft:shriek\"}]"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:small_flame'}",
+    "wire": "67"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:small_flame\"}",
+    "wire": "67"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:small_gust'}",
+    "wire": "20"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:small_gust\"}",
+    "wire": "20"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:smoke'}",
+    "wire": "48"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:smoke\"}",
+    "wire": "48"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:sneeze'}",
+    "wire": "4a"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:sneeze\"}",
+    "wire": "4a"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:snowflake'}",
+    "wire": "68"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:snowflake\"}",
+    "wire": "68"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:sonic_boom'}",
+    "wire": "23"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:sonic_boom\"}",
+    "wire": "23"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:soul'}",
+    "wire": "33"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:soul\"}",
+    "wire": "33"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:soul_fire_flame'}",
+    "wire": "32"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:soul_fire_flame\"}",
+    "wire": "32"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:spit'}",
+    "wire": "4b"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:spit\"}",
+    "wire": "4b"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:splash'}",
+    "wire": "50"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:splash\"}",
+    "wire": "50"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:spore_blossom_air'}",
+    "wire": "61"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:spore_blossom_air\"}",
+    "wire": "61"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:squid_ink'}",
+    "wire": "4c"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:squid_ink\"}",
+    "wire": "4c"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:sulfur_bubbles'}",
+    "wire": "04"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:sulfur_bubbles\"}",
+    "wire": "04"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:sulfur_cube_goo'}",
+    "wire": "7f"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:sulfur_cube_goo\"}",
+    "wire": "7f"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:sweep_attack'}",
+    "wire": "4d"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:sweep_attack\"}",
+    "wire": "4d"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:tinted_leaves'}",
+    "error": "No key color in MapLike[{type:\"minecraft:tinted_leaves\"}]"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:tinted_leaves\"}",
+    "error": "No key color in MapLike[{\"type\":\"minecraft:tinted_leaves\"}]"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:totem_of_undying'}",
+    "wire": "4e"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:totem_of_undying\"}",
+    "wire": "4e"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:trail'}",
+    "error": "No key duration in MapLike[{type:\"minecraft:trail\"}]; No key color in MapLike[{type:\"minecraft:trail\"}]; No key target in MapLike[{type:\"minecraft:trail\"}]"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:trail\"}",
+    "error": "No key duration in MapLike[{\"type\":\"minecraft:trail\"}]; No key color in MapLike[{\"type\":\"minecraft:trail\"}]; No key target in MapLike[{\"type\":\"minecraft:trail\"}]"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:trial_omen'}",
+    "wire": "7c"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:trial_omen\"}",
+    "wire": "7c"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:trial_spawner_detection'}",
+    "wire": "76"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:trial_spawner_detection\"}",
+    "wire": "76"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:trial_spawner_detection_ominous'}",
+    "wire": "77"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:trial_spawner_detection_ominous\"}",
+    "wire": "77"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:underwater'}",
+    "wire": "4f"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:underwater\"}",
+    "wire": "4f"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:vault_connection'}",
+    "wire": "78"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:vault_connection\"}",
+    "wire": "78"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:vibration'}",
+    "error": "No key arrival_in_ticks in MapLike[{type:\"minecraft:vibration\"}]; No key destination in MapLike[{type:\"minecraft:vibration\"}]"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:vibration\"}",
+    "error": "No key arrival_in_ticks in MapLike[{\"type\":\"minecraft:vibration\"}]; No key destination in MapLike[{\"type\":\"minecraft:vibration\"}]"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:warped_spore'}",
+    "wire": "60"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:warped_spore\"}",
+    "wire": "60"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:wax_off'}",
+    "wire": "70"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:wax_off\"}",
+    "wire": "70"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:wax_on'}",
+    "wire": "6f"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:wax_on\"}",
+    "wire": "6f"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:white_ash'}",
+    "wire": "66"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:white_ash\"}",
+    "wire": "66"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:white_smoke'}",
+    "wire": "49"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:white_smoke\"}",
+    "wire": "49"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:witch'}",
+    "wire": "51"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:witch\"}",
+    "wire": "51"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'minecraft:yellow_poplar_leaves'}",
+    "wire": "2d"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"minecraft:yellow_poplar_leaves\"}",
+    "wire": "2d"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:dust,color:[1f,0f,0.5f],scale:1f}",
+    "wire": "15ffff007f3f800000"
+  },
+  {
+    "format": "json",
+    "input": "{\"color\":[1.0,0.0,0.5],\"scale\":1.0,\"type\":\"dust\"}",
+    "wire": "15ffff007f3f800000"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:dust,color:16711680,scale:0.01f}",
+    "wire": "1500ff00003c23d70a"
+  },
+  {
+    "format": "json",
+    "input": "{\"color\":16711680,\"scale\":0.01,\"type\":\"dust\"}",
+    "wire": "1500ff00003c23d70a"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:dust,color:1,scale:4f}",
+    "wire": "150000000140800000"
+  },
+  {
+    "format": "json",
+    "input": "{\"color\":1,\"scale\":4.0,\"type\":\"dust\"}",
+    "wire": "150000000140800000"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:dust,color:1,scale:0.001f}",
+    "error": "Value must be within range [0.01;4.0]: 0.001"
+  },
+  {
+    "format": "json",
+    "input": "{\"color\":1,\"scale\":0.001,\"type\":\"dust\"}",
+    "error": "Value must be within range [0.01;4.0]: 0.001"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:dust,color:1,scale:5f}",
+    "error": "Value must be within range [0.01;4.0]: 5.0"
+  },
+  {
+    "format": "json",
+    "input": "{\"color\":1,\"scale\":5.0,\"type\":\"dust\"}",
+    "error": "Value must be within range [0.01;4.0]: 5.0"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:dust,color:1,scale:'wrong'}",
+    "error": "Not a number"
+  },
+  {
+    "format": "json",
+    "input": "{\"color\":1,\"scale\":\"wrong\",\"type\":\"dust\"}",
+    "error": "Not a number: \"wrong\""
+  },
+  {
+    "format": "nbt",
+    "input": "{type:dust,color:'red',scale:1f}",
+    "error": "Failed to parse either. First: Not a number; Second: Not a list: \"red\""
+  },
+  {
+    "format": "json",
+    "input": "{\"color\":\"red\",\"scale\":1.0,\"type\":\"dust\"}",
+    "error": "Failed to parse either. First: Not a number: \"red\"; Second: Not a json array: \"red\""
+  },
+  {
+    "format": "nbt",
+    "input": "{type:dust,color:[1f,0f],scale:1f}",
+    "error": "Failed to parse either. First: Not a number; Second: Input is not a list of 3 elements"
+  },
+  {
+    "format": "json",
+    "input": "{\"color\":[1.0,0.0],\"scale\":1.0,\"type\":\"dust\"}",
+    "error": "Failed to parse either. First: Not a number: [1.0,0.0]; Second: Input is not a list of 3 elements"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:dust,color:[1f,0f,0f,1f],scale:1f}",
+    "error": "Input is not a list of 3 elements"
+  },
+  {
+    "format": "json",
+    "input": "{\"color\":[1.0,0.0,0.0,1.0],\"scale\":1.0,\"type\":\"dust\"}",
+    "error": "Input is not a list of 3 elements"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:dust,color:[I;1,0,0],scale:1f}",
+    "wire": "15ffff00003f800000"
+  },
+  {
+    "format": "json",
+    "input": "{\"color\":[1,0,0],\"scale\":1.0,\"type\":\"dust\"}",
+    "wire": "15ffff00003f800000"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:dust,color:[B;1b,0b,0b],scale:1f}",
+    "wire": "15ffff00003f800000"
+  },
+  {
+    "format": "json",
+    "input": "{\"color\":[1,0,0],\"scale\":1.0,\"type\":\"dust\"}",
+    "wire": "15ffff00003f800000"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:dust_color_transition,from_color:1,to_color:2,scale:2f}",
+    "wire": "16000000010000000240000000"
+  },
+  {
+    "format": "json",
+    "input": "{\"to_color\":2,\"from_color\":1,\"scale\":2.0,\"type\":\"dust_color_transition\"}",
+    "wire": "16000000010000000240000000"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:dust_color_transition,from_color:[1f,0f,0f],to_color:[0f,0.5f,1f],scale:0.5f}",
+    "wire": "16ffff0000ff007fff3f000000"
+  },
+  {
+    "format": "json",
+    "input": "{\"to_color\":[0.0,0.5,1.0],\"from_color\":[1.0,0.0,0.0],\"scale\":0.5,\"type\":\"dust_color_transition\"}",
+    "wire": "16ffff0000ff007fff3f000000"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:dust_color_transition,from_color:'bad',to_color:'bad',scale:9f}",
+    "error": "Value must be within range [0.01;4.0]: 9.0; Failed to parse either. First: Not a number; Second: Not a list: \"bad\"; Failed to parse either. First: Not a number; Second: Not a list: \"bad\""
+  },
+  {
+    "format": "json",
+    "input": "{\"to_color\":\"bad\",\"from_color\":\"bad\",\"scale\":9.0,\"type\":\"dust_color_transition\"}",
+    "error": "Value must be within range [0.01;4.0]: 9.0; Failed to parse either. First: Not a number: \"bad\"; Second: Not a json array: \"bad\"; Failed to parse either. First: Not a number: \"bad\"; Second: Not a json array: \"bad\""
+  },
+  {
+    "format": "nbt",
+    "input": "{type:geyser,water_blocks:3}",
+    "wire": "0700000003"
+  },
+  {
+    "format": "json",
+    "input": "{\"water_blocks\":3,\"type\":\"geyser\"}",
+    "wire": "0700000003"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:geyser,water_blocks:0}",
+    "error": "Value must be positive: 0"
+  },
+  {
+    "format": "json",
+    "input": "{\"water_blocks\":0,\"type\":\"geyser\"}",
+    "error": "Value must be positive: 0"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:geyser_plume,water_blocks:3}",
+    "wire": "0a00000003"
+  },
+  {
+    "format": "json",
+    "input": "{\"water_blocks\":3,\"type\":\"geyser_plume\"}",
+    "wire": "0a00000003"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:geyser_plume,water_blocks:1.9d}",
+    "wire": "0a00000001"
+  },
+  {
+    "format": "json",
+    "input": "{\"water_blocks\":1.9,\"type\":\"geyser_plume\"}",
+    "wire": "0a00000001"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:geyser_base,water_blocks:3,burst_impulse_base:1.5f}",
+    "wire": "08000000033fc00000"
+  },
+  {
+    "format": "json",
+    "input": "{\"water_blocks\":3,\"burst_impulse_base\":1.5,\"type\":\"geyser_base\"}",
+    "wire": "08000000033fc00000"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:geyser_poof,water_blocks:4,burst_impulse_base:-1f}",
+    "wire": "0900000004bf800000"
+  },
+  {
+    "format": "json",
+    "input": "{\"water_blocks\":4,\"burst_impulse_base\":-1.0,\"type\":\"geyser_poof\"}",
+    "wire": "0900000004bf800000"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:dragon_breath,power:2.5f}",
+    "wire": "0f40200000"
+  },
+  {
+    "format": "json",
+    "input": "{\"power\":2.5,\"type\":\"dragon_breath\"}",
+    "wire": "0f40200000"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:dragon_breath,power:'bad'}",
+    "error": "Not a number"
+  },
+  {
+    "format": "json",
+    "input": "{\"power\":\"bad\",\"type\":\"dragon_breath\"}",
+    "error": "Not a number: \"bad\""
+  },
+  {
+    "format": "nbt",
+    "input": "{type:effect,color:[0.5f,0.25f,1f],power:2f}",
+    "wire": "17ff7f3fff40000000"
+  },
+  {
+    "format": "json",
+    "input": "{\"color\":[0.5,0.25,1.0],\"power\":2.0,\"type\":\"effect\"}",
+    "wire": "17ff7f3fff40000000"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:instant_effect,color:123,power:0.5d}",
+    "wire": "380000007b3f000000"
+  },
+  {
+    "format": "json",
+    "input": "{\"color\":123,\"power\":0.5,\"type\":\"instant_effect\"}",
+    "wire": "380000007b3f000000"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:effect,color:'bad',power:'bad'}",
+    "error": "Not a number; Failed to parse either. First: Not a number; Second: Not a list: \"bad\""
+  },
+  {
+    "format": "json",
+    "input": "{\"color\":\"bad\",\"power\":\"bad\",\"type\":\"effect\"}",
+    "error": "Not a number: \"bad\"; Failed to parse either. First: Not a number: \"bad\"; Second: Not a json array: \"bad\""
+  },
+  {
+    "format": "nbt",
+    "input": "{type:entity_effect,color:[1f,0f,0f,0.5f]}",
+    "wire": "1c7fff0000"
+  },
+  {
+    "format": "json",
+    "input": "{\"color\":[1.0,0.0,0.0,0.5],\"type\":\"entity_effect\"}",
+    "wire": "1c7fff0000"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:tinted_leaves,color:[0.1f,0.2f,0.3f,0.4f]}",
+    "wire": "2e6619334c"
+  },
+  {
+    "format": "json",
+    "input": "{\"color\":[0.1,0.2,0.3,0.4],\"type\":\"tinted_leaves\"}",
+    "wire": "2e6619334c"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:flash,color:123}",
+    "wire": "340000007b"
+  },
+  {
+    "format": "json",
+    "input": "{\"color\":123,\"type\":\"flash\"}",
+    "wire": "340000007b"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:flash,color:[1f,0f,0f]}",
+    "error": "Failed to parse either. First: Not a number; Second: Input is not a list of 4 elements"
+  },
+  {
+    "format": "json",
+    "input": "{\"color\":[1.0,0.0,0.0],\"type\":\"flash\"}",
+    "error": "Failed to parse either. First: Not a number: [1.0,0.0,0.0]; Second: Input is not a list of 4 elements"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:sculk_charge,roll:0.5f}",
+    "wire": "303f000000"
+  },
+  {
+    "format": "json",
+    "input": "{\"roll\":0.5,\"type\":\"sculk_charge\"}",
+    "wire": "303f000000"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:sculk_charge,roll:'bad'}",
+    "error": "Not a number"
+  },
+  {
+    "format": "json",
+    "input": "{\"roll\":\"bad\",\"type\":\"sculk_charge\"}",
+    "error": "Not a number: \"bad\""
+  },
+  {
+    "format": "nbt",
+    "input": "{type:shriek,delay:-2}",
+    "wire": "73feffffff0f"
+  },
+  {
+    "format": "json",
+    "input": "{\"delay\":-2,\"type\":\"shriek\"}",
+    "wire": "73feffffff0f"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:shriek,delay:4294967297L}",
+    "wire": "7301"
+  },
+  {
+    "format": "json",
+    "input": "{\"delay\":4294967297,\"type\":\"shriek\"}",
+    "wire": "7301"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:shriek,delay:2147483648d}",
+    "wire": "73ffffffff07"
+  },
+  {
+    "format": "json",
+    "input": "{\"delay\":2.147483648E9,\"type\":\"shriek\"}",
+    "wire": "738080808008"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:trail,target:[1d,2d,3d],color:1,duration:5}",
+    "wire": "3b3ff0000000000000400000000000000040080000000000000000000105"
+  },
+  {
+    "format": "json",
+    "input": "{\"duration\":5,\"color\":1,\"type\":\"trail\",\"target\":[1.0,2.0,3.0]}",
+    "wire": "3b3ff0000000000000400000000000000040080000000000000000000105"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:trail,target:[L;1L,2L,3L],color:[0f,1f,0f],duration:5}",
+    "wire": "3b3ff000000000000040000000000000004008000000000000ff00ff0005"
+  },
+  {
+    "format": "json",
+    "input": "{\"duration\":5,\"color\":[0.0,1.0,0.0],\"type\":\"trail\",\"target\":[1,2,3]}",
+    "wire": "3b3ff000000000000040000000000000004008000000000000ff00ff0005"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:trail,target:[1d,2d],color:1,duration:0}",
+    "error": "Value must be positive: 0; Input is not a list of 3 elements"
+  },
+  {
+    "format": "json",
+    "input": "{\"duration\":0,\"color\":1,\"type\":\"trail\",\"target\":[1.0,2.0]}",
+    "error": "Value must be positive: 0; Input is not a list of 3 elements"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:item,item:'minecraft:stone'}",
+    "wire": "3901010000"
+  },
+  {
+    "format": "json",
+    "input": "{\"item\":\"minecraft:stone\",\"type\":\"item\"}",
+    "wire": "3901010000"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:item,item:{id:'minecraft:stone',count:2}}",
+    "wire": "3901020000"
+  },
+  {
+    "format": "json",
+    "input": "{\"item\":{\"count\":2,\"id\":\"minecraft:stone\"},\"type\":\"item\"}",
+    "wire": "3901020000"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:item,item:{id:'minecraft:stone',components:{'minecraft:custom_name':'Named stone'}}}",
+    "wire": "39010101000608000b4e616d65642073746f6e65"
+  },
+  {
+    "format": "json",
+    "input": "{\"item\":{\"components\":{\"minecraft:custom_name\":\"Named stone\"},\"id\":\"minecraft:stone\"},\"type\":\"item\"}",
+    "wire": "39010101000608000b4e616d65642073746f6e65"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:block,block_state:'minecraft:stone'}",
+    "wire": "0101"
+  },
+  {
+    "format": "json",
+    "input": "{\"block_state\":\"minecraft:stone\",\"type\":\"block\"}",
+    "wire": "0101"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:block_marker,block_state:{id:'minecraft:oak_log',properties:{axis:'x'}}}",
+    "wire": "028b01"
+  },
+  {
+    "format": "json",
+    "input": "{\"block_state\":{\"id\":\"minecraft:oak_log\",\"properties\":{\"axis\":\"x\"}},\"type\":\"block_marker\"}",
+    "wire": "028b01"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:falling_dust,block_state:{id:'minecraft:oak_log',properties:{axis:'z'}}}",
+    "wire": "248d01"
+  },
+  {
+    "format": "json",
+    "input": "{\"block_state\":{\"id\":\"minecraft:oak_log\",\"properties\":{\"axis\":\"z\"}},\"type\":\"falling_dust\"}",
+    "wire": "248d01"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:dust_pillar,block_state:{id:'minecraft:oak_log',properties:{axis:'invalid'}}}",
+    "wire": "798c01"
+  },
+  {
+    "format": "json",
+    "input": "{\"block_state\":{\"id\":\"minecraft:oak_log\",\"properties\":{\"axis\":\"invalid\"}},\"type\":\"dust_pillar\"}",
+    "wire": "798c01"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:block_crumble,block_state:'minecraft:stone'}",
+    "wire": "7d01"
+  },
+  {
+    "format": "json",
+    "input": "{\"block_state\":\"minecraft:stone\",\"type\":\"block_crumble\"}",
+    "wire": "7d01"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:block,block_state:'minecraft:invented'}",
+    "error": "Failed to parse either. First: Failed to parse either. First: Unknown registry key in ResourceKey[minecraft:root / minecraft:block]: minecraft:invented; Second: Not a map: \"minecraft:invented\"; Second: Unknown registry key in ResourceKey[minecraft:root / minecraft:block]: minecraft:invented"
+  },
+  {
+    "format": "json",
+    "input": "{\"block_state\":\"minecraft:invented\",\"type\":\"block\"}",
+    "error": "Failed to parse either. First: Failed to parse either. First: Unknown registry key in ResourceKey[minecraft:root / minecraft:block]: minecraft:invented; Second: Not a JSON object: \"minecraft:invented\"; Second: Unknown registry key in ResourceKey[minecraft:root / minecraft:block]: minecraft:invented"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:block,block_state:{Name:'minecraft:stone'}}",
+    "error": "Failed to parse either. First: Failed to parse either. First: Not a string; Second: No key id in MapLike[{Name:\"minecraft:stone\"}]; Second: Not a string"
+  },
+  {
+    "format": "json",
+    "input": "{\"block_state\":{\"Name\":\"minecraft:stone\"},\"type\":\"block\"}",
+    "error": "Failed to parse either. First: Failed to parse either. First: Not a string: {\"Name\":\"minecraft:stone\"}; Second: No key id in MapLike[{\"Name\":\"minecraft:stone\"}]; Second: Not a string: {\"Name\":\"minecraft:stone\"}"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:block,block_state:3}",
+    "error": "Failed to parse either. First: Failed to parse either. First: Not a string; Second: Not a map: 3; Second: Not a string"
+  },
+  {
+    "format": "json",
+    "input": "{\"block_state\":3,\"type\":\"block\"}",
+    "error": "Failed to parse either. First: Failed to parse either. First: Not a string: 3; Second: Not a JSON object: 3; Second: Not a string: 3"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:vibration,destination:{type:block,pos:[1,2,3]},arrival_in_ticks:5}",
+    "wire": "3a00000000400000300205"
+  },
+  {
+    "format": "json",
+    "input": "{\"destination\":{\"pos\":[1,2,3],\"type\":\"block\"},\"type\":\"vibration\",\"arrival_in_ticks\":5}",
+    "wire": "3a00000000400000300205"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:vibration,destination:{type:'minecraft:block',pos:[I;1,2,3]},arrival_in_ticks:-5}",
+    "wire": "3a000000004000003002fbffffff0f"
+  },
+  {
+    "format": "json",
+    "input": "{\"destination\":{\"pos\":[1,2,3],\"type\":\"minecraft:block\"},\"type\":\"vibration\",\"arrival_in_ticks\":-5}",
+    "wire": "3a000000004000003002fbffffff0f"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:vibration,destination:{type:entity,source_entity:[I;0,0,0,1],y_offset:0f},arrival_in_ticks:5}",
+    "error": "Entity position sources are not allowed"
+  },
+  {
+    "format": "json",
+    "input": "{\"destination\":{\"type\":\"entity\",\"y_offset\":0.0,\"source_entity\":[0,0,0,1]},\"type\":\"vibration\",\"arrival_in_ticks\":5}",
+    "error": "Entity position sources are not allowed"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:vibration,destination:{type:entity},arrival_in_ticks:5}",
+    "error": "No key source_entity in MapLike[{type:\"entity\"}]"
+  },
+  {
+    "format": "json",
+    "input": "{\"destination\":{\"type\":\"entity\"},\"type\":\"vibration\",\"arrival_in_ticks\":5}",
+    "error": "No key source_entity in MapLike[{\"type\":\"entity\"}]"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:vibration,destination:{type:invented},arrival_in_ticks:5}",
+    "error": "Unknown registry key in ResourceKey[minecraft:root / minecraft:position_source_type]: minecraft:invented"
+  },
+  {
+    "format": "json",
+    "input": "{\"destination\":{\"type\":\"invented\"},\"type\":\"vibration\",\"arrival_in_ticks\":5}",
+    "error": "Unknown registry key in ResourceKey[minecraft:root / minecraft:position_source_type]: minecraft:invented"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:vibration,destination:{type:block,pos:[1,2]},arrival_in_ticks:5}",
+    "error": "Input is not a list of 3 ints"
+  },
+  {
+    "format": "json",
+    "input": "{\"destination\":{\"pos\":[1,2],\"type\":\"block\"},\"type\":\"vibration\",\"arrival_in_ticks\":5}",
+    "error": "Input is not a list of 3 ints"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:vibration,destination:3,arrival_in_ticks:5}",
+    "error": "Not a map: 3"
+  },
+  {
+    "format": "json",
+    "input": "{\"destination\":3,\"type\":\"vibration\",\"arrival_in_ticks\":5}",
+    "error": "Not a JSON object: 3"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:flame,ignored:1}",
+    "wire": "27"
+  },
+  {
+    "format": "json",
+    "input": "{\"ignored\":1,\"type\":\"flame\"}",
+    "wire": "27"
+  },
+  {
+    "format": "nbt",
+    "input": "{}",
+    "error": "No key type in MapLike[{}]"
+  },
+  {
+    "format": "json",
+    "input": "{}",
+    "error": "No key type in MapLike[{}]"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:invented}",
+    "error": "Unknown registry key in ResourceKey[minecraft:root / minecraft:particle_type]: minecraft:invented"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"invented\"}",
+    "error": "Unknown registry key in ResourceKey[minecraft:root / minecraft:particle_type]: minecraft:invented"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:'Bad:flame'}",
+    "error": "Not a valid resource location: Bad:flame Non [a-z0-9_.-] character in namespace of identifier: Bad:flame"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"Bad:flame\"}",
+    "error": "Not a valid resource location: Bad:flame Non [a-z0-9_.-] character in namespace of identifier: Bad:flame"
+  },
+  {
+    "format": "nbt",
+    "input": "{type:3}",
+    "error": "Not a string"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":3}",
+    "error": "Not a string: 3"
+  },
+  {
+    "format": "nbt",
+    "input": "'flame'",
+    "error": "Not a map: \"flame\""
+  },
+  {
+    "format": "json",
+    "input": "\"flame\"",
+    "error": "Not a JSON object: \"flame\""
+  },
+  {
+    "format": "nbt",
+    "input": "[]",
+    "error": "Not a map: []"
+  },
+  {
+    "format": "json",
+    "input": "[]",
+    "error": "Not a JSON object: []"
+  },
+  {
+    "format": "nbt",
+    "input": "3",
+    "error": "Not a map: 3"
+  },
+  {
+    "format": "json",
+    "input": "3",
+    "error": "Not a JSON object: 3"
+  },
+  {
+    "format": "json",
+    "input": "null",
+    "error": "Not a JSON object: null"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"dust\",\"color\":true,\"scale\":1}",
+    "error": "Failed to parse either. First: Not a number: true; Second: Not a json array: true"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"dragon_breath\",\"power\":null}",
+    "wire": "0f3f800000"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"effect\",\"power\":true}",
+    "error": "Not a number: true"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"shriek\",\"delay\":999999999999999999999999999999999999999}",
+    "wire": "73ffffffff0f"
+  },
+  {
+    "format": "json",
+    "input": "{\"type\":\"shriek\",\"delay\":1e20}",
+    "wire": "738080c09806"
+  }
+]
