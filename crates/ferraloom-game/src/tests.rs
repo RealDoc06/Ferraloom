@@ -88,33 +88,25 @@ static TEST_BEHAVIORS: Behaviors = Behaviors::EMPTY
 
 fn region() -> Level {
     let mut region = Level::new(Region::new(&TEST_BEHAVIORS));
-    region
-        .add_chunk(LevelChunk::new(
-            ChunkPos::containing(PLACED),
-            -4..20,
-            ferraloom_chunk::LevelChunkSection::new(
-                ferraloom_chunk::Strategy::block_states(),
-                ferraloom_chunk::Strategy::biomes(std::sync::Arc::new(
-                    ferraloom_chunk::IdMap::new(vec![ferraloom_chunk::BiomeId(0)]).unwrap(),
-                )),
-                ferraloom_chunk::BiomeId(0),
-            ),
-        ))
-        .unwrap();
-    region
-        .update_entity_chunk_status(
-            ChunkPos::containing(PLACED),
-            crate::level::entity::Visibility::Ticking,
-        )
-        .unwrap();
-    // The adversarial entities live at the fixture origin; ticking eligibility
-    // is independent of the block chunk needed by their reentrant callback.
-    region
-        .update_entity_chunk_status(
-            ChunkPos::new(0, 0),
-            crate::level::entity::Visibility::Ticking,
-        )
-        .unwrap();
+    for pos in [ChunkPos::containing(PLACED), ChunkPos::ZERO] {
+        region
+            .add_chunk(LevelChunk::new(
+                pos,
+                -4..20,
+                ferraloom_chunk::LevelChunkSection::new(
+                    ferraloom_chunk::Strategy::block_states(),
+                    ferraloom_chunk::Strategy::biomes(std::sync::Arc::new(
+                        ferraloom_chunk::IdMap::new(vec![ferraloom_chunk::BiomeId(0)]).unwrap(),
+                    )),
+                    ferraloom_chunk::BiomeId(0),
+                ),
+            ))
+            .unwrap();
+        region
+            .update_entity_chunk_status(pos, crate::level::entity::Visibility::Ticking)
+            .unwrap();
+        region.set_chunk_entity_ticking(pos, true).unwrap();
+    }
     region
 }
 

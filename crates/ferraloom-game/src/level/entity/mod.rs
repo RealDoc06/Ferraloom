@@ -626,17 +626,16 @@ impl Level {
             let state = self.entity_state(entity)?;
             let base = state.as_entity();
             if base.removed
-                || !self.always_ticking(entity)
-                    && !self
-                        .region()
-                        .entities
-                        .visibility(base.chunk_position)
-                        .is_ticking()
                 || tick_rate.is_entity_frozen(
                     state.entity_type() == ferraloom_data::EntityType::PLAYER,
                     crate::entity::count_player_passengers(entity, self)?,
                 )
             {
+                continue;
+            }
+            self.entity_behavior(entity)?.check_despawn(entity, self)?;
+            let base = self.entity::<EntityData>(entity)?;
+            if !self.always_ticking(entity) && !self.is_entity_ticking_chunk(base.chunk_position) {
                 continue;
             }
             if let Some(vehicle) = base.vehicle {
@@ -720,6 +719,9 @@ impl Level {
         }
     }
 }
+
+#[cfg(test)]
+mod tick_tests;
 
 #[cfg(test)]
 mod tests {

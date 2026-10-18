@@ -427,6 +427,10 @@ pub trait Entity: Sync {
             _ => true,
         })
     }
+    /// Port of Entity#checkDespawn's base hook, before simulation eligibility.
+    fn check_despawn(&self, _entity: EntityRef, _level: &mut Level) -> Result<(), LevelError> {
+        Ok(())
+    }
     /// Port of Entity#tick; ServerLevel owns commonTick separately.
     fn tick(&self, entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
         base_tick(self, entity, level)
