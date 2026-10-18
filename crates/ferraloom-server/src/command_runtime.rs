@@ -190,7 +190,7 @@ impl MinecraftServer {
             self.send_component(None, admin);
         }
     }
-    fn apply_command_result(
+    pub(super) fn apply_command_result(
         &mut self,
         source: Option<ConnectionId>,
         stack: &CommandSourceStack,
@@ -568,7 +568,9 @@ impl MinecraftServer {
             }
         }
         if let Err(error) = result {
-            if error.to_string() == "disconnect.spam" {
+            if error.to_string() == "disconnect.spam"
+                || error.is::<super::command_level::CommandLevelFailure>()
+            {
                 return Err(error);
             }
             if let Some(syntax) =

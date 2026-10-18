@@ -1,4 +1,6 @@
 //! Single-region MinecraftServer phase driver. Game state has one mutable owner.
+#[path = "command_level.rs"]
+mod command_level;
 #[path = "command_runtime.rs"]
 mod command_runtime;
 use crate::{
@@ -1845,6 +1847,9 @@ impl MinecraftServer {
             let action = Commands::action(prepared);
             match action {
                 CommandAction::Run(command) => {
+                    if self.run_level_command(source, &command).await? {
+                        continue;
+                    }
                     if let Err(error) = self.run_builtin(source, *command) {
                         self.command_failure(
                             source,
