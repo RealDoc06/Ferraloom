@@ -1158,6 +1158,10 @@ impl WorldGenRegion<'_> {
     pub fn set_has_skylight(&mut self, has_skylight: bool) {
         self.has_skylight = Some(has_skylight);
     }
+    pub fn has_skylight(&self) -> Result<bool, Error> {
+        self.has_skylight
+            .ok_or_else(|| Error("Unsupported: worldgen skylight context".into()))
+    }
     pub fn vine_acceptable_neighbor(
         &self,
         p: [i32; 3],

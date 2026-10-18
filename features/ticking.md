@@ -178,3 +178,4 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 
 | ticking.block.placement-context | Share native UseOnContext and BlockPlaceContext, constructor replacement routing, directional looking order and inherited base placement state | `BlockPlaceContext; DirectionalPlaceContext; Block#getStateForPlacement` | `block::placement::tests::native_context_construction_and_directional_looking_orders (18 real-Level Java cases)` | pass | todo |
 
+| ticking.light.raw-brightness | Distinguish absent skylight engines from dark columns and preserve arbitrary sky-dampening integer overflow | `LevelLightEngine#getRawBrightness` | `level::lighting::tests::raw_brightness_matches_native_absent_sky_and_integer_overflow (22 Java cases)` | pass | todo |

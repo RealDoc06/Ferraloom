@@ -24,6 +24,7 @@ pub mod emission;
 pub mod entity;
 pub mod events;
 pub mod heightmap;
+mod lighting;
 mod mutation;
 mod post_processing;
 mod random;
@@ -54,6 +55,7 @@ pub enum LevelError {
     UnsupportedBlock(Block),
     UnsupportedBlockMethod(Block, crate::block::BlockMethod),
     UnsupportedBlockEntity(Block),
+    UnsupportedLightQuery,
     MissingBlockTags,
     MissingFluidTags,
     MissingEntityTypeTags,
@@ -120,6 +122,7 @@ pub struct Region {
     min_y: i32,
     max_y: i32,
     rules: LevelRules,
+    has_skylight: Option<bool>,
     random: ferraloom_util::random::Random,
     sound_seed_generator: ferraloom_util::random::Random,
     rand_value: i32,
@@ -152,6 +155,7 @@ impl Region {
             min_y: -64,
             max_y: 320,
             rules: LevelRules::default(),
+            has_skylight: None,
             random: random::new_level_random(),
             sound_seed_generator: random::new_sound_random(),
             rand_value: random::new_position_seed(),
