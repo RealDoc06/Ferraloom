@@ -916,6 +916,9 @@ impl MinecraftServer {
         let access = self.world.access.clone();
         let uuid = profile.id.to_string();
         let saved = tokio::task::spawn_blocking(move || access.player_data().load(&uuid)).await??;
+        let respawn = self.default_spawn_data();
+        let (yaw, pitch) = ServerPlayer::saved_spawn_rotation(saved.as_ref())
+            .unwrap_or((respawn.rotation.yaw, respawn.rotation.pitch));
         let mode = self.default_game_mode;
         let mut player = ServerPlayer::new(
             profile.id,
@@ -933,7 +936,10 @@ impl MinecraftServer {
         }
         if self.properties.boolean("force-gamemode") {
             player.game_mode = mode;
+            player.update_game_mode_abilities();
         }
+        let spawn_position = player.position;
+        player.snap_to(spawn_position, yaw, pitch);
         player.view_distance = i32::from(self.connections[&connection].information.view_distance);
         player.text_filtering_enabled = self.connections[&connection]
             .information
@@ -1089,32 +1095,6 @@ impl MinecraftServer {
                 }
                 LevelEffect::WeatherEvent { event, param } => {
                     self.broadcast(cb::Packet::GameEvent(cb::GameEvent { event, param }))
-                }
-                LevelEffect::BlockEvent(event) => {
-                    let packet = cb::Packet::BlockEvent(cb::BlockEvent {
-                        pos: event.pos,
-                        b0: event.param_a as u8,
-                        b1: event.param_b as u8,
-                        block: BlockId(i32::from(event.block.protocol_id())),
-                    });
-                    for &connection in &self.players {
-                        let c = &self.connections[&connection];
-                        let Phase::Play(entity) = c.phase else {
-                            continue;
-                        };
-                        let position = self.player(entity)?.position;
-                        if position.distance_to_sqr(Vec3::new(
-                            f64::from(event.pos.x),
-                            f64::from(event.pos.y),
-                            f64::from(event.pos.z),
-                        )) < 4096.0
-                        {
-                            self.connections
-                                .get_mut(&connection)
-                                .unwrap()
-                                .push(packet.clone());
-                        }
-                    }
                 }
                 LevelEffect::LevelEvent { pos, id, data } => {
                     self.broadcast(cb::Packet::LevelEvent(cb::LevelEvent {
@@ -3266,7 +3246,7 @@ fn abilities(player: &ServerPlayer) -> cb::Packet {
         invulnerable: privileged,
         is_flying: player.flying,
         can_fly: privileged,
-        instabuild: player.game_mode == GameType::Creative,
+        instabuild: player.instabuild(),
         flying_speed: 0.05,
         walking_speed: 0.1,
     })
@@ -3426,6 +3406,26 @@ fn load_conduct(root: &Path, properties: &ServerProperties) -> Result<BTreeMap<S
 mod live_level_tests {
     use super::*;
     use ferraloom_game::level::{Level, chunk_holder::ChunkHolder};
+
+    #[test]
+    fn abilities_packet_reads_mutable_instabuild_instead_of_mode() {
+        for mode in [
+            GameType::Survival,
+            GameType::Creative,
+            GameType::Adventure,
+            GameType::Spectator,
+        ] {
+            let mut player =
+                ServerPlayer::new(Uuid::new(1, 2), "abilities".into(), 1, Vec3::ZERO, mode);
+            for value in [false, true] {
+                player.instabuild = value;
+                let cb::Packet::PlayerAbilities(packet) = abilities(&player) else {
+                    unreachable!()
+                };
+                assert_eq!(packet.instabuild, value);
+            }
+        }
+    }
 
     #[test]
     fn entity_visibility_follows_confirmed_holder_ranges_and_immediate_demotions() {

@@ -1,7 +1,7 @@
 use super::{BLACK, GRAY, LAMP, LIGHT, RoomPlacer};
 use crate::{
     Error,
-    feature::FeatureContext,
+    structure::StructurePlacementContext,
     structure::{BoundingBox, structures::ocean_monument::MonumentBuilding},
 };
 impl RoomPlacer<'_, '_, '_, '_> {
@@ -354,7 +354,7 @@ impl MonumentBuilding {
     /// ordered child rooms, and each piece consumes the caller's decoration RNG.
     pub fn post_process(
         &self,
-        context: &mut FeatureContext<'_, '_>,
+        context: &mut StructurePlacementContext<'_, '_>,
         bounds: BoundingBox,
     ) -> Result<(), Error> {
         {
@@ -504,7 +504,7 @@ mod tests {
             let mut random = WorldgenRandom::new(Algorithm::Legacy.new_instance(17));
             building
                 .post_process(
-                    &mut FeatureContext {
+                    &mut StructurePlacementContext {
                         region: &mut region,
                         random: &mut random,
                         origin: [0; 3],

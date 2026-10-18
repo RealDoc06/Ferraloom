@@ -1,7 +1,7 @@
 use super::*;
 use crate::{feature::PlacedFeature, placement::predicate::BlockPredicate, region::Heightmap};
 use ferraloom_data::registries::fluid;
-use ferraloom_util::random::WorldgenRandom;
+use ferraloom_util::random::RandomSource;
 /// Port of MangroveRootPlacer, RootPlacer and AboveRootPlacement.
 #[derive(Debug)]
 pub(super) struct RootPlacer {
@@ -45,11 +45,11 @@ impl RootPlacer {
             water: l.data.fluids(&Value::String("#minecraft:water".into()))?,
         })
     }
-    pub fn origin(&self, o: Pos, r: &mut WorldgenRandom) -> Pos {
+    pub fn origin(&self, o: Pos, r: &mut impl RandomSource) -> Pos {
         add(o, [0, self.offset.sample(r), 0])
     }
     fn valid(&self, c: &FeatureContext<'_, '_>, p: Pos) -> Result<bool, Error> {
-        let s = c.region.block(p)?;
+        let s = c.level.block(p)?;
         Ok(is_air(s) || self.replaceable.contains(&s.block()) || self.grow.contains(&s.block()))
     }
     fn simulate(
@@ -68,14 +68,14 @@ impl RootPlacer {
         let next = step(p, d);
         let width = manhattan(p, o);
         let positions = if width > self.width - 3 && width <= self.width {
-            if c.random.next_float() < self.skew {
+            if c.random()?.next_float() < self.skew {
                 vec![below, add(next, [0, -1, 0])]
             } else {
                 vec![below]
             }
-        } else if width > self.width || c.random.next_float() < self.skew {
+        } else if width > self.width || c.random()?.next_float() < self.skew {
             vec![below]
-        } else if c.random.next_boolean() {
+        } else if c.random()?.next_boolean() {
             vec![next]
         } else {
             vec![below]
@@ -98,7 +98,7 @@ impl RootPlacer {
     ) -> Result<BlockState, Error> {
         Ok(s.with(
             properties::WATERLOGGED,
-            self.water.contains(&c.region.fluid(p)?.fluid_type),
+            self.water.contains(&c.level.fluid(p)?.fluid_type),
         )
         .unwrap_or(s))
     }
@@ -126,7 +126,7 @@ impl RootPlacer {
             positions.push(p);
         }
         for p in positions {
-            if self.mud.contains(&c.region.block(p)?.block()) {
+            if self.mud.contains(&c.level.block(p)?.block()) {
                 let s = self.mud_provider.get_state(c, p)?;
                 let s = self.state(c, p, s)?;
                 put(c, p, s, out)?;
@@ -136,7 +136,7 @@ impl RootPlacer {
                 put(c, p, s, out)?;
                 if let Some((provider, chance)) = &self.above {
                     let above = add(p, [0, 1, 0]);
-                    if c.random.next_float() < *chance && is_air(c.region.block(above)?) {
+                    if c.random()?.next_float() < *chance && is_air(c.level.block(above)?) {
                         let s = provider.get_state(c, above)?;
                         let s = self.state(c, above, s)?;
                         put(c, above, s, out)?;
@@ -192,7 +192,7 @@ impl RootSystem {
     }
     fn space(&self, c: &FeatureContext<'_, '_>, p: Pos) -> Result<bool, Error> {
         for y in 1..=self.space {
-            let s = c.region.block(add(p, [0, y, 0]))?;
+            let s = c.level.block(add(p, [0, y, 0]))?;
             if !is_air(s)
                 && !(y < self.water_height && self.water.contains(&s.data().fluid.fluid_type))
             {
@@ -202,8 +202,8 @@ impl RootSystem {
         if self.test_distance > 0 {
             for i in 0..4 {
                 let p = relative(p, Direction::from_2d_data_value(i), self.test_distance);
-                if is_air(c.region.block(add(p, [0, -self.deviation, 0]))?)
-                    || !is_air(c.region.block(add(p, [0, self.deviation, 0]))?)
+                if is_air(c.level.block(add(p, [0, -self.deviation, 0]))?)
+                    || !is_air(c.level.block(add(p, [0, self.deviation, 0]))?)
                 {
                     return Ok(false);
                 }
@@ -215,13 +215,13 @@ impl RootSystem {
         let origin = c.origin;
         for y in 0..self.column {
             let p = add(origin, [0, y + 1, 0]);
-            if c.region.height_at(Heightmap::WorldSurface, p[0], p[2])? < p[1] {
+            if c.level.height_at(Heightmap::WorldSurface, p[0], p[2])? < p[1] {
                 return Ok(false);
             }
-            if self.allowed.test(c.region, p, c.generator)? && self.space(c, p)? {
+            if self.allowed.test(&c.level, p, c.generator)? && self.space(c, p)? {
                 let below = add(p, [0, -1, 0]);
-                if self.lava.contains(&c.region.fluid(below)?.fluid_type)
-                    || !c.region.block(below)?.is_solid()
+                if self.lava.contains(&c.level.fluid(below)?.fluid_type)
+                    || !c.level.block(below)?.is_solid()
                 {
                     return Ok(false);
                 }
@@ -231,14 +231,14 @@ impl RootSystem {
                 if result? {
                     for dy in 0..y {
                         for _ in 0..self.attempts {
-                            let x = c.random.next_int_bound(self.radius)
-                                - c.random.next_int_bound(self.radius);
-                            let z = c.random.next_int_bound(self.radius)
-                                - c.random.next_int_bound(self.radius);
+                            let x = c.random()?.next_int_bound(self.radius)
+                                - c.random()?.next_int_bound(self.radius);
+                            let z = c.random()?.next_int_bound(self.radius)
+                                - c.random()?.next_int_bound(self.radius);
                             let q = add(origin, [x, dy, z]);
-                            if self.replaceable.contains(&c.region.block(q)?.block()) {
+                            if self.replaceable.contains(&c.level.block(q)?.block()) {
                                 let s = self.provider.get_state(c, q)?;
-                                c.region.set_block(q, s, 2)?;
+                                c.level.set_block(q, s, 2)?;
                             }
                         }
                     }
@@ -251,27 +251,27 @@ impl RootSystem {
 }
 impl Feature for RootSystem {
     fn place(&self, c: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
-        if !is_air(c.region.block(c.origin)?) {
+        if !is_air(c.level.block(c.origin)?) {
             return Ok(false);
         }
         if self.tree(c)? {
             for _ in 0..self.hanging_attempts {
                 let delta = [
-                    c.random.next_int_bound(self.hanging_radius)
-                        - c.random.next_int_bound(self.hanging_radius),
-                    c.random.next_int_bound(self.hanging_span)
-                        - c.random.next_int_bound(self.hanging_span),
-                    c.random.next_int_bound(self.hanging_radius)
-                        - c.random.next_int_bound(self.hanging_radius),
+                    c.random()?.next_int_bound(self.hanging_radius)
+                        - c.random()?.next_int_bound(self.hanging_radius),
+                    c.random()?.next_int_bound(self.hanging_span)
+                        - c.random()?.next_int_bound(self.hanging_span),
+                    c.random()?.next_int_bound(self.hanging_radius)
+                        - c.random()?.next_int_bound(self.hanging_radius),
                 ];
                 let p = add(c.origin, delta);
-                if is_air(c.region.block(p)?) {
+                if is_air(c.level.block(p)?) {
                     let s = self.hanging.get_state(c, p)?;
-                    let above = c.region.block(add(p, [0, 1, 0]))?;
-                    if c.region.can_survive(s, p)?
-                        && c.region.state_has_sturdy_face(above, p, Direction::Down)?
+                    let above = c.level.block(add(p, [0, 1, 0]))?;
+                    if c.level.can_survive(s, p)?
+                        && c.level.state_has_sturdy_face(above, p, Direction::Down)?
                     {
-                        c.region.set_block(p, s, 2)?;
+                        c.level.set_block(p, s, 2)?;
                     }
                 }
             }

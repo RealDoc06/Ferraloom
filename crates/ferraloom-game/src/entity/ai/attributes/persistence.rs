@@ -32,7 +32,7 @@ impl PackedAttribute {
                 .map(|modifier| {
                     let mut tag = CompoundTag::new();
                     tag.insert("id", Tag::String(modifier.id.as_str().into()));
-                    tag.insert("amount", Tag::Double(modifier.amount));
+                    tag.insert("amount", Tag::Double(modifier.amount.0));
                     tag.insert(
                         "operation",
                         Tag::String(
@@ -108,7 +108,7 @@ fn decode_modifier(tag: &Tag) -> Option<AttributeModifier> {
     };
     Some(AttributeModifier {
         id,
-        amount,
+        amount: amount.into(),
         operation,
     })
 }
@@ -190,14 +190,14 @@ mod tests {
         health
             .add_permanent_modifier(Arc::new(AttributeModifier {
                 id: Identifier::parse("permanent").unwrap(),
-                amount: 2.0,
+                amount: 2.0.into(),
                 operation: AttributeOperation::AddValue,
             }))
             .unwrap();
         health
             .add_transient_modifier(Arc::new(AttributeModifier {
                 id: Identifier::parse("temporary").unwrap(),
-                amount: 4.0,
+                amount: 4.0.into(),
                 operation: AttributeOperation::AddValue,
             }))
             .unwrap();

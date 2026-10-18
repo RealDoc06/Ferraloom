@@ -7,7 +7,7 @@ use crate::{
         movement::{self, MovementEmission, MoverType},
         persistence,
         player::{
-            GameType, ServerPlayer,
+            ServerPlayer,
             inventory::{self, copy_with_count, count, max_stack_size, set_count},
         },
         synched_data::EntityDataAccessor,
@@ -234,9 +234,9 @@ pub fn player_touch(
     }
     let mut stack = item.item().clone();
     let org_count = count(&stack);
-    let kind = stack.0.as_ref().map(|stack| stack.item);
+    let kind = stack.item();
     let target = level.entity_mut::<ServerPlayer>(player)?;
-    let infinite = matches!(target.game_mode, GameType::Creative);
+    let infinite = target.instabuild();
     let accepted = target
         .inventory
         .add(&mut stack, &mut target.parent.equipment, infinite);
@@ -254,20 +254,26 @@ pub fn player_touch(
                 org_count,
             );
         }
-        if let Some(item) = kind {
-            level.emit_entity_effect(crate::entity::effects::EntityEffect::ItemPickup {
-                player,
-                entity,
-                item,
-                count: org_count,
-            });
-        }
+        level.emit_entity_effect(crate::entity::effects::EntityEffect::ItemPickup {
+            player,
+            entity,
+            item: kind,
+            count: org_count,
+        });
     }
     Ok(())
 }
 
 pub struct ItemEntityBehavior;
 impl Entity for ItemEntityBehavior {
+    fn player_touch(
+        &self,
+        entity: EntityRef,
+        player: EntityRef,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        player_touch(entity, player, level)
+    }
     fn sound_source(&self) -> ferraloom_protocol::play::SoundSource {
         ferraloom_protocol::play::SoundSource::Ambient
     }

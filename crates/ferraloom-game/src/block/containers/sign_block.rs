@@ -34,11 +34,7 @@ impl BlockBehavior for SignBlock {
         let sign = level.block_entity::<SignBlockEntity>(handle)?;
         let player = level.entity::<ServerPlayer>(context.player)?;
         let stack = player.get_item_in_hand(context.hand);
-        let item = if stack.is_empty() {
-            Item::AIR
-        } else {
-            stack.0.as_ref().unwrap().item
-        };
+        let item = stack.item();
         let front = sign.player_is_facing_front(player.position);
         let text = if front {
             &sign.front_text

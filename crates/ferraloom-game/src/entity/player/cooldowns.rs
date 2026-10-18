@@ -52,7 +52,7 @@ impl ItemCooldowns {
         if stack.is_empty() {
             return Identifier::parse(Item::AIR.name()).expect("registered air identifier");
         }
-        let item = stack.0.as_ref().unwrap().item;
+        let item = stack.item();
         let default = || Identifier::parse(item.name()).expect("registered item identifier");
         match inventory::component(stack, ComponentType::USE_COOLDOWN) {
             Some(DataComponent::UseCooldown(value)) => {

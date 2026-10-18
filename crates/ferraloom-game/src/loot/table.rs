@@ -238,6 +238,38 @@ impl LootData {
         })?;
         Ok(output)
     }
+    /// Port of LootTable#getRandomItems(LootParams), including inline holders.
+    /// The table's own random_sequence chooses a stream, independently of its key.
+    pub fn get_random_items_from_holder(
+        &self,
+        table: &Holder<LootTable>,
+        params: &LootParams,
+        sources: &mut LootRandomSources<'_>,
+        facts: &dyn LootFacts,
+    ) -> Result<Vec<ItemStack>> {
+        let evaluate = |random: &mut dyn RandomSource| {
+            let mut output = Vec::new();
+            let mut runtime = BorrowedRuntime::new(random, facts);
+            let mut context = EvalContext {
+                params,
+                runtime: &mut runtime,
+                visited: BTreeSet::new(),
+            };
+            table.raw(self, &mut context, &mut |stack, c| {
+                if c.facts().item_enabled(&stack)? {
+                    split_stack(stack, &mut output)?;
+                }
+                Ok(())
+            })?;
+            Ok(output)
+        };
+        if let Some(sequence) = &table.resolve(self)?.random_sequence {
+            let mut random = sources.sequences.get(sequence, sources.world_seed);
+            evaluate(&mut random)
+        } else {
+            evaluate(sources.level_random)
+        }
+    }
     /// Port of LootContext.Builder's seed precedence. Zero leaves the table's
     /// named sequence (or level random) selected; a nonzero seed is legacy RNG.
     pub fn get_random_items_seeded(

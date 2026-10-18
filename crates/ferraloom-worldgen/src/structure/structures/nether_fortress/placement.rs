@@ -1,5 +1,7 @@
 use super::{FortressPiece, FortressPieceKind};
-use crate::{Error, feature::FeatureContext, region::SavedTick, structure::BoundingBox};
+use crate::{
+    Error, region::SavedTick, structure::BoundingBox, structure::StructurePlacementContext,
+};
 use ferraloom_data::{
     Block, BlockState,
     properties::{self, East, Facing, North, South, West},
@@ -11,7 +13,7 @@ impl FortressPiece {
     /// spawner flags change before synchronous game-backed entity access.
     pub fn post_process(
         &mut self,
-        context: &mut FeatureContext<'_, '_>,
+        context: &mut StructurePlacementContext<'_, '_>,
         bounds: BoundingBox,
     ) -> Result<(), Error> {
         let bricks = Block::NETHER_BRICKS.default_state();
@@ -450,7 +452,7 @@ impl FortressPiece {
     }
     fn rect(
         &self,
-        context: &mut FeatureContext<'_, '_>,
+        context: &mut StructurePlacementContext<'_, '_>,
         bounds: BoundingBox,
         r: [i32; 6],
         state: BlockState,
@@ -467,7 +469,7 @@ impl FortressPiece {
     }
     fn rects(
         &self,
-        context: &mut FeatureContext<'_, '_>,
+        context: &mut StructurePlacementContext<'_, '_>,
         bounds: BoundingBox,
         rects: impl IntoIterator<Item = (BlockState, [i32; 6])>,
     ) -> Result<(), Error> {
@@ -478,7 +480,7 @@ impl FortressPiece {
     }
     fn foundation(
         &self,
-        context: &mut FeatureContext<'_, '_>,
+        context: &mut StructurePlacementContext<'_, '_>,
         bounds: BoundingBox,
         p: [i32; 3],
     ) -> Result<(), Error> {
@@ -491,7 +493,7 @@ impl FortressPiece {
     }
     fn foundation_rectangle(
         &self,
-        context: &mut FeatureContext<'_, '_>,
+        context: &mut StructurePlacementContext<'_, '_>,
         bounds: BoundingBox,
         min: [i32; 2],
         max: [i32; 2],
@@ -505,7 +507,7 @@ impl FortressPiece {
     }
     fn large_room(
         &self,
-        context: &mut FeatureContext<'_, '_>,
+        context: &mut StructurePlacementContext<'_, '_>,
         bounds: BoundingBox,
         stalk: bool,
     ) -> Result<(), Error> {
@@ -787,7 +789,7 @@ mod tests {
             let mut random = WorldgenRandom::new(Algorithm::Legacy.new_instance(17));
             piece
                 .post_process(
-                    &mut FeatureContext {
+                    &mut StructurePlacementContext {
                         region: &mut region,
                         random: &mut random,
                         origin: [0; 3],

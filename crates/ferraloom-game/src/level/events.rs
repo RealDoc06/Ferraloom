@@ -1,7 +1,7 @@
 //! Port of ServerLevel's insertion-ordered, deduplicated block-event drain.
 use super::{Level, LevelError, effects::LevelEffect};
 use ferraloom_data::Block;
-use ferraloom_util::BlockPos;
+use ferraloom_util::{BlockPos, Vec3};
 use std::collections::{HashSet, VecDeque};
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct BlockEvent {
@@ -55,7 +55,28 @@ impl Level {
                     .required_block_behavior(event.block, crate::block::BlockMethod::TriggerEvent)?
                     .trigger_event(state, event.pos, event.param_a, event.param_b, self)?
             {
-                self.emit(LevelEffect::BlockEvent(event));
+                let recipients = self.broadcast_audience(
+                    None,
+                    Vec3::new(
+                        f64::from(event.pos.x),
+                        f64::from(event.pos.y),
+                        f64::from(event.pos.z),
+                    ),
+                    64.0,
+                )?;
+                self.emit(LevelEffect::PlayerPacket {
+                    recipients,
+                    packet: Box::new(ferraloom_protocol::play::clientbound::Packet::BlockEvent(
+                        ferraloom_protocol::play::clientbound::BlockEvent {
+                            pos: event.pos,
+                            b0: event.param_a as u8,
+                            b1: event.param_b as u8,
+                            block: ferraloom_protocol::play::BlockId(i32::from(
+                                event.block.protocol_id(),
+                            )),
+                        },
+                    )),
+                });
             }
         }
         for event in reschedule {

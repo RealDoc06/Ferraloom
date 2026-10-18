@@ -90,16 +90,22 @@ impl MinecraftServer {
             locked: settings.is_some_and(|tag| tag.get_boolean_or("locked", false)),
         })
     }
-    pub(super) async fn save_game_rules(&self) -> Result<()> {
+    /// Capture owned save data before constructing IO, keeping the live level's
+    /// single-owner lazy caches out of the Send future.
+    pub(super) fn save_game_rules(
+        &self,
+    ) -> impl std::future::Future<Output = Result<()>> + Send + 'static {
         let storage = SavedDataStorage::new(self.world.access.path().join("data"));
         let mut data = SavedData::new(self.game_rules.map().clone());
         let mut clocks = SavedData::new(self.clocks.states.clone());
-        tokio::task::spawn_blocking(move || {
-            storage.save(GameRuleMap::STORAGE_ID, &mut data)?;
-            storage.save(PackedClockStates::STORAGE_ID, &mut clocks)
-        })
-        .await??;
-        Ok(())
+        async move {
+            tokio::task::spawn_blocking(move || {
+                storage.save(GameRuleMap::STORAGE_ID, &mut data)?;
+                storage.save(PackedClockStates::STORAGE_ID, &mut clocks)
+            })
+            .await??;
+            Ok(())
+        }
     }
     pub(super) fn on_game_rule_changed(&mut self, change: GameRuleChange) {
         self.game_rules
@@ -245,7 +251,6 @@ impl MinecraftServer {
             "ban-ip" | "pardon-ip" => self.ban_ip_command(source, &command)?,
             "banlist" => self.ban_list_command(&command),
             "gamemode" => self.game_mode_command(source, &command)?,
-            "teleport" => self.teleport_command(&command)?,
             "setworldspawn" | "spawnpoint" => self.spawn_command(source, &command)?,
             "seed" => builtins::seed(self.world.seed),
             "help" => self.commands.help(&command)?,
@@ -497,7 +502,7 @@ impl EntityQuery for MinecraftServer {
             .player(entity)
             .map_err(|_| exceptions::error("argument.entity.notfound.entity", &[]))?;
         Ok(match predicate {
-            SelectorPredicate::Alive => player.parent.health > 0.,
+            SelectorPredicate::Alive => player.parent.health() > 0.,
             SelectorPredicate::Name { value, inverted } => (player.name == *value) != *inverted,
             SelectorPredicate::GameMode { value, inverted } => {
                 (player.game_mode == *value) != *inverted
@@ -1199,11 +1204,7 @@ impl MinecraftServer {
             return None;
         }
         player.game_mode = mode;
-        if mode == GameType::Spectator {
-            player.flying = true;
-        } else if mode != GameType::Creative {
-            player.flying = false;
-        }
+        player.update_game_mode_abilities();
         let packet = abilities(player);
         let name = player.display_name();
         let uuid = player.uuid;
@@ -1682,10 +1683,7 @@ impl MinecraftServer {
         }
         Ok(entities)
     }
-    fn teleport_command(
-        &mut self,
-        command: &PreparedCommand,
-    ) -> Result<CommandResult, ferraloom_brigadier::CommandSyntaxException> {
+    pub(super) fn teleport_command(&mut self, command: &PreparedCommand) -> Result<CommandResult> {
         use ferraloom_game::commands::{
             source::{EntityAnchor, Rotation},
             teleport::TeleportPlan,
@@ -1754,55 +1752,17 @@ impl MinecraftServer {
                 )?
             };
             last_position = plan.position;
-            self.request_area(
-                ChunkPos::containing(BlockPos::new(
-                    plan.position.x.floor() as i32,
-                    plan.position.y.floor() as i32,
-                    plan.position.z.floor() as i32,
-                )),
-                1,
-            )
-            .map_err(|_| exceptions::error("command.failed", &[]))?;
-            self.level
-                .level
-                .set_entity_pos(*target, plan.position)
-                .map_err(|_| exceptions::error("argument.entity.notfound.entity", &[]))?;
+            self.teleport_player(*target, plan.change, plan.relatives)?;
             let player = self
                 .level
                 .level
                 .entity_mut::<ServerPlayer>(*target)
-                .map_err(|_| exceptions::error("argument.entity.notfound.entity", &[]))?;
-            player.first_good = plan.position;
-            player.last_good = plan.position;
-            player.yaw = plan.rotation.yaw;
-            player.pitch = plan.rotation.pitch;
-            player.velocity = Vec3::new(
-                if plan.relatives & 32 != 0 {
-                    player.known_movement.x
-                } else {
-                    0.
-                },
-                0.,
-                if plan.relatives & 128 != 0 {
-                    player.known_movement.z
-                } else {
-                    0.
-                },
-            );
-            player.on_ground = true;
-            let connection = self.players.iter().copied().find(|id| matches!(self.connections[id].phase, Phase::Play(entity) if entity == *target)).unwrap();
-            let c = self.connections.get_mut(&connection).unwrap();
-            c.teleport_id = if c.teleport_id == i32::MAX - 1 {
-                0
-            } else {
-                c.teleport_id + 1
-            };
-            c.awaiting_teleport = Some((c.teleport_id, plan.position, self.tick));
-            c.push(cb::Packet::PlayerPosition(cb::PlayerPosition {
-                id: VarInt(c.teleport_id),
-                change: plan.change,
-                relatives: plan.relatives,
-            }));
+                .map_err(game_error)?;
+            if !player.shared_flag(7) {
+                player.velocity.y = 0.;
+                player.on_ground = true;
+            }
+            let connection = self.players.iter().copied().find(|id| matches!(self.connections[id].phase, Phase::Play(entity) if entity == *target)).expect("selected connected player");
             let facing = if let Some(entity) = facing_entity {
                 let player = self
                     .player(entity)

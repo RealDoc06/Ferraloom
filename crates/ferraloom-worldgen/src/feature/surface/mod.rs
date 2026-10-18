@@ -58,11 +58,11 @@ impl Feature for FillLayerFeature {
             for z in 0..16 {
                 let p = [
                     ctx.origin[0] + x,
-                    ctx.region.min_y() + self.height,
+                    ctx.level.min_y() + self.height,
                     ctx.origin[2] + z,
                 ];
-                if ctx.region.block(p)?.is_air() {
-                    ctx.region.set_block(p, self.state, 2)?;
+                if ctx.level.block(p)?.is_air() {
+                    ctx.level.set_block(p, self.state, 2)?;
                 }
             }
         }
@@ -78,26 +78,26 @@ struct BlockBlobFeature {
 impl Feature for BlockBlobFeature {
     fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
         let mut p = ctx.origin;
-        while p[1] > ctx.region.min_y() + 3
+        while p[1] > ctx.level.min_y() + 3
             && !self
                 .can_place_on
-                .test(ctx.region, relative(p, Direction::Down), ctx.generator)?
+                .test(&ctx.level, relative(p, Direction::Down), ctx.generator)?
         {
             p[1] -= 1;
         }
-        if p[1] <= ctx.region.min_y() + 3 {
+        if p[1] <= ctx.level.min_y() + 3 {
             return Ok(false);
         }
         for _ in 0..3 {
-            let xr = ctx.random.next_int_bound(2);
-            let yr = ctx.random.next_int_bound(2);
-            let zr = ctx.random.next_int_bound(2);
+            let xr = ctx.random()?.next_int_bound(2);
+            let yr = ctx.random()?.next_int_bound(2);
+            let zr = ctx.random()?.next_int_bound(2);
             let radius = (xr + yr + zr) as f32 * 0.333 + 0.5;
             for z in -zr..=zr {
                 for y in -yr..=yr {
                     for x in -xr..=xr {
                         if f64::from(x * x + y * y + z * z) <= f64::from(radius * radius) {
-                            ctx.region.set_block(offset(p, [x, y, z]), self.state, 3)?;
+                            ctx.level.set_block(offset(p, [x, y, z]), self.state, 3)?;
                         }
                     }
                 }
@@ -105,9 +105,9 @@ impl Feature for BlockBlobFeature {
             p = offset(
                 p,
                 [
-                    -1 + ctx.random.next_int_bound(2),
-                    -ctx.random.next_int_bound(2),
-                    -1 + ctx.random.next_int_bound(2),
+                    -1 + ctx.random()?.next_int_bound(2),
+                    -ctx.random()?.next_int_bound(2),
+                    -1 + ctx.random()?.next_int_bound(2),
                 ],
             );
         }
@@ -124,17 +124,17 @@ struct SpikeFeature {
 impl Feature for SpikeFeature {
     fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
         let mut origin = ctx.origin;
-        while ctx.region.block(origin)?.is_air() && origin[1] > ctx.region.min_y() + 2 {
+        while ctx.level.block(origin)?.is_air() && origin[1] > ctx.level.min_y() + 2 {
             origin[1] -= 1;
         }
-        if !self.can_place_on.test(ctx.region, origin, ctx.generator)? {
+        if !self.can_place_on.test(&ctx.level, origin, ctx.generator)? {
             return Ok(false);
         }
-        origin[1] += ctx.random.next_int_bound(4);
-        let height = ctx.random.next_int_bound(4) + 7;
-        let width = height / 4 + ctx.random.next_int_bound(2);
-        if width > 1 && ctx.random.next_int_bound(60) == 0 {
-            origin[1] += 10 + ctx.random.next_int_bound(30);
+        origin[1] += ctx.random()?.next_int_bound(4);
+        let height = ctx.random()?.next_int_bound(4) + 7;
+        let width = height / 4 + ctx.random()?.next_int_bound(2);
+        if width > 1 && ctx.random()?.next_int_bound(60) == 0 {
+            origin[1] += 10 + ctx.random()?.next_int_bound(30);
         }
         for y in 0..height {
             let scale = (1.0 - y as f32 / height as f32) * width as f32;
@@ -145,20 +145,20 @@ impl Feature for SpikeFeature {
                     let dz = z.abs() as f32 - 0.25;
                     if (x == 0 && z == 0 || dx * dx + dz * dz <= scale * scale)
                         && (x != -radius && x != radius && z != -radius && z != radius
-                            || ctx.random.next_float() <= 0.75)
+                            || ctx.random()?.next_float() <= 0.75)
                     {
                         let p = offset(origin, [x, y, z]);
-                        if ctx.region.block(p)?.is_air()
-                            || self.can_replace.test(ctx.region, p, ctx.generator)?
+                        if ctx.level.block(p)?.is_air()
+                            || self.can_replace.test(&ctx.level, p, ctx.generator)?
                         {
-                            ctx.region.set_block(p, self.state, 3)?;
+                            ctx.level.set_block(p, self.state, 3)?;
                         }
                         if y != 0 && radius > 1 {
                             let p = offset(origin, [x, -y, z]);
-                            if ctx.region.block(p)?.is_air()
-                                || self.can_replace.test(ctx.region, p, ctx.generator)?
+                            if ctx.level.block(p)?.is_air()
+                                || self.can_replace.test(&ctx.level, p, ctx.generator)?
                             {
-                                ctx.region.set_block(p, self.state, 3)?;
+                                ctx.level.set_block(p, self.state, 3)?;
                             }
                         }
                     }
@@ -170,24 +170,24 @@ impl Feature for SpikeFeature {
             for z in -radius..=radius {
                 let mut p = offset(origin, [x, -1, z]);
                 let mut run = if x.abs() == 1 && z.abs() == 1 {
-                    ctx.random.next_int_bound(5)
+                    ctx.random()?.next_int_bound(5)
                 } else {
                     50
                 };
                 while p[1] > 50 {
-                    let state = ctx.region.block(p)?;
+                    let state = ctx.level.block(p)?;
                     if !state.is_air()
-                        && !self.can_replace.test(ctx.region, p, ctx.generator)?
+                        && !self.can_replace.test(&ctx.level, p, ctx.generator)?
                         && state != self.state
                     {
                         break;
                     }
-                    ctx.region.set_block(p, self.state, 3)?;
+                    ctx.level.set_block(p, self.state, 3)?;
                     p[1] -= 1;
                     run -= 1;
                     if run <= 0 {
-                        p[1] -= ctx.random.next_int_bound(5) + 1;
-                        run = ctx.random.next_int_bound(5);
+                        p[1] -= ctx.random()?.next_int_bound(5) + 1;
+                        run = ctx.random()?.next_int_bound(5);
                     }
                 }
             }
@@ -204,23 +204,23 @@ impl Feature for SnowAndFreezeFeature {
             for z in 0..16 {
                 let x = ctx.origin[0] + x;
                 let z = ctx.origin[2] + z;
-                let top = [x, ctx.region.height_at(Heightmap::MotionBlocking, x, z)?, z];
+                let top = [x, ctx.level.height_at(Heightmap::MotionBlocking, x, z)?, z];
                 let below = relative(top, Direction::Down);
                 let quart = crate::biome_manager::zoom_quart(
-                    crate::biome_manager::obfuscate_seed(ctx.region.seed),
+                    crate::biome_manager::obfuscate_seed(ctx.level.seed()),
                     top,
                 );
                 let id =
-                    &ctx.generator.data().biome_names[ctx.region.noise_biome(quart)?.0 as usize];
+                    &ctx.generator.data().biome_names[ctx.level.noise_biome(quart)?.0 as usize];
                 let climate = &ctx.generator.data().temperatures;
-                if climate.should_freeze(id, ctx.region, below, false)? {
-                    ctx.region.set_block(below, Block::ICE.default_state(), 2)?;
+                if climate.should_freeze(id, &ctx.level, below, false)? {
+                    ctx.level.set_block(below, Block::ICE.default_state(), 2)?;
                 }
-                if climate.should_snow(id, ctx.region, top)? {
-                    ctx.region.set_block(top, Block::SNOW.default_state(), 2)?;
-                    let state = ctx.region.block(below)?;
+                if climate.should_snow(id, &ctx.level, top)? {
+                    ctx.level.set_block(top, Block::SNOW.default_state(), 2)?;
+                    let state = ctx.level.block(below)?;
                     if let Some(state) = state.with(properties::SNOWY, true) {
-                        ctx.region.set_block(below, state, 2)?;
+                        ctx.level.set_block(below, state, 2)?;
                     }
                 }
             }

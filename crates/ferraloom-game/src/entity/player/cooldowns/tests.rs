@@ -9,7 +9,7 @@ use ferraloom_util::{Uuid, Vec3};
 fn stacks() -> Vec<ItemStack> {
     let shared = DataComponentPatch {
         added: vec![DataComponent::UseCooldown(UseCooldown {
-            seconds: 1.0,
+            seconds: 1.0.into(),
             cooldown_group: Some(Identifier::parse("minecraft:shared").unwrap()),
         })],
         removed: Vec::new(),

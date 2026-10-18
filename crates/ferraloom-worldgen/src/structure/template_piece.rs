@@ -10,7 +10,7 @@ use super::{
         transform_block,
     },
 };
-use crate::{Error, Identifier, feature::FeatureContext};
+use crate::{Error, Identifier, structure::StructurePlacementContext};
 use ferraloom_data::Block;
 use ferraloom_nbt::{CompoundTag, Tag};
 use ferraloom_util::Direction;
@@ -82,13 +82,17 @@ impl TemplateStructurePiece {
     #[allow(clippy::too_many_arguments)]
     pub fn post_process(
         &mut self,
-        context: &mut FeatureContext<'_, '_>,
+        context: &mut StructurePlacementContext<'_, '_>,
         templates: &StructureTemplateManager,
         tags: &BlockTags,
         bounds: BoundingBox,
         reference: [i32; 3],
         processors: &[StructureProcessor],
-        mut handle_marker: impl FnMut(&str, [i32; 3], &mut FeatureContext<'_, '_>) -> Result<(), Error>,
+        mut handle_marker: impl FnMut(
+            &str,
+            [i32; 3],
+            &mut StructurePlacementContext<'_, '_>,
+        ) -> Result<(), Error>,
     ) -> Result<(), Error> {
         let template = templates.get_or_create(&self.location);
         self.settings.bounding_box = Some(bounds);

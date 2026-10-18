@@ -39,11 +39,7 @@ impl MinecraftServer {
             .entity::<ServerPlayer>(entity)
             .map_err(game_error)?;
         let stack = player.get_item_in_hand(packet.hand).clone();
-        let item = if stack.is_empty() {
-            Item::AIR
-        } else {
-            stack.0.as_ref().unwrap().item
-        };
+        let item = stack.item();
         if !item.is_enabled_in_vanilla()
             || !player.is_within_block_interaction_range(packet.hit_result.block_pos, 1.0)
         {
@@ -169,7 +165,7 @@ impl MinecraftServer {
         stack: &protocol::component::ItemStack,
     ) -> Result<bool> {
         Ok(!stack.is_empty()
-            && stack.0.as_ref().unwrap().item.is_block_placement_attempt()
+            && stack.item().is_block_placement_attempt()
             && !self
                 .level
                 .level

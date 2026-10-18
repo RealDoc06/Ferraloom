@@ -40,16 +40,14 @@ pub trait Container {
     fn count_item(&self, item: ferraloom_data::Item) -> i32 {
         (0..self.size())
             .map(|slot| self.get_item(slot))
-            .filter(|stack| stack.0.as_ref().is_some_and(|s| s.item == item))
+            .filter(|stack| stack.item() == item)
             .map(|stack| count(&stack))
             .sum()
     }
     fn has_any_of(&self, items: &[ferraloom_data::Item]) -> bool {
         (0..self.size()).any(|slot| {
-            self.get_item(slot)
-                .0
-                .as_ref()
-                .is_some_and(|s| s.count > 0 && items.contains(&s.item))
+            let stack = self.get_item(slot);
+            !stack.is_empty() && items.contains(&stack.item())
         })
     }
     fn is_empty(&self) -> bool {
@@ -247,7 +245,7 @@ impl SimpleContainer {
         let mut removed = ItemStack::new(item, 1, Default::default());
         set_count(&mut removed, 0);
         for slot in (0..self.size()).rev() {
-            if self.items[slot].0.as_ref().is_some_and(|s| s.item == item) {
+            if self.items[slot].item() == item {
                 let part = split(&mut self.items[slot], amount - count(&removed));
                 let total = count(&removed) + count(&part);
                 set_count(&mut removed, total);

@@ -7,7 +7,7 @@ use crate::structure::{
     template::{StructurePlaceSettings, StructureTemplateManager, transform_block},
     template_piece::TemplateStructurePiece,
 };
-use crate::{Error, feature::FeatureContext};
+use crate::{Error, structure::StructurePlacementContext};
 use ferraloom_data::Block;
 use ferraloom_nbt::{CompoundTag, Tag};
 use ferraloom_util::{Direction, Rotation, random::RandomSource};
@@ -81,7 +81,7 @@ impl EndCityPiece {
     }
     pub fn post_process(
         &mut self,
-        context: &mut FeatureContext<'_, '_>,
+        context: &mut StructurePlacementContext<'_, '_>,
         templates: &StructureTemplateManager,
         tags: &BlockTags,
         bounds: BoundingBox,

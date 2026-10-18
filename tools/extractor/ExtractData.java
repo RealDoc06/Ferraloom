@@ -381,6 +381,17 @@ public final class ExtractData {
         write(dir, "attributes", attributes);
     }
 
+    private static void soundEvents(Path dir) throws Exception {
+        var entries = new JsonArray();
+        for (var sound : BuiltInRegistries.SOUND_EVENT) {
+            var entry = new JsonObject();
+            entry.addProperty("id", BuiltInRegistries.SOUND_EVENT.getId(sound));
+            entry.addProperty("name", BuiltInRegistries.SOUND_EVENT.getKey(sound).toString());
+            entry.add("fixed_range", sound.fixedRange().<JsonElement>map(JsonPrimitive::new).orElse(JsonNull.INSTANCE));
+            entries.add(entry);
+        }
+        write(dir, "sound_events", entries);
+    }
 
     /** Item#getCraftingRemainder is final and returns an immutable Properties field.
      * No stack, level or component lookup participates in this item-only fact. */
@@ -399,18 +410,6 @@ public final class ExtractData {
         write(dir, "item_crafting", entries);
     }
 
-    private static void soundEvents(Path dir) throws Exception {
-        var entries = new JsonArray();
-        for (var sound : BuiltInRegistries.SOUND_EVENT) {
-            var entry = new JsonObject();
-            entry.addProperty("id", BuiltInRegistries.SOUND_EVENT.getId(sound));
-            entry.addProperty("name", BuiltInRegistries.SOUND_EVENT.getKey(sound).toString());
-            entry.add("fixed_range", sound.fixedRange().<JsonElement>map(JsonPrimitive::new).orElse(JsonNull.INSTANCE));
-            entries.add(entry);
-        }
-        write(dir, "sound_events", entries);
-
-    }
 
     public static void main(String[] args) throws Exception {
         SharedConstants.tryDetectVersion();

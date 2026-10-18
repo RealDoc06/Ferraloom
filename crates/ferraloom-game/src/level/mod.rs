@@ -28,6 +28,7 @@ pub mod emission;
 pub mod entity;
 pub mod environment;
 pub mod events;
+mod features;
 pub mod heightmap;
 pub mod interaction;
 mod lighting;
@@ -75,6 +76,7 @@ pub enum LevelError {
     MissingEnvironmentContext,
     MissingSpawnProtectionContext,
     MissingBlockTags,
+    MissingBlockTag,
     MissingFluidTags,
     MissingEntityTypeTags,
     MissingItemTags,
@@ -147,7 +149,6 @@ pub struct Region {
     min_y: i32,
     max_y: i32,
     rules: LevelRules,
-    spawn_protection: Option<interaction::SpawnProtectionSnapshot>,
     has_skylight: Option<bool>,
     environment: Option<environment::EnvironmentRuntime>,
     random: ferraloom_util::random::Random,
@@ -189,7 +190,6 @@ impl Region {
             min_y: -64,
             max_y: 320,
             rules: LevelRules::default(),
-            spawn_protection: None,
             has_skylight: None,
             environment: None,
             random: random::new_level_random(),

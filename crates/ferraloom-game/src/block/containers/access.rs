@@ -324,11 +324,7 @@ pub fn can_take_item_through_face(
     tags: &TagSet<Item>,
 ) -> bool {
     if matches!(state, BlockEntityState::Furnace(_)) && face == Direction::Down && slot == 1 {
-        let item = if stack.is_empty() {
-            Item::AIR
-        } else {
-            stack.0.as_ref().unwrap().item
-        };
+        let item = stack.item();
         return tags.contains_key(ItemTags::FURNACE_FUEL_BOTTOM_TAKEABLE, item);
     }
     true

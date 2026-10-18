@@ -96,14 +96,14 @@ impl AttributeInstance {
         if self.dirty.replace(false) {
             let mut base = self.base_value;
             for modifier in self.modifiers_by_operation[0].values() {
-                base += modifier.amount;
+                base += modifier.amount.0;
             }
             let mut result = base;
             for modifier in self.modifiers_by_operation[1].values() {
-                result += base * modifier.amount;
+                result += base * modifier.amount.0;
             }
             for modifier in self.modifiers_by_operation[2].values() {
-                result *= 1.0 + modifier.amount;
+                result *= 1.0 + modifier.amount.0;
             }
             self.cached_value.set(sanitize(self.attribute, result));
         }
@@ -208,7 +208,7 @@ impl AttributeInstance {
                 .iter()
                 .map(|modifier| ferraloom_protocol::play::AttributeModifier {
                     id: modifier.id.clone(),
-                    amount: modifier.amount,
+                    amount: modifier.amount.0,
                     operation: modifier.operation,
                 })
                 .collect(),
@@ -451,7 +451,7 @@ mod tests {
     fn modifier(id: &str, amount: f64, operation: AttributeOperation) -> Arc<AttributeModifier> {
         Arc::new(AttributeModifier {
             id: Identifier::parse(id).unwrap(),
-            amount,
+            amount: amount.into(),
             operation,
         })
     }

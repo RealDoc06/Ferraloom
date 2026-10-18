@@ -781,6 +781,26 @@ pub(super) fn tags(level: &mut Level) {
 pub(super) fn level(floor: bool) -> Level {
     level_with_behaviors(floor, &BEHAVIORS)
 }
+fn install_test_environment(level: &mut Level, fast_lava: bool) {
+    use crate::level::environment::{ClockSnapshot, EnvironmentDefinitions};
+    let resources = ferraloom_data::datapack::ResourceManager::new(Vec::new());
+    let definitions = Arc::new(EnvironmentDefinitions::load(&resources).unwrap());
+    let dimension = definitions
+        .dimension(&serde_json::json!({
+            "attributes": {"gameplay/fast_lava": fast_lava}, "timelines": [],
+        }))
+        .unwrap();
+    level
+        .set_environment_attributes(
+            definitions,
+            &dimension,
+            "test".parse().unwrap(),
+            &[],
+            ClockSnapshot::default(),
+        )
+        .unwrap();
+}
+
 fn level_with_behaviors(floor: bool, behaviors: &'static Behaviors) -> Level {
     use ferraloom_chunk::{BiomeId, IdMap, LevelChunkSection, Strategy};
     let template = LevelChunkSection::new(
@@ -792,6 +812,8 @@ fn level_with_behaviors(floor: bool, behaviors: &'static Behaviors) -> Level {
         Region::new(behaviors),
         crate::level::LevelContext::fixture(0, 63),
     );
+    // Explicit controlled dimension with native constants and no timelines.
+    install_test_environment(&mut level, false);
     for x in -2..=2 {
         for z in -2..=2 {
             level
@@ -1191,6 +1213,38 @@ fn vanilla_item_ticks_preserve_friction_gravity_flags_and_pickup_delay() {
         n += 1;
     }
     assert_eq!(n, 12);
+}
+
+#[test]
+fn item_pickup_uses_mutable_instabuild_when_inventory_is_full() {
+    use ferraloom_data::Item;
+    use ferraloom_protocol::component::ItemStack;
+    for mode in [player::GameType::Survival, player::GameType::Creative] {
+        for instabuild in [false, true] {
+            let mut level = level(false);
+            let mut player =
+                player::ServerPlayer::new(Uuid::new(1, 2), "pickup".into(), 1, Vec3::ZERO, mode);
+            player.instabuild = instabuild;
+            player
+                .inventory
+                .items
+                .fill_with(|| ItemStack::new(Item::STONE, 64, Default::default()));
+            level
+                .add_entity(EntityRef(1), EntityState::Player(Box::new(player)))
+                .unwrap();
+            let mut item = item::ItemEntity::new(2, 2);
+            item.set_item(ItemStack::new(Item::STONE, 2, Default::default()));
+            level
+                .add_entity(EntityRef(2), EntityState::Item(Box::new(item)))
+                .unwrap();
+            item::item_entity::player_touch(EntityRef(2), EntityRef(1), &mut level).unwrap();
+            assert_eq!(
+                level.entity::<EntityData>(EntityRef(2)).unwrap().removed,
+                instabuild
+            );
+            assert_eq!(level.take_entity_effects().is_empty(), !instabuild);
+        }
+    }
 }
 
 #[test]
@@ -1813,7 +1867,7 @@ fn push_entities_up_matches_native_shape_difference_query_order_and_spectators()
             (1, Vec3::new(8.5, 63.9375, 8.5)),
         ] {
             let mut tnt = item::PrimedTnt::new(id as i32, 123);
-            tnt.parent.uuid = Uuid::new(0, id);
+            tnt.parent.uuid = Uuid::new(0, id as i64);
             tnt.parent.set_pos(position);
             level
                 .add_entity(EntityRef(id), EntityState::PrimedTnt(Box::new(tnt)))
@@ -1898,7 +1952,7 @@ fn nonplayer_teleport_snaps_recursive_passengers_without_changing_motion_or_rota
     let mut level = level(false);
     for index in 0..3 {
         let mut entity = item::PrimedTnt::new(index + 1, 123);
-        entity.parent.uuid = Uuid::new(0, index as u64 + 1);
+        entity.parent.uuid = Uuid::new(0, i64::from(index) + 1);
         entity
             .parent
             .set_pos(Vec3::new(8.5, 64.0 + f64::from(index) * 5.0, 8.5));
@@ -2148,4 +2202,41 @@ fn may_build_is_independent_and_game_mode_updates_match_native_abilities() {
         .filter(|row| row.starts_with("player-may-build\t"))
         .collect();
     assert_eq!(actual, expected);
+}
+
+#[test]
+fn lava_entity_force_reads_the_live_dimension_instead_of_the_legacy_rule_input() {
+    let mut level = level(false);
+    let pos = BlockPos::new(8, 64, 8);
+    level
+        .set_block_state(pos, Block::LAVA.default_state())
+        .unwrap();
+    level
+        .set_block_state(
+            pos.east(1),
+            crate::block::fluid::legacy_block(FlowingFluid::Lava.flowing(4, false)),
+        )
+        .unwrap();
+    let mut entity = item::PrimedTnt::new(1, 123);
+    entity.parent.set_pos(Vec3::new(8.5, 64.0, 8.5));
+    let id = EntityRef(1);
+    level
+        .add_entity(id, EntityState::PrimedTnt(Box::new(entity)))
+        .unwrap();
+    for fast in [false, true, false] {
+        install_test_environment(&mut level, fast);
+        level.rules_mut().fast_lava = !fast;
+        level.entity_mut::<EntityData>(id).unwrap().velocity = Vec3::new(0.1, 0.0, 0.0);
+        fluid::update_fluid_interaction(&item::PrimedTntBehavior, id, &mut level).unwrap();
+        let scale = if fast {
+            0.007
+        } else {
+            0.002_333_333_333_333_333_5
+        };
+        assert_vector(
+            level.entity::<EntityData>(id).unwrap().velocity,
+            Vec3::new(0.1 + scale, 0.0, 0.0),
+            "live FAST_LAVA",
+        );
+    }
 }

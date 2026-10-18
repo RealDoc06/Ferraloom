@@ -157,7 +157,7 @@ impl Slot {
         self
     }
     pub fn may_place(&self, stack: &ItemStack, hooks: &dyn MenuHooks) -> Result<bool> {
-        let item = stack.0.as_ref().map(|s| s.item);
+        let item = Some(stack.item());
         Ok(match self.kind {
             SlotKind::Normal | SlotKind::Offhand | SlotKind::EnchantmentItem => true,
             SlotKind::Banner => item.is_some_and(|i| i.name().ends_with("_banner")),
@@ -244,9 +244,7 @@ impl Slot {
         stack: &ItemStack,
         container_limit: impl FnOnce() -> Result<i32>,
     ) -> Result<i32> {
-        if self.kind == SlotKind::FurnaceFuel
-            && stack.0.as_ref().is_some_and(|s| s.item == Item::BUCKET)
-        {
+        if self.kind == SlotKind::FurnaceFuel && stack.item() == Item::BUCKET {
             return Ok(1);
         }
         let limit = match self.fixed_stack_limit() {

@@ -134,6 +134,23 @@ impl ValidationContext<'_> {
     }
 }
 impl LootData {
+    /// Port of advancement CriterionValidator's context-specific holder check.
+    /// The caller owns reporting and decides how to handle validation problems.
+    pub fn validate_condition(
+        &self,
+        condition: &Holder<LootItemCondition>,
+        params: &ContextKeySet,
+    ) -> Vec<ValidationProblem> {
+        let mut context = ValidationContext {
+            data: self,
+            params: params.clone(),
+            path: String::new(),
+            visited: BTreeSet::new(),
+            problems: Vec::new(),
+        };
+        context.holder("condition", condition);
+        context.problems
+    }
     pub fn validate(&self) -> Vec<ValidationProblem> {
         let mut problems = Vec::new();
         macro_rules! validate_registry {

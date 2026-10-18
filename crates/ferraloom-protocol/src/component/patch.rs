@@ -150,11 +150,20 @@ components! {
 }
 
 /// Port of DataComponentPatch. Order is preserved within additions and removals.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default)]
 pub struct DataComponentPatch {
     pub added: Vec<DataComponent>,
     pub removed: Vec<ComponentTypeId>,
 }
+/// Port of DataComponentPatch#equals; additions and removals each compare as map entries.
+impl PartialEq for DataComponentPatch {
+    fn eq(&self, other: &Self) -> bool {
+        super::unordered_eq(&self.added, &other.added)
+            && super::unordered_eq(&self.removed, &other.removed)
+    }
+}
+impl Eq for DataComponentPatch {}
+
 impl DataComponentPatch {
     pub fn decode_delimited(r: &mut Reader<'_>) -> Result<Self> {
         Self::decode_with(r, true)
