@@ -12,6 +12,7 @@ use crate::{
     ticks::{LevelTicks, ScheduledTick, TickPriority},
 };
 
+mod block_entity;
 pub mod border;
 mod broadcast;
 pub mod chunk;
@@ -39,6 +40,9 @@ pub mod weather;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum LevelError {
     Inventory(&'static str),
+    MissingBlockEntity(crate::block::entity::BlockEntityRef),
+    WrongBlockEntityType(crate::block::entity::BlockEntityRef),
+    DuplicateBlockEntity(crate::block::entity::BlockEntityRef),
     MissingChunk(ChunkPos),
     WorldgenMutationFailed(BlockPos),
     UnsupportedWorldgenEnvironment,
@@ -107,6 +111,7 @@ pub struct Region {
     entity_tick_list: entity::EntityTickList,
     block_ticks: LevelTicks,
     fluid_ticks: LevelTicks<ferraloom_data::registries::fluid::Id>,
+    block_entity_state: block_entity::BlockEntityRuntime,
     next_sub_tick_order: i64,
     game_time: i64,
     empty_time: i32,
@@ -141,6 +146,7 @@ impl Region {
             entity_tick_list: entity::EntityTickList::default(),
             block_ticks: LevelTicks::default(),
             fluid_ticks: LevelTicks::default(),
+            block_entity_state: block_entity::BlockEntityRuntime::default(),
             next_sub_tick_order: 0,
             game_time: 0,
             empty_time: 0,
