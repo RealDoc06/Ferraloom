@@ -135,15 +135,6 @@ pub struct StructureEntitySpawnFlags {
 /// extracted collision shapes cannot answer survival or neighbor shape queries.
 pub trait WorldgenBlockBehavior: Sync {
     // --- structures family ---
-    pub fn is_collision_face_full(
-        &self,
-        state: BlockState,
-        position: [i32; 3],
-        face: ferraloom_util::Direction,
-    ) -> Result<bool, Error> {
-        self.behavior
-            .is_collision_face_full(self, state, position, face)
-    }
     /// Port of Block#isFaceFull on the live collision shape, used by portal vines.
     fn is_collision_face_full(
         &self,
@@ -599,6 +590,15 @@ impl<'a> WorldGenRegion<'a> {
             .ok_or_else(|| Error("Unsupported: WorldGenRegion random stream is unset".into()))
     }
     // --- structures family ---
+    pub fn is_collision_face_full(
+        &self,
+        state: BlockState,
+        position: [i32; 3],
+        face: ferraloom_util::Direction,
+    ) -> Result<bool, Error> {
+        self.behavior
+            .is_collision_face_full(self, state, position, face)
+    }
     pub fn set_loot_table_seed(
         &mut self,
         position: [i32; 3],
