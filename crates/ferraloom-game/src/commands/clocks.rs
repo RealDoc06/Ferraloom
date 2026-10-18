@@ -128,8 +128,8 @@ impl ServerClockManager {
         for id in resources.list("world_clock/", ".json") {
             let name = format!(
                 "{}:{}",
-                id.namespace,
-                id.path
+                id.namespace(),
+                id.path()
                     .strip_prefix("world_clock/")
                     .unwrap()
                     .strip_suffix(".json")
@@ -189,8 +189,8 @@ impl ServerClockManager {
             }
             let name = format!(
                 "{}:{}",
-                id.namespace,
-                id.path
+                id.namespace(),
+                id.path()
                     .strip_prefix("timeline/")
                     .unwrap()
                     .strip_suffix(".json")
