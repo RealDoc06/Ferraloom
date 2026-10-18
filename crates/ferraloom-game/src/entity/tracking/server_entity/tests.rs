@@ -123,7 +123,7 @@ fn vanilla_server_entity_packet_order_velocity_precision_mount_and_sync_flags() 
     level
         .add_entity(
             mount,
-            EntityState::PrimedTnt(Box::new(PrimedTnt::new(3, 1))),
+            EntityState::PrimedTnt(Box::new(PrimedTnt::new(3, 2))),
         )
         .unwrap();
     let mut tracker = ServerEntity::new(
