@@ -4,6 +4,46 @@ use ferraloom_parity::{ObservationLog, Result, RunMode, Session, ensure, run};
 use ferraloom_util::BlockPos;
 use level_support::*;
 
+async fn record_torch_burnout(
+    bot: &mut ferraloom_parity::Bot,
+    log: &mut ObservationLog,
+) -> Result<()> {
+    let support = BlockPos::new(12, -59, 5);
+    let torch = BlockPos::new(12, -58, 5);
+    let input = BlockPos::new(11, -59, 5);
+    set(bot, support, Block::STONE).await?;
+    set(bot, torch, Block::REDSTONE_TORCH).await?;
+    for cycle in 0..8 {
+        for (edge, source) in [("rise", Block::REDSTONE_BLOCK), ("fall", Block::AIR)] {
+            set(bot, input, source).await?;
+            for tick in 1..=2 {
+                step(bot, 1).await?;
+                log.record(
+                    format!("torch.{cycle}.{edge}.{tick}"),
+                    block(bot, torch)?.id(),
+                )?;
+            }
+            let expected = edge == "fall" && cycle < 7;
+            ensure!(
+                block(bot, torch)?.get(p::LIT) == Some(expected),
+                "torch cycle {cycle} after {edge}"
+            );
+        }
+    }
+    // Burnout schedules recovery 160 ticks after the eighth falling torch
+    // edge. Removing its input above has already consumed two of those ticks.
+    for tick in 1..=160 {
+        step(bot, 1).await?;
+        let state = block(bot, torch)?;
+        log.record(format!("torch.recovery.{tick}"), state.id())?;
+        ensure!(
+            state.get(p::LIT) == Some(tick >= 158),
+            "torch recovery tick {tick}"
+        );
+    }
+    Ok(())
+}
+
 async fn record(session: &mut Session) -> Result<ObservationLog> {
     let id = session.join("ParityBot").await?;
     let bot = session.bot(id)?;
@@ -146,6 +186,7 @@ async fn record(session: &mut Session) -> Result<ObservationLog> {
         powered.into_iter().all(|ticks| ticks >= 2),
         "both observers must pulse in the clock"
     );
+    record_torch_burnout(bot, &mut log).await?;
     Ok(log)
 }
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
