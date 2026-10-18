@@ -12,7 +12,9 @@ use ferraloom_util::random::RandomSource;
 /// Block#isFaceFull for the upward face of a cached collision shape. Dynamic
 /// shapes must be obtained from the live block behavior instead.
 pub fn cached_collision_up_face_full(state: ferraloom_data::BlockState) -> Option<bool> {
-    state.cached_collision_full_block()?;
+    if state.cached_collision_full_block()? {
+        return Some(true);
+    }
     let boxes = state
         .data()
         .collision

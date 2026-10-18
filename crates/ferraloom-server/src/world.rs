@@ -21,6 +21,7 @@ use ferraloom_worldgen::{
     settings::DimensionType,
     spawn::{self, SpawnWorld},
 };
+use serde::Deserialize;
 use std::{
     borrow::Cow,
     collections::BTreeMap,
@@ -369,7 +370,12 @@ impl World {
                 seed,
             )?
         } else {
-            let generator_settings = serde_json::from_str(properties.get("generator-settings"))
+            let text = properties.get("generator-settings");
+            // GsonHelper reads the first strict JSON object through its type
+            // adapter without requiring EOF. Only an empty property means {}.
+            let mut parser =
+                serde_json::Deserializer::from_str(if text.is_empty() { "{}" } else { text });
+            let generator_settings = serde_json::Value::deserialize(&mut parser)
                 .context("invalid generator-settings JSON")?;
             let preset = WorldPreset::from_server_properties(
                 properties.get("level-type"),
