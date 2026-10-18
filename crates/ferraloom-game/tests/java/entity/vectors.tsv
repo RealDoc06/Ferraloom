@@ -391,6 +391,9 @@ xp-nbt	normal	17	3f400000	777	123
 xp-nbt	negative	-5	0	-9	-20
 xp-nbt	wrong	0	0	0	0
 xp-nbt	nan	0	7fc00000	0	0
+drop-receiver	carried	add:7,item_dropped:7,drop:1	true	7	true
+drop-receiver	empty	-	false	0	true
+drop-receiver	not-thrown	add:7	true	7	true
 entity-equipment-fact	player	head	1	minecraft:leather_boots	true
 entity-equipment-fact	player	head	0	minecraft:air	false
 entity-equipment-fact	player	head	-1	minecraft:air	false

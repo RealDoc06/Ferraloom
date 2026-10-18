@@ -10,8 +10,9 @@ use crate::{
             ServerPlayer,
             inventory::{self, copy_with_count, count, max_stack_size, set_count},
         },
-        synched_data::EntityDataAccessor,
+        synched_data::{EntityDataAccessor, SynchedValue},
     },
+    inventory::StackGenerations,
     level::{Level, LevelError},
 };
 use ferraloom_data::{EntityType, tags::FluidTags};
@@ -29,6 +30,7 @@ pub struct ItemEntity {
     pub thrower: Option<EntityReference<EntityData>>,
     pub target: Option<Uuid>,
     pub bob_offs: f32,
+    stack_generations: StackGenerations,
 }
 impl ItemEntity {
     pub(crate) fn with_parent(mut parent: EntityData) -> Self {
@@ -43,6 +45,7 @@ impl ItemEntity {
             thrower: None,
             target: None,
             bob_offs,
+            stack_generations: StackGenerations::new(1),
         }
     }
     pub fn new(network_id: i32, seed: i64) -> Self {
@@ -80,7 +83,28 @@ impl ItemEntity {
         self.parent.entity_data.get_mut(ITEM)
     }
     pub fn set_item(&mut self, stack: ItemStack) {
-        self.parent.entity_data.set(ITEM, stack);
+        if self.item().same_value(&stack) {
+            return;
+        }
+        let mut current = std::mem::take(self.parent.entity_data.get_mut(ITEM));
+        self.stack_generations.replace(0, &mut current, stack);
+        self.parent.entity_data.set_forced(ITEM, current, true);
+    }
+    /// ItemEntity#getItem's canonical receiver, addressed as entity slot zero.
+    pub fn stack_parts(&self, slot: usize) -> Option<(&StackGenerations, &ItemStack, usize)> {
+        (slot == 0).then(|| (&self.stack_generations, self.item(), 0))
+    }
+    pub fn stack_parts_mut(
+        &mut self,
+        slot: usize,
+    ) -> Option<(&mut StackGenerations, &mut ItemStack, usize)> {
+        (slot == 0).then(|| {
+            (
+                &mut self.stack_generations,
+                self.parent.entity_data.get_mut(ITEM),
+                0,
+            )
+        })
     }
     pub fn is_mergable(&self) -> bool {
         !self.parent.removed
@@ -524,4 +548,48 @@ pub(crate) fn move_towards_closest_space(
         Axis::Z => Vec3::new(movement.x, movement.y, step),
     };
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ferraloom_data::Item;
+
+    #[test]
+    fn item_slot_retains_replaced_receivers_without_dirtying_count_edits() {
+        let mut entity = ItemEntity::new(1, 123);
+        let initial = entity.stack_parts(0).unwrap().0.current(0).unwrap();
+        assert_eq!(initial.generation, 1);
+        entity.set_item(ItemStack::default());
+        assert_eq!(entity.stack_parts(0).unwrap().0.current(0), Some(initial));
+        assert!(entity.parent.entity_data.pack_dirty().is_none());
+        assert!(entity.stack_parts(1).is_none());
+        assert!(entity.stack_parts_mut(1).is_none());
+
+        entity.set_item(ItemStack::new(Item::STONE, 7, Default::default()));
+        assert_eq!(
+            entity.parent.entity_data.pack_dirty().unwrap()[0].id,
+            ITEM.id()
+        );
+        let (generations, stack, index) = entity.stack_parts_mut(0).unwrap();
+        let original = generations.current(index).unwrap();
+        assert!(generations.retain(original));
+        set_count(generations.get_mut(original, stack).unwrap(), 6);
+        assert_eq!(count(entity.item()), 6);
+        assert!(entity.parent.entity_data.pack_dirty().is_none());
+
+        entity.set_item(ItemStack::new(Item::STONE, 6, Default::default()));
+        assert_eq!(
+            entity.parent.entity_data.pack_dirty().unwrap()[0].id,
+            ITEM.id()
+        );
+        let (generations, current, _) = entity.stack_parts_mut(0).unwrap();
+        assert_ne!(generations.current(0), Some(original));
+        set_count(generations.get_mut(original, current).unwrap(), 2);
+        assert_eq!(count(current), 6);
+        assert_eq!(count(generations.get(original, current).unwrap()), 2);
+        assert!(generations.release(original).is_none());
+        assert!(generations.get(original, current).is_none());
+        assert!(entity.parent.entity_data.pack_dirty().is_none());
+    }
 }

@@ -1,5 +1,8 @@
 //! Region-owned canonical entity storage, vanilla ordered indexes and ticking.
-use std::{cell::Cell, collections::HashSet};
+use std::{
+    cell::Cell,
+    collections::{HashMap, HashSet},
+};
 
 use ferraloom_util::{Aabb, ChunkPos, SectionPos, Uuid, Vec3};
 
@@ -79,6 +82,7 @@ pub struct EntityStorage {
     registration: EntityRegistration,
     next_ref: Cell<u64>,
     effects: Vec<crate::entity::effects::EntityEffect>,
+    owner_roots: HashMap<EntityRef, usize>,
     pub border: crate::level::border::WorldBorder,
     states: InsertOnlyMap<EntityRef, EntityState>,
     pub lookup: EntityLookup,
@@ -158,6 +162,29 @@ pub enum EntityManagementEvent {
 }
 
 impl Level {
+    /// Hold a Java entity receiver across callbacks, including after removal.
+    /// Retention never restores lookup, spatial-query or tick visibility.
+    pub fn retain_entity(&mut self, entity: EntityRef) -> Result<(), LevelError> {
+        self.entity_state(entity)?;
+        let count = self
+            .region_mut()
+            .entities
+            .owner_roots
+            .entry(entity)
+            .or_default();
+        *count = count.checked_add(1).expect("entity owner roots exhausted");
+        Ok(())
+    }
+    pub fn release_entity(&mut self, entity: EntityRef) {
+        let roots = &mut self.region_mut().entities.owner_roots;
+        let count = roots
+            .get_mut(&entity)
+            .expect("unbalanced entity root release");
+        *count -= 1;
+        if *count == 0 {
+            roots.remove(&entity);
+        }
+    }
     pub fn are_entities_loaded(&self, pos: ChunkPos) -> bool {
         self.region().entities.are_entities_loaded(pos)
     }
@@ -582,9 +609,9 @@ impl Level {
             return;
         }
         let mut reachable = HashSet::new();
-        let mut work = Vec::new();
-        // Only registered live objects are roots; removed and unmanaged objects
-        // are retained solely when traced from one of these roots.
+        let mut work: Vec<_> = self.region().entities.owner_roots.keys().copied().collect();
+        // Live registered objects and explicitly held callback receivers are
+        // roots, including the references traced from a held removed receiver.
         for id in self.region().entities.sections.all_entities() {
             let state = self.entity_state(id).expect("section entity");
             if !state.as_entity().removed {
@@ -693,6 +720,85 @@ mod tests {
 mod removal_tests {
     use super::*;
     use crate::{Behaviors, level::Region};
+
+    #[test]
+    fn held_item_owner_survives_removal_and_retires_after_its_final_release() {
+        use crate::entity::{
+            EntityReference,
+            item::ItemEntity,
+            player::inventory::{count, set_count},
+        };
+        use ferraloom_data::Item;
+        use ferraloom_protocol::component::ItemStack;
+
+        let mut level = crate::entity::tests::level(false);
+        let thrower = level.next_entity_ref();
+        level
+            .add_entity(thrower, EntityState::Cow(Box::default()))
+            .unwrap();
+        let mut item = ItemEntity::new_at(
+            &mut level,
+            Vec3::new(8.5, 64.0, 8.5),
+            ItemStack::new(Item::STONE, 7, Default::default()),
+        );
+        item.thrower = Some(EntityReference::of(thrower, &level).unwrap());
+        let id = level.next_entity_ref();
+        level
+            .add_entity(id, EntityState::Item(Box::new(item)))
+            .unwrap();
+        let base = level.entity::<EntityData>(id).unwrap();
+        let (uuid, network, bounds) = (base.uuid, base.network_id, base.bounding_box);
+        level.retain_entity(id).unwrap();
+        level.retain_entity(id).unwrap();
+        let (generations, _, slot) = level
+            .entity_mut::<ItemEntity>(id)
+            .unwrap()
+            .stack_parts_mut(0)
+            .unwrap();
+        let held = generations.current(slot).unwrap();
+        assert!(generations.retain(held));
+
+        level
+            .remove_entity_with_reason(id, RemovalReason::Discarded)
+            .unwrap();
+        level
+            .remove_entity_with_reason(thrower, RemovalReason::Discarded)
+            .unwrap();
+        level.finish_entity_management();
+        assert!(level.all_entities().is_empty());
+        assert!(level.entities_in(bounds, |_, _| true).is_empty());
+        assert_eq!(level.entity_by_uuid(uuid), None);
+        assert_eq!(level.entity_by_network_id(network), None);
+        assert!(!level.region().entity_tick_list.contains(network));
+        let (generations, stack, _) = level
+            .entity_mut::<ItemEntity>(id)
+            .unwrap()
+            .stack_parts_mut(0)
+            .unwrap();
+        set_count(generations.get_mut(held, stack).unwrap(), 3);
+        assert_eq!(count(level.entity::<ItemEntity>(id).unwrap().item()), 3);
+        assert!(level.entity::<EntityData>(thrower).unwrap().removed);
+
+        level.release_entity(id);
+        level.finish_entity_management();
+        assert_eq!(count(level.entity::<ItemEntity>(id).unwrap().item()), 3);
+        let (generations, _, _) = level
+            .entity_mut::<ItemEntity>(id)
+            .unwrap()
+            .stack_parts_mut(0)
+            .unwrap();
+        assert!(generations.release(held).is_none());
+        level.release_entity(id);
+        level.finish_entity_management();
+        assert!(
+            matches!(level.entity_state(id), Err(LevelError::MissingEntity(missing)) if missing == id)
+        );
+        assert!(
+            matches!(level.entity_state(thrower), Err(LevelError::MissingEntity(missing)) if missing == thrower)
+        );
+        assert_eq!(level.retain_entity(id), Err(LevelError::MissingEntity(id)));
+    }
+
     #[test]
     fn removal_hides_indexes_before_canonical_retirement() {
         static BEHAVIORS: Behaviors = Behaviors::EMPTY;
