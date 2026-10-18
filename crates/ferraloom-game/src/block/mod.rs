@@ -215,11 +215,9 @@ pub trait BlockBehavior: Sync {
         direction: Option<Direction>,
         level: &LevelReaderRef<'_, '_>,
     ) -> Result<bool, LevelError> {
-        let source = match level {
-            LevelReaderRef::Server(server) => server
-                .required_block_behavior(state.block(), BlockMethod::IsSignalSource)?
-                .is_signal_source(state),
-        };
+        let source = level
+            .required_behavior(state.block(), BlockMethod::IsSignalSource)?
+            .is_signal_source(state);
         Ok(source && direction.is_some())
     }
     /// Port of BlockBehaviour#getAnalogOutputSignal.
