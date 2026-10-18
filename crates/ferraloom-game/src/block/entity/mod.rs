@@ -28,7 +28,7 @@ impl BlockEntityRef {
         let data = level.block_entity::<BlockEntityData>(self)?;
         let (has_level, state) = (data.has_level, data.block_state);
         if has_level {
-            level.set_changed(self.pos)?;
+            level.mark_chunk_unsaved(ChunkPos::containing(self.pos))?;
             if !state.is_air() {
                 level.update_neighbour_for_output_signal(self.pos, state.block())?;
             }
