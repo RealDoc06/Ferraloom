@@ -139,15 +139,11 @@ fn known_pending(error: &str) -> bool {
         "Unsupported: update_from_neighbor_shapes",
     ]
     .contains(&error)
-        || [
-            "sequence",
-            "weighted_random_selector",
-            "random_selector",
-            "simple_random_selector",
-            "template",
-        ]
-        .iter()
-        .any(|kind| error == format!("unsupported feature type minecraft:{kind}"))
+}
+#[derive(Default)]
+struct Coverage {
+    passing: usize,
+    pending: usize,
 }
 fn replay(require_pending: bool) {
     let (resources, generator) = setup();
@@ -159,7 +155,9 @@ fn replay(require_pending: bool) {
     let fixtures = cases();
     let mut passing = 0;
     let mut pending = BTreeMap::<String, usize>::new();
+    let mut coverage = BTreeMap::<&str, Coverage>::new();
     for case in &fixtures {
+        let coverage = coverage.entry(case["name"].as_str().unwrap()).or_default();
         let label = format!(
             "{} {} seed={} origin={}",
             case["name"], case["terrain"], case["seed"], case["origin"]
@@ -175,12 +173,14 @@ fn replay(require_pending: bool) {
             *pending
                 .entry(format!("vanilla template ServerLevel access: {error}"))
                 .or_default() += 1;
+            coverage.pending += 1;
             continue;
         }
         let feature = match loader.feature(&case["config"]) {
             Ok(f) => f,
             Err(error) if known_pending(&error.0) && !require_pending => {
                 *pending.entry(error.0).or_default() += 1;
+                coverage.pending += 1;
                 continue;
             }
             Err(error) => panic!("{label}: {error}"),
@@ -215,6 +215,7 @@ fn replay(require_pending: bool) {
             Ok(value) => value,
             Err(error) if known_pending(&error.0) && !require_pending => {
                 *pending.entry(error.0).or_default() += 1;
+                coverage.pending += 1;
                 continue;
             }
             Err(error) => panic!("{label}: {error}"),
@@ -258,6 +259,13 @@ fn replay(require_pending: bool) {
             "fluid ticks {label}"
         );
         passing += 1;
+        coverage.passing += 1;
+    }
+    for (name, coverage) in coverage {
+        eprintln!(
+            "{name}: {} passing, {} pending",
+            coverage.passing, coverage.pending
+        );
     }
     eprintln!(
         "{passing} complete vanilla placement cases match; {} pending cases: {pending:?}",
@@ -270,7 +278,7 @@ fn supported_vegetation_aquatic_surface_cases_match_real_vanilla() {
     replay(false);
 }
 #[test]
-#[ignore = "pending game canSurvive/sturdy-face/vine/double-plant/moss-carpet behavior and composite/template families"]
+#[ignore = "pending game canSurvive, vine neighbor checks and liquid placement"]
 fn pending_vegetation_game_behavior_cases() {
     replay(true);
 }
