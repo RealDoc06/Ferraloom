@@ -68,6 +68,7 @@ impl Level {
                     },
                     block_state: BlockStateId(i32::from(state.id())),
                 }));
+                self.append_block_entity_packet(block_pos, &mut packets)?;
             } else {
                 let mut states = Vec::with_capacity(changes.len());
                 for &relative in changes.iter() {
@@ -84,8 +85,30 @@ impl Level {
                     },
                     changes: states,
                 }));
+                for &relative in changes.iter() {
+                    self.append_block_entity_packet(
+                        section.relative_to_block_pos(relative),
+                        &mut packets,
+                    )?;
+                }
             }
         }
         Ok(packets)
+    }
+    fn append_block_entity_packet(
+        &mut self,
+        pos: ferraloom_util::BlockPos,
+        packets: &mut Vec<Packet>,
+    ) -> Result<(), LevelError> {
+        if self.get_block_state(pos)?.has_block_entity()
+            && let Some(handle) = self.get_or_promote_block_entity(pos)?
+            && let Some(packet) = self
+                .block_entity_state(handle)?
+                .get_update_packet()
+                .map_err(|_| LevelError::Inventory("block entity update packet codec"))?
+        {
+            packets.push(Packet::BlockEntityData(packet));
+        }
+        Ok(())
     }
 }

@@ -9,8 +9,10 @@
 //! ```
 
 mod block_methods;
+mod environment_attributes;
 mod sound_events;
 pub use block_methods::BlockMethod;
+pub use environment_attributes::EnvironmentAttributeData;
 
 pub mod datapack;
 pub use datapack::tags;
@@ -51,6 +53,17 @@ impl BlockState {
             let index = (self.0 - block.first_state) / layout.stride % layout.names.len() as u16;
             (layout.name, layout.names[index as usize])
         })
+    }
+
+    /// Port of Property#getPossibleValues for a named property on this state.
+    /// Values retain vanilla's order; comparison rules belong to the caller.
+    pub fn property_values(self, name: &str) -> Option<&'static [&'static str]> {
+        self.block()
+            .data()
+            .properties
+            .iter()
+            .find(|property| property.name == name)
+            .map(|property| property.names)
     }
 
     /// Port of StateDefinition#appendPropertyCodec and NbtUtils#readBlockState.
@@ -570,5 +583,51 @@ impl Block {
     /// pure block subclass overrides. Air represents an absent block item.
     pub const fn as_item(self) -> Item {
         BLOCK_ITEMS[self.protocol_id() as usize]
+    }
+}
+
+/// Pure BlockEntityType registry facts extracted from the pinned server.
+pub struct BlockEntityTypeData {
+    pub valid_blocks: &'static [Block],
+    pub only_op_can_set_nbt: bool,
+}
+impl registries::block_entity_type::Id {
+    pub const fn valid_blocks(self) -> &'static [Block] {
+        BLOCK_ENTITY_TYPES[self.protocol_id() as usize].valid_blocks
+    }
+    pub const fn only_op_can_set_nbt(self) -> bool {
+        BLOCK_ENTITY_TYPES[self.protocol_id() as usize].only_op_can_set_nbt
+    }
+    pub const fn is_valid(self, state: BlockState) -> bool {
+        matches!(state.block().block_entity_type(),Some(kind) if kind.protocol_id() == self.protocol_id())
+    }
+}
+impl Block {
+    /// Port of BlockEntityType#isValid's inverse, indexed by block ID.
+    pub const fn block_entity_type(self) -> Option<registries::block_entity_type::Id> {
+        BLOCK_ENTITY_TYPE_BY_BLOCK[self.protocol_id() as usize]
+    }
+}
+
+#[cfg(test)]
+mod property_value_tests {
+    use super::Block;
+    #[test]
+    fn possible_values_preserve_vanilla_order_and_absence() {
+        assert_eq!(
+            Block::OAK_STAIRS
+                .default_state()
+                .property_values("waterlogged"),
+            Some(["true", "false"].as_slice())
+        );
+        assert_eq!(
+            Block::OAK_LOG.default_state().property_values("axis"),
+            Some(["x", "y", "z"].as_slice())
+        );
+        assert_eq!(
+            Block::WHEAT.default_state().property_values("age"),
+            Some(["0", "1", "2", "3", "4", "5", "6", "7"].as_slice())
+        );
+        assert_eq!(Block::STONE.default_state().property_values("age"), None);
     }
 }

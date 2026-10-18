@@ -50,6 +50,14 @@ pub enum BlockMethod {
     IsCollisionShapeFullBlock,
     CloneItemStack,
     CanBeReplaced,
+    GetStateForPlacement,
+    Signal,
+    DirectSignal,
+    IsSignalSource,
+    OwnSignal,
+    ShouldRedstoneWireConnectTo,
+    HasAnalogOutputSignal,
+    AnalogOutputSignal,
 }
 impl BlockMethod {
     pub(crate) const fn vanilla_method(self) -> Option<ferraloom_data::BlockMethod> {
@@ -76,6 +84,14 @@ impl BlockMethod {
             Self::TriggerEvent => Vanilla::TriggerEvent,
             Self::CloneItemStack => Vanilla::GetCloneItemStack,
             Self::CanBeReplaced => Vanilla::CanBeReplaced,
+            Self::GetStateForPlacement => Vanilla::GetStateForPlacement,
+            Self::Signal => Vanilla::GetSignal,
+            Self::DirectSignal => Vanilla::GetDirectSignal,
+            Self::IsSignalSource => Vanilla::IsSignalSource,
+            Self::OwnSignal => Vanilla::OwnSignal,
+            Self::ShouldRedstoneWireConnectTo => Vanilla::ShouldRedstoneWireConnectTo,
+            Self::HasAnalogOutputSignal => Vanilla::HasAnalogOutputSignal,
+            Self::AnalogOutputSignal => Vanilla::GetAnalogOutputSignal,
             Self::CanPlaceLiquid => Vanilla::CanPlaceLiquid,
             Self::PlaceLiquid => Vanilla::PlaceLiquid,
             Self::PickupBlock => Vanilla::PickupBlock,
@@ -97,7 +113,15 @@ impl BlockMethod {
                 | Self::TriggerEvent
                 | Self::IsCollisionShapeFullBlock
                 | Self::CloneItemStack
+                | Self::GetStateForPlacement
                 | Self::CanBeReplaced
+                | Self::Signal
+                | Self::DirectSignal
+                | Self::IsSignalSource
+                | Self::OwnSignal
+                | Self::ShouldRedstoneWireConnectTo
+                | Self::HasAnalogOutputSignal
+                | Self::AnalogOutputSignal
         )
     }
     pub const fn name(self) -> &'static str {
@@ -130,6 +154,14 @@ impl BlockMethod {
             Self::IsCollisionShapeFullBlock => "isCollisionShapeFullBlock",
             Self::CloneItemStack => "getCloneItemStack",
             Self::CanBeReplaced => "canBeReplaced(BlockPlaceContext)",
+            Self::GetStateForPlacement => "getStateForPlacement",
+            Self::Signal => "getSignal",
+            Self::DirectSignal => "getDirectSignal",
+            Self::IsSignalSource => "isSignalSource",
+            Self::OwnSignal => "ownSignal",
+            Self::ShouldRedstoneWireConnectTo => "shouldRedstoneWireConnectTo",
+            Self::HasAnalogOutputSignal => "hasAnalogOutputSignal",
+            Self::AnalogOutputSignal => "getAnalogOutputSignal",
         }
     }
 }
@@ -144,17 +176,19 @@ pub(crate) struct UnportedCalls {
     seen: HashSet<UnportedCall>,
     stats: UnportedBehaviorStats,
 }
-#[derive(Clone, Copy, Eq, Hash, PartialEq)]
+#[derive(Eq, Hash, PartialEq)]
 enum UnportedCall {
     Block(Block, BlockMethod),
     Operation(UnportedOperation),
+    Worldgen(String, String),
+    BlockEntity(Block, ferraloom_nbt::NbtString),
+    PostProcessing(Block, &'static str),
 }
 impl UnportedCalls {
     fn record(&mut self, call: UnportedCall) {
         self.stats.skipped_calls = self.stats.skipped_calls.saturating_add(1);
-        if self.seen.insert(call) {
-            self.stats.distinct_calls = self.seen.len();
-            match call {
+        if !self.seen.contains(&call) {
+            match &call {
                 UnportedCall::Operation(UnportedOperation::EntityMethod(kind, method)) => {
                     eprintln!(
                         "Unported entity effect skipped: {}#{} (skipped calls: {})",
@@ -192,11 +226,69 @@ impl UnportedCalls {
                     "Pack reload not yet supported (skipped calls: {})",
                     self.stats.skipped_calls
                 ),
+                UnportedCall::Worldgen(unit, behavior) => eprintln!(
+                    "Unported worldgen unit skipped: {unit}#{behavior} (skipped calls: {})",
+                    self.stats.skipped_calls
+                ),
+                UnportedCall::BlockEntity(block, factory) => eprintln!(
+                    "Pending block entity activation skipped: {}#{factory} (skipped calls: {}; raw NBT retained)",
+                    block.name(),
+                    self.stats.skipped_calls
+                ),
+                UnportedCall::PostProcessing(block, behavior) => eprintln!(
+                    "Post-processing unit skipped: {}#{behavior} (skipped calls: {})",
+                    block.name(),
+                    self.stats.skipped_calls
+                ),
             }
+            self.seen.insert(call);
+            self.stats.distinct_calls = self.seen.len();
         }
     }
 }
 impl Level {
+    pub(crate) fn skip_post_processing(&mut self, error: LevelError) -> Result<(), LevelError> {
+        let (block, behavior) = match error {
+            LevelError::UnsupportedBlockMethod(block, method) => (block, method.name()),
+            LevelError::UnsupportedShape(state) => (state.block(), "getCollisionShape"),
+            LevelError::UnsupportedBlock(block) => (block, "Block.updateFromNeighbourShapes"),
+            LevelError::UnsupportedBlockEntity(block) => (block, "setBlockState block entity"),
+            _ => return Err(error),
+        };
+        let calls = &mut self.region_mut().unported;
+        if calls.policy == UnportedBehavior::Strict {
+            return Err(error);
+        }
+        calls.record(UnportedCall::PostProcessing(block, behavior));
+        Ok(())
+    }
+    /// Integrate owned generation-unit skips on the game thread. Strict rejects
+    /// any skipped unit; Warn shares the live counters and logs each pair once.
+    pub fn record_worldgen_skips(
+        &mut self,
+        skips: Vec<(String, String)>,
+    ) -> Result<(), LevelError> {
+        let calls = &mut self.region_mut().unported;
+        if !skips.is_empty() && calls.policy == UnportedBehavior::Strict {
+            return Err(LevelError::UnsupportedWorldgenBehavior);
+        }
+        for (unit, behavior) in skips {
+            calls.record(UnportedCall::Worldgen(unit, behavior));
+        }
+        Ok(())
+    }
+    pub(crate) fn skip_block_entity_activation(
+        &mut self,
+        block: Block,
+        factory: ferraloom_nbt::NbtString,
+    ) -> Result<(), LevelError> {
+        let calls = &mut self.region_mut().unported;
+        if calls.policy == UnportedBehavior::Strict {
+            return Err(LevelError::UnsupportedBlockEntity(block));
+        }
+        calls.record(UnportedCall::BlockEntity(block, factory));
+        Ok(())
+    }
     /// Record one approved unit-effect skip. This shares the block-method
     /// policy, deduplication and visible counters; it never supplies query values.
     pub fn unported_operation(&mut self, operation: UnportedOperation) -> Result<(), LevelError> {

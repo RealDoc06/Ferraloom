@@ -320,3 +320,12 @@ One class row per bootstrapped runtime Block class, listing every block id assig
 | blocks.class.wither-skull-block | `WitherSkullBlock`: `minecraft:wither_skeleton_skull` | `net.minecraft.world.level.block.WitherSkullBlock`; `Blocks#register` | | - | todo |
 | blocks.class.wither-wall-skull-block | `WitherWallSkullBlock`: `minecraft:wither_skeleton_wall_skull` | `net.minecraft.world.level.block.WitherWallSkullBlock`; `Blocks#register` | | - | todo |
 | blocks.class.wool-carpet-block | `WoolCarpetBlock`: `minecraft:black_carpet`, `minecraft:blue_carpet`, `minecraft:brown_carpet`, `minecraft:cyan_carpet`, `minecraft:gray_carpet`, `minecraft:green_carpet`, `minecraft:light_blue_carpet`, `minecraft:light_gray_carpet`, `minecraft:lime_carpet`, `minecraft:magenta_carpet`, `minecraft:orange_carpet`, `minecraft:pink_carpet`, `minecraft:purple_carpet`, `minecraft:red_carpet`, `minecraft:white_carpet`, `minecraft:yellow_carpet` | `net.minecraft.world.level.block.WoolCarpetBlock`; `Blocks#register` | | - | todo |
+
+| blocks.plants.double-plant-upper-support | Double plants require the matching lower half | `DoublePlantBlock#canSurvive` | `plants::tests::upper_double_plant_requires_its_own_lower_half` | - | todo |
+| blocks.plants.multiface-support-loss | Remove unsupported faces, preserving other attachments | `MultifaceBlock#updateShape` | `plants::tests::multiface_neighbor_loss_removes_only_the_unsupported_face` | - | todo |
+| blocks.plants.leaves-decay-callback | Persistent/distance gates, drops and removal without destroy particles | `LeavesBlock#randomTick` | `plants::tests::decaying_waterlogged_leaves_drop_and_restore_water_without_destroy_particles` | - | todo |
+| blocks.plants.shared-brightness | Shared reader requires canonical light context | `BlockAndLightGetter#getRawBrightness` | `plants::tests::shared_raw_brightness_requires_light_context` | - | todo |
+
+| blocks.drops.registry | Optional native block loot-table identities and exact getDrops/spawnAfterBreak virtual ownership | `BlockBehaviour#getLootTable; getDrops; spawnAfterBreak` | `ExtractBlockDropTables; ExtractBlockMethods` (1286 block registry entries) | pass | partial |
+
+| blocks.interaction.feature-eligibility | Check every block and item against the dedicated server advertised VANILLA_SET | `FeatureElement#isEnabled` | `tools/extractor/ExtractFeatureRequirements.java` (all native registry entries) | pass | partial |

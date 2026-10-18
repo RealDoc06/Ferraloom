@@ -19,6 +19,82 @@ fn result<T>(value: Result<T, LevelError>) -> Result<T, Error> {
     value.map_err(|error| Error(format!("game block behavior: {error:?}")))
 }
 impl WorldgenBlockBehavior for GameWorldgenBlockBehavior {
+    fn vine_acceptable_neighbor(
+        &self,
+        region: &WorldGenRegion<'_>,
+        p: [i32; 3],
+        direction: Direction,
+    ) -> Result<bool, Error> {
+        result(super::plants::vine_acceptable_neighbor(
+            &LevelReaderRef::Worldgen(region),
+            pos(p),
+            direction,
+        ))
+    }
+    fn place_double_plant(
+        &self,
+        region: &mut WorldGenRegion<'_>,
+        state: BlockState,
+        p: [i32; 3],
+        flags: u32,
+    ) -> Result<(), Error> {
+        result(super::plants::place_double_plant(
+            &mut LevelAccessRef::Worldgen(region),
+            state,
+            pos(p),
+            super::UpdateFlags(flags),
+        ))
+    }
+    fn place_mossy_carpet(
+        &self,
+        region: &mut WorldGenRegion<'_>,
+        p: [i32; 3],
+        flags: u32,
+    ) -> Result<(), Error> {
+        result(super::plants::place_mossy_carpet(
+            &mut LevelAccessRef::Worldgen(region),
+            pos(p),
+            super::UpdateFlags(flags),
+        ))
+    }
+    fn multiface_state_for_placement(
+        &self,
+        region: &WorldGenRegion<'_>,
+        block: ferraloom_data::Block,
+        old: BlockState,
+        p: [i32; 3],
+        face: Direction,
+    ) -> Result<Option<BlockState>, Error> {
+        result(super::plants::multiface::state_for_placement(
+            &LevelReaderRef::Worldgen(region),
+            block,
+            old,
+            pos(p),
+            face,
+        ))
+    }
+    #[allow(clippy::too_many_arguments)]
+    fn multiface_spread(
+        &self,
+        region: &mut WorldGenRegion<'_>,
+        state: BlockState,
+        p: [i32; 3],
+        face: Direction,
+        random: &mut ferraloom_util::random::WorldgenRandom,
+        post: bool,
+    ) -> Result<bool, Error> {
+        result(
+            super::plants::multiface_spreader::spread_from_face_toward_random_direction(
+                &mut LevelAccessRef::Worldgen(region),
+                state,
+                pos(p),
+                face,
+                random,
+                post,
+            ),
+        )
+        .map(|value| value.is_some())
+    }
     fn post_process_pos(
         &self,
         state: BlockState,
@@ -203,6 +279,33 @@ mod tests {
         )
         .unwrap();
         let p = [8, dimension.min_y + 1, 8];
+        let environment = Arc::new(
+            ferraloom_worldgen::environment::EnvironmentDefinitions::load(&resources).unwrap(),
+        );
+        let dimension_environment = environment
+            .dimension(
+                &resources
+                    .require(&"dimension_type/overworld.json".parse().unwrap())
+                    .unwrap()
+                    .json()
+                    .unwrap(),
+            )
+            .unwrap();
+        region
+            .set_environment_attributes(environment, &dimension_environment, &data.biome_names)
+            .unwrap();
+        region.set_has_skylight(dimension.has_skylight);
+        assert_eq!(LevelReaderRef::Worldgen(&region).sky_darken(), Ok(0));
+        assert_eq!(
+            LevelReaderRef::Worldgen(&region).get_dimension_value(
+                ferraloom_worldgen::environment::EnvironmentAttributes::SKY_LIGHT_LEVEL
+            ),
+            Ok(15.0)
+        );
+        assert_eq!(
+            LevelReaderRef::Worldgen(&region).max_local_raw_brightness(pos(p)),
+            Ok(15)
+        );
         let flower = Block::DANDELION.default_state();
         assert_eq!(
             LevelReaderRef::Worldgen(&region).can_survive(flower, pos(p)),

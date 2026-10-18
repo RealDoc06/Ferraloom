@@ -200,7 +200,7 @@ impl DistanceManager {
                     }
                     PlayerLoadingTask::Add(pos) => self.dispatcher.release(pos, false, None),
                     PlayerLoadingTask::Remove(pos) => {
-                        tickets.remove(pos, TicketType::PlayerLoading, 31)
+                        tickets.remove(pos, TicketType::PlayerLoading, 31);
                     }
                 }
             }
@@ -209,12 +209,33 @@ impl DistanceManager {
             }
         }
     }
-    /// Call only after the corresponding entity-ticking range future completes
+    /// DistanceManager#runAllUpdates registers these future callbacks only
+    /// after the holder update pass has settled. Preserve primitive-set order.
+    pub fn take_player_loading_waiters(
+        &mut self,
+        tickets: &super::tickets::TicketStorage,
+    ) -> Vec<ChunkPos> {
+        let waiters = self
+            .tickets_to_release
+            .iter()
+            .filter_map(|&key| {
+                let pos = ChunkPos::unpack(key);
+                tickets
+                    .contains_type(pos, super::tickets::TicketType::PlayerLoading)
+                    .then_some(pos)
+            })
+            .collect();
+        self.tickets_to_release.clear();
+        waiters
+    }
+    pub fn has_pending_player_loading(&self, pos: ChunkPos) -> bool {
+        self.tickets_to_release.contains(&pos.pack())
+    }
+    /// Call only after the registered entity-ticking range future completes
     /// (success or failure). A merely loaded chunk never releases this slot.
     pub fn complete_player_loading(&mut self, pos: ChunkPos) {
-        if self.tickets_to_release.remove(&pos.pack()) {
-            self.dispatcher.release(pos, false, None);
-        }
+        self.tickets_to_release.remove(&pos.pack());
+        self.dispatcher.release(pos, false, None);
     }
 }
 
@@ -236,11 +257,12 @@ mod player_tests {
         let origin = SectionPos::new(0, 4, 0);
         manager.update_player(a, Some(origin), &mut tickets);
         manager.update_player(b, Some(origin), &mut tickets);
-        assert_eq!(tickets.take_source_updates().len(), 1);
+        assert_eq!(tickets.pending_source_updates().len(), 1);
+        manager.run_all_updates(&mut tickets);
         manager.update_player(a, None, &mut tickets);
-        assert!(tickets.take_source_updates().is_empty());
+        assert!(tickets.pending_source_updates().is_empty());
         manager.update_player(b, Some(SectionPos::new(0, 5, 0)), &mut tickets);
-        let changes = tickets.take_source_updates();
+        let changes = tickets.pending_source_updates();
         assert_eq!(
             changes
                 .iter()
@@ -251,11 +273,12 @@ mod player_tests {
                 (TicketTracker::Simulation, 21, true)
             ]
         );
+        manager.run_all_updates(&mut tickets);
         // A->B->A during one packet phase must disturb the queued graph, even
         // though a snapshot of only the final player chunk would be unchanged.
         manager.update_player(b, Some(SectionPos::new(1, 5, 0)), &mut tickets);
         manager.update_player(b, Some(origin), &mut tickets);
-        assert_eq!(tickets.take_source_updates().len(), 4);
+        assert_eq!(tickets.pending_source_updates().len(), 4);
         manager.run_all_updates(&mut tickets);
         assert_eq!(manager.simulation.level(ChunkPos::new(0, 0)), 21);
         assert_eq!(manager.simulation.level(ChunkPos::new(1, 0)), 22);

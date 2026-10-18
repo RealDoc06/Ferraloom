@@ -12,19 +12,25 @@ use crate::{
     ticks::{LevelTicks, ScheduledTick, TickPriority},
 };
 
+mod block_entity;
 pub mod border;
 mod broadcast;
 pub mod chunk;
 pub mod chunk_holder;
 pub mod chunk_map;
 pub mod chunk_task_dispatcher;
+mod container_runtime;
 pub mod distance_manager;
 pub mod effects;
 pub mod emission;
 pub mod entity;
+pub mod environment;
 pub mod events;
 pub mod heightmap;
+mod lighting;
+pub mod loot_facts;
 mod mutation;
+mod post_processing;
 mod random;
 pub mod redstone;
 mod saved_ticks;
@@ -40,10 +46,16 @@ pub enum LevelError {
     UnsupportedEntityMethod(EntityType, crate::entity::EntityMethod),
     UnsupportedAdvancementCriterion(crate::advancements::criteria::Trigger),
     Inventory(&'static str),
+    MissingBlockEntity(crate::block::entity::BlockEntityRef),
+    WrongBlockEntityType(crate::block::entity::BlockEntityRef),
+    DuplicateBlockEntity(crate::block::entity::BlockEntityRef),
     MissingChunk(ChunkPos),
     WorldgenMutationFailed(BlockPos),
     UnsupportedWorldgenEnvironment,
+    UnsupportedWorldgenBehavior,
     OutsideBuildHeight,
+    MissingPlacementPlayer,
+    UninitializedPlacementDirection,
     MissingEntity(EntityRef),
     WrongEntityType(EntityRef),
     DuplicateEntity(EntityRef),
@@ -52,15 +64,22 @@ pub enum LevelError {
     UnsupportedBlock(Block),
     UnsupportedBlockMethod(Block, crate::block::BlockMethod),
     UnsupportedBlockEntity(Block),
+    UnsupportedGameRule(&'static str),
+    UnsupportedLightQuery,
+    UnsupportedEnvironmentAttribute(ferraloom_data::registries::environment_attribute::Id),
+    MissingEnvironmentContext,
     MissingBlockTags,
     MissingFluidTags,
     MissingEntityTypeTags,
+    MissingItemTags,
     UnsupportedShape(BlockState),
     UnsupportedFluidRandomTick,
     UnsupportedWeatherQuery,
     UnsupportedPushEntitiesUp,
     UnsupportedPackReload,
     InvalidSavedTick,
+    InvalidPendingGenerationData,
+    UnsupportedChunkUpgrade,
     WrongChunkHeight(ChunkPos),
 }
 
@@ -68,6 +87,8 @@ pub enum LevelError {
 /// dimension's FAST_LAVA attribute and synchronized game-rule snapshot.
 #[derive(Clone, Copy, Debug)]
 pub struct LevelRules {
+    /// Published by the canonical GameRules owner after load and each change.
+    pub block_drops: Option<bool>,
     pub tnt_explodes: bool,
     pub entity_drops: bool,
     pub debug: bool,
@@ -79,10 +100,13 @@ pub struct LevelRules {
     pub fast_lava: bool,
     pub redstone_experiments: bool,
     pub spread_fire: bool,
+    pub spread_vines: bool,
+    pub mob_griefing: bool,
 }
 impl Default for LevelRules {
     fn default() -> Self {
         Self {
+            block_drops: None,
             tnt_explodes: true,
             entity_drops: true,
             debug: false,
@@ -94,6 +118,8 @@ impl Default for LevelRules {
             fast_lava: false,
             redstone_experiments: false,
             spread_fire: true,
+            spread_vines: true,
+            mob_griefing: true,
         }
     }
 }
@@ -105,19 +131,27 @@ pub struct Region {
     entity_tick_list: entity::EntityTickList,
     block_ticks: LevelTicks,
     fluid_ticks: LevelTicks<ferraloom_data::registries::fluid::Id>,
+    block_entity_state: block_entity::BlockEntityRuntime,
+    container_runtime: crate::block::containers::runtime::ContainerRuntime,
     next_sub_tick_order: i64,
     game_time: i64,
     empty_time: i32,
+    handling_tick: bool,
     weather: weather::Weather,
     min_y: i32,
     max_y: i32,
     rules: LevelRules,
+    has_skylight: Option<bool>,
+    environment: Option<environment::EnvironmentRuntime>,
     random: ferraloom_util::random::Random,
     sound_seed_generator: ferraloom_util::random::Random,
     rand_value: i32,
     block_ticking_chunks: HashSet<ChunkPos>,
     entity_ticking_chunks: HashSet<ChunkPos>,
     neighbor_updater: redstone::CollectingNeighborUpdater,
+    // The family owner replaces its pending state/registration stub together.
+    #[allow(dead_code)]
+    pub(crate) redstone: crate::block::redstone::RedstoneState,
     block_events: events::BlockEvents,
     effects: Vec<effects::LevelEffect>,
     block_changes: broadcast::BlockChanges,
@@ -125,6 +159,7 @@ pub struct Region {
     fluid_tags:
         Option<Arc<ferraloom_data::datapack::TagSet<ferraloom_data::registries::fluid::Id>>>,
     entity_type_tags: Option<Arc<ferraloom_data::datapack::TagSet<EntityType>>>,
+    item_tags: Option<Arc<ferraloom_data::datapack::TagSet<ferraloom_data::Item>>>,
     pub(crate) unported: crate::block::UnportedCalls,
     behaviors: &'static Behaviors,
 }
@@ -137,25 +172,32 @@ impl Region {
             entity_tick_list: entity::EntityTickList::default(),
             block_ticks: LevelTicks::default(),
             fluid_ticks: LevelTicks::default(),
+            block_entity_state: block_entity::BlockEntityRuntime::default(),
+            container_runtime: crate::block::containers::runtime::ContainerRuntime::default(),
             next_sub_tick_order: 0,
             game_time: 0,
             empty_time: 0,
+            handling_tick: false,
             weather: weather::Weather::default(),
             min_y: -64,
             max_y: 320,
             rules: LevelRules::default(),
+            has_skylight: None,
+            environment: None,
             random: random::new_level_random(),
             sound_seed_generator: random::new_sound_random(),
             rand_value: random::new_position_seed(),
             block_ticking_chunks: HashSet::new(),
             entity_ticking_chunks: HashSet::new(),
             neighbor_updater: redstone::CollectingNeighborUpdater::default(),
+            redstone: crate::block::redstone::RedstoneState::default(),
             block_events: events::BlockEvents::default(),
             effects: Vec::new(),
             block_changes: broadcast::BlockChanges::default(),
             tags: None,
             fluid_tags: None,
             entity_type_tags: None,
+            item_tags: None,
             unported: crate::block::UnportedCalls::default(),
             behaviors,
         }
