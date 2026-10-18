@@ -13,7 +13,7 @@ use crate::{
 use ferraloom_data::{Block, BlockState, Item, properties as p};
 use ferraloom_protocol::{component::ItemStack, play::InteractionHand};
 use ferraloom_util::{Direction, Uuid, Vec3};
-use std::{collections::BTreeSet, io::Read, ops::Deref, sync::LazyLock};
+use std::{collections::BTreeSet, io::Read, sync::LazyLock};
 
 static VECTORS: LazyLock<String> = LazyLock::new(|| {
     let mut text = String::new();
@@ -90,24 +90,24 @@ fn attachments_match_every_variant_face_support_mask_and_actual_player_look_orde
         let block = block(f[1]);
         mask(&mut level, f[2].parse().unwrap());
         level.set_block_state(POS, state(f[5])).unwrap();
-        let context = if f[0] == "place" {
-            DirectionalPlaceContext::new(
+        let actual = if f[0] == "place" {
+            let context = DirectionalPlaceContext::new(
                 &LevelReaderRef::Server(&level),
                 POS,
                 direction(f[3]),
                 &item,
                 direction(f[4]),
             )
-            .unwrap()
-            .deref()
-            .clone()
+            .unwrap();
+            level.get_state_for_placement(block, &context)
         } else {
             let actor = level.entity_mut::<EntityData>(EntityRef(1)).unwrap();
             actor.yaw = f[3].parse().unwrap();
             actor.pitch = f[4].parse().unwrap();
-            player_context(&level, &item)
-        };
-        let actual = level.get_state_for_placement(block, &context).unwrap();
+            let context = player_context(&level, &item);
+            level.get_state_for_placement(block, &context)
+        }
+        .unwrap();
         assert_eq!(
             actual.map_or(-1, |state| i32::from(state.id())),
             f[6].parse::<i32>().unwrap(),
