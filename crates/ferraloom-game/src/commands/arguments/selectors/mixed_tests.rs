@@ -129,7 +129,7 @@ impl EntityQuery for Query {
 fn mixed_native_selectors_use_player_lookup_and_section_iteration() {
     let vectors: Vectors =
         serde_json::from_str(include_str!("../../vanilla/mixed-selector-vectors.json")).unwrap();
-    static BEHAVIORS: Behaviors = Behaviors::new();
+    static BEHAVIORS: Behaviors = Behaviors::EMPTY;
     let mut level = Level::new(
         Region::new(&BEHAVIORS),
         crate::level::LevelContext::fixture(0, 63),

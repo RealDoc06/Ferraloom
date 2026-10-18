@@ -43,7 +43,7 @@ fn dirty(storage: &CommandStorage) -> std::collections::BTreeMap<String, bool> {
             let data = storage
                 .current
                 .namespaces
-                .get(&namespace)
+                .peek(&namespace)
                 .unwrap()
                 .as_ref()
                 .unwrap();
@@ -125,7 +125,7 @@ fn real_native_saved_file_loads_and_level_reads_share_namespace_touches() {
     .unwrap();
     let mut commands = CommandStorage::preload(&directory.0);
     assert!(commands.keys().is_empty());
-    static BEHAVIORS: crate::Behaviors = crate::Behaviors::new();
+    static BEHAVIORS: crate::Behaviors = crate::Behaviors::EMPTY;
     let mut level = crate::level::Level::new(
         crate::level::Region::new(&BEHAVIORS),
         crate::level::LevelContext::fixture(0, 63),

@@ -91,7 +91,7 @@ pub struct CommandStorageSnapshot {
 impl CommandStorageSnapshot {
     pub fn get(&self, id: &Identifier) -> Result<CompoundTag, StorageReadError> {
         let namespace = id.namespace();
-        let loaded = self.namespaces.get(&namespace.to_owned());
+        let loaded = self.namespaces.peek(&namespace.to_owned());
         {
             let mut touches = self.touches.lock().expect("command storage cache poisoned");
             if matches!(loaded, Some(Ok(_))) {
@@ -117,7 +117,7 @@ impl CommandStorageSnapshot {
             }
         };
         Ok(data
-            .and_then(|data| data.value().contents.get(&id.path().to_owned()))
+            .and_then(|data| data.value().contents.peek(&id.path().to_owned()))
             .cloned()
             .unwrap_or_default())
     }
@@ -133,7 +133,7 @@ impl CommandStorageSnapshot {
             .collect::<Vec<_>>();
         let mut keys = Vec::new();
         for namespace in namespaces {
-            if let Some(Ok(data)) = self.namespaces.get(&namespace) {
+            if let Some(Ok(data)) = self.namespaces.peek(&namespace) {
                 for path in data.value().contents.keys() {
                     keys.push(
                         Identifier::parse(&format!("{namespace}:{path}"))
