@@ -44,12 +44,32 @@ fn registered_structure_generation_matches_vanilla_with_biome_rejection() {
             .parse()
             .unwrap())
         };
+        let nether = (case["id"] == "minecraft:nether_fossil").then(|| {
+            crate::generator::NoiseBasedChunkGenerator::new(
+                noise.data.clone(),
+                crate::settings::NoiseGeneratorSettings::decode(
+                    &resources
+                        .require(&"worldgen/noise_settings/nether.json".parse().unwrap())
+                        .unwrap()
+                        .json()
+                        .unwrap(),
+                )
+                .unwrap(),
+                crate::biome::BiomeSource::Fixed("minecraft:plains".parse().unwrap()),
+                seed,
+            )
+            .unwrap()
+        });
+        let generator: &dyn ChunkGeneratorAccess = match &nether {
+            Some(nether) => nether,
+            None => &flat,
+        };
         let mut context = StructureGenerationContext {
             seed,
             chunk,
             min_y: -64,
             height: 384,
-            generator: &flat,
+            generator,
             templates: &templates,
             pools: &pools,
             biome: &mut biome,

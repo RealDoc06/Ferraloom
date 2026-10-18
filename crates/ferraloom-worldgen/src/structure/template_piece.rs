@@ -79,6 +79,7 @@ impl TemplateStructurePiece {
         self.data.bounds = self.data.bounds.moved(delta);
         self.position = std::array::from_fn(|i| self.position[i].wrapping_add(delta[i]));
     }
+    #[allow(clippy::too_many_arguments)]
     pub fn post_process(
         &mut self,
         context: &mut FeatureContext<'_, '_>,

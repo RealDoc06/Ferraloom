@@ -8,18 +8,22 @@ use super::{
     template::StructureTemplateManager,
 };
 use crate::{
-    Error, Identifier, feature::PlacedFeature, generator::ChunkGeneratorAccess,
-    placement::providers::WorldGenerationContext, region::Heightmap,
+    Error, Identifier,
+    feature::PlacedFeature,
+    generator::ChunkGeneratorAccess,
+    placement::providers::{HeightProvider, WorldGenerationContext},
+    region::Heightmap,
 };
 use ferraloom_data::{datapack::ResourceManager, registries::worldgen_structure_type};
 use std::{collections::BTreeMap, sync::Arc};
 
 #[derive(Clone, Debug)]
 enum StructureGenerator {
-    Jigsaw(JigsawStructure),
+    Jigsaw(Box<JigsawStructure>),
     BuriedTreasure,
     Igloo,
     Shipwreck { beached: bool },
+    NetherFossil { height: HeightProvider },
     Unsupported(worldgen_structure_type::Id),
 }
 /// Immutable decoded generation definitions, shared by independent chunk jobs.
@@ -56,17 +60,21 @@ impl StructureGenerators {
                     .get(&id)
                     .ok_or_else(|| Error(format!("missing structure settings {id}")))?;
                 let generator = match definition.kind.name() {
-                    "minecraft:jigsaw" => StructureGenerator::Jigsaw(JigsawStructure::decode(
-                        &resource.json()?,
-                        resources,
-                        decode_feature,
-                    )?),
+                    "minecraft:jigsaw" => StructureGenerator::Jigsaw(Box::new(
+                        JigsawStructure::decode(&resource.json()?, resources, decode_feature)?,
+                    )),
                     "minecraft:buried_treasure" => StructureGenerator::BuriedTreasure,
                     "minecraft:igloo" => StructureGenerator::Igloo,
                     "minecraft:shipwreck" => StructureGenerator::Shipwreck {
                         beached: crate::codec::boolean(crate::codec::field(
                             &resource.json()?,
                             "is_beached",
+                        )?)?,
+                    },
+                    "minecraft:nether_fossil" => StructureGenerator::NetherFossil {
+                        height: HeightProvider::decode(crate::codec::field(
+                            &resource.json()?,
+                            "height",
                         )?)?,
                     },
                     _ => StructureGenerator::Unsupported(definition.kind),
@@ -185,7 +193,7 @@ impl StructureGenerators {
                             &mut random,
                         )?
                         .into_iter()
-                        .map(StructurePiece::Igloo)
+                        .map(|p| StructurePiece::Igloo(Box::new(p)))
                         .collect(),
                         StructureGenerator::Shipwreck { beached } => {
                             let mut piece =
@@ -203,7 +211,7 @@ impl StructureGenerators {
                                 context.height,
                                 &mut random,
                             )?;
-                            vec![StructurePiece::Shipwreck(piece)]
+                            vec![StructurePiece::Shipwreck(Box::new(piece))]
                         }
                         _ => unreachable!("non-template generators handled above"),
                     }
@@ -214,6 +222,63 @@ impl StructureGenerators {
                     references,
                     settings.terrain,
                     pieces,
+                ));
+            }
+            StructureGenerator::NetherFossil { height } => {
+                use ferraloom_data::Block;
+                use ferraloom_util::{
+                    Direction,
+                    random::{Algorithm, RandomSource, WorldgenRandom},
+                };
+                let mut random = WorldgenRandom::new(Algorithm::Legacy.new_instance(0));
+                random.set_large_feature_seed(context.seed, context.chunk[0], context.chunk[1]);
+                let x = context.chunk[0].wrapping_mul(16) + random.next_int_bound(16);
+                let z = context.chunk[1].wrapping_mul(16) + random.next_int_bound(16);
+                let generation = WorldGenerationContext::new(
+                    generator.min_y(),
+                    generator.gen_depth(),
+                    context.min_y,
+                    context.height,
+                    generator.sea_level(),
+                );
+                let mut y = height.sample(&mut random, generation);
+                let column = generator
+                    .get_base_column(x, z, context.min_y, context.height)?
+                    .ok_or_else(|| Error("Unsupported nether fossil base column".into()))?;
+                while y > generator.sea_level() {
+                    let current = column.get_block(y);
+                    y -= 1;
+                    let below = column.get_block(y);
+                    if current.is_air()
+                        && (below.block() == Block::SOUL_SAND
+                            || below.cached_sturdy_face(Direction::Up).ok_or_else(|| {
+                                Error(
+                                    "Unsupported nether fossil face against EmptyBlockGetter"
+                                        .into(),
+                                )
+                            })?)
+                    {
+                        break;
+                    }
+                }
+                if y <= generator.sea_level() {
+                    return Ok(StructureStart::invalid());
+                }
+                let position = [x, y, z];
+                if !valid(&(context.biome)(position.map(|v| v >> 2))?) {
+                    return Ok(StructureStart::invalid());
+                }
+                let piece = super::structures::nether_fossil::NetherFossilPiece::add_random(
+                    context.templates,
+                    position,
+                    &mut random,
+                );
+                return Ok(StructureStart::new(
+                    id.clone(),
+                    context.chunk,
+                    references,
+                    settings.terrain,
+                    vec![StructurePiece::NetherFossil(Box::new(piece))],
                 ));
             }
             StructureGenerator::Unsupported(kind) => {

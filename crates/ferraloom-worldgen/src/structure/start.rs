@@ -22,8 +22,9 @@ use std::{
 pub enum StructurePiece {
     Jigsaw(PoolElementStructurePiece),
     BuriedTreasure(super::structures::buried_treasure::BuriedTreasurePiece),
-    Igloo(super::structures::igloo::IglooPiece),
-    Shipwreck(super::structures::shipwreck::ShipwreckPiece),
+    Igloo(Box<super::structures::igloo::IglooPiece>),
+    Shipwreck(Box<super::structures::shipwreck::ShipwreckPiece>),
+    NetherFossil(Box<super::structures::nether_fossil::NetherFossilPiece>),
 }
 impl StructurePiece {
     pub fn terrain_piece(&self, adjustment: TerrainAdjustment) -> super::TerrainPiece<'_> {
@@ -50,6 +51,7 @@ impl StructurePiece {
             Self::BuriedTreasure(p) => p.data.bounds,
             Self::Igloo(p) => p.template.data.bounds,
             Self::Shipwreck(p) => p.template.data.bounds,
+            Self::NetherFossil(p) => p.template.data.bounds,
         }
     }
     pub fn to_nbt(&self) -> Result<CompoundTag, Error> {
@@ -58,6 +60,7 @@ impl StructurePiece {
             Self::BuriedTreasure(p) => Ok(p.to_nbt()),
             Self::Igloo(p) => Ok(p.to_nbt()),
             Self::Shipwreck(p) => Ok(p.to_nbt()),
+            Self::NetherFossil(p) => Ok(p.to_nbt()),
         }
     }
 }
@@ -206,18 +209,27 @@ impl StructureStart {
                     return Ok(None);
                 };
                 match piece_id.to_string().as_str() {
+                    "minecraft:nefos" => {
+                        if let Ok(piece) =
+                            super::structures::nether_fossil::NetherFossilPiece::from_nbt(
+                                templates, tag,
+                            )
+                        {
+                            pieces.push(StructurePiece::NetherFossil(Box::new(piece)));
+                        }
+                    }
                     "minecraft:shipwreck" => {
                         if let Ok(piece) =
                             super::structures::shipwreck::ShipwreckPiece::from_nbt(templates, tag)
                         {
-                            pieces.push(StructurePiece::Shipwreck(piece));
+                            pieces.push(StructurePiece::Shipwreck(Box::new(piece)));
                         }
                     }
                     "minecraft:iglu" => {
                         if let Ok(piece) =
                             super::structures::igloo::IglooPiece::from_nbt(templates, tag)
                         {
-                            pieces.push(StructurePiece::Igloo(piece));
+                            pieces.push(StructurePiece::Igloo(Box::new(piece)));
                         }
                     }
                     "minecraft:btp" => {

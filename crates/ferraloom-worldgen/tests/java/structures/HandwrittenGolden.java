@@ -25,12 +25,20 @@ public final class HandwrittenGolden {
         try(var storage=net.minecraft.world.level.storage.LevelStorageSource.createDefault(Path.of("handwritten-world")).createAccess("test")) {
             var templates=new StructureTemplateManager(StructureGolden.RESOURCES,storage,net.minecraft.util.datafix.DataFixers.getDataFixer(),BuiltInRegistries.BLOCK);
             var serialization=new StructurePieceSerializationContext(StructureGolden.RESOURCES,registries,templates);
-            for(String name:List.of("buried_treasure","igloo","shipwreck","shipwreck_beached","village_plains","trial_chambers","ancient_city"))for(long seed:new long[]{0,-1,8675309})for(int[] p:new int[][]{{0,0},{-7,11}})for(boolean accept:new boolean[]{true,false}) {
+            for(String name:List.of("buried_treasure","igloo","shipwreck","shipwreck_beached","nether_fossil","village_plains","trial_chambers","ancient_city"))for(long seed:new long[]{0,-1,8675309})for(int[] p:new int[][]{{0,0},{-7,11}})for(boolean accept:new boolean[]{true,false}) {
                 var selected=registries.lookupOrThrow(Registries.STRUCTURE).getOrThrow(ResourceKey.create(Registries.STRUCTURE,Identifier.withDefaultNamespace(name)));
-                var randomState=RandomState.create(registries.lookupOrThrow(Registries.NOISE),seed,settings.value());
-                var start=selected.value().generate(selected,Level.OVERWORLD,registries,generator,source,randomState.createClimateSampler(SamplerContext.builder().enableCaches().build()),randomState,templates,seed,new ChunkPos(p[0],p[1]),7,LevelHeightAccessor.create(-64,384),b->accept);
+                var useSettings=name.equals("nether_fossil")?registries.lookupOrThrow(Registries.NOISE_SETTINGS).getOrThrow(NoiseGeneratorSettings.NETHER):settings;
+                var selectedGenerator=name.equals("nether_fossil")?new NoiseBasedChunkGenerator(source,useSettings):generator;
+                var randomState=RandomState.create(registries.lookupOrThrow(Registries.NOISE),seed,useSettings.value());
+                var start=selected.value().generate(selected,Level.OVERWORLD,registries,selectedGenerator,source,randomState.createClimateSampler(SamplerContext.builder().enableCaches().build()),randomState,templates,seed,new ChunkPos(p[0],p[1]),7,LevelHeightAccessor.create(-64,384),b->accept);
                 var item=new JsonObject();item.addProperty("id","minecraft:"+name);item.addProperty("seed",seed);item.add("chunk",StructureGolden.ints(p));item.addProperty("accept",accept);item.addProperty("nbt",start.createTag(serialization,new ChunkPos(p[0],p[1])).toString());if(start.isValid())item.add("bounds",StructureGolden.bounds(start.getBoundingBox()));var loaded=StructureStart.loadStaticStart(serialization,start.createTag(serialization,new ChunkPos(p[0],p[1])),seed);item.addProperty("loaded",loaded.createTag(serialization,new ChunkPos(p[0],p[1])).toString());out.add(item);
             }
+            var fossilCases=new JsonArray();
+            for(long seed=0;seed<64;seed++)for(int[] p:new int[][]{{0,70,0},{-17,42,31},{123,98,-456}}) {
+                var random=new LegacyRandomSource(seed);var builder=new StructurePiecesBuilder();net.minecraft.world.level.levelgen.structure.structures.NetherFossilPieces.addPieces(templates,builder,random,new BlockPos(p[0],p[1],p[2]));
+                var piece=builder.build().pieces().getFirst();var item=new JsonObject();item.addProperty("seed",seed);item.add("position",StructureGolden.ints(p));item.addProperty("nbt",piece.createTag(serialization).toString());item.addProperty("next",random.nextInt());fossilCases.add(item);
+            }
+            StructureGolden.write(directory.resolve("nether_fossil_pieces.json.gz"),fossilCases);
             StructureGolden.write(directory.resolve("structure_generation.json.gz"),out);
         }
         var cases=new JsonArray();

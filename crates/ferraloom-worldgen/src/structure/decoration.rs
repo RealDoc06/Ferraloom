@@ -97,7 +97,7 @@ impl StructureStart {
         context: &mut FeatureContext<'_, '_>,
         templates: &StructureTemplateManager,
         tags: &BlockTags,
-        bounds: BoundingBox,
+        bounds: &mut BoundingBox,
     ) -> Result<(), Error> {
         let Some(first) = self.pieces.first() else {
             return Ok(());
@@ -106,17 +106,20 @@ impl StructureStart {
         let [x, _, z] = first.center();
         let reference = [x, first.min[1], z];
         for piece in &mut self.pieces {
-            if !piece.bounds().intersects(bounds) {
+            if !piece.bounds().intersects(*bounds) {
                 continue;
             }
             match piece {
-                StructurePiece::Shipwreck(piece) => {
+                StructurePiece::NetherFossil(piece) => {
                     piece.post_process(context, templates, tags, bounds, reference)?
+                }
+                StructurePiece::Shipwreck(piece) => {
+                    piece.post_process(context, templates, tags, *bounds, reference)?
                 }
                 StructurePiece::Igloo(piece) => {
-                    piece.post_process(context, templates, tags, bounds, reference)?
+                    piece.post_process(context, templates, tags, *bounds, reference)?
                 }
-                StructurePiece::BuriedTreasure(piece) => piece.post_process(context, bounds)?,
+                StructurePiece::BuriedTreasure(piece) => piece.post_process(context, *bounds)?,
                 StructurePiece::Jigsaw(piece) => {
                     piece.element.place(
                         templates,
@@ -124,7 +127,7 @@ impl StructureStart {
                         piece.position,
                         reference,
                         piece.rotation,
-                        bounds,
+                        *bounds,
                         piece.liquid,
                         false,
                         tags,
@@ -147,6 +150,24 @@ pub struct RegionStructureDecoration<'a> {
     pub generator: &'a dyn ChunkGeneratorAccess,
     pub features: &'a FeatureRegistry,
 }
+impl<'a> RegionStructureDecoration<'a> {
+    pub fn new(
+        registry: &'a [StructureStep],
+        templates: &'a StructureTemplateManager,
+        tags: &'a BlockTags,
+        generator: &'a dyn ChunkGeneratorAccess,
+        features: &'a FeatureRegistry,
+    ) -> Self {
+        Self {
+            registry,
+            templates,
+            tags,
+            generator,
+            features,
+        }
+    }
+}
+
 impl StructureDecoration for RegionStructureDecoration<'_> {
     fn place_step(
         &mut self,
@@ -176,6 +197,9 @@ impl StructureDecoration for RegionStructureDecoration<'_> {
                 let Some(mut start) = region.take_structure_start(origin, &structure.id)? else {
                     continue;
                 };
+                // ChunkGenerator#getWritableArea creates a fresh box per start;
+                // individual pieces within that start may expand the same box.
+                let mut piece_bounds = bounds;
                 let result = if start.is_valid() {
                     start.place_in_chunk(
                         &mut FeatureContext {
@@ -187,7 +211,7 @@ impl StructureDecoration for RegionStructureDecoration<'_> {
                         },
                         self.templates,
                         self.tags,
-                        bounds,
+                        &mut piece_bounds,
                     )
                 } else {
                     Ok(())
