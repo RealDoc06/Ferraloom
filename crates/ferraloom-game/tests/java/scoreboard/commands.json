@@ -1544,7 +1544,20 @@
         "broadcast": true
       }
     ],
-    "packets": []
+    "packets": [
+      {
+        "type": "ClientboundSetObjectivePacket",
+        "hex": "06706f696e747300080006706f696e74730000"
+      },
+      {
+        "type": "ClientboundSetDisplayObjectivePacket",
+        "hex": "0106706f696e7473"
+      },
+      {
+        "type": "ClientboundSetScorePacket",
+        "hex": "04236f6e6506706f696e7473fdffffff0f0000"
+      }
+    ]
   },
   {
     "command": "scoreboard objectives setdisplay list points",
@@ -2985,6 +2998,22 @@
       {
         "type": "ClientboundSetDisplayObjectivePacket",
         "hex": "01056f74686572"
+      },
+      {
+        "type": "ClientboundSetObjectivePacket",
+        "hex": "056f74686572000800054f746865720000"
+      },
+      {
+        "type": "ClientboundSetDisplayObjectivePacket",
+        "hex": "01056f74686572"
+      },
+      {
+        "type": "ClientboundSetScorePacket",
+        "hex": "0723736f75726365056f74686572000000"
+      },
+      {
+        "type": "ClientboundSetScorePacket",
+        "hex": "042374776f056f74686572000000"
       }
     ]
   },
@@ -3002,7 +3031,12 @@
         "broadcast": true
       }
     ],
-    "packets": []
+    "packets": [
+      {
+        "type": "ClientboundSetObjectivePacket",
+        "hex": "06706f696e747301"
+      }
+    ]
   },
   {
     "command": "scoreboard objectives setdisplay list",
@@ -3053,7 +3087,12 @@
         "broadcast": true
       }
     ],
-    "packets": []
+    "packets": [
+      {
+        "type": "ClientboundSetObjectivePacket",
+        "hex": "056f7468657201"
+      }
+    ]
   },
   {
     "command": "scoreboard objectives remove other",

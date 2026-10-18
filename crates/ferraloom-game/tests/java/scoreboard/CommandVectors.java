@@ -42,7 +42,8 @@ public class CommandVectors {
     com.mojang.brigadier.exceptions.CommandSyntaxException.BUILT_IN_EXCEPTIONS = new BrigadierExceptions();
     var context = CommandBuildContext.simple(net.minecraft.data.registries.VanillaRegistries.createWorldLookup(),FeatureFlags.DEFAULT_FLAGS);
     var source = mock(CommandSourceStack.class); var server = mock(MinecraftServer.class); var players = mock(PlayerList.class); var player = mock(ServerPlayer.class);
-    when(server.getPlayerList()).thenReturn(players); when(players.getPlayers()).thenReturn(List.of()); when(server.getAllLevels()).thenReturn(List.of());
+    var listener = mock(net.minecraft.server.network.ServerGamePacketListenerImpl.class); player.connection = listener;
+    when(server.getPlayerList()).thenReturn(players); when(players.getPlayers()).thenReturn(List.of(player)); when(server.getAllLevels()).thenReturn(List.of());
     var board = new ServerScoreboard(server); when(server.getScoreboard()).thenReturn(board);
     when(source.getServer()).thenReturn(server); when(source.permissions()).thenReturn(LevelBasedPermissionSet.forLevel(PermissionLevel.byId(4)));
     when(source.getPlayerOrException()).thenReturn(player); when(source.getEntityOrException()).thenReturn(player); when(source.getEntity()).thenReturn(player);
@@ -52,6 +53,7 @@ public class CommandVectors {
     var feedback = new JsonArray(); var packets = new JsonArray();
     doAnswer(call->{ var value = new JsonObject(); value.add("message",json(((Supplier<Component>)call.getArgument(0)).get())); value.addProperty("broadcast",(boolean)call.getArgument(1)); feedback.add(value); return null; }).when(source).sendSuccess(any(),anyBoolean());
     doAnswer(call->{packets.add(packet(call.getArgument(0)));return null;}).when(players).broadcastAll(any(Packet.class));
+    doAnswer(call->{packets.add(packet(call.getArgument(0)));return null;}).when(listener).send(any(Packet.class));
     var dispatcher = new CommandDispatcher<CommandSourceStack>(); TeamCommand.register(dispatcher,context); ScoreboardCommand.register(dispatcher,context); TriggerCommand.register(dispatcher);
     var commands = List.of(
       "team list", "team add red", "team add red", "team add blue \"Blue\"", "team join red #one", "team join red #one", "team join blue #one", "team join red #two", "team list red",
@@ -86,7 +88,6 @@ public class CommandVectors {
     joinBoard.addObjective("hidden",net.minecraft.world.scores.criteria.ObjectiveCriteria.DUMMY,Component.literal("Hidden"),net.minecraft.world.scores.criteria.ObjectiveCriteria.RenderType.INTEGER,false,null);
     joinBoard.getOrCreatePlayerScore(net.minecraft.world.scores.ScoreHolder.forNameOnly("Doc"),shown).set(3);
     joinBoard.setDisplayObjective(net.minecraft.world.scores.DisplaySlot.LIST,shown); joinBoard.setDisplayObjective(net.minecraft.world.scores.DisplaySlot.SIDEBAR,shown);
-    var listener = mock(net.minecraft.server.network.ServerGamePacketListenerImpl.class); player.connection = listener;
     var joinPackets = new JsonArray(); doAnswer(call->{joinPackets.add(packet(call.getArgument(0)));return null;}).when(listener).send(any(Packet.class));
     var sync = mock(PlayerList.class,CALLS_REAL_METHODS);
     var update = PlayerList.class.getDeclaredMethod("updateEntireScoreboard",ServerScoreboard.class,ServerPlayer.class); update.setAccessible(true); update.invoke(sync,joinBoard,player);
