@@ -15,6 +15,36 @@ pub enum EntityLoadError {
     InvalidRotation,
 }
 
+/// The supported constructor set is shared by persistent and proto-chunk loads.
+pub(crate) fn has_entity_factory(kind: ferraloom_data::EntityType) -> bool {
+    use ferraloom_data::EntityType;
+    matches!(
+        kind,
+        EntityType::COW
+            | EntityType::ITEM
+            | EntityType::TNT
+            | EntityType::FALLING_BLOCK
+            | EntityType::EXPERIENCE_ORB
+    )
+}
+
+/// Reuse the canonical loader for one constructor, allowing the stream consumer
+/// to register its state before recursively constructing its passengers.
+pub(crate) fn load_entity_state(
+    level: &mut crate::level::Level,
+    mut tag: CompoundTag,
+) -> Result<(super::EntityRef, super::EntityState), EntityPersistenceError> {
+    let passengers = tag.remove("Passengers");
+    let mut loaded = Vec::new();
+    load_entity_tree(level, tag, &mut loaded)?;
+    let (entity, mut state) = loaded.pop().expect("root constructor produced its state");
+    debug_assert!(loaded.is_empty());
+    if let Some(passengers) = passengers {
+        state.as_entity_mut().saved.insert("Passengers", passengers);
+    }
+    Ok((entity, state))
+}
+
 impl EntityData {
     /// Port of Entity#load. Passengers are instantiated by the section manager.
     pub fn load_nbt(&mut self, tag: CompoundTag) -> Result<(), EntityLoadError> {
