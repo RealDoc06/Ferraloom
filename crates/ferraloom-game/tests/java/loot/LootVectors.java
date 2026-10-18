@@ -214,6 +214,12 @@ public final class LootVectors {
             var json=JsonParser.parseString(test);var predicate=net.minecraft.advancements.predicates.DamagePredicate.CODEC.parse(lookup.createSerializationContext(JsonOps.INSTANCE),json).getOrThrow();
             var record=new JsonObject();record.add("predicate",json);record.addProperty("original",original);record.addProperty("blocked",blocked);record.addProperty("matches",predicate.matches(player,source,original,1.5f,blocked));damagePredicates.add(record);
         }output.add("damage_predicates",damagePredicates);
+        var pages=new JsonArray();
+        for(String character:List.of("a","\u2028","\ud83d\ude00"))for(int length:character.equals("a")?new int[]{32765,32766}:character.equals("\u2028")?new int[]{5460,5461}:new int[]{16382,16383}) {
+            var definition=new JsonObject();definition.addProperty("type","set_written_book_pages");definition.addProperty("mode","replace_all");var content=new JsonArray();content.add(character.repeat(length));definition.add("pages",content);
+            var record=new JsonObject();record.addProperty("character",character);record.addProperty("length",length);record.addProperty("accepts",net.minecraft.world.level.storage.loot.functions.LootItemFunctions.DIRECT_CODEC.parse(lookup.createSerializationContext(JsonOps.INSTANCE),definition).result().isPresent());pages.add(record);
+        }output.add("book_page_codecs",pages);
+
 
 
 

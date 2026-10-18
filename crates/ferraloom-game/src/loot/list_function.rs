@@ -74,7 +74,7 @@ impl ListFunction {
                 }
             }
             "minecraft:set_written_book_pages" => Self::SetWrittenBookPages {
-                pages: Vec::<Filterable<Component>>::from_json(codec::field(v, "pages")?)?,
+                pages: written_pages(codec::field(v, "pages")?)?,
                 mode: ListOperation::decode(v, i32::MAX as usize)?,
             },
             "minecraft:set_writable_book_pages" => Self::SetWritableBookPages {
@@ -300,6 +300,27 @@ impl ListFunction {
         }
         Ok(stack)
     }
+}
+/// Port of WrittenBookContent#CONTENT_CODEC's Gson JSON character limit.
+fn written_pages(v: &Value) -> Result<Vec<Filterable<Component>>> {
+    let pages = Vec::<Filterable<Component>>::from_json(v)?;
+    for page in &pages {
+        for value in std::iter::once(&page.raw).chain(page.filtered.iter()) {
+            if let Ok(json) = value.to_json() {
+                // Gson's JsonWriter escapes these two Unicode line separators.
+                let length = json.encode_utf16().count()
+                    + json
+                        .chars()
+                        .filter(|c| matches!(*c, '\u{2028}' | '\u{2029}'))
+                        .count()
+                        * 5;
+                if length > 32767 {
+                    return Err(codec::error("written book page component too large"));
+                }
+            }
+        }
+    }
+    Ok(pages)
 }
 fn written_book(map: &DataComponentMap) -> WrittenBookContent {
     match map.get(ComponentTypeId::WRITTEN_BOOK_CONTENT) {

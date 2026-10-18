@@ -462,6 +462,19 @@ fn item_modifiers_and_float_arithmetic_match_java() {
     let vectors: serde_json::Value =
         serde_json::from_str(include_str!("../../tests/java/loot/vectors.json")).unwrap();
     let data = LootData::default();
+    for record in vectors["book_page_codecs"].as_array().unwrap() {
+        let text = record["character"]
+            .as_str()
+            .unwrap()
+            .repeat(record["length"].as_u64().unwrap() as usize);
+        let definition =
+            json!({"type":"set_written_book_pages","mode":"replace_all","pages":[text]});
+        assert_eq!(
+            LootItemFunction::decode(&definition).is_ok(),
+            record["accepts"].as_bool().unwrap(),
+            "{record}"
+        );
+    }
     for record in vectors["modifiers"].as_array().unwrap() {
         let modifier = Holder::direct(LootItemFunction::decode(&record["definition"]).unwrap());
         let params = LootParams {
