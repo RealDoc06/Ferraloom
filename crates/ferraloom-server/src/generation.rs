@@ -2,6 +2,8 @@
 //! overlapping neighborhoods vanilla's X-major layers are serialized. Vanilla
 //! itself permits order-dependent feature writes; worker completion order never
 //! chooses which write wins here. Disjoint dimensions can use separate workers.
+pub(crate) mod runtime;
+
 use crate::jobs::JobPool;
 use crate::world::{
     GenerationLightNeighbor, RegistryAdapter, Terrain, surface_heights_in_dimension,
@@ -54,8 +56,8 @@ pub(crate) struct ReadyGeneration {
     pub pos: ChunkPos,
     pub result: Result<GenerationOutput>,
 }
-/// Identity captured by a main-executor continuation. Request IDs identify
-/// submissions; the epoch also rejects a holder removed and recreated in place.
+/// Identity captured by a main-executor FULL continuation. The status future
+/// survives replacement tasks; epoch rejects a removed/recreated holder.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct GenerationIdentity {
     pub pos: ChunkPos,
@@ -66,12 +68,21 @@ impl GenerationIdentity {
     pub fn of(holder: &ferraloom_game::level::chunk_holder::ChunkHolder) -> Self {
         Self {
             pos: holder.position,
-            request: holder.request_id,
+            request: holder
+                .generation
+                .future_id(ChunkStatus::Full)
+                .expect("FULL continuation requires its status future")
+                .0,
             holder_epoch: holder.epoch,
         }
     }
     pub fn matches(&self, holder: &ferraloom_game::level::chunk_holder::ChunkHolder) -> bool {
-        *self == Self::of(holder)
+        self.pos == holder.position
+            && self.holder_epoch == holder.epoch
+            && holder
+                .generation
+                .future_id(ChunkStatus::Full)
+                .is_some_and(|future| future.0 == self.request)
     }
 }
 pub(crate) struct GenerationCompletion {
@@ -85,8 +96,28 @@ pub struct GenerationOutput {
     pub neighbors: Vec<(ChunkPos, SerializableChunkData)>,
     pub skips: Vec<(String, String)>,
     pub statuses: Vec<(ChunkPos, ChunkStatus)>,
+    pub(crate) proto_biomes: Vec<ProtoBiomeSnapshot>,
     pub(crate) full_structures: Vec<StructureSnapshot>,
     pub initial_mob_spawning_pending: bool,
+}
+/// Immutable owned biome result for live BIOMES acquisitions. Writable proto
+/// neighborhoods remain exclusively in the generation worker's owned cache.
+pub(crate) struct ProtoBiomeSnapshot {
+    pub pos: ChunkPos,
+    pub revision: GenerationRevision,
+    pub min_section: i32,
+    pub biomes: Vec<ferraloom_chunk::PalettedContainer<ferraloom_chunk::BiomeId>>,
+}
+impl ProtoBiomeSnapshot {
+    pub fn biome(&self, quart: [i32; 3]) -> ferraloom_chunk::BiomeId {
+        let min_quart = self.min_section * 4;
+        let y = quart[1].clamp(min_quart, min_quart + self.biomes.len() as i32 * 4 - 1);
+        self.biomes[((y - min_quart) / 4) as usize].get(
+            (quart[0] & 3) as u8,
+            (y & 3) as u8,
+            (quart[2] & 3) as u8,
+        )
+    }
 }
 /// Port of ChunkMap's generation cache. FULL entries are read-only imposter
 /// protos. No references into this cache escape an owned generation job.
@@ -452,6 +483,24 @@ impl GenerationState {
             full_structures,
             initial_mob_spawning_pending: proto.initial_mob_spawning_pending,
             statuses: self.completed_statuses(),
+            proto_biomes: self
+                .holders
+                .iter()
+                .filter(|(_, holder)| holder.completed >= ChunkStatus::Biomes)
+                .map(|(&key, holder)| ProtoBiomeSnapshot {
+                    pos: ChunkPos::unpack(key),
+                    revision: self.revision,
+                    min_section: self.context.dimension.min_y >> 4,
+                    biomes: holder
+                        .chunk
+                        .region
+                        .chunk
+                        .sections
+                        .iter()
+                        .map(|section| section.biomes().clone())
+                        .collect(),
+                })
+                .collect(),
         })
     }
     fn apply_light(&mut self, pos: ChunkPos, target: ChunkStatus) -> Result<()> {

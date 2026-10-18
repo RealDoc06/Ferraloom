@@ -120,7 +120,7 @@ async fn offline_client_joins_walks_chats_and_saves() -> Result<()> {
 
 /// Java is confined to the explicit parity gate; ordinary tests remain Java-free.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-#[ignore = "periodic SetTime must carry an empty clock map; command_runtime clock_packet(None) fills all clocks (clock owner: commands)"]
+#[ignore = "gated both-server join parity requires the vanilla server jar and builder JDK"]
 async fn join_and_configuration_sequence_matches_vanilla() -> Result<()> {
     use std::{
         io::Write,

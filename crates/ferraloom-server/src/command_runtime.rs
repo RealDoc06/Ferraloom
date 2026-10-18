@@ -71,21 +71,22 @@ impl MinecraftServer {
 
     /// Port of MinecraftServer#sendDifficultyUpdate; also used when a new player joins.
     pub(super) fn difficulty_packet(&self) -> cb::Packet {
-        let settings = self
-            .world
-            .level_data
-            .data
-            .get_compound("difficulty_settings");
-        let current = settings
-            .and_then(|tag| tag.get_string("difficulty"))
-            .map(|s| s.to_string_lossy());
+        let (current, locked) = self.level.generation().with_world(|world| {
+            let settings = world.level_data.data.get_compound("difficulty_settings");
+            (
+                settings
+                    .and_then(|tag| tag.get_string("difficulty"))
+                    .map(|value| value.to_string_lossy()),
+                settings.is_some_and(|tag| tag.get_boolean_or("locked", false)),
+            )
+        });
         cb::Packet::ChangeDifficulty(cb::ChangeDifficulty {
             difficulty: difficulty(
                 current
                     .as_deref()
                     .unwrap_or_else(|| self.properties.get("difficulty")),
             ),
-            locked: settings.is_some_and(|tag| tag.get_boolean_or("locked", false)),
+            locked,
         })
     }
     /// Capture owned save data before constructing IO, keeping the live level's
@@ -93,7 +94,11 @@ impl MinecraftServer {
     pub(super) fn save_game_rules(
         &self,
     ) -> impl std::future::Future<Output = Result<()>> + Send + 'static {
-        let storage = SavedDataStorage::new(self.world.access.path().join("data"));
+        let storage = SavedDataStorage::new(
+            self.level
+                .generation()
+                .with_world(|world| world.access.path().join("data")),
+        );
         let mut data = SavedData::new(self.game_rules.map().clone());
         let mut clocks = SavedData::new(self.clocks.states.clone());
         let mut scoreboard = SavedData::new(ferraloom_game::scoreboard::ScoreboardSaveData(
@@ -116,7 +121,11 @@ impl MinecraftServer {
     pub(super) fn save_command_storage(
         &mut self,
     ) -> impl std::future::Future<Output = Result<()>> + Send + 'static {
-        let storage = SavedDataStorage::new(self.world.access.path().join("data"));
+        let storage = SavedDataStorage::new(
+            self.level
+                .generation()
+                .with_world(|world| world.access.path().join("data")),
+        );
         let dirty = self.command_storage.take_dirty();
         async move {
             tokio::task::spawn_blocking(move || {
@@ -275,7 +284,7 @@ impl MinecraftServer {
             "banlist" => self.ban_list_command(&command),
             "gamemode" => self.game_mode_command(source, &command)?,
             "setworldspawn" | "spawnpoint" => self.spawn_command(source, &command)?,
-            "seed" => builtins::seed(self.world.seed),
+            "seed" => builtins::seed(self.level.generation().with_world(|world| world.seed)),
             "help" => self.commands.help(&command)?,
             "say" | "me" | "msg" => self.message_command(source, &command)?,
             "teammsg" => self.message_command(source, &command)?,
@@ -306,12 +315,16 @@ impl MinecraftServer {
             }
             "difficulty" => {
                 let current = self
-                    .world
-                    .level_data
-                    .data
-                    .get_compound("difficulty_settings")
-                    .and_then(|tag| tag.get_string("difficulty"))
-                    .map(|s| s.to_string_lossy())
+                    .level
+                    .generation()
+                    .with_world(|world| {
+                        world
+                            .level_data
+                            .data
+                            .get_compound("difficulty_settings")
+                            .and_then(|tag| tag.get_string("difficulty"))
+                            .map(|value| value.to_string_lossy())
+                    })
                     .unwrap_or_else(|| self.properties.get("difficulty").to_owned());
                 if let Some(requested) = command.literals.get(1) {
                     if *requested == current {
@@ -323,13 +336,14 @@ impl MinecraftServer {
                             ))],
                         ));
                     }
-                    let mut settings = self
-                        .world
-                        .level_data
-                        .data
-                        .get_compound("difficulty_settings")
-                        .cloned()
-                        .unwrap_or_default();
+                    let mut settings = self.level.generation().with_world(|world| {
+                        world
+                            .level_data
+                            .data
+                            .get_compound("difficulty_settings")
+                            .cloned()
+                            .unwrap_or_default()
+                    });
                     let changed = if settings
                         .get_boolean_or("hardcore", self.properties.boolean("hardcore"))
                     {
@@ -339,10 +353,12 @@ impl MinecraftServer {
                     };
                     let locked = settings.get_boolean_or("locked", false);
                     settings.insert("difficulty", Tag::String(changed.into()));
-                    self.world
-                        .level_data
-                        .data
-                        .insert("difficulty_settings", Tag::Compound(settings));
+                    self.level.generation().with_world_mut(|world| {
+                        world
+                            .level_data
+                            .data
+                            .insert("difficulty_settings", Tag::Compound(settings))
+                    });
                     self.level.level.set_difficulty(difficulty(changed));
                     self.broadcast(cb::Packet::ChangeDifficulty(cb::ChangeDifficulty {
                         difficulty: difficulty(changed),
@@ -420,10 +436,12 @@ impl MinecraftServer {
                     unreachable!()
                 };
                 self.default_game_mode = *mode;
-                self.world
-                    .level_data
-                    .data
-                    .insert("GameType", Tag::Int(mode.id()));
+                self.level.generation().with_world_mut(|world| {
+                    world
+                        .level_data
+                        .data
+                        .insert("GameType", Tag::Int(mode.id()))
+                });
                 let mut count = 0;
                 if self.properties.boolean("force-gamemode") {
                     for player in self.players.clone() {
@@ -1978,17 +1996,19 @@ impl MinecraftServer {
 
 impl MinecraftServer {
     pub(super) fn default_spawn_data(&self) -> ferraloom_game::commands::spawn::SpawnData {
-        let data = self.world.level_data.data.get_compound("spawn");
-        ferraloom_game::commands::spawn::SpawnData {
-            dimension: data
-                .and_then(|data| data.get_string("dimension"))
-                .map_or_else(|| "minecraft:overworld".into(), |id| id.to_string_lossy()),
-            position: self.world.spawn,
-            rotation: ferraloom_game::commands::source::Rotation {
-                yaw: data.map_or(0., |data| data.get_float_or("yaw", 0.)),
-                pitch: data.map_or(0., |data| data.get_float_or("pitch", 0.)),
-            },
-        }
+        self.level.generation().with_world(|world| {
+            let data = world.level_data.data.get_compound("spawn");
+            ferraloom_game::commands::spawn::SpawnData {
+                dimension: data
+                    .and_then(|data| data.get_string("dimension"))
+                    .map_or_else(|| "minecraft:overworld".into(), |id| id.to_string_lossy()),
+                position: world.spawn,
+                rotation: ferraloom_game::commands::source::Rotation {
+                    yaw: data.map_or(0., |data| data.get_float_or("yaw", 0.)),
+                    pitch: data.map_or(0., |data| data.get_float_or("pitch", 0.)),
+                },
+            }
+        })
     }
     fn spawn_command(
         &mut self,
@@ -2009,11 +2029,13 @@ impl MinecraftServer {
         let spawn = SpawnData::command(command)?;
         if command.command == "setworldspawn" {
             if self.default_spawn_data() != spawn {
-                self.world.spawn = spawn.position;
-                self.world
-                    .level_data
-                    .data
-                    .insert("spawn", Tag::Compound(spawn.to_nbt()));
+                self.level.generation().with_world_mut(|world| {
+                    world.spawn = spawn.position;
+                    world
+                        .level_data
+                        .data
+                        .insert("spawn", Tag::Compound(spawn.to_nbt()));
+                });
                 self.publish_spawn_protection();
                 self.broadcast(cb::Packet::SetDefaultSpawnPosition(
                     cb::SetDefaultSpawnPosition {
