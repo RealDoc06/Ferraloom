@@ -5,16 +5,19 @@ pub mod beardifier;
 pub mod bounding_box;
 pub mod check;
 pub mod decoration;
+pub mod generation;
 pub mod jigsaw;
 pub mod jigsaw_structure;
 mod nbt;
-pub mod placement;
+pub mod piece;
 pub mod pipeline;
+pub mod placement;
 pub mod pool;
 pub mod processor;
 pub mod references;
 pub mod rule;
 pub mod start;
+pub mod structures;
 pub mod template;
 
 pub use beardifier::{

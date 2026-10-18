@@ -21,16 +21,19 @@ use std::{
 #[derive(Clone, Debug)]
 pub enum StructurePiece {
     Jigsaw(PoolElementStructurePiece),
+    BuriedTreasure(super::structures::buried_treasure::BuriedTreasurePiece),
 }
 impl StructurePiece {
     pub fn bounds(&self) -> BoundingBox {
         match self {
             Self::Jigsaw(p) => p.bounds,
+            Self::BuriedTreasure(p) => p.data.bounds,
         }
     }
     pub fn to_nbt(&self) -> Result<CompoundTag, Error> {
         match self {
             Self::Jigsaw(p) => p.to_nbt(),
+            Self::BuriedTreasure(p) => Ok(p.to_nbt()),
         }
     }
 }
@@ -179,6 +182,13 @@ impl StructureStart {
                     return Ok(None);
                 };
                 match piece_id.to_string().as_str() {
+                    "minecraft:btp" => {
+                        if let Ok(piece) =
+                            super::structures::buried_treasure::BuriedTreasurePiece::from_nbt(tag)
+                        {
+                            pieces.push(StructurePiece::BuriedTreasure(piece));
+                        }
+                    }
                     "minecraft:jigsaw"
                     | "minecraft:nvi"
                     | "minecraft:pcp"

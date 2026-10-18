@@ -110,6 +110,7 @@ impl StructureStart {
                 continue;
             }
             match piece {
+                StructurePiece::BuriedTreasure(piece) => piece.post_process(context, bounds)?,
                 StructurePiece::Jigsaw(piece) => {
                     piece.element.place(
                         templates,
