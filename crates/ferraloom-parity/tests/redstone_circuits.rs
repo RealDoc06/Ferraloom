@@ -1,3 +1,4 @@
+#[allow(dead_code)] // Each parity target uses a subset of the shared level fixtures.
 mod level_support;
 use ferraloom_data::{Block, properties as p};
 use ferraloom_parity::{ObservationLog, Result, RunMode, Session, ensure, run};
