@@ -17,6 +17,34 @@ pub struct LiveRecipeMenuHooks {
     pub limited_crafting: bool,
 }
 impl MenuHooks for LiveRecipeMenuHooks {
+    fn validate_live_result(&self, kind: ResultKind) -> Result<()> {
+        if matches!(kind, ResultKind::Crafting | ResultKind::Furnace) {
+            Ok(())
+        } else {
+            Err(MenuError::Unsupported(
+                "non-crafting result-slot achievements",
+            ))
+        }
+    }
+    fn live_item_crafted(
+        &mut self,
+        player: EntityRef,
+        _menu: MenuRef,
+        stack: StackRef,
+        amount: i32,
+        level: &mut Level,
+    ) -> Result<()> {
+        // ItemStack#onCraftedBy reads its item before awardStat, then invokes
+        // the item callback on the same receiver after scoreboard callbacks.
+        let item = level.stack(stack)?.item();
+        crate::entity::player::award_stat(
+            player,
+            crate::stats::Stat::Crafted(item),
+            amount,
+            level,
+        )?;
+        crafted_item_post_process(level, stack)
+    }
     fn live_award_recipe(
         &mut self,
         player: EntityRef,
