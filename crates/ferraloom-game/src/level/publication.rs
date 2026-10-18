@@ -40,9 +40,9 @@ impl Level {
     pub fn publish_full_chunk(
         &self,
         mut prepared: PreparedFullChunk,
-    ) -> Result<ChunkReference, ChunkPublicationError> {
+    ) -> Result<ChunkReference, Box<ChunkPublicationError>> {
         if let Err(source) = self.validate_full_publication(&prepared) {
-            return Err(ChunkPublicationError { source, prepared });
+            return Err(Box::new(ChunkPublicationError { source, prepared }));
         }
         let region = self.region();
         let pos = prepared.chunk.pos();
