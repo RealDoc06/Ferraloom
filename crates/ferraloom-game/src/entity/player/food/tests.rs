@@ -175,9 +175,9 @@ fn native_food_tick_preserves_thresholds_difficulty_damage_order_and_timer_wrap(
         let damage = player
             .custom_data
             .get_string("food_hurt")
-            .map(|v| v.as_str());
+            .map(|v| v.to_string_lossy());
         if row[8].starts_with("hurt:") {
-            assert_eq!(damage, Some(row[8]), "callback {row:?}");
+            assert_eq!(damage.as_deref(), Some(row[8]), "callback {row:?}");
         } else {
             assert!(damage.is_none());
         }

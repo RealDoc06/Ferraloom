@@ -147,7 +147,7 @@ fn native_player_ai_step_preserves_input_jump_travel_block_freeze_push_and_tail_
             p.y_head_rot.to_bits(),
             p.speed.to_bits(),
             p.fall_distance.to_bits(),
-            p.custom_data.get_string("ai_events").unwrap().as_str()
+            p.custom_data.get_string("ai_events").unwrap()
         );
         assert_eq!(actual, row[9..].join("\t"), "{row:?}");
         checked += 1;

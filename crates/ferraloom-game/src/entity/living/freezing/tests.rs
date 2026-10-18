@@ -149,8 +149,8 @@ fn native_freezing_phase_decays_before_frost_and_dispatches_periodic_damage_afte
             living
                 .saved
                 .get_string("freeze_hurt")
-                .map(|v| v.as_str())
-                .unwrap_or("-"),
+                .map(|v| v.to_string_lossy())
+                .unwrap_or_else(|| "-".to_owned()),
             f[8],
             "damage {row}"
         );

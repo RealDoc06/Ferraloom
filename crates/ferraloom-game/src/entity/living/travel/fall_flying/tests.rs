@@ -221,7 +221,7 @@ fn native_fall_flying_hits_select_sound_before_typed_damage_and_keep_float_thres
                 .0
                 .iter()
                 .map(|tag| match tag {
-                    Tag::String(value) => value.as_str(),
+                    Tag::String(value) => value.to_string_lossy(),
                     _ => unreachable!(),
                 })
                 .collect::<Vec<_>>()
