@@ -203,3 +203,55 @@ fn every_rule_value_parser_matches_java_including_partial_values() {
         );
     }
 }
+
+#[test]
+fn api_mutation_notifies_before_codec_range_validation_like_java() {
+    #[derive(serde::Deserialize)]
+    struct Vector {
+        rule: String,
+        requested: serde_json::Value,
+        present: bool,
+        notifications: usize,
+        value: Option<serde_json::Value>,
+        encode_error: Option<String>,
+        encoded: bool,
+    }
+    let vectors: Vec<Vector> = serde_json::from_str(include_str!(
+        "../commands/vanilla/rule-mutation-vectors.json"
+    ))
+    .unwrap();
+    for vector in vectors {
+        let rule = GameRule::by_id(&vector.rule).unwrap();
+        let requested = if let Some(value) = vector.requested.as_bool() {
+            GameRuleValue::Boolean(value)
+        } else {
+            GameRuleValue::Integer(vector.requested.as_i64().unwrap() as i32)
+        };
+        let mut rules = GameRules::default();
+        let result = rules.set(rule, requested);
+        assert_eq!(
+            usize::from(result.is_ok()),
+            vector.notifications,
+            "{}",
+            vector.rule
+        );
+        assert_eq!(rules.get(rule).is_some(), vector.present, "{}", vector.rule);
+        let mut map = GameRuleMap::default();
+        if vector.present {
+            let value = rules.get(rule).unwrap();
+            let encoded_value = match value {
+                GameRuleValue::Boolean(value) => serde_json::json!(value),
+                GameRuleValue::Integer(value) => serde_json::json!(value),
+            };
+            assert_eq!(Some(encoded_value), vector.value, "{}", vector.rule);
+            map.values[rule as usize] = Some(value);
+        }
+        let encoded = map.encode();
+        assert_eq!(encoded.is_ok(), vector.encoded, "{}", vector.rule);
+        let error = encoded.err().map(|error| match error {
+            ferraloom_storage::Error::Invalid(message) => message,
+            error => panic!("Unexpected codec error: {error}"),
+        });
+        assert_eq!(error, vector.encode_error, "{}", vector.rule);
+    }
+}

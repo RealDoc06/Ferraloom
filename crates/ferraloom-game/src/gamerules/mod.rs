@@ -235,6 +235,14 @@ impl SavedDataCodec for GameRuleMap {
     fn encode(&self) -> ferraloom_storage::Result<Tag> {
         let mut tag = CompoundTag::new();
         for (rule, value) in self.iter() {
+            if let (RuleType::Integer { min, max, .. }, GameRuleValue::Integer(value)) =
+                (rule.definition().kind, value)
+                && !(min..=max).contains(&value)
+            {
+                return Err(Error::Invalid(format!(
+                    "Value {value} outside of range [{min}:{max}]"
+                )));
+            }
             tag.insert(
                 rule.definition().id,
                 match value {
@@ -315,19 +323,13 @@ impl GameRules {
     pub fn boolean(&self, rule: GameRule) -> bool {
         match self.get(rule) {
             Some(GameRuleValue::Boolean(value)) => value,
-            _ => panic!(
-                "Tried to access invalid boolean game rule {}",
-                rule.definition().id
-            ),
+            _ => panic!("Tried to access invalid game rule {}", rule.definition().id),
         }
     }
     pub fn integer(&self, rule: GameRule) -> i32 {
         match self.get(rule) {
             Some(GameRuleValue::Integer(value)) => value,
-            _ => panic!(
-                "Tried to access invalid integer game rule {}",
-                rule.definition().id
-            ),
+            _ => panic!("Tried to access invalid game rule {}", rule.definition().id),
         }
     }
     pub fn set(
@@ -335,7 +337,14 @@ impl GameRules {
         rule: GameRule,
         value: GameRuleValue,
     ) -> Result<GameRuleChange, InvalidGameRule> {
-        if self.get(rule).is_none() || !rule.definition().kind.accepts(value) {
+        // GameRules#set is a typed assignment. Bounds belong to the command argument
+        // and the saved-data codec, including their encode boundary.
+        let matching_type = matches!(
+            (rule.definition().kind, value),
+            (RuleType::Boolean { .. }, GameRuleValue::Boolean(_))
+                | (RuleType::Integer { .. }, GameRuleValue::Integer(_))
+        );
+        if self.get(rule).is_none() || !matching_type {
             return Err(InvalidGameRule { rule, value });
         }
         self.map.values[rule as usize] = Some(value);
