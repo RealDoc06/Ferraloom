@@ -1,0 +1,299 @@
+//! Short-borrow addresses for the live menu algorithm. Canonical receivers never
+//! leave their owner while a slot operation calls back into the level.
+use super::{Container, ItemStack, MenuError, MenuRef, PlayerContainer, Result};
+use crate::{
+    block::{
+        containers::{access, storage::BaseContainerBlockEntity},
+        entity::BlockEntityRef,
+    },
+    entity::{EntityRef, player::ServerPlayer},
+    level::Level,
+};
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ContainerHandle {
+    PlayerInventory(EntityRef),
+    BlockEntity(BlockEntityRef),
+    MenuLocal {
+        player: EntityRef,
+        menu: MenuRef,
+        container: usize,
+    },
+    Entity(EntityRef),
+}
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ContainerSlot {
+    pub container: ContainerHandle,
+    pub slot: usize,
+}
+
+/// Fallible slot access shared by the live and in-memory menu contexts. Every
+/// operation completes its native container callbacks before returning.
+pub trait MenuContainerAccess {
+    fn get_item(&mut self, slot: ContainerSlot) -> Result<ItemStack>;
+    fn set_item(&mut self, slot: ContainerSlot, stack: ItemStack) -> Result<()>;
+    fn remove_item(&mut self, slot: ContainerSlot, amount: i32) -> Result<ItemStack>;
+    fn remove_item_no_update(&mut self, slot: ContainerSlot) -> Result<ItemStack>;
+    fn set_changed(&mut self, container: ContainerHandle) -> Result<()>;
+    fn size(&mut self, container: ContainerHandle) -> Result<usize>;
+    fn max_stack_size(&mut self, container: ContainerHandle) -> Result<i32>;
+    fn can_place_item(&mut self, slot: ContainerSlot, stack: &ItemStack) -> Result<bool>;
+    fn still_valid(&mut self, container: ContainerHandle) -> Result<bool>;
+}
+
+pub struct LiveMenuContext<'a> {
+    pub level: &'a mut Level,
+    pub player: EntityRef,
+    pub menu: MenuRef,
+}
+impl LiveMenuContext<'_> {
+    fn with_player<R>(
+        &mut self,
+        player: EntityRef,
+        operation: impl FnOnce(&mut PlayerContainer<'_>) -> R,
+    ) -> Result<R> {
+        let player = self.level.entity_mut::<ServerPlayer>(player)?;
+        Ok(operation(&mut PlayerContainer {
+            inventory: &mut player.inventory,
+            equipment: &mut player.parent.equipment,
+        }))
+    }
+    fn with_local<R>(
+        &mut self,
+        player: EntityRef,
+        menu: MenuRef,
+        container: usize,
+        operation: impl FnOnce(&mut super::MenuContainer) -> R,
+    ) -> Result<R> {
+        let menu = self
+            .level
+            .entity_mut::<ServerPlayer>(player)?
+            .menus
+            .menu_mut(menu)?;
+        let container = menu
+            .local
+            .get_mut(container)
+            .ok_or(MenuError::Unsupported("missing local menu container"))?;
+        Ok(operation(container))
+    }
+}
+impl MenuContainerAccess for LiveMenuContext<'_> {
+    fn get_item(&mut self, slot: ContainerSlot) -> Result<ItemStack> {
+        match slot.container {
+            ContainerHandle::PlayerInventory(player) => {
+                self.with_player(player, |container| container.get_item(slot.slot))
+            }
+            ContainerHandle::BlockEntity(handle) => {
+                Ok(access::get_item(handle, slot.slot, self.level)?)
+            }
+            ContainerHandle::MenuLocal {
+                player,
+                menu,
+                container,
+            } => self.with_local(player, menu, container, |container| {
+                container.get_item(slot.slot)
+            }),
+            ContainerHandle::Entity(_) => Err(MenuError::Unsupported("entity container resolver")),
+        }
+    }
+    fn set_item(&mut self, slot: ContainerSlot, stack: ItemStack) -> Result<()> {
+        match slot.container {
+            ContainerHandle::PlayerInventory(player) => {
+                self.with_player(player, |container| container.set_item(slot.slot, stack))
+            }
+            ContainerHandle::BlockEntity(handle) => {
+                Ok(access::set_item(handle, slot.slot, stack, self.level)?)
+            }
+            ContainerHandle::MenuLocal {
+                player,
+                menu,
+                container,
+            } => self.with_local(player, menu, container, |container| {
+                container.set_item(slot.slot, stack)
+            }),
+            ContainerHandle::Entity(_) => Err(MenuError::Unsupported("entity container resolver")),
+        }
+    }
+    fn remove_item(&mut self, slot: ContainerSlot, amount: i32) -> Result<ItemStack> {
+        match slot.container {
+            ContainerHandle::PlayerInventory(player) => {
+                self.with_player(player, |container| container.remove_item(slot.slot, amount))
+            }
+            ContainerHandle::BlockEntity(handle) => {
+                Ok(access::remove_item(handle, slot.slot, amount, self.level)?)
+            }
+            ContainerHandle::MenuLocal {
+                player,
+                menu,
+                container,
+            } => self.with_local(player, menu, container, |container| {
+                container.remove_item(slot.slot, amount)
+            }),
+            ContainerHandle::Entity(_) => Err(MenuError::Unsupported("entity container resolver")),
+        }
+    }
+    fn remove_item_no_update(&mut self, slot: ContainerSlot) -> Result<ItemStack> {
+        match slot.container {
+            ContainerHandle::PlayerInventory(player) => self.with_player(player, |container| {
+                container.remove_item_no_update(slot.slot)
+            }),
+            ContainerHandle::BlockEntity(handle) => Ok(access::remove_item_no_update(
+                handle, slot.slot, self.level,
+            )?),
+            ContainerHandle::MenuLocal {
+                player,
+                menu,
+                container,
+            } => self.with_local(player, menu, container, |container| {
+                container.remove_item_no_update(slot.slot)
+            }),
+            ContainerHandle::Entity(_) => Err(MenuError::Unsupported("entity container resolver")),
+        }
+    }
+    fn set_changed(&mut self, container: ContainerHandle) -> Result<()> {
+        match container {
+            ContainerHandle::PlayerInventory(player) => {
+                self.with_player(player, |container| container.set_changed())
+            }
+            ContainerHandle::BlockEntity(handle) => {
+                self.level
+                    .block_entity_mut::<BaseContainerBlockEntity>(handle)?
+                    .set_changed();
+                Ok(handle.set_changed(self.level)?)
+            }
+            ContainerHandle::MenuLocal {
+                player,
+                menu,
+                container,
+            } => self.with_local(player, menu, container, |container| container.set_changed()),
+            ContainerHandle::Entity(_) => Err(MenuError::Unsupported("entity container resolver")),
+        }
+    }
+    fn size(&mut self, container: ContainerHandle) -> Result<usize> {
+        match container {
+            ContainerHandle::PlayerInventory(player) => {
+                self.with_player(player, |container| container.size())
+            }
+            ContainerHandle::BlockEntity(handle) => Ok(self
+                .level
+                .block_entity::<BaseContainerBlockEntity>(handle)?
+                .size()),
+            ContainerHandle::MenuLocal {
+                player,
+                menu,
+                container,
+            } => self.with_local(player, menu, container, |container| container.size()),
+            ContainerHandle::Entity(_) => Err(MenuError::Unsupported("entity container resolver")),
+        }
+    }
+    fn max_stack_size(&mut self, container: ContainerHandle) -> Result<i32> {
+        match container {
+            ContainerHandle::PlayerInventory(player) => {
+                self.with_player(player, |container| container.max_stack_size())
+            }
+            ContainerHandle::BlockEntity(handle) => Ok(self
+                .level
+                .block_entity::<BaseContainerBlockEntity>(handle)?
+                .max_stack_size()),
+            ContainerHandle::MenuLocal {
+                player,
+                menu,
+                container,
+            } => self.with_local(player, menu, container, |container| {
+                container.max_stack_size()
+            }),
+            ContainerHandle::Entity(_) => Err(MenuError::Unsupported("entity container resolver")),
+        }
+    }
+    fn can_place_item(&mut self, slot: ContainerSlot, stack: &ItemStack) -> Result<bool> {
+        match slot.container {
+            ContainerHandle::PlayerInventory(player) => self.with_player(player, |container| {
+                container.can_place_item(slot.slot, stack)
+            }),
+            ContainerHandle::BlockEntity(handle) => Ok(access::can_place_item(
+                self.level.block_entity_state(handle)?,
+                slot.slot,
+                stack,
+            )),
+            ContainerHandle::MenuLocal {
+                player,
+                menu,
+                container,
+            } => self.with_local(player, menu, container, |container| {
+                container.can_place_item(slot.slot, stack)
+            }),
+            ContainerHandle::Entity(_) => Err(MenuError::Unsupported("entity container resolver")),
+        }
+    }
+    fn still_valid(&mut self, container: ContainerHandle) -> Result<bool> {
+        match container {
+            ContainerHandle::BlockEntity(handle) => Ok(self.level.block_entity_ref(handle.pos)?
+                == Some(handle)
+                && self
+                    .level
+                    .entity::<ServerPlayer>(self.player)?
+                    .is_within_block_interaction_range(handle.pos, 4.0)),
+            ContainerHandle::PlayerInventory(player) => {
+                self.with_player(player, |container| container.still_valid())
+            }
+            ContainerHandle::MenuLocal {
+                player,
+                menu,
+                container,
+            } => self.with_local(player, menu, container, |container| container.still_valid()),
+            ContainerHandle::Entity(_) => Err(MenuError::Unsupported("entity container resolver")),
+        }
+    }
+}
+
+/// Retain both the menu and its canonical block receivers for one dynamic call
+/// frame. Closing/replacing either receiver during a callback cannot retarget it.
+pub fn with_menu_callback<R>(
+    player: EntityRef,
+    menu: MenuRef,
+    level: &mut Level,
+    operation: impl FnOnce(&mut LiveMenuContext<'_>) -> Result<R>,
+) -> Result<R> {
+    let roots = level
+        .entity::<ServerPlayer>(player)?
+        .menus
+        .menu(menu)?
+        .block_entities
+        .clone();
+    for (index, &root) in roots.iter().enumerate() {
+        if let Err(error) = level.retain_block_entity(root) {
+            for &retained in &roots[..index] {
+                level.release_block_entity(retained);
+            }
+            return Err(error.into());
+        }
+    }
+    let retained = level
+        .entity_mut::<ServerPlayer>(player)?
+        .menus
+        .retain_menu(menu);
+    if let Err(error) = retained {
+        for root in roots {
+            level.release_block_entity(root);
+        }
+        return Err(error);
+    }
+    let result = operation(&mut LiveMenuContext {
+        level,
+        player,
+        menu,
+    });
+    let cleanup = level
+        .entity_mut::<ServerPlayer>(player)
+        .map(|player| player.menus.release_menu(menu));
+    for root in roots {
+        level.release_block_entity(root);
+    }
+    match result {
+        Err(error) => Err(error),
+        Ok(result) => {
+            cleanup?;
+            Ok(result)
+        }
+    }
+}

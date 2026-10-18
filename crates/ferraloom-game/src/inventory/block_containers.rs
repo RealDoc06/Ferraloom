@@ -262,6 +262,76 @@ mod tests {
         .unwrap();
     }
     #[test]
+    fn live_slot_access_keeps_detached_menu_and_block_receivers_during_reentry() {
+        let (mut level, player, old) = setup();
+        open(&mut level, player, old);
+        let menu = level
+            .entity::<ServerPlayer>(player)
+            .unwrap()
+            .menus
+            .current_ref();
+        with_menu_callback(player, menu, &mut level, |context| {
+            close_container(player, context.level, false, false)?;
+            let state = Block::CHEST.default_state();
+            context
+                .level
+                .set_block_entity(create(old.pos, state).unwrap())?;
+            let replacement = context.level.block_entity_ref(old.pos)?.unwrap();
+            let provider = ContainerMenuProvider {
+                entities: vec![replacement],
+                kind: MenuKind::Chest { rows: 3 },
+                title: ferraloom_protocol::chat::Component::literal("replacement"),
+            };
+            open_menu(player, &provider, context.level)?;
+            context.level.collect_detached_block_entities();
+            let slot = ContainerSlot {
+                container: ContainerHandle::BlockEntity(old),
+                slot: 0,
+            };
+            context.set_item(slot, ItemStack::new(Item::STONE, 5, Default::default()))?;
+            assert_eq!(
+                context.get_item(slot)?,
+                ItemStack::new(Item::STONE, 5, Default::default())
+            );
+            assert!(!context.still_valid(slot.container)?);
+            assert!(
+                context
+                    .get_item(ContainerSlot {
+                        container: ContainerHandle::BlockEntity(replacement),
+                        slot: 0
+                    })?
+                    .is_empty()
+            );
+            context
+                .level
+                .entity_mut::<ServerPlayer>(player)?
+                .menus
+                .menu_mut(menu)?
+                .carried = ItemStack::new(Item::DIRT, 2, Default::default());
+            assert!(
+                context
+                    .level
+                    .entity::<ServerPlayer>(player)?
+                    .menus
+                    .current()
+                    .carried
+                    .is_empty()
+            );
+            Ok(())
+        })
+        .unwrap();
+        assert!(matches!(
+            level
+                .entity::<ServerPlayer>(player)
+                .unwrap()
+                .menus
+                .menu(menu),
+            Err(MenuError::MissingMenu(_))
+        ));
+        level.collect_detached_block_entities();
+        assert!(level.block_entity_state(old).is_err());
+    }
+    #[test]
     fn external_menu_mutations_reach_canonical_slots_and_replacement_closes_after_broadcast() {
         let (mut level, player, handle) = setup();
         open(&mut level, player, handle);
