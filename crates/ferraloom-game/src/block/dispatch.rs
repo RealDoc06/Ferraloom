@@ -62,3 +62,54 @@ static VANILLA_CLASSES: [Option<&'static dyn super::BlockBehavior>;
 pub fn vanilla_behavior(block: ferraloom_data::Block) -> Option<&'static dyn super::BlockBehavior> {
     VANILLA_CLASSES[block.class() as usize]
 }
+
+/// The class port must explicitly implement the method vanilla overrides.
+/// Non-overridden methods select the reflected base owner before this table.
+pub(crate) fn ported_behavior(
+    block: ferraloom_data::Block,
+    method: super::BlockMethod,
+) -> Option<&'static dyn super::BlockBehavior> {
+    use super::BlockMethod as Method;
+    use ferraloom_data::BlockClass;
+    let supported = match block.class() {
+        BlockClass::Block | BlockClass::AirBlock | BlockClass::RotatedPillarBlock => {
+            matches!(method, Method::CollisionShape | Method::OutlineShape)
+        }
+        BlockClass::SandBlock | BlockClass::ColoredFallingBlock => matches!(
+            method,
+            Method::OnPlace
+                | Method::UpdateShape
+                | Method::UpdateFromNeighbourShapes
+                | Method::Tick
+        ),
+        BlockClass::FlowerBlock | BlockClass::TallGrassBlock | BlockClass::BushBlock => matches!(
+            method,
+            Method::CanSurvive
+                | Method::UpdateShape
+                | Method::UpdateFromNeighbourShapes
+                | Method::CollisionShape
+        ),
+        BlockClass::ChainBlock => matches!(
+            method,
+            Method::UpdateShape
+                | Method::UpdateFromNeighbourShapes
+                | Method::CanPlaceLiquid
+                | Method::PlaceLiquid
+                | Method::PickupBlock
+        ),
+        BlockClass::LiquidBlock => matches!(
+            method,
+            Method::OnPlace
+                | Method::NeighborChanged
+                | Method::UpdateShape
+                | Method::UpdateFromNeighbourShapes
+                | Method::Tick
+                | Method::RandomTick
+                | Method::CollisionShape
+                | Method::OutlineShape
+                | Method::PickupBlock
+        ),
+        _ => false,
+    };
+    supported.then(|| vanilla_behavior(block)).flatten()
+}

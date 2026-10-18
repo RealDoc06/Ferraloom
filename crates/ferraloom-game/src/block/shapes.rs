@@ -76,6 +76,15 @@ impl CollisionContext for BlockCollisionContext<'_> {
     }
 }
 impl LevelReaderRef<'_> {
+    pub fn entity_inside_collision_shape(
+        &self,
+        state: BlockState,
+        pos: BlockPos,
+        entity: crate::entity::EntityRef,
+    ) -> Result<VoxelShape, LevelError> {
+        self.shape_behavior(state, BlockMethod::EntityInsideCollisionShape)?
+            .entity_inside_collision_shape(state, pos, entity, self)
+    }
     fn shape_behavior(
         &self,
         state: BlockState,

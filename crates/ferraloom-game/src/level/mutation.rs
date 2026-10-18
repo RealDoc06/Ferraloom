@@ -38,6 +38,9 @@ impl Level {
             .as_deref()
             .ok_or(LevelError::MissingBlockTags)
     }
+    pub(crate) fn custom_block_behavior(&self, block: Block) -> Option<&'static dyn BlockBehavior> {
+        self.region().behaviors.block(block)
+    }
     pub fn block_behavior(&self, block: Block) -> Result<&'static dyn BlockBehavior, LevelError> {
         self.region()
             .behaviors
@@ -45,12 +48,29 @@ impl Level {
             .or_else(|| crate::block::dispatch::vanilla_behavior(block))
             .ok_or(LevelError::UnsupportedBlock(block))
     }
+    pub(crate) fn behavior_for_method(
+        &self,
+        block: Block,
+        method: BlockMethod,
+    ) -> Result<&'static dyn BlockBehavior, LevelError> {
+        if let Some(custom) = self.custom_block_behavior(block) {
+            return Ok(custom);
+        }
+        if method
+            .vanilla_method()
+            .is_some_and(|method| !block.overrides(method))
+        {
+            return Ok(&crate::block::BASE_BLOCK);
+        }
+        crate::block::dispatch::ported_behavior(block, method)
+            .ok_or(LevelError::UnsupportedBlock(block))
+    }
     pub fn required_block_behavior(
         &self,
         block: Block,
         method: BlockMethod,
     ) -> Result<&'static dyn BlockBehavior, LevelError> {
-        self.block_behavior(block)
+        self.behavior_for_method(block, method)
             .map_err(|_| LevelError::UnsupportedBlockMethod(block, method))
     }
     pub(crate) fn emit(&mut self, effect: LevelEffect) {

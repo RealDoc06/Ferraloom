@@ -764,7 +764,7 @@ fn strict_is_default_and_warn_records_each_skipped_call_without_query_fallbacks(
         }
     );
     assert!(matches!(
-        level.required_block_behavior(state.block(), BlockMethod::CanSurvive),
+        level.required_block_behavior(Block::OAK_SAPLING, BlockMethod::CanSurvive),
         Err(LevelError::UnsupportedBlockMethod(
             _,
             BlockMethod::CanSurvive
@@ -961,6 +961,51 @@ fn shared_collision_queries_use_native_faces_and_liquid_context_without_warn_fal
         Err(LevelError::UnsupportedBlockMethod(
             _,
             crate::block::BlockMethod::CollisionShape
+        ))
+    ));
+    assert_eq!(level.unported_behavior_stats().skipped_calls, 0);
+}
+
+#[test]
+fn reflected_method_ownership_ports_inherited_defaults_without_masking_overrides() {
+    use crate::block::{BlockMethod, LevelReaderRef, UnportedBehavior};
+    let mut level = flat_pool();
+    let pos = BlockPos::new(8, 0, 8);
+    // Leaves override random/updateShape, but inherit the full-cube inside
+    // query and base survival. These are individually proven vanilla methods.
+    let leaves = Block::OAK_LEAVES.default_state();
+    let behavior = level
+        .required_block_behavior(leaves.block(), BlockMethod::CanSurvive)
+        .unwrap();
+    assert!(
+        behavior
+            .can_survive(leaves, pos, &LevelReaderRef::Server(&level))
+            .unwrap()
+    );
+    assert!(
+        LevelReaderRef::Server(&level)
+            .entity_inside_collision_shape(leaves, pos, crate::entity::EntityRef(0))
+            .unwrap()
+            .ptr_eq(&ferraloom_util::shapes::block())
+    );
+    assert!(matches!(
+        level.behavior_for_method(leaves.block(), BlockMethod::RandomTick),
+        Err(LevelError::UnsupportedBlock(Block::OAK_LEAVES))
+    ));
+    assert!(matches!(
+        level.behavior_for_method(leaves.block(), BlockMethod::UpdateShape),
+        Err(LevelError::UnsupportedBlock(Block::OAK_LEAVES))
+    ));
+    level.set_unported_behavior(UnportedBehavior::Warn);
+    assert!(matches!(
+        LevelReaderRef::Server(&level).entity_inside_collision_shape(
+            Block::POWDER_SNOW.default_state(),
+            pos,
+            crate::entity::EntityRef(0)
+        ),
+        Err(LevelError::UnsupportedBlockMethod(
+            _,
+            BlockMethod::EntityInsideCollisionShape
         ))
     ));
     assert_eq!(level.unported_behavior_stats().skipped_calls, 0);

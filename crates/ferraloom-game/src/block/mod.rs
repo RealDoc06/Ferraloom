@@ -114,6 +114,16 @@ impl LevelAccessRef<'_> {
 /// Port of BlockBehaviour's virtual methods. Defaults are vanilla base behavior;
 /// only classes explicitly registered by dispatch may inherit these defaults.
 pub trait BlockBehavior: Sync {
+    /// Port of BlockBehaviour#getEntityInsideCollisionShape's base full cube.
+    fn entity_inside_collision_shape(
+        &self,
+        _state: BlockState,
+        _pos: BlockPos,
+        _entity: crate::entity::EntityRef,
+        _level: &LevelReaderRef<'_>,
+    ) -> Result<ferraloom_util::VoxelShape, LevelError> {
+        Ok(ferraloom_util::shapes::block())
+    }
     /// Port of BlockBehaviour#getCollisionShape for registered base families.
     /// Dynamic overrides must implement this method; no extracted baseline is
     /// treated as a live contextual answer.
@@ -147,7 +157,7 @@ pub trait BlockBehavior: Sync {
         pos: BlockPos,
         level: &LevelReaderRef<'_>,
     ) -> Result<ferraloom_util::VoxelShape, LevelError> {
-        self.collision_shape(state, pos, &BlockCollisionContext::empty(), level)
+        level.collision_shape(state, pos, &BlockCollisionContext::empty())
     }
     fn on_place(
         &self,
