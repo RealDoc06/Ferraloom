@@ -12,6 +12,10 @@ pub trait MenuSynchronizationContext {
     fn listener_copies(&self) -> Result<&ListenerCopyArena>;
     fn listener_copies_mut(&mut self) -> Result<&mut ListenerCopyArena>;
     fn data_at(&mut self, index: usize) -> Result<i32>;
+    /// Constructor-installed class listeners precede ServerPlayer's listener.
+    fn internal_slot_changed(&mut self, _slot: usize) -> Result<()> {
+        Ok(())
+    }
     fn slot_changed(&mut self, slot: usize, copy: ListenerCopyRef) -> Result<()> {
         let stack = self
             .listener_copies()?
@@ -145,6 +149,12 @@ impl MenuSynchronizationContext for LiveMenuContext<'_> {
         }
         Ok(self.menu()?.data[index])
     }
+    fn internal_slot_changed(&mut self, _slot: usize) -> Result<()> {
+        if self.menu()?.crafter_listener {
+            refresh_crafter_result(self.player, self.menu, self.level)?;
+        }
+        Ok(())
+    }
     fn send_update(&mut self, update: ContainerUpdate) -> Result<()> {
         flush_container_packets(self.player, self.level)?;
         for packet in update.into_packets() {
@@ -192,11 +202,34 @@ fn trigger_slot_listeners<C: MenuSynchronizationContext>(
         context.listener_copies_mut()?.release(previous);
     }
     assert!(context.listener_copies_mut()?.retain(copy));
-    if let Err(error) = context.slot_changed(index, copy) {
+    if let Err(error) = context
+        .internal_slot_changed(index)
+        .and_then(|()| context.slot_changed(index, copy))
+    {
         context.listener_copies_mut()?.release(copy);
         return Err(error);
     }
     Ok(Some(copy))
+}
+
+/// Port of CrafterMenu#refreshRecipeResult. Replacement retains rooted old results.
+pub(crate) fn refresh_crafter_result(
+    player: crate::entity::EntityRef,
+    menu: MenuRef,
+    level: &mut crate::level::Level,
+) -> Result<()> {
+    let result = level.crafter_menu_result(player, menu)?;
+    level.replace_stack_object(
+        ContainerSlot {
+            container: ContainerHandle::MenuLocal {
+                player,
+                menu,
+                container: 1,
+            },
+            slot: 0,
+        },
+        StackValue::New(result),
+    )
 }
 fn synchronize_slot<C: MenuSynchronizationContext>(
     context: &mut C,

@@ -447,7 +447,7 @@ impl LiveMenuTransfer<'_> {
             }
             _ => return Err(MenuError::Unsupported("non-slot object assignment")),
         }
-        self.context().set_changed(address.container)
+        self.slot_changed(index)
     }
 }
 impl MenuTransferContext for LiveMenuTransfer<'_> {
@@ -509,9 +509,14 @@ impl MenuTransferContext for LiveMenuTransfer<'_> {
         self.set_by_player_value(index, StackValue::Existing(stack), None)
     }
     fn slot_changed(&mut self, index: usize) -> Result<()> {
+        let slot = self.slot(index)?;
         let mut context = self.context();
         let address = context.slot_address(index)?;
-        context.set_changed(address.container)
+        context.set_changed(address.container)?;
+        if slot.kind == SlotKind::Crafter {
+            broadcast_menu_changes(&mut context)?;
+        }
+        Ok(())
     }
 }
 

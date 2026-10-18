@@ -155,7 +155,7 @@ pub fn quick_move_container_menu_item<C: MenuClickContext>(
         MenuKind::Chest { rows } => usize::from(rows) * 9,
         MenuKind::Hopper => 5,
         MenuKind::ShulkerBox => 27,
-        MenuKind::Dispenser => 9,
+        MenuKind::Dispenser | MenuKind::Crafter => 9,
         _ => return Err(MenuError::Unsupported("retained quick-move menu family")),
     };
     let source = context.slot_stack(index)?;
@@ -165,7 +165,15 @@ pub fn quick_move_container_menu_item<C: MenuClickContext>(
     let source = context.slot_stack(index)?;
     let original = context.stack(source)?;
     let (start, end, backwards) = if index < boundary {
-        (boundary, context.slot_count()?, true)
+        (
+            boundary,
+            if kind == MenuKind::Crafter {
+                45
+            } else {
+                context.slot_count()?
+            },
+            true,
+        )
     } else {
         (0, boundary, false)
     };
@@ -178,7 +186,7 @@ pub fn quick_move_container_menu_item<C: MenuClickContext>(
     } else {
         context.slot_changed(index)?;
     }
-    if kind == MenuKind::Dispenser {
+    if matches!(kind, MenuKind::Dispenser | MenuKind::Crafter) {
         if count(&context.stack(source)?) == count(&original) {
             return Ok(ItemStack::default());
         }

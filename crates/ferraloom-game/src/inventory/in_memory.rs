@@ -342,6 +342,9 @@ impl MenuTransferContext for InMemoryMenuOperation<'_, '_, '_> {
         self.menu
             .container_mut(self.context, container)
             .set_changed();
+        if self.menu.slots[index].kind == SlotKind::Crafter {
+            self.menu.broadcast_changes(self.context)?;
+        }
         Ok(())
     }
 }

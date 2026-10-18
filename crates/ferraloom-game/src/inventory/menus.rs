@@ -378,7 +378,11 @@ impl AbstractContainerMenu {
     ) -> Result<ItemStack> {
         if matches!(
             self.kind,
-            MenuKind::Chest { .. } | MenuKind::Hopper | MenuKind::ShulkerBox | MenuKind::Dispenser
+            MenuKind::Chest { .. }
+                | MenuKind::Hopper
+                | MenuKind::ShulkerBox
+                | MenuKind::Dispenser
+                | MenuKind::Crafter
         ) {
             return quick_move_container_menu_item(
                 &mut super::in_memory::InMemoryMenuOperation::new(self, ctx),
@@ -404,7 +408,7 @@ impl AbstractContainerMenu {
         let original = stack.clone();
         let slots = self.slots.len();
         let moved = match self.kind {
-            MenuKind::Crafter => self.move_between(ctx, &mut stack, index, 9, 45, hooks)?,
+            MenuKind::Crafter => unreachable!("crafter uses the retained quick-move kernel"),
             MenuKind::Chest { .. }
             | MenuKind::Hopper
             | MenuKind::ShulkerBox
