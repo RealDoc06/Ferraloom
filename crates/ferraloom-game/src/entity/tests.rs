@@ -1680,6 +1680,7 @@ fn relative_teleports_match_native_transform_state_and_packet_flags() {
         assert_eq!(player.teleport.awaiting_teleport, 1);
         assert_eq!(player.teleport.awaiting_teleport_time, 42);
         assert_eq!(player.teleport.awaiting_position, Some(player.position));
+        level.take_player_section_changes();
         let packets = level.take_effects();
         let [LevelEffect::PlayerPacket { recipients, packet }] = packets.as_slice() else {
             panic!("teleport must enqueue its real packet at the call site")
@@ -1933,4 +1934,80 @@ fn nonplayer_teleport_snaps_recursive_passengers_without_changing_motion_or_rota
         .filter(|row| row.starts_with("teleport-passengers\t"))
         .collect();
     assert_eq!(actual, expected);
+}
+
+#[test]
+fn accepted_player_section_changes_capture_a_to_b_to_a_before_any_drain() {
+    use ferraloom_util::SectionPos;
+    let mut level = level(false);
+    let id = EntityRef(1);
+    let player = player::ServerPlayer::new(
+        Uuid::new(1, 2),
+        "sections".into(),
+        1,
+        Vec3::new(8.5, 64.0, 8.5),
+        player::GameType::Survival,
+    );
+    level
+        .add_entity(id, EntityState::Player(Box::new(player)))
+        .unwrap();
+    for position in [Vec3::new(24.5, 64.0, 8.5), Vec3::new(8.5, 64.0, 8.5)] {
+        level.set_entity_pos(id, position).unwrap();
+    }
+    assert_eq!(
+        level.take_player_section_changes(),
+        vec![
+            (id, SectionPos::new(1, 4, 0)),
+            (id, SectionPos::new(0, 4, 0))
+        ]
+    );
+}
+
+#[test]
+fn piston_effects_use_only_the_explicit_path_and_keep_recorded_movements() {
+    let mut level = level(false);
+    let id = EntityRef(1);
+    level
+        .set_block_state(BlockPos::new(8, 64, 8), Block::WATER.default_state())
+        .unwrap();
+    let mut entity = item::PrimedTnt::new(1, 123);
+    entity.parent.set_pos(Vec3::new(8.5, 64.0, 8.5));
+    entity.parent.remaining_fire_ticks = 100;
+    let recording = Movement {
+        from: Vec3::new(20.5, 64.0, 8.5),
+        to: Vec3::new(21.5, 64.0, 8.5),
+        axis_dependent_original_movement: None,
+    };
+    entity
+        .parent
+        .movement_this_tick
+        .push_back(recording.clone());
+    level
+        .add_entity(id, EntityState::PrimedTnt(Box::new(entity)))
+        .unwrap();
+    let behavior = level.entity_behavior(id).unwrap();
+    assert_eq!(
+        behavior.piston_push_reaction(),
+        ferraloom_data::PushReaction::PushPull
+    );
+    assert!(!behavior.is_ignoring_block_triggers(id, &level).unwrap());
+    behavior
+        .apply_effects_from_blocks_between(
+            id,
+            Vec3::new(8.5, 64.0, 8.5),
+            Vec3::new(9.5, 64.0, 8.5),
+            &mut level,
+        )
+        .unwrap();
+    let entity = level.entity::<EntityData>(id).unwrap();
+    assert!(entity.remaining_fire_ticks <= 0);
+    assert_eq!(entity.movement_this_tick.len(), 1);
+    assert_eq!(entity.movement_this_tick[0].from, recording.from);
+    assert_eq!(entity.movement_this_tick[0].to, recording.to);
+    assert!(entity.final_movements_this_tick.is_empty());
+    let entity = level.entity_mut::<EntityData>(id).unwrap();
+    entity.remove_latest_movement_recording();
+    assert!(entity.movement_this_tick.is_empty());
+    entity.remove_latest_movement_recording();
+    assert!(entity.movement_this_tick.is_empty());
 }
