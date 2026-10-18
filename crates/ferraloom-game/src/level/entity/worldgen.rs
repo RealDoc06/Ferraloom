@@ -39,12 +39,15 @@ impl std::error::Error for WorldgenEntityLoadError {
     }
 }
 
-fn entity_type(tag: &CompoundTag) -> Option<ferraloom_data::EntityType> {
+pub(super) fn entity_type(tag: &CompoundTag) -> Option<ferraloom_data::EntityType> {
     let name = tag.get_string("id")?.to_string_lossy();
     let name = ferraloom_protocol::Identifier::parse(&name).ok()?;
     ferraloom_data::EntityType::from_name(name.as_str())
 }
-fn check_factories(tag: &CompoundTag, level: &Level) -> Result<(), EntityPersistenceError> {
+pub(super) fn check_factories(
+    tag: &CompoundTag,
+    level: &Level,
+) -> Result<(), EntityPersistenceError> {
     let Some(kind) = entity_type(tag) else {
         return Ok(());
     };

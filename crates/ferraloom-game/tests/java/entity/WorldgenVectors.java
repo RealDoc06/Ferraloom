@@ -103,8 +103,24 @@ public final class WorldgenVectors {
       flag.setBoolean(level,false);
     } catch(ReflectiveOperationException error) {throw new AssertionError(error);}
   }
+  static void legacyPublication(Level level) {
+    try {
+      var flag=level.getClass().getDeclaredField("captureCreationIds");flag.setAccessible(true);flag.setBoolean(level,true);
+      var counter=level.getClass().getDeclaredField("creationCounter");counter.setAccessible(true);counter.setInt(level,0);
+      var callbacks=new Callbacks();var manager=new PersistentEntitySectionManager<>(Entity.class,callbacks,null);
+      var unknown=tag("missing:unknown",99);unknown.put("Passengers",list(tag("minecraft:experience_orb",100)));
+      var root=tag("minecraft:experience_orb",1);root.put("Passengers",list(unknown,tag("minecraft:experience_orb",2)));
+      var input=TagValueInput.create(ProblemReporter.DISCARDING,level.registryAccess(),List.of(unknown,root));
+      var entities=EntityType.loadEntitiesRecursive(input,level,EntitySpawnReason.LOAD).toList();
+      manager.addLegacyChunkEntities(entities.stream());
+      System.out.println("entity-legacy\tunknown-trees\t"+links(entities)+"\t"+callbacks.created.size()+"\t"+counter.getInt(level));
+      counter.setInt(level,0);
+      flag.setBoolean(level,false);
+    } catch(ReflectiveOperationException error) {throw new AssertionError(error);}
+  }
   public static void run(Level level) {
     visibility(level);
+    legacyPublication(level);
     creationOrder(level);
     sharedPublication(level);
     var callbacks=new Callbacks();var manager=new PersistentEntitySectionManager<>(Entity.class,callbacks,null);

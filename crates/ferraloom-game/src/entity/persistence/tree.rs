@@ -93,7 +93,22 @@ pub(crate) fn load_entity_tree(
     let index = loaded.len();
     loaded.push((entity, state));
     for tag in passengers.iter().filter_map(Tag::as_compound) {
-        let passenger = load_entity_tree(level, tag.clone(), loaded)?;
+        let known = tag
+            .get_string("id")
+            .and_then(|name| ferraloom_protocol::Identifier::parse(&name.to_string_lossy()).ok())
+            .and_then(|name| EntityType::from_name(name.as_str()));
+        if known.is_none() {
+            eprintln!("Skipping passenger with unknown or missing id while loading entity chunk");
+            continue;
+        }
+        let passenger = match load_entity_tree(level, tag.clone(), loaded) {
+            Ok(passenger) => passenger,
+            Err(error @ EntityPersistenceError::Base(_)) => {
+                eprintln!("Skipping invalid passenger while loading entity chunk: {error}");
+                continue;
+            }
+            Err(error) => return Err(error),
+        };
         // Every currently loaded factory inherits couldAcceptPassenger=true;
         // Entity#startRiding does not reject a removed mount.
         let passenger_state = loaded.iter_mut().find(|(id, _)| *id == passenger).unwrap();

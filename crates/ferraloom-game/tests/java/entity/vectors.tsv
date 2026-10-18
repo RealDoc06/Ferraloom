@@ -448,6 +448,7 @@ entity-visibility	TICKING	TickingStart:1,TickingStart:2	3,1,2
 entity-visibility	TRACKED	TickingEnd:1,TickingEnd:2	3,1,2
 entity-visibility	HIDDEN	TrackingEnd:1,TrackingEnd:2	3
 entity-visibility	TICKING	TrackingStart:1,TrackingStart:2,TickingStart:1,TickingStart:2	3,1,2
+entity-legacy	unknown-trees	1:1:none:2:false,2:2:1::false	0	2
 entity-creation-order	minecraft:cow	1
 entity-creation-order	minecraft:item	2
 entity-creation-order	minecraft:tnt	3

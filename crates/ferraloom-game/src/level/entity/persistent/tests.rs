@@ -124,6 +124,20 @@ fn shared_status_and_io_queues_preserve_native_events_and_borrowed_state() {
         ChunkLoadStatus::Pending
     );
     assert!(shared.take_entity_storage_requests().is_empty());
+    shared.process_pending_entity_loads_shared().unwrap();
+    assert_eq!(
+        shared.entity_chunk_load_status(pos),
+        ChunkLoadStatus::Loaded
+    );
+    shared
+        .update_entity_chunk_status(pos, Visibility::Hidden)
+        .unwrap();
+    shared.process_pending_entity_loads_shared().unwrap();
+    assert!(
+        !captured.removed,
+        "load integration does not run unload management"
+    );
+    assert_eq!(captured.tick_count, 0);
 }
 
 #[test]
@@ -337,12 +351,21 @@ fn save_all_waits_for_pending_load_and_keeps_unported_chunks_pending() {
     level
         .complete_entity_chunk_load(request, Ok(Some(chunk(pos, vec![unported]))))
         .unwrap();
+    let Err(EntityStorageError::LoadIntegration(failure)) = level.poll_entity_save_all() else {
+        panic!("expected explicit factory failure");
+    };
     assert!(matches!(
-        level.poll_entity_save_all(),
-        Err(EntityStorageError::Entity(
-            EntityPersistenceError::UnsupportedType(_)
-        ))
+        failure.source,
+        EntityStorageError::Entity(EntityPersistenceError::UnsupportedType(_))
     ));
+    assert_eq!(
+        failure.stage,
+        super::super::WorldgenEntityLoadStage::Preflight
+    );
+    assert!(
+        failure.chunk.is_some(),
+        "the failed owned response is retained"
+    );
     assert_eq!(
         level.entity_chunk_load_status(pos),
         ChunkLoadStatus::Pending
@@ -350,6 +373,143 @@ fn save_all_waits_for_pending_load_and_keeps_unported_chunks_pending() {
     level.auto_save_entities().unwrap();
     assert!(level.take_entity_storage_requests().is_empty());
     assert!(!level.entity::<EntityData>(id).unwrap().removed);
+}
+
+#[test]
+fn shared_entity_io_preflight_keeps_owned_nbt_and_never_replays_it() {
+    let level = level();
+    let shared = &level;
+    let pos = ChunkPos::ZERO;
+    shared
+        .update_entity_chunk_status(pos, Visibility::Ticking)
+        .unwrap();
+    let requests = shared.take_entity_storage_requests();
+    let EntityStorageRequest::Load { id, .. } = requests[0] else {
+        panic!("expected load")
+    };
+    let mut unported = orb_tag(17, Vec3::new(1.0, 64.0, 1.0));
+    unported.insert("id", Tag::String("minecraft:pig".into()));
+    let original = chunk(pos, vec![unported]);
+    shared
+        .complete_entity_chunk_load(id, Ok(Some(original.clone())))
+        .unwrap();
+    let Err(EntityStorageError::LoadIntegration(failure)) =
+        shared.process_pending_entity_loads_shared()
+    else {
+        panic!("expected preflight failure")
+    };
+    assert_eq!(failure.chunk, Some(original));
+    assert_eq!(failure.id, id);
+    assert_eq!(failure.pos, pos);
+    assert_eq!(
+        failure.stage,
+        super::super::WorldgenEntityLoadStage::Preflight
+    );
+    assert!(matches!(
+        failure.source,
+        EntityStorageError::Entity(EntityPersistenceError::UnsupportedType(_))
+    ));
+    shared.process_pending_entity_loads_shared().unwrap();
+    assert_eq!(
+        shared.entity_chunk_load_status(pos),
+        ChunkLoadStatus::Pending
+    );
+    assert_eq!(shared.next_entity_id(), 1);
+    assert_eq!(shared.next_entity_ref(), EntityRef(1));
+    assert!(shared.all_entities().is_empty());
+}
+
+#[test]
+fn shared_legacy_load_skips_unknown_trees_and_keeps_registered_passenger_order() {
+    let level = level();
+    let shared = &level;
+    let pos = ChunkPos::ZERO;
+    shared
+        .update_entity_chunk_status(pos, Visibility::Ticking)
+        .unwrap();
+    let requests = shared.take_entity_storage_requests();
+    let EntityStorageRequest::Load { id, .. } = requests[0] else {
+        panic!("expected load")
+    };
+    let mut unknown = CompoundTag::new();
+    unknown.insert("id", Tag::String("missing:entity".into()));
+    unknown.insert(
+        "Passengers",
+        Tag::List(ListTag(vec![Tag::Compound(orb_tag(99, Vec3::ZERO))])),
+    );
+    let mut root = orb_tag(1, Vec3::new(1.0, 64.0, 1.0));
+    root.insert(
+        "Passengers",
+        Tag::List(ListTag(vec![
+            Tag::Compound(unknown.clone()),
+            Tag::Compound(orb_tag(2, Vec3::new(1.0, 64.0, 1.0))),
+        ])),
+    );
+    shared
+        .complete_entity_chunk_load(id, Ok(Some(chunk(pos, vec![unknown, root]))))
+        .unwrap();
+    shared.process_pending_entity_loads_shared().unwrap();
+    assert_eq!(shared.all_entities(), [EntityRef(1), EntityRef(2)]);
+    let parent = shared.entity::<EntityData>(EntityRef(1)).unwrap();
+    assert_eq!(parent.passengers.as_slice(), &[EntityRef(2)]);
+    assert_eq!(
+        shared
+            .entity::<EntityData>(EntityRef(2))
+            .unwrap()
+            .vehicle
+            .get(),
+        Some(EntityRef(1))
+    );
+    assert_eq!(
+        shared.take_entity_management_events(),
+        [
+            EntityManagementEvent::TrackingStart(EntityRef(1)),
+            EntityManagementEvent::TickingStart(EntityRef(1)),
+            EntityManagementEvent::TrackingStart(EntityRef(2)),
+            EntityManagementEvent::TickingStart(EntityRef(2))
+        ]
+    );
+    assert!(shared.are_entities_loaded(pos));
+    assert_eq!(parent.tick_count, 0);
+    assert_eq!(shared.next_entity_id(), 3);
+    let expected = include_str!("../../../../tests/java/entity/vectors.tsv")
+        .lines()
+        .find(|row| row.starts_with("entity-legacy\tunknown-trees\t"))
+        .unwrap();
+    let fields: Vec<_> = expected.split('\t').collect();
+    let links: Vec<_> = shared
+        .all_entities()
+        .iter()
+        .map(|&id| {
+            let base = shared.entity::<EntityData>(id).unwrap();
+            format!(
+                "{}:{}:{}:{}:{}",
+                base.network_id,
+                base.uuid.least,
+                base.vehicle.get().map_or_else(
+                    || "none".into(),
+                    |vehicle| shared
+                        .entity::<EntityData>(vehicle)
+                        .unwrap()
+                        .network_id
+                        .to_string()
+                ),
+                base.passengers
+                    .iter()
+                    .map(|&child| shared
+                        .entity::<EntityData>(child)
+                        .unwrap()
+                        .network_id
+                        .to_string())
+                    .collect::<Vec<_>>()
+                    .join("/"),
+                base.removed
+            )
+        })
+        .collect();
+    assert_eq!(links.join(","), fields[2]);
+    assert_eq!(fields[3], "0", "legacy load does not emit onCreated");
+    assert_eq!(fields[4], "2", "unknown trees consume no constructor IDs");
 }
 
 #[test]

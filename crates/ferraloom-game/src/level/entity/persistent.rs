@@ -41,6 +41,7 @@ pub enum EntityStorageRequest {
 }
 #[derive(Debug)]
 pub enum EntityStorageError {
+    LoadIntegration(Box<EntityChunkLoadError>),
     Level(LevelError),
     Entity(EntityPersistenceError),
     Storage(ferraloom_storage::Error),
@@ -51,6 +52,17 @@ pub enum EntityStorageError {
         stored: ChunkPos,
     },
     SaveAlreadyInProgress,
+}
+
+/// Failed entity IO integration keeps its original owned chunk NBT. Preflight
+/// consumed no constructor draws; Publishing must never be replayed from NBT.
+#[derive(Debug)]
+pub struct EntityChunkLoadError {
+    pub id: EntityLoadRequestId,
+    pub pos: ChunkPos,
+    pub chunk: Option<CompoundTag>,
+    pub source: EntityStorageError,
+    pub stage: super::WorldgenEntityLoadStage,
 }
 impl From<LevelError> for EntityStorageError {
     fn from(error: LevelError) -> Self {
@@ -215,70 +227,116 @@ impl Level {
     /// Port of PersistentEntitySectionManager#processPendingLoads. Explicit
     /// decode/unsupported errors leave the chunk pending and prevent overwrites.
     pub fn process_pending_entity_loads(&mut self) -> Result<(), EntityStorageError> {
+        self.process_pending_entity_loads_shared()
+    }
+    /// Ordered IO publication while a chunk read is suspended. This only
+    /// integrates loads: no entity simulation, unloading, retirement or save-all
+    /// phase runs. The inbox entry is removed before callbacks, so a nested
+    /// integration can consume the next ready request without replaying this one.
+    pub fn process_pending_entity_loads_shared(&self) -> Result<(), EntityStorageError> {
         loop {
-            let manager = self.region_mut().entities.persistent.state.get_mut();
-            if !manager
-                .loads
-                .front()
-                .is_some_and(|load| load.response.is_some())
-            {
-                break;
-            }
-            let load = manager.loads.pop_front().unwrap();
-            let tag = load.response.unwrap()?;
-            let mut loaded = Vec::new();
-            if let Some(tag) = tag {
-                let chunk = EntityChunk::parse(tag)?;
-                let position = chunk.position.expect("validated position").0;
-                let stored = ChunkPos::new(position[0], position[1]);
-                if stored != load.pos {
-                    return Err(EntityStorageError::MisplacedChunk {
-                        expected: load.pos,
-                        stored,
-                    });
-                }
-                self.region_mut()
-                    .entities
-                    .persistent
-                    .state
-                    .get_mut()
-                    .chunk_remainders
-                    .insert(load.pos.pack(), chunk.extra);
-                for tag in chunk.entities.unwrap_or_default() {
-                    persistence::load_entity_tree(self, tag, &mut loaded)?;
-                }
-            } else {
-                self.region_mut()
-                    .entities
-                    .persistent
-                    .state
-                    .get_mut()
-                    .empty_chunks
-                    .insert(load.pos.pack());
-            }
-            // The stream includes passengers even if their vehicle's duplicate
-            // UUID prevents its registration. Keep that Java object reachable
-            // solely through held handles, with no index or level callback.
-            for (id, state) in loaded {
-                if self
-                    .region()
-                    .entities
-                    .registration
-                    .knows_uuid(state.as_entity().uuid)
+            let load = {
+                let mut manager = self.region().entities.persistent.state.borrow_mut();
+                if !manager
+                    .loads
+                    .front()
+                    .is_some_and(|load| load.response.is_some())
                 {
-                    self.retain_unmanaged_entity(id, state);
-                } else {
-                    self.add_entity_with_origin(id, state, true)?;
+                    break;
+                }
+                manager.loads.pop_front().unwrap()
+            };
+            let tag = load.response.unwrap().map_err(|source| {
+                EntityStorageError::LoadIntegration(Box::new(EntityChunkLoadError {
+                    id: load.id,
+                    pos: load.pos,
+                    chunk: None,
+                    source: source.into(),
+                    stage: super::WorldgenEntityLoadStage::Preflight,
+                }))
+            })?;
+            let mut stage = super::WorldgenEntityLoadStage::Preflight;
+            if let Err(source) =
+                self.integrate_entity_chunk_load(load.pos, tag.as_ref(), &mut stage)
+            {
+                return Err(EntityStorageError::LoadIntegration(Box::new(
+                    EntityChunkLoadError {
+                        id: load.id,
+                        pos: load.pos,
+                        chunk: tag,
+                        source,
+                        stage,
+                    },
+                )));
+            }
+        }
+        Ok(())
+    }
+
+    fn integrate_entity_chunk_load(
+        &self,
+        pos: ChunkPos,
+        tag: Option<&CompoundTag>,
+        stage: &mut super::WorldgenEntityLoadStage,
+    ) -> Result<(), EntityStorageError> {
+        let mut loaded = Vec::new();
+        let mut remainder = None;
+        if let Some(tag) = tag {
+            let chunk = EntityChunk::parse(tag.clone())?;
+            let position = chunk.position.expect("validated position").0;
+            let stored = ChunkPos::new(position[0], position[1]);
+            if stored != pos {
+                return Err(EntityStorageError::MisplacedChunk {
+                    expected: pos,
+                    stored,
+                });
+            }
+            let entities = chunk.entities.unwrap_or_default();
+            for tag in &entities {
+                super::worldgen::check_factories(tag, self)?;
+            }
+            *stage = super::WorldgenEntityLoadStage::Publishing;
+            for tag in entities {
+                if super::worldgen::entity_type(&tag).is_none() {
+                    eprintln!(
+                        "Skipping entity with unknown or missing id while loading entity chunk"
+                    );
+                    continue;
+                }
+                match persistence::load_entity_tree(self, tag, &mut loaded) {
+                    Ok(_) => (),
+                    Err(error @ EntityPersistenceError::Base(_)) => {
+                        eprintln!("Skipping invalid entity while loading entity chunk: {error}")
+                    }
+                    Err(error) => return Err(error.into()),
                 }
             }
-            self.region_mut()
-                .entities
-                .persistent
-                .state
-                .get_mut()
-                .load_statuses
-                .insert(load.pos.pack(), ChunkLoadStatus::Loaded);
+            remainder = Some(chunk.extra);
         }
+        // The stream includes passengers even if their vehicle's duplicate
+        // UUID prevents its registration. Keep that Java object reachable
+        // solely through held handles, with no index or level callback.
+        for (id, state) in loaded {
+            if self
+                .region()
+                .entities
+                .registration
+                .knows_uuid(state.as_entity().uuid)
+            {
+                self.retain_unmanaged_entity(id, state);
+            } else {
+                self.add_entity_with_origin(id, state, true)?;
+            }
+        }
+        let mut manager = self.region().entities.persistent.state.borrow_mut();
+        if let Some(remainder) = remainder {
+            manager.chunk_remainders.insert(pos.pack(), remainder);
+        } else {
+            manager.empty_chunks.insert(pos.pack());
+        }
+        manager
+            .load_statuses
+            .insert(pos.pack(), ChunkLoadStatus::Loaded);
         Ok(())
     }
     fn entity_chunk_roots_to_save(&self, pos: ChunkPos) -> Result<Vec<EntityRef>, LevelError> {

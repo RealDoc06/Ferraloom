@@ -13,8 +13,8 @@ mod worldgen;
 use indexes::EntityRegistration;
 pub use indexes::{EntityLookup, EntitySectionStorage, EntityTickList};
 pub use persistent::{
-    ChunkLoadStatus, EntityLoadRequestId, EntityStorageError, EntityStorageRequest,
-    PersistentEntitySectionManager,
+    ChunkLoadStatus, EntityChunkLoadError, EntityLoadRequestId, EntityStorageError,
+    EntityStorageRequest, PersistentEntitySectionManager,
 };
 pub use worldgen::{WorldgenEntityLoadError, WorldgenEntityLoadStage};
 
