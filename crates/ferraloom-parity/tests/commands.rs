@@ -192,7 +192,70 @@ async fn clocks_and_admin(session: &mut Session) -> Result<ObservationLog> {
         "gametime feedback requires the full numeric long value"
     );
     log.record("gametime.translation", &gametime["translate"])?;
+    let newcomer = session.join("DifficultyGuest").await?;
+    let difficulty = session
+        .bot(newcomer)?
+        .sequence()
+        .join
+        .iter()
+        .find_map(|packet| {
+            if let cb::Packet::ChangeDifficulty(packet) = packet {
+                Some(packet.clone())
+            } else {
+                None
+            }
+        })
+        .expect("joining player's difficulty packet");
+    ensure!(
+        difficulty.difficulty == ferraloom_parity::protocol::play::Difficulty::Hard,
+        "joining player lost changed world difficulty"
+    );
+    log.record("difficulty.newcomer", format!("{difficulty:?}"))?;
     Ok(log)
+}
+
+async fn forced_default_game_mode(session: &mut Session) -> Result<ObservationLog> {
+    let operator = session.join("ParityBot").await?;
+    let guest = session.join("CommandGuest").await?;
+    session
+        .bot(operator)?
+        .command("defaultgamemode creative")
+        .await?;
+    let mut log = ObservationLog::default();
+    for (name, id) in [("operator", operator), ("guest", guest)] {
+        let packet = session.bot(id)?.wait_for("forced default game mode",Ticks::DEFAULT,|_,packet| {
+            matches!(packet,cb::Packet::GameEvent(packet) if packet.event==3 && packet.param==1.)
+        }).await?;
+        log.record(format!("{name}.mode"), format!("{packet:?}"))?;
+    }
+    log.record(
+        "feedback",
+        feedback(session.bot(operator)?, "commands.defaultgamemode.success").await?,
+    )?;
+    log.record(
+        "no_op",
+        command(
+            session.bot(operator)?,
+            "defaultgamemode creative",
+            "commands.defaultgamemode.success",
+        )
+        .await?,
+    )?;
+    Ok(log)
+}
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "requires builder vanilla jar/JDK; run with --ignored"]
+async fn parity_command_forced_default_game_mode() -> Result<()> {
+    let mut options = ferraloom_parity::LaunchOptions::default();
+    options
+        .properties
+        .insert("force-gamemode".into(), "true".into());
+    ferraloom_parity::run(
+        options,
+        ferraloom_parity::RunMode::from_env()?,
+        forced_default_game_mode,
+    )
+    .await
 }
 
 async fn message_arguments(session: &mut Session) -> Result<ObservationLog> {

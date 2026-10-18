@@ -834,15 +834,7 @@ impl MinecraftServer {
             online_mode: self.properties.boolean("online-mode"),
             enforces_secure_chat: self.enforces_secure_chat,
         }));
-        c.push(cb::Packet::ChangeDifficulty(cb::ChangeDifficulty {
-            difficulty: match self.properties.get("difficulty") {
-                "peaceful" => Difficulty::Peaceful,
-                "normal" => Difficulty::Normal,
-                "hard" => Difficulty::Hard,
-                _ => Difficulty::Easy,
-            },
-            locked: false,
-        }));
+        c.push(self.difficulty_packet());
         c.push(abilities(&player));
         c.push(cb::Packet::SetHeldSlot(cb::SetHeldSlot { slot: VarInt(0) }));
         c.push(cb::Packet::UpdateRecipes(cb::UpdateRecipes {

@@ -37,6 +37,25 @@ pub(super) fn rule_features(world: &World) -> RuleFeatures {
     }
 }
 impl MinecraftServer {
+    /// Port of MinecraftServer#sendDifficultyUpdate; also used when a new player joins.
+    pub(super) fn difficulty_packet(&self) -> cb::Packet {
+        let settings = self
+            .world
+            .level_data
+            .data
+            .get_compound("difficulty_settings");
+        let current = settings
+            .and_then(|tag| tag.get_string("difficulty"))
+            .map(|s| s.to_string_lossy());
+        cb::Packet::ChangeDifficulty(cb::ChangeDifficulty {
+            difficulty: difficulty(
+                current
+                    .as_deref()
+                    .unwrap_or_else(|| self.properties.get("difficulty")),
+            ),
+            locked: settings.is_some_and(|tag| tag.get_boolean_or("locked", false)),
+        })
+    }
     pub(super) async fn save_game_rules(&self) -> Result<()> {
         let storage = SavedDataStorage::new(self.world.access.path().join("data"));
         let mut data = SavedData::new(self.game_rules.map().clone());
@@ -260,7 +279,9 @@ impl MinecraftServer {
                         .get_compound("difficulty_settings")
                         .cloned()
                         .unwrap_or_default();
-                    let changed = if self.properties.boolean("hardcore") {
+                    let changed = if settings
+                        .get_boolean_or("hardcore", self.properties.boolean("hardcore"))
+                    {
                         "hard"
                     } else {
                         requested.as_str()
@@ -329,6 +350,7 @@ impl MinecraftServer {
             "setidletimeout" => {
                 let minutes = command.integer("minutes").expect("parsed minutes");
                 self.idle_timeout = minutes;
+                self.update_command_property("player-idle-timeout", minutes);
                 let (key, args) = if minutes > 0 {
                     (
                         "commands.setidletimeout.success",
@@ -350,8 +372,14 @@ impl MinecraftServer {
                     .level_data
                     .data
                     .insert("GameType", Tag::Int(mode.id()));
+                let mut count = 0;
+                if self.properties.boolean("force-gamemode") {
+                    for player in self.players.clone() {
+                        count += i32::from(self.change_player_game_mode(player, *mode).is_some());
+                    }
+                }
                 CommandResult::success(
-                    0,
+                    count,
                     Component::translatable(
                         "commands.defaultgamemode.success",
                         vec![builtins::component(Component::translatable(
@@ -993,6 +1021,47 @@ impl MinecraftServer {
 }
 
 impl MinecraftServer {
+    /// Port of ServerPlayer#setGameMode's currently available player state and packets.
+    fn change_player_game_mode(
+        &mut self,
+        id: ConnectionId,
+        mode: GameType,
+    ) -> Option<(EntityRef, Component)> {
+        let Phase::Play(entity) = self.connections[&id].phase else {
+            return None;
+        };
+        let Ok(player) = self.level.level.entity_mut::<ServerPlayer>(entity) else {
+            return None;
+        };
+        if player.game_mode == mode {
+            return None;
+        }
+        player.game_mode = mode;
+        if mode == GameType::Spectator {
+            player.flying = true;
+        } else if mode != GameType::Creative {
+            player.flying = false;
+        }
+        let packet = abilities(player);
+        let name = player.display_name();
+        let uuid = player.uuid;
+        let c = self.connections.get_mut(&id).unwrap();
+        c.push(cb::Packet::GameEvent(cb::GameEvent {
+            event: 3,
+            param: mode.id() as f32,
+        }));
+        c.push(packet);
+        self.broadcast(cb::Packet::PlayerInfoUpdate(cb::PlayerInfoUpdate {
+            actions: 4,
+            entries: vec![PlayerInfoEntry {
+                profile_id: uuid,
+                actions: vec![PlayerInfoAction::UpdateGameMode {
+                    game_mode: protocol_game_type(mode),
+                }],
+            }],
+        }));
+        Some((entity, name))
+    }
     fn game_mode_command(
         &mut self,
         source: Option<ConnectionId>,
@@ -1011,39 +1080,9 @@ impl MinecraftServer {
             Component::translatable(format!("gameMode.{}", game_mode_name(mode)), vec![]);
         let mut count = 0;
         for id in targets {
-            let Phase::Play(entity) = self.connections[&id].phase else {
+            let Some((entity, name)) = self.change_player_game_mode(id, mode) else {
                 continue;
             };
-            let Ok(player) = self.level.level.entity_mut::<ServerPlayer>(entity) else {
-                continue;
-            };
-            if player.game_mode == mode {
-                continue;
-            }
-            player.game_mode = mode;
-            if mode == GameType::Spectator {
-                player.flying = true;
-            } else if mode != GameType::Creative {
-                player.flying = false;
-            }
-            let packet = abilities(player);
-            let name = player.display_name();
-            let uuid = player.uuid;
-            let c = self.connections.get_mut(&id).unwrap();
-            c.push(cb::Packet::GameEvent(cb::GameEvent {
-                event: 3,
-                param: mode.id() as f32,
-            }));
-            c.push(packet);
-            self.broadcast(cb::Packet::PlayerInfoUpdate(cb::PlayerInfoUpdate {
-                actions: 4,
-                entries: vec![PlayerInfoEntry {
-                    profile_id: uuid,
-                    actions: vec![PlayerInfoAction::UpdateGameMode {
-                        game_mode: protocol_game_type(mode),
-                    }],
-                }],
-            }));
             let own = command.source.entity == Some(entity);
             if !own
                 && self
@@ -1084,6 +1123,14 @@ impl MinecraftServer {
 }
 
 impl MinecraftServer {
+    /// Port of DedicatedServerSettings#update for command-controlled properties.
+    fn update_command_property(&mut self, key: &str, value: impl ToString) {
+        let properties = Arc::make_mut(&mut self.properties);
+        properties.set(key, value);
+        if let Err(error) = properties.store(&self.root.join("server.properties")) {
+            eprintln!("Could not save server properties: {error:#}");
+        }
+    }
     fn whitelist_command(
         &mut self,
         source: Option<ConnectionId>,
@@ -1103,11 +1150,7 @@ impl MinecraftServer {
                         &[],
                     ));
                 }
-                let properties = Arc::make_mut(&mut self.properties);
-                properties.set("white-list", enabled);
-                if let Err(error) = properties.store(&self.root.join("server.properties")) {
-                    eprintln!("Could not save server properties: {error:#}");
-                }
+                self.update_command_property("white-list", enabled);
                 self.command_success(
                     source,
                     &command.source,
