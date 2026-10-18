@@ -210,10 +210,11 @@ impl BiomeTemperatures {
         ] {
             let step = d.step();
             let q = [p[0] + step.x, p[1] + step.y, p[2] + step.z];
-            if !matches!(
-                region.fluid(q)?.fluid_type,
-                fluid::Id::WATER | fluid::Id::FLOWING_WATER
-            ) {
+            let neighbor = region.fluid(q)?.fluid_type;
+            if !region
+                .fluid_tags()?
+                .contains_key(ferraloom_data::tags::FluidTags::WATER, neighbor)
+            {
                 return Ok(true);
             }
         }
