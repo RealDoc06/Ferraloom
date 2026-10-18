@@ -318,8 +318,11 @@ fn crop_bonemeal_and_growth_speed_match_real_vanilla_methods() {
 
 #[test]
 fn snow_melts_only_above_eleven_block_light_and_emits_destroy_context() {
+    let (blocks, fluids) = tags();
     for light in [0, 11, 12, 15] {
         let mut level = level();
+        level.set_block_tags(blocks.clone());
+        level.set_fluid_tags(fluids.clone());
         let pos = BlockPos::new(8, 5, 8);
         let state = Block::SNOW.default_state();
         level
@@ -504,9 +507,12 @@ fn farmland_water_boundary_and_crop_protection_preserve_random_stream() {
 
 #[test]
 fn ground_scheduled_tick_retains_farmland_but_always_converts_path() {
+    let (blocks, fluids) = tags();
     let pos = BlockPos::new(8, 5, 8);
     for block in [Block::FARMLAND, Block::DIRT_PATH] {
         let mut level = level();
+        level.set_block_tags(blocks.clone());
+        level.set_fluid_tags(fluids.clone());
         let state = block.default_state();
         level.set_block_state(pos, state).unwrap();
         ground::GROUND.tick(state, pos, &mut level).unwrap();
