@@ -1,3 +1,4 @@
+mod placement;
 use crate::{
     Error,
     structure::{BoundingBox, piece::StructurePieceData},
