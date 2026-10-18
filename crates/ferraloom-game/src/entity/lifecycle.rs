@@ -272,7 +272,8 @@ pub fn base_tick<E: super::Entity + ?Sized>(
             level.entity_mut::<EntityData>(entity)?.clear_fire();
         } else {
             if base.remaining_fire_ticks % 20 == 0 && !base.is_in_lava(level)? {
-                behavior.hurt_server(entity, level, super::DamageSource::default(), 1.0)?;
+                let source = level.damage_sources().on_fire();
+                behavior.hurt_server(entity, level, source, 1.0)?;
             }
             level.entity_mut::<EntityData>(entity)?.remaining_fire_ticks -= 1;
         }

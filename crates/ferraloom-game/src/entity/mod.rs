@@ -66,6 +66,7 @@ pub mod bubble_column;
 pub mod collision;
 pub mod collision_context;
 pub mod damage;
+pub use damage::DamageSource;
 pub mod dimensions;
 pub mod fluid;
 pub mod inside_block;
@@ -228,13 +229,6 @@ impl EntityMethod {
             Self::SwingAndResetAttackStrength => "swingAndResetAttackStrength",
         }
     }
-}
-
-/// Narrow source used by the unarmored damage primitive; tags grow with ports.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct DamageSource {
-    pub attacker: Option<EntityRef>,
-    pub bypasses_cooldown: bool,
 }
 
 /// Shared embedded Entity parent references for the host lifetime tracer.
@@ -772,7 +766,9 @@ pub fn hurt_unarmored(
     }
     let damage = if damage < 0.0 { 0.0 } else { damage };
     let damage = if damage.is_finite() { damage } else { f32::MAX };
-    let applied = if living.damage_cooldown_time > 10 && !source.bypasses_cooldown {
+    let applied = if living.damage_cooldown_time > 10
+        && !source.is_tag(damage::DamageTypeTag::BypassesCooldown)
+    {
         if damage <= living.last_hurt {
             return Ok(false);
         }

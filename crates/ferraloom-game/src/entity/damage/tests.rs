@@ -282,3 +282,41 @@ fn level_context_requires_actual_damage_resources_and_fixtures_load_vanilla() {
     );
     assert!(DamageTypeRegistry::load(&ResourceManager::new(vec![vanilla_pack(), pack])).is_err());
 }
+
+#[test]
+fn damage_cooldown_uses_the_contexts_loaded_tag_instead_of_a_caller_flag() {
+    let mut pack = Pack::new("cooldown override");
+    pack.insert(
+        "minecraft:tags/damage_type/bypasses_cooldown.json"
+            .parse()
+            .unwrap(),
+        br#"{"replace":true,"values":["minecraft:generic"]}"#.as_slice(),
+    );
+    let registry = Arc::new(
+        DamageTypeRegistry::load(&ResourceManager::new(vec![vanilla_pack(), pack])).unwrap(),
+    );
+    let fixture = LevelContext::fixture(0, 63);
+    let context = Arc::new(LevelContext::new(
+        fixture.seed,
+        fixture.sea_level,
+        fixture.generator.clone(),
+        fixture.features.clone(),
+        registry,
+    ));
+    static BEHAVIORS: Behaviors = Behaviors::EMPTY;
+    let mut level = Level::new(Region::new(&BEHAVIORS), context);
+    let entity = level.next_entity_ref();
+    level
+        .add_entity(entity, EntityState::Cow(Box::default()))
+        .unwrap();
+    let source = level.damage_sources().generic();
+    assert!(crate::entity::hurt_unarmored(entity, &mut level, source.clone(), 3.0).unwrap());
+    assert!(crate::entity::hurt_unarmored(entity, &mut level, source, 2.0).unwrap());
+    assert_eq!(
+        level
+            .entity::<crate::entity::LivingEntity>(entity)
+            .unwrap()
+            .health(),
+        5.0
+    );
+}

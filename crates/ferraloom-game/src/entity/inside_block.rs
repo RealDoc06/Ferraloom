@@ -182,8 +182,8 @@ pub fn apply_collected<E: Entity + ?Sized>(
                     .data()
                     .fire_immune
                 {
-                    let hurt =
-                        behavior.hurt_server(entity, level, super::DamageSource::default(), 4.0)?;
+                    let source = level.damage_sources().lava();
+                    let hurt = behavior.hurt_server(entity, level, source, 4.0)?;
                     if hurt
                         && behavior.should_play_lava_hurt_sound(entity, level)?
                         && !*level
@@ -205,7 +205,8 @@ pub fn apply_collected<E: Entity + ?Sized>(
                 }
             }
             InsideBlockAction::InFireHurt(damage) => {
-                behavior.hurt_server(entity, level, super::DamageSource::default(), damage)?;
+                let source = level.damage_sources().in_fire();
+                behavior.hurt_server(entity, level, source, damage)?;
             }
         }
     }
