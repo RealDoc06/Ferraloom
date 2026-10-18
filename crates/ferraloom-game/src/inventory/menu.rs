@@ -66,6 +66,9 @@ pub struct AbstractContainerMenu {
     suppressed: bool,
     pub changes: Vec<ContainerChange>,
     pub updates: Vec<ContainerUpdate>,
+    pub(crate) crafting_recipe_used: Option<ferraloom_data::datapack::Identifier>,
+    pub(crate) crafting_remove_count: i32,
+    pub(crate) placing_recipe: bool,
 }
 impl AbstractContainerMenu {
     pub(crate) fn empty(kind: MenuKind, container_id: i32) -> Self {
@@ -89,6 +92,9 @@ impl AbstractContainerMenu {
             suppressed: false,
             changes: Vec::new(),
             updates: Vec::new(),
+            crafting_recipe_used: None,
+            crafting_remove_count: 0,
+            placing_recipe: false,
         }
     }
     pub(crate) fn add_slot(&mut self, mut slot: Slot) {
@@ -153,14 +159,18 @@ impl AbstractContainerMenu {
             .cloned()
             .ok_or(MenuError::InvalidSlot(index))
     }
-    fn container<'a>(&'a self, ctx: &'a MenuContext<'_>, id: ContainerId) -> &'a dyn Container {
+    pub(crate) fn container<'a>(
+        &'a self,
+        ctx: &'a MenuContext<'_>,
+        id: ContainerId,
+    ) -> &'a dyn Container {
         match id {
             ContainerId::Player => &ctx.player,
             ContainerId::Local(i) => &self.local[i],
             ContainerId::External(i) => &*ctx.external[i],
         }
     }
-    fn container_mut<'a>(
+    pub(crate) fn container_mut<'a>(
         &'a mut self,
         ctx: &'a mut MenuContext<'_>,
         id: ContainerId,
@@ -338,6 +348,61 @@ impl AbstractContainerMenu {
             _ => true,
         }
     }
+    fn try_remove_live(
+        &mut self,
+        ctx: &mut MenuContext<'_>,
+        slot: &Slot,
+        amount: i32,
+        max_amount: i32,
+        hooks: &mut dyn MenuHooks,
+    ) -> Result<Option<ItemStack>> {
+        let stack = self.get_item(ctx, slot.index);
+        if !slot.may_pickup(&stack, ctx.creative, hooks)?
+            || (!slot.allow_modification(
+                self.container(ctx, slot.container),
+                ctx.creative,
+                hooks,
+            )? && max_amount < count(&stack))
+        {
+            return Ok(None);
+        }
+        let result = self.remove_item_live(ctx, slot.index, amount.min(max_amount), hooks)?;
+        if result.is_empty() {
+            return Ok(None);
+        }
+        if self.get_item(ctx, slot.index).is_empty() {
+            self.set_item_live(ctx, slot.index, ItemStack::default(), hooks)?;
+        }
+        Ok(Some(result))
+    }
+    fn safe_insert_live(
+        &mut self,
+        ctx: &mut MenuContext<'_>,
+        slot: &Slot,
+        mut input: ItemStack,
+        amount: i32,
+        hooks: &mut dyn MenuHooks,
+    ) -> Result<ItemStack> {
+        if input.is_empty() || !slot.may_place(&input, hooks)? {
+            return Ok(input);
+        }
+        let mut target = self.get_item(ctx, slot.index);
+        let n = amount
+            .min(count(&input))
+            .min(slot.max_stack_size(self.container(ctx, slot.container), &input) - count(&target));
+        if n > 0 {
+            if target.is_empty() {
+                self.set_item_live(ctx, slot.index, split(&mut input, n), hooks)?;
+            } else if is_same_item_same_components(&target, &input) {
+                let left = count(&input) - n;
+                let total = count(&target) + n;
+                set_count(&mut input, left);
+                set_count(&mut target, total);
+                self.set_item_live(ctx, slot.index, target, hooks)?;
+            }
+        }
+        Ok(input)
+    }
     fn safe_take(
         &mut self,
         ctx: &mut MenuContext<'_>,
@@ -347,16 +412,15 @@ impl AbstractContainerMenu {
         hooks: &mut dyn MenuHooks,
     ) -> Result<ItemStack> {
         let slot = self.slots[index].clone();
-        let creative = ctx.creative;
-        slot.safe_take(
-            self.container_mut(ctx, slot.container),
-            amount,
-            max_amount,
-            creative,
-            hooks,
-        )
+        let result = self
+            .try_remove_live(ctx, &slot, amount, max_amount, hooks)?
+            .unwrap_or_default();
+        if !result.is_empty() {
+            self.on_take(ctx, index, &result, 0, hooks)?;
+        }
+        Ok(result)
     }
-    fn on_take(
+    pub(crate) fn on_take(
         &mut self,
         ctx: &mut MenuContext<'_>,
         index: usize,
@@ -365,12 +429,16 @@ impl AbstractContainerMenu {
         hooks: &mut dyn MenuHooks,
     ) -> Result<()> {
         let slot = self.slots[index].clone();
-        slot.on_take(
-            self.container_mut(ctx, slot.container),
-            stack,
-            quick_count,
-            hooks,
-        )
+        if slot.kind == SlotKind::Result(ResultKind::Crafting) && hooks.has_crafting() {
+            self.take_crafting_result(ctx, stack, quick_count, hooks)
+        } else {
+            slot.on_take(
+                self.container_mut(ctx, slot.container),
+                stack,
+                quick_count,
+                hooks,
+            )
+        }
     }
     /// Port of AbstractContainerMenu#moveItemStackTo. The occupied-stack pass
     /// deliberately does not call mayPlace, matching vanilla's transfer behavior.
@@ -381,7 +449,7 @@ impl AbstractContainerMenu {
         start: usize,
         end: usize,
         backwards: bool,
-        hooks: &dyn MenuHooks,
+        hooks: &mut dyn MenuHooks,
     ) -> Result<bool> {
         let indices: Vec<_> = if backwards {
             (start..end).rev().collect()
@@ -402,13 +470,13 @@ impl AbstractContainerMenu {
                     if total <= max {
                         set_count(stack, 0);
                         set_count(&mut target, total);
-                        self.set_item(ctx, i, target);
+                        self.set_item_live(ctx, i, target, hooks)?;
                         changed = true;
                     } else if count(&target) < max {
                         let left = count(stack) - (max - count(&target));
                         set_count(stack, left);
                         set_count(&mut target, max);
-                        self.set_item(ctx, i, target);
+                        self.set_item_live(ctx, i, target, hooks)?;
                         changed = true;
                     }
                 }
@@ -420,7 +488,7 @@ impl AbstractContainerMenu {
                 if self.get_item(ctx, i).is_empty() && slot.may_place(stack, hooks)? {
                     let max = slot.max_stack_size(self.container(ctx, slot.container), stack);
                     let n = count(stack).min(max);
-                    self.set_item(ctx, i, split(stack, n));
+                    self.set_item_live(ctx, i, split(stack, n), hooks)?;
                     changed = true;
                     break;
                 }
@@ -500,7 +568,13 @@ impl AbstractContainerMenu {
             ContainerInput::Clone if ctx.creative && self.carried.is_empty() && slot_index >= 0 => {
                 let slot = self.slot(slot_index)?;
                 if !self.get_item(ctx, slot.index).is_empty() {
-                    self.carried = slot.safe_clone(self.container(ctx, slot.container));
+                    let cloned = slot.safe_clone(self.container(ctx, slot.container));
+                    if slot.kind == SlotKind::Result(ResultKind::Crafting)
+                        && let Some(crafting) = hooks.crafting()
+                    {
+                        crafting.item_crafted(self, ctx, &cloned, None)?;
+                    }
+                    self.carried = cloned;
                 }
             }
             ContainerInput::Throw if self.carried.is_empty() && slot_index >= 0 => {
@@ -558,12 +632,7 @@ impl AbstractContainerMenu {
             if !self.carried.is_empty() {
                 let amount = if button == 0 { count(&self.carried) } else { 1 };
                 let carried = self.carried.clone();
-                self.carried = slot.safe_insert(
-                    self.container_mut(ctx, slot.container),
-                    carried,
-                    amount,
-                    hooks,
-                )?;
+                self.carried = self.safe_insert_live(ctx, &slot, carried, amount, hooks)?;
             }
         } else if slot.may_pickup(&clicked, ctx.creative, hooks)? {
             if self.carried.is_empty() {
@@ -572,14 +641,7 @@ impl AbstractContainerMenu {
                 } else {
                     (count(&clicked) + 1) / 2
                 };
-                let creative = ctx.creative;
-                if let Some(taken) = slot.try_remove(
-                    self.container_mut(ctx, slot.container),
-                    amount,
-                    i32::MAX,
-                    creative,
-                    hooks,
-                )? {
+                if let Some(taken) = self.try_remove_live(ctx, &slot, amount, i32::MAX, hooks)? {
                     self.carried = taken.clone();
                     self.on_take(ctx, slot.index, &taken, 0, hooks)?;
                 }
@@ -587,28 +649,18 @@ impl AbstractContainerMenu {
                 if is_same_item_same_components(&clicked, &self.carried) {
                     let amount = if button == 0 { count(&self.carried) } else { 1 };
                     let carried = self.carried.clone();
-                    self.carried = slot.safe_insert(
-                        self.container_mut(ctx, slot.container),
-                        carried,
-                        amount,
-                        hooks,
-                    )?;
+                    self.carried = self.safe_insert_live(ctx, &slot, carried, amount, hooks)?;
                 } else if count(&self.carried)
                     <= slot.max_stack_size(self.container(ctx, slot.container), &self.carried)
                 {
                     let carried = std::mem::replace(&mut self.carried, clicked);
-                    self.set_item(ctx, slot.index, carried);
+                    self.set_item_live(ctx, slot.index, carried, hooks)?;
                 }
             } else if is_same_item_same_components(&clicked, &self.carried) {
                 let max = max_stack_size(&self.carried) - count(&self.carried);
-                let creative = ctx.creative;
-                if let Some(taken) = slot.try_remove(
-                    self.container_mut(ctx, slot.container),
-                    count(&clicked),
-                    max,
-                    creative,
-                    hooks,
-                )? {
+                if let Some(taken) =
+                    self.try_remove_live(ctx, &slot, count(&clicked), max, hooks)?
+                {
                     let total = count(&self.carried) + count(&taken);
                     set_count(&mut self.carried, total);
                     self.on_take(ctx, slot.index, &taken, 0, hooks)?;
@@ -638,7 +690,7 @@ impl AbstractContainerMenu {
             if slot.may_pickup(&source, ctx.creative, hooks)? && slot.may_place(&source, hooks)? {
                 let max = slot.max_stack_size(self.container(ctx, slot.container), &source);
                 if count(&source) > max {
-                    self.set_item(ctx, slot.index, split(&mut source, max));
+                    self.set_item_live(ctx, slot.index, split(&mut source, max), hooks)?;
                     self.on_take(ctx, slot.index, &source, 0, hooks)?;
                     if !ctx
                         .player
@@ -648,7 +700,7 @@ impl AbstractContainerMenu {
                         ctx.drop_item(source);
                     }
                 } else {
-                    self.set_item(ctx, slot.index, source.clone());
+                    self.set_item_live(ctx, slot.index, source.clone(), hooks)?;
                     self.on_take(ctx, slot.index, &source, 0, hooks)?;
                 }
             }
@@ -657,18 +709,18 @@ impl AbstractContainerMenu {
         if source.is_empty() {
             if !target.is_empty() && slot.may_pickup(&target, ctx.creative, hooks)? {
                 ctx.player.set_item(button, target.clone());
-                self.set_item(ctx, slot.index, ItemStack::default());
+                self.set_item_live(ctx, slot.index, ItemStack::default(), hooks)?;
                 self.on_take(ctx, slot.index, &target, count(&target), hooks)?;
             }
         } else if target.is_empty() {
             if slot.may_place(&source, hooks)? {
                 let max = slot.max_stack_size(self.container(ctx, slot.container), &source);
                 if count(&source) > max {
-                    self.set_item(ctx, slot.index, split(&mut source, max));
+                    self.set_item_live(ctx, slot.index, split(&mut source, max), hooks)?;
                     ctx.player.set_item(button, source);
                 } else {
                     ctx.player.set_item(button, ItemStack::default());
-                    self.set_item(ctx, slot.index, source);
+                    self.set_item_live(ctx, slot.index, source, hooks)?;
                 }
             }
         } else if slot.may_pickup(&target, ctx.creative, hooks)?
@@ -676,7 +728,7 @@ impl AbstractContainerMenu {
         {
             let max = slot.max_stack_size(self.container(ctx, slot.container), &source);
             if count(&source) > max {
-                self.set_item(ctx, slot.index, split(&mut source, max));
+                self.set_item_live(ctx, slot.index, split(&mut source, max), hooks)?;
                 ctx.player.set_item(button, source);
                 self.on_take(ctx, slot.index, &target, 0, hooks)?;
                 let mut target = target;
@@ -689,7 +741,7 @@ impl AbstractContainerMenu {
                 }
             } else {
                 ctx.player.set_item(button, target.clone());
-                self.set_item(ctx, slot.index, source);
+                self.set_item_live(ctx, slot.index, source, hooks)?;
                 self.on_take(ctx, slot.index, &target, 0, hooks)?;
             }
         }
@@ -774,7 +826,7 @@ impl AbstractContainerMenu {
                         };
                         let new = (added + old).min(max);
                         remaining -= new - old;
-                        self.set_item(ctx, *index, with_count(&source, new));
+                        self.set_item_live(ctx, *index, with_count(&source, new), hooks)?;
                     }
                 }
                 self.carried = with_count(&source, remaining);

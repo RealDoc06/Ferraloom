@@ -84,6 +84,7 @@ fn events(updates: Vec<ContainerUpdate>) -> String {
     updates
         .into_iter()
         .map(|u| match u {
+            ContainerUpdate::RecipeBookAdd(packet) => format!("B:{}", packet.entries.len()),
             ContainerUpdate::Initial { state_id, .. } => format!("I:{state_id}"),
             ContainerUpdate::Slot {
                 state_id,
@@ -422,4 +423,188 @@ fn real_vanilla_specialized_slot_component_predicates() {
         cases += 1;
     }
     assert_eq!(cases, 6);
+}
+
+#[derive(Default)]
+struct CraftingObservations {
+    stats: Vec<String>,
+    awards: Vec<String>,
+}
+impl CraftingCallbacks for CraftingObservations {
+    fn item_enabled(&self, _stack: &ItemStack) -> Result<bool> {
+        Ok(true)
+    }
+    fn item_crafted(
+        &mut self,
+        _menu: &mut AbstractContainerMenu,
+        _ctx: &mut MenuContext<'_>,
+        stack: &ItemStack,
+        amount: Option<i32>,
+    ) -> Result<()> {
+        if let Some(amount) = amount {
+            self.stats.push(format!(
+                "{}:{amount}",
+                stack.0.as_ref().unwrap().item.protocol_id()
+            ));
+        }
+        Ok(())
+    }
+    fn recipe_crafted(
+        &mut self,
+        _menu: &mut AbstractContainerMenu,
+        _ctx: &mut MenuContext<'_>,
+        recipe: &crate::crafting::RecipeHolder,
+        _input: &[ItemStack],
+    ) -> Result<()> {
+        self.awards.push(recipe.id.to_string());
+        Ok(())
+    }
+    fn recipe_unlocked(
+        &mut self,
+        _menu: &mut AbstractContainerMenu,
+        _ctx: &mut MenuContext<'_>,
+        recipe: &crate::crafting::RecipeHolder,
+        book: &crate::crafting::ServerRecipeBook,
+    ) -> Result<()> {
+        assert!(book.contains(&recipe.id));
+        Ok(())
+    }
+}
+struct CraftingTestContext;
+impl crate::crafting::CraftingContext for CraftingTestContext {}
+fn crafting_manager() -> crate::crafting::RecipeManager {
+    use ferraloom_data::datapack::{Pack, ResourceManager, TagSet};
+    let path = std::env::var_os("FERRALOOM_VANILLA_JAR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| "/home/doc/code/Ferraloom/.cache/vanilla/26.3/server.jar".into());
+    let resources = ResourceManager::new(vec![Pack::vanilla_jar(&path).unwrap()]);
+    crate::crafting::RecipeManager::load(&resources, &TagSet::load(&resources).unwrap()).unwrap()
+}
+fn nonempty_events(events: String) -> String {
+    if events.is_empty() {
+        "-".into()
+    } else {
+        events
+    }
+}
+
+#[test]
+fn real_server_crafting_clicks_remainders_stats_and_packet_order() {
+    use crate::crafting::{RecipeSynchronization, ServerRecipeBook};
+    let manager = crafting_manager();
+    let sync = RecipeSynchronization::new(&manager, |_| true);
+    let mut inventory = Inventory::default();
+    let mut equipment = EntityEquipment::default();
+    let mut menu = AbstractContainerMenu::new(MenuKind::Inventory, 0).unwrap();
+    let mut book = ServerRecipeBook::default();
+    let mut callbacks = CraftingObservations::default();
+    let mut clicks = 0;
+    let mut placements = 0;
+    for row in include_str!("../../tests/java/inventory/crafting.tsv").lines() {
+        let f: Vec<_> = row.split('\t').collect();
+        if f[0] == "start" {
+            inventory = Inventory::default();
+            equipment = EntityEquipment::default();
+            book = ServerRecipeBook::default();
+            callbacks = CraftingObservations::default();
+            menu = AbstractContainerMenu::new(kind(f[2]), if f[2] == "inventory" { 0 } else { 7 })
+                .unwrap();
+            let mut ctx = MenuContext::player(&mut inventory, &mut equipment, false);
+            menu.set_synchronizer(&ctx);
+            let mut hooks = RecipeMenuHooks {
+                manager: &manager,
+                context: &CraftingTestContext,
+                synchronization: &sync,
+                book: &mut book,
+                limited_crafting: false,
+                callbacks: &mut callbacks,
+            };
+            let mut expected_result = ItemStack::default();
+            for entry in f[3].split(';').filter(|s| *s != "-") {
+                let (index, value) = entry.split_once(':').unwrap();
+                let index = index.parse().unwrap();
+                if index == 0 {
+                    expected_result = parse_item(value);
+                } else {
+                    menu.set_item_live(&mut ctx, index, parse_item(value), &mut hooks)
+                        .unwrap();
+                }
+            }
+            if f[1].starts_with("fallback") {
+                menu.set_item(&mut ctx, 0, expected_result);
+            }
+            menu.broadcast_full_state(&ctx);
+            assert_eq!(slots(&menu, &ctx), f[3], "{} setup slots", f[1]);
+            assert_eq!(menu.state_id().to_string(), f[4], "{} setup state", f[1]);
+            menu.updates.clear();
+        } else if f[0] == "click" || f[0] == "place" {
+            let mut ctx = MenuContext::player(&mut inventory, &mut equipment, false);
+            let mut hooks = RecipeMenuHooks {
+                manager: &manager,
+                context: &CraftingTestContext,
+                synchronization: &sync,
+                book: &mut book,
+                limited_crafting: false,
+                callbacks: &mut callbacks,
+            };
+            if f[0] == "click" {
+                let input = match f[5] {
+                    "0" => ContainerInput::Pickup,
+                    "1" => ContainerInput::QuickMove,
+                    "2" => ContainerInput::Swap,
+                    "4" => ContainerInput::Throw,
+                    "5" => ContainerInput::QuickCraft,
+                    _ => unreachable!(),
+                };
+                menu.suppress_remote_updates();
+                menu.clicked(
+                    &mut ctx,
+                    f[3].parse().unwrap(),
+                    f[4].parse().unwrap(),
+                    input,
+                    &mut hooks,
+                )
+                .unwrap_or_else(|e| panic!("{} step {}: {e}", f[1], f[2]));
+                menu.resume_remote_updates();
+                clicks += 1;
+            } else {
+                let id = format!("minecraft:{}", f[3]).parse().unwrap();
+                let recipe = manager.by_key(&id).unwrap();
+                let action = menu
+                    .handle_crafting_placement(&mut ctx, recipe, f[4] == "true", false, &mut hooks)
+                    .unwrap();
+                assert_eq!(
+                    match action {
+                        crate::crafting::PostPlaceAction::Nothing => "NOTHING",
+                        crate::crafting::PostPlaceAction::PlaceGhostRecipe => "PLACE_GHOST_RECIPE",
+                    },
+                    f[5],
+                    "{} placement {}",
+                    f[1],
+                    f[2]
+                );
+                placements += 1;
+            }
+            menu.broadcast_changes(&ctx).unwrap();
+            let actual = [
+                slots(&menu, &ctx),
+                item(&menu.carried),
+                menu.state_id().to_string(),
+                nonempty_events(events(std::mem::take(&mut menu.updates))),
+                nonempty_events(std::mem::take(&mut callbacks.stats).join(";")),
+                nonempty_events(std::mem::take(&mut callbacks.awards).join(";")),
+            ];
+            assert_eq!(
+                actual.iter().map(String::as_str).collect::<Vec<_>>(),
+                f[6..],
+                "{} step {} operation {} button/amount {}",
+                f[1],
+                f[2],
+                f[3],
+                f[4]
+            );
+        }
+    }
+    assert_eq!(clicks, 239);
+    assert_eq!(placements, 40);
 }
