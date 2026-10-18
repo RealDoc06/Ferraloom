@@ -74,3 +74,5 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | block-entities.block-entity-type.trapped-chest | `minecraft:trapped_chest` (block entity type); implementation `TrappedChestBlockEntity` | `net.minecraft.world.level.block.entity.BlockEntityTypes#register; TrappedChestBlockEntity` | | - | todo |
 | block-entities.block-entity-type.trial-spawner | `minecraft:trial_spawner` (block entity type); implementation `TrialSpawnerBlockEntity` | `net.minecraft.world.level.block.entity.BlockEntityTypes#register; TrialSpawnerBlockEntity` | | - | todo |
 | block-entities.block-entity-type.vault | `minecraft:vault` (block entity type); implementation `VaultBlockEntity` | `net.minecraft.world.level.block.entity.BlockEntityTypes#register; VaultBlockEntity` | | - | todo |
+
+| block-entities.containers.menu-identity | Generation-based menu receivers retain closed/replaced canonical state across in-flight operations, including container-ID reuse | `ServerPlayer#containerMenu; AbstractContainerMenu` | `retained_menu_receiver_survives_replacement_with_the_same_container_id`; live algorithm migration pending | - | partial |
