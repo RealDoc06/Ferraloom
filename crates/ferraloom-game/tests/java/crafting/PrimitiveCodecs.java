@@ -20,11 +20,27 @@ public final class PrimitiveCodecs {
         CODECS.forEach((name,codec) -> {
             try {
                 Object value = codec.parse(ops,input).getOrThrow();
-                String text = value instanceof Float n ? Integer.toHexString(Float.floatToIntBits(n))
-                    : value instanceof Double n ? Long.toHexString(Double.doubleToLongBits(n)) : value.toString();
+                String text = value instanceof Float n ? Integer.toHexString(Float.floatToRawIntBits(n))
+                    : value instanceof Double n ? Long.toHexString(Double.doubleToRawLongBits(n)) : value.toString();
                 result.addProperty(name,text);
             } catch (Exception e) { result.add(name,JsonNull.INSTANCE); }
         });
+        return result;
+    }
+    static <T> JsonObject encoded(DynamicOps<T> ops, T input) {
+        var result = new JsonObject();
+        try {
+            float value=Codec.FLOAT.parse(ops,input).getOrThrow();
+            var tag=(FloatTag)Codec.FLOAT.encodeStart(NbtOps.INSTANCE,value).getOrThrow();
+            result.addProperty("float_nbt",Integer.toHexString(Float.floatToRawIntBits(tag.value())));
+            result.addProperty("float_hash",Integer.toString(Codec.FLOAT.encodeStart(net.minecraft.util.HashOps.CRC32C_INSTANCE,value).getOrThrow().asInt()));
+        } catch(Exception e) { result.add("float_nbt",JsonNull.INSTANCE); result.add("float_hash",JsonNull.INSTANCE); }
+        try {
+            double value=Codec.DOUBLE.parse(ops,input).getOrThrow();
+            var tag=(DoubleTag)Codec.DOUBLE.encodeStart(NbtOps.INSTANCE,value).getOrThrow();
+            result.addProperty("double_nbt",Long.toHexString(Double.doubleToRawLongBits(tag.value())));
+            result.addProperty("double_hash",Integer.toString(Codec.DOUBLE.encodeStart(net.minecraft.util.HashOps.CRC32C_INSTANCE,value).getOrThrow().asInt()));
+        } catch(Exception e) { result.add("double_nbt",JsonNull.INSTANCE); result.add("double_hash",JsonNull.INSTANCE); }
         return result;
     }
     static <T> String compound(DynamicOps<T> ops, T input) {
@@ -54,7 +70,7 @@ public final class PrimitiveCodecs {
             // Exercise the Codec's lazy Number contract independently of JsonReader's token buffer.
             var parsed=Character.isDigit(input.charAt(0)) || input.charAt(0)=='-'
                 ? new JsonPrimitive(new com.google.gson.internal.LazilyParsedNumber(input)) : JsonParser.parseString(input);
-            row.add("values",values(JsonOps.INSTANCE,parsed)); json.add(row);
+            row.add("values",values(JsonOps.INSTANCE,parsed)); row.add("encoded",encoded(JsonOps.INSTANCE,parsed)); json.add(row);
         }
         var numeric = new LinkedHashMap<String,Tag>();
         numeric.put("byte",ByteTag.valueOf((byte)-1)); numeric.put("short",ShortTag.valueOf((short)257));
@@ -62,11 +78,12 @@ public final class PrimitiveCodecs {
         numeric.put("longMax",LongTag.valueOf(Long.MAX_VALUE)); numeric.put("float",FloatTag.valueOf(-2.9f));
         numeric.put("double",DoubleTag.valueOf(-2.9)); numeric.put("doubleMax",DoubleTag.valueOf(Double.MAX_VALUE));
         numeric.put("negativeMax",DoubleTag.valueOf(-Double.MAX_VALUE)); numeric.put("nan",DoubleTag.valueOf(Double.NaN));
+        numeric.put("negativeNan",new DoubleTag(Double.longBitsToDouble(0xfff8000000000001L)));
         numeric.put("floatNan",FloatTag.valueOf(Float.NaN)); numeric.put("positiveInfinity",FloatTag.valueOf(Float.POSITIVE_INFINITY));
         numeric.put("negativeInfinity",DoubleTag.valueOf(Double.NEGATIVE_INFINITY)); numeric.put("negativeZero",new DoubleTag(-0.0));
         numeric.put("fraction",DoubleTag.valueOf(0.5)); numeric.put("string",StringTag.valueOf("1"));
         numeric.put("compound",new CompoundTag()); numeric.put("list",new ListTag());
-        numeric.forEach((name,input) -> { var row=new JsonObject(); row.addProperty("name",name);row.addProperty("input",input.toString());row.add("values",values(NbtOps.INSTANCE,input));nbt.add(row); });
+        numeric.forEach((name,input) -> { var row=new JsonObject(); row.addProperty("name",name);row.addProperty("input",input.toString());row.add("values",values(NbtOps.INSTANCE,input));row.add("encoded",encoded(NbtOps.INSTANCE,input));nbt.add(row); });
         for (String input : List.of("{\"x\":1.0,\"y\":1e3}","\"{x:1b,y:[I;2,3],z:1L}\"","\"{id:'minecraft:pig',x:1b}\"","\"[]\"","\"{x:}\"","[]","{\"id\":\"minecraft:pig\"}")) {
             var parsed=JsonParser.parseString(input); var row=new JsonObject(); row.addProperty("input",input);
             row.addProperty("compound",compound(JsonOps.INSTANCE,parsed)); row.addProperty("typed",typed(JsonOps.INSTANCE,parsed));

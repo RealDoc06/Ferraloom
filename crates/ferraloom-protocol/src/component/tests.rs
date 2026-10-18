@@ -350,10 +350,34 @@ fn vanilla_persistent_primitive_coercions() {
             "string": String::from_nbt(value).ok(),
         })
     }
+    fn encoded_values(float: Option<f32>, double: Option<f64>) -> Value {
+        serde_json::json!({
+            "float_nbt": float.map(|n| match n.to_nbt().unwrap() {
+                Tag::Float(value) => format!("{:x}",value.to_bits()),
+                _ => panic!("float codec must emit FloatTag"),
+            }),
+            "float_hash": float.map(|n| n.hash().unwrap().to_string()),
+            "double_nbt": double.map(|n| match n.to_nbt().unwrap() {
+                Tag::Double(value) => format!("{:x}",value.to_bits()),
+                _ => panic!("double codec must emit DoubleTag"),
+            }),
+            "double_hash": double.map(|n| n.hash().unwrap().to_string()),
+        })
+    }
     for row in fixture["json"].as_array().unwrap() {
         let input = row["input"].as_str().unwrap();
         let value = serde_json::from_str(input).unwrap();
-        assert_eq!(json_values(&value), row["values"], "JSON {input}");
+        let label = format!(
+            "JSON {} ({} chars)",
+            input.chars().take(80).collect::<String>(),
+            input.len()
+        );
+        assert_eq!(json_values(&value), row["values"], "{label}");
+        assert_eq!(
+            encoded_values(f32::from_json(&value).ok(), f64::from_json(&value).ok()),
+            row["encoded"],
+            "{label} encoding"
+        );
         assert_eq!(
             VarInt::from_json(&value).ok().map(|n| n.0),
             i32::from_json(&value).ok()
@@ -372,6 +396,7 @@ fn vanilla_persistent_primitive_coercions() {
             "doubleMax" => Tag::Double(f64::MAX),
             "negativeMax" => Tag::Double(-f64::MAX),
             "nan" => Tag::Double(f64::NAN),
+            "negativeNan" => Tag::Double(f64::from_bits(0xfff8_0000_0000_0001)),
             "floatNan" => Tag::Float(f32::NAN),
             "positiveInfinity" => Tag::Float(f32::INFINITY),
             "negativeInfinity" => Tag::Double(f64::NEG_INFINITY),
@@ -383,6 +408,11 @@ fn vanilla_persistent_primitive_coercions() {
             _ => panic!("unknown probe {name}"),
         };
         assert_eq!(nbt_values(&value), row["values"], "NBT {name}");
+        assert_eq!(
+            encoded_values(f32::from_nbt(&value).ok(), f64::from_nbt(&value).ok()),
+            row["encoded"],
+            "NBT {name} encoding"
+        );
     }
     for row in fixture["nested"].as_array().unwrap() {
         let input = ferraloom_nbt::parse(row["nbt"].as_str().unwrap()).unwrap();
