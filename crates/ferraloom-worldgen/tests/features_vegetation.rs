@@ -205,8 +205,10 @@ fn replay(require_pending: bool) {
         region.set_has_skylight(true);
         let registry = Default::default();
         let mut ctx = FeatureContext {
-            region: &mut region,
-            random: &mut random,
+            level: ferraloom_worldgen::feature::WorldGenLevel::Region(&mut region),
+            random: ferraloom_worldgen::feature::FeatureRandomSelector::External(
+                ferraloom_worldgen::feature::FeatureRandom::Region(&mut random),
+            ),
             origin,
             generator: &generator,
             registry: &registry,

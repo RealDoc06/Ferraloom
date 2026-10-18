@@ -203,7 +203,7 @@ impl StructurePieceData {
     /// Port of StructurePiece#createChest at a transformed local position.
     pub fn create_chest(
         &self,
-        context: &mut crate::feature::FeatureContext<'_, '_>,
+        context: &mut crate::structure::StructurePlacementContext<'_, '_>,
         local: [i32; 3],
         bounds: BoundingBox,
         loot: &Identifier,
@@ -213,7 +213,7 @@ impl StructurePieceData {
     /// Port of StructurePiece#createChest with world coordinates and an optional
     /// explicit state. Explicit template-marker facings bypass chest reorientation.
     pub fn create_chest_at(
-        context: &mut crate::feature::FeatureContext<'_, '_>,
+        context: &mut crate::structure::StructurePlacementContext<'_, '_>,
         p: [i32; 3],
         bounds: BoundingBox,
         loot: &Identifier,
@@ -238,7 +238,7 @@ impl StructurePieceData {
     /// only when the placed block entity is a dispenser.
     pub fn create_dispenser(
         &self,
-        context: &mut crate::feature::FeatureContext<'_, '_>,
+        context: &mut crate::structure::StructurePlacementContext<'_, '_>,
         local: [i32; 3],
         facing: ferraloom_data::properties::Facing,
         bounds: BoundingBox,

@@ -5,16 +5,22 @@ use crate::{
     codec::*,
     generator::ChunkGeneratorAccess,
     placement::{modifier::PlacementModifier, predicate::PredicateDecodeData},
-    region::WorldGenRegion,
 };
 use ferraloom_data::datapack::ResourceManager;
-use ferraloom_util::random::WorldgenRandom;
+use ferraloom_util::random::RandomSource;
 use serde_json::Value;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt::Debug,
     sync::Arc,
 };
+
+pub mod access;
+pub use access::{FeaturePlacementAccess, FeatureRandomSelector};
+pub mod level;
+pub mod random;
+pub use level::{LiveWorldGenLevel, WorldGenLevel};
+pub use random::{FeatureRandom, FeatureRandomSource};
 
 pub mod aquatic;
 pub mod cave;
@@ -35,11 +41,66 @@ pub trait Feature: Debug + Send + Sync {
     fn place(&self, context: &mut FeatureContext<'_, '_>) -> Result<bool, Error>;
 }
 pub struct FeatureContext<'a, 'r> {
-    pub region: &'a mut WorldGenRegion<'r>,
-    pub random: &'a mut WorldgenRandom,
+    pub level: WorldGenLevel<'a, 'r>,
+    pub random: FeatureRandomSelector<'a>,
     pub origin: [i32; 3],
     pub generator: &'a dyn ChunkGeneratorAccess,
     pub registry: &'a FeatureRegistry,
+}
+impl<'a, 'r> FeatureContext<'a, 'r> {
+    pub fn random(&mut self) -> Result<FeatureRandom<'_>, Error> {
+        self.random.resolve(&mut self.level)
+    }
+    pub fn with_random<T>(
+        &mut self,
+        f: impl FnOnce(&mut FeatureRandom<'_>) -> T,
+    ) -> Result<T, Error> {
+        Ok(f(&mut self.random()?))
+    }
+    pub fn placement(&mut self) -> FeaturePlacementAccess<'_, WorldGenLevel<'a, 'r>> {
+        FeaturePlacementAccess::new(&mut self.level, self.random.reborrow())
+    }
+}
+/// Port of Feature#place on a live ServerLevel, with the caller's RNG and
+/// registered configured feature. TreeGrower performs its sapling removal and
+/// restoration around this call; placement itself does not reseed or decorate.
+pub fn place_configured_feature<'a>(
+    live: &'a mut dyn LiveWorldGenLevel,
+    generator: &'a dyn ChunkGeneratorAccess,
+    registry: &'a FeatureRegistry,
+    feature_id: &Identifier,
+    origin: [i32; 3],
+    random: FeatureRandomSelector<'a>,
+) -> Result<bool, Error> {
+    let feature = registry
+        .features
+        .get(feature_id)
+        .ok_or_else(|| Error(format!("unknown configured feature {feature_id}")))?;
+    feature.place(&mut FeatureContext {
+        level: WorldGenLevel::Live(live),
+        random,
+        origin,
+        generator,
+        registry,
+    })
+}
+/// Convenience for a stream independent from the live level's own RNG.
+pub fn place_configured_feature_with_external_random<'a>(
+    live: &'a mut dyn LiveWorldGenLevel,
+    generator: &'a dyn ChunkGeneratorAccess,
+    registry: &'a FeatureRegistry,
+    feature_id: &Identifier,
+    origin: [i32; 3],
+    random: &'a mut dyn RandomSource,
+) -> Result<bool, Error> {
+    place_configured_feature(
+        live,
+        generator,
+        registry,
+        feature_id,
+        origin,
+        FeatureRandomSelector::External(FeatureRandom::Live(random)),
+    )
 }
 pub type FeatureFactory =
     for<'a> fn(&Value, &mut FeatureLoader<'a>) -> Result<Arc<dyn Feature>, Error>;

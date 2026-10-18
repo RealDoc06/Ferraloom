@@ -180,8 +180,10 @@ fn run_cases(require_pending: bool) {
         let seed = case["seed"].as_i64().unwrap();
         let mut random = WorldgenRandom::new(Random::Xoroshiro(XoroshiroRandomSource::new(seed)));
         let result = feature.place(&mut FeatureContext {
-            region: &mut region,
-            random: &mut random,
+            level: crate::feature::WorldGenLevel::Region(&mut region),
+            random: crate::feature::FeatureRandomSelector::External(
+                crate::feature::FeatureRandom::Region(&mut random),
+            ),
             origin,
             generator: &generator,
             registry: &registry,

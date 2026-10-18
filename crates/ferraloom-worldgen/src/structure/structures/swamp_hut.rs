@@ -1,5 +1,5 @@
 use crate::structure::{BoundingBox, scattered_piece::ScatteredFeaturePiece};
-use crate::{Error, feature::FeatureContext, region::StructureEntitySpawnFlags};
+use crate::{Error, region::StructureEntitySpawnFlags, structure::StructurePlacementContext};
 use ferraloom_data::{
     Block,
     properties::{self, Facing, Shape},
@@ -40,7 +40,7 @@ impl SwampHutPiece {
     }
     pub fn post_process(
         &mut self,
-        context: &mut FeatureContext<'_, '_>,
+        context: &mut StructurePlacementContext<'_, '_>,
         bounds: BoundingBox,
     ) -> Result<(), Error> {
         if !self
@@ -232,7 +232,7 @@ mod tests {
             );
             piece
                 .post_process(
-                    &mut FeatureContext {
+                    &mut StructurePlacementContext {
                         region: &mut region,
                         random: &mut random,
                         origin: [0, 0, 0],

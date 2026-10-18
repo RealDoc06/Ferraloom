@@ -10,9 +10,9 @@ use crate::structure::{
 use crate::{
     Error, Identifier,
     codec::*,
-    feature::FeatureContext,
     placement::providers::IntProvider,
     region::{Heightmap, StructureEntitySpawnFlags},
+    structure::StructurePlacementContext,
 };
 use ferraloom_data::{Block, properties, tags::FluidTags};
 use ferraloom_nbt::{CompoundTag, Tag};
@@ -285,7 +285,7 @@ impl OceanRuinPiece {
     }
     pub fn post_process(
         &mut self,
-        context: &mut FeatureContext<'_, '_>,
+        context: &mut StructurePlacementContext<'_, '_>,
         templates: &StructureTemplateManager,
         tags: &BlockTags,
         bounds: BoundingBox,
