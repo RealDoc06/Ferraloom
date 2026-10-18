@@ -9,6 +9,8 @@ mod center_support;
 mod environment_attributes;
 #[path = "build/feature_requirements.rs"]
 mod feature_requirements;
+#[path = "build/item_methods.rs"]
+mod item_methods;
 
 #[path = "build/dispenser_properties.rs"]
 mod dispenser_properties;
@@ -885,6 +887,7 @@ fn main() {
     dispenser_properties::generate(root);
     note_properties::generate(root);
     let item_report = load(root, "items");
+    item_methods::generate(root, &item_report);
     let entity_report = load(root, "entity_types");
     let attribute_report = load(root, "attributes");
     for (name, count) in [
