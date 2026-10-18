@@ -2,6 +2,7 @@
 //!
 pub mod block;
 pub mod entity;
+pub mod inventory;
 pub mod level;
 pub mod ticks;
 
