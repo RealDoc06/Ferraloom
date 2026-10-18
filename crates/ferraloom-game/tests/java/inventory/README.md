@@ -1,6 +1,9 @@
 Run `python3 generate.py` for ordinary menu storage, slot predicates and layouts.
 Run `python3 generate-crafting.py` for server-side crafting and recipe placement;
 it also builds the shared fixture classes through `generate.py`.
+Run `python3 generate-listeners.py` for nested real menu broadcasts: a listener
+replaces or mutates the current slot, then edits the original lastSlots copy.
+It records both listeners and the memoized copy delivered to the synchronizer.
 
 Both scripts use the pinned jar, JDK 25 and libraries in the main checkout's
 shared cache. Crafting uses the Mockito jars already used by the recipe harness
