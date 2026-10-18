@@ -222,7 +222,9 @@ mod tests {
                 &ferraloom_nbt::parse_compound(case["initial"].as_str().unwrap()).unwrap(),
             )
             .unwrap();
-            let mut random = WorldgenRandom::new(LegacyRandomSource::new(17));
+            let mut random = WorldgenRandom::new(ferraloom_util::random::Random::Legacy(
+                LegacyRandomSource::new(17),
+            ));
             let b = &case["bounds"];
             let bounds = BoundingBox::new(
                 point(b),

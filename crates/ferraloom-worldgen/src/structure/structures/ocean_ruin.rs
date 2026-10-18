@@ -35,7 +35,7 @@ pub struct OceanRuinStructure {
 impl OceanRuinStructure {
     pub fn decode(v: &Value) -> Result<Self, Error> {
         Ok(Self {
-            biome_type: match string(field(v, "biome_temp")?)? {
+            biome_type: match crate::codec::string(field(v, "biome_temp")?)? {
                 "warm" => OceanRuinType::Warm,
                 "cold" => OceanRuinType::Cold,
                 _ => return Err(Error("invalid ocean ruin biome temperature".into())),

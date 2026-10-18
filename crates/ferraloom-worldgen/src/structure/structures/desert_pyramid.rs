@@ -687,7 +687,9 @@ mod tests {
                 point(b),
                 std::array::from_fn(|i| b[i + 3].as_i64().unwrap() as i32),
             );
-            let mut random = WorldgenRandom::new(LegacyRandomSource::new(17));
+            let mut random = WorldgenRandom::new(ferraloom_util::random::Random::Legacy(
+                LegacyRandomSource::new(17),
+            ));
             piece
                 .post_process(
                     &mut FeatureContext {
