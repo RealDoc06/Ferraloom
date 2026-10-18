@@ -389,3 +389,5 @@ One class row per bootstrapped runtime Block class, listing every block id assig
 | blocks.plants.sapling-targets | Real ServerLevel sapling/azalea/mangrove target and success calls preserve weighted RNG, flower/2x2 checks and top-height rejection | `SaplingBlock#isValidBonemealTarget/isBonemealSuccess`, `AzaleaBlock`, `MangrovePropaguleBlock` | Dedicated ServerLevel sapling-target oracle (capture pending) | - | todo |
 
 | blocks.plants.grass-bonemeal-walk | Grass bone meal preserves 128 walk attempts, captured short-grass state, zoomed biome flower lists and ordinary placed-feature calls with canonical RNG | `GrassBlock#performBonemeal/placeBonemealEffect` | Native biome/composite bone-meal metadata; dedicated live parity scenario | pass | todo |
+
+| blocks.plants.worldgen-bonemeal-targets | Worldgen sapling, azalea and mushroom targets retain the non-ServerLevel branch; propagule targets remain state-only and consume no random | Real native `BonemealableBlock#isValidBonemealTarget` on Level | `plants::worldgen_tests::worldgen_bonemeal_targets_follow_native_non_server_branch_without_rng` (62 vectors) | pass | todo |

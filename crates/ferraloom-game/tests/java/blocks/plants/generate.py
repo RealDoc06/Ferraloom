@@ -63,3 +63,7 @@ with tempfile.TemporaryDirectory(prefix='ferraloom-plants-java-') as directory:
     scans='\n'.join(line for line in lines if line.startswith('eyeblossom-scan\t')) + '\n'
     (HERE/'eyeblossom-scan.tsv.gz').write_bytes(gzip.compress(scans.encode(),mtime=0))
     print(f'{len(scans.splitlines())} native section-boundary flower traversals')
+
+    targets='\n'.join(line for line in lines if line.startswith('non-server-target\t')) + '\n'
+    (HERE/'non-server-targets.tsv.gz').write_bytes(gzip.compress(targets.encode(),mtime=0))
+    print(f'{len(targets.splitlines())} native non-ServerLevel bonemeal targets and RNG vectors')

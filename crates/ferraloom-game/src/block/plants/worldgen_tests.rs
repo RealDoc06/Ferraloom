@@ -334,3 +334,59 @@ fn replay(require_pending: bool) {
 fn vegetation_fixtures_use_real_game_bridge() {
     replay(false);
 }
+
+#[test]
+fn worldgen_bonemeal_targets_follow_native_non_server_branch_without_rng() {
+    use super::{BonemealSource, bonemealable_behavior};
+    use crate::block::LevelAccessRef;
+    use ferraloom_util::{BlockPos, random::LegacyRandomSource};
+    let mut text = String::new();
+    flate2::read::GzDecoder::new(
+        include_bytes!("../../../tests/java/blocks/plants/non-server-targets.tsv.gz").as_slice(),
+    )
+    .read_to_string(&mut text)
+    .unwrap();
+    let (_, generator) = setup();
+    let mut chunks = [RegionChunk::new(
+        generator.new_chunk([0, 0]),
+        ChunkStatus::Features,
+    )];
+    let mut region = WorldGenRegion::new(
+        &mut chunks,
+        [0, 0],
+        &[ChunkStatus::Features],
+        0,
+        None,
+        &GameWorldgenBlockBehavior,
+        0,
+        63,
+    )
+    .unwrap();
+    let pos = BlockPos::new(8, 5, 8);
+    let mut count = 0;
+    for line in text.lines() {
+        let fields: Vec<_> = line.split('\t').collect();
+        let state = BlockState::from_id(fields[1].parse().unwrap()).unwrap();
+        region.set_random(Random::Legacy(LegacyRandomSource::new(42)));
+        let behavior = bonemealable_behavior(state.block()).unwrap();
+        assert_eq!(
+            behavior
+                .is_valid_bonemeal_target(
+                    state,
+                    pos,
+                    &mut LevelAccessRef::Worldgen(&mut region),
+                    BonemealSource::Interaction
+                )
+                .unwrap(),
+            fields[2] == "true",
+            "{line}"
+        );
+        assert_eq!(
+            region.random_mut().unwrap().next_long(),
+            fields[3].parse::<i64>().unwrap(),
+            "{line}"
+        );
+        count += 1;
+    }
+    assert_eq!(count, 62);
+}

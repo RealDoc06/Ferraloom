@@ -46,6 +46,15 @@ public final class PlantsVectors {
             Blocks.HONEY_BLOCK,Blocks.BARRIER,Blocks.PALE_MOSS_CARPET);
         var pos=new BlockPos(8,5,8);
         var level=new PlantLevel(registries);
+        // LevelReader's non-ServerLevel branch also applies to WorldGenRegion.
+        for(var block:List.of(Blocks.OAK_SAPLING,Blocks.SPRUCE_SAPLING,Blocks.BIRCH_SAPLING,Blocks.JUNGLE_SAPLING,
+            Blocks.ACACIA_SAPLING,Blocks.CHERRY_SAPLING,Blocks.DARK_OAK_SAPLING,Blocks.PALE_OAK_SAPLING,
+            Blocks.POPLAR_SAPLING,Blocks.MANGROVE_PROPAGULE,Blocks.AZALEA,Blocks.FLOWERING_AZALEA,
+            Blocks.BROWN_MUSHROOM,Blocks.RED_MUSHROOM))for(var state:block.getStateDefinition().getPossibleStates()) {
+            level.getRandom().setSeed(42);
+            boolean valid=((BonemealableBlock)block).isValidBonemealTarget(level,pos,state,BonemealSource.INTERACTION);
+            System.out.println("non-server-target\t"+Block.getId(state)+"\t"+valid+"\t"+level.getRandom().nextLong());
+        }
         var treeClass=net.minecraft.world.level.block.grower.TreeGrower.class;
         var selectTree=treeClass.getDeclaredMethod("getConfiguredFeature",RandomSource.class,boolean.class);selectTree.setAccessible(true);
         var selectMega=treeClass.getDeclaredMethod("getConfiguredMegaFeature",RandomSource.class);selectMega.setAccessible(true);
