@@ -5,6 +5,9 @@ use crate::level::LevelError;
 use ferraloom_data::{Block, BlockState, properties as p, registries::fluid::Id as Fluid};
 use ferraloom_util::{BlockPos, Direction};
 
+#[cfg(test)]
+mod connected_tests;
+mod connections;
 mod orientation;
 mod slab;
 #[cfg(test)]
@@ -25,6 +28,9 @@ pub(crate) fn ported_behavior(
     }
     if slab::supports(block, method) {
         return Some(&slab::SLAB);
+    }
+    if connections::supports(block, method) {
+        return Some(&connections::CONNECTIONS);
     }
     None
 }

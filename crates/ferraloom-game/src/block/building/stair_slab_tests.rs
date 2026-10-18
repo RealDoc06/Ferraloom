@@ -56,7 +56,7 @@ fn context<'stack>(
     )
     .unwrap()
 }
-fn ticks(level: &mut Level) -> String {
+pub(super) fn ticks(level: &mut Level) -> String {
     let mut saved = ferraloom_storage::SerializableChunkData::default();
     level
         .save_chunk_ticks(ChunkPos::new(0, 0), &mut saved)

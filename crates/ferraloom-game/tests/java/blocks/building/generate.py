@@ -14,11 +14,12 @@ JAVA = CACHE / 'toolchains/jdk-25.0.4.1+1/bin'
 VANILLA = CACHE / 'vanilla/26.3'
 CLASSPATH = os.pathsep.join(map(str, [VANILLA / 'versions/26.3/server-26.3.jar', *sorted((VANILLA / 'libraries').rglob('*.jar'))]))
 parser = argparse.ArgumentParser()
-parser.add_argument('family', nargs='?', choices=['orientation', 'stairs-slabs'], default='orientation')
+parser.add_argument('family', nargs='?', choices=['orientation', 'stairs-slabs', 'connected'], default='orientation')
 family = parser.parse_args().family
 source, bootstrap, expected = {
     'orientation': ('OrientationVectors.java', 'OrientationBootstrap', 42012),
     'stairs-slabs': ('StairSlabVectors.java', 'StairSlabBootstrap', 281554),
+    'connected': ('ConnectedVectors.java', 'ConnectedBootstrap', 84864),
 }[family]
 with tempfile.TemporaryDirectory() as temporary:
     classes = Path(temporary)
@@ -35,8 +36,10 @@ with tempfile.TemporaryDirectory() as temporary:
     if result.returncode:
         raise RuntimeError(result.stderr[-8000:])
     lines = [line.removeprefix('BUILDING\t') for line in result.stdout.splitlines() if line.startswith('BUILDING\t')]
-    if len(lines) != expected:
+    if expected is not None and len(lines) != expected:
         from collections import Counter
         raise RuntimeError(f'Expected {expected} native {family} cases, got {len(lines)}: {Counter(line.split(chr(9))[0] for line in lines)}')
     (HERE / f'{family}.tsv.gz').write_bytes(gzip.compress(('\n'.join(lines) + '\n').encode(), mtime=0))
     print(f'{len(lines)} native {family} cases')
+    if family == 'connected':
+        print(next(line for line in result.stdout.splitlines() if line.startswith('Native atlas:')))
