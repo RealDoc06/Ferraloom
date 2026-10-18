@@ -31,8 +31,15 @@ impl EntityQuery for Backend {
         _: EntityRef,
         predicate: &SelectorPredicate,
     ) -> Result<bool, CommandSyntaxException> {
-        assert!(matches!(predicate, SelectorPredicate::Alive));
-        Ok(true)
+        Ok(match predicate {
+            SelectorPredicate::Alive => true,
+            SelectorPredicate::Type {
+                value,
+                inverted,
+                tag: false,
+            } => (value == "minecraft:player") != *inverted,
+            _ => panic!("unexpected fixture predicate: {predicate:?}"),
+        })
     }
     fn shuffle(&mut self, _: &mut [(EntityRef, f64)]) {
         panic!("fixture has no random selector");
