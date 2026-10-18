@@ -97,3 +97,8 @@ The generated `CraftingRemainder` holds a typed item id/count and persistent
 component patch JSON; the game resolves the patch through protocol codecs.
 `BannerItem#getColor` is recorded alongside it for component-independent banner
 crafting checks.
+
+`fluid_random_ticking` records `FluidState#isRandomlyTicking`, which delegates
+only to the fluid type's virtual `isRandomlyTicking`. It has no level, position
+or state-property inputs. Source and flowing variants retain their own registry
+entries; waterlogged states use the same fluid fact as ordinary water.

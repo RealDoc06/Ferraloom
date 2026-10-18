@@ -5,6 +5,10 @@ use ferraloom_util::{Uuid, Vec3};
 
 use super::{EntityData, synched_data as data};
 
+mod tree;
+pub use tree::EntityPersistenceError;
+pub(crate) use tree::load_entity_tree;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum EntityLoadError {
     InvalidPosition,

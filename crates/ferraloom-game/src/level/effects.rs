@@ -34,10 +34,6 @@ pub enum LevelEffect {
         pos: BlockPos,
         state: BlockState,
     },
-    FallingBlock {
-        pos: BlockPos,
-        state: BlockState,
-    },
     LevelEvent {
         pos: BlockPos,
         id: i32,

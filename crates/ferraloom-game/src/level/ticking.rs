@@ -11,6 +11,20 @@ use ferraloom_util::{
     random::{Random, RandomSource},
 };
 impl Level {
+    /// Port of ServerLevel#tick's inactivity gate, after block events. Active
+    /// tickets reset it even during freeze; only running simulation advances it.
+    /// The returned flag gates dragon/entity/block-entity phases, never entity
+    /// storage management.
+    pub fn update_empty_time(&mut self, active_tickets: bool, running: bool) -> bool {
+        let region = self.region_mut();
+        if active_tickets {
+            region.empty_time = 0;
+        }
+        if running {
+            region.empty_time = region.empty_time.wrapping_add(1);
+        }
+        region.empty_time < 300
+    }
     pub fn set_game_time(&mut self, game_time: i64) {
         self.region_mut().game_time = game_time;
     }
@@ -42,6 +56,14 @@ impl Level {
             let other = self.random().next_int_bound(size as i32) as usize;
             chunks.swap(size - 1, other);
         }
+    }
+    pub fn increment_chunk_inhabited_time(&mut self, pos: ChunkPos) -> Result<(), LevelError> {
+        self.region_mut()
+            .chunks
+            .get_mut(&pos)
+            .ok_or(LevelError::MissingChunk(pos))?
+            .increment_inhabited_time();
+        Ok(())
     }
     pub fn schedule_block_tick_after(
         &mut self,
@@ -98,7 +120,12 @@ impl Level {
         let region = self.region_mut();
         region.game_time = game_time;
         region.block_ticks.collect(game_time, budget, |p| {
-            region.block_ticking_chunks.contains(&p)
+            region.entities.are_entities_loaded(p)
+                && region.block_ticking_chunks.contains(&p)
+                && region
+                    .chunks
+                    .get(&p)
+                    .is_some_and(|chunk| chunk.ticking_ready)
         });
         let result = self.run_collected_blocks();
         self.region_mut().block_ticks.cleanup_after_tick();
@@ -108,7 +135,12 @@ impl Level {
         let region = self.region_mut();
         region.game_time = game_time;
         region.fluid_ticks.collect(game_time, budget, |p| {
-            region.block_ticking_chunks.contains(&p)
+            region.entities.are_entities_loaded(p)
+                && region.block_ticking_chunks.contains(&p)
+                && region
+                    .chunks
+                    .get(&p)
+                    .is_some_and(|chunk| chunk.ticking_ready)
         });
         let result = self.run_collected_fluids();
         self.region_mut().fluid_ticks.cleanup_after_tick();
@@ -190,9 +222,12 @@ impl Level {
                 }
                 // The fluid is captured from the original state, even if the
                 // block callback changed it (LiquidBlock invokes lava twice).
-                if let Some(flow) = FlowingFluid::from_id(state.data().fluid.fluid_type) {
+                let fluid = state.data().fluid;
+                if fluid.is_randomly_ticking() {
                     self.optional_call(state.block(), BlockMethod::FluidRandomTick, |level| {
-                        flow.random_tick(level, pos, state.data().fluid)
+                        FlowingFluid::from_id(fluid.fluid_type)
+                            .ok_or(LevelError::UnsupportedFluidRandomTick)?
+                            .random_tick(level, pos, fluid)
                     })?;
                 }
             }

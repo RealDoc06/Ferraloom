@@ -114,7 +114,16 @@ public final class NeighborVectors {
                 System.out.println("fluid-legacy:"+net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(block)+":"+liquidLevel+"\\t"+Block.getId(fluid.createLegacyBlock()));
               }
               var wall=net.minecraft.world.level.material.FlowingFluid.class.getDeclaredMethod("canPassThroughWall",Direction.class,net.minecraft.world.level.BlockGetter.class,BlockPos.class,BlockState.class,BlockPos.class,BlockState.class);wall.setAccessible(true);
-              var states=List.of(Blocks.AIR.defaultBlockState(),Blocks.STONE.defaultBlockState(),Blocks.STONE_SLAB.defaultBlockState(),Blocks.STONE_SLAB.defaultBlockState().setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.SLAB_TYPE,net.minecraft.world.level.block.state.properties.SlabType.TOP),Blocks.WATER.defaultBlockState());
+              // Moving piston's dynamic shape requires the real level's block
+              // entity query, which this minimal Level explicitly rejects.
+              var wallStates=List.of(Blocks.STONE.defaultBlockState(),Blocks.WATER.defaultBlockState(),Blocks.MOVING_PISTON.defaultBlockState());
+              for(var wallPositions:List.of(new int[]{2,0},new int[]{0,2},new int[]{1,1},new int[]{0,1})){
+                String result;
+                try{result=""+wall.invoke(null,Direction.EAST,f,new BlockPos(wallPositions[0],0,0),wallStates.get(wallPositions[0]),new BlockPos(wallPositions[1],0,0),wallStates.get(wallPositions[1]));}
+                catch(java.lang.reflect.InvocationTargetException error){if(!(error.getCause() instanceof UnsupportedOperationException))throw error;result="unsupported";}
+                System.out.println("dynamic-fluid-wall:"+wallPositions[0]+":"+wallPositions[1]+"\t"+result);
+              }
+              var states=List.of(Blocks.AIR.defaultBlockState(),Blocks.STONE.defaultBlockState(),Blocks.STONE_SLAB.defaultBlockState(),Blocks.STONE_SLAB.defaultBlockState().setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.SLAB_TYPE,net.minecraft.world.level.block.state.properties.SlabType.TOP),Blocks.WATER.defaultBlockState(),Blocks.SHORT_GRASS.defaultBlockState());
               for(var first:states)for(var second:states)for(var direction:Direction.values()){
                 boolean pass=(Boolean)wall.invoke(null,direction,f,BlockPos.ZERO,first,BlockPos.ZERO.relative(direction),second);
                 System.out.println("fluid-wall:"+Block.getId(first)+":"+Block.getId(second)+":"+direction.get3DDataValue()+"\\t"+pass);
@@ -136,13 +145,15 @@ public final class NeighborVectors {
             final class MutationFixture extends NeighborFixture {
               final Map<ChunkPos,net.minecraft.world.level.chunk.LevelChunk> chunks=new HashMap<>();
               final Source source=new Source();
+              net.minecraft.server.level.FullChunkStatus fullStatus=net.minecraft.server.level.FullChunkStatus.BLOCK_TICKING;
+              net.minecraft.server.level.ChunkHolder holder;
               MutationFixture(RegistryAccess r){super(r,1000);}
               final class Source extends net.minecraft.world.level.chunk.ChunkSource {
                 final net.minecraft.world.level.lighting.LevelLightEngine lights=new net.minecraft.world.level.lighting.LevelLightEngine(this,false,false);
                 @Override public net.minecraft.world.level.BlockGetter getLevel(){return MutationFixture.this;}
                 @Override public net.minecraft.world.level.chunk.ChunkAccess getChunk(int x,int z,net.minecraft.world.level.chunk.status.ChunkStatus status,boolean load){
                   var p=new ChunkPos(x,z);return load?chunks.computeIfAbsent(p,k->new net.minecraft.world.level.chunk.LevelChunk(MutationFixture.this,k){
-                    @Override public net.minecraft.server.level.FullChunkStatus getFullStatus(){return net.minecraft.server.level.FullChunkStatus.BLOCK_TICKING;}
+                    @Override public net.minecraft.server.level.FullChunkStatus getFullStatus(){return MutationFixture.this.fullStatus;}
                   }):chunks.get(p);
                 }
                 @Override public void tick(java.util.function.BooleanSupplier time,boolean tick){}
@@ -153,14 +164,58 @@ public final class NeighborVectors {
               }
               @Override public net.minecraft.world.level.chunk.ChunkSource getChunkSource(){return source;}
               @Override public BlockState getBlockState(BlockPos p){return getChunkAt(p).getBlockState(p);}
-              @Override public void sendBlockUpdated(BlockPos p,BlockState a,BlockState b,int flags){trace.add("send");}
+              @Override public void sendBlockUpdated(BlockPos p,BlockState a,BlockState b,int flags){trace.add("send");if(holder!=null)holder.blockChanged(p);}
               @Override public void updatePOIOnBlockStateChange(BlockPos p,BlockState a,BlockState b){trace.add("poi");}
               @Override public void updateNeighborsAt(BlockPos p,Block b){trace.add("neighbors");neighborUpdater.updateNeighborsAtExceptFromFacing(p,b,null,null);}
               @Override public void neighborChanged(BlockState state,BlockPos p,Block b,Orientation o,boolean moved){trace.add("analog:"+p.toShortString());}
               @Override public void scheduleTick(BlockPos p,Block b,int delay){trace.add("schedule:"+delay);}
               @Override public void scheduleTick(BlockPos p,net.minecraft.world.level.material.Fluid f,int delay){trace.add("fluid:"+delay);}
 
+              static void recordReadiness(String stage,net.minecraft.world.ticks.LevelTicks<String> ticks,BlockPos pos){
+                ticks.tick(0,65536,(p,t)->{});
+                System.out.println("scheduled-readiness:"+stage+"\t"+ticks.hasScheduledTick(pos,"block"));
+              }
+              static void scheduledReadiness(RegistryAccess r) throws Exception {
+                var level=new MutationFixture(r);var pos=new BlockPos(8,0,8);var chunk=level.getChunkAt(pos);
+                var holder=new net.minecraft.server.level.ChunkHolder(chunk.getPos(),32,level,level.source.lights,(p,old,l,set)->{},(p,b)->List.of());
+                var future=net.minecraft.server.level.ChunkHolder.class.getDeclaredField("tickingChunkFuture");future.setAccessible(true);
+                var ready=java.util.concurrent.CompletableFuture.completedFuture(net.minecraft.server.level.ChunkResult.of(chunk));future.set(holder,ready);
+                var completion=new java.util.concurrent.CompletableFuture<net.minecraft.world.level.entity.ChunkEntities<net.minecraft.world.level.entity.EntityAccess>>();
+                var storage=new net.minecraft.world.level.entity.EntityPersistentStorage<net.minecraft.world.level.entity.EntityAccess>(){
+                  public java.util.concurrent.CompletableFuture<net.minecraft.world.level.entity.ChunkEntities<net.minecraft.world.level.entity.EntityAccess>> loadEntities(ChunkPos p){return completion;}
+                  public void storeEntities(net.minecraft.world.level.entity.ChunkEntities<net.minecraft.world.level.entity.EntityAccess> entities){throw new UnsupportedOperationException("storeEntities");}
+                  public void flush(boolean flush){throw new UnsupportedOperationException("flush");}
+                };
+                // Empty storage never calls an entity callback; an accidental
+                // callback through this omitted service fails immediately.
+                var entities=new net.minecraft.world.level.entity.PersistentEntitySectionManager<>(net.minecraft.world.level.entity.EntityAccess.class,null,storage);
+                var simulation=new boolean[]{true};
+                var ticks=new net.minecraft.world.ticks.LevelTicks<String>(key->entities.areEntitiesLoaded(key)&&simulation[0]&&holder.getTickingChunkFuture().getNow(net.minecraft.server.level.ChunkHolder.UNLOADED_LEVEL_CHUNK).isSuccess());
+                ticks.addContainer(chunk.getPos(),new net.minecraft.world.ticks.LevelChunkTicks<>());
+                ticks.schedule(new net.minecraft.world.ticks.ScheduledTick<>("block",pos,0,net.minecraft.world.ticks.TickPriority.NORMAL,0));
+                recordReadiness("fresh",ticks,pos);
+                entities.updateChunkStatus(chunk.getPos(),net.minecraft.world.level.entity.Visibility.TRACKED);
+                recordReadiness("pending",ticks,pos);
+                completion.complete(new net.minecraft.world.level.entity.ChunkEntities<>(chunk.getPos(),List.of()));
+                recordReadiness("completed-not-integrated",ticks,pos);
+                entities.tick();simulation[0]=false;recordReadiness("outside-simulation",ticks,pos);
+                simulation[0]=true;future.set(holder,java.util.concurrent.CompletableFuture.completedFuture(net.minecraft.server.level.ChunkHolder.UNLOADED_LEVEL_CHUNK));
+                recordReadiness("ticking-not-ready",ticks,pos);
+                future.set(holder,ready);recordReadiness("ready",ticks,pos);
+              }
               public static void run(RegistryAccess r) throws Exception {
+                scheduledReadiness(r);
+                for(var status:List.of(net.minecraft.server.level.FullChunkStatus.FULL,net.minecraft.server.level.FullChunkStatus.BLOCK_TICKING))for(boolean ready:new boolean[]{false,true}){
+                  var live=new MutationFixture(r);live.fullStatus=status;var updatePos=new BlockPos(8,0,8);
+                  var chunk=live.getChunkAt(updatePos);
+                  live.holder=new net.minecraft.server.level.ChunkHolder(chunk.getPos(),31,live,live.source.lights,(p,old,l,set)->{},(p,b)->List.of());
+                  if(ready){
+                    var future=net.minecraft.server.level.ChunkHolder.class.getDeclaredField("tickingChunkFuture");future.setAccessible(true);
+                    future.set(live.holder,java.util.concurrent.CompletableFuture.completedFuture(net.minecraft.server.level.ChunkResult.of(chunk)));
+                  }
+                  live.setBlock(updatePos,Blocks.STONE.defaultBlockState(),18,512);
+                  System.out.println("client-update:"+status+":"+ready+"\\t"+live.trace.contains("send")+":"+live.holder.hasChangesToBroadcast());
+                }
                 var contextClass=Class.forName("net.minecraft.world.level.material.FlowingFluid$SpreadContext");
                 var contextConstructor=contextClass.getDeclaredConstructor(net.minecraft.world.level.material.FlowingFluid.class,net.minecraft.world.level.BlockGetter.class,BlockPos.class);contextConstructor.setAccessible(true);
                 var slope=net.minecraft.world.level.material.FlowingFluid.class.getDeclaredMethod("getSlopeDistance",net.minecraft.world.level.LevelReader.class,BlockPos.class,int.class,Direction.class,BlockState.class,contextClass);slope.setAccessible(true);

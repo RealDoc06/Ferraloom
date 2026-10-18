@@ -26,6 +26,11 @@ impl SimulationChunkTracker {
     pub fn set_source_level(&mut self, pos: ChunkPos, level: Option<i32>) {
         self.graph.set_source_level(pos, level);
     }
+    /// Apply each TicketStorage listener notification while graph work is
+    /// queued, including non-minimal ticket removals.
+    pub fn update_source_level(&mut self, pos: ChunkPos, level: i32, only_decreased: bool) {
+        self.graph.update_source_level(pos, level, only_decreased);
+    }
     pub fn entity_ticking_chunks(&self) -> impl Iterator<Item = ChunkPos> + '_ {
         self.graph
             .chunks
@@ -42,6 +47,42 @@ impl SimulationChunkTracker {
     }
     pub fn run_all_updates(&mut self) {
         self.graph.run_all_updates();
+    }
+}
+
+/// One LoadingChunkTracker#setLevel call in fixed-point queue order. Holder
+/// scheduling consumes these changes before its full-status future pass.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ChunkLevelChange {
+    pub pos: ChunkPos,
+    pub old_level: i32,
+    pub level: i32,
+}
+
+/// Port of LoadingChunkTracker. The generation pipeline supplies ChunkLevel's
+/// maximum loaded level; its dependency radius is independent of simulation.
+pub struct LoadingChunkTracker {
+    graph: ChunkTracker,
+}
+impl LoadingChunkTracker {
+    pub fn new(max_loaded_level: i32) -> Self {
+        assert!((33..=125).contains(&max_loaded_level));
+        let missing = max_loaded_level + 1;
+        let mut graph = ChunkTracker::new(missing + 1, missing, max_loaded_level, missing);
+        graph.changes = Some(Vec::new());
+        Self { graph }
+    }
+    pub fn level(&self, pos: ChunkPos) -> i32 {
+        self.graph.get_level(pos.pack())
+    }
+    pub fn update_source_level(&mut self, pos: ChunkPos, level: i32, only_decreased: bool) {
+        self.graph.update_source_level(pos, level, only_decreased);
+    }
+    pub fn run_all_updates(&mut self) {
+        self.graph.run_all_updates();
+    }
+    pub fn take_level_changes(&mut self) -> Vec<ChunkLevelChange> {
+        std::mem::take(self.graph.changes.as_mut().unwrap())
     }
 }
 
@@ -96,6 +137,7 @@ struct ChunkTracker {
     sources: Long2ByteOpenHashMap,
     computed: Long2ByteOpenHashMap,
     queues: Vec<LongLinkedOpenHashSet>,
+    changes: Option<Vec<ChunkLevelChange>>,
 }
 impl ChunkTracker {
     fn new(level_count: i32, default_level: i32, retained_level: i32, source_default: i32) -> Self {
@@ -104,6 +146,7 @@ impl ChunkTracker {
             default_level,
             retained_level,
             source_default,
+            changes: None,
             chunks: Long2ByteOpenHashMap::new(),
             sources: Long2ByteOpenHashMap::new(),
             computed: Long2ByteOpenHashMap::with_capacity_and_load_factor(256, 0.5),
@@ -124,12 +167,17 @@ impl ChunkTracker {
         if new == old {
             return;
         }
-        if level.is_some() {
-            self.sources.insert(key, new as i8);
+        self.update_source_level(pos, new, new < old);
+    }
+    fn update_source_level(&mut self, pos: ChunkPos, level: i32, only_decreased: bool) {
+        let key = pos.pack();
+        let level = level.clamp(0, self.max_level);
+        if level < self.max_level {
+            self.sources.insert(key, level as i8);
         } else {
             self.sources.remove(&key);
         }
-        self.check_edge(INVALID_CHUNK, key, new, new < old);
+        self.check_edge(INVALID_CHUNK, key, level, only_decreased);
     }
     fn run_all_updates(&mut self) {
         while let Some(priority) = self.queues.iter().position(|queue| !queue.is_empty()) {
@@ -161,6 +209,16 @@ impl ChunkTracker {
             .unwrap_or(self.default_level)
     }
     fn set_level(&mut self, node: i64, level: i32) {
+        let old_level = self.get_level(node);
+        if let Some(changes) = &mut self.changes
+            && old_level != level
+        {
+            changes.push(ChunkLevelChange {
+                pos: ChunkPos::unpack(node),
+                old_level,
+                level,
+            });
+        }
         if level > self.retained_level {
             self.chunks.remove(&node);
         } else {
@@ -286,6 +344,46 @@ impl ChunkTracker {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn loading_tracker_queue_changes_match_real_holder_scheduling() {
+        use crate::level::distance_manager::MAX_LOADED_LEVEL;
+        let vector = |name: &str| {
+            include_str!("../../tests/java/level/loading.tsv")
+                .lines()
+                .find_map(|line| {
+                    let (key, value) = line.split_once('\t')?;
+                    (key == name).then_some(value)
+                })
+                .unwrap()
+        };
+        assert_eq!(MAX_LOADED_LEVEL.to_string(), vector("max-loaded-level"));
+        let mut tracker = LoadingChunkTracker::new(MAX_LOADED_LEVEL);
+        for (stage, changes) in [
+            ("origin", vec![(ChunkPos::new(0, 0), 31, true)]),
+            ("overlap", vec![(ChunkPos::new(2, -1), 32, true)]),
+            (
+                "remove-origin",
+                vec![(ChunkPos::new(0, 0), MAX_LOADED_LEVEL + 1, false)],
+            ),
+            (
+                "empty",
+                vec![(ChunkPos::new(2, -1), MAX_LOADED_LEVEL + 1, false)],
+            ),
+        ] {
+            for (pos, level, down) in changes {
+                tracker.update_source_level(pos, level, down);
+            }
+            tracker.run_all_updates();
+            let actual = tracker
+                .take_level_changes()
+                .iter()
+                .map(|change| format!("{},{},{}", change.pos.x, change.pos.z, change.level))
+                .collect::<Vec<_>>()
+                .join(";");
+            assert_eq!(actual, vector(stage), "{stage}");
+        }
+        assert_eq!(tracker.level(ChunkPos::new(0, 0)), MAX_LOADED_LEVEL + 1);
+    }
     #[test]
     fn simulation_tracker_map_order_and_levels_match_vanilla_ticket_changes() {
         let mut tracker = SimulationChunkTracker::default();

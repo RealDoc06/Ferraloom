@@ -105,6 +105,43 @@ impl Level {
             .block_ticking_chunks
             .contains(&ChunkPos::containing(pos))
     }
+    /// SimulationChunkTracker's entity-ticking range, distinct from the loading
+    /// holder's full status and the entity section manager's visibility.
+    pub fn is_entity_ticking_chunk(&self, pos: ChunkPos) -> bool {
+        self.region().entity_ticking_chunks.contains(&pos)
+    }
+    pub fn set_chunk_entity_ticking(
+        &mut self,
+        pos: ChunkPos,
+        ticking: bool,
+    ) -> Result<(), LevelError> {
+        if self.chunk(pos).is_none() {
+            return Err(LevelError::MissingChunk(pos));
+        }
+        if ticking {
+            self.region_mut().entity_ticking_chunks.insert(pos);
+        } else {
+            self.region_mut().entity_ticking_chunks.remove(&pos);
+        }
+        Ok(())
+    }
+    /// Attach the holder's loading-ticket status and current ticking future.
+    /// Neither is implied by simulation tickets or by owning a block chunk.
+    pub fn set_chunk_loading_status(
+        &mut self,
+        pos: ChunkPos,
+        requested: super::distance_manager::FullChunkStatus,
+        ticking_ready: bool,
+    ) -> Result<(), LevelError> {
+        let chunk = self
+            .region_mut()
+            .chunks
+            .get_mut(&pos)
+            .ok_or(LevelError::MissingChunk(pos))?;
+        chunk.requested_full_status = requested;
+        chunk.ticking_ready = ticking_ready;
+        Ok(())
+    }
     /// Return false for vanilla's rejected placements (bounds/debug/identical
     /// state or callback replacement); missing ownership is always an error.
     pub fn set_block(
@@ -199,7 +236,10 @@ impl Level {
             .unsaved = true;
         let new = self.get_block_state(pos)?;
         if new == state {
-            if flags.contains(UpdateFlags::CLIENTS) && self.should_tick_blocks_at(pos) {
+            if flags.contains(UpdateFlags::CLIENTS)
+                && self.chunk(chunk_pos).unwrap().requested_full_status
+                    >= super::distance_manager::FullChunkStatus::BlockTicking
+            {
                 self.send_block_updated(pos, old, state);
             }
             if flags.contains(UpdateFlags::NEIGHBORS) {

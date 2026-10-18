@@ -24,7 +24,9 @@ pub struct PrimedTnt {
 }
 impl PrimedTnt {
     pub fn new(network_id: i32, seed: i64) -> Self {
-        let mut parent = EntityData::new(EntityType::TNT, network_id, seed);
+        Self::with_parent(EntityData::new(EntityType::TNT, network_id, seed))
+    }
+    pub(crate) fn with_parent(mut parent: EntityData) -> Self {
         parent.blocks_building = true;
         parent.entity_data.define(FUSE, VarInt(80));
         parent
@@ -119,6 +121,14 @@ impl EntityDataView for PrimedTnt {
 }
 pub struct PrimedTntBehavior;
 impl Entity for PrimedTntBehavior {
+    fn trace_entity_refs(
+        &self,
+        state: &crate::entity::EntityState,
+        references: &mut Vec<crate::entity::EntityRef>,
+    ) {
+        crate::entity::trace_base_entity_refs(state.as_entity(), references);
+    }
+
     fn movement_emission(&self) -> MovementEmission {
         MovementEmission::None
     }

@@ -1,4 +1,4 @@
-use super::heightmap::Heightmap;
+use super::{distance_manager::FullChunkStatus, heightmap::Heightmap};
 use crate::ticks::LevelChunkTicks;
 use std::ops::Range;
 
@@ -16,6 +16,9 @@ pub struct LevelChunk {
     heightmaps: Option<[[i32; 256]; 4]>,
     pub(super) block_ticks: LevelChunkTicks,
     pub(super) fluid_ticks: LevelChunkTicks<ferraloom_data::registries::fluid::Id>,
+    pub(super) requested_full_status: FullChunkStatus,
+    pub(super) ticking_ready: bool,
+    inhabited_time: i64,
     pub unsaved: bool,
 }
 
@@ -30,6 +33,11 @@ impl LevelChunk {
             heightmaps: None,
             block_ticks: LevelChunkTicks::default(),
             fluid_ticks: LevelChunkTicks::default(),
+            // LevelChunk#getFullStatus defaults to FULL until a holder's
+            // supplier is attached. This alone never permits broadcasts.
+            requested_full_status: FullChunkStatus::Full,
+            ticking_ready: false,
+            inhabited_time: 0,
             unsaved: false,
         }
     }
@@ -53,11 +61,26 @@ impl LevelChunk {
             heightmaps: None,
             block_ticks: LevelChunkTicks::default(),
             fluid_ticks: LevelChunkTicks::default(),
+            requested_full_status: FullChunkStatus::Full,
+            ticking_ready: false,
+            inhabited_time: 0,
             unsaved: false,
         }
     }
     pub fn min_y(&self) -> i32 {
         self.min_section * 16
+    }
+    /// Port of ChunkAccess#getInhabitedTime, saved as InhabitedTime.
+    pub fn inhabited_time(&self) -> i64 {
+        self.inhabited_time
+    }
+    pub fn set_inhabited_time(&mut self, inhabited_time: i64) {
+        self.inhabited_time = inhabited_time;
+    }
+    /// ServerChunkCache#tickSpawningChunk increments this before thunder and
+    /// spawning. Native incrementInhabitedTime does not itself mark unsaved.
+    pub fn increment_inhabited_time(&mut self) {
+        self.inhabited_time = self.inhabited_time.wrapping_add(1);
     }
     pub fn max_y(&self) -> i32 {
         self.min_y() + self.sections.len() as i32 * 16

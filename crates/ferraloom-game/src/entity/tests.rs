@@ -89,13 +89,16 @@ pub(super) fn tags(level: &mut Level) {
     ));
 }
 fn level(floor: bool) -> Level {
+    level_with_behaviors(floor, &BEHAVIORS)
+}
+fn level_with_behaviors(floor: bool, behaviors: &'static Behaviors) -> Level {
     use ferraloom_chunk::{BiomeId, IdMap, LevelChunkSection, Strategy};
     let template = LevelChunkSection::new(
         Strategy::block_states(),
         Strategy::biomes(Arc::new(IdMap::new(vec![BiomeId(0)]).unwrap())),
         BiomeId(0),
     );
-    let mut level = Level::new(Region::new(&BEHAVIORS));
+    let mut level = Level::new(Region::new(behaviors));
     for x in -2..=2 {
         for z in -2..=2 {
             level
@@ -656,4 +659,241 @@ fn vanilla_player_dropped_item_position_and_velocity_bits() {
         n += 1;
     }
     assert_eq!(n, 3);
+}
+
+#[test]
+fn vanilla_falling_block_airborne_motion_flags_and_fall_distance_bits() {
+    let mut level = level(true);
+    let mut falling = item::FallingBlockEntity::new(3, 123);
+    falling.parent.set_pos(Vec3::new(8.5, 68.0, 8.5));
+    let mut id = EntityRef(1);
+    level
+        .add_entity(id, EntityState::FallingBlock(Box::new(falling)))
+        .unwrap();
+    let mut n = 0;
+    for row in VECTORS.lines().filter(|s| s.starts_with("falling-tick\t")) {
+        let f: Vec<_> = row.split('\t').collect();
+        common_tick(id, &mut level).unwrap();
+        id.tick(&mut level).unwrap();
+        let falling = level.entity::<item::FallingBlockEntity>(id).unwrap();
+        assert_vector(falling.parent.position, vector(f[2]), row);
+        assert_vector(falling.parent.velocity, vector(f[3]), row);
+        assert_eq!(flags(&falling.parent), f[4], "{row}");
+        assert_eq!(falling.time, f[5].parse::<i32>().unwrap());
+        assert_eq!(
+            falling.parent.fall_distance.to_bits(),
+            double(f[6]).to_bits(),
+            "{row}"
+        );
+        n += 1;
+    }
+    assert_eq!(n, 4);
+}
+
+#[test]
+fn falling_sand_is_constructed_before_source_replacement_then_lands() {
+    struct OrderingProbe;
+    impl crate::block::BlockBehavior for OrderingProbe {
+        fn affect_neighbors_after_removal(
+            &self,
+            _state: BlockState,
+            pos: BlockPos,
+            _moved: bool,
+            level: &mut Level,
+        ) -> Result<(), crate::level::LevelError> {
+            if pos.y == 66 {
+                let tnt = item::PrimedTnt::new(level.next_entity_id(), 123);
+                let id = level.next_entity_ref();
+                level.add_entity(id, EntityState::PrimedTnt(Box::new(tnt)))?;
+            }
+            Ok(())
+        }
+    }
+    static ORDERING: Behaviors = Behaviors::EMPTY.with_block(Block::SAND, &OrderingProbe);
+    let mut level = level_with_behaviors(true, &ORDERING);
+    let source = BlockPos::new(8, 66, 8);
+    level
+        .set_block_state(source, Block::SAND.default_state())
+        .unwrap();
+    let id = item::falling_block::fall(&mut level, source, Block::SAND.default_state()).unwrap();
+    assert!(level.get_block_state(source).unwrap().is_air());
+    assert_eq!(
+        level
+            .entity::<item::FallingBlockEntity>(id)
+            .unwrap()
+            .parent
+            .network_id,
+        1
+    );
+    let probe = level
+        .entity_by_network_id(2)
+        .expect("neighbor callback allocated second");
+    assert_eq!(level.all_entities(), [probe, id]);
+    assert_eq!(
+        level
+            .entity::<item::FallingBlockEntity>(id)
+            .unwrap()
+            .start_pos(),
+        source
+    );
+    for _ in 0..30 {
+        if level.entity::<EntityData>(id).unwrap().removed {
+            break;
+        }
+        common_tick(id, &mut level).unwrap();
+        EntityRef(id.0).tick(&mut level).unwrap();
+    }
+    assert!(level.entity::<EntityData>(id).unwrap().removed);
+    assert_eq!(
+        level.get_block_state(BlockPos::new(8, 64, 8)).unwrap(),
+        Block::SAND.default_state()
+    );
+    assert!(matches!(
+        level.take_entity_effects().last(),
+        Some(effects::EntityEffect::FallingBlockLanded {
+            pos: BlockPos { x: 8, y: 64, z: 8 },
+            ..
+        })
+    ));
+}
+
+#[test]
+fn vanilla_experience_orb_motion_friction_and_bounce_bits() {
+    use experience_orb::ExperienceOrb;
+    let mut level = level(true);
+    let mut orb = ExperienceOrb::new(4, 123);
+    orb.parent.set_pos(Vec3::new(8.5, 64.7, 8.5));
+    orb.parent.velocity = Vec3::new(0.1, 0.0, 0.01);
+    let mut id = EntityRef(1);
+    level
+        .add_entity(id, EntityState::ExperienceOrb(Box::new(orb)))
+        .unwrap();
+    let mut n = 0;
+    for row in VECTORS.lines().filter(|s| s.starts_with("orb-tick\t")) {
+        let f: Vec<_> = row.split('\t').collect();
+        common_tick(id, &mut level).unwrap();
+        id.tick(&mut level).unwrap();
+        let orb = level.entity::<ExperienceOrb>(id).unwrap();
+        assert_vector(orb.parent.position, vector(f[2]), row);
+        assert_vector(orb.parent.velocity, vector(f[3]), row);
+        assert_eq!(flags(&orb.parent), f[4], "{row}");
+        assert_eq!(
+            orb.parent.fall_distance.to_bits(),
+            double(f[5]).to_bits(),
+            "{row}"
+        );
+        n += 1;
+    }
+    assert_eq!(n, 12);
+}
+
+#[test]
+fn orb_retains_disconnected_player_until_its_native_follow_cache_clears() {
+    use experience_orb::{ExperienceOrb, follow_nearby_player};
+    let mut level = level(false);
+    let player_id = EntityRef(1);
+    let uuid = Uuid::new(1, 2);
+    let player = player::ServerPlayer::new(
+        uuid,
+        "fixture".into(),
+        1,
+        Vec3::new(4.5, 64.0, 1.5),
+        player::GameType::Survival,
+    );
+    level
+        .add_entity(player_id, EntityState::Player(Box::new(player)))
+        .unwrap();
+    let mut orb = ExperienceOrb::new(2, 123);
+    orb.parent.set_pos(Vec3::new(1.5, 64.0, 1.5));
+    let orb_id = EntityRef(2);
+    level
+        .add_entity(orb_id, EntityState::ExperienceOrb(Box::new(orb)))
+        .unwrap();
+    follow_nearby_player(orb_id, &mut level).unwrap();
+    assert_eq!(
+        level
+            .entity::<ExperienceOrb>(orb_id)
+            .unwrap()
+            .following_player,
+        Some(player_id)
+    );
+    level
+        .entity_mut::<ExperienceOrb>(orb_id)
+        .unwrap()
+        .parent
+        .velocity = Vec3::ZERO;
+    level.remove_entity(player_id).unwrap();
+    level.finish_entity_management();
+    assert_eq!(level.entity_by_uuid(uuid), None);
+    assert!(
+        level
+            .entity::<player::ServerPlayer>(player_id)
+            .unwrap()
+            .removed
+    );
+    follow_nearby_player(orb_id, &mut level).unwrap();
+    let row = VECTORS
+        .lines()
+        .find(|s| s.starts_with("orb-removed-follow\t"))
+        .unwrap();
+    let f: Vec<_> = row.split('\t').collect();
+    assert_vector(
+        level
+            .entity::<ExperienceOrb>(orb_id)
+            .unwrap()
+            .parent
+            .velocity,
+        vector(f[1]),
+        row,
+    );
+    assert_eq!(f[2], "true");
+    level
+        .set_entity_pos(orb_id, Vec3::new(30.0, 64.0, 1.5))
+        .unwrap();
+    follow_nearby_player(orb_id, &mut level).unwrap();
+    assert_eq!(
+        level
+            .entity::<ExperienceOrb>(orb_id)
+            .unwrap()
+            .following_player,
+        None
+    );
+    level.finish_entity_management();
+    assert!(level.entity_state(player_id).is_err());
+}
+
+#[test]
+fn orb_merges_only_matching_value_and_modulo_forty_group() {
+    use experience_orb::ExperienceOrb;
+    let mut level = level(false);
+    for (n, network, age, count) in [(1, 1, 30, 1), (2, 41, 5, 2), (3, 2, 10, 3)] {
+        let mut orb = ExperienceOrb::new(network, n);
+        orb.set_value(7);
+        orb.age = age;
+        orb.count = count;
+        orb.parent.set_pos(Vec3::new(8.5, 65.0, 8.5));
+        level
+            .add_entity(
+                EntityRef(n as u64),
+                EntityState::ExperienceOrb(Box::new(orb)),
+            )
+            .unwrap();
+    }
+    let mut id = EntityRef(1);
+    common_tick(id, &mut level).unwrap();
+    id.tick(&mut level).unwrap();
+    let orb = level.entity::<ExperienceOrb>(id).unwrap();
+    assert_eq!(orb.count, 3);
+    assert_eq!(orb.age, 6);
+    assert!(
+        level
+            .entity::<ExperienceOrb>(EntityRef(2))
+            .unwrap()
+            .parent
+            .removed
+    );
+    assert_eq!(
+        level.entity::<ExperienceOrb>(EntityRef(3)).unwrap().count,
+        3
+    );
 }

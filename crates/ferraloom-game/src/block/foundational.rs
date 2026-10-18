@@ -1,6 +1,6 @@
 //! Ports of FallingBlock and VegetationBlock's live/core methods.
 use super::{BlockBehavior, LevelAccessRef, LevelReaderRef};
-use crate::level::{Level, LevelError, effects::LevelEffect};
+use crate::level::{Level, LevelError};
 use ferraloom_data::{Block, BlockState};
 use ferraloom_util::{BlockPos, Direction};
 pub struct FallingBlock;
@@ -30,27 +30,13 @@ impl BlockBehavior for FallingBlock {
     }
     fn tick(&self, state: BlockState, pos: BlockPos, level: &mut Level) -> Result<(), LevelError> {
         let below = level.get_block_state(pos.below(1))?;
-        if below.is_air()
-            || below.data().replaceable
-            || below.liquid()
-            || level
-                .block_tags()?
-                .contains_key(ferraloom_data::tags::BlockTags::FIRE, below.block())
-        {
+        if crate::entity::item::falling_block::is_free(below, level)? {
             let min_y = level
                 .chunk(ferraloom_util::ChunkPos::containing(pos))
                 .unwrap()
                 .min_y();
             if pos.y >= min_y {
-                // FallingBlockEntity#fall removes the block synchronously. The
-                // entity insertion hook carries the original state.
-                level.set_block(
-                    pos,
-                    super::fluid::legacy_block(state.data().fluid),
-                    super::UpdateFlags::ALL,
-                    super::UPDATE_LIMIT,
-                )?;
-                level.emit(LevelEffect::FallingBlock { pos, state });
+                crate::entity::item::falling_block::fall(level, pos, state)?;
             }
         }
         Ok(())

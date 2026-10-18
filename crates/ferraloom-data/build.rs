@@ -714,6 +714,24 @@ fn main() {
     }
     let mut out = String::from("// Generated from the pinned vanilla 26.3 server. Do not edit.\n");
     registries(&mut out, &registries_report);
+    let fluid_random_ticking = load(root, "fluid_random_ticking");
+    let fluid_random_ticking = fluid_random_ticking
+        .as_array()
+        .expect("fluid random-tick facts");
+    let fluid_count = registries_report["minecraft:fluid"]["entries"]
+        .as_object()
+        .unwrap()
+        .len();
+    assert_eq!(fluid_random_ticking.len(), fluid_count);
+    writeln!(
+        out,
+        "static FLUID_RANDOM_TICKING: [bool; {fluid_count}] = {:?};",
+        fluid_random_ticking
+            .iter()
+            .map(|v| v.as_bool().unwrap())
+            .collect::<Vec<_>>()
+    )
+    .unwrap();
     block_classes(
         &mut out,
         &load(root, "block_classes"),

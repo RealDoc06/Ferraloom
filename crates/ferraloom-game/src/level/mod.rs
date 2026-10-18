@@ -97,6 +97,7 @@ pub struct Region {
     fluid_ticks: LevelTicks<ferraloom_data::registries::fluid::Id>,
     next_sub_tick_order: i64,
     game_time: i64,
+    empty_time: i32,
     weather: weather::Weather,
     min_y: i32,
     max_y: i32,
@@ -104,6 +105,7 @@ pub struct Region {
     random: ferraloom_util::random::Random,
     rand_value: i32,
     block_ticking_chunks: HashSet<ChunkPos>,
+    entity_ticking_chunks: HashSet<ChunkPos>,
     neighbor_updater: redstone::CollectingNeighborUpdater,
     block_events: events::BlockEvents,
     effects: Vec<effects::LevelEffect>,
@@ -125,6 +127,7 @@ impl Region {
             fluid_ticks: LevelTicks::default(),
             next_sub_tick_order: 0,
             game_time: 0,
+            empty_time: 0,
             weather: weather::Weather::default(),
             min_y: -64,
             max_y: 320,
@@ -132,6 +135,7 @@ impl Region {
             random: random::new_level_random(),
             rand_value: random::new_position_seed(),
             block_ticking_chunks: HashSet::new(),
+            entity_ticking_chunks: HashSet::new(),
             neighbor_updater: redstone::CollectingNeighborUpdater::default(),
             block_events: events::BlockEvents::default(),
             effects: Vec::new(),
@@ -180,6 +184,7 @@ impl Level {
         chunk.block_ticks = region.block_ticks.remove_container(pos).unwrap_or_default();
         chunk.fluid_ticks = region.fluid_ticks.remove_container(pos).unwrap_or_default();
         region.block_ticking_chunks.remove(&pos);
+        region.entity_ticking_chunks.remove(&pos);
         Some(chunk)
     }
     pub fn add_chunk(&mut self, mut chunk: chunk::LevelChunk) -> Result<(), LevelError> {

@@ -335,7 +335,7 @@ impl MinecraftServer {
     /// Port of MinecraftServer#runServer's 50ms deadline and overload catch-up.
     async fn run(mut self) -> Result<()> {
         println!(
-            "Ferraloom 26.3 running; single-region mode. Structures, carvers, features and spawn generation are passthrough."
+            "Ferraloom 26.3 running; single-region mode. Structure starts/references, general biome decoration and original mob spawning are passthrough."
         );
         let mut next = tokio::time::Instant::now();
         let mut last_overload = next;
@@ -2548,6 +2548,9 @@ fn initialize_live_level(
     ));
     level.level.set_game_time(level.game_time);
     level.level.set_unported_behavior(unported_behavior);
+    level
+        .level
+        .set_max_chained_neighbor_updates(properties.int("max-chained-neighbor-updates"));
     let saved = SavedDataStorage::new(world.access.path().join("data"));
     let mut border = saved
         .load::<WorldBorder>(border::SAVED_DATA_ID)?

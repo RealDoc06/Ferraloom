@@ -369,8 +369,8 @@ pub fn move_player_with_checks(
     let player = level.entity::<ServerPlayer>(entity)?;
     if player.vehicle.is_some() {
         let player = level.entity_mut::<ServerPlayer>(entity)?;
-        player.yaw = yaw;
-        player.pitch = pitch;
+        player.set_y_rot(yaw);
+        player.set_x_rot(pitch);
         return Ok(MovementResult::Accepted);
     }
     let start = player.position;
@@ -380,8 +380,8 @@ pub fn move_player_with_checks(
     if player.pose() == ferraloom_protocol::entity_data::Pose::Sleeping {
         if distance > 1.0 {
             let player = level.entity_mut::<ServerPlayer>(entity)?;
-            player.yaw = yaw;
-            player.pitch = pitch;
+            player.set_y_rot(yaw);
+            player.set_x_rot(pitch);
             return Ok(MovementResult::Wrongly);
         }
         return Ok(MovementResult::Accepted);
@@ -427,8 +427,8 @@ pub fn move_player_with_checks(
         level.set_entity_pos(entity, target)?;
         {
             let player = level.entity_mut::<ServerPlayer>(entity)?;
-            player.yaw = yaw;
-            player.pitch = pitch;
+            player.set_y_rot(yaw);
+            player.set_x_rot(pitch);
             player.horizontal_collision = input.horizontal_collision;
         }
         let delta = target - start;
@@ -448,8 +448,8 @@ pub fn move_player_with_checks(
         level.set_entity_pos(entity, start)?;
         {
             let player = level.entity_mut::<ServerPlayer>(entity)?;
-            player.yaw = yaw;
-            player.pitch = pitch;
+            player.set_y_rot(yaw);
+            player.set_x_rot(pitch);
             player.velocity = Vec3::ZERO;
         }
         movement::check_supporting_block(entity, input.on_ground, Some(Vec3::ZERO), level)?;
@@ -520,6 +520,14 @@ fn jump_from_ground(entity: crate::entity::EntityRef, level: &mut Level) -> Resu
 }
 pub struct PlayerBehavior;
 impl crate::entity::Entity for PlayerBehavior {
+    fn trace_entity_refs(
+        &self,
+        state: &crate::entity::EntityState,
+        references: &mut Vec<crate::entity::EntityRef>,
+    ) {
+        crate::entity::trace_base_entity_refs(state.as_entity(), references);
+    }
+
     fn fire_immune_ticks(&self) -> i32 {
         20
     }

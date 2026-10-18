@@ -9,6 +9,12 @@ use ferraloom_util::{
 use super::{Level, LevelError};
 use crate::entity::{EntityData, EntityRef, EntityState, RemovalReason};
 
+mod persistent;
+pub use persistent::{
+    ChunkLoadStatus, EntityLoadRequestId, EntityStorageError, EntityStorageRequest,
+    PersistentEntitySectionManager,
+};
+
 pub(crate) fn new_entity_random() -> ferraloom_util::random::LegacyRandomSource {
     let ferraloom_util::random::Random::Legacy(random) = super::random::new_level_random() else {
         unreachable!("RandomSource.create uses LegacyRandomSource")
@@ -92,6 +98,9 @@ pub struct EntitySection {
 #[derive(Default)]
 pub struct EntitySectionStorage {
     sections: BTreeMap<i64, EntitySection>,
+    // The AVL order serves spatial queries; the original open-map key order
+    // independently determines the save-chunk set's insertion history.
+    section_keys: Long2ObjectOpenHashMap<()>,
     membership: HashMap<EntityRef, i64>,
 }
 impl EntitySectionStorage {
@@ -101,6 +110,7 @@ impl EntitySectionStorage {
             return;
         }
         self.remove(entity);
+        self.section_keys.insert(key, ());
         self.sections
             .entry(key)
             .or_insert_with(|| EntitySection {
@@ -118,6 +128,7 @@ impl EntitySectionStorage {
             section.entities.retain(|id| *id != entity);
             if section.entities.is_empty() {
                 self.sections.remove(&key);
+                self.section_keys.remove(&key);
             }
         }
     }
@@ -177,6 +188,7 @@ impl EntityIdAllocator {
 /// Canonical data is never removed while a callback frame is active.
 #[derive(Default)]
 pub struct EntityStorage {
+    persistent: PersistentEntitySectionManager,
     known_uuids: HashSet<Uuid>,
     chunk_visibility: Long2ObjectOpenHashMap<Visibility>,
     management_events: Vec<EntityManagementEvent>,
@@ -191,6 +203,12 @@ pub struct EntityStorage {
     pub ids: EntityIdAllocator,
 }
 impl EntityStorage {
+    /// Port of PersistentEntitySectionManager#areEntitiesLoaded. Visibility and
+    /// simulation range do not establish that entity chunk loading completed.
+    pub fn are_entities_loaded(&self, pos: ChunkPos) -> bool {
+        self.persistent.status(pos) == ChunkLoadStatus::Loaded
+    }
+
     pub fn get(&self, id: &EntityRef) -> Option<&EntityState> {
         self.states.get(id)
     }
@@ -261,6 +279,10 @@ pub enum EntityManagementEvent {
 }
 
 impl Level {
+    pub fn are_entities_loaded(&self, pos: ChunkPos) -> bool {
+        self.region().entities.are_entities_loaded(pos)
+    }
+
     /// Server-lifetime handles never reuse a retired identity. Regional blocks
     /// are assigned by the scheduler before parallel execution is enabled.
     pub fn next_entity_ref(&mut self) -> EntityRef {
@@ -294,6 +316,9 @@ impl Level {
     pub fn min_build_height(&self) -> i32 {
         self.region().min_y
     }
+    pub fn max_build_height(&self) -> i32 {
+        self.region().max_y - 1
+    }
 
     pub fn emit_entity_movement_effect(&mut self, effect: crate::entity::movement::MovementEffect) {
         self.region_mut().entities.movement_effects.push(effect);
@@ -309,6 +334,14 @@ impl Level {
         self.region_mut().entities.border = border;
     }
     pub fn add_entity(&mut self, entity: EntityRef, state: EntityState) -> Result<(), LevelError> {
+        self.add_entity_with_origin(entity, state, false)
+    }
+    fn add_entity_with_origin(
+        &mut self,
+        entity: EntityRef,
+        state: EntityState,
+        loaded: bool,
+    ) -> Result<(), LevelError> {
         let region = self.region_mut();
         let network_id = region.entities.add(entity, state)?;
         let base = region.entities.get(&entity).unwrap().as_entity();
@@ -317,10 +350,12 @@ impl Level {
         } else {
             region.entities.visibility(base.chunk_position)
         };
-        region
-            .entities
-            .management_events
-            .push(EntityManagementEvent::Created(entity));
+        if !loaded {
+            region
+                .entities
+                .management_events
+                .push(EntityManagementEvent::Created(entity));
+        }
         if status.is_accessible() {
             region
                 .entities
@@ -407,8 +442,11 @@ impl Level {
         let storage = &mut self.region_mut().entities;
         if status == Visibility::Hidden {
             storage.chunk_visibility.remove(&pos.pack());
+            storage.persistent.chunks_to_unload.insert(pos.pack());
         } else {
             storage.chunk_visibility.insert(pos.pack(), status);
+            storage.persistent.chunks_to_unload.remove(&pos.pack());
+            storage.persistent.ensure_chunk_queued_for_load(pos);
         }
         let sections: Vec<_> = storage
             .sections
@@ -598,17 +636,16 @@ impl Level {
             let state = self.entity_state(entity)?;
             let base = state.as_entity();
             if base.removed
-                || !self.always_ticking(entity)
-                    && !self
-                        .region()
-                        .entities
-                        .visibility(base.chunk_position)
-                        .is_ticking()
                 || tick_rate.is_entity_frozen(
                     state.entity_type() == ferraloom_data::EntityType::PLAYER,
                     crate::entity::count_player_passengers(entity, self)?,
                 )
             {
+                continue;
+            }
+            self.entity_behavior(entity)?.check_despawn(entity, self)?;
+            let base = self.entity::<EntityData>(entity)?;
+            if !self.always_ticking(entity) && !self.is_entity_ticking_chunk(base.chunk_position) {
                 continue;
             }
             if let Some(vehicle) = base.vehicle {
@@ -659,21 +696,42 @@ impl Level {
         Ok(())
     }
     pub fn finish_entity_management(&mut self) {
+        if self.region().entities.pending_retire.is_empty() {
+            return;
+        }
+        let mut reachable = HashSet::new();
+        let mut work = Vec::new();
+        // Map order affects only set membership, never simulation callbacks.
+        for (&id, state) in &self.region().entities.states {
+            if !state.as_entity().removed {
+                self.entity_behavior(id)
+                    .expect("stored entity dispatcher")
+                    .trace_entity_refs(state, &mut work);
+            }
+        }
+        while let Some(id) = work.pop() {
+            if reachable.insert(id)
+                && let Some(state) = self.region().entities.get(&id)
+            {
+                self.entity_behavior(id)
+                    .expect("referenced entity dispatcher")
+                    .trace_entity_refs(state, &mut work);
+            }
+        }
         let removed = std::mem::take(&mut self.region_mut().entities.pending_retire);
         for id in removed {
-            let network_id = self
-                .region()
-                .entities
-                .get(&id)
-                .unwrap()
-                .as_entity()
-                .network_id;
+            if reachable.contains(&id) {
+                self.region_mut().entities.pending_retire.push(id);
+                continue;
+            }
             let region = self.region_mut();
-            region.entity_tick_list.remove(network_id);
             region.entities.retire(id);
         }
     }
 }
+
+#[cfg(test)]
+mod tick_tests;
 
 #[cfg(test)]
 mod tests {

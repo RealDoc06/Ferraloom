@@ -19,6 +19,10 @@ const PLACED: BlockPos = BlockPos::new(-1, 64, -1);
 
 struct TestCow;
 impl Entity for TestCow {
+    fn trace_entity_refs(&self, state: &EntityState, references: &mut Vec<EntityRef>) {
+        CowBehavior.trace_entity_refs(state, references);
+    }
+
     fn tick(&self, entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
         CowBehavior.tick(entity, level)?;
         // These borrows end before damage calls back into this active entity.
@@ -84,33 +88,25 @@ static TEST_BEHAVIORS: Behaviors = Behaviors::EMPTY
 
 fn region() -> Level {
     let mut region = Level::new(Region::new(&TEST_BEHAVIORS));
-    region
-        .add_chunk(LevelChunk::new(
-            ChunkPos::containing(PLACED),
-            -4..20,
-            ferraloom_chunk::LevelChunkSection::new(
-                ferraloom_chunk::Strategy::block_states(),
-                ferraloom_chunk::Strategy::biomes(std::sync::Arc::new(
-                    ferraloom_chunk::IdMap::new(vec![ferraloom_chunk::BiomeId(0)]).unwrap(),
-                )),
-                ferraloom_chunk::BiomeId(0),
-            ),
-        ))
-        .unwrap();
-    region
-        .update_entity_chunk_status(
-            ChunkPos::containing(PLACED),
-            crate::level::entity::Visibility::Ticking,
-        )
-        .unwrap();
-    // The adversarial entities live at the fixture origin; ticking eligibility
-    // is independent of the block chunk needed by their reentrant callback.
-    region
-        .update_entity_chunk_status(
-            ChunkPos::new(0, 0),
-            crate::level::entity::Visibility::Ticking,
-        )
-        .unwrap();
+    for pos in [ChunkPos::containing(PLACED), ChunkPos::ZERO] {
+        region
+            .add_chunk(LevelChunk::new(
+                pos,
+                -4..20,
+                ferraloom_chunk::LevelChunkSection::new(
+                    ferraloom_chunk::Strategy::block_states(),
+                    ferraloom_chunk::Strategy::biomes(std::sync::Arc::new(
+                        ferraloom_chunk::IdMap::new(vec![ferraloom_chunk::BiomeId(0)]).unwrap(),
+                    )),
+                    ferraloom_chunk::BiomeId(0),
+                ),
+            ))
+            .unwrap();
+        region
+            .update_entity_chunk_status(pos, crate::level::entity::Visibility::Ticking)
+            .unwrap();
+        region.set_chunk_entity_ticking(pos, true).unwrap();
+    }
     region
 }
 
@@ -242,10 +238,10 @@ fn removed_entities_are_visible_until_management_and_never_tick() {
 #[test]
 fn block_access_does_not_hide_missing_neighbors_or_overwrite_replacements() {
     let mut region = region();
-    let missing = BlockPos::new(0, 64, 0);
+    let missing = BlockPos::new(16, 64, 0);
     assert_eq!(
         region.get_block_state(missing),
-        Err(LevelError::MissingChunk(ChunkPos::new(0, 0)))
+        Err(LevelError::MissingChunk(ChunkPos::new(1, 0)))
     );
     region
         .set_block_state(PLACED, Block::STONE.default_state())

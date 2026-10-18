@@ -226,7 +226,7 @@ impl FlowingFluid {
     ) -> Result<bool, LevelError> {
         Ok(!self.is_source(target_state.data().fluid)
             && Self::can_hold_any(target_state, level)?
-            && can_pass_through_wall(direction, pos, state, target, target_state)?)
+            && can_pass_through_wall(direction, level, pos, state, target, target_state)?)
     }
     fn can_pass(
         self,
@@ -251,7 +251,7 @@ impl FlowingFluid {
         below_state: BlockState,
     ) -> Result<bool, LevelError> {
         Ok(
-            can_pass_through_wall(Direction::Down, pos, state, below, below_state)?
+            can_pass_through_wall(Direction::Down, level, pos, state, below, below_state)?
                 && (self.same(below_state.data().fluid)
                     || (Self::can_hold_any(below_state, level)?
                         && Self::can_hold_specific(below_state, self.flowing_id(), level)?)),
@@ -270,7 +270,7 @@ impl FlowingFluid {
             let target_state = level.get_block_state(target)?;
             let fluid = target_state.data().fluid;
             if self.same(fluid)
-                && can_pass_through_wall(direction, pos, state, target, target_state)?
+                && can_pass_through_wall(direction, level, pos, state, target, target_state)?
             {
                 sources += u8::from(fluid.source);
                 highest = highest.max(fluid.amount);
@@ -286,7 +286,7 @@ impl FlowingFluid {
         let above = level.get_block_state(above_pos)?;
         if self.same(above.data().fluid)
             && !above.data().fluid.empty
-            && can_pass_through_wall(Direction::Up, pos, state, above_pos, above)?
+            && can_pass_through_wall(Direction::Up, level, pos, state, above_pos, above)?
         {
             return Ok(self.flowing(8, true));
         }
@@ -592,34 +592,20 @@ pub fn legacy_block(fluid: FluidState) -> BlockState {
 }
 pub(crate) fn can_pass_through_wall(
     direction: Direction,
-    _source: BlockPos,
+    level: &Level,
+    source_pos: BlockPos,
     source: BlockState,
-    _target: BlockPos,
+    target_pos: BlockPos,
     target: BlockState,
 ) -> Result<bool, LevelError> {
-    // The no-context BlockState overload returns Cache.collisionShape whenever
-    // a cache exists. Conservative entity/offset flags on the data API do not
-    // invalidate that actual vanilla cache. Dynamic LiquidBlock is empty in
-    // CollisionContext.empty(); other dynamic queries still require behavior.
-    let collision = |state: BlockState| {
-        if state.block().class() == BlockClass::LiquidBlock {
-            Ok(ferraloom_util::shapes::empty())
-        } else if state.cached_collision_full_block().is_some() {
-            Ok(state.cached_shapes().collision.get().clone())
-        } else {
-            state
-                .collision_shape()
-                .cloned()
-                .ok_or(LevelError::UnsupportedShape(state))
-        }
-    };
+    let reader = super::LevelReaderRef::Server(level);
     // Vanilla queries the target before the source and preserves Shapes.block
     // identity shortcuts, then uses native voxel occupancy for partial faces.
-    let target_shape = collision(target)?;
+    let target_shape = reader.collision_shape_without_context(target, target_pos)?;
     if target_shape.ptr_eq(&ferraloom_util::shapes::block()) {
         return Ok(false);
     }
-    let source_shape = collision(source)?;
+    let source_shape = reader.collision_shape_without_context(source, source_pos)?;
     Ok(!ferraloom_util::shapes::merged_face_occludes(
         &source_shape,
         &target_shape,

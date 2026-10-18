@@ -31,27 +31,61 @@ impl BlockBehavior for Trace {
 static EMPTY: Behaviors = Behaviors::EMPTY;
 static PLAIN: Behaviors = Behaviors::EMPTY.with_block(Block::STONE, &Trace { nested: false });
 static NESTED: Behaviors = Behaviors::EMPTY.with_block(Block::STONE, &Trace { nested: true });
+#[test]
+fn inactive_entity_phase_stops_after_300_running_ticks_and_active_tickets_reset_it_during_freeze() {
+    let mut level = Level::new(Region::new(&EMPTY));
+    for _ in 1..300 {
+        assert!(level.update_empty_time(false, true));
+    }
+    assert!(!level.update_empty_time(false, true));
+    assert!(!level.update_empty_time(false, false));
+    assert!(level.update_empty_time(true, false));
+    for _ in 0..400 {
+        assert!(level.update_empty_time(false, false));
+    }
+    assert!(level.update_empty_time(true, true));
+}
+fn empty_chunk(pos: ChunkPos) -> chunk::LevelChunk {
+    chunk::LevelChunk::new(
+        pos,
+        -1..1,
+        ferraloom_chunk::LevelChunkSection::new(
+            ferraloom_chunk::Strategy::block_states(),
+            ferraloom_chunk::Strategy::biomes(Arc::new(
+                ferraloom_chunk::IdMap::new(vec![ferraloom_chunk::BiomeId(0)]).unwrap(),
+            )),
+            ferraloom_chunk::BiomeId(0),
+        ),
+    )
+}
 fn empty_level(behaviors: &'static Behaviors) -> Level {
     let mut level = Level::new(Region::new(behaviors));
     for x in -1..=1 {
         for z in -1..=1 {
+            let pos = ChunkPos::new(x, z);
+            level.add_chunk(empty_chunk(pos)).unwrap();
             level
-                .add_chunk(chunk::LevelChunk::new(
-                    ChunkPos::new(x, z),
-                    -1..1,
-                    ferraloom_chunk::LevelChunkSection::new(
-                        ferraloom_chunk::Strategy::block_states(),
-                        ferraloom_chunk::Strategy::biomes(Arc::new(
-                            ferraloom_chunk::IdMap::new(vec![ferraloom_chunk::BiomeId(0)]).unwrap(),
-                        )),
-                        ferraloom_chunk::BiomeId(0),
-                    ),
-                ))
+                .set_chunk_loading_status(
+                    pos,
+                    distance_manager::FullChunkStatus::EntityTicking,
+                    true,
+                )
+                .unwrap();
+            level
+                .update_entity_chunk_status(pos, entity::Visibility::Ticking)
                 .unwrap();
         }
     }
+    for request in level.take_entity_storage_requests() {
+        let entity::EntityStorageRequest::Load { id, .. } = request else {
+            panic!("new empty fixture only requests entity loads")
+        };
+        level.complete_entity_chunk_load(id, Ok(None)).unwrap();
+    }
+    level.tick_entity_management().unwrap();
     level
 }
+
 fn fixture(behaviors: &'static Behaviors) -> Level {
     let mut level = empty_level(behaviors);
     for direction in Direction::VALUES {
@@ -299,6 +333,49 @@ fn block_broadcasts_deduplicate_and_capture_final_states_at_broadcast_time() {
     );
     assert!(level.take_block_updates(chunk).unwrap().is_empty());
 }
+#[test]
+fn client_updates_use_loading_status_and_ticking_future_independently_of_simulation() {
+    use crate::block::{UPDATE_LIMIT, UpdateFlags};
+    use distance_manager::FullChunkStatus;
+    for line in include_str!("../../tests/java/level/client-updates.tsv").lines() {
+        let (input, expected) = line.split_once('\t').unwrap();
+        let mut parts = input.split(':').skip(1);
+        let status = match parts.next().unwrap() {
+            "FULL" => FullChunkStatus::Full,
+            "BLOCK_TICKING" => FullChunkStatus::BlockTicking,
+            _ => panic!("unexpected vanilla full status"),
+        };
+        let ready = parts.next().unwrap().parse::<bool>().unwrap();
+        let mut level = empty_level(&EMPTY);
+        install_tags(&mut level);
+        let chunk = ChunkPos::new(0, 0);
+        let pos = BlockPos::new(8, 0, 8);
+        assert!(!level.should_tick_blocks_at(pos));
+        level
+            .set_chunk_loading_status(chunk, status, ready)
+            .unwrap();
+        level
+            .set_block(
+                pos,
+                Block::STONE.default_state(),
+                UpdateFlags::CLIENTS | UpdateFlags::KNOWN_SHAPE,
+                UPDATE_LIMIT,
+            )
+            .unwrap();
+        let navigation = level
+            .take_effects()
+            .iter()
+            .any(|effect| matches!(effect, LevelEffect::BlockUpdated { .. }));
+        let broadcast = !level.take_block_updates(chunk).unwrap().is_empty();
+        assert_eq!(format!("{navigation}:{broadcast}"), expected, "{input}");
+        // A subsequent future completion cannot retroactively queue a change
+        // made while the holder lacked a ticking chunk.
+        level
+            .set_chunk_loading_status(chunk, FullChunkStatus::BlockTicking, true)
+            .unwrap();
+        assert!(level.take_block_updates(chunk).unwrap().is_empty());
+    }
+}
 struct EventChain;
 impl BlockBehavior for EventChain {
     fn trigger_event(
@@ -408,6 +485,77 @@ fn flat_pool() -> Level {
     }
     level.rules_mut().spread_fire = false;
     level
+}
+#[test]
+fn scheduled_phases_wait_for_entity_load_integration_simulation_and_ticking_future() {
+    use ferraloom_data::registries::fluid::Id as Fluid;
+    let mut level = Level::new(Region::new(&EMPTY));
+    let chunk = ChunkPos::ZERO;
+    let pos = BlockPos::new(8, 0, 8);
+    level.add_chunk(empty_chunk(chunk)).unwrap();
+    level
+        .set_block_state(pos, Block::STONE.default_state())
+        .unwrap();
+    level.set_chunk_block_ticking(chunk, true).unwrap();
+    level
+        .set_chunk_loading_status(chunk, distance_manager::FullChunkStatus::BlockTicking, true)
+        .unwrap();
+    level
+        .schedule_block_tick_after(pos, Block::STONE, 0)
+        .unwrap();
+    level
+        .schedule_fluid_tick_after(pos, Fluid::WATER, 0)
+        .unwrap();
+    let check = |level: &mut Level, name: &str| {
+        level.tick_block_phase(0, 65536).unwrap();
+        level.tick_fluid_phase(0, 65536).unwrap();
+        let key = format!("scheduled-readiness:{name}");
+        let expected = include_str!("../../tests/java/level/scheduled-readiness.tsv")
+            .lines()
+            .find_map(|line| {
+                let (name, value) = line.split_once('\t')?;
+                (name == key).then_some(value.parse::<bool>().unwrap())
+            })
+            .unwrap();
+        assert_eq!(
+            level.has_scheduled_block_tick(pos, Block::STONE),
+            expected,
+            "{name}"
+        );
+        assert_eq!(
+            level.has_scheduled_fluid_tick(pos, Fluid::WATER),
+            expected,
+            "{name}"
+        );
+    };
+    check(&mut level, "fresh");
+    level
+        .update_entity_chunk_status(chunk, entity::Visibility::Tracked)
+        .unwrap();
+    check(&mut level, "pending");
+    let entity::EntityStorageRequest::Load { id, .. } =
+        level.take_entity_storage_requests().pop().unwrap()
+    else {
+        panic!("the fixture requests its entity chunk")
+    };
+    level.complete_entity_chunk_load(id, Ok(None)).unwrap();
+    check(&mut level, "completed-not-integrated");
+    level.tick_entity_management().unwrap();
+    level.set_chunk_block_ticking(chunk, false).unwrap();
+    check(&mut level, "outside-simulation");
+    level.set_chunk_block_ticking(chunk, true).unwrap();
+    level
+        .set_chunk_loading_status(
+            chunk,
+            distance_manager::FullChunkStatus::BlockTicking,
+            false,
+        )
+        .unwrap();
+    check(&mut level, "ticking-not-ready");
+    level
+        .set_chunk_loading_status(chunk, distance_manager::FullChunkStatus::BlockTicking, true)
+        .unwrap();
+    check(&mut level, "ready");
 }
 #[test]
 fn water_spread_uses_scheduled_delay_and_crosses_a_chunk_boundary() {
@@ -523,10 +671,13 @@ fn liquid_block_mixes_lava_into_obsidian_cobblestone_and_basalt() {
     assert_eq!(level.get_block_state(pos).unwrap().block(), Block::BASALT);
 }
 #[test]
-fn falling_sand_removes_its_block_before_the_entity_insertion_hook() {
+fn scheduled_falling_sand_creates_the_entity_and_replaces_its_source_synchronously() {
     use crate::block::{UPDATE_LIMIT, UpdateFlags};
     let mut level = empty_level(&EMPTY);
     install_tags(&mut level);
+    level
+        .update_entity_chunk_status(ChunkPos::new(0, 0), entity::Visibility::Ticking)
+        .unwrap();
     let pos = BlockPos::new(8, 0, 8);
     level
         .set_chunk_block_ticking(ChunkPos::new(0, 0), true)
@@ -544,11 +695,13 @@ fn falling_sand_removes_its_block_before_the_entity_insertion_hook() {
     assert_eq!(level.get_block_state(pos).unwrap().block(), Block::SAND);
     level.tick_block_phase(2, 65536).unwrap();
     assert!(level.get_block_state(pos).unwrap().is_air());
-    let effects = level.take_effects();
-    assert!(matches!(
-        effects.last(),
-        Some(LevelEffect::FallingBlock { .. })
-    ));
+    let entities = level.all_entities();
+    assert_eq!(entities.len(), 1);
+    let falling = level
+        .entity::<crate::entity::item::falling_block::FallingBlockEntity>(entities[0])
+        .unwrap();
+    assert_eq!(falling.block_state, Block::SAND.default_state());
+    assert_eq!(falling.start_pos(), pos);
 }
 #[test]
 fn block_and_fluid_ticks_survive_unload_nbt_and_reload_with_their_remaining_delay() {
@@ -869,7 +1022,11 @@ fn water_slope_search_matches_real_vanilla_across_chunk_borders_and_at_its_limit
 
 #[test]
 fn fluid_wall_occlusion_matches_vanilla_native_partial_faces_in_all_directions() {
-    for line in include_str!("../../tests/java/level/walls.tsv").lines() {
+    let level = empty_level(&EMPTY);
+    for line in include_str!("../../tests/java/level/walls.tsv")
+        .lines()
+        .filter(|line| line.starts_with("fluid-wall:"))
+    {
         let (input, expected) = line.split_once('\t').unwrap();
         let mut ids = input
             .strip_prefix("fluid-wall:")
@@ -882,6 +1039,7 @@ fn fluid_wall_occlusion_matches_vanilla_native_partial_faces_in_all_directions()
         assert_eq!(
             crate::block::fluid::can_pass_through_wall(
                 direction,
+                &level,
                 BlockPos::ZERO,
                 source,
                 BlockPos::ZERO.relative(direction, 1),
@@ -892,6 +1050,78 @@ fn fluid_wall_occlusion_matches_vanilla_native_partial_faces_in_all_directions()
             "{input}"
         );
     }
+}
+
+struct DynamicFluidWall;
+impl BlockBehavior for DynamicFluidWall {
+    fn collision_shape(
+        &self,
+        state: BlockState,
+        pos: BlockPos,
+        _context: &crate::block::BlockCollisionContext<'_>,
+        _level: &crate::block::LevelReaderRef<'_>,
+    ) -> Result<ferraloom_util::VoxelShape, LevelError> {
+        match pos.x {
+            0 => Ok(ferraloom_util::shapes::block()),
+            1 => Ok(ferraloom_util::shapes::empty()),
+            _ => Err(LevelError::UnsupportedShape(state)),
+        }
+    }
+}
+static DYNAMIC_FLUID_WALL: Behaviors =
+    Behaviors::EMPTY.with_block(Block::SCAFFOLDING, &DynamicFluidWall);
+
+#[test]
+fn fluid_wall_queries_share_dynamic_dispatch_and_match_vanilla_target_first_shortcuts() {
+    let level = empty_level(&DYNAMIC_FLUID_WALL);
+    let states = [Block::STONE, Block::WATER, Block::MOVING_PISTON].map(Block::default_state);
+    for line in include_str!("../../tests/java/level/walls.tsv")
+        .lines()
+        .filter(|line| line.starts_with("dynamic-fluid-wall:"))
+    {
+        let (input, expected) = line.split_once('\t').unwrap();
+        let mut positions = input
+            .strip_prefix("dynamic-fluid-wall:")
+            .unwrap()
+            .split(':')
+            .map(|x| x.parse::<usize>().unwrap());
+        let source = positions.next().unwrap();
+        let target = positions.next().unwrap();
+        let result = crate::block::fluid::can_pass_through_wall(
+            Direction::East,
+            &level,
+            BlockPos::new(source as i32, 0, 0),
+            states[source],
+            BlockPos::new(target as i32, 0, 0),
+            states[target],
+        );
+        if expected == "unsupported" {
+            assert_eq!(
+                result,
+                Err(LevelError::UnsupportedBlockMethod(
+                    Block::MOVING_PISTON,
+                    crate::block::BlockMethod::CollisionShape
+                )),
+                "{input}"
+            );
+        } else {
+            assert_eq!(result.unwrap().to_string(), expected, "{input}");
+        }
+    }
+    // A state without a native collision cache reaches the registered dynamic
+    // method, including successful contextual results.
+    let dynamic = Block::SCAFFOLDING.default_state();
+    assert!(
+        !crate::block::fluid::can_pass_through_wall(
+            Direction::East,
+            &level,
+            BlockPos::ZERO,
+            dynamic,
+            BlockPos::new(1, 0, 0),
+            dynamic,
+        )
+        .unwrap()
+    );
 }
 
 static ANALOG: Behaviors = Behaviors::EMPTY.with_block(Block::COMPARATOR, &Trace { nested: false });
