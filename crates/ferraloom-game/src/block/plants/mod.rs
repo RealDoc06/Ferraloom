@@ -255,3 +255,6 @@ mod tests;
 
 #[cfg(test)]
 mod worldgen_tests;
+
+#[cfg(test)]
+mod tree_worldgen_tests;

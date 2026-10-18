@@ -393,3 +393,5 @@ One class row per bootstrapped runtime Block class, listing every block id assig
 | blocks.plants.worldgen-bonemeal-targets | Worldgen sapling, azalea and mushroom targets retain the non-ServerLevel branch; propagule targets remain state-only and consume no random | Real native `BonemealableBlock#isValidBonemealTarget` on Level | `plants::worldgen_tests::worldgen_bonemeal_targets_follow_native_non_server_branch_without_rng` (62 vectors) | pass | todo |
 
 | blocks.plants.chorus-growth | Chorus support and connections, one-tick invalidation, flower pillar/branch/death RNG and events; projectile callback awaits framework | `ChorusPlantBlock`, `ChorusFlowerBlock` | Dedicated ServerLevel chorus oracle and support/shape fixtures (capture pending) | - | todo |
+
+| blocks.plants.tree-worldgen-bridge | Re-run all tree fixtures through shared real leaf updates, survival, moss and fluids; retained bee prefixes stay explicit dependencies | Real vanilla TreeFeature and decorators | `plants::tree_worldgen_tests::tree_fixtures_use_real_leaf_and_plant_bridge` (2,444 native cases) | pass | todo |

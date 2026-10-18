@@ -69,7 +69,7 @@ fn initial(terrain: &str, p: [i32; 3]) -> BlockState {
     };
     b.default_state()
 }
-fn setup() -> (ResourceManager, NoiseBasedChunkGenerator) {
+pub(super) fn setup() -> (ResourceManager, NoiseBasedChunkGenerator) {
     let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").expect("builder supplies vanilla jar");
     let resources = ResourceManager::new(vec![Pack::vanilla_jar(Path::new(&jar)).unwrap()]);
     let data = Arc::new(GenerationData::load(&resources).unwrap());
