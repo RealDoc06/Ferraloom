@@ -1103,7 +1103,8 @@ impl MinecraftServer {
             if self.level.level.chunk(pos).is_some() {
                 let requested = holder.requested_full_status();
                 let ticking = requested >= FullChunkStatus::BlockTicking
-                    && full_chunk_range_ready(&self.world.ready, pos, 1);
+                    && self.world.ready.contains(&pos)
+                    && full_chunk_range_ready(&self.world.light_ready, pos, 1);
                 self.level
                     .level
                     .set_chunk_loading_status(pos, requested, ticking)
