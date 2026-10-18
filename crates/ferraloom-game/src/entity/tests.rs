@@ -1981,7 +1981,7 @@ fn piston_effects_use_only_the_explicit_path_and_keep_recorded_movements() {
     entity
         .parent
         .movement_this_tick
-        .push_back(recording.clone());
+        .push_back(recording);
     level
         .add_entity(id, EntityState::PrimedTnt(Box::new(entity)))
         .unwrap();

@@ -1214,7 +1214,12 @@ impl MinecraftServer {
             .context("missing joining connection")?;
         let mut player = c.player.take().context("spawn not prepared")?;
         if player.saved.is_empty() {
-            player.position.y = f64::from(self.world.spawn.y);
+            let position = Vec3::new(
+                player.position.x,
+                f64::from(self.world.spawn.y),
+                player.position.z,
+            );
+            player.set_pos(position);
             player.first_good = player.position;
             player.last_good = player.position;
         }
