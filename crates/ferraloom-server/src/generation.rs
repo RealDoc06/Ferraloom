@@ -24,6 +24,18 @@ use std::{
     },
 };
 
+/// Execution order is separate from FULL request/integration order. Shared
+/// StructureStart mutations must survive an older owned promotion snapshot.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) struct GenerationRevision(pub u64);
+
+#[derive(Clone)]
+pub(crate) struct StructureSnapshot {
+    pub pos: ChunkPos,
+    pub revision: GenerationRevision,
+    pub data: storage::StructureData,
+}
+
 pub(crate) struct GenerationRequest {
     pub id: u64,
     pub pos: ChunkPos,
@@ -41,7 +53,7 @@ pub struct GenerationOutput {
     pub neighbors: Vec<(ChunkPos, SerializableChunkData)>,
     pub skips: Vec<(String, String)>,
     pub statuses: Vec<(ChunkPos, ChunkStatus)>,
-    pub full_structures: Vec<(ChunkPos, storage::StructureData)>,
+    pub(crate) full_structures: Vec<StructureSnapshot>,
     pub initial_mob_spawning_pending: bool,
 }
 /// Port of ChunkMap's generation cache. FULL entries are read-only imposter
@@ -53,6 +65,7 @@ pub struct GenerationState {
     light_pool: Arc<JobPool>,
     snapshots: SectionSnapshots<'static>,
     structure_check: StructureCheck,
+    revision: GenerationRevision,
     placeholder: ferraloom_worldgen::region::RegionChunk,
 }
 impl GenerationState {
@@ -71,6 +84,7 @@ impl GenerationState {
             context,
             holders: BTreeMap::new(),
             structure_check: StructureCheck::default(),
+            revision: GenerationRevision::default(),
         }
     }
     pub fn completed_statuses(&self) -> Vec<(ChunkPos, ChunkStatus)> {
@@ -164,6 +178,12 @@ impl GenerationState {
         io: &IoWorker,
         cancelled: Option<&AtomicBool>,
     ) -> Result<GenerationOutput> {
+        self.revision = GenerationRevision(
+            self.revision
+                .0
+                .checked_add(1)
+                .context("generation revision exhausted")?,
+        );
         let mut task = ChunkGenerationTask::new(request, pos, target);
         let mut touched = BTreeSet::new();
         let mut skips = Vec::new();
@@ -314,10 +334,11 @@ impl GenerationState {
         for key in touched {
             let proto = &self.holders[&key].chunk;
             if key != pos.pack() && proto.region.status == ChunkStatus::Full {
-                full_structures.push((
-                    ChunkPos::unpack(key),
-                    storage::StructureData::from_nbt(proto.region.structures.to_nbt()?)?,
-                ));
+                full_structures.push(StructureSnapshot {
+                    pos: ChunkPos::unpack(key),
+                    revision: self.revision,
+                    data: storage::StructureData::from_nbt(proto.region.structures.to_nbt()?)?,
+                });
             }
             if key != pos.pack()
                 && proto.region.status < ChunkStatus::Full
@@ -355,6 +376,7 @@ impl GenerationState {
             .collect();
         let terrain = Terrain {
             pos,
+            revision: self.revision,
             light_neighbors,
             surface: surface_heights_in_dimension(&sections, self.context.dimension.min_y),
             sections,
