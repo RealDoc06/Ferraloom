@@ -28,7 +28,7 @@ with tempfile.TemporaryDirectory(prefix='ferraloom-plant-ticks-') as temp:
         jar.writestr('META-INF/MANIFEST.MF','Manifest-Version: 1.0\nPremain-Class: PlantsTickOracle\nCan-Retransform-Classes: true\n\n')
         for file in path.glob('*.class'):jar.write(file,file.name)
     (path/'eula.txt').write_text('eula=true\n')
-    (path/'server.properties').write_text('online-mode=false\nserver-ip=127.0.0.1\nserver-port=0\nlevel-type=minecraft:flat\ngenerator-settings={"biome":"minecraft:plains","layers":[{"block":"minecraft:bedrock","height":1}]}\nspawn-protection=0\nview-distance=2\nsimulation-distance=2\nmax-tick-time=-1\npause-when-empty-seconds=-1\n')
+    (path/'server.properties').write_text('online-mode=false\nlevel-seed=0\nserver-ip=127.0.0.1\nserver-port=0\nlevel-type=minecraft:flat\ngenerator-settings={"biome":"minecraft:plains","layers":[{"block":"minecraft:bedrock","height":1}]}\nspawn-protection=0\nview-distance=2\nsimulation-distance=2\nmax-tick-time=-1\npause-when-empty-seconds=-1\n')
     output=path/'random.tsv'
     with (path/'server.log').open('w') as log:
         process=subprocess.Popen([str(JDK/'java'),'-Xmx1G','-Dnet.bytebuddy.experimental=true','-Dferraloom.plants.extended='+str('--extended' in sys.argv).lower(),'-javaagent:'+str(agent)+'='+str(output),'-cp',classpath,'net.minecraft.server.Main','--nogui'],cwd=path,stdout=log,stderr=subprocess.STDOUT)
