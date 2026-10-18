@@ -54,7 +54,7 @@ pub mod tickets;
 mod ticking;
 pub mod weather;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum LevelError {
     UnsupportedItemUseOn(ferraloom_data::Item),
     UnsupportedItemCraftedPostProcess(ferraloom_data::Item),
@@ -72,7 +72,10 @@ pub enum LevelError {
         acquisition::AcquireFailure,
     ),
     UnsupportedChunkEntityPublication(ChunkPos),
-    WorldgenMutationFailed(BlockPos),
+    WorldgenMutationFailed {
+        pos: BlockPos,
+        source: ferraloom_worldgen::Error,
+    },
     UnsupportedWorldgenEnvironment,
     UnsupportedWorldgenBehavior,
     OutsideBuildHeight,
@@ -109,6 +112,25 @@ pub enum LevelError {
     WrongChunkHeight(ChunkPos),
     InvalidChunkStructures(ChunkPos),
     InvalidStructureHolderSet,
+}
+
+impl std::fmt::Display for LevelError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::WorldgenMutationFailed { pos, source } => {
+                write!(formatter, "worldgen mutation at {pos:?}: {source}")
+            }
+            error => std::fmt::Debug::fmt(error, formatter),
+        }
+    }
+}
+impl std::error::Error for LevelError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::WorldgenMutationFailed { source, .. } => Some(source),
+            _ => None,
+        }
+    }
 }
 
 /// Dimension settings consumed by the live core. The server supplies the

@@ -117,7 +117,7 @@ impl<'chunks> LevelAccessRef<'_, 'chunks> {
             Self::Server(level) => level.set_block(pos, state, flags, UPDATE_LIMIT),
             Self::Worldgen(region) => region
                 .set_block([pos.x, pos.y, pos.z], state, flags.0)
-                .map_err(|_| LevelError::WorldgenMutationFailed(pos)),
+                .map_err(|source| LevelError::WorldgenMutationFailed { pos, source }),
         }
     }
     pub fn destroy_block(&mut self, pos: BlockPos, drop: bool) -> Result<bool, LevelError> {
@@ -125,7 +125,7 @@ impl<'chunks> LevelAccessRef<'_, 'chunks> {
             Self::Server(level) => level.destroy_block(pos, drop, UPDATE_LIMIT),
             Self::Worldgen(region) => region
                 .destroy_block([pos.x, pos.y, pos.z], drop)
-                .map_err(|_| LevelError::WorldgenMutationFailed(pos)),
+                .map_err(|source| LevelError::WorldgenMutationFailed { pos, source }),
         }
     }
     pub fn schedule_block_tick(
