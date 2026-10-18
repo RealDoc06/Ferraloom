@@ -85,14 +85,13 @@ pub(super) fn bonemeal(
         level.set_block(above, replaced, UpdateFlags(18))?;
         return place_with_random_height(pos, state.get(p::FACING).unwrap(), level);
     }
-    if let Some(head) = head_pos(state, pos, &level.as_reader())? {
-        if state.block() == Block::BIG_DRIPLEAF_STEM
-            || can_grow_into(&level.as_reader(), head.above(1))?
-        {
-            let facing = state.get(p::FACING).unwrap();
-            place(Block::BIG_DRIPLEAF_STEM, facing, head, level)?;
-            place(Block::BIG_DRIPLEAF, facing, head.above(1), level)?;
-        }
+    if let Some(head) = head_pos(state, pos, &level.as_reader())?
+        && (state.block() == Block::BIG_DRIPLEAF_STEM
+            || can_grow_into(&level.as_reader(), head.above(1))?)
+    {
+        let facing = state.get(p::FACING).unwrap();
+        place(Block::BIG_DRIPLEAF_STEM, facing, head, level)?;
+        place(Block::BIG_DRIPLEAF, facing, head.above(1), level)?;
     }
     Ok(())
 }

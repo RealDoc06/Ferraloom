@@ -128,12 +128,11 @@ pub fn spread_from_random_face_toward_random_direction(
     random: &mut impl RandomSource,
 ) -> Result<Option<SpreadPos>, LevelError> {
     for from in shuffled(random) {
-        if multiface::has_face(state, from) {
-            if let Some(spread) =
+        if multiface::has_face(state, from)
+            && let Some(spread) =
                 spread_from_face_toward_random_direction(level, state, pos, from, random, false)?
-            {
-                return Ok(Some(spread));
-            }
+        {
+            return Ok(Some(spread));
         }
     }
     Ok(None)

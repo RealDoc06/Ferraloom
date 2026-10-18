@@ -42,23 +42,23 @@ impl BlockBehavior for PowderSnow {
         context: &BlockCollisionContext<'_>,
         reader: &LevelReaderRef<'_, '_>,
     ) -> Result<VoxelShape, LevelError> {
-        if !context.is_placement() {
-            if let BlockCollisionContext::Entity(entity_context) = context {
-                let LevelReaderRef::Server(level) = reader else {
-                    return Err(LevelError::UnsupportedWorldgenEnvironment);
-                };
-                let entity = entity_context.entity.entity;
-                let base = level.entity::<EntityData>(entity)?;
-                if base.fall_distance > 2.5 {
-                    return Ok(shapes::create(0.0, 0.0, 0.0, 1.0, 0.8999999761581421, 1.0));
-                }
-                if base.entity_type == EntityType::FALLING_BLOCK
-                    || (can_walk_on(entity, level)?
-                        && context.is_above(&shapes::block(), pos, false)
-                        && !context.is_descending())
-                {
-                    return Ok(shapes::block());
-                }
+        if !context.is_placement()
+            && let BlockCollisionContext::Entity(entity_context) = context
+        {
+            let LevelReaderRef::Server(level) = reader else {
+                return Err(LevelError::UnsupportedWorldgenEnvironment);
+            };
+            let entity = entity_context.entity.entity;
+            let base = level.entity::<EntityData>(entity)?;
+            if base.fall_distance > 2.5 {
+                return Ok(shapes::create(0.0, 0.0, 0.0, 1.0, 0.8999999761581421, 1.0));
+            }
+            if base.entity_type == EntityType::FALLING_BLOCK
+                || (can_walk_on(entity, level)?
+                    && context.is_above(&shapes::block(), pos, false)
+                    && !context.is_descending())
+            {
+                return Ok(shapes::block());
             }
         }
         Ok(shapes::empty())

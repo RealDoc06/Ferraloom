@@ -337,13 +337,13 @@ impl BonemealableBlock for PlantBonemeal {
 
             C::BambooSaplingBlock => bamboo::grow_sapling(pos, level)?,
             C::BambooStalkBlock => {
-                let mut above =
-                    bamboo::height(&level.as_reader(), pos, ferraloom_util::Direction::Up)?;
+                let above = bamboo::height(&level.as_reader(), pos, ferraloom_util::Direction::Up)?;
                 let below =
                     bamboo::height(&level.as_reader(), pos, ferraloom_util::Direction::Down)?;
-                let mut total = above + below + 1;
                 let count = 1 + level.random()?.next_int_bound(2);
-                for _ in 0..count {
+                for offset in 0..count {
+                    let above = above + offset;
+                    let total = above + below + 1;
                     let at = pos.above(above);
                     let state = level.get_block_state(at)?;
                     let growth = at.above(1);
@@ -355,8 +355,6 @@ impl BonemealableBlock for PlantBonemeal {
                         return Ok(());
                     }
                     bamboo::grow(state, at, total, level)?;
-                    above += 1;
-                    total += 1;
                 }
             }
 
