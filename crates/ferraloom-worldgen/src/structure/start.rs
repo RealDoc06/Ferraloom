@@ -24,6 +24,7 @@ pub enum StructurePiece {
     NetherFossil(Box<super::structures::nether_fossil::NetherFossilPiece>),
     EndCity(Box<super::structures::end_city::EndCityPiece>),
     OceanRuin(Box<super::structures::ocean_ruin::OceanRuinPiece>),
+    NetherFortress(super::structures::nether_fortress::FortressPiece),
     Mineshaft(super::structures::mineshaft::MineshaftPiece),
     RuinedPortal(Box<super::structures::ruined_portal::RuinedPortalPiece>),
     JungleTemple(super::structures::jungle_temple::JungleTemplePiece),
@@ -58,6 +59,7 @@ impl StructurePiece {
             Self::NetherFossil(p) => p.template.data.bounds,
             Self::EndCity(p) => p.template.data.bounds,
             Self::OceanRuin(p) => p.template.data.bounds,
+            Self::NetherFortress(p) => p.data.bounds,
             Self::Mineshaft(p) => p.data.bounds,
             Self::RuinedPortal(p) => p.template.data.bounds,
             Self::JungleTemple(p) => p.scattered.data.bounds,
@@ -74,6 +76,7 @@ impl StructurePiece {
             Self::NetherFossil(p) => Ok(p.to_nbt()),
             Self::EndCity(p) => Ok(p.to_nbt()),
             Self::OceanRuin(p) => Ok(p.to_nbt()),
+            Self::NetherFortress(p) => Ok(p.to_nbt()),
             Self::Mineshaft(p) => Ok(p.to_nbt()),
             Self::RuinedPortal(p) => Ok(p.to_nbt()),
             Self::JungleTemple(p) => Ok(p.to_nbt()),
@@ -233,6 +236,20 @@ impl StructureStart {
                     return Ok(None);
                 };
                 match piece_id.to_string().as_str() {
+                    "minecraft:nestart" | "minecraft:nebcr" | "minecraft:nebs"
+                    | "minecraft:nebef" | "minecraft:nerc" | "minecraft:nesr"
+                    | "minecraft:nemt" | "minecraft:nece" | "minecraft:nesc"
+                    | "minecraft:nescsc" | "minecraft:nescrt" | "minecraft:nesclt"
+                    | "minecraft:neccs" | "minecraft:nectb" | "minecraft:necsr" => {
+                        if let Ok(piece) =
+                            super::structures::nether_fortress::FortressPiece::from_nbt(
+                                &piece_id.to_string(),
+                                tag,
+                            )
+                        {
+                            pieces.push(StructurePiece::NetherFortress(piece));
+                        }
+                    }
                     "minecraft:msroom"
                     | "minecraft:mscorridor"
                     | "minecraft:msstairs"

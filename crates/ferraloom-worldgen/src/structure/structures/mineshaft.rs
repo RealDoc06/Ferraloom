@@ -405,7 +405,7 @@ fn add_children(index: usize, pieces: &mut Vec<MineshaftPiece>, random: &mut imp
                     (Direction::East, _) => ([b.max[0] - 3, y, b.max[2] + 1], Direction::South),
                     _ => unreachable!("horizontal corridor"),
                 };
-                create_and_add(pieces, random, foot, next, depth);
+                let _ = create_and_add(pieces, random, foot, next, depth);
             }
             if depth < 8 {
                 let z_axis = matches!(direction, Some(Direction::North | Direction::South));
@@ -421,7 +421,7 @@ fn add_children(index: usize, pieces: &mut Vec<MineshaftPiece>, random: &mut imp
                         _ => None,
                     };
                     if let Some((foot, d)) = branch {
-                        create_and_add(pieces, random, foot, d, depth + 1);
+                        let _ = create_and_add(pieces, random, foot, d, depth + 1);
                     }
                     pos += 5;
                 }
@@ -442,13 +442,13 @@ fn add_children(index: usize, pieces: &mut Vec<MineshaftPiece>, random: &mut imp
                 _ => [north, west, east],
             };
             for (foot, d) in branches {
-                create_and_add(pieces, random, foot, d, depth);
+                let _ = create_and_add(pieces, random, foot, d, depth);
             }
             if two_floored {
                 for (mut foot, d) in [north, west, east, south] {
                     if random.next_boolean() {
                         foot[1] += 4;
-                        create_and_add(pieces, random, foot, d, depth);
+                        let _ = create_and_add(pieces, random, foot, d, depth);
                     }
                 }
             }
@@ -462,7 +462,7 @@ fn add_children(index: usize, pieces: &mut Vec<MineshaftPiece>, random: &mut imp
                     Direction::East => [b.max[0] + 1, b.min[1], b.min[2]],
                     _ => unreachable!("horizontal stairs"),
                 };
-                create_and_add(pieces, random, foot, d, depth);
+                let _ = create_and_add(pieces, random, foot, d, depth);
             }
         }
     }

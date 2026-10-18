@@ -5,6 +5,7 @@ pub mod end_city;
 pub mod igloo;
 pub mod jungle_temple;
 pub mod mineshaft;
+pub mod nether_fortress;
 pub mod nether_fossil;
 pub mod ocean_ruin;
 pub mod ruined_portal;

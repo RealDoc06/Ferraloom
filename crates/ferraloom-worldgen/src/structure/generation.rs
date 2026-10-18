@@ -25,6 +25,7 @@ enum StructureGenerator {
     EndCity,
     SwampHut,
     JungleTemple,
+    NetherFortress,
     Mineshaft(super::structures::mineshaft::MineshaftType),
     RuinedPortal(super::structures::ruined_portal::RuinedPortalStructure),
     DesertPyramid,
@@ -83,6 +84,7 @@ impl StructureGenerators {
                         )?,
                     ),
                     "minecraft:jungle_temple" => StructureGenerator::JungleTemple,
+                    "minecraft:fortress" => StructureGenerator::NetherFortress,
                     "minecraft:swamp_hut" => StructureGenerator::SwampHut,
                     "minecraft:desert_pyramid" => StructureGenerator::DesertPyramid,
                     "minecraft:ocean_ruin" => StructureGenerator::OceanRuin(
@@ -459,6 +461,31 @@ impl StructureGenerators {
                     references,
                     settings.terrain,
                     vec![StructurePiece::NetherFossil(Box::new(piece))],
+                ));
+            }
+            StructureGenerator::NetherFortress => {
+                use ferraloom_util::random::{Algorithm, WorldgenRandom};
+                if !valid(&(context.biome)([
+                    context.chunk[0] * 4,
+                    16,
+                    context.chunk[1] * 4,
+                ])?) {
+                    return Ok(StructureStart::invalid());
+                }
+                let mut random = WorldgenRandom::new(Algorithm::Legacy.new_instance(0));
+                random.set_large_feature_seed(context.seed, context.chunk[0], context.chunk[1]);
+                let pieces =
+                    super::structures::nether_fortress::generate(&mut random, context.chunk)
+                        .into_iter()
+                        .map(StructurePiece::NetherFortress)
+                        .collect();
+                return Ok(StructureStart::new(
+                    id.clone(),
+                    settings.kind,
+                    context.chunk,
+                    references,
+                    settings.terrain,
+                    pieces,
                 ));
             }
             StructureGenerator::Mineshaft(mine_type) => {
