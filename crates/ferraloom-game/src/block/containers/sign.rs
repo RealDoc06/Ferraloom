@@ -37,7 +37,15 @@ impl SignBlockEntity {
         let rotation = if let Some(facing) = facing {
             facing.to_y_rot()
         } else {
-            state.get(p::ROTATION).expect("standing sign rotation") as f32 * 22.5
+            // RotationSegment#convertToDegrees returns the signed segment angle.
+            // Keep that float subtraction before degreesDifferenceAbs: wrapping
+            // only the final difference changes rounding at the 90-degree edge.
+            let degrees = state.get(p::ROTATION).expect("standing sign rotation") as f32 * 22.5;
+            if degrees >= 180.0 {
+                degrees - 360.0
+            } else {
+                degrees
+            }
         };
         let (mut x, mut z) = (0.5, 0.5);
         if state.block().class() == BlockClass::WallSignBlock {
