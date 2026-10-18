@@ -1,11 +1,11 @@
 use super::{ComponentPredicate, ItemStackTemplate, JavaF32, JavaF64, invalid, registry};
-use ferraloom_util::collections::{JavaHash, record_hash_code};
 use crate::chat::Component;
 use crate::{
     Identifier, Reader, Result, Uuid, Wire, Writer,
     codec::{Either, GlobalPos, Holder, HolderSet, VarInt},
 };
 use ferraloom_nbt::Tag;
+use ferraloom_util::collections::{JavaHash, record_hash_code};
 
 impl Wire for JavaF32 {
     fn decode(r: &mut Reader<'_>) -> Result<Self> {
