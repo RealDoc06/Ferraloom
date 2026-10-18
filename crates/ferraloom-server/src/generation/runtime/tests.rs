@@ -77,6 +77,8 @@ impl AcquireDriver for InlineProbe {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn acquisition_stays_inline_when_the_phase_task_moves_between_workers() {
+    static BEHAVIORS: Behaviors = Behaviors::EMPTY;
+    let mut level = Level::new(Region::new(&BEHAVIORS), LevelContext::fixture(0, 63));
     let (blocked, wait_blocked) = tokio::sync::oneshot::channel();
     let server = tokio::spawn(async move {
         let owner = PhaseOwner::current();
@@ -94,8 +96,6 @@ async fn acquisition_stays_inline_when_the_phase_task_moves_between_workers() {
         });
         wait_resume.await.unwrap();
         let after = thread::current().id();
-        static BEHAVIORS: Behaviors = Behaviors::EMPTY;
-        let mut level = Level::new(Region::new(&BEHAVIORS), LevelContext::fixture(0, 63));
         level
             .install_acquire_driver(
                 Box::new(InlineProbe {
