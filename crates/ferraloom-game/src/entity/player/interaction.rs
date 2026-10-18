@@ -26,6 +26,23 @@ pub(super) fn range_modifiers() -> [Arc<AttributeModifier>; 2] {
     })
 }
 
+/// Typed pending port of ServerPlayer#swingAndResetAttackStrength. Its full
+/// SwingState, effect-modified duration and attack ticker belong to slice 2.
+/// This unit effect uses the same counted Strict/Warn policy as block effects.
+pub fn swing_and_reset_attack_strength(
+    entity: crate::entity::EntityRef,
+    _hand: InteractionHand,
+    _animation: ferraloom_protocol::component::SwingAnimation,
+    _send_to_self: bool,
+    level: &mut crate::level::Level,
+) -> Result<(), crate::level::LevelError> {
+    level.entity::<ServerPlayer>(entity)?;
+    level.unported_operation(crate::block::UnportedOperation::EntityMethod(
+        ferraloom_data::EntityType::PLAYER,
+        crate::entity::EntityMethod::SwingAndResetAttackStrength,
+    ))
+}
+
 impl ServerPlayer {
     /// Port of LivingEntity#getItemInHand with Player's main-hand inventory slot.
     pub fn get_item_in_hand(&self, hand: InteractionHand) -> &ItemStack {
@@ -193,6 +210,69 @@ mod tests {
         assert!(player.is_text_filtering_enabled());
         assert!(player.has_client_loaded());
     }
+    #[test]
+    fn required_swing_effect_is_typed_and_uses_the_shared_strict_warn_policy() {
+        use crate::{
+            block::UnportedBehavior,
+            entity::{EntityMethod, EntityRef, EntityState},
+            level::LevelError,
+        };
+        use ferraloom_protocol::{
+            codec::VarInt,
+            component::{SwingAnimation, SwingAnimationType},
+        };
+        let mut level = crate::entity::tests::level(false);
+        let id = EntityRef(93);
+        level
+            .add_entity(id, EntityState::Player(Box::new(player())))
+            .unwrap();
+        level.take_effects();
+        let animation = SwingAnimation {
+            animation_type: SwingAnimationType::Whack,
+            duration: VarInt(6),
+        };
+        level.set_unported_behavior(UnportedBehavior::Strict);
+        assert_eq!(
+            swing_and_reset_attack_strength(
+                id,
+                InteractionHand::MainHand,
+                animation.clone(),
+                true,
+                &mut level
+            ),
+            Err(LevelError::UnsupportedEntityMethod(
+                ferraloom_data::EntityType::PLAYER,
+                EntityMethod::SwingAndResetAttackStrength
+            ))
+        );
+        assert_eq!(level.unported_behavior_stats().skipped_calls, 0);
+        level.set_unported_behavior(UnportedBehavior::Warn);
+        for send_to_self in [false, true] {
+            swing_and_reset_attack_strength(
+                id,
+                InteractionHand::OffHand,
+                animation.clone(),
+                send_to_self,
+                &mut level,
+            )
+            .unwrap();
+        }
+        assert_eq!(level.unported_behavior_stats().skipped_calls, 2);
+        assert_eq!(level.unported_behavior_stats().distinct_calls, 1);
+        assert!(level.take_effects().is_empty());
+        assert_eq!(
+            swing_and_reset_attack_strength(
+                EntityRef(94),
+                InteractionHand::MainHand,
+                animation,
+                false,
+                &mut level
+            ),
+            Err(LevelError::MissingEntity(EntityRef(94)))
+        );
+        assert_eq!(level.unported_behavior_stats().skipped_calls, 2);
+    }
+
     #[test]
     fn creative_ranges_keep_modifier_identity_are_transient_and_follow_game_mode() {
         let mut player = player();

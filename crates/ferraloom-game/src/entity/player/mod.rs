@@ -4,6 +4,7 @@ pub use drop_item::drop_item;
 pub mod cooldowns;
 pub mod equipment;
 mod interaction;
+pub use interaction::swing_and_reset_attack_strength;
 pub mod inventory;
 use crate::{
     entity::{Avatar, EntityData, EntityDataView, EntityState},

@@ -2,7 +2,7 @@
 //! remain strict; Warn records a skipped call, never a fabricated return value.
 use super::BlockBehavior;
 use crate::level::{Level, LevelError};
-use ferraloom_data::Block;
+use ferraloom_data::{Block, EntityType};
 use std::collections::HashSet;
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum UnportedBehavior {
@@ -13,6 +13,7 @@ pub enum UnportedBehavior {
 /// Approved whole-effect skips, distinct from queries that require a value.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum UnportedOperation {
+    EntityMethod(EntityType, crate::entity::EntityMethod),
     AdvancementCriterion(crate::advancements::criteria::Trigger),
     WeatherStrike,
     PackReload,
@@ -154,6 +155,14 @@ impl UnportedCalls {
         if self.seen.insert(call) {
             self.stats.distinct_calls = self.seen.len();
             match call {
+                UnportedCall::Operation(UnportedOperation::EntityMethod(kind, method)) => {
+                    eprintln!(
+                        "Unported entity effect skipped: {}#{} (skipped calls: {})",
+                        kind.name(),
+                        method.name(),
+                        self.stats.skipped_calls
+                    )
+                }
                 UnportedCall::Operation(UnportedOperation::AdvancementCriterion(trigger)) => {
                     eprintln!(
                         "Unported advancement criterion skipped: {} (skipped calls: {})",
@@ -194,6 +203,9 @@ impl Level {
         let calls = &mut self.region_mut().unported;
         if calls.policy == UnportedBehavior::Strict {
             return Err(match operation {
+                UnportedOperation::EntityMethod(kind, method) => {
+                    LevelError::UnsupportedEntityMethod(kind, method)
+                }
                 UnportedOperation::AdvancementCriterion(trigger) => {
                     LevelError::UnsupportedAdvancementCriterion(trigger)
                 }
