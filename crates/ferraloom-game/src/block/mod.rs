@@ -10,6 +10,7 @@ pub mod fluid;
 mod foundational;
 mod placement;
 pub mod plants;
+pub mod redstone;
 pub use placement::DirectionalPlaceContext;
 pub use plants::multiface_spreader;
 mod shapes;

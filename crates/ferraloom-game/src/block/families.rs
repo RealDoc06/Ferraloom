@@ -8,4 +8,5 @@ pub(super) fn ported_behavior(
     method: BlockMethod,
 ) -> Option<&'static dyn BlockBehavior> {
     super::plants::ported_behavior(block, method)
+        .or_else(|| super::redstone::ported_behavior(block, method))
 }
