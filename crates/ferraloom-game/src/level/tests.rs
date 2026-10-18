@@ -1910,7 +1910,9 @@ fn pending_block_entity_nbt_survives_full_without_claiming_live_factory_readines
         ..Default::default()
     };
     let mut block_chunk = empty_chunk(chunk);
-    block_chunk.set_block_state(pos, Block::CHEST.default_state());
+    block_chunk
+        .set_block_state(pos, Block::CHEST.default_state())
+        .unwrap();
     block_chunk.load_pending_generation_data(&data).unwrap();
     assert_eq!(block_chunk.pending_block_entity_nbt(), &[tag.clone()]);
     let mut level = Level::new(Region::new(&EMPTY));
