@@ -98,6 +98,7 @@ pub enum EntityState {
     Cow(animal::Cow),
     Player(Box<player::ServerPlayer>),
     PrimedTnt(Box<item::PrimedTnt>),
+    Item(Box<item::ItemEntity>),
 }
 
 impl EntityState {
@@ -106,6 +107,7 @@ impl EntityState {
             Self::Cow(_) => EntityType::COW,
             Self::Player(_) => EntityType::PLAYER,
             Self::PrimedTnt(_) => EntityType::TNT,
+            Self::Item(_) => EntityType::ITEM,
         }
     }
 
@@ -140,6 +142,7 @@ impl EntityState {
             Self::Cow(cow) => &cow.as_living().parent,
             Self::Player(p) => &p.parent.parent,
             Self::PrimedTnt(tnt) => &tnt.parent,
+            Self::Item(item) => &item.parent,
         }
     }
     pub fn as_entity_mut(&mut self) -> &mut EntityData {
@@ -147,6 +150,7 @@ impl EntityState {
             Self::Cow(cow) => &mut cow.as_living_mut().parent,
             Self::Player(p) => &mut p.parent.parent,
             Self::PrimedTnt(tnt) => &mut tnt.parent,
+            Self::Item(item) => &mut item.parent,
         }
     }
 }
@@ -212,6 +216,22 @@ pub struct DamageSource {
 ///
 /// Dispatch objects are stateless. Never hold a state borrow across a world call.
 pub trait Entity: Sync {
+    /// Port of Entity#getPickResult. Vanilla returns null; empty ItemStack is a
+    /// distinct successful result and must not erase that distinction.
+    fn get_pick_result(
+        &self,
+        _entity: EntityRef,
+        _level: &Level,
+    ) -> Result<Option<ferraloom_protocol::component::ItemStack>, LevelError> {
+        Ok(None)
+    }
+    fn block_pos_below_that_affects_my_movement(
+        &self,
+        entity: EntityRef,
+        level: &Level,
+    ) -> Result<ferraloom_util::BlockPos, LevelError> {
+        movement::get_on_pos(entity, 0.500_001_f32, level)
+    }
     fn fire_immune_ticks(&self) -> i32 {
         0
     }
@@ -449,6 +469,7 @@ pub fn vanilla_behavior(kind: EntityType) -> Option<&'static dyn Entity> {
         EntityType::COW => Some(&animal::CowBehavior),
         EntityType::PLAYER => Some(&player::PlayerBehavior),
         EntityType::TNT => Some(&item::PrimedTntBehavior),
+        EntityType::ITEM => Some(&item::ItemEntityBehavior),
         _ => None,
     }
 }

@@ -128,7 +128,11 @@ pub fn block_speed_factor(entity: EntityRef, level: &Level) -> Result<f32, Level
         return Ok(factor);
     }
     Ok(level
-        .get_block_state(get_on_pos(entity, 0.500_001_f32, level)?)?
+        .get_block_state(
+            level
+                .entity_behavior(entity)?
+                .block_pos_below_that_affects_my_movement(entity, level)?,
+        )?
         .block()
         .data()
         .speed_factor)
@@ -140,7 +144,11 @@ pub fn block_jump_factor(entity: EntityRef, level: &Level) -> Result<f32, LevelE
         .data()
         .jump_factor;
     let below = level
-        .get_block_state(get_on_pos(entity, 0.500_001_f32, level)?)?
+        .get_block_state(
+            level
+                .entity_behavior(entity)?
+                .block_pos_below_that_affects_my_movement(entity, level)?,
+        )?
         .block()
         .data()
         .jump_factor;
@@ -403,7 +411,7 @@ fn restitute<E: Entity + ?Sized>(
         after = after.with(Axis::Y, (compensation - current.y) * drag * restitution);
     }
     if bounced {
-        let pos = get_on_pos(entity, 0.500_001_f32, level)?;
+        let pos = behavior.block_pos_below_that_affects_my_movement(entity, level)?;
         let distance = level.entity::<EntityData>(entity)?.fall_distance;
         level.call_bounce_on(state, pos, entity, distance)?;
         level.emit_entity_movement_effect(MovementEffect::Bounce { entity });
