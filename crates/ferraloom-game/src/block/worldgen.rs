@@ -385,6 +385,14 @@ mod tests {
         );
         struct PendingWorldgenQuery;
         impl WorldgenBlockBehavior for PendingWorldgenQuery {
+            fn post_process_pos(
+                &self,
+                _: BlockState,
+                _: &WorldGenRegion<'_>,
+                _: [i32; 3],
+            ) -> Result<Option<[i32; 3]>, Error> {
+                Err(Error("test: required postProcessPos".into()))
+            }
             fn update_shape(
                 &self,
                 _: &mut WorldGenRegion<'_>,
