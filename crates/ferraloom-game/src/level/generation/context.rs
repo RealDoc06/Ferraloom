@@ -2,6 +2,7 @@
 use super::{ChunkStatus, ChunkStatusTask, ChunkStep};
 use crate::block::GameWorldgenBlockBehavior;
 use ferraloom_data::datapack::ResourceManager;
+use ferraloom_util::random::RandomSource;
 use ferraloom_worldgen::{
     Error, Identifier,
     climate::SearchContext,
@@ -16,7 +17,7 @@ use ferraloom_worldgen::{
         decoration::{RegionStructureDecoration, StructureStep},
         generation::{StructureGenerationContext, StructureGenerators},
         pipeline::{self, StructureRegistry},
-        placement::{ChunkGeneratorStructureState, StructurePlacement, find_ring_biome},
+        placement::{BiomeSet, ChunkGeneratorStructureState, StructurePlacement, find_ring_biome},
         pool::StructurePools,
         rule::BlockTags,
         template::StructureTemplateManager,
@@ -88,7 +89,27 @@ impl WorldGenContext {
                         ChunkGenerator::Noise(noise) => {
                             find_ring_biome(noise, position, biomes, random)
                         }
-                        _ => Ok(None),
+                        ChunkGenerator::Flat(flat) => {
+                            let preferred = match biomes {
+                                BiomeSet::Direct(ids) => ids.as_slice(),
+                                BiomeSet::Tag(tag) => generator
+                                    .data()
+                                    .biome_tags
+                                    .get(tag)
+                                    .ok_or_else(|| {
+                                        Error(format!("missing preferred ring biome tag {tag}"))
+                                    })?
+                                    .as_slice(),
+                            };
+                            Ok(preferred.contains(&flat.settings.biome).then(|| {
+                                position.map(|chunk| {
+                                    (chunk.wrapping_mul(16).wrapping_add(8) - 112
+                                        + random.next_int_bound(225))
+                                        >> 4
+                                })
+                            }))
+                        }
+                        ChunkGenerator::Debug(_) => Ok(None),
                     },
                 )?;
                 structure_state.rings.push((rings.clone(), positions));

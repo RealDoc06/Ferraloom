@@ -32,6 +32,7 @@ pub(crate) struct GenerationCompletion {
     pub state: GenerationState,
     pub result: Result<GenerationOutput>,
     pub request: GenerationRequest,
+    pub cleanup: Result<()>,
 }
 pub struct GenerationOutput {
     pub terrain: Terrain,
@@ -103,6 +104,19 @@ impl GenerationState {
             updated.block_entities = holder.chunk.region.block_entities.clone();
             holder.chunk.region = updated;
         }
+    }
+    pub fn save_proto_chunks(&self, registry: &RegistryAdapter, io: &IoWorker) -> Result<()> {
+        for (&key, holder) in &self.holders {
+            let proto = &holder.chunk;
+            if proto.region.status > ChunkStatus::Empty && proto.region.status < ChunkStatus::Full {
+                let disk = proto
+                    .capture(&self.context, registry)
+                    .map_err(anyhow::Error::msg)?;
+                io.store(ChunkPos::unpack(key), Some(disk.write()?))
+                    .wait()?;
+            }
+        }
+        Ok(())
     }
     pub fn save_unclaimed_protos(
         &mut self,

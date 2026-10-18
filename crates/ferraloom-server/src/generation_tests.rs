@@ -310,3 +310,36 @@ fn saved_proto_resumes_and_full_reload_preserves_owned_payload_and_tick_delays()
     }
     io.close().unwrap();
 }
+
+#[test]
+fn flat_stronghold_rings_use_zero_seed_and_fixed_biome_search() {
+    let resources = resources();
+    let data = Arc::new(GenerationData::load(&resources).unwrap());
+    let generator=Arc::new(ChunkGenerator::decode(&serde_json::json!({"type":"minecraft:flat","settings":{"layers":[{"height":1,"block":"minecraft:bedrock"}],"biome":"minecraft:plains","features":false,"lakes":false,"structure_overrides":["minecraft:strongholds"]}}),&resources,data,8675309).unwrap());
+    let dimension = DimensionType::decode(
+        &resources
+            .require(&"minecraft:dimension_type/overworld.json".parse().unwrap())
+            .unwrap()
+            .json()
+            .unwrap(),
+    )
+    .unwrap();
+    let context = WorldGenContext::load(&resources, generator, dimension, 8675309, true).unwrap();
+    let cases = fixtures(include_bytes!(
+        "../../ferraloom-worldgen/src/structure/testdata/placements.json.gz"
+    ));
+    let expected = cases
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|case| case["seed"] == 0 && case["set"] == "minecraft:strongholds")
+        .unwrap()["rings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|pos| std::array::from_fn(|i| pos[i].as_i64().unwrap() as i32))
+        .collect::<Vec<[i32; 2]>>();
+    assert_eq!(context.structure_state.rings.len(), 1);
+    assert_eq!(context.structure_state.rings[0].1, expected);
+    assert_eq!(context.structure_state.seed, 8675309);
+}

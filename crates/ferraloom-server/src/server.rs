@@ -1068,6 +1068,13 @@ impl MinecraftServer {
                 holder.ticket_level = change.level;
                 self.world
                     .update_generation_priority(change.pos, change.level);
+                if change.level > 33
+                    && let Some(request) = self.world.cancel_generation(change.pos)
+                {
+                    self.level
+                        .chunks
+                        .cancel_generation_request(change.pos, request);
+                }
                 if change.level <= 33
                     && let Some(request) = self.level.chunks.request(change.pos)
                 {
@@ -1154,7 +1161,7 @@ impl MinecraftServer {
                         .contains(&p)
                         .then_some(ChunkStatus::Full)
                 })
-                || self.world.failed_generation.contains(&pos)
+                || self.world.failed_generation.contains(&(pos, request_id))
             {
                 self.level.distance_manager.complete_player_loading(pos);
                 self.player_loading_futures.remove(index);
@@ -1167,10 +1174,12 @@ impl MinecraftServer {
     fn integrate_jobs(&mut self) -> Result<()> {
         self.world.refresh_generation_snapshots(&self.level.level);
         let completed = self.world.poll_terrain();
-        for pos in &self.world.failed_generation {
-            self.level.distance_manager.complete_player_loading(*pos);
+        for &(pos, request_id) in &self.world.failed_generation {
+            if self.player_loading_futures.contains(&(pos, request_id)) {
+                self.level.distance_manager.complete_player_loading(pos);
+            }
             self.player_loading_futures
-                .retain(|&(waiting, _)| waiting != *pos);
+                .retain(|&waiting| waiting != (pos, request_id));
         }
         self.world.failed_generation.clear();
         let completed = completed?;
@@ -1179,7 +1188,13 @@ impl MinecraftServer {
             .record_worldgen_skips(std::mem::take(&mut self.world.generation_skips))
             .map_err(game_error)?;
         for (&pos, &status) in &self.world.generation_statuses {
-            self.level.chunks.ensure_holder(pos).status = status;
+            let attached = self.level.level.chunk(pos).is_some();
+            self.level.chunks.ensure_holder(pos).status =
+                if status == ChunkStatus::Full && !attached {
+                    ChunkStatus::Spawn
+                } else {
+                    status
+                };
         }
         for (request, mut terrain) in completed {
             let entities = terrain.disk.entities.take().unwrap_or_default();
@@ -1285,6 +1300,17 @@ impl MinecraftServer {
             }
         }
         for pos in self.level.chunks.holder_positions().collect::<Vec<_>>() {
+            let holder = &self.level.chunks.holders[&pos.pack()];
+            if holder.ticket_level > 44
+                && self.level.level.chunk(pos).is_none()
+                && !self.world.generation_pins(pos)
+                && self.world.proto_saves_complete()
+            {
+                if self.level.chunks.remove_unloaded_holder(pos).is_some() {
+                    self.world.forget_proto_holder(pos);
+                }
+                continue;
+            }
             let holder = &self.level.chunks.holders[&pos.pack()];
             if holder.ticket_level > 44
                 && self.world.light_ready.contains(&pos)

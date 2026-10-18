@@ -500,7 +500,7 @@ pub struct World {
     active_generation: BTreeMap<ChunkPos, (u64, Arc<AtomicBool>)>,
     running_generation: Option<(u64, ChunkPos)>,
     retained_generation: BTreeSet<ChunkPos>,
-    pub failed_generation: Vec<ChunkPos>,
+    pub failed_generation: Vec<(ChunkPos, u64)>,
     proto_saves: VecDeque<storage::IoTask<()>>,
     unloading: VecDeque<ChunkUnload>,
     evictions: Vec<ChunkPos>,
@@ -872,22 +872,21 @@ impl World {
         } else {
             self.retained_generation.remove(&pos);
         }
-        if level > 44 {
-            self.cancel_generation(pos);
-        }
     }
-    pub fn cancel_generation(&mut self, pos: ChunkPos) {
+    pub fn cancel_generation(&mut self, pos: ChunkPos) -> Option<u64> {
         if let Some((request, cancelled)) = self.active_generation.get(&pos) {
             let request = *request;
             if !cancelled.swap(true, Ordering::Relaxed) {
                 self.pending.remove(&request);
-                self.failed_generation.push(pos);
+                self.failed_generation.push((pos, request));
                 self.generation_dispatcher.release(pos, true, None);
             }
             if self.running_generation != Some((request, pos)) {
                 self.active_generation.remove(&pos);
             }
+            return Some(request);
         }
+        None
     }
     pub fn request(&mut self, request: u64, pos: ChunkPos) {
         let (reply, answer) = oneshot::channel();
@@ -954,14 +953,24 @@ impl World {
                 &io,
                 Some(&request.cancelled),
             );
-            let result = result.and_then(|output| {
-                state.save_unclaimed_protos(&retained, &registry, &io)?;
-                Ok(output)
-            });
+            let cleanup = if request.cancelled.load(Ordering::Relaxed) {
+                state.save_proto_chunks(&registry, &io).and_then(|()| {
+                    if let Ok(output) = &result {
+                        io.store(request.pos, Some(output.terrain.disk.write()?))
+                            .wait()?;
+                    }
+                    Ok(())
+                })
+            } else if result.is_ok() {
+                state.save_unclaimed_protos(&retained, &registry, &io)
+            } else {
+                Ok(())
+            };
             GenerationCompletion {
                 state,
                 result,
                 request,
+                cleanup,
             }
         }));
         Ok(())
@@ -971,18 +980,26 @@ impl World {
             state,
             result,
             request,
+            cleanup,
         } = output;
         let pos = request.pos;
         self.generation_state = Some(state);
         self.running_generation = None;
-        self.active_generation.remove(&pos);
+        if self
+            .active_generation
+            .get(&pos)
+            .is_some_and(|(id, _)| *id == request.id)
+        {
+            self.active_generation.remove(&pos);
+        }
         self.generation_dispatcher.release(pos, false, None);
         self.generation_dispatcher.complete_batch();
+        cleanup?;
         if request.cancelled.load(Ordering::Relaxed) {
             return Ok(());
         }
         if result.is_err() {
-            self.failed_generation.push(pos);
+            self.failed_generation.push((pos, request.id));
         }
         let result = result.and_then(|output| {
             if output.initial_mob_spawning_pending {
@@ -1011,6 +1028,17 @@ impl World {
             self.complete_generation(work.await?)?;
         }
         Ok(())
+    }
+    pub fn proto_saves_complete(&self) -> bool {
+        self.proto_saves.is_empty()
+    }
+    pub fn forget_proto_holder(&mut self, pos: ChunkPos) {
+        self.generation_statuses.remove(&pos);
+        if let Some(state) = self.generation_state.as_mut() {
+            state.forget(pos);
+        } else {
+            self.evictions.push(pos);
+        }
     }
     pub fn generation_pins(&self, pos: ChunkPos) -> bool {
         self.active_generation
