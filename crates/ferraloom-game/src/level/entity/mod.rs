@@ -599,6 +599,14 @@ impl Level {
                         .management_events
                         .push(EntityManagementEvent::SectionChange(entity));
                 }
+                if self.entity::<EntityData>(entity)?.entity_type
+                    == ferraloom_data::EntityType::PLAYER
+                {
+                    self.emit(super::effects::LevelEffect::PlayerSectionChange {
+                        player: entity,
+                        section,
+                    });
+                }
             }
         }
         Ok(())
