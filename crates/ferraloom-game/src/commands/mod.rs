@@ -34,6 +34,7 @@ pub enum CommandAction {
     Save { flush: bool },
     Run(Box<PreparedCommand>),
 }
+
 /// Parsing stores syntax, never captures entity matches ahead of command execution.
 #[derive(Clone, Debug)]
 pub struct PreparedCommand {
@@ -286,5 +287,62 @@ impl Commands {
             &CommandSourceStack::server(permission, Vec3::ZERO),
             self.features,
         ))
+    }
+}
+
+#[cfg(test)]
+mod help_tests {
+    use super::*;
+    #[test]
+    fn smart_usage_feedback_and_errors_match_registered_java_command() {
+        #[derive(serde::Deserialize)]
+        struct Vector {
+            input: String,
+            level: i32,
+            value: Option<i32>,
+            error: Option<serde_json::Value>,
+            feedback: serde_json::Value,
+        }
+        let vectors: Vec<Vector> =
+            serde_json::from_str(include_str!("vanilla/help-vectors.json")).unwrap();
+        let commands = Commands::default();
+        for vector in vectors {
+            let result = commands
+                .prepare(
+                    &vector.input,
+                    CommandSourceStack::server(vector.level, Vec3::ZERO),
+                )
+                .and_then(|command| commands.help(&command));
+            match result {
+                Ok(result) => {
+                    assert!(vector.error.is_none(), "{}", vector.input);
+                    assert_eq!(Some(result.value), vector.value, "{}", vector.input);
+                    let feedback = result.feedback.into_iter().map(|feedback| serde_json::json!({
+                        "message":serde_json::from_str::<serde_json::Value>(&feedback.message.to_json().unwrap()).unwrap(),
+                        "broadcast":feedback.broadcast,
+                    })).collect::<Vec<_>>();
+                    assert_eq!(
+                        serde_json::json!(feedback),
+                        vector.feedback,
+                        "{}",
+                        vector.input
+                    );
+                }
+                Err(error) => {
+                    assert_eq!(
+                        Some(
+                            serde_json::from_str::<serde_json::Value>(
+                                &exceptions::error_component(&error).to_json().unwrap()
+                            )
+                            .unwrap()
+                        ),
+                        vector.error,
+                        "{}",
+                        vector.input
+                    );
+                    assert_eq!(vector.feedback, serde_json::json!([]));
+                }
+            }
+        }
     }
 }
