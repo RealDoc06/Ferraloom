@@ -9,23 +9,21 @@ use ferraloom_data::datapack::{Pack, ResourceManager};
 use ferraloom_util::random::{Random, WorldgenRandom, XoroshiroRandomSource};
 use std::{io::Read, path::Path};
 
-// Preserve vanilla registry presence only when the actual patch factory has not
-// landed yet. An available feature always uses its real implementation.
-#[derive(Debug)]
-struct PendingMossPatch;
-const MISSING_MOSS_PATCH: &str = concat!(
-    "Unsupported: configured feature minecraft:pale_moss_patch ",
-    "(missing minecraft:vegetation_patch factory until ore and cave merge)"
-);
-impl Feature for PendingMossPatch {
-    fn place(&self, _: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
-        Err(Error(MISSING_MOSS_PATCH.into()))
-    }
-}
 struct UnsupportedBehavior;
 impl WorldgenBlockBehavior for UnsupportedBehavior {
     fn has_block_entity(&self, s: BlockState) -> bool {
         s.has_block_entity()
+    }
+    fn can_survive(
+        &self,
+        state: BlockState,
+        _region: &WorldGenRegion<'_>,
+        _position: Pos,
+    ) -> Result<bool, Error> {
+        Err(Error(format!(
+            "Unsupported: can_survive ({})",
+            state.block().key()
+        )))
     }
     fn post_process_pos(
         &self,
@@ -124,19 +122,10 @@ fn run_cases(require_pending: bool) {
             );
         }
     }
-    let missing_patch = match loader.feature(&Value::String("minecraft:pale_moss_patch".into())) {
-        Ok(_) => None,
-        Err(Error(reason)) if reason == "unsupported feature type minecraft:vegetation_patch" => {
-            Some(PendingMossPatch)
-        }
-        Err(e) => panic!("failed to load pale_moss_patch: {e}"),
-    };
-    let mut registry = loader.finish();
-    if let Some(patch) = missing_patch {
-        registry
-            .features
-            .insert("pale_moss_patch".parse().unwrap(), Arc::new(patch));
-    }
+    loader
+        .feature(&Value::String("minecraft:pale_moss_patch".into()))
+        .expect("pale moss uses its real vegetation_patch dependency");
+    let registry = loader.finish();
     let mut baselines = std::collections::BTreeMap::new();
     let mut passed = 0;
     let mut geometry = 0;
@@ -204,9 +193,9 @@ fn run_cases(require_pending: bool) {
                     message.as_str(),
                     "Unsupported: update_shape"
                         | "Unsupported: populate_worldgen_beehive"
-                        | "Unsupported: state_has_sturdy_face"
-                        | MISSING_MOSS_PATCH
-                ) {
+                        | "Unsupported: place_liquid"
+                ) && !message.starts_with("Unsupported: can_survive (")
+                {
                     let entry = unexpected.entry(message).or_insert((0, label));
                     entry.0 += 1;
                     continue;
@@ -215,7 +204,6 @@ fn run_cases(require_pending: bool) {
                 let prefix = match message.as_str() {
                     "Unsupported: update_shape" => Some("before_edge"),
                     "Unsupported: populate_worldgen_beehive" => Some("before_bees"),
-                    MISSING_MOSS_PATCH => Some("before_external"),
                     _ => None,
                 };
                 if let Some(prefix) = prefix {
@@ -276,7 +264,7 @@ fn supported_controlled_level_cases_match_vanilla() {
     run_cases(false);
 }
 #[test]
-#[ignore = "pending game bridge: update_shape, state_has_sturdy_face, populate_worldgen_beehive; vegetation_patch factory until ore and cave merge; root-system template behavior"]
+#[ignore = "pending game bridge: update_shape, populate_worldgen_beehive, can_survive (pale moss), place_liquid (sulfur templates)"]
 fn pending_controlled_level_cases_require_game_behavior() {
     run_cases(true);
 }
