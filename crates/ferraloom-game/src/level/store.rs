@@ -60,7 +60,9 @@ impl<K: Copy + Eq + Hash, V> InsertOnlyMap<K, V> {
             .map(|(key, value)| (key, value.as_mut()))
     }
     pub fn values(&self) -> impl Iterator<Item = &V> {
-        self.keys.copy_iter().filter_map(|key| self.get(&key))
+        (0..self.keys.len())
+            .filter_map(|index| self.keys.get_copy(index))
+            .filter_map(|key| self.get(&key))
     }
 }
 
