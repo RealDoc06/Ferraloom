@@ -102,8 +102,8 @@ impl Level {
         if self
             .region()
             .entities
-            .known_uuids
-            .contains(&state.as_entity().uuid)
+            .registration
+            .knows_uuid(state.as_entity().uuid)
         {
             self.retain_unmanaged_entity(entity, state);
         } else {
@@ -327,7 +327,7 @@ mod tests {
             level.entity::<EntityData>(EntityRef(2)).unwrap().position,
             Vec3::new(1.5, 64.0, 1.5)
         );
-        assert_eq!(level.region().entities.known_uuids.len(), 2);
+        assert_eq!(level.region().entities.registration.uuid_count(), 2);
         let events = level.take_entity_management_events();
         let native = oracle("duplicate");
         assert_eq!(created_ids(&level, &events), expected_created(&native));

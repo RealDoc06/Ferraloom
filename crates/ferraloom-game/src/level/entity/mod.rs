@@ -1,20 +1,20 @@
 //! Region-owned canonical entity storage, vanilla ordered indexes and ticking.
 use std::{
     cell::Cell,
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{HashMap, HashSet},
 };
 
-use ferraloom_util::{
-    Aabb, ChunkPos, SectionPos, Uuid, Vec3,
-    collections::{Int2ObjectLinkedOpenHashMap, Long2ObjectOpenHashMap},
-};
+use ferraloom_util::{Aabb, ChunkPos, SectionPos, Uuid, Vec3, collections::Long2ObjectOpenHashMap};
 
 use super::{Level, LevelError};
 use crate::entity::{EntityData, EntityRef, EntityState, RemovalReason};
 
+mod indexes;
 mod persistent;
 mod push;
 mod worldgen;
+use indexes::EntityRegistration;
+pub use indexes::{EntityLookup, EntitySectionStorage, EntityTickList};
 pub use persistent::{
     ChunkLoadStatus, EntityLoadRequestId, EntityStorageError, EntityStorageRequest,
     PersistentEntitySectionManager,
@@ -42,123 +42,6 @@ impl Visibility {
     }
     pub fn is_ticking(self) -> bool {
         self == Self::Ticking
-    }
-}
-
-/// Port of EntityTickList. Owned snapshots preserve membership across reentry.
-#[derive(Default)]
-pub struct EntityTickList {
-    active: Int2ObjectLinkedOpenHashMap<EntityRef>,
-}
-impl EntityTickList {
-    pub fn add(&mut self, id: i32, entity: EntityRef) {
-        self.active.insert(id, entity);
-    }
-    pub fn remove(&mut self, id: i32) {
-        self.active.remove(&id);
-    }
-    pub fn contains(&self, id: i32) -> bool {
-        self.active.contains_key(&id)
-    }
-    pub fn snapshot(&self) -> Vec<EntityRef> {
-        self.active.iter().map(|(_, id)| *id).collect()
-    }
-}
-
-/// Port of EntityLookup. Only the linked runtime-ID map supplies iteration.
-#[derive(Default)]
-pub struct EntityLookup {
-    by_id: Int2ObjectLinkedOpenHashMap<EntityRef>,
-    by_uuid: HashMap<Uuid, EntityRef>,
-}
-impl EntityLookup {
-    pub fn by_id(&self, id: i32) -> Option<EntityRef> {
-        self.by_id.get(&id).copied()
-    }
-    pub fn by_uuid(&self, uuid: Uuid) -> Option<EntityRef> {
-        self.by_uuid.get(&uuid).copied()
-    }
-    pub fn all(&self) -> Vec<EntityRef> {
-        self.by_id.iter().map(|(_, id)| *id).collect()
-    }
-    fn add(&mut self, id: i32, uuid: Uuid, entity: EntityRef) -> bool {
-        if self.by_uuid.contains_key(&uuid) || self.by_id.contains_key(&id) {
-            return false;
-        }
-        self.by_id.insert(id, entity);
-        self.by_uuid.insert(uuid, entity);
-        true
-    }
-    fn remove(&mut self, base: &EntityData) {
-        self.by_id.remove(&base.network_id);
-        self.by_uuid.remove(&base.uuid);
-    }
-}
-#[derive(Default)]
-pub struct EntitySection {
-    pub visibility: Visibility,
-    entities: Vec<EntityRef>,
-}
-
-/// Port of EntitySectionStorage. Signed packed SectionPos order matches LongAVLTreeSet.
-#[derive(Default)]
-pub struct EntitySectionStorage {
-    sections: BTreeMap<i64, EntitySection>,
-    // The AVL order serves spatial queries; the original open-map key order
-    // independently determines the save-chunk set's insertion history.
-    section_keys: Long2ObjectOpenHashMap<()>,
-    membership: HashMap<EntityRef, i64>,
-}
-impl EntitySectionStorage {
-    fn move_entity(&mut self, entity: EntityRef, position: Vec3, visibility: Visibility) {
-        let key = SectionPos::from_position(position).as_long();
-        if self.membership.get(&entity) == Some(&key) {
-            return;
-        }
-        self.remove(entity);
-        self.section_keys.insert(key, ());
-        self.sections
-            .entry(key)
-            .or_insert_with(|| EntitySection {
-                visibility,
-                entities: Vec::new(),
-            })
-            .entities
-            .push(entity);
-        self.membership.insert(entity, key);
-    }
-    fn remove(&mut self, entity: EntityRef) {
-        if let Some(key) = self.membership.remove(&entity)
-            && let Some(section) = self.sections.get_mut(&key)
-        {
-            section.entities.retain(|id| *id != entity);
-            if section.entities.is_empty() {
-                self.sections.remove(&key);
-                self.section_keys.remove(&key);
-            }
-        }
-    }
-    pub fn query(&self, bb: Aabb) -> Vec<EntityRef> {
-        let min =
-            SectionPos::from_position(Vec3::new(bb.min_x - 2.0, bb.min_y - 4.0, bb.min_z - 2.0));
-        let max = SectionPos::from_position(Vec3::new(bb.max_x + 2.0, bb.max_y, bb.max_z + 2.0));
-        let mut result = Vec::new();
-        for x in min.x..=max.x {
-            let low = SectionPos::new(x, 0, 0).as_long();
-            let high = SectionPos::new(x, -1, -1).as_long();
-            for (&key, section) in self.sections.range(low..=high) {
-                let pos = SectionPos::of(key);
-                if pos.y >= min.y
-                    && pos.y <= max.y
-                    && pos.z >= min.z
-                    && pos.z <= max.z
-                    && section.visibility.is_accessible()
-                {
-                    result.extend(section.entities.iter().copied());
-                }
-            }
-        }
-        result
     }
 }
 
@@ -196,15 +79,10 @@ impl EntityIdAllocator {
 #[derive(Default)]
 pub struct EntityStorage {
     persistent: PersistentEntitySectionManager,
-    // Objects rejected by the UUID guard can still be held by a successfully
-    // loaded passenger. Their vanilla level callback remains NULL.
-    unmanaged: HashSet<EntityRef>,
-    known_uuids: HashSet<Uuid>,
+    registration: EntityRegistration,
     chunk_visibility: Long2ObjectOpenHashMap<Visibility>,
-    management_events: Vec<EntityManagementEvent>,
     next_ref: Cell<u64>,
     effects: Vec<crate::entity::effects::EntityEffect>,
-    pending_retire: Vec<EntityRef>,
     pub border: crate::level::border::WorldBorder,
     states: HashMap<EntityRef, EntityState>,
     pub lookup: EntityLookup,
@@ -237,7 +115,7 @@ impl EntityStorage {
                 .expect("regional entity ID block exhausted at barrier");
             base.network_id_allocated = true;
         }
-        if !self.known_uuids.insert(base.uuid) {
+        if !self.registration.reserve_uuid(base.uuid) {
             return Err(LevelError::DuplicateEntity(id));
         }
         let network_id = base.network_id;
@@ -245,7 +123,7 @@ impl EntityStorage {
         if (status.is_accessible() || base.entity_type == ferraloom_data::EntityType::PLAYER)
             && !self.lookup.add(base.network_id, base.uuid, id)
         {
-            self.known_uuids.remove(&base.uuid);
+            self.registration.forget_uuid(base.uuid);
             return Err(LevelError::DuplicateEntity(id));
         }
         self.sections.move_entity(id, base.position, status);
@@ -255,17 +133,15 @@ impl EntityStorage {
     fn retire(&mut self, id: EntityRef) {
         self.states.remove(&id);
         self.sections.remove(id);
-        self.unmanaged.remove(&id);
+        self.registration.remove_unmanaged(id);
     }
     fn stop_accessing(&mut self, id: EntityRef) {
         if let Some(state) = self.states.get(&id) {
             self.lookup.remove(state.as_entity());
             self.sections.remove(id);
-            self.known_uuids.remove(&state.as_entity().uuid);
+            self.registration.forget_uuid(state.as_entity().uuid);
         }
-        if !self.pending_retire.contains(&id) {
-            self.pending_retire.push(id);
-        }
+        self.registration.queue_retirement(id);
     }
     fn visibility(&self, chunk: ChunkPos) -> Visibility {
         self.chunk_visibility
@@ -358,21 +234,21 @@ impl Level {
         if !loaded {
             region
                 .entities
-                .management_events
-                .push(EntityManagementEvent::Created(entity));
+                .registration
+                .push_event(EntityManagementEvent::Created(entity));
         }
         if status.is_accessible() {
             region
                 .entities
-                .management_events
-                .push(EntityManagementEvent::TrackingStart(entity));
+                .registration
+                .push_event(EntityManagementEvent::TrackingStart(entity));
         }
         if status.is_ticking() {
             region.entity_tick_list.add(network_id, entity);
             region
                 .entities
-                .management_events
-                .push(EntityManagementEvent::TickingStart(entity));
+                .registration
+                .push_event(EntityManagementEvent::TickingStart(entity));
         }
         Ok(())
     }
@@ -381,11 +257,10 @@ impl Level {
         assert!(!storage.states.contains_key(&entity), "new entity handle");
         storage.next_ref.set(storage.next_ref.get().max(entity.0));
         storage.states.insert(entity, state);
-        storage.unmanaged.insert(entity);
-        storage.pending_retire.push(entity);
+        storage.registration.retain_unmanaged(entity);
     }
     pub fn take_entity_management_events(&mut self) -> Vec<EntityManagementEvent> {
-        std::mem::take(&mut self.region_mut().entities.management_events)
+        self.region().entities.registration.take_events()
     }
     pub fn entity_chunk_visibility(&self, pos: ChunkPos) -> Visibility {
         self.region().entities.visibility(pos)
@@ -402,15 +277,15 @@ impl Level {
             return Err(LevelError::DuplicateEntity(entity));
         }
         storage
-            .management_events
-            .push(EntityManagementEvent::TrackingStart(entity));
+            .registration
+            .push_event(EntityManagementEvent::TrackingStart(entity));
         Ok(())
     }
     fn stop_entity_tracking(&mut self, entity: EntityRef) {
         let storage = &mut self.region_mut().entities;
         storage
-            .management_events
-            .push(EntityManagementEvent::TrackingEnd(entity));
+            .registration
+            .push_event(EntityManagementEvent::TrackingEnd(entity));
         storage
             .lookup
             .remove(storage.states.get(&entity).unwrap().as_entity());
@@ -427,8 +302,8 @@ impl Level {
         region.entity_tick_list.add(id, entity);
         region
             .entities
-            .management_events
-            .push(EntityManagementEvent::TickingStart(entity));
+            .registration
+            .push_event(EntityManagementEvent::TickingStart(entity));
     }
     fn stop_entity_ticking(&mut self, entity: EntityRef) {
         let region = self.region_mut();
@@ -442,8 +317,8 @@ impl Level {
         region.entity_tick_list.remove(id);
         region
             .entities
-            .management_events
-            .push(EntityManagementEvent::TickingEnd(entity));
+            .registration
+            .push_event(EntityManagementEvent::TickingEnd(entity));
     }
     /// Port of PersistentEntitySectionManager#updateChunkStatus. This is driven
     /// by FullChunkStatus/ticket eligibility, independently of loaded chunks.
@@ -461,26 +336,14 @@ impl Level {
             storage.persistent.chunks_to_unload.remove(&pos.pack());
             storage.persistent.ensure_chunk_queued_for_load(pos);
         }
-        let sections: Vec<_> = storage
-            .sections
-            .sections
-            .keys()
-            .copied()
-            .filter(|key| {
-                let section = SectionPos::of(*key);
-                section.x == pos.x && section.z == pos.z
-            })
-            .collect();
+        let sections = storage.sections.sections_in_chunk(pos);
         for section_key in sections {
-            let section = self
-                .region_mut()
+            let (previous, entities) = self
+                .region()
                 .entities
                 .sections
-                .sections
-                .get_mut(&section_key)
-                .unwrap();
-            let previous = std::mem::replace(&mut section.visibility, status);
-            let entities = section.entities.clone();
+                .replace_visibility(section_key, status)
+                .expect("existing section");
             let entities: Vec<_> = entities
                 .into_iter()
                 .filter(|id| !self.always_ticking(*id))
@@ -535,7 +398,7 @@ impl Level {
         for passenger in passengers {
             crate::entity::stop_riding(passenger, self)?;
         }
-        if self.region().entities.unmanaged.contains(&entity) {
+        if self.region().entities.registration.is_unmanaged(entity) {
             return Ok(());
         }
         if !was_removed {
@@ -548,8 +411,8 @@ impl Level {
             if reason.should_destroy() {
                 self.region_mut()
                     .entities
-                    .management_events
-                    .push(EntityManagementEvent::Destroyed(entity));
+                    .registration
+                    .push_event(EntityManagementEvent::Destroyed(entity));
             }
         }
         let region = self.region_mut();
@@ -559,19 +422,14 @@ impl Level {
         Ok(())
     }
     pub fn set_entity_pos(&mut self, entity: EntityRef, pos: Vec3) -> Result<(), LevelError> {
-        let old_key = self
-            .region()
-            .entities
-            .sections
-            .membership
-            .get(&entity)
-            .copied();
+        let sections = &self.region().entities.sections;
+        let old_key = sections.member_section(entity);
         let previous_status = old_key
-            .and_then(|key| self.region().entities.sections.sections.get(&key))
-            .map_or(Visibility::Hidden, |section| section.visibility);
+            .and_then(|key| sections.section_visibility(key))
+            .unwrap_or(Visibility::Hidden);
         self.entity_mut::<EntityData>(entity)?.set_pos(pos);
         if !self.entity::<EntityData>(entity)?.removed
-            && !self.region().entities.unmanaged.contains(&entity)
+            && !self.region().entities.registration.is_unmanaged(entity)
         {
             let section = SectionPos::from_position(pos);
             let new_key = section.as_long();
@@ -602,8 +460,8 @@ impl Level {
                 if after.is_accessible() {
                     self.region_mut()
                         .entities
-                        .management_events
-                        .push(EntityManagementEvent::SectionChange(entity));
+                        .registration
+                        .push_event(EntityManagementEvent::SectionChange(entity));
                 }
                 if self.entity::<EntityData>(entity)?.entity_type
                     == ferraloom_data::EntityType::PLAYER
@@ -721,14 +579,19 @@ impl Level {
         Ok(())
     }
     pub fn finish_entity_management(&mut self) {
-        if self.region().entities.pending_retire.is_empty() {
+        if !self
+            .region()
+            .entities
+            .registration
+            .has_pending_retirements()
+        {
             return;
         }
         let mut reachable = HashSet::new();
         let mut work = Vec::new();
         // Map order affects only set membership, never simulation callbacks.
         for (&id, state) in &self.region().entities.states {
-            if !state.as_entity().removed && !self.region().entities.unmanaged.contains(&id) {
+            if !state.as_entity().removed && !self.region().entities.registration.is_unmanaged(id) {
                 self.entity_behavior(id)
                     .expect("stored entity dispatcher")
                     .trace_entity_refs(state, &mut work);
@@ -743,10 +606,10 @@ impl Level {
                     .trace_entity_refs(state, &mut work);
             }
         }
-        let removed = std::mem::take(&mut self.region_mut().entities.pending_retire);
+        let removed = self.region().entities.registration.take_retirements();
         for id in removed {
             if reachable.contains(&id) {
-                self.region_mut().entities.pending_retire.push(id);
+                self.region().entities.registration.queue_retirement(id);
                 continue;
             }
             let region = self.region_mut();
@@ -1035,7 +898,7 @@ mod visibility_tests {
             ]
         );
         assert_eq!(level.all_entities(), [player]);
-        assert!(level.region().entities.known_uuids.contains(&uuid));
+        assert!(level.region().entities.registration.knows_uuid(uuid));
     }
     #[test]
     fn movement_transitions_visibility_and_retirement_keeps_replacement_uuid_index() {

@@ -222,8 +222,8 @@ impl Level {
                 if self
                     .region()
                     .entities
-                    .known_uuids
-                    .contains(&state.as_entity().uuid)
+                    .registration
+                    .knows_uuid(state.as_entity().uuid)
                 {
                     self.retain_unmanaged_entity(id, state);
                 } else {
@@ -240,14 +240,9 @@ impl Level {
     }
     fn entity_chunk_roots_to_save(&self, pos: ChunkPos) -> Result<Vec<EntityRef>, LevelError> {
         let mut roots = Vec::new();
-        let sections = &self.region().entities.sections.sections;
-        let low = SectionPos::new(pos.x, 0, pos.z).as_long();
-        let high = SectionPos::new(pos.x, -1, pos.z).as_long();
-        for (_, section) in sections.range(low..=high) {
-            for &id in &section.entities {
-                if self.entity_should_be_saved(id)? {
-                    roots.push(id);
-                }
+        for id in self.region().entities.sections.chunk_entities(pos) {
+            if self.entity_should_be_saved(id)? {
+                roots.push(id);
             }
         }
         Ok(roots)
@@ -349,7 +344,7 @@ impl Level {
     }
     fn all_entity_chunks_to_save(&self) -> LongOpenHashSet {
         let mut chunks = LongOpenHashSet::new();
-        for (&section, _) in &self.region().entities.sections.section_keys {
+        for section in self.region().entities.sections.section_keys() {
             let section = SectionPos::of(section);
             chunks.insert(ChunkPos::new(section.x, section.z).pack());
         }
