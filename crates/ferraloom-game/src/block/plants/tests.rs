@@ -935,8 +935,7 @@ fn frosted_ice_on_place_schedules_native_delay_and_keeps_rng() {
 }
 
 #[test]
-fn spreading_snowy_support_and_decay_match_native_occlusion_and_full_fluids() {
-    use ferraloom_util::random::{LegacyRandomSource, Random, RandomSource};
+fn spreading_snowy_support_matches_native_occlusion_and_full_fluids() {
     use std::io::Read;
     let mut text = String::new();
     flate2::read::GzDecoder::new(
@@ -967,22 +966,8 @@ fn spreading_snowy_support_and_decay_match_native_occlusion_and_full_fluids() {
             fields[4] == "true",
             "{line}"
         );
-        if !alive {
-            level.set_random_streams(Random::Legacy(LegacyRandomSource::new(7331)), 0);
-            spreading::SPREADING_SNOWY
-                .random_tick(state, pos, &mut level)
-                .unwrap();
-            assert_eq!(
-                level.get_block_state(pos).unwrap(),
-                Block::DIRT.default_state(),
-                "{line}"
-            );
-            assert_eq!(
-                level.random().next_long(),
-                LegacyRandomSource::new(7331).next_long(),
-                "decay RNG {line}"
-            );
-        }
+        // Actual decay, neighbor updates, tick queues and RNG are replayed by
+        // runtime_tests::native_ground_ticks_match_changes_queues_and_rng.
         count += 1;
     }
     assert_eq!(count, 1612);
@@ -1111,6 +1096,9 @@ fn farmland_trampling_preserves_draw_order_permission_size_and_actor() {
                 GameType::Creative,
             ))),
         };
+        level
+            .update_entity_chunk_status(ChunkPos::ZERO, crate::level::entity::Visibility::Ticking)
+            .unwrap();
         level.add_entity(actor, entity).unwrap();
         level.set_spawn_protection(SpawnProtectionSnapshot::new(
             "minecraft:overworld".parse().unwrap(),
@@ -1144,7 +1132,8 @@ fn farmland_trampling_preserves_draw_order_permission_size_and_actor() {
         );
         assert_eq!(
             level.entity::<EntityData>(actor).unwrap().position.y,
-            if tramples { 6.0 } else { location.y }
+            if tramples { 6.0 } else { location.y },
+            "kind={kind} mob_griefing={mob_griefing} protected={protected} distance={distance}"
         );
     }
 }
@@ -1263,8 +1252,13 @@ pub(super) fn native_bonemeal_snapshots_and_rng_match_registered_growth() {
     for line in text.lines() {
         let f: Vec<_> = line.split('\t').collect();
         let state = BlockState::from_id(f[1].parse().unwrap()).unwrap();
-        if state.block().class() == BlockClass::StemBlock && f.len() < 10 {
-            // Older captures lack the required native light inputs for a stem's randomTick.
+        if matches!(
+            state.block().class(),
+            BlockClass::StemBlock | BlockClass::PitcherCropBlock
+        ) && f.len() < 10
+        {
+            // Older captures omit required crop/stem light inputs. The fresh
+            // ServerLevel oracle supplies them and requires all 5,808 matches.
             pending += 1;
             continue;
         }

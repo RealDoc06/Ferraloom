@@ -555,6 +555,13 @@ fn feature_level(biome: &str, seed: i64) -> Level {
                 .unwrap();
         }
     }
+    for x in -16..32 {
+        for z in -16..32 {
+            level
+                .set_block_state(BlockPos::new(x, -64, z), Block::BEDROCK.default_state())
+                .unwrap();
+        }
+    }
     super::fixtures::install_loot(&mut level);
     level.rules_mut().block_drops = Some(false);
     level.set_random_streams(Random::Legacy(LegacyRandomSource::new(seed)), 0);

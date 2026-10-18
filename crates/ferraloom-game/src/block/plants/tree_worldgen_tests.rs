@@ -137,6 +137,7 @@ fn tree_fixtures_use_real_leaf_and_plant_bridge() {
     let mut baselines = BTreeMap::new();
     let mut matches = 0;
     let mut unpended = 0;
+    let mut block_entity_prefixes = 0;
     let mut pending = BTreeMap::<String, usize>::new();
     for case in &cases {
         let name = case["feature"].as_str().unwrap();
@@ -242,15 +243,57 @@ fn tree_fixtures_use_real_leaf_and_plant_bridge() {
                     case["blocks"],
                     "blocks {label}"
                 );
-                assert!(
-                    chunks.iter().all(|chunk| chunk.block_entities.is_empty()),
-                    "unexpected block entity {label}"
-                );
+                let expected_entities = case["block_entities"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|entity| {
+                        let pos =
+                            std::array::from_fn(|i| entity["position"][i].as_i64().unwrap() as i32);
+                        let nbt =
+                            ferraloom_nbt::parse_compound(entity["nbt"].as_str().unwrap()).unwrap();
+                        (pos, nbt)
+                    })
+                    .collect::<BTreeMap<[i32; 3], _>>();
+                let actual_entities = chunks
+                    .iter()
+                    .flat_map(|chunk| chunk.block_entities.iter().map(|(pos, tag)| (*pos, tag)))
+                    .collect::<BTreeMap<_, _>>();
                 assert_eq!(
-                    case["block_entities"],
-                    serde_json::json!([]),
-                    "native block entities {label}"
+                    actual_entities.keys().collect::<Vec<_>>(),
+                    expected_entities.keys().collect::<Vec<_>>(),
+                    "block entity positions {label}"
                 );
+                let mut materialization_pending = false;
+                for (pos, native) in &expected_entities {
+                    let actual = actual_entities[pos];
+                    if actual
+                        .get_string("id")
+                        .is_some_and(|id| id.to_string_lossy() == "DUMMY")
+                    {
+                        // Protochunks retain this placeholder until the canonical
+                        // block-entity factory loads it. The ServerLevel oracle
+                        // serializes a real receiver, so this is a prefix match.
+                        assert_eq!(
+                            native.get_string("id").unwrap().to_string_lossy(),
+                            "minecraft:creaking_heart",
+                            "unclassified block-entity dependency {label}"
+                        );
+                        for (axis, value) in ["x", "y", "z"].into_iter().zip(pos) {
+                            assert_eq!(actual.get_int(axis), Some(*value), "{label}");
+                        }
+                        materialization_pending = true;
+                    } else {
+                        assert_eq!(actual, native, "block entity NBT {label}");
+                    }
+                }
+                if materialization_pending {
+                    *pending
+                        .entry("creaking-heart block-entity materialization".into())
+                        .or_default() += 1;
+                    block_entity_prefixes += 1;
+                    continue;
+                }
                 matches += 1;
                 if original.is_err() {
                     unpended += 1;
@@ -261,6 +304,6 @@ fn tree_fixtures_use_real_leaf_and_plant_bridge() {
     assert_eq!(matches + pending.values().sum::<usize>(), 2444);
     assert!(matches > 0);
     eprintln!(
-        "tree game bridge: {matches}/2444 full matches, {unpended} un-pended; pending {pending:?}"
+        "tree game bridge: {matches}/2444 full matches, {unpended} un-pended; pending {pending:?}; {block_entity_prefixes} block-entity prefixes checked"
     );
 }
