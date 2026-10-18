@@ -3310,6 +3310,21 @@ impl MinecraftServer {
         for (pos, tag) in encoded {
             self.world.io.store(pos, Some(tag)).await?;
         }
+        let progress = self
+            .players
+            .iter()
+            .filter_map(|id| self.connections.get(id))
+            .filter_map(|connection| match connection.phase {
+                Phase::Play(entity) => Some(entity),
+                _ => None,
+            })
+            .map(|entity| {
+                Ok(ferraloom_game::advancements::PlayerProgressSave::capture(
+                    self.player(entity)?,
+                    self.world.access.path(),
+                )?)
+            })
+            .collect::<Result<Vec<_>>>()?;
         let players = self
             .players
             .iter()
@@ -3329,6 +3344,8 @@ impl MinecraftServer {
         self.world
             .save_level_and_players(self.level.game_time, players)
             .await?;
+        tokio::task::spawn_blocking(move || progress.into_iter().try_for_each(|save| save.write()))
+            .await??;
         self.world.io.synchronize(flush).await?;
         Ok(())
     }
