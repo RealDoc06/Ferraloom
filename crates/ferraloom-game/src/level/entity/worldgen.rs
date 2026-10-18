@@ -15,6 +15,14 @@ pub struct WorldgenEntityLoadError {
     pub pos: ChunkPos,
     pub entities: Vec<CompoundTag>,
     pub source: EntityPersistenceError,
+    pub stage: WorldgenEntityLoadStage,
+}
+/// Only a preflight failure is safe to retry from the original proto-chunk NBT.
+/// Once constructors start, IDs or registered roots may already be observable.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum WorldgenEntityLoadStage {
+    Preflight,
+    Publishing,
 }
 impl std::fmt::Display for WorldgenEntityLoadError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -87,6 +95,7 @@ impl Level {
                 pos,
                 entities,
                 source,
+                stage: WorldgenEntityLoadStage::Preflight,
             });
         }
         for tag in &entities {
@@ -95,6 +104,7 @@ impl Level {
                     pos,
                     entities,
                     source,
+                    stage: WorldgenEntityLoadStage::Publishing,
                 });
             }
         }
@@ -380,6 +390,7 @@ mod tests {
             EntityPersistenceError::Level(crate::level::LevelError::MissingBlockTags)
         ));
         assert_eq!(error.entities, entities);
+        assert_eq!(error.stage, WorldgenEntityLoadStage::Preflight);
         assert_eq!(level.next_entity_id(), 1);
         assert_eq!(level.next_entity_ref(), EntityRef(1));
         assert!(level.region().entities.states.is_empty());
@@ -490,6 +501,7 @@ mod tests {
             .unwrap_err();
         assert_eq!(error.pos, pos);
         assert_eq!(error.entities, entities);
+        assert_eq!(error.stage, WorldgenEntityLoadStage::Preflight);
         assert!(
             matches!(error.source, EntityPersistenceError::UnsupportedType(name) if name == "minecraft:zombie")
         );

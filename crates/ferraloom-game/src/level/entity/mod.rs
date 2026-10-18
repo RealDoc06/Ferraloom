@@ -16,7 +16,7 @@ pub use persistent::{
     ChunkLoadStatus, EntityLoadRequestId, EntityStorageError, EntityStorageRequest,
     PersistentEntitySectionManager,
 };
-pub use worldgen::WorldgenEntityLoadError;
+pub use worldgen::{WorldgenEntityLoadError, WorldgenEntityLoadStage};
 
 pub(crate) fn new_entity_random() -> ferraloom_util::random::LegacyRandomSource {
     let ferraloom_util::random::Random::Legacy(random) = super::random::new_level_random() else {
