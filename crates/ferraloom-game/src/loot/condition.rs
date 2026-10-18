@@ -295,16 +295,25 @@ impl LootItemCondition {
                 if !test.matches_state(state, c.facts)? {
                     return Ok(false);
                 }
-                let components = if test.0.components.exact.is_empty()
-                    && test.0.components.partial.0.is_empty()
+                if (!test.0.components.exact.is_empty() || !test.0.components.partial.0.is_empty())
+                    && c.params.block_entity_components.is_none()
+                    && c.params.block_entity.is_some()
                 {
-                    None
-                } else {
                     return Err(LootError::Unsupported(
                         "loot.block_entity_components".into(),
                     ));
-                };
-                test.matches_entity(c.params.block_entity.as_ref(), components, c.facts)
+                }
+                if test.0.nbt.is_some()
+                    && c.params.block_entity.is_none()
+                    && c.params.block_entity_components.is_some()
+                {
+                    return Err(LootError::Unsupported("loot.block_entity_nbt".into()));
+                }
+                test.matches_entity(
+                    c.params.block_entity.as_ref(),
+                    c.params.block_entity_components.as_ref(),
+                    c.facts,
+                )
             }
             Self::EntityProperties(target, test) => {
                 let entity = c.params.entity(*target);

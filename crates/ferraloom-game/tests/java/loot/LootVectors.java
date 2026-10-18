@@ -220,6 +220,40 @@ public final class LootVectors {
             var definition=new JsonObject();definition.addProperty("type","set_written_book_pages");definition.addProperty("mode","replace_all");var content=new JsonArray();content.add(character.repeat(length));definition.add("pages",content);
             var record=new JsonObject();record.addProperty("character",character);record.addProperty("length",length);record.addProperty("accepts",net.minecraft.world.level.storage.loot.functions.LootItemFunctions.DIRECT_CODEC.parse(lookup.createSerializationContext(JsonOps.INSTANCE),definition).result().isPresent());pages.add(record);
         }output.add("book_page_codecs",pages);
+        var conditions=new JsonArray();
+        doReturn(true).when(level).isRaining();doReturn(false).when(level).isThundering();
+        var clockManager=missing(net.minecraft.world.clock.ServerClockManager.class);var clock=missing(net.minecraft.world.clock.ServerClockManager.ServerClockInstance.class);doReturn(23567L).when(clock).totalTicks();doReturn(clock).when(clockManager).getInstance(any());doReturn(clockManager).when(level).clockManager();
+        var environment=missing(net.minecraft.world.attribute.EnvironmentAttributeSystem.class);doReturn(7f).when(environment).getValue(any(LootContext.class),same(net.minecraft.world.attribute.EnvironmentAttributes.SKY_LIGHT_LEVEL));doReturn(environment).when(level).environmentAttributes();
+        var conditionToolJson=JsonParser.parseString("{\"id\":\"diamond_pickaxe\",\"components\":{\"damage\":17,\"enchantments\":{\"fortune\":3}}}");
+        var conditionTool=ItemStack.CODEC.parse(lookup.createSerializationContext(JsonOps.INSTANCE),conditionToolJson).getOrThrow();
+        var conditionParams=new LootParams(level,ContextMap.builder().set(LootContextParams.ORIGIN,new Vec3(0.5,64,0.5)).set(LootContextParams.TOOL,conditionTool).set(LootContextParams.BLOCK_STATE,Blocks.WHEAT.defaultBlockState()).set(LootContextParams.EXPLOSION_RADIUS,3f).set(LootContextParams.ENCHANTMENT_ACTIVE,true).set(LootContextParams.DAMAGE_SOURCE,source).build(),Map.of(),0);
+        for(String definition:List.of(
+            "{\"type\":\"inverted\",\"term\":{\"type\":\"random_chance\",\"chance\":0.4}}",
+            "{\"type\":\"all_of\",\"terms\":[{\"type\":\"random_chance\",\"chance\":0.4},{\"type\":\"random_chance\",\"chance\":0.4}]}",
+            "{\"type\":\"any_of\",\"terms\":[{\"type\":\"random_chance\",\"chance\":0.4},{\"type\":\"random_chance\",\"chance\":0.4}]}",
+            "{\"type\":\"random_chance\",\"chance\":{\"type\":\"uniform\",\"min\":0.1,\"max\":0.9}}",
+            "{\"type\":\"random_chance_with_enchanted_bonus\",\"unenchanted_chance\":0.4,\"enchanted_chance\":{\"type\":\"linear\",\"base\":0.5,\"per_level_above_first\":0.1},\"enchantment\":\"fortune\"}",
+            "{\"type\":\"entity_properties\",\"entity\":\"this\",\"predicate\":{}}",
+            "{\"type\":\"killed_by_player\"}",
+            "{\"type\":\"entity_scores\",\"entity\":\"this\",\"scores\":{\"test\":3}}",
+            "{\"type\":\"match_block\",\"blocks\":\"wheat\",\"state\":{\"age\":\"0\"}}",
+            "{\"type\":\"match_tool\",\"predicate\":{\"items\":\"diamond_pickaxe\",\"predicates\":{\"damage\":{\"damage\":17}}}}",
+            "{\"type\":\"table_bonus\",\"enchantment\":\"fortune\",\"chances\":[0.0,0.1,0.2,0.9]}",
+            "{\"type\":\"survives_explosion\"}",
+            "{\"type\":\"damage_source_properties\",\"predicate\":{\"is_direct\":true}}",
+            "{\"type\":\"location_check\",\"predicate\":{\"position\":{\"y\":64},\"light\":{\"light\":7}}}",
+            "{\"type\":\"weather_check\",\"raining\":true,\"thundering\":false}",
+            "{\"type\":\"time_check\",\"clock\":\"overworld\",\"period\":24000.9,\"value\":{\"min\":23500,\"max\":23600}}",
+            "{\"type\":\"int_value_check\",\"value\":{\"type\":\"uniform\",\"min\":0,\"max\":8},\"test\":{\"min\":2,\"max\":6}}",
+            "{\"type\":\"float_value_check\",\"value\":{\"type\":\"uniform\",\"min\":0,\"max\":8},\"test\":{\"min\":2.5,\"max\":6.3}}",
+            "{\"type\":\"enchantment_active_check\",\"active\":true}",
+            "{\"type\":\"environment_attribute_check\",\"attribute\":\"gameplay/sky_light_level\",\"value\":7}"
+        ))for(long seed:SEEDS){
+            var json=JsonParser.parseString(definition);var condition=net.minecraft.world.level.storage.loot.predicates.LootItemCondition.DIRECT_CODEC.parse(lookup.createSerializationContext(JsonOps.INSTANCE),json).getOrThrow();
+            var random=RandomSource.create(seed);RANDOM.set(random);var context=new LootContext.Builder(conditionParams).withOptionalRandomSource(random).create(Optional.empty());
+            var record=new JsonObject();record.add("definition",json);record.addProperty("seed",seed);record.add("tool",conditionToolJson);record.addProperty("matches",condition.test(context));record.addProperty("next",random.nextLong());conditions.add(record);
+        }output.add("conditions",conditions);
+
 
 
 

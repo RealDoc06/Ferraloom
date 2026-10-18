@@ -305,35 +305,7 @@ fn item_predicate_acceptance_matches_real_java() {
 #[test]
 fn all_available_builtin_tables_match_real_java() {
     let resources = vanilla_resources();
-    let mut data = LootData::default();
-    let mut pending = std::collections::BTreeMap::new();
-    // Only this test uses a partial reload: production load remains atomic and
-    // rejects unsupported codecs. Each pending key retains its missing fact.
-    macro_rules! decode {
-        ($field:ident,$ty:ty,$directory:literal) => {
-            for (id, resource) in resources.registry($directory) {
-                let id = Identifier::parse(&id.to_string()).unwrap();
-                match <$ty>::decode(&resource.json().unwrap()) {
-                    Ok(value) => {
-                        data.$field.insert(id, value);
-                    }
-                    Err(LootError::Unsupported(fact)) => {
-                        pending.insert(($directory, id), fact);
-                    }
-                    Err(e) => panic!("{id}: {e}"),
-                }
-            }
-        };
-    }
-    decode!(tables, LootTable, "loot_table");
-    decode!(predicates, LootItemCondition, "predicate");
-    decode!(modifiers, LootItemFunction, "item_modifier");
-    decode!(int_providers, ContextIntProvider, "context_int_provider");
-    decode!(
-        float_providers,
-        ContextFloatProvider,
-        "context_float_provider"
-    );
+    let data = LootData::load(&resources).unwrap();
     let facts = ItemFacts::load(&resources);
     let vectors: serde_json::Value =
         serde_json::from_str(include_str!("../../tests/java/loot/vectors.json")).unwrap();
@@ -344,13 +316,7 @@ fn all_available_builtin_tables_match_real_java() {
     for record in vectors["vectors"].as_array().unwrap() {
         let id = Identifier::parse(record["table"].as_str().unwrap()).unwrap();
         let seed = record["seed"].as_i64().unwrap();
-        let Some(table) = data.tables.get(&id) else {
-            *pending_tables.entry(id.to_string()).or_default() += 1;
-            *pending_counts
-                .entry(pending[&("loot_table", id.clone())].clone())
-                .or_default() += 1;
-            continue;
-        };
+        let table = data.tables.get(&id).unwrap();
         let allowed = ContextKeySet::vanilla(&table.param_set).unwrap().allowed;
         let mut params = LootParams::default();
         if allowed.contains(&ContextParam::Origin) {
@@ -391,16 +357,6 @@ fn all_available_builtin_tables_match_real_java() {
             Err(LootError::Unsupported(fact)) => {
                 *pending_tables.entry(id.to_string()).or_default() += 1;
                 *pending_counts.entry(fact).or_default() += 1;
-                continue;
-            }
-            Err(LootError::MissingReference {
-                registry,
-                id: missing,
-            }) if pending.contains_key(&(registry, missing.clone())) => {
-                *pending_tables.entry(id.to_string()).or_default() += 1;
-                *pending_counts
-                    .entry(pending[&(registry, missing)].clone())
-                    .or_default() += 1;
                 continue;
             }
             Err(e) => panic!("{id}, seed {seed}: {e}"),
@@ -667,6 +623,66 @@ fn movement_distance_fluid_and_environment_codecs_match_java() {
                 )
                 .unwrap(),
             record["matches"].as_bool().unwrap(),
+            "{record}"
+        );
+    }
+}
+
+#[test]
+fn conditions_match_real_java() {
+    struct ConditionFacts;
+    impl crate::predicates::PredicateContext for ConditionFacts {
+        fn loaded(&self, _pos: ferraloom_util::BlockPos) -> Result<bool> {
+            Ok(true)
+        }
+        fn light(&self, _pos: ferraloom_util::BlockPos) -> Result<i32> {
+            Ok(7)
+        }
+    }
+    impl LootFacts for ConditionFacts {
+        fn weather(&self) -> Result<(bool, bool)> {
+            Ok((true, false))
+        }
+        fn clock_ticks(&self, _clock: &Identifier) -> Result<i64> {
+            Ok(23567)
+        }
+        fn environment_value(
+            &self,
+            _attribute: &Identifier,
+            _params: &LootParams,
+        ) -> Result<EnvironmentValue> {
+            Ok(EnvironmentValue::Float(7.0))
+        }
+    }
+    let vectors: serde_json::Value =
+        serde_json::from_str(include_str!("../../tests/java/loot/vectors.json")).unwrap();
+    let data = LootData::default();
+    for record in vectors["conditions"].as_array().unwrap() {
+        let condition = Holder::direct(LootItemCondition::decode(&record["definition"]).unwrap());
+        let params = LootParams {
+            origin: Some(ferraloom_util::Vec3::new(0.5, 64.0, 0.5)),
+            tool: Some(decode_stack(&record["tool"])),
+            block_state: Some(ferraloom_data::Block::WHEAT.default_state()),
+            explosion_radius: Some(3.0),
+            enchantment_active: Some(true),
+            damage_source: Some(DamageSource {
+                damage_type: Identifier::parse("generic").unwrap(),
+                source: None,
+                direct: None,
+                position: None,
+            }),
+            ..Default::default()
+        };
+        let mut random = LegacyRandomSource::new(record["seed"].as_i64().unwrap());
+        assert_eq!(
+            data.test_predicate(&condition, &params, &mut random, &ConditionFacts)
+                .unwrap(),
+            record["matches"].as_bool().unwrap(),
+            "{record}"
+        );
+        assert_eq!(
+            random.next_long(),
+            record["next"].as_i64().unwrap(),
             "{record}"
         );
     }
