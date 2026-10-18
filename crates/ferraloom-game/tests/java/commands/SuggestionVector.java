@@ -45,6 +45,11 @@ public final class SuggestionVector {
                 vectors.add(capture("command",input,level,dispatcher.getCompletionSuggestions(dispatcher.parse(input,source)).join()));
             }
         }
+        var resources = List.of(net.minecraft.resources.Identifier.parse("example:thing"),net.minecraft.resources.Identifier.parse("minecraft:thing"),net.minecraft.resources.Identifier.parse("example:other"));
+        for (var input : List.of("","!","#","!#","!#th","thing","example:")) {
+            vectors.add(capture("resource_prefix",input,4,net.minecraft.commands.SharedSuggestionProvider.suggestResource(resources,new SuggestionsBuilder(input,0),"!#").join()));
+            vectors.add(capture("resource_plain",input,4,net.minecraft.commands.SharedSuggestionProvider.suggestResource(resources,new SuggestionsBuilder(input,0)).join()));
+        }
         Files.writeString(Path.of(args[0]),new GsonBuilder().setPrettyPrinting().create().toJson(vectors)+"\n");
     }
 }

@@ -258,6 +258,18 @@ mod tests {
             let source = CommandSourceStack::server(vector.level, Vec3::ZERO);
             let actual = if vector.kind == "command" {
                 commands.suggestions_with(&vector.input, source, &data)
+            } else if vector.kind.starts_with("resource_") {
+                let mut builder = SuggestionsBuilder::new(&vector.input, 0);
+                resources(
+                    &mut builder,
+                    ["example:thing", "minecraft:thing", "example:other"],
+                    if vector.kind == "resource_prefix" {
+                        "!#"
+                    } else {
+                        ""
+                    },
+                );
+                builder.build()
             } else {
                 let wire = if vector.kind == "entity" {
                     CommandArgument::Entity {

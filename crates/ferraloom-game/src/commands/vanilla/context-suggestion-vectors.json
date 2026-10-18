@@ -6053,5 +6053,178 @@
         "text": "1d"
       }
     ]
+  },
+  {
+    "kind": "resource_prefix",
+    "input": "",
+    "level": 4,
+    "start": 0,
+    "end": 0,
+    "suggestions": [
+      {
+        "text": "!#example:other"
+      },
+      {
+        "text": "!#example:thing"
+      },
+      {
+        "text": "!#minecraft:thing"
+      }
+    ]
+  },
+  {
+    "kind": "resource_plain",
+    "input": "",
+    "level": 4,
+    "start": 0,
+    "end": 0,
+    "suggestions": [
+      {
+        "text": "example:other"
+      },
+      {
+        "text": "example:thing"
+      },
+      {
+        "text": "minecraft:thing"
+      }
+    ]
+  },
+  {
+    "kind": "resource_prefix",
+    "input": "!",
+    "level": 4,
+    "start": 0,
+    "end": 1,
+    "suggestions": [
+      {
+        "text": "!#example:other"
+      },
+      {
+        "text": "!#example:thing"
+      },
+      {
+        "text": "!#minecraft:thing"
+      }
+    ]
+  },
+  {
+    "kind": "resource_plain",
+    "input": "!",
+    "level": 4,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "resource_prefix",
+    "input": "#",
+    "level": 4,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "resource_plain",
+    "input": "#",
+    "level": 4,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "resource_prefix",
+    "input": "!#",
+    "level": 4,
+    "start": 0,
+    "end": 2,
+    "suggestions": [
+      {
+        "text": "!#example:other"
+      },
+      {
+        "text": "!#example:thing"
+      },
+      {
+        "text": "!#minecraft:thing"
+      }
+    ]
+  },
+  {
+    "kind": "resource_plain",
+    "input": "!#",
+    "level": 4,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "resource_prefix",
+    "input": "!#th",
+    "level": 4,
+    "start": 0,
+    "end": 4,
+    "suggestions": [
+      {
+        "text": "!#example:thing"
+      },
+      {
+        "text": "!#minecraft:thing"
+      }
+    ]
+  },
+  {
+    "kind": "resource_plain",
+    "input": "!#th",
+    "level": 4,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "resource_prefix",
+    "input": "thing",
+    "level": 4,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "resource_plain",
+    "input": "thing",
+    "level": 4,
+    "start": 0,
+    "end": 5,
+    "suggestions": [
+      {
+        "text": "example:thing"
+      },
+      {
+        "text": "minecraft:thing"
+      }
+    ]
+  },
+  {
+    "kind": "resource_prefix",
+    "input": "example:",
+    "level": 4,
+    "start": 0,
+    "end": 0,
+    "suggestions": []
+  },
+  {
+    "kind": "resource_plain",
+    "input": "example:",
+    "level": 4,
+    "start": 0,
+    "end": 8,
+    "suggestions": [
+      {
+        "text": "example:other"
+      },
+      {
+        "text": "example:thing"
+      }
+    ]
   }
 ]

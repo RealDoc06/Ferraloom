@@ -24,10 +24,18 @@ pub fn resources<'a>(
         remaining.as_str()
     } else if remaining.is_empty() {
         ""
-    } else if let Some(filter) = remaining.strip_prefix(prefix) {
-        filter
     } else {
-        return;
+        // Vanilla strips the common prefix, including a partially typed multi-character prefix.
+        let common = remaining
+            .chars()
+            .zip(prefix.chars())
+            .take_while(|(a, b)| a == b)
+            .map(|(character, _)| character.len_utf8())
+            .sum::<usize>();
+        if common == 0 {
+            return;
+        }
+        &remaining[common..]
     };
     for id in values {
         if resource_matches(filter, id) {
