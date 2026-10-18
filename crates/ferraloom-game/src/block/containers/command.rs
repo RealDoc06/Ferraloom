@@ -8,7 +8,7 @@ use crate::{
     },
     level::{Level, LevelError},
 };
-use ferraloom_data::{Block, BlockClass, properties as p};
+use ferraloom_data::{Block, BlockClass, BlockState, properties as p};
 use ferraloom_nbt::{CompoundTag, Tag};
 use ferraloom_protocol::{
     chat::Component,

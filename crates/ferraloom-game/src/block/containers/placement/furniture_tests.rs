@@ -104,11 +104,7 @@ fn native_sign_skull_and_utility_placement_masks_match_vanilla() {
             data.pitch = pitch;
             data.set_shared_flag(1, f[5] == "true");
         }
-        level
-            .entity_mut::<ServerPlayer>(player)
-            .unwrap()
-            .abilities
-            .instabuild = matches!(capability, 1 | 2);
+        level.entity_mut::<ServerPlayer>(player).unwrap().instabuild = matches!(capability, 1 | 2);
         level.shared_mut().unwrap().ops.set_operator(
             &profile,
             Some(PermissionLevel::by_id(if capability >= 2 { 2 } else { 0 })),
