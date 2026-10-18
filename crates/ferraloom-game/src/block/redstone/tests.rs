@@ -53,30 +53,15 @@ fn level_in_radius(radius: i32) -> Level {
         }
     }
     level.process_pending_entity_loads().unwrap();
-    let values = include_str!("../../../tests/java/level/tags.tsv")
-        .lines()
-        .map(|line| {
-            let (name, blocks) = line.split_once('\t').unwrap();
-            (
-                name.strip_prefix("tag:").unwrap().parse().unwrap(),
-                blocks
-                    .split(',')
-                    .filter(|s| !s.is_empty())
-                    .map(|n| Block::from_name(n).unwrap())
-                    .collect(),
-            )
-        })
-        .collect();
-    level.set_block_tags(Arc::new(
-        ferraloom_data::datapack::TagSet::from_tags(
-            ferraloom_data::datapack::Tags {
-                values,
-                diagnostics: Vec::new(),
-            },
-            ferraloom_data::BLOCKS.len(),
-        )
-        .unwrap(),
-    ));
+    static BLOCK_TAGS: std::sync::LazyLock<Arc<ferraloom_data::datapack::TagSet<Block>>> =
+        std::sync::LazyLock::new(|| {
+            use ferraloom_data::datapack::{Pack, ResourceManager, TagSet};
+            let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").expect("builder vanilla jar");
+            let resources =
+                ResourceManager::new(vec![Pack::vanilla_jar(std::path::Path::new(&jar)).unwrap()]);
+            Arc::new(TagSet::load(&resources).unwrap())
+        });
+    level.set_block_tags(Arc::clone(&BLOCK_TAGS));
     level.set_random_streams(Random::Legacy(LegacyRandomSource::new(0)), 0);
     level
 }
