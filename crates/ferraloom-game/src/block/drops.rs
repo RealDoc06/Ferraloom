@@ -1,4 +1,5 @@
 //! Port of Block's loot contexts and synchronous resource spawning.
+use super::containers::loot_runtime::LiveLootRuntime;
 use super::{BlockMethod, entity::BlockEntityRef};
 use crate::{
     entity::{EntityRef, EntityState, item::ItemEntity},
@@ -208,16 +209,11 @@ pub(super) fn get_base_drops(
         .map_err(|_| LevelError::Inventory("block loot context"))?;
     let resources = level.container_resources()?;
     let table = Identifier::parse(name).expect("extracted loot-table identifier");
-    level
-        .with_loot_sources(|sources| {
-            resources.loot.get_random_items_seeded(
-                &table,
-                &params,
-                0,
-                sources,
-                resources.facts.as_ref(),
-            )
-        })
+    let mut runtime = LiveLootRuntime::for_table(level, &resources.loot, &table, 0)
+        .map_err(|_| LevelError::Inventory("block loot stream"))?;
+    resources
+        .loot
+        .get_random_items_with_runtime(&table, &params, &mut runtime)
         .map_err(|_| LevelError::Inventory("block loot evaluation"))
 }
 
@@ -262,17 +258,14 @@ pub fn drop_from_block_interact_loot_table(
             )
             .map_err(|_| LevelError::Inventory("block interact loot context"))?;
         let resources = level.container_resources()?;
-        let drops = level
-            .with_loot_sources(|sources| {
-                resources.loot.get_random_items_seeded(
-                    table,
-                    &params,
-                    0,
-                    sources,
-                    resources.facts.as_ref(),
-                )
-            })
-            .map_err(|_| LevelError::Inventory("block interact loot evaluation"))?;
+        let drops = {
+            let mut runtime = LiveLootRuntime::for_table(level, &resources.loot, table, 0)
+                .map_err(|_| LevelError::Inventory("block interact loot stream"))?;
+            resources
+                .loot
+                .get_random_items_with_runtime(table, &params, &mut runtime)
+                .map_err(|_| LevelError::Inventory("block interact loot evaluation"))?
+        };
         let generated = !drops.is_empty();
         for stack in drops {
             pop_resource(level, pos, stack)?;

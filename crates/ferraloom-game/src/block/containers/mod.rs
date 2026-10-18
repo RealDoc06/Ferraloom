@@ -7,6 +7,7 @@ pub mod drops;
 pub mod furnace;
 mod furnace_tick;
 pub mod loot;
+pub mod loot_runtime;
 pub mod menu;
 pub mod runtime;
 pub mod sign;

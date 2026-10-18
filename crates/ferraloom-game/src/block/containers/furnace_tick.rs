@@ -1,5 +1,6 @@
 //! Port of AbstractFurnaceBlockEntity#serverTick and its fuel/cooking helpers.
 use super::furnace::AbstractFurnaceBlockEntity;
+use super::loot_runtime::LiveLootRuntime;
 use crate::{
     block::{UpdateFlags, entity::BlockEntityRef},
     crafting::RecipeInput,
@@ -8,7 +9,7 @@ use crate::{
     },
     inventory::Container,
     level::{Level, LevelError},
-    loot::{ContextKeySet, Holder, LootParams},
+    loot::{ContextKeySet, Holder, LootParams, LootRandomSelection},
 };
 use ferraloom_data::{Item, properties as p};
 use ferraloom_nbt::Tag;
@@ -69,24 +70,22 @@ fn fuel_properties(
         Either::Left(duration) => duration,
         Either::Right(id) => resources
             .loot
-            .evaluate_int(
+            .evaluate_int_with_runtime(
                 &Holder::Reference(id),
                 &params,
-                level.random(),
-                resources.facts.as_ref(),
+                &mut LiveLootRuntime::new(level, LootRandomSelection::Level),
             )
             .map_err(|_| LevelError::Inventory("furnace burn-time provider"))?,
     };
     let params = fuel_context(handle, level)?;
     let speed = match fuel.speed_multiplier {
-        Either::Left(speed) => speed,
+        Either::Left(speed) => speed.0,
         Either::Right(id) => resources
             .loot
-            .evaluate_float(
+            .evaluate_float_with_runtime(
                 &Holder::Reference(id),
                 &params,
-                level.random(),
-                resources.facts.as_ref(),
+                &mut LiveLootRuntime::new(level, LootRandomSelection::Level),
             )
             .map_err(|_| LevelError::Inventory("furnace speed provider"))?,
     };
@@ -291,7 +290,7 @@ mod tests {
         block::{containers::runtime::ContainerResources, entity::create},
         crafting::{Ingredient, Recipe, RecipeHolder, RecipeKind, RecipeManager, RecipeType},
         level::{Region, chunk::LevelChunk},
-        loot::{LootData, NoFacts},
+        loot::LootData,
     };
     use ferraloom_data::{
         Block,
@@ -349,7 +348,7 @@ mod tests {
         let mut fuel = DataComponentPatch::default();
         fuel.set(DataComponent::CookingFuel(CookingFuel {
             burn_time: Either::Left(3),
-            speed_multiplier: Either::Left(2.0),
+            speed_multiplier: Either::Left(2.0.into()),
         }));
         entity.container_mut().unwrap().items[0] =
             ItemStack::new(Item::IRON_ORE, 2, Default::default());
@@ -379,7 +378,6 @@ mod tests {
             Arc::new(ContainerResources {
                 recipes: Arc::new(RecipeManager::new(vec![recipe]).unwrap()),
                 loot: Arc::new(LootData::default()),
-                facts: Arc::new(NoFacts),
             }),
             0,
         );

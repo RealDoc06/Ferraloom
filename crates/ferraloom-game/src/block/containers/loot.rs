@@ -1,5 +1,6 @@
 //! Port of RandomizableContainer#unpackLootTable. Ordered fill placements are
 //! delivered to the original receiver, with synchronous callbacks between writes.
+use super::loot_runtime::LiveLootRuntime;
 use super::storage::RandomizableContainerBlockEntity;
 use crate::{
     advancements::criteria,
@@ -61,27 +62,31 @@ pub fn unpack_loot_table(
                 .expect("chest context"),
             )
             .map_err(|_| LevelError::Inventory("container loot context"))?;
-        let placements = level
-            .with_block_entity_and_loot_sources(handle, |receiver, sources| {
-                resources.loot.fill_seeded_placements(
-                    &table,
-                    &params,
-                    seed,
-                    sources,
-                    resources.facts.as_ref(),
-                    || {
-                        Ok(receiver
-                            .container()
-                            .expect("randomizable container")
-                            .items
-                            .iter()
-                            .enumerate()
-                            .filter_map(|(slot, stack)| stack.is_empty().then_some(slot))
-                            .collect())
-                    },
-                )
-            })?
-            .map_err(|_| LevelError::Inventory("container loot evaluation"))?;
+        let placements = {
+            let mut runtime = LiveLootRuntime::for_table(level, &resources.loot, &table, seed)
+                .map_err(|_| LevelError::Inventory("container loot stream"))?;
+            resources
+                .loot
+                .fill_placements_with_runtime(&table, &params, &mut runtime, |runtime| {
+                    let receiver = runtime
+                        .level()
+                        .block_entity_state(handle)
+                        .map_err(|error| {
+                            crate::loot::LootError::Unsupported(format!(
+                                "container available slots: {error:?}"
+                            ))
+                        })?;
+                    Ok(receiver
+                        .container()
+                        .expect("randomizable container")
+                        .items
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(slot, stack)| stack.is_empty().then_some(slot))
+                        .collect())
+                })
+                .map_err(|_| LevelError::Inventory("container loot evaluation"))?
+        };
         for (slot, stack) in placements {
             super::access::set_item(handle, slot, stack, level)?;
         }
@@ -102,19 +107,12 @@ mod tests {
         crafting::RecipeManager,
         entity::{EntityState, player::GameType},
         level::{Region, chunk::LevelChunk},
-        loot::{LootData, LootFacts, LootTable},
+        loot::{LootData, LootTable},
     };
     use ferraloom_data::{Block, Item};
     use ferraloom_protocol::component::ItemStack;
     use ferraloom_util::{BlockPos, ChunkPos, Uuid};
     use std::sync::Arc;
-    struct Features;
-    impl crate::predicates::PredicateContext for Features {}
-    impl LootFacts for Features {
-        fn item_enabled(&self, _: &ItemStack) -> crate::loot::Result<bool> {
-            Ok(true)
-        }
-    }
     static BEHAVIORS: Behaviors = Behaviors::EMPTY;
     #[test]
     fn lazy_fill_preserves_seed_occupied_slots_and_criterion_boundary() {
@@ -144,7 +142,6 @@ mod tests {
             Arc::new(ContainerResources {
                 recipes: Arc::new(RecipeManager::new(Vec::new()).unwrap()),
                 loot: Arc::new(loot),
-                facts: Arc::new(Features),
             }),
             0,
         );
