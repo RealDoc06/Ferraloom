@@ -329,3 +329,5 @@ One class row per bootstrapped runtime Block class, listing every block id assig
 | blocks.containers.interaction-core | Chest/copper/trapped, barrel, furnace/smoker/blast and crafter menu bindings; comparator fill; chest joining shapes and neighbor maintenance | `ChestBlock; BarrelBlock; AbstractFurnaceBlock; CrafterBlock; DoubleBlockCombiner` | `inventory::block_containers::tests` (2 focused canonical storage/menu tests; full interactions pending) | - | partial |
 
 | blocks.interaction.feature-eligibility | Check every block and item against the dedicated server advertised VANILLA_SET | `FeatureElement#isEnabled` | `tools/extractor/ExtractFeatureRequirements.java` (all native registry entries) | pass | partial |
+
+| blocks.drops.registry | Optional native block loot-table identities and exact getDrops/spawnAfterBreak virtual ownership | `BlockBehaviour#getLootTable; getDrops; spawnAfterBreak` | `ExtractBlockDropTables; ExtractBlockMethods` (1286 block registry entries) | pass | partial |

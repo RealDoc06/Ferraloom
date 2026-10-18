@@ -1,4 +1,6 @@
 //! Turns pinned vanilla reports and extracted facts into allocation-free tables.
+#[path = "build/block_drop_tables.rs"]
+mod block_drop_tables;
 #[path = "build/block_methods.rs"]
 mod block_methods;
 #[path = "build/environment_attributes.rs"]
@@ -941,6 +943,7 @@ fn main() {
     )
     .unwrap();
     items(&mut out, &item_report, &load(root, "item_crafting"));
+    block_drop_tables::generate(&mut out, &load(root, "block_drop_tables"), block_count);
     feature_requirements::generate(
         &mut out,
         &load(root, "feature_requirements"),
