@@ -1,5 +1,6 @@
 //! Ocean monument room graph, room fitting and geometry.
 pub mod graph;
+mod placement;
 use crate::structure::{BoundingBox, piece::StructurePieceData};
 use ferraloom_util::{Direction, random::RandomSource};
 use graph::{RoomGraph, RoomKind};
