@@ -78,7 +78,7 @@ impl Level {
     /// Call after a batch of shared publications at an exclusive phase boundary.
     /// No structure references can survive this mutable borrow. Saves also collect.
     pub fn collect_chunk_structure_versions(&mut self) {
-        for chunk in self.region_mut().chunks.values_mut() {
+        for (_, chunk) in self.region_mut().chunks.iter_mut() {
             chunk.collect_structure_versions();
         }
     }
