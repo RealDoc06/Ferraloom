@@ -155,7 +155,7 @@ impl BlockBehavior for ComparatorBlock {
         state: BlockState,
         pos: BlockPos,
         _by: Option<crate::entity::EntityRef>,
-        _stack: &ferraloom_protocol::component::ItemStack,
+        _stack: crate::block::StackView<'_>,
         level: &mut Level,
     ) -> Result<(), LevelError> {
         if should_turn_on(level, pos, state)? {

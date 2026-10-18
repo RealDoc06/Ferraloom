@@ -1796,7 +1796,12 @@ fn double_plant_and_moss_post_placement_match_native_updates_and_rng() {
             0,
         );
         level
-            .set_placed_by(state, pos, None, &ItemStack::default())
+            .set_placed_by(
+                state,
+                pos,
+                None,
+                crate::block::StackView::Borrowed(&ItemStack::default()),
+            )
             .unwrap();
         assert_eq!(
             level.get_block_state(pos).unwrap().id(),

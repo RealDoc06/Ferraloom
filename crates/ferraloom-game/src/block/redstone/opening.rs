@@ -81,7 +81,7 @@ impl BlockBehavior for OpeningBlock {
         state: BlockState,
         pos: BlockPos,
         _by: Option<crate::entity::EntityRef>,
-        _stack: &ferraloom_protocol::component::ItemStack,
+        _stack: crate::block::StackView<'_>,
         level: &mut Level,
     ) -> Result<(), LevelError> {
         level.set_block_and_update(pos.above(1), state.with(p::HALF, p::Half::Upper).unwrap())?;

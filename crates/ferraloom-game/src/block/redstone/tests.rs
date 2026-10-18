@@ -700,7 +700,12 @@ fn redstone_post_placement_updates_match_vanilla() {
         level.set_block_state(ORIGIN, state).unwrap();
         level.take_effects();
         level
-            .set_placed_by(state, ORIGIN, None, &Default::default())
+            .set_placed_by(
+                state,
+                ORIGIN,
+                None,
+                crate::block::StackView::Borrowed(&Default::default()),
+            )
             .unwrap();
         let mut targets = vec![ORIGIN, ORIGIN.above(1)];
         targets.extend((1..=4).map(|i| ORIGIN.relative(direction, i)));
