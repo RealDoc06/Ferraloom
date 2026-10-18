@@ -138,7 +138,7 @@ fn rail_junctions_slopes_and_connection_update_order_match_vanilla() {
     ];
     for (name, expected) in cases("rail-place:") {
         let mut args = name.split(':').skip(1);
-        let block = Block::from_name(args.next().unwrap()).unwrap();
+        let block = Block::from_name(&format!("minecraft:{}", args.next().unwrap())).unwrap();
         let mut pattern = args.next().unwrap().parse::<u16>().unwrap();
         let powered = args.next().unwrap().parse::<bool>().unwrap();
         let initial = if args.next().unwrap().parse::<bool>().unwrap() {
@@ -200,7 +200,7 @@ fn powered_and_activator_rails_preserve_search_limits_and_power_update_order() {
     use ferraloom_data::properties as p;
     for (name, expected) in cases("rail-find:") {
         let mut args = name.split(':').skip(1);
-        let block = Block::from_name(args.next().unwrap()).unwrap();
+        let block = Block::from_name(&format!("minecraft:{}", args.next().unwrap())).unwrap();
         let direction = Direction::VALUES[args.next().unwrap().parse::<usize>().unwrap()];
         let length = args.next().unwrap().parse::<i32>().unwrap();
         let obstruction = args.next().unwrap().parse::<u8>().unwrap();
