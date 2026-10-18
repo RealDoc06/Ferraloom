@@ -639,7 +639,15 @@ impl MinecraftServer {
                         .tick_fluid_phase(self.level.game_time, 65536)
                         .map_err(game_error)?;
                 }
-                self.level.tickets.purge_stale(self.tick);
+                let holders = &self.level.chunks.holders;
+                let world = &self.world;
+                self.level
+                    .tickets
+                    .purge_stale_with_readiness(self.tick, |pos| {
+                        holders
+                            .get(&pos.pack())
+                            .is_none_or(|holder| world.chunk_ready_for_saving(holder))
+                    });
             }
             self.integrate_jobs()?;
             self.update_chunk_tickets()?;
