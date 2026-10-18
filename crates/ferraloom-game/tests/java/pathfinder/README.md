@@ -25,7 +25,8 @@ source from flowing fluid membership under real registry tag reloads. These
 queries use no live block, chunk or entity data.
 
 `python3 path_types.py` records raw native PathType classification for all
-35,723 states, plus 24 ordered cache/neighbor steps. These cover stale neighbor
+35,723 states, plus 24 ordered cache/neighbor steps and 35 floor/first-hazard
+cases. These cover stale neighbor
 hazards and floor changes, invalidating only the changed key, hash collisions
 and packed-position aliases. The in-memory real Cow/Level fixture overrides
 only PathfindingContext's ServerLevel cache attachment; PathTypeCache and the

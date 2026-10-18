@@ -186,3 +186,36 @@ fn sent_block_update_invalidates_cache_without_a_ready_holder() {
         PathType::Open
     );
 }
+
+#[test]
+fn native_floor_types_and_first_neighbor_hazard_in_iteration_order() {
+    let oracle: Value = serde_json::from_str(include_str!(
+        "../../../../tests/java/pathfinder/path-type-cache.json"
+    ))
+    .unwrap();
+    let cases = oracle["static_cases"].as_array().unwrap();
+    for case in cases {
+        let mut level = level();
+        for block in case["blocks"].as_array().unwrap() {
+            let p = pos(&block["pos"]);
+            ensure_chunk(&mut level, p);
+            level
+                .set_block_state(
+                    p,
+                    BlockState::from_id(block["state"].as_u64().unwrap() as u16).unwrap(),
+                )
+                .unwrap();
+        }
+        let mut reads = Vec::new();
+        let result = walk_node_evaluator::get_path_type_static(
+            BlockPos::new(8, 5, 8),
+            oracle["min_y"].as_i64().unwrap() as i32,
+            |p| cached_type(&mut level, p, &mut reads),
+        )
+        .unwrap();
+        assert_eq!(result.id(), case["type"].as_u64().unwrap() as u8, "{case}");
+        let expected: Vec<_> = case["reads"].as_array().unwrap().iter().map(pos).collect();
+        assert_eq!(reads, expected, "{case}");
+    }
+    assert_eq!(cases.len(), 35);
+}

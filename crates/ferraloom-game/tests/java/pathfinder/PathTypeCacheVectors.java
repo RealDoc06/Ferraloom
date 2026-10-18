@@ -52,6 +52,21 @@ public final class PathTypeCacheVectors {
         }
         var trace=new JsonArray();for(var read:reads) trace.add(pos(read));row.add("reads",trace);steps.add(row);
     }
+    static JsonObject staticCase(RegistryAccess registries,Block floor,Block first,Block last) {
+        var level=new World(registries);var context=new Context(level);var center=new BlockPos(8,5,8);
+        var positions=new ArrayList<BlockPos>();var states=new ArrayList<BlockState>();
+        positions.add(center.below());states.add(floor.defaultBlockState());
+        if(first!=null){positions.add(center.offset(-1,-1,-1));states.add(first.defaultBlockState());}
+        if(last!=null){positions.add(center.offset(1,1,1));states.add(last.defaultBlockState());}
+        var blocks=new JsonArray();
+        for(int i=0;i<positions.size();i++) {
+            level.blocks.put(positions.get(i),states.get(i));var block=new JsonObject();
+            block.add("pos",pos(positions.get(i)));block.addProperty("state",Block.getId(states.get(i)));blocks.add(block);
+        }
+        reads.clear();var type=WalkNodeEvaluator.getPathTypeStatic(context,center.mutable());
+        var row=new JsonObject();row.add("blocks",blocks);row.addProperty("type",type.ordinal());
+        var trace=new JsonArray();for(var read:reads)trace.add(pos(read));row.add("reads",trace);return row;
+    }
     public static void main(String[] args) throws Exception {
         SharedConstants.tryDetectVersion();Bootstrap.bootStrap();
         var registries=NeighborVectors.load();
@@ -91,9 +106,14 @@ public final class PathTypeCacheVectors {
         step("raw",world,context,new BlockPos(0,4096,0),null);
         step("raw",world,context,collision,null);step("set",world,context,zero,Blocks.AIR.defaultBlockState());step("raw",world,context,zero,null);
         var result=new JsonObject();result.addProperty("min_y",world.getMinY());result.add("steps",steps);
+        var statics=new JsonArray();
+        for(var floor:List.of(Blocks.AIR,Blocks.STONE,Blocks.WATER,Blocks.LAVA,Blocks.MAGMA_BLOCK,Blocks.CACTUS,Blocks.HONEY_BLOCK,Blocks.POWDER_SNOW,Blocks.WITHER_ROSE,Blocks.OAK_TRAPDOOR))statics.add(staticCase(registries,floor,null,null));
+        var hazards=List.of(Blocks.LAVA,Blocks.MAGMA_BLOCK,Blocks.CACTUS,Blocks.WATER,Blocks.WITHER_ROSE);
+        for(var first:hazards)for(var last:hazards)statics.add(staticCase(registries,Blocks.STONE,first,last));
+        result.add("static_cases",statics);
         Files.writeString(Path.of(args[1]),G.toJson(result)+"\n");
         var observed=new ArrayList<Integer>();for(var e:steps)if(e.getAsJsonObject().has("type"))observed.add(e.getAsJsonObject().get("type").getAsInt());
         if(!observed.subList(0,8).equals(List.of(PathType.WALKABLE.ordinal(),PathType.WALKABLE.ordinal(),PathType.WALKABLE.ordinal(),PathType.WATER_BORDER.ordinal(),PathType.WATER_BORDER.ordinal(),PathType.FIRE_IN_NEIGHBOR.ordinal(),PathType.FIRE_IN_NEIGHBOR.ordinal(),PathType.ON_TOP_OF_POWDER_SNOW.ordinal())))throw new AssertionError(observed);
-        System.out.println("PASS "+states+" native raw types; "+steps.size()+" cache/neighbor steps");
+        System.out.println("PASS "+states+" native raw types; "+steps.size()+" cache/neighbor steps; "+statics.size()+" floor/first-hazard cases");
     }
 }
