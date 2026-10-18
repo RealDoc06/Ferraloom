@@ -1,5 +1,5 @@
 //! Entity common ticking and riding, with short canonical borrows around callbacks.
-use super::{EntityData, EntityRef, EntityState, synched_data};
+use super::{EntityData, EntityRef, EntityState};
 use crate::level::{Level, LevelError};
 use ferraloom_protocol::entity_data::Pose;
 
