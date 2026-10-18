@@ -3,10 +3,7 @@
 use super::*;
 use crate::{
     block::entity::{BlockEntityRef, BlockEntityState},
-    entity::{
-        EntityRef,
-        player::ServerPlayer,
-    },
+    entity::{EntityRef, player::ServerPlayer},
     level::Level,
 };
 #[cfg(test)]
@@ -123,6 +120,26 @@ pub fn with_block_menu_context<R>(
     let valid = block_menu_still_valid(player, &refs, level)?;
     let (result, changed) = {
         let (player, states) = level.player_and_retained_block_entities_mut(player, &refs)?;
+        // Native menus hold the receiver's ContainerData. Refresh its network
+        // view at each operation, including initial synchronization and ticks.
+        match states.first().map(|state| &**state) {
+            Some(BlockEntityState::Furnace(furnace)) => {
+                player
+                    .menus
+                    .current_mut()
+                    .data
+                    .copy_from_slice(&furnace.data());
+            }
+            Some(BlockEntityState::Crafter(crafter)) => {
+                let menu = player.menus.current_mut();
+                for (slot, &disabled) in crafter.disabled_slots.iter().enumerate() {
+                    menu.data[slot] = i32::from(disabled);
+                    menu.slots[slot].disabled = disabled;
+                }
+                menu.data[9] = crafter.triggered;
+            }
+            _ => {}
+        }
         let before: Vec<_> = states
             .iter()
             .map(|state| state.container().expect("block container").times_changed)
@@ -214,6 +231,35 @@ mod tests {
             packets[0],
             ferraloom_protocol::play::clientbound::Packet::OpenScreen(_)
         ));
+    }
+    #[test]
+    fn furnace_menu_reads_current_canonical_timer_data() {
+        use crate::block::containers::furnace::AbstractFurnaceBlockEntity;
+        let (mut level, player, old) = setup();
+        let state = Block::FURNACE.default_state();
+        level.set_block_state(old.pos, state).unwrap();
+        level
+            .set_block_entity(create(old.pos, state).unwrap())
+            .unwrap();
+        let handle = level.block_entity_ref(old.pos).unwrap().unwrap();
+        let provider = ContainerMenuProvider {
+            entities: vec![handle],
+            kind: MenuKind::Furnace,
+            title: ferraloom_protocol::chat::Component::literal("Furnace"),
+        };
+        open_menu(player, &provider, &mut level).unwrap();
+        let furnace = level
+            .block_entity_mut::<AbstractFurnaceBlockEntity>(handle)
+            .unwrap();
+        furnace.lit_time_remaining = 123;
+        furnace.lit_total_time = 1600;
+        furnace.cooking_timer = 17;
+        furnace.cooking_total_time = 200;
+        with_block_menu_context(player, &mut level, |menus, _, _| {
+            assert_eq!(menus.current().data, [123, 1600, 17, 200]);
+            Ok(())
+        })
+        .unwrap();
     }
     #[test]
     fn external_menu_mutations_reach_canonical_slots_and_replacement_closes_after_broadcast() {
