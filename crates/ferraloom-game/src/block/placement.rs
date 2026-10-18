@@ -527,13 +527,11 @@ mod tests {
                     level.get_state_for_placement(Block::STONE, &context),
                     Ok(Some(Block::STONE.default_state()))
                 );
-                assert!(matches!(
+                // RotatedPillarBlock takes the clicked face's axis; UP is the default Y axis.
+                assert_eq!(
                     level.get_state_for_placement(Block::OAK_LOG, &context),
-                    Err(LevelError::UnsupportedBlockMethod(
-                        _,
-                        BlockMethod::GetStateForPlacement
-                    ))
-                ));
+                    Ok(Some(Block::OAK_LOG.default_state()))
+                );
                 actual
             } else {
                 level
