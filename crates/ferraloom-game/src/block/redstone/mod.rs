@@ -8,11 +8,13 @@ pub mod diode;
 pub mod lamp;
 pub mod moving_piston;
 pub mod observer;
+pub mod opening;
 pub mod piston;
 pub mod signal;
 mod sources;
 mod state;
 pub mod storage;
+pub mod switches;
 pub mod torch;
 pub mod wire;
 
@@ -146,6 +148,56 @@ pub(crate) fn ported_behavior(
             ) =>
         {
             Some(&comparator::COMPARATOR)
+        }
+        BlockClass::LeverBlock | BlockClass::ButtonBlock
+            if matches!(
+                method,
+                M::UseWithoutItem
+                    | M::CanSurvive
+                    | M::UpdateShape
+                    | M::UpdateFromNeighbourShapes
+                    | M::AffectNeighborsAfterRemoval
+                    | M::Tick
+                    | M::EntityInside
+            ) =>
+        {
+            Some(&switches::SWITCHES)
+        }
+        BlockClass::PressurePlateBlock | BlockClass::WeightedPressurePlateBlock
+            if matches!(
+                method,
+                M::CanSurvive
+                    | M::UpdateShape
+                    | M::UpdateFromNeighbourShapes
+                    | M::AffectNeighborsAfterRemoval
+                    | M::Tick
+                    | M::EntityInside
+            ) =>
+        {
+            Some(&switches::SWITCHES)
+        }
+        _ if (block.is_instance_of(BlockClass::DoorBlock)
+            || block.is_instance_of(BlockClass::TrapDoorBlock)
+            || block.is_instance_of(BlockClass::FenceGateBlock))
+            && matches!(
+                method,
+                M::UseWithoutItem
+                    | M::CanSurvive
+                    | M::UpdateShape
+                    | M::UpdateFromNeighbourShapes
+                    | M::NeighborChanged
+                    | M::IsFaceSturdy
+            ) =>
+        {
+            Some(&opening::OPENING)
+        }
+        _ if block.is_instance_of(BlockClass::CopperBulbBlock)
+            && matches!(
+                method,
+                M::OnPlace | M::NeighborChanged | M::HasAnalogOutputSignal | M::AnalogOutputSignal
+            ) =>
+        {
+            Some(&opening::BULB)
         }
         BlockClass::MovingPistonBlock
             if matches!(

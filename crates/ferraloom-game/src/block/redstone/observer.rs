@@ -4,7 +4,7 @@ use crate::{
     block::{BlockBehavior, LevelAccessRef, LevelReaderRef, UPDATE_LIMIT, UpdateFlags},
     level::{Level, LevelError},
 };
-use ferraloom_data::{Block, BlockState, properties as p};
+use ferraloom_data::{BlockState, properties as p};
 use ferraloom_util::{BlockPos, Direction};
 
 pub struct ObserverBlock;
