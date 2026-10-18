@@ -3,6 +3,8 @@
 mod block_methods;
 #[path = "build/dispenser_properties.rs"]
 mod dispenser_properties;
+#[path = "build/note_properties.rs"]
+mod note_properties;
 #[path = "build/redstone_properties.rs"]
 mod redstone_properties;
 
@@ -831,6 +833,7 @@ fn main() {
     block_methods::generate(root, &block_properties);
     redstone_properties::generate(root);
     dispenser_properties::generate(root);
+    note_properties::generate(root);
     let item_report = load(root, "items");
     let entity_report = load(root, "entity_types");
     let attribute_report = load(root, "attributes");

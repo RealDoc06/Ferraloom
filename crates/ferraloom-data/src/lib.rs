@@ -10,6 +10,7 @@
 
 mod block_methods;
 pub mod dispenser_properties;
+pub mod note_properties;
 pub mod redstone_properties;
 mod sound_events;
 pub use block_methods::BlockMethod;
