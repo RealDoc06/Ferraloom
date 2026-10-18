@@ -230,6 +230,13 @@ pub struct FluidState {
     pub empty: bool,
     pub falling: bool,
 }
+impl FluidState {
+    /// Port of FluidState#isRandomlyTicking, which delegates to its Fluid type
+    /// without reading a level, position or another fluid-state property.
+    pub const fn is_randomly_ticking(self) -> bool {
+        FLUID_RANDOM_TICKING[self.fluid_type.protocol_id() as usize]
+    }
+}
 
 /// Port of BlockBehaviour.BlockStateBase's cached state facts.
 #[derive(Clone, Copy, Debug)]

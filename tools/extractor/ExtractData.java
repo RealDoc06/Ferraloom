@@ -272,6 +272,14 @@ public final class ExtractData {
         write(dir, "block_items", table);
     }
 
+    // FluidState#isRandomlyTicking delegates only to its Fluid type. Query the
+    // real virtual method, without inferring behavior from a liquid block id.
+    private static void fluidRandomTicking(Path dir) throws Exception {
+        var table = new JsonArray();
+        for (var fluid : BuiltInRegistries.FLUID) table.add(fluid.defaultFluidState().isRandomlyTicking());
+        write(dir, "fluid_random_ticking", table);
+    }
+
     private static void collectClasses(Class<?> type, Set<Class<?>> classes) {
         if (type == null || !classes.add(type)) return;
         collectClasses(type.getSuperclass(), classes);
@@ -310,6 +318,7 @@ public final class ExtractData {
     public static void main(String[] args) throws Exception {
         SharedConstants.tryDetectVersion();
         Bootstrap.bootStrap();
+        if (args.length > 1 && args[1].equals("--fluid-random-ticking-only")) { fluidRandomTicking(Path.of(args[0])); return; }
         if (args.length > 1 && args[1].equals("--block-items-only")) { blockItems(Path.of(args[0])); return; }
         if (args.length > 1 && args[1].equals("--block-collision-flags-only")) { blockCollisionFlags(Path.of(args[0])); return; }
         if (args.length > 1 && args[1].equals("--redstone-facts-only")) { redstoneStateFacts(Path.of(args[0])); return; }
@@ -321,6 +330,7 @@ public final class ExtractData {
         }
         blockCollisionFlags(Path.of(args[0]));
         blockItems(Path.of(args[0]));
+        fluidRandomTicking(Path.of(args[0]));
         redstoneStateFacts(Path.of(args[0]));
         airStates(Path.of(args[0]));
         if (args.length > 1 && args[1].equals("--air-states-only")) return;
