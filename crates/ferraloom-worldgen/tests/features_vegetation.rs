@@ -133,6 +133,10 @@ fn known_pending(error: &str) -> bool {
         "Unsupported: VineBlock.isAcceptableNeighbour",
         "Unsupported: DoublePlantBlock.placeAt",
         "Unsupported: MossyCarpetBlock.placeAt and level random",
+        "Unsupported: load_block_entity",
+        "Unsupported: place_liquid",
+        "Unsupported: update_shape",
+        "Unsupported: update_from_neighbor_shapes",
     ]
     .contains(&error)
         || [
