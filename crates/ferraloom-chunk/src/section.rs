@@ -1,4 +1,4 @@
-use ferraloom_data::{Block, BlockState, registries::fluid};
+use ferraloom_data::{Block, BlockState};
 
 use crate::{PalettedContainer, Strategy};
 
@@ -25,14 +25,7 @@ fn contribution(state: BlockState) -> SectionCounts {
         non_empty_blocks: 1,
         fluids: u16::from(!data.fluid.empty),
         ticking_blocks: u16::from(data.random_ticking),
-        // LavaFluid#isRandomlyTicking applies to both source and flowing lava.
-        ticking_fluids: u16::from(
-            !data.fluid.empty
-                && matches!(
-                    data.fluid.fluid_type,
-                    fluid::Id::LAVA | fluid::Id::FLOWING_LAVA
-                ),
-        ),
+        ticking_fluids: u16::from(data.fluid.is_randomly_ticking()),
     }
 }
 
@@ -123,5 +116,43 @@ impl LevelChunkSection {
             total.ticking_fluids += c.ticking_fluids * count;
         }
         self.counts = total;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ferraloom_data::properties;
+    use std::sync::Arc;
+
+    #[test]
+    fn fluid_random_counts_track_mixed_fluids_and_recount_after_replacement() {
+        let mut section = LevelChunkSection::new(
+            Strategy::block_states(),
+            Strategy::biomes(Arc::new(crate::IdMap::new(vec![BiomeId(0)]).unwrap())),
+            BiomeId(0),
+        );
+        let water = Block::WATER.default_state();
+        let lava = Block::LAVA
+            .default_state()
+            .with(properties::LEVEL, 1)
+            .unwrap();
+        let wet_slab = Block::STONE_SLAB
+            .default_state()
+            .with(properties::WATERLOGGED, true)
+            .unwrap();
+        for (x, state) in [water, lava, wet_slab].into_iter().enumerate() {
+            section.set_block_state(x as u8, 0, 0, state);
+        }
+        assert_eq!(section.counts().fluids, 3);
+        assert_eq!(section.counts().ticking_fluids, 1);
+        let counts = section.counts();
+        section.recalc_block_counts();
+        assert_eq!(section.counts(), counts);
+        section.set_block_state(1, 0, 0, water);
+        assert_eq!(section.counts().fluids, 3);
+        assert!(!section.is_randomly_ticking_fluids());
+        section.recalc_block_counts();
+        assert!(!section.is_randomly_ticking_fluids());
     }
 }

@@ -5,16 +5,46 @@ use std::collections::{BTreeMap, HashSet};
 pub struct ChunkMap {
     pub holders: BTreeMap<i64, ChunkHolder>,
     next_request: u64,
+    holder_order: ferraloom_util::collections::LongLinkedOpenHashSet,
 }
 impl ChunkMap {
+    /// Preserve holder insertion order independently of its lookup map.
+    pub fn holder_positions(&self) -> impl Iterator<Item = ChunkPos> + '_ {
+        self.holder_order.iter().map(|&key| ChunkPos::unpack(key))
+    }
+    pub fn ensure_holder(&mut self, pos: ChunkPos) -> &mut ChunkHolder {
+        self.holders.entry(pos.pack()).or_insert_with(|| {
+            self.holder_order.insert(pos.pack());
+            ChunkHolder::new(pos, 0)
+        })
+    }
+    /// Port of ChunkMap's final unloaded-holder removal. The runtime must first
+    /// await a successful save, release generation jobs and recheck tickets.
+    /// Demotions must have settled before removing either lookup or traversal.
+    pub fn remove_unloaded_holder(&mut self, pos: ChunkPos) -> Option<ChunkHolder> {
+        let key = pos.pack();
+        let holder = self.holders.get(&key)?;
+        if holder.ticket_level <= super::distance_manager::MAX_LOADED_LEVEL
+            || holder.confirmed_full_status()
+                != super::distance_manager::FullChunkStatus::Inaccessible
+            || holder.pending_full_status().is_some()
+        {
+            return None;
+        }
+        let holder = self.holders.remove(&key)?;
+        self.holder_order.remove(&key);
+        Some(holder)
+    }
     pub fn request(&mut self, pos: ChunkPos) -> Option<u64> {
-        if self.holders.contains_key(&pos.pack()) {
+        let holder = self.ensure_holder(pos);
+        if holder.generation_requested {
             return None;
         }
         let request = self.next_request;
-        self.next_request += 1;
-        self.holders
-            .insert(pos.pack(), ChunkHolder::new(pos, request));
+        self.next_request = self.next_request.wrapping_add(1);
+        let holder = self.holders.get_mut(&pos.pack()).unwrap();
+        holder.request_id = request;
+        holder.generation_requested = true;
         Some(request)
     }
 }
@@ -105,5 +135,31 @@ mod tests {
         assert!(sender.next_batch(ChunkPos::new(0, 0), |_| true).is_empty());
         sender.acknowledge(f32::NAN);
         assert_eq!(sender.next_batch(ChunkPos::new(0, 0), |_| true).len(), 1);
+    }
+    #[test]
+    fn unloading_waits_for_ticket_demotion_and_reloading_gets_a_new_request_in_order() {
+        let mut chunks = ChunkMap::default();
+        let a = ChunkPos::new(0, 0);
+        let b = ChunkPos::new(1, 0);
+        let first = chunks.request(a).unwrap();
+        chunks.request(b).unwrap();
+        let holder = chunks.holders.get_mut(&a.pack()).unwrap();
+        holder.ticket_level = 31;
+        holder.update_full_status();
+        holder.confirm_full_status(holder.pending_full_status().unwrap());
+        holder.ticket_level = 45;
+        assert!(chunks.remove_unloaded_holder(a).is_none());
+        let holder = chunks.holders.get_mut(&a.pack()).unwrap();
+        holder.update_full_status();
+        holder.ticket_level = 44;
+        assert!(chunks.remove_unloaded_holder(a).is_none());
+        chunks.holders.get_mut(&a.pack()).unwrap().ticket_level = 45;
+        assert_eq!(chunks.remove_unloaded_holder(a).unwrap().request_id, first);
+        assert_eq!(chunks.holder_positions().collect::<Vec<_>>(), vec![b]);
+        assert!(chunks.remove_unloaded_holder(a).is_none());
+        let second = chunks.request(a).unwrap();
+        assert_ne!(first, second);
+        assert_eq!(chunks.request(a), None);
+        assert_eq!(chunks.holder_positions().collect::<Vec<_>>(), vec![b, a]);
     }
 }

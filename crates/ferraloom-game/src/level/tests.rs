@@ -974,6 +974,7 @@ fn random_phase_is_strict_and_warn_counts_both_vanilla_lava_callbacks() {
             }
         }
     }
+    install_weather_environment(&mut level, "plains");
     assert_eq!(
         level.tick_random_chunk(chunk),
         Err(LevelError::UnsupportedFluidRandomTick)
@@ -1059,7 +1060,7 @@ impl BlockBehavior for DynamicFluidWall {
         state: BlockState,
         pos: BlockPos,
         _context: &crate::block::BlockCollisionContext<'_>,
-        _level: &crate::block::LevelReaderRef<'_>,
+        _level: &crate::block::LevelReaderRef<'_, '_>,
     ) -> Result<ferraloom_util::VoxelShape, LevelError> {
         match pos.x {
             0 => Ok(ferraloom_util::shapes::block()),
@@ -1295,6 +1296,47 @@ fn reflected_method_ownership_ports_inherited_defaults_without_masking_overrides
     assert_eq!(level.unported_behavior_stats().skipped_calls, 0);
 }
 
+fn weather_test_temperatures() -> Arc<ferraloom_worldgen::biome_manager::BiomeTemperatures> {
+    use ferraloom_data::datapack::{Pack, ResourceManager};
+    use ferraloom_worldgen::biome_manager::BiomeTemperatures;
+    static TEMPERATURES: std::sync::OnceLock<Arc<BiomeTemperatures>> = std::sync::OnceLock::new();
+    TEMPERATURES
+        .get_or_init(|| {
+            let jar = std::env::var_os("FERRALOOM_VANILLA_JAR")
+                .expect("builder supplies the vanilla datapack");
+            let resources =
+                ResourceManager::new(vec![Pack::vanilla_jar(std::path::Path::new(&jar)).unwrap()]);
+            Arc::new(BiomeTemperatures::load(&resources).unwrap())
+        })
+        .clone()
+}
+fn install_weather_environment(level: &mut Level, biome: &str) {
+    use weather::{ChunkLightSnapshot, WeatherEnvironment};
+    let temperatures = weather_test_temperatures();
+    level.set_weather_environment(WeatherEnvironment {
+        temperatures: temperatures.clone(),
+        biome_names: Arc::new(vec![biome.parse().unwrap()]),
+        biome_zoom_seed: 0,
+        sea_level: 63,
+    });
+    install_tags(level);
+    for x in -1..=1 {
+        for z in -1..=1 {
+            let p = ChunkPos::new(x, z);
+            level.prime_chunk_heightmaps(p).unwrap();
+            level.set_light_snapshot(
+                p,
+                ChunkLightSnapshot {
+                    sky: (-1..=0)
+                        .map(|y| (y, ferraloom_light::DataLayer::new(15)))
+                        .collect(),
+                    block: std::collections::BTreeMap::new(),
+                },
+            );
+        }
+    }
+}
+
 #[test]
 fn precipitation_selection_slots_match_vanilla_random_and_position_streams_when_dry() {
     use ferraloom_util::random::{LegacyRandomSource, Random, RandomSource};
@@ -1306,6 +1348,7 @@ fn precipitation_selection_slots_match_vanilla_random_and_position_streams_when_
             .split_once(':')
             .unwrap();
         let mut level = empty_level(&EMPTY);
+        install_weather_environment(&mut level, "plains");
         level.set_random_streams(
             Random::Legacy(LegacyRandomSource::new(seed.parse().unwrap())),
             0,
@@ -1602,4 +1645,482 @@ fn directional_replacement_matches_vanilla_and_keeps_required_override_errors() 
         ))
     ));
     assert_eq!(level.unported_behavior_stats().skipped_calls, 0);
+}
+
+#[test]
+fn broadcast_membership_drains_separately_from_retained_section_changes() {
+    use crate::block::UpdateFlags;
+    let mut level = empty_level(&EMPTY);
+    install_tags(&mut level);
+    let chunk = ChunkPos::new(0, 0);
+    let p = BlockPos::new(8, 0, 8);
+    level
+        .set_block(
+            p,
+            Block::STONE.default_state(),
+            UpdateFlags::CLIENTS | UpdateFlags::KNOWN_SHAPE,
+            512,
+        )
+        .unwrap();
+    assert_eq!(level.take_block_update_chunks(), vec![chunk]);
+    level
+        .set_chunk_loading_status(chunk, distance_manager::FullChunkStatus::Full, false)
+        .unwrap();
+    // The server skips this holder after its ticking future is cancelled.
+    assert!(level.take_block_update_chunks().is_empty());
+    level
+        .set_chunk_loading_status(chunk, distance_manager::FullChunkStatus::BlockTicking, true)
+        .unwrap();
+    assert!(level.take_block_update_chunks().is_empty());
+    level
+        .set_block(
+            p.above(1),
+            Block::STONE.default_state(),
+            UpdateFlags::CLIENTS | UpdateFlags::KNOWN_SHAPE,
+            512,
+        )
+        .unwrap();
+    assert_eq!(level.take_block_update_chunks(), vec![chunk]);
+    let packets = level.take_block_updates(chunk).unwrap();
+    assert!(
+        matches!(&packets[..],[ferraloom_protocol::play::clientbound::Packet::SectionBlocksUpdate(packet)] if packet.changes.len()==2)
+    );
+}
+
+struct SnowSurvivalFixture;
+impl BlockBehavior for SnowSurvivalFixture {
+    fn can_survive(
+        &self,
+        _state: BlockState,
+        _pos: BlockPos,
+        _level: &crate::block::LevelReaderRef<'_, '_>,
+    ) -> Result<bool, LevelError> {
+        // Every native predicate vector supplies a full stone support block.
+        Ok(true)
+    }
+}
+static SNOW_SURVIVAL: Behaviors = Behaviors::EMPTY.with_block(Block::SNOW, &SnowSurvivalFixture);
+#[test]
+fn live_freeze_and_snow_predicates_match_real_biome_calls() {
+    use ferraloom_light::{DataLayer, LightLayer};
+    use ferraloom_worldgen::biome_manager::Precipitation;
+    for row in include_str!("../../tests/java/level/weather.tsv").lines() {
+        let (input, expected) = row.split_once('\t').unwrap();
+        let args: Vec<_> = input.split(':').collect();
+        let biome = args[0].parse().unwrap();
+        let light = args[1].parse().unwrap();
+        let y: i32 = args[3].parse().unwrap();
+        let surrounded = args[4] == "true";
+        let pos = BlockPos::new(8, y, 8);
+        let mut level = empty_level(&SNOW_SURVIVAL);
+        install_weather_environment(&mut level, args[0]);
+        let state = match args[2] {
+            "water" => Block::WATER.default_state(),
+            "flowing" => Block::WATER
+                .default_state()
+                .with(ferraloom_data::properties::LEVEL, 3)
+                .unwrap(),
+            "snow" => Block::SNOW.default_state(),
+            "stone" => Block::STONE.default_state(),
+            _ => Block::AIR.default_state(),
+        };
+        if (-16..16).contains(&y) {
+            level.set_block_state(pos, state).unwrap();
+            for direction in [
+                Direction::West,
+                Direction::East,
+                Direction::North,
+                Direction::South,
+            ] {
+                if surrounded {
+                    level
+                        .set_block_state(pos.relative(direction, 1), Block::WATER.default_state())
+                        .unwrap();
+                }
+            }
+        }
+        if (-16..16).contains(&(y - 1)) {
+            level
+                .set_block_state(pos.below(1), Block::STONE.default_state())
+                .unwrap();
+        }
+        level.set_light_snapshot(
+            ChunkPos::new(0, 0),
+            weather::ChunkLightSnapshot {
+                sky: std::collections::BTreeMap::new(),
+                block: (-1..=0).map(|y| (y, DataLayer::new(light))).collect(),
+            },
+        );
+        let resources = weather_test_temperatures();
+        let climate = resources.precipitation_at(&biome, [pos.x, pos.y, pos.z], 63);
+        let climate = match climate {
+            Precipitation::None => "none",
+            Precipitation::Rain => "rain",
+            Precipitation::Snow => "snow",
+        };
+        assert_eq!(
+            format!(
+                "{},{},{},{}",
+                level.should_freeze(&biome, pos, false).unwrap(),
+                level.should_freeze(&biome, pos, true).unwrap(),
+                level.should_snow(&biome, pos).unwrap(),
+                climate
+            ),
+            expected,
+            "{input}"
+        );
+        if (-16..16).contains(&y) {
+            assert_eq!(level.brightness(LightLayer::Block, pos).unwrap(), light);
+        }
+    }
+}
+#[test]
+fn snow_accumulation_wraps_unsupported_survival_without_inventing_a_query_result() {
+    use crate::block::{BlockMethod, UnportedBehavior};
+    let mut level = empty_level(&EMPTY);
+    let p = BlockPos::new(8, 0, 8);
+    level
+        .set_block_state(p.below(1), Block::STONE.default_state())
+        .unwrap();
+    install_weather_environment(&mut level, "snowy_plains");
+    level.load_weather(weather::WeatherData {
+        raining: true,
+        ..Default::default()
+    });
+    let biome = "snowy_plains".parse().unwrap();
+    let unsupported = Err(LevelError::UnsupportedBlockMethod(
+        Block::SNOW,
+        BlockMethod::CanSurvive,
+    ));
+    assert_eq!(level.should_snow(&biome, p), unsupported);
+    assert_eq!(level.tick_precipitation(p), unsupported.map(|_| ()));
+    level.set_unported_behavior(UnportedBehavior::Warn);
+    assert_eq!(level.should_snow(&biome, p), unsupported);
+    level.tick_precipitation(p).unwrap();
+    level.tick_precipitation(p).unwrap();
+    assert!(level.get_block_state(p).unwrap().is_air());
+    assert_eq!(level.unported_behavior_stats().skipped_calls, 2);
+    assert_eq!(level.unported_behavior_stats().distinct_calls, 1);
+}
+#[test]
+fn rain_queries_use_visible_sky_heightmap_and_zoomed_biome() {
+    use ferraloom_light::DataLayer;
+    let mut level = empty_level(&EMPTY);
+    let p = BlockPos::new(8, 0, 8);
+    assert!(!level.is_raining_at(p).unwrap());
+    level.load_weather(weather::WeatherData {
+        raining: true,
+        ..Default::default()
+    });
+    assert_eq!(
+        level.is_raining_at(p),
+        Err(LevelError::UnsupportedWeatherQuery)
+    );
+    level
+        .set_block_state(p.below(1), Block::STONE.default_state())
+        .unwrap();
+    install_weather_environment(&mut level, "plains");
+    assert!(level.is_raining_at(p).unwrap());
+    assert!(!level.is_raining_at(p.below(1)).unwrap());
+    level.set_light_snapshot(
+        ChunkPos::new(0, 0),
+        weather::ChunkLightSnapshot {
+            sky: [(1, DataLayer::new(14))].into_iter().collect(),
+            block: Default::default(),
+        },
+    );
+    assert!(!level.is_raining_at(p).unwrap());
+    install_weather_environment(&mut level, "snowy_plains");
+    assert!(!level.is_raining_at(p).unwrap());
+}
+
+struct PostProcessTrace;
+impl BlockBehavior for PostProcessTrace {
+    fn update_shape(
+        &self,
+        state: BlockState,
+        pos: BlockPos,
+        direction: Direction,
+        _neighbor_pos: BlockPos,
+        _neighbor: BlockState,
+        access: &mut crate::block::LevelAccessRef<'_, '_>,
+    ) -> Result<BlockState, LevelError> {
+        let crate::block::LevelAccessRef::Server(level) = access else {
+            return Err(LevelError::UnsupportedWorldgenEnvironment);
+        };
+        level.emit(LevelEffect::LevelEvent {
+            pos,
+            id: 321,
+            data: direction as i32,
+        });
+        let added = BlockPos::new(9, 0, 8);
+        if pos == BlockPos::new(8, 0, 8)
+            && direction == Direction::Down
+            && level.get_block_state(added)?.is_air()
+        {
+            level.set_block_state(added, Block::DIRT.default_state())?;
+            level.mark_pos_for_post_processing(added)?;
+        }
+        Ok(state)
+    }
+}
+static POST_PROCESS_TRACE: Behaviors = Behaviors::EMPTY.with_block(Block::DIRT, &PostProcessTrace);
+#[test]
+fn post_processing_drains_sections_in_order_including_reentrant_appends() {
+    let mut level = empty_level(&POST_PROCESS_TRACE);
+    let upper = BlockPos::new(8, 0, 8);
+    let lower = upper.below(1);
+    for pos in [upper, lower] {
+        level
+            .set_block_state(pos, Block::DIRT.default_state())
+            .unwrap();
+        level.mark_pos_for_post_processing(pos).unwrap();
+    }
+    let chunk = ChunkPos::new(0, 0);
+    assert!(!level.chunk(chunk).unwrap().post_processing_complete());
+    level.post_process_generation(chunk).unwrap();
+    assert!(level.chunk(chunk).unwrap().post_processing_complete());
+    let trace: Vec<_> = level
+        .take_effects()
+        .into_iter()
+        .map(|effect| match effect {
+            LevelEffect::LevelEvent { pos, id: 321, data } => (pos, data),
+            other => panic!("unexpected post-process effect {other:?}"),
+        })
+        .collect();
+    let expected: Vec<_> = [lower, upper, BlockPos::new(9, 0, 8)]
+        .into_iter()
+        .flat_map(|pos| redstone::UPDATE_SHAPE_ORDER.map(|direction| (pos, direction as i32)))
+        .collect();
+    assert_eq!(trace, expected);
+}
+#[test]
+fn pending_block_entity_nbt_survives_full_without_claiming_live_factory_readiness() {
+    use crate::block::UnportedBehavior;
+    use ferraloom_nbt::{CompoundTag, Compression, NbtAccounter, NbtIo, NbtString, Tag};
+    fn encode(data: &ferraloom_storage::SerializableChunkData) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        NbtIo::write_compound(&mut bytes, Compression::None, &data.write().unwrap()).unwrap();
+        bytes
+    }
+    let chunk = ChunkPos::new(0, 0);
+    let pos = BlockPos::new(8, 0, 8);
+    let mut tag = CompoundTag::new();
+    tag.insert("id", Tag::String("minecraft:chest".into()));
+    for (key, value) in [("x", pos.x), ("y", pos.y), ("z", pos.z), ("future", 42)] {
+        tag.insert(key, Tag::Int(value));
+    }
+    tag.insert("future_bytes", Tag::ByteArray(vec![-128, 0, 127]));
+    tag.insert("future_double", Tag::Double(-0.0));
+    tag.insert(
+        "future_utf16",
+        Tag::String(NbtString::from_utf16(vec![0xd800, 0, 0xdc00])),
+    );
+    let data = ferraloom_storage::SerializableChunkData {
+        data_version: Some(ferraloom_storage::DATA_VERSION),
+        status: Some("minecraft:full".into()),
+        x_pos: Some(chunk.x),
+        y_pos: Some(-1),
+        z_pos: Some(chunk.z),
+        block_entities: Some(vec![tag.clone()]),
+        post_processing: Some(vec![Vec::new(), Vec::new()]),
+        ..Default::default()
+    };
+    let mut block_chunk = empty_chunk(chunk);
+    block_chunk
+        .set_block_state(pos, Block::CHEST.default_state())
+        .unwrap();
+    block_chunk.load_pending_generation_data(&data).unwrap();
+    assert_eq!(
+        block_chunk.pending_block_entity_nbt(),
+        std::slice::from_ref(&tag)
+    );
+    let mut level = Level::new(Region::new(&EMPTY));
+    level.add_chunk(block_chunk).unwrap();
+    assert_eq!(
+        level.post_process_generation(chunk),
+        Err(LevelError::UnsupportedBlockEntity(Block::CHEST))
+    );
+    assert_eq!(level.unported_behavior_stats().skipped_calls, 0);
+    level.set_unported_behavior(UnportedBehavior::Warn);
+    level.post_process_generation(chunk).unwrap();
+    level.post_process_generation(chunk).unwrap();
+    assert_eq!(level.unported_behavior_stats().skipped_calls, 2);
+    assert_eq!(level.unported_behavior_stats().distinct_calls, 1);
+    let block_chunk = level.chunk(chunk).unwrap();
+    assert!(!block_chunk.post_processing_complete());
+    assert!(block_chunk.generation_callbacks_drained());
+    let mut saved = data.clone();
+    block_chunk.save_pending_generation_data(&mut saved);
+    assert_eq!(saved.block_entities, Some(vec![tag]));
+    assert_eq!(saved.post_processing, data.post_processing);
+    let bytes = encode(&saved);
+    assert_eq!(bytes, encode(&data));
+    let loaded = ferraloom_storage::SerializableChunkData::parse(
+        NbtIo::read_compound(
+            bytes.as_slice(),
+            Compression::None,
+            &mut NbtAccounter::uncompressed(),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let mut reloaded_chunk = empty_chunk(chunk);
+    reloaded_chunk
+        .load_pending_generation_data(&loaded)
+        .unwrap();
+    let mut resaved = loaded.clone();
+    reloaded_chunk.save_pending_generation_data(&mut resaved);
+    assert_eq!(encode(&resaved), bytes);
+}
+
+#[test]
+fn worldgen_skips_share_policy_counters_and_deduplicate_owned_unit_behavior_pairs() {
+    use crate::block::{UnportedBehavior, UnportedOperation};
+    let mut level = Level::new(Region::new(&EMPTY));
+    let pair = ("minecraft:oak".to_owned(), "canSurvive".to_owned());
+    level.record_worldgen_skips(Vec::new()).unwrap();
+    assert_eq!(
+        level.record_worldgen_skips(vec![pair.clone()]),
+        Err(LevelError::UnsupportedWorldgenBehavior)
+    );
+    assert_eq!(level.unported_behavior_stats().skipped_calls, 0);
+    level.set_unported_behavior(UnportedBehavior::Warn);
+    level
+        .unported_operation(UnportedOperation::PackReload)
+        .unwrap();
+    level
+        .record_worldgen_skips(vec![pair.clone(), pair.clone()])
+        .unwrap();
+    level
+        .record_worldgen_skips(vec![
+            pair,
+            ("minecraft:oak".to_owned(), "updateShape".to_owned()),
+            ("minecraft:birch".to_owned(), "canSurvive".to_owned()),
+        ])
+        .unwrap();
+    assert_eq!(level.unported_behavior_stats().skipped_calls, 6);
+    assert_eq!(level.unported_behavior_stats().distinct_calls, 4);
+    level.set_unported_behavior(UnportedBehavior::Strict);
+    assert_eq!(
+        level.record_worldgen_skips(vec![("minecraft:oak".into(), "canSurvive".into())]),
+        Err(LevelError::UnsupportedWorldgenBehavior)
+    );
+    assert_eq!(level.unported_behavior_stats().skipped_calls, 6);
+}
+
+#[test]
+fn save_snapshot_marker_keeps_subsequent_live_mutations_dirty() {
+    use crate::block::UpdateFlags;
+    let mut level = empty_level(&EMPTY);
+    install_tags(&mut level);
+    let pos = BlockPos::new(8, 0, 8);
+    let chunk = ChunkPos::containing(pos);
+    assert!(!level.try_mark_chunk_saved(chunk).unwrap());
+    level
+        .set_block(
+            pos,
+            Block::STONE.default_state(),
+            UpdateFlags::KNOWN_SHAPE,
+            512,
+        )
+        .unwrap();
+    assert!(level.chunk(chunk).unwrap().is_unsaved());
+    assert!(level.try_mark_chunk_saved(chunk).unwrap());
+    let saved_state = level.get_block_state(pos).unwrap();
+    assert!(!level.chunk(chunk).unwrap().is_unsaved());
+    level
+        .set_block(
+            pos,
+            Block::DIRT.default_state(),
+            UpdateFlags::KNOWN_SHAPE,
+            512,
+        )
+        .unwrap();
+    // Completing the old snapshot cannot clear this later write.
+    assert_eq!(saved_state, Block::STONE.default_state());
+    assert!(level.chunk(chunk).unwrap().is_unsaved());
+    assert!(level.try_mark_chunk_saved(chunk).unwrap());
+    assert!(!level.try_mark_chunk_saved(chunk).unwrap());
+    level.mark_chunk_unsaved(chunk).unwrap();
+    assert!(level.chunk(chunk).unwrap().is_unsaved());
+    let missing = ChunkPos::new(2, 0);
+    assert_eq!(
+        level.try_mark_chunk_saved(missing),
+        Err(LevelError::MissingChunk(missing))
+    );
+}
+
+struct PostProcessUnsupported;
+impl BlockBehavior for PostProcessUnsupported {
+    fn update_shape(
+        &self,
+        _state: BlockState,
+        pos: BlockPos,
+        _direction: Direction,
+        _neighbor_pos: BlockPos,
+        _neighbor: BlockState,
+        _level: &mut crate::block::LevelAccessRef<'_, '_>,
+    ) -> Result<BlockState, LevelError> {
+        if pos.x == 8 {
+            Err(LevelError::UnsupportedBlockMethod(
+                Block::DIRT,
+                crate::block::BlockMethod::UpdateShape,
+            ))
+        } else {
+            Ok(Block::STONE.default_state())
+        }
+    }
+}
+static POST_PROCESS_UNSUPPORTED: Behaviors =
+    Behaviors::EMPTY.with_block(Block::DIRT, &PostProcessUnsupported);
+#[test]
+fn warn_post_processing_retains_skipped_units_and_continues_in_position_order() {
+    use crate::block::UnportedBehavior;
+    let mut level = empty_level(&POST_PROCESS_UNSUPPORTED);
+    install_tags(&mut level);
+    let skipped = BlockPos::new(8, 0, 8);
+    let next = BlockPos::new(9, 0, 8);
+    for pos in [skipped, next] {
+        level
+            .set_block_state(pos, Block::DIRT.default_state())
+            .unwrap();
+        level.mark_pos_for_post_processing(pos).unwrap();
+    }
+    let chunk = ChunkPos::containing(skipped);
+    assert_eq!(
+        level.post_process_generation(chunk),
+        Err(LevelError::UnsupportedBlockMethod(
+            Block::DIRT,
+            crate::block::BlockMethod::UpdateShape
+        ))
+    );
+    assert_eq!(
+        level.get_block_state(next).unwrap(),
+        Block::DIRT.default_state()
+    );
+    level.set_unported_behavior(UnportedBehavior::Warn);
+    level.post_process_generation(chunk).unwrap();
+    assert_eq!(
+        level.get_block_state(skipped).unwrap(),
+        Block::DIRT.default_state()
+    );
+    assert_eq!(
+        level.get_block_state(next).unwrap(),
+        Block::STONE.default_state()
+    );
+    assert!(!level.chunk(chunk).unwrap().post_processing_complete());
+    assert!(!level.chunk(chunk).unwrap().generation_callbacks_drained());
+    let mut saved = ferraloom_storage::SerializableChunkData::default();
+    level
+        .chunk(chunk)
+        .unwrap()
+        .save_pending_generation_data(&mut saved);
+    assert_eq!(
+        saved.post_processing,
+        Some(vec![Vec::new(), vec![8 | (8 << 8)]])
+    );
+    level.post_process_generation(chunk).unwrap();
+    assert_eq!(level.unported_behavior_stats().skipped_calls, 2);
+    assert_eq!(level.unported_behavior_stats().distinct_calls, 1);
 }

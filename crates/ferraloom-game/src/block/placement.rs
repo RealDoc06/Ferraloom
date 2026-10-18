@@ -16,7 +16,7 @@ pub struct DirectionalPlaceContext<'stack> {
 }
 impl<'stack> DirectionalPlaceContext<'stack> {
     pub fn new(
-        reader: &LevelReaderRef<'_>,
+        reader: &LevelReaderRef<'_, '_>,
         pos: BlockPos,
         direction: Direction,
         held_item: &'stack ItemStack,
@@ -55,35 +55,27 @@ impl<'stack> DirectionalPlaceContext<'stack> {
     pub fn is_secondary_use_active(&self) -> bool {
         false
     }
-    pub fn can_place(&self, reader: &LevelReaderRef<'_>) -> Result<bool, LevelError> {
+    pub fn can_place(&self, reader: &LevelReaderRef<'_, '_>) -> Result<bool, LevelError> {
         reader.can_be_replaced(reader.get_block_state(self.pos)?, self)
     }
     pub fn replacing_clicked_on_block(
         &self,
-        reader: &LevelReaderRef<'_>,
+        reader: &LevelReaderRef<'_, '_>,
     ) -> Result<bool, LevelError> {
         self.can_place(reader)
     }
 }
-impl LevelReaderRef<'_> {
+impl LevelReaderRef<'_, '_> {
     pub fn can_be_replaced(
         &self,
         state: BlockState,
         context: &DirectionalPlaceContext<'_>,
     ) -> Result<bool, LevelError> {
-        let behavior = match self {
-            Self::Server(level) => {
-                level.required_block_behavior(state.block(), BlockMethod::CanBeReplaced)?
-            }
-        };
+        let behavior = self.required_behavior(state.block(), BlockMethod::CanBeReplaced)?;
         behavior.can_be_replaced(state, context, self)
     }
     pub fn can_survive(&self, state: BlockState, pos: BlockPos) -> Result<bool, LevelError> {
-        let behavior = match self {
-            Self::Server(level) => {
-                level.required_block_behavior(state.block(), BlockMethod::CanSurvive)?
-            }
-        };
+        let behavior = self.required_behavior(state.block(), BlockMethod::CanSurvive)?;
         behavior.can_survive(state, pos, self)
     }
 }

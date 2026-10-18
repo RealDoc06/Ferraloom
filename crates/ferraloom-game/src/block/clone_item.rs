@@ -5,18 +5,14 @@ use ferraloom_data::BlockState;
 use ferraloom_protocol::component::ItemStack;
 use ferraloom_util::BlockPos;
 
-impl LevelReaderRef<'_> {
+impl LevelReaderRef<'_, '_> {
     pub fn get_clone_item_stack(
         &self,
         state: BlockState,
         pos: BlockPos,
         include_data: bool,
     ) -> Result<ItemStack, LevelError> {
-        let behavior = match self {
-            Self::Server(level) => {
-                level.required_block_behavior(state.block(), BlockMethod::CloneItemStack)?
-            }
-        };
+        let behavior = self.required_behavior(state.block(), BlockMethod::CloneItemStack)?;
         behavior.get_clone_item_stack(state, pos, include_data, self)
     }
 }
