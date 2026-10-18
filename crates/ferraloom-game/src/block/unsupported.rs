@@ -10,6 +10,12 @@ pub enum UnportedBehavior {
     Strict,
     Warn,
 }
+/// Approved whole-effect skips, distinct from queries that require a value.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum UnportedOperation {
+    WeatherStrike,
+    PackReload,
+}
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum BlockMethod {
     OnPlace,
@@ -37,6 +43,7 @@ pub enum BlockMethod {
     UpdateFromNeighbourShapes,
     TriggerEvent,
     IsCollisionShapeFullBlock,
+    CloneItemStack,
 }
 impl BlockMethod {
     pub(crate) const fn vanilla_method(self) -> Option<ferraloom_data::BlockMethod> {
@@ -60,12 +67,11 @@ impl BlockMethod {
             Self::IsCollisionShapeFullBlock => Vanilla::IsCollisionShapeFullBlock,
             Self::EntityInsideCollisionShape => Vanilla::GetEntityInsideCollisionShape,
             Self::TriggerEvent => Vanilla::TriggerEvent,
-            Self::CanPlaceLiquid
-            | Self::PlaceLiquid
-            | Self::PickupBlock
-            | Self::FluidTick
-            | Self::FluidRandomTick
-            | Self::BubbleColumnUpdate => return None,
+            Self::CloneItemStack => Vanilla::GetCloneItemStack,
+            Self::CanPlaceLiquid => Vanilla::CanPlaceLiquid,
+            Self::PlaceLiquid => Vanilla::PlaceLiquid,
+            Self::PickupBlock => Vanilla::PickupBlock,
+            Self::FluidTick | Self::FluidRandomTick | Self::BubbleColumnUpdate => return None,
         })
     }
     const fn can_skip(self) -> bool {
@@ -82,6 +88,7 @@ impl BlockMethod {
                 | Self::UpdateFromNeighbourShapes
                 | Self::TriggerEvent
                 | Self::IsCollisionShapeFullBlock
+                | Self::CloneItemStack
         )
     }
     pub const fn name(self) -> &'static str {
@@ -111,6 +118,7 @@ impl BlockMethod {
             Self::UpdateFromNeighbourShapes => "Block.updateFromNeighbourShapes",
             Self::TriggerEvent => "triggerEvent",
             Self::IsCollisionShapeFullBlock => "isCollisionShapeFullBlock",
+            Self::CloneItemStack => "getCloneItemStack",
         }
     }
 }
@@ -128,7 +136,7 @@ pub(crate) struct UnportedCalls {
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
 enum UnportedCall {
     Block(Block, BlockMethod),
-    WeatherStrike,
+    Operation(UnportedOperation),
 }
 impl UnportedCalls {
     fn record(&mut self, call: UnportedCall) {
@@ -142,8 +150,12 @@ impl UnportedCalls {
                     method.name(),
                     self.stats.skipped_calls
                 ),
-                UnportedCall::WeatherStrike => eprintln!(
+                UnportedCall::Operation(UnportedOperation::WeatherStrike) => eprintln!(
                     "Unported behavior skipped: ServerLevel#tickThunder strike (skipped calls: {}; RNG parity pending)",
+                    self.stats.skipped_calls
+                ),
+                UnportedCall::Operation(UnportedOperation::PackReload) => eprintln!(
+                    "Pack reload not yet supported (skipped calls: {})",
                     self.stats.skipped_calls
                 ),
             }
@@ -151,14 +163,17 @@ impl UnportedCalls {
     }
 }
 impl Level {
-    /// Temporary whole-effect exception approved for the thunder strike path.
-    /// Required position queries elsewhere keep their Unsupported result.
-    pub(crate) fn unported_weather_strike(&mut self) -> Result<(), LevelError> {
+    /// Record one approved unit-effect skip. This shares the block-method
+    /// policy, deduplication and visible counters; it never supplies query values.
+    pub fn unported_operation(&mut self, operation: UnportedOperation) -> Result<(), LevelError> {
         let calls = &mut self.region_mut().unported;
         if calls.policy == UnportedBehavior::Strict {
-            return Err(LevelError::UnsupportedWeatherQuery);
+            return Err(match operation {
+                UnportedOperation::WeatherStrike => LevelError::UnsupportedWeatherQuery,
+                UnportedOperation::PackReload => LevelError::UnsupportedPackReload,
+            });
         }
-        calls.record(UnportedCall::WeatherStrike);
+        calls.record(UnportedCall::Operation(operation));
         Ok(())
     }
     /// Dispatch the captured inside-block state with the configured unsupported

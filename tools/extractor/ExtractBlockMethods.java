@@ -22,12 +22,13 @@ public final class ExtractBlockMethods {
         "updateIndirectNeighbourShapes", "propagatesSkylightDown",
         "useShapeForLightOcclusion", "isPathfindable", "getLightDampening",
         "getEntityInsideCollisionShape", "bounceOn", "triggerEvent",
-        "getAnalogOutputSignal", "hasAnalogOutputSignal"
+        "getAnalogOutputSignal", "hasAnalogOutputSignal",
+        "canPlaceLiquid", "placeLiquid", "pickupBlock", "getCloneItemStack"
     );
 
     private static Method baseMethod(String name) {
         var candidates = new ArrayList<Method>();
-        for (Class<?> type : List.of(BlockBehaviour.class, Block.class)) {
+        for (Class<?> type : List.of(BlockBehaviour.class, Block.class, SimpleWaterloggedBlock.class)) {
             for (Method method : type.getDeclaredMethods()) {
                 int modifiers = method.getModifiers();
                 if (method.getName().equals(name) && !method.isSynthetic()
@@ -50,6 +51,15 @@ public final class ExtractBlockMethods {
                 return method;
             } catch (NoSuchMethodException missing) {
                 // Continue through the actual superclass chain, including anonymous classes.
+            }
+        }
+        if (base.getDeclaringClass().isInterface()) {
+            try {
+                // getMethod resolves the maximally specific inherited default,
+                // including subinterfaces, after all concrete class overrides.
+                return type.getMethod(base.getName(), base.getParameterTypes());
+            } catch (NoSuchMethodException absentInterface) {
+                return null;
             }
         }
         throw new NoSuchMethodException(type.getName() + ": " + base);
@@ -80,7 +90,8 @@ public final class ExtractBlockMethods {
             item.addProperty("class", block.getClass().getName());
             var owners = new JsonArray();
             for (Method base : bases) {
-                String owner = implementation(block.getClass(), base).getDeclaringClass().getName();
+                Method method = implementation(block.getClass(), base);
+                String owner = method == null ? "<not implemented>" : method.getDeclaringClass().getName();
                 owners.add(classes.computeIfAbsent(owner, key -> classes.size()));
             }
             item.add("declaring_classes", owners);

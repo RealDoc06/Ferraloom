@@ -60,6 +60,12 @@ impl Level {
             .vanilla_method()
             .is_some_and(|method| !block.overrides(method))
         {
+            if matches!(
+                method,
+                BlockMethod::CanPlaceLiquid | BlockMethod::PlaceLiquid | BlockMethod::PickupBlock
+            ) {
+                return Ok(&crate::block::fluid::SIMPLE_WATERLOGGED_BLOCK);
+            }
             return Ok(&crate::block::BASE_BLOCK);
         }
         crate::block::dispatch::ported_behavior(block, method)
@@ -199,7 +205,7 @@ impl Level {
             if flags.contains(UpdateFlags::NEIGHBORS) {
                 self.update_neighbors_at(pos, old.block())?;
                 if state.has_analog_output_signal() {
-                    self.update_neighbour_for_output_signal(pos, old.block())?;
+                    self.update_neighbour_for_output_signal(pos, state.block())?;
                 }
             }
             if !flags.contains(UpdateFlags::KNOWN_SHAPE) && limit > 0 {

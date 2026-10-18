@@ -742,6 +742,16 @@ fn main() {
     let collision_flags = collision_flags.as_array().expect("block collision flags");
     let block_count = block_properties["blocks"].as_array().unwrap().len();
     assert_eq!(collision_flags.len(), block_count);
+    let block_items = load(root, "block_items");
+    let block_items = block_items.as_array().expect("block items");
+    assert_eq!(block_items.len(), block_count);
+    write!(out, "static BLOCK_ITEMS: [Item; {block_count}] = [").unwrap();
+    for item in block_items {
+        let item = number(item);
+        assert!((item as usize) < item_report.as_array().unwrap().len());
+        write!(out, "Item({item}),").unwrap();
+    }
+    out.push_str("];\n");
     writeln!(
         out,
         "static BLOCK_HAS_COLLISION: [bool; {block_count}] = {:?};",

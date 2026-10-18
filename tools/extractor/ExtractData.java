@@ -264,6 +264,14 @@ public final class ExtractData {
         write(dir, "block_collision_flags", table);
     }
 
+    // Block#asItem reads a registry mapping (or a pure subclass override),
+    // never level state. Wall variants may share their standing block's item.
+    private static void blockItems(Path dir) throws Exception {
+        var table = new JsonArray();
+        for (var block : BuiltInRegistries.BLOCK) table.add(BuiltInRegistries.ITEM.getId(block.asItem()));
+        write(dir, "block_items", table);
+    }
+
     private static void collectClasses(Class<?> type, Set<Class<?>> classes) {
         if (type == null || !classes.add(type)) return;
         collectClasses(type.getSuperclass(), classes);
@@ -302,6 +310,7 @@ public final class ExtractData {
     public static void main(String[] args) throws Exception {
         SharedConstants.tryDetectVersion();
         Bootstrap.bootStrap();
+        if (args.length > 1 && args[1].equals("--block-items-only")) { blockItems(Path.of(args[0])); return; }
         if (args.length > 1 && args[1].equals("--block-collision-flags-only")) { blockCollisionFlags(Path.of(args[0])); return; }
         if (args.length > 1 && args[1].equals("--redstone-facts-only")) { redstoneStateFacts(Path.of(args[0])); return; }
         if (args.length > 1 && args[1].equals("--state-facts-only")) { stateFacts(Path.of(args[0])); return; }
@@ -311,6 +320,7 @@ public final class ExtractData {
             return;
         }
         blockCollisionFlags(Path.of(args[0]));
+        blockItems(Path.of(args[0]));
         redstoneStateFacts(Path.of(args[0]));
         airStates(Path.of(args[0]));
         if (args.length > 1 && args[1].equals("--air-states-only")) return;

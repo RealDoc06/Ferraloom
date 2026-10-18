@@ -11,7 +11,7 @@ impl BlockBehavior for Trace {
         &self,
         _state: BlockState,
         pos: BlockPos,
-        _source: Block,
+        source: Block,
         _orientation: Option<redstone::Orientation>,
         _moved: bool,
         level: &mut Level,
@@ -19,7 +19,7 @@ impl BlockBehavior for Trace {
         level.emit(LevelEffect::LevelEvent {
             pos,
             id: 99,
-            data: 0,
+            data: i32::from(source.protocol_id()),
         });
         if self.nested && pos == BlockPos::new(-1, 0, 0) {
             level.neighbor_changed(BlockPos::new(10, 0, 0), Block::STONE, None)?;
@@ -915,6 +915,31 @@ fn comparator_notifications_match_vanilla_direct_and_through_conductors() {
         .unwrap();
     let expected = vector("analog-neighbors").replace("analog:", "");
     assert_eq!(trace(&mut level), expected);
+    level
+        .set_block(
+            center,
+            Block::CAKE.default_state(),
+            crate::block::UpdateFlags::NEIGHBORS | crate::block::UpdateFlags::KNOWN_SHAPE,
+            512,
+        )
+        .unwrap();
+    let source_ids = level
+        .take_effects()
+        .into_iter()
+        .filter_map(|effect| match effect {
+            LevelEffect::LevelEvent { pos, id: 99, data } if pos == center.north(1) => Some(data),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    // Ordinary neighborChanged receives the removed block; the following
+    // comparator notification receives the newly placed analog-output block.
+    assert_eq!(
+        source_ids,
+        [
+            i32::from(Block::AIR.protocol_id()),
+            i32::from(Block::CAKE.protocol_id())
+        ]
+    );
 }
 
 #[test]
@@ -1136,4 +1161,153 @@ fn thunder_gate_and_position_draw_match_vanilla_before_the_pending_required_quer
             );
         }
     }
+}
+
+#[test]
+fn whole_effect_skips_share_the_block_policy_and_counters() {
+    use crate::block::{BlockMethod, UnportedBehavior, UnportedBehaviorStats, UnportedOperation};
+    let mut level = empty_level(&EMPTY);
+    assert_eq!(
+        level.unported_operation(UnportedOperation::PackReload),
+        Err(LevelError::UnsupportedPackReload)
+    );
+    assert_eq!(
+        level.unported_behavior_stats(),
+        UnportedBehaviorStats::default()
+    );
+    level.set_unported_behavior(UnportedBehavior::Warn);
+    level
+        .unported_operation(UnportedOperation::PackReload)
+        .unwrap();
+    level
+        .unported_operation(UnportedOperation::PackReload)
+        .unwrap();
+    level
+        .unported_operation(UnportedOperation::WeatherStrike)
+        .unwrap();
+    level
+        .optional_call(Block::OAK_LEAVES, BlockMethod::RandomTick, |_| {
+            Err::<(), _>(LevelError::UnsupportedBlock(Block::OAK_LEAVES))
+        })
+        .unwrap();
+    assert_eq!(
+        level.unported_behavior_stats(),
+        UnportedBehaviorStats {
+            skipped_calls: 4,
+            distinct_calls: 3
+        }
+    );
+}
+
+#[test]
+fn slab_waterlogging_matches_vanilla_interface_overrides_and_source_identity() {
+    use crate::block::{BlockMethod, LevelAccessRef, fluid::FlowingFluid};
+    use ferraloom_data::{
+        Item,
+        properties::{self, Type},
+        registries::fluid::Id as Fluid,
+    };
+    for line in include_str!("../../tests/java/level/slab-waterlogged.tsv").lines() {
+        let (case, expected) = line.split_once('\t').unwrap();
+        let (slab_type, fluid) = case
+            .strip_prefix("slab-waterlogged:")
+            .unwrap()
+            .split_once(':')
+            .unwrap();
+        let slab_type = match slab_type {
+            "bottom" => Type::Bottom,
+            "top" => Type::Top,
+            "double" => Type::Double,
+            _ => unreachable!(),
+        };
+        let fluid = Fluid::from_name(fluid).unwrap();
+        let fluid_state = if fluid == Fluid::FLOWING_WATER {
+            FlowingFluid::Water.flowing(7, false)
+        } else {
+            FlowingFluid::from_id(fluid).unwrap().source()
+        };
+        let mut level = flat_pool();
+        let pos = BlockPos::new(8, 0, 8);
+        let slab = Block::STONE_SLAB
+            .default_state()
+            .with(properties::TYPE, slab_type)
+            .unwrap();
+        level.set_block_state(pos, slab).unwrap();
+        let can = level
+            .required_block_behavior(slab.block(), BlockMethod::CanPlaceLiquid)
+            .unwrap()
+            .can_place_liquid(slab, fluid);
+        let placed = level
+            .required_block_behavior(slab.block(), BlockMethod::PlaceLiquid)
+            .unwrap()
+            .place_liquid(
+                slab,
+                pos,
+                fluid_state,
+                &mut LevelAccessRef::Server(&mut level),
+            )
+            .unwrap();
+        let wet = level.get_block_state(pos).unwrap();
+        assert_eq!(
+            level.has_scheduled_fluid_tick(pos, Fluid::WATER),
+            placed,
+            "{case}"
+        );
+        let bucket = level
+            .required_block_behavior(slab.block(), BlockMethod::PickupBlock)
+            .unwrap()
+            .pickup_block(wet, pos, &mut LevelAccessRef::Server(&mut level))
+            .unwrap()
+            .unwrap_or(Item::AIR);
+        assert_eq!(
+            format!(
+                "{can}:{placed}:{}:{}",
+                wet.get(properties::WATERLOGGED).unwrap(),
+                bucket.name()
+            ),
+            expected,
+            "{case}"
+        );
+        assert_eq!(
+            level
+                .get_block_state(pos)
+                .unwrap()
+                .get(properties::WATERLOGGED),
+            Some(false)
+        );
+    }
+}
+
+#[test]
+fn clone_item_query_matches_vanilla_base_and_rejects_unported_overrides() {
+    use crate::block::{BlockMethod, UnportedBehavior};
+    let mut level = Level::new(Region::new(&EMPTY));
+    for line in include_str!("../../tests/java/level/clone-items.tsv").lines() {
+        let (case, expected) = line.split_once('\t').unwrap();
+        let (block, include_data) = case
+            .strip_prefix("clone-item:")
+            .unwrap()
+            .rsplit_once(':')
+            .unwrap();
+        let state = Block::from_name(block).unwrap().default_state();
+        let stack = level
+            .get_clone_item_stack(state, BlockPos::ZERO, include_data.parse().unwrap())
+            .unwrap();
+        let (item, count) = stack
+            .0
+            .as_ref()
+            .map_or((ferraloom_data::Item::AIR, 0), |stack| {
+                (stack.item, stack.count)
+            });
+        assert_eq!(format!("{}:{count}", item.name()), expected, "{case}");
+    }
+    level.set_unported_behavior(UnportedBehavior::Warn);
+    assert_eq!(
+        level.get_clone_item_stack(Block::BEEHIVE.default_state(), BlockPos::ZERO, true),
+        Err(LevelError::UnsupportedBlockMethod(
+            Block::BEEHIVE,
+            BlockMethod::CloneItemStack
+        ))
+    );
+    assert_eq!(level.unported_behavior_stats().skipped_calls, 0);
 }
