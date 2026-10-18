@@ -6,10 +6,7 @@ use crate::{
     ticks::{ScheduledTick, TickPriority},
 };
 use ferraloom_data::{Block, registries::fluid::Id as Fluid};
-use ferraloom_util::{
-    BlockPos, ChunkPos,
-    random::{Random, RandomSource},
-};
+use ferraloom_util::{BlockPos, ChunkPos, random::Random};
 impl Level {
     pub fn set_game_time(&mut self, game_time: i64) {
         self.region_mut().game_time = game_time;
