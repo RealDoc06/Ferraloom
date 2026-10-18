@@ -230,7 +230,10 @@ mod tests {
         {
             let fields: Vec<_> = row.split('\t').collect();
             static BEHAVIORS: crate::Behaviors = crate::Behaviors::EMPTY;
-            let mut level = Level::new(crate::level::Region::new(&BEHAVIORS));
+            let mut level = Level::new(
+                crate::level::Region::new(&BEHAVIORS),
+                crate::level::LevelContext::fixture(0, 63),
+            );
             level.random().set_seed(fields[1].parse().unwrap());
             let tnt = PrimedTnt::new_at(&mut level, Vec3::new(1.0, 64.0, 1.0), None).unwrap();
             let expected: Vec<_> = fields[2]
@@ -258,7 +261,10 @@ mod tests {
     fn tnt_nbt_uses_native_lowercase_fields_and_keeps_unknown_data() {
         let mut tnt = PrimedTnt::new(1, 123);
         static BEHAVIORS: crate::Behaviors = crate::Behaviors::EMPTY;
-        let level = Level::new(crate::level::Region::new(&BEHAVIORS));
+        let level = Level::new(
+            crate::level::Region::new(&BEHAVIORS),
+            crate::level::LevelContext::fixture(0, 63),
+        );
         let mut tag = tnt.save_without_id(&level).unwrap();
         tag.insert("future", Tag::String("retained".into()));
         tag.insert("fuse", Tag::Short(17));

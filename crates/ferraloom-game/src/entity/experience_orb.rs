@@ -243,6 +243,17 @@ pub(crate) fn follow_nearby_player(entity: EntityRef, level: &mut Level) -> Resu
 }
 pub struct ExperienceOrbBehavior;
 impl Entity for ExperienceOrbBehavior {
+    fn player_touch(
+        &self,
+        _entity: EntityRef,
+        _player: EntityRef,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        level.unported_operation(crate::block::UnportedOperation::EntityMethod(
+            EntityType::EXPERIENCE_ORB,
+            super::EntityMethod::PlayerTouch,
+        ))
+    }
     fn do_water_splash_effect(
         &self,
         _entity: crate::entity::EntityRef,

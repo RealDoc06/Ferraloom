@@ -73,8 +73,7 @@ impl EntityCollisionView {
             always_collide_with_fluid,
             held_item: held_item
                 .filter(|stack| !stack.is_empty())
-                .and_then(|stack| stack.0.as_ref())
-                .map(|stack| stack.item),
+                .map(ferraloom_protocol::component::ItemStack::item),
             entity: Self {
                 entity,
                 living: level.entity_state(entity)?.as_living().is_some(),

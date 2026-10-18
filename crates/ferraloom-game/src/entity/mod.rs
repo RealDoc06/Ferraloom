@@ -209,6 +209,21 @@ impl EntityDataView for LivingEntity {
         state.as_living_mut()
     }
 }
+/// Typed virtual effects whose complete implementation belongs to a later slice.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum EntityMethod {
+    PlayerTouch,
+    SwingAndResetAttackStrength,
+}
+impl EntityMethod {
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::PlayerTouch => "playerTouch",
+            Self::SwingAndResetAttackStrength => "swingAndResetAttackStrength",
+        }
+    }
+}
+
 /// Narrow source used by the unarmored damage primitive; tags grow with ports.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct DamageSource {
@@ -226,6 +241,15 @@ pub fn trace_base_entity_refs(base: &EntityData, references: &mut Vec<EntityRef>
 ///
 /// Dispatch objects are stateless. Never hold a state borrow across a world call.
 pub trait Entity: Sync {
+    /// Port of Entity#playerTouch; concrete pickup entities override this hook.
+    fn player_touch(
+        &self,
+        _entity: EntityRef,
+        _player: EntityRef,
+        _level: &mut Level,
+    ) -> Result<(), LevelError> {
+        Ok(())
+    }
     /// Host lifetime tracing is required for every dispatcher. Declare all held
     /// EntityRef fields here; UUID lookup references do not retain old states.
     fn trace_entity_refs(&self, state: &EntityState, references: &mut Vec<EntityRef>);
@@ -330,6 +354,42 @@ pub trait Entity: Sync {
     ) -> Result<(), LevelError> {
         let movements = inside_block::collect_movements(entity, level)?;
         inside_block::apply_effects(self, entity, &movements, level)
+    }
+    /// Port of Entity#applyEffectsFromBlocks(Vec3,Vec3), without draining or
+    /// replacing movementThisTick/finalMovementsThisTick.
+    fn apply_effects_from_blocks_between(
+        &self,
+        entity: EntityRef,
+        from: ferraloom_util::Vec3,
+        to: ferraloom_util::Vec3,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        inside_block::apply_effects(
+            self,
+            entity,
+            &[Movement {
+                from,
+                to,
+                axis_dependent_original_movement: None,
+            }],
+            level,
+        )
+    }
+    /// Port of Entity#getPistonPushReaction. Ported subclasses inherit PUSH_PULL.
+    fn piston_push_reaction(
+        &self,
+        _entity: EntityRef,
+        _level: &Level,
+    ) -> Result<ferraloom_data::PushReaction, LevelError> {
+        Ok(ferraloom_data::PushReaction::PushPull)
+    }
+    /// Port of Entity#isIgnoringBlockTriggers. Spectator filtering is separate.
+    fn is_ignoring_block_triggers(
+        &self,
+        _entity: EntityRef,
+        _level: &Level,
+    ) -> Result<bool, LevelError> {
+        Ok(false)
     }
     fn can_freeze(&self, _entity: EntityRef, _level: &Level) -> Result<bool, LevelError> {
         Ok(true)

@@ -13,7 +13,10 @@ use std::{collections::BTreeMap, num::NonZeroI32};
 const VECTORS: &str = include_str!("../../../../tests/java/entity/vectors.tsv");
 fn level() -> Level {
     static BEHAVIORS: Behaviors = Behaviors::EMPTY;
-    Level::new(Region::new(&BEHAVIORS))
+    Level::new(
+        Region::new(&BEHAVIORS),
+        crate::level::LevelContext::fixture(0, 63),
+    )
 }
 fn bits(v: Vec3) -> String {
     format!(
@@ -76,7 +79,7 @@ fn packet_text(packet: &Packet) -> String {
                 .map(|entry| format!(
                     "{}={}:{}",
                     crate::entity::player::equipment::slot_name(entry.slot),
-                    entry.item.0.as_ref().unwrap().item.name(),
+                    entry.item.item().name(),
                     inventory::count(&entry.item)
                 ))
                 .collect::<Vec<_>>()
@@ -231,7 +234,7 @@ fn real_player_pairing_and_updates_preserve_equipment_attributes_head_and_motion
                 health
                     .add_transient_modifier(Arc::new(AttributeModifier {
                         id: "minecraft:bonus".parse().unwrap(),
-                        amount: 3.0,
+                        amount: 3.0.into(),
                         operation: AttributeOperation::AddValue,
                     }))
                     .unwrap();

@@ -56,7 +56,8 @@ pub fn place_recipe(
     let biggest = available.biggest_craftable_stack(&placement.ingredients, i32::MAX);
     if matches {
         for stack in access.input_grid() {
-            if let Some(contents) = &stack.0
+            if !stack.is_empty()
+                && let Some(contents) = &stack.0
                 && max_stack_size(stack)?.min(biggest) < contents.count.wrapping_add(1)
             {
                 access.inventory_changed();
@@ -70,6 +71,7 @@ pub fn place_recipe(
         access
             .input_grid()
             .iter()
+            .filter(|stack| !stack.is_empty())
             .filter_map(|stack| stack.0.as_ref().map(|stack| stack.count))
             .min()
             .map_or(i32::MAX, |count| count.wrapping_add(1))

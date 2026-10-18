@@ -142,14 +142,6 @@ not participate. Float limits are measured with sanitizeValue at both infinities
 unbounded ends remain null. The Rust build consumes this committed table without
 Java. No environment value is sampled from a fabricated live level.
 
-`ExtractCenterSupport <output-file>` extracts `BlockStateBase.Cache` support
-entries for `SupportType.CENTER` into `block_center_support.json`. The native
-cache is initialized once with `EmptyBlockGetter` at `BlockPos.ZERO`, alongside
-its existing FULL entries. Extraction calls the cached query only when
-`!block.hasDynamicShape()`; dynamic states record no cached result. No live
-level, biome, position, collision context or tag membership is sampled. Bit six
-marks cache presence, and bits zero through five follow native direction order.
-
 `ExtractBlockDropTables <output-json>` records the optional actual block loot
 keys, including shared keys and absent drops. `ExtractBlockMethods` also records
 exact `getDrops` and `spawnAfterBreak` ownership, so unported subclass overrides
@@ -160,3 +152,9 @@ against `FeatureFlags.VANILLA_SET` for every block and item. The dedicated serve
 currently advertises precisely that set. The generated const queries are named
 `is_enabled_in_vanilla` so a future experimental-feature runtime cannot mistake
 them for checks against an arbitrary live feature set.
+
+`ExtractBlockEntityTypes <output-json>` records valid blocks, OP-only NBT flags
+and whether each registered receiver implements `Nameable`. The last fact is
+checked against the actual factory receiver for every valid block, including
+aliases. It is independent of whether a receiver currently has a custom name;
+`CopyNameFunction` reads nullable `Nameable#getCustomName` at evaluation time.

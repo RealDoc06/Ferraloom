@@ -230,6 +230,10 @@ impl LiveWorldGenLevel for Level {
             .map(|shape| shape.is_empty())
     }
     fn brightness(&self, layer: LightLayer, p: [i32; 3]) -> Result<u8, Error> {
+        let layer = match layer {
+            LightLayer::Sky => ferraloom_light::LightLayer::Sky,
+            LightLayer::Block => ferraloom_light::LightLayer::Block,
+        };
         required(Level::brightness(self, layer, pos(p)))
     }
     fn vine_acceptable_neighbor(&self, p: [i32; 3], direction: Direction) -> Result<bool, Error> {
@@ -451,7 +455,7 @@ mod tests {
         level
             .add_chunk(LevelChunk::new(
                 ChunkPos::ZERO,
-                0..1,
+                -4..20,
                 ferraloom_chunk::LevelChunkSection::new(
                     ferraloom_chunk::Strategy::block_states(),
                     ferraloom_chunk::Strategy::biomes(Arc::new(
@@ -536,23 +540,53 @@ mod tests {
     fn live_reads_keep_missing_chunks_required_and_wg_heightmaps_cached() {
         let mut level = level();
         let p = BlockPos::new(8, 4, 8);
+        let expected: std::collections::BTreeMap<_, _> =
+            include_str!("../../tests/java/level/live-heightmaps.tsv")
+                .lines()
+                .map(|line| {
+                    let (name, value) = line.split_once('\t').unwrap();
+                    (name, value.parse::<i32>().unwrap())
+                })
+                .collect();
+        assert_eq!(level.min_build_height(), expected["minimum"]);
         level
             .set_block_state(p, Block::STONE.default_state())
             .unwrap();
         assert_eq!(
             LiveWorldGenLevel::height_at(&level, Heightmap::OceanFloorWg, 8, 8).unwrap(),
-            5
+            expected["first-ocean-floor-wg"]
         );
         level
-            .set_block_state(p, Block::AIR.default_state())
+            .set_block(
+                p,
+                Block::AIR.default_state(),
+                UpdateFlags::SKIP_ALL_SIDEEFFECTS,
+                UPDATE_LIMIT,
+            )
             .unwrap();
         assert_eq!(
             LiveWorldGenLevel::height_at(&level, Heightmap::OceanFloorWg, 8, 8).unwrap(),
-            5
+            expected["cached-ocean-floor-wg"]
         );
         assert_eq!(
             LiveWorldGenLevel::height_at(&level, Heightmap::WorldSurfaceWg, 8, 8).unwrap(),
-            0
+            expected["first-world-surface-wg"]
+        );
+        level
+            .set_block(
+                p.below(2),
+                Block::DIRT.default_state(),
+                UpdateFlags::SKIP_ALL_SIDEEFFECTS,
+                UPDATE_LIMIT,
+            )
+            .unwrap();
+        assert_eq!(
+            LiveWorldGenLevel::height_at(&level, Heightmap::OceanFloor, 8, 8).unwrap(),
+            expected["updated-ocean-floor"]
+        );
+        assert_eq!(
+            LiveWorldGenLevel::height_at(&level, Heightmap::WorldSurfaceWg, 8, 8).unwrap(),
+            expected["still-cached-world-surface-wg"]
         );
         for policy in [UnportedBehavior::Strict, UnportedBehavior::Warn] {
             level.set_unported_behavior(policy);

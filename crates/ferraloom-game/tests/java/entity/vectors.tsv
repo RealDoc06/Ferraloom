@@ -49,6 +49,9 @@ tracked-steps	6	3fe8000000000000,405000624dd2f1aa,bff3333333333334	false	S:1:3fe
 tracked-steps	7	3fec000000000000,40500072b020c49c,bff6666666666667	false	-
 tracked-steps	8	3ff0000000000000,40500083126e978d,bff999999999999a	false	-
 tracked-steps	9	3ff2000000000000,4050009374bc6a7f,bffccccccccccccd	false	S:1:3fec000000000000,40500072b020c49c,bff6666666666667;2:3ff2000000000000,4050009374bc6a7f,bffccccccccccccd
+player-profile-uuid	0	00000000-0000-0001-0000-000000000002,00000000-0000-0001-0000-000000000002,00000000-0000-0001-0000-000000000002
+player-profile-uuid	1	00000000-0000-0001-0000-000000000002,00000000-0000-0001-0000-000000000002,00000000-0000-0001-0000-000000000002
+player-profile-uuid	2	00000000-0000-0001-0000-000000000002,00000000-0000-0001-0000-000000000002,00000000-0000-0001-0000-000000000002
 entity-reference	true,true,true,true,true
 tnt-launch	0	3f9455701d104043,3fc99999a0000000,3f638bb864b49459
 tnt-launch	123	3f9430950c2afab4,3fc99999a0000000,3f6b7c20f66a8d13
@@ -61,6 +64,19 @@ nbt-rotation	4	42150000,c2b40000,42150000,c2b40000	3fe0000000000000,3fd000000000
 nbt-motion	0	3ff0000000000000,4000000000000000,4008000000000000
 nbt-motion	1	4024000000000000,0,0
 nbt-motion	2	0,0,3fd0000000000000
+player-spawn-rotation	fresh_zero	-	0,0	false	0,0	0,0,0,0	4021000000000000,4050100000000000,c029800000000000	4021000000000000,4050100000000000,c029800000000000	4021000000000000,4050100000000000,c029800000000000	5c9f20d58361b331
+player-spawn-rotation	fresh_respawn	-	30,-12.5	false	41f00000,c1480000	41f00000,c1480000,41f00000,c1480000	4021000000000000,4050100000000000,c029800000000000	4021000000000000,4050100000000000,c029800000000000	4021000000000000,4050100000000000,c029800000000000	5c9f20d58361b331
+player-spawn-rotation	saved_without_rotation	{}	30,-12.5	false	41f00000,c1480000	41f00000,c1480000,41f00000,c1480000	4021000000000000,4050100000000000,c029800000000000	4021000000000000,4050100000000000,c029800000000000	4021000000000000,4050100000000000,c029800000000000	5c9f20d58361b331
+player-spawn-rotation	saved_rotation	{Rotation:[37.25f,-28.125f]}	30,-12.5	true	42150000,c1e10000	42150000,c1e10000,42150000,c1e10000	4021000000000000,4050100000000000,c029800000000000	4021000000000000,4050100000000000,c029800000000000	4021000000000000,4050100000000000,c029800000000000	5c9f20d58361b331
+player-spawn-rotation	saved_unwrapped	{Rotation:[721.25f,120.25f]}	30,-12.5	true	44345000,42f08000	44345000,42b40000,44345000,42b40000	4021000000000000,4050100000000000,c029800000000000	4021000000000000,4050100000000000,c029800000000000	4021000000000000,4050100000000000,c029800000000000	5c9f20d58361b331
+player-spawn-rotation	saved_signed_zero	{Rotation:[-0.0f,-0.0f]}	30,-12.5	true	0,0	0,0,0,0	4021000000000000,4050100000000000,c029800000000000	4021000000000000,4050100000000000,c029800000000000	4021000000000000,4050100000000000,c029800000000000	5c9f20d58361b331
+player-spawn-rotation	rotation_long	{Rotation:[70.0f,10.0f,99.0f]}	30,-12.5	true	428c0000,41200000	428c0000,41200000,428c0000,41200000	4021000000000000,4050100000000000,c029800000000000	4021000000000000,4050100000000000,c029800000000000	4021000000000000,4050100000000000,c029800000000000	5c9f20d58361b331
+player-spawn-rotation	rotation_short	{Rotation:[70.0f]}	30,-12.5	false	41f00000,c1480000	41f00000,c1480000,41f00000,c1480000	4021000000000000,4050100000000000,c029800000000000	4021000000000000,4050100000000000,c029800000000000	4021000000000000,4050100000000000,c029800000000000	5c9f20d58361b331
+player-spawn-rotation	rotation_array	{Rotation:[I;45,-15]}	30,-12.5	true	42340000,c1700000	42340000,c1700000,42340000,c1700000	4021000000000000,4050100000000000,c029800000000000	4021000000000000,4050100000000000,c029800000000000	4021000000000000,4050100000000000,c029800000000000	5c9f20d58361b331
+player-spawn-rotation	rotation_partial	{Rotation:[70.0f,10.0f,'invalid']}	30,-12.5	true	428c0000,41200000	428c0000,41200000,428c0000,41200000	4021000000000000,4050100000000000,c029800000000000	4021000000000000,4050100000000000,c029800000000000	4021000000000000,4050100000000000,c029800000000000	5c9f20d58361b331
+player-spawn-rotation	invalid_dimension	{Dimension:'Bad Dimension',Rotation:[70.0f,10.0f]}	30,-12.5	true	428c0000,41200000	428c0000,41200000,428c0000,41200000	4021000000000000,4050100000000000,c029800000000000	4021000000000000,4050100000000000,c029800000000000	4021000000000000,4050100000000000,c029800000000000	5c9f20d58361b331
+player-spawn-rotation	position_short	{Pos:[1.0d,2.0d],Rotation:[70.0f,10.0f]}	30,-12.5	true	428c0000,41200000	428c0000,41200000,428c0000,41200000	4021000000000000,4050100000000000,c029800000000000	4021000000000000,4050100000000000,c029800000000000	4021000000000000,4050100000000000,c029800000000000	5c9f20d58361b331
+player-spawn-rotation	position_long	{Pos:[1.0d,2.0d,3.0d,4.0d],Rotation:[70.0f,10.0f]}	30,-12.5	true	428c0000,41200000	428c0000,41200000,428c0000,41200000	4021000000000000,4050100000000000,c029800000000000	4021000000000000,4050100000000000,c029800000000000	4021000000000000,4050100000000000,c029800000000000	5c9f20d58361b331
 border-lerp	0	0	4059100000000000,c048f00000000000,4049300000000000,c049300000000000,4048f00000000000,4049300000000000,4049300000000000,3fd8000000000000,4059700000000000	4	GROWING
 border-lerp	0	1	4059280000000000,c048f00000000000,4049300000000000,c049300000000000,4048f00000000000,40493c0000000000,4049480000000000,3fd8000000000000,4059700000000000	3	GROWING
 border-lerp	0	2	4059400000000000,c049080000000000,4049480000000000,c049480000000000,4049080000000000,4049540000000000,4049600000000000,3fd8000000000000,4059700000000000	2	GROWING
@@ -303,6 +319,19 @@ teleport-transform	384	0,3fb0000000000000,402c000000000000	8000000000000000,3fc9
 teleport-set	384	0,3fb0000000000000,402c000000000000	8000000000000000,3fc999999999999a,bfe10f76c83faa52	c2b70000,42b40000	c2b70000	0,3fb0000000000000,402c000000000000
 teleport-transform	2147483647	4021000000000000,4050140000000000,3ff4000000000000	bfd68c82aea63880,bfc74e0b3e666666,bfe14ebdae7b8c1e	441d7000,42b40000
 teleport-set	2147483647	4021000000000000,4050140000000000,3ff4000000000000	bfd68c82aea63880,bfc74e0b3e666666,bfe14ebdae7b8c1e	441d7000,42b40000	441d7000	4021000000000000,4050140000000000,3ff4000000000000
+teleport-pending-rotation	44345000,43870000	3fa00000,c2b40000,3fa00000,c2b40000	4021000000000000,4050100000000000,c029800000000000
+teleport-pending-rotation	c4345000,c3b40000	bfa00000,80000000,bfa00000,80000000	4021000000000000,4050100000000000,c029800000000000
+teleport-pending-rotation	42150000,c1e10000	42150000,c1e10000,42150000,c1e10000	4021000000000000,4050100000000000,c029800000000000
+teleport-confirm-snap	4021000000000000,4050000000000000,4021000000000000	4021000000000000,4050000000000000,4021000000000000	4021000000000000,4050000000000000,4021000000000000	4021000000000000,4050000000000000,4021000000000000	3fa00000,44345000,3fa00000
+teleport-confirm-snap	417c9c3810000000,4050400000000000,c17c9c3810000000	417c9c3800000000,4050400000000000,c17c9c3800000000	417c9c3800000000,4050400000000000,c17c9c3800000000	417c9c3810000000,4050400000000000,c17c9c3810000000	3fa00000,44345000,3fa00000
+player-may-build	0	false	true,false,false,false
+player-may-build	0	true	true,false,false,false
+player-may-build	1	false	true,false,false,false
+player-may-build	1	true	true,true,false,false
+player-may-build	2	false	false,false,true,true
+player-may-build	2	true	false,false,true,true
+player-may-build	3	false	false,true,true,true
+player-may-build	3	true	false,true,true,true
 teleport-passengers	1	4025000000000000,4050800000000000,4029000000000000	4025000000000000,4050800000000000,4029000000000000	3fd0000000000000,bfc0000000000000,3fe0000000000000	0,80000000
 teleport-passengers	2	4025000000000000,4050beb852000000,4029000000000000	4025000000000000,4050beb852000000,4029000000000000	3fd0000000000000,bfc0000000000000,3fe0000000000000	42150000,c1680000
 teleport-passengers	3	4025000000000000,4050fd70a4000000,4029000000000000	4025000000000000,4050fd70a4000000,4029000000000000	3fd0000000000000,bfc0000000000000,3fe0000000000000	42950000,c1e80000
@@ -312,6 +341,245 @@ push-entities	2	1	1	2:0,3fe0000000000000,0;1:0,3fb0000000000000,0	40210000000000
 push-entities	3	0	0	-	4021000000000000,404ff80000000000,4021000000000000	4021800000000000,404fc00000000000,4021000000000000	4021000000000000,404ff80000000000,4021000000000000
 push-entities	4	1	1	2:0,3fe0000000000000,0;1:0,3fb0000000000000,0	4021000000000000,4050000000000000,4021000000000000	4021800000000000,4050000000000000,4021000000000000	4021000000000000,404ff80000000000,4021000000000000
 push-entities	5	1	0	-	4021000000000000,404ff80000000000,4021000000000000	4021800000000000,404fc00000000000,4021000000000000	4021000000000000,404ff80000000000,4021000000000000
+player-instabuild	0	false	false,true,true,true,false
+player-instabuild	0	true	false,true,true,true,false
+player-instabuild	1	false	true,false,false,false,true
+player-instabuild	1	true	true,false,false,false,true
+player-instabuild	2	false	false,true,true,true,false
+player-instabuild	2	true	false,true,true,true,false
+player-instabuild	3	false	false,true,true,true,false
+player-instabuild	3	true	false,true,true,true,false
+player-interaction	false	false,5,3,true
+player-interaction	true	true,5,3,true
+player-range	0	0.0	5,65,0	false
+player-range	0	0.0	0,70,0	true
+player-range	0	0.0	0,65,0	true
+player-range	0	1.0	5,65,0	true
+player-range	0	1.0	0,70,0	true
+player-range	0	1.0	0,65,0	true
+player-range	0	4.0	5,65,0	true
+player-range	0	4.0	0,70,0	true
+player-range	0	4.0	0,65,0	true
+player-range	0	-1.0	5,65,0	false
+player-range	0	-1.0	0,70,0	false
+player-range	0	-1.0	0,65,0	true
+player-range	1	0.0	5,65,0	false
+player-range	1	0.0	0,70,0	true
+player-range	1	0.0	0,65,0	true
+player-range	1	1.0	5,65,0	true
+player-range	1	1.0	0,70,0	true
+player-range	1	1.0	0,65,0	true
+player-range	1	4.0	5,65,0	true
+player-range	1	4.0	0,70,0	true
+player-range	1	4.0	0,65,0	true
+player-range	1	-1.0	5,65,0	false
+player-range	1	-1.0	0,70,0	false
+player-range	1	-1.0	0,65,0	true
+player-range	2	0.0	5,65,0	true
+player-range	2	0.0	0,70,0	true
+player-range	2	0.0	0,65,0	true
+player-range	2	1.0	5,65,0	true
+player-range	2	1.0	0,70,0	true
+player-range	2	1.0	0,65,0	true
+player-range	2	4.0	5,65,0	true
+player-range	2	4.0	0,70,0	true
+player-range	2	4.0	0,65,0	true
+player-range	2	-1.0	5,65,0	false
+player-range	2	-1.0	0,70,0	false
+player-range	2	-1.0	0,65,0	true
+player-range	3	0.0	5,65,0	false
+player-range	3	0.0	0,70,0	false
+player-range	3	0.0	0,65,0	false
+player-range	3	1.0	5,65,0	false
+player-range	3	1.0	0,70,0	false
+player-range	3	1.0	0,65,0	true
+player-range	3	4.0	5,65,0	false
+player-range	3	4.0	0,70,0	false
+player-range	3	4.0	0,65,0	true
+player-range	3	-1.0	5,65,0	false
+player-range	3	-1.0	0,70,0	false
+player-range	3	-1.0	0,65,0	true
+player-range	4	0.0	5,65,0	false
+player-range	4	0.0	0,70,0	false
+player-range	4	0.0	0,65,0	false
+player-range	4	1.0	5,65,0	false
+player-range	4	1.0	0,70,0	false
+player-range	4	1.0	0,65,0	true
+player-range	4	4.0	5,65,0	false
+player-range	4	4.0	0,70,0	false
+player-range	4	4.0	0,65,0	true
+player-range	4	-1.0	5,65,0	false
+player-range	4	-1.0	0,70,0	false
+player-range	4	-1.0	0,65,0	true
+cooldown-group	0	minecraft:stone
+cooldown-group	1	minecraft:shared
+cooldown-group	2	minecraft:shared
+cooldown-group	3	minecraft:air
+cooldown	fresh	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0	-
+cooldown	added	3f800000,3f555555,3f800000,nan,0,3f800000,3f400000,3f800000,nan,0,3f800000,3f400000,3f800000,nan,0,0,0,0,0,0	minecraft:stone:3|minecraft:shared:2
+cooldown	tick1	3f2aaaab,3f000000,3f2aaaab,nan,0,3f000000,3e800000,3f000000,nan,0,3f000000,3e800000,3f000000,nan,0,0,0,0,0,0	-
+cooldown	replace	3f2aaaab,3f000000,3f2aaaab,nan,0,3f800000,3f600000,3f800000,nan,0,3f800000,3f600000,3f800000,nan,0,0,0,0,0,0	minecraft:shared:4
+cooldown	tick2	3eaaaaab,3e2aaaab,3eaaaaab,nan,0,3f400000,3f200000,3f400000,nan,0,3f400000,3f200000,3f400000,nan,0,0,0,0,0,0	-
+cooldown	tick3	0,0,0,0,0,3f000000,3ec00000,3f000000,nan,0,3f000000,3ec00000,3f000000,nan,0,0,0,0,0,0	minecraft:stone:0
+cooldown	remove-absent	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0	minecraft:shared:0|minecraft:shared:0
+cooldown	nonpositive	nan,0,nan,nan,0,3f800000,3f800000,3f800000,nan,3f800000,3f800000,3f800000,3f800000,nan,3f800000,0,0,0,0,0	minecraft:stone:0|minecraft:shared:-1
+cooldown	nonpositive-expire	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0	minecraft:stone:0|minecraft:shared:0
+cooldown	rehash	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0	minecraft:group_0:1|minecraft:group_1:1|minecraft:group_2:1|minecraft:group_3:1|minecraft:group_4:1|minecraft:group_5:1|minecraft:group_6:1|minecraft:group_7:1|minecraft:group_8:1|minecraft:group_9:1|minecraft:group_10:1|minecraft:group_11:1|minecraft:group_12:1|minecraft:group_13:1|minecraft:group_14:1|minecraft:group_15:1|minecraft:group_16:1|minecraft:group_17:1|minecraft:group_18:1|minecraft:group_19:1|minecraft:group_20:1|minecraft:group_21:1|minecraft:group_22:1|minecraft:group_23:1
+cooldown	iterator-expire	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0	minecraft:group_9:0|minecraft:group_7:0|minecraft:group_19:0|minecraft:group_8:0|minecraft:group_18:0|minecraft:group_5:0|minecraft:group_17:0|minecraft:group_6:0|minecraft:group_16:0|minecraft:group_3:0|minecraft:group_15:0|minecraft:group_4:0|minecraft:group_14:0|minecraft:group_1:0|minecraft:group_13:0|minecraft:group_2:0|minecraft:group_12:0|minecraft:group_23:0|minecraft:group_11:0|minecraft:group_22:0|minecraft:group_0:0|minecraft:group_10:0|minecraft:group_21:0|minecraft:group_20:0
+cooldown	overflow-add	0,0,0,nan,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0	minecraft:stone:2
+cooldown	overflow-end	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0	minecraft:stone:0
+cooldown	wrap-tick	0,0,0,0,0,0,0,0,nan,0,0,0,0,nan,0,0,0,0,0,0	minecraft:shared:2
+tool-tag	minecraft:incorrect_for_iron_tool	-
+tool-tag	minecraft:incorrect_for_netherite_tool	-
+tool-tag	minecraft:incorrect_for_wooden_tool	minecraft:diamond_ore,minecraft:iron_block
+tool-tag	minecraft:mineable/pickaxe	minecraft:stone,minecraft:diamond_ore,minecraft:iron_block
+tool-tag	minecraft:shears_extreme_breaking_speed	minecraft:oak_leaves
+tool-tag	minecraft:shears_major_breaking_speed	minecraft:white_wool
+tool-tag	minecraft:shears_minor_breaking_speed	-
+tool-drops	empty	minecraft:stone	false,false,true
+tool-drops	empty	minecraft:dirt	false,true,false
+tool-drops	empty	minecraft:diamond_ore	false,false,true
+tool-drops	empty	minecraft:oak_log	false,true,false
+tool-drops	empty	minecraft:cobweb	false,false,true
+tool-drops	empty	minecraft:oak_leaves	false,true,false
+tool-drops	empty	minecraft:white_wool	false,true,false
+tool-drops	empty	minecraft:iron_block	false,false,true
+tool-drops	stick	minecraft:stone	false,false,true
+tool-drops	stick	minecraft:dirt	false,true,false
+tool-drops	stick	minecraft:diamond_ore	false,false,true
+tool-drops	stick	minecraft:oak_log	false,true,false
+tool-drops	stick	minecraft:cobweb	false,false,true
+tool-drops	stick	minecraft:oak_leaves	false,true,false
+tool-drops	stick	minecraft:white_wool	false,true,false
+tool-drops	stick	minecraft:iron_block	false,false,true
+tool-drops	wooden	minecraft:stone	true,true,true
+tool-drops	wooden	minecraft:dirt	false,true,false
+tool-drops	wooden	minecraft:diamond_ore	false,false,true
+tool-drops	wooden	minecraft:oak_log	false,true,false
+tool-drops	wooden	minecraft:cobweb	false,false,true
+tool-drops	wooden	minecraft:oak_leaves	false,true,false
+tool-drops	wooden	minecraft:white_wool	false,true,false
+tool-drops	wooden	minecraft:iron_block	false,false,true
+tool-drops	iron	minecraft:stone	true,true,true
+tool-drops	iron	minecraft:dirt	false,true,false
+tool-drops	iron	minecraft:diamond_ore	true,true,true
+tool-drops	iron	minecraft:oak_log	false,true,false
+tool-drops	iron	minecraft:cobweb	false,false,true
+tool-drops	iron	minecraft:oak_leaves	false,true,false
+tool-drops	iron	minecraft:white_wool	false,true,false
+tool-drops	iron	minecraft:iron_block	true,true,true
+tool-drops	shears	minecraft:stone	false,false,true
+tool-drops	shears	minecraft:dirt	false,true,false
+tool-drops	shears	minecraft:diamond_ore	false,false,true
+tool-drops	shears	minecraft:oak_log	false,true,false
+tool-drops	shears	minecraft:cobweb	true,true,true
+tool-drops	shears	minecraft:oak_leaves	false,true,false
+tool-drops	shears	minecraft:white_wool	false,true,false
+tool-drops	shears	minecraft:iron_block	false,false,true
+tool-drops	removed	minecraft:stone	false,false,true
+tool-drops	removed	minecraft:dirt	false,true,false
+tool-drops	removed	minecraft:diamond_ore	false,false,true
+tool-drops	removed	minecraft:oak_log	false,true,false
+tool-drops	removed	minecraft:cobweb	false,false,true
+tool-drops	removed	minecraft:oak_leaves	false,true,false
+tool-drops	removed	minecraft:white_wool	false,true,false
+tool-drops	removed	minecraft:iron_block	false,false,true
+tool-drops	zero	minecraft:stone	false,false,true
+tool-drops	zero	minecraft:dirt	false,true,false
+tool-drops	zero	minecraft:diamond_ore	false,false,true
+tool-drops	zero	minecraft:oak_log	false,true,false
+tool-drops	zero	minecraft:cobweb	false,false,true
+tool-drops	zero	minecraft:oak_leaves	false,true,false
+tool-drops	zero	minecraft:white_wool	false,true,false
+tool-drops	zero	minecraft:iron_block	false,false,true
+tool-drops	speed_and_deny	minecraft:stone	true,true,true
+tool-drops	speed_and_deny	minecraft:dirt	false,true,false
+tool-drops	speed_and_deny	minecraft:diamond_ore	false,false,true
+tool-drops	speed_and_deny	minecraft:oak_log	false,true,false
+tool-drops	speed_and_deny	minecraft:cobweb	false,false,true
+tool-drops	speed_and_deny	minecraft:oak_leaves	false,true,false
+tool-drops	speed_and_deny	minecraft:white_wool	false,true,false
+tool-drops	speed_and_deny	minecraft:iron_block	true,true,true
+tool-drops	deny_first	minecraft:stone	false,false,true
+tool-drops	deny_first	minecraft:dirt	false,true,false
+tool-drops	deny_first	minecraft:diamond_ore	false,false,true
+tool-drops	deny_first	minecraft:oak_log	false,true,false
+tool-drops	deny_first	minecraft:cobweb	false,false,true
+tool-drops	deny_first	minecraft:oak_leaves	false,true,false
+tool-drops	deny_first	minecraft:white_wool	false,true,false
+tool-drops	deny_first	minecraft:iron_block	false,false,true
+tool-drops	allow_first	minecraft:stone	true,true,true
+tool-drops	allow_first	minecraft:dirt	false,true,false
+tool-drops	allow_first	minecraft:diamond_ore	false,false,true
+tool-drops	allow_first	minecraft:oak_log	false,true,false
+tool-drops	allow_first	minecraft:cobweb	false,false,true
+tool-drops	allow_first	minecraft:oak_leaves	false,true,false
+tool-drops	allow_first	minecraft:white_wool	false,true,false
+tool-drops	allow_first	minecraft:iron_block	false,false,true
+tool-drops	direct_empty	minecraft:stone	false,false,true
+tool-drops	direct_empty	minecraft:dirt	false,true,false
+tool-drops	direct_empty	minecraft:diamond_ore	false,false,true
+tool-drops	direct_empty	minecraft:oak_log	false,true,false
+tool-drops	direct_empty	minecraft:cobweb	false,false,true
+tool-drops	direct_empty	minecraft:oak_leaves	false,true,false
+tool-drops	direct_empty	minecraft:white_wool	false,true,false
+tool-drops	direct_empty	minecraft:iron_block	false,false,true
+tool-drops	miss_then_allow	minecraft:stone	true,true,true
+tool-drops	miss_then_allow	minecraft:dirt	false,true,false
+tool-drops	miss_then_allow	minecraft:diamond_ore	false,false,true
+tool-drops	miss_then_allow	minecraft:oak_log	false,true,false
+tool-drops	miss_then_allow	minecraft:cobweb	false,false,true
+tool-drops	miss_then_allow	minecraft:oak_leaves	false,true,false
+tool-drops	miss_then_allow	minecraft:white_wool	false,true,false
+tool-drops	miss_then_allow	minecraft:iron_block	false,false,true
+tool-drops	speed_only_tag	minecraft:stone	true,true,true
+tool-drops	speed_only_tag	minecraft:dirt	false,true,false
+tool-drops	speed_only_tag	minecraft:diamond_ore	false,false,true
+tool-drops	speed_only_tag	minecraft:oak_log	false,true,false
+tool-drops	speed_only_tag	minecraft:cobweb	false,false,true
+tool-drops	speed_only_tag	minecraft:oak_leaves	false,true,false
+tool-drops	speed_only_tag	minecraft:white_wool	false,true,false
+tool-drops	speed_only_tag	minecraft:iron_block	false,false,true
+tool-drops	air_payload	minecraft:stone	false,false,true
+tool-drops	air_payload	minecraft:dirt	false,true,false
+tool-drops	air_payload	minecraft:diamond_ore	false,false,true
+tool-drops	air_payload	minecraft:oak_log	false,true,false
+tool-drops	air_payload	minecraft:cobweb	false,false,true
+tool-drops	air_payload	minecraft:oak_leaves	false,true,false
+tool-drops	air_payload	minecraft:white_wool	false,true,false
+tool-drops	air_payload	minecraft:iron_block	false,false,true
+tool-drops	named_empty	minecraft:stone	false,false,true
+tool-drops	named_empty	minecraft:dirt	false,true,false
+tool-drops	named_empty	minecraft:diamond_ore	false,false,true
+tool-drops	named_empty	minecraft:oak_log	false,true,false
+tool-drops	named_empty	minecraft:cobweb	false,false,true
+tool-drops	named_empty	minecraft:oak_leaves	false,true,false
+tool-drops	named_empty	minecraft:white_wool	false,true,false
+tool-drops	named_empty	minecraft:iron_block	false,false,true
+tool-drops	netherite	minecraft:stone	true,true,true
+tool-drops	netherite	minecraft:dirt	false,true,false
+tool-drops	netherite	minecraft:diamond_ore	true,true,true
+tool-drops	netherite	minecraft:oak_log	false,true,false
+tool-drops	netherite	minecraft:cobweb	false,false,true
+tool-drops	netherite	minecraft:oak_leaves	false,true,false
+tool-drops	netherite	minecraft:white_wool	false,true,false
+tool-drops	netherite	minecraft:iron_block	true,true,true
+tool-missing-tag	true
+stop-use	idle	false,0,true,0	false,0,true,0,false	-
+stop-use	stored_without_flag	false,2,false,17	false,2,true,0,false	-
+stop-use	active_empty	true,3,true,17	false,2,true,0,true	-
+stop-use	active_default	true,1,false,17	false,0,true,0,true	minecraft:item_interact_finish:1:none:4021000000000000,4050000000000000,4021000000000000
+stop-use	vibration_off	true,3,false,17	false,2,true,0,true	-
+stop-use	vibration_on	true,7,false,17	false,6,true,0,true	minecraft:item_interact_finish:1:none:4021000000000000,4050000000000000,4021000000000000
+stop-use	empty_payload	true,1,true,17	false,0,true,0,true	-
+stop-use	other_flags	true,-1,false,-5	false,-2,true,0,true	minecraft:item_interact_finish:1:none:4021000000000000,4050000000000000,4021000000000000
+stop-use	signed_inactive	false,-128,true,17	false,-128,true,0,false	-
+player-contact	0	3,6,4,2	402cffffff99999a,404fc00000000000,bff8000003333333;4031199999cccccd,4050933333000000,3ff199999ccccccd	63b6619458e5a47b
+player-contact	1	3,4,7,2,5	402cffffff99999a,4050000000000000,bff8000003333333;4033fd70a4000000,4050733333000000,3fffd70a40000000	63b6619458e5a47b
+player-contact	2	3,6,4,2	402cffffff99999a,404fc00000000000,bff8000003333333;4031199999cccccd,4050933333000000,3ff199999ccccccd	63b6619458e5a47b
+player-contact	3	-	none	b8f2fa7663b66194
+player-contact	4	-	none	b8f2fa7663b66194
+player-contact	5	-	none	b8f2fa7663b66194
 bubble	tnt	inside	false	-1.0	3fd0000000000000,bfee147ae147ae14,bfc0000000000000	0
 bubble	tnt	inside	false	-0.25	3fd0000000000000,bfc851eb851eb852,bfc0000000000000	0
 bubble	tnt	inside	false	0.65	3fd0000000000000,3fe6666666666666,bfc0000000000000	0

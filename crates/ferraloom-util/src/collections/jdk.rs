@@ -142,6 +142,27 @@ impl<K: Eq + JavaHash, V, const L: bool> JavaHashMap<K, V, L> {
         self.access(id);
         Some(&mut self.n_mut(id).value)
     }
+    /// Port of JDK 25 HashMap#putMapEntries, including sizing from the source
+    /// map's size before inserting entries in its iteration order.
+    pub fn put_all(&mut self, entries: impl ExactSizeIterator<Item = (K, V)>) {
+        let size = entries.len();
+        if size == 0 {
+            return;
+        }
+        if self.bins.is_empty() {
+            let target = ((size as f64 / f64::from(self.f)).ceil() as usize).min(1 << 30);
+            if target > self.threshold {
+                self.threshold = target.max(1).next_power_of_two();
+            }
+        } else {
+            while size > self.threshold && self.capacity() < 1 << 30 {
+                self.resize();
+            }
+        }
+        for (key, value) in entries {
+            self.insert(key, value);
+        }
+    }
     pub fn insert(&mut self, key: K, value: V) -> Option<V> {
         if let Some(id) = self.find(&key) {
             let old = mem::replace(&mut self.n_mut(id).value, value);
@@ -824,5 +845,47 @@ impl<'a, K: Eq + JavaHash, const L: bool> IntoIterator for &'a JavaHashSet<K, L>
     type IntoIter = std::iter::Map<JavaIter<'a, K, (), L>, fn((&'a K, &'a ())) -> &'a K>;
     fn into_iter(self) -> Self::IntoIter {
         self.0.iter().map(|(k, _)| k)
+    }
+}
+
+#[cfg(test)]
+mod put_all_tests {
+    use super::JavaHashMap;
+
+    fn key(i: i32) -> i32 {
+        i.wrapping_mul(0x9e37_79b9_u32 as i32) ^ (i << 12)
+    }
+
+    #[test]
+    fn put_all_matches_jdk25_presizing_and_traversal() {
+        for row in include_str!("put-all.tsv").lines() {
+            let fields: Vec<_> = row.split('\t').collect();
+            let mode: usize = fields[0].parse().unwrap();
+            let size: i32 = fields[1].parse().unwrap();
+            let mut map = match mode {
+                0 | 4 | 5 => JavaHashMap::<i32, i32>::new(),
+                1 => JavaHashMap::with_capacity(1),
+                2 => JavaHashMap::with_capacity(16),
+                3 => JavaHashMap::with_capacity(64),
+                6 => JavaHashMap::with_capacity_and_load_factor(1, 0.5),
+                _ => JavaHashMap::with_capacity_and_load_factor(1, 1.0),
+            };
+            let initial = match mode {
+                4 => 7,
+                5 => 13,
+                _ => 0,
+            };
+            for i in 0..initial {
+                map.insert(key(i), -i);
+            }
+            map.put_all((0..size).rev().map(|i| (key(i), i + 100)));
+            assert_eq!(map.capacity(), fields[2].parse::<usize>().unwrap(), "{row}");
+            let order = map
+                .iter()
+                .map(|(k, v)| format!("{k}:{v}"))
+                .collect::<Vec<_>>()
+                .join(",");
+            assert_eq!(order, fields[3], "mode={mode}, source size={size}");
+        }
     }
 }

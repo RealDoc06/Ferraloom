@@ -40,6 +40,15 @@ public final class EntityVectors {
     for(Class<?> cls=Level.class;cls!=null;cls=cls.getSuperclass())for(var m:cls.getDeclaredMethods())if(Modifier.isAbstract(m.getModifiers()))stub(out,m,seen);
     for(var m:Level.class.getMethods())if(Modifier.isAbstract(m.getModifiers()))stub(out,m,seen);
     out.append("""
+      final net.minecraft.world.level.entity.EntitySectionStorage<Entity> contactSections=new net.minecraft.world.level.entity.EntitySectionStorage<>(Entity.class,key->net.minecraft.world.level.entity.Visibility.TICKING);
+      final net.minecraft.world.level.entity.EntityLookup<Entity> contactLookup=new net.minecraft.world.level.entity.EntityLookup<>();
+      final net.minecraft.world.level.entity.LevelEntityGetter<Entity> contactGetter=new net.minecraft.world.level.entity.LevelEntityGetterAdapter<>(contactLookup,contactSections);
+      AABB lastContactBounds;
+      void addContact(Entity entity){contactLookup.add(entity);contactSections.getOrCreateSection(SectionPos.asLong(entity.blockPosition())).add(entity);}
+      void clearContacts(){for(Entity entity:List.copyOf(java.util.stream.StreamSupport.stream(contactLookup.getAllEntities().spliterator(),false).toList())){contactSections.getOrCreateSection(SectionPos.asLong(entity.blockPosition())).remove(entity);contactLookup.remove(entity);}lastContactBounds=null;}
+      @Override protected net.minecraft.world.level.entity.LevelEntityGetter<Entity> getEntities(){return contactGetter;}
+      @Override public Collection<net.minecraft.world.entity.boss.enderdragon.EnderDragonPart> dragonParts(){return List.of();}
+      @Override public List<Entity> getEntities(Entity except,AABB bounds,java.util.function.Predicate<? super Entity> predicate){lastContactBounds=bounds;return super.getEntities(except,bounds,predicate);}
       boolean captureEntitySounds;
       final List<String> soundCalls=new ArrayList<>();
       final List<String> gameEvents=new ArrayList<>();
@@ -83,11 +92,13 @@ public final class EntityVectors {
       public static void run(RegistryAccess r)throws Exception {
         TrackingVectors.run(new EntityFixture(r));
         PersistenceVectors.run(new EntityFixture(r));
+        SpawnVectors.run(new EntityFixture(r));
         BorderVectors.run(new EntityFixture(r));
         RidingVectors.run(new EntityFixture(r));
         SynchedDataVectors.run(new EntityFixture(r));
         AttributeVectors.run();
         LivingVectors.run(new EntityFixture(r));
+        TeleportVectors.run(new EntityFixture(r));
         DimensionVectors.run(new EntityFixture(r));
         PlayerTrackingVectors.run(new EntityFixture(r));
         WorldgenVectors.run(new EntityFixture(r));
@@ -95,6 +106,10 @@ public final class EntityVectors {
         SoundVectors.run(new EntityFixture(r));
         TeleportVectors.run(new EntityFixture(r));
         PushVectors.run(new EntityFixture(r));
+        InteractionVectors.run(new EntityFixture(r));
+        ToolVectors.run(new EntityFixture(r));
+        UseItemVectors.run(new EntityFixture(r));
+        ContactVectors.run(new EntityFixture(r));
         for(String kind:List.of("tnt","player","flying"))for(boolean above:List.of(false,true))for(boolean drag:List.of(false,true))for(double speed:new double[]{-1,-0.25,0.65,2}){
           var f=new EntityFixture(r);Entity e=kind.equals("tnt")?new net.minecraft.world.entity.item.PrimedTnt(EntityTypes.TNT,f):new TestPlayer(f);
           if(kind.equals("flying"))((Player)e).getAbilities().flying=true;
@@ -194,7 +209,7 @@ public final class EntityVectors {
     Files.writeString(path,out.toString());
   }
   static void stub(StringBuilder out,Method m,Set<String> seen){
-    var skip=Set.of("enabledFeatures","getChunkSource","getWorldBorder","getBlockEntity","players","getScoreboard","getGameTime","environmentAttributes");
+    var skip=Set.of("enabledFeatures","getChunkSource","getWorldBorder","getBlockEntity","players","getScoreboard","getGameTime","environmentAttributes","getEntities","dragonParts");
     var params=m.getParameterTypes();var key=m.getName()+Arrays.toString(params);if(!seen.add(key)||skip.contains(m.getName()))return;
     out.append("@Override public ").append(m.getReturnType().getCanonicalName()).append(' ').append(m.getName()).append('(');
     for(int i=0;i<params.length;i++){if(i>0)out.append(',');out.append(params[i].getCanonicalName()).append(" p").append(i);}

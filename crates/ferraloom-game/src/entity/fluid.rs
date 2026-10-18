@@ -227,7 +227,7 @@ fn finish<E: Entity + ?Sized>(
             apply_current(
                 entity,
                 currents[1],
-                if level.rules().fast_lava {
+                if level.fast_lava()? {
                     0.007
                 } else {
                     0.002_333_333_333_333_333_5

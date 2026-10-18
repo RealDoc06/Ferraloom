@@ -228,6 +228,16 @@ impl EntityData {
         self.set_pos_raw(pos);
         self.bounding_box = self.dimensions.make_bounding_box(self.position);
     }
+    /// Port of Entity#snapTo before registration. Registered entities use Level's
+    /// handle operations so section membership follows the accepted position.
+    pub fn snap_to(&mut self, position: Vec3, yaw: f32, pitch: f32) {
+        self.set_pos_raw(position);
+        self.set_y_rot(yaw);
+        self.set_x_rot(pitch);
+        self.set_old_pos_and_rot();
+        self.last_known_position = None;
+        self.set_pos(self.position);
+    }
     pub fn set_bounding_box(&mut self, bb: Aabb) {
         self.bounding_box = bb;
     }
@@ -242,6 +252,17 @@ impl EntityData {
         if pitch.is_finite() {
             self.pitch = (pitch % 360.0).clamp(-90.0, 90.0);
         }
+    }
+    /// Port of Entity#absSnapRotationTo, preserving position history.
+    pub fn abs_snap_rotation_to(&mut self, yaw: f32, pitch: f32) {
+        self.set_y_rot(yaw % 360.0);
+        self.set_x_rot(pitch.clamp(-90.0, 90.0) % 360.0);
+        self.old_yaw = self.yaw;
+        self.old_pitch = self.pitch;
+    }
+    /// Port of Entity#removeLatestMovementRecording; an empty queue is unchanged.
+    pub fn remove_latest_movement_recording(&mut self) {
+        self.movement_this_tick.pop_back();
     }
     pub fn set_old_pos_and_rot(&mut self) {
         self.old_position = self.position;

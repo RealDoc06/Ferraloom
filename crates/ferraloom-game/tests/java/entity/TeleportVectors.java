@@ -18,6 +18,25 @@ public final class TeleportVectors {
       player.teleportSetPosition(source,change,Relative.unpack(bits));
       System.out.println("teleport-set\t"+bits+"\t"+value(new PositionMoveRotation(player.position(),player.getDeltaMovement(),player.getYRot(),player.getXRot()))+"\t"+Integer.toHexString(Float.floatToRawIntBits(player.getYHeadRot()))+"\t"+TrackingVectors.vec(new Vec3(player.xo,player.yo,player.zo)));
     }
+    for(float[] rotation:List.of(new float[]{721.25f,270f},new float[]{-721.25f,-360f},new float[]{37.25f,-28.125f})) {
+      var player=new LivingVectors(fixture);player.setPos(8.5,64.25,-12.75);player.setOldPosAndRot();
+      player.absSnapRotationTo(net.minecraft.util.Mth.wrapDegrees(rotation[0]),net.minecraft.util.Mth.wrapDegrees(rotation[1]));
+      System.out.println("teleport-pending-rotation\t"+Integer.toHexString(Float.floatToRawIntBits(rotation[0]))+","+Integer.toHexString(Float.floatToRawIntBits(rotation[1]))+"\t"+Integer.toHexString(Float.floatToRawIntBits(player.getYRot()))+","+Integer.toHexString(Float.floatToRawIntBits(player.getXRot()))+","+Integer.toHexString(Float.floatToRawIntBits(player.yRotO))+","+Integer.toHexString(Float.floatToRawIntBits(player.xRotO))+"\t"+TrackingVectors.vec(new Vec3(player.xo,player.yo,player.zo)));
+    }
+    for(Vec3 destination:List.of(new Vec3(8.5,64,8.5),new Vec3(3.0e7+1,65,-3.0e7-1))) {
+      var player=new LivingVectors(fixture);
+      player.teleportSetPosition(source,new PositionMoveRotation(destination,Vec3.ZERO,721.25f,-28.125f),Set.of());
+      player.absSnapTo(destination.x,destination.y,destination.z,player.getYRot(),player.getXRot());
+      System.out.println("teleport-confirm-snap\t"+TrackingVectors.vec(destination)+"\t"+TrackingVectors.vec(player.position())+"\t"+TrackingVectors.vec(new Vec3(player.xo,player.yo,player.zo))+"\t"+TrackingVectors.vec(player.oldPosition())+"\t"+Integer.toHexString(Float.floatToRawIntBits(player.getYRot()))+","+Integer.toHexString(Float.floatToRawIntBits(player.getYHeadRot()))+","+Integer.toHexString(Float.floatToRawIntBits(player.yRotO)));
+    }
+    for(var type:net.minecraft.world.level.GameType.values()) for(boolean flying:List.of(false,true)) {
+      var player=new LivingVectors(fixture);player.getAbilities().flying=flying;
+      type.updatePlayerAbilities(player.getAbilities());
+      boolean mayBuild=player.mayBuild();boolean resultFlying=player.getAbilities().flying;
+      player.getAbilities().mayBuild=!mayBuild;
+      var saved=net.minecraft.world.entity.player.Abilities.Packed.CODEC.encodeStart(net.minecraft.nbt.NbtOps.INSTANCE,player.getAbilities().pack()).getOrThrow().asCompound().orElseThrow();
+      System.out.println("player-may-build\t"+type.getId()+"\t"+flying+"\t"+mayBuild+","+resultFlying+","+player.mayBuild()+","+saved.getBooleanOr("mayBuild",true));
+    }
     var root=new net.minecraft.world.entity.item.PrimedTnt(EntityTypes.TNT,fixture);
     var child=new net.minecraft.world.entity.item.PrimedTnt(EntityTypes.TNT,fixture);
     var grandchild=new net.minecraft.world.entity.item.PrimedTnt(EntityTypes.TNT,fixture);

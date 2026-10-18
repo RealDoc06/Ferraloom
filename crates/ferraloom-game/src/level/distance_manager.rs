@@ -257,28 +257,34 @@ mod player_tests {
         let origin = SectionPos::new(0, 4, 0);
         manager.update_player(a, Some(origin), &mut tickets);
         manager.update_player(b, Some(origin), &mut tickets);
-        assert_eq!(tickets.pending_source_updates().len(), 1);
+        assert_eq!(
+            tickets.source_level(ChunkPos::new(0, 0), TicketTracker::Simulation),
+            21
+        );
         manager.run_all_updates(&mut tickets);
         manager.update_player(a, None, &mut tickets);
-        assert!(tickets.pending_source_updates().is_empty());
-        manager.update_player(b, Some(SectionPos::new(0, 5, 0)), &mut tickets);
-        let changes = tickets.pending_source_updates();
         assert_eq!(
-            changes
-                .iter()
-                .map(|update| (update.tracker, update.level, update.only_decreased))
-                .collect::<Vec<_>>(),
-            vec![
-                (TicketTracker::Simulation, 45, false),
-                (TicketTracker::Simulation, 21, true)
-            ]
+            tickets.source_level(ChunkPos::new(0, 0), TicketTracker::Simulation),
+            21
+        );
+        manager.update_player(b, Some(SectionPos::new(0, 5, 0)), &mut tickets);
+        assert_eq!(
+            tickets.source_level(ChunkPos::new(0, 0), TicketTracker::Simulation),
+            21
         );
         manager.run_all_updates(&mut tickets);
         // A->B->A during one packet phase must disturb the queued graph, even
         // though a snapshot of only the final player chunk would be unchanged.
         manager.update_player(b, Some(SectionPos::new(1, 5, 0)), &mut tickets);
         manager.update_player(b, Some(origin), &mut tickets);
-        assert_eq!(tickets.pending_source_updates().len(), 4);
+        assert_eq!(
+            tickets.source_level(ChunkPos::new(0, 0), TicketTracker::Simulation),
+            21
+        );
+        assert_eq!(
+            tickets.source_level(ChunkPos::new(1, 0), TicketTracker::Simulation),
+            45
+        );
         manager.run_all_updates(&mut tickets);
         assert_eq!(manager.simulation.level(ChunkPos::new(0, 0)), 21);
         assert_eq!(manager.simulation.level(ChunkPos::new(1, 0)), 22);

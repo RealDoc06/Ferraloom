@@ -14,6 +14,60 @@ use ferraloom_protocol::{
 };
 use std::collections::BTreeMap;
 
+/// Port of AbstractFurnaceBlockEntity#setItem, including input-change reset.
+pub fn set_item(
+    handle: BlockEntityRef,
+    slot: usize,
+    stack: ferraloom_protocol::component::ItemStack,
+    level: &mut Level,
+) -> Result<(), LevelError> {
+    super::access::set_item(handle, slot, stack, level)
+}
+pub(crate) fn set_item_value(
+    handle: BlockEntityRef,
+    slot: usize,
+    value: crate::inventory::StackValue,
+    level: &mut Level,
+) -> Result<(), LevelError> {
+    use crate::{entity::player::inventory::is_same_item_same_components, inventory::Container};
+    let reset = {
+        let furnace = level.block_entity::<AbstractFurnaceBlockEntity>(handle)?;
+        let stack = value
+            .as_stack(level)
+            .map_err(|_| LevelError::Inventory("furnace stack receiver"))?;
+        let same =
+            !stack.is_empty() && is_same_item_same_components(&furnace.parent.items[slot], stack);
+        slot == 0 && !same && furnace.parent.parent.has_level
+    };
+    super::access::replace_and_limit(handle, slot, value, level)?;
+    if reset {
+        let resources = level.container_resources()?;
+        let furnace = level.block_entity::<AbstractFurnaceBlockEntity>(handle)?;
+        let recipe = resources
+            .recipes
+            .get_recipe_for(
+                furnace.recipe_type(),
+                crate::crafting::RecipeInput::Single(&furnace.parent.items[0]),
+                &(),
+                furnace.last_recipe.as_ref(),
+            )
+            .map_err(|_| LevelError::Inventory("furnace recipe lookup"))?;
+        let total = recipe.map_or(200, |recipe| {
+            furnace.total_cook_time(recipe.value.cooking_time().expect("cooking recipe"))
+        });
+        let hint = recipe.map(|recipe| recipe.id.clone());
+        let furnace = level.block_entity_mut::<AbstractFurnaceBlockEntity>(handle)?;
+        if hint.is_some() {
+            furnace.last_recipe = hint;
+        }
+        furnace.cooking_total_time = total;
+        furnace.cooking_timer = 0;
+        furnace.parent.set_changed();
+        handle.set_changed(level)?;
+    }
+    Ok(())
+}
+
 #[derive(Clone, Debug)]
 pub struct AbstractFurnaceBlockEntity {
     pub parent: BaseContainerBlockEntity,
@@ -64,13 +118,23 @@ impl AbstractFurnaceBlockEntity {
 pub struct FurnaceBehavior;
 pub static FURNACE_ENTITY: FurnaceBehavior = FurnaceBehavior;
 impl BlockEntity for FurnaceBehavior {
+    fn has_server_ticker(&self) -> bool {
+        true
+    }
+    fn tick(&self, handle: BlockEntityRef, level: &mut Level) -> Result<(), LevelError> {
+        super::furnace_tick::server_tick(handle, level)
+    }
+    fn remove_components_from_tag(&self, tag: &mut CompoundTag) {
+        for key in ["CustomName", "lock", "Items"] {
+            tag.remove(key);
+        }
+    }
     fn load_additional(&self, state: &mut BlockEntityState, tag: &CompoundTag) {
         let BlockEntityState::Furnace(entity) = state else {
             unreachable!()
         };
         entity.parent.load_base(tag);
-        entity.parent.items.fill(Default::default());
-        storage::load_items(tag, &mut entity.parent.items);
+        entity.parent.load_items(tag);
         entity.cooking_timer = tag.get_int_or("cooking_time_spent", 0);
         entity.cooking_total_time = tag.get_int_or("cooking_total_time", 0);
         entity.lit_time_remaining = tag.get_int_or("lit_time_remaining", 0);
