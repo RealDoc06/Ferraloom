@@ -134,11 +134,12 @@ pub struct MinecraftArgument {
 }
 impl MinecraftArgument {
     pub fn new(wire: CommandArgument) -> Self {
+        let examples = wire::examples(&wire);
         Self {
             context: Arc::default(),
             wire,
             suggestion_provider: None,
-            examples: Arc::from([]),
+            examples,
         }
     }
     fn parse_impl(

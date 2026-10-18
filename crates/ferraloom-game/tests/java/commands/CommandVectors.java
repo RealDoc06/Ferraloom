@@ -193,6 +193,7 @@ public final class CommandVectors {
             vector.addProperty("parser", entry.getKey());
             vector.add("properties", propertiesByType.getOrDefault(entry.getKey(), new JsonObject()));
             vector.addProperty("wire", HexFormat.of().formatHex(bytes));
+            vector.add("examples", JSON.toJsonTree(entry.getValue().getExamples()));
             wireVectors.add(vector);
         }
         write(out, "argument-wire.json", wireVectors);

@@ -128,6 +128,46 @@ pub fn from_report(parser: &str, properties: &Value) -> CommandArgument {
     }
 }
 
+/// ArgumentType#getExamples is class-specific, independently of template flags and bounds.
+pub(super) fn examples(argument: &CommandArgument) -> std::sync::Arc<[String]> {
+    use std::{
+        collections::BTreeMap,
+        sync::{Arc, OnceLock},
+    };
+    static EXAMPLES: OnceLock<BTreeMap<i32, Arc<[String]>>> = OnceLock::new();
+    EXAMPLES
+        .get_or_init(|| {
+            #[derive(serde::Deserialize)]
+            struct Entry {
+                wire: String,
+                examples: Vec<String>,
+            }
+            let entries: Vec<Entry> =
+                serde_json::from_str(include_str!("../vanilla/argument-wire.json"))
+                    .expect("Java argument templates");
+            entries
+                .into_iter()
+                .map(|entry| {
+                    let bytes = entry
+                        .wire
+                        .as_bytes()
+                        .chunks_exact(2)
+                        .map(|pair| {
+                            u8::from_str_radix(std::str::from_utf8(pair).unwrap(), 16).unwrap()
+                        })
+                        .collect::<Vec<_>>();
+                    let id = ferraloom_protocol::Reader::new(&bytes)
+                        .var_int()
+                        .expect("argument template id");
+                    (id, Arc::from(entry.examples))
+                })
+                .collect()
+        })
+        .get(&argument.tag())
+        .expect("registered ArgumentTypeInfos template")
+        .clone()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -137,6 +177,7 @@ mod tests {
         parser: String,
         properties: Value,
         wire: String,
+        examples: Vec<String>,
     }
     #[test]
     fn every_argument_network_template_matches_java() {
@@ -152,6 +193,13 @@ mod tests {
                 .collect::<Vec<_>>();
             let argument = from_report(&vector.parser, &vector.properties);
             assert_eq!(argument.to_bytes().unwrap(), expected, "{}", vector.parser);
+            use ferraloom_brigadier::ArgumentType;
+            assert_eq!(
+                super::super::MinecraftArgument::new(argument).examples(),
+                vector.examples,
+                "{} examples",
+                vector.parser
+            );
         }
     }
 }
