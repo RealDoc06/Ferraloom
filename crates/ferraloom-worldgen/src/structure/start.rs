@@ -24,6 +24,7 @@ pub enum StructurePiece {
     NetherFossil(Box<super::structures::nether_fossil::NetherFossilPiece>),
     EndCity(Box<super::structures::end_city::EndCityPiece>),
     OceanRuin(Box<super::structures::ocean_ruin::OceanRuinPiece>),
+    Stronghold(super::structures::stronghold::StrongholdPiece),
     NetherFortress(super::structures::nether_fortress::FortressPiece),
     Mineshaft(super::structures::mineshaft::MineshaftPiece),
     RuinedPortal(Box<super::structures::ruined_portal::RuinedPortalPiece>),
@@ -59,6 +60,7 @@ impl StructurePiece {
             Self::NetherFossil(p) => p.template.data.bounds,
             Self::EndCity(p) => p.template.data.bounds,
             Self::OceanRuin(p) => p.template.data.bounds,
+            Self::Stronghold(p) => p.data.bounds,
             Self::NetherFortress(p) => p.data.bounds,
             Self::Mineshaft(p) => p.data.bounds,
             Self::RuinedPortal(p) => p.template.data.bounds,
@@ -76,6 +78,7 @@ impl StructurePiece {
             Self::NetherFossil(p) => Ok(p.to_nbt()),
             Self::EndCity(p) => Ok(p.to_nbt()),
             Self::OceanRuin(p) => Ok(p.to_nbt()),
+            Self::Stronghold(p) => Ok(p.to_nbt()),
             Self::NetherFortress(p) => Ok(p.to_nbt()),
             Self::Mineshaft(p) => Ok(p.to_nbt()),
             Self::RuinedPortal(p) => Ok(p.to_nbt()),
@@ -234,6 +237,17 @@ impl StructureStart {
                     return Ok(None);
                 };
                 match piece_id.to_string().as_str() {
+                    "minecraft:shstart" | "minecraft:shsd" | "minecraft:shs" | "minecraft:shph"
+                    | "minecraft:shlt" | "minecraft:shrt" | "minecraft:shrc"
+                    | "minecraft:shssd" | "minecraft:sh5c" | "minecraft:shcc"
+                    | "minecraft:shli" | "minecraft:shpr" | "minecraft:shfc" => {
+                        if let Ok(piece) = super::structures::stronghold::StrongholdPiece::from_nbt(
+                            &piece_id.to_string(),
+                            tag,
+                        ) {
+                            pieces.push(StructurePiece::Stronghold(piece));
+                        }
+                    }
                     "minecraft:nestart" | "minecraft:nebcr" | "minecraft:nebs"
                     | "minecraft:nebef" | "minecraft:nerc" | "minecraft:nesr"
                     | "minecraft:nemt" | "minecraft:nece" | "minecraft:nesc"

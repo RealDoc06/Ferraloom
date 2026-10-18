@@ -26,6 +26,7 @@ enum StructureGenerator {
     SwampHut,
     JungleTemple,
     NetherFortress,
+    Stronghold,
     Mineshaft(super::structures::mineshaft::MineshaftType),
     RuinedPortal(super::structures::ruined_portal::RuinedPortalStructure),
     DesertPyramid,
@@ -84,6 +85,7 @@ impl StructureGenerators {
                         )?,
                     ),
                     "minecraft:jungle_temple" => StructureGenerator::JungleTemple,
+                    "minecraft:stronghold" => StructureGenerator::Stronghold,
                     "minecraft:fortress" => StructureGenerator::NetherFortress,
                     "minecraft:swamp_hut" => StructureGenerator::SwampHut,
                     "minecraft:desert_pyramid" => StructureGenerator::DesertPyramid,
@@ -461,6 +463,34 @@ impl StructureGenerators {
                     references,
                     settings.terrain,
                     vec![StructurePiece::NetherFossil(Box::new(piece))],
+                ));
+            }
+            StructureGenerator::Stronghold => {
+                use ferraloom_util::random::{Algorithm, WorldgenRandom};
+                if !valid(&(context.biome)([
+                    context.chunk[0] * 4,
+                    0,
+                    context.chunk[1] * 4,
+                ])?) {
+                    return Ok(StructureStart::invalid());
+                }
+                let mut random = WorldgenRandom::new(Algorithm::Legacy.new_instance(0));
+                let pieces = super::structures::stronghold::generate(
+                    context.seed,
+                    context.chunk,
+                    &mut random,
+                    generator,
+                )
+                .into_iter()
+                .map(StructurePiece::Stronghold)
+                .collect();
+                return Ok(StructureStart::new(
+                    id.clone(),
+                    settings.kind,
+                    context.chunk,
+                    references,
+                    settings.terrain,
+                    pieces,
                 ));
             }
             StructureGenerator::NetherFortress => {

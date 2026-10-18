@@ -126,6 +126,9 @@ impl StructureStart {
             }
             match piece {
                 StructurePiece::DesertPyramid(piece) => piece.post_process(context, *bounds)?,
+                StructurePiece::Stronghold(_) => {
+                    return Err(Error("Unsupported: stronghold piece postProcess".into()));
+                }
                 StructurePiece::NetherFortress(piece) => piece.post_process(context, *bounds)?,
                 StructurePiece::Mineshaft(piece) => piece.post_process(context, *bounds)?,
                 StructurePiece::RuinedPortal(piece) => {
