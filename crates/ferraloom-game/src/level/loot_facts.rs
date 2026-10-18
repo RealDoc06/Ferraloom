@@ -196,7 +196,11 @@ impl PredicateContext for Level {
             on_fire: crate::entity::inside_block::is_on_fire(entity, self).map_err(required)?,
             crouching: base.pose() == ferraloom_protocol::entity_data::Pose::Crouching,
             sprinting: base.shared_flag(3),
-            swimming: base.shared_flag(4),
+            swimming: self
+                .entity_behavior(entity)
+                .map_err(required)?
+                .is_swimming(entity, self)
+                .map_err(required)?,
             flying: fall_flying || matches!(state, EntityState::Player(player) if player.flying),
             baby: self
                 .entity_behavior(entity)

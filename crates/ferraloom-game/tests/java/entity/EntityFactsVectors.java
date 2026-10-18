@@ -67,14 +67,19 @@ public final class EntityFactsVectors {
         pos(entity.getOnPos())+"\t"+pos(entity.getOnPosLegacy())+"\t"+pos(entity.getBlockPosBelowThatAffectsMyMovement())+"\t"+pos((BlockPos)offset.invoke(entity,Float.NaN))+"\t"+on.matches(entity,world,null)+"\t"+affected.matches(entity,world,null));
     }
     var shared=Entity.class.getDeclaredMethod("setSharedFlag",int.class,boolean.class);shared.setAccessible(true);
-    for(String scenario:List.of("base","player-flying","player-glide","cow-baby","cow-glide","tnt-glide","item-stone","item-netherite","item-zero","item-negative","item-direct","item-other")) {
+    for(String scenario:List.of("base","player-base","player-flying","player-glide","player-spectator","cow-baby","cow-glide","tnt-glide","item-stone","item-netherite","item-zero","item-negative","item-direct","item-other")) {
       Entity entity;
       if(scenario.startsWith("item")) {
         var item=new ItemEntity(EntityTypes.ITEM,level);var stack=new ItemStack(scenario.equals("item-stone")||scenario.equals("item-direct")||scenario.equals("item-other")?Items.STONE:Items.NETHERITE_INGOT);
         if(scenario.equals("item-zero"))stack.setCount(0);if(scenario.equals("item-negative"))stack.setCount(-1);
         if(scenario.equals("item-direct")||scenario.equals("item-other"))stack.set(DataComponents.DAMAGE_RESISTANT,new DamageResistant(HolderSet.direct(level.registryAccess().lookupOrThrow(Registries.DAMAGE_TYPE).getOrThrow(scenario.equals("item-direct")?DamageTypes.IN_FIRE:DamageTypes.LAVA))));
         item.setItem(stack);entity=item;
-      } else if(scenario.startsWith("player")){var player=new LivingVectors(level);player.getAbilities().flying=scenario.equals("player-flying");entity=player;}
+      } else if(scenario.startsWith("player")){
+        var player=new Player(level,new com.mojang.authlib.GameProfile(new UUID(1,2),"metadata")) {
+          @Override public GameType gameMode(){return scenario.equals("player-spectator")?GameType.SPECTATOR:GameType.SURVIVAL;}
+        };
+        player.getAbilities().flying=scenario.equals("player-flying");entity=player;
+      }
       else if(scenario.startsWith("cow")){var cow=new Cow(EntityTypes.COW,level);if(scenario.equals("cow-baby"))cow.setAge(-1);entity=cow;}
       else entity=new PrimedTnt(EntityTypes.TNT,level);
       entity.setOnGround(true);entity.setRemainingFireTicks(20);entity.setPose(Pose.CROUCHING);shared.invoke(entity,3,true);shared.invoke(entity,4,true);shared.invoke(entity,7,scenario.endsWith("glide"));

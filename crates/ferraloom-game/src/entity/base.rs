@@ -312,6 +312,10 @@ impl EntityData {
     pub fn shared_flag(&self, bit: u8) -> bool {
         *self.entity_data.get(synched_data::SHARED_FLAGS) as u8 & (1 << bit) != 0
     }
+    /// Parent body of Entity#isSwimming; Player adds its flight/spectator gates.
+    pub fn is_swimming(&self) -> bool {
+        self.shared_flag(4)
+    }
     pub fn set_shared_flag(&mut self, bit: u8, enabled: bool) {
         let flags = *self.entity_data.get(synched_data::SHARED_FLAGS) as u8;
         self.entity_data.set(

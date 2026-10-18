@@ -816,6 +816,13 @@ impl crate::entity::Entity for PlayerBehavior {
     ) -> Result<bool, LevelError> {
         Ok(level.entity::<ServerPlayer>(entity)?.game_mode == GameType::Spectator)
     }
+    /// Port of Player#isSwimming. The final read invokes Entity's parent body.
+    fn is_swimming(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
+        if level.entity::<ServerPlayer>(entity)?.flying || self.is_spectator(entity, level)? {
+            return Ok(false);
+        }
+        Ok(level.entity::<super::EntityData>(entity)?.is_swimming())
+    }
     fn sound_source(&self) -> ferraloom_protocol::play::SoundSource {
         ferraloom_protocol::play::SoundSource::Players
     }

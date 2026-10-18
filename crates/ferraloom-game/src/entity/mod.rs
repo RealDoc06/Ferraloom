@@ -356,6 +356,10 @@ pub trait Entity: Sync {
     fn is_spectator(&self, _entity: EntityRef, _level: &Level) -> Result<bool, LevelError> {
         Ok(false)
     }
+    /// Port of Entity#isSwimming, dispatched through Player's override.
+    fn is_swimming(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
+        Ok(level.entity::<EntityData>(entity)?.is_swimming())
+    }
     fn is_pushable(&self, _entity: EntityRef, _level: &Level) -> Result<bool, LevelError> {
         Ok(false)
     }

@@ -265,7 +265,7 @@ pub fn base_tick<E: super::Entity + ?Sized>(
         base.was_eye_in_water = was_eye;
     }
     super::fluid::update_fluid_interaction(behavior, entity, level)?;
-    update_swimming(entity, level)?;
+    update_swimming(behavior, entity, level)?;
     let base = level.entity::<EntityData>(entity)?;
     if base.remaining_fire_ticks > 0 {
         if base.entity_type.data().fire_immune {
@@ -289,12 +289,16 @@ pub fn base_tick<E: super::Entity + ?Sized>(
     base.first_tick = false;
     Ok(())
 }
-fn update_swimming(entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
+fn update_swimming<E: Entity + ?Sized>(
+    behavior: &E,
+    entity: EntityRef,
+    level: &mut Level,
+) -> Result<(), LevelError> {
     let base = level.entity::<EntityData>(entity)?;
     let sprinting = base.shared_flag(3);
     let water = base.was_touching_water;
     let passenger = base.vehicle.get().is_some();
-    let swimming = if base.shared_flag(4) {
+    let swimming = if behavior.is_swimming(entity, level)? {
         sprinting && water && !passenger
     } else {
         sprinting

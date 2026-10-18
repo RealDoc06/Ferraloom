@@ -328,6 +328,9 @@ fn native_flags_use_living_virtuals_player_abilities_and_effective_fire_resistan
         if scenario == "player-flying" {
             level.entity_mut::<ServerPlayer>(id).unwrap().flying = true;
         }
+        if scenario == "player-spectator" {
+            level.entity_mut::<ServerPlayer>(id).unwrap().game_mode = GameType::Spectator;
+        }
         if scenario == "cow-baby" {
             level
                 .entity_mut::<Cow>(id)
@@ -373,7 +376,7 @@ fn native_flags_use_living_virtuals_player_abilities_and_effective_fire_resistan
         );
         count += 1;
     }
-    assert_eq!(count, 12);
+    assert_eq!(count, 14);
     let id = spawn(&mut level, "item");
     let mut stack = stack(Item::STONE, 1);
     stack

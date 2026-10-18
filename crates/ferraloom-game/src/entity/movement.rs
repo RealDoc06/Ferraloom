@@ -530,7 +530,7 @@ fn emit_step<E: Entity + ?Sized>(
     if (base.on_ground
         || is_climbable
         || base.pose() == ferraloom_protocol::entity_data::Pose::Crouching && movement.y == 0.0)
-        && !base.shared_flag(4)
+        && !behavior.is_swimming(entity, level)?
     {
         if emission.emits_sounds() {
             super::sounds::walking_step_sound(behavior, entity, pos, state, level)?;
