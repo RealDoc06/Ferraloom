@@ -493,3 +493,88 @@ async fn access_commands(session: &mut Session) -> Result<ObservationLog> {
     Ok(log)
 }
 parity_test!(parity_command_access_lists, access_commands);
+
+async fn force_load_and_weather(session: &mut Session) -> Result<ObservationLog> {
+    let id = session.join("ParityBot").await?;
+    let mut log = ObservationLog::default();
+    for (index, text, key) in [
+        (0, "forceload query", "commands.forceload.added.none"),
+        (
+            1,
+            "forceload add 1024 1024",
+            "commands.forceload.added.single",
+        ),
+        (
+            2,
+            "forceload add 1024 1024",
+            "commands.forceload.added.failure",
+        ),
+        (
+            3,
+            "forceload query 1024 1024",
+            "commands.forceload.query.success",
+        ),
+        (
+            4,
+            "forceload add -16 0 15 15",
+            "commands.forceload.added.multiple",
+        ),
+        (5, "forceload query", "commands.forceload.list.multiple"),
+        (
+            6,
+            "forceload add 0 0 4096 4096",
+            "commands.forceload.toobig",
+        ),
+        (7, "forceload remove all", "commands.forceload.removed.all"),
+        (8, "forceload query", "commands.forceload.added.none"),
+        (
+            9,
+            "forceload query 1024 1024",
+            "commands.forceload.query.failure",
+        ),
+        (
+            10,
+            "forceload add 1024 1024",
+            "commands.forceload.added.single",
+        ),
+        (11, "weather clear", "commands.weather.set.clear"),
+        (12, "weather rain 100t", "commands.weather.set.rain"),
+        (13, "weather thunder 2s", "commands.weather.set.thunder"),
+        (14, "weather clear 1d", "commands.weather.set.clear"),
+        (15, "weather rain 0t", "argument.time.tick_count_too_low"),
+    ] {
+        log.record(
+            format!("level.{index}"),
+            command(session.bot(id)?, text, key).await?,
+        )?;
+    }
+    log.record(
+        "weather.error_context",
+        feedback(session.bot(id)?, "command.context.here").await?,
+    )?;
+    session.restart().await?;
+    let id = session.join("ParityBot").await?;
+    log.record(
+        "forced.persisted",
+        command(
+            session.bot(id)?,
+            "forceload query 1024 1024",
+            "commands.forceload.query.success",
+        )
+        .await?,
+    )?;
+    log.record(
+        "forced.persisted_list",
+        command(
+            session.bot(id)?,
+            "forceload query",
+            "commands.forceload.list.single",
+        )
+        .await?,
+    )?;
+    Ok(log)
+}
+parity_test!(
+    parity_command_force_load_and_weather,
+    force_load_and_weather
+);
