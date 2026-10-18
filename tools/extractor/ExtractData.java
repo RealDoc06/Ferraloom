@@ -398,11 +398,24 @@ public final class ExtractData {
         write(dir, "item_crafting", entries);
     }
 
+    private static void soundEvents(Path dir) throws Exception {
+        var entries = new JsonArray();
+        for (var sound : BuiltInRegistries.SOUND_EVENT) {
+            var entry = new JsonObject();
+            entry.addProperty("id", BuiltInRegistries.SOUND_EVENT.getId(sound));
+            entry.addProperty("name", BuiltInRegistries.SOUND_EVENT.getKey(sound).toString());
+            entry.add("fixed_range", sound.fixedRange().<JsonElement>map(JsonPrimitive::new).orElse(JsonNull.INSTANCE));
+            entries.add(entry);
+        }
+        write(dir, "sound_events", entries);
+    }
+
     public static void main(String[] args) throws Exception {
         SharedConstants.tryDetectVersion();
         Bootstrap.bootStrap();
         if (args.length > 1 && args[1].equals("--attributes-only")) { attributeProperties(Path.of(args[0])); return; }
         if (args.length > 1 && args[1].equals("--entities-only")) { entityTypes(Path.of(args[0])); return; }
+        if (args.length > 1 && args[1].equals("--sound-events-only")) { soundEvents(Path.of(args[0])); return; }
         if (args.length > 1 && args[1].equals("--fluid-random-ticking-only")) { fluidRandomTicking(Path.of(args[0])); return; }
         if (args.length > 1 && args[1].equals("--block-items-only")) { blockItems(Path.of(args[0])); return; }
         if (args.length > 1 && args[1].equals("--block-render-shapes-only")) { blockRenderShapes(Path.of(args[0])); return; }
@@ -439,6 +452,7 @@ public final class ExtractData {
         }
         var dir = Path.of(args[0]);
         Files.createDirectories(dir);
+        soundEvents(dir);
         var blocks = new JsonArray();
         var states = new JsonArray();
         for (var block : BuiltInRegistries.BLOCK) {
