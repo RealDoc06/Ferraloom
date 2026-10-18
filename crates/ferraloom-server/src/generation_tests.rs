@@ -308,6 +308,22 @@ fn saved_proto_resumes_and_full_reload_preserves_owned_payload_and_tick_delays()
             }
         }
     }
+    let mut corrupt = full.terrain.disk.clone();
+    corrupt.sections.as_mut().unwrap()[0].sky_light = Some(storage::ByteArray(vec![0]));
+    io.store(pos, Some(corrupt.write().unwrap()))
+        .wait()
+        .unwrap();
+    let mut failed = GenerationState::new(context, light);
+    let first = failed
+        .generate(2, pos, ChunkStatus::Full, &registry, &io, None)
+        .err()
+        .unwrap();
+    assert!(format!("{first:#}").contains("invalid saved light length"));
+    let dependent = failed
+        .generate(3, pos, ChunkStatus::Full, &registry, &io, None)
+        .err()
+        .unwrap();
+    assert!(format!("{dependent:#}").contains("generation dependency failed"));
     io.close().unwrap();
 }
 
