@@ -464,3 +464,28 @@ fn liquid_and_lava_ignition_are_state_facts_independent_of_waterlogging() {
         None
     );
 }
+
+#[test]
+fn comparator_and_conductor_facts_preserve_property_overrides() {
+    use crate::Block;
+    assert!(Block::CAKE.default_state().has_analog_output_signal());
+    assert!(!Block::STONE.default_state().has_analog_output_signal());
+    assert_eq!(
+        Block::STONE.default_state().cached_redstone_conductor(),
+        Some(true)
+    );
+    assert_eq!(
+        Block::GLASS.default_state().cached_redstone_conductor(),
+        Some(false)
+    );
+    assert_eq!(
+        Block::SOUL_SAND
+            .default_state()
+            .cached_collision_full_block(),
+        Some(false)
+    );
+    assert_eq!(
+        Block::SOUL_SAND.default_state().cached_redstone_conductor(),
+        Some(true)
+    );
+}

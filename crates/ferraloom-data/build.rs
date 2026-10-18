@@ -732,6 +732,15 @@ fn main() {
         &load(root, "block_state_facts"),
         block_properties["states"].as_array().unwrap().len(),
     );
+    let redstone = load(root, "redstone_state_facts");
+    let redstone = redstone.as_array().expect("redstone state facts array");
+    assert_eq!(redstone.len(), state_count);
+    writeln!(
+        out,
+        "static REDSTONE_STATE_FACTS: [u8; {state_count}] = {:?};",
+        redstone.iter().map(|v| number(v) as u8).collect::<Vec<_>>()
+    )
+    .unwrap();
     items(&mut out, &item_report);
     entities(&mut out, &entity_report, &registries_report);
     let path = Path::new(&std::env::var_os("OUT_DIR").unwrap()).join("data.rs");

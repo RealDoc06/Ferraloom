@@ -62,3 +62,8 @@ read a world or position. `is_solid` is vanilla's `initCache` legacySolid;
 `replaceable` is already retained in the per-state properties. Vanilla 26.3
 uses loaded `BLOCKS_MOTION_IN_HEIGHTMAP` tags for heightmap membership rather
 than a `blocksMotion` state method.
+
+`redstone_state_facts` stores `hasAnalogOutputSignal` (whose signature takes
+only state), plus redstone conductivity for non-dynamic states. Every registered
+26.3 conductor predicate is either the cache-backed collision-full query or
+`Blocks::always`/`never`; dynamic states retain an explicit missing live query.

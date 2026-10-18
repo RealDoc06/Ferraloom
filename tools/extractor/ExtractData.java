@@ -237,6 +237,22 @@ public final class ExtractData {
         write(dir, "block_state_facts", table);
     }
 
+    // hasAnalogOutputSignal accepts only state. Vanilla's redstone-conductor
+    // predicates are the cached collision-full query or Blocks::always/never;
+    // non-dynamic caches therefore prove no level/position dependence.
+    private static void redstoneStateFacts(Path dir) throws Exception {
+        var table = new JsonArray();
+        for (var state : Block.BLOCK_STATE_REGISTRY) {
+            int bits = state.hasAnalogOutputSignal() ? 1 : 0;
+            if (!state.getBlock().hasDynamicShape()) {
+                bits |= 2;
+                if (state.isRedstoneConductor(EmptyBlockGetter.INSTANCE, BlockPos.ZERO)) bits |= 4;
+            }
+            table.add(bits);
+        }
+        write(dir, "redstone_state_facts", table);
+    }
+
     private static void collectClasses(Class<?> type, Set<Class<?>> classes) {
         if (type == null || !classes.add(type)) return;
         collectClasses(type.getSuperclass(), classes);
@@ -275,12 +291,14 @@ public final class ExtractData {
     public static void main(String[] args) throws Exception {
         SharedConstants.tryDetectVersion();
         Bootstrap.bootStrap();
+        if (args.length > 1 && args[1].equals("--redstone-facts-only")) { redstoneStateFacts(Path.of(args[0])); return; }
         if (args.length > 1 && args[1].equals("--state-facts-only")) { stateFacts(Path.of(args[0])); return; }
         if (args.length > 1 && args[1].equals("--face-occlusion-only")) { faceOcclusion(Path.of(args[0])); return; }
         if (args.length > 1 && args[1].equals("--state-transforms-only")) {
             stateTransforms(Path.of(args[0]));
             return;
         }
+        redstoneStateFacts(Path.of(args[0]));
         airStates(Path.of(args[0]));
         if (args.length > 1 && args[1].equals("--air-states-only")) return;
         blockClasses(Path.of(args[0]));

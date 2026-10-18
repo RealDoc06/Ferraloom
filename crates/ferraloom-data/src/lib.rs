@@ -461,3 +461,20 @@ impl BlockState {
         STATE_IS_AIR[self.id() as usize]
     }
 }
+
+impl BlockState {
+    /// Port of BlockStateBase#hasAnalogOutputSignal (a state-only virtual query).
+    pub const fn has_analog_output_signal(self) -> bool {
+        REDSTONE_STATE_FACTS[self.0 as usize] & 1 != 0
+    }
+    /// Vanilla's predicate is cached collision-full or a constant. Dynamic
+    /// collision shapes still require a live query and return None here.
+    pub const fn cached_redstone_conductor(self) -> Option<bool> {
+        let bits = REDSTONE_STATE_FACTS[self.0 as usize];
+        if bits & 2 == 0 {
+            None
+        } else {
+            Some(bits & 4 != 0)
+        }
+    }
+}
