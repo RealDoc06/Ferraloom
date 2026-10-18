@@ -6,7 +6,6 @@ use ferraloom_parity::{
     Bot, LaunchOptions, ObservationLog, Result, RunMode, Session, Ticks, WorldPreset, ensure,
     protocol::{
         Identifier,
-        codec::VarInt,
         component::{DataComponentPatch, ItemStack},
         play::{self, clientbound as cb, serverbound as sb},
     },

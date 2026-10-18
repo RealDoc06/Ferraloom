@@ -12,7 +12,7 @@ use crate::{
     entity::{EntityData, EntityRef, item::ItemEntity, player::ServerPlayer},
     inventory::{MenuError, StackRef},
     level::{Level, LevelError, effects::LevelEffect},
-    loot::{Identifier, LootError, LootParams, LootRandomSelection},
+    loot::{Identifier, LootError, LootRandomSelection},
 };
 use ferraloom_protocol::{
     component::ItemStack,
