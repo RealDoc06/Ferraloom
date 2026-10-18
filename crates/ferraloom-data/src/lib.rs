@@ -586,29 +586,6 @@ impl Block {
     }
 }
 
-#[cfg(test)]
-mod property_value_tests {
-    use super::Block;
-    #[test]
-    fn possible_values_preserve_vanilla_order_and_absence() {
-        assert_eq!(
-            Block::OAK_STAIRS
-                .default_state()
-                .property_values("waterlogged"),
-            Some(["true", "false"].as_slice())
-        );
-        assert_eq!(
-            Block::OAK_LOG.default_state().property_values("axis"),
-            Some(["x", "y", "z"].as_slice())
-        );
-        assert_eq!(
-            Block::WHEAT.default_state().property_values("age"),
-            Some(["0", "1", "2", "3", "4", "5", "6", "7"].as_slice())
-        );
-        assert_eq!(Block::STONE.default_state().property_values("age"), None);
-    }
-}
-
 /// Pure BlockEntityType registry facts extracted from the pinned server.
 pub struct BlockEntityTypeData {
     pub valid_blocks: &'static [Block],
@@ -629,5 +606,28 @@ impl Block {
     /// Port of BlockEntityType#isValid's inverse, indexed by block ID.
     pub const fn block_entity_type(self) -> Option<registries::block_entity_type::Id> {
         BLOCK_ENTITY_TYPE_BY_BLOCK[self.protocol_id() as usize]
+    }
+}
+
+#[cfg(test)]
+mod property_value_tests {
+    use super::Block;
+    #[test]
+    fn possible_values_preserve_vanilla_order_and_absence() {
+        assert_eq!(
+            Block::OAK_STAIRS
+                .default_state()
+                .property_values("waterlogged"),
+            Some(["true", "false"].as_slice())
+        );
+        assert_eq!(
+            Block::OAK_LOG.default_state().property_values("axis"),
+            Some(["x", "y", "z"].as_slice())
+        );
+        assert_eq!(
+            Block::WHEAT.default_state().property_values("age"),
+            Some(["0", "1", "2", "3", "4", "5", "6", "7"].as_slice())
+        );
+        assert_eq!(Block::STONE.default_state().property_values("age"), None);
     }
 }
