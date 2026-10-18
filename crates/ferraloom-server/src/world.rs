@@ -12,9 +12,13 @@ use ferraloom_storage::{
 };
 use ferraloom_util::{BlockPos, ChunkPos};
 use ferraloom_worldgen::{
-    biome::BiomeSource,
-    generator::{GenerationData, NoiseBasedChunkGenerator},
-    settings::NoiseGeneratorSettings,
+    decoration::{DecorationPlan, GenerationStep, StructureDecoration},
+    feature::FeatureRegistry,
+    generator::{
+        ChunkGenerator, ChunkGeneratorAccess, GenerationData, WorldDimensions, WorldPreset,
+    },
+    region::{ChunkStatus, RegionChunk, WorldGenRegion, WorldgenBlockBehavior},
+    settings::DimensionType,
 };
 use std::{
     borrow::Cow,
@@ -118,6 +122,48 @@ struct LightJob {
     sections: Vec<LevelChunkSection>,
 }
 
+struct FlatDecoration {
+    registry: Option<FeatureRegistry>,
+    plan: Option<DecorationPlan>,
+}
+struct LocalBlockBehavior;
+impl WorldgenBlockBehavior for LocalBlockBehavior {
+    fn post_process_pos(
+        &self,
+        _: BlockState,
+        _: &WorldGenRegion<'_>,
+        _: [i32; 3],
+    ) -> std::result::Result<Option<[i32; 3]>, ferraloom_worldgen::Error> {
+        Err(ferraloom_worldgen::Error(
+            "Unsupported: dynamic generation postprocessing requires game block behavior".into(),
+        ))
+    }
+}
+struct NoStructures;
+impl StructureDecoration for NoStructures {
+    fn place_step(
+        &mut self,
+        _: GenerationStep,
+        _: &mut WorldGenRegion<'_>,
+        _: &mut ferraloom_util::random::WorldgenRandom,
+        _: i64,
+    ) -> std::result::Result<(), ferraloom_worldgen::Error> {
+        Ok(())
+    }
+}
+
+fn saved_tick(position: [i32; 3], name: &str, priority: i32) -> storage::SavedTick {
+    storage::SavedTick {
+        id: Some(name.into()),
+        x: Some(position[0]),
+        y: Some(position[1]),
+        z: Some(position[2]),
+        delay: Some(0),
+        priority: Some(priority),
+        ..Default::default()
+    }
+}
+
 pub struct World {
     pub access: Arc<LevelStorageAccess>,
     pub level_data: LevelData,
@@ -125,7 +171,10 @@ pub struct World {
     pub spawn: BlockPos,
     pub registry: Arc<RegistryAdapter>,
     pub io: IoWorker,
-    generator: Arc<NoiseBasedChunkGenerator>,
+    pub dimensions: WorldDimensions,
+    generator: Arc<ChunkGenerator>,
+    dimension: DimensionType,
+    flat_decoration: Option<Arc<FlatDecoration>>,
     generation: Arc<JobPool>,
     saving: JobPool,
     pub pending: BTreeMap<u64, oneshot::Receiver<Result<Terrain>>>,
@@ -150,11 +199,33 @@ impl World {
         let seed = settings
             .as_ref()
             .map_or_else(|| properties.seed(), |s| s.value().get_long_or("seed", 0));
-        if settings.is_none() {
-            let preset = resources
-                .require(&"worldgen/world_preset/normal.json".parse()?)?
-                .json()?;
-            let mut settings = json_nbt(&preset)
+        let data = Arc::new(GenerationData::load(resources)?);
+        ensure!(
+            data.biome_names
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                == registries.entries["minecraft:worldgen/biome"],
+            "worldgen biome ids differ from synchronized registry"
+        );
+        let preset = if let Some(settings) = &settings {
+            WorldPreset::decode(
+                &nbt_json(&Tag::Compound(settings.value().clone()))?,
+                resources,
+                data,
+                seed,
+            )?
+        } else {
+            let generator_settings = serde_json::from_str(properties.get("generator-settings"))
+                .context("invalid generator-settings JSON")?;
+            let preset = WorldPreset::from_server_properties(
+                properties.get("level-type"),
+                &generator_settings,
+                resources,
+                data,
+                seed,
+            )?;
+            let mut settings = json_nbt(&preset.definition)
                 .as_compound()
                 .cloned()
                 .context("world preset compound")?;
@@ -168,7 +239,24 @@ impl World {
                 "minecraft:world_gen_settings",
                 &mut SavedData::new(settings),
             )?;
-        }
+            preset
+        };
+        let dimension = preset.dimensions.overworld().dimension;
+        let generator = preset.dimensions.overworld().generator.clone();
+        let flat_decoration = if let ChunkGenerator::Flat(flat) = generator.as_ref() {
+            let registry = flat.chunk_local_feature_registry(resources)?;
+            Some(Arc::new(FlatDecoration {
+                plan: registry
+                    .as_ref()
+                    .map(|registry| {
+                        DecorationPlan::new(registry, &flat.biome_source().possible_biomes())
+                    })
+                    .transpose()?,
+                registry,
+            }))
+        } else {
+            None
+        };
         let level_data = if access.path().join("level.dat").exists() {
             access.read_level_data()?
         } else {
@@ -181,24 +269,6 @@ impl World {
             .and_then(|t| t.get_int_array("pos"))
             .filter(|v| v.len() == 3)
             .map_or(BlockPos::new(0, 80, 0), |v| BlockPos::new(v[0], v[1], v[2]));
-        let data = Arc::new(GenerationData::load(resources)?);
-        ensure!(
-            data.biome_names
-                .iter()
-                .map(ToString::to_string)
-                .collect::<Vec<_>>()
-                == registries.entries["minecraft:worldgen/biome"],
-            "worldgen biome ids differ from synchronized registry"
-        );
-        let noise = resources
-            .require(&"worldgen/noise_settings/overworld.json".parse()?)?
-            .json()?;
-        let settings = NoiseGeneratorSettings::decode(&noise)?;
-        let source = BiomeSource::decode(
-            &serde_json::json!({"type":"minecraft:multi_noise","preset":"minecraft:overworld"}),
-            resources,
-        )?;
-        let generator = Arc::new(NoiseBasedChunkGenerator::new(data, settings, source, seed)?);
         let version = match properties.get("region-file-compression") {
             "none" => storage::RegionFileVersion::None,
             "lz4" => storage::RegionFileVersion::Lz4,
@@ -267,7 +337,10 @@ impl World {
             spawn,
             registry,
             io,
+            dimensions: preset.dimensions,
             generator,
+            dimension,
+            flat_decoration,
             generation: Arc::new(JobPool::new("ferraloom-worldgen", 2)?),
             saving: JobPool::new("ferraloom-save", 1)?,
             pending: BTreeMap::new(),
@@ -281,6 +354,9 @@ impl World {
     pub fn request(&mut self, request: u64, pos: ChunkPos) {
         let load = self.io.load(pos);
         let generator = self.generator.clone();
+        let dimension = self.dimension;
+        let flat_decoration = self.flat_decoration.clone();
+        let seed = self.seed;
         let registry = self.registry.clone();
         let pool = self.generation.clone();
         let (reply, answer) = oneshot::channel();
@@ -321,26 +397,50 @@ impl World {
                             surface,
                         })
                     } else {
-                        let chunk = generator.generate([pos.x, pos.z]);
+                        let generated = generator.build_terrain([pos.x, pos.z], dimension, None)?;
+                        let mut chunks = [RegionChunk::new(generated, ChunkStatus::Terrain)];
+                        {
+                            let mut region = WorldGenRegion::new(
+                                &mut chunks, [pos.x, pos.z], &[ChunkStatus::Terrain], 0,
+                                None, &LocalBlockBehavior, seed, generator.sea_level(),
+                            )?;
+                            match generator.as_ref() {
+                                ChunkGenerator::Debug(debug) => debug.apply_biome_decoration(&mut region)?,
+                                ChunkGenerator::Flat(_) => {
+                                    let flat = flat_decoration.as_ref().context("flat decoration plan")?;
+                                    let registry = flat.registry.as_ref().context("Unsupported: flat features and lakes require owned-neighborhood chunk-status scheduling")?;
+                                    let biomes = generator.biome_source().possible_biomes().into_iter().collect();
+                                    flat.plan.as_ref().unwrap().apply_for_biomes(&mut region, generator.as_ref(), registry, &mut NoStructures, &biomes)?;
+                                }
+                                ChunkGenerator::Noise(_) => {}
+                            }
+                        }
+                        let [chunk] = chunks;
+                        ensure!(chunk.entities.is_empty(), "Unsupported: generation entities need owned-region integration");
+                        let mut post_processing = vec![Vec::new(); (dimension.height / 16) as usize];
+                        for [x, y, z] in &chunk.chunk.post_processing {
+                            post_processing[((y - dimension.min_y) >> 4) as usize]
+                                .push(((x & 15) | ((y & 15) << 4) | ((z & 15) << 8)) as i16);
+                        }
                         let disk = SerializableChunkData {
                             data_version: Some(storage::DATA_VERSION),
                             x_pos: Some(pos.x),
-                            y_pos: Some(-4),
+                            y_pos: Some(dimension.min_y >> 4),
                             z_pos: Some(pos.z),
                             status: Some("minecraft:full".into()),
                             is_light_on: Some(true),
-                            block_entities: Some(Vec::new()),
-                            block_ticks: Some(Vec::new()),
-                            fluid_ticks: Some(Vec::new()),
-                            post_processing: Some(vec![Vec::new(); 24]),
+                            block_entities: Some(chunk.block_entities.into_values().collect()),
+                            block_ticks: Some(chunk.block_ticks.ticks().iter().map(|tick| saved_tick(tick.position, tick.kind.name(), tick.priority)).collect()),
+                            fluid_ticks: Some(chunk.fluid_ticks.ticks().iter().map(|tick| saved_tick(tick.position, tick.kind.name(), tick.priority)).collect()),
+                            post_processing: Some(post_processing),
                             structures: Some(storage::StructureData::default()),
                             ..Default::default()
                         };
                         Ok(Terrain {
                             pos,
-                            sections: chunk.sections,
+                            surface: surface_heights(&chunk.chunk.sections),
+                            sections: chunk.chunk.sections,
                             disk,
-                            surface: chunk.world_surface,
                         })
                     }
                 })
@@ -619,4 +719,37 @@ pub fn json_nbt(value: &serde_json::Value) -> Tag {
                 .collect(),
         ),
     }
+}
+
+/// Inverse of the world-settings JSON-to-NBT conversion. Codec booleans are
+/// bytes in NBT; other integral widths retain their full value.
+fn nbt_json(tag: &Tag) -> Result<serde_json::Value> {
+    use serde_json::{Value, json};
+    Ok(match tag {
+        Tag::End => anyhow::bail!("end tag in world settings"),
+        Tag::Byte(value @ (0 | 1)) => Value::Bool(*value != 0),
+        Tag::Byte(value) => json!(value),
+        Tag::Short(value) => json!(value),
+        Tag::Int(value) => json!(value),
+        Tag::Long(value) => json!(value),
+        Tag::Float(value) => {
+            ensure!(value.is_finite(), "nonfinite world setting");
+            json!(value)
+        }
+        Tag::Double(value) => {
+            ensure!(value.is_finite(), "nonfinite world setting");
+            json!(value)
+        }
+        Tag::String(value) => Value::String(value.to_string_lossy()),
+        Tag::List(values) => Value::Array(values.0.iter().map(nbt_json).collect::<Result<_>>()?),
+        Tag::Compound(values) => Value::Object(
+            values
+                .iter()
+                .map(|(name, value)| Ok((name.to_string_lossy(), nbt_json(value)?)))
+                .collect::<Result<_>>()?,
+        ),
+        Tag::ByteArray(values) => json!(values),
+        Tag::IntArray(values) => json!(values),
+        Tag::LongArray(values) => json!(values),
+    })
 }

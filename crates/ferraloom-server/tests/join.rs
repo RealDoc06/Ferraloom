@@ -3,6 +3,64 @@ use anyhow::Result;
 use ferraloom_server::server::{MinecraftServer, ServerOptions};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn flat_world_boots_and_retains_generator_settings_on_reload() -> Result<()> {
+    use ferraloom_nbt::CompoundTag;
+    use ferraloom_storage::SavedDataStorage;
+    let root = tempfile::tempdir()?;
+    support::properties(root.path())?;
+    let properties_path = root.path().join("server.properties");
+    let properties = std::fs::read_to_string(&properties_path)?;
+    let config = serde_json::json!({
+        "layers": [{"height":1,"block":"minecraft:bedrock"}, {"height":3,"block":"minecraft:stone"}],
+        "biome":"minecraft:plains", "features":false, "lakes":false,
+        "structure_overrides":[]
+    });
+    std::fs::write(
+        &properties_path,
+        format!("{properties}level-type=flat\ngenerator-settings={config}\n"),
+    )?;
+    for iteration in 0..2 {
+        let mut options = ServerOptions::new(root.path());
+        options.console = false;
+        options.port = Some(0);
+        let server = MinecraftServer::start(options).await?;
+        server.command("stop").await?;
+        server.wait().await?;
+        let data = SavedDataStorage::new(root.path().join("world/data"))
+            .load::<CompoundTag>("minecraft:world_gen_settings")?
+            .unwrap();
+        let generator = data
+            .value()
+            .get_compound("dimensions")
+            .unwrap()
+            .get_compound("minecraft:overworld")
+            .unwrap()
+            .get_compound("generator")
+            .unwrap();
+        assert_eq!(
+            generator.get_string("type").unwrap().to_string_lossy(),
+            "minecraft:flat"
+        );
+        assert_eq!(
+            generator
+                .get_compound("settings")
+                .unwrap()
+                .get_list("layers")
+                .unwrap()
+                .0
+                .len(),
+            2
+        );
+        if iteration == 0 {
+            // Existing saved dimensions, rather than changed properties, select
+            // the generator on the second boot.
+            std::fs::write(&properties_path, &properties)?;
+        }
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn offline_client_joins_walks_chats_and_saves() -> Result<()> {
     let root = tempfile::tempdir()?;
     support::properties(root.path())?;
