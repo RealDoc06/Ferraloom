@@ -1,6 +1,10 @@
 use ferraloom_util::ChunkPos;
+/// ChunkLevel.MAX_LEVEL for the 26.3 generation pyramid's radius of 11.
+/// Checked against the real LoadingChunkTracker Java vectors. A future
+/// generation-pipeline descriptor supplies this radius to the loading tracker.
+pub const MAX_LOADED_LEVEL: i32 = 44;
 /// Port of ChunkLevel's full, block-ticking and entity-ticking thresholds.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum FullChunkStatus {
     Inaccessible,
     Full,

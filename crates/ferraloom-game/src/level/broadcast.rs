@@ -14,14 +14,20 @@ pub(super) struct BlockChanges {
 }
 impl Level {
     pub(super) fn send_block_updated(&mut self, pos: BlockPos, old: BlockState, new: BlockState) {
-        self.region_mut()
-            .block_changes
-            .chunks
-            .entry(ChunkPos::containing(pos))
-            .or_default()
-            .entry(pos.y >> 4)
-            .or_default()
-            .insert(SectionPos::section_relative_pos(pos));
+        let chunk_pos = ChunkPos::containing(pos);
+        if self
+            .chunk(chunk_pos)
+            .is_some_and(|chunk| chunk.ticking_ready)
+        {
+            self.region_mut()
+                .block_changes
+                .chunks
+                .entry(chunk_pos)
+                .or_default()
+                .entry(pos.y >> 4)
+                .or_default()
+                .insert(SectionPos::section_relative_pos(pos));
+        }
         self.emit(LevelEffect::BlockUpdated { pos, old, new });
     }
     /// The server calls this during ServerChunkCache's broadcast-changed-chunks

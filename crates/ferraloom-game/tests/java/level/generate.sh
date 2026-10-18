@@ -8,8 +8,9 @@ classes=$(mktemp -d)
 trap 'rm -rf "$classes"' EXIT
 classpath="$vanilla/versions/26.3/server-26.3.jar"
 while IFS= read -r -d '' library; do classpath="$classpath:$library"; done < <(find "$vanilla/libraries" -name '*.jar' -print0)
-"$jdk/javac" -cp "$classpath" -d "$classes" "$root/crates/ferraloom-game/tests/java/level/TickVectors.java" "$root/crates/ferraloom-game/tests/java/level/NeighborVectors.java" "$root/crates/ferraloom-game/tests/java/level/SimulationVectors.java" "$root/crates/ferraloom-game/tests/java/level/TickRateVectors.java" "$root/crates/ferraloom-game/tests/java/level/SpawnChunkVectors.java"
+"$jdk/javac" -cp "$classpath" -d "$classes" "$root/crates/ferraloom-game/tests/java/level/TickVectors.java" "$root/crates/ferraloom-game/tests/java/level/NeighborVectors.java" "$root/crates/ferraloom-game/tests/java/level/SimulationVectors.java" "$root/crates/ferraloom-game/tests/java/level/TickRateVectors.java" "$root/crates/ferraloom-game/tests/java/level/SpawnChunkVectors.java" "$root/crates/ferraloom-game/tests/java/level/LoadingVectors.java"
 cd "$classes"
+"$jdk/java" -Xmx512M -cp "$classes:$classpath" LoadingVectors > "$root/crates/ferraloom-game/tests/java/level/loading.tsv"
 "$jdk/java" -Xmx512M -cp "$classes:$classpath" TickRateVectors > "$root/crates/ferraloom-game/tests/java/level/tick-rate.tsv"
 "$jdk/java" -Xmx512M -cp "$classes:$classpath" SimulationVectors > "$root/crates/ferraloom-game/tests/java/level/simulation.tsv"
 "$jdk/java" -Xmx512M -cp "$classes:$classpath" SpawnChunkVectors > "$root/crates/ferraloom-game/tests/java/level/spawn-chunks.tsv"
@@ -39,5 +40,6 @@ rg '^(orientation|initial-orientation):' "$classes/neighbors.tsv" > "$root/crate
 rg '^clone-item:' "$classes/neighbors.tsv" > "$root/crates/ferraloom-game/tests/java/level/clone-items.tsv"
 
 rg '^directional-replacement:' "$classes/neighbors.tsv" > "$root/crates/ferraloom-game/tests/java/level/placement.tsv"
+rg '^client-update:' "$classes/neighbors.tsv" > "$root/crates/ferraloom-game/tests/java/level/client-updates.tsv"
 
 rg '^fluid-wall:' "$classes/neighbors.tsv" > "$root/crates/ferraloom-game/tests/java/level/walls.tsv"

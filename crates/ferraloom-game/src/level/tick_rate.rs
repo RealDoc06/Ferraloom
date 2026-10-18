@@ -82,7 +82,8 @@ pub enum TickRateEvent {
         ticks_per_second: i32,
         milliseconds_per_tick: String,
     },
-    /// Port of MinecraftServer#onTickRateChanged's deadline/autosave reset hook.
+    /// Port of MinecraftServer#onTickRateChanged's autosave interval hook.
+    /// Only shorten the remaining interval; it does not reset the tick deadline.
     RateChanged,
 }
 #[derive(Default)]
