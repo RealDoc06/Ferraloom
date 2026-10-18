@@ -185,6 +185,10 @@ impl MinecraftServer {
             .add_chunk(chunk)
             .map_err(|e| anyhow::anyhow!("{e:?}"))?;
         self.level
+            .level
+            .prime_chunk_heightmaps(pos)
+            .map_err(game_error)?;
+        self.level
             .chunks
             .holders
             .get_mut(&pos.pack())
@@ -193,17 +197,32 @@ impl MinecraftServer {
         Ok(())
     }
     pub(super) fn integrate_command_light(&mut self, light: crate::world::LitChunk) -> Result<()> {
-        let holder = self
-            .level
-            .chunks
-            .holders
-            .get_mut(&light.pos.pack())
-            .context("unknown light job")?;
-        ensure!(holder.request_id == light.request, "stale light completion");
-        holder.status = ChunkStatus::Full;
-        self.world.ready.insert(light.pos);
-        for (pos, data) in light.updates {
-            self.world.lights.insert(pos, data);
+        if let Some((request, pos)) = light.initialized {
+            let holder = self
+                .level
+                .chunks
+                .holders
+                .get_mut(&pos.pack())
+                .context("unknown light job")?;
+            ensure!(holder.request_id == request, "stale light completion");
+            holder.status = ChunkStatus::Full;
+            self.world.ready.insert(pos);
+        }
+        for (key, data) in light.updates {
+            self.level
+                .level
+                .set_light_snapshot(ChunkPos::unpack(key), data.snapshot());
+            self.world.lights.insert(key, data);
+        }
+        for (key, mask) in light.dirty {
+            self.world.light_chunks_to_broadcast.insert(key);
+            let dirty = self
+                .world
+                .pending_light_updates
+                .entry(ChunkPos::unpack(key))
+                .or_default();
+            dirty.sky |= mask.sky;
+            dirty.block |= mask.block;
         }
         Ok(())
     }

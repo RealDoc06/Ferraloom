@@ -1,5 +1,6 @@
 //! Region-owned simulation. See `docs/design/game-core.md` for porting rules.
 //!
+pub mod advancements;
 pub mod block;
 pub mod commands;
 pub mod crafting;

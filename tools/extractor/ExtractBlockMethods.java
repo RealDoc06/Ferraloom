@@ -23,7 +23,9 @@ public final class ExtractBlockMethods {
         "useShapeForLightOcclusion", "isPathfindable", "getLightDampening",
         "getEntityInsideCollisionShape", "bounceOn", "triggerEvent",
         "getAnalogOutputSignal", "hasAnalogOutputSignal",
-        "canPlaceLiquid", "placeLiquid", "pickupBlock", "getCloneItemStack", "canBeReplaced"
+        "canPlaceLiquid", "placeLiquid", "pickupBlock", "getCloneItemStack", "canBeReplaced",
+        "handlePrecipitation",
+        "getSignal", "getDirectSignal", "isSignalSource", "ownSignal", "shouldRedstoneWireConnectTo"
     );
 
     private static Method baseMethod(String name) {

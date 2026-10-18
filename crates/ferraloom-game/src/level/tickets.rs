@@ -133,6 +133,49 @@ impl Default for TicketStorage {
     }
 }
 impl TicketStorage {
+    pub fn add_player_spawn(&mut self, pos: ChunkPos, _ticket_tick: u64) {
+        self.add(
+            pos,
+            Ticket {
+                kind: TicketType::PlayerSpawn,
+                level: 30,
+                expires: None,
+            },
+        );
+    }
+
+    pub fn replace_ticket_level_of_type(&mut self, level: i32, kind: TicketType) {
+        let mut affected = Vec::new();
+        for &key in self.traversal.iter() {
+            for ticket in &self.tickets[&key] {
+                if ticket.kind == kind {
+                    affected.push((ChunkPos::unpack(key), ticket.level));
+                }
+            }
+        }
+        for (pos, old) in affected {
+            self.remove(pos, kind, old);
+            self.add(
+                pos,
+                Ticket {
+                    kind,
+                    level,
+                    expires: None,
+                },
+            );
+        }
+    }
+
+    pub fn contains_type(&self, pos: ChunkPos, kind: TicketType) -> bool {
+        self.tickets
+            .get(&pos.pack())
+            .is_some_and(|tickets| tickets.iter().any(|ticket| ticket.kind == kind))
+    }
+
+    pub fn has_pending_source_updates(&self) -> bool {
+        !self.updates.is_empty()
+    }
+
     pub const STORAGE_ID: &'static str = "minecraft:chunk_tickets";
     pub fn add(&mut self, pos: ChunkPos, ticket: Ticket) {
         self.add_record(
@@ -259,6 +302,16 @@ impl TicketStorage {
         }
     }
     pub fn purge_stale(&mut self, tick: u64) {
+        self.purge_stale_with_readiness(tick, |_| true);
+    }
+    /// TicketStorage#canTicketExpire: the callback reports updating holder
+    /// saveSync completion, with true for an absent holder. Native timed tickets
+    /// retain their signed remaining duration while that dependency is pending.
+    pub fn purge_stale_with_readiness(
+        &mut self,
+        tick: u64,
+        mut ready: impl FnMut(ChunkPos) -> bool,
+    ) {
         let mut removed_forced = false;
         let mut cursor = self.traversal.cursor();
         while let Some((&key, _)) = cursor.next_entry() {
@@ -269,6 +322,9 @@ impl TicketStorage {
                 let retained = if let Some(expires) = t.expires {
                     tick <= expires
                 } else if t.kind.timeout() != 0 {
+                    if t.kind != TicketType::Unknown && !ready(ChunkPos::unpack(key)) {
+                        return true;
+                    }
                     t.ticks_left = t.ticks_left.wrapping_sub(1);
                     t.ticks_left >= 0
                 } else {
@@ -527,6 +583,46 @@ mod tests {
             })
             .collect::<Vec<_>>()
             .join(";")
+    }
+
+    #[test]
+    fn native_timeout_pauses_for_save_dependencies_and_expires_below_zero() {
+        let pos = ChunkPos::new(4, -3);
+        let mut storage = TicketStorage::default();
+        storage.add_player_spawn(pos, 0);
+        for tick in 1..=1000 {
+            storage.purge_stale_with_readiness(tick, |_| false);
+        }
+        assert!(storage.contains_type(pos, TicketType::PlayerSpawn));
+        for tick in 1001..=1020 {
+            storage.purge_stale_with_readiness(tick, |_| true);
+        }
+        assert!(storage.contains_type(pos, TicketType::PlayerSpawn));
+        storage.purge_stale_with_readiness(1021, |_| true);
+        assert!(!storage.contains_type(pos, TicketType::PlayerSpawn));
+        storage.add(
+            pos,
+            Ticket {
+                kind: TicketType::Unknown,
+                level: 33,
+                expires: None,
+            },
+        );
+        storage.purge_stale_with_readiness(1022, |_| false);
+        assert!(storage.contains_type(pos, TicketType::Unknown));
+        storage.purge_stale_with_readiness(1023, |_| false);
+        assert!(!storage.contains_type(pos, TicketType::Unknown));
+        storage.add_player_spawn(pos, 1023);
+        for tick in 1024..=1033 {
+            storage.purge_stale_with_readiness(tick, |_| true);
+        }
+        storage.add_player_spawn(pos, 1033);
+        for tick in 1034..=1053 {
+            storage.purge_stale_with_readiness(tick, |_| true);
+        }
+        assert!(storage.contains_type(pos, TicketType::PlayerSpawn));
+        storage.purge_stale_with_readiness(1054, |_| true);
+        assert!(!storage.contains_type(pos, TicketType::PlayerSpawn));
     }
 
     #[test]

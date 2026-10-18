@@ -50,6 +50,13 @@ up/down, and `East` covers boolean connections, redstone sides and wall heights.
 unsupported values. Numeric property values are `u8`, boolean values are `bool`.
 Other values are generated enums; none require string lookup during simulation.
 
+`ExtractData <output-dir> --sound-events-only` records each registered
+`SoundEvent.fixedRange` in protocol order. This is pure immutable registry data;
+`SoundEvent#getRange` uses the fixed value when present, otherwise 16 or
+`16 * volume` with native float arithmetic. All 1,991 registered 26.3 events
+currently use variable range. Direct unregistered sound records can still have
+fixed ranges and are represented separately by the protocol codec.
+
 `ExtractTagKeys` separately records tag key names and their registry identities,
 including vanilla datapack tags without a Java constant, in `tag_keys.json`.
 `tools/extract-data.sh` regenerates it. Typed keys have per-registry ordinals;
@@ -102,3 +109,11 @@ crafting checks.
 only to the fluid type's virtual `isRandomlyTicking`. It has no level, position
 or state-property inputs. Source and flowing variants retain their own registry
 entries; waterlogged states use the same fluid fact as ordinary water.
+
+`ExtractEnvironmentAttributes <output-dir>` independently extracts all native
+EnvironmentAttribute defaults through their real value codecs, attribute-type
+registry IDs, allowed modifier names, flags and float sanitization bounds. These
+are immutable registry facts: dimension, biome, clock and weather sampling does
+not participate. Float limits are measured with sanitizeValue at both infinities;
+unbounded ends remain null. The Rust build consumes this committed table without
+Java. No environment value is sampled from a fabricated live level.
