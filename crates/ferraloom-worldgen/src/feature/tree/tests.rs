@@ -395,3 +395,43 @@ fn minimum_height_is_only_the_actual_tree_trunk_base() {
     oak["type"] = "minecraft:no_op".into();
     assert_eq!(loader.feature(&oak).unwrap().tree_minimum_height(), None);
 }
+
+#[test]
+fn mushroom_foliage_radius_requires_an_actual_huge_mushroom() {
+    let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").expect("builder provides vanilla jar");
+    let resources = ResourceManager::new(vec![Pack::vanilla_jar(Path::new(&jar)).unwrap()]);
+    let mut loader = FeatureLoader::new(&resources).unwrap();
+    for name in ["huge_brown_mushroom", "huge_red_mushroom"] {
+        let mut config = resources
+            .require(&format!("worldgen/feature/{name}.json").parse().unwrap())
+            .unwrap()
+            .json()
+            .unwrap();
+        config.as_object_mut().unwrap().remove("foliage_radius");
+        assert_eq!(
+            loader
+                .feature(&config)
+                .unwrap()
+                .huge_mushroom_foliage_radius(),
+            Some(2)
+        );
+        for radius in [-3, 0, 2, 7, i32::MAX] {
+            config["foliage_radius"] = radius.into();
+            assert_eq!(
+                loader
+                    .feature(&config)
+                    .unwrap()
+                    .huge_mushroom_foliage_radius(),
+                Some(radius)
+            );
+        }
+        config["type"] = "minecraft:no_op".into();
+        assert_eq!(
+            loader
+                .feature(&config)
+                .unwrap()
+                .huge_mushroom_foliage_radius(),
+            None
+        );
+    }
+}

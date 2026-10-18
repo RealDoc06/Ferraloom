@@ -40,6 +40,9 @@ impl HugeMushroom {
     }
 }
 impl Feature for HugeMushroom {
+    fn huge_mushroom_foliage_radius(&self) -> Option<i32> {
+        Some(self.radius)
+    }
     fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
         let origin = ctx.origin;
         let mut height = ctx.random()?.next_int_bound(3) + 4;
