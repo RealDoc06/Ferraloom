@@ -1,4 +1,7 @@
 //! Turns pinned vanilla reports and extracted facts into allocation-free tables.
+#[path = "build/block_methods.rs"]
+mod block_methods;
+
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;
@@ -562,6 +565,7 @@ fn main() {
     tag_keys(root, &registries_report);
     let block_report = load(root, "blocks");
     let block_properties = load(root, "block_properties");
+    block_methods::generate(root, &block_properties);
     let item_report = load(root, "items");
     let entity_report = load(root, "entity_types");
     for (name, count) in [
