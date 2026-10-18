@@ -413,6 +413,9 @@ impl<T: Copy + Eq + Hash> LevelTicks<T> {
             });
         }
     }
+    pub fn copy_area_from(&mut self, source: &Self, area: TickArea, offset: BlockPos) {
+        self.copy_ticks(&source.ticks_in_area(area), offset);
+    }
     pub fn copy_area(&mut self, area: TickArea, offset: BlockPos) {
         let ticks = self.ticks_in_area(area);
         self.copy_ticks(&ticks, offset);
@@ -578,5 +581,81 @@ mod tests {
             LevelChunkTicks::from_saved(vec![decoded], ChunkPos::new(1, 0)).count(),
             0
         );
+    }
+    #[test]
+    fn equal_loaded_container_heads_match_fastutil_and_jdk_tie_order() {
+        let mut ticks = LevelTicks::default();
+        for x in -10..=10 {
+            let pos = BlockPos::new(x * 16, 0, 0);
+            let chunk = ChunkPos::new(x, 0);
+            let mut container = LevelChunkTicks::from_saved(
+                vec![SavedTick {
+                    block: Block::STONE,
+                    pos,
+                    delay: 0,
+                    priority: TickPriority::Normal,
+                }],
+                chunk,
+            );
+            container.unpack(0);
+            ticks.add_container(chunk, container);
+        }
+        let mut output = Vec::new();
+        for _ in 0..5 {
+            output.extend(
+                ticks
+                    .collect_due(0, 5)
+                    .into_iter()
+                    .map(|t| t.pos.x.to_string()),
+            );
+        }
+        assert_eq!(output.join(","), vector("equal-loaded-heads"));
+    }
+    #[test]
+    fn vanilla_area_copy_clear_and_lazy_will_tick_cache() {
+        let mut ticks = LevelTicks::default();
+        for x in 0..=3 {
+            ticks.add_container(ChunkPos::new(x, 0), LevelChunkTicks::default());
+        }
+        ticks.schedule(A, Block::STONE, 0, TickPriority::Normal);
+        ticks.schedule(B, Block::STONE, 0, TickPriority::Normal);
+        ticks.schedule(C, Block::STONE, 0, TickPriority::Normal);
+        ticks.schedule(
+            BlockPos::new(2, 0, 0),
+            Block::STONE,
+            9,
+            TickPriority::Normal,
+        );
+        ticks.collect(0, 65536, |_| true);
+        let mut output = Vec::new();
+        while let Some(tick) = ticks.poll_this_tick() {
+            output.push(tick.pos.x.to_string());
+            if tick.pos == A {
+                output.push(format!(
+                    "before:{}",
+                    ticks.will_tick_this_tick(B, Block::STONE)
+                ));
+                ticks.copy_area(TickArea { min: A, max: C }, BlockPos::new(32, 0, 0));
+                ticks.clear_area(TickArea { min: A, max: B });
+                output.push(format!(
+                    "after:{}",
+                    ticks.will_tick_this_tick(B, Block::STONE)
+                ));
+            }
+        }
+        ticks.cleanup_after_tick();
+        output.extend(
+            ticks
+                .collect_due(0, 65536)
+                .into_iter()
+                .map(|t| t.pos.x.to_string()),
+        );
+        output.extend(
+            ticks
+                .collect_due(9, 65536)
+                .into_iter()
+                .map(|t| t.pos.x.to_string()),
+        );
+        assert_eq!(output.join(","), vector("area-copy-clear"));
     }
 }

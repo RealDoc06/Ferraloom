@@ -89,3 +89,48 @@ impl BlockBehavior for VegetationBlock {
         })
     }
 }
+
+/// Port of ChainBlock's waterlogging and scheduled fluid update. Placement
+/// context and entity/pathfinding methods belong to their respective ports.
+pub struct ChainBlock;
+pub static CHAIN_BLOCK: ChainBlock = ChainBlock;
+impl BlockBehavior for ChainBlock {
+    fn update_shape(
+        &self,
+        state: BlockState,
+        pos: BlockPos,
+        _direction: Direction,
+        _neighbor_pos: BlockPos,
+        _neighbor: BlockState,
+        level: &mut LevelAccessRef<'_>,
+    ) -> Result<BlockState, LevelError> {
+        if state.get(ferraloom_data::properties::WATERLOGGED) == Some(true) {
+            level.schedule_fluid_tick(pos, ferraloom_data::registries::fluid::Id::WATER, 5)?;
+        }
+        Ok(state)
+    }
+    fn can_place_liquid(
+        &self,
+        _state: BlockState,
+        fluid: ferraloom_data::registries::fluid::Id,
+    ) -> bool {
+        fluid == ferraloom_data::registries::fluid::Id::WATER
+    }
+    fn place_liquid(
+        &self,
+        state: BlockState,
+        pos: BlockPos,
+        fluid: ferraloom_data::FluidState,
+        level: &mut LevelAccessRef<'_>,
+    ) -> Result<bool, LevelError> {
+        super::fluid::SimpleWaterloggedBlock::place_liquid(state, pos, fluid, level)
+    }
+    fn pickup_block(
+        &self,
+        state: BlockState,
+        pos: BlockPos,
+        level: &mut LevelAccessRef<'_>,
+    ) -> Result<Option<ferraloom_data::Item>, LevelError> {
+        super::fluid::SimpleWaterloggedBlock::pickup_block(state, pos, level)
+    }
+}

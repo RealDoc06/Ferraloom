@@ -21,9 +21,11 @@ pub mod effects;
 pub mod events;
 pub mod heightmap;
 mod mutation;
+mod random;
 pub mod redstone;
 mod saved_ticks;
 pub mod server_level;
+pub mod simulation;
 pub mod tickets;
 mod ticking;
 
@@ -37,6 +39,7 @@ pub enum LevelError {
     DuplicateChunk(ChunkPos),
     UnsupportedEntity(EntityType),
     UnsupportedBlock(Block),
+    UnsupportedBlockMethod(Block, crate::block::BlockMethod),
     UnsupportedBlockEntity(Block),
     MissingBlockTags,
     UnsupportedShape(BlockState),
@@ -91,6 +94,7 @@ pub struct Region {
     effects: Vec<effects::LevelEffect>,
     block_changes: broadcast::BlockChanges,
     tags: Option<Arc<ferraloom_data::datapack::TagSet<Block>>>,
+    pub(crate) unported: crate::block::UnportedCalls,
     behaviors: &'static Behaviors,
 }
 
@@ -107,16 +111,15 @@ impl Region {
             min_y: -64,
             max_y: 320,
             rules: LevelRules::default(),
-            random: ferraloom_util::random::Random::Legacy(
-                ferraloom_util::random::LegacyRandomSource::new(0),
-            ),
-            rand_value: 0,
+            random: random::new_level_random(),
+            rand_value: random::new_position_seed(),
             block_ticking_chunks: HashSet::new(),
             neighbor_updater: redstone::CollectingNeighborUpdater::default(),
             block_events: events::BlockEvents::default(),
             effects: Vec::new(),
             block_changes: broadcast::BlockChanges::default(),
             tags: None,
+            unported: crate::block::UnportedCalls::default(),
             behaviors,
         }
     }
@@ -141,11 +144,11 @@ impl Level {
         self.region.expect("level is parked")
     }
     #[inline]
-    fn region(&self) -> &Region {
+    pub(crate) fn region(&self) -> &Region {
         self.region.as_ref().expect("level is parked")
     }
     #[inline]
-    fn region_mut(&mut self) -> &mut Region {
+    pub(crate) fn region_mut(&mut self) -> &mut Region {
         self.region.as_mut().expect("level is parked")
     }
 
@@ -240,8 +243,11 @@ impl Level {
         while let Some(tick) = self.region_mut().block_ticks.poll_this_tick() {
             let state = self.get_block_state(tick.pos)?;
             if state.block() == tick.block {
-                self.block_behavior(tick.block)?
-                    .tick(state, tick.pos, self)?;
+                self.optional_block_call(
+                    tick.block,
+                    crate::block::BlockMethod::Tick,
+                    |behavior, level| behavior.tick(state, tick.pos, level),
+                )?;
             }
         }
         Ok(())

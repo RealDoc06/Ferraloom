@@ -143,7 +143,7 @@ impl FlowingFluid {
             .is_instance_of(BlockClass::LiquidBlockContainer)
         {
             return Ok(level
-                .block_behavior(state.block())?
+                .required_block_behavior(state.block(), super::BlockMethod::CanPlaceLiquid)?
                 .can_place_liquid(state, fluid));
         }
         Ok(true)
@@ -357,12 +357,9 @@ impl FlowingFluid {
             .block()
             .is_instance_of(BlockClass::LiquidBlockContainer)
         {
-            level.block_behavior(state.block())?.place_liquid(
-                state,
-                pos,
-                target,
-                &mut LevelAccessRef::Server(level),
-            )?;
+            level
+                .required_block_behavior(state.block(), super::BlockMethod::PlaceLiquid)?
+                .place_liquid(state, pos, target, &mut LevelAccessRef::Server(level))?;
         } else {
             if !state.is_air() {
                 if self == Self::Water {
@@ -718,7 +715,10 @@ impl BlockBehavior for LiquidBlock {
                     .block_tags()?
                     .contains_key(BlockTags::ENABLES_BUBBLE_COLUMN_PUSH_UP, below.block())
             {
-                return Err(LevelError::UnsupportedBlock(Block::BUBBLE_COLUMN));
+                return Err(LevelError::UnsupportedBlockMethod(
+                    Block::BUBBLE_COLUMN,
+                    super::BlockMethod::BubbleColumnUpdate,
+                ));
             }
         }
         Ok(())
@@ -758,11 +758,9 @@ impl SimpleWaterloggedBlock {
             UpdateFlags::ALL,
         )?;
         let survives = match level {
-            LevelAccessRef::Server(level) => level.block_behavior(state.block())?.can_survive(
-                state,
-                pos,
-                &super::LevelReaderRef::Server(level),
-            )?,
+            LevelAccessRef::Server(level) => level
+                .required_block_behavior(state.block(), super::BlockMethod::CanSurvive)?
+                .can_survive(state, pos, &super::LevelReaderRef::Server(level))?,
         };
         if !survives {
             match level {

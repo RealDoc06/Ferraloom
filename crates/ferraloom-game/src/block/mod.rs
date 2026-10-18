@@ -6,7 +6,10 @@ pub mod dispatch;
 pub mod flags;
 pub mod fluid;
 mod foundational;
+mod unsupported;
 pub use flags::{UPDATE_LIMIT, UpdateFlags};
+pub(crate) use unsupported::UnportedCalls;
+pub use unsupported::{BlockMethod, UnportedBehavior, UnportedBehaviorStats};
 
 /// Port of the shared LevelReader/LevelAccessor call surface. The live arm
 /// borrows the concrete simulation facade, including during reentrant callbacks.

@@ -1,6 +1,6 @@
 //! Port of Level#setBlock and LevelChunk#setBlockState's callback sequence.
 use super::{Level, LevelError, LevelRules, effects::LevelEffect};
-use crate::block::{BlockBehavior, UpdateFlags};
+use crate::block::{BlockBehavior, BlockMethod, UpdateFlags};
 use ferraloom_data::{Block, BlockState, datapack::TagSet};
 use ferraloom_util::{BlockPos, ChunkPos};
 use std::sync::Arc;
@@ -35,6 +35,14 @@ impl Level {
             .block(block)
             .or_else(|| crate::block::dispatch::vanilla_behavior(block))
             .ok_or(LevelError::UnsupportedBlock(block))
+    }
+    pub fn required_block_behavior(
+        &self,
+        block: Block,
+        method: BlockMethod,
+    ) -> Result<&'static dyn BlockBehavior, LevelError> {
+        self.block_behavior(block)
+            .map_err(|_| LevelError::UnsupportedBlockMethod(block, method))
     }
     pub(super) fn emit(&mut self, effect: LevelEffect) {
         self.region_mut().effects.push(effect);
@@ -99,8 +107,6 @@ impl Level {
                 },
             ));
         }
-        let old_behavior = self.block_behavior(old.block())?;
-        let behavior = self.block_behavior(state.block())?;
         let tags = self
             .region()
             .tags
@@ -137,13 +143,19 @@ impl Level {
                 .is_instance_of(ferraloom_data::BlockClass::BaseRailBlock))
             && (flags.contains(UpdateFlags::NEIGHBORS) || moved)
         {
-            old_behavior.affect_neighbors_after_removal(old, pos, moved, self)?;
+            self.optional_block_call(
+                old.block(),
+                BlockMethod::AffectNeighborsAfterRemoval,
+                |behavior, level| behavior.affect_neighbors_after_removal(old, pos, moved, level),
+            )?;
         }
         if self.get_block_state(pos)?.block() != state.block() {
             return Ok(false);
         }
         if !flags.contains(UpdateFlags::SKIP_ON_PLACE) {
-            behavior.on_place(state, pos, old, moved, self)?;
+            self.optional_block_call(state.block(), BlockMethod::OnPlace, |behavior, level| {
+                behavior.on_place(state, pos, old, moved, level)
+            })?;
         }
         self.region_mut()
             .chunks
@@ -163,20 +175,32 @@ impl Level {
             if !flags.contains(UpdateFlags::KNOWN_SHAPE) && limit > 0 {
                 let neighbor_flags =
                     flags.without(UpdateFlags::NEIGHBORS | UpdateFlags::SUPPRESS_DROPS);
-                old_behavior.update_indirect_neighbor_shapes(
-                    old,
-                    pos,
-                    neighbor_flags,
-                    limit - 1,
-                    self,
+                self.optional_block_call(
+                    old.block(),
+                    BlockMethod::UpdateIndirectNeighborShapes,
+                    |behavior, level| {
+                        behavior.update_indirect_neighbor_shapes(
+                            old,
+                            pos,
+                            neighbor_flags,
+                            limit - 1,
+                            level,
+                        )
+                    },
                 )?;
                 self.update_neighbor_shapes(state, pos, neighbor_flags, limit - 1)?;
-                behavior.update_indirect_neighbor_shapes(
-                    state,
-                    pos,
-                    neighbor_flags,
-                    limit - 1,
-                    self,
+                self.optional_block_call(
+                    state.block(),
+                    BlockMethod::UpdateIndirectNeighborShapes,
+                    |behavior, level| {
+                        behavior.update_indirect_neighbor_shapes(
+                            state,
+                            pos,
+                            neighbor_flags,
+                            limit - 1,
+                            level,
+                        )
+                    },
                 )?;
             }
             self.emit(LevelEffect::PoiChanged { pos, old, new });

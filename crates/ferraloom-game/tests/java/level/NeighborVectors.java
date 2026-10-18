@@ -33,6 +33,9 @@ public final class NeighborVectors {
         if(args.length>0 && args[0].equals("generate")) { generate(Path.of(args[1])); return; }
         var output=System.out; var errors=System.err; SharedConstants.tryDetectVersion(); Bootstrap.bootStrap(); System.setOut(output); System.setErr(errors);
         var registries=load();
+        var builtins=RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
+        var context=HolderLookup.Provider.create(java.util.stream.Stream.concat(builtins.listRegistries(),registries.listRegistries()));
+        BuiltInRegistries.DATA_COMPONENT_INITIALIZERS.build(context).forEach(net.minecraft.core.component.DataComponentInitializers.PendingComponents::apply);
         Class.forName("NeighborFixture").getMethod("run", RegistryAccess.class).invoke(null,registries);
         var mutation=Class.forName("MutationFixture").getMethod("run",RegistryAccess.class);mutation.setAccessible(true);mutation.invoke(null,registries);
     }
@@ -74,6 +77,11 @@ public final class NeighborVectors {
               for(int i=0;i<4;i++)positions.add(f.getBlockRandomPos(-16,-64,32,15).toShortString());
               System.out.println("random-positions\\t"+String.join(";",positions));
               System.out.println("valid-chunk-bound\\t"+net.minecraft.world.level.chunk.status.ChunkPyramid.MAX_CHUNK_COORDINATE_VALUE);
+
+              for(var block:List.of(Blocks.WATER,Blocks.LAVA))for(int liquidLevel=0;liquidLevel<16;liquidLevel++){
+                var state=block.defaultBlockState().setValue(net.minecraft.world.level.block.LiquidBlock.LEVEL,liquidLevel);var fluid=state.getFluidState();
+                System.out.println("fluid-legacy:"+net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(block)+":"+liquidLevel+"\\t"+Block.getId(fluid.createLegacyBlock()));
+              }
               var sample=List.of(Blocks.AIR,Blocks.CAVE_AIR,Blocks.VOID_AIR,Blocks.STONE,Blocks.DIRT,Blocks.SAND,Blocks.GRAVEL,Blocks.WATER,Blocks.LAVA,Blocks.OBSIDIAN,Blocks.COBBLESTONE,Blocks.BASALT,Blocks.SOUL_SOIL,Blocks.BLUE_ICE,Blocks.SHORT_GRASS,Blocks.DANDELION,Blocks.BUSH,Blocks.FIRE,Blocks.SOUL_FIRE,Blocks.MAGMA_BLOCK);
               for(var tag:List.of(net.minecraft.tags.BlockTags.SUPPORTS_VEGETATION,net.minecraft.tags.BlockTags.FIRE,net.minecraft.tags.BlockTags.WASHED_AWAY_BY_FLUIDS,net.minecraft.tags.BlockTags.BLOCKS_MOTION_IN_HEIGHTMAP,net.minecraft.tags.BlockTags.BLOCKS_MOTION_IN_HEIGHTMAP_NO_LEAVES,net.minecraft.tags.BlockTags.ENABLES_BUBBLE_COLUMN_DRAG_DOWN,net.minecraft.tags.BlockTags.ENABLES_BUBBLE_COLUMN_PUSH_UP)){
                 var names=new ArrayList<String>();for(var block:sample)if(block.defaultBlockState().is(tag))names.add(net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(block).toString());
@@ -108,7 +116,16 @@ public final class NeighborVectors {
               @Override public void updatePOIOnBlockStateChange(BlockPos p,BlockState a,BlockState b){trace.add("poi");}
               @Override public void updateNeighborsAt(BlockPos p,Block b){trace.add("neighbors");neighborUpdater.updateNeighborsAtExceptFromFacing(p,b,null,null);}
               @Override public void scheduleTick(BlockPos p,Block b,int delay){trace.add("schedule:"+delay);}
+              @Override public void scheduleTick(BlockPos p,net.minecraft.world.level.material.Fluid f,int delay){trace.add("fluid:"+delay);}
+
               public static void run(RegistryAccess r){
+                var waterlogged=new MutationFixture(r);var pos=new BlockPos(8,0,8);
+                waterlogged.setBlock(pos,Blocks.IRON_CHAIN.defaultBlockState(),528,512);waterlogged.trace.clear();
+                var fluid=net.minecraft.world.level.material.Fluids.WATER.getSource(false);
+                boolean placed=((net.minecraft.world.level.block.LiquidBlockContainer)Blocks.IRON_CHAIN).placeLiquid(waterlogged,pos,waterlogged.getBlockState(pos),fluid);
+                boolean wet=waterlogged.getBlockState(pos).getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.WATERLOGGED);
+                var item=((net.minecraft.world.level.block.BucketPickup)Blocks.IRON_CHAIN).pickupBlock(null,waterlogged,pos,waterlogged.getBlockState(pos));
+                System.out.println("simple-waterlogged\\t"+placed+":"+wet+":"+net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(item.getItem())+":"+String.join(",",waterlogged.trace));
                 for(int flags:new int[]{0,1,2,3,4,8,16,32,64,128,256,512,816}){
                   var f=new MutationFixture(r);
                   boolean result=f.setBlock(new BlockPos(8,0,8),Blocks.SAND.defaultBlockState(),flags,512);

@@ -2,7 +2,7 @@
 //! dimension-wide budgets and chunk order, then calls block events separately.
 use super::{Level, LevelError};
 use crate::{
-    block::fluid::FlowingFluid,
+    block::{BlockMethod, fluid::FlowingFluid},
     ticks::{ScheduledTick, TickPriority},
 };
 use ferraloom_data::{Block, registries::fluid::Id as Fluid};
@@ -112,7 +112,9 @@ impl Level {
             let fluid = state.data().fluid;
             if fluid.fluid_type == tick.block {
                 if let Some(flow) = FlowingFluid::from_id(tick.block) {
-                    flow.tick(self, tick.pos, state, fluid)?;
+                    self.optional_call(state.block(), BlockMethod::FluidTick, |level| {
+                        flow.tick(level, tick.pos, state, fluid)
+                    })?;
                 }
             }
         }
@@ -151,13 +153,18 @@ impl Level {
                 );
                 let state = self.get_block_state(pos)?;
                 if state.data().random_ticking {
-                    self.block_behavior(state.block())?
-                        .random_tick(state, pos, self)?;
+                    self.optional_block_call(
+                        state.block(),
+                        BlockMethod::RandomTick,
+                        |behavior, level| behavior.random_tick(state, pos, level),
+                    )?;
                 }
                 // The fluid is captured from the original state, even if the
                 // block callback changed it (LiquidBlock invokes lava twice).
                 if let Some(flow) = FlowingFluid::from_id(state.data().fluid.fluid_type) {
-                    flow.random_tick(self, pos, state.data().fluid)?;
+                    self.optional_call(state.block(), BlockMethod::FluidRandomTick, |level| {
+                        flow.random_tick(level, pos, state.data().fluid)
+                    })?;
                 }
             }
         }

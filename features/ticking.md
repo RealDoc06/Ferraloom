@@ -130,3 +130,8 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 
 | ticking.level.set-block-flags | Apply 26.3 setBlock flags, sand onPlace scheduling, section emptiness and live heightmaps | `Level#setBlock; LevelChunk#setBlockState` | `ferraloom-game: level::tests::vanilla_set_block_flags_schedule_sand_notify_and_update_all_heightmaps` | pass | todo |
 | ticking.level.block-broadcasts | Deduplicate changed positions and capture block or section packets at the broadcast phase | `ChunkHolder#blockChanged; ChunkHolder#broadcastChanges` | `ferraloom-game: level::tests::block_broadcasts_deduplicate_and_capture_final_states_at_broadcast_time (server audience drain pending)` | - | todo |
+
+| ticking.level.synchronous-chunk-read | Load or merge missing FULL chunks at the synchronous read call site | `Level#getChunk; ServerChunkCache#getChunk` | Known limitation: live core returns explicit `MissingChunk`; synchronous continuation belongs to the next adapter port. No air substitution or callback retry. | - | todo |
+
+| ticking.simulation-chunk-order | Propagate player simulation ticket levels through fixed-point queues and retain vanilla primitive-map iteration order | `SimulationChunkTracker; ChunkTracker; DynamicGraphMinFixedPoint` | `ferraloom-game: level::simulation::tests::simulation_tracker_map_order_and_levels_match_vanilla_ticket_changes` | pass | todo |
+| ticking.unported-behavior-policy | Strict by default; optional Warn skips count every call including shape updates and retain required-query errors | `BlockBehaviour virtual dispatch (temporary port policy)` | `ferraloom-game: level::tests::strict_is_default_and_warn_records_each_skipped_call_without_query_fallbacks` | - | todo |

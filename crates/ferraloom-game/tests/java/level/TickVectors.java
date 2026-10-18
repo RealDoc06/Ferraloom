@@ -40,5 +40,28 @@ public final class TickVectors {
         order.clear();
         while(saved.peek()!=null) { var tick=saved.poll(); order.add(name(tick.pos())+":"+tick.triggerTick()+":"+tick.subTickOrder()); }
         System.out.println("saved-unpack\t" + String.join(",",order));
+
+        var equal = new LevelTicks<String>(pos -> true);
+        for(int x=-10;x<=10;x++){
+            var p=new BlockPos(x*16,0,0);var container=new LevelChunkTicks<String>(List.of(new SavedTick<>(TYPE,p,0,TickPriority.NORMAL)));container.unpack(0);equal.addContainer(new ChunkPos(x,0),container);
+        }
+        order.clear();for(int pass=0;pass<5;pass++)equal.tick(0,5,(pos,type)->order.add(""+pos.getX()));
+        System.out.println("equal-loaded-heads\t"+String.join(",",order));
+        var area = new LevelTicks<String>(pos -> true);
+        for(int x=0;x<=3;x++)area.addContainer(new ChunkPos(x,0),new LevelChunkTicks<>());
+        area.schedule(new ScheduledTick<>(TYPE,A,0,TickPriority.NORMAL,0));area.schedule(new ScheduledTick<>(TYPE,B,0,TickPriority.NORMAL,1));area.schedule(new ScheduledTick<>(TYPE,C,0,TickPriority.NORMAL,2));
+        area.schedule(new ScheduledTick<>(TYPE,new BlockPos(2,0,0),9,TickPriority.NORMAL,3));
+        order.clear();
+        area.tick(0,65536,(pos,type)->{
+            order.add(""+pos.getX());
+            if(pos.equals(A)){
+                order.add("before:"+area.willTickThisTick(B,TYPE));
+                area.copyArea(new net.minecraft.world.level.levelgen.structure.BoundingBox(0,0,0,16,0,0),new net.minecraft.core.Vec3i(32,0,0));
+                area.clearArea(new net.minecraft.world.level.levelgen.structure.BoundingBox(0,0,0,1,0,0));
+                order.add("after:"+area.willTickThisTick(B,TYPE));
+            }
+        });
+        area.tick(0,65536,(pos,type)->order.add(""+pos.getX()));area.tick(9,65536,(pos,type)->order.add(""+pos.getX()));
+        System.out.println("area-copy-clear\t"+String.join(",",order));
     }
 }

@@ -604,3 +604,158 @@ fn shape_updates_skip_wire_and_apply_drop_suppression_at_the_shape_call() {
             .any(|e| matches!(e, LevelEffect::DropResources { .. }))
     );
 }
+
+#[test]
+fn vanilla_simple_waterlogged_chain_places_source_ticks_and_picks_up_water() {
+    use crate::block::{LevelAccessRef, UPDATE_LIMIT, UpdateFlags, fluid::FlowingFluid};
+    use ferraloom_data::{Item, properties, registries::fluid::Id};
+    let mut level = empty_level(&EMPTY);
+    install_tags(&mut level);
+    let pos = BlockPos::new(8, 0, 8);
+    level
+        .set_chunk_block_ticking(ChunkPos::new(0, 0), true)
+        .unwrap();
+    let dry = Block::IRON_CHAIN.default_state();
+    level
+        .set_block(
+            pos,
+            dry,
+            UpdateFlags::KNOWN_SHAPE | UpdateFlags::SKIP_ON_PLACE,
+            UPDATE_LIMIT,
+        )
+        .unwrap();
+    let behavior = level.block_behavior(dry.block()).unwrap();
+    assert!(
+        !behavior
+            .place_liquid(
+                dry,
+                pos,
+                FlowingFluid::Water.flowing(7, false),
+                &mut LevelAccessRef::Server(&mut level)
+            )
+            .unwrap()
+    );
+    level.take_effects();
+    let placed = behavior
+        .place_liquid(
+            dry,
+            pos,
+            FlowingFluid::Water.source(),
+            &mut LevelAccessRef::Server(&mut level),
+        )
+        .unwrap();
+    let wet = level.get_block_state(pos).unwrap();
+    assert_eq!(wet.get(properties::WATERLOGGED), Some(true));
+    assert!(level.has_scheduled_fluid_tick(pos, Id::WATER));
+    let bucket = behavior
+        .pickup_block(wet, pos, &mut LevelAccessRef::Server(&mut level))
+        .unwrap();
+    assert_eq!(bucket, Some(Item::WATER_BUCKET));
+    assert_eq!(
+        level
+            .get_block_state(pos)
+            .unwrap()
+            .get(properties::WATERLOGGED),
+        Some(false)
+    );
+    let expected = vector("simple-waterlogged");
+    assert!(expected.starts_with(&format!("{placed}:true:minecraft:water_bucket:")));
+    let effects: Vec<_> = level
+        .take_effects()
+        .into_iter()
+        .filter_map(|e| match e {
+            LevelEffect::BlockUpdated { .. } => Some("send"),
+            LevelEffect::PoiChanged { .. } => Some("poi"),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(effects, ["send", "poi", "send", "poi"]);
+    level.tick_fluid_phase(5, 65536).unwrap();
+    assert!(!level.has_scheduled_fluid_tick(pos, Id::WATER));
+}
+#[test]
+fn vanilla_liquid_legacy_state_canonicalizes_falling_levels() {
+    for line in include_str!("../../tests/java/level/fluids.tsv").lines() {
+        let (input, expected) = line.split_once('\t').unwrap();
+        let (block, level) = input
+            .strip_prefix("fluid-legacy:")
+            .unwrap()
+            .rsplit_once(':')
+            .unwrap();
+        let state = Block::from_name(block)
+            .unwrap()
+            .default_state()
+            .with(ferraloom_data::properties::LEVEL, level.parse().unwrap())
+            .unwrap();
+        assert_eq!(
+            crate::block::fluid::legacy_block(state.data().fluid).id(),
+            expected.parse::<u16>().unwrap(),
+            "{input}"
+        );
+    }
+}
+
+#[test]
+fn strict_is_default_and_warn_records_each_skipped_call_without_query_fallbacks() {
+    use crate::block::{BlockMethod, UnportedBehavior};
+    let mut level = empty_level(&EMPTY);
+    let pos = BlockPos::new(0, 0, 0);
+    let state = Block::OAK_LEAVES.default_state();
+    assert_eq!(level.unported_behavior(), UnportedBehavior::Strict);
+    assert_eq!(
+        level.optional_block_call(state.block(), BlockMethod::RandomTick, |behavior, level| {
+            behavior.random_tick(state, pos, level)
+        }),
+        Err(LevelError::UnsupportedBlock(state.block()))
+    );
+    level.set_unported_behavior(UnportedBehavior::Warn);
+    for _ in 0..2 {
+        assert_eq!(
+            level.optional_block_call(state.block(), BlockMethod::RandomTick, |behavior, level| {
+                behavior.random_tick(state, pos, level)
+            }),
+            Ok(None)
+        );
+    }
+    // No fabricated state is returned for an unported shape update.
+    assert_eq!(
+        level.optional_block_call(
+            state.block(),
+            BlockMethod::UpdateShape,
+            |behavior, level| behavior.update_shape(
+                state,
+                pos,
+                Direction::Down,
+                pos.below(1),
+                Block::STONE.default_state(),
+                &mut crate::block::LevelAccessRef::Server(level)
+            )
+        ),
+        Ok(None)
+    );
+    assert_eq!(
+        level.unported_behavior_stats(),
+        crate::block::UnportedBehaviorStats {
+            skipped_calls: 3,
+            distinct_calls: 2
+        }
+    );
+    assert!(matches!(
+        level.required_block_behavior(state.block(), BlockMethod::CanSurvive),
+        Err(LevelError::UnsupportedBlockMethod(
+            _,
+            BlockMethod::CanSurvive
+        ))
+    ));
+    let missing = LevelError::MissingChunk(ChunkPos::new(20, 20));
+    assert_eq!(
+        level.optional_call(state.block(), BlockMethod::Tick, |_| Err::<(), _>(missing)),
+        Err(missing)
+    );
+    let required = LevelError::UnsupportedBlockMethod(state.block(), BlockMethod::CanSurvive);
+    assert_eq!(
+        level.optional_call(state.block(), BlockMethod::Tick, |_| Err::<(), _>(required)),
+        Err(required)
+    );
+    assert_eq!(level.unported_behavior_stats().skipped_calls, 3);
+}

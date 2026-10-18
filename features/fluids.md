@@ -21,3 +21,6 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | fluids.fluid.flowing-water | `minecraft:flowing_water` (fluid) | `net.minecraft.world.level.material.Fluids#register` | | - | todo |
 | fluids.fluid.lava | `minecraft:lava` (fluid) | `net.minecraft.world.level.material.Fluids#register` | | - | todo |
 | fluids.fluid.water | `minecraft:water` (fluid) | `net.minecraft.world.level.material.Fluids#register` | | - | todo |
+
+| fluids.waterlogged.simple-container | Place source water, schedule the fluid tick and pick up water through SimpleWaterloggedBlock | `SimpleWaterloggedBlock; ChainBlock#updateShape` | `ferraloom-game: level::tests::vanilla_simple_waterlogged_chain_places_source_ticks_and_picks_up_water` | pass | todo |
+| fluids.liquid-block.legacy-state | Map source, flowing and falling fluid states to their canonical LiquidBlock state | `FlowingFluid#getLegacyLevel; LiquidBlock#getFluidState` | `ferraloom-game: level::tests::vanilla_liquid_legacy_state_canonicalizes_falling_levels` | pass | todo |

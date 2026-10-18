@@ -1,6 +1,6 @@
 //! Ports of NeighborUpdater, CollectingNeighborUpdater and Orientation.
 use super::{Level, LevelError};
-use crate::block::{LevelAccessRef, UpdateFlags};
+use crate::block::{BlockMethod, LevelAccessRef, UpdateFlags};
 use ferraloom_data::{Block, BlockState};
 use ferraloom_util::{
     BlockPos, Direction,
@@ -323,13 +323,12 @@ impl Level {
                         Some(state) => state,
                         None => self.get_block_state(pos)?,
                     };
-                    self.block_behavior(state.block())?.neighbor_changed(
-                        state,
-                        pos,
-                        block,
-                        orientation,
-                        moved,
-                        self,
+                    self.optional_block_call(
+                        state.block(),
+                        BlockMethod::NeighborChanged,
+                        |behavior, level| {
+                            behavior.neighbor_changed(state, pos, block, orientation, moved, level)
+                        },
                     )?;
                 }
                 NeighborUpdate::Multi {
@@ -366,8 +365,13 @@ impl Level {
                                 index,
                             });
                     }
-                    self.block_behavior(state.block())?
-                        .neighbor_changed(state, pos, block, delivered, false, self)?;
+                    self.optional_block_call(
+                        state.block(),
+                        BlockMethod::NeighborChanged,
+                        |behavior, level| {
+                            behavior.neighbor_changed(state, pos, block, delivered, false, level)
+                        },
+                    )?;
                 }
                 NeighborUpdate::Shape {
                     direction,
@@ -383,15 +387,23 @@ impl Level {
                     {
                         continue;
                     }
-                    let new = self.block_behavior(current.block())?.update_shape(
-                        current,
-                        pos,
-                        direction,
-                        neighbor_pos,
-                        neighbor,
-                        &mut LevelAccessRef::Server(self),
+                    let new = self.optional_block_call(
+                        current.block(),
+                        BlockMethod::UpdateShape,
+                        |behavior, level| {
+                            behavior.update_shape(
+                                current,
+                                pos,
+                                direction,
+                                neighbor_pos,
+                                neighbor,
+                                &mut LevelAccessRef::Server(level),
+                            )
+                        },
                     )?;
-                    self.update_or_destroy(current, new, pos, flags, limit)?;
+                    if let Some(new) = new {
+                        self.update_or_destroy(current, new, pos, flags, limit)?;
+                    }
                 }
             }
         }

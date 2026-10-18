@@ -55,6 +55,7 @@ static VANILLA_CLASSES: [Option<&'static dyn super::BlockBehavior>;
     classes[BlockClass::FlowerBlock as usize] = Some(&super::foundational::VEGETATION_BLOCK);
     classes[BlockClass::TallGrassBlock as usize] = Some(&super::foundational::VEGETATION_BLOCK);
     classes[BlockClass::BushBlock as usize] = Some(&super::foundational::VEGETATION_BLOCK);
+    classes[BlockClass::ChainBlock as usize] = Some(&super::foundational::CHAIN_BLOCK);
     classes[BlockClass::LiquidBlock as usize] = Some(&super::fluid::LIQUID_BLOCK);
     classes
 };
