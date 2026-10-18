@@ -16,6 +16,6 @@ def run(args):
     return result.stdout
 run([str(jdk/'javac'),'-cp',cp,'-d',str(classes),str(source/'BlockEntityVectors.java')])
 output=run([str(jdk/'java'),'-Xmx512m','-cp',f'{classes}:{cp}','BlockEntityVectors'])
-rows=[line for line in output.splitlines() if line.startswith(('registry\t','position\t','base-'))]
+rows=[line for line in output.splitlines() if line.startswith(('registry\t','position\t','base-','default-save\t','filled-save\t','roundtrip\t','update-tag\t','update-packet\t','loot-save\t','loot-zero\t'))]
 (source/'vectors.tsv').write_text('\n'.join(rows)+'\n')
 print(f'{len(rows)} vanilla block-entity vectors')
