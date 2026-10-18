@@ -338,6 +338,54 @@ impl Level {
             )
             .ok_or(MenuError::MissingStack(reference))
     }
+    /// Extract a rooted receiver during a callback-free move. The caller must
+    /// install it and call forward_moved_stack before invoking any callbacks.
+    pub(crate) fn take_stack_for_move(&mut self, reference: StackRef) -> Result<ItemStack> {
+        let source = self.resolve_stack(reference)?;
+        let (generations, current, index) = self.stack_parts_mut(source.address())?;
+        generations
+            .take_for_move(
+                StackSlotRef {
+                    slot: index,
+                    generation: source.generation,
+                },
+                current,
+            )
+            .ok_or(MenuError::MissingStack(reference))
+    }
+    /// Finish a callback-free move. The original receiver owns one destination
+    /// root until its final holder releases it; later replacements stay visible
+    /// through the same forwarding chain.
+    pub(crate) fn forward_moved_stack(
+        &mut self,
+        source: StackRef,
+        destination: StackRef,
+    ) -> Result<()> {
+        let source = self.resolve_stack(source)?;
+        let destination = self.resolve_stack(destination)?;
+        let (generations, current, index) = self.stack_parts(source.address())?;
+        let local = StackSlotRef {
+            slot: index,
+            generation: source.generation,
+        };
+        if source == destination
+            || !generations.is_retained(local)
+            || generations.get(local, current).is_some()
+        {
+            return Err(MenuError::MissingStack(source));
+        }
+        self.stack(destination)?;
+        self.retain_stack(destination)?;
+        let result = self
+            .stack_parts_mut(source.address())
+            .map(|(generations, _, _)| {
+                generations.forward_to(local, destination);
+            });
+        if result.is_err() {
+            self.release_stack(destination);
+        }
+        result
+    }
     /// Replace/move the object atomically, before the container invokes any
     /// native callbacks. The caller keeps the Existing receiver rooted.
     pub fn replace_stack_object(&mut self, slot: ContainerSlot, value: StackValue) -> Result<()> {
@@ -363,21 +411,11 @@ impl Level {
                 let result: Result<()> = (|| {
                     // Validate both addresses before the callback-free transaction.
                     self.stack_parts(slot)?;
-                    let (generations, current, index) = self.stack_parts_mut(source.address())?;
-                    let local = StackSlotRef {
-                        slot: index,
-                        generation: source.generation,
-                    };
-                    let item = generations
-                        .take_for_move(local, current)
-                        .ok_or(MenuError::MissingStack(original))?;
+                    let item = self.take_stack_for_move(source)?;
                     let (generations, current, index) = self.stack_parts_mut(slot)?;
                     generations.replace(index, current, item);
                     let destination = self.stack_ref(slot)?;
-                    self.retain_stack(destination)?;
-                    let (generations, _, _) = self.stack_parts_mut(source.address())?;
-                    generations.forward_to(local, destination);
-                    Ok(())
+                    self.forward_moved_stack(source, destination)
                 })();
                 self.release_stack_owner(slot.container);
                 result?;
