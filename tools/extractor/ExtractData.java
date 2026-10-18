@@ -221,6 +221,7 @@ public final class ExtractData {
                     if (state.isFaceSturdy(EmptyBlockGetter.INSTANCE, BlockPos.ZERO, direction)) bits |= 1 << (3 + direction.get3DDataValue());
                 }
                 if (state.isCollisionShapeFullBlock(EmptyBlockGetter.INSTANCE, BlockPos.ZERO)) bits |= 1 << 9;
+                if (state.hasLargeCollisionShape()) bits |= 1 << 12;
             }
             var post = state.getPostProcessPos(EmptyBlockGetter.INSTANCE, BlockPos.ZERO);
             if (post != null) {

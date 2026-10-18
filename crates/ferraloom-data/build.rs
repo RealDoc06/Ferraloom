@@ -622,7 +622,7 @@ fn block_state_facts(out: &mut String, values: &Value, state_count: usize) {
     write!(out, "static BLOCK_STATE_FACTS: [u16; {state_count}] = [").unwrap();
     for value in values {
         let bits = number(value);
-        assert!(bits < 4096);
+        assert!(bits < 8192);
         write!(out, "{bits},").unwrap();
     }
     out.push_str("];\n");

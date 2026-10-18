@@ -382,6 +382,20 @@ fn cached_block_facts_preserve_dynamic_shape_fallback_and_post_processing() {
         Block::STONE.default_state().cached_collision_full_block(),
         Some(true)
     );
+    assert_eq!(
+        Block::STONE.default_state().has_large_collision_shape(),
+        Some(false)
+    );
+    assert_eq!(
+        Block::OAK_FENCE.default_state().has_large_collision_shape(),
+        Some(true)
+    );
+    assert_eq!(
+        Block::SCAFFOLDING
+            .default_state()
+            .has_large_collision_shape(),
+        None
+    );
     assert_eq!(Block::STONE.default_state().post_process_y_offset(), None);
     assert_eq!(
         Block::BROWN_MUSHROOM

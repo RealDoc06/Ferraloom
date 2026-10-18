@@ -424,9 +424,19 @@ impl BlockState {
         self.cached_collision_full_block()
             .map(|_| self.data().collision.boxes().is_empty())
     }
+    /// Port of BlockStateBase.Cache#largeCollisionShape. Dynamic shapes have no
+    /// cache; BlockCollisions treats that case as potentially large.
+    pub const fn has_large_collision_shape(self) -> Option<bool> {
+        let bits = BLOCK_STATE_FACTS[self.0 as usize];
+        if bits & 4 == 0 {
+            None
+        } else {
+            Some(bits & (1 << 12) != 0)
+        }
+    }
     /// Vanilla's registered PostProcess callbacks are null, self, and above.
     pub const fn post_process_y_offset(self) -> Option<i32> {
-        match BLOCK_STATE_FACTS[self.0 as usize] >> 10 {
+        match (BLOCK_STATE_FACTS[self.0 as usize] >> 10) & 3 {
             1 => Some(0),
             2 => Some(1),
             _ => None,
