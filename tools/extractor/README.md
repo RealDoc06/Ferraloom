@@ -17,6 +17,23 @@ binaries, assets or Java sources are committed.
 Shapes are AABB lists in block-local coordinates, queried with
 `EmptyBlockGetter.INSTANCE`, `BlockPos.ZERO`, and an empty collision context.
 The shared shape table deduplicates collision, outline and occlusion shapes.
+`voxel_shapes.json` additionally preserves native shape representations,
+coordinate-list kinds, raw double bits, discrete occupancy and cached bounds.
+Its `snapshots` table deduplicates numeric data; `shapes` indexes snapshots while
+preserving distinct Java object identities. Every `states` row contains shape
+indices for collision, outline, occlusion, then the six cached occlusion faces
+in Direction order (down, up, north, south, west, east). `context_dependent`
+retains the state flags. Hex strings encode unsigned double/bitset words without
+decimal parsing loss. `ExtractData <output-dir> --voxel-shapes-only` regenerates
+only that file from an already bootstrapped jar/classpath.
+
+`BlockState::collision_shape` and `shape` return `None` for flagged states.
+`cached_shapes` exposes their explicitly marked empty-world baselines;
+`occlusion_shape` and `face_occlusion_shape` expose vanilla's actual state caches.
+The legacy AABB tables remain because game movement and lighting still use them.
+Regenerate the independent Rust parity fixture with
+`python3 crates/ferraloom-util/tests/java/shapes/generate.py --registry-caches`.
+
 `context_dependent_shape` is true for dynamic shapes and position offsets.
 These states require live queries in game code; the extracted shape is only an
 empty-world baseline. Entity-dependent collision contexts also require live

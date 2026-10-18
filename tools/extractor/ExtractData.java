@@ -3,6 +3,7 @@ import com.mojang.serialization.JsonOps;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.*;
+import java.lang.reflect.Field;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.*;
 import net.minecraft.core.component.DataComponentMap;
@@ -15,7 +16,7 @@ import net.minecraft.world.item.*;
 import net.minecraft.world.level.EmptyBlockGetter;
 import net.minecraft.world.level.block.*;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.phys.shapes.VoxelShape;
+import net.minecraft.world.phys.shapes.*;
 
 /** Extracts facts directly from the pinned vanilla registries and codecs. */
 public final class ExtractData {
@@ -23,6 +24,70 @@ public final class ExtractData {
     private static final List<JsonArray> SHAPES = new ArrayList<>();
     private static final Map<String, Integer> SHAPE_IDS = new LinkedHashMap<>();
     private static final Map<SoundType, String> SOUND_NAMES = new IdentityHashMap<>();
+
+    private static boolean contextDependent(BlockState state) {
+        return state.getBlock().hasDynamicShape() || state.hasOffsetFunction()
+            || state.getBlock() instanceof LiquidBlock || state.getBlock() instanceof ScaffoldingBlock
+            || state.getBlock() instanceof PowderSnowBlock || state.getBlock() instanceof LightBlock;
+    }
+
+    /** Retain object identity independently of deduplicated numeric snapshots. */
+    private static void voxelShapes(Path dir) throws Exception {
+        Field discreteField = VoxelShape.class.getDeclaredField("shape");
+        discreteField.setAccessible(true);
+        var snapshots = new JsonArray();
+        var snapshotIds = new LinkedHashMap<String, Integer>();
+        var instances = new JsonArray();
+        var identities = new IdentityHashMap<VoxelShape, Integer>();
+        var states = new JsonArray();
+        var contexts = new JsonArray();
+        for (var block : BuiltInRegistries.BLOCK) for (var state : block.getStateDefinition().getPossibleStates()) {
+            if (Block.getId(state) != states.size()) throw new IllegalStateException("state order");
+            var nativeShapes = new ArrayList<VoxelShape>();
+            nativeShapes.add(state.getCollisionShape(EmptyBlockGetter.INSTANCE, BlockPos.ZERO));
+            nativeShapes.add(state.getShape(EmptyBlockGetter.INSTANCE, BlockPos.ZERO));
+            nativeShapes.add(state.getOcclusionShape());
+            for (var direction : Direction.values()) nativeShapes.add(state.getFaceOcclusionShape(direction));
+            var row = new JsonArray();
+            for (var shape : nativeShapes) {
+                Integer identity = identities.get(shape);
+                if (identity == null) {
+                    var snapshot = new JsonObject();
+                    snapshot.addProperty("kind", shape instanceof CubeVoxelShape ? "cube" : shape instanceof SliceShape ? "slice" : "array");
+                    snapshot.addProperty("singleton", shape == Shapes.block() ? "block" : shape == Shapes.empty() ? "empty" : "none");
+                    var discrete = (DiscreteVoxelShape) discreteField.get(shape);
+                    var size = new JsonArray(); var first = new JsonArray(); var last = new JsonArray(); var coordinates = new JsonArray();
+                    for (var axis : Direction.Axis.values()) {
+                        size.add(discrete.getSize(axis)); first.add(discrete.firstFull(axis)); last.add(discrete.lastFull(axis));
+                        var values = shape.getCoords(axis);
+                        if (values.getClass().getSimpleName().equals("CubePointRange")) {
+                            var cube = new JsonObject(); cube.addProperty("cube", values.size() - 1); coordinates.add(cube);
+                        } else {
+                            var bits = new JsonArray();
+                            for (double value : values) bits.add(Long.toUnsignedString(Double.doubleToRawLongBits(value), 16));
+                            coordinates.add(bits);
+                        }
+                    }
+                    var storage = new BitSet();
+                    for (int x = 0; x < discrete.getXSize(); x++) for (int y = 0; y < discrete.getYSize(); y++) for (int z = 0; z < discrete.getZSize(); z++) {
+                        if (discrete.isFull(x, y, z)) storage.set((x * discrete.getYSize() + y) * discrete.getZSize() + z);
+                    }
+                    var words = new JsonArray(); for (long word : storage.toLongArray()) words.add(Long.toUnsignedString(word, 16));
+                    var bounds = new JsonArray(); bounds.add(first); bounds.add(last);
+                    snapshot.add("size", size); snapshot.add("bounds", bounds); snapshot.add("coordinates", coordinates); snapshot.add("bits", words);
+                    String key = GSON.toJson(snapshot);
+                    Integer template = snapshotIds.get(key);
+                    if (template == null) { template = snapshots.size(); snapshots.add(snapshot); snapshotIds.put(key, template); }
+                    identity = instances.size(); identities.put(shape, identity); instances.add(template);
+                }
+                row.add(identity);
+            }
+            states.add(row); contexts.add(contextDependent(state));
+        }
+        var result = new JsonObject(); result.add("snapshots", snapshots); result.add("shapes", instances); result.add("states", states); result.add("context_dependent", contexts);
+        write(dir, "voxel_shapes", result);
+        System.out.printf("Native voxel shapes: %d states, %d instances, %d snapshots%n", states.size(), instances.size(), snapshots.size());
+    }
 
     private static int shape(VoxelShape shape) {
         var boxes = new JsonArray();
@@ -61,9 +126,7 @@ public final class ExtractData {
         out.addProperty("collision", shape(state.getCollisionShape(EmptyBlockGetter.INSTANCE, BlockPos.ZERO)));
         out.addProperty("outline", shape(state.getShape(EmptyBlockGetter.INSTANCE, BlockPos.ZERO)));
         out.addProperty("occlusion", shape(state.getOcclusionShape()));
-        out.addProperty("context_dependent_shape", state.getBlock().hasDynamicShape() || state.hasOffsetFunction()
-            || state.getBlock() instanceof LiquidBlock || state.getBlock() instanceof ScaffoldingBlock
-            || state.getBlock() instanceof PowderSnowBlock || state.getBlock() instanceof LightBlock);
+        out.addProperty("context_dependent_shape", contextDependent(state));
         out.addProperty("solid_render", state.isSolidRender());
         out.addProperty("opacity", state.getLightDampening());
         out.addProperty("propagates_skylight", state.propagatesSkylightDown());
@@ -120,6 +183,11 @@ public final class ExtractData {
     public static void main(String[] args) throws Exception {
         SharedConstants.tryDetectVersion();
         Bootstrap.bootStrap();
+        if (args.length > 1 && args[1].equals("--voxel-shapes-only")) {
+            Files.createDirectories(Path.of(args[0]));
+            voxelShapes(Path.of(args[0]));
+            return;
+        }
         for (var field : Arrays.stream(SoundType.class.getFields()).sorted(Comparator.comparing(java.lang.reflect.Field::getName)).toList()) {
             if (field.getType() == SoundType.class) SOUND_NAMES.putIfAbsent((SoundType) field.get(null), field.getName().toLowerCase(Locale.ROOT));
         }
@@ -148,6 +216,7 @@ public final class ExtractData {
         var shapes = new JsonArray();
         SHAPES.forEach(shapes::add);
         write(dir, "shapes", shapes);
+        voxelShapes(dir);
 
         var registries = net.minecraft.data.registries.VanillaRegistries.createWorldLookup();
         BuiltInRegistries.DATA_COMPONENT_INITIALIZERS.build(registries).forEach(pending -> pending.apply());

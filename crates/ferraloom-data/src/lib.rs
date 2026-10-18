@@ -9,6 +9,8 @@
 //! ```
 
 pub mod datapack;
+mod voxel_shapes;
+pub use voxel_shapes::{BlockStateShapes, NativeShapeId};
 
 use std::marker::PhantomData;
 
