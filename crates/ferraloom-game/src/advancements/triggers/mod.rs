@@ -192,7 +192,7 @@ impl TriggerInstance {
         let block = || {
             let mut fields = serde_json::Map::new();
             for key in ["blocks", "state"] {
-                if let Some(value) = v.get(key) {
+                if let Some(value) = v.get(key).filter(|value| !value.is_null()) {
                     fields.insert(key.into(), value.clone());
                 }
             }
@@ -215,7 +215,10 @@ impl TriggerInstance {
             },
             InventoryChanged => {
                 let empty = serde_json::json!({});
-                let slots = v.get("slots").unwrap_or(&empty);
+                let slots = v
+                    .get("slots")
+                    .filter(|value| !value.is_null())
+                    .unwrap_or(&empty);
                 let bound = |name| -> Result<IntBounds> {
                     Ok(optional(slots, name, IntBounds::decode)?.unwrap_or_default())
                 };

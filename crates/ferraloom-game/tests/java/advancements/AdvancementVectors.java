@@ -177,6 +177,8 @@ public final class AdvancementVectors {
         for(var trigger:BuiltInRegistries.TRIGGER_TYPES) {
             String name=BuiltInRegistries.TRIGGER_TYPES.getKey(trigger).getPath();
             var definitions=conditions(name);
+            var specific=definitions.get(1);
+            for(var field:new ArrayList<>(specific.keySet()))if(!field.equals("player")){var withNull=specific.deepCopy();withNull.add(field,JsonNull.INSTANCE);definitions.add(withNull);}
             var invalid=base(name);invalid.add("player",JsonNull.INSTANCE);definitions.add(invalid);
             invalid=base(name);invalid.add("player",json("{}"));definitions.add(invalid);
             invalid=base(name);invalid.add("player",json("[]"));definitions.add(invalid);
