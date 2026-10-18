@@ -268,3 +268,6 @@ fn assert_start_nbt(
         }
     }
 }
+
+#[path = "normal_world_tests.rs"]
+mod normal_world;
