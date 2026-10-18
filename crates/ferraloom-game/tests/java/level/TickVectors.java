@@ -41,6 +41,20 @@ public final class TickVectors {
         while(saved.peek()!=null) { var tick=saved.poll(); order.add(name(tick.pos())+":"+tick.triggerTick()+":"+tick.subTickOrder()); }
         System.out.println("saved-unpack\t" + String.join(",",order));
 
+        var delayed = new LevelChunkTicks<String>(List.of(new SavedTick<>(TYPE,A,7,TickPriority.NORMAL)));
+        var dimension = new LevelTicks<String>(pos -> true);
+        dimension.addContainer(new ChunkPos(0,0),delayed);
+        order.clear();
+        dimension.tick(100,65536,(pos,type)->order.add(name(pos)+"@100"));
+        System.out.println("registered-pending\t"+delayed.pack(200).getFirst().delay()+":"+order.size());
+        dimension.schedule(new ScheduledTick<>(TYPE,B,105,TickPriority.NORMAL,0));
+        delayed.unpack(200);
+        delayed.unpack(500);
+        dimension.tick(200,65536,(pos,type)->order.add(name(pos)+"@200"));
+        dimension.tick(206,65536,(pos,type)->order.add(name(pos)+"@206"));
+        dimension.tick(207,65536,(pos,type)->order.add(name(pos)+"@207"));
+        System.out.println("late-start-ticking\t"+String.join(",",order));
+
         var equal = new LevelTicks<String>(pos -> true);
         for(int x=-10;x<=10;x++){
             var p=new BlockPos(x*16,0,0);var container=new LevelChunkTicks<String>(List.of(new SavedTick<>(TYPE,p,0,TickPriority.NORMAL)));container.unpack(0);equal.addContainer(new ChunkPos(x,0),container);

@@ -104,6 +104,7 @@ pub(crate) fn finish_promotions(level: &mut ServerLevel, world: &mut World) -> R
                 .level
                 .post_process_generation(pos)
                 .map_err(game_error)?;
+            level.level.start_ticking_chunk(pos).map_err(game_error)?;
             world.ready.insert(pos);
         }
     }
