@@ -320,3 +320,38 @@ fn damage_cooldown_uses_the_contexts_loaded_tag_instead_of_a_caller_flag() {
         5.0
     );
 }
+
+#[test]
+fn damage_rule_snapshots_use_definition_defaults_and_current_canonical_values() {
+    use crate::{
+        gamerules::{GameRule, GameRuleValue, GameRules},
+        level::LevelRules,
+    };
+    let mut canonical = GameRules::default();
+    let mut snapshot = LevelRules::default();
+    for (rule, value) in [
+        (GameRule::DrowningDamage, snapshot.drowning_damage),
+        (GameRule::FallDamage, snapshot.fall_damage),
+        (GameRule::FireDamage, snapshot.fire_damage),
+        (GameRule::FreezeDamage, snapshot.freeze_damage),
+    ] {
+        assert_eq!(
+            GameRuleValue::Boolean(value),
+            rule.definition().kind.default_value()
+        );
+        canonical.set(rule, GameRuleValue::Boolean(false)).unwrap();
+    }
+    canonical.update_level_rules(&mut snapshot);
+    assert!(
+        !snapshot.drowning_damage
+            && !snapshot.fall_damage
+            && !snapshot.fire_damage
+            && !snapshot.freeze_damage
+    );
+    canonical
+        .set(GameRule::FireDamage, GameRuleValue::Boolean(true))
+        .unwrap();
+    canonical.update_level_rules(&mut snapshot);
+    assert!(snapshot.fire_damage);
+    assert!(!snapshot.drowning_damage && !snapshot.fall_damage && !snapshot.freeze_damage);
+}

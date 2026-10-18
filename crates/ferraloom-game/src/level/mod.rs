@@ -96,6 +96,10 @@ pub struct LevelRules {
     pub tnt_explodes: bool,
     pub entity_drops: bool,
     pub max_entity_cramming: i32,
+    pub drowning_damage: bool,
+    pub fall_damage: bool,
+    pub fire_damage: bool,
+    pub freeze_damage: bool,
     pub debug: bool,
     pub can_have_weather: bool,
     pub random_tick_speed: u32,
@@ -110,11 +114,22 @@ pub struct LevelRules {
 }
 impl Default for LevelRules {
     fn default() -> Self {
+        use crate::gamerules::{GameRule, RuleType};
+        let damage_default = |rule: GameRule| {
+            let RuleType::Boolean { default } = rule.definition().kind else {
+                unreachable!("damage game rules are boolean");
+            };
+            default
+        };
         Self {
             block_drops: None,
             tnt_explodes: true,
             entity_drops: true,
             max_entity_cramming: 24,
+            drowning_damage: damage_default(GameRule::DrowningDamage),
+            fall_damage: damage_default(GameRule::FallDamage),
+            fire_damage: damage_default(GameRule::FireDamage),
+            freeze_damage: damage_default(GameRule::FreezeDamage),
             debug: false,
             can_have_weather: true,
             random_tick_speed: 3,
