@@ -431,6 +431,14 @@ pub trait Entity: Sync {
     fn check_despawn(&self, _entity: EntityRef, _level: &mut Level) -> Result<(), LevelError> {
         Ok(())
     }
+    /// Port of Entity#updateDataBeforeSync's base virtual method.
+    fn update_data_before_sync(
+        &self,
+        _entity: EntityRef,
+        _level: &mut Level,
+    ) -> Result<(), LevelError> {
+        Ok(())
+    }
     /// Port of Entity#tick; ServerLevel owns commonTick separately.
     fn tick(&self, entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
         base_tick(self, entity, level)

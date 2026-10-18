@@ -1,3 +1,24 @@
+server-entity	0	T:move:true:false:0,0,0:0,0:false|S:data:8:item=3
+server-entity	1	-
+server-entity	2	-
+server-entity	3	T:motion:3fc0000000000000,0,0|T:move:true:true:512,0,0:9,0:false
+server-entity	4	T:sync:L:4021800d1b71758e,4050000000000000,4021000000000000:41500000,0:false
+server-entity	5	S:motion:3fc0000000000000,0,0
+server-entity	6	T:sync:L:4021800d1b71758e,4050000000000000,4021000000000000:41500000,0:true
+server-entity	7	T:move:false:true:0,0,0:14,0:true
+server-entity	8	-
+server-entity	9	T:sync:L:4021800d1b71758e,4050000000000000,4021000000000000:41a00000,0:true
+server-entity	10	T:sync:L:403cc0068db8bac7,4050000000000000,4021000000000000:41a00000,0:true
+server-entity	11	T:sync:L:403cc0068db8bac7,4050000000000000,4021000000000000:41a00000,0:true
+server-entity	12	S:data:8:item=5
+server-teleport	0	T:move:true:false:0,0,0:0,0:false
+server-teleport	60	T:move:true:false:0,0,0:0,0:false
+server-teleport	120	T:move:true:false:0,0,0:0,0:false
+server-teleport	180	T:move:true:false:0,0,0:0,0:false
+server-teleport	240	T:move:true:false:0,0,0:0,0:false
+server-teleport	300	T:move:true:false:0,0,0:0,0:false
+server-teleport	360	T:move:true:false:0,0,0:0,0:false
+server-teleport	400	T:sync:L:0,4050000000000000,0:0,0:false
 delta-codec	0,0,0	0,0,0	0,0,0	0,0,0	0,0,0
 delta-codec	0,0,0	3f20000000000000,bf20000000000000,0	1,0,0	3f30000000000000,0,0	3f20000000000000,3f20000000000000,0
 delta-codec	0,0,0	401fffc000000000,c020000000000000,0	32767,-32768,0	401fffc000000000,c020000000000000,0	0,0,0
