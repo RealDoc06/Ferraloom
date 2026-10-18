@@ -25,7 +25,7 @@ fn bits(v: Vec3) -> String {
 }
 fn path(value: &PositionPath) -> String {
     match value {
-        PositionPath::Linear(pos) => format!("L:{}", bits(*pos)),
+        PositionPath::Linear(pos) => format!("L:{}", bits(Vec3::new(pos.x, pos.y, pos.z))),
         PositionPath::Stepped(_) => panic!("these nonliving trackers use linear paths"),
     }
 }
@@ -60,7 +60,10 @@ fn packet_text(packet: &Packet) -> String {
             p.x_rot.to_bits(),
             p.on_ground
         ),
-        Packet::SetEntityMotion(p) => format!("motion:{}", bits(p.movement.0)),
+        Packet::SetEntityMotion(p) => format!(
+            "motion:{}",
+            bits(Vec3::new(p.movement.0.x, p.movement.0.y, p.movement.0.z))
+        ),
         Packet::SetEntityData(p) => format!(
             "data:{}",
             p.packed_items

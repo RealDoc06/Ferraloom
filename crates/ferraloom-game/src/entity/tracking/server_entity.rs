@@ -131,7 +131,11 @@ impl ServerEntity {
             x: position.x,
             y: position.y,
             z: position.z,
-            movement: play::LpVec3(self.last_sent_movement),
+            movement: play::LpVec3(play::Vec3 {
+                x: self.last_sent_movement.x,
+                y: self.last_sent_movement.y,
+                z: self.last_sent_movement.z,
+            }),
             x_rot: Angle(self.last_sent_x_rot as u8),
             y_rot: Angle(self.last_sent_y_rot as u8),
             y_head_rot: Angle(0),
@@ -234,7 +238,11 @@ impl ServerEntity {
                         out.push(TrackingPacket::players(Packet::SetEntityMotion(
                             packet::SetEntityMotion {
                                 id: VarInt(base.network_id),
-                                movement: play::LpVec3(movement),
+                                movement: play::LpVec3(play::Vec3 {
+                                    x: movement.x,
+                                    y: movement.y,
+                                    z: movement.z,
+                                }),
                             },
                         )));
                     }
@@ -265,7 +273,11 @@ impl ServerEntity {
             out.push(TrackingPacket::with_self(Packet::SetEntityMotion(
                 packet::SetEntityMotion {
                     id: VarInt(base.network_id),
-                    movement: play::LpVec3(base.velocity),
+                    movement: play::LpVec3(play::Vec3 {
+                        x: base.velocity.x,
+                        y: base.velocity.y,
+                        z: base.velocity.z,
+                    }),
                 },
             )));
         }
@@ -284,7 +296,11 @@ impl ServerEntity {
         let absolute = |base: &EntityData| {
             Packet::EntityPositionSync(packet::EntityPositionSync {
                 id: VarInt(base.network_id),
-                position: PositionPath::Linear(base.position),
+                position: PositionPath::Linear(play::Vec3 {
+                    x: base.position.x,
+                    y: base.position.y,
+                    z: base.position.z,
+                }),
                 y_rot: base.yaw,
                 x_rot: base.pitch,
                 on_ground: base.on_ground,
