@@ -94,7 +94,7 @@ pub struct PersistentEntitySectionManager {
     requests: Vec<EntityStorageRequest>,
 }
 impl PersistentEntitySectionManager {
-    fn status(&self, pos: ChunkPos) -> ChunkLoadStatus {
+    pub(super) fn status(&self, pos: ChunkPos) -> ChunkLoadStatus {
         self.load_statuses
             .get(&pos.pack())
             .copied()
