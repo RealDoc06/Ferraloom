@@ -1,0 +1,558 @@
+use super::triggers::*;
+use super::*;
+use crate::{entity::EntityRef, loot::*, predicates::PredicateContext};
+use ferraloom_data::{Block, EntityType, Item};
+use ferraloom_protocol::{
+    Wire, Writer,
+    component::{DataComponent, ItemStack, Persistent, PotionContents},
+    play::clientbound,
+};
+use ferraloom_util::{
+    Vec3,
+    random::{LegacyRandomSource, RandomSource},
+};
+use serde_json::{Value, json};
+use std::{io::Read, sync::OnceLock};
+
+fn oracle() -> &'static Value {
+    static FIXTURE: OnceLock<Value> = OnceLock::new();
+    FIXTURE.get_or_init(|| {
+        let mut bytes = Vec::new();
+        flate2::read::GzDecoder::new(&include_bytes!("vanilla.json.gz")[..])
+            .read_to_end(&mut bytes)
+            .unwrap();
+        serde_json::from_slice(&bytes).unwrap()
+    })
+}
+fn id(value: &str) -> Identifier {
+    Identifier::parse(value).unwrap()
+}
+fn wire(value: &impl Wire) -> String {
+    let mut writer = Writer::new();
+    value.encode(&mut writer).unwrap();
+    writer
+        .as_slice()
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
+}
+fn holders(rows: &Value) -> Vec<AdvancementHolder> {
+    rows.as_array()
+        .unwrap()
+        .iter()
+        .map(|row| AdvancementHolder {
+            id: id(row["id"].as_str().unwrap()),
+            value: Advancement::decode(&row["value"])
+                .unwrap_or_else(|e| panic!("{}: {e}", row["id"])),
+        })
+        .collect()
+}
+
+#[test]
+fn vanilla_builtin_advancements_tree_and_positions() {
+    let rows = &oracle()["builtins"];
+    let mut manager = ServerAdvancementManager::new(holders(rows));
+    assert_eq!(manager.advancements.len(), 1866);
+    assert_eq!(manager.tree.nodes().count(), 1866);
+    for row in rows.as_array().unwrap() {
+        let children = row["children"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| id(v.as_str().unwrap()))
+            .collect();
+        assert!(
+            manager
+                .tree
+                .set_child_order(&id(row["id"].as_str().unwrap()), children)
+        );
+    }
+    manager.tree.reposition_nodes();
+    for row in rows.as_array().unwrap() {
+        let node = manager.tree.get(&id(row["id"].as_str().unwrap())).unwrap();
+        assert_eq!(
+            (node.x, node.y),
+            (
+                row["x"].as_f64().unwrap() as f32,
+                row["y"].as_f64().unwrap() as f32
+            ),
+            "{}",
+            row["id"]
+        );
+        assert_eq!(
+            node.parent.as_ref().map(Identifier::as_str),
+            row["value"]["parent"].as_str()
+        );
+    }
+}
+#[test]
+fn vanilla_trigger_codecs_and_synthetic_matches() {
+    let data = LootData::default();
+    let facts = Facts;
+    for row in oracle()["trigger_decode"].as_array().unwrap() {
+        assert_eq!(
+            Criterion::decode(&row["input"]).is_ok(),
+            row["accepted"].as_bool().unwrap(),
+            "{}",
+            row["input"]
+        );
+    }
+    let mut covered = std::collections::BTreeSet::new();
+    for row in oracle()["trigger_matches"].as_array().unwrap() {
+        let criterion = Criterion::decode(&row["input"]).unwrap();
+        covered.insert(criterion.trigger);
+        let n = row["scenario"].as_i64().unwrap() as i32;
+        let mut random = LegacyRandomSource::new(42);
+        let mut context = MatchContext {
+            data: &data,
+            facts: &facts,
+            random: &mut random,
+            origin: Vec3::new(1.0, 64.0, 2.0),
+        };
+        let matched = scenario(&criterion.instance, n, &mut context);
+        assert_eq!(
+            matched.unwrap_or_else(|e| panic!("{} scenario {n}: {e}", row["input"])),
+            row["matches"].as_bool().unwrap(),
+            "{} scenario {n}",
+            row["input"]
+        );
+    }
+    assert_eq!(covered.len(), TriggerType::ALL.len());
+}
+struct Facts;
+impl PredicateContext for Facts {
+    fn entity_type(&self, entity: EntityRef) -> Result<EntityType> {
+        Ok(match entity.0 {
+            0 => EntityType::PLAYER,
+            1 => EntityType::PIG,
+            _ => EntityType::COW,
+        })
+    }
+    fn entity_position(&self, _entity: EntityRef) -> Result<Vec3> {
+        Ok(Vec3::new(1.0, 64.0, 2.0))
+    }
+    fn loaded(&self, _pos: ferraloom_util::BlockPos) -> Result<bool> {
+        Ok(true)
+    }
+    fn entity_effects(
+        &self,
+        _entity: EntityRef,
+    ) -> Result<Option<Vec<ferraloom_protocol::component::MobEffectInstance>>> {
+        Ok(Some(Vec::new()))
+    }
+}
+impl LootFacts for Facts {
+    fn item_enabled(&self, _: &ItemStack) -> Result<bool> {
+        Ok(true)
+    }
+}
+impl TriggerFacts for Facts {
+    fn hooked_item(&self, _: EntityRef) -> Result<Option<ItemStack>> {
+        Ok(None)
+    }
+}
+fn scenario(instance: &TriggerInstance, n: i32, context: &mut MatchContext<'_>) -> Result<bool> {
+    use TriggerConditions as C;
+    use TriggerEvent as E;
+    let origin = context.origin;
+    let start = Vec3::new(-3.0, 60.0, 2.0);
+    let pig = create_context(origin, EntityRef(1));
+    let cow = create_context(origin, EntityRef(2));
+    let entity = if n == 1 { &cow } else { &pig };
+    let item = match n {
+        2 => ItemStack::default(),
+        1 => ItemStack::from_json(&json!({"id":"diamond_pickaxe","components":{"damage":17}}))?,
+        _ => ItemStack::new(Item::STONE, 5, Default::default()),
+    };
+    let state = if n == 1 { Block::OAK_LOG } else { Block::STONE }.default_state();
+    let location = LootParams {
+        origin: Some(origin),
+        this_entity: Some(EntityRef(0)),
+        tool: Some(item.clone()),
+        block_state: Some(state),
+        ..Default::default()
+    };
+    let source = DamageSource {
+        damage_type: id("generic"),
+        source: Some(EntityRef(1)),
+        direct: Some(EntityRef(1)),
+        position: None,
+    };
+    let inventory = [
+        ItemStack::new(Item::STONE, 5, Default::default()),
+        ItemStack::new(Item::APPLE, 1, Default::default()),
+        ItemStack::default(),
+        ItemStack::new(Item::STONE, 64, Default::default()),
+    ];
+    let recipe = id(if n == 1 { "furnace" } else { "crafting_table" });
+    let ingredients = if n == 1 {
+        vec![item.clone()]
+    } else {
+        vec![item.clone(), item.clone()]
+    };
+    let potion = PotionContents::from_json(&json!({"potion":if n==0 {"healing"}else{"water"}}))?;
+    let from = id("overworld");
+    let to = id(if n == 1 { "the_nether" } else { "overworld" });
+    let caught = if n == 2 {
+        Vec::new()
+    } else {
+        vec![ItemStack::new(Item::APPLE, 1, Default::default())]
+    };
+    let victims = if n == 2 {
+        Vec::new()
+    } else {
+        vec![pig.clone(), cow.clone()]
+    };
+    let table = id(if n == 1 {
+        "chests/spawn_bonus_chest"
+    } else {
+        "chests/simple_dungeon"
+    });
+    let event = match &instance.conditions {
+        C::Impossible | C::Player => E::Player,
+        C::Item(_) => E::Item(&item),
+        C::Entity(_) => E::Entity(entity),
+        C::Block(_) => E::Block(state),
+        C::Location(_) => E::Location(&location),
+        C::Killed { .. } => E::Killed {
+            entity,
+            source: &source,
+        },
+        C::Inventory { .. } => E::Inventory {
+            inventory: &inventory,
+            changed: &item,
+            full: 1,
+            empty: 1,
+            occupied: 3,
+        },
+        C::Recipe { .. } => E::Recipe {
+            id: &recipe,
+            ingredients: &ingredients,
+        },
+        C::Hurt { .. } => E::Hurt {
+            entity: Some(entity),
+            source: &source,
+            original: 5.0,
+            actual: 3.0,
+            blocked: n == 1,
+        },
+        C::EnchantedItem { .. } => E::EnchantedItem {
+            item: &item,
+            levels: n + 1,
+        },
+        C::Potion(_) => E::Potion(&potion),
+        C::Beacon(_) => E::Beacon(n + 1),
+        C::EnderEye(_) => E::EnderEye(match n {
+            0 => 16.0,
+            1 => 25.0,
+            _ => 26.0,
+        }),
+        C::Bred { .. } => E::Bred {
+            parent: entity,
+            partner: &cow,
+            child: (n != 2).then_some(&pig),
+        },
+        C::Cured { .. } => E::Cured {
+            zombie: entity,
+            villager: &cow,
+        },
+        C::Trade { .. } => E::Trade {
+            villager: entity,
+            item: &item,
+        },
+        C::Durability { .. } => E::Durability {
+            item: &item,
+            new_damage: 10,
+        },
+        C::Levitation { .. } => E::Levitation {
+            start,
+            duration: n * 20,
+        },
+        C::Dimension { .. } => E::Dimension {
+            from: &from,
+            to: &to,
+        },
+        C::Effects { .. } => E::Effects {
+            player: EntityRef(0),
+            source: (n != 2).then_some(entity),
+        },
+        C::Distance { .. } => E::Distance {
+            start,
+            end: origin,
+            cause: (n != 2).then_some(entity),
+        },
+        C::Fishing { .. } => E::Fishing {
+            rod: &item,
+            hooked: entity,
+            items: &caught,
+        },
+        C::ChanneledLightning(_) => E::ChanneledLightning(&victims),
+        C::SpearMobs(_) => E::SpearMobs(n),
+        C::KilledByArrow { .. } => E::KilledByArrow {
+            victims: &victims,
+            unique_entity_types: if n == 2 { 0 } else { 2 },
+            fired_from_weapon: (n != 2).then_some(&item),
+        },
+        C::BeeNest { .. } => E::BeeNest {
+            state,
+            item: &item,
+            bees: n,
+        },
+        C::Target { .. } => E::Target {
+            signal_strength: n,
+            projectile: entity,
+        },
+        C::Loot(_) => E::Loot(&table),
+        C::ItemEntity { .. } => E::ItemEntity {
+            item: &item,
+            entity,
+        },
+        C::Lightning { .. } => E::Lightning {
+            lightning: entity,
+            bystanders: &victims,
+        },
+    };
+    instance.matches(event, context)
+}
+#[test]
+fn vanilla_progress_award_revoke_dates_and_wire() {
+    for row in oracle()["progress"].as_array().unwrap() {
+        let progress = AdvancementProgress::decode(&row["input"]);
+        assert_eq!(
+            progress.is_ok(),
+            row["accepted"].as_bool().unwrap(),
+            "{}",
+            row["input"]
+        );
+        let Ok(mut progress) = progress else {
+            continue;
+        };
+        progress.update(&AdvancementRequirements(vec![
+            vec!["a".into(), "b".into()],
+            vec!["c".into()],
+        ]));
+        for step in row["steps"].as_array().unwrap() {
+            let action = step["action"].as_str().unwrap();
+            let changed = if let Some(name) = action.strip_prefix("grant:") {
+                progress.grant(name, ObtainedTime::from_millis(123456789))
+            } else if let Some(name) = action.strip_prefix("revoke:") {
+                progress.revoke(name)
+            } else {
+                false
+            };
+            assert_eq!(changed, step["changed"].as_bool().unwrap());
+            assert_eq!(progress.is_done(), step["done"].as_bool().unwrap());
+            assert_eq!(progress.percent(), step["percent"].as_f64().unwrap() as f32);
+            assert_eq!(progress.to_json(|_| 0).unwrap(), step["json"]);
+            let network = progress.network(id("test"));
+            let mut writer = Writer::new();
+            writer.var_int(network.criteria.len() as i32);
+            for criterion in network.criteria {
+                criterion.encode(&mut writer).unwrap();
+            }
+            let actual: String = writer
+                .as_slice()
+                .iter()
+                .map(|b| format!("{b:02x}"))
+                .collect();
+            assert_eq!(
+                actual,
+                step["wire"].as_str().unwrap(),
+                "{} {action}",
+                row["input"]
+            );
+        }
+    }
+}
+fn synthetic_manager() -> ServerAdvancementManager {
+    let fixture = &oracle()["player"];
+    let mut manager = ServerAdvancementManager::new(holders(&fixture["inputs"]));
+    for (key, children) in fixture["children"].as_object().unwrap() {
+        assert!(
+            manager.tree.set_child_order(
+                &id(key),
+                children
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|v| id(v.as_str().unwrap()))
+                    .collect()
+            )
+        );
+    }
+    manager.tree.reposition_nodes();
+    manager
+}
+#[test]
+fn vanilla_player_listeners_visibility_packets_rewards_and_persistence() {
+    let manager = synthetic_manager();
+    let mut player = PlayerAdvancements::new(&manager);
+    let fixture = &oracle()["player"];
+    let name = ferraloom_protocol::chat::Component::literal("Doc");
+    let award = AwardContext {
+        now: ObtainedTime::from_millis(123456789),
+        player_name: &name,
+        announce_advancements: true,
+    };
+    for step in fixture["steps"].as_array().unwrap() {
+        let action = step["action"].as_str().unwrap();
+        let mut packets = Vec::new();
+        let mut effects = Vec::new();
+        let mut changed = false;
+        if action.starts_with("award:") || action.starts_with("revoke:") {
+            let parts: Vec<_> = action.split(':').collect();
+            let key = id(&format!("{}:{}", parts[1], parts[2]));
+            if parts[0] == "award" {
+                let result = player.award(&manager, &key, parts[3], award);
+                changed = result.changed;
+                for effect in result.effects {
+                    match effect {
+                        AdvancementEffect::Rewards { rewards, .. } => {
+                            effects.push(Value::String(format!("xp:{}", rewards.experience)))
+                        }
+                        AdvancementEffect::Announcement(component) => {
+                            effects.push(Value::String(component.to_json().unwrap()))
+                        }
+                    }
+                }
+            } else {
+                changed = player.revoke(&manager, &key, parts[3]);
+            }
+        } else if let Some(key) = action.strip_prefix("tab:") {
+            if let Some(packet) = player.set_selected_tab(if key == "null" {
+                None
+            } else {
+                manager.get(&id(key))
+            }) {
+                packets.push(Value::String(wire(&packet)));
+            }
+        }
+        if let Some(packet) = player.flush_dirty(&manager, true) {
+            packets.push(Value::String(wire(&packet)));
+        }
+        assert_eq!(changed, step["changed"].as_bool().unwrap(), "{action}");
+        assert_eq!(Value::Array(packets), step["packets"], "{action}");
+        let expected: Vec<Value> = step["effects"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|value| {
+                if value.as_str().unwrap().starts_with("xp:") {
+                    value.clone()
+                } else {
+                    json!(serde_json::from_str::<Value>(value.as_str().unwrap()).unwrap())
+                }
+            })
+            .collect();
+        let actual: Vec<Value> = effects
+            .into_iter()
+            .map(|value| {
+                if value.as_str().unwrap().starts_with("xp:") {
+                    value
+                } else {
+                    json!(serde_json::from_str::<Value>(value.as_str().unwrap()).unwrap())
+                }
+            })
+            .collect();
+        assert_eq!(actual, expected, "{action}");
+        assert_eq!(player.to_json(|_| 0).unwrap(), step["saved"], "{action}");
+        for holder in &manager.advancements {
+            let progress = player.get_progress(&holder.id).unwrap();
+            for (criterion, definition) in &holder.value.criteria {
+                let registered = player
+                    .listeners(definition.trigger)
+                    .any(|(key, _)| key.advancement == holder.id && key.criterion == *criterion);
+                assert_eq!(
+                    registered,
+                    !progress.is_done() && !progress.criterion_done(criterion),
+                    "{action} {} {criterion}",
+                    holder.id
+                );
+            }
+        }
+    }
+    let unknown = player.load_json(&manager, &fixture["load_input"]).unwrap();
+    assert_eq!(unknown, vec![id("test:missing")]);
+    assert_eq!(player.to_json(|_| 0).unwrap(), fixture["loaded_saved"]);
+    assert_eq!(
+        Value::Array(
+            player
+                .flush_dirty(&manager, true)
+                .into_iter()
+                .map(|p| json!(wire(&p)))
+                .collect()
+        ),
+        fixture["loaded_packets"]
+    );
+}
+#[test]
+fn unavailable_trigger_facts_are_errors_and_impossible_never_awards() {
+    let criterion=Criterion::decode(&json!({"trigger":"location","conditions":{"player":{"type":"entity_properties","entity":"this","predicate":{"location":{"biomes":"plains"}}}}})).unwrap();
+    let data = LootData::default();
+    let mut random = LegacyRandomSource::new(0);
+    let mut context = MatchContext {
+        data: &data,
+        facts: &NoFacts,
+        random: &mut random,
+        origin: Vec3::ZERO,
+    };
+    assert!(
+        context
+            .predicate(
+                criterion.instance.player.as_ref().unwrap(),
+                &create_context(Vec3::ZERO, EntityRef(0))
+            )
+            .is_err()
+    );
+    let manager = synthetic_manager();
+    let mut player = PlayerAdvancements::new(&manager);
+    let impossible = Criterion::decode(&json!({"trigger":"impossible"})).unwrap();
+    player.add_player_listener(
+        &impossible,
+        TriggerInstanceKey {
+            advancement: id("test:root"),
+            criterion: "a".into(),
+        },
+    );
+    assert!(
+        player
+            .matching_listeners(
+                TriggerType::Impossible,
+                &LootParams::default(),
+                &mut context,
+                |_, _| Ok(true)
+            )
+            .unwrap()
+            .is_empty()
+    );
+    assert!(matches!(
+        player.load_json(&manager, &json!({"DataVersion":1343})),
+        Err(LootError::Unsupported(_))
+    ));
+}
+
+#[test]
+fn vanilla_inline_reward_tables_select_their_own_random_sequence() {
+    let fixture = oracle();
+    let data = LootData::default();
+    let key = id("test:advancement_reward");
+    for row in fixture["inline_loot"].as_array().unwrap() {
+        let table = Holder::direct(LootTable::decode(&row["input"]).unwrap());
+        let mut local = LegacyRandomSource::new(42);
+        let mut sequences = RandomSequences::default();
+        let mut sources = LootRandomSources {
+            world_seed: 123,
+            sequences: &mut sequences,
+            level_random: &mut local,
+        };
+        let items = data
+            .get_random_items_from_holder(&table, &LootParams::default(), &mut sources, &Facts)
+            .unwrap();
+        assert_eq!(items.len(), row["count"].as_u64().unwrap() as usize);
+        assert_eq!(local.next_long(), row["level_next"].as_i64().unwrap());
+        assert_eq!(
+            sequences.get(&key, 123).next_long(),
+            row["sequence_next"].as_i64().unwrap()
+        );
+    }
+}
