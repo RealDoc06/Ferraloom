@@ -8,6 +8,9 @@
 //! assert_eq!(wet.block(), Block::OAK_STAIRS);
 //! ```
 
+mod block_methods;
+pub use block_methods::BlockMethod;
+
 pub mod datapack;
 pub use datapack::tags;
 

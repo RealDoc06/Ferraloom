@@ -38,3 +38,13 @@ including vanilla datapack tags without a Java constant, in `tag_keys.json`.
 `tools/extract-data.sh` regenerates it. Typed keys have per-registry ordinals;
 each loaded `TagSet` resolves them once and stores membership in bitsets. Custom
 datapack tags resolve by identifier to a dense `TagId` before simulation reads.
+
+`ExtractBlockMethods` records the first class declaring each selected virtual
+method in every registered block's real superclass hierarchy. Signatures include
+parameter types; no behavior sampling determines ownership. `Block::overrides`
+is false for the recorded vanilla base owner (`BlockBehaviour`, or `Block` for
+placement, stepping and falling). This does not imply that every base method is
+a constant: collision-shape defaults, for example, call other virtual methods.
+The extractor additionally exercises the base survival and shape-update methods
+for every applicable state with null level/tick/random arguments, proving those
+two known constants require no level behavior or random draws.
