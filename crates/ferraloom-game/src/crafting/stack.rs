@@ -22,11 +22,19 @@ pub(super) fn component(stack: &ItemStack, id: ComponentTypeId) -> Result<Option
 pub(super) fn set(stack: &mut ItemStack, component: DataComponent) {
     if let Some(contents) = &mut stack.0 {
         contents.components.set(component);
+        contents.components.sanitize(
+            ferraloom_protocol::component::DataComponentMap::item_defaults(contents.item)
+                .expect("typed registry prototype"),
+        );
     }
 }
 pub(super) fn remove(stack: &mut ItemStack, id: ComponentTypeId) {
     if let Some(contents) = &mut stack.0 {
         contents.components.remove(id);
+        contents.components.sanitize(
+            ferraloom_protocol::component::DataComponentMap::item_defaults(contents.item)
+                .expect("typed registry prototype"),
+        );
     }
 }
 pub(super) fn item(stack: &ItemStack) -> Item {

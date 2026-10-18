@@ -364,7 +364,6 @@ impl Recipe {
                 Ok(output)
             }
             DecoratedPot { result, .. } => {
-                let mut result = stack::create(result);
                 let template = |index: usize| {
                     let stack = &input.items()[index];
                     stack
@@ -385,18 +384,14 @@ impl Recipe {
                 // ItemStackTemplate#apply overlays the template after the generated patch.
                 let mut patch = ferraloom_protocol::component::DataComponentPatch::default();
                 patch.set(C::PotDecorations(decorations));
-                stack::apply_patch(
-                    &mut patch,
-                    &result
-                        .0
-                        .as_ref()
-                        .map(|s| s.components.clone())
-                        .unwrap_or_default(),
-                );
-                if let Some(result) = &mut result.0 {
-                    result.components = patch;
-                }
-                Ok(result)
+                stack::apply_patch(&mut patch, &result.components);
+                Ok(stack::create(
+                    &ferraloom_protocol::component::ItemStackTemplate {
+                        item: result.item,
+                        count: result.count,
+                        components: patch,
+                    },
+                ))
             }
             BookCloning {
                 source,

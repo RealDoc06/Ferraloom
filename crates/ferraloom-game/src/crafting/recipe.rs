@@ -272,6 +272,9 @@ impl TransmuteResult {
             return Err(Error::Invalid("expected transmute result".into()));
         }
         let item = v.get("id").map(Item::from_json).transpose()?;
+        if item == Some(Item::AIR) {
+            return Err(Error::Invalid("transmute result cannot be air".into()));
+        }
         let count = v.get("count").map(integer).transpose()?.unwrap_or(1);
         if !(1..=99).contains(&count) {
             return Err(Error::Invalid("result count outside 1..99".into()));

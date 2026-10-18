@@ -269,6 +269,38 @@ fn check_case(manager: &RecipeManager, test: &serde_json::Value, context: &impl 
             "{} result: {assembled:?} expected {expected:?}",
             test["label"]
         );
+        if let (Some(actual), Some(expected)) = (&assembled.0, &expected.0) {
+            assert_eq!(
+                actual.components.added.len(),
+                expected.components.added.len(),
+                "{} added patch size",
+                test["label"]
+            );
+            assert_eq!(
+                actual.components.removed.len(),
+                expected.components.removed.len(),
+                "{} removed patch size",
+                test["label"]
+            );
+            assert!(
+                actual
+                    .components
+                    .added
+                    .iter()
+                    .all(|value| expected.components.added.contains(value)),
+                "{} added patch",
+                test["label"]
+            );
+            assert!(
+                actual
+                    .components
+                    .removed
+                    .iter()
+                    .all(|id| expected.components.removed.contains(id)),
+                "{} removed patch",
+                test["label"]
+            );
+        }
         assert_eq!(
             assembled.0.as_ref().map(|s| s.count),
             expected.0.as_ref().map(|s| s.count),

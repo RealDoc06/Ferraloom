@@ -189,7 +189,8 @@ public final class RecipeVectors {
             "{type:'minecraft:crafting_shapeless',ingredients:[],result:'minecraft:diamond'}",
             "{type:'minecraft:crafting_shapeless',ingredients:['minecraft:air'],result:'minecraft:diamond'}",
             "{type:'minecraft:crafting_shapeless',ingredients:['minecraft:stone'],result:{id:'minecraft:diamond',count:0}}",
-            "{type:'minecraft:crafting_transmute',input:'minecraft:stone',material:'minecraft:dirt',material_count:{},result:{}}"
+            "{type:'minecraft:crafting_transmute',input:'minecraft:stone',material:'minecraft:dirt',material_count:{},result:{}}",
+            "{type:'minecraft:crafting_transmute',input:'minecraft:stone',material:'minecraft:dirt',result:{id:'minecraft:air'}}"
         )) {
             var recipeJson=JsonParser.parseString(raw);var test=new JsonObject();test.add("input",recipeJson);
             try { var decoded=Recipe.DIRECT_CODEC.parse(ops,recipeJson);test.addProperty("accepted",decoded.isSuccess());if(decoded.isSuccess() && decoded.getOrThrow() instanceof AbstractCookingRecipe cooking) {test.addProperty("cookingtime",cooking.cookingTime());test.addProperty("experience",cooking.experience());test.add("assembled",encode(cooking.assemble(new SingleRecipeInput(new ItemStack(Items.STONE)))));} }
