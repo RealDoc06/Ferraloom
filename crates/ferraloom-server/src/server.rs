@@ -524,6 +524,7 @@ impl MinecraftServer {
                 .level
                 .tick_entities()
                 .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+            self.broadcast_container_changes()?;
             self.level.level.finish_entity_management();
         } else {
             self.integrate_jobs()?;
