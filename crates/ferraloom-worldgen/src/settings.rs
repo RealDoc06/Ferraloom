@@ -161,16 +161,7 @@ fn dimension_fast_lava(v: &Value) -> Result<bool, Error> {
     }
     let modifier = string(field(entry, "modifier")?)?;
     let argument = boolean(field(entry, "argument")?)?;
-    // BooleanModifier applied to FAST_LAVA's false default.
-    match modifier {
-        "override" | "or" | "xor" => Ok(argument),
-        "and" => Ok(false),
-        "nand" => Ok(true),
-        "nor" | "xnor" => Ok(!argument),
-        _ => Err(Error(format!(
-            "invalid BOOLEAN attribute modifier {modifier}"
-        ))),
-    }
+    Ok(crate::environment::BooleanModifier::decode(modifier)?.apply(false, argument))
 }
 
 #[cfg(test)]

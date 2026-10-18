@@ -60,6 +60,7 @@ pub enum LevelError {
     UnsupportedBlock(Block),
     UnsupportedBlockMethod(Block, crate::block::BlockMethod),
     UnsupportedBlockEntity(Block),
+    UnsupportedGameRule(&'static str),
     MissingBlockTags,
     MissingFluidTags,
     MissingEntityTypeTags,
@@ -78,6 +79,8 @@ pub enum LevelError {
 /// dimension's FAST_LAVA attribute and synchronized game-rule snapshot.
 #[derive(Clone, Copy, Debug)]
 pub struct LevelRules {
+    /// Published by the canonical GameRules owner after load and each change.
+    pub block_drops: Option<bool>,
     pub tnt_explodes: bool,
     pub entity_drops: bool,
     pub debug: bool,
@@ -95,6 +98,7 @@ pub struct LevelRules {
 impl Default for LevelRules {
     fn default() -> Self {
         Self {
+            block_drops: None,
             tnt_explodes: true,
             entity_drops: true,
             debug: false,
