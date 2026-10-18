@@ -126,6 +126,9 @@ impl StructureStart {
             }
             match piece {
                 StructurePiece::DesertPyramid(piece) => piece.post_process(context, *bounds)?,
+                StructurePiece::RuinedPortal(piece) => {
+                    piece.post_process(context, templates, tags, bounds, reference)?
+                }
                 StructurePiece::JungleTemple(piece) => piece.post_process(context, *bounds)?,
                 StructurePiece::SwampHut(piece) => piece.post_process(context, *bounds)?,
                 StructurePiece::OceanRuin(piece) => {

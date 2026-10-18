@@ -6,5 +6,6 @@ pub mod igloo;
 pub mod jungle_temple;
 pub mod nether_fossil;
 pub mod ocean_ruin;
+pub mod ruined_portal;
 pub mod shipwreck;
 pub mod swamp_hut;

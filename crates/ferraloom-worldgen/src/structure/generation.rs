@@ -25,6 +25,7 @@ enum StructureGenerator {
     EndCity,
     SwampHut,
     JungleTemple,
+    RuinedPortal(super::structures::ruined_portal::RuinedPortalStructure),
     DesertPyramid,
     OceanRuin(super::structures::ocean_ruin::OceanRuinStructure),
     Shipwreck { beached: bool },
@@ -35,6 +36,7 @@ enum StructureGenerator {
 #[derive(Clone, Debug)]
 pub struct StructureGenerators {
     pub registry: StructureRegistry,
+    temperatures: crate::biome_manager::BiomeTemperatures,
     generators: BTreeMap<Identifier, StructureGenerator>,
 }
 /// The biome resolver samples the source with the generation climate sampler,
@@ -71,6 +73,11 @@ impl StructureGenerators {
                     "minecraft:buried_treasure" => StructureGenerator::BuriedTreasure,
                     "minecraft:igloo" => StructureGenerator::Igloo,
                     "minecraft:end_city" => StructureGenerator::EndCity,
+                    "minecraft:ruined_portal" => StructureGenerator::RuinedPortal(
+                        super::structures::ruined_portal::RuinedPortalStructure::decode(
+                            &resource.json()?,
+                        )?,
+                    ),
                     "minecraft:jungle_temple" => StructureGenerator::JungleTemple,
                     "minecraft:swamp_hut" => StructureGenerator::SwampHut,
                     "minecraft:desert_pyramid" => StructureGenerator::DesertPyramid,
@@ -99,6 +106,7 @@ impl StructureGenerators {
         Ok(Self {
             registry,
             generators,
+            temperatures: crate::biome_manager::BiomeTemperatures::load(resources)?,
         })
     }
     /// Port of Structure#generate, including the final generation-point biome
@@ -447,6 +455,33 @@ impl StructureGenerators {
                     references,
                     settings.terrain,
                     vec![StructurePiece::NetherFossil(Box::new(piece))],
+                ));
+            }
+            StructureGenerator::RuinedPortal(portal) => {
+                use ferraloom_util::random::{Algorithm, WorldgenRandom};
+                let mut random = WorldgenRandom::new(Algorithm::Legacy.new_instance(0));
+                random.set_large_feature_seed(context.seed, context.chunk[0], context.chunk[1]);
+                let piece = portal.generate(
+                    context.templates,
+                    &self.temperatures,
+                    generator,
+                    &mut random,
+                    context.chunk,
+                    context.min_y,
+                    context.height,
+                    &mut *context.biome,
+                    &valid,
+                )?;
+                let Some(piece) = piece else {
+                    return Ok(StructureStart::invalid());
+                };
+                return Ok(StructureStart::new(
+                    id.clone(),
+                    settings.kind,
+                    context.chunk,
+                    references,
+                    settings.terrain,
+                    vec![StructurePiece::RuinedPortal(Box::new(piece))],
                 ));
             }
             StructureGenerator::Unsupported(kind) => {
