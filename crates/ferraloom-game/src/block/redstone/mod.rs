@@ -11,6 +11,7 @@ pub mod piston;
 pub mod signal;
 mod sources;
 mod state;
+pub mod storage;
 pub mod torch;
 pub mod wire;
 
