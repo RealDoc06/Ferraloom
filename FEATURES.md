@@ -10,7 +10,7 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Chat and text components](features/chat.md) | 23 | 21 | 2 | 0 | 0 |
 | [Chunks and tickets](features/chunks.md) | 37 | 31 | 6 | 0 | 0 |
 | [Combat and damage](features/combat-damage.md) | 204 | 204 | 0 | 0 | 0 |
-| [Commands and argument types](features/commands.md) | 2550 | 2545 | 4 | 0 | 1 |
+| [Commands and argument types](features/commands.md) | 2641 | 2496 | 27 | 118 | 0 |
 | [Crafting and recipes](features/crafting-recipes.md) | 2130 | 2 | 29 | 2099 | 0 |
 | [Datapacks and resource reload](features/datapacks-reload.md) | 57 | 57 | 0 | 0 | 0 |
 | [Enchantments](features/enchantments.md) | 136 | 136 | 0 | 0 | 0 |
@@ -18,7 +18,7 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Fluids](features/fluids.md) | 25 | 25 | 0 | 0 | 0 |
 | [Binary data, geometry and randomness](features/foundations.md) | 63 | 18 | 17 | 28 | 0 |
 | [Functions and macros](features/functions-macros.md) | 10 | 10 | 0 | 0 | 0 |
-| [Game rules](features/game-rules.md) | 62 | 62 | 0 | 0 | 0 |
+| [Game rules](features/game-rules.md) | 73 | 0 | 4 | 69 | 0 |
 | [GameTest](features/gametest.md) | 23 | 23 | 0 | 0 | 0 |
 | [Inventory and menus](features/inventory-menus.md) | 63 | 12 | 51 | 0 | 0 |
 | [Item modifiers](features/item-modifiers.md) | 4 | 1 | 3 | 0 | 0 |
@@ -49,4 +49,4 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Weather, time and environment](features/weather-time.md) | 85 | 85 | 0 | 0 | 0 |
 | [World storage and data fixing](features/world-storage.md) | 307 | 306 | 1 | 0 | 0 |
 | [World generation](features/worldgen.md) | 3102 | 2645 | 166 | 291 | 0 |
-| **Total** | **18910** | **14238** | **2016** | **2655** | **1** |
+| **Total** | **19012** | **14127** | **2043** | **2842** | **0** |
