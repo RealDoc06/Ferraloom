@@ -31,7 +31,8 @@ use ferraloom_game::{
         LevelError, Region,
         chunk_holder::ChunkStatus,
         chunk_map::PlayerChunkSender,
-        distance_manager::tracking_view,
+        distance_manager::{FullChunkStatus, tracking_view},
+        entity::Visibility,
         server_level::ServerLevel,
         tick_rate::{ServerTickRateManager, TickRateEvent},
     },
@@ -998,7 +999,7 @@ impl MinecraftServer {
                         pos: event.pos,
                         b0: event.param_a as u8,
                         b1: event.param_b as u8,
-                        block: BlockId(i32::from(event.block.id())),
+                        block: BlockId(i32::from(event.block.protocol_id())),
                     });
                     for &connection in &self.players {
                         let c = &self.connections[&connection];
@@ -1033,6 +1034,18 @@ impl MinecraftServer {
                 LevelEffect::DestroyParticles { .. } => self.pending_level_hooks.particles += 1,
                 LevelEffect::BlockDestroyed { .. } => self.pending_level_hooks.game_events += 1,
                 LevelEffect::PendingPrecipitation(_) => {}
+                LevelEffect::PlayerPacket { recipients, packet } => {
+                    for entity in recipients {
+                        for &connection in &self.players {
+                            let c = self.connections.get_mut(&connection).unwrap();
+                            if matches!(c.phase, Phase::Play(id) if id == entity) && !c.close {
+                                c.push(*packet.clone());
+                                break;
+                            }
+                        }
+                    }
+                }
+                LevelEffect::GameEvent { .. } => self.pending_level_hooks.game_events += 1,
             }
         }
         self.world
@@ -2380,6 +2393,11 @@ fn initialize_live_level(
     level.level.set_fluid_tags(Arc::new(
         TagSet::<ferraloom_data::registries::fluid::Id>::load(resources)?,
     ));
+    level
+        .level
+        .set_entity_type_tags(Arc::new(TagSet::<ferraloom_data::EntityType>::load(
+            resources,
+        )?));
     world.configure_live_rules(&mut level.level);
     level.level.set_game_time(level.game_time);
     level.level.set_unported_behavior(unported_behavior);

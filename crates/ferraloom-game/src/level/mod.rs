@@ -20,6 +20,7 @@ pub mod chunk_map;
 pub mod chunk_task_dispatcher;
 pub mod distance_manager;
 pub mod effects;
+pub mod emission;
 pub mod entity;
 pub mod events;
 pub mod heightmap;
@@ -53,6 +54,7 @@ pub enum LevelError {
     UnsupportedBlockEntity(Block),
     MissingBlockTags,
     MissingFluidTags,
+    MissingEntityTypeTags,
     UnsupportedShape(BlockState),
     UnsupportedFluidRandomTick,
     UnsupportedWeatherQuery,
@@ -113,6 +115,7 @@ pub struct Region {
     max_y: i32,
     rules: LevelRules,
     random: ferraloom_util::random::Random,
+    sound_seed_generator: ferraloom_util::random::Random,
     rand_value: i32,
     block_ticking_chunks: HashSet<ChunkPos>,
     entity_ticking_chunks: HashSet<ChunkPos>,
@@ -123,6 +126,7 @@ pub struct Region {
     tags: Option<Arc<ferraloom_data::datapack::TagSet<Block>>>,
     fluid_tags:
         Option<Arc<ferraloom_data::datapack::TagSet<ferraloom_data::registries::fluid::Id>>>,
+    entity_type_tags: Option<Arc<ferraloom_data::datapack::TagSet<EntityType>>>,
     pub(crate) unported: crate::block::UnportedCalls,
     behaviors: &'static Behaviors,
 }
@@ -143,6 +147,7 @@ impl Region {
             max_y: 320,
             rules: LevelRules::default(),
             random: random::new_level_random(),
+            sound_seed_generator: random::new_sound_random(),
             rand_value: random::new_position_seed(),
             block_ticking_chunks: HashSet::new(),
             entity_ticking_chunks: HashSet::new(),
@@ -152,6 +157,7 @@ impl Region {
             block_changes: broadcast::BlockChanges::default(),
             tags: None,
             fluid_tags: None,
+            entity_type_tags: None,
             unported: crate::block::UnportedCalls::default(),
             behaviors,
         }
