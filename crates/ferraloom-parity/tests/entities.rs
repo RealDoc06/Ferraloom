@@ -4,7 +4,12 @@ use anyhow::Context;
 use ferraloom_data::{Block, EntityType, Item};
 use ferraloom_parity::{
     BotState, ObservationLog, Result, RunMode, Session, Ticks, ensure,
-    protocol::{entity_data::EntityDataValue, play::clientbound as cb},
+    protocol::{
+        codec::VarInt,
+        component::HashedStack,
+        entity_data::EntityDataValue,
+        play::{self, clientbound as cb, serverbound as sb},
+    },
     run,
 };
 use ferraloom_util::BlockPos;
@@ -102,6 +107,23 @@ async fn item_drop_delay_and_pickup(session: &mut Session) -> Result<Observation
     }
     bot.look(0.0, 0.0).await?;
     bot.drop_item(false).await?;
+    // ServerPlayer#drop updates the menu's remote slot because a real client
+    // predicts its inventory decrement. Request the native full resync instead
+    // of waiting for a slot delta that vanilla deliberately suppresses.
+    let state_id = bot.snapshot().containers[&0].state_id;
+    bot.send(sb::Packet::ContainerClick(sb::ContainerClick {
+        container_id: VarInt(0),
+        state_id: VarInt(-1),
+        slot_num: -1,
+        button_num: 0,
+        container_input: play::ContainerInput::Pickup,
+        changed_slots: play::ChangedSlots(Vec::new()),
+        carried_item: HashedStack::default(),
+    }))
+    .await?;
+    bot.wait_for("drop inventory resync", Ticks::DEFAULT, |_, packet| {
+        matches!(packet, cb::Packet::ContainerSetContent(p) if p.container_id.0 == 0 && p.state_id.0 != state_id)
+    }).await?;
     bot.wait_for(
         "one dropped stone and two retained",
         Ticks::DEFAULT,
@@ -113,7 +135,14 @@ async fn item_drop_delay_and_pickup(session: &mut Session) -> Result<Observation
         },
     )
     .await
-    .context("drop packet did not produce one tracked stone and two retained stones")?;
+    .with_context(|| {
+        format!(
+            "drop packet: inventory={}, mode={:?}, items={:?}",
+            inventory_count(&bot.snapshot(), Item::STONE),
+            bot.snapshot().game_mode,
+            dropped_items(&bot.snapshot(), Item::STONE)
+        )
+    })?;
     step(bot, 20).await?;
     let dropped = dropped_items(&bot.snapshot(), Item::STONE);
     ensure!(
