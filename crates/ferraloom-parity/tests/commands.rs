@@ -693,3 +693,71 @@ async fn player_state_commands(session: &mut Session) -> Result<ObservationLog> 
     Ok(log)
 }
 parity_test!(parity_command_player_state, player_state_commands);
+
+async fn limited_crafting(session: &mut Session) -> Result<ObservationLog> {
+    use ferraloom_data::Item;
+    use ferraloom_parity::protocol::{
+        codec::VarInt,
+        component::{HashedStack, ItemStack},
+        play::{self, serverbound as sb},
+    };
+    let id = session.join("ParityBot").await?;
+    let bot = session.bot(id)?;
+    command(bot, "gamemode creative", "commands.gamemode.success.self").await?;
+    let mut log = ObservationLog::default();
+    for (index, limited, count) in [(0, false, 1), (1, true, 2), (2, false, 3)] {
+        if index != 0 {
+            log.record(
+                format!("rule.{index}"),
+                command(
+                    bot,
+                    &format!("gamerule limited_crafting {limited}"),
+                    "commands.gamerule.set",
+                )
+                .await?,
+            )?;
+        }
+        // Change the crafting grid without taking its result, so the recipe
+        // remains unknown to the recipe book throughout this scenario.
+        bot.send(sb::Packet::SetCreativeModeSlot(sb::SetCreativeModeSlot {
+            slot_num: 1,
+            item_stack: play::UntrustedItemStack(ItemStack::new(
+                Item::OAK_LOG,
+                count,
+                Default::default(),
+            )),
+        }))
+        .await?;
+        bot.synchronize().await?;
+        // Native stale-state handling returns an authoritative full menu.
+        bot.send(sb::Packet::ContainerClick(sb::ContainerClick {
+            container_id: VarInt(0),
+            state_id: VarInt(-1),
+            slot_num: -1,
+            button_num: 0,
+            container_input: play::ContainerInput::Pickup,
+            changed_slots: play::ChangedSlots(Vec::new()),
+            carried_item: HashedStack::default(),
+        }))
+        .await?;
+        let packet = bot.wait_for("crafting result resync", Ticks::DEFAULT, |_,packet| matches!(packet, cb::Packet::ContainerSetContent(packet) if packet.container_id.0==0)).await?;
+        let cb::Packet::ContainerSetContent(packet) = packet.as_ref() else {
+            unreachable!()
+        };
+        let result = &packet.items[0];
+        if limited {
+            ensure!(result.is_empty(), "unknown recipe bypassed LimitedCrafting");
+        } else {
+            ensure!(
+                result
+                    .0
+                    .as_ref()
+                    .is_some_and(|stack| stack.item == Item::OAK_PLANKS && stack.count == 4),
+                "unrestricted crafting result missing: {result:?}"
+            );
+        }
+        log.record(format!("result.{index}"), format!("{result:?}"))?;
+    }
+    Ok(log)
+}
+parity_test!(parity_command_limited_crafting, limited_crafting);
