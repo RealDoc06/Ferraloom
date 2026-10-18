@@ -183,6 +183,23 @@ pub struct DamageSource {
 ///
 /// Dispatch objects are stateless. Never hold a state borrow across a world call.
 pub trait Entity: Sync {
+    /// Port of Entity#causeFallDamage's passenger propagation. LivingEntity
+    /// overrides the damage calculation; the base entity itself takes none.
+    fn cause_fall_damage(
+        &self,
+        entity: EntityRef,
+        level: &mut Level,
+        fall_distance: f64,
+        damage_modifier: f32,
+    ) -> Result<bool, LevelError> {
+        let passengers = level.entity::<EntityData>(entity)?.passengers.clone();
+        for passenger in passengers {
+            let behavior = level.entity_behavior(passenger)?;
+            behavior.cause_fall_damage(passenger, level, fall_distance, damage_modifier)?;
+        }
+        Ok(false)
+    }
+
     fn can_be_collided_with(
         &self,
         _entity: EntityRef,

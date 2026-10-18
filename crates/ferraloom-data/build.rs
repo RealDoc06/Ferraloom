@@ -278,6 +278,8 @@ fn blocks(
             "friction",
             "speed_factor",
             "jump_factor",
+            "fall_distance_reduction",
+            "bounce_restitution",
         ] {
             write!(out, "{field}: {},", float(&block[field])).unwrap();
         }

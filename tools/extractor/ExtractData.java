@@ -303,6 +303,8 @@ public final class ExtractData {
             out.addProperty("friction", block.getFriction());
             out.addProperty("speed_factor", block.getSpeedFactor());
             out.addProperty("jump_factor", block.getJumpFactor());
+            out.addProperty("fall_distance_reduction", block.getFallDistanceReduction());
+            out.addProperty("bounce_restitution", block.getBounceRestitution());
             // State-dependent defaults are retained on every individual state below.
             out.add("default_properties", state(block.defaultBlockState()));
             blocks.add(out);
@@ -312,6 +314,7 @@ public final class ExtractData {
         blockData.add("blocks", blocks);
         blockData.add("states", states);
         write(dir, "block_properties", blockData);
+        if (args.length > 1 && args[1].equals("--block-properties-only")) return;
         var shapes = new JsonArray();
         SHAPES.forEach(shapes::add);
         write(dir, "shapes", shapes);
