@@ -23,6 +23,14 @@ pub struct BlockEntityRef {
 }
 
 impl BlockEntityRef {
+    /// Live loadCustomOnly, used by TypedEntityData#loadInto. Class callbacks run
+    /// on this generation; the existing extra component map stays untouched.
+    pub fn load_custom_only(self, tag: &CompoundTag, level: &mut Level) -> Result<(), LevelError> {
+        level.with_block_entity_callback(self, |level| {
+            let behavior = level.block_entity_state(self)?.behavior();
+            behavior.load_additional_live(self, tag, level)
+        })
+    }
     /// Live loadWithComponents: class callbacks complete on the retained receiver
     /// before the component map is replaced, matching BlockEntity's native order.
     pub fn load_with_components(

@@ -165,6 +165,18 @@ public final class PostPlacementVectors {
       System.out.println("live-load\t"+BuiltInRegistries.BLOCK.getId(block)+"\t"+mask+"\t"+tag+"\t"+entity.saveWithoutMetadata(registries)+"\t"+Block.getId(world.getBlockState(POS))+"\t"+ticks(world)+"\t"+String.join(",",world.writes));
     }
   }
+  static void customLoads(World world)throws Exception{
+    for(var block:List.of(Blocks.COMMAND_BLOCK,Blocks.REPEATING_COMMAND_BLOCK,Blocks.CHAIN_COMMAND_BLOCK,Blocks.STRUCTURE_BLOCK))for(int mask=0;mask<8;mask++){
+      world.cells.clear();world.entities.clear();world.writes.clear();world.ticks=new LevelTicks<>(key->true);world.chunkTicks=new LevelChunkTicks<>();world.ticks.addContainer(new ChunkPos(0,0),world.chunkTicks);
+      var state=block.defaultBlockState();var entity=((EntityBlock)block).newBlockEntity(POS,state);
+      entity.applyComponents(DataComponentMap.EMPTY,DataComponentPatch.builder().set(DataComponents.MAX_STACK_SIZE,7).build());
+      if(entity instanceof CommandBlockEntity command)command.setAutomatic((mask&1)!=0);
+      install(world,state,entity);var tag=new CompoundTag();tag.putBoolean("auto",(mask&2)!=0);tag.putBoolean("powered",(mask&4)!=0);tag.putString("mode",(mask&2)!=0?"LOAD":"SAVE");
+      var components=new CompoundTag();components.putInt("minecraft:max_stack_size",9);tag.put("components",components);
+      entity.loadCustomOnly(TagValueInput.create(ProblemReporter.DISCARDING,registries,tag));
+      System.out.println("custom-live-load\t"+BuiltInRegistries.BLOCK.getId(block)+"\t"+mask+"\t"+tag+"\t"+entity.saveWithoutMetadata(registries)+"\t"+Block.getId(world.getBlockState(POS))+"\t"+ticks(world)+"\t"+String.join(",",world.writes));
+    }
+  }
   static void wither(World world)throws Exception{
     var method=WitherSkullBlock.class.getDeclaredMethod("getOrCreateWitherFull");method.setAccessible(true);var pattern=(BlockPattern)method.invoke(null);
     for(var forward:Direction.values())for(var up:Direction.values())if(up!=forward&&up!=forward.getOpposite())for(int changed=-1;changed<9;changed++){
@@ -181,6 +193,6 @@ public final class PostPlacementVectors {
   public static void main(String[] args)throws Exception{
     var out=System.out;SharedConstants.tryDetectVersion();Bootstrap.bootStrap();System.setOut(out);var access=NeighborVectors.load();var builtin=RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
     registries=HolderLookup.Provider.create(java.util.stream.Stream.concat(builtin.listRegistries(),access.listRegistries()));BuiltInRegistries.DATA_COMPONENT_INITIALIZERS.build(registries).forEach(DataComponentInitializers.PendingComponents::apply);
-    var world=world(access);beds(world);signs(world);command(world);utilities(world);data(world);components(world);liveLoads(world);wither(world);
+    var world=world(access);beds(world);signs(world);command(world);utilities(world);data(world);components(world);liveLoads(world);customLoads(world);wither(world);
   }
 }

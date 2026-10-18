@@ -157,7 +157,7 @@ fn native_live_load_runs_callbacks_on_the_original_generation() {
     let mut cases = 0;
     for line in vectors().lines() {
         let f: Vec<_> = line.split('\t').collect();
-        if f[0] != "live-load" {
+        if !matches!(f[0], "live-load" | "custom-live-load") {
             continue;
         }
         let mut level = bare_level();
@@ -170,9 +170,18 @@ fn native_live_load_runs_callbacks_on_the_original_generation() {
                 .unwrap()
                 .automatic = mask & 1 != 0;
         }
-        handle
-            .load_with_components(&ferraloom_nbt::parse_compound(f[3]).unwrap(), &mut level)
-            .unwrap();
+        let tag = ferraloom_nbt::parse_compound(f[3]).unwrap();
+        if f[0] == "custom-live-load" {
+            let mut patch = DataComponentPatch::default();
+            patch.set(DataComponent::MaxStackSize(7));
+            level
+                .block_entity_state_mut(handle)
+                .unwrap()
+                .apply_components(&Default::default(), &patch);
+            handle.load_custom_only(&tag, &mut level).unwrap();
+        } else {
+            handle.load_with_components(&tag, &mut level).unwrap();
+        }
         assert_eq!(level.block_entity_ref(POS).unwrap(), Some(handle));
         assert_eq!(
             level
@@ -187,5 +196,5 @@ fn native_live_load_runs_callbacks_on_the_original_generation() {
         assert_eq!(ticks(&level), f[6], "{line}");
         cases += 1;
     }
-    assert_eq!(cases, 32);
+    assert_eq!(cases, 64);
 }

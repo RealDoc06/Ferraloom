@@ -24,7 +24,7 @@ run([str(jdk / 'javac'), '-cp', cp, '-d', str(classes), str(source.parent.parent
 run([str(jdk / 'java'), '-cp', f'{classes}:{cp}', 'NeighborVectors', 'generate', str(classes / 'NeighborFixture.java')])
 run([str(jdk / 'javac'), '-cp', f'{classes}:{cp}', '-d', str(classes), str(classes / 'NeighborFixture.java'), str(source / 'PostPlacementVectors.java')])
 output = run([str(jdk / 'java'), '-Xmx512m', '-XX:+EnableDynamicAgentLoading', '-Dnet.bytebuddy.experimental=true', '-cp', f'{classes}:{cp}', 'PostPlacementVectors'])
-groups = ('bed-placed', 'bed-shape', 'sign-placed', 'command-placed', 'crafter-placed', 'jukebox-placed', 'structure-author', 'data', 'components', 'live-load', 'wither-pattern')
+groups = ('bed-placed', 'bed-shape', 'sign-placed', 'command-placed', 'crafter-placed', 'jukebox-placed', 'structure-author', 'data', 'components', 'live-load', 'custom-live-load', 'wither-pattern')
 rows = [line for line in output.splitlines() if line.split('\t')[0] in groups]
 (source / 'post-placement.tsv.gz').write_bytes(gzip.compress(('\n'.join(rows) + '\n').encode(), mtime=0))
 print(f'{len(rows)} native setPlacedBy/data/pattern observations')
