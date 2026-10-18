@@ -1267,6 +1267,28 @@ impl MinecraftServer {
         }
         Ok(())
     }
+    /// Drain ServerPlayer#tick container output at the entity phase. The game
+    /// callback already broadcast changes; this only routes its ordered packets.
+    fn broadcast_container_changes(&mut self) -> Result<()> {
+        for connection in self.players.clone() {
+            let Some(c) = self.connections.get(&connection) else {
+                continue;
+            };
+            let Phase::Play(entity) = c.phase else {
+                continue;
+            };
+            let player = self
+                .level
+                .level
+                .entity_mut::<ServerPlayer>(entity)
+                .map_err(game_error)?;
+            let packets = std::mem::take(&mut player.menus.pending_packets);
+            for packet in packets {
+                self.connections.get_mut(&connection).unwrap().push(packet);
+            }
+        }
+        Ok(())
+    }
     /// Port of ServerGamePacketListenerImpl#handleContainerClick.
     fn handle_container_click(
         &mut self,

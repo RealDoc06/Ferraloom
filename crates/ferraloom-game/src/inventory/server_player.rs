@@ -100,3 +100,55 @@ pub fn close_container(
     }
     Ok(packets)
 }
+
+/// Port of ServerPlayer#tick's opening container broadcast and validity check.
+/// Canonical entity ticking calls this; the server drains pending_packets in
+/// the same entity phase, preserving each player's native output order.
+pub fn tick_container_menu(
+    player: EntityRef,
+    level: &mut Level,
+) -> std::result::Result<(), crate::level::LevelError> {
+    tick_container_menu_inner(player, level).map_err(|error| match error {
+        MenuError::Level(error) => error,
+        MenuError::Unsupported(operation) => crate::level::LevelError::Inventory(operation),
+        _ => crate::level::LevelError::Inventory("container synchronization codec"),
+    })
+}
+fn tick_container_menu_inner(player: EntityRef, level: &mut Level) -> Result<()> {
+    let (valid, packets) = {
+        let player = level.entity_mut::<ServerPlayer>(player)?;
+        let menu = player.menus.current_mut();
+        if menu
+            .slots
+            .iter()
+            .any(|slot| matches!(slot.container, ContainerId::External(_)))
+        {
+            return Err(MenuError::Unsupported(
+                "canonical external container access",
+            ));
+        }
+        let ctx = MenuContext::player(
+            &mut player.inventory,
+            &mut player.parent.equipment,
+            player.game_mode == GameType::Creative,
+        );
+        menu.broadcast_changes(&ctx)?;
+        let valid = menu.still_valid(&ctx);
+        menu.changes.clear();
+        (valid, menu.drain_packets())
+    };
+    level
+        .entity_mut::<ServerPlayer>(player)?
+        .menus
+        .pending_packets
+        .extend(packets);
+    if !valid {
+        let packets = close_container(player, level, true, false)?;
+        level
+            .entity_mut::<ServerPlayer>(player)?
+            .menus
+            .pending_packets
+            .extend(packets);
+    }
+    Ok(())
+}
