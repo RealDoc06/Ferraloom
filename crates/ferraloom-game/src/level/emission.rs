@@ -357,6 +357,10 @@ mod tests {
             )
             .unwrap();
         level.set_entity_pos(a, Vec3::new(40.0, 0.0, 0.0)).unwrap();
+        assert_eq!(
+            level.take_player_section_changes(),
+            vec![(a, ferraloom_util::SectionPos::new(2, 0, 0))],
+        );
         assert_eq!(only_packet(&mut level).0, vec![a]);
         level
             .play_seeded_entity_sound(None, except, sound, SoundSource::Players, 1.0, 1.0, 7)
