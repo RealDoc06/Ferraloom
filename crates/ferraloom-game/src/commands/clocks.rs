@@ -15,6 +15,15 @@ use ferraloom_protocol::{
 };
 use ferraloom_storage::{Error, SavedDataCodec};
 use std::collections::BTreeMap;
+/// Port of MinecraftServer#forceGameTimeSynchronization's periodic packet.
+/// World-clock states are sent at join and when changed, not every twenty ticks.
+pub fn game_time_sync_packet(game_time: i64) -> ferraloom_protocol::play::clientbound::SetTime {
+    ferraloom_protocol::play::clientbound::SetTime {
+        game_time,
+        clock_updates: Vec::new(),
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ClockState {
     pub total_ticks: i64,
@@ -442,6 +451,30 @@ fn wrap_time(value: i64) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn periodic_game_time_sync_has_native_empty_clock_map_and_bytes() {
+        use ferraloom_protocol::codec::Wire;
+        #[derive(serde::Deserialize)]
+        struct Vector {
+            game_time: i64,
+            clock_count: usize,
+            bytes: String,
+        }
+        let vectors: Vec<Vector> =
+            serde_json::from_str(include_str!("vanilla/clock-sync-vectors.json")).unwrap();
+        for vector in vectors {
+            let packet = game_time_sync_packet(vector.game_time);
+            assert_eq!(packet.clock_updates.len(), vector.clock_count);
+            let bytes: String = packet
+                .to_bytes()
+                .unwrap()
+                .iter()
+                .map(|byte| format!("{byte:02x}"))
+                .collect();
+            assert_eq!(bytes, vector.bytes, "game time {}", vector.game_time);
+        }
+    }
+
     #[test]
     fn unchanged_clock_errors_keep_native_numeric_components_and_text() {
         #[derive(serde::Deserialize)]

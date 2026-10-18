@@ -1365,7 +1365,7 @@ impl MinecraftServer {
                 .entity_world_border()
                 .initialization_packet(),
         ));
-        c.push(self.time_packet());
+        c.push(self.clock_packet(None));
         c.push(cb::Packet::SetDefaultSpawnPosition(
             cb::SetDefaultSpawnPosition {
                 respawn_data: self.default_spawn_data().packet_data(),
@@ -2809,7 +2809,9 @@ impl MinecraftServer {
         }
     }
     fn time_packet(&self) -> cb::Packet {
-        self.clock_packet(None)
+        cb::Packet::SetTime(ferraloom_game::commands::clocks::game_time_sync_packet(
+            self.level.game_time,
+        ))
     }
     fn refresh_status(&mut self) {
         use rand::{Rng, seq::SliceRandom};
