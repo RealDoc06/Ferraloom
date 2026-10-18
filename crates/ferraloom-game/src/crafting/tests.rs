@@ -60,7 +60,10 @@ fn vanilla_empty_stack_effective_accessors_and_restore() {
             expected["max_stack_size"].as_i64().unwrap() as i32
         );
         assert_eq!(is_damaged(stack), expected["damaged"].as_bool().unwrap());
-        assert_eq!(is_stackable(stack), expected["stackable"].as_bool().unwrap());
+        assert_eq!(
+            is_stackable(stack),
+            expected["stackable"].as_bool().unwrap()
+        );
         for key in ferraloom_data::registries::data_component_type::ALL {
             assert_eq!(stack.component(*key).unwrap(), components.get(*key));
             assert_eq!(component(stack, *key), components.get(*key));
@@ -785,6 +788,9 @@ impl RecipePlacementAccess for PlacementState {
     }
     fn take_inventory_item(&mut self, index: usize, count: i32) -> Result<ItemStack> {
         let stack = &mut self.inventory[index];
+        if count >= stack.0.as_ref().unwrap().count {
+            return Ok(std::mem::take(stack));
+        }
         let n = stack.0.as_ref().unwrap().count.min(count);
         let taken = stack::copy_with_count(stack, n);
         *stack = stack::copy_with_count(stack, stack.0.as_ref().unwrap().count - n);

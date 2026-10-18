@@ -42,7 +42,9 @@ impl ItemStack {
     }
     /// Port of ItemStack#getPrototype. Empty stacks have no prototype components.
     pub fn prototype(&self) -> Result<&'static super::DataComponentMap> {
-        static EMPTY: super::DataComponentMap = super::DataComponentMap { entries: Vec::new() };
+        static EMPTY: super::DataComponentMap = super::DataComponentMap {
+            entries: Vec::new(),
+        };
         if self.is_empty() {
             Ok(&EMPTY)
         } else {
