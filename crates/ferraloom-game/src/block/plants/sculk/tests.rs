@@ -27,6 +27,17 @@ fn point(v: &Value) -> BlockPos {
         v[2].as_i64().unwrap() as i32,
     )
 }
+fn case_label(case: &Value) -> String {
+    format!(
+        "{} mode={} seed={} canonical={} distance={} charge={}",
+        case["kind"],
+        case["mode"],
+        case["seed"],
+        case["canonical"],
+        case["distance"],
+        case["charge"]
+    )
+}
 fn cursor_json(spreader: &SculkSpreader) -> Value {
     serde_json::to_value(
         spreader
@@ -132,6 +143,7 @@ fn random(case: &Value) -> Random {
     }
 }
 fn run(case: &Value, level: &mut LevelAccessRef<'_, '_>) {
+    let label = case_label(case);
     let origin = point(&case["origin"]);
     let mut external = WorldgenRandom::new(Random::Legacy(LegacyRandomSource::new(
         case["seed"].as_i64().unwrap(),
@@ -183,20 +195,20 @@ fn run(case: &Value, level: &mut LevelAccessRef<'_, '_>) {
                     &mut selector,
                     case["spread"].as_bool().unwrap(),
                 )
-                .unwrap_or_else(|e| panic!("{case}: {e:?}"));
+                .unwrap_or_else(|e| panic!("{label}: {e:?}"));
         }
-        assert_eq!(cursor_json(&spreader), case["cursors"], "cursor {case}");
+        assert_eq!(cursor_json(&spreader), case["cursors"], "cursor {label}");
     }
     let next = if case["canonical"] == true {
         level.random().unwrap().next_long()
     } else {
         external.next_long()
     };
-    assert_eq!(next, case["next"].as_i64().unwrap(), "RNG {case}");
+    assert_eq!(next, case["next"].as_i64().unwrap(), "RNG {label}");
     assert_eq!(
         level.random().unwrap().next_long(),
         case["level_next"].as_i64().unwrap(),
-        "level RNG {case}"
+        "level RNG {label}"
     );
 }
 
@@ -222,6 +234,7 @@ fn native_worldgen_and_server_cursors_blocks_events_and_rng_match() {
     let mut counts = BTreeMap::new();
     for line in text.lines() {
         let case: Value = serde_json::from_str(line).unwrap();
+        let label = case_label(&case);
         let kind = case["kind"].as_str().unwrap();
         *counts.entry(kind.to_owned()).or_insert(0_usize) += 1;
         if kind == "decay" {
@@ -263,12 +276,12 @@ fn native_worldgen_and_server_cursors_blocks_events_and_rng_match() {
             assert_eq!(
                 actual,
                 case["remaining"].as_i64().unwrap() as i32,
-                "decay {case}"
+                "decay {label}"
             );
             assert_eq!(
                 random.next_long(),
                 case["next"].as_i64().unwrap(),
-                "decay RNG {case}"
+                "decay RNG {label}"
             );
             continue;
         }
@@ -323,7 +336,7 @@ fn native_worldgen_and_server_cursors_blocks_events_and_rng_match() {
             assert_eq!(
                 changed(&LevelReaderRef::Server(&level), origin, &before),
                 case["blocks"],
-                "blocks {case}"
+                "blocks {label}"
             );
             let events = level
                 .take_effects()
@@ -348,7 +361,7 @@ fn native_worldgen_and_server_cursors_blocks_events_and_rng_match() {
             assert_eq!(
                 serde_json::to_value(events).unwrap(),
                 case["events"],
-                "events {case}"
+                "events {label}"
             );
         } else {
             let mut chunks = Vec::new();
@@ -382,7 +395,7 @@ fn native_worldgen_and_server_cursors_blocks_events_and_rng_match() {
             assert_eq!(
                 changed(&LevelReaderRef::Worldgen(&region), origin, &before),
                 case["blocks"],
-                "blocks {case}"
+                "blocks {label}"
             );
             drop(region);
             let mut post = chunks
@@ -398,7 +411,7 @@ fn native_worldgen_and_server_cursors_blocks_events_and_rng_match() {
             assert_eq!(
                 serde_json::to_value(post).unwrap(),
                 case["post"],
-                "post-processing {case}"
+                "post-processing {label}"
             );
             let expected = case["block_entities"]
                 .as_array()
@@ -416,7 +429,7 @@ fn native_worldgen_and_server_cursors_blocks_events_and_rng_match() {
                 .iter()
                 .flat_map(|c| c.block_entities.iter().map(|(p, nbt)| (*p, nbt.clone())))
                 .collect::<BTreeMap<_, _>>();
-            assert_eq!(actual, expected, "protochunk block-entity NBT {case}");
+            assert_eq!(actual, expected, "protochunk block-entity NBT {label}");
         }
     }
     assert_eq!(counts.get("decay"), Some(&768));
