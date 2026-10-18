@@ -17,6 +17,9 @@ use std::{
 };
 
 pub mod aquatic;
+pub mod end;
+pub mod misc;
+pub mod nether;
 pub mod state_provider;
 pub mod surface;
 pub mod vegetation;
@@ -100,6 +103,9 @@ impl<'a> FeatureLoader<'a> {
         vegetation::register(&mut loader)?;
         aquatic::register(&mut loader)?;
         surface::register(&mut loader)?;
+        nether::register(&mut loader)?;
+        end::register(&mut loader)?;
+        misc::register(&mut loader)?;
         Ok(loader)
     }
     pub fn register(&mut self, kind: Identifier, factory: FeatureFactory) -> Result<(), Error> {
@@ -275,6 +281,9 @@ impl<'a> FeatureLoader<'a> {
     }
     pub fn finish(self) -> FeatureRegistry {
         self.registry
+    }
+    pub fn registry(&self) -> &FeatureRegistry {
+        &self.registry
     }
 }
 #[derive(Debug)]

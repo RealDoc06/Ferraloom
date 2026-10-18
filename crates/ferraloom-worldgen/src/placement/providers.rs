@@ -37,6 +37,9 @@ pub struct WeightedList<T> {
     total: i32,
 }
 impl<T> WeightedList<T> {
+    pub fn entries(&self) -> &[(T, i32)] {
+        &self.entries
+    }
     pub fn decode(v: &Value, decode: impl Fn(&Value) -> Result<T, Error>) -> Result<Self, Error> {
         let mut entries = Vec::new();
         let mut total = 0i32;
