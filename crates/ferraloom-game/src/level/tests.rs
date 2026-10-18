@@ -866,3 +866,30 @@ fn water_slope_search_matches_real_vanilla_across_chunk_borders_and_at_its_limit
         );
     }
 }
+
+#[test]
+fn fluid_wall_occlusion_matches_vanilla_native_partial_faces_in_all_directions() {
+    for line in include_str!("../../tests/java/level/walls.tsv").lines() {
+        let (input, expected) = line.split_once('\t').unwrap();
+        let mut ids = input
+            .strip_prefix("fluid-wall:")
+            .unwrap()
+            .split(':')
+            .map(|id| id.parse::<u16>().unwrap());
+        let source = BlockState::from_id(ids.next().unwrap()).unwrap();
+        let target = BlockState::from_id(ids.next().unwrap()).unwrap();
+        let direction = Direction::VALUES[ids.next().unwrap() as usize];
+        assert_eq!(
+            crate::block::fluid::can_pass_through_wall(
+                direction,
+                BlockPos::ZERO,
+                source,
+                BlockPos::ZERO.relative(direction, 1),
+                target
+            )
+            .unwrap(),
+            expected.parse::<bool>().unwrap(),
+            "{input}"
+        );
+    }
+}

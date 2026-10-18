@@ -533,36 +533,40 @@ pub fn legacy_block(fluid: FluidState) -> BlockState {
         .with(properties::LEVEL, level)
         .expect("LiquidBlock level 0..15")
 }
-fn can_pass_through_wall(
-    _direction: Direction,
+pub(crate) fn can_pass_through_wall(
+    direction: Direction,
     _source: BlockPos,
     source: BlockState,
     _target: BlockPos,
     target: BlockState,
 ) -> Result<bool, LevelError> {
-    // FlowingFluid requests CollisionContext.empty(). LiquidBlock's context
-    // branch always returns the empty shape here, even when it has no cache.
-    let empty = |state: BlockState| {
+    // The no-context BlockState overload returns Cache.collisionShape whenever
+    // a cache exists. Conservative entity/offset flags on the data API do not
+    // invalidate that actual vanilla cache. Dynamic LiquidBlock is empty in
+    // CollisionContext.empty(); other dynamic queries still require behavior.
+    let collision = |state: BlockState| {
         if state.block().class() == BlockClass::LiquidBlock {
-            Some(true)
+            Ok(ferraloom_util::shapes::empty())
+        } else if state.cached_collision_full_block().is_some() {
+            Ok(state.cached_shapes().collision.get().clone())
         } else {
-            state.cached_collision_empty()
+            state
+                .collision_shape()
+                .cloned()
+                .ok_or(LevelError::UnsupportedShape(state))
         }
     };
-    if source.cached_collision_full_block() == Some(true)
-        || target.cached_collision_full_block() == Some(true)
-    {
+    // Vanilla queries the target before the source and preserves Shapes.block
+    // identity shortcuts, then uses native voxel occupancy for partial faces.
+    let target_shape = collision(target)?;
+    if target_shape.ptr_eq(&ferraloom_util::shapes::block()) {
         return Ok(false);
     }
-    if empty(source) == Some(true) && empty(target) == Some(true) {
-        return Ok(true);
-    }
-    Err(LevelError::UnsupportedShape(
-        if empty(source) != Some(true) {
-            source
-        } else {
-            target
-        },
+    let source_shape = collision(source)?;
+    Ok(!ferraloom_util::shapes::merged_face_occludes(
+        &source_shape,
+        &target_shape,
+        direction,
     ))
 }
 

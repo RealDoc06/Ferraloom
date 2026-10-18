@@ -82,6 +82,12 @@ public final class NeighborVectors {
                 var state=block.defaultBlockState().setValue(net.minecraft.world.level.block.LiquidBlock.LEVEL,liquidLevel);var fluid=state.getFluidState();
                 System.out.println("fluid-legacy:"+net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(block)+":"+liquidLevel+"\\t"+Block.getId(fluid.createLegacyBlock()));
               }
+              var wall=net.minecraft.world.level.material.FlowingFluid.class.getDeclaredMethod("canPassThroughWall",Direction.class,net.minecraft.world.level.BlockGetter.class,BlockPos.class,BlockState.class,BlockPos.class,BlockState.class);wall.setAccessible(true);
+              var states=List.of(Blocks.AIR.defaultBlockState(),Blocks.STONE.defaultBlockState(),Blocks.STONE_SLAB.defaultBlockState(),Blocks.STONE_SLAB.defaultBlockState().setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.SLAB_TYPE,net.minecraft.world.level.block.state.properties.SlabType.TOP),Blocks.WATER.defaultBlockState());
+              for(var first:states)for(var second:states)for(var direction:Direction.values()){
+                boolean pass=(Boolean)wall.invoke(null,direction,f,BlockPos.ZERO,first,BlockPos.ZERO.relative(direction),second);
+                System.out.println("fluid-wall:"+Block.getId(first)+":"+Block.getId(second)+":"+direction.get3DDataValue()+"\\t"+pass);
+              }
               for(var tag:List.of(net.minecraft.tags.FluidTags.WATER,net.minecraft.tags.FluidTags.LAVA,net.minecraft.tags.FluidTags.BUBBLE_COLUMN_CAN_OCCUPY)){
                 var names=new ArrayList<String>();for(var fluid:net.minecraft.core.registries.BuiltInRegistries.FLUID)if(fluid.is(tag))names.add(net.minecraft.core.registries.BuiltInRegistries.FLUID.getKey(fluid).toString());
                 System.out.println("fluid-tag:"+tag.location()+"\\t"+String.join(",",names));
