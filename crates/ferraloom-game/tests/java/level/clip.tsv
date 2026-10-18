@@ -512,7 +512,7 @@ clip	matrix-510	0,0	8,64,8,105	8.5,64.25,8.5	10.0,64.25,8.5	FALLDAMAGE_RESETTING
 clip	matrix-511	0,0	8,64,8,105	7.0,65.0,8.5	10.0,65.0,8.5	FALLDAMAGE_RESETTING	WATER	MISS|10.0,65.0,8.5|4|10,65,8|false|false	6,65,8;6,65,8;6,65,8;6,65,8;7,65,8;7,65,8;8,65,8;8,65,8;9,65,8;9,65,8;10,65,8;10,65,8
 clip	missing-false	0,0		14.5,64.5,8.5	17.5,64.5,8.5	OUTLINE	NONE	missing:1,0	14,64,8;14,64,8;15,64,8;15,64,8;16,64,8
 clip	missing-true	0,0	15,64,8,1	14.5,64.5,8.5	17.5,64.5,8.5	OUTLINE	NONE	BLOCK|15.0,64.5,8.5|4|15,64,8|false|false	14,64,8;14,64,8;15,64,8;15,64,8
-clip	zero-no-read			19.0,64.0,8.0	19.0,64.0,8.0	OUTLINE	ANY	MISS|19.0,64.0,8.0|2|19,64,8|false|false	
+clip	zero-no-read			19.0,64.0,8.0	19.0,64.0,8.0	OUTLINE	ANY	MISS|19.0,64.0,8.0|2|19,64,8|false|false	-
 clip	outside-no-read			19.0,321.0,8.0	22.0,321.0,8.0	OUTLINE	NONE	MISS|22.0,321.0,8.0|4|22,321,8|false|false	18,321,8;18,321,8;18,321,8;18,321,8;18,321,8;18,321,8;19,321,8;19,321,8;20,321,8;20,321,8;21,321,8;21,321,8;22,321,8;22,321,8
 clip	negative-start	-1,0;0,0	-1,64,8,1	0.0,64.5,8.5	-3.0,64.5,8.5	OUTLINE	NONE	BLOCK|-0.003,64.5,8.5|5|-1,64,8|true|false	0,64,8;0,64,8;-1,64,8;-1,64,8
 traverse	ties	0.0,0.0,0.0	2.0,2.0,2.0	0	-1,-1,-1;-1,-1,0;-1,0,0;0,0,0;0,0,1;0,1,1;1,1,1;1,1,2;1,2,2;2,2,2
@@ -524,9 +524,9 @@ traverse	ties	2.0,2.0,2.0	0.0,0.0,0.0	3	2,2,2;2,2,1;2,1,1
 traverse	ties	-1.0,-1.0,-1.0	-3.0,-3.0,-3.0	0	-1,-1,-1;-1,-1,-2;-1,-2,-2;-2,-2,-2;-2,-2,-3;-2,-3,-3;-3,-3,-3;-3,-3,-4;-3,-4,-4;-4,-4,-4
 traverse	ties	-1.0,-1.0,-1.0	-3.0,-3.0,-3.0	1	-1,-1,-1
 traverse	ties	-1.0,-1.0,-1.0	-3.0,-3.0,-3.0	3	-1,-1,-1;-1,-1,-2;-1,-2,-2
-traverse	ties	0.5,0.0,0.5	0.5,0.0,0.5	0	
-traverse	ties	0.5,0.0,0.5	0.5,0.0,0.5	1	
-traverse	ties	0.5,0.0,0.5	0.5,0.0,0.5	3	
+traverse	ties	0.5,0.0,0.5	0.5,0.0,0.5	0	-
+traverse	ties	0.5,0.0,0.5	0.5,0.0,0.5	1	-
+traverse	ties	0.5,0.0,0.5	0.5,0.0,0.5	3	-
 traverse	ties	15.5,15.5,15.5	16.5,16.5,16.5	0	15,15,15;15,15,16;15,16,16;16,16,16
 traverse	ties	15.5,15.5,15.5	16.5,16.5,16.5	1	15,15,15
 traverse	ties	15.5,15.5,15.5	16.5,16.5,16.5	3	15,15,15;15,15,16;15,16,16
@@ -547,5 +547,18 @@ player-shape	16797	80	true
 player-shape	16797	0	true
 player-shape	8687	80	false
 player-shape	8687	0	true
+line	predicate-not-shape	0,0	8,64,8,89	7.0,64.95,8.5	10.0,64.95,8.5	water	BLOCK|10.0,64.95,8.5|4|10,64,8|false|false	6,64,8;7,64,8;8,64,8
+line	predicate-not-shape	0,0	8,64,8,2409	7.0,64.95,8.5	10.0,64.95,8.5	occludes	BLOCK|10.0,64.95,8.5|4|10,64,8|false|false	6,64,8;7,64,8;8,64,8
+line	predicate-not-shape	0,0	8,64,8,1	7.0,64.95,8.5	10.0,64.95,8.5	occludes	MISS|10.0,64.95,8.5|4|10,64,8|false|false	6,64,8;7,64,8;8,64,8;9,64,8;10,64,8
+line	unloaded-endpoint	0,0		14.5,64.5,8.5	17.5,64.5,8.5	air	BLOCK|17.5,64.5,8.5|4|17,64,8|false|false	14,64,8
+line	unloaded-endpoint	0,0		14.5,64.5,8.5	17.5,64.5,8.5	stone	missing:1,0	14,64,8;15,64,8;16,64,8
+line	zero-no-read	0,0	8,64,8,2409	8.5,64.5,8.5	8.5,64.5,8.5	occludes	MISS|8.5,64.5,8.5|2|8,64,8|false|false	-
+line	start-is-target	0,0	8,64,8,2409	8.5,64.5,8.5	10.5,64.5,8.5	occludes	BLOCK|10.5,64.5,8.5|4|10,64,8|false|false	8,64,8
+line	vibration-nudge-down	0,0	8,64,8,2409	7.5,64.49999000000025,8.5	10.5,64.5,8.5	occludes	BLOCK|10.5,64.5,8.5|4|10,64,8|false|false	7,64,8;8,64,8
+line	vibration-nudge-up	0,0	8,64,8,2409	7.5,64.50000999999975,8.5	10.5,64.5,8.5	occludes	BLOCK|10.5,64.5,8.5|4|10,64,8|false|false	7,64,8;8,64,8
+line	vibration-nudge-north	0,0	8,64,8,2409	7.5,64.5,8.499990000000253	10.5,64.5,8.5	occludes	BLOCK|10.5,64.5,8.5|4|10,64,8|false|false	7,64,8;8,64,8
+line	vibration-nudge-south	0,0	8,64,8,2409	7.5,64.5,8.500009999999747	10.5,64.5,8.5	occludes	BLOCK|10.5,64.5,8.5|4|10,64,8|false|false	7,64,8;8,64,8
+line	vibration-nudge-west	0,0	8,64,8,2409	7.499990000000253,64.5,8.5	10.5,64.5,8.5	occludes	BLOCK|10.5,64.5,8.5|4|10,64,8|false|false	7,64,8;8,64,8
+line	vibration-nudge-east	0,0	8,64,8,2409	7.500009999999747,64.5,8.5	10.5,64.5,8.5	occludes	BLOCK|10.5,64.5,8.5|4|10,64,8|false|false	7,64,8;8,64,8
 with-position	BLOCK|8.5,64.25,8.75|5|-1,0,16|true|true
 with-position	MISS|8.5,64.25,8.75|5|-1,0,16|false|false

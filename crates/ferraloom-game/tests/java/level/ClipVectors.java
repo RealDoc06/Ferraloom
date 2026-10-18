@@ -53,7 +53,31 @@ public final class ClipVectors implements BlockGetter {
         clearFluidShapes();reads.clear();String result;
         try{result=hit(clip(new ClipContext(from,to,block,fluid,CollisionContext.empty())));}
         catch(IllegalStateException error){result=error.getMessage();}
-        System.out.println("clip\t"+name+"\t"+chunks+"\t"+states()+"\t"+v(from)+"\t"+v(to)+"\t"+block+"\t"+fluid+"\t"+result+"\t"+String.join(";",reads));
+        System.out.println("clip\t"+name+"\t"+chunks+"\t"+states()+"\t"+v(from)+"\t"+v(to)+"\t"+block+"\t"+fluid+"\t"+result+"\t"+(reads.isEmpty()?"-":String.join(";",reads)));
+    }
+    void inLine(String name,String chunks,Vec3 from,Vec3 to,String predicate) {
+        reads.clear();String result;
+        java.util.function.Predicate<BlockState> match=switch(predicate) {
+            case "occludes" -> state->state.is(net.minecraft.tags.BlockTags.OCCLUDES_VIBRATION_SIGNALS);
+            case "water" -> state->state.getFluidState().is(net.minecraft.tags.FluidTags.WATER);
+            case "air" -> BlockState::isAir;
+            default -> state->state.is(Blocks.STONE);
+        };
+        try {result=hit(isBlockInLine(new ClipBlockStateContext(from,to,match)));}
+        catch(IllegalStateException error){result=error.getMessage();}
+        System.out.println("line\t"+name+"\t"+chunks+"\t"+states()+"\t"+v(from)+"\t"+v(to)+"\t"+predicate+"\t"+result+"\t"+(reads.isEmpty()?"-":String.join(";",reads)));
+    }
+    static void inLineCases() {
+        for(var state:List.of(Blocks.WATER.defaultBlockState(),Blocks.WOOL.pick(net.minecraft.world.item.DyeColor.WHITE).defaultBlockState(),Blocks.STONE.defaultBlockState())) {
+            var world=new ClipVectors("0,0");world.states.put(new BlockPos(8,64,8),state);
+            world.inLine("predicate-not-shape","0,0",new Vec3(7,64.95,8.5),new Vec3(10,64.95,8.5),state.is(Blocks.WATER)?"water":"occludes");
+        }
+        for(String predicate:List.of("air","stone"))new ClipVectors("0,0").inLine("unloaded-endpoint","0,0",new Vec3(14.5,64.5,8.5),new Vec3(17.5,64.5,8.5),predicate);
+        var inside=new ClipVectors("0,0");inside.states.put(new BlockPos(8,64,8),Blocks.WOOL.pick(net.minecraft.world.item.DyeColor.WHITE).defaultBlockState());
+        inside.inLine("zero-no-read","0,0",new Vec3(8.5,64.5,8.5),new Vec3(8.5,64.5,8.5),"occludes");
+        inside.inLine("start-is-target","0,0",new Vec3(8.5,64.5,8.5),new Vec3(10.5,64.5,8.5),"occludes");
+        var origin=new Vec3(7.5,64.5,8.5);var dest=new Vec3(10.5,64.5,8.5);
+        for(var direction:Direction.values()) inside.inLine("vibration-nudge-"+direction,"0,0",origin.relative(direction,9.999999747378752E-6),dest,"occludes");
     }
     static void traversal(String name,Vec3 from,Vec3 to,int stop){
         var visited=new ArrayList<String>();
@@ -111,7 +135,7 @@ public final class ClipVectors implements BlockGetter {
         empty.clip("outside-no-read","",new Vec3(19,321,8),new Vec3(22,321,8),ClipContext.Block.OUTLINE,ClipContext.Fluid.NONE);
         var negative=new ClipVectors("-1,0;0,0");negative.states.put(new BlockPos(-1,64,8),Blocks.STONE.defaultBlockState());negative.clip("negative-start","-1,0;0,0",new Vec3(0,64.5,8.5),new Vec3(-3,64.5,8.5),ClipContext.Block.OUTLINE,ClipContext.Fluid.NONE);
         for(var ray:List.of(new Vec3[]{new Vec3(0,0,0),new Vec3(2,2,2)},new Vec3[]{new Vec3(2,2,2),new Vec3(0,0,0)},new Vec3[]{new Vec3(-1,-1,-1),new Vec3(-3,-3,-3)},new Vec3[]{new Vec3(.5,0,.5),new Vec3(.5,0,.5)},new Vec3[]{new Vec3(15.5,15.5,15.5),new Vec3(16.5,16.5,16.5)},new Vec3[]{new Vec3(0,0,0),new Vec3(1e-10,0,0)}))for(int stop:new int[]{0,1,3})traversal("ties",ray[0],ray[1],stop);
-        memo(false);memo(true);interaction();playerShapes();
+        memo(false);memo(true);interaction();playerShapes();inLineCases();
         var result=new BlockHitResult(new Vec3(8.5,64.25,8.75),Direction.EAST,new BlockPos(8,64,8),true,true);
         System.out.println("with-position\t"+hit(result.withPosition(new BlockPos(-1,0,16))));
         System.out.println("with-position\t"+hit(BlockHitResult.miss(new Vec3(8.5,64.25,8.75),Direction.EAST,new BlockPos(8,64,8)).withPosition(new BlockPos(-1,0,16))));

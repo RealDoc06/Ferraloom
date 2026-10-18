@@ -33,6 +33,22 @@ pub enum ClipFluid {
     Water,
 }
 
+/// Port of ClipBlockStateContext. The predicate tests states, never shapes.
+pub struct ClipBlockStateContext<P> {
+    pub from: Vec3,
+    pub to: Vec3,
+    pub is_target_block: P,
+}
+impl<P> ClipBlockStateContext<P> {
+    pub fn new(from: Vec3, to: Vec3, is_target_block: P) -> Self {
+        Self {
+            from,
+            to,
+            is_target_block,
+        }
+    }
+}
+
 /// Port of ClipContext, including its captured entity CollisionContext.
 pub struct ClipContext<'context> {
     pub from: Vec3,
@@ -150,6 +166,25 @@ impl Default for FluidShapeCache {
     }
 }
 impl Level {
+    /// Port of BlockGetter#isBlockInLine. Even a match reports the endpoint's
+    /// position and direction, rather than the matched block or a shape hit.
+    pub fn is_block_in_line<P: Fn(BlockState) -> bool>(
+        &self,
+        context: &ClipBlockStateContext<P>,
+    ) -> Result<BlockHitResult, LevelError> {
+        let matched = traverse_blocks(context.from, context.to, |pos| {
+            Ok((context.is_target_block)(self.get_block_state(pos)?))
+        })?;
+        let delta = context.from - context.to;
+        let direction = Direction::get_approximate_nearest(delta.x, delta.y, delta.z);
+        let pos = BlockPos::containing(context.to.x, context.to.y, context.to.z);
+        Ok(if matched {
+            BlockHitResult::new(context.to, direction, pos, false)
+        } else {
+            BlockHitResult::miss(context.to, direction, pos)
+        })
+    }
+
     /// Port of FluidState#getShape / FlowingFluid#getShape / EmptyFluid#getShape.
     pub fn fluid_shape(&self, state: FluidState, pos: BlockPos) -> Result<VoxelShape, LevelError> {
         if state.empty {

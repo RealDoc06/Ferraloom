@@ -157,6 +157,51 @@ fn native_traversal_start_cells_ties_negative_faces_and_early_exit() {
 }
 
 #[test]
+fn native_block_in_line_tests_predicates_and_reports_the_endpoint() {
+    let mut cases = 0;
+    for line in VECTORS.lines() {
+        let f: Vec<_> = line.split('\t').collect();
+        if f[0] != "line" {
+            continue;
+        }
+        let level = level(f[2], f[3], &REQUIRED);
+        let tags = level.block_tags().unwrap();
+        let calls = std::cell::Cell::new(0);
+        let query = ClipBlockStateContext::new(vec(f[4]), vec(f[5]), |state: BlockState| {
+            calls.set(calls.get() + 1);
+            match f[6] {
+                "occludes" => {
+                    tags.contains_key(BlockTags::OCCLUDES_VIBRATION_SIGNALS, state.block())
+                }
+                "water" => level
+                    .fluid_tags()
+                    .unwrap()
+                    .contains_key(FluidTags::WATER, state.data().fluid.fluid_type),
+                "air" => state.is_air(),
+                _ => state.block() == Block::STONE,
+            }
+        });
+        let reads = f[8]
+            .split(';')
+            .filter(|s| !s.is_empty() && *s != "-")
+            .count();
+        match level.is_block_in_line(&query) {
+            Ok(hit) => {
+                assert_hit(hit, f[7]);
+                assert_eq!(calls.get(), reads);
+            }
+            Err(LevelError::MissingChunk(p)) => {
+                assert_eq!(format!("missing:{},{}", p.x, p.z), f[7], "{line}");
+                assert_eq!(calls.get(), reads - 1);
+            }
+            Err(error) => panic!("{line}: {error:?}"),
+        }
+        cases += 1;
+    }
+    assert_eq!(cases, 13);
+}
+
+#[test]
 fn native_fluid_first_height_is_memoized_without_later_neighbor_reads() {
     let mut cases = 0;
     for line in VECTORS.lines() {
