@@ -53,7 +53,7 @@ public final class PlantsTickOracle {
                 state.randomTick(level,pos,level.getRandom());
                 lines.add("random-crop\t"+net.minecraft.world.level.block.Block.getId(state)+"\t"+moisture+"\t"+pattern+"\t"+seed+"\t"+light+"\t"+net.minecraft.world.level.block.Block.getId(level.getBlockState(pos))+"\t"+level.getRandom().nextLong());
             }
-            if (Boolean.getBoolean("ferraloom.plants.extended")) { extended(level,pos,lines); groundTicks(level,pos,lines); eyeblossomTicks(level,pos,lines); }
+            if (Boolean.getBoolean("ferraloom.plants.extended")) { extended(level,pos,lines); saplingTargets(level,pos,lines); groundTicks(level,pos,lines); eyeblossomTicks(level,pos,lines); }
             Files.write(output,lines);
             Files.writeString(output.resolveSibling("oracle-done"),"done\n");
         }catch(Throwable error){error.printStackTrace();try{Files.writeString(output.resolveSibling("oracle-error.txt"),error.toString());}catch(Exception ignored){}}
@@ -128,6 +128,29 @@ public final class PlantsTickOracle {
             if(scheduled)block.defaultBlockState().tick(level,pos,level.getRandom());else block.defaultBlockState().randomTick(level,pos,level.getRandom());
             String blocks=ticks((net.minecraft.world.ticks.LevelChunkTicks<Block>)level.getChunkAt(pos).getBlockTicks(),net.minecraft.core.registries.BuiltInRegistries.BLOCK::getId,level,pos);
             lines.add("eyeblossom-tick\t"+Block.getId(block.defaultBlockState())+"\t"+seed+"\t"+scheduled+"\t"+attribute.getSerializedName()+"\t"+before+"\t"+snapshot(level,pos)+"\t"+blocks+"\t"+level.getRandom().nextLong());
+        }
+    }
+    static void saplingTargets(ServerLevel level,BlockPos pos,List<String> lines) {
+        var blocks=List.of(OAK_SAPLING,SPRUCE_SAPLING,BIRCH_SAPLING,JUNGLE_SAPLING,ACACIA_SAPLING,
+            CHERRY_SAPLING,DARK_OAK_SAPLING,PALE_OAK_SAPLING,POPLAR_SAPLING,MANGROVE_PROPAGULE,AZALEA,FLOWERING_AZALEA);
+        for(var block:blocks)for(var state:block.getStateDefinition().getPossibleStates())for(int mode=0;mode<3;mode++)for(int seed=0;seed<8;seed++) {
+            clear(level,pos);
+            if(mode==1) {
+                for(int x=0;x<=1;x++)for(int z=0;z<=1;z++) {
+                    level.setBlock(pos.offset(x,-1,z),DIRT.defaultBlockState(),816);
+                    level.setBlock(pos.offset(x,0,z),state,816);
+                }
+                level.setBlock(pos.offset(-1,0,1),DANDELION.defaultBlockState(),816);
+            }
+            var at=mode==2?new BlockPos(pos.getX(),level.getMaxY(),pos.getZ()):pos;
+            level.setBlock(at.below(),DIRT.defaultBlockState(),816);
+            level.setBlock(at,state,816);
+            level.getRandom().setSeed(seed);
+            var behavior=(BonemealableBlock)block;
+            boolean valid=behavior.isValidBonemealTarget(level,at,state,BonemealSource.INTERACTION);
+            boolean success=valid&&behavior.isBonemealSuccess(level,level.getRandom(),at,state,BonemealSource.INTERACTION);
+            lines.add("sapling-target\t"+Block.getId(state)+"\t"+mode+"\t"+seed+"\t"+at.getY()+"\t"+valid+"\t"+success+"\t"+level.getRandom().nextLong());
+            if(mode==2) {level.setBlock(at,AIR.defaultBlockState(),816);level.setBlock(at.below(),AIR.defaultBlockState(),816);}
         }
     }
     static void extended(ServerLevel level,BlockPos pos,List<String> lines) {
