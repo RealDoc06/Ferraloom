@@ -75,21 +75,22 @@ impl MinecraftServer {
 
     /// Port of MinecraftServer#sendDifficultyUpdate; also used when a new player joins.
     pub(super) fn difficulty_packet(&self) -> cb::Packet {
-        let settings = self
-            .world
-            .level_data
-            .data
-            .get_compound("difficulty_settings");
-        let current = settings
-            .and_then(|tag| tag.get_string("difficulty"))
-            .map(|s| s.to_string_lossy());
+        let (current, locked) = self.level.generation().with_world(|world| {
+            let settings = world.level_data.data.get_compound("difficulty_settings");
+            (
+                settings
+                    .and_then(|tag| tag.get_string("difficulty"))
+                    .map(|value| value.to_string_lossy()),
+                settings.is_some_and(|tag| tag.get_boolean_or("locked", false)),
+            )
+        });
         cb::Packet::ChangeDifficulty(cb::ChangeDifficulty {
             difficulty: difficulty(
                 current
                     .as_deref()
                     .unwrap_or_else(|| self.properties.get("difficulty")),
             ),
-            locked: settings.is_some_and(|tag| tag.get_boolean_or("locked", false)),
+            locked,
         })
     }
     /// Capture owned save data before constructing IO, keeping the live level's
@@ -318,12 +319,16 @@ impl MinecraftServer {
             }
             "difficulty" => {
                 let current = self
-                    .world
-                    .level_data
-                    .data
-                    .get_compound("difficulty_settings")
-                    .and_then(|tag| tag.get_string("difficulty"))
-                    .map(|s| s.to_string_lossy())
+                    .level
+                    .generation()
+                    .with_world(|world| {
+                        world
+                            .level_data
+                            .data
+                            .get_compound("difficulty_settings")
+                            .and_then(|tag| tag.get_string("difficulty"))
+                            .map(|value| value.to_string_lossy())
+                    })
                     .unwrap_or_else(|| self.properties.get("difficulty").to_owned());
                 if let Some(requested) = command.literals.get(1) {
                     if *requested == current {
