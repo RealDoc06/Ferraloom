@@ -176,21 +176,14 @@ async fn clocks_and_admin(session: &mut Session) -> Result<ObservationLog> {
         "day.timeline",
         command(bot, "time query day", "commands.time.query.timeline").await?,
     )?;
-    for name in ["daytime"] {
-        log.record(
-            format!("legacy.{name}"),
-            command(
-                bot,
-                &format!("time query {name}"),
-                "argument.resource.not_found",
-            )
-            .await?,
-        )?;
-        log.record(
-            format!("legacy.{name}.context"),
-            feedback(bot, "command.context.here").await?,
-        )?;
-    }
+    log.record(
+        "legacy.daytime",
+        command(bot, "time query daytime", "argument.resource.not_found").await?,
+    )?;
+    log.record(
+        "legacy.daytime.context",
+        feedback(bot, "command.context.here").await?,
+    )?;
     let gametime = command(bot, "time query gametime", "commands.time.query.gametime").await?;
     ensure!(
         gametime["with"][0].as_i64().is_some_and(|time| time >= 0),
