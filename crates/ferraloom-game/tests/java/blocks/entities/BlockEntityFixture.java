@@ -161,6 +161,23 @@ class BlockEntityFixture extends MutationFixture {
       System.out.println("menu-swap-source\t"+replace+"\t"+String.join(",",events)+"\t"+target.visible(inventory.getItem(0))+"\t"+target.visible(target.getItem(0))+"\t"+source.getCount()+"\t"+target.heldTarget.getCount());
     }
   }
+  static void menuAbilities(RegistryAccess r){
+    for(var mode:new net.minecraft.world.level.GameType[]{net.minecraft.world.level.GameType.SURVIVAL,net.minecraft.world.level.GameType.CREATIVE})for(boolean infinite:new boolean[]{false,true}){
+      var level=new BlockEntityFixture(r);
+      var player=new net.minecraft.world.entity.player.Player(level,new com.mojang.authlib.GameProfile(new UUID(1,2),"abilities")){
+        @Override public net.minecraft.world.level.GameType gameMode(){return mode;}
+      };
+      player.getAbilities().instabuild=infinite;
+      var target=new net.minecraft.world.SimpleContainer(9);target.setItem(0,new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.STONE,3));
+      var menu=new net.minecraft.world.inventory.ChestMenu(net.minecraft.world.inventory.MenuType.GENERIC_9x1,1,player.getInventory(),target,1);
+      menu.clicked(0,0,net.minecraft.world.inventory.ContainerInput.CLONE,player);
+      var armor=new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.DIAMOND_CHESTPLATE);
+      armor.enchant(r.lookupOrThrow(net.minecraft.core.registries.Registries.ENCHANTMENT).getOrThrow(net.minecraft.world.item.enchantment.Enchantments.BINDING_CURSE),1);
+      var armorInventory=new net.minecraft.world.SimpleContainer(1);armorInventory.setItem(0,armor);
+      var slot=new net.minecraft.world.inventory.ArmorSlot(armorInventory,player,net.minecraft.world.entity.EquipmentSlot.CHEST,0,0,0,null);
+      System.out.println("menu-abilities\t"+mode+"\t"+infinite+"\t"+menu.getCarried().getCount()+"\t"+slot.mayPickup(player));
+    }
+  }
   static void tickerPhases(RegistryAccess r){
     var level=new BlockEntityFixture(r);var events=new ArrayList<String>();
     class Ticker implements TickingBlockEntity {

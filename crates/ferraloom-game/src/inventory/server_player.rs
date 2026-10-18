@@ -186,10 +186,12 @@ fn close_container_inner(
                 container_id: VarInt(player.menus.current().container_id),
             }));
         }
-        let mut context = MenuContext::player(
+        let infinite_materials = player.instabuild();
+        let mut context = MenuContext::player_with_abilities(
             &mut player.inventory,
             &mut player.parent.equipment,
             player.game_mode == GameType::Creative,
+            infinite_materials,
         );
         player.menus.do_close_container(&mut context, disconnected)
     };

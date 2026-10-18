@@ -118,10 +118,12 @@ pub fn with_block_menu_context<R>(
         {
             return Err(MenuError::Unsupported("mount container resolver"));
         }
-        let mut ctx = MenuContext::player(
+        let infinite_materials = player.instabuild();
+        let mut ctx = MenuContext::player_with_abilities(
             &mut player.inventory,
             &mut player.parent.equipment,
             player.game_mode == GameType::Creative,
+            infinite_materials,
         );
         return operation(&mut player.menus, &mut player.recipe_book, &mut ctx);
     }
@@ -155,10 +157,12 @@ pub fn with_block_menu_context<R>(
         let mut container = BlockMenuContainer { states, valid };
         let result = {
             let mut external: [&mut dyn Container; 1] = [&mut container];
-            let mut ctx = MenuContext::player(
+            let infinite_materials = player.instabuild();
+            let mut ctx = MenuContext::player_with_abilities(
                 &mut player.inventory,
                 &mut player.parent.equipment,
                 player.game_mode == GameType::Creative,
+                infinite_materials,
             );
             ctx.external = &mut external;
             operation(&mut player.menus, &mut player.recipe_book, &mut ctx)

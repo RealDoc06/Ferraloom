@@ -12,7 +12,8 @@ pub struct DroppedStack {
 pub struct MenuContext<'a> {
     pub player: PlayerContainer<'a>,
     pub external: &'a mut [&'a mut dyn Container],
-    pub creative: bool,
+    pub is_creative: bool,
+    pub infinite_materials: bool,
     pub can_drop: bool,
     pub drops: Vec<DroppedStack>,
 }
@@ -22,13 +23,22 @@ impl<'a> MenuContext<'a> {
         equipment: &'a mut crate::entity::player::equipment::EntityEquipment,
         creative: bool,
     ) -> Self {
+        Self::player_with_abilities(inventory, equipment, creative, creative)
+    }
+    pub fn player_with_abilities(
+        inventory: &'a mut crate::entity::player::inventory::Inventory,
+        equipment: &'a mut crate::entity::player::equipment::EntityEquipment,
+        is_creative: bool,
+        infinite_materials: bool,
+    ) -> Self {
         Self {
             player: PlayerContainer {
                 inventory,
                 equipment,
             },
             external: &mut [],
-            creative,
+            is_creative,
+            infinite_materials,
             can_drop: true,
             drops: Vec::new(),
         }
@@ -320,10 +330,10 @@ impl AbstractContainerMenu {
         hooks: &mut dyn MenuHooks,
     ) -> Result<Option<ItemStack>> {
         let stack = self.get_item(ctx, slot.index);
-        if !slot.may_pickup(&stack, ctx.creative, hooks)?
+        if !slot.may_pickup(&stack, ctx.is_creative, hooks)?
             || (!slot.allow_modification(
                 self.container(ctx, slot.container),
-                ctx.creative,
+                ctx.is_creative,
                 hooks,
             )? && max_amount < count(&stack))
         {
@@ -486,7 +496,7 @@ impl AbstractContainerMenu {
                     let slot = self.slot(slot_index)?;
                     let clicked = self.get_item(ctx, slot.index);
                     if input == ContainerInput::QuickMove {
-                        if slot.may_pickup(&clicked, ctx.creative, hooks)? {
+                        if slot.may_pickup(&clicked, ctx.is_creative, hooks)? {
                             let mut moved = self.quick_move_stack(ctx, slot.index, hooks)?;
                             while !moved.is_empty()
                                 && same_item(&self.get_item(ctx, slot.index), &moved)
@@ -502,7 +512,9 @@ impl AbstractContainerMenu {
             ContainerInput::Swap if (0..9).contains(&button) || button == 40 => {
                 self.swap(ctx, slot_index, button as usize, hooks)?
             }
-            ContainerInput::Clone if ctx.creative && self.carried.is_empty() && slot_index >= 0 => {
+            ContainerInput::Clone
+                if ctx.infinite_materials && self.carried.is_empty() && slot_index >= 0 =>
+            {
                 let slot = self.slot(slot_index)?;
                 if !self.get_item(ctx, slot.index).is_empty() {
                     let cloned = slot.safe_clone(self.container(ctx, slot.container));
@@ -572,7 +584,7 @@ impl AbstractContainerMenu {
                 let remaining = self.safe_insert_live(ctx, &slot, carried, amount, hooks)?;
                 self.set_carried(remaining);
             }
-        } else if slot.may_pickup(&clicked, ctx.creative, hooks)? {
+        } else if slot.may_pickup(&clicked, ctx.is_creative, hooks)? {
             if self.carried.is_empty() {
                 let amount = if button == 0 {
                     count(&clicked)
@@ -630,16 +642,18 @@ impl AbstractContainerMenu {
             // Java's source and target references alias here. Splitting an
             // oversized stack leaves the old target equal to the overflow,
             // which Inventory.add reinserts after the slot receives its limit.
-            if slot.may_pickup(&source, ctx.creative, hooks)? && slot.may_place(&source, hooks)? {
+            if slot.may_pickup(&source, ctx.is_creative, hooks)?
+                && slot.may_place(&source, hooks)?
+            {
                 let max = slot.max_stack_size(self.container(ctx, slot.container), &source);
                 if count(&source) > max {
                     self.set_item_live(ctx, slot.index, split(&mut source, max), hooks)?;
                     self.on_take(ctx, slot.index, &source, 0, hooks)?;
-                    if !ctx
-                        .player
-                        .inventory
-                        .add(&mut source, ctx.player.equipment, ctx.creative)
-                    {
+                    if !ctx.player.inventory.add(
+                        &mut source,
+                        ctx.player.equipment,
+                        ctx.infinite_materials,
+                    ) {
                         ctx.drop_item(source);
                     }
                 } else {
@@ -650,7 +664,7 @@ impl AbstractContainerMenu {
             return Ok(());
         }
         if source.is_empty() {
-            if !target.is_empty() && slot.may_pickup(&target, ctx.creative, hooks)? {
+            if !target.is_empty() && slot.may_pickup(&target, ctx.is_creative, hooks)? {
                 if slot.kind == SlotKind::Result(ResultKind::Crafting)
                     && let Some(crafting) = hooks.crafting_ref()
                 {
@@ -671,7 +685,7 @@ impl AbstractContainerMenu {
                     self.set_item_live(ctx, slot.index, source, hooks)?;
                 }
             }
-        } else if slot.may_pickup(&target, ctx.creative, hooks)?
+        } else if slot.may_pickup(&target, ctx.is_creative, hooks)?
             && slot.may_place(&source, hooks)?
         {
             let max = slot.max_stack_size(self.container(ctx, slot.container), &source);
@@ -680,11 +694,11 @@ impl AbstractContainerMenu {
                 ctx.player.set_item(button, source);
                 self.on_take(ctx, slot.index, &target, 0, hooks)?;
                 let mut target = target;
-                if !ctx
-                    .player
-                    .inventory
-                    .add(&mut target, ctx.player.equipment, ctx.creative)
-                {
+                if !ctx.player.inventory.add(
+                    &mut target,
+                    ctx.player.equipment,
+                    ctx.infinite_materials,
+                ) {
                     ctx.drop_item(target);
                 }
             } else {
@@ -715,7 +729,7 @@ impl AbstractContainerMenu {
                 self.quickcraft_type = (button >> 2) & 3;
                 if self.quickcraft_type == 0
                     || self.quickcraft_type == 1
-                    || self.quickcraft_type == 2 && ctx.creative
+                    || self.quickcraft_type == 2 && ctx.infinite_materials
                 {
                     self.quickcraft_status = 1;
                     self.quickcraft_slots.clear();
@@ -797,7 +811,7 @@ impl AbstractContainerMenu {
         let slot = self.slot(index)?;
         let clicked = self.get_item(ctx, slot.index);
         if self.carried.is_empty()
-            || !clicked.is_empty() && slot.may_pickup(&clicked, ctx.creative, hooks)?
+            || !clicked.is_empty() && slot.may_pickup(&clicked, ctx.is_creative, hooks)?
         {
             return Ok(());
         }
@@ -815,7 +829,7 @@ impl AbstractContainerMenu {
                 let stack = self.get_item(ctx, index);
                 if !stack.is_empty()
                     && Self::can_item_quick_replace(&stack, &self.carried, true)
-                    && slot.may_pickup(&stack, ctx.creative, hooks)?
+                    && slot.may_pickup(&stack, ctx.is_creative, hooks)?
                     && self.can_take_for_pick_all(slot)
                     && (pass != 0 || count(&stack) != max_stack_size(&stack))
                 {

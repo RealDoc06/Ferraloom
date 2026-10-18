@@ -694,6 +694,10 @@ menu-transfer-source	false	minecraft:stone:6:6,minecraft:stone:5:5,minecraft:air
 menu-transfer-source	true	minecraft:stone:6:6,minecraft:diamond:7:5,minecraft:diamond:7:0,minecraft:diamond:7:0,minecraft:diamond:7:0	0	minecraft:diamond:7
 menu-swap-source	false	minecraft:diamond:7|minecraft:stone:10|10|7,minecraft:diamond:10|minecraft:stone:8|8|10,minecraft:diamond:10|minecraft:stone:8|8|10	minecraft:diamond:10	minecraft:stone:8	8	10
 menu-swap-source	true	minecraft:diamond:7|minecraft:stone:10|10|7,minecraft:diamond:10|minecraft:dirt:5|5|10,minecraft:diamond:10|minecraft:dirt:5|5|10	minecraft:diamond:10	minecraft:dirt:5	5	10
+menu-abilities	SURVIVAL	false	0	false
+menu-abilities	SURVIVAL	true	64	false
+menu-abilities	CREATIVE	false	0	true
+menu-abilities	CREATIVE	true	64	true
 default-save	minecraft:chest	{Items:[],components:{}}
 filled-save	minecraft:chest	{Items:[{Slot:0b,count:31,id:"minecraft:stone"},{Slot:26b,count:3,id:"minecraft:diamond"}],components:{},id:"minecraft:chest",x:1,y:64,z:2}
 roundtrip	minecraft:chest	true

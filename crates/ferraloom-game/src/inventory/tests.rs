@@ -1,6 +1,64 @@
 use super::*;
 
 #[test]
+fn menu_clone_and_binding_checks_use_independent_player_abilities() {
+    struct BindingArmor;
+    impl MenuHooks for BindingArmor {
+        fn may_pickup_armor(&self, _: &ItemStack) -> Result<bool> {
+            Ok(false)
+        }
+    }
+    let armor = ItemStack::new(
+        Item::DIAMOND_CHESTPLATE,
+        1,
+        DataComponentPatch::from_json(&serde_json::json!({
+            "minecraft:enchantments": { "minecraft:binding_curse": 1 }
+        }))
+        .unwrap(),
+    );
+    let mut checked = 0;
+    for line in include_str!("../../tests/java/blocks/entities/vectors.tsv")
+        .lines()
+        .filter(|line| line.starts_with("menu-abilities\t"))
+    {
+        let fields: Vec<_> = line.split('\t').collect();
+        let mut inventory = Inventory::default();
+        let mut equipment = EntityEquipment::default();
+        let mut context = MenuContext::player_with_abilities(
+            &mut inventory,
+            &mut equipment,
+            fields[1] == "CREATIVE",
+            fields[2] == "true",
+        );
+        let mut menu = AbstractContainerMenu::new(MenuKind::Chest { rows: 1 }, 1).unwrap();
+        menu.local[0].set_item(0, ItemStack::new(Item::STONE, 3, Default::default()));
+        menu.clicked(
+            &mut context,
+            0,
+            0,
+            ContainerInput::Clone,
+            &mut UnsupportedMenuHooks,
+        )
+        .unwrap();
+        assert_eq!(
+            count(&menu.carried),
+            fields[3].parse::<i32>().unwrap(),
+            "{line}"
+        );
+        let slot = Slot::new(ContainerId::Player, 38, 0, 0)
+            .with_kind(SlotKind::Armor(EquipmentSlot::Chest));
+        assert_eq!(
+            slot.may_pickup(&armor, context.is_creative, &BindingArmor)
+                .unwrap(),
+            fields[4] == "true",
+            "{line}"
+        );
+        checked += 1;
+    }
+    assert_eq!(checked, 4);
+}
+
+#[test]
 fn initializing_menu_is_canonical_before_it_becomes_the_current_menu() {
     let mut menus = MenuSession::default();
     let inventory = menus.current_ref();

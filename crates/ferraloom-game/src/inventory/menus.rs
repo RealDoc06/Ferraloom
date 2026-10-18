@@ -907,7 +907,7 @@ impl AbstractContainerMenu {
                     &mut carried,
                     true,
                     ctx.player.equipment,
-                    ctx.creative,
+                    ctx.infinite_materials,
                 ));
             }
         }
@@ -944,7 +944,7 @@ impl AbstractContainerMenu {
                         &mut stack,
                         true,
                         ctx.player.equipment,
-                        ctx.creative,
+                        ctx.infinite_materials,
                     ));
                 }
             }
@@ -989,7 +989,7 @@ impl MenuSession {
             } else {
                 inventory.pick_slot(slot);
             }
-        } else if ctx.creative {
+        } else if ctx.infinite_materials {
             inventory.add_and_pick_item(stack);
         }
         let mut packets = vec![cb::Packet::SetHeldSlot(cb::SetHeldSlot {
@@ -1042,11 +1042,11 @@ impl AbstractContainerMenu {
                         };
                         let mut book = container.remove_item_no_update(slot.container_slot);
                         container.set_changed();
-                        if !ctx
-                            .player
-                            .inventory
-                            .add(&mut book, ctx.player.equipment, ctx.creative)
-                            && !book.is_empty()
+                        if !ctx.player.inventory.add(
+                            &mut book,
+                            ctx.player.equipment,
+                            ctx.infinite_materials,
+                        ) && !book.is_empty()
                         {
                             ctx.drops.push(DroppedStack {
                                 stack: book,
@@ -1062,7 +1062,7 @@ impl AbstractContainerMenu {
                 if !(0..3).contains(&button)
                     || self.data[button as usize] <= 0
                     || self.get_item(ctx, 0).is_empty()
-                    || !ctx.creative && count(&self.get_item(ctx, 1)) < button + 1
+                    || !ctx.infinite_materials && count(&self.get_item(ctx, 1)) < button + 1
                 {
                     Ok(false)
                 } else {
