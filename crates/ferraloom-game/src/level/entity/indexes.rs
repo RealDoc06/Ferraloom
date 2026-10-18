@@ -170,6 +170,14 @@ impl EntitySectionStorage {
             .flat_map(|(_, section)| section.entities.iter().copied())
             .collect()
     }
+    pub(super) fn all_entities(&self) -> Vec<EntityRef> {
+        self.indexes
+            .borrow()
+            .sections
+            .values()
+            .flat_map(|section| section.entities.iter().copied())
+            .collect()
+    }
     pub(super) fn section_keys(&self) -> Vec<i64> {
         self.indexes
             .borrow()

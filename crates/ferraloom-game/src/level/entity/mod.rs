@@ -1,12 +1,9 @@
 //! Region-owned canonical entity storage, vanilla ordered indexes and ticking.
-use std::{
-    cell::Cell,
-    collections::{HashMap, HashSet},
-};
+use std::{cell::Cell, collections::HashSet};
 
 use ferraloom_util::{Aabb, ChunkPos, SectionPos, Uuid, Vec3, collections::Long2ObjectOpenHashMap};
 
-use super::{Level, LevelError};
+use super::{Level, LevelError, store::InsertOnlyMap};
 use crate::entity::{EntityData, EntityRef, EntityState, RemovalReason};
 
 mod indexes;
@@ -84,7 +81,7 @@ pub struct EntityStorage {
     next_ref: Cell<u64>,
     effects: Vec<crate::entity::effects::EntityEffect>,
     pub border: crate::level::border::WorldBorder,
-    states: HashMap<EntityRef, EntityState>,
+    states: InsertOnlyMap<EntityRef, EntityState>,
     pub lookup: EntityLookup,
     pub sections: EntitySectionStorage,
     pub ids: EntityIdAllocator,
@@ -102,7 +99,7 @@ impl EntityStorage {
     pub fn get_mut(&mut self, id: &EntityRef) -> Option<&mut EntityState> {
         self.states.get_mut(id)
     }
-    fn add(&mut self, id: EntityRef, mut state: EntityState) -> Result<i32, LevelError> {
+    fn add(&self, id: EntityRef, mut state: EntityState) -> Result<i32, LevelError> {
         if self.states.contains_key(&id) {
             return Err(LevelError::DuplicateEntity(id));
         }
@@ -127,7 +124,7 @@ impl EntityStorage {
             return Err(LevelError::DuplicateEntity(id));
         }
         self.sections.move_entity(id, base.position, status);
-        self.states.insert(id, state);
+        self.states.publish(id, state).expect("new entity handle");
         Ok(network_id)
     }
     fn retire(&mut self, id: EntityRef) {
@@ -135,7 +132,7 @@ impl EntityStorage {
         self.sections.remove(id);
         self.registration.remove_unmanaged(id);
     }
-    fn stop_accessing(&mut self, id: EntityRef) {
+    fn stop_accessing(&self, id: EntityRef) {
         if let Some(state) = self.states.get(&id) {
             self.lookup.remove(state.as_entity());
             self.sections.remove(id);
@@ -183,8 +180,7 @@ impl Level {
     /// Entity constructors share RandomSource.create's seed uniquifier with the
     /// level factory, while retaining a separate random stream per entity.
     pub fn create_entity_data(&self, kind: ferraloom_data::EntityType) -> EntityData {
-        let network_id = self.next_entity_id();
-        EntityData::from_random(kind, network_id, new_entity_random())
+        EntityData::from_random_with_id(kind, new_entity_random(), || self.next_entity_id())
     }
     pub fn emit_entity_effect(&mut self, effect: crate::entity::effects::EntityEffect) {
         self.region_mut().entities.effects.push(effect);
@@ -218,12 +214,12 @@ impl Level {
         self.add_entity_with_origin(entity, state, false)
     }
     fn add_entity_with_origin(
-        &mut self,
+        &self,
         entity: EntityRef,
         state: EntityState,
         loaded: bool,
     ) -> Result<(), LevelError> {
-        let region = self.region_mut();
+        let region = self.region();
         let network_id = region.entities.add(entity, state)?;
         let base = region.entities.get(&entity).unwrap().as_entity();
         let status = if base.entity_type == ferraloom_data::EntityType::PLAYER {
@@ -252,11 +248,14 @@ impl Level {
         }
         Ok(())
     }
-    fn retain_unmanaged_entity(&mut self, entity: EntityRef, state: EntityState) {
-        let storage = &mut self.region_mut().entities;
+    fn retain_unmanaged_entity(&self, entity: EntityRef, state: EntityState) {
+        let storage = &self.region().entities;
         assert!(!storage.states.contains_key(&entity), "new entity handle");
         storage.next_ref.set(storage.next_ref.get().max(entity.0));
-        storage.states.insert(entity, state);
+        storage
+            .states
+            .publish(entity, state)
+            .expect("new entity handle");
         storage.registration.retain_unmanaged(entity);
     }
     pub fn take_entity_management_events(&mut self) -> Vec<EntityManagementEvent> {
@@ -589,9 +588,11 @@ impl Level {
         }
         let mut reachable = HashSet::new();
         let mut work = Vec::new();
-        // Map order affects only set membership, never simulation callbacks.
-        for (&id, state) in &self.region().entities.states {
-            if !state.as_entity().removed && !self.region().entities.registration.is_unmanaged(id) {
+        // Only registered live objects are roots; removed and unmanaged objects
+        // are retained solely when traced from one of these roots.
+        for id in self.region().entities.sections.all_entities() {
+            let state = self.entity_state(id).expect("section entity");
+            if !state.as_entity().removed {
                 self.entity_behavior(id)
                     .expect("stored entity dispatcher")
                     .trace_entity_refs(state, &mut work);
@@ -735,6 +736,45 @@ mod removal_tests {
 mod identity_tests {
     use super::*;
     use crate::{Behaviors, level::Region};
+
+    #[test]
+    fn shared_publication_preserves_borrowed_canonical_state_and_rejects_replacement() {
+        use crate::entity::item::PrimedTnt;
+        use ferraloom_data::EntityType;
+
+        let level = Level::new(
+            Region::new(&Behaviors::EMPTY),
+            crate::level::LevelContext::fixture(0, 63),
+        );
+        let make_state = || {
+            EntityState::PrimedTnt(Box::new(PrimedTnt::with_parent(
+                level.create_entity_data(EntityType::TNT),
+            )))
+        };
+        let original = level.next_entity_ref();
+        level
+            .add_entity_with_origin(original, make_state(), false)
+            .unwrap();
+        let borrowed = level.entity::<EntityData>(original).unwrap();
+        let original_uuid = borrowed.uuid;
+        let passenger_view = borrowed.passengers.as_slice();
+        for _ in 0..1024 {
+            level
+                .add_entity_with_origin(level.next_entity_ref(), make_state(), false)
+                .unwrap();
+        }
+        assert_eq!(
+            level.add_entity_with_origin(original, make_state(), false),
+            Err(LevelError::DuplicateEntity(original))
+        );
+        assert!(std::ptr::eq(
+            borrowed,
+            level.entity::<EntityData>(original).unwrap()
+        ));
+        assert_eq!(borrowed.uuid, original_uuid);
+        assert!(passenger_view.is_empty());
+        assert_eq!(level.region().entities.sections.all_entities().len(), 1025);
+    }
 
     #[test]
     fn shared_constructor_preparation_keeps_native_ids_and_borrowed_states() {

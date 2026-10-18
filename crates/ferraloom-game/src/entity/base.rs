@@ -134,9 +134,19 @@ impl EntityData {
     pub(crate) fn from_random(
         kind: EntityType,
         network_id: i32,
+        random: LegacyRandomSource,
+    ) -> Self {
+        Self::from_random_with_id(kind, random, || network_id)
+    }
+    /// Entity's random and UUID field initializers run before the constructor's
+    /// Level#getNextEntityId call; subclass RNG draws follow this base creation.
+    pub(crate) fn from_random_with_id(
+        kind: EntityType,
         mut random: LegacyRandomSource,
+        next_id: impl FnOnce() -> i32,
     ) -> Self {
         let uuid = Uuid::insecure(&mut random);
+        let network_id = next_id();
         let dimensions = EntityDimensions::for_type(kind);
         Self {
             entity_type: kind,
