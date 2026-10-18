@@ -117,11 +117,17 @@ impl SectionRegistry for RegistryAdapter {
     }
 }
 
+pub struct GenerationLightNeighbor {
+    pub pos: ChunkPos,
+    pub sections: Vec<LevelChunkSection>,
+    pub disk: SerializableChunkData,
+}
 pub struct Terrain {
     pub pos: ChunkPos,
     pub sections: Vec<LevelChunkSection>,
     pub disk: SerializableChunkData,
     pub surface: [i32; 256],
+    pub light_neighbors: Vec<GenerationLightNeighbor>,
 }
 #[derive(Clone, Default)]
 pub struct ChunkLight {
@@ -168,7 +174,8 @@ enum LightJob {
         request: u64,
         pos: ChunkPos,
         sections: Vec<LevelChunkSection>,
-        saved_light: Option<SerializableChunkData>,
+        saved_light: Option<Box<SerializableChunkData>>,
+        neighbors: Vec<GenerationLightNeighbor>,
     },
     Unload {
         pos: ChunkPos,
@@ -192,6 +199,7 @@ fn run_light_worker(
     let mut snapshots = SectionSnapshots::new(-4, 20);
     let mut engine = LevelLightEngine::new(true, true);
     let mut lights: BTreeMap<i64, ChunkLight> = BTreeMap::new();
+    let mut full_chunks = std::collections::HashSet::new();
     while let Ok(job) = light_in.recv() {
         let (initialized, changes) = match job {
             LightJob::Initialize {
@@ -199,6 +207,7 @@ fn run_light_worker(
                 pos,
                 sections,
                 saved_light,
+                neighbors,
             } => {
                 snapshots.insert_chunk(
                     pos,
@@ -207,6 +216,61 @@ fn run_light_worker(
                         .map(|section| Some(Cow::Owned(section)))
                         .collect(),
                 );
+                let neighbors = neighbors
+                    .into_iter()
+                    .filter(|neighbor| !full_chunks.contains(&neighbor.pos))
+                    .collect::<Vec<_>>();
+                for neighbor in &neighbors {
+                    snapshots.insert_chunk(
+                        neighbor.pos,
+                        neighbor
+                            .sections
+                            .iter()
+                            .cloned()
+                            .map(|section| Some(Cow::Owned(section)))
+                            .collect(),
+                    );
+                }
+                let mut changes = Vec::new();
+                for neighbor in neighbors {
+                    for section in neighbor.disk.sections.as_deref().unwrap_or_default() {
+                        if let Some(y) = section.y {
+                            for (layer, data) in [
+                                (LightLayer::Sky, &section.sky_light),
+                                (LightLayer::Block, &section.block_light),
+                            ] {
+                                if let Some(data) = data {
+                                    let bytes = data
+                                        .0
+                                        .iter()
+                                        .map(|&b| b as u8)
+                                        .collect::<Vec<_>>()
+                                        .into_boxed_slice()
+                                        .try_into()
+                                        .expect("validated generation neighbor light");
+                                    engine.queue_section_data(
+                                        layer,
+                                        SectionPos::new(
+                                            neighbor.pos.x,
+                                            i32::from(y),
+                                            neighbor.pos.z,
+                                        ),
+                                        Some(ferraloom_light::DataLayer::from_bytes(bytes)),
+                                    );
+                                }
+                            }
+                        }
+                    }
+                    changes.extend(
+                        engine
+                            .initialize_light(
+                                &snapshots,
+                                neighbor.pos,
+                                neighbor.disk.is_light_on == Some(true),
+                            )
+                            .sections,
+                    );
+                }
                 let lighted = saved_light
                     .as_ref()
                     .is_some_and(|disk| disk.is_light_on == Some(true));
@@ -236,7 +300,7 @@ fn run_light_worker(
                         }
                     }
                 }
-                let mut changes = engine.initialize_light(&snapshots, pos, lighted).sections;
+                changes.extend(engine.initialize_light(&snapshots, pos, lighted).sections);
                 changes.extend(engine.light_chunk(&snapshots, pos, lighted).sections);
                 (Some((request, pos)), changes)
             }
@@ -248,6 +312,7 @@ fn run_light_worker(
                 snapshots.remove_chunk(pos);
                 engine.forget_chunk_sources(pos);
                 lights.remove(&pos.pack());
+                full_chunks.remove(&pos);
                 (None, engine.run_light_updates(&snapshots).sections)
             }
             LightJob::Changed { chunks, changes } => {
@@ -274,6 +339,7 @@ fn run_light_worker(
         let mut affected = std::collections::BTreeSet::new();
         let mut dirty = BTreeMap::<i64, LightDirtySections>::new();
         if let Some((_, pos)) = initialized {
+            full_chunks.insert(pos);
             affected.insert(pos.pack());
             lights.entry(pos.pack()).or_default();
         }
@@ -1212,7 +1278,8 @@ impl World {
             request,
             pos: terrain.pos,
             sections: terrain.sections.clone(),
-            saved_light: Some(terrain.disk.clone()),
+            saved_light: Some(Box::new(terrain.disk.clone())),
+            neighbors: terrain.light_neighbors,
         })?;
         let chunk = ferraloom_game::level::generation::promote(
             terrain.pos,
@@ -1638,6 +1705,7 @@ mod light_worker_tests {
             pos,
             sections: sections.clone(),
             saved_light: None,
+            neighbors: Vec::new(),
         })
         .unwrap();
         assert_eq!(results.blocking_recv().unwrap().initialized, Some((7, pos)));

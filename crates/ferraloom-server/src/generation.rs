@@ -3,7 +3,9 @@
 //! itself permits order-dependent feature writes; worker completion order never
 //! chooses which write wins here. Disjoint dimensions can use separate workers.
 use crate::jobs::JobPool;
-use crate::world::{RegistryAdapter, Terrain, surface_heights_in_dimension};
+use crate::world::{
+    GenerationLightNeighbor, RegistryAdapter, Terrain, surface_heights_in_dimension,
+};
 use anyhow::{Context, Result, ensure};
 use ferraloom_game::level::generation::{
     ChunkGenerationTask, ChunkStatus, ChunkStatusTask, GenerationChunkHolder, ProtoChunk,
@@ -329,8 +331,24 @@ impl GenerationState {
             .capture(&self.context, registry)
             .map_err(anyhow::Error::msg)?;
         let sections = proto.region.chunk.sections.clone();
+        let light_neighbors = self
+            .holders
+            .iter()
+            .filter_map(|(&key, holder)| {
+                let neighbor = ChunkPos::unpack(key);
+                (neighbor != pos
+                    && neighbor.x.abs_diff(pos.x).max(neighbor.z.abs_diff(pos.z)) <= 1
+                    && holder.completed >= ChunkStatus::InitializeLight)
+                    .then(|| GenerationLightNeighbor {
+                        pos: neighbor,
+                        sections: holder.chunk.region.chunk.sections.clone(),
+                        disk: holder.chunk.disk.clone(),
+                    })
+            })
+            .collect();
         let terrain = Terrain {
             pos,
+            light_neighbors,
             surface: surface_heights_in_dimension(&sections, self.context.dimension.min_y),
             sections,
             disk,
