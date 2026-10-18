@@ -5,7 +5,7 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | Area | Rows | Ferraloom todo | Ferraloom partial | Ferraloom pass | Ferraloom fail |
 |---|---:|---:|---:|---:|---:|
 | [Advancements](features/advancements.md) | 1942 | 0 | 1933 | 9 | 0 |
-| [Block entities](features/block-entities.md) | 76 | 70 | 6 | 0 | 0 |
+| [Block entities](features/block-entities.md) | 77 | 70 | 7 | 0 | 0 |
 | [Blocks](features/blocks.md) | 322 | 320 | 2 | 0 | 0 |
 | [Chat and text components](features/chat.md) | 23 | 21 | 2 | 0 | 0 |
 | [Chunks and tickets](features/chunks.md) | 37 | 31 | 6 | 0 | 0 |
@@ -14,7 +14,7 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Crafting and recipes](features/crafting-recipes.md) | 2136 | 2 | 29 | 2105 | 0 |
 | [Datapacks and resource reload](features/datapacks-reload.md) | 57 | 57 | 0 | 0 | 0 |
 | [Enchantments](features/enchantments.md) | 136 | 136 | 0 | 0 | 0 |
-| [Entities and AI](features/entities.md) | 696 | 673 | 23 | 0 | 0 |
+| [Entities and AI](features/entities.md) | 725 | 672 | 53 | 0 | 0 |
 | [Fluids](features/fluids.md) | 25 | 25 | 0 | 0 | 0 |
 | [Binary data, geometry and randomness](features/foundations.md) | 63 | 18 | 17 | 28 | 0 |
 | [Functions and macros](features/functions-macros.md) | 10 | 10 | 0 | 0 | 0 |
@@ -31,7 +31,7 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Patrols](features/patrols.md) | 4 | 4 | 0 | 0 | 0 |
 | [Permissions](features/permissions.md) | 7 | 7 | 0 | 0 | 0 |
 | [Phantoms](features/phantoms.md) | 3 | 3 | 0 | 0 | 0 |
-| [Player mechanics](features/player.md) | 46 | 33 | 13 | 0 | 0 |
+| [Player mechanics](features/player.md) | 61 | 33 | 28 | 0 | 0 |
 | [Portals and dimension travel](features/portals-travel.md) | 13 | 13 | 0 | 0 | 0 |
 | [Predicates](features/predicates.md) | 100 | 79 | 21 | 0 | 0 |
 | [Protocol packets](features/protocol.md) | 270 | 47 | 0 | 223 | 0 |
@@ -43,10 +43,10 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Spawning, trial spawners and vaults](features/spawning.md) | 138 | 138 | 0 | 0 | 0 |
 | [Statistics](features/statistics.md) | 96 | 3 | 90 | 3 | 0 |
 | [Tags](features/tags.md) | 907 | 907 | 0 | 0 | 0 |
-| [Ticking, game events and vibrations](features/ticking.md) | 183 | 179 | 4 | 0 | 0 |
+| [Ticking, game events and vibrations](features/ticking.md) | 183 | 175 | 8 | 0 | 0 |
 | [Villages, trading and POI](features/villages-trading-poi.md) | 599 | 599 | 0 | 0 | 0 |
 | [Wandering traders](features/wandering-traders.md) | 5 | 5 | 0 | 0 | 0 |
 | [Weather, time and environment](features/weather-time.md) | 85 | 85 | 0 | 0 | 0 |
 | [World storage and data fixing](features/world-storage.md) | 307 | 306 | 1 | 0 | 0 |
 | [World generation](features/worldgen.md) | 3110 | 2642 | 168 | 300 | 0 |
-| **Total** | **19096** | **12141** | **4086** | **2869** | **0** |
+| **Total** | **19141** | **12136** | **4136** | **2869** | **0** |
