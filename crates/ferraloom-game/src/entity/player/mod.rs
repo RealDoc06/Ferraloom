@@ -448,6 +448,9 @@ fn jump_from_ground(entity: crate::entity::EntityRef, level: &mut Level) -> Resu
 }
 pub struct PlayerBehavior;
 impl crate::entity::Entity for PlayerBehavior {
+    fn fire_immune_ticks(&self) -> i32 {
+        20
+    }
     fn default_gravity(&self) -> f64 {
         0.08
     }
