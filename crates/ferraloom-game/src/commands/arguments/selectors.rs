@@ -651,6 +651,9 @@ pub struct SelectorEntity<'a> {
 pub trait EntityQuery {
     fn candidates(&self, players_only: bool) -> Vec<EntityRef>;
     fn info(&self, entity: EntityRef) -> Option<SelectorEntity<'_>>;
+    fn display_name(&self, entity: EntityRef) -> ferraloom_protocol::chat::Component {
+        ferraloom_protocol::chat::Component::literal(self.info(entity).map_or("", |info| info.name))
+    }
     fn matches(
         &mut self,
         entity: EntityRef,

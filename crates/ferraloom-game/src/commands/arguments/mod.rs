@@ -575,3 +575,45 @@ fn nbt_path_text(reader: &mut StringReader) -> String {
 
 #[cfg(test)]
 mod tests;
+
+impl Message {
+    /// Port of MessageArgument.Message#toComponent. Selectors capture live matches here.
+    pub fn to_component<Q: selectors::EntityQuery>(
+        &self,
+        source: &CommandSourceStack,
+        query: &mut Q,
+    ) -> Result<Component, CommandSyntaxException> {
+        if self.parts.is_empty()
+            || !source
+                .permissions
+                .has(&Permission::Atom(Permission::ENTITY_SELECTORS.into()))
+        {
+            return Ok(Component::literal(&self.text));
+        }
+        let text = self.text.encode_utf16().collect::<Vec<_>>();
+        let mut result = Component::literal(String::from_utf16_lossy(&text[..self.parts[0].start]));
+        let mut read_to = self.parts[0].start;
+        for part in &self.parts {
+            if read_to < part.start {
+                result
+                    .extra
+                    .push(Component::literal(String::from_utf16_lossy(
+                        &text[read_to..part.start],
+                    )));
+            }
+            let matches = part.selector.find(source, query, false)?;
+            result.extra.push(crate::commands::builtins::format_list(
+                matches.into_iter().map(|entity| query.display_name(entity)),
+            ));
+            read_to = part.end;
+        }
+        if read_to < text.len() {
+            result
+                .extra
+                .push(Component::literal(String::from_utf16_lossy(
+                    &text[read_to..],
+                )));
+        }
+        Ok(result)
+    }
+}

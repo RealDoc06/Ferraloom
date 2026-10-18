@@ -2561,3 +2561,5 @@ Every literal and argument node from `reports/commands.json` has a row, includin
 | commands.execution.queue-order | Execute newly queued commands before siblings; discard returning frames inline and enforce sequence/fork limits | `ExecutionContext; BuildContexts; Frame` | `commands::execution::tests` | - | todo |
 
 | commands.execution.clock-state | Keep world-clock ticks, fractional rate and pause state separate from game time; persist the native world_clocks saved data | `ServerClockManager; ClockState; TimeCommand` | `commands::clocks::tests::fractional_rate_pause_and_saved_state_preserve_clock_values` | - | todo |
+
+| commands.message.resolve-selectors | Resolve selector components at message delivery time and retain the actual signable argument name (message, action, reason) | `MessageArgument#resolveChatMessage; MessageArgument.Message#toComponent` | `commands::message::tests::unsigned_player_argument_and_absent_argument_match_java_packet_variants` | pass | todo |

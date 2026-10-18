@@ -127,7 +127,7 @@ struct Connection {
     session: Option<ChatSession>,
     last_seen: LastSeenMessagesValidator,
     signature_cache: MessageSignatureCache,
-    command_message: Option<ValidatedMessage>,
+    command_message: Option<(String, ValidatedMessage)>,
     next_chat_index: i32,
     network_ticks: u64,
     rate_packets: u64,
@@ -1157,17 +1157,41 @@ impl MinecraftServer {
                         return Ok(());
                     }
                 };
-                if let Some(ferraloom_game::commands::arguments::ArgumentValue::Message(message)) =
-                    prepared.argument("message")
+                if let Some((argument_name, message)) =
+                    prepared.arguments.iter().find_map(|(name, value)| {
+                        if let ferraloom_game::commands::arguments::ArgumentValue::Message(
+                            message,
+                        ) = value
+                        {
+                            Some((name, message))
+                        } else {
+                            None
+                        }
+                    })
                 {
                     let content = message.text.clone();
                     let signature = p
                         .argument_signatures
                         .0
                         .iter()
-                        .find(|argument| argument.name.0 == "message")
+                        .find(|argument| argument.name.0 == *argument_name)
                         .map(|argument| argument.signature.clone());
-                    c.command_message = Some(if let Some(session) = &mut c.session {
+                    if !p.argument_signatures.0.is_empty()
+                        && (p.argument_signatures.0.len() != 1 || signature.is_none())
+                    {
+                        let mut message = Component::translatable(
+                            "chat.disabled.invalid_command_signature",
+                            vec![],
+                        );
+                        message.style.color =
+                            Some(protocol::chat::TextColor::parse("red").unwrap());
+                        c.push(cb::Packet::SystemChat(Box::new(cb::SystemChat {
+                            content: message,
+                            overlay: false,
+                        })));
+                        return Ok(());
+                    }
+                    let validated = if let Some(session) = &mut c.session {
                         session.unpack(
                             c.profile.id,
                             content,
@@ -1175,14 +1199,26 @@ impl MinecraftServer {
                             p.salt,
                             signature,
                             last_seen,
-                        )?
+                        )
+                    } else if self.enforces_secure_chat {
+                        Err(anyhow::anyhow!("chat.disabled.missingProfileKey"))
                     } else {
-                        ensure!(
-                            !self.enforces_secure_chat,
-                            "chat.disabled.missingProfileKey"
-                        );
-                        ValidatedMessage::unsigned(c.profile.id, content)
-                    });
+                        Ok(ValidatedMessage::unsigned(c.profile.id, content))
+                    };
+                    let validated = match validated {
+                        Ok(message) => message,
+                        Err(error) => {
+                            let mut message = Component::translatable(error.to_string(), vec![]);
+                            message.style.color =
+                                Some(protocol::chat::TextColor::parse("red").unwrap());
+                            c.push(cb::Packet::SystemChat(Box::new(cb::SystemChat {
+                                content: message,
+                                overlay: false,
+                            })));
+                            return Ok(());
+                        }
+                    };
+                    c.command_message = Some((argument_name.clone(), validated));
                 } else {
                     ensure!(
                         p.argument_signatures.0.is_empty(),
@@ -1626,40 +1662,6 @@ impl MinecraftServer {
         }
         Ok(())
     }
-    /// Port of MessageArgument#resolveChatMessage: a missing signed argument is system chat.
-    fn broadcast_command_chat(
-        &mut self,
-        source: Option<ConnectionId>,
-        content: String,
-        chat_type: protocol::Identifier,
-    ) -> Result<()> {
-        if let Some(connection) = source {
-            if let Some(message) = self
-                .connections
-                .get_mut(&connection)
-                .and_then(|c| c.command_message.take())
-            {
-                return self.broadcast_chat(message, chat_type);
-            }
-        }
-        let name = if let Some(connection) = source {
-            let Phase::Play(entity) = self.connections[&connection].phase else {
-                bail!("command source not playing");
-            };
-            self.player(entity)?.display_name()
-        } else {
-            Component::literal("Server")
-        };
-        self.broadcast(cb::Packet::DisguisedChat(Box::new(cb::DisguisedChat {
-            message: Component::literal(content),
-            chat_type: ChatTypeBound {
-                chat_type: ChatTypeHolder(Holder::Reference(chat_type)),
-                name,
-                target_name: None,
-            },
-        })));
-        Ok(())
-    }
     fn broadcast(&mut self, packet: cb::Packet) {
         for c in self.connections.values_mut() {
             if matches!(c.phase, Phase::Play(_)) && !c.close {
@@ -1779,9 +1781,9 @@ impl MinecraftServer {
                         yaw: player.yaw,
                     });
             }
-            if let Some(message) = &c.command_message {
+            if let Some((argument_name, message)) = &c.command_message {
                 stack.signing_context.arguments = Arc::from([(
-                    "message".into(),
+                    argument_name.clone(),
                     ferraloom_game::commands::source::SignedArgument {
                         sender: message.sender,
                         index: message.index,
@@ -1844,9 +1846,6 @@ impl MinecraftServer {
                     );
                     stack.callback.on_failure();
                 }
-            }
-            CommandAction::Say(content) => {
-                self.broadcast_command_chat(source, content, id("say_command"))?;
             }
             CommandAction::Teleport { targets, position } => {
                 let targets = self.targets(source, targets.as_deref())?;

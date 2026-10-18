@@ -164,6 +164,17 @@ impl MinecraftServer {
         let result = match command.command.as_str() {
             "gamerule" => builtins::gamerule(&mut self.game_rules, &command)?,
             "seed" => builtins::seed(self.world.seed),
+            "say" | "me" | "msg" => self.message_command(source, &command)?,
+            "teammsg" => {
+                return Err(exceptions::error(
+                    if stack.entity.is_none() {
+                        "permissions.requires.entity"
+                    } else {
+                        "commands.teammsg.failed.noteam"
+                    },
+                    &[],
+                ));
+            }
             "time" => {
                 let (result, changed) = self.clocks.command(&command, self.level.game_time);
                 if let Some(clock) = changed {
@@ -385,6 +396,10 @@ impl EntityQuery for MinecraftServer {
             height: 1.8,
         })
     }
+    fn display_name(&self, entity: EntityRef) -> Component {
+        self.player(entity)
+            .map_or_else(|_| Component::literal(""), ServerPlayer::display_name)
+    }
     fn matches(
         &mut self,
         entity: EntityRef,
@@ -512,7 +527,13 @@ impl MinecraftServer {
                 );
             }
         }
-        if let Err(error) = self.execute_command_inner(source, text).await {
+        let result = self.execute_command_inner(source, text).await;
+        if let Some(connection) = source {
+            if let Some(c) = self.connections.get_mut(&connection) {
+                c.command_message = None;
+            }
+        }
+        if let Err(error) = result {
             if error.to_string() == "disconnect.spam" {
                 return Err(error);
             }
@@ -591,5 +612,155 @@ impl MinecraftServer {
                 })
                 .collect(),
         })
+    }
+}
+
+impl MinecraftServer {
+    fn message_command(
+        &mut self,
+        source: Option<ConnectionId>,
+        command: &PreparedCommand,
+    ) -> Result<CommandResult, ferraloom_brigadier::CommandSyntaxException> {
+        use ferraloom_game::commands::arguments::ArgumentValue;
+        let argument = if command.command == "me" {
+            "action"
+        } else {
+            "message"
+        };
+        let targets = if command.command == "msg" {
+            let Some(ArgumentValue::Entity(selector)) = command.argument("targets") else {
+                unreachable!()
+            };
+            let targets = selector.find(&command.source, self, true)?;
+            if targets.is_empty() {
+                return Err(exceptions::error("argument.entity.notfound.player", &[]));
+            }
+            Some(targets)
+        } else {
+            None
+        };
+        let Some(ArgumentValue::Message(message)) = command.argument(argument) else {
+            unreachable!()
+        };
+        let content = message.to_component(&command.source, self)?;
+        let signed = source
+            .and_then(|connection| self.connections.get_mut(&connection))
+            .and_then(|c| c.command_message.take())
+            .filter(|(name, _)| name == argument)
+            .map(|(_, message)| message);
+        let name = command.source.display_name(|entity| {
+            self.player(entity)
+                .map_or_else(|_| Component::literal(""), ServerPlayer::display_name)
+        });
+        let count = if let Some(targets) = targets {
+            for entity in &targets {
+                let target_name = self
+                    .player(*entity)
+                    .map_err(|_| exceptions::error("argument.entity.notfound.player", &[]))?
+                    .display_name();
+                let target=self.players.iter().copied().find(|id|matches!(self.connections[id].phase,Phase::Play(handle) if handle==*entity)).unwrap();
+                let outgoing = ChatTypeBound {
+                    chat_type: ChatTypeHolder(Holder::Reference(id("msg_command_outgoing"))),
+                    name: name.clone(),
+                    target_name: Some(target_name.clone()),
+                };
+                if let Some(source) = source {
+                    if !command.source.silent {
+                        self.send_command_chat_to(source, signed.as_ref(), &content, outgoing);
+                    }
+                } else if !command.source.silent {
+                    let mut decorated = Component::translatable(
+                        "commands.message.display.outgoing",
+                        vec![
+                            builtins::component(target_name),
+                            builtins::component(content.clone()),
+                        ],
+                    );
+                    decorated.style.color = Some(protocol::chat::TextColor::parse("gray").unwrap());
+                    decorated.style.italic = Some(true);
+                    self.send_component(None, decorated);
+                }
+                self.send_command_chat_to(
+                    target,
+                    signed.as_ref(),
+                    &content,
+                    ChatTypeBound {
+                        chat_type: ChatTypeHolder(Holder::Reference(id("msg_command_incoming"))),
+                        name: name.clone(),
+                        target_name: None,
+                    },
+                );
+            }
+            targets.len() as i32
+        } else {
+            let chat_type = if command.command == "me" {
+                "emote_command"
+            } else {
+                "say_command"
+            };
+            let receivers = self.players.clone();
+            for receiver in receivers {
+                self.send_command_chat_to(
+                    receiver,
+                    signed.as_ref(),
+                    &content,
+                    ChatTypeBound {
+                        chat_type: ChatTypeHolder(Holder::Reference(id(chat_type))),
+                        name: name.clone(),
+                        target_name: None,
+                    },
+                );
+            }
+            1
+        };
+        Ok(CommandResult {
+            value: count,
+            feedback: vec![],
+            rule_change: None,
+        })
+    }
+    fn send_command_chat_to(
+        &mut self,
+        receiver: ConnectionId,
+        signed: Option<&ValidatedMessage>,
+        content: &Component,
+        chat_type: ChatTypeBound,
+    ) {
+        let Some(c) = self.connections.get_mut(&receiver) else {
+            return;
+        };
+        if c.close
+            || !matches!(c.phase, Phase::Play(_))
+            || c.information.chat_visibility != common::serverbound::ChatVisibility::Full
+        {
+            return;
+        }
+        if let Some(message) = signed {
+            if let Some(signature) = &message.signature {
+                if let Err(error) = c.last_seen.add_pending(signature) {
+                    c.disconnect(error.to_string());
+                    return;
+                }
+            }
+            let global_index = c.next_chat_index;
+            c.next_chat_index += 1;
+            let body = c.signature_cache.pack(message);
+            c.push(cb::Packet::PlayerChat(Box::new(cb::PlayerChat {
+                global_index: VarInt(global_index),
+                sender: message.sender,
+                index: VarInt(message.index),
+                signature: message.signature.clone(),
+                body,
+                unsigned_content: (*content != Component::literal(&message.content))
+                    .then(|| content.clone()),
+                filter_mask: FilterMask::PassThrough,
+                chat_type,
+            })));
+        } else {
+            c.push(cb::Packet::DisguisedChat(Box::new(cb::DisguisedChat {
+                message: content.clone(),
+                chat_type,
+            })));
+        }
     }
 }

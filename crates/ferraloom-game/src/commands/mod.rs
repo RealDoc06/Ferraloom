@@ -25,7 +25,6 @@ pub enum CommandAction {
     Save {
         flush: bool,
     },
-    Say(String),
     Teleport {
         targets: Option<String>,
         position: Vec3,
@@ -167,10 +166,6 @@ impl Commands {
             "save-all" => CommandAction::Save {
                 flush: prepared.literals.iter().any(|s| s == "flush"),
             },
-            "say" => CommandAction::Say(match prepared.argument("message") {
-                Some(ArgumentValue::Message(message)) => message.text.clone(),
-                _ => String::new(),
-            }),
             "teleport" if prepared.coordinates("location").is_some() => CommandAction::Teleport {
                 targets: selector_text("targets"),
                 position: prepared
