@@ -256,7 +256,14 @@ fn no_spawn_block_collision(
                         ));
                     }
                     if state.data().collision.boxes().iter().any(|shape| {
-                        bbox.intersects(shape.move_by(f64::from(x), f64::from(y), f64::from(z)))
+                        bbox.intersects(Aabb::new(
+                            shape.min[0] + f64::from(x),
+                            shape.min[1] + f64::from(y),
+                            shape.min[2] + f64::from(z),
+                            shape.max[0] + f64::from(x),
+                            shape.max[1] + f64::from(y),
+                            shape.max[2] + f64::from(z),
+                        ))
                     }) {
                         return Ok(false);
                     }
