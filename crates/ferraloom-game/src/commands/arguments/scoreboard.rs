@@ -113,9 +113,7 @@ pub fn criteria(reader: &mut StringReader) -> Result<ObjectiveCriteria, CommandS
         });
     let stat = name.split_once(':').and_then(|(kind, value)| {
         let kind = by_separator(kind);
-        let Some((_, registry)) = STAT_TYPES.iter().find(|(id, _)| *id == kind) else {
-            return None;
-        };
+        let (_, registry) = STAT_TYPES.iter().find(|(id, _)| *id == kind)?;
         let value = by_separator(value);
         ferraloom_data::registry_entries(registry)
             .is_some_and(|entries| entries.contains(&value.as_str()))
