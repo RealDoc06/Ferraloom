@@ -43,7 +43,13 @@ pub fn generate(root: &Path, item_report: &Value) {
     out.push_str("#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]\n#[repr(u8)]\npub enum ItemMethod {\n");
     let method_variants = methods
         .iter()
-        .map(|m| super::pascal(m["name"].as_str().unwrap()))
+        .map(|m| {
+            super::pascal(
+                m["rust_name"]
+                    .as_str()
+                    .unwrap_or_else(|| m["name"].as_str().unwrap()),
+            )
+        })
         .collect::<Vec<_>>();
     assert!(methods.len() <= u8::MAX as usize);
     assert_eq!(
@@ -135,6 +141,43 @@ pub fn generate(root: &Path, item_report: &Value) {
         out.push_str("],\n");
     }
     out.push_str("];\n");
+    for (field, ty, conversion) in [
+        (
+            "wall_block",
+            "crate::Block",
+            "crate::Block::from_protocol_id",
+        ),
+        (
+            "attachment_direction",
+            "ferraloom_util::Direction",
+            "direction",
+        ),
+        (
+            "place_sound",
+            "crate::registries::sound_event::Id",
+            "crate::registries::sound_event::Id::from_protocol_id",
+        ),
+    ] {
+        writeln!(
+            out,
+            "const ITEM_{}: &[Option<{ty}>] = &[",
+            field.to_uppercase()
+        )
+        .unwrap();
+        for item in items {
+            if let Some(value) = item[field].as_u64() {
+                if conversion == "direction" {
+                    assert!(value < 6);
+                    writeln!(out, "Some(ferraloom_util::Direction::VALUES[{value}]),").unwrap();
+                } else {
+                    writeln!(out, "Some({conversion}({value}).unwrap()),").unwrap();
+                }
+            } else {
+                out.push_str("None,\n");
+            }
+        }
+        out.push_str("];\n");
+    }
     std::fs::write(
         Path::new(&std::env::var("OUT_DIR").unwrap()).join("item_methods.rs"),
         out,

@@ -33,6 +33,14 @@ public final class ExtractItemMethods {
         hierarchy(type.getSuperclass(), result);
         for (var parent : type.getInterfaces()) hierarchy(parent, result);
     }
+    static String methodName(Method method) {
+        return method.getDeclaringClass() == StandingAndWallBlockItem.class && method.getName().equals("canPlace")
+            ? "canPlaceStandingOrWall" : method.getName();
+    }
+    static Object field(Object receiver, Class<?> owner, String name) throws Exception {
+        var field = owner.getDeclaredField(name); field.setAccessible(true);
+        return field.get(receiver);
+    }
     public static void main(String[] args) throws Exception {
         SharedConstants.tryDetectVersion(); Bootstrap.bootStrap();
         var methodsBySignature = new TreeMap<String, Method>();
@@ -42,9 +50,12 @@ public final class ExtractItemMethods {
             for (var method : type.getDeclaredMethods()) if (virtual(method))
                 methodsBySignature.putIfAbsent(signature(method), method);
         }
+        var standingCanPlace = StandingAndWallBlockItem.class.getDeclaredMethod("canPlace",
+            net.minecraft.world.level.LevelReader.class, net.minecraft.world.level.block.state.BlockState.class, net.minecraft.core.BlockPos.class);
+        methodsBySignature.put(signature(standingCanPlace), standingCanPlace);
         var bases = new ArrayList<>(methodsBySignature.values());
         var names = new HashSet<String>();
-        for (var base : bases) if (!names.add(base.getName())) throw new AssertionError("Overloaded virtual requires explicit name: " + base);
+        for (var base : bases) if (!names.add(methodName(base))) throw new AssertionError("Overloaded virtual requires explicit name: " + base);
         var types = new TreeSet<Class<?>>(Comparator.comparing(Class::getName));
         for (var item : BuiltInRegistries.ITEM) hierarchy(item.getClass(), types);
         var typeIds = new HashMap<Class<?>, Integer>();
@@ -62,6 +73,7 @@ public final class ExtractItemMethods {
         var methods = new JsonArray();
         for (var method : bases) {
             var entry = new JsonObject(); entry.addProperty("name", method.getName());
+            entry.addProperty("rust_name", methodName(method));
             entry.addProperty("base", typeIds.get(method.getDeclaringClass()));
             entry.addProperty("returns", method.getReturnType().getTypeName());
             var parameters = new JsonArray();
@@ -78,7 +90,15 @@ public final class ExtractItemMethods {
                 var method = implementation(item.getClass(), base);
                 if (method == null) owners.add(JsonNull.INSTANCE); else owners.add(typeIds.get(method.getDeclaringClass()));
             }
-            entry.add("declaring_classes", owners); items.add(entry);
+            entry.add("declaring_classes", owners);
+            if (item instanceof StandingAndWallBlockItem) {
+                entry.addProperty("wall_block", BuiltInRegistries.BLOCK.getId((net.minecraft.world.level.block.Block) field(item, StandingAndWallBlockItem.class, "wallBlock")));
+                entry.addProperty("attachment_direction", ((net.minecraft.core.Direction) field(item, StandingAndWallBlockItem.class, "attachmentDirection")).ordinal());
+            }
+            if (item instanceof SolidBucketItem) {
+                entry.addProperty("place_sound", BuiltInRegistries.SOUND_EVENT.getId((net.minecraft.sounds.SoundEvent) field(item, SolidBucketItem.class, "placeSound")));
+            }
+            items.add(entry);
         }
         var result = new JsonObject(); result.add("classes", classes); result.add("methods", methods); result.add("items", items);
         Files.writeString(Path.of(args[0]), new GsonBuilder().setPrettyPrinting().create().toJson(result) + "\n");
