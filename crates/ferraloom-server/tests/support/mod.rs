@@ -18,9 +18,18 @@ use tokio::net::TcpStream;
 pub const NAME: &str = "JoinBot";
 pub fn properties(root: &Path) -> Result<()> {
     std::fs::write(root.join("eula.txt"), "eula=true\n")?;
+    // Both servers use this featureless flat world for Strict protocol/join
+    // coverage. Restore default noise once the block families clear the skips.
+    let generator = serde_json::json!({
+        "layers": [{"height":4,"block":"minecraft:bedrock"}],
+        "biome":"minecraft:plains", "features":false, "lakes":false,
+        "structure_overrides":[]
+    });
     std::fs::write(
         root.join("server.properties"),
-        "server-ip=127.0.0.1\nserver-port=0\nonline-mode=false\nwhite-list=false\nenforce-secure-profile=false\nview-distance=2\nsimulation-distance=2\nlevel-seed=12345\ngenerate-structures=false\npause-when-empty-seconds=0\n",
+        format!(
+            "server-ip=127.0.0.1\nserver-port=0\nonline-mode=false\nwhite-list=false\nenforce-secure-profile=false\nview-distance=2\nsimulation-distance=2\nlevel-seed=12345\ngenerate-structures=false\npause-when-empty-seconds=0\nlevel-type=flat\ngenerator-settings={generator}\n"
+        ),
     )?;
     std::fs::write(
         root.join("ops.json"),
@@ -42,6 +51,8 @@ pub struct Sequence {
 }
 pub struct Outcome {
     pub sequence: Sequence,
+    pub time_updates: Vec<cb::SetTime>,
+    pub frozen_periodic_time: Option<cb::SetTime>,
     pub chunks: usize,
     pub unloaded: usize,
     pub position: [f64; 3],
@@ -54,6 +65,7 @@ struct Client {
     chunks: HashSet<(i32, i32)>,
     unloads: usize,
     sequence: Sequence,
+    time_updates: Vec<cb::SetTime>,
     joining: bool,
 }
 impl Client {
@@ -194,6 +206,7 @@ impl Client {
             chunks: HashSet::new(),
             unloads: 0,
             sequence,
+            time_updates: Vec::new(),
             joining: true,
         })
     }
@@ -202,7 +215,15 @@ impl Client {
         let mut reader = Reader::with_context(&bytes, &self.registries);
         let packet = cb::Packet::decode(&mut reader)?;
         reader.finish()?;
-        if self.joining {
+        let periodic_time = if let cb::Packet::SetTime(time) = &packet {
+            let periodic = !self.time_updates.is_empty();
+            self.time_updates.push(time.clone());
+            periodic
+        } else {
+            false
+        };
+        // MinecraftServer.java:1078-1081/1142-1145 emits periodic SetTime independently of join packet order.
+        if self.joining && !periodic_time {
             self.sequence.join.push(
                 packet_types::play::clientbound::Packet::from_protocol_id(packet.packet_id())
                     .context("unknown play packet type")?,
@@ -284,12 +305,15 @@ impl Client {
         Ok(())
     }
 }
-pub async fn scenario(address: SocketAddr) -> Result<Outcome> {
-    tokio::time::timeout(Duration::from_secs(240), run_scenario(address))
-        .await
-        .context("join/walk scenario timed out")?
+pub async fn scenario(address: SocketAddr, sample_periodic_time: bool) -> Result<Outcome> {
+    tokio::time::timeout(
+        Duration::from_secs(240),
+        run_scenario(address, sample_periodic_time),
+    )
+    .await
+    .context("join/walk scenario timed out")?
 }
-async fn run_scenario(address: SocketAddr) -> Result<Outcome> {
+async fn run_scenario(address: SocketAddr, sample_periodic_time: bool) -> Result<Outcome> {
     let mut client = Client::connect(address).await?;
     client
         .until(|c, p| c.chunks.len() >= 9 && matches!(p, cb::Packet::ChunkBatchFinished(_)))
@@ -364,6 +388,20 @@ async fn run_scenario(address: SocketAddr) -> Result<Outcome> {
             })
             .await?;
     }
+    let frozen_periodic_time = if sample_periodic_time {
+        // Freeze only this parity fixture so the sampled gameTime can match saved overworld Time exactly.
+        client.command("tick freeze").await?;
+        client
+            .until(|_, p| matches!(p, cb::Packet::TickingState(p) if p.is_frozen))
+            .await?;
+        loop {
+            if let cb::Packet::SetTime(time) = client.next().await? {
+                break Some(time);
+            }
+        }
+    } else {
+        None
+    };
     client.command("save-all flush").await?;
     client.until(|_,p|matches!(p,cb::Packet::SystemChat(p) if p.content.to_json().is_ok_and(|s|s.contains("Saved the game")||s.contains("commands.save.success")))).await?;
     client.command("stop").await?;
@@ -380,6 +418,8 @@ async fn run_scenario(address: SocketAddr) -> Result<Outcome> {
     );
     Ok(Outcome {
         sequence: client.sequence,
+        time_updates: client.time_updates,
+        frozen_periodic_time,
         chunks: client.chunks.len(),
         unloaded: client.unloads,
         position: [start[0] + 100., start[1], start[2]],

@@ -1,0 +1,585 @@
+[
+  {
+    "id": 0,
+    "name": "minecraft:furnace",
+    "only_op_can_set_nbt": false,
+    "is_nameable": true,
+    "valid_blocks": [
+      253
+    ]
+  },
+  {
+    "id": 1,
+    "name": "minecraft:chest",
+    "only_op_can_set_nbt": false,
+    "is_nameable": true,
+    "valid_blocks": [
+      245,
+      1198,
+      1199,
+      1200,
+      1201,
+      1202,
+      1203,
+      1204,
+      1205
+    ]
+  },
+  {
+    "id": 2,
+    "name": "minecraft:trapped_chest",
+    "only_op_can_set_nbt": false,
+    "is_nameable": true,
+    "valid_blocks": [
+      523
+    ]
+  },
+  {
+    "id": 3,
+    "name": "minecraft:ender_chest",
+    "only_op_can_set_nbt": false,
+    "is_nameable": false,
+    "valid_blocks": [
+      451
+    ]
+  },
+  {
+    "id": 4,
+    "name": "minecraft:jukebox",
+    "only_op_can_set_nbt": false,
+    "is_nameable": false,
+    "valid_blocks": [
+      332
+    ]
+  },
+  {
+    "id": 5,
+    "name": "minecraft:dispenser",
+    "only_op_can_set_nbt": false,
+    "is_nameable": true,
+    "valid_blocks": [
+      114
+    ]
+  },
+  {
+    "id": 6,
+    "name": "minecraft:dropper",
+    "only_op_can_set_nbt": false,
+    "is_nameable": true,
+    "valid_blocks": [
+      536
+    ]
+  },
+  {
+    "id": 7,
+    "name": "minecraft:sign",
+    "only_op_can_set_nbt": true,
+    "is_nameable": false,
+    "valid_blocks": [
+      254,
+      255,
+      256,
+      257,
+      258,
+      259,
+      260,
+      261,
+      262,
+      263,
+      264,
+      269,
+      270,
+      271,
+      272,
+      273,
+      274,
+      275,
+      276,
+      277,
+      278,
+      279,
+      991,
+      992,
+      993,
+      994
+    ]
+  },
+  {
+    "id": 8,
+    "name": "minecraft:hanging_sign",
+    "only_op_can_set_nbt": true,
+    "is_nameable": false,
+    "valid_blocks": [
+      280,
+      281,
+      282,
+      283,
+      284,
+      285,
+      286,
+      287,
+      288,
+      289,
+      290,
+      291,
+      292,
+      293,
+      294,
+      295,
+      296,
+      297,
+      298,
+      299,
+      300,
+      301,
+      302,
+      303,
+      304,
+      305
+    ]
+  },
+  {
+    "id": 9,
+    "name": "minecraft:mob_spawner",
+    "only_op_can_set_nbt": true,
+    "is_nameable": false,
+    "valid_blocks": [
+      242
+    ]
+  },
+  {
+    "id": 10,
+    "name": "minecraft:creaking_heart",
+    "only_op_can_set_nbt": false,
+    "is_nameable": false,
+    "valid_blocks": [
+      243
+    ]
+  },
+  {
+    "id": 11,
+    "name": "minecraft:piston",
+    "only_op_can_set_nbt": false,
+    "is_nameable": false,
+    "valid_blocks": [
+      199
+    ]
+  },
+  {
+    "id": 12,
+    "name": "minecraft:brewing_stand",
+    "only_op_can_set_nbt": false,
+    "is_nameable": true,
+    "valid_blocks": [
+      436
+    ]
+  },
+  {
+    "id": 13,
+    "name": "minecraft:enchanting_table",
+    "only_op_can_set_nbt": false,
+    "is_nameable": true,
+    "valid_blocks": [
+      435
+    ]
+  },
+  {
+    "id": 14,
+    "name": "minecraft:end_portal",
+    "only_op_can_set_nbt": false,
+    "is_nameable": false,
+    "valid_blocks": [
+      441
+    ]
+  },
+  {
+    "id": 15,
+    "name": "minecraft:beacon",
+    "only_op_can_set_nbt": false,
+    "is_nameable": true,
+    "valid_blocks": [
+      459
+    ]
+  },
+  {
+    "id": 16,
+    "name": "minecraft:skull",
+    "only_op_can_set_nbt": false,
+    "is_nameable": false,
+    "valid_blocks": [
+      506,
+      507,
+      508,
+      509,
+      510,
+      511,
+      512,
+      513,
+      514,
+      515,
+      516,
+      517,
+      518,
+      519
+    ]
+  },
+  {
+    "id": 17,
+    "name": "minecraft:daylight_detector",
+    "only_op_can_set_nbt": false,
+    "is_nameable": false,
+    "valid_blocks": [
+      527
+    ]
+  },
+  {
+    "id": 18,
+    "name": "minecraft:hopper",
+    "only_op_can_set_nbt": false,
+    "is_nameable": true,
+    "valid_blocks": [
+      530
+    ]
+  },
+  {
+    "id": 19,
+    "name": "minecraft:comparator",
+    "only_op_can_set_nbt": false,
+    "is_nameable": false,
+    "valid_blocks": [
+      526
+    ]
+  },
+  {
+    "id": 20,
+    "name": "minecraft:banner",
+    "only_op_can_set_nbt": false,
+    "is_nameable": true,
+    "valid_blocks": [
+      617,
+      618,
+      619,
+      620,
+      621,
+      622,
+      623,
+      624,
+      625,
+      626,
+      627,
+      628,
+      629,
+      630,
+      631,
+      632,
+      633,
+      634,
+      635,
+      636,
+      637,
+      638,
+      639,
+      640,
+      641,
+      642,
+      643,
+      644,
+      645,
+      646,
+      647,
+      648
+    ]
+  },
+  {
+    "id": 21,
+    "name": "minecraft:structure_block",
+    "only_op_can_set_nbt": false,
+    "is_nameable": false,
+    "valid_blocks": [
+      995
+    ]
+  },
+  {
+    "id": 22,
+    "name": "minecraft:end_gateway",
+    "only_op_can_set_nbt": false,
+    "is_nameable": false,
+    "valid_blocks": [
+      725
+    ]
+  },
+  {
+    "id": 23,
+    "name": "minecraft:command_block",
+    "only_op_can_set_nbt": true,
+    "is_nameable": false,
+    "valid_blocks": [
+      458,
+      726,
+      727
+    ]
+  },
+  {
+    "id": 24,
+    "name": "minecraft:shulker_box",
+    "only_op_can_set_nbt": false,
+    "is_nameable": true,
+    "valid_blocks": [
+      735,
+      736,
+      737,
+      738,
+      739,
+      740,
+      741,
+      742,
+      743,
+      744,
+      745,
+      746,
+      747,
+      748,
+      749,
+      750,
+      751
+    ]
+  },
+  {
+    "id": 25,
+    "name": "minecraft:conduit",
+    "only_op_can_set_nbt": false,
+    "is_nameable": false,
+    "valid_blocks": [
+      880
+    ]
+  },
+  {
+    "id": 26,
+    "name": "minecraft:barrel",
+    "only_op_can_set_nbt": false,
+    "is_nameable": true,
+    "valid_blocks": [
+      929
+    ]
+  },
+  {
+    "id": 27,
+    "name": "minecraft:smoker",
+    "only_op_can_set_nbt": false,
+    "is_nameable": true,
+    "valid_blocks": [
+      930
+    ]
+  },
+  {
+    "id": 28,
+    "name": "minecraft:blast_furnace",
+    "only_op_can_set_nbt": false,
+    "is_nameable": true,
+    "valid_blocks": [
+      931
+    ]
+  },
+  {
+    "id": 29,
+    "name": "minecraft:lectern",
+    "only_op_can_set_nbt": true,
+    "is_nameable": false,
+    "valid_blocks": [
+      935
+    ]
+  },
+  {
+    "id": 30,
+    "name": "minecraft:bell",
+    "only_op_can_set_nbt": false,
+    "is_nameable": false,
+    "valid_blocks": [
+      938
+    ]
+  },
+  {
+    "id": 31,
+    "name": "minecraft:jigsaw",
+    "only_op_can_set_nbt": false,
+    "is_nameable": false,
+    "valid_blocks": [
+      996
+    ]
+  },
+  {
+    "id": 32,
+    "name": "minecraft:campfire",
+    "only_op_can_set_nbt": false,
+    "is_nameable": false,
+    "valid_blocks": [
+      949,
+      950
+    ]
+  },
+  {
+    "id": 33,
+    "name": "minecraft:beehive",
+    "only_op_can_set_nbt": false,
+    "is_nameable": false,
+    "valid_blocks": [
+      1001,
+      1002
+    ]
+  },
+  {
+    "id": 34,
+    "name": "minecraft:sculk_sensor",
+    "only_op_can_set_nbt": false,
+    "is_nameable": false,
+    "valid_blocks": [
+      1118
+    ]
+  },
+  {
+    "id": 35,
+    "name": "minecraft:calibrated_sculk_sensor",
+    "only_op_can_set_nbt": false,
+    "is_nameable": false,
+    "valid_blocks": [
+      1119
+    ]
+  },
+  {
+    "id": 36,
+    "name": "minecraft:sculk_catalyst",
+    "only_op_can_set_nbt": false,
+    "is_nameable": false,
+    "valid_blocks": [
+      1122
+    ]
+  },
+  {
+    "id": 37,
+    "name": "minecraft:sculk_shrieker",
+    "only_op_can_set_nbt": false,
+    "is_nameable": false,
+    "valid_blocks": [
+      1123
+    ]
+  },
+  {
+    "id": 38,
+    "name": "minecraft:chiseled_bookshelf",
+    "only_op_can_set_nbt": false,
+    "is_nameable": false,
+    "valid_blocks": [
+      222
+    ]
+  },
+  {
+    "id": 39,
+    "name": "minecraft:shelf",
+    "only_op_can_set_nbt": false,
+    "is_nameable": false,
+    "valid_blocks": [
+      223,
+      224,
+      225,
+      226,
+      227,
+      228,
+      229,
+      230,
+      231,
+      232,
+      233,
+      234,
+      235
+    ]
+  },
+  {
+    "id": 40,
+    "name": "minecraft:brushable_block",
+    "only_op_can_set_nbt": false,
+    "is_nameable": false,
+    "valid_blocks": [
+      40,
+      43
+    ]
+  },
+  {
+    "id": 41,
+    "name": "minecraft:decorated_pot",
+    "only_op_can_set_nbt": false,
+    "is_nameable": false,
+    "valid_blocks": [
+      1273
+    ]
+  },
+  {
+    "id": 42,
+    "name": "minecraft:crafter",
+    "only_op_can_set_nbt": false,
+    "is_nameable": true,
+    "valid_blocks": [
+      1274
+    ]
+  },
+  {
+    "id": 43,
+    "name": "minecraft:trial_spawner",
+    "only_op_can_set_nbt": true,
+    "is_nameable": false,
+    "valid_blocks": [
+      1275
+    ]
+  },
+  {
+    "id": 44,
+    "name": "minecraft:vault",
+    "only_op_can_set_nbt": false,
+    "is_nameable": false,
+    "valid_blocks": [
+      1276
+    ]
+  },
+  {
+    "id": 45,
+    "name": "minecraft:test_block",
+    "only_op_can_set_nbt": false,
+    "is_nameable": false,
+    "valid_blocks": [
+      997
+    ]
+  },
+  {
+    "id": 46,
+    "name": "minecraft:test_instance_block",
+    "only_op_can_set_nbt": false,
+    "is_nameable": false,
+    "valid_blocks": [
+      998
+    ]
+  },
+  {
+    "id": 47,
+    "name": "minecraft:copper_golem_statue",
+    "only_op_can_set_nbt": false,
+    "is_nameable": false,
+    "valid_blocks": [
+      1206,
+      1207,
+      1208,
+      1209,
+      1210,
+      1211,
+      1212,
+      1213
+    ]
+  },
+  {
+    "id": 48,
+    "name": "minecraft:potent_sulfur",
+    "only_op_can_set_nbt": false,
+    "is_nameable": false,
+    "valid_blocks": [
+      1089
+    ]
+  }
+]

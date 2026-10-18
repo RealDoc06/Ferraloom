@@ -39,7 +39,7 @@ impl Entity for TestCow {
             level.set_block_state(PLACED, Block::STONE.default_state())?;
             level.schedule_block_tick(PLACED, Block::STONE, 1, TickPriority::Normal)?;
             // Re-reading sees the callback's mutation, with no restore step.
-            assert_eq!(level.entity::<Cow>(entity)?.as_living().health, 9.0);
+            assert_eq!(level.entity::<Cow>(entity)?.as_living().health(), 9.0);
         }
         Ok(())
     }
@@ -87,7 +87,10 @@ static TEST_BEHAVIORS: Behaviors = Behaviors::EMPTY
     .with_block(Block::DIRT, &TurnToAir);
 
 fn region() -> Level {
-    let mut region = Level::new(Region::new(&TEST_BEHAVIORS));
+    let mut region = Level::new(
+        Region::new(&TEST_BEHAVIORS),
+        crate::level::LevelContext::fixture(0, 63),
+    );
     for pos in [ChunkPos::containing(PLACED), ChunkPos::ZERO] {
         region
             .add_chunk(LevelChunk::new(
@@ -106,7 +109,22 @@ fn region() -> Level {
             .update_entity_chunk_status(pos, crate::level::entity::Visibility::Ticking)
             .unwrap();
         region.set_chunk_entity_ticking(pos, true).unwrap();
+        region.set_chunk_block_ticking(pos, true).unwrap();
+        region
+            .set_chunk_loading_status(
+                pos,
+                crate::level::distance_manager::FullChunkStatus::EntityTicking,
+                true,
+            )
+            .unwrap();
     }
+    for request in region.take_entity_storage_requests() {
+        let crate::level::entity::EntityStorageRequest::Load { id, .. } = request else {
+            panic!("new fixture only requests empty entity loads")
+        };
+        region.complete_entity_chunk_load(id, Ok(None)).unwrap();
+    }
+    region.process_pending_entity_loads().unwrap();
     region
 }
 
@@ -123,11 +141,11 @@ fn entity_tick_reenters_attacker_and_places_a_scheduled_block() {
         .unwrap();
     region.tick_entities().unwrap();
     assert_eq!(
-        region.entity::<Cow>(ATTACKER).unwrap().as_living().health,
+        region.entity::<Cow>(ATTACKER).unwrap().as_living().health(),
         9.0
     );
     assert_eq!(
-        region.entity::<Cow>(TARGET).unwrap().as_living().health,
+        region.entity::<Cow>(TARGET).unwrap().as_living().health(),
         6.0
     );
     assert_eq!(
@@ -168,7 +186,7 @@ fn living_damage_cooldown_applies_only_the_increase() {
             .unwrap()
     );
     assert_eq!(
-        region.entity::<Cow>(TARGET).unwrap().as_living().health,
+        region.entity::<Cow>(TARGET).unwrap().as_living().health(),
         5.0
     );
     assert_eq!(

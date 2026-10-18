@@ -3,33 +3,47 @@ use crate::level::{Level, LevelError, redstone::Orientation};
 use ferraloom_data::{Block, BlockState, FluidState};
 use ferraloom_util::{BlockPos, Direction};
 mod clone_item;
+pub mod containers;
 pub mod dispatch;
+pub mod drops;
+pub mod entity;
+pub mod interaction;
+pub use interaction::{InteractionResult, UseContext};
+mod families;
 pub mod flags;
 pub mod fluid;
 mod foundational;
 mod placement;
-pub use placement::DirectionalPlaceContext;
+pub mod plants;
+pub mod redstone;
+pub use placement::{BlockPlaceContext, DirectionalPlaceContext, PlacementHit, UseOnContext};
+pub use plants::multiface_spreader;
 mod shapes;
 pub use shapes::BlockCollisionContext;
 mod unsupported;
+mod worldgen;
 pub use flags::{UPDATE_LIMIT, UpdateFlags};
 pub(crate) use unsupported::UnportedCalls;
 pub use unsupported::{BlockMethod, UnportedBehavior, UnportedBehaviorStats, UnportedOperation};
+pub use worldgen::GameWorldgenBlockBehavior;
 
-/// Port of the shared LevelReader/LevelAccessor call surface. The live arm
-/// borrows the concrete simulation facade, including during reentrant callbacks.
-pub enum LevelAccessRef<'a> {
-    Server(&'a mut Level),
-    // The Worldgen arm and adapter are added when worldgen slice 2 lands.
+/// Shared LevelReader/LevelAccessor surface. The borrow of the region is
+/// independent of the lifetime of its generation chunk neighborhood.
+pub enum LevelAccessRef<'call, 'chunks> {
+    Server(&'call mut Level),
+    Worldgen(&'call mut ferraloom_worldgen::region::WorldGenRegion<'chunks>),
 }
-/// Read-only LevelReader view used by shared survival and shape queries.
-pub enum LevelReaderRef<'a> {
-    Server(&'a Level),
+pub enum LevelReaderRef<'call, 'chunks> {
+    Server(&'call Level),
+    Worldgen(&'call ferraloom_worldgen::region::WorldGenRegion<'chunks>),
 }
-impl LevelReaderRef<'_> {
+impl LevelReaderRef<'_, '_> {
     pub fn get_block_state(&self, pos: BlockPos) -> Result<BlockState, LevelError> {
         match self {
             Self::Server(level) => level.get_block_state(pos),
+            Self::Worldgen(region) => region
+                .block([pos.x, pos.y, pos.z])
+                .map_err(|_| LevelError::MissingChunk(ferraloom_util::ChunkPos::containing(pos))),
         }
     }
     pub fn fluid_tags(
@@ -38,17 +52,33 @@ impl LevelReaderRef<'_> {
     {
         match self {
             Self::Server(level) => level.fluid_tags(),
+            Self::Worldgen(region) => region
+                .fluid_tags()
+                .map_err(|_| LevelError::MissingFluidTags),
         }
     }
     pub fn block_tags(&self) -> Result<&ferraloom_data::datapack::TagSet<Block>, LevelError> {
         match self {
             Self::Server(level) => level.block_tags(),
+            Self::Worldgen(region) => region
+                .block_tags()
+                .map_err(|_| LevelError::MissingBlockTags),
+        }
+    }
+    pub(crate) fn required_behavior(
+        &self,
+        block: Block,
+        method: BlockMethod,
+    ) -> Result<&'static dyn BlockBehavior, LevelError> {
+        match self {
+            Self::Server(level) => level.required_block_behavior(block, method),
+            Self::Worldgen(_) => dispatch::registered_behavior(block, method)
+                .ok_or(LevelError::UnsupportedBlockMethod(block, method)),
         }
     }
 }
-impl LevelAccessRef<'_> {
-    /// Port of Block#updateFromNeighbourShapes. This query returns a required
-    /// placement state, so unsupported calls fail even under Warn policy.
+impl<'chunks> LevelAccessRef<'_, 'chunks> {
+    /// Port of Block#updateFromNeighbourShapes; every result is required.
     pub fn update_from_neighbor_shapes(
         &mut self,
         mut state: BlockState,
@@ -57,25 +87,21 @@ impl LevelAccessRef<'_> {
         for direction in crate::level::redstone::UPDATE_SHAPE_ORDER {
             let neighbor_pos = pos.relative(direction, 1);
             let neighbor = self.get_block_state(neighbor_pos)?;
-            let behavior = match self {
-                Self::Server(level) => level.required_block_behavior(
-                    state.block(),
-                    BlockMethod::UpdateFromNeighbourShapes,
-                )?,
-            };
+            let behavior = self
+                .as_reader()
+                .required_behavior(state.block(), BlockMethod::UpdateFromNeighbourShapes)?;
             state = behavior.update_shape(state, pos, direction, neighbor_pos, neighbor, self)?;
         }
         Ok(state)
     }
-    pub fn as_reader(&self) -> LevelReaderRef<'_> {
+    pub fn as_reader(&self) -> LevelReaderRef<'_, 'chunks> {
         match self {
             Self::Server(level) => LevelReaderRef::Server(level),
+            Self::Worldgen(region) => LevelReaderRef::Worldgen(region),
         }
     }
     pub fn get_block_state(&self, pos: BlockPos) -> Result<BlockState, LevelError> {
-        match self {
-            Self::Server(level) => level.get_block_state(pos),
-        }
+        self.as_reader().get_block_state(pos)
     }
     pub fn set_block(
         &mut self,
@@ -85,6 +111,17 @@ impl LevelAccessRef<'_> {
     ) -> Result<bool, LevelError> {
         match self {
             Self::Server(level) => level.set_block(pos, state, flags, UPDATE_LIMIT),
+            Self::Worldgen(region) => region
+                .set_block([pos.x, pos.y, pos.z], state, flags.0)
+                .map_err(|_| LevelError::WorldgenMutationFailed(pos)),
+        }
+    }
+    pub fn destroy_block(&mut self, pos: BlockPos, drop: bool) -> Result<bool, LevelError> {
+        match self {
+            Self::Server(level) => level.destroy_block(pos, drop, UPDATE_LIMIT),
+            Self::Worldgen(region) => region
+                .destroy_block([pos.x, pos.y, pos.z], drop)
+                .map_err(|_| LevelError::WorldgenMutationFailed(pos)),
         }
     }
     pub fn schedule_block_tick(
@@ -95,6 +132,13 @@ impl LevelAccessRef<'_> {
     ) -> Result<(), LevelError> {
         match self {
             Self::Server(level) => level.schedule_block_tick_after(pos, block, delay),
+            Self::Worldgen(region) => region
+                .schedule_block_tick(ferraloom_worldgen::region::SavedTick {
+                    position: [pos.x, pos.y, pos.z],
+                    kind: block,
+                    priority: 0,
+                })
+                .map_err(|_| LevelError::MissingChunk(ferraloom_util::ChunkPos::containing(pos))),
         }
     }
     pub fn schedule_fluid_tick(
@@ -105,11 +149,21 @@ impl LevelAccessRef<'_> {
     ) -> Result<(), LevelError> {
         match self {
             Self::Server(level) => level.schedule_fluid_tick_after(pos, fluid, delay),
+            Self::Worldgen(region) => region
+                .schedule_fluid_tick(ferraloom_worldgen::region::SavedTick {
+                    position: [pos.x, pos.y, pos.z],
+                    kind: fluid,
+                    priority: 0,
+                })
+                .map_err(|_| LevelError::MissingChunk(ferraloom_util::ChunkPos::containing(pos))),
         }
     }
-    pub fn fast_lava(&self) -> bool {
+    pub fn fast_lava(&self) -> Result<bool, LevelError> {
         match self {
-            Self::Server(level) => level.rules().fast_lava,
+            Self::Server(level) => level.fast_lava(),
+            Self::Worldgen(region) => region
+                .fast_lava()
+                .map_err(|_| LevelError::UnsupportedWorldgenEnvironment),
         }
     }
 }
@@ -117,12 +171,206 @@ impl LevelAccessRef<'_> {
 /// Port of BlockBehaviour's virtual methods. Defaults are vanilla base behavior;
 /// only classes explicitly registered by dispatch may inherit these defaults.
 pub trait BlockBehavior: Sync {
+    /// Port of BlockBehaviour#getMenuProvider's absent base provider.
+    fn get_menu_provider(
+        &self,
+        _state: BlockState,
+        _pos: BlockPos,
+        _level: &Level,
+    ) -> Result<Option<Box<dyn crate::inventory::MenuProvider>>, LevelError> {
+        Ok(None)
+    }
+    /// Port of BlockBehaviour#getDrops. Subclass ownership is dispatched separately.
+    fn get_drops(
+        &self,
+        state: BlockState,
+        context: drops::BlockLootContext,
+        level: &mut Level,
+    ) -> Result<Vec<ferraloom_protocol::component::ItemStack>, LevelError> {
+        drops::get_base_drops(state, context, level)
+    }
+    /// Port of BlockBehaviour#spawnAfterBreak's base no-op.
+    fn spawn_after_break(
+        &self,
+        _state: BlockState,
+        _pos: BlockPos,
+        _tool: &ferraloom_protocol::component::ItemStack,
+        _drop_experience: bool,
+        _level: &mut Level,
+    ) -> Result<(), LevelError> {
+        Ok(())
+    }
+    /// Port of Block#setPlacedBy's inherited no-op.
+    fn set_placed_by(
+        &self,
+        _state: BlockState,
+        _pos: BlockPos,
+        _by: Option<crate::entity::EntityRef>,
+        _stack: &ferraloom_protocol::component::ItemStack,
+        _level: &mut Level,
+    ) -> Result<(), LevelError> {
+        Ok(())
+    }
+    /// Port of Block#spawnDestroyByEntityParticles and ServerLevel#levelEvent.
+    fn spawn_destroy_by_entity_particles(
+        &self,
+        state: BlockState,
+        pos: BlockPos,
+        source: Option<crate::entity::EntityRef>,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        use ferraloom_protocol::play::clientbound as cb;
+        let point = ferraloom_util::Vec3::new(f64::from(pos.x), f64::from(pos.y), f64::from(pos.z));
+        let mut recipients = Vec::new();
+        for entity in level.all_entities() {
+            if Some(entity) != source
+                && let crate::entity::EntityState::Player(player) = level.entity_state(entity)?
+                && player.position.distance_to_sqr(point) < 64.0 * 64.0
+            {
+                recipients.push(entity);
+            }
+        }
+        level.emit(crate::level::effects::LevelEffect::PlayerPacket {
+            recipients,
+            packet: Box::new(cb::Packet::LevelEvent(cb::LevelEvent {
+                event_type: 2001,
+                pos,
+                data: i32::from(state.id()),
+                global_event: false,
+            })),
+        });
+        Ok(())
+    }
+    /// Port of Block#playerWillDestroy. The guarded-piglin AI side effect
+    /// remains a required unported call until PiglinAi is implemented.
+    fn player_will_destroy(
+        &self,
+        state: BlockState,
+        pos: BlockPos,
+        player: crate::entity::EntityRef,
+        level: &mut Level,
+    ) -> Result<BlockState, LevelError> {
+        level
+            .required_block_behavior(state.block(), BlockMethod::SpawnDestroyByEntityParticles)?
+            .spawn_destroy_by_entity_particles(state, pos, Some(player), level)?;
+        if level.block_tags()?.contains_key(
+            ferraloom_data::tags::BlockTags::GUARDED_BY_PIGLINS,
+            state.block(),
+        ) {
+            return Err(LevelError::UnsupportedEntity(
+                ferraloom_data::EntityType::PIGLIN,
+            ));
+        }
+        level.game_event(
+            ferraloom_data::registries::game_event::Id::BLOCK_DESTROY,
+            ferraloom_util::Vec3::new(
+                f64::from(pos.x) + 0.5,
+                f64::from(pos.y) + 0.5,
+                f64::from(pos.z) + 0.5,
+            ),
+            Some(player),
+            Some(state),
+        );
+        Ok(state)
+    }
+    /// Port of Block#getStateForPlacement's inherited implementation.
+    fn get_state_for_placement(
+        &self,
+        block: Block,
+        _context: &BlockPlaceContext<'_>,
+        _level: &mut LevelAccessRef<'_, '_>,
+    ) -> Result<Option<BlockState>, LevelError> {
+        Ok(Some(block.default_state()))
+    }
+    /// Port of BlockBehaviour#isSignalSource.
+    fn is_signal_source(&self, _state: BlockState) -> bool {
+        false
+    }
+    /// Port of BlockBehaviour#hasAnalogOutputSignal.
+    fn has_analog_output_signal(&self, _state: BlockState) -> bool {
+        false
+    }
+    /// Port of BlockBehaviour#ownSignal.
+    fn own_signal(
+        &self,
+        _state: BlockState,
+        _pos: BlockPos,
+        _level: &LevelReaderRef<'_, '_>,
+    ) -> Result<i32, LevelError> {
+        Ok(0)
+    }
+    /// Port of BlockBehaviour#getSignal. Re-dispatch ownSignal on the concrete
+    /// block: inherited getSignal still observes a subclass's ownSignal.
+    fn signal(
+        &self,
+        state: BlockState,
+        pos: BlockPos,
+        _direction: Direction,
+        level: &LevelReaderRef<'_, '_>,
+    ) -> Result<i32, LevelError> {
+        level
+            .required_behavior(state.block(), BlockMethod::OwnSignal)?
+            .own_signal(state, pos, level)
+    }
+    /// Port of BlockBehaviour#getDirectSignal.
+    fn direct_signal(
+        &self,
+        _state: BlockState,
+        _pos: BlockPos,
+        _direction: Direction,
+        _level: &LevelReaderRef<'_, '_>,
+    ) -> Result<i32, LevelError> {
+        Ok(0)
+    }
+    /// Port of BlockBehaviour#shouldRedstoneWireConnectTo.
+    fn should_redstone_wire_connect_to(
+        &self,
+        state: BlockState,
+        _pos: BlockPos,
+        direction: Option<Direction>,
+        level: &LevelReaderRef<'_, '_>,
+    ) -> Result<bool, LevelError> {
+        let source = level
+            .required_behavior(state.block(), BlockMethod::IsSignalSource)?
+            .is_signal_source(state);
+        Ok(source && direction.is_some())
+    }
+    /// Port of BlockBehaviour#getAnalogOutputSignal.
+    fn analog_output_signal(
+        &self,
+        _state: BlockState,
+        _pos: BlockPos,
+        _direction: Direction,
+        _level: &mut Level,
+    ) -> Result<i32, LevelError> {
+        Ok(0)
+    }
+    /// Port of BlockBehaviour#useWithoutItem's base pass-through.
+    fn use_without_item(
+        &self,
+        _state: BlockState,
+        _pos: BlockPos,
+        _context: &UseContext,
+        _level: &mut Level,
+    ) -> Result<InteractionResult, LevelError> {
+        Ok(InteractionResult::Pass)
+    }
+    /// Port of BlockBehaviour#useItemOn's base empty-hand fallback.
+    fn use_item_on(
+        &self,
+        _state: BlockState,
+        _pos: BlockPos,
+        _context: &UseContext,
+        _level: &mut Level,
+    ) -> Result<InteractionResult, LevelError> {
+        Ok(InteractionResult::TryWithEmptyHand)
+    }
     /// Port of BlockBehaviour#canBeReplaced(BlockState, BlockPlaceContext).
     fn can_be_replaced(
         &self,
         state: BlockState,
-        context: &DirectionalPlaceContext<'_>,
-        _level: &LevelReaderRef<'_>,
+        context: &BlockPlaceContext<'_>,
+        _level: &LevelReaderRef<'_, '_>,
     ) -> Result<bool, LevelError> {
         Ok(state.data().replaceable
             && (context.item_in_hand().is_empty()
@@ -139,7 +387,7 @@ pub trait BlockBehavior: Sync {
         state: BlockState,
         _pos: BlockPos,
         _include_data: bool,
-        _level: &LevelReaderRef<'_>,
+        _level: &LevelReaderRef<'_, '_>,
     ) -> Result<ferraloom_protocol::component::ItemStack, LevelError> {
         Ok(ferraloom_protocol::component::ItemStack::new(
             state.block().as_item(),
@@ -153,7 +401,7 @@ pub trait BlockBehavior: Sync {
         _state: BlockState,
         _pos: BlockPos,
         _entity: crate::entity::EntityRef,
-        _level: &LevelReaderRef<'_>,
+        _level: &LevelReaderRef<'_, '_>,
     ) -> Result<ferraloom_util::VoxelShape, LevelError> {
         Ok(ferraloom_util::shapes::block())
     }
@@ -165,7 +413,7 @@ pub trait BlockBehavior: Sync {
         state: BlockState,
         pos: BlockPos,
         _context: &BlockCollisionContext<'_>,
-        level: &LevelReaderRef<'_>,
+        level: &LevelReaderRef<'_, '_>,
     ) -> Result<ferraloom_util::VoxelShape, LevelError> {
         if state.block().has_collision() {
             level.shape(state, pos)
@@ -179,7 +427,7 @@ pub trait BlockBehavior: Sync {
         &self,
         _state: BlockState,
         _pos: BlockPos,
-        _level: &LevelReaderRef<'_>,
+        _level: &LevelReaderRef<'_, '_>,
     ) -> Result<ferraloom_util::VoxelShape, LevelError> {
         Ok(ferraloom_util::shapes::block())
     }
@@ -187,7 +435,7 @@ pub trait BlockBehavior: Sync {
         &self,
         state: BlockState,
         pos: BlockPos,
-        level: &LevelReaderRef<'_>,
+        level: &LevelReaderRef<'_, '_>,
     ) -> Result<bool, LevelError> {
         Ok(ferraloom_util::shapes::is_shape_full_block(
             &level.collision_shape_without_context(state, pos)?,
@@ -197,9 +445,19 @@ pub trait BlockBehavior: Sync {
         &self,
         state: BlockState,
         pos: BlockPos,
-        level: &LevelReaderRef<'_>,
+        level: &LevelReaderRef<'_, '_>,
     ) -> Result<ferraloom_util::VoxelShape, LevelError> {
         level.collision_shape(state, pos, &BlockCollisionContext::empty())
+    }
+    /// Port of Block#handlePrecipitation's inherited no-op.
+    fn handle_precipitation(
+        &self,
+        _state: BlockState,
+        _pos: BlockPos,
+        _precipitation: ferraloom_worldgen::biome_manager::Precipitation,
+        _level: &mut Level,
+    ) -> Result<(), LevelError> {
+        Ok(())
     }
     fn on_place(
         &self,
@@ -238,7 +496,7 @@ pub trait BlockBehavior: Sync {
         _direction: Direction,
         _neighbor_pos: BlockPos,
         _neighbor: BlockState,
-        _level: &mut LevelAccessRef<'_>,
+        _level: &mut LevelAccessRef<'_, '_>,
     ) -> Result<BlockState, LevelError> {
         Ok(state)
     }
@@ -256,7 +514,7 @@ pub trait BlockBehavior: Sync {
         &self,
         _state: BlockState,
         _pos: BlockPos,
-        _level: &LevelReaderRef<'_>,
+        _level: &LevelReaderRef<'_, '_>,
     ) -> Result<bool, LevelError> {
         Ok(true)
     }
@@ -339,7 +597,7 @@ pub trait BlockBehavior: Sync {
         _state: BlockState,
         _pos: BlockPos,
         _fluid: FluidState,
-        _level: &mut LevelAccessRef<'_>,
+        _level: &mut LevelAccessRef<'_, '_>,
     ) -> Result<bool, LevelError> {
         Ok(false)
     }
@@ -354,7 +612,7 @@ pub trait BlockBehavior: Sync {
         &self,
         _state: BlockState,
         _pos: BlockPos,
-        _level: &mut LevelAccessRef<'_>,
+        _level: &mut LevelAccessRef<'_, '_>,
     ) -> Result<Option<ferraloom_data::Item>, LevelError> {
         Ok(None)
     }
@@ -365,3 +623,18 @@ pub trait BlockBehavior: Sync {
 pub struct BaseBlock;
 impl BlockBehavior for BaseBlock {}
 pub static BASE_BLOCK: BaseBlock = BaseBlock;
+
+/// Port of BaseFireBlock#spawnDestroyByEntityParticles's empty override.
+struct NoDestroyParticles;
+impl BlockBehavior for NoDestroyParticles {
+    fn spawn_destroy_by_entity_particles(
+        &self,
+        _state: BlockState,
+        _pos: BlockPos,
+        _source: Option<crate::entity::EntityRef>,
+        _level: &mut Level,
+    ) -> Result<(), LevelError> {
+        Ok(())
+    }
+}
+static NO_DESTROY_PARTICLES: NoDestroyParticles = NoDestroyParticles;

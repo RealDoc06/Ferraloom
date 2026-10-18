@@ -12,7 +12,8 @@ pub struct DroppedStack {
 pub struct MenuContext<'a> {
     pub player: PlayerContainer<'a>,
     pub external: &'a mut [&'a mut dyn Container],
-    pub creative: bool,
+    pub is_creative: bool,
+    pub infinite_materials: bool,
     pub can_drop: bool,
     pub drops: Vec<DroppedStack>,
 }
@@ -22,13 +23,22 @@ impl<'a> MenuContext<'a> {
         equipment: &'a mut crate::entity::player::equipment::EntityEquipment,
         creative: bool,
     ) -> Self {
+        Self::player_with_abilities(inventory, equipment, creative, creative)
+    }
+    pub fn player_with_abilities(
+        inventory: &'a mut crate::entity::player::inventory::Inventory,
+        equipment: &'a mut crate::entity::player::equipment::EntityEquipment,
+        is_creative: bool,
+        infinite_materials: bool,
+    ) -> Self {
         Self {
             player: PlayerContainer {
                 inventory,
                 equipment,
             },
             external: &mut [],
-            creative,
+            is_creative,
+            infinite_materials,
             can_drop: true,
             drops: Vec::new(),
         }
@@ -47,23 +57,26 @@ impl<'a> MenuContext<'a> {
 /// listener snapshots are copied. Clicks themselves never increment the state ID.
 #[derive(Debug)]
 pub struct AbstractContainerMenu {
+    pub(crate) generation: u64,
     pub kind: MenuKind,
     pub container_id: i32,
     pub slots: Vec<Slot>,
     pub local: Vec<MenuContainer>,
+    pub block_entities: Vec<crate::block::entity::BlockEntityRef>,
     pub data: Vec<i32>,
     pub carried: ItemStack,
+    pub(crate) carried_generations: StackGenerations,
     state_id: i32,
     quickcraft_type: i32,
     quickcraft_status: i32,
     quickcraft_slots: Vec<usize>,
-    last_slots: Vec<ItemStack>,
-    last_data: Vec<i32>,
-    remote_slots: Vec<RemoteSlot>,
-    remote_carried: RemoteSlot,
-    remote_data: Vec<i32>,
-    synchronized: bool,
-    suppressed: bool,
+    pub(super) last_slots: Vec<ItemStack>,
+    pub(super) last_data: Vec<i32>,
+    pub(super) remote_slots: Vec<RemoteSlot>,
+    pub(super) remote_carried: RemoteSlot,
+    pub(super) remote_data: Vec<i32>,
+    pub(super) synchronized: bool,
+    pub(super) suppressed: bool,
     pub changes: Vec<ContainerChange>,
     pub updates: Vec<ContainerUpdate>,
     pub(crate) crafting_recipe_used: Option<ferraloom_data::datapack::Identifier>,
@@ -73,12 +86,15 @@ pub struct AbstractContainerMenu {
 impl AbstractContainerMenu {
     pub(crate) fn empty(kind: MenuKind, container_id: i32) -> Self {
         Self {
+            generation: 0,
             kind,
             container_id,
             slots: Vec::new(),
             local: Vec::new(),
+            block_entities: Vec::new(),
             data: Vec::new(),
             carried: ItemStack::default(),
+            carried_generations: StackGenerations::new(1),
             state_id: 0,
             quickcraft_type: -1,
             quickcraft_status: 0,
@@ -96,6 +112,18 @@ impl AbstractContainerMenu {
             crafting_remove_count: 0,
             placing_recipe: false,
         }
+    }
+    /// Port of AbstractContainerMenu#setCarried. Count edits use the existing
+    /// receiver; replacing it detaches any operation-rooted cursor stack.
+    pub fn set_carried(&mut self, stack: ItemStack) {
+        self.carried_generations
+            .replace(0, &mut self.carried, stack);
+    }
+    pub(crate) fn take_carried_unrooted(&mut self) -> ItemStack {
+        self.carried_generations
+            .replace(0, &mut self.carried, ItemStack::default())
+            .into_owned()
+            .expect("live cursor removal uses StackRef")
     }
     pub(crate) fn add_slot(&mut self, mut slot: Slot) {
         slot.index = self.slots.len();
@@ -123,7 +151,7 @@ impl AbstractContainerMenu {
         for (i, stack) in items.iter().enumerate() {
             self.set_item(ctx, i, stack.clone());
         }
-        self.carried = carried;
+        self.set_carried(carried);
         self.state_id = state_id;
     }
     pub fn set_item_with_state(
@@ -202,88 +230,33 @@ impl AbstractContainerMenu {
     }
     /// Port of ServerPlayer's ContainerSynchronizer installation.
     pub fn set_synchronizer(&mut self, ctx: &MenuContext<'_>) {
-        self.synchronized = true;
-        self.remote_carried = RemoteSlot::Unknown;
-        self.remote_slots.fill(RemoteSlot::Unknown);
-        self.send_all_data_to_remote(ctx);
+        super::operation::set_menu_synchronizer(&mut super::operation::PureMenuSynchronization {
+            menu: self,
+            context: ctx,
+        })
+        .expect("in-memory menu synchronization");
     }
     pub fn send_all_data_to_remote(&mut self, ctx: &MenuContext<'_>) {
-        let items = self.items(ctx);
-        for (slot, stack) in self.remote_slots.iter_mut().zip(&items) {
-            slot.force(stack);
-        }
-        self.remote_carried.force(&self.carried);
-        self.remote_data.clone_from(&self.data);
-        if self.synchronized {
-            let state_id = self.increment_state_id();
-            self.updates.push(ContainerUpdate::Initial {
-                container_id: self.container_id,
-                state_id,
-                items,
-                carried: self.carried.clone(),
-                data: self.data.clone(),
-            });
-        }
+        super::operation::send_all_menu_data(&mut super::operation::PureMenuSynchronization {
+            menu: self,
+            context: ctx,
+        })
+        .expect("in-memory menu synchronization");
     }
     pub fn broadcast_changes(&mut self, ctx: &MenuContext<'_>) -> Result<()> {
-        self.trigger_listeners(ctx);
-        if self.suppressed {
-            return Ok(());
-        }
-        for i in 0..self.slots.len() {
-            let current = self.get_item(ctx, i);
-            if !self.remote_slots[i].matches(&current)? {
-                self.remote_slots[i].force(&current);
-                if self.synchronized {
-                    let state_id = self.increment_state_id();
-                    self.updates.push(ContainerUpdate::Slot {
-                        container_id: self.container_id,
-                        state_id,
-                        slot: i,
-                        stack: current,
-                    });
-                }
-            }
-        }
-        if !self.remote_carried.matches(&self.carried)? {
-            self.remote_carried.force(&self.carried);
-            if self.synchronized {
-                self.updates
-                    .push(ContainerUpdate::Carried(self.carried.clone()));
-            }
-        }
-        for i in 0..self.data.len() {
-            if self.remote_data[i] != self.data[i] {
-                self.remote_data[i] = self.data[i];
-                if self.synchronized {
-                    self.updates.push(ContainerUpdate::Data {
-                        container_id: self.container_id,
-                        id: i,
-                        value: self.data[i],
-                    });
-                }
-            }
-        }
-        Ok(())
-    }
-    fn trigger_listeners(&mut self, ctx: &MenuContext<'_>) {
-        for i in 0..self.slots.len() {
-            let current = self.get_item(ctx, i);
-            if !matches(&self.last_slots[i], &current) {
-                self.last_slots[i] = current.clone();
-                self.changes.push(ContainerChange::Slot(i, current));
-            }
-        }
-        for i in 0..self.data.len() {
-            if self.last_data[i] != self.data[i] {
-                self.last_data[i] = self.data[i];
-                self.changes.push(ContainerChange::Data(i, self.data[i]));
-            }
-        }
+        super::operation::broadcast_menu_changes(&mut super::operation::PureMenuSynchronization {
+            menu: self,
+            context: ctx,
+        })
     }
     pub fn broadcast_full_state(&mut self, ctx: &MenuContext<'_>) {
-        self.trigger_listeners(ctx);
-        self.send_all_data_to_remote(ctx);
+        super::operation::broadcast_menu_full_state(
+            &mut super::operation::PureMenuSynchronization {
+                menu: self,
+                context: ctx,
+            },
+        )
+        .expect("in-memory menu synchronization");
     }
     pub fn suppress_remote_updates(&mut self) {
         self.suppressed = true;
@@ -357,10 +330,10 @@ impl AbstractContainerMenu {
         hooks: &mut dyn MenuHooks,
     ) -> Result<Option<ItemStack>> {
         let stack = self.get_item(ctx, slot.index);
-        if !slot.may_pickup(&stack, ctx.creative, hooks)?
+        if !slot.may_pickup(&stack, ctx.is_creative, hooks)?
             || (!slot.allow_modification(
                 self.container(ctx, slot.container),
-                ctx.creative,
+                ctx.is_creative,
                 hooks,
             )? && max_amount < count(&stack))
         {
@@ -457,50 +430,18 @@ impl AbstractContainerMenu {
         backwards: bool,
         hooks: &mut dyn MenuHooks,
     ) -> Result<bool> {
-        let indices: Vec<_> = if backwards {
-            (start..end).rev().collect()
-        } else {
-            (start..end).collect()
-        };
-        let mut changed = false;
-        if is_stackable(stack) {
-            for &i in &indices {
-                if stack.is_empty() {
-                    break;
-                }
-                let mut target = self.get_item(ctx, i);
-                if !target.is_empty() && is_same_item_same_components(stack, &target) {
-                    let slot = &self.slots[i];
-                    let max = slot.max_stack_size(self.container(ctx, slot.container), &target);
-                    let total = count(&target) + count(stack);
-                    if total <= max {
-                        set_count(stack, 0);
-                        set_count(&mut target, total);
-                        self.set_item_live(ctx, i, target, hooks)?;
-                        changed = true;
-                    } else if count(&target) < max {
-                        let left = count(stack) - (max - count(&target));
-                        set_count(stack, left);
-                        set_count(&mut target, max);
-                        self.set_item_live(ctx, i, target, hooks)?;
-                        changed = true;
-                    }
-                }
-            }
-        }
-        if !stack.is_empty() {
-            for i in indices {
-                let slot = &self.slots[i];
-                if self.get_item(ctx, i).is_empty() && slot.may_place(stack, hooks)? {
-                    let max = slot.max_stack_size(self.container(ctx, slot.container), stack);
-                    let n = count(stack).min(max);
-                    self.set_item_live(ctx, i, split(stack, n), hooks)?;
-                    changed = true;
-                    break;
-                }
-            }
-        }
-        Ok(changed)
+        super::transfer::move_menu_item_stack_to(
+            &mut super::transfer::PureMenuTransfer {
+                menu: self,
+                context: ctx,
+                source: stack,
+            },
+            super::transfer::PureStackRef::Source,
+            start,
+            end,
+            backwards,
+            hooks,
+        )
     }
     /// Port of AbstractContainerMenu#clicked/doClick for all seven ContainerInput values.
     pub fn clicked(
@@ -545,7 +486,7 @@ impl AbstractContainerMenu {
                 if slot_index == -999 {
                     if !self.carried.is_empty() {
                         let dropped = if button == 0 {
-                            std::mem::take(&mut self.carried)
+                            self.take_carried_unrooted()
                         } else {
                             split(&mut self.carried, 1)
                         };
@@ -555,7 +496,7 @@ impl AbstractContainerMenu {
                     let slot = self.slot(slot_index)?;
                     let clicked = self.get_item(ctx, slot.index);
                     if input == ContainerInput::QuickMove {
-                        if slot.may_pickup(&clicked, ctx.creative, hooks)? {
+                        if slot.may_pickup(&clicked, ctx.is_creative, hooks)? {
                             let mut moved = self.quick_move_stack(ctx, slot.index, hooks)?;
                             while !moved.is_empty()
                                 && same_item(&self.get_item(ctx, slot.index), &moved)
@@ -571,7 +512,9 @@ impl AbstractContainerMenu {
             ContainerInput::Swap if (0..9).contains(&button) || button == 40 => {
                 self.swap(ctx, slot_index, button as usize, hooks)?
             }
-            ContainerInput::Clone if ctx.creative && self.carried.is_empty() && slot_index >= 0 => {
+            ContainerInput::Clone
+                if ctx.infinite_materials && self.carried.is_empty() && slot_index >= 0 =>
+            {
                 let slot = self.slot(slot_index)?;
                 if !self.get_item(ctx, slot.index).is_empty() {
                     let cloned = slot.safe_clone(self.container(ctx, slot.container));
@@ -580,7 +523,7 @@ impl AbstractContainerMenu {
                     {
                         crafting.item_crafted(self, ctx, &cloned, None)?;
                     }
-                    self.carried = cloned;
+                    self.set_carried(cloned);
                 }
             }
             ContainerInput::Throw if self.carried.is_empty() && slot_index >= 0 => {
@@ -638,9 +581,10 @@ impl AbstractContainerMenu {
             if !self.carried.is_empty() {
                 let amount = if button == 0 { count(&self.carried) } else { 1 };
                 let carried = self.carried.clone();
-                self.carried = self.safe_insert_live(ctx, &slot, carried, amount, hooks)?;
+                let remaining = self.safe_insert_live(ctx, &slot, carried, amount, hooks)?;
+                self.set_carried(remaining);
             }
-        } else if slot.may_pickup(&clicked, ctx.creative, hooks)? {
+        } else if slot.may_pickup(&clicked, ctx.is_creative, hooks)? {
             if self.carried.is_empty() {
                 let amount = if button == 0 {
                     count(&clicked)
@@ -648,18 +592,23 @@ impl AbstractContainerMenu {
                     (count(&clicked) + 1) / 2
                 };
                 if let Some(taken) = self.try_remove_live(ctx, &slot, amount, i32::MAX, hooks)? {
-                    self.carried = taken.clone();
+                    self.set_carried(taken.clone());
                     self.on_take(ctx, slot.index, &taken, 0, hooks)?;
                 }
             } else if slot.may_place(&self.carried, hooks)? {
                 if is_same_item_same_components(&clicked, &self.carried) {
                     let amount = if button == 0 { count(&self.carried) } else { 1 };
                     let carried = self.carried.clone();
-                    self.carried = self.safe_insert_live(ctx, &slot, carried, amount, hooks)?;
+                    let remaining = self.safe_insert_live(ctx, &slot, carried, amount, hooks)?;
+                    self.set_carried(remaining);
                 } else if count(&self.carried)
                     <= slot.max_stack_size(self.container(ctx, slot.container), &self.carried)
                 {
-                    let carried = std::mem::replace(&mut self.carried, clicked);
+                    let carried = self
+                        .carried_generations
+                        .replace(0, &mut self.carried, clicked)
+                        .into_owned()
+                        .expect("live cursor replacement uses StackRef");
                     self.set_item_live(ctx, slot.index, carried, hooks)?;
                 }
             } else if is_same_item_same_components(&clicked, &self.carried) {
@@ -693,16 +642,18 @@ impl AbstractContainerMenu {
             // Java's source and target references alias here. Splitting an
             // oversized stack leaves the old target equal to the overflow,
             // which Inventory.add reinserts after the slot receives its limit.
-            if slot.may_pickup(&source, ctx.creative, hooks)? && slot.may_place(&source, hooks)? {
+            if slot.may_pickup(&source, ctx.is_creative, hooks)?
+                && slot.may_place(&source, hooks)?
+            {
                 let max = slot.max_stack_size(self.container(ctx, slot.container), &source);
                 if count(&source) > max {
                     self.set_item_live(ctx, slot.index, split(&mut source, max), hooks)?;
                     self.on_take(ctx, slot.index, &source, 0, hooks)?;
-                    if !ctx
-                        .player
-                        .inventory
-                        .add(&mut source, ctx.player.equipment, ctx.creative)
-                    {
+                    if !ctx.player.inventory.add(
+                        &mut source,
+                        ctx.player.equipment,
+                        ctx.infinite_materials,
+                    ) {
                         ctx.drop_item(source);
                     }
                 } else {
@@ -713,7 +664,7 @@ impl AbstractContainerMenu {
             return Ok(());
         }
         if source.is_empty() {
-            if !target.is_empty() && slot.may_pickup(&target, ctx.creative, hooks)? {
+            if !target.is_empty() && slot.may_pickup(&target, ctx.is_creative, hooks)? {
                 if slot.kind == SlotKind::Result(ResultKind::Crafting)
                     && let Some(crafting) = hooks.crafting_ref()
                 {
@@ -734,7 +685,7 @@ impl AbstractContainerMenu {
                     self.set_item_live(ctx, slot.index, source, hooks)?;
                 }
             }
-        } else if slot.may_pickup(&target, ctx.creative, hooks)?
+        } else if slot.may_pickup(&target, ctx.is_creative, hooks)?
             && slot.may_place(&source, hooks)?
         {
             let max = slot.max_stack_size(self.container(ctx, slot.container), &source);
@@ -743,11 +694,11 @@ impl AbstractContainerMenu {
                 ctx.player.set_item(button, source);
                 self.on_take(ctx, slot.index, &target, 0, hooks)?;
                 let mut target = target;
-                if !ctx
-                    .player
-                    .inventory
-                    .add(&mut target, ctx.player.equipment, ctx.creative)
-                {
+                if !ctx.player.inventory.add(
+                    &mut target,
+                    ctx.player.equipment,
+                    ctx.infinite_materials,
+                ) {
                     ctx.drop_item(target);
                 }
             } else {
@@ -778,7 +729,7 @@ impl AbstractContainerMenu {
                 self.quickcraft_type = (button >> 2) & 3;
                 if self.quickcraft_type == 0
                     || self.quickcraft_type == 1
-                    || self.quickcraft_type == 2 && ctx.creative
+                    || self.quickcraft_type == 2 && ctx.infinite_materials
                 {
                     self.quickcraft_status = 1;
                     self.quickcraft_slots.clear();
@@ -840,7 +791,7 @@ impl AbstractContainerMenu {
                         self.set_item_live(ctx, *index, with_count(&source, new), hooks)?;
                     }
                 }
-                self.carried = with_count(&source, remaining);
+                self.set_carried(with_count(&source, remaining));
                 self.reset_quick_craft();
             }
             _ => self.reset_quick_craft(),
@@ -860,7 +811,7 @@ impl AbstractContainerMenu {
         let slot = self.slot(index)?;
         let clicked = self.get_item(ctx, slot.index);
         if self.carried.is_empty()
-            || !clicked.is_empty() && slot.may_pickup(&clicked, ctx.creative, hooks)?
+            || !clicked.is_empty() && slot.may_pickup(&clicked, ctx.is_creative, hooks)?
         {
             return Ok(());
         }
@@ -878,7 +829,7 @@ impl AbstractContainerMenu {
                 let stack = self.get_item(ctx, index);
                 if !stack.is_empty()
                     && Self::can_item_quick_replace(&stack, &self.carried, true)
-                    && slot.may_pickup(&stack, ctx.creative, hooks)?
+                    && slot.may_pickup(&stack, ctx.is_creative, hooks)?
                     && self.can_take_for_pick_all(slot)
                     && (pass != 0 || count(&stack) != max_stack_size(&stack))
                 {

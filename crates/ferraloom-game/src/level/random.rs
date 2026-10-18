@@ -37,6 +37,11 @@ pub(super) fn new_level_random() -> Random {
     let seed = previous.wrapping_mul(1_181_783_497_276_652_981) ^ nano_time();
     Random::Legacy(LegacyRandomSource::new(seed))
 }
+/// RandomSource#createThreadSafe uses the same unique seed factory and Legacy
+/// algorithm. Region ownership replaces its Java synchronization, without locks.
+pub(super) fn new_sound_random() -> Random {
+    new_level_random()
+}
 /// Level initializes randValue from a temporary SingleThreadedRandomSource,
 /// seeded by Netty's nondeterministic thread-local generator in Java. It does
 /// not draw from the canonical Level#random stream.

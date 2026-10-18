@@ -136,6 +136,23 @@ impl MinecraftServer {
                 })?;
                 self.apply_command_result(source, &command.source, result);
             }
+            "teleport" => {
+                let result = self.teleport_command(command)?;
+                self.apply_command_result(source, &command.source, result);
+            }
+            "time" => {
+                let (result, changed) = self.clocks.command(command, self.level.game_time);
+                if let Some(clock) = changed {
+                    self.level
+                        .level
+                        .refresh_environment_attributes(
+                            super::command_runtime::environment_clock_snapshot(&self.clocks),
+                        )
+                        .map_err(CommandLevelFailure)?;
+                    self.broadcast(self.clock_packet(Some(&clock)));
+                }
+                self.apply_command_result(source, &command.source, result?);
+            }
             "weather" => {
                 let result = ferraloom_game::commands::weather::run(command, &mut self.level.level);
                 self.apply_command_result(source, &command.source, result);
@@ -172,62 +189,13 @@ impl MinecraftServer {
         request: u64,
         terrain: crate::world::Terrain,
     ) -> Result<()> {
-        let pos = terrain.pos;
-        if pos == ChunkPos::containing(self.world.spawn)
-            && !self.world.level_data.data.contains_key("spawn")
-        {
-            self.world.spawn.y = terrain.surface
-                [((self.world.spawn.z & 15) * 16 + (self.world.spawn.x & 15)) as usize];
-        }
-        let chunk = self.world.integrate(request, terrain)?;
-        self.level
-            .level
-            .add_chunk(chunk)
-            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
-        self.level
-            .chunks
-            .holders
-            .get_mut(&pos.pack())
-            .unwrap()
-            .status = ChunkStatus::InitializeLight;
-        Ok(())
+        self.integrate_generation_terrain(request, terrain)
     }
     pub(super) fn integrate_command_light(&mut self, light: crate::world::LitChunk) -> Result<()> {
-        let holder = self
-            .level
-            .chunks
-            .holders
-            .get_mut(&light.pos.pack())
-            .context("unknown light job")?;
-        ensure!(holder.request_id == light.request, "stale light completion");
-        holder.status = ChunkStatus::Full;
-        self.world.ready.insert(light.pos);
-        for (pos, data) in light.updates {
-            self.world.lights.insert(pos, data);
-        }
-        Ok(())
+        self.integrate_generation_light(light)
     }
     async fn command_get_chunk(&mut self, position: ChunkPos) -> Result<()> {
-        self.request_area(position, 0)?;
-        loop {
-            self.integrate_jobs()?;
-            if self.world.ready.contains(&position) {
-                return Ok(());
-            }
-            if let Some((&request, _)) = self.world.pending.first_key_value() {
-                // Preserve the canonical request order even if a later job finished first.
-                let terrain = self.world.pending.remove(&request).unwrap().await??;
-                self.integrate_command_terrain(request, terrain)?;
-            } else {
-                let light = self
-                    .world
-                    .light_rx
-                    .recv()
-                    .await
-                    .context("chunk light worker stopped")?;
-                self.integrate_command_light(light)?;
-            }
-        }
+        self.await_generation_chunk(position).await
     }
     pub(super) async fn prepare_command_tickets(&mut self) -> Result<()> {
         self.level.tickets.activate_all_deactivated_tickets();
@@ -243,18 +211,24 @@ impl MinecraftServer {
         }
         Ok(())
     }
-    pub(super) async fn save_command_tickets(&self) -> Result<()> {
+    /// Capture owned save data before constructing IO, keeping the live level's
+    /// single-owner lazy caches out of the Send future.
+    pub(super) fn save_command_tickets(
+        &self,
+    ) -> impl std::future::Future<Output = Result<()>> + Send + 'static {
         let storage =
             ferraloom_storage::SavedDataStorage::new(self.world.access.path().join("data"));
         let mut data = ferraloom_storage::SavedData::new(self.level.tickets.clone());
-        tokio::task::spawn_blocking(move || {
-            storage.save(
-                ferraloom_game::level::tickets::TicketStorage::STORAGE_ID,
-                &mut data,
-            )
-        })
-        .await??;
-        Ok(())
+        async move {
+            tokio::task::spawn_blocking(move || {
+                storage.save(
+                    ferraloom_game::level::tickets::TicketStorage::STORAGE_ID,
+                    &mut data,
+                )
+            })
+            .await??;
+            Ok(())
+        }
     }
 }
 pub(super) fn load_command_tickets(level: &mut ServerLevel, world: &World) -> Result<()> {

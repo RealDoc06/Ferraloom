@@ -32,6 +32,7 @@ pub mod climate;
 
 pub mod biome;
 
+pub mod environment;
 pub mod material;
 pub mod settings;
 

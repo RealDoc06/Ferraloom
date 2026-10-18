@@ -284,9 +284,11 @@ Vanilla block methods take `LevelReader`/`LevelAccessor`, which both
 `updateShape`, `canSurvive`, `placeLiquid` and block-entity loading. Ferraloom
 keeps one implementation of each behavior in `ferraloom-game`:
 
-- Methods that vanilla calls on both kinds of level take a `LevelAccessRef<'_>`
+- Methods that vanilla calls on both kinds of level take a `LevelAccessRef<'call, 'chunks>`
   enum (`Server(&mut Level)` / `Worldgen(&mut WorldGenRegion)`). Read-only
-  methods use `LevelReaderRef` (`Server(&Level)` / `Worldgen(&WorldGenRegion)`). It is
+  methods use `LevelReaderRef<'call, 'chunks>` (`Server(&Level)` /
+  `Worldgen(&WorldGenRegion)`). The call borrow and chunk-neighborhood lifetime
+  are independent. It is
   matched statically, so block code still inlines and no `dyn Level` appears
   on the hot path.
 - `ferraloom-worldgen` cannot depend on game, so it calls those behaviors
@@ -297,6 +299,14 @@ keeps one implementation of each behavior in `ferraloom-game`:
   pending.
 - Pure state transforms (rotate, mirror) are generated data tables in
   `ferraloom-data`, extracted from vanilla's own methods.
+
+Live configured features use `LiveWorldGenLevel` implemented by the concrete
+`Level` at the cold feature boundary. `Level` construction requires an immutable
+`Arc<LevelContext>` containing the actual WorldOptions seed, generator sea level,
+generator and configured-feature registry. Tests supply explicit fixture context;
+production has no missing-context state or default services. A canonical
+`FeatureRandomSelector` resolves short borrows of `Level#random` between world
+callbacks, so placement never takes, replaces or copies that stream.
 
 ## Global state, commands and messages
 

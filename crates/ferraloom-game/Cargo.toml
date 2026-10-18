@@ -12,6 +12,7 @@ ferraloom-util.workspace = true
 ferraloom-nbt.workspace = true
 ferraloom-data.workspace = true
 ferraloom-chunk.workspace = true
+ferraloom-light.workspace = true
 ferraloom-worldgen.workspace = true
 ferraloom-storage.workspace = true
 ferraloom-brigadier.workspace = true
@@ -20,7 +21,11 @@ serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["arbitrary_precision", "preserve_order"] }
 
 [dev-dependencies]
+serde = { version = "1", features = ["derive"] }
 flate2 = "1"
+
+[features]
+test-fixtures = []
 
 [lints]
 workspace = true

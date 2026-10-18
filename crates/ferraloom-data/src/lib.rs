@@ -9,7 +9,13 @@
 //! ```
 
 mod block_methods;
+pub mod dispenser_properties;
+mod environment_attributes;
+pub mod note_properties;
+pub mod redstone_properties;
+mod sound_events;
 pub use block_methods::BlockMethod;
+pub use environment_attributes::EnvironmentAttributeData;
 
 pub mod datapack;
 pub use datapack::tags;
@@ -249,6 +255,13 @@ impl FluidState {
     }
 }
 
+/// Port of RenderShape. Block#getRenderShape takes only the block state.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RenderShape {
+    Invisible,
+    Model,
+}
+
 /// Port of BlockBehaviour.BlockStateBase's cached state facts.
 #[derive(Clone, Copy, Debug)]
 pub struct BlockStateData {
@@ -271,6 +284,7 @@ pub struct BlockStateData {
     pub replaceable: bool,
     pub push_reaction: PushReaction,
     pub sound: &'static SoundType,
+    pub render_shape: RenderShape,
     pub fluid: FluidState,
 }
 
@@ -316,6 +330,42 @@ pub enum MobCategory {
     Misc,
 }
 
+/// Native EntityAttachment order, used by EntityDimensions' immutable points.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum EntityAttachment {
+    Passenger,
+    Vehicle,
+    NameTag,
+    WardenChest,
+}
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct EntityAttachments {
+    points: [&'static [ferraloom_util::Vec3]; 4],
+}
+impl EntityAttachments {
+    pub const fn points(self, attachment: EntityAttachment) -> &'static [ferraloom_util::Vec3] {
+        self.points[attachment as usize]
+    }
+}
+
+/// Native RangedAttribute limits; None on AttributeData preserves an unbounded
+/// base Attribute rather than inventing minimum and maximum values.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct AttributeRange {
+    pub min: f64,
+    pub max: f64,
+}
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct AttributeData {
+    pub default_value: f64,
+    pub range: Option<AttributeRange>,
+    pub syncable: bool,
+}
+impl registries::attribute::Id {
+    pub const fn data(self) -> &'static AttributeData {
+        &ATTRIBUTE_DATA[self.protocol_id() as usize]
+    }
+}
 #[derive(Clone, Copy, Debug)]
 pub struct EntityTypeData {
     pub width: f32,
@@ -325,9 +375,11 @@ pub struct EntityTypeData {
     pub category: MobCategory,
     pub tracking_range: u32,
     pub update_interval: u32,
+    pub track_deltas: bool,
     pub fire_immune: bool,
     pub summonable: bool,
     pub attributes: &'static [(registries::attribute::Id, f64)],
+    pub attachments: EntityAttachments,
 }
 
 include!(concat!(env!("OUT_DIR"), "/data.rs"));
@@ -534,6 +586,34 @@ impl Block {
     /// pure block subclass overrides. Air represents an absent block item.
     pub const fn as_item(self) -> Item {
         BLOCK_ITEMS[self.protocol_id() as usize]
+    }
+}
+
+/// Pure BlockEntityType registry facts extracted from the pinned server.
+pub struct BlockEntityTypeData {
+    pub valid_blocks: &'static [Block],
+    pub only_op_can_set_nbt: bool,
+    pub is_nameable: bool,
+}
+impl registries::block_entity_type::Id {
+    pub const fn valid_blocks(self) -> &'static [Block] {
+        BLOCK_ENTITY_TYPES[self.protocol_id() as usize].valid_blocks
+    }
+    pub const fn only_op_can_set_nbt(self) -> bool {
+        BLOCK_ENTITY_TYPES[self.protocol_id() as usize].only_op_can_set_nbt
+    }
+    /// Whether the type's native receiver implements Nameable, independent of its components.
+    pub const fn is_nameable(self) -> bool {
+        BLOCK_ENTITY_TYPES[self.protocol_id() as usize].is_nameable
+    }
+    pub const fn is_valid(self, state: BlockState) -> bool {
+        matches!(state.block().block_entity_type(),Some(kind) if kind.protocol_id() == self.protocol_id())
+    }
+}
+impl Block {
+    /// Port of BlockEntityType#isValid's inverse, indexed by block ID.
+    pub const fn block_entity_type(self) -> Option<registries::block_entity_type::Id> {
+        BLOCK_ENTITY_TYPE_BY_BLOCK[self.protocol_id() as usize]
     }
 }
 

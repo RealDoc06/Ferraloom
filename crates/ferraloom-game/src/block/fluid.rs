@@ -66,19 +66,22 @@ impl FlowingFluid {
             }
         }
     }
-    fn drop_off(self, level: &Level) -> u8 {
-        if self == Self::Lava && !level.rules().fast_lava {
+    pub fn tick_delay_for(self, level: &Level) -> Result<i32, LevelError> {
+        Ok(self.tick_delay(self == Self::Lava && level.fast_lava()?))
+    }
+    fn drop_off(self, level: &Level) -> Result<u8, LevelError> {
+        Ok(if self == Self::Lava && !level.fast_lava()? {
             2
         } else {
             1
-        }
+        })
     }
-    fn slope_find_distance(self, level: &Level) -> i32 {
-        if self == Self::Lava && !level.rules().fast_lava {
+    fn slope_find_distance(self, level: &Level) -> Result<i32, LevelError> {
+        Ok(if self == Self::Lava && !level.fast_lava()? {
             2
         } else {
             4
-        }
+        })
     }
     fn can_convert_to_source(self, level: &Level) -> bool {
         match self {
@@ -290,7 +293,7 @@ impl FlowingFluid {
         {
             return Ok(self.flowing(8, true));
         }
-        let amount = highest.saturating_sub(self.drop_off(level));
+        let amount = highest.saturating_sub(self.drop_off(level)?);
         Ok(if amount == 0 {
             empty_fluid()
         } else {
@@ -323,7 +326,7 @@ impl FlowingFluid {
                 )? {
                     return Ok(pass);
                 }
-                if pass < self.slope_find_distance(level) {
+                if pass < self.slope_find_distance(level)? {
                     lowest = lowest.min(self.slope_distance(
                         level,
                         target,
@@ -446,7 +449,7 @@ impl FlowingFluid {
         let amount = if fluid.falling {
             7
         } else {
-            fluid.amount.saturating_sub(self.drop_off(level))
+            fluid.amount.saturating_sub(self.drop_off(level)?)
         };
         if amount > 0 {
             for (direction, new_fluid) in self.get_spread(level, pos, state)? {
@@ -526,7 +529,7 @@ impl FlowingFluid {
         let ticking_fluid = fluid.fluid_type;
         if !fluid.source {
             let new = self.get_new_liquid(level, pos, level.get_block_state(pos)?)?;
-            let mut delay = self.tick_delay(level.rules().fast_lava);
+            let mut delay = self.tick_delay_for(level)?;
             if self == Self::Lava
                 && !fluid.empty
                 && !new.empty
@@ -672,7 +675,7 @@ impl LiquidBlock {
         state: BlockState,
         pos: BlockPos,
         below: BlockState,
-        level: &mut LevelAccessRef<'_>,
+        level: &mut LevelAccessRef<'_, '_>,
     ) -> Result<(), LevelError> {
         if level.as_reader().fluid_tags()?.contains_key(
             FluidTags::BUBBLE_COLUMN_CAN_OCCUPY,
@@ -699,7 +702,7 @@ impl BlockBehavior for LiquidBlock {
         state: BlockState,
         pos: BlockPos,
         context: &super::BlockCollisionContext<'_>,
-        level: &super::LevelReaderRef<'_>,
+        level: &super::LevelReaderRef<'_, '_>,
     ) -> Result<ferraloom_util::VoxelShape, LevelError> {
         use ferraloom_util::shapes::CollisionContext;
         if context.always_collide_with_fluid() {
@@ -712,6 +715,12 @@ impl BlockBehavior for LiquidBlock {
             let liquid_shape = match level {
                 super::LevelReaderRef::Server(level) => {
                     entity_context.entity.liquid_collision_shape(level)?
+                }
+                super::LevelReaderRef::Worldgen(_) => {
+                    return Err(LevelError::UnsupportedBlockMethod(
+                        state.block(),
+                        super::BlockMethod::CollisionShape,
+                    ));
                 }
             };
             if let Some(shape) = liquid_shape
@@ -730,7 +739,7 @@ impl BlockBehavior for LiquidBlock {
         &self,
         _state: BlockState,
         _pos: BlockPos,
-        _level: &super::LevelReaderRef<'_>,
+        _level: &super::LevelReaderRef<'_, '_>,
     ) -> Result<ferraloom_util::VoxelShape, LevelError> {
         Ok(ferraloom_util::shapes::empty())
     }
@@ -747,7 +756,7 @@ impl BlockBehavior for LiquidBlock {
             level.schedule_fluid_tick_after(
                 pos,
                 state.data().fluid.fluid_type,
-                flow.tick_delay(level.rules().fast_lava),
+                flow.tick_delay_for(level)?,
             )?;
         }
         if level.fluid_tags()?.contains_key(
@@ -779,12 +788,12 @@ impl BlockBehavior for LiquidBlock {
         direction: Direction,
         _neighbor_pos: BlockPos,
         neighbor: BlockState,
-        level: &mut LevelAccessRef<'_>,
+        level: &mut LevelAccessRef<'_, '_>,
     ) -> Result<BlockState, LevelError> {
         if state.data().fluid.source || neighbor.data().fluid.source {
-            let delay = FlowingFluid::from_id(state.data().fluid.fluid_type)
-                .unwrap()
-                .tick_delay(level.fast_lava());
+            let flow = FlowingFluid::from_id(state.data().fluid.fluid_type).unwrap();
+            let fast_lava = flow == FlowingFluid::Lava && level.fast_lava()?;
+            let delay = flow.tick_delay(fast_lava);
             level.schedule_fluid_tick(pos, state.data().fluid.fluid_type, delay)?;
         }
         if direction == Direction::Down {
@@ -806,7 +815,7 @@ impl BlockBehavior for LiquidBlock {
         &self,
         state: BlockState,
         pos: BlockPos,
-        level: &mut LevelAccessRef<'_>,
+        level: &mut LevelAccessRef<'_, '_>,
     ) -> Result<Option<Item>, LevelError> {
         if state.get(properties::LEVEL) != Some(0) {
             return Ok(None);
@@ -857,7 +866,7 @@ impl BlockBehavior for SimpleWaterloggedBlock {
         state: BlockState,
         pos: BlockPos,
         fluid: FluidState,
-        level: &mut LevelAccessRef<'_>,
+        level: &mut LevelAccessRef<'_, '_>,
     ) -> Result<bool, LevelError> {
         Self::place_liquid(state, pos, fluid, level)
     }
@@ -865,7 +874,7 @@ impl BlockBehavior for SimpleWaterloggedBlock {
         &self,
         state: BlockState,
         pos: BlockPos,
-        level: &mut LevelAccessRef<'_>,
+        level: &mut LevelAccessRef<'_, '_>,
     ) -> Result<Option<Item>, LevelError> {
         Self::pickup_block(state, pos, level)
     }
@@ -875,7 +884,7 @@ impl SimpleWaterloggedBlock {
         state: BlockState,
         pos: BlockPos,
         fluid: FluidState,
-        level: &mut LevelAccessRef<'_>,
+        level: &mut LevelAccessRef<'_, '_>,
     ) -> Result<bool, LevelError> {
         if state.get(properties::WATERLOGGED) != Some(false) || fluid.fluid_type != Id::WATER {
             return Ok(false);
@@ -891,7 +900,7 @@ impl SimpleWaterloggedBlock {
     pub fn pickup_block(
         state: BlockState,
         pos: BlockPos,
-        level: &mut LevelAccessRef<'_>,
+        level: &mut LevelAccessRef<'_, '_>,
     ) -> Result<Option<Item>, LevelError> {
         if state.get(properties::WATERLOGGED) != Some(true) {
             return Ok(None);
@@ -901,17 +910,10 @@ impl SimpleWaterloggedBlock {
             state.with(properties::WATERLOGGED, false).unwrap(),
             UpdateFlags::ALL,
         )?;
-        let survives = match level {
-            LevelAccessRef::Server(level) => level
-                .required_block_behavior(state.block(), super::BlockMethod::CanSurvive)?
-                .can_survive(state, pos, &super::LevelReaderRef::Server(level))?,
-        };
+        let reader = level.as_reader();
+        let survives = reader.can_survive(state, pos)?;
         if !survives {
-            match level {
-                LevelAccessRef::Server(level) => {
-                    level.destroy_block(pos, true, UPDATE_LIMIT)?;
-                }
-            }
+            level.destroy_block(pos, true)?;
         }
         Ok(Some(Item::WATER_BUCKET))
     }

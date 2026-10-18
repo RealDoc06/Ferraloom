@@ -134,6 +134,7 @@ fn chunks(
                     logical_height: 128,
                     has_ceiling: false,
                     has_skylight: true,
+                    fast_lava: false,
                     coordinate_scale: 1.0,
                 },
             );

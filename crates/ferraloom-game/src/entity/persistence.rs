@@ -22,16 +22,57 @@ impl std::fmt::Display for EntityLoadError {
 }
 impl std::error::Error for EntityLoadError {}
 
+/// The supported constructor set is shared by persistent and proto-chunk loads.
+pub(crate) fn has_entity_factory(kind: ferraloom_data::EntityType) -> bool {
+    use ferraloom_data::EntityType;
+    matches!(
+        kind,
+        EntityType::COW
+            | EntityType::ITEM
+            | EntityType::TNT
+            | EntityType::FALLING_BLOCK
+            | EntityType::EXPERIENCE_ORB
+    )
+}
+
+/// Reuse the canonical loader for one constructor, allowing the stream consumer
+/// to register its state before recursively constructing its passengers.
+pub(crate) fn load_entity_state(
+    level: &mut crate::level::Level,
+    mut tag: CompoundTag,
+) -> Result<(super::EntityRef, super::EntityState), EntityPersistenceError> {
+    let passengers = tag.remove("Passengers");
+    let mut loaded = Vec::new();
+    load_entity_tree(level, tag, &mut loaded)?;
+    let (entity, mut state) = loaded.pop().expect("root constructor produced its state");
+    debug_assert!(loaded.is_empty());
+    if let Some(passengers) = passengers {
+        state.as_entity_mut().saved.insert("Passengers", passengers);
+    }
+    Ok((entity, state))
+}
+
 impl EntityData {
     /// Port of Entity#load. Passengers are instantiated by the section manager.
     pub fn load_nbt(&mut self, tag: CompoundTag) -> Result<(), EntityLoadError> {
+        self.load_nbt_with_head_rotation(tag).map(|_| ())
+    }
+
+    /// Entity#load calls the derived head/body setters before wrapping yaw.
+    pub(crate) fn load_nbt_with_head_rotation(
+        &mut self,
+        tag: CompoundTag,
+    ) -> Result<f32, EntityLoadError> {
         let position = vector(&tag, "Pos");
         let motion = vector(&tag, "Motion");
-        self.velocity = Vec3::new(
+        let velocity = Vec3::new(
             safe_motion(motion.x),
             safe_motion(motion.y),
             safe_motion(motion.z),
         );
+        if velocity.is_finite() {
+            self.velocity = velocity;
+        }
         self.needs_sync = true;
         self.set_pos_raw(Vec3::new(
             position.x.clamp(-30_000_512.0, 30_000_512.0),
@@ -39,9 +80,10 @@ impl EntityData {
             position.z.clamp(-30_000_512.0, 30_000_512.0),
         ));
         let rotation = tag.get_list("Rotation").filter(|v| v.len() == 2);
-        self.yaw = rotation.and_then(|v| v[0].as_float()).unwrap_or(0.0);
-        self.pitch = rotation.and_then(|v| v[1].as_float()).unwrap_or(0.0);
+        self.set_y_rot(rotation.and_then(|v| v[0].as_float()).unwrap_or(0.0));
+        self.set_x_rot(rotation.and_then(|v| v[1].as_float()).unwrap_or(0.0));
         self.set_old_pos_and_rot();
+        let head_rotation = self.yaw;
         self.fall_distance = tag.get_double_or("fall_distance", 0.0);
         self.remaining_fire_ticks = i32::from(tag.get_short_or("Fire", 0));
         self.entity_data
@@ -62,8 +104,8 @@ impl EntityData {
             return Err(EntityLoadError::InvalidRotation);
         }
         self.set_pos(self.position);
-        self.yaw %= 360.0;
-        self.pitch %= 360.0;
+        self.set_y_rot(self.yaw % 360.0);
+        self.set_x_rot(self.pitch % 360.0);
         let name = tag
             .get("CustomName")
             .cloned()
@@ -94,7 +136,7 @@ impl EntityData {
             }
         }
         self.saved = tag;
-        Ok(())
+        Ok(head_rotation)
     }
     /// Port of Entity#saveWithoutId. The Level facade supplies vehicle X/Z and riders.
     pub fn save_without_id(&self) -> CompoundTag {
@@ -242,6 +284,82 @@ pub(crate) fn load_block_state(tag: &Tag) -> Option<ferraloom_data::BlockState> 
 mod tests {
     use super::*;
     use ferraloom_data::EntityType;
+    #[test]
+    fn vanilla_load_rotation_clamping_and_motion_validation_bits() {
+        let rotations = [
+            [-721.25_f32, -721.25],
+            [721.25, 180.0],
+            [-0.0, -0.0],
+            [f32::NAN, f32::INFINITY],
+            [37.25, -450.125],
+        ];
+        let motions = [
+            Vec3::new(f64::NAN, 8.0, 9.0),
+            Vec3::new(10.0, -10.00001, f64::INFINITY),
+            Vec3::new(f64::NEG_INFINITY, -0.0, 0.25),
+        ];
+        let vectors = include_str!("../../tests/java/entity/vectors.tsv");
+        let mut count = 0;
+        for row in vectors.lines().filter(|row| row.starts_with("nbt-")) {
+            let fields: Vec<_> = row.split('\t').collect();
+            let index: usize = fields[1].parse().unwrap();
+            let mut base = EntityData::new(EntityType::TNT, 1, 1);
+            base.set_y_rot(11.25);
+            base.set_x_rot(-12.5);
+            base.velocity = Vec3::new(1.0, 2.0, 3.0);
+            let mut tag = CompoundTag::new();
+            let motion = if fields[0] == "nbt-rotation" {
+                // The oracle constructs NBT through FloatTag.valueOf, which
+                // canonicalizes signed zero before Entity#load sees it.
+                tag.insert(
+                    "Rotation",
+                    Tag::List(ListTag(
+                        rotations[index]
+                            .map(|v| Tag::Float(if v == 0.0 { 0.0 } else { v }))
+                            .to_vec(),
+                    )),
+                );
+                Vec3::new(0.5, 0.25, -0.25)
+            } else {
+                motions[index]
+            };
+            let zero = |v| if v == 0.0 { 0.0 } else { v };
+            tag.insert(
+                "Motion",
+                vector_tag(Vec3::new(zero(motion.x), zero(motion.y), zero(motion.z))),
+            );
+            base.load_nbt(tag).unwrap();
+            let expected_velocity = if fields[0] == "nbt-rotation" {
+                let rotation_bits: Vec<_> = fields[2]
+                    .split(',')
+                    .map(|v| u32::from_str_radix(v, 16).unwrap())
+                    .collect();
+                assert_eq!(
+                    [base.yaw, base.pitch, base.old_yaw, base.old_pitch]
+                        .map(f32::to_bits)
+                        .as_slice(),
+                    rotation_bits,
+                    "{row}"
+                );
+                fields[3]
+            } else {
+                fields[2]
+            };
+            let velocity_bits: Vec<_> = expected_velocity
+                .split(',')
+                .map(|v| u64::from_str_radix(v, 16).unwrap())
+                .collect();
+            assert_eq!(
+                [base.velocity.x, base.velocity.y, base.velocity.z]
+                    .map(f64::to_bits)
+                    .as_slice(),
+                velocity_bits,
+                "{row}"
+            );
+            count += 1;
+        }
+        assert_eq!(count, 8);
+    }
     #[test]
     fn base_nbt_round_trips_and_removes_cleared_optional_fields() {
         let mut base = EntityData::new(EntityType::ITEM, 9, 123);

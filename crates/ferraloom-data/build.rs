@@ -1,6 +1,19 @@
 //! Turns pinned vanilla reports and extracted facts into allocation-free tables.
+#[path = "build/block_drop_tables.rs"]
+mod block_drop_tables;
 #[path = "build/block_methods.rs"]
 mod block_methods;
+#[path = "build/environment_attributes.rs"]
+mod environment_attributes;
+#[path = "build/feature_requirements.rs"]
+mod feature_requirements;
+
+#[path = "build/dispenser_properties.rs"]
+mod dispenser_properties;
+#[path = "build/note_properties.rs"]
+mod note_properties;
+#[path = "build/redstone_properties.rs"]
+mod redstone_properties;
 
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
@@ -162,6 +175,28 @@ fn packets(out: &mut String, reports: &Value) {
     out.push_str("}\n");
 }
 
+fn sound_events(out: &mut String, entries: &Value, report: &Value) {
+    let entries = entries.as_array().expect("sound event facts");
+    let registry = ordered_entries(&report["entries"]);
+    assert_eq!(entries.len(), registry.len());
+    writeln!(
+        out,
+        "static SOUND_FIXED_RANGES: [Option<f32>; {}] = [",
+        entries.len()
+    )
+    .unwrap();
+    for (entry, (name, id)) in entries.iter().zip(registry) {
+        assert_eq!(entry["id"].as_u64(), Some(id));
+        assert_eq!(entry["name"].as_str(), Some(name));
+        if entry["fixed_range"].is_null() {
+            out.push_str("None,");
+        } else {
+            write!(out, "Some({}),", float(&entry["fixed_range"])).unwrap();
+        }
+    }
+    out.push_str("];\n");
+}
+
 struct Property {
     id: usize,
     values: Vec<String>,
@@ -256,9 +291,12 @@ fn blocks(
     reports: &Value,
     extracted: &Value,
     props: &BTreeMap<String, Property>,
+    render_shapes: &Value,
 ) {
+    let render_shapes = render_shapes.as_array().expect("per-state render shapes");
     let blocks = extracted["blocks"].as_array().unwrap();
     let states = extracted["states"].as_array().unwrap();
+    assert_eq!(states.len(), render_shapes.len());
     assert!(states.len() <= u16::MAX as usize + 1);
     assert_eq!(blocks.len(), reports.as_object().unwrap().len());
     out.push_str("pub const BLOCKS: &[BlockData] = &[\n");
@@ -383,6 +421,9 @@ fn blocks(
         ] {
             write!(out, "{field}: {},", state[field]).unwrap();
         }
+        let render = string(&render_shapes[id]);
+        assert!(matches!(render, "invisible" | "model"));
+        write!(out, "render_shape: RenderShape::{},", pascal(render)).unwrap();
         for field in ["collision", "outline", "occlusion"] {
             write!(out, "{field}: ShapeId({}),", state[field]).unwrap();
         }
@@ -502,6 +543,54 @@ fn items(out: &mut String, items: &Value, crafting: &Value) {
     out.push_str("];\n");
 }
 
+fn attribute_properties(out: &mut String, attributes: &Value, registries: &Value) {
+    let attributes = attributes.as_array().unwrap();
+    assert_eq!(
+        attributes.len(),
+        registries["minecraft:attribute"]["entries"]
+            .as_object()
+            .unwrap()
+            .len()
+    );
+    writeln!(
+        out,
+        "const ATTRIBUTE_DATA: [AttributeData; {}] = [",
+        attributes.len()
+    )
+    .unwrap();
+    for (id, attribute) in attributes.iter().enumerate() {
+        assert_eq!(number(&attribute["id"]), id as u64);
+        assert_eq!(
+            number(
+                &registries["minecraft:attribute"]["entries"][string(&attribute["name"])]["protocol_id"]
+            ),
+            id as u64
+        );
+        write!(
+            out,
+            "AttributeData {{ default_value: {}, syncable: {}, range: ",
+            float(&attribute["default_value"]),
+            attribute["syncable"]
+        )
+        .unwrap();
+        match (&attribute["min_value"], &attribute["max_value"]) {
+            (Value::Null, Value::Null) => out.push_str("None"),
+            (min, max) => {
+                assert!(min.as_f64().unwrap() <= max.as_f64().unwrap());
+                write!(
+                    out,
+                    "Some(AttributeRange {{ min: {}, max: {} }})",
+                    float(min),
+                    float(max)
+                )
+                .unwrap();
+            }
+        }
+        out.push_str(" },\n");
+    }
+    out.push_str("];\n");
+}
+
 fn entities(out: &mut String, entities: &Value, registries: &Value) {
     out.push_str("pub const ENTITY_TYPES: &[EntityTypeData] = &[\n");
     for (id, entity) in entities.as_array().unwrap().iter().enumerate() {
@@ -514,6 +603,7 @@ fn entities(out: &mut String, entities: &Value, registries: &Value) {
             "fixed_dimensions",
             "tracking_range",
             "update_interval",
+            "track_deltas",
             "fire_immune",
             "summonable",
         ] {
@@ -529,7 +619,29 @@ fn entities(out: &mut String, entities: &Value, registries: &Value) {
             let id = number(&registries["minecraft:attribute"]["entries"][name]["protocol_id"]);
             write!(out, "(registries::attribute::Id({id}), {}),", float(value)).unwrap();
         }
-        out.push_str("] },\n");
+        out.push_str("], attachments: EntityAttachments { points: [");
+        for attachment in ["passenger", "vehicle", "name_tag", "warden_chest"] {
+            let points = entity["attachments"][attachment].as_array().unwrap();
+            assert!(
+                !points.is_empty(),
+                "entity attachment has no fallback points"
+            );
+            out.push_str("&[");
+            for point in points {
+                let values = point.as_array().unwrap();
+                assert_eq!(values.len(), 3);
+                write!(
+                    out,
+                    "ferraloom_util::Vec3 {{ x: {}, y: {}, z: {} }},",
+                    float(&values[0]),
+                    float(&values[1]),
+                    float(&values[2])
+                )
+                .unwrap();
+            }
+            out.push_str("],");
+        }
+        out.push_str("] } },\n");
     }
     out.push_str("];\n");
 }
@@ -687,6 +799,39 @@ fn tag_keys(root: &Path, registries: &Value) {
     .unwrap();
 }
 
+fn block_entity_types(out: &mut String, report: &Value, block_count: usize) {
+    let rows = report.as_array().expect("block entity type array");
+    let mut by_block = vec![None; block_count];
+    out.push_str("pub static BLOCK_ENTITY_TYPES: &[BlockEntityTypeData] = &[\n");
+    for (index, row) in rows.iter().enumerate() {
+        assert_eq!(number(&row["id"]) as usize, index);
+        write!(
+            out,
+            "BlockEntityTypeData {{ only_op_can_set_nbt: {}, is_nameable: {}, valid_blocks: &[",
+            row["only_op_can_set_nbt"],
+            row["is_nameable"].as_bool().expect("Nameable fact")
+        )
+        .unwrap();
+        for block in row["valid_blocks"].as_array().unwrap() {
+            let id = number(block) as usize;
+            assert!(
+                by_block[id].replace(index).is_none(),
+                "block in two block entity types"
+            );
+            write!(out, "registries::block::Id({id}),").unwrap();
+        }
+        out.push_str("] },\n");
+    }
+    out.push_str("];\npub static BLOCK_ENTITY_TYPE_BY_BLOCK: &[Option<registries::block_entity_type::Id>] = &[\n");
+    for kind in by_block {
+        match kind {
+            Some(id) => writeln!(out, "Some(registries::block_entity_type::Id({id})),").unwrap(),
+            None => out.push_str("None,\n"),
+        }
+    }
+    out.push_str("];\n");
+}
+
 fn main() {
     let root = Path::new("../../data/generated");
     let registries_report = load(root, "registries");
@@ -694,8 +839,12 @@ fn main() {
     let block_report = load(root, "blocks");
     let block_properties = load(root, "block_properties");
     block_methods::generate(root, &block_properties);
+    redstone_properties::generate(root);
+    dispenser_properties::generate(root);
+    note_properties::generate(root);
     let item_report = load(root, "items");
     let entity_report = load(root, "entity_types");
+    let attribute_report = load(root, "attributes");
     for (name, count) in [
         (
             "block",
@@ -739,7 +888,13 @@ fn main() {
     );
     packets(&mut out, &load(root, "packets"));
     let props = properties(&mut out, &block_report);
-    blocks(&mut out, &block_report, &block_properties, &props);
+    blocks(
+        &mut out,
+        &block_report,
+        &block_properties,
+        &props,
+        &load(root, "block_render_shapes"),
+    );
     shapes(&mut out, &load(root, "shapes"));
     state_transforms(
         &mut out,
@@ -799,7 +954,33 @@ fn main() {
     )
     .unwrap();
     items(&mut out, &item_report, &load(root, "item_crafting"));
+    block_drop_tables::generate(&mut out, &load(root, "block_drop_tables"), block_count);
+    feature_requirements::generate(
+        &mut out,
+        &load(root, "feature_requirements"),
+        block_count,
+        item_report.as_array().expect("item report").len(),
+    );
+    sound_events(
+        &mut out,
+        &load(root, "sound_events"),
+        &registries_report["minecraft:sound_event"],
+    );
+    block_entity_types(
+        &mut out,
+        &load(root, "block_entity_types"),
+        registries_report["minecraft:block"]["entries"]
+            .as_object()
+            .unwrap()
+            .len(),
+    );
+    environment_attributes::generate(
+        &mut out,
+        &load(root, "environment_attributes"),
+        &registries_report["minecraft:environment_attribute"],
+    );
     entities(&mut out, &entity_report, &registries_report);
+    attribute_properties(&mut out, &attribute_report, &registries_report);
     let path = Path::new(&std::env::var_os("OUT_DIR").unwrap()).join("data.rs");
     std::fs::write(path, out).unwrap();
     let native = voxel_shapes(&load(root, "voxel_shapes"), &block_properties);

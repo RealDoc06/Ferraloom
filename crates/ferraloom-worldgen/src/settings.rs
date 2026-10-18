@@ -110,6 +110,8 @@ pub struct DimensionType {
     pub logical_height: i32,
     pub has_ceiling: bool,
     pub has_skylight: bool,
+    /// FAST_LAVA's dimension constant, after applying the dimension modifier.
+    pub fast_lava: bool,
     pub coordinate_scale: f64,
 }
 impl DimensionType {
@@ -125,11 +127,71 @@ impl DimensionType {
             logical_height,
             has_ceiling: boolean(field(v, "has_ceiling")?)?,
             has_skylight: boolean(field(v, "has_skylight")?)?,
+            fast_lava: dimension_fast_lava(v)?,
             coordinate_scale: bounded(
                 field(v, "coordinate_scale")?,
                 9.999999747378752E-6,
                 30000000.0,
             )?,
         })
+    }
+}
+
+/// Port of WorldGenRegion's static EnvironmentAttributeSystem dimension layer.
+/// FAST_LAVA is non-positional and starts at false; biome layers do not affect it.
+fn dimension_fast_lava(v: &Value) -> Result<bool, Error> {
+    let Some(attributes) = v.get("attributes").filter(|value| !value.is_null()) else {
+        return Ok(false);
+    };
+    let attributes = attributes
+        .as_object()
+        .ok_or_else(|| Error("expected dimension environment attribute map".into()))?;
+    let fast_lava: Identifier = "minecraft:gameplay/fast_lava".parse()?;
+    let mut entry = None;
+    for (name, value) in attributes {
+        if name.parse::<Identifier>()? == fast_lava && entry.replace(value).is_some() {
+            return Err(Error("duplicate FAST_LAVA dimension attribute".into()));
+        }
+    }
+    let Some(entry) = entry else {
+        return Ok(false);
+    };
+    if !entry.is_object() {
+        return boolean(entry);
+    }
+    let modifier = string(field(entry, "modifier")?)?;
+    let argument = boolean(field(entry, "argument")?)?;
+    Ok(crate::environment::BooleanModifier::decode(modifier)?.apply(false, argument))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Read;
+
+    #[test]
+    fn dimension_fast_lava_matches_vanilla_attributes_and_modifiers() {
+        let mut text = String::new();
+        flate2::read::GzDecoder::new(&include_bytes!("../tests/golden/fast_lava.json.gz")[..])
+            .read_to_string(&mut text)
+            .unwrap();
+        let cases: Value = serde_json::from_str(&text).unwrap();
+        for case in cases.as_array().unwrap() {
+            let decoded = DimensionType::decode(&case["config"]);
+            assert_eq!(
+                decoded.is_ok(),
+                case["success"].as_bool().unwrap(),
+                "{}",
+                case["name"]
+            );
+            if let Ok(dimension) = decoded {
+                assert_eq!(
+                    dimension.fast_lava,
+                    case["fast_lava"].as_bool().unwrap(),
+                    "{}",
+                    case["name"]
+                );
+            }
+        }
     }
 }
