@@ -239,6 +239,7 @@ impl MinecraftServer {
             &properties,
             options.unported_behavior,
         )?;
+        game_rules.update_level_rules(level.level.rules_mut());
         let access = AccessLists::load(&options.root)?;
         let favicon = std::fs::read(options.root.join("server-icon.png")).ok();
         if let Some(icon) = &favicon {

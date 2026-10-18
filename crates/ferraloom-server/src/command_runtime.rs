@@ -79,6 +79,8 @@ impl MinecraftServer {
         Ok(())
     }
     pub(super) fn on_game_rule_changed(&mut self, change: GameRuleChange) {
+        self.game_rules
+            .update_level_rules(self.level.level.rules_mut());
         match change.effect {
             Some(GameRuleEffect::ReducedDebugInfo { event }) => {
                 let players = self.players.clone();
