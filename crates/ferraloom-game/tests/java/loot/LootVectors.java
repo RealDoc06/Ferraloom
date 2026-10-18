@@ -110,6 +110,8 @@ public final class LootVectors {
         output.add("item_predicates",predicates);
         var modifiers=new JsonArray();
         var functionDefinitions=List.of(
+            "{\"type\":\"set_components\",\"components\":{\"container\":[{\"slot\":0,\"item\":{\"id\":\"stone\",\"count\":65}}]}}",
+            "{\"type\":\"set_components\",\"components\":{\"charged_projectiles\":[{\"id\":\"stone\",\"count\":65}]}}",
             "{\"type\":\"set_lore\",\"lore\":[\"one\",\"two\"],\"mode\":\"replace_all\"}",
             "{\"type\":\"set_book_cover\",\"title\":\"Title\",\"author\":\"Doc\",\"generation\":2}",
             "{\"type\":\"set_written_book_pages\",\"pages\":[\"hello\"],\"mode\":\"append\"}",
@@ -205,6 +207,13 @@ public final class LootVectors {
         for(String test:List.of("{\"attribute\":\"gameplay/water_evaporates\",\"value\":true}","{\"attribute\":\"gameplay/water_evaporates\",\"value\":1}","{\"attribute\":\"visual/star_brightness\",\"value\":1.1}","{\"attribute\":\"visual/fog_start_distance\",\"value\":-1}","{\"attribute\":\"gameplay/eyeblossom_open\",\"value\":\"default\"}","{\"attribute\":\"visual/moon_phase\",\"value\":\"full_moon\"}","{\"attribute\":\"visual/moon_phase\",\"value\":0}","{\"attribute\":\"visual/fog_color\",\"value\":\"#010203\"}","{\"attribute\":\"visual/cloud_color\",\"value\":[0,0.5,1,0.75]}","{\"attribute\":\"gameplay/bed_rule\",\"value\":{\"can_sleep\":\"always\",\"can_set_spawn\":\"never\"}}")) {
             var json=JsonParser.parseString(test).getAsJsonObject();json.addProperty("type","environment_attribute_check");var record=new JsonObject();record.add("definition",json);record.addProperty("accepts",net.minecraft.world.level.storage.loot.predicates.LootItemCondition.DIRECT_CODEC.parse(lookup.createSerializationContext(JsonOps.INSTANCE),json).result().isPresent());checks.add(record);
         }output.add("environment_codecs",checks);
+        var damagePredicates=new JsonArray();var player=missing(net.minecraft.server.level.ServerPlayer.class);doReturn(level).when(player).level();doReturn(new Vec3(0,64,0)).when(player).position();
+        var source=new net.minecraft.world.damagesource.DamageSource(lookup.lookupOrThrow(Registries.DAMAGE_TYPE).getOrThrow(net.minecraft.world.damagesource.DamageTypes.GENERIC));
+        for(String test:List.of("{}","{\"dealt\":{\"min\":1,\"max\":3}}","{\"taken\":1.5,\"blocked\":true}","{\"source_entity\":{}}","{\"type\":{\"is_direct\":true}}","{\"type\":{\"direct_entity\":{}}}"))for(float original:new float[]{0.5f,2.0f})for(boolean blocked:new boolean[]{false,true}) {
+            var json=JsonParser.parseString(test);var predicate=net.minecraft.advancements.predicates.DamagePredicate.CODEC.parse(lookup.createSerializationContext(JsonOps.INSTANCE),json).getOrThrow();
+            var record=new JsonObject();record.add("predicate",json);record.addProperty("original",original);record.addProperty("blocked",blocked);record.addProperty("matches",predicate.matches(player,source,original,1.5f,blocked));damagePredicates.add(record);
+        }output.add("damage_predicates",damagePredicates);
+
 
 
     }

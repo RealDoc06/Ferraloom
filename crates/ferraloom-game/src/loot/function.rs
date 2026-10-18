@@ -273,7 +273,7 @@ impl LootItemFunction {
                         s.components.set(component.clone());
                     }
                 }
-                if !valid_components(&stack)? {
+                if !valid_components(&stack, c.facts)? {
                     stack = previous;
                 }
             }
@@ -424,13 +424,46 @@ fn set_component(stack: &mut ItemStack, component: DataComponent) {
         s.components.set(component);
     }
 }
-fn valid_components(stack: &ItemStack) -> Result<bool> {
+fn valid_components(stack: &ItemStack, facts: &dyn super::LootFacts) -> Result<bool> {
     let map = stack.components()?;
     let max = match map.get(ComponentTypeId::MAX_STACK_SIZE) {
         Some(DataComponent::MaxStackSize(value)) => value.0,
         _ => 1,
     };
-    Ok(stack_count(stack) <= max && !(map.get(ComponentTypeId::MAX_DAMAGE).is_some() && max > 1))
+    if stack_count(stack) > max || (map.get(ComponentTypeId::MAX_DAMAGE).is_some() && max > 1) {
+        return Ok(false);
+    }
+    let contained = |item: &ItemStackTemplate| -> Result<bool> {
+        let stack = ItemStack::new(item.item, item.count, item.components.clone());
+        Ok(item.count <= max_stack_size(&stack)?)
+    };
+    if let Some(DataComponent::Container(items)) = map.get(ComponentTypeId::CONTAINER) {
+        for item in items.0.iter().flatten() {
+            if !contained(item)? {
+                return Ok(false);
+            }
+        }
+    }
+    if let Some(DataComponent::BundleContents(items)) = map.get(ComponentTypeId::BUNDLE_CONTENTS) {
+        for item in items {
+            if !contained(item)? {
+                return Ok(false);
+            }
+        }
+        if !items.is_empty() && !facts.bundle_weight_valid(items)? {
+            return Ok(false);
+        }
+    }
+    if let Some(DataComponent::ChargedProjectiles(items)) =
+        map.get(ComponentTypeId::CHARGED_PROJECTILES)
+    {
+        for item in &items.0 {
+            if !contained(item)? {
+                return Ok(false);
+            }
+        }
+    }
+    Ok(true)
 }
 impl Holder<LootItemFunction> {
     pub(crate) fn apply(

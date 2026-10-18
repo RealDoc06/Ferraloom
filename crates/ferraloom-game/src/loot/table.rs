@@ -310,6 +310,39 @@ impl LootData {
         }
         Ok(())
     }
+    /// Port of LootTable#fill's optional seed and named sequence selection.
+    pub fn fill_seeded(
+        &self,
+        table: &Identifier,
+        container: &mut [ItemStack],
+        params: &LootParams,
+        seed: i64,
+        sources: &mut LootRandomSources<'_>,
+        facts: &dyn LootFacts,
+    ) -> Result<()> {
+        if seed != 0 {
+            return self.fill(
+                table,
+                container,
+                params,
+                &mut LegacyRandomSource::new(seed),
+                facts,
+            );
+        }
+        let value = self
+            .tables
+            .get(table)
+            .ok_or_else(|| super::LootError::MissingReference {
+                registry: "loot_table",
+                id: table.clone(),
+            })?;
+        let random = if let Some(sequence) = &value.random_sequence {
+            sources.sequences.get(sequence, sources.world_seed)
+        } else {
+            &mut *sources.level_random
+        };
+        self.fill(table, container, params, random, facts)
+    }
 }
 pub(crate) fn split_stack(stack: ItemStack, output: &mut Vec<ItemStack>) -> Result<()> {
     let max = max_stack_size(&stack)?;

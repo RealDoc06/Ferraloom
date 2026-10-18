@@ -564,4 +564,27 @@ fn movement_distance_fluid_and_environment_codecs_match_java() {
             "{record}"
         );
     }
+    let source = DamageSource {
+        damage_type: Identifier::parse("generic").unwrap(),
+        source: None,
+        direct: None,
+        position: None,
+    };
+    for record in vectors["damage_predicates"].as_array().unwrap() {
+        assert_eq!(
+            crate::predicates::DamagePredicate::decode(&record["predicate"])
+                .unwrap()
+                .matches(
+                    ferraloom_util::Vec3::new(0.0, 64.0, 0.0),
+                    &source,
+                    record["original"].as_f64().unwrap() as f32,
+                    1.5,
+                    record["blocked"].as_bool().unwrap(),
+                    &NoFacts
+                )
+                .unwrap(),
+            record["matches"].as_bool().unwrap(),
+            "{record}"
+        );
+    }
 }

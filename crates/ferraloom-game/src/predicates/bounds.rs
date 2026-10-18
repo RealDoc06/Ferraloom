@@ -27,11 +27,11 @@ impl DoubleBounds {
         Ok(result)
     }
     pub fn matches(self, value: f64) -> bool {
-        !self.min.is_some_and(|min| min > value) && !self.max.is_some_and(|max| max < value)
+        !self.min.is_some_and(|min| min > value) && self.max.is_none_or(|max| max >= value)
     }
     pub fn matches_sqr(self, value: f64) -> bool {
         !self.min.is_some_and(|min| min * min > value)
-            && !self.max.is_some_and(|max| max * max < value)
+            && self.max.is_none_or(|max| max * max >= value)
     }
 }
 /// Port of MinMaxBounds.Ints.

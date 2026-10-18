@@ -69,3 +69,49 @@ impl DamageSourcePredicate {
             .is_none_or(|expected| expected == (source.source == source.direct)))
     }
 }
+
+/// Port of DamagePredicate#matches. The caller supplies the player's origin,
+/// level facts and the original and actual damage from the damage calculation.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct DamagePredicate {
+    pub dealt: super::DoubleBounds,
+    pub taken: super::DoubleBounds,
+    pub source_entity: Option<EntityPredicate>,
+    pub blocked: Option<bool>,
+    pub damage_type: Option<DamageSourcePredicate>,
+}
+impl DamagePredicate {
+    pub fn decode(v: &Value) -> Result<Self> {
+        Ok(Self {
+            dealt: codec::optional(v, "dealt", super::DoubleBounds::decode)?.unwrap_or_default(),
+            taken: codec::optional(v, "taken", super::DoubleBounds::decode)?.unwrap_or_default(),
+            source_entity: codec::optional(v, "source_entity", EntityPredicate::decode)?,
+            blocked: codec::optional(v, "blocked", codec::boolean)?,
+            damage_type: codec::optional(v, "type", DamageSourcePredicate::decode)?,
+        })
+    }
+    pub fn matches(
+        &self,
+        origin: Vec3,
+        source: &DamageSource,
+        original: f32,
+        actual: f32,
+        blocked: bool,
+        facts: &dyn PredicateContext,
+    ) -> Result<bool> {
+        if !self.dealt.matches(f64::from(original)) || !self.taken.matches(f64::from(actual)) {
+            return Ok(false);
+        }
+        if let Some(test) = &self.source_entity {
+            if !test.matches(source.source, Some(origin), facts)? {
+                return Ok(false);
+            }
+        }
+        if self.blocked.is_some_and(|expected| expected != blocked) {
+            return Ok(false);
+        }
+        self.damage_type
+            .as_ref()
+            .map_or(Ok(true), |test| test.matches(source, origin, facts))
+    }
+}

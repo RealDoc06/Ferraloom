@@ -309,6 +309,12 @@ pub trait LootFacts: PredicateContext {
     ) -> Result<Vec<ferraloom_protocol::component::ItemStackTemplate>> {
         Err(LootError::Unsupported("inventory.bundle_insertion".into()))
     }
+    fn bundle_weight_valid(
+        &self,
+        _items: &[ferraloom_protocol::component::ItemStackTemplate],
+    ) -> Result<bool> {
+        Err(LootError::Unsupported("inventory.bundle_weight".into()))
+    }
     fn player_profile(
         &self,
         _entity: EntityRef,
