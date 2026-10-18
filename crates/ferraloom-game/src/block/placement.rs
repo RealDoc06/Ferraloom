@@ -187,11 +187,12 @@ impl<'stack> BlockPlaceContext<'stack> {
         let step = face.step();
         Self::new(
             reader,
-            UseOnContext::new(
-                context.use_on.player,
-                context.use_on.hand,
-                context.use_on.held_item,
-                PlacementHit {
+            // Keep the original borrowed or retained receiver; never re-wrap it.
+            UseOnContext {
+                player: context.use_on.player,
+                hand: context.use_on.hand,
+                held_item: context.use_on.held_item,
+                hit: PlacementHit {
                     pos,
                     face,
                     inside: false,
@@ -201,7 +202,7 @@ impl<'stack> BlockPlaceContext<'stack> {
                         f64::from(pos.z) + 0.5 + f64::from(step.z) * 0.5,
                     ),
                 },
-            ),
+            },
         )
     }
     pub fn clicked_pos(&self) -> BlockPos {
