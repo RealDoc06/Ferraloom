@@ -1760,7 +1760,12 @@ impl MinecraftServer {
                 let eyes = command.string("facingAnchor") == Some("eyes");
                 let position = Vec3::new(
                     player.position.x,
-                    player.position.y + if eyes { 1.62 } else { 0. },
+                    player.position.y
+                        + if eyes {
+                            f64::from(ferraloom_data::EntityType::PLAYER.data().eye_height)
+                        } else {
+                            0.
+                        },
                     player.position.z,
                 );
                 Some((
@@ -1783,7 +1788,14 @@ impl MinecraftServer {
                     .clone()
                     .with_entity(*target)
                     .with_position(plan.position);
-                let rotation = facing_source.facing(position, Some(1.62)).rotation;
+                let rotation = facing_source
+                    .facing(
+                        position,
+                        Some(f64::from(
+                            ferraloom_data::EntityType::PLAYER.data().eye_height,
+                        )),
+                    )
+                    .rotation;
                 let player = self
                     .level
                     .level
