@@ -87,7 +87,7 @@ fn water(level: &LevelReaderRef<'_, '_>, pos: BlockPos) -> Result<bool, LevelErr
         .fluid_tags()?
         .contains_key(F::WATER, level.get_fluid_state(pos)?.fluid_type))
 }
-fn facing(state: BlockState) -> Direction {
+pub(super) fn facing(state: BlockState) -> Direction {
     match state.get(p::FACING).expect("horizontal facing") {
         p::Facing::North => Direction::North,
         p::Facing::South => Direction::South,
@@ -298,12 +298,15 @@ impl BlockBehavior for Plant {
                     )
                     || (below.block() == block && below.get(p::LAYERS) == Some(8)))
             }
-            C::BaseCoralWallFanBlock => {
+            C::BaseCoralWallFanBlock | C::CoralWallFanBlock => {
                 let d = facing(state);
                 let support = pos.relative(d.opposite(), 1);
                 level.is_face_sturdy(level.get_block_state(support)?, support, d)
             }
-            C::BaseCoralPlantBlock | C::BaseCoralFanBlock => {
+            C::BaseCoralPlantBlock
+            | C::BaseCoralFanBlock
+            | C::CoralPlantBlock
+            | C::CoralFanBlock => {
                 level.is_face_sturdy(level.get_block_state(below_pos)?, below_pos, Direction::Up)
             }
             _ => may_place_on(state, level.get_block_state(below_pos)?, below_pos, level),
@@ -375,9 +378,15 @@ impl BlockBehavior for Plant {
                     state
                 });
             }
-            C::BaseCoralPlantBlock | C::BaseCoralFanBlock | C::BaseCoralWallFanBlock => {
+            C::BaseCoralPlantBlock
+            | C::BaseCoralFanBlock
+            | C::BaseCoralWallFanBlock
+            | C::CoralWallFanBlock => {
                 schedule_water(state, pos, level)?;
-                let check = if block.class() == C::BaseCoralWallFanBlock {
+                let check = if matches!(
+                    block.class(),
+                    C::BaseCoralWallFanBlock | C::CoralWallFanBlock
+                ) {
                     direction.opposite() == facing(state)
                 } else {
                     direction == Direction::Down

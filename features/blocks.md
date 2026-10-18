@@ -330,3 +330,5 @@ One class row per bootstrapped runtime Block class, listing every block id assig
 | blocks.plants.worldgen-bridge | Replay vegetation placement through the real shared block registry | Vanilla feature fixtures | `plants::worldgen_tests::vegetation_fixtures_use_real_game_bridge` | pass | todo |
 
 | blocks.plants.crop-bonemeal-growth-speed | Crop bonemeal increments, torchflower conversion, moisture and crowding growth speed | `CropBlock`, `BeetrootBlock`, `TorchflowerCropBlock` on a real vanilla Level | `plants::tests::crop_bonemeal_and_growth_speed_match_real_vanilla_methods` | pass | todo |
+
+| blocks.plants.snow-melt-threshold | Snow melt uses block light above 11, drop hook and captured destruction context | `SnowLayerBlock#randomTick` | `plants::tests::snow_melts_only_above_eleven_block_light_and_emits_destroy_context` | - | todo |

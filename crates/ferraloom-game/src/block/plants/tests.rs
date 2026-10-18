@@ -311,3 +311,39 @@ fn crop_bonemeal_and_growth_speed_match_real_vanilla_methods() {
     }
     assert_eq!(count, 592);
 }
+
+#[test]
+fn snow_melts_only_above_eleven_block_light_and_emits_destroy_context() {
+    for light in [0, 11, 12, 15] {
+        let mut level = level();
+        let pos = BlockPos::new(8, 5, 8);
+        let state = Block::SNOW.default_state();
+        level
+            .set_block_state(pos.below(1), Block::STONE.default_state())
+            .unwrap();
+        level.set_block_state(pos, state).unwrap();
+        level.set_light_snapshot(
+            ChunkPos::new(0, 0),
+            crate::level::weather::ChunkLightSnapshot {
+                sky: [(0, ferraloom_light::DataLayer::new(15))].into(),
+                block: [(0, ferraloom_light::DataLayer::new(light))].into(),
+            },
+        );
+        snow::SNOW.random_tick(state, pos, &mut level).unwrap();
+        assert_eq!(
+            level.get_block_state(pos).unwrap(),
+            if light > 11 {
+                Block::AIR.default_state()
+            } else {
+                state
+            }
+        );
+        let effects = level.take_effects();
+        assert_eq!(effects.iter().filter(|e|matches!(e,LevelEffect::GameEvent{event:ferraloom_data::registries::game_event::Id::BLOCK_DESTROY,affected_state:Some(affected),..} if *affected==state)).count(),usize::from(light>11));
+        assert!(
+            !effects
+                .iter()
+                .any(|e| matches!(e, LevelEffect::DestroyParticles { .. }))
+        );
+    }
+}
