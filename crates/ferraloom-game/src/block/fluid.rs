@@ -207,12 +207,6 @@ impl FlowingFluid {
     fn can_hold_specific(state: BlockState, fluid: Id, level: &Level) -> Result<bool, LevelError> {
         if state
             .block()
-            .is_instance_of(BlockClass::SimpleWaterloggedBlock)
-        {
-            return Ok(fluid == Id::WATER);
-        }
-        if state
-            .block()
             .is_instance_of(BlockClass::LiquidBlockContainer)
         {
             return Ok(level
@@ -423,16 +417,6 @@ impl FlowingFluid {
             return Ok(());
         }
         if state
-            .block()
-            .is_instance_of(BlockClass::SimpleWaterloggedBlock)
-        {
-            SimpleWaterloggedBlock::place_liquid(
-                state,
-                pos,
-                target,
-                &mut LevelAccessRef::Server(level),
-            )?;
-        } else if state
             .block()
             .is_instance_of(BlockClass::LiquidBlockContainer)
         {
@@ -878,6 +862,29 @@ impl BlockBehavior for LiquidBlock {
 }
 
 pub struct SimpleWaterloggedBlock;
+pub static SIMPLE_WATERLOGGED_BLOCK: SimpleWaterloggedBlock = SimpleWaterloggedBlock;
+impl BlockBehavior for SimpleWaterloggedBlock {
+    fn can_place_liquid(&self, _state: BlockState, fluid: Id) -> bool {
+        fluid == Id::WATER
+    }
+    fn place_liquid(
+        &self,
+        state: BlockState,
+        pos: BlockPos,
+        fluid: FluidState,
+        level: &mut LevelAccessRef<'_>,
+    ) -> Result<bool, LevelError> {
+        Self::place_liquid(state, pos, fluid, level)
+    }
+    fn pickup_block(
+        &self,
+        state: BlockState,
+        pos: BlockPos,
+        level: &mut LevelAccessRef<'_>,
+    ) -> Result<Option<Item>, LevelError> {
+        Self::pickup_block(state, pos, level)
+    }
+}
 impl SimpleWaterloggedBlock {
     pub fn place_liquid(
         state: BlockState,

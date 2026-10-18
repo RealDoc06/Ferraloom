@@ -162,6 +162,16 @@ public final class NeighborVectors {
                 analog.trace.clear();analog.updateNeighbourForOutputSignal(center,Blocks.CAKE);
                 System.out.println("analog-neighbors\\t"+String.join(";",analog.trace));
                 var waterlogged=new MutationFixture(r);var pos=new BlockPos(8,0,8);
+                for(var type:net.minecraft.world.level.block.state.properties.SlabType.values())for(var liquid:List.of(net.minecraft.world.level.material.Fluids.WATER.getSource(false),net.minecraft.world.level.material.Fluids.FLOWING_WATER.getFlowing(7,false),net.minecraft.world.level.material.Fluids.LAVA.getSource(false))){
+                  var slabLevel=new MutationFixture(r);var slab=Blocks.STONE_SLAB.defaultBlockState().setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.SLAB_TYPE,type);
+                  slabLevel.setBlock(pos,slab,816,512);
+                  var behavior=(net.minecraft.world.level.block.LiquidBlockContainer)Blocks.STONE_SLAB;
+                  boolean can=behavior.canPlaceLiquid(null,slabLevel,pos,slab,liquid.getType());
+                  boolean placed=behavior.placeLiquid(slabLevel,pos,slab,liquid);
+                  boolean wet=slabLevel.getBlockState(pos).getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.WATERLOGGED);
+                  var bucket=((net.minecraft.world.level.block.BucketPickup)Blocks.STONE_SLAB).pickupBlock(null,slabLevel,pos,slabLevel.getBlockState(pos));
+                  System.out.println("slab-waterlogged:"+type.getSerializedName()+":"+net.minecraft.core.registries.BuiltInRegistries.FLUID.getKey(liquid.getType())+"\\t"+can+":"+placed+":"+wet+":"+net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(bucket.getItem()));
+                }
                 waterlogged.setBlock(pos,Blocks.IRON_CHAIN.defaultBlockState(),528,512);waterlogged.trace.clear();
                 var fluid=net.minecraft.world.level.material.Fluids.WATER.getSource(false);
                 boolean placed=((net.minecraft.world.level.block.LiquidBlockContainer)Blocks.IRON_CHAIN).placeLiquid(waterlogged,pos,waterlogged.getBlockState(pos),fluid);

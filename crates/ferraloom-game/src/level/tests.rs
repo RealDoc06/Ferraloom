@@ -1198,3 +1198,82 @@ fn whole_effect_skips_share_the_block_policy_and_counters() {
         }
     );
 }
+
+#[test]
+fn slab_waterlogging_matches_vanilla_interface_overrides_and_source_identity() {
+    use crate::block::{BlockMethod, LevelAccessRef, fluid::FlowingFluid};
+    use ferraloom_data::{
+        Item,
+        properties::{self, Type},
+        registries::fluid::Id as Fluid,
+    };
+    for line in include_str!("../../tests/java/level/slab-waterlogged.tsv").lines() {
+        let (case, expected) = line.split_once('\t').unwrap();
+        let (slab_type, fluid) = case
+            .strip_prefix("slab-waterlogged:")
+            .unwrap()
+            .split_once(':')
+            .unwrap();
+        let slab_type = match slab_type {
+            "bottom" => Type::Bottom,
+            "top" => Type::Top,
+            "double" => Type::Double,
+            _ => unreachable!(),
+        };
+        let fluid = Fluid::from_name(fluid).unwrap();
+        let fluid_state = if fluid == Fluid::FLOWING_WATER {
+            FlowingFluid::Water.flowing(7, false)
+        } else {
+            FlowingFluid::from_id(fluid).unwrap().source()
+        };
+        let mut level = flat_pool();
+        let pos = BlockPos::new(8, 0, 8);
+        let slab = Block::STONE_SLAB
+            .default_state()
+            .with(properties::TYPE, slab_type)
+            .unwrap();
+        level.set_block_state(pos, slab).unwrap();
+        let can = level
+            .required_block_behavior(slab.block(), BlockMethod::CanPlaceLiquid)
+            .unwrap()
+            .can_place_liquid(slab, fluid);
+        let placed = level
+            .required_block_behavior(slab.block(), BlockMethod::PlaceLiquid)
+            .unwrap()
+            .place_liquid(
+                slab,
+                pos,
+                fluid_state,
+                &mut LevelAccessRef::Server(&mut level),
+            )
+            .unwrap();
+        let wet = level.get_block_state(pos).unwrap();
+        assert_eq!(
+            level.has_scheduled_fluid_tick(pos, Fluid::WATER),
+            placed,
+            "{case}"
+        );
+        let bucket = level
+            .required_block_behavior(slab.block(), BlockMethod::PickupBlock)
+            .unwrap()
+            .pickup_block(wet, pos, &mut LevelAccessRef::Server(&mut level))
+            .unwrap()
+            .unwrap_or(Item::AIR);
+        assert_eq!(
+            format!(
+                "{can}:{placed}:{}:{}",
+                wet.get(properties::WATERLOGGED).unwrap(),
+                bucket.name()
+            ),
+            expected,
+            "{case}"
+        );
+        assert_eq!(
+            level
+                .get_block_state(pos)
+                .unwrap()
+                .get(properties::WATERLOGGED),
+            Some(false)
+        );
+    }
+}

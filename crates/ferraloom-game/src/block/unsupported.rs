@@ -66,12 +66,10 @@ impl BlockMethod {
             Self::IsCollisionShapeFullBlock => Vanilla::IsCollisionShapeFullBlock,
             Self::EntityInsideCollisionShape => Vanilla::GetEntityInsideCollisionShape,
             Self::TriggerEvent => Vanilla::TriggerEvent,
-            Self::CanPlaceLiquid
-            | Self::PlaceLiquid
-            | Self::PickupBlock
-            | Self::FluidTick
-            | Self::FluidRandomTick
-            | Self::BubbleColumnUpdate => return None,
+            Self::CanPlaceLiquid => Vanilla::CanPlaceLiquid,
+            Self::PlaceLiquid => Vanilla::PlaceLiquid,
+            Self::PickupBlock => Vanilla::PickupBlock,
+            Self::FluidTick | Self::FluidRandomTick | Self::BubbleColumnUpdate => return None,
         })
     }
     const fn can_skip(self) -> bool {

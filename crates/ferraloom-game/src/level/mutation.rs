@@ -60,6 +60,12 @@ impl Level {
             .vanilla_method()
             .is_some_and(|method| !block.overrides(method))
         {
+            if matches!(
+                method,
+                BlockMethod::CanPlaceLiquid | BlockMethod::PlaceLiquid | BlockMethod::PickupBlock
+            ) {
+                return Ok(&crate::block::fluid::SIMPLE_WATERLOGGED_BLOCK);
+            }
             return Ok(&crate::block::BASE_BLOCK);
         }
         crate::block::dispatch::ported_behavior(block, method)
