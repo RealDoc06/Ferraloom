@@ -249,7 +249,9 @@ impl LootData {
     ) -> Result<Vec<ItemStack>> {
         let evaluate = |random: &mut dyn RandomSource| {
             self.get_random_items_from_holder_with_runtime(
-                table, params, &mut BorrowedRuntime::new(random, facts),
+                table,
+                params,
+                &mut BorrowedRuntime::new(random, facts),
             )
         };
         if let Some(sequence) = &table.resolve(self)?.random_sequence {
@@ -269,7 +271,11 @@ impl LootData {
         runtime: &mut dyn LootRuntime,
     ) -> Result<Vec<ItemStack>> {
         let mut output = Vec::new();
-        let mut context = EvalContext { params, runtime, visited: BTreeSet::new() };
+        let mut context = EvalContext {
+            params,
+            runtime,
+            visited: BTreeSet::new(),
+        };
         table.raw(self, &mut context, &mut |stack, c| {
             if c.facts().item_enabled(&stack)? {
                 split_stack(stack, &mut output)?;
