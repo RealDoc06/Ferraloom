@@ -1244,6 +1244,7 @@ impl MinecraftServer {
                 LevelEffect::DestroyParticles { .. } => self.pending_level_hooks.particles += 1,
                 LevelEffect::BlockDestroyed { .. } => self.pending_level_hooks.game_events += 1,
                 LevelEffect::PendingPrecipitation(_) => {}
+                LevelEffect::BroadcastAll(packet) => self.broadcast(*packet),
                 LevelEffect::PlayerPacket { recipients, packet } => {
                     for entity in recipients {
                         for &connection in &self.players {

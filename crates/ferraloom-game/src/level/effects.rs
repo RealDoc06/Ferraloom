@@ -50,6 +50,8 @@ pub enum LevelEffect {
         recipients: Vec<crate::entity::EntityRef>,
         packet: Box<ferraloom_protocol::play::clientbound::Packet>,
     },
+    /// Native PlayerList#broadcastAll, ordered with individual player output.
+    BroadcastAll(Box<ferraloom_protocol::play::clientbound::Packet>),
     GameEvent {
         event: ferraloom_data::registries::game_event::Id,
         position: ferraloom_util::Vec3,
@@ -59,6 +61,16 @@ pub enum LevelEffect {
 }
 
 impl super::Level {
+    /// Publish queued canonical ServerScoreboard output at its native producer
+    /// point; each connection observes these between surrounding player packets.
+    pub fn emit_scoreboard_packets(&mut self) -> Result<(), super::LevelError> {
+        let packets = self.shared_mut()?.scoreboard.drain_packets();
+        for packet in packets {
+            self.emit(LevelEffect::BroadcastAll(Box::new(packet)));
+        }
+        Ok(())
+    }
+
     /// Consume every captured accepted player transition in source order. The
     /// listener invokes this before synchronous ticket-dependent work.
     pub fn take_player_section_changes(
