@@ -112,15 +112,15 @@ impl MenuProvider for ContainerMenuProvider {
             {
                 return Ok(None);
             }
-            if !spectator && let Some(lock) = &state.container().expect("container provider").lock {
-                if !crate::predicates::ItemPredicate(lock.clone())
+            if !spectator
+                && let Some(lock) = &state.container().expect("container provider").lock
+                && !crate::predicates::ItemPredicate(lock.clone())
                     .matches(&hand, level)
                     .map_err(|_| {
                         crate::inventory::MenuError::Unsupported("container lock predicate facts")
                     })?
-                {
-                    return Ok(None);
-                }
+            {
+                return Ok(None);
             }
         }
         for &handle in &self.entities {

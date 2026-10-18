@@ -172,9 +172,9 @@ impl BlockBehavior for ContainerBlock {
         {
             return Ok(entity.analog_output());
         }
-        let container = match refs.as_slice() {
-            &[single] => super::access::ContainerRef::Single(single),
-            &[first, second] => super::access::ContainerRef::Double([first, second]),
+        let container = match *refs.as_slice() {
+            [single] => super::access::ContainerRef::Single(single),
+            [first, second] => super::access::ContainerRef::Double([first, second]),
             _ => unreachable!(),
         };
         super::access::analog_output(&container, level)
