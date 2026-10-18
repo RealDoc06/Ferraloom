@@ -655,10 +655,14 @@ impl EntitySelector {
         }
         let players_only = players_only || !self.includes_entities;
         if let Some(uuid) = self.uuid {
-            return Ok(query
+            let entities = query
                 .entity_by_uuid(uuid, players_only)
                 .into_iter()
-                .collect());
+                .collect::<Vec<_>>();
+            for entity in &entities {
+                query.validate_candidate(*entity)?;
+            }
+            return Ok(entities);
         }
         let origin = Vec3::new(
             self.position[0].unwrap_or(source.position.x),
@@ -694,6 +698,7 @@ impl EntitySelector {
         };
         let mut result = Vec::new();
         'candidate: for entity in candidates {
+            query.validate_candidate(entity)?;
             let Some(info) = query.info(entity) else {
                 continue;
             };
@@ -798,6 +803,10 @@ pub trait EntityQuery {
             self.info(*entity)
                 .is_some_and(|info| info.uuid == uuid && (!players_only || info.player))
         })
+    }
+    /// Required live metadata may fail explicitly while its native API is unported.
+    fn validate_candidate(&self, _entity: EntityRef) -> Result<(), CommandSyntaxException> {
+        Ok(())
     }
     fn info(&self, entity: EntityRef) -> Option<SelectorEntity<'_>>;
     fn bounding_box(&self, entity: EntityRef) -> Option<Aabb> {

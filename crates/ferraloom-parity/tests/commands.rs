@@ -302,6 +302,102 @@ async fn message_arguments(session: &mut Session) -> Result<ObservationLog> {
         };
         log.record(format!("message.{index}"), value)?;
     }
+    log.record(
+        "team.no_team",
+        command(
+            session.bot(sender)?,
+            "teammsg before joining",
+            "commands.teammsg.failed.noteam",
+        )
+        .await?,
+    )?;
+    for (text, key) in [
+        (
+            "team add parity \"Parity Team\"",
+            "commands.team.add.success",
+        ),
+        (
+            "team modify parity color gold",
+            "commands.team.option.color.success",
+        ),
+        ("team join parity @a", "commands.team.join.success.multiple"),
+        (
+            "scoreboard objectives add selection dummy",
+            "commands.scoreboard.objectives.add.success",
+        ),
+        (
+            "scoreboard players set ParityBot selection 7",
+            "commands.scoreboard.players.set.success.single",
+        ),
+    ] {
+        command(session.bot(sender)?, text, key).await?;
+    }
+    for (index, text) in [
+        "say selected @a[team=parity,scores={selection=7..}]",
+        "say missing @a[team=!parity,scores={absent=1..}]",
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        session.bot(sender)?.command(text).await?;
+        let packet = session
+            .bot(witness)?
+            .wait_for(
+                "score/team message selector",
+                Ticks::DEFAULT,
+                |_, packet| matches!(packet, cb::Packet::DisguisedChat(_)),
+            )
+            .await?;
+        let cb::Packet::DisguisedChat(packet) = packet.as_ref() else {
+            unreachable!()
+        };
+        log.record(format!("selector.{index}"), json(&packet.message)?)?;
+    }
+    let outsider = session.join("OutsideTeam").await?;
+    session.bot(outsider)?.synchronize().await?;
+    let outside_messages = session.bot(outsider)?.snapshot().messages.len();
+    for (index, signed, text) in [
+        (0, false, "teammsg plain team"),
+        (1, true, "tm signed team"),
+    ] {
+        let bot = session.bot(sender)?;
+        if signed {
+            bot.signed_command(text).await?;
+        } else {
+            bot.command(text).await?;
+        }
+        for (recipient, expected_type) in [
+            (sender, "minecraft:team_msg_command_outgoing"),
+            (witness, "minecraft:team_msg_command_incoming"),
+        ] {
+            let packet=session.bot(recipient)?.wait_for("team message variant and direction",Ticks::DEFAULT,|_,packet| {
+                let binding=match packet { cb::Packet::DisguisedChat(packet)=>&packet.chat_type,cb::Packet::PlayerChat(packet)=>&packet.chat_type,_=>return false };
+                matches!(&binding.chat_type.0,ferraloom_parity::protocol::codec::Holder::Reference(id) if id.as_str()==expected_type)
+            }).await?;
+            let (kind, message, binding) = match packet.as_ref() {
+                cb::Packet::DisguisedChat(packet) => {
+                    ensure!(!signed, "unsigned team message used wrong packet variant");
+                    ("DisguisedChat", json(&packet.message)?, &packet.chat_type)
+                }
+                cb::Packet::PlayerChat(packet) => {
+                    ensure!(signed, "signed team message used wrong packet variant");
+                    (
+                        "PlayerChat",
+                        serde_json::json!({"content":packet.body.content.0,"unsigned":packet.unsigned_content.as_ref().map(json).transpose()?}),
+                        &packet.chat_type,
+                    )
+                }
+                _ => unreachable!(),
+            };
+            log.record(format!("team.{index}.{expected_type}"),serde_json::json!({"kind":kind,"message":message,"name":json(&binding.name)?,"target":binding.target_name.as_ref().map(json).transpose()?}))?;
+        }
+    }
+    session.bot(outsider)?.synchronize().await?;
+    ensure!(
+        session.bot(outsider)?.snapshot().messages.len() == outside_messages,
+        "team message reached a nonmember"
+    );
+    log.record("team.outsider_messages", 0)?;
     Ok(log)
 }
 
