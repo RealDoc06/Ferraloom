@@ -265,14 +265,45 @@ pub fn recipe_unlocked(
         None,
     )
 }
-/// Port of ServerPlayer#triggerRecipeCrafted and RecipeCraftedTrigger#trigger.
-/// The captured list contains native grid receiver identities, including empty
-/// stacks and repeated refs. Retain it across nested award effects, never copy it.
+/// Port of CriteriaTriggers.RECIPE_CRAFTED at ServerPlayer#triggerRecipeCrafted.
 pub fn recipe_crafted(
     level: &mut Level,
     player: EntityRef,
     recipe: &RecipeHolder,
     ingredients: &[StackRef],
+) -> Result<(), LevelError> {
+    recipe_crafted_event(
+        level,
+        player,
+        recipe,
+        ingredients,
+        TriggerType::RecipeCrafted,
+    )
+}
+/// Port of CriteriaTriggers.CRAFTER_RECIPE_CRAFTED at CrafterBlock#dispenseItem.
+/// The producer captures the eligible nearby players at the native call point.
+pub fn crafter_recipe_crafted(
+    level: &mut Level,
+    player: EntityRef,
+    recipe: &RecipeHolder,
+    ingredients: &[StackRef],
+) -> Result<(), LevelError> {
+    recipe_crafted_event(
+        level,
+        player,
+        recipe,
+        ingredients,
+        TriggerType::CrafterRecipeCrafted,
+    )
+}
+/// Keep ordered native receiver identities, including empty stacks and repeated
+/// refs, retained across all synchronous award effects without copying inputs.
+fn recipe_crafted_event(
+    level: &mut Level,
+    player: EntityRef,
+    recipe: &RecipeHolder,
+    ingredients: &[StackRef],
+    trigger: TriggerType,
 ) -> Result<(), LevelError> {
     for (index, &stack) in ingredients.iter().enumerate() {
         if let Err(error) = level.retain_stack(stack) {
@@ -288,7 +319,7 @@ pub fn recipe_crafted(
         live::trigger(
             level,
             player,
-            TriggerType::RecipeCrafted,
+            trigger,
             TriggerEvent::RecipeLive {
                 id: &id,
                 ingredients,

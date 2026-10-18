@@ -1669,6 +1669,51 @@ fn vanilla_recipe_crafted_retained_receivers_preserve_order_and_duplicates() {
 }
 
 #[test]
+fn recipe_crafted_families_use_distinct_listeners_and_shared_retained_inputs() {
+    use crate::{
+        entity::player::ServerPlayer,
+        inventory::{ContainerHandle, ContainerSlot},
+    };
+    let rows: Vec<_> = [("ordinary", "recipe_crafted"), ("crafter", "crafter_recipe_crafted")]
+        .into_iter()
+        .map(|(name, trigger)| json!({"id":format!("test:{name}"),"value":{"criteria":{"used":{
+            "trigger":trigger,"conditions":{"recipes":"crafting_table","ingredients":[{"items":"stone"},{"items":"stone"}]}
+        }}}}))
+        .collect();
+    let manager = ServerAdvancementManager::new(holders(&json!(rows)));
+    let (mut level, player) = live_fixture(manager);
+    level
+        .entity_mut::<ServerPlayer>(player)
+        .unwrap()
+        .inventory
+        .items[0] = ItemStack::new(Item::STONE, 1, Default::default());
+    let address = ContainerSlot {
+        container: ContainerHandle::PlayerInventory(player),
+        slot: 0,
+    };
+    let input = level.stack_ref(address).unwrap();
+    let resources = level.container_resources().unwrap();
+    let recipe = &resources.recipes.recipes()[0];
+    let done = |level: &crate::level::Level| {
+        ["test:ordinary", "test:crafter"].map(|name| {
+            level
+                .entity::<ServerPlayer>(player)
+                .unwrap()
+                .advancements
+                .get_progress(&id(name))
+                .unwrap()
+                .is_done()
+        })
+    };
+    criteria::crafter_recipe_crafted(&mut level, player, recipe, &[input, input]).unwrap();
+    assert_eq!(done(&level), [false, true]);
+    assert!(!level.stack_is_retained(address).unwrap());
+    criteria::recipe_crafted(&mut level, player, recipe, &[input, input]).unwrap();
+    assert_eq!(done(&level), [true, true]);
+    assert!(!level.stack_is_retained(address).unwrap());
+}
+
+#[test]
 fn recipe_crafted_releases_roots_on_capture_and_predicate_errors() {
     use crate::{
         entity::player::ServerPlayer,
