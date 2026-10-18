@@ -126,6 +126,104 @@ impl FixedPlayerDistanceChunkTracker {
     }
 }
 
+/// DistanceManager.PlayerTicketTracker on the shared fixed-point graph.
+/// Ticket changes are submitted to the native four-priority throttler; the
+/// runtime rechecks have_ticket_for before applying each Add operation.
+pub struct PlayerTicketTracker {
+    graph: ChunkTracker,
+    view_distance: i32,
+    to_update: ferraloom_util::collections::LongOpenHashSet,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PlayerLoadingTask {
+    Add(ChunkPos),
+    Remove(ChunkPos),
+}
+impl Default for PlayerTicketTracker {
+    fn default() -> Self {
+        let mut graph = ChunkTracker::new(34, 34, 32, i32::MAX);
+        graph.changes = Some(Vec::new());
+        Self {
+            graph,
+            view_distance: 0,
+            to_update: ferraloom_util::collections::LongOpenHashSet::new(),
+        }
+    }
+}
+impl PlayerTicketTracker {
+    pub fn update_player_chunk(&mut self, pos: ChunkPos, present: bool) {
+        self.graph
+            .update_source_level(pos, if present { 0 } else { i32::MAX }, present);
+    }
+    pub fn has_ticket(&self, pos: ChunkPos) -> bool {
+        self.graph.get_level(pos.pack()) <= self.view_distance
+    }
+    fn change_ticket(
+        dispatcher: &mut super::chunk_task_dispatcher::ThrottlingChunkTaskDispatcher<
+            PlayerLoadingTask,
+        >,
+        pos: ChunkPos,
+        level: i32,
+        saw: bool,
+        sees: bool,
+    ) {
+        if saw == sees {
+            return;
+        }
+        if sees {
+            dispatcher.submit(pos, level, PlayerLoadingTask::Add(pos));
+        } else {
+            dispatcher.release(pos, true, Some(PlayerLoadingTask::Remove(pos)));
+        }
+    }
+    pub fn update_view_distance(
+        &mut self,
+        distance: i32,
+        dispatcher: &mut super::chunk_task_dispatcher::ThrottlingChunkTaskDispatcher<
+            PlayerLoadingTask,
+        >,
+    ) {
+        for (&key, &level) in self.graph.chunks.iter() {
+            let level = i32::from(level);
+            Self::change_ticket(
+                dispatcher,
+                ChunkPos::unpack(key),
+                level,
+                level <= self.view_distance,
+                level <= distance,
+            );
+        }
+        self.view_distance = distance;
+    }
+    pub fn run_all_updates(
+        &mut self,
+        dispatcher: &mut super::chunk_task_dispatcher::ThrottlingChunkTaskDispatcher<
+            PlayerLoadingTask,
+        >,
+    ) {
+        self.graph.run_all_updates();
+        for change in std::mem::take(self.graph.changes.as_mut().unwrap()) {
+            self.to_update.insert(change.pos.pack());
+        }
+        for &key in self.to_update.iter() {
+            let pos = ChunkPos::unpack(key);
+            let old = dispatcher.queue_level(pos);
+            let level = self.graph.get_level(key);
+            if old != level {
+                dispatcher.on_level_change(pos, level);
+                Self::change_ticket(
+                    dispatcher,
+                    pos,
+                    level,
+                    old <= self.view_distance,
+                    level <= self.view_distance,
+                );
+            }
+        }
+        self.to_update.clear();
+    }
+}
+
 /// Concrete shared ChunkTracker/DynamicGraphMinFixedPoint queue. Maps are
 /// lookups plus the exact fastutil chunk iteration; queues retain FIFO order.
 struct ChunkTracker {

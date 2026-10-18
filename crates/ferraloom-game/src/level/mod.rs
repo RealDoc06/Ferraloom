@@ -17,6 +17,7 @@ mod broadcast;
 pub mod chunk;
 pub mod chunk_holder;
 pub mod chunk_map;
+pub mod chunk_task_dispatcher;
 pub mod distance_manager;
 pub mod effects;
 pub mod entity;
