@@ -11,6 +11,13 @@ pub mod climbable;
 pub mod freezing;
 pub mod travel;
 
+/// Port of LivingEntity.Fallsounds, selected virtually by the entity family.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct FallSounds {
+    pub small: ferraloom_data::registries::sound_event::Id,
+    pub big: ferraloom_data::registries::sound_event::Id,
+}
+
 /// Port of LivingEntity's canonical attributes, metadata, equipment and current
 /// unarmored damage primitive. Every concrete subclass embeds this state once.
 #[derive(Debug)]

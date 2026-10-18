@@ -2,13 +2,13 @@ use super::*;
 use crate::entity::{EntityData, player::ServerPlayer};
 use ferraloom_util::Uuid;
 
-fn float(bits: &str) -> f32 {
+pub(super) fn float(bits: &str) -> f32 {
     f32::from_bits(u32::from_str_radix(bits, 16).unwrap())
 }
-fn double(bits: &str) -> f64 {
+pub(super) fn double(bits: &str) -> f64 {
     f64::from_bits(u64::from_str_radix(bits, 16).unwrap())
 }
-fn vector(value: &str) -> Vec3 {
+pub(super) fn vector(value: &str) -> Vec3 {
     let mut parts = value.split(',').map(double);
     Vec3::new(
         parts.next().unwrap(),
@@ -16,7 +16,7 @@ fn vector(value: &str) -> Vec3 {
         parts.next().unwrap(),
     )
 }
-fn bits(value: Vec3) -> String {
+pub(super) fn bits(value: Vec3) -> String {
     format!(
         "{:x},{:x},{:x}",
         value.x.to_bits(),
@@ -24,7 +24,7 @@ fn bits(value: Vec3) -> String {
         value.z.to_bits()
     )
 }
-fn rows(prefix: &str) -> impl Iterator<Item = Vec<&'static str>> {
+pub(super) fn rows(prefix: &str) -> impl Iterator<Item = Vec<&'static str>> {
     include_str!("../../../../tests/java/entity/vectors.tsv")
         .lines()
         .filter(move |line| line.starts_with(prefix))

@@ -10,6 +10,7 @@ use ferraloom_data::{
 };
 use ferraloom_util::{Vec3, java, mth};
 
+pub mod fall_flying;
 pub mod fluid;
 
 /// Port of LivingEntity#getEffectiveGravity, reading the falling flag before the

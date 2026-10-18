@@ -419,6 +419,14 @@ pub trait Entity: Sync {
     fn swim_sound(&self) -> ferraloom_data::registries::sound_event::Id {
         ferraloom_data::registries::sound_event::Id::ENTITY_GENERIC_SWIM
     }
+    /// Port of LivingEntity#getFallSounds's inherited selection.
+    fn fall_sounds(&self) -> living::FallSounds {
+        use ferraloom_data::registries::sound_event::Id as Sound;
+        living::FallSounds {
+            small: Sound::ENTITY_GENERIC_SMALL_FALL,
+            big: Sound::ENTITY_GENERIC_BIG_FALL,
+        }
+    }
     fn swim_splash_sound(&self) -> ferraloom_data::registries::sound_event::Id {
         ferraloom_data::registries::sound_event::Id::ENTITY_GENERIC_SPLASH
     }

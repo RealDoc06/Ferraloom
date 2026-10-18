@@ -888,6 +888,13 @@ impl crate::entity::Entity for PlayerBehavior {
     fn swim_sound(&self) -> ferraloom_data::registries::sound_event::Id {
         ferraloom_data::registries::sound_event::Id::ENTITY_PLAYER_SWIM
     }
+    fn fall_sounds(&self) -> super::living::FallSounds {
+        use ferraloom_data::registries::sound_event::Id as Sound;
+        super::living::FallSounds {
+            small: Sound::ENTITY_PLAYER_SMALL_FALL,
+            big: Sound::ENTITY_PLAYER_BIG_FALL,
+        }
+    }
     fn swim_splash_sound(&self) -> ferraloom_data::registries::sound_event::Id {
         ferraloom_data::registries::sound_event::Id::ENTITY_PLAYER_SPLASH
     }
