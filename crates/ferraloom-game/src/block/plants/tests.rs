@@ -11,7 +11,7 @@ static EMPTY: Behaviors = Behaviors::EMPTY;
 fn level() -> Level {
     level_with_height(2)
 }
-fn level_with_height(sections: i32) -> Level {
+pub(super) fn level_with_height(sections: i32) -> Level {
     let mut level = Level::new(
         Region::new(&EMPTY),
         crate::level::LevelContext::fixture(0, 63),
@@ -133,7 +133,7 @@ fn shared_raw_brightness_requires_light_context() {
     );
 }
 
-fn tags() -> (
+pub(super) fn tags() -> (
     Arc<ferraloom_data::datapack::TagSet<Block>>,
     Arc<ferraloom_data::datapack::TagSet<ferraloom_data::registries::fluid::Id>>,
 ) {

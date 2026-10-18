@@ -258,3 +258,6 @@ mod worldgen_tests;
 
 #[cfg(test)]
 mod tree_worldgen_tests;
+
+#[cfg(test)]
+mod runtime_tests;
