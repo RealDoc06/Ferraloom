@@ -10,6 +10,7 @@ pub mod feedback;
 pub mod forceload;
 pub mod message;
 pub mod permissions;
+pub mod placement;
 pub mod source;
 pub mod spawn;
 pub mod suggestions;

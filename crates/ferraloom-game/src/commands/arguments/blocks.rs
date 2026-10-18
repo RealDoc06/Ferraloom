@@ -126,19 +126,22 @@ pub enum BlockPredicate {
     },
 }
 impl BlockPredicate {
-    pub fn matches(&self, state: BlockState, block_entity: Option<&Tag>) -> bool {
-        let (block_matches, properties, expected_nbt) = match self {
-            Self::Block(input) => (
-                input.state.block() == state.block(),
-                &input.properties,
-                &input.nbt,
-            ),
+    /// Port of BlockPredicateArgument.Result#requiresNbt.
+    pub fn requires_nbt(&self) -> bool {
+        self.expected_nbt().is_some()
+    }
+    fn expected_nbt(&self) -> Option<&Tag> {
+        match self {
+            Self::Block(input) => input.nbt.as_ref(),
+            Self::Tag { nbt, .. } => nbt.as_ref(),
+        }
+    }
+    pub fn matches_state(&self, state: BlockState) -> bool {
+        let (block_matches, properties) = match self {
+            Self::Block(input) => (input.state.block() == state.block(), &input.properties),
             Self::Tag {
-                blocks,
-                properties,
-                nbt,
-                ..
-            } => (blocks.contains(&state.block()), properties, nbt),
+                blocks, properties, ..
+            } => (blocks.contains(&state.block()), properties),
         };
         block_matches
             && properties.iter().all(|(key, value)| {
@@ -146,11 +149,15 @@ impl BlockPredicate {
                     .properties()
                     .any(|(name, actual)| name == key && actual == value)
             })
-            && expected_nbt.as_ref().is_none_or(|expected| {
+    }
+    pub fn matches(&self, state: BlockState, block_entity: Option<&Tag>) -> bool {
+        self.matches_state(state)
+            && self.expected_nbt().is_none_or(|expected| {
                 ferraloom_nbt::compare_nbt(Some(expected), block_entity, true)
             })
     }
 }
+
 pub fn predicate(
     reader: &mut StringReader,
     context: &crate::commands::context::CommandBuildContext,
