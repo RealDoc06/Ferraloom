@@ -74,11 +74,16 @@ public final class PlantsTickOracle {
         // growth. Snapshot every relevant cell before and after the callback.
         var blocks=List.of(PITCHER_CROP,SEA_PICKLE,MELON_STEM,PUMPKIN_STEM,KELP,KELP_PLANT,
             TWISTING_VINES,TWISTING_VINES_PLANT,WEEPING_VINES,WEEPING_VINES_PLANT,
-            BIG_DRIPLEAF,BIG_DRIPLEAF_STEM,SMALL_DRIPLEAF);
+            BIG_DRIPLEAF,BIG_DRIPLEAF_STEM,SMALL_DRIPLEAF,MANGROVE_LEAVES,NETHERRACK,ROOTED_DIRT);
         for(var block:blocks)for(var state:block.getStateDefinition().getPossibleStates())for(int mode=0;mode<3;mode++)for(int seed=0;seed<8;seed++) {
             clear(level,pos);
             for(int x=-3;x<=3;x++)for(int z=-3;z<=3;z++)level.setBlock(pos.below().offset(x,0,z),FARMLAND.defaultBlockState().setValue(MOISTURE,7),816);
-            if(block==SEA_PICKLE) {
+            if(block==MANGROVE_LEAVES||block==ROOTED_DIRT) {
+                level.setBlock(pos.below(),AIR.defaultBlockState(),816);
+            } else if(block==NETHERRACK) {
+                if(mode!=2)level.setBlock(pos.west(),WARPED_NYLIUM.defaultBlockState(),816);
+                if(mode!=0)level.setBlock(pos.east(),CRIMSON_NYLIUM.defaultBlockState(),816);
+            } else if(block==SEA_PICKLE) {
                 for(int x=-2;x<=2;x++)for(int z=-2;z<=2;z++)for(int y=-2;y<=0;y++)level.setBlock(pos.offset(x,y,z),(y==-2?TUBE_CORAL_BLOCK:WATER).defaultBlockState(),816);
             } else if(block==KELP||block==KELP_PLANT) {
                 level.setBlock(pos.below(),SAND.defaultBlockState(),816);

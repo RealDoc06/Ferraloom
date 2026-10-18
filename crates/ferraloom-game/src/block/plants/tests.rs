@@ -591,7 +591,7 @@ fn nylium_occlusion_and_bonemeal_metadata_match_vanilla() {
         }
         count += 1;
     }
-    assert_eq!(count, 816);
+    assert_eq!(count, 817);
 }
 
 #[test]

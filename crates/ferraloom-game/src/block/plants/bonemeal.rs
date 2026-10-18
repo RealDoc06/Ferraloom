@@ -78,7 +78,7 @@ pub fn bonemealable_behavior(block: Block) -> Option<&'static dyn BonemealableBl
     if block.class() == C::NetherrackBlock {
         return Some(&NEIGHBOR_BONEMEAL);
     }
-    if block.class() == C::RootedDirtBlock {
+    if matches!(block.class(), C::RootedDirtBlock | C::MangroveLeavesBlock) {
         return Some(&ROOTED_BONEMEAL);
     }
     matches!(
@@ -150,6 +150,7 @@ impl BonemealableBlock for PlantBonemeal {
         let level = &access.as_reader();
         use BlockClass as C;
         match state.block().class() {
+            C::MangroveLeavesBlock => Ok(level.get_block_state(pos.below(1))?.is_air()),
             C::NetherrackBlock => nylium::netherrack_target(pos, level),
             C::RootedDirtBlock => {
                 Ok(level.get_block_state(pos.below(1))?.is_air()
@@ -264,6 +265,18 @@ impl BonemealableBlock for PlantBonemeal {
     ) -> Result<(), LevelError> {
         use BlockClass as C;
         match state.block().class() {
+            C::MangroveLeavesBlock => {
+                level.set_block(
+                    pos.below(1),
+                    Block::MANGROVE_PROPAGULE
+                        .default_state()
+                        .with(p::HANGING, true)
+                        .unwrap()
+                        .with(p::AGE, 0)
+                        .unwrap(),
+                    UpdateFlags::CLIENTS,
+                )?;
+            }
             C::NetherrackBlock => nylium::spread_to_netherrack(pos, level)?,
             C::RootedDirtBlock => {
                 level.set_block(

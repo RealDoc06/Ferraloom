@@ -78,7 +78,7 @@ public final class PlantsVectors {
             System.out.println("frosted-place\t"+Block.getId(state)+"\t"+seed+"\t"+level.trace.getFirst().substring("schedule:".length())+"\t"+level.getRandom().nextLong());
         }
         for(var block:List.of(Blocks.NETHERRACK,Blocks.ROOTED_DIRT,Blocks.WHEAT,Blocks.SEAGRASS,Blocks.GLOW_LICHEN,
-            Blocks.PALE_MOSS_CARPET,Blocks.BAMBOO,Blocks.CAVE_VINES,Blocks.BIG_DRIPLEAF,Blocks.SEA_PICKLE)) {
+            Blocks.PALE_MOSS_CARPET,Blocks.BAMBOO,Blocks.CAVE_VINES,Blocks.BIG_DRIPLEAF,Blocks.SEA_PICKLE,Blocks.MANGROVE_LEAVES)) {
             var bonemeal=(BonemealableBlock)block;
             System.out.println("bonemeal-kind\t"+BuiltInRegistries.BLOCK.getId(block)+"\t"+String.valueOf((Object)bonemeal.getType())+"\t"+(bonemeal.getParticlePos(pos).getY()-pos.getY()));
         }
