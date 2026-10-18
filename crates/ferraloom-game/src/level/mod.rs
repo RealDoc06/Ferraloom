@@ -1,7 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
+use std::{collections::HashSet, sync::Arc};
 
 use ferraloom_data::{Block, BlockState, EntityType};
 use ferraloom_util::{BlockPos, ChunkPos};
@@ -12,6 +9,7 @@ use crate::{
     ticks::{LevelTicks, ScheduledTick, TickPriority},
 };
 
+pub mod acquisition;
 mod block_entity;
 pub mod border;
 mod broadcast;
@@ -41,6 +39,7 @@ pub mod redstone;
 mod saved_ticks;
 pub mod server_level;
 pub mod simulation;
+pub(crate) mod store;
 pub mod tick_rate;
 pub mod tickets;
 mod ticking;
@@ -57,6 +56,11 @@ pub enum LevelError {
     WrongBlockEntityType(crate::block::entity::BlockEntityRef),
     DuplicateBlockEntity(crate::block::entity::BlockEntityRef),
     MissingChunk(ChunkPos),
+    ChunkAcquisition(
+        ChunkPos,
+        chunk_holder::ChunkStatus,
+        acquisition::AcquireFailure,
+    ),
     WorldgenMutationFailed(BlockPos),
     UnsupportedWorldgenEnvironment,
     UnsupportedWorldgenBehavior,
@@ -137,7 +141,7 @@ impl Default for LevelRules {
 
 /// Owned portion of ServerLevel. The scheduler moves this value between workers.
 pub struct Region {
-    chunks: HashMap<ChunkPos, chunk::LevelChunk>,
+    chunks: store::InsertOnlyMap<ChunkPos, chunk::LevelChunk>,
     entities: entity::EntityStorage,
     entity_tick_list: entity::EntityTickList,
     block_ticks: LevelTicks,
@@ -179,7 +183,7 @@ pub struct Region {
 impl Region {
     pub fn new(behaviors: &'static Behaviors) -> Self {
         Self {
-            chunks: HashMap::new(),
+            chunks: store::InsertOnlyMap::default(),
             entities: entity::EntityStorage::default(),
             entity_tick_list: entity::EntityTickList::default(),
             block_ticks: LevelTicks::default(),
@@ -289,8 +293,6 @@ impl Level {
         if region.min_y != chunk.min_y() || region.max_y != chunk.max_y() {
             return Err(LevelError::WrongChunkHeight(pos));
         }
-        chunk.block_ticks.unpack(region.game_time);
-        chunk.fluid_ticks.unpack(region.game_time);
         region
             .block_ticks
             .add_container(pos, std::mem::take(&mut chunk.block_ticks));
@@ -298,6 +300,17 @@ impl Level {
             .fluid_ticks
             .add_container(pos, std::mem::take(&mut chunk.fluid_ticks));
         region.chunks.insert(pos, chunk);
+        Ok(())
+    }
+    /// Port of ServerLevel#startTickingChunk, after generation post-processing.
+    /// FULL registration alone leaves saved delays relative until this point.
+    pub fn start_ticking_chunk(&mut self, pos: ChunkPos) -> Result<(), LevelError> {
+        let region = self.region_mut();
+        if !region.chunks.contains_key(&pos) {
+            return Err(LevelError::MissingChunk(pos));
+        }
+        region.block_ticks.unpack_container(pos, region.game_time);
+        region.fluid_ticks.unpack_container(pos, region.game_time);
         Ok(())
     }
     /// Compatibility entry for the scheduled block phase. It uses the same

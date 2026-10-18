@@ -10,6 +10,8 @@ pub struct ChunkHolder {
     pub request_id: u64,
     /// A holder may exist for a proto dependency before runtime requests FULL.
     pub generation_requested: bool,
+    /// ChunkMap-assigned incarnation, stable across requests and status changes.
+    /// Zero is reserved for standalone holders outside a canonical ChunkMap.
     pub epoch: u64,
     pub ticket_level: i32,
     old_ticket_level: i32,
