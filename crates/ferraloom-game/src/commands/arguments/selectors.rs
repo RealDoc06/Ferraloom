@@ -661,12 +661,14 @@ impl EntitySelector {
             query.candidates(players_only || !self.includes_entities)
         };
         let mut result = Vec::new();
-        for entity in candidates {
+        'candidate: for entity in candidates {
             let Some(info) = query.info(entity) else {
                 continue;
             };
             if players_only && !info.player
-                || self.world_limited && info.dimension != source.level.dimension
+                || self.world_limited
+                    && !self.current_entity
+                    && info.dimension != source.level.dimension
                 || self
                     .player_name
                     .as_ref()
@@ -675,16 +677,18 @@ impl EntitySelector {
             {
                 continue;
             }
+            for predicate in &self.predicates {
+                if !query.matches(entity, predicate)? {
+                    continue 'candidate;
+                }
+            }
+            let Some(info) = query.info(entity) else {
+                continue;
+            };
             let dx = info.position.x - origin.x;
             let dy = info.position.y - origin.y;
             let dz = info.position.z - origin.z;
             let distance = dx * dx + dy * dy + dz * dz;
-            if self.distance.is_some_and(|range| {
-                range.min.is_some_and(|v| distance < v * v)
-                    || range.max.is_some_and(|v| distance > v * v)
-            }) {
-                continue;
-            }
             if self.delta.iter().any(Option::is_some) {
                 let pos = [info.position.x, info.position.y, info.position.z];
                 let origin = [origin.x, origin.y, origin.z];
@@ -698,15 +702,15 @@ impl EntitySelector {
                     continue;
                 }
             }
-            let mut matched = true;
-            for predicate in &self.predicates {
-                if !query.matches(entity, predicate)? {
-                    matched = false;
-                    break;
-                }
+            if self.distance.is_some_and(|range| {
+                range.min.is_some_and(|v| distance < v * v)
+                    || range.max.is_some_and(|v| distance > v * v)
+            }) {
+                continue;
             }
-            if matched {
-                result.push((entity, distance));
+            result.push((entity, distance));
+            if self.sort == SelectorSort::Arbitrary && result.len() >= self.max_results {
+                break;
             }
         }
         if result.len() > 1 {
@@ -822,5 +826,109 @@ pub fn rotation_matches(range: NumberRange, value: f32) -> bool {
         value >= min || value <= max
     } else {
         value >= min && value <= max
+    }
+}
+
+#[cfg(test)]
+mod capture_tests {
+    use super::*;
+    #[derive(serde::Deserialize)]
+    struct Vector {
+        selector: String,
+        names: Vec<String>,
+        examined: Vec<String>,
+        selected: Option<Vec<String>>,
+        count: usize,
+        current_entity: bool,
+    }
+    struct Query {
+        names: Vec<String>,
+        examined: Vec<String>,
+        shuffled: usize,
+    }
+    impl EntityQuery for Query {
+        fn candidates(&self, _: bool) -> Vec<EntityRef> {
+            (0..self.names.len())
+                .map(|id| EntityRef(id as u64))
+                .collect()
+        }
+        fn info(&self, entity: EntityRef) -> Option<SelectorEntity<'_>> {
+            let index = entity.0 as usize;
+            Some(SelectorEntity {
+                name: &self.names[index],
+                uuid: Uuid::NIL,
+                player: true,
+                dimension: "minecraft:overworld",
+                position: Vec3::new((self.names.len() - index) as f64, 0., 0.),
+                width: 0.6,
+                height: 1.8,
+            })
+        }
+        fn matches(
+            &mut self,
+            entity: EntityRef,
+            predicate: &SelectorPredicate,
+        ) -> Result<bool, CommandSyntaxException> {
+            let SelectorPredicate::Name { value, inverted } = predicate else {
+                panic!("unexpected predicate: {predicate:?}")
+            };
+            let name = self.names[entity.0 as usize].clone();
+            self.examined.push(name.clone());
+            Ok((name == *value) != *inverted)
+        }
+        fn shuffle(&mut self, entities: &mut [(EntityRef, f64)]) {
+            self.shuffled += 1;
+            entities.reverse();
+        }
+    }
+    #[test]
+    fn candidate_capture_stops_at_vanillas_limit_and_sort_point() {
+        let vectors: Vec<Vector> =
+            serde_json::from_str(include_str!("../vanilla/selector-capture-vectors.json")).unwrap();
+        for vector in vectors {
+            let selector =
+                EntitySelector::parse(&mut StringReader::new(&vector.selector), true).unwrap();
+            let mut query = Query {
+                names: vector.names,
+                examined: Vec::new(),
+                shuffled: 0,
+            };
+            let mut source = CommandSourceStack::server(4, Vec3::ZERO);
+            if vector.current_entity {
+                source = source.with_entity(EntityRef(0)).with_level(
+                    crate::commands::source::CommandLevel {
+                        dimension: "minecraft:the_nether".into(),
+                        coordinate_scale: 8.,
+                    },
+                );
+            }
+            let selected = selector.find(&source, &mut query, true).unwrap();
+            assert_eq!(query.examined, vector.examined, "{}", vector.selector);
+            assert_eq!(selected.len(), vector.count, "{}", vector.selector);
+            if let Some(names) = vector.selected {
+                assert_eq!(
+                    selected
+                        .iter()
+                        .map(|id| query.names[id.0 as usize].clone())
+                        .collect::<Vec<_>>(),
+                    names,
+                    "{}",
+                    vector.selector
+                );
+            }
+            let expected_shuffle = selector.sort == SelectorSort::Random
+                && query
+                    .examined
+                    .iter()
+                    .filter(|name| name.as_str() != "Skip")
+                    .count()
+                    > 1;
+            assert_eq!(
+                query.shuffled,
+                usize::from(expected_shuffle),
+                "{}",
+                vector.selector
+            );
+        }
     }
 }
