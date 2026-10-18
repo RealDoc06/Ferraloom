@@ -378,7 +378,32 @@ impl AbstractContainerMenu {
     ) -> Result<ItemStack> {
         if matches!(
             self.kind,
-            MenuKind::Chest { .. } | MenuKind::Hopper | MenuKind::ShulkerBox | MenuKind::Dispenser
+            MenuKind::Furnace | MenuKind::Smoker | MenuKind::BlastFurnace
+        ) {
+            let mut operation = super::in_memory::InMemoryMenuOperation::new(self, ctx);
+            let stack = super::quick_move_furnace::quick_move_furnace_menu_item(
+                &mut operation,
+                index,
+                hooks,
+            )?;
+            return operation.read(stack).cloned();
+        }
+        if matches!(self.kind, MenuKind::Inventory | MenuKind::Crafting) {
+            let mut operation = super::in_memory::InMemoryMenuOperation::new(self, ctx);
+            let stack = super::quick_move_crafting::quick_move_crafting_menu_item(
+                &mut operation,
+                index,
+                hooks,
+            )?;
+            return operation.read(stack).cloned();
+        }
+        if matches!(
+            self.kind,
+            MenuKind::Chest { .. }
+                | MenuKind::Hopper
+                | MenuKind::ShulkerBox
+                | MenuKind::Dispenser
+                | MenuKind::Crafter
         ) {
             return quick_move_container_menu_item(
                 &mut super::in_memory::InMemoryMenuOperation::new(self, ctx),
@@ -404,7 +429,7 @@ impl AbstractContainerMenu {
         let original = stack.clone();
         let slots = self.slots.len();
         let moved = match self.kind {
-            MenuKind::Crafter => self.move_between(ctx, &mut stack, index, 9, 45, hooks)?,
+            MenuKind::Crafter => unreachable!("crafter uses the retained quick-move kernel"),
             MenuKind::Chest { .. }
             | MenuKind::Hopper
             | MenuKind::ShulkerBox
@@ -671,21 +696,6 @@ impl AbstractContainerMenu {
             });
         }
         Ok(original)
-    }
-    fn move_between(
-        &mut self,
-        ctx: &mut MenuContext<'_>,
-        stack: &mut ItemStack,
-        index: usize,
-        boundary: usize,
-        end: usize,
-        hooks: &mut dyn MenuHooks,
-    ) -> Result<bool> {
-        if index < boundary {
-            self.move_item_stack_to(ctx, stack, boundary, end, true, hooks)
-        } else {
-            self.move_item_stack_to(ctx, stack, 0, boundary, false, hooks)
-        }
     }
     fn move_player_sections(
         &mut self,

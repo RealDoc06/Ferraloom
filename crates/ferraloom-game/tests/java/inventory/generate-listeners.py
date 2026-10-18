@@ -21,9 +21,9 @@ def run(args):
 
 run([str(java/'javac'), '-cp', cp, '-d', str(classes), *map(str, sorted((source.parent/'entity').glob('*.java'))), str(source.parent/'level/NeighborVectors.java')])
 run([str(java/'java'), '-cp', f'{classes}:{cp}', 'EntityVectors', 'generate', str(classes/'EntityFixture.java')])
-run([str(java/'javac'), '-cp', f'{classes}:{cp}', '-d', str(classes), str(classes/'EntityFixture.java'), str(source/'InventoryVectors.java'), str(source/'ListenerVectors.java')])
+run([str(java/'javac'), '-cp', f'{classes}:{cp}', '-d', str(classes), str(classes/'EntityFixture.java'), str(source/'InventoryVectors.java'), str(source/'ListenerVectors.java'), str(source/'CrafterVectors.java')])
 output = run([str(java/'java'), '-Xmx768m', '-cp', f'{classes}:{cp}', 'ListenerVectors'])
 rows = [line for line in output.splitlines() if line.startswith('listener\t')]
-assert len(rows) == 18
+assert len(rows) == 20
 (source/'listeners.tsv').write_text('\n'.join(rows)+'\n')
 print(f'{len(rows)} native listener reentry timelines')

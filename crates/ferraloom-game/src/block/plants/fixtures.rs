@@ -125,6 +125,7 @@ pub(super) fn install_loot(level: &mut Level) {
         );
         (
             Arc::new(ContainerResources {
+                crafting: crate::inventory::RuntimeCraftingContext::fixture(),
                 recipes,
                 loot: Arc::new(loot),
                 advancements,

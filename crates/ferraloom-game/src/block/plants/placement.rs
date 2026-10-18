@@ -93,7 +93,7 @@ impl BlockBehavior for PlantPlacement {
         level: &LevelReaderRef<'_, '_>,
     ) -> Result<bool, LevelError> {
         let block = state.block();
-        let held = context.item_in_hand().item();
+        let held = context.item_in_hand(level)?.item();
         if block.class() == BlockClass::PitcherCropBlock {
             return Ok(false);
         }

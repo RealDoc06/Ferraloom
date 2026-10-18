@@ -19,7 +19,7 @@ def run(args):
         raise SystemExit(result.returncode)
     return result.stdout
 
-run([str(java/'javac'), '-cp', cp, '-d', str(classes), str(source.parent/'entity/EntityVectors.java'), str(source.parent/'level/NeighborVectors.java')])
+run([str(java/'javac'), '-cp', cp, '-d', str(classes), *map(str, sorted((source.parent/'entity').glob('*.java'))), str(source.parent/'level/NeighborVectors.java')])
 run([str(java/'java'), '-cp', f'{classes}:{cp}', 'EntityVectors', 'generate', str(classes/'EntityFixture.java')])
 run([str(java/'javac'), '-cp', f'{classes}:{cp}', '-d', str(classes), str(classes/'EntityFixture.java'), str(source/'InventoryVectors.java')])
 output = run([str(java/'java'), '-Xmx768m', '-cp', f'{classes}:{cp}', 'InventoryVectors'])

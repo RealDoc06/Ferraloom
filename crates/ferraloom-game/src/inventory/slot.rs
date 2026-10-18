@@ -56,6 +56,57 @@ pub enum SlotKind {
 /// Pure domain hooks. Default errors make unported recipe, enchantment and trade work explicit.
 /// Implementations may hold immutable recipe/fuel tables; they do not own player stacks.
 pub trait MenuHooks {
+    /// Live counterparts keep canonical receivers addressable across callbacks.
+    fn live_grid_changed(
+        &mut self,
+        _player: crate::entity::EntityRef,
+        _menu: super::MenuRef,
+        _level: &mut crate::level::Level,
+    ) -> Result<()> {
+        Err(MenuError::Unsupported("live crafting result calculation"))
+    }
+    fn validate_live_result(&self, _kind: ResultKind) -> Result<()> {
+        Err(MenuError::Unsupported("live result-slot achievements"))
+    }
+    fn live_grid_changed_with_hint(
+        &mut self,
+        player: crate::entity::EntityRef,
+        menu: super::MenuRef,
+        _hint: &ferraloom_data::datapack::Identifier,
+        level: &mut crate::level::Level,
+    ) -> Result<()> {
+        self.live_grid_changed(player, menu, level)
+    }
+    fn live_item_crafted(
+        &mut self,
+        _player: crate::entity::EntityRef,
+        _menu: super::MenuRef,
+        _stack: super::StackRef,
+        _amount: i32,
+        _level: &mut crate::level::Level,
+    ) -> Result<()> {
+        Err(MenuError::Unsupported("crafting statistic producer"))
+    }
+    fn live_award_recipe(
+        &mut self,
+        _player: crate::entity::EntityRef,
+        _menu: super::MenuRef,
+        _recipe: &ferraloom_data::datapack::Identifier,
+        _input: &[super::StackRef],
+        _level: &mut crate::level::Level,
+    ) -> Result<bool> {
+        Err(MenuError::Unsupported("crafting advancement producer"))
+    }
+    fn live_award_furnace(
+        &mut self,
+        _player: crate::entity::EntityRef,
+        _furnace: crate::block::entity::BlockEntityRef,
+        _level: &mut crate::level::Level,
+    ) -> Result<()> {
+        Err(MenuError::Unsupported(
+            "furnace experience and recipe producer",
+        ))
+    }
     fn crafting_ref(&self) -> Option<&dyn super::CraftingMenuHooks> {
         None
     }

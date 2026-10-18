@@ -385,6 +385,8 @@ impl LiveMenuTransfer<'_> {
             if !matches!(
                 kind,
                 MenuKind::Chest { .. }
+                    | MenuKind::Inventory
+                    | MenuKind::Crafting
                     | MenuKind::Dispenser
                     | MenuKind::Hopper
                     | MenuKind::Crafter
@@ -403,8 +405,16 @@ impl LiveMenuTransfer<'_> {
         index: usize,
         value: StackValue,
         previous: Option<StackRef>,
+        hooks: &mut dyn MenuHooks,
     ) -> Result<()> {
         let (_, address) = self.validate_storage_mutation(index)?;
+        let grid = matches!(
+            address.container,
+            ContainerHandle::MenuLocal { container: 0, .. }
+        ) && self.menu()?.crafting_grid_size().is_some();
+        if grid {
+            hooks.prepare_recipe_click(self.menu()?.kind)?;
+        }
         if let Some(previous) = previous {
             self.operation.pin_existing(previous)?;
         } else {
@@ -447,7 +457,10 @@ impl LiveMenuTransfer<'_> {
             }
             _ => return Err(MenuError::Unsupported("non-slot object assignment")),
         }
-        self.context().set_changed(address.container)
+        if grid {
+            hooks.live_grid_changed(self.player, self.menu, self.operation.level)?;
+        }
+        self.slot_changed(index)
     }
 }
 impl MenuTransferContext for LiveMenuTransfer<'_> {
@@ -496,22 +509,27 @@ impl MenuTransferContext for LiveMenuTransfer<'_> {
         &mut self,
         index: usize,
         stack: ItemStack,
-        _: &mut dyn MenuHooks,
+        hooks: &mut dyn MenuHooks,
     ) -> Result<()> {
-        self.set_by_player_value(index, StackValue::New(stack), None)
+        self.set_by_player_value(index, StackValue::New(stack), None, hooks)
     }
     fn reassign_by_player(
         &mut self,
         index: usize,
         stack: StackRef,
-        _: &mut dyn MenuHooks,
+        hooks: &mut dyn MenuHooks,
     ) -> Result<()> {
-        self.set_by_player_value(index, StackValue::Existing(stack), None)
+        self.set_by_player_value(index, StackValue::Existing(stack), None, hooks)
     }
     fn slot_changed(&mut self, index: usize) -> Result<()> {
+        let slot = self.slot(index)?;
         let mut context = self.context();
         let address = context.slot_address(index)?;
-        context.set_changed(address.container)
+        context.set_changed(address.container)?;
+        if slot.kind == SlotKind::Crafter {
+            broadcast_menu_changes(&mut context)?;
+        }
+        Ok(())
     }
 }
 
