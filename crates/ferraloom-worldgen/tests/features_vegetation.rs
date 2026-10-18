@@ -139,15 +139,6 @@ fn known_pending(error: &str) -> bool {
         "Unsupported: update_from_neighbor_shapes",
     ]
     .contains(&error)
-        || [
-            "sequence",
-            "weighted_random_selector",
-            "random_selector",
-            "simple_random_selector",
-            "template",
-        ]
-        .iter()
-        .any(|kind| error == format!("unsupported feature type minecraft:{kind}"))
 }
 #[derive(Default)]
 struct Coverage {
@@ -287,7 +278,7 @@ fn supported_vegetation_aquatic_surface_cases_match_real_vanilla() {
     replay(false);
 }
 #[test]
-#[ignore = "pending game canSurvive/sturdy-face/vine/double-plant/moss-carpet behavior and composite/template families"]
+#[ignore = "pending game canSurvive, vine neighbor checks and liquid placement"]
 fn pending_vegetation_game_behavior_cases() {
     replay(true);
 }
