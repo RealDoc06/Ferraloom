@@ -6,8 +6,12 @@ use ferraloom_protocol::component::ItemStack;
 /// ordinary Inventory/Slot callbacks; the placer never keeps a state borrow
 /// across one of those calls. Inventory items are the 36 non-equipment slots.
 pub trait RecipePlacementAccess {
-    fn inventory_items(&self) -> &[ItemStack];
-    fn input_grid(&self) -> &[ItemStack];
+    type Stack;
+    fn inventory_items(&self) -> Result<&[ItemStack]>;
+    fn input_grid(&self) -> Result<&[ItemStack]>;
+    /// Capture getItem's receiver before inventory lookup/removal callbacks.
+    fn capture_grid_item(&mut self, index: usize) -> Result<Self::Stack>;
+    fn stack<'a>(&'a self, receiver: &'a Self::Stack) -> Result<&'a ItemStack>;
     fn fill_craft_slots(&self, contents: &mut StackedItemContents) -> Result<()>;
     fn recipe_matches(&self, recipe: &RecipeHolder) -> Result<bool>;
     /// Inventory#getSlotWithRemainingSpace, including selected/offhand precedence.
@@ -17,11 +21,11 @@ pub trait RecipePlacementAccess {
     /// performs drop/callback effects synchronously in that order.
     fn clear_grid(&mut self) -> Result<()>;
     /// Inventory#removeItem when count < stack count, else removeItemNoUpdate.
-    fn take_inventory_item(&mut self, index: usize, count: i32) -> Result<ItemStack>;
-    fn set_grid_item(&mut self, index: usize, stack: ItemStack) -> Result<()>;
+    fn take_inventory_item(&mut self, index: usize, count: i32) -> Result<Self::Stack>;
+    fn set_grid_item(&mut self, index: usize, stack: Self::Stack) -> Result<()>;
     /// ItemStack#grow on the existing target, without Slot#set callbacks.
-    fn grow_grid_item(&mut self, index: usize, count: i32) -> Result<()>;
-    fn inventory_changed(&mut self);
+    fn grow_grid_item(&mut self, index: usize, receiver: &Self::Stack, count: i32) -> Result<()>;
+    fn inventory_changed(&mut self) -> Result<()>;
 }
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PostPlaceAction {
@@ -42,25 +46,25 @@ pub fn place_recipe(
         return Ok(PostPlaceAction::Nothing);
     }
     let mut available = StackedItemContents::default();
-    for stack in access.inventory_items() {
+    for stack in access.inventory_items()? {
         available.account_simple_stack(stack)?;
     }
     access.fill_craft_slots(&mut available)?;
     let placement = recipe.value.placement_info();
     if !available.can_craft(&placement, 1) {
         access.clear_grid()?;
-        access.inventory_changed();
+        access.inventory_changed()?;
         return Ok(PostPlaceAction::PlaceGhostRecipe);
     }
     let matches = access.recipe_matches(recipe)?;
     let biggest = available.biggest_craftable_stack(&placement.ingredients, i32::MAX);
     if matches {
-        for stack in access.input_grid() {
+        for stack in access.input_grid()? {
             if !stack.is_empty()
                 && let Some(contents) = &stack.0
                 && max_stack_size(stack)?.min(biggest) < contents.count.wrapping_add(1)
             {
-                access.inventory_changed();
+                access.inventory_changed()?;
                 return Ok(PostPlaceAction::Nothing);
             }
         }
@@ -69,7 +73,7 @@ pub fn place_recipe(
         biggest
     } else if matches {
         access
-            .input_grid()
+            .input_grid()?
             .iter()
             .filter(|stack| !stack.is_empty())
             .filter_map(|stack| stack.0.as_ref().map(|stack| stack.count))
@@ -84,7 +88,7 @@ pub fn place_recipe(
         });
         if adjusted != amount {
             let Some(repicked) = available.pick(&placement.ingredients, adjusted) else {
-                access.inventory_changed();
+                access.inventory_changed()?;
                 return Ok(PostPlaceAction::Nothing);
             };
             picked = repicked;
@@ -100,27 +104,35 @@ pub fn place_recipe(
                 let item = picked[ingredient];
                 let mut remaining = adjusted;
                 while remaining > 0 {
-                    let target = access.input_grid()[grid_index].clone();
-                    let index = find_inventory_item(access.inventory_items(), item, &target)?;
+                    let target = access.capture_grid_item(grid_index)?;
+                    let index = find_inventory_item(
+                        access.inventory_items()?,
+                        item,
+                        access.stack(&target)?,
+                    )?;
                     let Some(index) = index else {
                         break;
                     };
                     let taken = access.take_inventory_item(index, remaining)?;
-                    let count = taken.0.as_ref().map_or(0, |stack| stack.count);
+                    let count = access
+                        .stack(&taken)?
+                        .0
+                        .as_ref()
+                        .map_or(0, |stack| stack.count);
                     if count <= 0 {
                         break;
                     }
-                    if target.is_empty() {
+                    if access.stack(&target)?.is_empty() {
                         access.set_grid_item(grid_index, taken)?;
                     } else {
-                        access.grow_grid_item(grid_index, count)?;
+                        access.grow_grid_item(grid_index, &target, count)?;
                     }
                     remaining -= count;
                 }
             }
         }
     }
-    access.inventory_changed();
+    access.inventory_changed()?;
     Ok(PostPlaceAction::Nothing)
 }
 /// Port of PlaceRecipeHelper#placeRecipe, including vanilla's strict half-grid
@@ -197,12 +209,16 @@ fn find_inventory_item(
 }
 fn test_clear_grid(access: &impl RecipePlacementAccess) -> Result<bool> {
     let free_slots = access
-        .inventory_items()
+        .inventory_items()?
         .iter()
         .filter(|stack| stack.is_empty())
         .count();
     let mut free: Vec<ItemStack> = Vec::new();
-    for stack in access.input_grid().iter().filter(|stack| !stack.is_empty()) {
+    for stack in access
+        .input_grid()?
+        .iter()
+        .filter(|stack| !stack.is_empty())
+    {
         if !access.has_inventory_space_for(stack)? {
             if free.len() > free_slots {
                 return Ok(false);

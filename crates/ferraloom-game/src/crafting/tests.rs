@@ -774,11 +774,18 @@ struct PlacementState {
     height: usize,
 }
 impl RecipePlacementAccess for PlacementState {
-    fn inventory_items(&self) -> &[ItemStack] {
-        &self.inventory
+    type Stack = ItemStack;
+    fn inventory_items(&self) -> Result<&[ItemStack]> {
+        Ok(&self.inventory)
     }
-    fn input_grid(&self) -> &[ItemStack] {
-        &self.grid
+    fn input_grid(&self) -> Result<&[ItemStack]> {
+        Ok(&self.grid)
+    }
+    fn capture_grid_item(&mut self, index: usize) -> Result<ItemStack> {
+        Ok(self.grid[index].clone())
+    }
+    fn stack<'a>(&'a self, receiver: &'a ItemStack) -> Result<&'a ItemStack> {
+        Ok(receiver)
     }
     fn fill_craft_slots(&self, contents: &mut StackedItemContents) -> Result<()> {
         for stack in &self.grid {
@@ -846,11 +853,13 @@ impl RecipePlacementAccess for PlacementState {
         self.grid[index] = stack;
         Ok(())
     }
-    fn grow_grid_item(&mut self, index: usize, count: i32) -> Result<()> {
+    fn grow_grid_item(&mut self, index: usize, _receiver: &ItemStack, count: i32) -> Result<()> {
         self.grid[index].0.as_mut().unwrap().count += count;
         Ok(())
     }
-    fn inventory_changed(&mut self) {}
+    fn inventory_changed(&mut self) -> Result<()> {
+        Ok(())
+    }
 }
 #[test]
 fn vanilla_recipe_book_placement_inventory_and_grid() {
