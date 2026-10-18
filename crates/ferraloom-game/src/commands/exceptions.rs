@@ -150,8 +150,14 @@ impl BuiltInExceptionProvider for BrigadierExceptions {
                         Argument::Number(match *kind {
                             "Integer" => Numeric::Int(value.parse().expect("integer bound")),
                             "Long" => Numeric::Long(value.parse().expect("long bound")),
-                            "Float" => Numeric::Float(value.parse().expect("float bound")),
-                            "Double" => Numeric::Double(value.parse().expect("double bound")),
+                            "Float" => {
+                                let value = value.parse::<f32>().expect("float bound");
+                                Numeric::Float(value.into())
+                            }
+                            "Double" => {
+                                let value = value.parse::<f64>().expect("double bound");
+                                Numeric::Double(value.into())
+                            }
                             _ => unreachable!("Brigadier numeric argument type"),
                         })
                     })
@@ -186,9 +192,9 @@ pub fn plain_text(component: &Component) -> String {
                         ferraloom_protocol::chat::Numeric::Short(v) => v.to_string(),
                         ferraloom_protocol::chat::Numeric::Int(v) => v.to_string(),
                         ferraloom_protocol::chat::Numeric::Long(v) => v.to_string(),
-                        ferraloom_protocol::chat::Numeric::Float(v) => java_float_string(*v),
+                        ferraloom_protocol::chat::Numeric::Float(v) => java_float_string(v.0),
                         ferraloom_protocol::chat::Numeric::Double(v) => {
-                            let mut text = ferraloom_nbt::Tag::Double(*v).to_string();
+                            let mut text = ferraloom_nbt::Tag::Double(v.0).to_string();
                             text.pop();
                             text
                         }

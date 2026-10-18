@@ -157,9 +157,9 @@ fn decode_contents(map: &Fields, kind: &str, nbt: bool) -> Result<Contents> {
                                         } else if let Tag::Long(value) = tag {
                                             Numeric::Long(value)
                                         } else if value == (value as f32) as f64 {
-                                            Numeric::Float(value as f32)
+                                            Numeric::Float((value as f32).into())
                                         } else {
-                                            Numeric::Double(value)
+                                            Numeric::Double(value.into())
                                         }
                                     };
                                     Argument::Number(number)
