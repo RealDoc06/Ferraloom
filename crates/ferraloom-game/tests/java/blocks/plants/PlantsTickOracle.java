@@ -53,7 +53,7 @@ public final class PlantsTickOracle {
                 state.randomTick(level,pos,level.getRandom());
                 lines.add("random-crop\t"+net.minecraft.world.level.block.Block.getId(state)+"\t"+moisture+"\t"+pattern+"\t"+seed+"\t"+light+"\t"+net.minecraft.world.level.block.Block.getId(level.getBlockState(pos))+"\t"+level.getRandom().nextLong());
             }
-            if (Boolean.getBoolean("ferraloom.plants.extended")) extended(level,pos,lines);
+            if (Boolean.getBoolean("ferraloom.plants.extended")) { extended(level,pos,lines); groundTicks(level,pos,lines); }
             Files.write(output,lines);
             Files.writeString(output.resolveSibling("oracle-done"),"done\n");
         }catch(Throwable error){error.printStackTrace();try{Files.writeString(output.resolveSibling("oracle-error.txt"),error.toString());}catch(Exception ignored){}}
@@ -70,6 +70,38 @@ public final class PlantsTickOracle {
             if(!state.isAir())cells.add(x+":"+y+":"+z+":"+Block.getId(state));
         }
         return String.join(",",cells);
+    }
+    static <T> String ticks(net.minecraft.world.ticks.LevelChunkTicks<T> ticks,java.util.function.ToIntFunction<T> id,ServerLevel level,BlockPos origin) {
+        return ticks.getAll().sorted(net.minecraft.world.ticks.ScheduledTick.DRAIN_ORDER)
+            .filter(t->Math.abs(t.pos().getX()-origin.getX())<=3&&Math.abs(t.pos().getZ()-origin.getZ())<=3&&Math.abs(t.pos().getY()-origin.getY())<=20)
+            .map(t->(t.pos().getX()-origin.getX())+":"+(t.pos().getY()-origin.getY())+":"+(t.pos().getZ()-origin.getZ())+":"+id.applyAsInt(t.type())+":"+(t.triggerTick()-level.getGameTime())+":"+t.priority().getValue())
+            .collect(java.util.stream.Collectors.joining(","));
+    }
+    static void groundTicks(ServerLevel level,BlockPos pos,List<String> lines) {
+        var area=net.minecraft.world.level.levelgen.structure.BoundingBox.fromCorners(pos.offset(-3,-20,-3),pos.offset(3,20,3));
+        var covers=List.of(AIR.defaultBlockState(),STONE.defaultBlockState(),WATER.defaultBlockState(),SNOW.defaultBlockState(),SNOW.defaultBlockState().setValue(LAYERS,8));
+        for(var block:List.of(GRASS_BLOCK,MYCELIUM,ICE,FROSTED_ICE))for(var state:block.getStateDefinition().getPossibleStates())for(int mode=0;mode<5;mode++)for(int seed=0;seed<16;seed++) {
+            clear(level,pos);
+            if(block==GRASS_BLOCK||block==MYCELIUM) {
+                for(int x=-2;x<=2;x++)for(int z=-2;z<=2;z++)for(int y=-3;y<=0;y++)level.setBlock(pos.offset(x,y,z),DIRT.defaultBlockState(),816);
+            } else if(block==FROSTED_ICE) {
+                int neighbors=switch(mode){case 0->0;case 1->1;case 2->2;case 3->4;default->6;};
+                for(int i=0;i<neighbors;i++)level.setBlock(pos.relative(net.minecraft.core.Direction.values()[i]),FROSTED_ICE.defaultBlockState().setValue(AGE_3,i%4),816);
+            }
+            level.setBlock(pos,state,816);
+            if(block!=FROSTED_ICE)level.setBlock(pos.above(),covers.get(mode),816);
+            level.getBlockTicks().clearArea(area);level.getFluidTicks().clearArea(area);
+            String before=snapshot(level,pos);
+            int sky=level.getBrightness(net.minecraft.world.level.LightLayer.SKY,pos);
+            int blockLight=level.getBrightness(net.minecraft.world.level.LightLayer.BLOCK,pos);
+            int maxAbove=level.getMaxLocalRawBrightness(pos.above());
+            boolean evaporates=level.environmentAttributes().getValue(net.minecraft.world.attribute.EnvironmentAttributes.WATER_EVAPORATES,pos);
+            level.getRandom().setSeed(seed);
+            if(block==FROSTED_ICE)state.tick(level,pos,level.getRandom());else state.randomTick(level,pos,level.getRandom());
+            String blocks=ticks((net.minecraft.world.ticks.LevelChunkTicks<Block>)level.getChunkAt(pos).getBlockTicks(),net.minecraft.core.registries.BuiltInRegistries.BLOCK::getId,level,pos);
+            String fluids=ticks((net.minecraft.world.ticks.LevelChunkTicks<net.minecraft.world.level.material.Fluid>)level.getChunkAt(pos).getFluidTicks(),net.minecraft.core.registries.BuiltInRegistries.FLUID::getId,level,pos);
+            lines.add("ground-tick\t"+Block.getId(state)+"\t"+seed+"\t"+sky+"\t"+blockLight+"\t"+level.getSkyDarken()+"\t"+maxAbove+"\t"+evaporates+"\t"+before+"\t"+snapshot(level,pos)+"\t"+blocks+"\t"+fluids+"\t"+level.getRandom().nextLong());
+        }
     }
     static void extended(ServerLevel level,BlockPos pos,List<String> lines) {
         // Real bonemeal dispatch, including both halves/heads/bodies and blocked
