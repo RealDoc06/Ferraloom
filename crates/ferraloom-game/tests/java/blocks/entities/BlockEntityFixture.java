@@ -128,6 +128,39 @@ class BlockEntityFixture extends MutationFixture {
       System.out.println("menu-transfer-source\t"+replace+"\t"+String.join(",",events)+"\t"+held.getCount()+"\t"+source.getItem(0).getItem()+":"+source.getItem(0).getCount());
     }
   }
+  static void menuSwapSources(RegistryAccess r){
+    for(boolean replace:new boolean[]{false,true}){
+      var level=new BlockEntityFixture(r);var player=new SignPlayer(level,false);
+      var inventory=player.getInventory();
+      inventory.setItem(0,new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.STONE,10));
+      var source=inventory.getItem(0);var events=new ArrayList<String>();
+      class ObservedContainer extends net.minecraft.world.SimpleContainer {
+        boolean observe;net.minecraft.world.item.ItemStack heldTarget;
+        ObservedContainer(){super(9);}
+        String visible(net.minecraft.world.item.ItemStack stack){return stack.getItem()+":"+stack.getCount();}
+        @Override public void setChanged(){
+          if(observe){
+            events.add(visible(inventory.getItem(0))+"|"+visible(getItem(0))+"|"+source.getCount()+"|"+heldTarget.getCount());
+            if(events.size()==1){
+              source.shrink(2);heldTarget.grow(3);
+              if(replace){
+                observe=false;setItem(0,new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.DIRT,5));observe=true;
+                source.shrink(3);
+              }
+            }
+          }
+          super.setChanged();
+        }
+      }
+      var target=new ObservedContainer();
+      target.setItem(0,new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.DIAMOND,7));
+      target.heldTarget=target.getItem(0);
+      var menu=new net.minecraft.world.inventory.ChestMenu(net.minecraft.world.inventory.MenuType.GENERIC_9x1,1,inventory,target,1);
+      target.observe=true;menu.clicked(0,0,net.minecraft.world.inventory.ContainerInput.SWAP,player);
+      if(source.getCount()!=(replace?5:8)||target.heldTarget.getCount()!=10)throw new AssertionError("swap receiver identity");
+      System.out.println("menu-swap-source\t"+replace+"\t"+String.join(",",events)+"\t"+target.visible(inventory.getItem(0))+"\t"+target.visible(target.getItem(0))+"\t"+source.getCount()+"\t"+target.heldTarget.getCount());
+    }
+  }
   static void tickerPhases(RegistryAccess r){
     var level=new BlockEntityFixture(r);var events=new ArrayList<String>();
     class Ticker implements TickingBlockEntity {
