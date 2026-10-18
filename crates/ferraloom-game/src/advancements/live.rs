@@ -2,7 +2,7 @@
 //! Captured listener membership is immutable; canonical player state is borrowed
 //! only between predicates and callbacks, including nested recipe awards.
 use super::{
-    AdvancementEffect, AdvancementRewards, AwardContext, ObtainedTime, PlayerAdvancements,
+    AdvancementEffect, AdvancementRewards, ObtainedTime, PlayerAdvancements,
     triggers::{
         MatchContext, TriggerEvent, TriggerFacts, TriggerRuntime, TriggerType, create_context,
     },
@@ -113,8 +113,6 @@ pub(super) fn trigger(
         Err(error) => return criterion_error(level, trigger, error),
     };
     for key in matched {
-        let name = level.entity::<ServerPlayer>(player)?.display_name();
-        let announce_advancements = level.rules().show_advancement_messages;
         let result = level
             .entity_mut::<ServerPlayer>(player)?
             .advancements
@@ -122,38 +120,48 @@ pub(super) fn trigger(
                 &resources.advancements,
                 &key.advancement,
                 &key.criterion,
-                AwardContext {
-                    now: ObtainedTime::now(),
-                    player_name: &name,
-                    announce_advancements,
-                },
+                ObtainedTime::now(),
             );
         for effect in result.effects {
-            match effect {
-                AdvancementEffect::Rewards { rewards, .. } => {
-                    grant_rewards(level, player, &rewards)?
-                }
-                AdvancementEffect::Announcement(content) => {
-                    let recipients = level
-                        .all_entities()
-                        .into_iter()
-                        .filter(|id| level.entity::<ServerPlayer>(*id).is_ok())
-                        .collect();
-                    level.emit(LevelEffect::PlayerPacket {
-                        recipients,
-                        packet: Box::new(cb::Packet::SystemChat(Box::new(cb::SystemChat {
-                            content: *content,
-                            overlay: false,
-                        }))),
-                    });
-                }
-                AdvancementEffect::MarkVisibility(id) => {
-                    level
-                        .entity_mut::<ServerPlayer>(player)?
-                        .advancements
-                        .apply_mark_visibility(&resources.advancements, &id);
-                }
+            apply_effect(level, player, &resources.advancements, effect)?;
+        }
+    }
+    Ok(())
+}
+/// Apply one ordered award effect after the preceding effect has returned.
+pub(super) fn apply_effect(
+    level: &mut Level,
+    player: EntityRef,
+    manager: &super::ServerAdvancementManager,
+    effect: AdvancementEffect,
+) -> Result<(), LevelError> {
+    match effect {
+        AdvancementEffect::Rewards { rewards, .. } => grant_rewards(level, player, &rewards)?,
+        AdvancementEffect::AnnounceAdvancement(id) => {
+            if !level.rules().show_advancement_messages {
+                return Ok(());
             }
+            let name = level.entity_display_name(player)?;
+            let holder = manager.get(&id).expect("awarded advancement");
+            let content = super::announcement(holder, &name);
+            let recipients = level
+                .all_entities()
+                .into_iter()
+                .filter(|id| level.entity::<ServerPlayer>(*id).is_ok())
+                .collect();
+            level.emit(LevelEffect::PlayerPacket {
+                recipients,
+                packet: Box::new(cb::Packet::SystemChat(Box::new(cb::SystemChat {
+                    content,
+                    overlay: false,
+                }))),
+            });
+        }
+        AdvancementEffect::MarkVisibility(id) => {
+            level
+                .entity_mut::<ServerPlayer>(player)?
+                .advancements
+                .apply_mark_visibility(manager, &id);
         }
     }
     Ok(())

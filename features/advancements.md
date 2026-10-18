@@ -1960,3 +1960,5 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 
 | advancements.parity.consumed-inventory-and-tab | Bedrock flat Strict scenario grants crafting table through native inventory listener and selects root tab | `ServerPlayer.containerListener; ServerGamePacketListenerImpl#handleSeenAdvancements` | `ferraloom-parity::inventory_changed_awards_and_selects_advancement_tab` | pending | pending |
 | advancements.parity.player-save-rejoin | Bedrock flat awarded inventory criterion persists through player/world save and rejoin | `PlayerList#save; PlayerAdvancements#load` | `ferraloom-parity::inventory_advancement_persists_across_player_save` | pending | pending |
+
+| advancements.announcement.application-time | Announcement descriptor reads SHOW_ADVANCEMENT_MESSAGES and team-formatted player name after synchronous rewards return | `PlayerAdvancements#award` | `advancements::tests::announcement_descriptor_reads_rule_and_team_at_application_time` | pass | partial |

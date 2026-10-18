@@ -119,10 +119,10 @@ impl PlayerProgressSave {
 mod tests {
     use super::*;
     use crate::{
-        advancements::{Advancement, AdvancementHolder, AwardContext, ObtainedTime},
+        advancements::{Advancement, AdvancementHolder, ObtainedTime},
         entity::player::GameType,
     };
-    use ferraloom_protocol::{Identifier, chat::Component};
+    use ferraloom_protocol::Identifier;
     use ferraloom_util::Vec3;
     use serde_json::json;
 
@@ -147,13 +147,9 @@ mod tests {
                 &manager,
                 &manager.advancements[0].id,
                 criterion,
-                AwardContext {
-                    now: ObtainedTime {
-                        seconds: timestamp.as_second(),
-                        nanos: 0,
-                    },
-                    player_name: &Component::literal("DST"),
-                    announce_advancements: false,
+                ObtainedTime {
+                    seconds: timestamp.as_second(),
+                    nanos: 0,
                 },
             );
         }

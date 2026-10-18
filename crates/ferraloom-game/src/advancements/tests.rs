@@ -13,6 +13,22 @@ use ferraloom_util::{
 use serde_json::{Value, json};
 use std::{io::Read, sync::OnceLock};
 
+#[derive(Clone, Copy)]
+struct AwardContext<'a> {
+    now: ObtainedTime,
+    player_name: &'a ferraloom_protocol::chat::Component,
+    announce_advancements: bool,
+}
+fn resolve_announcement(
+    manager: &ServerAdvancementManager,
+    id: &Identifier,
+    award: AwardContext<'_>,
+) -> Option<ferraloom_protocol::chat::Component> {
+    award
+        .announce_advancements
+        .then(|| announcement(manager.get(id).unwrap(), award.player_name))
+}
+
 fn oracle() -> &'static Value {
     static FIXTURE: OnceLock<Value> = OnceLock::new();
     FIXTURE.get_or_init(|| {
@@ -486,13 +502,15 @@ impl RewardHarness {
                             .unwrap();
                         for key in matched {
                             let result =
-                                player.award(manager, &key.advancement, &key.criterion, award);
+                                player.award(manager, &key.advancement, &key.criterion, award.now);
                             effects.extend(self.effects(result, player, book, manager, award));
                         }
                     }
                 }
-                AdvancementEffect::Announcement(component) => {
-                    effects.push(json!(component.as_ref().to_json().unwrap()))
+                AdvancementEffect::AnnounceAdvancement(id) => {
+                    if let Some(component) = resolve_announcement(manager, &id, award) {
+                        effects.push(json!(component.to_json().unwrap()));
+                    }
                 }
                 AdvancementEffect::MarkVisibility(id) => {
                     player.apply_mark_visibility(manager, &id);
@@ -524,7 +542,7 @@ fn vanilla_player_listeners_visibility_packets_rewards_and_persistence() {
             let parts: Vec<_> = action.split(':').collect();
             let key = id(&format!("{}:{}", parts[1], parts[2]));
             if parts[0] == "award" {
-                let result = player.award(&manager, &key, parts[3], award);
+                let result = player.award(&manager, &key, parts[3], award.now);
                 changed = result.changed;
                 effects.extend(rewards.effects(result, &mut player, &mut book, &manager, award));
             } else {
@@ -545,7 +563,7 @@ fn vanilla_player_listeners_visibility_packets_rewards_and_persistence() {
                 )
                 .unwrap();
             for key in matched {
-                let result = player.award(&manager, &key.advancement, &key.criterion, award);
+                let result = player.award(&manager, &key.advancement, &key.criterion, award.now);
                 effects.extend(rewards.effects(result, &mut player, &mut book, &manager, award));
             }
         } else if let Some(key) = action.strip_prefix("tab:")
@@ -868,7 +886,7 @@ fn vanilla_nested_reward_visibility_order_and_post_reward_revoke() {
                                     self.manager,
                                     &key.advancement,
                                     &key.criterion,
-                                    self.award,
+                                    self.award.now,
                                 );
                                 self.apply(player, nested);
                             }
@@ -878,7 +896,11 @@ fn vanilla_nested_reward_visibility_order_and_post_reward_revoke() {
                             }
                         }
                     }
-                    AdvancementEffect::Announcement(_) => self.effects.push(json!("chat")),
+                    AdvancementEffect::AnnounceAdvancement(id) => {
+                        if resolve_announcement(self.manager, &id, self.award).is_some() {
+                            self.effects.push(json!("chat"));
+                        }
+                    }
                     AdvancementEffect::MarkVisibility(id) => {
                         player.apply_mark_visibility(self.manager, &id);
                     }
@@ -901,7 +923,7 @@ fn vanilla_nested_reward_visibility_order_and_post_reward_revoke() {
             effects: Vec::new(),
             revoke: row["revoke"].as_bool().unwrap(),
         };
-        let result = player.award(&manager, &id("test:an"), "a", apply.award);
+        let result = player.award(&manager, &id("test:an"), "a", apply.award.now);
         apply.apply(&mut player, result);
         apply.flush(&mut player);
         assert_eq!(json!(apply.effects), row["effects"]);
@@ -1098,4 +1120,66 @@ fn retained_inventory_trigger_and_stats_request_read_canonical_player() {
     assert_eq!(packets[0].stats.len(), 1);
     assert_eq!(packets[0].stats[0].count.0, 2);
     assert!(packets[1].stats.is_empty());
+}
+
+#[test]
+fn announcement_descriptor_reads_rule_and_team_at_application_time() {
+    use crate::{
+        entity::player::ServerPlayer, level::effects::LevelEffect, scoreboard::Scoreboard,
+    };
+    use ferraloom_protocol::{chat::Component, play::clientbound as cb};
+    use std::sync::Arc;
+    let manager =
+        ServerAdvancementManager::new(holders(&oracle()["nested_visibility"][0]["inputs"]));
+    let (mut level, player) = live_fixture(manager);
+    let resources = level.container_resources().unwrap();
+    let result = level
+        .entity_mut::<ServerPlayer>(player)
+        .unwrap()
+        .advancements
+        .award(
+            &resources.advancements,
+            &id("test:an"),
+            "a",
+            ObtainedTime::from_millis(1),
+        );
+    let descriptor = result
+        .effects
+        .into_iter()
+        .find(|effect| matches!(effect, AdvancementEffect::AnnounceAdvancement(_)))
+        .unwrap();
+    level.rules_mut().show_advancement_messages = false;
+    super::live::apply_effect(
+        &mut level,
+        player,
+        &resources.advancements,
+        descriptor.clone(),
+    )
+    .unwrap();
+    assert!(level.take_effects().is_empty());
+    let mut scoreboard = Scoreboard::default();
+    scoreboard.add_player_team("after_rewards").prefix = Component::literal("after ");
+    scoreboard
+        .add_player_to_team("Live", "after_rewards")
+        .unwrap();
+    level.set_scoreboard(Arc::new(scoreboard));
+    level.rules_mut().show_advancement_messages = true;
+    let expected = announcement(
+        resources.advancements.get(&id("test:an")).unwrap(),
+        &level.entity_display_name(player).unwrap(),
+    );
+    super::live::apply_effect(&mut level, player, &resources.advancements, descriptor).unwrap();
+    let content = level
+        .take_effects()
+        .into_iter()
+        .find_map(|effect| match effect {
+            LevelEffect::PlayerPacket { packet, .. } => match *packet {
+                cb::Packet::SystemChat(chat) => Some(chat.content),
+                _ => None,
+            },
+            _ => None,
+        })
+        .unwrap();
+    assert_eq!(content, expected);
+    assert!(content.to_json().unwrap().contains("after "));
 }

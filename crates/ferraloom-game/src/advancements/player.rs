@@ -56,7 +56,7 @@ pub enum AdvancementEffect {
         advancement: Identifier,
         rewards: AdvancementRewards,
     },
-    Announcement(Box<Component>),
+    AnnounceAdvancement(Identifier),
     /// Apply after all preceding effects, rereading completion after callbacks.
     MarkVisibility(Identifier),
 }
@@ -88,13 +88,6 @@ impl Default for PlayerAdvancements {
             first_packet: true,
         }
     }
-}
-/// Inputs supplied by the live player at the award call site.
-#[derive(Clone, Copy)]
-pub struct AwardContext<'a> {
-    pub now: ObtainedTime,
-    pub player_name: &'a Component,
-    pub announce_advancements: bool,
 }
 impl PlayerAdvancements {
     pub fn new(manager: &ServerAdvancementManager) -> Self {
@@ -196,20 +189,20 @@ impl PlayerAdvancements {
             self.roots_to_update.insert(Key(root.holder.id.clone()));
         }
     }
-    /// The rule argument is GameRules.SHOW_ADVANCEMENT_MESSAGES in 26.3.
+    /// Port of PlayerAdvancements#award; effects resolve live reads when applied.
     pub fn award(
         &mut self,
         manager: &ServerAdvancementManager,
         id: &Identifier,
         criterion: &str,
-        award: AwardContext<'_>,
+        now: ObtainedTime,
     ) -> AwardResult {
         let Some(holder) = manager.get(id) else {
             return AwardResult::default();
         };
         let progress = self.get_or_start_progress(holder);
         let was_done = progress.is_done();
-        let changed = progress.grant(criterion, award.now);
+        let changed = progress.grant(criterion, now);
         let done = progress.is_done();
         let mut effects = Vec::new();
         if changed {
@@ -220,17 +213,13 @@ impl PlayerAdvancements {
                     advancement: id.clone(),
                     rewards: holder.value.rewards.clone(),
                 });
-                if award.announce_advancements
-                    && holder
-                        .value
-                        .display
-                        .as_ref()
-                        .is_some_and(|d| d.announce_to_chat)
+                if holder
+                    .value
+                    .display
+                    .as_ref()
+                    .is_some_and(|display| display.announce_to_chat)
                 {
-                    effects.push(AdvancementEffect::Announcement(Box::new(announcement(
-                        holder,
-                        award.player_name,
-                    ))));
+                    effects.push(AdvancementEffect::AnnounceAdvancement(id.clone()));
                 }
             }
         }
@@ -256,9 +245,9 @@ impl PlayerAdvancements {
         manager: &ServerAdvancementManager,
         id: &Identifier,
         criterion: &str,
-        award: AwardContext<'_>,
+        now: ObtainedTime,
     ) -> AwardResult {
-        let mut result = self.award(manager, id, criterion, award);
+        let mut result = self.award(manager, id, criterion, now);
         result.effects.retain(|effect| {
             if let AdvancementEffect::MarkVisibility(id) = effect {
                 self.apply_mark_visibility(manager, id);
@@ -336,7 +325,7 @@ impl PlayerAdvancements {
         event: TriggerEvent<'_>,
         player_context: &LootParams,
         context: &mut MatchContext<'_>,
-        award: AwardContext<'_>,
+        now: ObtainedTime,
     ) -> Result<Vec<AwardResult>> {
         let matched =
             self.matching_listeners(trigger, player_context, context, |instance, context| {
@@ -344,7 +333,7 @@ impl PlayerAdvancements {
             })?;
         Ok(matched
             .into_iter()
-            .map(|key| self.award_immediate(manager, &key.advancement, &key.criterion, award))
+            .map(|key| self.award_immediate(manager, &key.advancement, &key.criterion, now))
             .collect())
     }
     /// Port of PlayerAdvancements#flushDirty. An empty first flush sends nothing
