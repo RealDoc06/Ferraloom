@@ -1,5 +1,7 @@
 //! Vanilla container storage, slot rules, click simulation and remote synchronization.
+mod block_containers;
 mod container;
+pub use block_containers::{block_menu_still_valid, with_block_menu_context};
 mod crafting;
 mod crafting_runtime;
 mod menu;

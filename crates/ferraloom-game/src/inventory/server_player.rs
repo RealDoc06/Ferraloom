@@ -29,37 +29,53 @@ pub fn open_menu(
         .entity_mut::<ServerPlayer>(player)?
         .menus
         .next_container_counter();
-    let Some(mut menu) = provider.create_menu(id, player, level)? else {
+    let Some(menu) = provider.create_menu(id, player, level)? else {
         return Ok(packets);
     };
     let menu_type = menu.kind.registry_id().ok_or(MenuError::Unsupported(
         "mount screens require MountScreenOpen",
     ))?;
-    if menu
-        .slots
-        .iter()
-        .any(|slot| matches!(slot.container, ContainerId::External(_)))
+    let refs = menu.block_entities.clone();
+    if refs.is_empty()
+        && menu
+            .slots
+            .iter()
+            .any(|slot| matches!(slot.container, ContainerId::External(_)))
     {
-        return Err(MenuError::Unsupported(
-            "canonical block/mount container resolver",
-        ));
+        return Err(MenuError::Unsupported("mount container resolver"));
+    }
+    for &handle in &refs {
+        level.retain_block_entity(handle)?;
     }
     packets.push(cb::Packet::OpenScreen(Box::new(cb::OpenScreen {
         container_id: VarInt(menu.container_id),
         menu_type,
         title: provider.display_name(),
     })));
-    let player = level.entity_mut::<ServerPlayer>(player)?;
-    let context = MenuContext::player(
-        &mut player.inventory,
-        &mut player.parent.equipment,
-        player.game_mode == GameType::Creative,
-    );
-    menu.broadcast_changes(&context)?;
-    menu.set_synchronizer(&context);
-    menu.changes.clear();
-    packets.extend(menu.drain_packets());
-    player.menus.container_menu = Some(menu);
+    level
+        .entity_mut::<ServerPlayer>(player)?
+        .menus
+        .container_menu = Some(menu);
+    let initial = with_block_menu_context(player, level, |menus, _book, context| {
+        let menu = menus.current_mut();
+        menu.broadcast_changes(context)?;
+        menu.set_synchronizer(context);
+        menu.changes.clear();
+        Ok(menu.drain_packets())
+    });
+    match initial {
+        Ok(initial) => packets.extend(initial),
+        Err(error) => {
+            level
+                .entity_mut::<ServerPlayer>(player)?
+                .menus
+                .container_menu = None;
+            for handle in refs {
+                level.release_block_entity(handle);
+            }
+            return Err(error);
+        }
+    }
     Ok(packets)
 }
 
@@ -71,6 +87,12 @@ pub fn close_container(
     disconnected: bool,
 ) -> Result<Vec<cb::Packet>> {
     let mut packets = Vec::new();
+    let bound = level
+        .entity::<ServerPlayer>(player)?
+        .menus
+        .current()
+        .block_entities
+        .clone();
     let effects = {
         let player = level.entity_mut::<ServerPlayer>(player)?;
         if send_close {
@@ -98,6 +120,11 @@ pub fn close_container(
             }
         }
     }
+    for handle in bound {
+        let result = crate::block::containers::menu::stop_open(handle, player, level);
+        level.release_block_entity(handle);
+        result?;
+    }
     Ok(packets)
 }
 
@@ -115,28 +142,13 @@ pub fn tick_container_menu(
     })
 }
 fn tick_container_menu_inner(player: EntityRef, level: &mut Level) -> Result<()> {
-    let (valid, packets) = {
-        let player = level.entity_mut::<ServerPlayer>(player)?;
-        let menu = player.menus.current_mut();
-        if menu
-            .slots
-            .iter()
-            .any(|slot| matches!(slot.container, ContainerId::External(_)))
-        {
-            return Err(MenuError::Unsupported(
-                "canonical external container access",
-            ));
-        }
-        let ctx = MenuContext::player(
-            &mut player.inventory,
-            &mut player.parent.equipment,
-            player.game_mode == GameType::Creative,
-        );
-        menu.broadcast_changes(&ctx)?;
-        let valid = menu.still_valid(&ctx);
+    let (valid, packets) = with_block_menu_context(player, level, |menus, _book, ctx| {
+        let menu = menus.current_mut();
+        menu.broadcast_changes(ctx)?;
+        let valid = menu.still_valid(ctx);
         menu.changes.clear();
-        (valid, menu.drain_packets())
-    };
+        Ok((valid, menu.drain_packets()))
+    })?;
     level
         .entity_mut::<ServerPlayer>(player)?
         .menus
