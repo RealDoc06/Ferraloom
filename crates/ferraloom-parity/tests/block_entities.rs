@@ -1,3 +1,4 @@
+use anyhow::Context;
 use ferraloom_data::{EntityType, Item};
 use ferraloom_nbt::{CompoundTag, Tag};
 use ferraloom_parity::{
@@ -188,6 +189,8 @@ async fn chest_store_break(session: &mut Session) -> Result<ObservationLog> {
         container_id: VarInt(menu),
     }))
     .await?;
+    // Container scatter has no pickup delay; observe outside the player's pickup area.
+    bot.teleport([8.5, 80.0, 13.5]).await?;
     command(
         bot,
         "setblock 8 79 9 minecraft:air destroy",
@@ -197,7 +200,20 @@ async fn chest_store_break(session: &mut Session) -> Result<ObservationLog> {
     bot.wait_for("container item drops", Ticks::DEFAULT, |state, _| {
         dropped_count(state, Item::STONE) == 37 && dropped_count(state, Item::CHEST) == 1
     })
-    .await?;
+    .await
+    .with_context(|| {
+        let state = bot.snapshot();
+        format!(
+            "drop counts stone={}, chest={}; items={:?}",
+            dropped_count(&state, Item::STONE),
+            dropped_count(&state, Item::CHEST),
+            state
+                .entities
+                .values()
+                .filter(|entity| entity.entity_type == i32::from(EntityType::ITEM.protocol_id()))
+                .collect::<Vec<_>>()
+        )
+    })?;
     bot.synchronize().await?;
     log.record("dropped_stone", dropped_count(&bot.snapshot(), Item::STONE))?;
     log.record("dropped_chest", dropped_count(&bot.snapshot(), Item::CHEST))?;
