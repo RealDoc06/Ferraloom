@@ -1,4 +1,7 @@
-use std::collections::HashMap;
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use ferraloom_data::{Block, BlockState, EntityType};
 use ferraloom_util::{BlockPos, ChunkPos};
@@ -6,15 +9,29 @@ use ferraloom_util::{BlockPos, ChunkPos};
 use crate::{
     Behaviors,
     entity::{Entity, EntityDataView, EntityRef, EntityState},
-    ticks::{LevelTicks, TickPriority},
+    ticks::{LevelTicks, ScheduledTick, TickPriority},
 };
 
+pub mod border;
+mod broadcast;
 pub mod chunk;
 pub mod chunk_holder;
 pub mod chunk_map;
 pub mod distance_manager;
+pub mod effects;
+pub mod entity;
+pub mod events;
+pub mod heightmap;
+mod mutation;
+mod random;
+pub mod redstone;
+mod saved_ticks;
 pub mod server_level;
+pub mod simulation;
+pub mod tick_rate;
 pub mod tickets;
+mod ticking;
+pub mod weather;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum LevelError {
@@ -26,14 +43,76 @@ pub enum LevelError {
     DuplicateChunk(ChunkPos),
     UnsupportedEntity(EntityType),
     UnsupportedBlock(Block),
+    UnsupportedBlockMethod(Block, crate::block::BlockMethod),
+    UnsupportedBlockEntity(Block),
+    MissingBlockTags,
+    MissingFluidTags,
+    UnsupportedShape(BlockState),
+    UnsupportedFluidRandomTick,
+    UnsupportedWeatherQuery,
+    UnsupportedPackReload,
+    InvalidSavedTick,
+    WrongChunkHeight(ChunkPos),
+}
+
+/// Dimension settings consumed by the live core. The server supplies the
+/// dimension's FAST_LAVA attribute and synchronized game-rule snapshot.
+#[derive(Clone, Copy, Debug)]
+pub struct LevelRules {
+    pub tnt_explodes: bool,
+    pub entity_drops: bool,
+    pub debug: bool,
+    pub can_have_weather: bool,
+    pub random_tick_speed: u32,
+    pub water_source_conversion: bool,
+    pub lava_source_conversion: bool,
+    pub fast_lava: bool,
+    pub redstone_experiments: bool,
+    pub spread_fire: bool,
+}
+impl Default for LevelRules {
+    fn default() -> Self {
+        Self {
+            tnt_explodes: true,
+            entity_drops: true,
+            debug: false,
+            can_have_weather: true,
+            random_tick_speed: 3,
+            water_source_conversion: true,
+            lava_source_conversion: false,
+            fast_lava: false,
+            redstone_experiments: false,
+            spread_fire: true,
+        }
+    }
 }
 
 /// Owned portion of ServerLevel. The scheduler moves this value between workers.
 pub struct Region {
     chunks: HashMap<ChunkPos, chunk::LevelChunk>,
-    entities: HashMap<EntityRef, EntityState>,
-    entity_tick_list: Vec<EntityRef>,
+    entities: entity::EntityStorage,
+    entity_tick_list: entity::EntityTickList,
     block_ticks: LevelTicks,
+    fluid_ticks: LevelTicks<ferraloom_data::registries::fluid::Id>,
+    next_sub_tick_order: i64,
+    game_time: i64,
+    empty_time: i32,
+    weather: weather::Weather,
+    min_y: i32,
+    max_y: i32,
+    rules: LevelRules,
+    random: ferraloom_util::random::Random,
+    rand_value: i32,
+    block_ticking_chunks: HashSet<ChunkPos>,
+    entity_ticking_chunks: HashSet<ChunkPos>,
+    neighbor_updater: redstone::CollectingNeighborUpdater,
+    block_events: events::BlockEvents,
+    effects: Vec<effects::LevelEffect>,
+    block_changes: broadcast::BlockChanges,
+    tags: Option<Arc<ferraloom_data::datapack::TagSet<Block>>>,
+    fluid_tags:
+        Option<Arc<ferraloom_data::datapack::TagSet<ferraloom_data::registries::fluid::Id>>>,
+    pub(crate) unported: crate::block::UnportedCalls,
     behaviors: &'static Behaviors,
 }
 
@@ -41,9 +120,28 @@ impl Region {
     pub fn new(behaviors: &'static Behaviors) -> Self {
         Self {
             chunks: HashMap::new(),
-            entities: HashMap::new(),
-            entity_tick_list: Vec::new(),
+            entities: entity::EntityStorage::default(),
+            entity_tick_list: entity::EntityTickList::default(),
             block_ticks: LevelTicks::default(),
+            fluid_ticks: LevelTicks::default(),
+            next_sub_tick_order: 0,
+            game_time: 0,
+            empty_time: 0,
+            weather: weather::Weather::default(),
+            min_y: -64,
+            max_y: 320,
+            rules: LevelRules::default(),
+            random: random::new_level_random(),
+            rand_value: random::new_position_seed(),
+            block_ticking_chunks: HashSet::new(),
+            entity_ticking_chunks: HashSet::new(),
+            neighbor_updater: redstone::CollectingNeighborUpdater::default(),
+            block_events: events::BlockEvents::default(),
+            effects: Vec::new(),
+            block_changes: broadcast::BlockChanges::default(),
+            tags: None,
+            fluid_tags: None,
+            unported: crate::block::UnportedCalls::default(),
             behaviors,
         }
     }
@@ -68,11 +166,11 @@ impl Level {
         self.region.expect("level is parked")
     }
     #[inline]
-    fn region(&self) -> &Region {
+    pub(crate) fn region(&self) -> &Region {
         self.region.as_ref().expect("level is parked")
     }
     #[inline]
-    fn region_mut(&mut self) -> &mut Region {
+    pub(crate) fn region_mut(&mut self) -> &mut Region {
         self.region.as_mut().expect("level is parked")
     }
 
@@ -80,55 +178,37 @@ impl Level {
         self.region().chunks.get(&pos)
     }
     pub fn remove_chunk(&mut self, pos: ChunkPos) -> Option<chunk::LevelChunk> {
-        self.region_mut().chunks.remove(&pos)
+        let region = self.region_mut();
+        let mut chunk = region.chunks.remove(&pos)?;
+        chunk.block_ticks = region.block_ticks.remove_container(pos).unwrap_or_default();
+        chunk.fluid_ticks = region.fluid_ticks.remove_container(pos).unwrap_or_default();
+        region.block_ticking_chunks.remove(&pos);
+        region.entity_ticking_chunks.remove(&pos);
+        Some(chunk)
     }
-    pub fn add_chunk(&mut self, chunk: chunk::LevelChunk) -> Result<(), LevelError> {
+    pub fn add_chunk(&mut self, mut chunk: chunk::LevelChunk) -> Result<(), LevelError> {
         let pos = chunk.pos();
         let region = self.region_mut();
         if region.chunks.contains_key(&pos) {
             return Err(LevelError::DuplicateChunk(pos));
         }
+        if region.chunks.is_empty() {
+            region.min_y = chunk.min_y();
+            region.max_y = chunk.max_y();
+        }
+        if region.min_y != chunk.min_y() || region.max_y != chunk.max_y() {
+            return Err(LevelError::WrongChunkHeight(pos));
+        }
+        chunk.block_ticks.unpack(region.game_time);
+        chunk.fluid_ticks.unpack(region.game_time);
+        region
+            .block_ticks
+            .add_container(pos, std::mem::take(&mut chunk.block_ticks));
+        region
+            .fluid_ticks
+            .add_container(pos, std::mem::take(&mut chunk.fluid_ticks));
         region.chunks.insert(pos, chunk);
         Ok(())
-    }
-    /// Port of EntityTickList#add: insertion order is independent of lookup order.
-    pub fn add_entity(&mut self, entity: EntityRef, state: EntityState) -> Result<(), LevelError> {
-        let region = self.region_mut();
-        if region.entities.contains_key(&entity) {
-            return Err(LevelError::DuplicateEntity(entity));
-        }
-        region.entities.insert(entity, state);
-        region.entity_tick_list.push(entity);
-        Ok(())
-    }
-    /// Port of Entity#setRemoved: mark immediately, retain state for active frames.
-    pub fn remove_entity(&mut self, entity: EntityRef) -> Result<(), LevelError> {
-        self.entity_state_mut(entity)?.as_entity_mut().removed = true;
-        Ok(())
-    }
-    /// Port of ServerLevel#tickNonPassenger / EntityTickList#forEach, without riders.
-    /// Additions wait for the next iteration, removals suppress ticks immediately.
-    pub fn tick_entities(&mut self) -> Result<(), LevelError> {
-        let ticking = self.region().entity_tick_list.clone();
-        for mut entity in ticking {
-            let base = self.entity_state_mut(entity)?.as_entity_mut();
-            if base.removed {
-                continue;
-            }
-            base.tick_count = base.tick_count.wrapping_add(1);
-            entity.tick(self)?;
-        }
-        Ok(())
-    }
-    /// A separate entity-management boundary, never called during a virtual method.
-    pub fn finish_entity_management(&mut self) {
-        let region = self.region_mut();
-        region
-            .entities
-            .retain(|_, state| !state.as_entity().removed);
-        region
-            .entity_tick_list
-            .retain(|entity| region.entities.contains_key(entity));
     }
     /// Port of ServerLevel's blockTicks phase: collect first, then invoke callbacks.
     pub fn tick_scheduled_blocks(
@@ -136,16 +216,22 @@ impl Level {
         game_time: i64,
         budget: usize,
     ) -> Result<(), LevelError> {
-        let collected = self.region_mut().block_ticks.collect_due(game_time, budget);
-        for tick in collected {
+        self.region_mut().game_time = game_time;
+        let region = self.region_mut();
+        region.block_ticks.collect(game_time, budget, |_| true);
+        let result = self.run_collected_blocks();
+        self.region_mut().block_ticks.cleanup_after_tick();
+        result
+    }
+    fn run_collected_blocks(&mut self) -> Result<(), LevelError> {
+        while let Some(tick) = self.region_mut().block_ticks.poll_this_tick() {
             let state = self.get_block_state(tick.pos)?;
             if state.block() == tick.block {
-                let behavior = self
-                    .region()
-                    .behaviors
-                    .block(tick.block)
-                    .ok_or(LevelError::UnsupportedBlock(tick.block))?;
-                behavior.tick(state, tick.pos, self)?;
+                self.optional_block_call(
+                    tick.block,
+                    crate::block::BlockMethod::Tick,
+                    |behavior, level| behavior.tick(state, tick.pos, level),
+                )?;
             }
         }
         Ok(())
@@ -180,10 +266,14 @@ impl Level {
         self.region()
             .behaviors
             .entity(kind)
+            .or_else(|| crate::entity::vanilla_behavior(kind))
             .ok_or(LevelError::UnsupportedEntity(kind))
     }
     #[inline]
     pub fn get_block_state(&self, pos: BlockPos) -> Result<BlockState, LevelError> {
+        if !self.is_in_valid_bounds(pos) {
+            return Ok(Block::VOID_AIR.default_state());
+        }
         let chunk_pos = ChunkPos::containing(pos);
         self.region()
             .chunks
@@ -218,9 +308,18 @@ impl Level {
         if !region.chunks.contains_key(&chunk) {
             return Err(LevelError::MissingChunk(chunk));
         }
-        region
-            .block_ticks
-            .schedule(pos, block, trigger_tick, priority);
+        let sub_tick_order = region.next_sub_tick_order;
+        region.next_sub_tick_order = sub_tick_order.wrapping_add(1);
+        region.block_ticks.schedule_tick(ScheduledTick {
+            pos,
+            block,
+            trigger_tick,
+            priority,
+            sub_tick_order,
+        });
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests;

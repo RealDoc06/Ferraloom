@@ -56,6 +56,18 @@ including vanilla datapack tags without a Java constant, in `tag_keys.json`.
 each loaded `TagSet` resolves them once and stores membership in bitsets. Custom
 datapack tags resolve by identifier to a dense `TagId` before simulation reads.
 
+`BlockState::liquid` and `ignited_by_lava` come from the final booleans
+`BlockStateBase` copies directly from `Properties` at construction. They never
+read a world or position. `is_solid` is vanilla's `initCache` legacySolid;
+`replaceable` is already retained in the per-state properties. Vanilla 26.3
+uses loaded `BLOCKS_MOTION_IN_HEIGHTMAP` tags for heightmap membership rather
+than a `blocksMotion` state method.
+
+`redstone_state_facts` stores `hasAnalogOutputSignal` (whose signature takes
+only state), plus redstone conductivity for non-dynamic states. Every registered
+26.3 conductor predicate is either the cache-backed collision-full query or
+`Blocks::always`/`never`; dynamic states retain an explicit missing live query.
+
 `ExtractBlockMethods` records the first class declaring each selected virtual
 method in every registered block's real superclass hierarchy. Signatures include
 parameter types; no behavior sampling determines ownership. `Block::overrides`
@@ -65,3 +77,19 @@ a constant: collision-shape defaults, for example, call other virtual methods.
 The extractor additionally exercises the base survival and shape-update methods
 for every applicable state with null level/tick/random arguments, proving those
 two known constants require no level behavior or random draws.
+
+Liquid-container and bucket interfaces use `SimpleWaterloggedBlock` as the
+default owner. Reflection resolves inherited interface defaults after concrete
+class overrides. A non-implementing block records `<not implemented>`, so it
+never selects an interface default. Slab waterlogging overrides remain distinct
+from that default even when the slab is currently a single half.
+
+`block_items` records `Block#asItem` directly, including wall/standing aliases.
+Reversing the item's single block field loses those aliases. The clone-stack
+method's reflected base is `BlockBehaviour`; it creates one item and ignores
+the include-data flag. Overriding block families still require their own port.
+
+`fluid_random_ticking` records `FluidState#isRandomlyTicking`, which delegates
+only to the fluid type's virtual `isRandomlyTicking`. It has no level, position
+or state-property inputs. Source and flowing variants retain their own registry
+entries; waterlogged states use the same fluid fact as ordinary water.

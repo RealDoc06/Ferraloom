@@ -269,8 +269,7 @@ pub(crate) async fn launch(
                         std::fs::canonicalize(binary)
                             .with_context(|| format!("Ferraloom binary {}", binary.display()))?,
                     );
-                    // Enable when level-core lands; parity must never use Warn behavior:
-                    // c.args(["--unported-behavior", "strict"]);
+                    c.args(["--unported-behavior", "strict"]);
                     c.args([
                         "nogui",
                         "--regions",

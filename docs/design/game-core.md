@@ -273,7 +273,8 @@ Vanilla block methods take `LevelReader`/`LevelAccessor`, which both
 keeps one implementation of each behavior in `ferraloom-game`:
 
 - Methods that vanilla calls on both kinds of level take a `LevelAccessRef<'_>`
-  enum (`Server(&mut ServerLevel)` / `Worldgen(&mut WorldGenRegion)`). It is
+  enum (`Server(&mut Level)` / `Worldgen(&mut WorldGenRegion)`). Read-only
+  methods use `LevelReaderRef` (`Server(&Level)` / `Worldgen(&WorldGenRegion)`). It is
   matched statically, so block code still inlines and no `dyn Level` appears
   on the hot path.
 - `ferraloom-worldgen` cannot depend on game, so it calls those behaviors
