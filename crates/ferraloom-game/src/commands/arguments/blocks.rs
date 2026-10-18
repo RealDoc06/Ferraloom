@@ -358,14 +358,8 @@ pub fn suggestions(
             if matches!(completion.mode, CompletionMode::Block) {
                 super::suggestions::resources(&mut builder, context.entries("minecraft:block"), "");
             }
-            if for_testing {
-                if let Some(tags) = context.tags.get("minecraft:block") {
-                    super::suggestions::resources(
-                        &mut builder,
-                        tags.keys().map(String::as_str),
-                        "#",
-                    );
-                }
+            if for_testing && let Some(tags) = context.tags.get("minecraft:block") {
+                super::suggestions::resources(&mut builder, tags.keys().map(String::as_str), "#");
             }
         }
         CompletionMode::Open if empty => {

@@ -684,10 +684,9 @@ impl ArgumentType for MinecraftArgument {
                 CommandArgument::ResourceOrTag { .. }
                     | CommandArgument::ResourceOrTagKey { .. }
                     | CommandArgument::BlockPredicate {}
-            ) {
-                if let Some(tags) = self.context.tags.get(registry) {
-                    suggestions::resources(&mut builder, tags.keys().map(String::as_str), "#");
-                }
+            ) && let Some(tags) = self.context.tags.get(registry)
+            {
+                suggestions::resources(&mut builder, tags.keys().map(String::as_str), "#");
             }
         }
         if matches!(

@@ -151,7 +151,9 @@ pub(super) fn examples(argument: &CommandArgument) -> std::sync::Arc<[String]> {
                     let bytes = entry
                         .wire
                         .as_bytes()
-                        .chunks_exact(2)
+                        .as_chunks::<2>()
+                        .0
+                        .iter()
                         .map(|pair| {
                             u8::from_str_radix(std::str::from_utf8(pair).unwrap(), 16).unwrap()
                         })
@@ -188,7 +190,9 @@ mod tests {
             let expected = vector
                 .wire
                 .as_bytes()
-                .chunks_exact(2)
+                .as_chunks::<2>()
+                .0
+                .iter()
                 .map(|pair| u8::from_str_radix(std::str::from_utf8(pair).unwrap(), 16).unwrap())
                 .collect::<Vec<_>>();
             let argument = from_report(&vector.parser, &vector.properties);

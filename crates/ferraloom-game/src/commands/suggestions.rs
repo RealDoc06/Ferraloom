@@ -61,8 +61,7 @@ pub fn argument(
                         .is_some_and(|entity| entity.data().summonable)
                         && resource_matches(&remaining, key)
                     {
-                        let description =
-                            format!("entity.{}", key.replace(':', ".").replace('/', "."));
+                        let description = format!("entity.{}", key.replace([':', '/'], "."));
                         builder.suggest_with_tooltip(key, Arc::new(translated(&description, &[])));
                     }
                 }
@@ -104,7 +103,7 @@ pub fn argument(
                         let clock = clock.ok_or_else(|| {
                             super::exceptions::error(
                                 "commands.time.no_default_clock",
-                                &[context.source.level.dimension.clone()],
+                                std::slice::from_ref(&context.source.level.dimension),
                             )
                         })?;
                         let values = match &argument.wire {
@@ -228,23 +227,23 @@ fn entity(
                     "",
                 );
             }
-            if positive || negative {
-                if let Some(tags) = argument.context.tags.get("minecraft:entity_type") {
-                    resources(
-                        &mut builder,
-                        tags.keys()
-                            .filter(|tag| !used_tags.contains(tag))
-                            .map(String::as_str),
-                        "#",
-                    );
-                    resources(
-                        &mut builder,
-                        tags.keys()
-                            .filter(|tag| !used_tags.contains(tag))
-                            .map(String::as_str),
-                        "!#",
-                    );
-                }
+            if (positive || negative)
+                && let Some(tags) = argument.context.tags.get("minecraft:entity_type")
+            {
+                resources(
+                    &mut builder,
+                    tags.keys()
+                        .filter(|tag| !used_tags.contains(tag))
+                        .map(String::as_str),
+                    "#",
+                );
+                resources(
+                    &mut builder,
+                    tags.keys()
+                        .filter(|tag| !used_tags.contains(tag))
+                        .map(String::as_str),
+                    "!#",
+                );
             }
         }
         CompletionMode::None => {}

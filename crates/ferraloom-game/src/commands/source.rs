@@ -79,7 +79,7 @@ pub enum CommandSource {
 #[derive(Clone, Debug)]
 pub enum NamesProvider {
     Entity,
-    Constant(Component),
+    Constant(Box<Component>),
 }
 #[derive(Clone, Debug, Default)]
 pub struct CommandSigningContext {
@@ -125,7 +125,7 @@ impl CommandSourceStack {
             rotation: Rotation::default(),
             level: CommandLevel::default(),
             permissions: PermissionSet::for_level(permission),
-            names: NamesProvider::Constant(Component::literal("Server")),
+            names: NamesProvider::Constant(Box::new(Component::literal("Server"))),
             server: 0,
             silent: false,
             entity: None,
@@ -232,7 +232,7 @@ impl CommandSourceStack {
     }
     pub fn display_name(&self, entity_name: impl FnOnce(EntityRef) -> Component) -> Component {
         match &self.names {
-            NamesProvider::Constant(name) => name.clone(),
+            NamesProvider::Constant(name) => name.as_ref().clone(),
             NamesProvider::Entity => self
                 .entity
                 .map(entity_name)

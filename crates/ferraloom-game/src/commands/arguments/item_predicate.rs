@@ -50,21 +50,21 @@ enum Expected {
 }
 impl Parser<'_> {
     fn record(&mut self, mark: usize, error: CommandSyntaxException) {
-        if let Some((cursor, expected)) = &mut self.completion {
-            if mark > *cursor {
-                *cursor = mark;
-                expected.clear();
-            }
+        if let Some((cursor, expected)) = &mut self.completion
+            && mark > *cursor
+        {
+            *cursor = mark;
+            expected.clear();
         }
         if self.best.as_ref().is_none_or(|(cursor, _)| mark > *cursor) {
             self.best = Some((mark, error));
         }
     }
     fn expect(&mut self, mark: usize, value: Expected) {
-        if let Some((cursor, expected)) = &mut self.completion {
-            if mark == *cursor {
-                expected.push(value);
-            }
+        if let Some((cursor, expected)) = &mut self.completion
+            && mark == *cursor
+        {
+            expected.push(value);
         }
     }
     fn character(&mut self, character: u16) -> bool {
@@ -163,16 +163,16 @@ impl Parser<'_> {
     }
     fn test(&mut self) -> Option<ItemTest> {
         let start = self.reader.cursor();
-        if let Some(id) = self.lookup(Lookup::Component) {
-            if self.character(b'=' as u16) {
-                return self.value(&id, false);
-            }
+        if let Some(id) = self.lookup(Lookup::Component)
+            && self.character(b'=' as u16)
+        {
+            return self.value(&id, false);
         }
         self.reader.set_cursor(start);
-        if let Some(id) = self.lookup(Lookup::Predicate) {
-            if self.character(b'~' as u16) {
-                return self.value(&id, true);
-            }
+        if let Some(id) = self.lookup(Lookup::Predicate)
+            && self.character(b'~' as u16)
+        {
+            return self.value(&id, true);
         }
         self.reader.set_cursor(start);
         self.lookup(Lookup::Component).map(|id| {
@@ -323,12 +323,12 @@ fn count(tag: &Tag) -> Result<IntBounds, String> {
             "Failed to parse either. First: Not a map: {tag}; Second: Not a number"
         ));
     };
-    if let (Some(min), Some(max)) = (bounds.min, bounds.max) {
-        if min > max {
-            return Err(format!(
-                "Swapped bounds in range: Optional[{min}] is higher than Optional[{max}]"
-            ));
-        }
+    if let (Some(min), Some(max)) = (bounds.min, bounds.max)
+        && min > max
+    {
+        return Err(format!(
+            "Swapped bounds in range: Optional[{min}] is higher than Optional[{max}]"
+        ));
     }
     Ok(bounds)
 }

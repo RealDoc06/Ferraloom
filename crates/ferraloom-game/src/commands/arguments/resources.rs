@@ -20,20 +20,20 @@ pub fn parse_reference(
     reader.skip_whitespace();
     let id_start = reader.cursor();
     let parsed = identifier(reader);
-    if reader.cursor() != id_start {
-        if let Ok(key) = parsed {
-            if !context.contains(registry, &key) {
-                return Err(error_at(
-                    reader,
-                    "argument.resource_or_id.no_such_element",
-                    &[key, registry.into()],
-                ));
-            }
-            return Ok(RegistryReference {
-                registry: registry.into(),
-                key,
-            });
+    if reader.cursor() != id_start
+        && let Ok(key) = parsed
+    {
+        if !context.contains(registry, &key) {
+            return Err(error_at(
+                reader,
+                "argument.resource_or_id.no_such_element",
+                &[key, registry.into()],
+            ));
         }
+        return Ok(RegistryReference {
+            registry: registry.into(),
+            key,
+        });
     }
     // The grammar's SNBT alternative is parsed, but never accepted without its gameplay codec.
     reader.set_cursor(start);

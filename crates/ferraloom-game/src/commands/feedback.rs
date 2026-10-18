@@ -120,7 +120,7 @@ mod tests {
             } else {
                 "Invoker"
             });
-            source.names = NamesProvider::Constant(name.clone());
+            source.names = NamesProvider::Constant(Box::new(name.clone()));
             source.accepts_success = vector.accepts;
             source.should_inform_admins = vector.informs;
             source.always_accepts = vector.always;
