@@ -295,3 +295,36 @@ fn slab_waterlogging_rejects_double_and_flowing_water_like_vanilla() {
     }
     assert_eq!(matched, 1818);
 }
+
+#[test]
+fn falling_block_landing_context_checks_native_slab_replacement() {
+    let mut level = level();
+    let empty = ItemStack::default();
+    let mut matched = 0;
+    for line in cases("landing\t") {
+        let f: Vec<_> = line.split('\t').collect();
+        let state = BlockState::from_id(f[1].parse().unwrap()).unwrap();
+        level.set_block_state(POS, state).unwrap();
+        let reader = LevelReaderRef::Server(&level);
+        let context =
+            DirectionalPlaceContext::new(&reader, POS, Direction::Down, &empty, Direction::Up)
+                .unwrap();
+        assert_eq!(
+            reader.can_be_replaced(state, &context).unwrap(),
+            f[2].parse::<bool>().unwrap(),
+            "receiver {line}"
+        );
+        assert_eq!(
+            context.can_place(&reader).unwrap(),
+            f[3].parse::<bool>().unwrap(),
+            "canPlace {line}"
+        );
+        assert_eq!(
+            context.replacing_clicked_on_block(&reader).unwrap(),
+            f[4].parse::<bool>().unwrap(),
+            "replacing {line}"
+        );
+        matched += 1;
+    }
+    assert_eq!(matched, 606);
+}

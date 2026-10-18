@@ -18,7 +18,7 @@ parser.add_argument('family', nargs='?', choices=['orientation', 'stairs-slabs',
 family = parser.parse_args().family
 source, bootstrap, expected = {
     'orientation': ('OrientationVectors.java', 'OrientationBootstrap', 42012),
-    'stairs-slabs': ('StairSlabVectors.java', 'StairSlabBootstrap', 281554),
+    'stairs-slabs': ('StairSlabVectors.java', 'StairSlabBootstrap', 282160),
     'connected': ('ConnectedVectors.java', 'ConnectedBootstrap', 84864),
     'attachments': ('AttachmentVectors.java', 'AttachmentBootstrap', 268940),
     'decorative': ('DecorativeVectors.java', 'DecorativeBootstrap', 35092),

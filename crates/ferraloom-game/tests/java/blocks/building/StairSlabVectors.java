@@ -53,6 +53,12 @@ public final class StairSlabVectors extends MutationFixture {
                 emit("height\t"+BuiltInRegistries.BLOCK.getId(block)+"\t"+face.get3DDataValue()+"\t"+h+"\t"+id(old)+"\t"+id(block.getStateForPlacement(context)));
             }
             for(var state:block.getStateDefinition().getPossibleStates()){
+                if(block instanceof SlabBlock){
+                    level.clear();level.raw(POS,state);
+                    // FallingBlockEntity#tick's actual landing context.
+                    var landing=new DirectionalPlaceContext(level,POS,Direction.DOWN,ItemStack.EMPTY,Direction.UP);
+                    emit("landing\t"+id(state)+"\t"+state.canBeReplaced(landing)+"\t"+landing.canPlace()+"\t"+landing.replacingClickedOnBlock());
+                }
                 if(block instanceof SlabBlock)for(var face:Direction.values())for(int h=0;h<HEIGHTS.length;h++)for(int held=0;held<4;held++){
                     level.clear();level.raw(POS,state);
                     var item=switch(held){case 0->ItemStack.EMPTY;case 1->new ItemStack(block.asItem());case 2->new ItemStack(block.asItem(),0);default->new ItemStack(Items.STONE);};
