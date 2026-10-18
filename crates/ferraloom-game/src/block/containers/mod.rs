@@ -5,6 +5,7 @@ pub mod chest;
 pub mod crafter;
 pub mod drops;
 pub mod furnace;
+pub mod loot;
 pub mod menu;
 pub mod runtime;
 pub mod sign;

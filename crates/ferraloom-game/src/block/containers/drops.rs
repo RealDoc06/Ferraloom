@@ -55,18 +55,13 @@ pub fn drop_item_stack(
 /// Live-slot counterpart of Containers#dropContents. The same receiver generation
 /// is reborrowed after every spawn, even if an entity callback replaced its block.
 pub fn drop_contents(entity: BlockEntityRef, level: &mut Level) -> Result<(), LevelError> {
-    use super::storage::{BaseContainerBlockEntity, RandomizableContainerBlockEntity};
-    if let Ok(container) = level.block_entity::<RandomizableContainerBlockEntity>(entity)
-        && container.loot_table.is_some()
-    {
-        return Err(LevelError::UnsupportedBlockEntity(
-            container.parent.parent.block_state.block(),
-        ));
-    }
+    use super::storage::BaseContainerBlockEntity;
     let size = level
         .block_entity::<BaseContainerBlockEntity>(entity)?
         .size();
     for slot in 0..size {
+        // Containers reads each stack through getItem before its scatter draws.
+        super::access::get_item(entity, slot, level)?;
         let origin = scatter_origin(
             level,
             Vec3::new(

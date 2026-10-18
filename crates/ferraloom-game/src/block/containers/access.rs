@@ -3,7 +3,7 @@
 use super::{furnace::AbstractFurnaceBlockEntity, menu, storage::BaseContainerBlockEntity};
 use crate::{
     block::entity::{BlockEntityRef, BlockEntityState},
-    entity::player::inventory::component,
+    entity::player::inventory::{component, count, max_stack_size, set_count, split},
     inventory::Container,
     level::{Level, LevelError},
 };
@@ -21,6 +21,29 @@ pub enum ContainerRef {
     Double([BlockEntityRef; 2]),
 }
 impl ContainerRef {
+    pub fn with_callback<R>(
+        &self,
+        level: &mut Level,
+        operation: impl FnOnce(&mut Level) -> Result<R, LevelError>,
+    ) -> Result<R, LevelError> {
+        for (index, &handle) in self.handles().iter().enumerate() {
+            if let Err(error) = level.retain_block_entity(handle) {
+                for &retained in &self.handles()[..index] {
+                    level.release_block_entity(retained);
+                }
+                return Err(error);
+            }
+        }
+        let result = operation(level);
+        for &handle in self.handles() {
+            level.release_block_entity(handle);
+        }
+        result
+    }
+    pub fn get_item(&self, slot: usize, level: &mut Level) -> Result<ItemStack, LevelError> {
+        let (handle, slot) = self.slot(slot, level)?;
+        get_item(handle, slot, level)
+    }
     pub fn handles(&self) -> &[BlockEntityRef] {
         match self {
             Self::Single(handle) => std::slice::from_ref(handle),
@@ -53,6 +76,116 @@ impl ContainerRef {
         }
         Err(LevelError::Inventory("container slot out of range"))
     }
+}
+
+/// Port of BaseContainerBlockEntity#getItem and RandomizableContainer's lazy
+/// override. Crafter overrides getItem with direct storage, without unpacking.
+pub fn get_item(
+    handle: BlockEntityRef,
+    slot: usize,
+    level: &mut Level,
+) -> Result<ItemStack, LevelError> {
+    if !matches!(
+        level.block_entity_state(handle)?,
+        BlockEntityState::Crafter(_)
+    ) {
+        super::loot::unpack_loot_table(handle, None, level)?;
+    }
+    Ok(level
+        .block_entity::<BaseContainerBlockEntity>(handle)?
+        .get_item(slot))
+}
+
+/// Port of container setItem dispatch. Each world callback sees the write before
+/// this function returns; Hopper deliberately omits setChanged here.
+pub fn set_item(
+    handle: BlockEntityRef,
+    slot: usize,
+    mut stack: ItemStack,
+    level: &mut Level,
+) -> Result<(), LevelError> {
+    level.with_block_entity_callback(handle, |level| {
+        super::loot::unpack_loot_table(handle, None, level)?;
+        if matches!(level.block_entity_state(handle)?, BlockEntityState::Furnace(_)) {
+            return super::furnace::set_item(handle, slot, stack, level);
+        }
+        let enable_crafter_slot = matches!(level.block_entity_state(handle)?, BlockEntityState::Crafter(crafter) if crafter.disabled_slots[slot] && crafter.parent.parent.items[slot].is_empty());
+        if enable_crafter_slot {
+            level.block_entity_mut::<super::crafter::CrafterBlockEntity>(handle)?.set_slot_state(slot, true);
+            handle.set_changed(level)?;
+        }
+        let hopper = matches!(level.block_entity_state(handle)?, BlockEntityState::Hopper(_));
+        let container = level.block_entity_mut::<BaseContainerBlockEntity>(handle)?;
+        if hopper {
+            let size = count(&stack).min(container.max_stack_size().min(max_stack_size(&stack)));
+            set_count(&mut stack, size);
+            container.items[slot] = stack;
+        } else {
+            container.set_item(slot, stack);
+            handle.set_changed(level)?;
+        }
+        Ok(())
+    })
+}
+
+/// Port of ContainerHelper#removeItem and the receiver's change notification.
+pub fn remove_item(
+    handle: BlockEntityRef,
+    slot: usize,
+    amount: i32,
+    level: &mut Level,
+) -> Result<ItemStack, LevelError> {
+    level.with_block_entity_callback(handle, |level| {
+        super::loot::unpack_loot_table(handle, None, level)?;
+        let hopper = matches!(
+            level.block_entity_state(handle)?,
+            BlockEntityState::Hopper(_)
+        );
+        let container = level.block_entity_mut::<BaseContainerBlockEntity>(handle)?;
+        let result = if amount <= 0 {
+            ItemStack::default()
+        } else {
+            split(&mut container.items[slot], amount)
+        };
+        if !hopper && !result.is_empty() {
+            container.set_changed();
+            handle.set_changed(level)?;
+        }
+        Ok(result)
+    })
+}
+pub fn remove_item_no_update(
+    handle: BlockEntityRef,
+    slot: usize,
+    level: &mut Level,
+) -> Result<ItemStack, LevelError> {
+    super::loot::unpack_loot_table(handle, None, level)?;
+    Ok(level
+        .block_entity_mut::<BaseContainerBlockEntity>(handle)?
+        .remove_item_no_update(slot))
+}
+
+/// Port of AbstractContainerMenu#getRedstoneSignalFromContainer, invoking each
+/// native getItem at its original point so the first read can unpack chest loot.
+pub fn analog_output(container: &ContainerRef, level: &mut Level) -> Result<i32, LevelError> {
+    container.with_callback(level, |level| analog_output_inner(container, level))
+}
+fn analog_output_inner(container: &ContainerRef, level: &mut Level) -> Result<i32, LevelError> {
+    let size = container.size(level)?;
+    let mut fullness = 0.0f32;
+    for slot in 0..size {
+        let (handle, _) = container.slot(slot, level)?;
+        let stack = container.get_item(slot, level)?;
+        if !stack.is_empty() {
+            let limit = level
+                .block_entity::<BaseContainerBlockEntity>(handle)?
+                .max_stack_size()
+                .min(max_stack_size(&stack));
+            fullness += count(&stack) as f32 / limit as f32;
+        }
+    }
+    fullness /= size as f32;
+    Ok((fullness * 14.0).floor() as i32 + i32::from(fullness > 0.0))
 }
 
 /// Port of HopperBlockEntity#getBlockContainer. Entity selection (including its
