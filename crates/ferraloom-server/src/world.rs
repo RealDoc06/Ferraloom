@@ -631,6 +631,7 @@ pub struct World {
     generation: Arc<JobPool>,
     generation_state: Option<GenerationState>,
     generation_work: Option<oneshot::Receiver<GenerationCompletion>>,
+    progress_waker: Waker,
     generation_dispatcher: ThrottlingChunkTaskDispatcher<GenerationRequest>,
     active_generation: BTreeMap<i64, (u64, Arc<AtomicBool>)>,
     running_generation: Option<(u64, ChunkPos)>,
@@ -665,6 +666,11 @@ struct EntityIo {
     loads: VecDeque<(EntityLoadRequestId, storage::IoTask<Option<CompoundTag>>)>,
     stores: VecDeque<storage::IoTask<()>>,
 }
+/// Owned IO result popped before any entity decode, registration or callback.
+pub(crate) enum EntityIoCompletion {
+    Load(EntityLoadRequestId, storage::Result<Option<CompoundTag>>),
+    Store(storage::Result<()>),
+}
 impl EntityIo {
     fn submit(&mut self, requests: Vec<EntityStorageRequest>) -> Result<()> {
         for request in requests {
@@ -682,22 +688,31 @@ impl EntityIo {
     }
     fn poll(&mut self, level: &mut Level) -> Result<()> {
         let mut context = TaskContext::from_waker(Waker::noop());
-        while let Some((id, task)) = self.loads.front_mut() {
-            let Poll::Ready(result) = Pin::new(task).poll(&mut context) else {
-                break;
-            };
-            let id = *id;
-            self.loads.pop_front();
-            level.complete_entity_chunk_load(id, result)?;
-        }
-        while let Some(task) = self.stores.front_mut() {
-            let Poll::Ready(result) = Pin::new(task).poll(&mut context) else {
-                break;
-            };
-            self.stores.pop_front();
-            result?;
+        while let Some(completion) = self.next_completion(&mut context) {
+            match completion {
+                EntityIoCompletion::Load(id, result) => {
+                    level.complete_entity_chunk_load(id, result)?;
+                }
+                EntityIoCompletion::Store(result) => result?,
+            }
         }
         Ok(())
+    }
+    fn next_completion(&mut self, context: &mut TaskContext<'_>) -> Option<EntityIoCompletion> {
+        if let Some((id, task)) = self.loads.front_mut()
+            && let Poll::Ready(result) = Pin::new(task).poll(&mut *context)
+        {
+            let id = *id;
+            self.loads.pop_front();
+            return Some(EntityIoCompletion::Load(id, result));
+        }
+        if let Some(task) = self.stores.front_mut()
+            && let Poll::Ready(result) = Pin::new(task).poll(context)
+        {
+            self.stores.pop_front();
+            return Some(EntityIoCompletion::Store(result));
+        }
+        None
     }
 }
 impl World {
@@ -906,6 +921,7 @@ impl World {
             generation,
             generation_state: Some(generation_state),
             generation_work: None,
+            progress_waker: Waker::noop().clone(),
             generation_dispatcher: ThrottlingChunkTaskDispatcher::new(4),
             active_generation: BTreeMap::new(),
             running_generation: None,
@@ -1058,6 +1074,23 @@ impl World {
             self.entity_io(properties)?.submit(requests)?;
         }
         Ok(())
+    }
+    pub(crate) fn take_entity_io_completion(
+        &mut self,
+        properties: &ServerProperties,
+    ) -> Result<Option<EntityIoCompletion>> {
+        let waker = self.progress_waker.clone();
+        let mut context = TaskContext::from_waker(&waker);
+        Ok(self.entity_io(properties)?.next_completion(&mut context))
+    }
+
+    /// Returned futures own their operation and never borrow the runtime owner.
+    pub(crate) fn synchronize_entities(
+        &mut self,
+        properties: &ServerProperties,
+        flush: bool,
+    ) -> Result<storage::IoTask<()>> {
+        Ok(self.entity_io(properties)?.worker.synchronize(flush))
     }
     /// PersistentEntitySectionManager#tick polling point, also used while frozen.
     pub fn tick_entity_management(
@@ -1443,20 +1476,21 @@ impl World {
     /// off the canonical queue. No Level borrow or promotion callback runs here.
     pub fn poll_generation_progress(&mut self) -> Result<bool> {
         let mut progressed = false;
+        let waker = self.progress_waker.clone();
+        let mut context = TaskContext::from_waker(&waker);
         if let Some(work) = &mut self.generation_work {
-            match work.try_recv() {
-                Ok(output) => {
+            match Pin::new(work).poll(&mut context) {
+                Poll::Ready(Ok(output)) => {
                     self.generation_work = None;
                     self.complete_generation(output)?;
                     progressed = true;
                 }
-                Err(oneshot::error::TryRecvError::Empty) => {}
-                Err(error) => return Err(error.into()),
+                Poll::Pending => {}
+                Poll::Ready(Err(error)) => return Err(error.into()),
             }
         }
         progressed |= !self.cancelled_outputs.is_empty();
         self.persist_cancelled_outputs()?;
-        let mut context = TaskContext::from_waker(Waker::noop());
         while let Some(task) = self.proto_saves.front_mut() {
             let Poll::Ready(result) = Pin::new(task).poll(&mut context) else {
                 break;
@@ -1489,6 +1523,17 @@ impl World {
             progressed |= !running && self.generation_work.is_some();
         }
         Ok(progressed)
+    }
+    pub(crate) fn set_progress_waker(&mut self, waker: Waker) {
+        self.progress_waker = waker;
+    }
+    pub(crate) fn take_light_completion(&mut self) -> Result<Option<LitChunk>> {
+        let mut context = TaskContext::from_waker(&self.progress_waker);
+        match self.light_rx.poll_recv(&mut context) {
+            Poll::Ready(Some(light)) => Ok(Some(light)),
+            Poll::Pending => Ok(None),
+            Poll::Ready(None) => anyhow::bail!("generation light worker terminated"),
+        }
     }
     /// Begin just one ordered integration. A nested managed-block pump can
     /// still reach every later completion, including an ordered failure.
