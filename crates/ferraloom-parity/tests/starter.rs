@@ -1,11 +1,12 @@
 mod command_support;
 
 use ferraloom_parity::{
-    ObservationLog, Result, Session, Ticks, ensure, parity_test,
+    LaunchOptions, ObservationLog, Result, RunMode, Session, Ticks, ensure, parity_test,
     protocol::{
         codec::Holder,
         play::{self, clientbound as cb},
     },
+    run,
 };
 
 async fn join_and_spawn(s: &mut Session) -> Result<ObservationLog> {
@@ -247,7 +248,6 @@ async fn save_and_reload_player_position(s: &mut Session) -> Result<ObservationL
     Ok(log)
 }
 parity_test!(parity_join_and_spawn, join_and_spawn);
-// Strict default-noise generation still requires the unported sculk_spread callback.
 command_support::command_test!(parity_commands, commands);
 parity_test!(
     parity_chunk_loading_while_walking,
@@ -258,3 +258,15 @@ parity_test!(
     parity_save_and_reload_player_position,
     save_and_reload_player_position
 );
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "requires builder vanilla jar/JDK; default-noise both-server parity"]
+async fn parity_commands_default_noise() -> Result<()> {
+    let started = std::time::Instant::now();
+    let result = run(LaunchOptions::default(), RunMode::Both, commands).await;
+    eprintln!(
+        "Default-noise command starter elapsed: {:?}",
+        started.elapsed()
+    );
+    result
+}
