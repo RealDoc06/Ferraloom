@@ -251,6 +251,14 @@ impl EntityData {
     pub fn set_bounding_box(&mut self, bb: Aabb) {
         self.bounding_box = bb;
     }
+    /// Port of Entity#moveRelative. Input acceleration does not mark needsSync.
+    pub fn move_relative(&mut self, speed: f32, input: Vec3) {
+        self.velocity = self.velocity + super::movement::input_vector(input, speed, self.yaw);
+    }
+    /// Port of Entity#getLookAngle using its current, uninterpolated rotation.
+    pub fn look_angle(&self) -> Vec3 {
+        super::movement::calculate_view_vector(self.pitch, self.yaw)
+    }
     /// Port of Entity#setYRot. Non-finite input leaves the previous angle intact.
     pub fn set_y_rot(&mut self, yaw: f32) {
         if yaw.is_finite() {

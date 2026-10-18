@@ -40,6 +40,44 @@ impl MovementEmission {
         matches!(self, Self::Events | Self::All)
     }
 }
+
+/// Port of Entity#getInputVector: normalize only inputs longer than one, then
+/// apply the float speed and lookup-table yaw before double vector arithmetic.
+pub fn input_vector(input: Vec3, speed: f32, yaw: f32) -> Vec3 {
+    let length = input.length_sqr();
+    if length < 1.0e-7 {
+        return Vec3::ZERO;
+    }
+    let movement = if length > 1.0 {
+        input.normalize()
+    } else {
+        input
+    } * f64::from(speed);
+    let angle = f64::from(yaw * mth::DEG_TO_RAD);
+    let sin = f64::from(mth::sin(angle));
+    let cos = f64::from(mth::cos(angle));
+    Vec3::new(
+        movement.x * cos - movement.z * sin,
+        movement.y,
+        movement.z * cos + movement.x * sin,
+    )
+}
+
+/// Port of Entity#calculateViewVector. Products round as floats before widening.
+pub fn calculate_view_vector(pitch: f32, yaw: f32) -> Vec3 {
+    let pitch = f64::from(pitch * mth::DEG_TO_RAD);
+    let yaw = f64::from(-yaw * mth::DEG_TO_RAD);
+    let y_cos = mth::cos(yaw);
+    let y_sin = mth::sin(yaw);
+    let x_cos = mth::cos(pitch);
+    let x_sin = mth::sin(pitch);
+    Vec3::new(
+        f64::from(y_sin * x_cos),
+        f64::from(-x_sin),
+        f64::from(y_cos * x_cos),
+    )
+}
+
 /// Port of Entity#limitPistonMovement, preserving first-nonzero-axis selection.
 pub fn limit_piston_movement(base: &mut EntityData, movement: Vec3, game_time: i64) -> Vec3 {
     if movement.length_sqr() <= 1e-7 {
