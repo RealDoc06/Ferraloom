@@ -12,8 +12,11 @@ use ferraloom_data::{
 };
 use ferraloom_util::{BlockPos, Direction};
 
-/// Port of ServerPlayerGameMode's destruction fields. Slice B attaches this
-/// state once to ServerPlayer and ticks it at the native pre-menu slot.
+mod block_actions;
+pub use block_actions::{BlockBreakAction, BlockBreakError, DestroyAction, destroy_block};
+
+/// Port of ServerPlayerGameMode's destruction fields. Attachment to ServerPlayer
+/// and the native pre-menu tick slot wait for the entity landing.
 #[derive(Debug)]
 pub struct BlockBreakingState {
     pub is_destroying_block: bool,
@@ -119,5 +122,7 @@ pub fn get_destroy_speed(
     Ok(speed)
 }
 
+#[cfg(test)]
+mod block_action_tests;
 #[cfg(test)]
 mod tests;

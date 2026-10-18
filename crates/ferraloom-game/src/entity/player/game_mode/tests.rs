@@ -16,7 +16,7 @@ const POS: BlockPos = BlockPos::new(8, 64, 8);
 const VECTORS: &str = include_str!("../../../../tests/java/level/mining.tsv");
 static EMPTY: Behaviors = Behaviors::EMPTY;
 
-fn fixture(water: bool, ground: bool) -> (Level, EntityRef) {
+pub(super) fn fixture(water: bool, ground: bool) -> (Level, EntityRef) {
     let context = LevelContext::fixture(0, 63);
     let mut level = Level::new(Region::new(&EMPTY), context.clone());
     let data = context.generator.access().data();
