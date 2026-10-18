@@ -118,3 +118,6 @@ impl AbstractContainerMenu {
             .unwrap_or(true))
     }
 }
+
+#[cfg(test)]
+mod tests;
