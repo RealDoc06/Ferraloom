@@ -7,7 +7,7 @@ use crate::{
 use ferraloom_data::{Block, BlockState, EntityType, tags::BlockTags};
 use ferraloom_protocol::play::Difficulty;
 use ferraloom_util::{BlockPos, Direction};
-use std::collections::BTreeMap;
+use std::collections::HashMap;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) struct WitherPatternMatch {
@@ -32,7 +32,7 @@ pub(super) fn find_pattern(
     level: &Level,
     origin: BlockPos,
 ) -> Result<Option<WitherPatternMatch>, LevelError> {
-    let mut cache = BTreeMap::<BlockPos, BlockState>::new();
+    let mut cache = HashMap::<BlockPos, BlockState>::new();
     for candidate in BlockPos::between_closed(origin, origin.offset(2, 2, 2)) {
         for forwards in Direction::VALUES {
             for up in Direction::VALUES {
