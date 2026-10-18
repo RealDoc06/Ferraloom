@@ -1816,6 +1816,14 @@ no-collision-order	minecraft:air	false	required-read
 no-collision-order	minecraft:air	true	required-read
 no-collision-order	minecraft:water	false	required-read
 no-collision-order	minecraft:water	true	false
+placement-context	0	false,true,ffefffffffffffff,true,false,false,false,false,true,false,false,true,true
+placement-context	1	false,true,4050000000000000,false,true,false,false,false,true,true,true,true,true
+placement-context	2	true,true,4050000000000000,false,true,false,false,false,true,true,true,true,true
+placement-context	3	false,true,4050000000000000,true,false,false,false,false,true,true,true,true,true
+placement-context	4	false,true,4050000000000000,true,false,false,false,false,true,true,true,true,true
+placement-context	5	false,true,c004000000000000,false,true,false,false,false,true,false,false,true,true
+placement-context	6	false,true,4050000000000000,true,false,false,false,false,true,true,true,true,true
+placement-context	7	false,true,4050000000000000,false,true,false,false,false,true,true,true,true,true
 entity-sound	base-step	none:minecraft:block.stone.step:6:68,512,68:3e19999a:3f800000:bf82071f723fe4e0	b921f1dd	-
 entity-sound	base-silent-step		b921f1dd	-
 entity-sound	player-silent-step	1:minecraft:block.stone.step:7:68,512,68:3e19999a:3f800000:bf82071f723fe4e0	b921f1dd	-

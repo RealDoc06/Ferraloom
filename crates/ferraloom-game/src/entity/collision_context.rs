@@ -10,7 +10,7 @@ use ferraloom_util::shapes::{EntityCollisionContext, EntityCollisionData};
 /// Current base entities cannot stand on fluids. Living subclasses override that
 /// capability when their equipment/locomotion ports arrive, through this view.
 pub struct EntityCollisionView {
-    pub entity: EntityRef,
+    pub entity: Option<EntityRef>,
     living: bool,
 }
 impl EntityCollisionData for EntityCollisionView {
@@ -46,10 +46,11 @@ impl EntityCollisionView {
         if !self.living {
             return Ok(None);
         }
-        let behavior = level.entity_behavior(self.entity)?;
-        behavior
-            .liquid_collision_shape(self.entity, level)
-            .map(Some)
+        let Some(entity) = self.entity else {
+            return Ok(None);
+        };
+        let behavior = level.entity_behavior(entity)?;
+        behavior.liquid_collision_shape(entity, level).map(Some)
     }
 
     pub fn capture(
@@ -75,8 +76,38 @@ impl EntityCollisionView {
                 .filter(|stack| !stack.is_empty())
                 .map(ferraloom_protocol::component::ItemStack::item),
             entity: Self {
-                entity,
+                entity: Some(entity),
                 living: level.entity_state(entity)?.as_living().is_some(),
+            },
+        })
+    }
+    /// Port of CollisionContext#placementContext. Capture the player's current
+    /// main hand and position Y, independently of its bounding-box minimum.
+    pub fn placement_context(
+        player: Option<EntityRef>,
+        level: &Level,
+    ) -> Result<EntityCollisionContext<Self>, LevelError> {
+        let (descending, entity_bottom, held_item) = match player {
+            Some(player) => {
+                let player = level.entity::<super::ServerPlayer>(player)?;
+                (
+                    player.shared_flag(1),
+                    player.position.y,
+                    player.get_main_hand_item().item(),
+                )
+            }
+            // Native ItemStack.EMPTY has AIR as its effective item holder.
+            None => (false, -f64::MAX, Item::AIR),
+        };
+        Ok(EntityCollisionContext {
+            descending,
+            placement: true,
+            entity_bottom,
+            always_collide_with_fluid: false,
+            held_item: Some(held_item),
+            entity: Self {
+                entity: player,
+                living: player.is_some(),
             },
         })
     }
@@ -93,9 +124,12 @@ impl EntityCollisionView {
             always_collide_with_fluid: false,
             held_item: None,
             entity: Self {
-                entity,
+                entity: Some(entity),
                 living: false,
             },
         }
     }
 }
+
+#[cfg(test)]
+mod tests;
