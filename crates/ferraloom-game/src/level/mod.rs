@@ -14,6 +14,7 @@ use crate::{
 
 pub mod acquisition;
 mod block_entity;
+pub mod blockscan;
 pub mod border;
 mod broadcast;
 pub mod chunk;

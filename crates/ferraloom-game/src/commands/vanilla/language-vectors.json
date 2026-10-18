@@ -1,0 +1,127 @@
+[
+  {
+    "case": "cow",
+    "component": {
+      "translate": "entity.minecraft.cow"
+    },
+    "text": "Cow"
+  },
+  {
+    "case": "stone",
+    "component": {
+      "translate": "block.minecraft.stone"
+    },
+    "text": "Stone"
+  },
+  {
+    "case": "custom",
+    "component": {
+      "text": "Named Cow",
+      "extra": [
+        "!"
+      ]
+    },
+    "text": "Named Cow!"
+  },
+  {
+    "case": "missing",
+    "component": {
+      "translate": "ferraloom.missing"
+    },
+    "text": "ferraloom.missing"
+  },
+  {
+    "case": "fallback",
+    "component": {
+      "translate": "ferraloom.missing",
+      "fallback": "Fallback"
+    },
+    "text": "Fallback"
+  },
+  {
+    "case": "format",
+    "component": {
+      "translate": "ferraloom.format",
+      "fallback": "%2$s: %1$s %%",
+      "with": [
+        "A",
+        "B"
+      ]
+    },
+    "text": "B: A %"
+  },
+  {
+    "case": "missing-argument",
+    "component": {
+      "translate": "ferraloom.format",
+      "fallback": "before %s after"
+    },
+    "text": "before %s after"
+  },
+  {
+    "case": "bad-format",
+    "component": {
+      "translate": "ferraloom.format",
+      "fallback": "%q then %s",
+      "with": [
+        "A"
+      ]
+    },
+    "text": "%q then %s"
+  },
+  {
+    "case": "deprecated",
+    "component": {
+      "translate": "block.minecraft.grass"
+    },
+    "text": "block.minecraft.grass"
+  },
+  {
+    "case": "normalized-integer",
+    "component": {
+      "translate": "ferraloom.format",
+      "fallback": "%s",
+      "with": [
+        "A",
+        "B"
+      ]
+    },
+    "text": "A"
+  },
+  {
+    "case": "normalized-float",
+    "component": {
+      "translate": "ferraloom.format",
+      "fallback": "%s",
+      "with": [
+        "A",
+        "B"
+      ]
+    },
+    "text": "A"
+  },
+  {
+    "case": "normalized-indexed",
+    "component": {
+      "translate": "ferraloom.format",
+      "fallback": "%2$s %1$s",
+      "with": [
+        "A",
+        "B"
+      ]
+    },
+    "text": "B A"
+  },
+  {
+    "case": "normalized-percent",
+    "component": {
+      "translate": "ferraloom.format",
+      "fallback": "%%s",
+      "with": [
+        "A",
+        "B"
+      ]
+    },
+    "text": "%s"
+  }
+]
