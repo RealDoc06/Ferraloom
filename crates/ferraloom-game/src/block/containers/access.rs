@@ -119,7 +119,7 @@ pub fn set_item(
         if hopper {
             let size = count(&stack).min(container.max_stack_size().min(max_stack_size(&stack)));
             set_count(&mut stack, size);
-            container.items[slot] = stack;
+            container.replace_item(slot, stack);
         } else {
             container.set_item(slot, stack);
             handle.set_changed(level)?;

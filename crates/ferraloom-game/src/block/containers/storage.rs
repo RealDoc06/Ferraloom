@@ -1,6 +1,9 @@
 //! Port of BaseContainerBlockEntity, RandomizableContainerBlockEntity and ContainerHelper.
 use crate::entity::player::inventory::{count, max_stack_size, set_count};
-use crate::{block::entity::BlockEntityData, inventory::Container};
+use crate::{
+    block::entity::BlockEntityData,
+    inventory::{Container, StackGenerations, StackReplacement},
+};
 use ferraloom_nbt::{CompoundTag, ListTag, Tag};
 use ferraloom_protocol::{
     Identifier,
@@ -15,6 +18,7 @@ use ferraloom_protocol::{
 pub struct BaseContainerBlockEntity {
     pub parent: BlockEntityData,
     pub items: Vec<ItemStack>,
+    stack_generations: StackGenerations,
     pub custom_name: Option<Component>,
     pub lock: Option<LockCode>,
     pub times_changed: u32,
@@ -24,9 +28,20 @@ impl BaseContainerBlockEntity {
         Self {
             parent,
             items: vec![ItemStack::default(); size],
+            stack_generations: StackGenerations::new(size),
             custom_name: None,
             lock: None,
             times_changed: 0,
+        }
+    }
+    pub fn replace_item(&mut self, slot: usize, item: ItemStack) -> StackReplacement {
+        self.stack_generations
+            .replace(slot, &mut self.items[slot], item)
+    }
+    pub fn load_items(&mut self, tag: &CompoundTag) {
+        self.clear_content();
+        for (slot, stack) in item_entries(tag, self.items.len()) {
+            self.replace_item(slot, stack);
         }
     }
     pub fn load_base(&mut self, tag: &CompoundTag) {
@@ -54,11 +69,14 @@ impl BaseContainerBlockEntity {
             Some(DataComponent::Lock(lock)) => Some(lock.clone()),
             _ => None,
         };
-        self.items.fill(ItemStack::default());
+        self.clear_content();
         if let Some(DataComponent::Container(items)) = map.get(ComponentTypeId::CONTAINER) {
-            for (to, from) in self.items.iter_mut().zip(&items.0) {
+            for (slot, from) in items.0.iter().take(self.items.len()).enumerate() {
                 if let Some(from) = from {
-                    *to = ItemStack::new(from.item, from.count, from.components.clone());
+                    self.replace_item(
+                        slot,
+                        ItemStack::new(from.item, from.count, from.components.clone()),
+                    );
                 }
             }
         }
@@ -104,6 +122,25 @@ impl BaseContainerBlockEntity {
     }
 }
 impl Container for BaseContainerBlockEntity {
+    fn stack_parts(&self, slot: usize) -> Option<(&StackGenerations, &ItemStack, usize)> {
+        Some((&self.stack_generations, self.items.get(slot)?, slot))
+    }
+    fn stack_parts_mut(
+        &mut self,
+        slot: usize,
+    ) -> Option<(&mut StackGenerations, &mut ItemStack, usize)> {
+        Some((&mut self.stack_generations, self.items.get_mut(slot)?, slot))
+    }
+    fn remove_item(&mut self, slot: usize, amount: i32) -> ItemStack {
+        if amount <= 0 {
+            return ItemStack::default();
+        }
+        let result = crate::entity::player::inventory::split(&mut self.items[slot], amount);
+        if !result.is_empty() {
+            self.set_changed();
+        }
+        result
+    }
     fn set_item_count(&mut self, slot: usize, amount: i32) -> crate::inventory::Result<()> {
         set_count(&mut self.items[slot], amount);
         Ok(())
@@ -117,20 +154,24 @@ impl Container for BaseContainerBlockEntity {
     fn set_item(&mut self, slot: usize, mut stack: ItemStack) {
         let size = count(&stack).min(self.max_stack_size().min(max_stack_size(&stack)));
         set_count(&mut stack, size);
-        self.items[slot] = stack;
+        self.replace_item(slot, stack);
         self.set_changed();
     }
     fn set_changed(&mut self) {
         self.times_changed = self.times_changed.wrapping_add(1);
     }
     fn remove_item_no_update(&mut self, slot: usize) -> ItemStack {
-        self.items
-            .get_mut(slot)
-            .map(std::mem::take)
-            .unwrap_or_default()
+        if self.items.get(slot).is_none_or(ItemStack::is_empty) {
+            return ItemStack::default();
+        }
+        self.replace_item(slot, ItemStack::default())
+            .into_owned()
+            .expect("live value removal requires an unrooted stack")
     }
     fn clear_content(&mut self) {
-        self.items.fill(ItemStack::default());
+        for slot in 0..self.items.len() {
+            self.replace_item(slot, ItemStack::default());
+        }
     }
 }
 #[derive(Clone, Debug)]
@@ -153,9 +194,9 @@ impl RandomizableContainerBlockEntity {
             .get_string("LootTable")
             .and_then(|id| Identifier::parse(&id.to_string_lossy()).ok());
         self.loot_table_seed = tag.get_long_or("LootTableSeed", 0);
-        self.parent.items.fill(ItemStack::default());
+        self.parent.clear_content();
         if self.loot_table.is_none() {
-            load_items(tag, &mut self.parent.items);
+            self.parent.load_items(tag);
         }
     }
     pub fn save(&self, also_when_empty: bool) -> ferraloom_protocol::Result<CompoundTag> {
@@ -212,19 +253,20 @@ pub fn set(map: &mut DataComponentMap, component: DataComponent) {
         map.entries.push(component);
     }
 }
-pub fn load_items(tag: &CompoundTag, items: &mut [ItemStack]) {
-    for entry in tag
-        .get_list("Items")
+fn item_entries(tag: &CompoundTag, size: usize) -> impl Iterator<Item = (usize, ItemStack)> + '_ {
+    tag.get_list("Items")
         .into_iter()
-        .flat_map(|list| list.0.iter())
+        .flat_map(|list| list.iter())
         .filter_map(Tag::as_compound)
-    {
-        let slot = usize::from(entry.get_byte_or("Slot", 0) as u8);
-        if slot < items.len()
-            && let Ok(stack) = ItemStack::from_nbt(&Tag::Compound(entry.clone()))
-        {
-            items[slot] = stack;
-        }
+        .filter_map(move |entry| {
+            let slot = usize::from(entry.get_byte_or("Slot", 0) as u8);
+            let stack = ItemStack::from_nbt(&Tag::Compound(entry.clone())).ok()?;
+            (slot < size).then_some((slot, stack))
+        })
+}
+pub fn load_items(tag: &CompoundTag, items: &mut [ItemStack]) {
+    for (slot, stack) in item_entries(tag, items.len()) {
+        items[slot] = stack;
     }
 }
 pub fn save_items(

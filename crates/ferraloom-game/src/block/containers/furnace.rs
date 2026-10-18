@@ -33,7 +33,7 @@ pub fn set_item(
             !stack.is_empty() && is_same_item_same_components(&furnace.parent.items[slot], &stack);
         let size = count(&stack).min(furnace.parent.max_stack_size().min(max_stack_size(&stack)));
         set_count(&mut stack, size);
-        furnace.parent.items[slot] = stack;
+        furnace.parent.replace_item(slot, stack);
         slot == 0 && !same && furnace.parent.parent.has_level
     };
     if reset {
@@ -130,8 +130,7 @@ impl BlockEntity for FurnaceBehavior {
             unreachable!()
         };
         entity.parent.load_base(tag);
-        entity.parent.items.fill(Default::default());
-        storage::load_items(tag, &mut entity.parent.items);
+        entity.parent.load_items(tag);
         entity.cooking_timer = tag.get_int_or("cooking_time_spent", 0);
         entity.cooking_total_time = tag.get_int_or("cooking_total_time", 0);
         entity.lit_time_remaining = tag.get_int_or("lit_time_remaining", 0);

@@ -138,7 +138,7 @@ fn consume_fuel(handle: BlockEntityRef, level: &mut Level) -> Result<(), LevelEr
             level
                 .block_entity_mut::<AbstractFurnaceBlockEntity>(handle)?
                 .parent
-                .items[1] = stack;
+                .replace_item(1, stack);
         } else {
             super::drops::drop_item_stack(
                 level,
@@ -154,13 +154,13 @@ fn consume_fuel(handle: BlockEntityRef, level: &mut Level) -> Result<(), LevelEr
     Ok(())
 }
 fn burn(entity: &mut AbstractFurnaceBlockEntity, result: ItemStack) {
-    let items = &mut entity.parent.items;
-    if items[2].is_empty() {
-        items[2] = result;
+    if entity.parent.items[2].is_empty() {
+        entity.parent.replace_item(2, result);
     } else {
-        let total = count(&items[2]) + count(&result);
-        set_count(&mut items[2], total);
+        let total = count(&entity.parent.items[2]) + count(&result);
+        set_count(&mut entity.parent.items[2], total);
     }
+    let items = &entity.parent.items;
     if items[0]
         .0
         .as_ref()
@@ -171,10 +171,12 @@ fn burn(entity: &mut AbstractFurnaceBlockEntity, result: ItemStack) {
             .as_ref()
             .is_some_and(|stack| stack.item == Item::BUCKET)
     {
-        items[1] = ItemStack::new(Item::WATER_BUCKET, 1, Default::default());
+        entity
+            .parent
+            .replace_item(1, ItemStack::new(Item::WATER_BUCKET, 1, Default::default()));
     }
-    let remaining = count(&items[0]) - 1;
-    set_count(&mut items[0], remaining);
+    let remaining = count(&entity.parent.items[0]) - 1;
+    set_count(&mut entity.parent.items[0], remaining);
 }
 
 pub fn server_tick(handle: BlockEntityRef, level: &mut Level) -> Result<(), LevelError> {
