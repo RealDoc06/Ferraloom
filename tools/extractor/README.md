@@ -83,3 +83,8 @@ default owner. Reflection resolves inherited interface defaults after concrete
 class overrides. A non-implementing block records `<not implemented>`, so it
 never selects an interface default. Slab waterlogging overrides remain distinct
 from that default even when the slab is currently a single half.
+
+`block_items` records `Block#asItem` directly, including wall/standing aliases.
+Reversing the item's single block field loses those aliases. The clone-stack
+method's reflected base is `BlockBehaviour`; it creates one item and ignores
+the include-data flag. Overriding block families still require their own port.

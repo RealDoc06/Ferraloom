@@ -500,4 +500,9 @@ impl Block {
     pub const fn has_collision(self) -> bool {
         BLOCK_HAS_COLLISION[self.protocol_id() as usize]
     }
+    /// Port of Block#asItem, including shared standing/wall item mappings and
+    /// pure block subclass overrides. Air represents an absent block item.
+    pub const fn as_item(self) -> Item {
+        BLOCK_ITEMS[self.protocol_id() as usize]
+    }
 }

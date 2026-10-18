@@ -23,7 +23,7 @@ public final class ExtractBlockMethods {
         "useShapeForLightOcclusion", "isPathfindable", "getLightDampening",
         "getEntityInsideCollisionShape", "bounceOn", "triggerEvent",
         "getAnalogOutputSignal", "hasAnalogOutputSignal",
-        "canPlaceLiquid", "placeLiquid", "pickupBlock"
+        "canPlaceLiquid", "placeLiquid", "pickupBlock", "getCloneItemStack"
     );
 
     private static Method baseMethod(String name) {

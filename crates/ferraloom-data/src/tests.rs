@@ -546,3 +546,13 @@ fn waterlogging_ownership_distinguishes_interfaces_and_slab_overrides() {
     assert!(Block::WATER.overrides(BlockMethod::PickupBlock));
     assert!(Block::STONE.overrides(BlockMethod::PlaceLiquid));
 }
+
+#[test]
+fn clone_item_ownership_and_block_items_preserve_wall_aliases() {
+    assert_eq!(Block::STONE.as_item(), Item::STONE);
+    assert_eq!(Block::WALL_TORCH.as_item(), Item::TORCH);
+    assert_eq!(Block::AIR.as_item(), Item::AIR);
+    assert!(!Block::STONE.overrides(BlockMethod::GetCloneItemStack));
+    assert!(!Block::CHEST.overrides(BlockMethod::GetCloneItemStack));
+    assert!(Block::BEEHIVE.overrides(BlockMethod::GetCloneItemStack));
+}
