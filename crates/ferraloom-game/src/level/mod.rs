@@ -378,7 +378,7 @@ impl Level {
             .set(chunk.publication_generation);
         region
             .block_entity_state
-            .register_published_chunk(&mut chunk);
+            .register_published_chunk(&mut chunk, region.game_time);
         region
             .block_ticks
             .add_container(pos, std::mem::take(&mut chunk.block_ticks));

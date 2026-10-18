@@ -58,7 +58,7 @@ impl Level {
         prepared.chunk.publication_generation = generation;
         region
             .block_entity_state
-            .register_published_chunk(&mut prepared.chunk);
+            .register_published_chunk(&mut prepared.chunk, region.game_time);
         // No callbacks or acquisition suspension occur between precondition
         // checks and these insertions; duplicate registration is an invariant bug.
         assert!(
