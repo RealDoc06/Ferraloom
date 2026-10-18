@@ -101,10 +101,11 @@ fn registered_structure_generation_matches_vanilla_with_biome_rejection() {
                 &mut context,
             )
             .unwrap();
-        assert_eq!(
-            start.to_nbt(chunk).unwrap(),
-            ferraloom_nbt::parse_compound(case["nbt"].as_str().unwrap()).unwrap(),
-            "{case}"
+        let label = format!("{} seed={seed} chunk={chunk:?} accept={accept}", case["id"]);
+        assert_start_nbt(
+            &start.to_nbt(chunk).unwrap(),
+            &ferraloom_nbt::parse_compound(case["nbt"].as_str().unwrap()).unwrap(),
+            &label,
         );
         let loaded = StructureStart::from_nbt(
             &start.to_nbt(chunk).unwrap(),
@@ -116,9 +117,10 @@ fn registered_structure_generation_matches_vanilla_with_biome_rejection() {
         .unwrap()
         .unwrap();
         assert_eq!(loaded.kind, start.kind);
-        assert_eq!(
-            loaded.to_nbt(chunk).unwrap(),
-            ferraloom_nbt::parse_compound(case["loaded"].as_str().unwrap()).unwrap()
+        assert_start_nbt(
+            &loaded.to_nbt(chunk).unwrap(),
+            &ferraloom_nbt::parse_compound(case["loaded"].as_str().unwrap()).unwrap(),
+            &label,
         );
         if let Some(bounds) = case.get("bounds") {
             assert_eq!(
@@ -231,5 +233,26 @@ fn oversized_datapack_shipwreck_heights_match_vanilla_asymmetric_corners() {
             ferraloom_nbt::parse_compound(case["nbt"].as_str().unwrap()).unwrap(),
             "{case}"
         );
+    }
+}
+
+fn assert_start_nbt(
+    actual: &ferraloom_nbt::CompoundTag,
+    expected: &ferraloom_nbt::CompoundTag,
+    label: &str,
+) {
+    use ferraloom_nbt::Tag;
+    assert_eq!(actual.len(), expected.len(), "{label}");
+    for (key, value) in expected.iter() {
+        if key == "Children" {
+            let actual = actual.get(key).and_then(Tag::as_list).unwrap();
+            let expected = value.as_list().unwrap();
+            assert_eq!(actual.len(), expected.len(), "{label} pieces");
+            for (i, (a, e)) in actual.iter().zip(expected.iter()).enumerate() {
+                assert_eq!(a, e, "{label} piece={i}");
+            }
+        } else {
+            assert_eq!(actual.get(key), Some(value), "{label} field={key}");
+        }
     }
 }
