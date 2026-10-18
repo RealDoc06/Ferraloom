@@ -36,6 +36,7 @@ mod survival;
 pub mod tree_grower;
 mod vines;
 pub use moss::place_at as place_mossy_carpet;
+pub use powder_snow::can_walk_on as can_entity_walk_on_powder_snow;
 pub use survival::place_double_plant;
 pub use vines::acceptable_neighbor as vine_acceptable_neighbor;
 
