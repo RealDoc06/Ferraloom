@@ -25,7 +25,7 @@ public final class HandwrittenGolden {
         try(var storage=net.minecraft.world.level.storage.LevelStorageSource.createDefault(Path.of("handwritten-world")).createAccess("test")) {
             var templates=new StructureTemplateManager(StructureGolden.RESOURCES,storage,net.minecraft.util.datafix.DataFixers.getDataFixer(),BuiltInRegistries.BLOCK);
             var serialization=new StructurePieceSerializationContext(StructureGolden.RESOURCES,registries,templates);
-            for(String name:List.of("buried_treasure","igloo","village_plains","trial_chambers","ancient_city"))for(long seed:new long[]{0,-1,8675309})for(int[] p:new int[][]{{0,0},{-7,11}})for(boolean accept:new boolean[]{true,false}) {
+            for(String name:List.of("buried_treasure","igloo","shipwreck","shipwreck_beached","village_plains","trial_chambers","ancient_city"))for(long seed:new long[]{0,-1,8675309})for(int[] p:new int[][]{{0,0},{-7,11}})for(boolean accept:new boolean[]{true,false}) {
                 var selected=registries.lookupOrThrow(Registries.STRUCTURE).getOrThrow(ResourceKey.create(Registries.STRUCTURE,Identifier.withDefaultNamespace(name)));
                 var randomState=RandomState.create(registries.lookupOrThrow(Registries.NOISE),seed,settings.value());
                 var start=selected.value().generate(selected,Level.OVERWORLD,registries,generator,source,randomState.createClimateSampler(SamplerContext.builder().enableCaches().build()),randomState,templates,seed,new ChunkPos(p[0],p[1]),7,LevelHeightAccessor.create(-64,384),b->accept);

@@ -19,6 +19,7 @@ enum StructureGenerator {
     Jigsaw(JigsawStructure),
     BuriedTreasure,
     Igloo,
+    Shipwreck { beached: bool },
     Unsupported(worldgen_structure_type::Id),
 }
 /// Immutable decoded generation definitions, shared by independent chunk jobs.
@@ -62,6 +63,12 @@ impl StructureGenerators {
                     )?),
                     "minecraft:buried_treasure" => StructureGenerator::BuriedTreasure,
                     "minecraft:igloo" => StructureGenerator::Igloo,
+                    "minecraft:shipwreck" => StructureGenerator::Shipwreck {
+                        beached: crate::codec::boolean(crate::codec::field(
+                            &resource.json()?,
+                            "is_beached",
+                        )?)?,
+                    },
                     _ => StructureGenerator::Unsupported(definition.kind),
                 };
                 Ok((id, generator))
@@ -133,12 +140,18 @@ impl StructureGenerators {
                         .collect(),
                 )
             }
-            kind @ (StructureGenerator::BuriedTreasure | StructureGenerator::Igloo) => {
+            kind @ (StructureGenerator::BuriedTreasure
+            | StructureGenerator::Igloo
+            | StructureGenerator::Shipwreck { .. }) => {
                 let [x, z] = context.chunk.map(|c| c.wrapping_mul(16).wrapping_add(8));
                 if !could_exist(x, z, context.min_y - 1, context.min_y + context.height - 1)? {
                     return Ok(StructureStart::invalid());
                 }
-                let map = if matches!(kind, StructureGenerator::BuriedTreasure) {
+                let map = if matches!(
+                    kind,
+                    StructureGenerator::BuriedTreasure
+                        | StructureGenerator::Shipwreck { beached: false }
+                ) {
                     Heightmap::OceanFloorWg
                 } else {
                     Heightmap::WorldSurfaceWg
@@ -164,15 +177,36 @@ impl StructureGenerators {
                     let mut random = WorldgenRandom::new(Algorithm::Legacy.new_instance(0));
                     random.set_large_feature_seed(context.seed, context.chunk[0], context.chunk[1]);
                     let rotation = Rotation::VALUES[random.next_int_bound(4) as usize];
-                    super::structures::igloo::add_pieces(
-                        context.templates,
-                        [x - 8, 90, z - 8],
-                        rotation,
-                        &mut random,
-                    )?
-                    .into_iter()
-                    .map(StructurePiece::Igloo)
-                    .collect()
+                    match kind {
+                        StructureGenerator::Igloo => super::structures::igloo::add_pieces(
+                            context.templates,
+                            [x - 8, 90, z - 8],
+                            rotation,
+                            &mut random,
+                        )?
+                        .into_iter()
+                        .map(StructurePiece::Igloo)
+                        .collect(),
+                        StructureGenerator::Shipwreck { beached } => {
+                            let mut piece =
+                                super::structures::shipwreck::ShipwreckPiece::add_random(
+                                    context.templates,
+                                    [x - 8, 90, z - 8],
+                                    rotation,
+                                    &mut random,
+                                    *beached,
+                                );
+                            piece.adjust_generation_height(
+                                context.templates,
+                                generator,
+                                context.min_y,
+                                context.height,
+                                &mut random,
+                            )?;
+                            vec![StructurePiece::Shipwreck(piece)]
+                        }
+                        _ => unreachable!("non-template generators handled above"),
+                    }
                 };
                 return Ok(StructureStart::new(
                     id.clone(),
