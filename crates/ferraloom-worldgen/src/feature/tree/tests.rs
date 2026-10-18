@@ -141,6 +141,7 @@ fn run_cases(require_pending: bool) {
     let mut passed = 0;
     let mut geometry = 0;
     let mut pending = std::collections::BTreeMap::<String, usize>::new();
+    let mut unexpected = std::collections::BTreeMap::<String, (usize, String)>::new();
     for case in cases {
         let name = case["feature"].as_str().unwrap();
         let feature = &features[name];
@@ -199,16 +200,17 @@ fn run_cases(require_pending: bool) {
         let label = format!("{name} {seed} {origin:?} {terrain}");
         match result {
             Err(Error(message)) if message.starts_with("Unsupported:") => {
-                assert!(
-                    matches!(
-                        message.as_str(),
-                        "Unsupported: update_shape"
-                            | "Unsupported: populate_worldgen_beehive"
-                            | "Unsupported: state_has_sturdy_face"
-                            | MISSING_MOSS_PATCH
-                    ),
-                    "unexpected pending behavior {label}: {message}"
-                );
+                if !matches!(
+                    message.as_str(),
+                    "Unsupported: update_shape"
+                        | "Unsupported: populate_worldgen_beehive"
+                        | "Unsupported: state_has_sturdy_face"
+                        | MISSING_MOSS_PATCH
+                ) {
+                    let entry = unexpected.entry(message).or_insert((0, label));
+                    entry.0 += 1;
+                    continue;
+                }
                 assert!(!require_pending, "{label} pending: {message}");
                 let prefix = match message.as_str() {
                     "Unsupported: update_shape" => Some("before_edge"),
@@ -232,7 +234,11 @@ fn run_cases(require_pending: bool) {
                 *pending.entry(message).or_default() += 1;
                 continue;
             }
-            Err(e) => panic!("{label}: {e}"),
+            Err(Error(message)) => {
+                let entry = unexpected.entry(message).or_insert((0, label));
+                entry.0 += 1;
+                continue;
+            }
             Ok(result) => assert_eq!(result, case["success"].as_bool().unwrap(), "{label}"),
         }
         assert_eq!(
@@ -257,7 +263,11 @@ fn run_cases(require_pending: bool) {
         passed += 1;
     }
     eprintln!(
-        "Tree-family fixture cases compared: {passed}; placement prefix geometry/RNG checked in {geometry} pending tree cases; PENDING (not passing): {pending:?}"
+        "Tree-family fixture cases compared: {passed}; placement prefix geometry/RNG checked in {geometry} pending tree cases; PENDING (not passing): {pending:?}; unexpected errors (test failures): {unexpected:?}"
+    );
+    assert!(
+        unexpected.is_empty(),
+        "unexpected feature failures: {unexpected:#?}"
     );
     assert!(passed > 0);
 }
