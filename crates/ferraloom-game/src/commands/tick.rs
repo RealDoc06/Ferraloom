@@ -40,6 +40,17 @@ fn feedback(key: &str, args: Vec<ferraloom_protocol::chat::Argument>, broadcast:
         broadcast,
     }
 }
+/// Port of ServerTickRateManager#finishTickSprint's feedback.
+pub fn sprint_report(ticks_per_second: i32, milliseconds_per_tick: String) -> Feedback {
+    feedback(
+        "commands.tick.sprint.report",
+        vec![
+            builtins::integer(ticks_per_second),
+            builtins::string(milliseconds_per_tick),
+        ],
+        true,
+    )
+}
 /// Mutates the live manager and returns feedback. The runtime drains its ordered
 /// events before emitting this feedback or reporting a command error.
 pub fn run<A: TickRateAccess>(
@@ -231,6 +242,21 @@ mod tests {
             self.calls.push("stop_sprint");
             self.outcome
         }
+    }
+    #[test]
+    fn sprint_report_component_and_console_text_match_native_manager() {
+        let expected: serde_json::Value =
+            serde_json::from_str(include_str!("vanilla/tick-report-vector.json")).unwrap();
+        let report = sprint_report(100, "10.00".into());
+        assert_eq!(Some(report.broadcast), expected["broadcast"].as_bool());
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&report.message.to_json().unwrap()).unwrap(),
+            expected["message"]
+        );
+        assert_eq!(
+            crate::commands::exceptions::plain_text(&report.message),
+            expected["text"].as_str().unwrap()
+        );
     }
     #[test]
     fn tick_feedback_and_errors_match_java_command_methods() {

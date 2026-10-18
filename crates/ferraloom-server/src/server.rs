@@ -489,17 +489,15 @@ impl MinecraftServer {
                     ticks_per_second,
                     milliseconds_per_tick,
                 } => {
+                    let report = ferraloom_game::commands::tick::sprint_report(
+                        ticks_per_second,
+                        milliseconds_per_tick,
+                    );
                     self.command_success(
                         None,
                         &CommandSourceStack::server(4, Vec3::ZERO),
-                        Component::translatable(
-                            "commands.tick.sprint.report",
-                            vec![
-                                ferraloom_game::commands::builtins::integer(ticks_per_second),
-                                ferraloom_game::commands::builtins::string(milliseconds_per_tick),
-                            ],
-                        ),
-                        true,
+                        report.message,
+                        report.broadcast,
                     );
                 }
             }
