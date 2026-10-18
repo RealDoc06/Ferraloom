@@ -797,21 +797,46 @@ impl MenuSession {
             }
         }
     }
-    /// Publish a new canonical receiver, retiring an old receiver only when no
-    /// active operation retains it. This is lifecycle movement, never writeback.
-    pub fn install_container_menu(&mut self, mut menu: AbstractContainerMenu) -> MenuRef {
+    /// Store and root a newly constructed receiver before initMenu callbacks.
+    /// It is addressable by generation while containerMenu still names the old menu.
+    pub fn register_container_menu(&mut self, mut menu: AbstractContainerMenu) -> MenuRef {
         menu.generation = self.next_generation;
         self.next_generation = self
             .next_generation
             .checked_add(1)
             .expect("menu generations exhausted");
         let reference = menu.reference();
+        self.detached.insert(reference, menu);
+        self.retained.insert(reference, 1);
+        reference
+    }
+    /// Port of ServerPlayer#openMenu's assignment after initMenu. Return the
+    /// displaced receiver's block roots for the level adapter to release.
+    pub fn publish_container_menu(
+        &mut self,
+        reference: MenuRef,
+    ) -> Result<Vec<crate::block::entity::BlockEntityRef>> {
+        let menu = self
+            .detached
+            .remove(&reference)
+            .ok_or(MenuError::MissingMenu(reference))?;
+        let mut displaced = Vec::new();
         if let Some(old) = self.container_menu.replace(menu) {
+            displaced.clone_from(&old.block_entities);
             let reference = old.reference();
             if self.retained.contains_key(&reference) {
                 self.detached.insert(reference, old);
             }
         }
+        Ok(displaced)
+    }
+    /// In-memory lifecycle adapter; the live path initializes the registered
+    /// receiver before publishing it. No callbacks occur during either move.
+    pub fn install_container_menu(&mut self, menu: AbstractContainerMenu) -> MenuRef {
+        let reference = self.register_container_menu(menu);
+        self.publish_container_menu(reference)
+            .expect("newly registered menu");
+        self.release_menu(reference);
         reference
     }
     pub fn detach_menu(&mut self, reference: MenuRef) {

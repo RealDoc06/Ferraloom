@@ -206,10 +206,11 @@ impl AbstractContainerMenu {
     }
     /// Port of ServerPlayer's ContainerSynchronizer installation.
     pub fn set_synchronizer(&mut self, ctx: &MenuContext<'_>) {
-        self.synchronized = true;
-        self.remote_carried = RemoteSlot::Unknown;
-        self.remote_slots.fill(RemoteSlot::Unknown);
-        self.send_all_data_to_remote(ctx);
+        super::operation::set_menu_synchronizer(&mut super::operation::PureMenuSynchronization {
+            menu: self,
+            context: ctx,
+        })
+        .expect("in-memory menu synchronization");
     }
     pub fn send_all_data_to_remote(&mut self, ctx: &MenuContext<'_>) {
         super::operation::send_all_menu_data(&mut super::operation::PureMenuSynchronization {

@@ -175,6 +175,15 @@ pub fn broadcast_menu_full_state(context: &mut impl MenuSynchronizationContext) 
     }
     send_all_menu_data(context)
 }
+/// Port of AbstractContainerMenu#setSynchronizer, using the same live slot
+/// reads as subsequent broadcasts.
+pub fn set_menu_synchronizer(context: &mut impl MenuSynchronizationContext) -> Result<()> {
+    let menu = context.menu_mut()?;
+    menu.synchronized = true;
+    menu.remote_carried = RemoteSlot::Unknown;
+    menu.remote_slots.fill(RemoteSlot::Unknown);
+    send_all_menu_data(context)
+}
 pub fn send_all_menu_data(context: &mut impl MenuSynchronizationContext) -> Result<()> {
     let size = context.menu()?.slots.len();
     let mut items = Vec::with_capacity(size);

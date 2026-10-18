@@ -1,6 +1,30 @@
 use super::*;
 
 #[test]
+fn initializing_menu_is_canonical_before_it_becomes_the_current_menu() {
+    let mut menus = MenuSession::default();
+    let inventory = menus.current_ref();
+    let opening = menus.register_container_menu(
+        AbstractContainerMenu::new(MenuKind::Chest { rows: 3 }, 7).unwrap(),
+    );
+    assert_eq!(menus.current_ref(), inventory);
+    menus.menu_mut(opening).unwrap().carried = ItemStack::new(Item::STONE, 3, Default::default());
+    // initMenu may reenter openMenu; the outer Java frame still publishes its
+    // original receiver after that callback returns.
+    let nested = menus.install_container_menu(
+        AbstractContainerMenu::new(MenuKind::Chest { rows: 3 }, 7).unwrap(),
+    );
+    menus.retain_menu(nested).unwrap();
+    menus.publish_container_menu(opening).unwrap();
+    menus.release_menu(opening);
+    assert_eq!(menus.current_ref(), opening);
+    assert_eq!(count(&menus.current().carried), 3);
+    assert!(menus.menu(nested).unwrap().carried.is_empty());
+    menus.release_menu(nested);
+    assert!(matches!(menus.menu(nested), Err(MenuError::MissingMenu(_))));
+}
+
+#[test]
 fn retained_menu_receiver_survives_replacement_with_the_same_container_id() {
     let mut menus = MenuSession::default();
     let first = menus.install_container_menu(

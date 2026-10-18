@@ -20,7 +20,7 @@ pub use menu::*;
 pub use menus::*;
 pub use operation::{
     MenuSynchronizationContext, broadcast_menu_changes, broadcast_menu_full_state,
-    send_all_menu_data,
+    send_all_menu_data, set_menu_synchronizer,
 };
 pub use server_player::*;
 pub use slot::*;
