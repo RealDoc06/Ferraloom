@@ -649,7 +649,7 @@ fn region_write_bounds_bulk_writes_and_tick_deduplication() {
         RegionChunk::new(generator.new_chunk([0, 0]), ChunkStatus::Terrain),
         RegionChunk::new(generator.new_chunk([1, 0]), ChunkStatus::Terrain),
     ];
-    let structure = "ferraloom:test_start".parse().unwrap();
+    let structure: ferraloom_worldgen::Identifier = "ferraloom:test_start".parse().unwrap();
     chunks[1].structures.starts.insert(
         structure.clone(),
         ferraloom_worldgen::structure::start::StructureStart::invalid(),
