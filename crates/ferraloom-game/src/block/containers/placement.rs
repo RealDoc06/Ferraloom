@@ -8,18 +8,25 @@ use ferraloom_data::{
 };
 use ferraloom_util::{BlockPos, Direction};
 
+mod furniture;
+mod signs;
+
 pub(super) struct ContainerPlacement;
 pub(super) static CONTAINER_PLACEMENT: ContainerPlacement = ContainerPlacement;
 
 pub(super) fn supports(block: Block, method: BlockMethod) -> bool {
-    method == BlockMethod::GetStateForPlacement
-        && (block.is_instance_of(BlockClass::AbstractBedBlock)
-            || block.is_instance_of(BlockClass::AbstractFurnaceBlock)
-            || block.is_instance_of(BlockClass::ChestBlock)
-            || matches!(
-                block.class(),
-                BlockClass::BarrelBlock | BlockClass::EnderChestBlock | BlockClass::ShulkerBoxBlock
-            ))
+    signs::supports(block, method)
+        || furniture::supports(block, method)
+        || method == BlockMethod::GetStateForPlacement
+            && (block.is_instance_of(BlockClass::AbstractBedBlock)
+                || block.is_instance_of(BlockClass::AbstractFurnaceBlock)
+                || block.is_instance_of(BlockClass::ChestBlock)
+                || matches!(
+                    block.class(),
+                    BlockClass::BarrelBlock
+                        | BlockClass::EnderChestBlock
+                        | BlockClass::ShulkerBoxBlock
+                ))
 }
 fn facing(direction: Direction) -> p::Facing {
     match direction {
@@ -54,7 +61,7 @@ fn candidate_partner_facing(
         reader
             .block_tags()?
             .contains_key(BlockTags::COPPER_CHESTS, state.block())
-            && state.get(p::TYPE_).is_some()
+            && state.property_values("type") == block.default_state().property_values("type")
     } else {
         state.block() == block
     };
@@ -142,8 +149,20 @@ fn least_oxidized_connected(
     Ok(chosen.default_state().with_properties_of(state))
 }
 impl BlockBehavior for ContainerPlacement {
-    /// Ports AbstractBedBlock, AbstractFurnaceBlock, BarrelBlock, ChestBlock,
-    /// CopperChestBlock, EnderChestBlock and ShulkerBoxBlock#getStateForPlacement.
+    fn can_survive(
+        &self,
+        state: BlockState,
+        pos: BlockPos,
+        reader: &LevelReaderRef<'_, '_>,
+    ) -> Result<bool, LevelError> {
+        if state.block().class() == BlockClass::BellBlock {
+            furniture::can_survive(state, pos, reader)
+        } else {
+            signs::can_survive(state, pos, reader)
+        }
+    }
+    /// Shared per-method dispatcher for furniture/container getStateForPlacement
+    /// ports. Sign and utility subclasses keep their own native read order.
     fn get_state_for_placement(
         &self,
         block: Block,
@@ -151,6 +170,12 @@ impl BlockBehavior for ContainerPlacement {
         level: &mut LevelAccessRef<'_, '_>,
     ) -> Result<Option<BlockState>, LevelError> {
         let reader = level.as_reader();
+        if signs::supports(block, BlockMethod::GetStateForPlacement) {
+            return signs::get_state_for_placement(block, context, &reader);
+        }
+        if furniture::supports(block, BlockMethod::GetStateForPlacement) {
+            return furniture::get_state_for_placement(block, context, &reader);
+        }
         let state = block.default_state();
         if block.is_instance_of(BlockClass::AbstractBedBlock) {
             let forward = context.horizontal_direction(&reader)?;
@@ -208,5 +233,7 @@ impl BlockBehavior for ContainerPlacement {
     }
 }
 
+#[cfg(test)]
+mod furniture_tests;
 #[cfg(test)]
 mod tests;

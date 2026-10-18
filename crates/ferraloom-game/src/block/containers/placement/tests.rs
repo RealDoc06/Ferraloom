@@ -29,7 +29,7 @@ const SIDES: [Direction; 4] = [
     Direction::South,
     Direction::West,
 ];
-fn level() -> (Level, EntityRef) {
+pub(super) fn level() -> (Level, EntityRef) {
     let mut level = Level::new(Region::new(&BEHAVIORS), LevelContext::fixture(0, 63));
     level
         .add_chunk(LevelChunk::new(

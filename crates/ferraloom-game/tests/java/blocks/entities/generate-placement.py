@@ -22,8 +22,13 @@ def run(args):
 
 run([str(jdk / 'javac'), '-cp', cp, '-d', str(classes), str(source.parent.parent / 'level/NeighborVectors.java')])
 run([str(jdk / 'java'), '-cp', f'{classes}:{cp}', 'NeighborVectors', 'generate', str(classes / 'NeighborFixture.java')])
-run([str(jdk / 'javac'), '-cp', f'{classes}:{cp}', '-d', str(classes), str(classes / 'NeighborFixture.java'), str(source / 'ContainerPlacementVectors.java')])
+run([str(jdk / 'javac'), '-cp', f'{classes}:{cp}', '-d', str(classes), str(classes / 'NeighborFixture.java'), str(source / 'ContainerPlacementVectors.java'), str(source / 'FurniturePlacementVectors.java')])
 output = run([str(jdk / 'java'), '-Xmx512m', '-cp', f'{classes}:{cp}', 'ContainerPlacementVectors'])
 rows = [line for line in output.splitlines() if line.startswith('placement\t')]
 (source / 'placement.tsv.gz').write_bytes(gzip.compress(('\n'.join(rows) + '\n').encode(), mtime=0))
 print(f'{len(rows)} native container/furniture placement masks')
+
+output = run([str(jdk / 'java'), '-Xmx512m', '-cp', f'{classes}:{cp}', 'FurniturePlacementVectors'])
+rows = [line for line in output.splitlines() if line.startswith('furniture\t')]
+(source / 'furniture-placement.tsv.gz').write_bytes(gzip.compress(('\n'.join(rows) + '\n').encode(), mtime=0))
+print(f'{len(rows)} native sign/furniture placement masks')
