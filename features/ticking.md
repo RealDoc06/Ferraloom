@@ -182,3 +182,5 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | ticking.player.accepted-section-order | Capture each accepted player section before deferred effect drain, preserving A-to-B-to-A ticket transitions | `PersistentEntitySectionManager.Callback#onMove; ChunkMap#move` | `level::effects::tests::captured_player_sections_preserve_intermediate_transitions` | - | todo |
 
 | ticking.player.spawn-ticket | Prepare and refresh player-spawn loading tickets at radius three and timeout twenty, independently of simulation | `PrepareSpawnTask.Loading; PrepareSpawnTask.Ready#keepAlive` | `native tracker propagation vectors; runtime preparation integration pending` | - | todo |
+
+| ticking.tickets.remaining-time | Preserve signed native ticket countdown and saved records, pausing timed expiry on holder save dependencies; UNKNOWN may expire unloaded | `TicketStorage#canTicketExpire; Ticket#decreaseTicksLeft` | `level::tickets::tests::native_timeout_pauses_for_save_dependencies_and_expires_below_zero; native_saved_ticket_codec_activation_and_mutation_order_match_java (20 Java cases)` | pass | todo |
