@@ -127,6 +127,140 @@ fn native_mutations(value: &str) -> String {
         .collect::<Vec<_>>()
         .join(";")
 }
+
+fn note_sounds(level: &mut Level) -> String {
+    use ferraloom_data::registries::sound_event::Id as SoundEvent;
+    use ferraloom_protocol::{codec::Holder, play::clientbound::Packet};
+    level
+        .take_effects()
+        .into_iter()
+        .filter_map(|effect| {
+            if let LevelEffect::PlayerPacket { packet, .. } = effect
+                && let Packet::Sound(sound) = *packet
+            {
+                let Holder::Reference(id) = sound.sound.0 else {
+                    panic!("registered note sound")
+                };
+                assert_eq!(
+                    (sound.x, sound.y, sound.z),
+                    ((ORIGIN.x * 8) + 4, (ORIGIN.y * 8) + 4, (ORIGIN.z * 8) + 4)
+                );
+                Some(format!(
+                    "{}:{}:{}:{}:{}",
+                    SoundEvent::from_name(id.as_str()).unwrap().protocol_id(),
+                    sound.source as i32,
+                    sound.volume.to_bits(),
+                    sound.pitch.to_bits(),
+                    sound.seed
+                ))
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(";")
+}
+fn note_instrument(name: &str) -> ferraloom_data::properties::Instrument {
+    use ferraloom_data::{PropertyValue, properties::Instrument};
+    (0..=u8::MAX)
+        .filter_map(Instrument::from_index)
+        .find(|v| v.as_str() == name)
+        .unwrap()
+}
+#[test]
+fn note_instruments_pitch_and_seeded_sound_events_match_vanilla() {
+    use ferraloom_data::properties as p;
+    use ferraloom_util::random::RandomSource;
+    for (name, expected) in cases("note-instrument:") {
+        let mut args = name.split(':').skip(1);
+        let below = Block::from_protocol_id(args.next().unwrap().parse().unwrap()).unwrap();
+        let above = Block::from_protocol_id(args.next().unwrap().parse().unwrap()).unwrap();
+        let mut level = level();
+        level
+            .set_block_state(ORIGIN.below(1), below.default_state())
+            .unwrap();
+        level
+            .set_block_state(ORIGIN.above(1), above.default_state())
+            .unwrap();
+        let state = note::set_instrument(
+            &LevelReaderRef::Server(&level),
+            ORIGIN,
+            Block::NOTE_BLOCK.default_state(),
+        )
+        .unwrap();
+        assert_eq!(state.id().to_string(), expected, "{name}");
+    }
+    for (name, expected) in cases("note-event:") {
+        let mut args = name.split(':').skip(1);
+        let instrument = note_instrument(args.next().unwrap());
+        let value = args.next().unwrap().parse::<u8>().unwrap();
+        let mut level = level();
+        let state = Block::NOTE_BLOCK
+            .default_state()
+            .with(p::INSTRUMENT, instrument)
+            .unwrap()
+            .with(p::NOTE, value)
+            .unwrap();
+        level.set_block_state(ORIGIN, state).unwrap();
+        level.take_effects();
+        let played = note::NOTE
+            .trigger_event(state, ORIGIN, 0, 0, &mut level)
+            .unwrap();
+        let actual = format!(
+            "{played}|{}|{}",
+            note_sounds(&mut level),
+            level.random().next_long()
+        );
+        assert_eq!(actual, expected, "{name}");
+    }
+}
+#[test]
+fn note_redstone_edges_and_obstruction_match_vanilla() {
+    use ferraloom_data::properties as p;
+    for instrument in
+        (0..=u8::MAX).filter_map(<p::Instrument as ferraloom_data::PropertyValue>::from_index)
+    {
+        for blocked in [false, true] {
+            let mut level = level();
+            let state = Block::NOTE_BLOCK
+                .default_state()
+                .with(p::INSTRUMENT, instrument)
+                .unwrap();
+            level.set_block_state(ORIGIN, state).unwrap();
+            if blocked {
+                level
+                    .set_block_state(ORIGIN.above(1), Block::STONE.default_state())
+                    .unwrap();
+            }
+            for change in 0..3 {
+                level.take_effects();
+                level
+                    .set_block_and_update(
+                        ORIGIN.west(1),
+                        if change == 1 {
+                            Block::AIR
+                        } else {
+                            Block::REDSTONE_BLOCK
+                        }
+                        .default_state(),
+                    )
+                    .unwrap();
+                level.run_block_events().unwrap();
+                let name = format!("note-power:{}:{blocked}:{change}", instrument.as_str());
+                let expected = cases("note-power:")
+                    .find(|(key, _)| *key == name)
+                    .unwrap()
+                    .1;
+                let actual = format!(
+                    "{}|{}",
+                    level.get_block_state(ORIGIN).unwrap().id(),
+                    note_sounds(&mut level)
+                );
+                assert_eq!(actual, expected, "{name}");
+            }
+        }
+    }
+}
 #[test]
 fn rail_junctions_slopes_and_connection_update_order_match_vanilla() {
     use ferraloom_data::properties as p;

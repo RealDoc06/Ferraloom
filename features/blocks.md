@@ -199,7 +199,7 @@ One class row per bootstrapped runtime Block class, listing every block id assig
 | blocks.class.nether-sprouts-block | `NetherSproutsBlock`: `minecraft:nether_sprouts` | `net.minecraft.world.level.block.NetherSproutsBlock`; `Blocks#register` | | - | todo |
 | blocks.class.nether-wart-block | `NetherWartBlock`: `minecraft:nether_wart` | `net.minecraft.world.level.block.NetherWartBlock`; `Blocks#register` | | - | todo |
 | blocks.class.netherrack-block | `NetherrackBlock`: `minecraft:netherrack` | `net.minecraft.world.level.block.NetherrackBlock`; `Blocks#register` | | - | todo |
-| blocks.class.note-block | `NoteBlock`: `minecraft:note_block` | `net.minecraft.world.level.block.NoteBlock`; `Blocks#register` | | - | todo |
+| blocks.class.note-block | `NoteBlock`: `minecraft:note_block` | `net.minecraft.world.level.block.NoteBlock`; `Blocks#register` | `ferraloom-game: block::redstone::tests::note_instruments_pitch_and_seeded_sound_events_match_vanilla; note_redstone_edges_and_obstruction_match_vanilla` | pass | partial |
 | blocks.class.nylium-block | `NyliumBlock`: `minecraft:crimson_nylium`, `minecraft:warped_nylium` | `net.minecraft.world.level.block.NyliumBlock`; `Blocks#register` | | - | todo |
 | blocks.class.observer-block | `ObserverBlock`: `minecraft:observer` | `net.minecraft.world.level.block.ObserverBlock`; `Blocks#register` | `ferraloom-game: block::redstone::tests` (signal methods; wire mutation order) | pass | partial |
 | blocks.class.path-block | `PathBlock`: `minecraft:dirt_path` | `net.minecraft.world.level.block.PathBlock`; `Blocks#register` | | - | todo |

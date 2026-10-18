@@ -32,6 +32,7 @@ pub(super) fn supports(block: Block) -> bool {
             | BlockClass::RailBlock
             | BlockClass::PoweredRailBlock
             | BlockClass::DetectorRailBlock
+            | BlockClass::NoteBlock
     ) || block.is_instance_of(BlockClass::DoorBlock)
         || block.is_instance_of(BlockClass::TrapDoorBlock)
         || block.is_instance_of(BlockClass::FenceGateBlock)
@@ -92,6 +93,7 @@ impl BlockBehavior for RedstonePlacement {
         let pos = context.clicked_pos();
         let state = block.default_state();
         let result = match block.class() {
+            BlockClass::NoteBlock => super::note::set_instrument(&reader, pos, state)?,
             BlockClass::RedstoneWireBlock => {
                 let cross = HORIZONTAL
                     .into_iter()

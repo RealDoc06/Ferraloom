@@ -9,6 +9,7 @@ pub mod dispenser;
 pub mod hopper;
 pub mod lamp;
 pub mod moving_piston;
+pub mod note;
 pub mod observer;
 pub mod opening;
 pub mod piston;
@@ -101,6 +102,17 @@ pub(crate) fn ported_behavior(
         }
         BlockClass::RedstoneLampBlock if matches!(method, M::NeighborChanged | M::Tick) => {
             Some(&lamp::LAMP)
+        }
+        BlockClass::NoteBlock
+            if matches!(
+                method,
+                M::UpdateShape
+                    | M::UpdateFromNeighbourShapes
+                    | M::NeighborChanged
+                    | M::TriggerEvent
+            ) =>
+        {
+            Some(&note::NOTE)
         }
         BlockClass::RailBlock | BlockClass::PoweredRailBlock
             if matches!(
