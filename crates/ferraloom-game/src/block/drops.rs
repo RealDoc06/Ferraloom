@@ -386,8 +386,8 @@ mod tests {
             let pos = BlockPos::new(-2, 64, 3);
             let result = match fields[2] {
                 "NONE" => pop_resource(&mut level, pos, stack),
-                "UP" => pop_resource_from_face(&mut level, pos, Direction::Up, stack),
-                "EAST" => pop_resource_from_face(&mut level, pos, Direction::East, stack),
+                "up" => pop_resource_from_face(&mut level, pos, Direction::Up, stack),
+                "east" => pop_resource_from_face(&mut level, pos, Direction::East, stack),
                 _ => unreachable!(),
             };
             assert_eq!(result.unwrap(), None);
@@ -456,9 +456,9 @@ mod tests {
             let entry = if contents {
                 serde_json::json!({"type":"dynamic","name":"contents"})
             } else {
-                serde_json::json!({"type":"item","name":"shulker_box","functions":[
-                    {"function":"copy_components","source":"block_entity","include":["minecraft:container"]},
-                    {"function":"copy_name","source":"block_entity"}
+                serde_json::json!({"type":"item","name":"shulker_box","modifier":[
+                    {"type":"copy_components","source":"block_entity","include":["minecraft:container"]},
+                    {"type":"copy_name","source":"block_entity"}
                 ]})
             };
             let mut loot = LootData::default();
