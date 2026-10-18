@@ -57,6 +57,7 @@ pub mod weather;
 pub enum LevelError {
     UnsupportedItemUseOn(ferraloom_data::Item),
     UnsupportedItemCraftedPostProcess(ferraloom_data::Item),
+    UnsupportedItemInventoryTick(ferraloom_data::Item),
     UnsupportedPortalUse(Block),
     UnsupportedEntityMethod(EntityType, crate::entity::EntityMethod),
     UnsupportedAdvancementCriterion(crate::advancements::criteria::Trigger),

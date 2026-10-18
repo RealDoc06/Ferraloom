@@ -6,6 +6,7 @@ pub mod cooldowns;
 pub mod equipment;
 mod experience;
 mod interaction;
+pub(crate) mod item_tick;
 mod spawn;
 pub mod travel;
 pub use experience::{give_experience_levels, give_experience_points, send_experience_update};
