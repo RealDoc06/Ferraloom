@@ -1484,6 +1484,7 @@ impl MinecraftServer {
             event_id: 24 + permission.clamp(0, 4) as i8,
         }));
         c.push(self.commands.packet(permission));
+        player.stats.mark_all_dirty();
         let (settings, recipes) = player
             .recipe_book
             .initial_packets(&self.recipe_synchronization);

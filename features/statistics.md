@@ -107,3 +107,5 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | statistics.live-counter-scoreboard-order | Player award/reset updates the counter before synchronous scoreboard effect; matching objectives use policy until ServerShared bridge lands | `ServerPlayer#awardStat; ServerPlayer#resetStat` | `stats::tests::live_stat_counter_precedes_interim_scoreboard_policy` | pass | partial |
 
 | statistics.parity.consumed-chest-open | Bedrock flat Strict chest interaction awards OPEN_CHEST and REQUEST_STATS clears its dirty entry | `ChestBlock#useWithoutItem; ServerPlayer#awardStat` | `ferraloom-parity::opening_chest_awards_and_flushes_statistics` | pending | pending |
+
+| statistics.join-dirty-loaded | Joining marks all loaded statistics dirty before initial recipe packets, for the first REQUEST_STATS response | `PlayerList#placeNewPlayer` | `stats::tests::vanilla_stat_registries_json_and_dirty_packets` | pass | partial |
