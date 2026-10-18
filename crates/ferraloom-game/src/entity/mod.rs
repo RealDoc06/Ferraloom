@@ -28,23 +28,13 @@ impl EntityRef {
     }
 }
 
-/// Port of Entity's shared state. No world pointer or subclass behavior lives here.
-#[derive(Debug)]
-pub struct EntityData {
-    pub tick_count: i32,
-    pub first_tick: bool,
-    pub removed: bool,
-}
-
-impl Default for EntityData {
-    fn default() -> Self {
-        Self {
-            tick_count: 0,
-            first_tick: true,
-            removed: false,
-        }
-    }
-}
+mod base;
+pub mod collision;
+mod lifecycle;
+pub use lifecycle::{common_tick, eject_passengers, position_rider, start_riding, stop_riding};
+pub mod persistence;
+pub mod synched_data;
+pub use base::{EntityData, EntityDimensions, Movement, RemovalReason};
 
 /// Port of LivingEntity's unarmored damage/cooldown state.
 #[derive(Debug)]
@@ -153,6 +143,35 @@ impl EntityDataView for animal::Cow {
     }
 }
 
+impl EntityDataView for EntityData {
+    fn view(state: &EntityState) -> Option<&Self> {
+        Some(state.as_entity())
+    }
+    fn view_mut(state: &mut EntityState) -> Option<&mut Self> {
+        Some(state.as_entity_mut())
+    }
+}
+impl EntityDataView for LivingEntity {
+    fn view(state: &EntityState) -> Option<&Self> {
+        state.as_living()
+    }
+    fn view_mut(state: &mut EntityState) -> Option<&mut Self> {
+        state.as_living_mut()
+    }
+}
+/// Embedded-parent projection; each struct dereferences only to its immediate parent.
+impl std::ops::Deref for LivingEntity {
+    type Target = EntityData;
+    fn deref(&self) -> &Self::Target {
+        &self.parent
+    }
+}
+impl std::ops::DerefMut for LivingEntity {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.parent
+    }
+}
+
 /// Narrow source used by the unarmored damage primitive; tags grow with ports.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct DamageSource {
@@ -164,6 +183,51 @@ pub struct DamageSource {
 ///
 /// Dispatch objects are stateless. Never hold a state borrow across a world call.
 pub trait Entity: Sync {
+    /// Port of Entity#causeFallDamage's passenger propagation. LivingEntity
+    /// overrides the damage calculation; the base entity itself takes none.
+    fn cause_fall_damage(
+        &self,
+        entity: EntityRef,
+        level: &mut Level,
+        fall_distance: f64,
+        damage_modifier: f32,
+    ) -> Result<bool, LevelError> {
+        let passengers = level.entity::<EntityData>(entity)?.passengers.clone();
+        for passenger in passengers {
+            let behavior = level.entity_behavior(passenger)?;
+            behavior.cause_fall_damage(passenger, level, fall_distance, damage_modifier)?;
+        }
+        Ok(false)
+    }
+
+    fn can_be_collided_with(
+        &self,
+        _entity: EntityRef,
+        _other: Option<EntityRef>,
+        _level: &Level,
+    ) -> Result<bool, LevelError> {
+        Ok(false)
+    }
+    fn passenger_riding_position(
+        &self,
+        entity: EntityRef,
+        _passenger: EntityRef,
+        level: &Level,
+    ) -> Result<ferraloom_util::Vec3, LevelError> {
+        let base = level.entity::<EntityData>(entity)?;
+        Ok(base
+            .position
+            .add_xyz(0.0, f64::from(base.dimensions.height), 0.0))
+    }
+    fn vehicle_attachment_point(
+        &self,
+        _entity: EntityRef,
+        _vehicle: EntityRef,
+        _level: &Level,
+    ) -> Result<ferraloom_util::Vec3, LevelError> {
+        Ok(ferraloom_util::Vec3::ZERO)
+    }
+
     /// Subset of Entity#baseTick: finish the first tick. ServerLevel owns commonTick.
     fn tick(&self, entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
         level.entity_state_mut(entity)?.as_entity_mut().first_tick = false;

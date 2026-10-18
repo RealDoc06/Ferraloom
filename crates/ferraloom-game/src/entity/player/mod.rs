@@ -35,21 +35,13 @@ impl GameType {
 #[derive(Debug)]
 pub struct ServerPlayer {
     pub parent: LivingEntity,
-    pub uuid: Uuid,
     pub name: String,
-    pub network_id: i32,
-    pub position: Vec3,
-    pub velocity: Vec3,
     pub known_movement: Vec3,
-    pub yaw: f32,
-    pub pitch: f32,
-    pub on_ground: bool,
     pub game_mode: GameType,
     pub flying: bool,
     pub view_distance: i32,
     pub loaded: bool,
     pub connection_ticks: u64,
-    pub saved: CompoundTag,
     pub first_good: Vec3,
     pub last_good: Vec3,
     pub received_moves: u32,
@@ -64,28 +56,26 @@ impl ServerPlayer {
     ) -> Self {
         Self {
             parent: LivingEntity {
-                parent: EntityData::default(),
+                parent: {
+                    let mut base =
+                        EntityData::new(ferraloom_data::EntityType::PLAYER, network_id, 0);
+                    base.uuid = uuid;
+                    base.set_pos(position);
+                    base
+                },
                 health: 20.,
                 last_hurt: 0.,
                 damage_cooldown_time: 0,
                 hurt_time: 0,
                 hurt_duration: 0,
             },
-            uuid,
             name,
-            network_id,
-            position,
-            velocity: Vec3::ZERO,
             known_movement: Vec3::ZERO,
-            yaw: 0.,
-            pitch: 0.,
-            on_ground: false,
             game_mode,
             flying: game_mode == GameType::Spectator,
             view_distance: 10,
             loaded: false,
             connection_ticks: 0,
-            saved: CompoundTag::new(),
             first_good: position,
             last_good: position,
             received_moves: 0,
@@ -173,6 +163,18 @@ impl ServerPlayer {
         abilities.insert("walkSpeed", Tag::Float(0.1));
         tag.insert("abilities", Tag::Compound(abilities));
         tag
+    }
+}
+/// Embedded-parent projection preserving the bring-up's public field access.
+impl std::ops::Deref for ServerPlayer {
+    type Target = LivingEntity;
+    fn deref(&self) -> &Self::Target {
+        &self.parent
+    }
+}
+impl std::ops::DerefMut for ServerPlayer {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.parent
     }
 }
 impl EntityDataView for ServerPlayer {

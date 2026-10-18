@@ -221,6 +221,7 @@ public final class ExtractData {
                     if (state.isFaceSturdy(EmptyBlockGetter.INSTANCE, BlockPos.ZERO, direction)) bits |= 1 << (3 + direction.get3DDataValue());
                 }
                 if (state.isCollisionShapeFullBlock(EmptyBlockGetter.INSTANCE, BlockPos.ZERO)) bits |= 1 << 9;
+                if (state.hasLargeCollisionShape()) bits |= 1 << 14;
             }
             var post = state.getPostProcessPos(EmptyBlockGetter.INSTANCE, BlockPos.ZERO);
             if (post != null) {
@@ -324,6 +325,8 @@ public final class ExtractData {
             out.addProperty("friction", block.getFriction());
             out.addProperty("speed_factor", block.getSpeedFactor());
             out.addProperty("jump_factor", block.getJumpFactor());
+            out.addProperty("fall_distance_reduction", block.getFallDistanceReduction());
+            out.addProperty("bounce_restitution", block.getBounceRestitution());
             // State-dependent defaults are retained on every individual state below.
             out.add("default_properties", state(block.defaultBlockState()));
             blocks.add(out);
@@ -333,6 +336,7 @@ public final class ExtractData {
         blockData.add("blocks", blocks);
         blockData.add("states", states);
         write(dir, "block_properties", blockData);
+        if (args.length > 1 && args[1].equals("--block-properties-only")) return;
         var shapes = new JsonArray();
         SHAPES.forEach(shapes::add);
         write(dir, "shapes", shapes);

@@ -489,3 +489,17 @@ fn comparator_and_conductor_facts_preserve_property_overrides() {
         Some(true)
     );
 }
+
+#[test]
+fn block_landing_properties_preserve_float_restitution_and_reduction() {
+    assert_eq!(
+        Block::HAY_BLOCK.data().fall_distance_reduction.to_bits(),
+        0.8_f32.to_bits()
+    );
+    assert_eq!(
+        Block::SLIME_BLOCK.data().bounce_restitution.to_bits(),
+        1.0_f32.to_bits()
+    );
+    assert_eq!(Block::STONE.data().fall_distance_reduction, 0.0);
+    assert_eq!(Block::STONE.data().bounce_restitution, 0.0);
+}

@@ -1,0 +1,311 @@
+//! Canonical Entity state, embedded exactly once in every concrete entity.
+use std::collections::VecDeque;
+
+use ferraloom_data::{BlockState, EntityType};
+use ferraloom_nbt::CompoundTag;
+use ferraloom_protocol::{codec::VarInt, entity_data::Pose};
+use ferraloom_util::{
+    Aabb, BlockPos, ChunkPos, Uuid, Vec3, collections::JavaHashSet, mth, random::LegacyRandomSource,
+};
+
+use super::{
+    EntityRef,
+    synched_data::{self, SynchedEntityData},
+};
+
+/// Port of EntityDimensions. Width arithmetic is deliberately performed as float.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct EntityDimensions {
+    pub width: f32,
+    pub height: f32,
+    pub eye_height: f32,
+    pub fixed: bool,
+}
+impl EntityDimensions {
+    pub fn for_type(kind: EntityType) -> Self {
+        let data = kind.data();
+        Self {
+            width: data.width,
+            height: data.height,
+            eye_height: data.eye_height,
+            fixed: data.fixed_dimensions,
+        }
+    }
+    pub fn make_bounding_box(self, pos: Vec3) -> Aabb {
+        let radius = f64::from(self.width / 2.0);
+        Aabb::new(
+            pos.x - radius,
+            pos.y,
+            pos.z - radius,
+            pos.x + radius,
+            pos.y + f64::from(self.height),
+            pos.z + radius,
+        )
+    }
+}
+
+/// Port of Entity.RemovalReason, including chunk unload's persistence semantics.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RemovalReason {
+    Killed,
+    Discarded,
+    UnloadedToChunk,
+    UnloadedWithPlayer,
+    ChangedDimension,
+}
+impl RemovalReason {
+    pub fn should_destroy(self) -> bool {
+        matches!(self, Self::Killed | Self::Discarded)
+    }
+    pub fn should_save(self) -> bool {
+        self == Self::UnloadedToChunk
+    }
+}
+
+/// Port of Entity.Movement; None denotes a combined/direct movement path.
+#[derive(Clone, Copy, Debug)]
+pub struct Movement {
+    pub from: Vec3,
+    pub to: Vec3,
+    pub axis_dependent_original_movement: Option<Vec3>,
+}
+
+/// Port of Entity's mutable base state. World ownership and callbacks use handles.
+#[derive(Debug)]
+pub struct EntityData {
+    pub entity_type: EntityType,
+    pub network_id: i32,
+    pub uuid: Uuid,
+    pub requires_precise_position: bool,
+    pub blocks_building: bool,
+    pub passengers: Vec<EntityRef>,
+    pub boarding_cooldown: i32,
+    pub vehicle: Option<EntityRef>,
+    pub position: Vec3,
+    pub block_position: BlockPos,
+    pub chunk_position: ChunkPos,
+    pub velocity: Vec3,
+    pub old_position: Vec3,
+    pub interpolation_old_position: Vec3,
+    pub yaw: f32,
+    pub pitch: f32,
+    pub old_yaw: f32,
+    pub old_pitch: f32,
+    pub bounding_box: Aabb,
+    pub on_ground: bool,
+    pub horizontal_collision: bool,
+    pub vertical_collision: bool,
+    pub vertical_collision_below: bool,
+    pub minor_horizontal_collision: bool,
+    pub stuck_speed_multiplier: Vec3,
+    pub removed: bool,
+    pub removal_reason: Option<RemovalReason>,
+    pub move_dist: f32,
+    pub fly_dist: f32,
+    pub fall_distance: f64,
+    pub next_step: f32,
+    pub no_physics: bool,
+    pub random: LegacyRandomSource,
+    pub tick_count: i32,
+    pub remaining_fire_ticks: i32,
+    pub was_touching_water: bool,
+    pub was_eye_in_water: bool,
+    pub water_height: f64,
+    pub lava_height: f64,
+    pub eye_in_water: bool,
+    pub eye_in_lava: bool,
+    pub invulnerable_time: i32,
+    pub first_tick: bool,
+    pub entity_data: SynchedEntityData,
+    pub packet_position: Vec3,
+    pub needs_sync: bool,
+    pub sync_position: bool,
+    pub sync_velocity: bool,
+    pub portal_cooldown: i32,
+    pub permanently_invulnerable: bool,
+    pub has_glowing_tag: bool,
+    pub tags: JavaHashSet<String>,
+    pub piston_deltas: [f64; 3],
+    pub piston_deltas_game_time: i64,
+    pub dimensions: EntityDimensions,
+    pub eye_height: f32,
+    pub is_in_powder_snow: bool,
+    pub was_in_powder_snow: bool,
+    pub supporting_block_pos: Option<BlockPos>,
+    pub on_ground_no_blocks: bool,
+    pub crystal_sound_intensity: f32,
+    pub last_crystal_sound_play_tick: i32,
+    pub has_visual_fire: bool,
+    pub last_known_speed: Vec3,
+    pub last_known_position: Option<Vec3>,
+    pub in_block_state: Option<BlockState>,
+    pub movement_this_tick: VecDeque<Movement>,
+    pub final_movements_this_tick: Vec<Movement>,
+    pub custom_data: CompoundTag,
+    /// Unknown and subclass NBT is retained; known fields are regenerated on save.
+    pub saved: CompoundTag,
+}
+impl Default for EntityData {
+    fn default() -> Self {
+        Self::new(EntityType::COW, 0, 0)
+    }
+}
+impl EntityData {
+    /// RandomSource.create's seed is supplied by the owning server RNG allocator.
+    pub fn new(kind: EntityType, network_id: i32, seed: i64) -> Self {
+        let mut random = LegacyRandomSource::new(seed);
+        let uuid = Uuid::insecure(&mut random);
+        let dimensions = EntityDimensions::for_type(kind);
+        Self {
+            entity_type: kind,
+            network_id,
+            uuid,
+            requires_precise_position: false,
+            blocks_building: false,
+            passengers: Vec::new(),
+            boarding_cooldown: 0,
+            vehicle: None,
+            position: Vec3::ZERO,
+            block_position: BlockPos::ZERO,
+            chunk_position: ChunkPos::new(0, 0),
+            velocity: Vec3::ZERO,
+            old_position: Vec3::ZERO,
+            interpolation_old_position: Vec3::ZERO,
+            yaw: 0.0,
+            pitch: 0.0,
+            old_yaw: 0.0,
+            old_pitch: 0.0,
+            bounding_box: dimensions.make_bounding_box(Vec3::ZERO),
+            on_ground: false,
+            horizontal_collision: false,
+            vertical_collision: false,
+            vertical_collision_below: false,
+            minor_horizontal_collision: false,
+            stuck_speed_multiplier: Vec3::ZERO,
+            removed: false,
+            removal_reason: None,
+            move_dist: 0.0,
+            fly_dist: 0.0,
+            fall_distance: 0.0,
+            next_step: 1.0,
+            no_physics: false,
+            random,
+            tick_count: 0,
+            remaining_fire_ticks: 0,
+            was_touching_water: false,
+            was_eye_in_water: false,
+            water_height: 0.0,
+            lava_height: 0.0,
+            eye_in_water: false,
+            eye_in_lava: false,
+            invulnerable_time: 0,
+            first_tick: true,
+            entity_data: SynchedEntityData::default(),
+            packet_position: Vec3::ZERO,
+            needs_sync: false,
+            sync_position: false,
+            sync_velocity: false,
+            portal_cooldown: 0,
+            permanently_invulnerable: false,
+            has_glowing_tag: false,
+            tags: JavaHashSet::new(),
+            piston_deltas: [0.0; 3],
+            piston_deltas_game_time: 0,
+            dimensions,
+            eye_height: dimensions.eye_height,
+            is_in_powder_snow: false,
+            was_in_powder_snow: false,
+            supporting_block_pos: None,
+            on_ground_no_blocks: false,
+            crystal_sound_intensity: 0.0,
+            last_crystal_sound_play_tick: 0,
+            has_visual_fire: false,
+            last_known_speed: Vec3::ZERO,
+            last_known_position: None,
+            in_block_state: None,
+            movement_this_tick: VecDeque::with_capacity(100),
+            final_movements_this_tick: Vec::new(),
+            custom_data: CompoundTag::new(),
+            saved: CompoundTag::new(),
+        }
+    }
+    pub fn set_pos_raw(&mut self, pos: Vec3) {
+        if self.position.x != pos.x || self.position.y != pos.y || self.position.z != pos.z {
+            self.position = pos;
+            let block = BlockPos::new(mth::floor(pos.x), mth::floor(pos.y), mth::floor(pos.z));
+            if block != self.block_position {
+                self.block_position = block;
+                self.in_block_state = None;
+                self.chunk_position = ChunkPos::containing(block);
+            }
+        }
+    }
+    /// Port of Entity#setPos; the Level facade also updates section membership.
+    pub fn set_pos(&mut self, pos: Vec3) {
+        self.set_pos_raw(pos);
+        self.bounding_box = self.dimensions.make_bounding_box(self.position);
+    }
+    pub fn set_bounding_box(&mut self, bb: Aabb) {
+        self.bounding_box = bb;
+    }
+    pub fn set_old_pos_and_rot(&mut self) {
+        self.old_position = self.position;
+        self.interpolation_old_position = self.position;
+        self.old_yaw = self.yaw;
+        self.old_pitch = self.pitch;
+    }
+    pub fn shared_flag(&self, bit: u8) -> bool {
+        *self.entity_data.get(synched_data::SHARED_FLAGS) as u8 & (1 << bit) != 0
+    }
+    pub fn set_shared_flag(&mut self, bit: u8, enabled: bool) {
+        let flags = *self.entity_data.get(synched_data::SHARED_FLAGS) as u8;
+        self.entity_data.set(
+            synched_data::SHARED_FLAGS,
+            (if enabled {
+                flags | (1 << bit)
+            } else {
+                flags & !(1 << bit)
+            }) as i8,
+        );
+    }
+    pub fn ticks_frozen(&self) -> i32 {
+        self.entity_data.get(synched_data::TICKS_FROZEN).0
+    }
+    pub fn clear_freeze(&mut self) {
+        self.entity_data.set(synched_data::TICKS_FROZEN, VarInt(0));
+    }
+    pub fn clear_fire(&mut self) {
+        self.remaining_fire_ticks = self.remaining_fire_ticks.min(0);
+    }
+    pub fn ignite_for_ticks(&mut self, ticks: i32) {
+        self.remaining_fire_ticks = self.remaining_fire_ticks.max(ticks);
+        self.clear_freeze();
+    }
+    pub fn add_movement(&mut self, movement: Movement) {
+        if self.movement_this_tick.len() >= 100 {
+            let first = self.movement_this_tick.pop_front().unwrap();
+            let second = self.movement_this_tick.pop_front().unwrap();
+            self.movement_this_tick.push_front(Movement {
+                from: first.from,
+                to: second.to,
+                axis_dependent_original_movement: None,
+            });
+        }
+        self.movement_this_tick.push_back(movement);
+    }
+    /// Port of Entity#checkFallDamage's accumulation before the fallOn callback.
+    pub fn accumulate_fall_distance(&mut self, dy: f64) {
+        if !self.was_touching_water && dy < 0.0 {
+            self.fall_distance -= f64::from(dy as f32);
+        }
+    }
+    pub fn set_removed(&mut self, reason: RemovalReason) {
+        if self.removal_reason.is_none() {
+            self.removal_reason = Some(reason);
+        }
+        self.removed = true;
+    }
+    pub fn pose(&self) -> Pose {
+        *self.entity_data.get(synched_data::POSE)
+    }
+}

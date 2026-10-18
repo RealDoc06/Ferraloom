@@ -278,6 +278,8 @@ fn blocks(
             "friction",
             "speed_factor",
             "jump_factor",
+            "fall_distance_reduction",
+            "bounce_restitution",
         ] {
             write!(out, "{field}: {},", float(&block[field])).unwrap();
         }
@@ -622,7 +624,7 @@ fn block_state_facts(out: &mut String, values: &Value, state_count: usize) {
     write!(out, "static BLOCK_STATE_FACTS: [u16; {state_count}] = [").unwrap();
     for value in values {
         let bits = number(value);
-        assert!(bits < (1 << 14));
+        assert!(bits < 32768);
         write!(out, "{bits},").unwrap();
     }
     out.push_str("];\n");

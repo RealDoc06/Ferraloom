@@ -174,6 +174,8 @@ pub struct BlockData {
     pub friction: f32,
     pub speed_factor: f32,
     pub jump_factor: f32,
+    pub fall_distance_reduction: f32,
+    pub bounce_restitution: f32,
     properties: &'static [PropertyLayout],
 }
 
@@ -431,6 +433,16 @@ impl BlockState {
     pub fn cached_collision_empty(self) -> Option<bool> {
         self.cached_collision_full_block()
             .map(|_| self.data().collision.boxes().is_empty())
+    }
+    /// Port of BlockStateBase.Cache#largeCollisionShape. Dynamic shapes have no
+    /// cache; BlockCollisions treats that case as potentially large.
+    pub const fn has_large_collision_shape(self) -> Option<bool> {
+        let bits = BLOCK_STATE_FACTS[self.0 as usize];
+        if bits & 4 == 0 {
+            None
+        } else {
+            Some(bits & (1 << 14) != 0)
+        }
     }
     /// Vanilla's registered PostProcess callbacks are null, self, and above.
     pub const fn post_process_y_offset(self) -> Option<i32> {
