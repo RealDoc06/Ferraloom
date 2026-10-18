@@ -7,7 +7,6 @@ use crate::{
         containers::{
             access::{self, ContainerRef},
             loot::unpack_loot_table,
-            storage::BaseContainerBlockEntity,
         },
         entity::{BlockEntityRef, BlockEntityType},
     },
