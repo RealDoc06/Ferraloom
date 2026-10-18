@@ -1,7 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
+use std::{collections::HashSet, sync::Arc};
 
 use ferraloom_data::{Block, BlockState, EntityType};
 use ferraloom_util::{BlockPos, ChunkPos};
@@ -40,6 +37,7 @@ pub mod redstone;
 mod saved_ticks;
 pub mod server_level;
 pub mod simulation;
+pub(crate) mod store;
 pub mod tick_rate;
 pub mod tickets;
 mod ticking;
@@ -134,7 +132,7 @@ impl Default for LevelRules {
 
 /// Owned portion of ServerLevel. The scheduler moves this value between workers.
 pub struct Region {
-    chunks: HashMap<ChunkPos, chunk::LevelChunk>,
+    chunks: store::InsertOnlyMap<ChunkPos, chunk::LevelChunk>,
     entities: entity::EntityStorage,
     entity_tick_list: entity::EntityTickList,
     block_ticks: LevelTicks,
@@ -175,7 +173,7 @@ pub struct Region {
 impl Region {
     pub fn new(behaviors: &'static Behaviors) -> Self {
         Self {
-            chunks: HashMap::new(),
+            chunks: store::InsertOnlyMap::default(),
             entities: entity::EntityStorage::default(),
             entity_tick_list: entity::EntityTickList::default(),
             block_ticks: LevelTicks::default(),

@@ -258,6 +258,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "elsa"
+version = "1.11.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9abf33c656a7256451ebb7d0082c5a471820c31269e49d807c538c252352186e"
+dependencies = [
+ "stable_deref_trait",
+]
+
+[[package]]
 name = "equivalent"
 version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -308,6 +317,7 @@ dependencies = [
 name = "ferraloom-game"
 version = "0.1.0"
 dependencies = [
+ "elsa",
  "ferraloom-brigadier",
  "ferraloom-chunk",
  "ferraloom-data",

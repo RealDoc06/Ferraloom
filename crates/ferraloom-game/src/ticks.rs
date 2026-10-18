@@ -5,8 +5,9 @@ use ferraloom_util::{
     collections::{JavaPriorityQueue, Long2LongOpenHashMap},
 };
 use std::{
+    cell::RefCell,
     cmp::Ordering,
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{HashSet, VecDeque},
     hash::Hash,
 };
 
@@ -177,8 +178,8 @@ impl<T: Copy + Eq + Hash> LevelChunkTicks<T> {
 /// Port of LevelTicks. Collection and callback execution are distinct phases;
 /// callbacks can inspect/remove/copy the live remaining collection reentrantly.
 pub struct LevelTicks<T = Block> {
-    containers: HashMap<ChunkPos, LevelChunkTicks<T>>,
-    next_tick_for_container: Long2LongOpenHashMap,
+    containers: crate::level::store::InsertOnlyMap<ChunkPos, LevelChunkTicks<T>>,
+    next_tick_for_container: RefCell<Long2LongOpenHashMap>,
     to_run: VecDeque<ScheduledTick<T>>,
     already_run: Vec<ScheduledTick<T>>,
     next_order: i64,
@@ -187,8 +188,8 @@ pub struct LevelTicks<T = Block> {
 impl<T> Default for LevelTicks<T> {
     fn default() -> Self {
         Self {
-            containers: HashMap::new(),
-            next_tick_for_container: Long2LongOpenHashMap::new(),
+            containers: crate::level::store::InsertOnlyMap::default(),
+            next_tick_for_container: RefCell::new(Long2LongOpenHashMap::new()),
             to_run: VecDeque::new(),
             already_run: Vec::new(),
             next_order: 0,
@@ -197,15 +198,33 @@ impl<T> Default for LevelTicks<T> {
     }
 }
 impl<T: Copy + Eq + Hash> LevelTicks<T> {
+    /// Register a newly published FULL container without mutating any existing
+    /// queue. Only this cold insertion borrows the dimension index dynamically;
+    /// normal scheduling/collection uses exclusive get_mut access.
+    pub fn publish_container(
+        &self,
+        chunk: ChunkPos,
+        ticks: LevelChunkTicks<T>,
+    ) -> Result<(), LevelChunkTicks<T>> {
+        let head = ticks.peek();
+        self.containers.publish(chunk, ticks)?;
+        if let Some(head) = head {
+            self.next_tick_for_container
+                .borrow_mut()
+                .insert(chunk.pack(), head.trigger_tick);
+        }
+        Ok(())
+    }
     pub fn add_container(&mut self, chunk: ChunkPos, ticks: LevelChunkTicks<T>) {
         if let Some(head) = ticks.peek() {
             self.next_tick_for_container
+                .get_mut()
                 .insert(chunk.pack(), head.trigger_tick);
         }
         self.containers.insert(chunk, ticks);
     }
     pub fn remove_container(&mut self, chunk: ChunkPos) -> Option<LevelChunkTicks<T>> {
-        self.next_tick_for_container.remove(&chunk.pack());
+        self.next_tick_for_container.get_mut().remove(&chunk.pack());
         self.containers.remove(&chunk)
     }
     pub fn container(&self, chunk: ChunkPos) -> Option<&LevelChunkTicks<T>> {
@@ -223,6 +242,7 @@ impl<T: Copy + Eq + Hash> LevelTicks<T> {
             && Some(head) != previous
         {
             self.next_tick_for_container
+                .get_mut()
                 .insert(chunk.pack(), head.trigger_tick);
         }
     }
@@ -242,6 +262,7 @@ impl<T: Copy + Eq + Hash> LevelTicks<T> {
                 && head.sub_tick_order == tick.sub_tick_order
         }) {
             self.next_tick_for_container
+                .get_mut()
                 .insert(chunk.pack(), tick.trigger_tick);
         }
         true
@@ -249,9 +270,10 @@ impl<T: Copy + Eq + Hash> LevelTicks<T> {
     /// Convenience for isolated scheduler callers. Live Level uses one shared
     /// sub-tick counter across both block and fluid schedulers.
     pub fn schedule(&mut self, pos: BlockPos, block: T, trigger_tick: i64, priority: TickPriority) {
-        self.containers
-            .entry(ChunkPos::containing(pos))
-            .or_default();
+        let chunk = ChunkPos::containing(pos);
+        if !self.containers.contains_key(&chunk) {
+            self.containers.insert(chunk, LevelChunkTicks::default());
+        }
         let sub_tick_order = self.next_order;
         self.next_order = self.next_order.wrapping_add(1);
         self.schedule_tick(ScheduledTick {
@@ -269,7 +291,7 @@ impl<T: Copy + Eq + Hash> LevelTicks<T> {
         );
         let mut ready: JavaPriorityQueue<(ChunkPos, ScheduledTick<T>)> =
             JavaPriorityQueue::new(|a, b| a.1.intra_tick_order(&b.1));
-        let mut cursor = self.next_tick_for_container.cursor();
+        let mut cursor = self.next_tick_for_container.get_mut().cursor();
         let mut stale = Vec::new();
         while let Some((&packed, &next_time)) = cursor.next_entry() {
             if next_time > game_time {
@@ -288,7 +310,7 @@ impl<T: Copy + Eq + Hash> LevelTicks<T> {
             }
         }
         for (pos, time) in stale {
-            self.next_tick_for_container.insert(pos, time);
+            self.next_tick_for_container.get_mut().insert(pos, time);
         }
         let budget = budget.min(MAX_TICKS_PER_TICK);
         while self.to_run.len() < budget {
@@ -312,12 +334,14 @@ impl<T: Copy + Eq + Hash> LevelTicks<T> {
                     ready.offer((pos, next));
                 } else {
                     self.next_tick_for_container
+                        .get_mut()
                         .insert(pos.pack(), next.trigger_tick);
                 }
             }
         }
         for (pos, head) in ready.iter() {
             self.next_tick_for_container
+                .get_mut()
                 .insert(pos.pack(), head.trigger_tick);
         }
     }
@@ -377,9 +401,10 @@ impl<T: Copy + Eq + Hash> LevelTicks<T> {
                 {
                     if let Some(head) = head {
                         self.next_tick_for_container
+                            .get_mut()
                             .insert(pos.pack(), head.trigger_tick);
                     } else {
-                        self.next_tick_for_container.remove(&pos.pack());
+                        self.next_tick_for_container.get_mut().remove(&pos.pack());
                     }
                 }
             }
