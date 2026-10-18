@@ -550,81 +550,12 @@ impl AbstractContainerMenu {
         hooks: &mut dyn MenuHooks,
     ) -> Result<()> {
         let slot = self.slot(index)?;
-        let mut source = ctx.player.get_item(button);
-        let target = self.get_item(ctx, slot.index);
-        if slot.container == ContainerId::Player
-            && slot.container_slot == button
-            && !source.is_empty()
-        {
-            // Java's source and target references alias here. Splitting an
-            // oversized stack leaves the old target equal to the overflow,
-            // which Inventory.add reinserts after the slot receives its limit.
-            if slot.may_pickup(&source, ctx.is_creative, hooks)?
-                && slot.may_place(&source, hooks)?
-            {
-                let max = slot.max_stack_size(self.container(ctx, slot.container), &source);
-                if count(&source) > max {
-                    self.set_item_live(ctx, slot.index, split(&mut source, max), hooks)?;
-                    self.on_take(ctx, slot.index, &source, 0, hooks)?;
-                    if !ctx.player.inventory.add(
-                        &mut source,
-                        ctx.player.equipment,
-                        ctx.infinite_materials,
-                    ) {
-                        ctx.drop_item(source);
-                    }
-                } else {
-                    self.set_item_live(ctx, slot.index, source.clone(), hooks)?;
-                    self.on_take(ctx, slot.index, &source, 0, hooks)?;
-                }
-            }
-            return Ok(());
-        }
-        if source.is_empty() {
-            if !target.is_empty() && slot.may_pickup(&target, ctx.is_creative, hooks)? {
-                if slot.kind == SlotKind::Result(ResultKind::Crafting)
-                    && let Some(crafting) = hooks.crafting_ref()
-                {
-                    crafting.validate_take_result()?;
-                }
-                ctx.player.set_item(button, target.clone());
-                self.set_item_live(ctx, slot.index, ItemStack::default(), hooks)?;
-                self.on_take(ctx, slot.index, &target, count(&target), hooks)?;
-            }
-        } else if target.is_empty() {
-            if slot.may_place(&source, hooks)? {
-                let max = slot.max_stack_size(self.container(ctx, slot.container), &source);
-                if count(&source) > max {
-                    self.set_item_live(ctx, slot.index, split(&mut source, max), hooks)?;
-                    ctx.player.set_item(button, source);
-                } else {
-                    ctx.player.set_item(button, ItemStack::default());
-                    self.set_item_live(ctx, slot.index, source, hooks)?;
-                }
-            }
-        } else if slot.may_pickup(&target, ctx.is_creative, hooks)?
-            && slot.may_place(&source, hooks)?
-        {
-            let max = slot.max_stack_size(self.container(ctx, slot.container), &source);
-            if count(&source) > max {
-                self.set_item_live(ctx, slot.index, split(&mut source, max), hooks)?;
-                ctx.player.set_item(button, source);
-                self.on_take(ctx, slot.index, &target, 0, hooks)?;
-                let mut target = target;
-                if !ctx.player.inventory.add(
-                    &mut target,
-                    ctx.player.equipment,
-                    ctx.infinite_materials,
-                ) {
-                    ctx.drop_item(target);
-                }
-            } else {
-                ctx.player.set_item(button, target.clone());
-                self.set_item_live(ctx, slot.index, source, hooks)?;
-                self.on_take(ctx, slot.index, &target, 0, hooks)?;
-            }
-        }
-        Ok(())
+        swap_menu_item(
+            &mut super::in_memory::InMemoryMenuOperation::new(self, ctx),
+            slot.index,
+            button,
+            hooks,
+        )
     }
     fn quick_craft(
         &mut self,

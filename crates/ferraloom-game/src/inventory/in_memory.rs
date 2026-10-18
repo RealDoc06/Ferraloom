@@ -9,6 +9,7 @@ pub(super) enum MemoryContainer {
     Container(ContainerId),
     Carried,
     Operation,
+    Dropped,
 }
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub(super) struct MemoryStackRef {
@@ -20,6 +21,7 @@ pub(super) struct MemoryStackRef {
 pub(super) struct InMemoryStackState {
     objects: super::operation_stacks::OperationStackArena,
     forwards: HashMap<MemoryStackRef, MemoryStackRef>,
+    dropped: Option<StackGenerations>,
 }
 #[cfg(test)]
 impl InMemoryStackState {
@@ -55,6 +57,13 @@ impl<'a, 'b, 'p> InMemoryMenuOperation<'a, 'b, 'p> {
             }
             MemoryContainer::Carried => None,
             MemoryContainer::Operation => self.context.in_memory_stacks.objects.parts(slot),
+            MemoryContainer::Dropped => self.context.drops.get(slot).map(|dropped| {
+                (
+                    self.context.in_memory_stacks.dropped.as_ref().unwrap(),
+                    &dropped.stack,
+                    slot,
+                )
+            }),
         };
         parts.ok_or(MenuError::InvalidSlot(slot as i32))
     }
@@ -75,6 +84,13 @@ impl<'a, 'b, 'p> InMemoryMenuOperation<'a, 'b, 'p> {
             )),
             MemoryContainer::Carried => None,
             MemoryContainer::Operation => self.context.in_memory_stacks.objects.parts_mut(slot),
+            MemoryContainer::Dropped => self.context.drops.get_mut(slot).map(|dropped| {
+                (
+                    self.context.in_memory_stacks.dropped.as_mut().unwrap(),
+                    &mut dropped.stack,
+                    slot,
+                )
+            }),
         };
         parts.ok_or(MenuError::InvalidSlot(slot as i32))
     }
@@ -339,6 +355,42 @@ impl MenuClickContext for InMemoryMenuOperation<'_, '_, '_> {
     fn set_carried_stack(&mut self, reference: MemoryStackRef) -> Result<()> {
         self.replace(MemoryContainer::Carried, 0, reference)
     }
+    fn inventory_stack(&mut self, slot: usize) -> Result<MemoryStackRef> {
+        self.capture(MemoryContainer::Container(ContainerId::Player), slot)
+    }
+    fn set_inventory_stack(&mut self, slot: usize, stack: MemoryStackRef) -> Result<()> {
+        self.replace(MemoryContainer::Container(ContainerId::Player), slot, stack)
+    }
+    fn add_to_inventory(&mut self, stack: MemoryStackRef) -> Result<bool> {
+        add_inventory_stack(self, stack, None)
+    }
+    fn drop_stack(&mut self, stack: MemoryStackRef, thrown_from_hand: bool) -> Result<()> {
+        if self.read(stack)?.is_empty() {
+            return Ok(());
+        }
+        // The standalone drop output owns the moved receiver just as the live
+        // ItemEntity does; held refs forward there through the operation.
+        let slot = self.context.drops.len();
+        match self.context.in_memory_stacks.dropped.as_mut() {
+            None => self.context.in_memory_stacks.dropped = Some(StackGenerations::new(slot + 1)),
+            Some(generations) => {
+                while generations.current(slot).is_none() {
+                    generations.append_slot();
+                }
+            }
+        }
+        self.context.drops.push(DroppedStack {
+            stack: ItemStack::default(),
+            thrown_from_hand,
+        });
+        self.replace(MemoryContainer::Dropped, slot, stack)
+    }
+    fn swap_craft(&mut self, index: usize, amount: i32) -> Result<()> {
+        if self.menu.slots[index].kind == SlotKind::Result(ResultKind::Crafting) {
+            self.menu.crafting_remove_count = self.menu.crafting_remove_count.wrapping_add(amount);
+        }
+        Ok(())
+    }
     fn set_slot_stack(
         &mut self,
         index: usize,
@@ -431,5 +483,38 @@ impl MenuClickContext for InMemoryMenuOperation<'_, '_, '_> {
         // through the canonical menu/context and are never written back.
         let observed = self.read(stack)?.clone();
         self.menu.on_take(self.context, index, &observed, 0, hooks)
+    }
+}
+
+impl InventoryAddContext for InMemoryMenuOperation<'_, '_, '_> {
+    type Stack = MemoryStackRef;
+    fn stack(&self, reference: MemoryStackRef) -> Result<&ItemStack> {
+        self.read(reference)
+    }
+    fn set_stack_count(&mut self, reference: MemoryStackRef, amount: i32) -> Result<()> {
+        set_count(self.mutate(reference)?, amount);
+        Ok(())
+    }
+    fn inventory_stack(&mut self, slot: usize) -> Result<MemoryStackRef> {
+        self.capture(MemoryContainer::Container(ContainerId::Player), slot)
+    }
+    fn set_inventory_stack(&mut self, slot: usize, stack: ItemStack) -> Result<MemoryStackRef> {
+        let reference = self.own(stack);
+        self.replace(
+            MemoryContainer::Container(ContainerId::Player),
+            slot,
+            reference,
+        )?;
+        self.capture(MemoryContainer::Container(ContainerId::Player), slot)
+    }
+    fn set_inventory_pop_time(&mut self, slot: usize, ticks: i32) -> Result<()> {
+        self.context.player.inventory.set_pop_time(slot, ticks);
+        Ok(())
+    }
+    fn selected_slot(&self) -> Result<usize> {
+        Ok(self.context.player.inventory.selected_slot())
+    }
+    fn infinite_materials(&self) -> Result<bool> {
+        Ok(self.context.infinite_materials)
     }
 }

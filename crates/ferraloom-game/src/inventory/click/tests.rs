@@ -10,12 +10,64 @@ use ferraloom_data::Item;
 use ferraloom_util::{Uuid, Vec3};
 
 fn describe(stack: &ItemStack) -> String {
+    if stack.is_empty() {
+        return "-".into();
+    }
     format!(
         "{},{},{}",
         stack.item().protocol_id(),
         count(stack),
         max_stack_size(stack)
     )
+}
+
+fn swap_timeline<C: MenuClickContext>(
+    context: &mut C,
+    same: impl Fn(&C, C::Stack, C::Stack) -> bool,
+) -> Result<String> {
+    let hooks = &mut UnsupportedMenuHooks;
+    let source = context.own_stack(ItemStack::new(Item::STONE, 70, Default::default()))?;
+    context.set_inventory_stack(0, source)?;
+    let held = context.inventory_stack(0)?;
+    swap_menu_item(context, 36, 0, hooks)?;
+    let main = context.inventory_stack(0)?;
+    let other = context.inventory_stack(1)?;
+    let mut events = vec![format!(
+        "self:{}:{}:{}",
+        describe(&context.stack(held)?),
+        describe(&context.stack(main)?),
+        describe(&context.stack(other)?),
+    )];
+    let total = count(&context.stack(held)?) + 2;
+    context.set_stack_count(held, total)?;
+    events.push(format!(
+        "detached:{}:{}",
+        describe(&context.stack(held)?),
+        describe(&context.stack(main)?),
+    ));
+    let source = context.own_stack(ItemStack::new(Item::STONE, 10, Default::default()))?;
+    context.set_inventory_stack(0, source)?;
+    context.set_by_player(0, ItemStack::new(Item::DIRT, 2, Default::default()), hooks)?;
+    let source = context.inventory_stack(0)?;
+    let target = context.slot_stack(0)?;
+    swap_menu_item(context, 0, 0, hooks)?;
+    let now_slot = context.slot_stack(0)?;
+    let now_main = context.inventory_stack(0)?;
+    events.push(format!(
+        "alias:{}:{}",
+        same(context, source, now_slot),
+        same(context, target, now_main),
+    ));
+    for held in [source, target] {
+        let total = count(&context.stack(held)?) + 1;
+        context.set_stack_count(held, total)?;
+    }
+    events.push(format!(
+        "current:{}:{}",
+        describe(&context.stack(now_slot)?),
+        describe(&context.stack(now_main)?),
+    ));
+    Ok(events.join(";"))
 }
 fn pickup_timeline<C: MenuClickContext>(
     context: &mut C,
@@ -78,6 +130,10 @@ fn pure_and_live_pickup_share_native_cursor_and_target_identity() {
         .lines()
         .find_map(|line| line.strip_prefix("listener\tpickup\t"))
         .unwrap();
+    let expected_swap = include_str!("../../../tests/java/inventory/listeners.tsv")
+        .lines()
+        .find_map(|line| line.strip_prefix("listener\tswap\t"))
+        .unwrap();
     let make_player = || {
         ServerPlayer::new(
             Uuid::new(0, 1),
@@ -106,6 +162,14 @@ fn pure_and_live_pickup_share_native_cursor_and_target_identity() {
             .unwrap(),
             expected
         );
+        assert_eq!(
+            swap_timeline(&mut context, |context, a, b| std::ptr::eq(
+                context.read(a).unwrap(),
+                context.read(b).unwrap()
+            ))
+            .unwrap(),
+            expected_swap
+        );
     }
     assert!(pure.in_memory_stacks.forwards_are_empty());
 
@@ -129,6 +193,13 @@ fn pure_and_live_pickup_share_native_cursor_and_target_identity() {
                 context.operation.level.stack(b).unwrap()
             ))?,
             expected
+        );
+        assert_eq!(
+            swap_timeline(&mut context, |context, a, b| std::ptr::eq(
+                context.operation.level.stack(a).unwrap(),
+                context.operation.level.stack(b).unwrap()
+            ))?,
+            expected_swap
         );
         Ok(())
     })

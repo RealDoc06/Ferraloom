@@ -171,6 +171,28 @@ public final class ListenerVectors {
     events.add("owner:" + InventoryVectors.item(source.getItem(0)));
     System.out.println("listener\tinventory-add-" + kind + "\t" + String.join(";", events));
   }
+  static void swap(RegistryAccess registries) {
+    var player = new InventoryVectors.MenuPlayer(new InventoryVectors.MenuLevel(registries), false);
+    var menu = InventoryVectors.menu("chest1", player);
+    var inventory = player.getInventory();
+    inventory.setItem(0, new ItemStack(Items.STONE, 70));
+    var held = inventory.getItem(0);
+    menu.clicked(36, 0, ContainerInput.SWAP, player);
+    var events = new ArrayList<String>();
+    events.add("self:" + InventoryVectors.item(held) + ":" + InventoryVectors.item(inventory.getItem(0)) + ":" + InventoryVectors.item(inventory.getItem(1)));
+    held.grow(2);
+    events.add("detached:" + InventoryVectors.item(held) + ":" + InventoryVectors.item(inventory.getItem(0)));
+    inventory.setItem(0, new ItemStack(Items.STONE, 10));
+    menu.getSlot(0).setByPlayer(new ItemStack(Items.DIRT, 2));
+    var source = inventory.getItem(0);
+    var target = menu.getSlot(0).getItem();
+    menu.clicked(0, 0, ContainerInput.SWAP, player);
+    events.add("alias:" + (source == menu.getSlot(0).getItem()) + ":" + (target == inventory.getItem(0)));
+    source.grow(1);
+    target.grow(1);
+    events.add("current:" + InventoryVectors.item(menu.getSlot(0).getItem()) + ":" + InventoryVectors.item(inventory.getItem(0)));
+    System.out.println("listener\tswap\t" + String.join(";", events));
+  }
   public static void main(String[] args) throws Exception {
     var output = System.out;
     var errors = System.err;
@@ -192,5 +214,6 @@ public final class ListenerVectors {
     safeInsert(true);
     pickup(registries);
     for (var kind : new String[]{"partial", "infinite", "empty", "damaged", "detached"}) inventoryAdd(registries, kind);
+    swap(registries);
   }
 }

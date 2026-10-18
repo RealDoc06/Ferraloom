@@ -5,6 +5,11 @@ pub trait MenuClickContext: MenuTransferContext {
     fn carried_stack(&mut self) -> Result<Self::Stack>;
     fn own_stack(&mut self, stack: ItemStack) -> Result<Self::Stack>;
     fn set_carried_stack(&mut self, stack: Self::Stack) -> Result<()>;
+    fn inventory_stack(&mut self, slot: usize) -> Result<Self::Stack>;
+    fn set_inventory_stack(&mut self, slot: usize, stack: Self::Stack) -> Result<()>;
+    fn add_to_inventory(&mut self, stack: Self::Stack) -> Result<bool>;
+    fn drop_stack(&mut self, stack: Self::Stack, thrown_from_hand: bool) -> Result<()>;
+    fn swap_craft(&mut self, index: usize, amount: i32) -> Result<()>;
     /// The explicit previous receiver covers native Slot#setByPlayer's overload
     /// used by tryRemove, and callback-free swaps whose objects have moved.
     fn set_slot_stack(
@@ -27,6 +32,57 @@ pub trait MenuClickContext: MenuTransferContext {
         stack: Self::Stack,
         hooks: &mut dyn MenuHooks,
     ) -> Result<()>;
+}
+
+/// Port of AbstractContainerMenu#doClick's SWAP branch. Both Java receivers
+/// remain held through the setters, onTake and possible overflow insertion.
+pub fn swap_menu_item<C: MenuClickContext>(
+    context: &mut C,
+    index: usize,
+    button: usize,
+    hooks: &mut dyn MenuHooks,
+) -> Result<()> {
+    let source = context.inventory_stack(button)?;
+    let target = context.slot_stack(index)?;
+    if context.stack(source)?.is_empty() && context.stack(target)?.is_empty() {
+        return Ok(());
+    }
+    if context.stack(source)?.is_empty() {
+        if context.may_pickup(index, hooks)? {
+            context.set_inventory_stack(button, target)?;
+            context.swap_craft(index, count(&context.stack(target)?))?;
+            let empty = context.own_stack(ItemStack::default())?;
+            context.set_slot_stack(index, empty, Some(target), hooks)?;
+            context.take_slot_stack(index, target, hooks)?;
+        }
+    } else if context.stack(target)?.is_empty() {
+        if context.may_place(index, source, hooks)? {
+            let max = context.stack_limit(index, source)?;
+            if count(&context.stack(source)?) > max {
+                let split = context.split_stack(source, max)?;
+                context.set_by_player(index, split, hooks)?;
+            } else {
+                let empty = context.own_stack(ItemStack::default())?;
+                context.set_inventory_stack(button, empty)?;
+                context.set_slot_stack(index, source, Some(target), hooks)?;
+            }
+        }
+    } else if context.may_pickup(index, hooks)? && context.may_place(index, source, hooks)? {
+        let max = context.stack_limit(index, source)?;
+        if count(&context.stack(source)?) > max {
+            let split = context.split_stack(source, max)?;
+            context.set_by_player(index, split, hooks)?;
+            context.take_slot_stack(index, target, hooks)?;
+            if !context.add_to_inventory(target)? {
+                context.drop_stack(target, true)?;
+            }
+        } else {
+            context.set_inventory_stack(button, target)?;
+            context.set_slot_stack(index, source, Some(target), hooks)?;
+            context.take_slot_stack(index, target, hooks)?;
+        }
+    }
+    Ok(())
 }
 
 /// Port of Slot#tryRemove. The removed object stays rooted through the empty
@@ -167,6 +223,34 @@ impl MenuClickContext for super::transfer::LiveMenuTransfer<'_> {
             },
             StackValue::Existing(stack),
         )
+    }
+    fn inventory_stack(&mut self, slot: usize) -> Result<StackRef> {
+        self.operation.pin(ContainerSlot {
+            container: ContainerHandle::PlayerInventory(self.player),
+            slot,
+        })
+    }
+    fn set_inventory_stack(&mut self, slot: usize, stack: StackRef) -> Result<()> {
+        self.operation.level.replace_stack_object(
+            ContainerSlot {
+                container: ContainerHandle::PlayerInventory(self.player),
+                slot,
+            },
+            StackValue::Existing(stack),
+        )
+    }
+    fn add_to_inventory(&mut self, stack: StackRef) -> Result<bool> {
+        add_item_stack(self.player, stack, self.operation.level)
+    }
+    fn drop_stack(&mut self, _: StackRef, _: bool) -> Result<()> {
+        // The entity-owned Existing receiver constructor arrives via restart.
+        Err(MenuError::Unsupported("retained player drop constructor"))
+    }
+    fn swap_craft(&mut self, index: usize, _: i32) -> Result<()> {
+        if matches!(self.slot(index)?.kind, SlotKind::Result(_)) {
+            return Err(MenuError::Unsupported("live result-slot achievements"));
+        }
+        Ok(())
     }
     fn set_slot_stack(
         &mut self,
