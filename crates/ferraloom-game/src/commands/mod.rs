@@ -18,6 +18,7 @@ pub mod suggestions;
 pub mod teleport;
 pub mod tick;
 mod tree;
+pub mod weather;
 use arguments::{ArgumentValue, coordinates::Coordinates};
 use ferraloom_brigadier::{
     CommandContext, CommandDispatcher, CommandSyntaxException, ContextChain, ExceptionKind,
