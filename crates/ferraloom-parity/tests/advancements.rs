@@ -178,15 +178,12 @@ async fn inventory_progress_survives_restart(session: &mut Session) -> Result<Ob
     session.restart().await?;
     let player = session.join("ParityBot").await?;
     let bot = session.bot(player)?;
-    let packet = bot.wait_for("restored advancement progress", Ticks::DEFAULT, |_, packet| matches!(packet, cb::Packet::UpdateAdvancements(packet) if packet.progress.iter().any(|progress| progress.id.as_str() == "minecraft:story/root"))).await?;
-    let cb::Packet::UpdateAdvancements(packet) = packet.as_ref() else {
-        unreachable!()
-    };
-    let root = packet
-        .progress
-        .iter()
-        .find(|progress| progress.id.as_str() == "minecraft:story/root")
-        .unwrap();
+    bot.synchronize().await?;
+    let state = bot.snapshot();
+    let root = state
+        .advancement_progress
+        .get(&Identifier::parse("minecraft:story/root")?)
+        .ok_or_else(|| anyhow::anyhow!("restored advancement progress missing"))?;
     ensure!(
         root.criteria
             .iter()
