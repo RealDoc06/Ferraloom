@@ -121,6 +121,7 @@ public final class EntityVectors {
         NbtVectors.run(new EntityFixture(r));
         NameVectors.run(new EntityFixture(r));
         FreezingVectors.run(new EntityFixture(r));
+        FreezePhaseVectors.run(new EntityFixture(r));
         ClimbVectors.run(new EntityFixture(r));
         PushingVectors.run(new EntityFixture(r));
         CrammingVectors.run(new EntityFixture(r));

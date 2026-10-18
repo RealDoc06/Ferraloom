@@ -1129,6 +1129,70 @@ freeze-frost	true	139	1	none	3fb99999a0000000
 freeze-frost	true	140	1	none	3fb99999a0000000
 freeze-frost	true	141	1	none	3fb99999a0000000
 freeze-frost	true	2147483647	1	none	3fb99999a0000000
+freeze-phase	-2147483648	false	false	39	2147483646	bfa99999a0000000	3fa99999a0000000	-
+freeze-phase	-2147483648	false	false	40	2147483646	bfa99999a0000000	3fa99999a0000000	-
+freeze-phase	-2147483648	false	true	39	2147483646	bfa99999a0000000	3fa99999a0000000	-
+freeze-phase	-2147483648	false	true	40	2147483646	bfa99999a0000000	3fa99999a0000000	freeze:3f800000:2147483646:3fa99999a0000000
+freeze-phase	-2147483648	true	false	39	2147483646	bfa99999a0000000	3fa99999a0000000	-
+freeze-phase	-2147483648	true	false	40	2147483646	bfa99999a0000000	3fa99999a0000000	-
+freeze-phase	-2147483648	true	true	39	-2147483648	none	3fb99999a0000000	-
+freeze-phase	-2147483648	true	true	40	-2147483648	none	3fb99999a0000000	-
+freeze-phase	-1	false	false	39	0	none	3fb99999a0000000	-
+freeze-phase	-1	false	false	40	0	none	3fb99999a0000000	-
+freeze-phase	-1	false	true	39	0	none	3fb99999a0000000	-
+freeze-phase	-1	false	true	40	0	none	3fb99999a0000000	-
+freeze-phase	-1	true	false	39	0	none	3fb99999a0000000	-
+freeze-phase	-1	true	false	40	0	none	3fb99999a0000000	-
+freeze-phase	-1	true	true	39	-1	none	3fb99999a0000000	-
+freeze-phase	-1	true	true	40	-1	none	3fb99999a0000000	-
+freeze-phase	0	false	false	39	0	none	3fb99999a0000000	-
+freeze-phase	0	false	false	40	0	none	3fb99999a0000000	-
+freeze-phase	0	false	true	39	0	none	3fb99999a0000000	-
+freeze-phase	0	false	true	40	0	none	3fb99999a0000000	-
+freeze-phase	0	true	false	39	0	none	3fb99999a0000000	-
+freeze-phase	0	true	false	40	0	none	3fb99999a0000000	-
+freeze-phase	0	true	true	39	0	none	3fb99999a0000000	-
+freeze-phase	0	true	true	40	0	none	3fb99999a0000000	-
+freeze-phase	1	false	false	39	0	none	3fb99999a0000000	-
+freeze-phase	1	false	false	40	0	none	3fb99999a0000000	-
+freeze-phase	1	false	true	39	0	none	3fb99999a0000000	-
+freeze-phase	1	false	true	40	0	none	3fb99999a0000000	-
+freeze-phase	1	true	false	39	0	none	3fb99999a0000000	-
+freeze-phase	1	true	false	40	0	none	3fb99999a0000000	-
+freeze-phase	1	true	true	39	1	bf3767dce0000000	3fb98231c3200000	-
+freeze-phase	1	true	true	40	1	bf3767dce0000000	3fb98231c3200000	-
+freeze-phase	139	false	false	39	137	bfa90d2a60000000	3faa2608e0000000	-
+freeze-phase	139	false	false	40	137	bfa90d2a60000000	3faa2608e0000000	-
+freeze-phase	139	false	true	39	137	bfa90d2a60000000	3faa2608e0000000	-
+freeze-phase	139	false	true	40	137	bfa90d2a60000000	3faa2608e0000000	-
+freeze-phase	139	true	false	39	137	bfa90d2a60000000	3faa2608e0000000	-
+freeze-phase	139	true	false	40	137	bfa90d2a60000000	3faa2608e0000000	-
+freeze-phase	139	true	true	39	139	bfa96ac9e0000000	3fa9c86960000000	-
+freeze-phase	139	true	true	40	139	bfa96ac9e0000000	3fa9c86960000000	-
+freeze-phase	140	false	false	39	138	bfa93bfa20000000	3fa9f73920000000	-
+freeze-phase	140	false	false	40	138	bfa93bfa20000000	3fa9f73920000000	-
+freeze-phase	140	false	true	39	138	bfa93bfa20000000	3fa9f73920000000	-
+freeze-phase	140	false	true	40	138	bfa93bfa20000000	3fa9f73920000000	-
+freeze-phase	140	true	false	39	138	bfa93bfa20000000	3fa9f73920000000	-
+freeze-phase	140	true	false	40	138	bfa93bfa20000000	3fa9f73920000000	-
+freeze-phase	140	true	true	39	140	bfa99999a0000000	3fa99999a0000000	-
+freeze-phase	140	true	true	40	140	bfa99999a0000000	3fa99999a0000000	freeze:3f800000:140:3fa99999a0000000
+freeze-phase	141	false	false	39	139	bfa96ac9e0000000	3fa9c86960000000	-
+freeze-phase	141	false	false	40	139	bfa96ac9e0000000	3fa9c86960000000	-
+freeze-phase	141	false	true	39	139	bfa96ac9e0000000	3fa9c86960000000	-
+freeze-phase	141	false	true	40	139	bfa96ac9e0000000	3fa9c86960000000	-
+freeze-phase	141	true	false	39	139	bfa96ac9e0000000	3fa9c86960000000	-
+freeze-phase	141	true	false	40	139	bfa96ac9e0000000	3fa9c86960000000	-
+freeze-phase	141	true	true	39	141	bfa99999a0000000	3fa99999a0000000	-
+freeze-phase	141	true	true	40	141	bfa99999a0000000	3fa99999a0000000	freeze:3f800000:141:3fa99999a0000000
+freeze-phase	2147483647	false	false	39	2147483645	bfa99999a0000000	3fa99999a0000000	-
+freeze-phase	2147483647	false	false	40	2147483645	bfa99999a0000000	3fa99999a0000000	-
+freeze-phase	2147483647	false	true	39	2147483645	bfa99999a0000000	3fa99999a0000000	-
+freeze-phase	2147483647	false	true	40	2147483645	bfa99999a0000000	3fa99999a0000000	freeze:3f800000:2147483645:3fa99999a0000000
+freeze-phase	2147483647	true	false	39	2147483645	bfa99999a0000000	3fa99999a0000000	-
+freeze-phase	2147483647	true	false	40	2147483645	bfa99999a0000000	3fa99999a0000000	-
+freeze-phase	2147483647	true	true	39	2147483647	bfa99999a0000000	3fa99999a0000000	-
+freeze-phase	2147483647	true	true	40	2147483647	bfa99999a0000000	3fa99999a0000000	freeze:3f800000:2147483647:3fa99999a0000000
 living-climb	0	0	0	0	false	41a00000	false	true	none
 living-climb	1	7308	0	0	false	41a00000	true	false	8,64,8
 living-climb	2	10123	0	0	false	41a00000	true	false	8,64,8
