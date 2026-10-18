@@ -25,7 +25,7 @@ fn registered_structure_generation_matches_vanilla_with_biome_rejection() {
     .unwrap();
     let pools =
         StructurePools::load(&resources, &mut |_| Err(Error("no inline features".into()))).unwrap();
-    let templates = StructureTemplateManager::load(&resources, pools.templates()).unwrap();
+    let templates = StructureTemplateManager::load_all(&resources).unwrap();
     let mut text = String::new();
     flate2::read::GzDecoder::new(&include_bytes!("testdata/structure_generation.json.gz")[..])
         .read_to_string(&mut text)
