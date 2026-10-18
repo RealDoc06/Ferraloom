@@ -133,6 +133,18 @@ impl Default for TicketStorage {
     }
 }
 impl TicketStorage {
+    /// Port of ServerChunkCache#getChunkFutureMainThread's loading ticket.
+    /// Native signed ticksLeft is owned by add_record; expires is never used.
+    pub fn add_unknown(&mut self, pos: ChunkPos, status: super::chunk_holder::ChunkStatus) {
+        self.add(
+            pos,
+            Ticket {
+                kind: TicketType::Unknown,
+                level: super::acquisition::ticket_level(status),
+                expires: None,
+            },
+        );
+    }
     pub fn add_player_spawn(&mut self, pos: ChunkPos, _ticket_tick: u64) {
         self.add(
             pos,
