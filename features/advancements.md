@@ -1955,3 +1955,5 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | advancements.player-food-unconstrained | Unconstrained food bounds need no runtime food state; constrained bounds remain Unsupported until food is available | `PlayerPredicate#matches` | `predicates::player::tests::unconstrained_food_needs_no_unavailable_state` | pass | partial |
 
 | advancements.live-trigger-effects | Live consumed block, retained inventory, recipe, tick and location triggers apply synchronous rewards, announcements and visibility | `SimpleCriterionTrigger#trigger; AdvancementRewards#grant` | `advancements::tests::vanilla_nested_reward_visibility_order_and_post_reward_revoke` | pass | partial |
+
+| advancements.persistence.live-save-zone | Save capture uses the system zone at each obtained instant; IO workers write captured JSON | `PlayerList#save; AdvancementProgress.OBTAINED_TIME_CODEC` | `advancements::persistence::tests::captured_save_uses_each_instant_offset_across_dst` | pass | partial |
