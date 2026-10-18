@@ -493,8 +493,8 @@ fn comparator_and_conductor_facts_preserve_property_overrides() {
 #[test]
 fn block_landing_properties_preserve_float_restitution_and_reduction() {
     assert_eq!(
-        Block::HAY_BLOCK.data().fall_distance_reduction.to_bits(),
-        0.8_f32.to_bits()
+        Block::RED_BED.data().fall_distance_reduction.to_bits(),
+        0.5_f32.to_bits()
     );
     assert_eq!(
         Block::SLIME_BLOCK.data().bounce_restitution.to_bits(),
@@ -502,6 +502,9 @@ fn block_landing_properties_preserve_float_restitution_and_reduction() {
     );
     assert_eq!(Block::STONE.data().fall_distance_reduction, 0.0);
     assert_eq!(Block::STONE.data().bounce_restitution, 0.0);
+    // Hay reduces the damage modifier in its fallOn override, independently
+    // of the base Block's fall-distance reduction property.
+    assert_eq!(Block::HAY_BLOCK.data().fall_distance_reduction, 0.0);
 }
 
 #[test]
@@ -511,8 +514,9 @@ fn entity_inside_and_landing_virtual_owners_are_extracted_by_signature() {
     assert!(!Block::WATER.overrides(BlockMethod::EntityInside));
     assert!(Block::POWDER_SNOW.overrides(BlockMethod::GetEntityInsideCollisionShape));
     assert!(Block::TRIPWIRE.overrides(BlockMethod::GetEntityInsideCollisionShape));
-    assert!(Block::SLIME_BLOCK.overrides(BlockMethod::BounceOn));
-    assert!(!Block::HAY_BLOCK.overrides(BlockMethod::FallOn));
+    assert!(Block::SLIME_BLOCK.overrides(BlockMethod::FallOn));
+    assert!(!Block::SLIME_BLOCK.overrides(BlockMethod::BounceOn));
+    assert!(Block::HAY_BLOCK.overrides(BlockMethod::FallOn));
 }
 
 #[test]
