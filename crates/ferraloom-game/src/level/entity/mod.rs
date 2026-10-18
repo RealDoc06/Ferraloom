@@ -178,6 +178,7 @@ impl EntityIdAllocator {
 /// Canonical data is never removed while a callback frame is active.
 #[derive(Default)]
 pub struct EntityStorage {
+    effects: Vec<crate::entity::effects::EntityEffect>,
     pending_retire: Vec<EntityRef>,
     movement_effects: Vec<crate::entity::movement::MovementEffect>,
     pub border: crate::level::border::WorldBorder,
@@ -235,6 +236,12 @@ impl EntityStorage {
 }
 
 impl Level {
+    pub fn emit_entity_effect(&mut self, effect: crate::entity::effects::EntityEffect) {
+        self.region_mut().entities.effects.push(effect);
+    }
+    pub fn take_entity_effects(&mut self) -> Vec<crate::entity::effects::EntityEffect> {
+        std::mem::take(&mut self.region_mut().entities.effects)
+    }
     /// Port of ServerLevel#getNextEntityId. Every entity constructor, including
     /// players, draws from this region's canonical creation-order allocator.
     pub fn next_entity_id(&mut self) -> i32 {

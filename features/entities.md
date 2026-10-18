@@ -311,7 +311,7 @@ Includes every entity type, concrete goal implementation (including nested goals
 | entities.entity-type.sulfur-cube | `minecraft:sulfur_cube` (entity type); implementation `SulfurCube` | `net.minecraft.world.entity.EntityTypes#register; SulfurCube` | | - | todo |
 | entities.entity-type.tadpole | `minecraft:tadpole` (entity type); implementation `Tadpole` | `net.minecraft.world.entity.EntityTypes#register; Tadpole` | | - | todo |
 | entities.entity-type.text-display | `minecraft:text_display` (entity type); implementation `Display.TextDisplay` | `net.minecraft.world.entity.EntityTypes#register; Display.TextDisplay` | | - | todo |
-| entities.entity-type.tnt | `minecraft:tnt` (entity type); implementation `PrimedTnt` | `net.minecraft.world.entity.EntityTypes#register; PrimedTnt` | | - | todo |
+| entities.entity-type.tnt | `minecraft:tnt` (entity type); implementation `PrimedTnt` | `net.minecraft.world.entity.EntityTypes#register; PrimedTnt` | `entity::tests::vanilla_primed_tnt_tick_motion_fuse_and_removal_bits; entity::item::primed_tnt::tests` | - | partial |
 | entities.entity-type.tnt-minecart | `minecraft:tnt_minecart` (entity type); implementation `MinecartTNT` | `net.minecraft.world.entity.EntityTypes#register; MinecartTNT` | | - | todo |
 | entities.entity-type.trader-llama | `minecraft:trader_llama` (entity type); implementation `TraderLlama` | `net.minecraft.world.entity.EntityTypes#register; TraderLlama` | | - | todo |
 | entities.entity-type.trident | `minecraft:trident` (entity type); implementation `ThrownTrident` | `net.minecraft.world.entity.EntityTypes#register; ThrownTrident` | | - | todo |

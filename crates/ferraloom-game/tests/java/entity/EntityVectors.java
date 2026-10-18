@@ -78,6 +78,8 @@ public final class EntityVectors {
         System.out.println("move\\t"+name+"\\t"+(player?"player":"cow")+"\\t"+(obstacle==null?-1:Block.getId(obstacle))+"\\t"+vec(from)+"\\t"+vec(delta)+"\\t"+ground+"\\t"+sneak+"\\t"+bits(fall)+"\\t"+vec(e.position())+"\\t"+flags(e)+"\\t"+bits(e.fallDistance)+"\\t"+vec(e.getDeltaMovement()));
       }
       public static void run(RegistryAccess r)throws Exception {
+        var tntLevel=new EntityFixture(r);tntLevel.floor();var tnt=new net.minecraft.world.entity.item.PrimedTnt(EntityTypes.TNT,tntLevel);tnt.setId(1);tnt.setPos(8.5,66,8.5);tnt.setDeltaMovement(0.125,0.2,-0.03);tnt.setFuse(4);
+        for(int tick=1;tick<=4;tick++){tnt.commonTick();tnt.tick();System.out.println("tnt\\t"+tick+"\\t"+vec(tnt.position())+"\\t"+vec(tnt.getDeltaMovement())+"\\t"+flags(tnt)+"\\t"+tnt.getFuse()+"\\t"+tnt.isRemoved()+"\\t"+tnt.getRequiresPrecisePosition());}
         for(int test=0;test<6;test++){
           var player=new TestPlayer(new EntityFixture(r));var inventory=player.getInventory();
           var stack=new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.STONE,test==0?70:8);
