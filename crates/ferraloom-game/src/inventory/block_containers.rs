@@ -236,6 +236,90 @@ mod tests {
         ));
     }
     #[test]
+    fn sign_edits_notify_at_set_text_and_after_clearing_editor() {
+        use crate::block::containers::sign::{self, SignBlockEntity};
+        let fixtures = include_str!("../../tests/java/blocks/entities/vectors.tsv");
+        let mut checked = 0;
+        for line in fixtures
+            .lines()
+            .filter(|line| line.starts_with("sign-edit-updates\t"))
+        {
+            let fields: Vec<_> = line.split('\t').collect();
+            let (mut level, player, old) = setup();
+            let state = Block::OAK_SIGN.default_state();
+            level.set_block_state(old.pos, state).unwrap();
+            level
+                .set_block_entity(create(old.pos, state).unwrap())
+                .unwrap();
+            let handle = level.block_entity_ref(old.pos).unwrap().unwrap();
+            let uuid = level.entity::<ServerPlayer>(player).unwrap().uuid;
+            let sign = level.block_entity_mut::<SignBlockEntity>(handle).unwrap();
+            sign.is_waxed = fields[1] == "true";
+            sign.allowed_player_editor = Some(if fields[2] == "true" {
+                uuid
+            } else {
+                Uuid::new(3, 4)
+            });
+            let lines = [
+                ("first".into(), "first".into()),
+                ("second".into(), String::new()),
+                ("third".into(), "third".into()),
+                ("fourth".into(), "fourth".into()),
+            ];
+            level.take_effects();
+            let accepted =
+                sign::update_sign_text(handle, uuid, true, &lines, fields[3] == "true", &mut level)
+                    .unwrap();
+            let updates = level
+                .take_effects()
+                .into_iter()
+                .filter(|effect| {
+                    matches!(
+                        effect,
+                        crate::level::effects::LevelEffect::BlockUpdated { .. }
+                    )
+                })
+                .count();
+            let expected_updates = if fields[4] == "[]" {
+                0
+            } else {
+                fields[4].split(',').count()
+            };
+            assert_eq!(updates, expected_updates, "{line}");
+            assert_eq!(accepted, expected_updates != 0, "{line}");
+            let native = fixtures
+                .lines()
+                .find(|row| {
+                    row.starts_with(&format!(
+                        "sign-edit\t{}\t{}\t{}\t",
+                        fields[1], fields[2], fields[3]
+                    ))
+                })
+                .unwrap();
+            let native: Vec<_> = native.split('\t').collect();
+            assert_eq!(
+                level
+                    .block_entity_state(handle)
+                    .unwrap()
+                    .save_without_metadata()
+                    .unwrap(),
+                ferraloom_nbt::parse_compound(native[4]).unwrap(),
+                "{line}"
+            );
+            assert_eq!(
+                level
+                    .block_entity::<SignBlockEntity>(handle)
+                    .unwrap()
+                    .allowed_player_editor
+                    .is_none(),
+                native[5] == "true",
+                "{line}"
+            );
+            checked += 1;
+        }
+        assert_eq!(checked, 8);
+    }
+    #[test]
     fn furnace_menu_reads_current_canonical_timer_data() {
         use crate::block::containers::furnace::AbstractFurnaceBlockEntity;
         let (mut level, player, old) = setup();

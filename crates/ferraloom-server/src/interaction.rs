@@ -3,9 +3,7 @@ use super::*;
 use ferraloom_data::{Item, registries::data_component_type::Id as ComponentType};
 use ferraloom_game::{
     advancements::criteria,
-    block::{
-        InteractionResult, UseContext, containers::sign::SignBlockEntity, interaction::SwingSource,
-    },
+    block::{InteractionResult, UseContext, interaction::SwingSource},
     entity::player::{inventory, swing_and_reset_attack_strength},
 };
 use ferraloom_util::Direction;
@@ -258,21 +256,16 @@ impl MinecraftServer {
             .map_err(game_error)?;
         let uuid = player.uuid;
         let filter = player.is_text_filtering_enabled();
-        let accepted = self
-            .level
-            .level
-            .block_entity_mut::<SignBlockEntity>(handle)
-            .map_err(game_error)?
-            .update_sign_text(uuid, packet.slot == SignTextSlot::Front, &lines, filter);
-        if accepted {
-            handle
-                .set_changed(&mut self.level.level)
-                .map_err(game_error)?;
-            self.level
-                .level
-                .block_entity_updated(handle)
-                .map_err(game_error)?;
-        } else {
+        let accepted = ferraloom_game::block::containers::sign::update_sign_text(
+            handle,
+            uuid,
+            packet.slot == SignTextSlot::Front,
+            &lines,
+            filter,
+            &mut self.level.level,
+        )
+        .map_err(game_error)?;
+        if !accepted {
             eprintln!(
                 "Player {} tried to change a non-editable sign",
                 self.connections[&connection].profile.name

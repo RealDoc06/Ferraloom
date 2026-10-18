@@ -60,8 +60,8 @@ impl SignBlockEntity {
             allowed_player_editor: None,
         }
     }
-    /// Port of SignBlockEntity#updateSignText / updateMessages. Caller emits the
-    /// block update after acceptance; unauthorized edits leave the editor intact.
+    /// In-memory adapter for SignBlockEntity#updateSignText. Live callers use
+    /// the handle function below so both notifications occur in native order.
     pub fn update_sign_text(
         &mut self,
         player: Uuid,
@@ -72,6 +72,11 @@ impl SignBlockEntity {
         if self.is_waxed || self.allowed_player_editor != Some(player) || !self.parent.has_level {
             return false;
         }
+        self.update_messages(front, lines, filter);
+        self.allowed_player_editor = None;
+        true
+    }
+    fn update_messages(&mut self, front: bool, lines: &[(String, String); 4], filter: bool) {
         let text = if front {
             &mut self.front_text
         } else {
@@ -97,9 +102,33 @@ impl SignBlockEntity {
         }
         text.filtered_messages = (filtered != raw).then_some(filtered);
         text.messages = raw;
-        self.allowed_player_editor = None;
-        true
     }
+}
+
+/// Port of SignBlockEntity#updateSignText, including markUpdated inside setText
+/// before clearing the editor, then the second sendBlockUpdated afterwards.
+pub fn update_sign_text(
+    handle: crate::block::entity::BlockEntityRef,
+    player: Uuid,
+    front: bool,
+    lines: &[(String, String); 4],
+    filter: bool,
+    level: &mut crate::level::Level,
+) -> Result<bool, crate::level::LevelError> {
+    level.with_block_entity_callback(handle, |level| {
+        let sign = level.block_entity_mut::<SignBlockEntity>(handle)?;
+        if sign.is_waxed || sign.allowed_player_editor != Some(player) || !sign.parent.has_level {
+            return Ok(false);
+        }
+        sign.update_messages(front, lines, filter);
+        handle.set_changed(level)?;
+        level.block_entity_updated(handle)?;
+        level
+            .block_entity_mut::<SignBlockEntity>(handle)?
+            .allowed_player_editor = None;
+        level.block_entity_updated(handle)?;
+        Ok(true)
+    })
 }
 pub struct SignBehavior;
 pub static SIGN_ENTITY: SignBehavior = SignBehavior;

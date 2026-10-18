@@ -345,13 +345,21 @@ pop-resource-rng	9123456	NONE	3	1426726698
 pop-resource-rng	9123456	up	3	-1503499307
 pop-resource-rng	9123456	east	3	-1503499307
 sign-edit	false	false	false	{back_text:{color:"black",has_glowing_text:0b,messages:["","","",""]},components:{},front_text:{color:"black",has_glowing_text:0b,messages:["","","",""]},is_waxed:0b}	false
+sign-edit-updates	false	false	false	[]
 sign-edit	false	false	true	{back_text:{color:"black",has_glowing_text:0b,messages:["","","",""]},components:{},front_text:{color:"black",has_glowing_text:0b,messages:["","","",""]},is_waxed:0b}	false
+sign-edit-updates	false	false	true	[]
 sign-edit	false	true	false	{back_text:{color:"black",has_glowing_text:0b,messages:["","","",""]},components:{},front_text:{color:"black",filtered_messages:["first","","third","fourth"],has_glowing_text:0b,messages:["first","second","third","fourth"]},is_waxed:0b}	true
+sign-edit-updates	false	true	false	[true,false]
 sign-edit	false	true	true	{back_text:{color:"black",has_glowing_text:0b,messages:["","","",""]},components:{},front_text:{color:"black",has_glowing_text:0b,messages:["first","","third","fourth"]},is_waxed:0b}	true
+sign-edit-updates	false	true	true	[true,false]
 sign-edit	true	false	false	{back_text:{color:"black",has_glowing_text:0b,messages:["","","",""]},components:{},front_text:{color:"black",has_glowing_text:0b,messages:["","","",""]},is_waxed:1b}	false
+sign-edit-updates	true	false	false	[]
 sign-edit	true	false	true	{back_text:{color:"black",has_glowing_text:0b,messages:["","","",""]},components:{},front_text:{color:"black",has_glowing_text:0b,messages:["","","",""]},is_waxed:1b}	false
+sign-edit-updates	true	false	true	[]
 sign-edit	true	true	false	{back_text:{color:"black",has_glowing_text:0b,messages:["","","",""]},components:{},front_text:{color:"black",has_glowing_text:0b,messages:["","","",""]},is_waxed:1b}	false
+sign-edit-updates	true	true	false	[]
 sign-edit	true	true	true	{back_text:{color:"black",has_glowing_text:0b,messages:["","","",""]},components:{},front_text:{color:"black",has_glowing_text:0b,messages:["","","",""]},is_waxed:1b}	false
+sign-edit-updates	true	true	true	[]
 sign-facing	6891	3fe0000000000000	400c000000000000	true
 sign-facing	6891	400c000000000000	400c000000000000	true
 sign-facing	6891	400c000000000000	3fe0000000000000	true

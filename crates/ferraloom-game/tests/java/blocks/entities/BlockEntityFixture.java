@@ -42,12 +42,19 @@ class BlockEntityFixture extends MutationFixture {
     @Override public boolean isTextFilteringEnabled(){return filtered;}
   }
   static void signEdits(RegistryAccess r){
+    class EditLevel extends BlockEntityFixture {
+      SignBlockEntity sign;final List<Boolean> notifications=new ArrayList<>();
+      EditLevel(){super(r);}
+      @Override public void sendBlockUpdated(BlockPos pos,net.minecraft.world.level.block.state.BlockState oldState,net.minecraft.world.level.block.state.BlockState newState,int flags){notifications.add(sign.getPlayerWhoMayEdit()!=null);}
+    }
     for(boolean waxed:new boolean[]{false,true})for(boolean allowed:new boolean[]{false,true})for(boolean filtered:new boolean[]{false,true}){
-      var level=new BlockEntityFixture(r);var sign=new SignBlockEntity(BlockPos.ZERO,net.minecraft.world.level.block.Blocks.OAK_SIGN.defaultBlockState());sign.setLevel(level);
+      var level=new EditLevel();var sign=new SignBlockEntity(BlockPos.ZERO,net.minecraft.world.level.block.Blocks.OAK_SIGN.defaultBlockState());level.sign=sign;sign.setLevel(level);
       var player=new SignPlayer(level,filtered);sign.setWaxed(waxed);sign.setAllowedPlayerEditor(allowed?player.getUUID():new UUID(3,4));
+      level.notifications.clear();
       var lines=List.of(net.minecraft.server.network.FilteredText.passThrough("first"),net.minecraft.server.network.FilteredText.fullyFiltered("second"),net.minecraft.server.network.FilteredText.passThrough("third"),net.minecraft.server.network.FilteredText.passThrough("fourth"));
       sign.updateSignText(player,net.minecraft.world.level.block.entity.SignTextSlot.FRONT,lines);
       System.out.println("sign-edit\t"+waxed+"\t"+allowed+"\t"+filtered+"\t"+sign.saveWithoutMetadata(r)+"\t"+(sign.getPlayerWhoMayEdit()==null));
+      System.out.println("sign-edit-updates\t"+waxed+"\t"+allowed+"\t"+filtered+"\t"+level.notifications.toString().replace(" ",""));
     }
   }
   static void signFacing(RegistryAccess r){
