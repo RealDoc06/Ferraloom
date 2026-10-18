@@ -32,7 +32,7 @@ use ferraloom_worldgen::{
 use serde::Deserialize;
 use std::{
     borrow::Cow,
-    collections::{BTreeMap, VecDeque},
+    collections::{BTreeMap, BTreeSet, VecDeque},
     future::Future,
     path::Path,
     pin::Pin,
@@ -499,6 +499,7 @@ pub struct World {
     generation_dispatcher: ThrottlingChunkTaskDispatcher<GenerationRequest>,
     active_generation: BTreeMap<ChunkPos, (u64, Arc<AtomicBool>)>,
     running_generation: Option<(u64, ChunkPos)>,
+    retained_generation: BTreeSet<ChunkPos>,
     pub failed_generation: Vec<ChunkPos>,
     proto_saves: VecDeque<storage::IoTask<()>>,
     unloading: VecDeque<ChunkUnload>,
@@ -729,6 +730,7 @@ impl World {
             generation_dispatcher: ThrottlingChunkTaskDispatcher::new(4),
             active_generation: BTreeMap::new(),
             running_generation: None,
+            retained_generation: BTreeSet::new(),
             failed_generation: Vec::new(),
             proto_saves: VecDeque::new(),
             unloading: VecDeque::new(),
@@ -862,6 +864,11 @@ impl World {
     pub fn update_generation_priority(&mut self, pos: ChunkPos, level: i32) {
         self.generation_dispatcher
             .on_level_change(pos, level.clamp(0, 45));
+        if level <= 44 {
+            self.retained_generation.insert(pos);
+        } else {
+            self.retained_generation.remove(&pos);
+        }
         if level > 44 {
             self.cancel_generation(pos);
         }
@@ -926,6 +933,14 @@ impl World {
         self.initial_chunks.remove(&request.pos.pack());
         let registry = self.registry.clone();
         let io = self.io.clone();
+        let mut retained = self.retained_generation.clone();
+        for center in self.active_generation.keys() {
+            for x in center.x - 11..=center.x + 11 {
+                for z in center.z - 11..=center.z + 11 {
+                    retained.insert(ChunkPos::new(x, z));
+                }
+            }
+        }
         self.running_generation = Some((request.id, request.pos));
         self.generation_work = Some(self.generation.submit(move || {
             let result = state.generate(
@@ -936,6 +951,10 @@ impl World {
                 &io,
                 Some(&request.cancelled),
             );
+            let result = result.and_then(|output| {
+                state.save_unclaimed_protos(&retained, &registry, &io)?;
+                Ok(output)
+            });
             GenerationCompletion {
                 state,
                 result,

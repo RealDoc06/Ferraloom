@@ -189,16 +189,30 @@ impl StructureStart {
                     .finish_generation_unit(format!("structure_piece:{id}"), Err(error))?;
             }
         }
-        match self.kind.map(|kind| kind.name()) {
-            Some("minecraft:desert_pyramid") => {
-                super::structures::desert_pyramid::after_place(&self.pieces, context, *bounds)?
+        let result = (|| -> Result<(), Error> {
+            match self.kind.map(|kind| kind.name()) {
+                Some("minecraft:desert_pyramid") => {
+                    super::structures::desert_pyramid::after_place(&self.pieces, context, *bounds)?
+                }
+                Some("minecraft:woodland_mansion") => {
+                    super::structures::woodland_mansion::after_place(
+                        context,
+                        &self.pieces,
+                        *bounds,
+                    )?;
+                }
+                Some(_) => {}
+                None => return Err(Error("valid start has no structure type".into())),
             }
-            Some("minecraft:woodland_mansion") => {
-                super::structures::woodland_mansion::after_place(context, &self.pieces, *bounds)?;
-            }
-            Some(_) => {}
-            None => return Err(Error("valid start has no structure type".into())),
-        }
+            Ok(())
+        })();
+        let unit = self
+            .structure
+            .as_ref()
+            .map_or_else(|| "unknown".into(), ToString::to_string);
+        context
+            .region
+            .finish_generation_unit(format!("structure_after_place:{unit}"), result)?;
         Ok(())
     }
 }

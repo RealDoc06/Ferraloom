@@ -92,6 +92,33 @@ impl GenerationState {
             holder.chunk.region = updated;
         }
     }
+    pub fn save_unclaimed_protos(
+        &mut self,
+        retained: &std::collections::BTreeSet<ChunkPos>,
+        registry: &RegistryAdapter,
+        io: &IoWorker,
+    ) -> Result<()> {
+        let drop = self
+            .holders
+            .iter()
+            .filter_map(|(&key, holder)| {
+                let pos = ChunkPos::unpack(key);
+                (holder.chunk.region.status < ChunkStatus::Full && !retained.contains(&pos))
+                    .then_some(pos)
+            })
+            .collect::<Vec<_>>();
+        for pos in drop {
+            let proto = &self.holders[&pos.pack()].chunk;
+            if proto.region.status > ChunkStatus::Empty {
+                let disk = proto
+                    .capture(&self.context, registry)
+                    .map_err(anyhow::Error::msg)?;
+                io.store(pos, Some(disk.write()?)).wait()?;
+            }
+            self.forget(pos);
+        }
+        Ok(())
+    }
     pub fn forget(&mut self, pos: ChunkPos) {
         self.holders.remove(&pos.pack());
         self.snapshots.remove_chunk(pos);
