@@ -30,6 +30,7 @@ mod pitcher;
 mod placement;
 mod powder_snow;
 mod sapling;
+pub mod sculk;
 mod sea_pickle;
 mod snow;
 mod survival;
