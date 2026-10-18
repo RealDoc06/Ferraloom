@@ -261,7 +261,7 @@ fn color(tag: &Tag, channels: usize) -> Result<i32, String> {
     let values = vector(tag, channels, float).map_err(|message| {
         format!("Failed to parse either. First: Not a number; Second: {message}")
     })?;
-    let channel = |index| (values[index] * 255.).floor() as i32;
+    let channel = |index: usize| (values[index] * 255.).floor() as i32;
     let alpha = if channels == 4 { channel(3) } else { 255 };
     Ok(alpha << 24 | channel(0) << 16 | channel(1) << 8 | channel(2))
 }

@@ -145,18 +145,14 @@ impl MinecraftArgument {
     ) -> Result<ArgumentValue, CommandSyntaxException> {
         use ArgumentValue as V;
         use CommandArgument as A;
-        let coordinate = match self.wire {
-            A::BlockPos {} => Some(CoordinateKind::BlockPos),
-            A::ColumnPos {} => Some(CoordinateKind::ColumnPos),
-            A::Vec3 {} => Some(CoordinateKind::Vec3),
-            A::Vec2 {} => Some(CoordinateKind::Vec2),
-            A::Rotation {} => Some(CoordinateKind::Rotation),
-            _ => None,
-        };
-        if let Some(kind) = coordinate {
-            return Coordinates::parse(reader, kind).map(V::Coordinates);
-        }
         Ok(match &self.wire {
+            A::BlockPos {} => V::Coordinates(Coordinates::parse(reader, CoordinateKind::BlockPos)?),
+            A::ColumnPos {} => {
+                V::Coordinates(Coordinates::parse(reader, CoordinateKind::ColumnPos)?)
+            }
+            A::Vec3 {} => V::Coordinates(Coordinates::parse(reader, CoordinateKind::Vec3)?),
+            A::Vec2 {} => V::Coordinates(Coordinates::parse(reader, CoordinateKind::Vec2)?),
+            A::Rotation {} => V::Coordinates(Coordinates::parse(reader, CoordinateKind::Rotation)?),
             A::Bool {} => V::Boolean(brigadier::BoolArgumentType.parse(reader)?),
             A::Integer { bounds } => V::Integer(
                 brigadier::IntegerArgumentType::new(
