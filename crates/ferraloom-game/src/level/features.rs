@@ -602,11 +602,11 @@ mod tests {
                     .0
                     .contains("MissingChunk")
             );
-            assert!(
-                LiveWorldGenLevel::height_at(&level, Heightmap::OceanFloorWg, 16, 0)
-                    .unwrap_err()
-                    .0
-                    .contains("MissingChunk")
+            // Level#getHeight returns minimum Y after its non-loading presence
+            // check; the block read above still requires the absent chunk.
+            assert_eq!(
+                LiveWorldGenLevel::height_at(&level, Heightmap::OceanFloorWg, 16, 0).unwrap(),
+                level.min_build_height()
             );
             assert_eq!(level.unported_behavior_stats().skipped_calls, 0);
         }

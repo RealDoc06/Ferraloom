@@ -564,22 +564,34 @@ mod tests {
     #[test]
     fn rain_query_short_circuits_only_canonical_dry_weather() {
         static BEHAVIORS: crate::Behaviors = crate::Behaviors::EMPTY;
-        let mut level = Level::new(
-            super::super::Region::new(&BEHAVIORS),
-            crate::level::LevelContext::fixture(0, 63),
-        );
-        let pos = BlockPos::new(0, 0, 0);
-        assert_eq!(level.is_raining_at(pos), Ok(false));
-        level.load_weather(WeatherData {
-            raining: true,
-            ..WeatherData::default()
-        });
-        assert_eq!(
-            level.is_raining_at(pos),
-            Err(LevelError::MissingChunk(ChunkPos::new(0, 0)))
-        );
-        level.rules_mut().can_have_weather = false;
-        assert_eq!(level.is_raining_at(pos), Ok(false));
+        for policy in [
+            crate::block::UnportedBehavior::Strict,
+            crate::block::UnportedBehavior::Warn,
+        ] {
+            let mut level = Level::new(
+                super::super::Region::new(&BEHAVIORS),
+                crate::level::LevelContext::fixture(0, 63),
+            );
+            level.set_unported_behavior(policy);
+            let pos = BlockPos::new(0, 0, 0);
+            assert_eq!(level.is_raining_at(pos), Ok(false));
+            level.load_weather(WeatherData {
+                raining: true,
+                ..WeatherData::default()
+            });
+            assert_eq!(
+                level.is_raining_at(pos),
+                Err(LevelError::UnsupportedLightQuery)
+            );
+            level.set_has_skylight(true);
+            assert_eq!(
+                level.is_raining_at(pos),
+                Err(LevelError::UnsupportedWeatherQuery)
+            );
+            level.rules_mut().can_have_weather = false;
+            assert_eq!(level.is_raining_at(pos), Ok(false));
+            assert_eq!(level.unported_behavior_stats().skipped_calls, 0);
+        }
     }
     #[test]
     fn clear_time_overrides_targets_without_sampling_and_rule_false_still_smooths() {

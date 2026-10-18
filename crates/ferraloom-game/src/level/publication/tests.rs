@@ -366,5 +366,9 @@ fn installed_dimension_bounds_reject_a_wrong_first_chunk_without_changing_contex
     );
     assert!(level.chunk(ORIGIN).is_none());
     assert_eq!(level.min_build_height(), 0);
-    assert_eq!(level.max_build_height(), 16);
+    assert_eq!(level.max_build_height(), 15);
+    assert_eq!(
+        ferraloom_worldgen::feature::LiveWorldGenLevel::height(&level),
+        16
+    );
 }
