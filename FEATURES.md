@@ -21,10 +21,10 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Game rules](features/game-rules.md) | 62 | 62 | 0 | 0 | 0 |
 | [GameTest](features/gametest.md) | 23 | 23 | 0 | 0 | 0 |
 | [Inventory and menus](features/inventory-menus.md) | 63 | 12 | 51 | 0 | 0 |
-| [Item modifiers](features/item-modifiers.md) | 4 | 4 | 0 | 0 | 0 |
+| [Item modifiers](features/item-modifiers.md) | 4 | 1 | 3 | 0 | 0 |
 | [Items and data components](features/items.md) | 242 | 116 | 123 | 3 | 0 |
 | [Lighting](features/lighting.md) | 13 | 2 | 0 | 11 | 0 |
-| [Loot](features/loot.md) | 1652 | 1652 | 0 | 0 | 0 |
+| [Loot](features/loot.md) | 1668 | 162 | 1506 | 0 | 0 |
 | [Management JSON-RPC](features/management.md) | 101 | 101 | 0 | 0 | 0 |
 | [Maps, decoration and variants](features/maps-decoration.md) | 255 | 255 | 0 | 0 | 0 |
 | [Networking and login](features/networking-login.md) | 46 | 10 | 36 | 0 | 0 |
@@ -33,7 +33,7 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Phantoms](features/phantoms.md) | 3 | 3 | 0 | 0 | 0 |
 | [Player mechanics](features/player.md) | 46 | 33 | 13 | 0 | 0 |
 | [Portals and dimension travel](features/portals-travel.md) | 13 | 13 | 0 | 0 | 0 |
-| [Predicates](features/predicates.md) | 92 | 92 | 0 | 0 | 0 |
+| [Predicates](features/predicates.md) | 100 | 79 | 21 | 0 | 0 |
 | [Protocol packets](features/protocol.md) | 270 | 47 | 0 | 223 | 0 |
 | [Raids](features/raids.md) | 8 | 8 | 0 | 0 | 0 |
 | [Redstone mechanics](features/redstone.md) | 41 | 41 | 0 | 0 | 0 |
@@ -49,4 +49,4 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Weather, time and environment](features/weather-time.md) | 85 | 85 | 0 | 0 | 0 |
 | [World storage and data fixing](features/world-storage.md) | 307 | 306 | 1 | 0 | 0 |
 | [World generation](features/worldgen.md) | 3102 | 2645 | 166 | 291 | 0 |
-| **Total** | **18886** | **15744** | **486** | **2655** | **1** |
+| **Total** | **18910** | **14238** | **2016** | **2655** | **1** |
