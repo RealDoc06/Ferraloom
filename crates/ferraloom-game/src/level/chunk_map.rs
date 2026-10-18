@@ -47,6 +47,21 @@ impl ChunkMap {
         holder.generation_requested = true;
         Some(request)
     }
+    /// Cancel only the runtime's current unfinished FULL request. A stale
+    /// worker cannot reset a newer request, and completed FULL data is cached.
+    pub fn cancel_generation_request(&mut self, pos: ChunkPos, request_id: u64) -> bool {
+        let Some(holder) = self.holders.get_mut(&pos.pack()) else {
+            return false;
+        };
+        if holder.request_id != request_id
+            || !holder.generation_requested
+            || holder.status == super::chunk_holder::ChunkStatus::Full
+        {
+            return false;
+        }
+        holder.generation_requested = false;
+        true
+    }
 }
 /// Port of PlayerChunkSender: quota, one initial unacknowledged batch, then ten.
 #[derive(Debug)]
@@ -135,6 +150,23 @@ mod tests {
         assert!(sender.next_batch(ChunkPos::new(0, 0), |_| true).is_empty());
         sender.acknowledge(f32::NAN);
         assert_eq!(sender.next_batch(ChunkPos::new(0, 0), |_| true).len(), 1);
+    }
+    #[test]
+    fn cancelled_generation_retries_with_fresh_identity_and_keeps_completed_full_data() {
+        let mut chunks = ChunkMap::default();
+        let pos = ChunkPos::new(0, 0);
+        let first = chunks.request(pos).unwrap();
+        assert!(!chunks.cancel_generation_request(pos, first + 1));
+        assert!(chunks.cancel_generation_request(pos, first));
+        let second = chunks.request(pos).unwrap();
+        assert_ne!(first, second);
+        assert!(!chunks.cancel_generation_request(pos, first));
+        assert_eq!(chunks.request(pos), None);
+        chunks.holders.get_mut(&pos.pack()).unwrap().status =
+            super::super::chunk_holder::ChunkStatus::Full;
+        assert!(!chunks.cancel_generation_request(pos, second));
+        assert_eq!(chunks.request(pos), None);
+        assert_eq!(chunks.holder_positions().collect::<Vec<_>>(), vec![pos]);
     }
     #[test]
     fn unloading_waits_for_ticket_demotion_and_reloading_gets_a_new_request_in_order() {

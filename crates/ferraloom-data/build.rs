@@ -162,6 +162,28 @@ fn packets(out: &mut String, reports: &Value) {
     out.push_str("}\n");
 }
 
+fn sound_events(out: &mut String, entries: &Value, report: &Value) {
+    let entries = entries.as_array().expect("sound event facts");
+    let registry = ordered_entries(&report["entries"]);
+    assert_eq!(entries.len(), registry.len());
+    writeln!(
+        out,
+        "static SOUND_FIXED_RANGES: [Option<f32>; {}] = [",
+        entries.len()
+    )
+    .unwrap();
+    for (entry, (name, id)) in entries.iter().zip(registry) {
+        assert_eq!(entry["id"].as_u64(), Some(id));
+        assert_eq!(entry["name"].as_str(), Some(name));
+        if entry["fixed_range"].is_null() {
+            out.push_str("None,");
+        } else {
+            write!(out, "Some({}),", float(&entry["fixed_range"])).unwrap();
+        }
+    }
+    out.push_str("];\n");
+}
+
 struct Property {
     id: usize,
     values: Vec<String>,
@@ -789,6 +811,11 @@ fn main() {
     )
     .unwrap();
     items(&mut out, &item_report);
+    sound_events(
+        &mut out,
+        &load(root, "sound_events"),
+        &registries_report["minecraft:sound_event"],
+    );
     entities(&mut out, &entity_report, &registries_report);
     let path = Path::new(&std::env::var_os("OUT_DIR").unwrap()).join("data.rs");
     std::fs::write(path, out).unwrap();
