@@ -1000,7 +1000,12 @@ impl crate::entity::Entity for PlayerBehavior {
         entity: crate::entity::EntityRef,
         level: &crate::level::Level,
     ) -> Result<f32, crate::level::LevelError> {
-        crate::entity::living::block_speed_factor(entity, level)
+        let player = level.entity::<ServerPlayer>(entity)?;
+        if player.flying || player.shared_flag(7) {
+            Ok(1.0)
+        } else {
+            crate::entity::living::block_speed_factor(entity, level)
+        }
     }
     fn ignite_for_ticks(
         &self,

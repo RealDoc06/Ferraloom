@@ -34,7 +34,7 @@ fn bits(value: Vec3) -> String {
 fn prepare(level: &mut Level, case: i32, surface: BlockState) {
     let fluid = if (3..=9).contains(&case) || case == 11 || case == 13 {
         Block::WATER
-    } else if case >= 16 {
+    } else if (16..=17).contains(&case) {
         Block::LAVA
     } else {
         Block::AIR
@@ -145,5 +145,5 @@ fn native_virtual_travel_preserves_player_swim_flight_and_passenger_parent_calls
         );
         checked += 1;
     }
-    assert_eq!(checked, 36);
+    assert_eq!(checked, 46);
 }
