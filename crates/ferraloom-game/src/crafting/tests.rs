@@ -18,6 +18,104 @@ fn tags() -> TagSet<Item> {
 fn stack(item: Item, count: i32) -> ItemStack {
     ItemStack::new(item, count, Default::default())
 }
+#[test]
+fn vanilla_empty_stack_effective_accessors_and_restore() {
+    use crate::entity::player::inventory::{
+        component, copy_with_count, count, is_damaged, is_stackable, max_stack_size, set_count,
+    };
+    use crate::inventory::{ContainerId, Slot, SlotKind, UnsupportedMenuHooks};
+    use ferraloom_protocol::{Writer, chat::Component, codec::VarInt, component::ComponentTypeId};
+
+    fn check(stack: &ItemStack, expected: &serde_json::Value) {
+        let components = stack.components().unwrap();
+        let mut keys: Vec<_> = components
+            .entries
+            .iter()
+            .map(|v| v.component_type().name())
+            .collect();
+        keys.sort_unstable();
+        let mut prototype: Vec<_> = stack
+            .prototype()
+            .unwrap()
+            .entries
+            .iter()
+            .map(|v| v.component_type().name())
+            .collect();
+        prototype.sort_unstable();
+        let mut wire = Writer::new();
+        wire.write(stack.components_patch()).unwrap();
+        assert_eq!(stack.item().name(), expected["item"].as_str().unwrap());
+        assert_eq!(count(stack), expected["count"].as_i64().unwrap() as i32);
+        assert_eq!(stack.is_empty(), expected["empty"].as_bool().unwrap());
+        assert_eq!(json!(keys), expected["components"]);
+        assert_eq!(json!(prototype), expected["prototype"]);
+        assert_eq!(wire.as_slice(), unhex(expected["patch"].as_str().unwrap()));
+        assert_eq!(
+            max_stack_size(stack),
+            expected["max_stack_size"].as_i64().unwrap() as i32
+        );
+        assert_eq!(is_damaged(stack), expected["damaged"].as_bool().unwrap());
+        assert_eq!(is_stackable(stack), expected["stackable"].as_bool().unwrap());
+        for key in ferraloom_data::registries::data_component_type::ALL {
+            assert_eq!(stack.component(*key).unwrap(), components.get(*key));
+            assert_eq!(component(stack, *key), components.get(*key));
+        }
+    }
+    let fixtures: serde_json::Value =
+        serde_json::from_str(include_str!("stack-count-fixtures.json")).unwrap();
+    for row in fixtures.as_array().unwrap() {
+        let item = Item::from_name(row["source_item"].as_str().unwrap()).unwrap();
+        let mut patch = DataComponentPatch::default();
+        patch.set(DataComponent::CustomName(Box::new(Component::literal(
+            "retained",
+        ))));
+        patch.set(DataComponent::MaxStackSize(VarInt(23)));
+        patch.set(DataComponent::Damage(VarInt(7)));
+        patch.remove(ComponentTypeId::ITEM_NAME);
+        let mut source = ItemStack::new(item, 1, patch);
+        let retained_patch = source.0.as_ref().unwrap().components.clone();
+        set_count(&mut source, row["source_count"].as_i64().unwrap() as i32);
+        check(&source, &row["effective"]);
+        check(&copy_with_count(&source, 3), &row["copy"]);
+        check(&stack::copy_with_count(&source, 3), &row["copy"]);
+        let mut zero_copy = source.copy_with_count(0);
+        check(&zero_copy, &row["zero_copy"]);
+        let grown = count(&zero_copy).wrapping_add(2);
+        set_count(&mut zero_copy, grown);
+        check(&zero_copy, &row["zero_copy_grown"]);
+        let mut negative_copy = source.copy_with_count(-3);
+        let grown = count(&negative_copy).wrapping_add(2);
+        set_count(&mut negative_copy, grown);
+        check(&negative_copy, &row["negative_copy_grown"]);
+        let template = ItemStackTemplate::new(Item::DIRT, 1, Default::default()).unwrap();
+        check(&stack::transmute(&template, &source, 0), &row["transmuted"]);
+        for (kind, accepts) in [
+            SlotKind::Banner,
+            SlotKind::ShulkerBox,
+            SlotKind::Lapis,
+            SlotKind::FurnaceFuel,
+            SlotKind::MapAddition,
+        ]
+        .into_iter()
+        .zip(row["effective"]["slots"].as_array().unwrap())
+        {
+            assert_eq!(
+                Slot::new(ContainerId::Local(0), 0, 0, 0)
+                    .with_kind(kind)
+                    .may_place(&source, &UnsupportedMenuHooks)
+                    .unwrap(),
+                accepts.as_bool().unwrap()
+            );
+        }
+        // Reading effective state must not discard the mutable stack's stored item or patch.
+        assert_eq!(source.0.as_ref().unwrap().item, item);
+        assert_eq!(source.0.as_ref().unwrap().components, retained_patch);
+        let grown = count(&source).wrapping_add(2);
+        set_count(&mut source, grown);
+        check(&source, &row["grown"]);
+        assert_eq!(source.0.as_ref().unwrap().components, retained_patch);
+    }
+}
 fn decode(json: serde_json::Value) -> Recipe {
     Recipe::decode(&json, &tags()).unwrap()
 }

@@ -32,6 +32,55 @@ impl ItemStack {
             .as_ref()
             .is_none_or(|v| v.count <= 0 || v.item == ferraloom_data::Item::AIR)
     }
+    /// Port of ItemStack#getItem/typeHolder. Empty stacks expose AIR, retaining their payload.
+    pub fn item(&self) -> ferraloom_data::Item {
+        if self.is_empty() {
+            ferraloom_data::Item::AIR
+        } else {
+            self.0.as_ref().expect("nonempty").item
+        }
+    }
+    /// Port of ItemStack#getPrototype. Empty stacks have no prototype components.
+    pub fn prototype(&self) -> Result<&'static super::DataComponentMap> {
+        static EMPTY: super::DataComponentMap = super::DataComponentMap { entries: Vec::new() };
+        if self.is_empty() {
+            Ok(&EMPTY)
+        } else {
+            super::DataComponentMap::item_defaults(self.item())
+        }
+    }
+    /// Port of ItemStack#getComponentsPatch. The retained empty payload is not observable here.
+    pub fn components_patch(&self) -> &DataComponentPatch {
+        static EMPTY: DataComponentPatch = DataComponentPatch {
+            added: Vec::new(),
+            removed: Vec::new(),
+        };
+        if self.is_empty() {
+            &EMPTY
+        } else {
+            &self.0.as_ref().expect("nonempty").components
+        }
+    }
+    /// Port of DataComponentHolder#get over ItemStack#getComponents, without cloning the map.
+    pub fn component(&self, key: super::ComponentTypeId) -> Result<Option<&super::DataComponent>> {
+        let patch = self.components_patch();
+        if let Some(value) = patch.added.iter().rev().find(|v| v.component_type() == key) {
+            return Ok(Some(value));
+        }
+        if patch.removed.contains(&key) {
+            return Ok(None);
+        }
+        Ok(self.prototype()?.get(key))
+    }
+    /// Port of ItemStack#copyWithCount. A nonempty source retains its payload even at count zero.
+    pub fn copy_with_count(&self, count: i32) -> Self {
+        if self.is_empty() {
+            return Self::default();
+        }
+        let mut copy = self.clone();
+        copy.0.as_mut().expect("nonempty").count = count;
+        copy
+    }
     /// Port of ItemStack#isSameItemSameComponents; counts and map entry order are ignored.
     pub fn is_same_item_same_components(&self, other: &Self) -> Result<bool> {
         if self.is_empty() || other.is_empty() {
@@ -275,12 +324,8 @@ impl HashedStack {
 impl ItemStack {
     /// Resolve vanilla item defaults before applying additions and explicit removals.
     pub fn components(&self) -> Result<super::DataComponentMap> {
-        if self.is_empty() {
-            return Ok(super::DataComponentMap::default());
-        }
-        let value = self.0.as_ref().expect("nonempty");
-        let mut defaults = super::DataComponentMap::item_defaults(value.item)?.clone();
-        defaults.apply(&value.components);
+        let mut defaults = self.prototype()?.clone();
+        defaults.apply(self.components_patch());
         Ok(defaults)
     }
 }

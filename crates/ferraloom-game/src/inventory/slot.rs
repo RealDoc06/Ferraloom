@@ -157,10 +157,10 @@ impl Slot {
         self
     }
     pub fn may_place(&self, stack: &ItemStack, hooks: &dyn MenuHooks) -> Result<bool> {
-        let item = stack.0.as_ref().map(|s| s.item);
+        let item = stack.item();
         Ok(match self.kind {
             SlotKind::Normal | SlotKind::Offhand | SlotKind::EnchantmentItem => true,
-            SlotKind::Banner => item.is_some_and(|i| i.name().ends_with("_banner")),
+            SlotKind::Banner => item.name().ends_with("_banner"),
             SlotKind::GrindstoneInput => {
                 let c = stack.components()?;
                 (c.get(ComponentTypeId::MAX_DAMAGE).is_some() && c.get(ComponentTypeId::DAMAGE).is_some() && c.get(ComponentTypeId::UNBREAKABLE).is_none()) || [ComponentTypeId::ENCHANTMENTS,ComponentTypeId::STORED_ENCHANTMENTS].into_iter().any(|key| matches!(c.get(key),Some(DataComponent::Enchantments(v)|DataComponent::StoredEnchantments(v)) if !v.0.is_empty()))
@@ -186,20 +186,20 @@ impl Slot {
                 }
                 _ => false,
             },
-            SlotKind::ShulkerBox => !item.is_some_and(|i| i.name().ends_with("shulker_box")),
+            SlotKind::ShulkerBox => !item.name().ends_with("shulker_box"),
             SlotKind::FurnaceFuel => {
                 stack
                     .components()?
                     .get(ComponentTypeId::COOKING_FUEL)
                     .is_some()
-                    || item == Some(Item::BUCKET)
+                    || item == Item::BUCKET
             }
             SlotKind::BrewingBottle => hooks.may_place(self.kind, stack)?,
             SlotKind::BrewingFuel => stack
                 .components()?
                 .get(ComponentTypeId::BREWING_FUEL)
                 .is_some(),
-            SlotKind::Lapis => item == Some(Item::LAPIS_LAZULI),
+            SlotKind::Lapis => item == Item::LAPIS_LAZULI,
             SlotKind::Dye => stack.components()?.get(ComponentTypeId::DYE).is_some(),
             SlotKind::BannerPattern => stack
                 .components()?
@@ -207,7 +207,7 @@ impl Slot {
                 .is_some(),
             SlotKind::Map => stack.components()?.get(ComponentTypeId::MAP_ID).is_some(),
             SlotKind::MapAddition => {
-                matches!(item, Some(Item::PAPER | Item::MAP | Item::GLASS_PANE))
+                matches!(item, Item::PAPER | Item::MAP | Item::GLASS_PANE)
             }
             _ => hooks.may_place(self.kind, stack)?,
         })
@@ -236,9 +236,7 @@ impl Slot {
         }
     }
     pub fn max_stack_size(&self, container: &dyn Container, stack: &ItemStack) -> i32 {
-        if self.kind == SlotKind::FurnaceFuel
-            && stack.0.as_ref().is_some_and(|s| s.item == Item::BUCKET)
-        {
+        if self.kind == SlotKind::FurnaceFuel && stack.item() == Item::BUCKET {
             1
         } else {
             self.get_max_stack_size(container)

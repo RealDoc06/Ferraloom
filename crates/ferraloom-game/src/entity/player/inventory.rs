@@ -4,27 +4,14 @@ use ferraloom_data::registries::data_component_type::Id as ComponentType;
 use ferraloom_nbt::{ListTag, Tag};
 use ferraloom_protocol::{
     Result,
-    component::{DataComponent, DataComponentMap, EquipmentSlot, ItemStack, Persistent},
+    component::{DataComponent, EquipmentSlot, ItemStack, Persistent},
 };
 
 /// Access a stack's effective component without cloning its immutable prototype.
 pub fn component(stack: &ItemStack, key: ComponentType) -> Option<&DataComponent> {
-    let stack = stack.0.as_ref()?;
-    if let Some(value) = stack
-        .components
-        .added
-        .iter()
-        .rev()
-        .find(|v| v.component_type() == key)
-    {
-        return Some(value);
-    }
-    if stack.components.removed.contains(&key) {
-        return None;
-    }
-    DataComponentMap::item_defaults(stack.item)
+    stack
+        .component(key)
         .expect("generated vanilla item components")
-        .get(key)
 }
 pub fn count(stack: &ItemStack) -> i32 {
     if stack.is_empty() {
@@ -41,12 +28,7 @@ pub fn set_count(stack: &mut ItemStack, count: i32) {
     }
 }
 pub fn copy_with_count(stack: &ItemStack, amount: i32) -> ItemStack {
-    if stack.is_empty() {
-        return ItemStack::default();
-    }
-    let mut copy = stack.clone();
-    set_count(&mut copy, amount);
-    copy
+    stack.copy_with_count(amount)
 }
 pub fn split(stack: &mut ItemStack, amount: i32) -> ItemStack {
     let amount = amount.min(count(stack));
