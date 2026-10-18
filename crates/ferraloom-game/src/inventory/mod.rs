@@ -29,6 +29,7 @@ mod stack_runtime;
 mod stacks;
 mod sync;
 mod transfer;
+mod workstation_removed;
 
 pub(crate) use add::add_inventory_value;
 pub use add::{InventoryAddContext, add_inventory_stack, add_item_stack};

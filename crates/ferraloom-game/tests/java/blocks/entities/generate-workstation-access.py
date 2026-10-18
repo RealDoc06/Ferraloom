@@ -27,9 +27,19 @@ run([str(jdk / 'javac'), '-cp', cp, '-d', str(classes),
 run([str(jdk / 'java'), '-cp', cp, 'EntityVectors', 'generate', str(classes / 'EntityFixture.java')])
 run([str(jdk / 'javac'), '-cp', cp, '-d', str(classes),
      str(classes / 'EntityFixture.java'), str(tests / 'inventory/InventoryVectors.java'),
-     str(source / 'WorkstationAccessVectors.java')])
+     str(source / 'WorkstationAccessVectors.java'), str(source / 'WorkstationRemovedVectors.java')])
 output = run([str(jdk / 'java'), '-Xmx512m', '-cp', cp, 'WorkstationAccessVectors'])
 rows = [line for line in output.splitlines() if line.startswith('access\t')]
 assert len(rows) == 258, len(rows)
 (source / 'workstation-access.tsv').write_text('\n'.join(rows) + '\n')
 print(f'{len(rows)} native captured workstation access observations')
+output = run([str(jdk / 'java'), '-Xmx512m', '-Dnet.bytebuddy.experimental=true',
+              '-XX:+EnableDynamicAgentLoading', '-cp', cp, 'WorkstationRemovedVectors'])
+rows = [line for line in output.splitlines() if line.startswith('removed\t')]
+assert len(rows) == 84, len(rows)
+(source / 'workstation-removed.tsv').write_text('\n'.join(rows) + '\n')
+print(f'{len(rows)} native workstation close/return/drop observations')
+rows = [line for line in output.splitlines() if line.startswith('grid\t')]
+assert len(rows) == 4, len(rows)
+(source / 'workstation-grid.tsv').write_text('\n'.join(rows) + '\n')
+print(f'{len(rows)} native captured CraftingMenu slotsChanged/finish observations')

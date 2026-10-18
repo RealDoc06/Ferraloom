@@ -180,3 +180,70 @@ fn captured_dimension_mismatch_uses_evaluate_defaults_and_skips_execute() {
         .install_container_menu(menu);
     assert!(inventory::live_menu_still_valid(player, receiver, &level).unwrap());
 }
+
+#[test]
+fn crafting_grid_callbacks_match_native_access_and_placement_brackets() {
+    use crate::inventory::{Container, ItemStack};
+    use ferraloom_data::Item;
+    fn result_packets(level: &mut Level) -> String {
+        level
+            .take_effects()
+            .into_iter()
+            .filter_map(|effect| {
+                let LevelEffect::PlayerPacket { packet, .. } = effect else {
+                    return None;
+                };
+                let cb::Packet::ContainerSetSlot(packet) = *packet else {
+                    return None;
+                };
+                assert!(packet.item_stack.is_empty());
+                Some(format!("result:{}:{}:-", packet.state_id.0, packet.slot))
+            })
+            .collect::<Vec<_>>()
+            .join(";")
+    }
+    let (mut services, _) = fixture();
+    crate::level::drop_fixtures::install(&mut services);
+    let resources = services.container_resources().unwrap();
+    let mut cases = 0;
+    for row in include_str!("../../../tests/java/blocks/entities/workstation-grid.tsv").lines() {
+        let f: Vec<_> = row.split('\t').collect();
+        let (mut level, player) = fixture();
+        level.set_container_resources(resources.clone(), 0);
+        let mut menu = if f[1] == "true" {
+            AbstractContainerMenu::new_bound_workstation(MenuKind::Crafting, 7, POS, &level)
+                .unwrap()
+        } else {
+            AbstractContainerMenu::new(MenuKind::Crafting, 7).unwrap()
+        };
+        menu.local[1].set_item(0, ItemStack::new(Item::DIAMOND, 2, Default::default()));
+        menu.placing_recipe = f[2] == "true";
+        let receiver = level
+            .entity_mut::<ServerPlayer>(player)
+            .unwrap()
+            .menus
+            .install_container_menu(menu);
+        level.take_effects();
+        inventory::refresh_live_crafting_result(player, receiver, false, &mut level).unwrap();
+        let events = result_packets(&mut level);
+        assert_eq!(events, f[3], "{row}");
+        let owner = level.entity_mut::<ServerPlayer>(player).unwrap();
+        let menu = owner.menus.menu_mut(receiver).unwrap();
+        assert_eq!(menu.local[1].get_item(0).is_empty(), f[4] == "-", "{row}");
+        menu.placing_recipe = false;
+        super::super::live_crafting::refresh_live_crafting_result_with_hint(
+            player, receiver, false, None, &mut level,
+        )
+        .unwrap();
+        let finish = result_packets(&mut level);
+        let all = if events.is_empty() {
+            finish
+        } else {
+            format!("{events};{finish}")
+        };
+        assert_eq!(all, f[5], "{row}");
+        assert_eq!(f[6], "-", "{row}");
+        cases += 1;
+    }
+    assert_eq!(cases, 4);
+}
