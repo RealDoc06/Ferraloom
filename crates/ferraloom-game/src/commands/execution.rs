@@ -231,21 +231,27 @@ mod tests {
                 context.increment_cost();
                 context.queue_next(CommandQueueEntry::new(
                     child_frame.clone(),
-                    |context, _, host| {
+                    |context, _, host: &mut Vec<i32>| {
                         host.push(2);
                         context.increment_cost();
                     },
                 ));
-                context.queue_next(CommandQueueEntry::new(child_frame, |context, _, host| {
-                    host.push(3);
-                    context.increment_cost();
-                }));
+                context.queue_next(CommandQueueEntry::new(
+                    child_frame,
+                    |context, _, host: &mut Vec<i32>| {
+                        host.push(3);
+                        context.increment_cost();
+                    },
+                ));
             },
         ));
-        context.queue_next(CommandQueueEntry::new(frame, |context, _, host| {
-            host.push(4);
-            context.increment_cost();
-        }));
+        context.queue_next(CommandQueueEntry::new(
+            frame,
+            |context, _, host: &mut Vec<i32>| {
+                host.push(4);
+                context.increment_cost();
+            },
+        ));
         let mut host = Vec::new();
         assert_eq!(context.run_command_queue(&mut host), QueueResult::Complete);
         assert_eq!(host, [1, 2, 3, 4]);
@@ -268,7 +274,10 @@ mod tests {
                 host.push(7);
             },
         ));
-        context.queue_next(CommandQueueEntry::new(frame, |_, _, host| host.push(99)));
+        context.queue_next(CommandQueueEntry::new(
+            frame,
+            |_, _, host: &mut Vec<i32>| host.push(99),
+        ));
         let mut host = Vec::new();
         assert_eq!(
             context.run_command_queue(&mut host),
