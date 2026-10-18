@@ -1718,12 +1718,15 @@ impl MinecraftServer {
                 1,
             )
             .map_err(|_| exceptions::error("command.failed", &[]))?;
+            self.level
+                .level
+                .set_entity_pos(*target, plan.position)
+                .map_err(|_| exceptions::error("argument.entity.notfound.entity", &[]))?;
             let player = self
                 .level
                 .level
                 .entity_mut::<ServerPlayer>(*target)
                 .map_err(|_| exceptions::error("argument.entity.notfound.entity", &[]))?;
-            player.position = plan.position;
             player.first_good = plan.position;
             player.last_good = plan.position;
             player.yaw = plan.rotation.yaw;
