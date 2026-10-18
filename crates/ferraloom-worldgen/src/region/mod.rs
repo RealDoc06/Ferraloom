@@ -135,6 +135,19 @@ pub struct StructureEntitySpawnFlags {
 /// extracted collision shapes cannot answer survival or neighbor shape queries.
 pub trait WorldgenBlockBehavior: Sync {
     // --- structures family ---
+    /// Create an elder guardian with STRUCTURE reason; heal it to max health,
+    /// snap to the supplied position with zero yaw/pitch, finalizeSpawn, and add
+    /// with passengers. False means EntityType#create returned null.
+    fn spawn_monument_elder(
+        &self,
+        _region: &mut WorldGenRegion<'_>,
+        _position: [f64; 3],
+    ) -> Result<bool, Error> {
+        Err(Error(
+            "Unsupported: monument elder guardian creation".into(),
+        ))
+    }
+
     /// Mansion allay markers create every mob before finalizing any of them.
     /// For each non-null mob: persistence, bottom-center snap with zero rotation,
     /// STRUCTURE finalizeSpawn, addFreshEntityWithPassengers, then clear the marker
@@ -624,6 +637,10 @@ impl<'a> WorldGenRegion<'a> {
             .ok_or_else(|| Error("Unsupported: WorldGenRegion random stream is unset".into()))
     }
     // --- structures family ---
+    pub fn spawn_monument_elder(&mut self, position: [f64; 3]) -> Result<bool, Error> {
+        self.behavior.spawn_monument_elder(self, position)
+    }
+
     pub fn spawn_mansion_allays(&mut self, position: [i32; 3], count: i32) -> Result<(), Error> {
         self.behavior.spawn_mansion_allays(self, position, count)
     }
