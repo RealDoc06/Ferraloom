@@ -139,14 +139,23 @@ fn unsupported_and_mismatched_factories_do_not_fabricate_data() {
 fn ticker_add_remove_and_rebind_preserve_phase_membership() {
     use ticking::BlockEntityTickers;
     let mut tickers = BlockEntityTickers::default();
-    let a = BlockEntityRef(BlockPos::new(0, 0, 0));
-    let b = BlockEntityRef(BlockPos::new(1, 0, 0));
-    let c = BlockEntityRef(BlockPos::new(2, 0, 0));
+    let a = BlockEntityRef {
+        pos: BlockPos::new(0, 0, 0),
+        generation: 1,
+    };
+    let b = BlockEntityRef {
+        pos: BlockPos::new(1, 0, 0),
+        generation: 2,
+    };
+    let c = BlockEntityRef {
+        pos: BlockPos::new(2, 0, 0),
+        generation: 3,
+    };
     let first = tickers.bind(a, BlockEntityType::FURNACE);
     let old = tickers.bind(b, BlockEntityType::FURNACE);
     tickers.begin_phase();
     assert_eq!(tickers.next_ticker().unwrap().entity, a);
-    tickers.unbind(b.0);
+    tickers.unbind(b.pos);
     tickers.bind(b, BlockEntityType::SMOKER);
     tickers.bind(c, BlockEntityType::FURNACE);
     assert!(tickers.next_ticker().is_none());

@@ -52,6 +52,21 @@ impl ShulkerBoxBlockEntity {
 pub struct StorageBehavior;
 pub static STORAGE_ENTITY: StorageBehavior = StorageBehavior;
 impl BlockEntity for StorageBehavior {
+    fn pre_remove_side_effects(
+        &self,
+        entity: crate::block::entity::BlockEntityRef,
+        level: &mut crate::level::Level,
+    ) -> Result<(), crate::level::LevelError> {
+        let state = level.get_block_state(entity.pos)?;
+        if state.block().block_entity_type()
+            == Some(crate::block::entity::BlockEntityType::SHULKER_BOX)
+        {
+            return Ok(());
+        }
+        Err(crate::level::LevelError::UnsupportedBlockEntity(
+            state.block(),
+        ))
+    }
     fn load_additional(&self, state: &mut BlockEntityState, tag: &CompoundTag) {
         state
             .randomizable_mut()

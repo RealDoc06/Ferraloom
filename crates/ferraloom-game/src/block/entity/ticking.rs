@@ -30,7 +30,7 @@ impl BlockEntityTickers {
     /// creates a fresh wrapper and therefore waits when called during a phase.
     pub fn bind(&mut self, entity: BlockEntityRef, kind: BlockEntityType) -> TickerId {
         let binding = Some(TickingBlockEntity { entity, kind });
-        if let Some(id) = self.at_position.get(&entity.0).copied() {
+        if let Some(id) = self.at_position.get(&entity.pos).copied() {
             self.wrappers.get_mut(&id).expect("live wrapper").binding = binding;
             return id;
         }
@@ -41,7 +41,7 @@ impl BlockEntityTickers {
             .expect("block entity ticker identities exhausted");
         self.wrappers
             .insert(id, RebindableTickingBlockEntityWrapper { binding });
-        self.at_position.insert(entity.0, id);
+        self.at_position.insert(entity.pos, id);
         if self.cursor.is_some() {
             self.pending.push(id);
         } else {
