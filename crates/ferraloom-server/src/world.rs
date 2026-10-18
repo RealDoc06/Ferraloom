@@ -170,9 +170,17 @@ impl ChunkLight {
 }
 pub struct LitChunk {
     /// Delta relighting never completes or resets a generation request.
-    pub initialized: Option<(u64, ChunkPos)>,
+    pub initialized: Option<GenerationLightInitialization>,
     pub updates: BTreeMap<i64, ChunkLight>,
     pub dirty: BTreeMap<i64, LightDirtySections>,
+}
+/// The actor may already hold a newer neighbor import than the center request.
+/// Report the installed generation revision, not the incoming request revision.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct GenerationLightInitialization {
+    pub request: u64,
+    pub pos: ChunkPos,
+    pub(crate) revision: GenerationRevision,
 }
 enum LightJob {
     Initialize {
@@ -340,7 +348,14 @@ fn run_light_worker(
                         lighted: true,
                     },
                 );
-                (Some((request, pos)), changes)
+                (
+                    Some(GenerationLightInitialization {
+                        request,
+                        pos,
+                        revision: known.map_or(revision, |known| known.revision.max(revision)),
+                    }),
+                    changes,
+                )
             }
             LightJob::Unload { pos } => {
                 imported.remove(&pos.pack());
@@ -377,7 +392,7 @@ fn run_light_worker(
         };
         let mut affected = std::collections::BTreeSet::new();
         let mut dirty = BTreeMap::<i64, LightDirtySections>::new();
-        if let Some((_, pos)) = initialized {
+        if let Some(GenerationLightInitialization { pos, .. }) = initialized {
             full_chunks.insert(pos);
             affected.insert(pos.pack());
             lights.entry(pos.pack()).or_default();
@@ -2145,7 +2160,14 @@ mod light_worker_tests {
         })
         .unwrap();
         let first_result = results.blocking_recv().unwrap();
-        assert_eq!(first_result.initialized, Some((0, first)));
+        assert_eq!(
+            first_result.initialized,
+            Some(GenerationLightInitialization {
+                request: 0,
+                pos: first,
+                revision: GenerationRevision(2)
+            })
+        );
         assert_eq!(first_result.updates[&second.pack()].block[&0][68] & 15, 15);
         send.send(LightJob::Initialize {
             request: 1,
@@ -2157,7 +2179,14 @@ mod light_worker_tests {
         })
         .unwrap();
         let promoted = results.blocking_recv().unwrap();
-        assert_eq!(promoted.initialized, Some((1, second)));
+        assert_eq!(
+            promoted.initialized,
+            Some(GenerationLightInitialization {
+                request: 1,
+                pos: second,
+                revision: GenerationRevision(2)
+            })
+        );
         assert_eq!(promoted.updates[&second.pack()].block[&0][68] & 15, 15);
         send.send(LightJob::Changed {
             chunks: vec![(second, vec![empty])],
@@ -2205,7 +2234,14 @@ mod light_worker_tests {
             neighbors: Vec::new(),
         })
         .unwrap();
-        assert_eq!(results.blocking_recv().unwrap().initialized, Some((7, pos)));
+        assert_eq!(
+            results.blocking_recv().unwrap().initialized,
+            Some(GenerationLightInitialization {
+                request: 7,
+                pos,
+                revision: GenerationRevision(1)
+            })
+        );
         let source = BlockPos::new(8, 64, 8);
         sections[8].set_block_state(8, 0, 8, Block::GLOWSTONE.default_state());
         send.send(LightJob::Changed {
@@ -2703,6 +2739,7 @@ mod generation_order_tests {
         let publish_pos = ChunkPos::new(64, 0);
         let publish_request = publishing.chunks.request(publish_pos).unwrap();
         let mut terrain = output(publish_pos, "publication").terrain;
+        terrain.revision = GenerationRevision(7);
         terrain.disk.entities = Some(vec![
             ferraloom_nbt::parse_compound(
                 "{id:\"minecraft:tnt\",UUID:[I;1,2,3,4],Pos:[1024.5d,0.0d,0.5d],Motion:[0d,0d,0d],Rotation:[0f,0f]}",
@@ -2718,6 +2755,32 @@ mod generation_order_tests {
         .unwrap_err();
         assert!(failure.to_string().contains("MissingBlockTags"));
         assert_eq!(publishing.level.next_entity_id(), 2);
+        let light = |revision| LitChunk {
+            initialized: Some(GenerationLightInitialization {
+                request: publish_request,
+                pos: publish_pos,
+                revision: GenerationRevision(revision),
+            }),
+            updates: BTreeMap::from([(publish_pos.pack(), ChunkLight::default())]),
+            dirty: BTreeMap::new(),
+        };
+        assert!(
+            crate::server::generation_completion::integrate_light(
+                &mut publishing,
+                &mut world,
+                light(6),
+            )
+            .is_err()
+        );
+        assert!(!world.lights.contains_key(&publish_pos.pack()));
+        crate::server::generation_completion::integrate_light(
+            &mut publishing,
+            &mut world,
+            light(7),
+        )
+        .unwrap();
+        assert!(world.lights.contains_key(&publish_pos.pack()));
+        assert!(!world.light_ready.contains(&publish_pos));
         publishing
             .level
             .set_block_tags(world.generator.data().block_tags.clone());
@@ -2729,6 +2792,8 @@ mod generation_order_tests {
         .unwrap();
         assert_eq!(publishing.level.next_entity_id(), 2);
         assert_eq!(publishing.level.take_entity_management_events().len(), 1);
+        assert!(world.light_ready.contains(&publish_pos));
+        assert!(!world.ready.contains(&publish_pos));
         assert_eq!(
             publishing.chunks.holders[&publish_pos.pack()].status,
             ChunkStatus::Full

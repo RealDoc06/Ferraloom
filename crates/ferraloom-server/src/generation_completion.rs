@@ -14,6 +14,7 @@ pub(crate) struct PromotionContinuation {
     entity_failure: Option<String>,
     attached: bool,
     complete: bool,
+    center_light_installed: bool,
 }
 
 pub(crate) fn integrate_metadata(level: &mut ServerLevel, world: &mut World) -> Result<()> {
@@ -63,6 +64,7 @@ pub(crate) fn integrate_terrain(
             entity_failure: None,
             attached: false,
             complete: false,
+            center_light_installed: false,
         });
     resume_terrain(level, world, request)
 }
@@ -166,28 +168,60 @@ pub(crate) fn resume_terrain(
     let continuation = world.full_promotions.get_mut(&request).unwrap();
     if result.is_ok() {
         continuation.complete = true;
+        if continuation.center_light_installed {
+            world.light_ready.insert(identity.pos);
+        }
     } else {
         continuation.input = Some(terrain);
     }
     result
 }
 
-fn integrate_light(level: &mut ServerLevel, world: &mut World, light: LitChunk) -> Result<()> {
-    if let Some((request, pos)) = light.initialized {
-        let holder = level
+pub(crate) fn integrate_light(
+    level: &mut ServerLevel,
+    world: &mut World,
+    light: LitChunk,
+) -> Result<()> {
+    let initialized = light.initialized.filter(|initialized| {
+        level
             .chunks
             .holders
-            .get_mut(&pos.pack())
-            .context("unknown light job")?;
-        ensure!(holder.request_id == request, "stale light completion");
-        holder.status = ChunkStatus::Full;
-        world.light_ready.insert(pos);
+            .get(&initialized.pos.pack())
+            .is_some_and(|holder| {
+                world
+                    .full_promotions
+                    .get(&initialized.request)
+                    .is_some_and(|continuation| {
+                        continuation.identity.matches(holder)
+                            && continuation.identity.pos == initialized.pos
+                    })
+            })
+    });
+    if let Some(initialized) = initialized {
+        let continuation = &world.full_promotions[&initialized.request];
+        ensure!(
+            initialized.revision >= continuation.light_revision,
+            "older center light import"
+        );
+        ensure!(
+            light.updates.contains_key(&initialized.pos.pack()),
+            "center light import missing its snapshot"
+        );
     }
     for (key, data) in light.updates {
         level
             .level
             .set_light_snapshot(ChunkPos::unpack(key), data.snapshot());
         world.lights.insert(key, data);
+    }
+    // Publish completion only after the canonical center snapshot is installed.
+    // LIGHT deltas cannot mark an unfinished or failed FULL publication ready.
+    if let Some(initialized) = initialized {
+        let continuation = world.full_promotions.get_mut(&initialized.request).unwrap();
+        continuation.center_light_installed = true;
+        if continuation.complete {
+            world.light_ready.insert(initialized.pos);
+        }
     }
     for (key, mask) in light.dirty {
         world.light_chunks_to_broadcast.insert(key);
