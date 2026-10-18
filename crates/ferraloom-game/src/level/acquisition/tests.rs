@@ -260,6 +260,42 @@ fn cached_absence_is_retained_for_false_and_bypassed_for_true() {
 }
 
 #[test]
+fn managed_distance_updates_invalidate_other_cached_absence() {
+    let level = crate::level::Level::new(
+        crate::level::Region::new(&crate::Behaviors::EMPTY),
+        crate::level::LevelContext::fixture(0, 63),
+    );
+    let cache = ChunkAcquisition::default();
+    let driver = Driver::new(None);
+    assert_eq!(
+        cache.get_chunk(&driver, &level, POS, ChunkStatus::Full, false),
+        Ok(None)
+    );
+    driver.level.set(Some(33));
+    driver.remaining.set(1);
+    driver
+        .steps
+        .borrow_mut()
+        .push_back(AcquireProgress::DistanceUpdates);
+    cache
+        .get_chunk(
+            &driver,
+            &level,
+            ChunkPos::new(1, 0),
+            ChunkStatus::Full,
+            false,
+        )
+        .unwrap();
+    assert!(
+        cache
+            .get_chunk(&driver, &level, POS, ChunkStatus::Full, false)
+            .unwrap()
+            .is_some()
+    );
+    assert_eq!(driver.requests.get(), 2);
+}
+
+#[test]
 fn false_can_managed_block_without_a_ticket_and_wait_only_after_idle() {
     let level = crate::level::Level::new(
         crate::level::Region::new(&crate::Behaviors::EMPTY),
