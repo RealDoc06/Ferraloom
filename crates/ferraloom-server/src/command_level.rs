@@ -276,18 +276,24 @@ impl MinecraftServer {
         }
         Ok(())
     }
-    pub(super) async fn save_command_tickets(&self) -> Result<()> {
+    /// Capture owned save data before constructing IO, keeping the live level's
+    /// single-owner lazy caches out of the Send future.
+    pub(super) fn save_command_tickets(
+        &self,
+    ) -> impl std::future::Future<Output = Result<()>> + Send + 'static {
         let storage =
             ferraloom_storage::SavedDataStorage::new(self.world.access.path().join("data"));
         let mut data = ferraloom_storage::SavedData::new(self.level.tickets.clone());
-        tokio::task::spawn_blocking(move || {
-            storage.save(
-                ferraloom_game::level::tickets::TicketStorage::STORAGE_ID,
-                &mut data,
-            )
-        })
-        .await??;
-        Ok(())
+        async move {
+            tokio::task::spawn_blocking(move || {
+                storage.save(
+                    ferraloom_game::level::tickets::TicketStorage::STORAGE_ID,
+                    &mut data,
+                )
+            })
+            .await??;
+            Ok(())
+        }
     }
 }
 pub(super) fn load_command_tickets(level: &mut ServerLevel, world: &World) -> Result<()> {
