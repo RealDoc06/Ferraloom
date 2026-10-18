@@ -15,7 +15,10 @@ pub mod spawn;
 pub mod teleport;
 mod tree;
 use arguments::{ArgumentValue, coordinates::Coordinates};
-use ferraloom_brigadier::{CommandDispatcher, CommandSyntaxException, NodeKind};
+use ferraloom_brigadier::{
+    CommandContext, CommandDispatcher, CommandSyntaxException, ContextChain, ExceptionKind,
+    NodeKind,
+};
 use ferraloom_protocol::play;
 use ferraloom_util::Vec3;
 pub use source::CommandSourceStack;
@@ -35,8 +38,25 @@ pub struct PreparedCommand {
     pub command: String,
     pub literals: Vec<String>,
     pub arguments: BTreeMap<String, ArgumentValue>,
+    pub continuation: Option<Box<PreparedCommand>>,
 }
 impl PreparedCommand {
+    pub fn message_argument(&self) -> Option<(&str, &arguments::Message)> {
+        self.arguments
+            .iter()
+            .find_map(|(name, value)| {
+                if let ArgumentValue::Message(message) = value {
+                    Some((name.as_str(), message))
+                } else {
+                    None
+                }
+            })
+            .or_else(|| {
+                self.continuation
+                    .as_deref()
+                    .and_then(Self::message_argument)
+            })
+    }
     pub fn argument(&self, name: &str) -> Option<&ArgumentValue> {
         self.arguments.get(name)
     }
@@ -89,10 +109,35 @@ impl Commands {
     ) -> Result<PreparedCommand, CommandSyntaxException> {
         let text = Self::trim_optional_prefix(text);
         let parse = self.dispatcher.parse(text, source);
-        self.dispatcher.execute_parsed(&parse)?;
+        // Commands#finishParsing validates the chain; execution belongs to the live call site.
+        if parse.reader.can_read() {
+            return Err(if parse.exceptions.len() == 1 {
+                parse.exceptions[0].1.clone()
+            } else {
+                parse.reader.error(
+                    if parse.context.range.is_empty() {
+                        ExceptionKind::UnknownCommand
+                    } else {
+                        ExceptionKind::UnknownArgument
+                    },
+                    &[],
+                )
+            });
+        }
+        if ContextChain::try_flatten(&parse.context).is_none() {
+            return Err(parse.reader.error(ExceptionKind::UnknownCommand, &[]));
+        }
+        Ok(self.prepared_context(&parse.context, text))
+    }
+    fn prepared_context(
+        &self,
+        root: &CommandContext<CommandSourceStack>,
+        text: &str,
+    ) -> PreparedCommand {
         let mut literals = Vec::new();
         let mut arguments = BTreeMap::new();
-        let mut context = &parse.context;
+        let mut context = root;
+        let mut continuation = None;
         loop {
             for parsed in &context.nodes {
                 let node = self.dispatcher.node(parsed.node);
@@ -106,6 +151,12 @@ impl Commands {
                 }
             }
             if let Some(child) = context.child.as_deref() {
+                if literals.first().is_some_and(|literal| literal == "return")
+                    && child.root_node == self.dispatcher.root()
+                {
+                    continuation = Some(Box::new(self.prepared_context(child, text)));
+                    break;
+                }
                 context = child;
             } else {
                 break;
@@ -118,13 +169,14 @@ impl Commands {
             name => name,
         }
         .to_owned();
-        Ok(PreparedCommand {
-            source: (*parse.context.source).clone(),
+        PreparedCommand {
+            source: (*root.source).clone(),
             input: text.into(),
             command,
             literals,
             arguments,
-        })
+            continuation,
+        }
     }
     /// Compatibility bridge for the already-running server while command hosts migrate.
     pub fn parse(
@@ -132,14 +184,16 @@ impl Commands {
         text: &str,
         source: CommandSourceStack,
     ) -> Result<CommandAction, CommandSyntaxException> {
-        let prepared = self.prepare(text, source)?;
-        Ok(match prepared.command.as_str() {
+        Ok(Self::action(self.prepare(text, source)?))
+    }
+    pub fn action(prepared: PreparedCommand) -> CommandAction {
+        match prepared.command.as_str() {
             "stop" => CommandAction::Stop,
             "save-all" => CommandAction::Save {
                 flush: prepared.literals.iter().any(|s| s == "flush"),
             },
             _ => CommandAction::Run(Box::new(prepared)),
-        })
+        }
     }
     /// Port of HelpCommand, using Brigadier's smart usage and original reader text.
     pub fn help(

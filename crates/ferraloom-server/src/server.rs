@@ -1160,24 +1160,13 @@ impl MinecraftServer {
                         return Ok(());
                     }
                 };
-                if let Some((argument_name, message)) =
-                    prepared.arguments.iter().find_map(|(name, value)| {
-                        if let ferraloom_game::commands::arguments::ArgumentValue::Message(
-                            message,
-                        ) = value
-                        {
-                            Some((name, message))
-                        } else {
-                            None
-                        }
-                    })
-                {
+                if let Some((argument_name, message)) = prepared.message_argument() {
                     let content = message.text.clone();
                     let signature = p
                         .argument_signatures
                         .0
                         .iter()
-                        .find(|argument| argument.name.0 == *argument_name)
+                        .find(|argument| argument.name.0 == argument_name)
                         .map(|argument| argument.signature.clone());
                     if !p.argument_signatures.0.is_empty()
                         && (p.argument_signatures.0.len() != 1 || signature.is_none())
@@ -1221,7 +1210,7 @@ impl MinecraftServer {
                             return Ok(());
                         }
                     };
-                    c.command_message = Some((argument_name.clone(), validated));
+                    c.command_message = Some((argument_name.to_owned(), validated));
                 } else {
                     ensure!(
                         p.argument_signatures.0.is_empty(),
@@ -1803,56 +1792,95 @@ impl MinecraftServer {
                 )]);
             }
         }
-        let action = match self.commands.parse(text, stack.clone()) {
-            Ok(action) => action,
+        let prepared = match self.commands.prepare(text, stack.clone()) {
+            Ok(command) => command,
             Err(error) => {
                 self.command_syntax_failure(source, &stack, &error, text);
                 return Ok(());
             }
         };
-        match action {
-            CommandAction::Run(command) => {
-                if let Err(error) = self.run_builtin(source, *command) {
-                    self.command_failure(
-                        source,
-                        &stack,
-                        ferraloom_game::commands::exceptions::error_component(&error),
+        use ferraloom_game::{
+            commands::{
+                execution::{self, ExecutionContext, QueueResult},
+                source::CommandResultCallback,
+            },
+            gamerules::GameRule,
+        };
+        let mut queue = ExecutionContext::new(
+            self.game_rules
+                .integer(GameRule::MaxCommandSequenceLength)
+                .max(1),
+            self.game_rules.integer(GameRule::MaxCommandForks),
+        );
+        let frame = queue.top_frame(CommandResultCallback::default());
+        execution::queue_command(&mut queue, frame, prepared, false);
+        let mut pending = None;
+        loop {
+            match queue.run_next(&mut pending) {
+                Ok(false) => break,
+                Err(QueueResult::CommandLimit) => {
+                    println!(
+                        "Command execution stopped due to limit (executed {} commands)",
+                        queue.command_limit()
                     );
-                    stack.callback.on_failure();
+                    break;
                 }
+                Err(QueueResult::QueueOverflow) => {
+                    eprintln!("Command execution stopped due to command queue overflow (max {})", ExecutionContext::<Option<ferraloom_game::commands::PreparedCommand>>::MAX_QUEUE_DEPTH);
+                    break;
+                }
+                Err(QueueResult::Complete) => unreachable!(),
+                Ok(true) => {}
             }
-            CommandAction::Stop => {
-                self.command_success(
-                    source,
-                    &stack,
-                    Component::translatable("commands.stop.stopping", vec![]),
-                    true,
-                );
-                self.stop = true;
-                stack.callback.on_success(1);
-            }
-            CommandAction::Save { flush } => {
-                self.command_success(
-                    source,
-                    &stack,
-                    Component::translatable("commands.save.saving", vec![]),
-                    false,
-                );
-                if self.save_all(flush, true).await.is_ok() {
+            let Some(prepared) = pending.take() else {
+                continue;
+            };
+            let stack = prepared.source.clone();
+            let action = Commands::action(prepared);
+            match action {
+                CommandAction::Run(command) => {
+                    if let Err(error) = self.run_builtin(source, *command) {
+                        self.command_failure(
+                            source,
+                            &stack,
+                            ferraloom_game::commands::exceptions::error_component(&error),
+                        );
+                        stack.callback.on_failure();
+                    }
+                }
+                CommandAction::Stop => {
                     self.command_success(
                         source,
                         &stack,
-                        Component::translatable("commands.save.success", vec![]),
+                        Component::translatable("commands.stop.stopping", vec![]),
                         true,
                     );
+                    self.stop = true;
                     stack.callback.on_success(1);
-                } else {
-                    self.command_failure(
+                }
+                CommandAction::Save { flush } => {
+                    self.command_success(
                         source,
                         &stack,
-                        Component::translatable("commands.save.failed", vec![]),
+                        Component::translatable("commands.save.saving", vec![]),
+                        false,
                     );
-                    stack.callback.on_failure();
+                    if self.save_all(flush, true).await.is_ok() {
+                        self.command_success(
+                            source,
+                            &stack,
+                            Component::translatable("commands.save.success", vec![]),
+                            true,
+                        );
+                        stack.callback.on_success(1);
+                    } else {
+                        self.command_failure(
+                            source,
+                            &stack,
+                            Component::translatable("commands.save.failed", vec![]),
+                        );
+                        stack.callback.on_failure();
+                    }
                 }
             }
         }
