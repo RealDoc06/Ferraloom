@@ -5,7 +5,7 @@ use crate::{
     entity::player::ServerPlayer,
     level::{Level, LevelError, effects::LevelEffect},
 };
-use ferraloom_data::{BlockClass, BlockState, Item, registries::sound_event::Id as SoundEvent};
+use ferraloom_data::{BlockClass, BlockState, registries::sound_event::Id as SoundEvent};
 use ferraloom_protocol::{
     chat::{ClickEvent, Component, Contents, TextColor},
     play::{BlockStateId, SignTextSlot, SoundSource, clientbound as cb},

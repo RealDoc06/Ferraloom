@@ -1,6 +1,6 @@
 //! ServerGamePacketListenerImpl's canonical block interaction packet paths.
 use super::*;
-use ferraloom_data::{Item, registries::data_component_type::Id as ComponentType};
+use ferraloom_data::registries::data_component_type::Id as ComponentType;
 use ferraloom_game::{
     advancements::criteria,
     block::{InteractionResult, UseContext, interaction::SwingSource},
