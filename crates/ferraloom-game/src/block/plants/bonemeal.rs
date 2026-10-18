@@ -107,6 +107,7 @@ pub fn bonemealable_behavior(block: Block) -> Option<&'static dyn BonemealableBl
             | C::TorchflowerCropBlock
             | C::TallGrassBlock
             | C::ShortDryGrassBlock
+            | C::TallDryGrassBlock
             | C::SweetBerryBushBlock
             | C::BushBlock
             | C::SeagrassBlock
@@ -230,10 +231,15 @@ impl BonemealableBlock for PlantBonemeal {
                 && inside_height(level, pos.above(1))),
             C::SeagrassBlock => Ok(level.get_block_state(pos.above(1))?.block() == Block::WATER),
             C::CaveVinesBlock | C::CaveVinesPlantBlock => Ok(state.get(p::BERRIES) == Some(false)),
-            C::BushBlock | C::FireflyBushBlock => {
+            C::BushBlock | C::FireflyBushBlock | C::TallDryGrassBlock => {
+                let target = if state.block().class() == C::TallDryGrassBlock {
+                    Block::SHORT_DRY_GRASS.default_state()
+                } else {
+                    state
+                };
                 for &d in Plane::Horizontal.faces() {
                     let at = pos.relative(d, 1);
-                    if level.get_block_state(at)?.is_air() && level.can_survive(state, at)? {
+                    if level.get_block_state(at)?.is_air() && level.can_survive(target, at)? {
                         return Ok(true);
                     }
                 }
@@ -387,8 +393,16 @@ impl BonemealableBlock for PlantBonemeal {
                     UpdateFlags::CLIENTS,
                 )?;
             }
-            C::BushBlock | C::FireflyBushBlock => {
-                let mut directions = Plane::Horizontal.faces().to_vec();
+            C::BushBlock | C::FireflyBushBlock | C::TallDryGrassBlock => {
+                let target = if state.block().class() == C::TallDryGrassBlock {
+                    Block::SHORT_DRY_GRASS.default_state()
+                } else {
+                    state
+                };
+                let mut directions: [ferraloom_util::Direction; 4] = Plane::Horizontal
+                    .faces()
+                    .try_into()
+                    .expect("four horizontal faces");
                 for i in (2..=directions.len()).rev() {
                     let j = level.random()?.next_int_bound(i as i32) as usize;
                     directions.swap(i - 1, j);
@@ -396,9 +410,9 @@ impl BonemealableBlock for PlantBonemeal {
                 for d in directions {
                     let at = pos.relative(d, 1);
                     if level.get_block_state(at)?.is_air()
-                        && level.as_reader().can_survive(state, at)?
+                        && level.as_reader().can_survive(target, at)?
                     {
-                        level.set_block(at, state.block().default_state(), UpdateFlags::ALL)?;
+                        level.set_block(at, target.block().default_state(), UpdateFlags::ALL)?;
                         break;
                     }
                 }
