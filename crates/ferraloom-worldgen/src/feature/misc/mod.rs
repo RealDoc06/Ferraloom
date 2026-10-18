@@ -123,6 +123,23 @@ fn decode_selector(v: &Value, l: &mut FeatureLoader<'_>) -> Result<Arc<dyn Featu
     Ok(Arc::new(selector))
 }
 impl Feature for Selector {
+    fn sub_features(&self) -> Vec<&PlacedFeature> {
+        match self {
+            Self::Boolean { yes, no } => vec![yes.as_ref(), no.as_ref()],
+            Self::Random { features, default } => features
+                .iter()
+                .map(|(feature, _)| feature.as_ref())
+                .chain(std::iter::once(default.as_ref()))
+                .collect(),
+            Self::Weighted { features, .. } => features
+                .iter()
+                .map(|(feature, _)| feature.as_ref())
+                .collect(),
+            Self::Simple(features) | Self::Sequence(features) => {
+                features.iter().map(Arc::as_ref).collect()
+            }
+        }
+    }
     fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
         match self {
             Self::Boolean { yes, no } => if ctx.random()?.next_boolean() {
