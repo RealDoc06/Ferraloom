@@ -759,3 +759,27 @@ fn strict_is_default_and_warn_records_each_skipped_call_without_query_fallbacks(
     );
     assert_eq!(level.unported_behavior_stats().skipped_calls, 3);
 }
+
+#[test]
+fn falling_sand_stays_on_a_waterlogged_solid_block() {
+    let mut level = flat_pool();
+    let pos = BlockPos::new(8, 0, 8);
+    let wet_slab = Block::OAK_SLAB
+        .default_state()
+        .with(ferraloom_data::properties::WATERLOGGED, true)
+        .unwrap();
+    level.set_block_state(pos.below(1), wet_slab).unwrap();
+    level
+        .set_block_state(pos, Block::SAND.default_state())
+        .unwrap();
+    level
+        .block_behavior(Block::SAND)
+        .unwrap()
+        .tick(Block::SAND.default_state(), pos, &mut level)
+        .unwrap();
+    assert_eq!(
+        level.get_block_state(pos).unwrap(),
+        Block::SAND.default_state()
+    );
+    assert!(level.take_effects().is_empty());
+}

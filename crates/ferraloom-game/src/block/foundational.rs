@@ -32,7 +32,7 @@ impl BlockBehavior for FallingBlock {
         let below = level.get_block_state(pos.below(1))?;
         if below.is_air()
             || below.data().replaceable
-            || !below.data().fluid.empty
+            || below.liquid()
             || level
                 .block_tags()?
                 .contains_key(ferraloom_data::tags::BlockTags::FIRE, below.block())
