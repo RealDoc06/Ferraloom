@@ -853,6 +853,52 @@ impl RoomPlacer<'_, '_, '_, '_> {
     }
 }
 impl MonumentRoom {
+    /// Saved monument children carry only common piece data. Native reconstructs
+    /// their graph through the parent structure rather than persisting room links.
+    pub fn from_nbt(id: &str, tag: &ferraloom_nbt::CompoundTag) -> Result<Self, Error> {
+        let kind = match id {
+            "minecraft:omentry" => RoomKind::Entry,
+            "minecraft:omcr" => RoomKind::Core,
+            "minecraft:omdxr" => RoomKind::DoubleX,
+            "minecraft:omdyr" => RoomKind::DoubleY,
+            "minecraft:omdzr" => RoomKind::DoubleZ,
+            "minecraft:omdxyr" => RoomKind::DoubleXY,
+            "minecraft:omdyzr" => RoomKind::DoubleYZ,
+            "minecraft:omsimplet" => RoomKind::SimpleTop,
+            "minecraft:omsimple" => RoomKind::Simple { design: 0 },
+            "minecraft:omwr" => RoomKind::Wing { design: 0 },
+            "minecraft:ompenthouse" => RoomKind::Penthouse,
+            _ => return Err(Error("unknown monument child piece".into())),
+        };
+        Ok(Self {
+            data: StructurePieceData::from_nbt(tag)?,
+            room: None,
+            kind,
+        })
+    }
+    pub fn to_nbt(&self) -> ferraloom_nbt::CompoundTag {
+        self.data
+            .to_nbt(&self.kind.piece_id().parse().expect("builtin piece id"))
+    }
+    pub fn post_process_saved(
+        &self,
+        context: &mut FeatureContext<'_, '_>,
+        bounds: BoundingBox,
+    ) -> Result<(), Error> {
+        let mut placer = RoomPlacer {
+            data: &self.data,
+            context,
+            bounds,
+        };
+        match self.kind {
+            RoomKind::Wing { design } => placer.wing(design),
+            RoomKind::Penthouse => placer.penthouse(),
+            _ => Err(Error(
+                "Unsupported: saved monument room has no generated definition".into(),
+            )),
+        }
+    }
+
     /// Port of every monument child-room postProcess implementation. Elder
     /// creation remains an explicit game-adapter operation.
     pub fn post_process(

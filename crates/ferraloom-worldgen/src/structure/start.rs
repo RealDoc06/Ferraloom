@@ -27,6 +27,7 @@ pub enum StructurePiece {
     OceanRuin(Box<super::structures::ocean_ruin::OceanRuinPiece>),
     Stronghold(super::structures::stronghold::StrongholdPiece),
     OceanMonument(Box<super::structures::ocean_monument::MonumentBuilding>),
+    OceanMonumentRoom(super::structures::ocean_monument::MonumentRoom),
     NetherFortress(super::structures::nether_fortress::FortressPiece),
     Mineshaft(super::structures::mineshaft::MineshaftPiece),
     RuinedPortal(Box<super::structures::ruined_portal::RuinedPortalPiece>),
@@ -65,6 +66,7 @@ impl StructurePiece {
             Self::OceanRuin(p) => p.template.data.bounds,
             Self::Stronghold(p) => p.data.bounds,
             Self::OceanMonument(p) => p.data.bounds,
+            Self::OceanMonumentRoom(p) => p.data.bounds,
             Self::NetherFortress(p) => p.data.bounds,
             Self::Mineshaft(p) => p.data.bounds,
             Self::RuinedPortal(p) => p.template.data.bounds,
@@ -85,6 +87,7 @@ impl StructurePiece {
             Self::OceanRuin(p) => Ok(p.to_nbt()),
             Self::Stronghold(p) => Ok(p.to_nbt()),
             Self::OceanMonument(p) => Ok(p.to_nbt()),
+            Self::OceanMonumentRoom(p) => Ok(p.to_nbt()),
             Self::NetherFortress(p) => Ok(p.to_nbt()),
             Self::Mineshaft(p) => Ok(p.to_nbt()),
             Self::RuinedPortal(p) => Ok(p.to_nbt()),
@@ -347,6 +350,24 @@ impl StructureStart {
                             super::structures::ocean_ruin::OceanRuinPiece::from_nbt(templates, tag)
                         {
                             pieces.push(StructurePiece::OceanRuin(Box::new(piece)));
+                        }
+                    }
+                    "minecraft:omentry"
+                    | "minecraft:omcr"
+                    | "minecraft:omdxr"
+                    | "minecraft:omdyr"
+                    | "minecraft:omdzr"
+                    | "minecraft:omdxyr"
+                    | "minecraft:omdyzr"
+                    | "minecraft:omsimple"
+                    | "minecraft:omsimplet"
+                    | "minecraft:omwr"
+                    | "minecraft:ompenthouse" => {
+                        if let Ok(piece) = super::structures::ocean_monument::MonumentRoom::from_nbt(
+                            &piece_id.to_string(),
+                            tag,
+                        ) {
+                            pieces.push(StructurePiece::OceanMonumentRoom(piece));
                         }
                     }
                     "minecraft:omb" => {

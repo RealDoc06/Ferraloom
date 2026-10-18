@@ -128,6 +128,9 @@ impl StructureStart {
                 StructurePiece::DesertPyramid(piece) => piece.post_process(context, *bounds)?,
                 StructurePiece::Stronghold(piece) => piece.post_process(context, *bounds)?,
                 StructurePiece::OceanMonument(piece) => piece.post_process(context, *bounds)?,
+                StructurePiece::OceanMonumentRoom(piece) => {
+                    piece.post_process_saved(context, *bounds)?
+                }
                 StructurePiece::NetherFortress(piece) => piece.post_process(context, *bounds)?,
                 StructurePiece::Mineshaft(piece) => piece.post_process(context, *bounds)?,
                 StructurePiece::RuinedPortal(piece) => {
