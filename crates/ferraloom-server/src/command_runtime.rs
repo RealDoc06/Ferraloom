@@ -67,16 +67,22 @@ impl MinecraftServer {
             locked: settings.is_some_and(|tag| tag.get_boolean_or("locked", false)),
         })
     }
-    pub(super) async fn save_game_rules(&self) -> Result<()> {
+    /// Capture owned save data before constructing IO, keeping the live level's
+    /// single-owner lazy caches out of the Send future.
+    pub(super) fn save_game_rules(
+        &self,
+    ) -> impl std::future::Future<Output = Result<()>> + Send + 'static {
         let storage = SavedDataStorage::new(self.world.access.path().join("data"));
         let mut data = SavedData::new(self.game_rules.map().clone());
         let mut clocks = SavedData::new(self.clocks.states.clone());
-        tokio::task::spawn_blocking(move || {
-            storage.save(GameRuleMap::STORAGE_ID, &mut data)?;
-            storage.save(PackedClockStates::STORAGE_ID, &mut clocks)
-        })
-        .await??;
-        Ok(())
+        async move {
+            tokio::task::spawn_blocking(move || {
+                storage.save(GameRuleMap::STORAGE_ID, &mut data)?;
+                storage.save(PackedClockStates::STORAGE_ID, &mut clocks)
+            })
+            .await??;
+            Ok(())
+        }
     }
     pub(super) fn on_game_rule_changed(&mut self, change: GameRuleChange) {
         self.game_rules
