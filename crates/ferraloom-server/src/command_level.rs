@@ -137,6 +137,19 @@ impl MinecraftServer {
                 self.apply_level_effects()?;
                 self.apply_command_result(source, &command.source, result?);
             }
+            "time" => {
+                let (result, changed) = self.clocks.command(command, self.level.game_time);
+                if let Some(clock) = changed {
+                    self.level
+                        .level
+                        .refresh_environment_attributes(
+                            super::command_runtime::environment_clock_snapshot(&self.clocks),
+                        )
+                        .map_err(CommandLevelFailure)?;
+                    self.broadcast(self.clock_packet(Some(&clock)));
+                }
+                self.apply_command_result(source, &command.source, result?);
+            }
             "tick" => {
                 let result = ferraloom_game::commands::tick::run(command, self);
                 self.apply_tick_rate_events()?;

@@ -236,13 +236,6 @@ impl MinecraftServer {
                     &[],
                 ));
             }
-            "time" => {
-                let (result, changed) = self.clocks.command(&command, self.level.game_time);
-                if let Some(clock) = changed {
-                    self.broadcast(self.clock_packet(Some(&clock)));
-                }
-                result?
-            }
             "list" => {
                 let uuids = command.literals.iter().any(|literal| literal == "uuids");
                 let names = self
@@ -601,6 +594,20 @@ pub(super) fn load_clocks(
         .map(|data| data.value().clone())
         .unwrap_or_default();
     ServerClockManager::load(resources, states).map_err(|error| anyhow::anyhow!("{error}"))
+}
+/// Capture whole ticks from the sole mutable server clock manager. Loaded clock
+/// keys come from validated resource identifiers; saved unknown keys are discarded.
+pub(super) fn environment_clock_snapshot(
+    clocks: &ServerClockManager,
+) -> ferraloom_game::level::environment::ClockSnapshot {
+    ferraloom_game::level::environment::ClockSnapshot::new(clocks.states.0.iter().map(
+        |(id, state)| {
+            (
+                id.parse().expect("registered world-clock identifier"),
+                state.total_ticks,
+            )
+        },
+    ))
 }
 pub(super) fn command_build_context(
     registries: &RegistrySet,
