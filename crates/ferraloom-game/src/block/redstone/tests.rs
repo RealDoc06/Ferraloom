@@ -1492,6 +1492,80 @@ fn piston_entity_push_slime_velocity_and_honey_drag_match_real_vanilla_moves() {
 }
 
 #[test]
+fn comparator_container_reads_and_occlusion_match_real_vanilla_inventories() {
+    use crate::block::{containers::storage::BaseContainerBlockEntity, entity};
+    use ferraloom_data::{Item, properties as p};
+    use ferraloom_protocol::component::ItemStack;
+    for (name, expected) in cases("container-comparator:") {
+        let mut args = name.split(':').skip(1);
+        let block = Block::from_protocol_id(args.next().unwrap().parse().unwrap()).unwrap();
+        let pattern = args.next().unwrap().parse::<usize>().unwrap();
+        let gap = args.next().unwrap().parse::<i32>().unwrap();
+        let blocked = args.next().unwrap().parse::<bool>().unwrap();
+        let mut level = level();
+        let direction = Direction::North;
+        let target = ORIGIN.relative(direction, 1 + gap);
+        let target_state = block.default_state();
+        level.set_block_state(target, target_state).unwrap();
+        level
+            .set_block_entity(entity::create(target, target_state).unwrap())
+            .unwrap();
+        let handle = level.block_entity_ref(target).unwrap().unwrap();
+        for (slot, stack) in level
+            .block_entity_mut::<BaseContainerBlockEntity>(handle)
+            .unwrap()
+            .items
+            .iter_mut()
+            .enumerate()
+        {
+            let item = match pattern {
+                1..=3 if slot == 0 => Some((Item::STONE, [0, 1, 32, 64][pattern])),
+                4 => Some((Item::STONE, 64)),
+                5 if slot % 2 == 0 => Some((Item::ENDER_PEARL, 16)),
+                5 => Some((Item::WATER_BUCKET, 1)),
+                6 if slot == 0 => Some((Item::WATER_BUCKET, 1)),
+                _ => None,
+            };
+            if let Some((item, count)) = item {
+                *stack = ItemStack::new(item, count, Default::default());
+            }
+        }
+        if gap == 1 {
+            level
+                .set_block_state(ORIGIN.relative(direction, 1), Block::STONE.default_state())
+                .unwrap();
+        }
+        if blocked {
+            level
+                .set_block_state(target.above(1), Block::STONE.default_state())
+                .unwrap();
+        }
+        level
+            .set_block_state(
+                ORIGIN.relative(direction.clockwise(), 1),
+                Block::REDSTONE_WIRE
+                    .default_state()
+                    .with(p::POWER, 7)
+                    .unwrap(),
+            )
+            .unwrap();
+        let mut outputs = Vec::new();
+        for mode in [p::Mode::Compare, p::Mode::Subtract] {
+            let state = state::with_facing(Block::COMPARATOR.default_state(), direction)
+                .with(p::MODE, mode)
+                .unwrap();
+            level.set_block_state(ORIGIN, state).unwrap();
+            outputs.push(format!(
+                "{}:{}",
+                comparator::calculate_output(&mut level, ORIGIN, state).unwrap(),
+                comparator::should_turn_on(&mut level, ORIGIN, state).unwrap()
+            ));
+        }
+        assert_eq!(outputs.join("|"), expected, "{name}");
+    }
+}
+
+#[test]
 fn comparator_compare_and_subtract_match_vanilla_for_all_inputs() {
     use ferraloom_data::properties as p;
     for (name, expected) in cases("comparator:") {

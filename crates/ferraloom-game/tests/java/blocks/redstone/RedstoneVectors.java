@@ -197,6 +197,29 @@ public final class RedstoneVectors extends MutationFixture {
                 System.out.println("comparator:"+Block.getId(state)+":"+main+":"+side+"\t"+calculate.invoke(Blocks.COMPARATOR,level,ORIGIN,state)+":"+should.invoke(Blocks.COMPARATOR,level,ORIGIN,state));
             }
         }
+        var itemsGetter=net.minecraft.world.level.block.entity.BaseContainerBlockEntity.class.getDeclaredMethod("getItems");itemsGetter.setAccessible(true);
+        for(var block:List.of(Blocks.BARREL,Blocks.CHEST,Blocks.FURNACE,Blocks.HOPPER,Blocks.DISPENSER,Blocks.DROPPER,Blocks.CRAFTER))for(int pattern=0;pattern<7;pattern++)for(int gap=0;gap<=1;gap++)for(boolean blocked:block instanceof ChestBlock?new boolean[]{false,true}:new boolean[]{false}){
+            var level=new RedstoneVectors(r);var direction=Direction.NORTH;var target=ORIGIN.relative(direction,1+gap);var targetState=block.defaultBlockState();level.raw(target,targetState);
+            var entity=((EntityBlock)block).newBlockEntity(target,targetState);level.getChunkAt(target).setBlockEntity(entity);
+            var items=(List<net.minecraft.world.item.ItemStack>)itemsGetter.invoke(entity);
+            for(int i=0;i<items.size();i++){
+                net.minecraft.world.item.ItemStack stack=net.minecraft.world.item.ItemStack.EMPTY;
+                if(pattern>=1&&pattern<=3&&i==0)stack=new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.STONE,new int[]{0,1,32,64}[pattern]);
+                if(pattern==4)stack=new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.STONE,64);
+                if(pattern==5)stack=new net.minecraft.world.item.ItemStack(i%2==0?net.minecraft.world.item.Items.ENDER_PEARL:net.minecraft.world.item.Items.WATER_BUCKET,i%2==0?16:1);
+                if(pattern==6&&i==0)stack=new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.WATER_BUCKET,1);
+                items.set(i,stack);
+            }
+            if(gap==1)level.raw(ORIGIN.relative(direction),Blocks.STONE.defaultBlockState());
+            if(blocked)level.raw(target.above(),Blocks.STONE.defaultBlockState());
+            level.raw(ORIGIN.relative(direction.getClockWise()),Blocks.REDSTONE_WIRE.defaultBlockState().setValue(RedstoneWireBlock.POWER,7));
+            var outputs=new ArrayList<String>();
+            for(var mode:ComparatorMode.values()){
+                var state=Blocks.COMPARATOR.defaultBlockState().setValue(ComparatorBlock.FACING,direction).setValue(ComparatorBlock.MODE,mode);level.raw(ORIGIN,state);
+                outputs.add(calculate.invoke(Blocks.COMPARATOR,level,ORIGIN,state)+":"+should.invoke(Blocks.COMPARATOR,level,ORIGIN,state));
+            }
+            System.out.println("container-comparator:"+BuiltInRegistries.BLOCK.getId(block)+":"+pattern+":"+gap+":"+blocked+"\t"+String.join("|",outputs));
+        }
     }
     static void placements(RegistryAccess r) {
         var blocks=new ArrayList<>(List.<Block>of(Blocks.REDSTONE_WIRE,Blocks.REPEATER,Blocks.COMPARATOR,Blocks.OBSERVER,Blocks.REDSTONE_WALL_TORCH,Blocks.LEVER,Blocks.STONE_BUTTON,Blocks.OAK_BUTTON,Blocks.PISTON,Blocks.STICKY_PISTON,Blocks.DISPENSER,Blocks.DROPPER,Blocks.HOPPER,Blocks.OAK_DOOR,Blocks.IRON_DOOR,Blocks.COPPER_DOOR.weathering().unaffected(),Blocks.OAK_TRAPDOOR,Blocks.IRON_TRAPDOOR,Blocks.COPPER_TRAPDOOR.weathering().unaffected(),Blocks.OAK_FENCE_GATE,Blocks.REDSTONE_LAMP,Blocks.RAIL,Blocks.POWERED_RAIL,Blocks.ACTIVATOR_RAIL,Blocks.DETECTOR_RAIL,Blocks.NOTE_BLOCK,Blocks.TRIPWIRE,Blocks.TRIPWIRE_HOOK));
