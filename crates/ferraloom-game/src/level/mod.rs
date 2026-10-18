@@ -27,6 +27,7 @@ pub mod redstone;
 mod saved_ticks;
 pub mod server_level;
 pub mod simulation;
+pub mod tick_rate;
 pub mod tickets;
 mod ticking;
 pub mod weather;
