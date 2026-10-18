@@ -190,7 +190,7 @@ impl Level {
         LevelReaderRef::Server(self).get_best_own_or_neighbor_signal(pos)
     }
     pub fn get_analog_output_signal(
-        &self,
+        &mut self,
         state: BlockState,
         pos: BlockPos,
         direction: Direction,

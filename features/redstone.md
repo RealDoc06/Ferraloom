@@ -28,8 +28,8 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | redstone.piston.slime-honey | Apply slime velocity and honey dragging to entities on moving blocks | `PistonMovingBlockEntity` | | - | todo |
 | redstone.observer.pulse | Schedule the observer pulse on watched state changes and ignore changes during its pulse | `ObserverBlock#updateShape; ObserverBlock#tick` | | - | todo |
 | redstone.repeater.delay-lock | Apply selectable repeater delay, side locking and scheduled-tick priority | `RepeaterBlock; DiodeBlock` | | - | todo |
-| redstone.comparator.modes | Compare or subtract side input with the main input and store output in the block entity | `ComparatorBlock#calculateOutputSignal; ComparatorBlockEntity` | | - | todo |
-| redstone.comparator.container-read | Read container fullness, analog-output blocks and item frames through the permitted block path | `ComparatorBlock#getInputSignal` | | - | todo |
+| redstone.comparator.modes | Compare or subtract side input with the main input and store output in the block entity | `ComparatorBlock#calculateOutputSignal; ComparatorBlockEntity` | | - | partial |
+| redstone.comparator.container-read | Read container fullness, analog-output blocks and item frames through the permitted block path | `ComparatorBlock#getInputSignal` | | - | partial |
 | redstone.torch.burnout | Track rapid torch toggles, burn out and schedule recovery | `RedstoneTorchBlock#tick; RedstoneTorchBlock#isToggledTooFrequently` | | - | todo |
 | redstone.rail.power-propagation | Propagate powered-rail signal through connected slopes with the recursion limit | `PoweredRailBlock#findPoweredRailSignal` | | - | todo |
 | redstone.rail.detector | Detect minecarts, update powered state and expose comparator output | `DetectorRailBlock#checkPressed; DetectorRailBlock#getAnalogOutputSignal` | | - | todo |

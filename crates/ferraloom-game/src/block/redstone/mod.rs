@@ -127,6 +127,25 @@ pub(crate) fn ported_behavior(
         {
             Some(&sources::SOURCES)
         }
+        BlockClass::ComparatorBlock
+            if matches!(
+                method,
+                M::IsSignalSource
+                    | M::OwnSignal
+                    | M::Signal
+                    | M::DirectSignal
+                    | M::CanSurvive
+                    | M::OnPlace
+                    | M::AffectNeighborsAfterRemoval
+                    | M::UpdateShape
+                    | M::UpdateFromNeighbourShapes
+                    | M::NeighborChanged
+                    | M::Tick
+                    | M::TriggerEvent
+            ) =>
+        {
+            Some(&comparator::COMPARATOR)
+        }
         _ => None,
     }
 }
