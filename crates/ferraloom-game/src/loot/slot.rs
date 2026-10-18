@@ -184,12 +184,12 @@ impl SlotSource {
                 {
                     Ok(Vec::new())
                 }
-                _ => c.facts.slot_items(*source, &slots.slots, c.params),
+                _ => c.facts().slot_items(*source, &slots.slots, c.params),
             },
             Self::Filtered { source, filter } => {
                 let mut result = Vec::new();
                 for item in source.items(data, c)? {
-                    if filter.matches(&item, c.facts)? {
+                    if filter.matches(&item, c.facts())? {
                         result.push(item);
                     }
                 }

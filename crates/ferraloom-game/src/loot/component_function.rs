@@ -8,6 +8,7 @@ use ferraloom_protocol::{
     codec::{Holder, HolderSet},
     component::*,
 };
+use ferraloom_util::random::RandomSource;
 use serde_json::Value;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -186,7 +187,7 @@ impl ComponentFunction {
                     ComponentSource::Entity(target) => c
                         .params
                         .entity(*target)
-                        .map(|entity| c.facts.entity_components(entity))
+                        .map(|entity| c.facts().entity_components(entity))
                         .transpose()?,
                 };
                 if let Some(map) = map {
@@ -205,7 +206,7 @@ impl ComponentFunction {
                     NbtSource::Entity(target) => c
                         .params
                         .entity(*target)
-                        .map(|entity| c.facts.entity_custom_name(entity))
+                        .map(|entity| c.facts().entity_custom_name(entity))
                         .transpose()?
                         .flatten(),
                     NbtSource::BlockEntity => {
@@ -261,7 +262,7 @@ impl ComponentFunction {
                 if let Some(name) = name {
                     let name =
                         if let Some(entity) = entity.and_then(|target| c.params.entity(target)) {
-                            c.facts.resolve_component(name, entity)?
+                            c.facts().resolve_component(name, entity)?
                         } else {
                             name.as_ref().clone()
                         };
@@ -290,7 +291,7 @@ impl ComponentFunction {
                 let ids =
                     resolve_options(options, crate::predicates::PredicateRegistry::Instrument, c)?;
                 if !ids.is_empty() {
-                    let id = ids[c.random.next_int_bound(ids.len() as i32) as usize].clone();
+                    let id = ids[c.random().next_int_bound(ids.len() as i32) as usize].clone();
                     set(
                         &mut stack,
                         DataComponent::Instrument(InstrumentHolder(Holder::Reference(id))),
@@ -302,10 +303,10 @@ impl ComponentFunction {
                 let ids = if let Some(options) = options {
                     resolve_options(options, registry, c)?
                 } else {
-                    c.facts.registry_values(registry)?
+                    c.facts().registry_values(registry)?
                 };
                 if !ids.is_empty() {
-                    let id = ids[c.random.next_int_bound(ids.len() as i32) as usize].clone();
+                    let id = ids[c.random().next_int_bound(ids.len() as i32) as usize].clone();
                     let mut value = match stack.components()?.get(ComponentTypeId::POTION_CONTENTS)
                     {
                         Some(DataComponent::PotionContents(value)) => value.clone(),
@@ -362,6 +363,6 @@ fn resolve_options(
 ) -> Result<Vec<Identifier>> {
     match options {
         HolderSet::Direct(ids) => Ok(ids.clone()),
-        HolderSet::Named(tag) => c.facts.registry_tag_values(registry, tag),
+        HolderSet::Named(tag) => c.facts().registry_tag_values(registry, tag),
     }
 }

@@ -4,6 +4,7 @@ use super::{
 };
 use crate::predicates::{BlockPredicate, EntityPredicate, ItemPredicate, LocationPredicate};
 use ferraloom_util::Vec3;
+use ferraloom_util::random::RandomSource;
 use serde_json::Value;
 
 /// Port of IntRangePredicate and FloatRangePredicate. An empty line deliberately
@@ -245,7 +246,7 @@ impl LootItemCondition {
             }
             Self::RandomChance(chance) => {
                 let chance = chance.get(data, c)?;
-                Ok(c.random.next_float() < chance)
+                Ok(c.random().next_float() < chance)
             }
             Self::TableBonus(enchantment, chances) => {
                 let level = c
@@ -256,7 +257,7 @@ impl LootItemCondition {
                     .transpose()?
                     .unwrap_or(0);
                 let chance = chances[(level as usize).min(chances.len() - 1)];
-                Ok(c.random.next_float() < chance)
+                Ok(c.random().next_float() < chance)
             }
             Self::RandomChanceWithEnchantedBonus {
                 unenchanted,
@@ -266,7 +267,7 @@ impl LootItemCondition {
                 let level = c
                     .params
                     .attacking_entity
-                    .map(|entity| c.facts.entity_enchantment_level(entity, enchantment))
+                    .map(|entity| c.facts().entity_enchantment_level(entity, enchantment))
                     .transpose()?
                     .unwrap_or(0);
                 let chance = if level > 0 {
@@ -274,25 +275,25 @@ impl LootItemCondition {
                 } else {
                     *unenchanted
                 };
-                Ok(c.random.next_float() < chance)
+                Ok(c.random().next_float() < chance)
             }
             Self::KilledByPlayer => Ok(c.params.last_damage_player.is_some()),
             Self::SurvivesExplosion => Ok(c
                 .params
                 .explosion_radius
-                .is_none_or(|radius| c.random.next_float() <= 1.0 / radius)),
+                .is_none_or(|radius| c.random().next_float() <= 1.0 / radius)),
             Self::MatchTool(test) => {
                 let Some(tool) = &c.params.tool else {
                     return Ok(false);
                 };
                 test.as_ref()
-                    .map_or(Ok(true), |test| test.matches(tool, c.facts))
+                    .map_or(Ok(true), |test| test.matches(tool, c.facts()))
             }
             Self::MatchBlock(test) => {
                 let Some(state) = c.params.block_state else {
                     return Ok(false);
                 };
-                if !test.matches_state(state, c.facts)? {
+                if !test.matches_state(state, c.facts())? {
                     return Ok(false);
                 }
                 if (!test.0.components.exact.is_empty() || !test.0.components.partial.0.is_empty())
@@ -312,13 +313,13 @@ impl LootItemCondition {
                 test.matches_entity(
                     c.params.block_entity.as_ref(),
                     c.params.block_entity_components.as_ref(),
-                    c.facts,
+                    c.facts(),
                 )
             }
             Self::EntityProperties(target, test) => {
                 let entity = c.params.entity(*target);
                 test.as_ref().map_or(Ok(entity.is_some()), |test| {
-                    test.matches(entity, c.params.origin, c.facts)
+                    test.matches(entity, c.params.origin, c.facts())
                 })
             }
             Self::EntityScores(target, scores) => {
@@ -327,7 +328,7 @@ impl LootItemCondition {
                 };
                 for (objective, test) in scores {
                     let Some(value) = c
-                        .facts
+                        .facts()
                         .score(super::ScoreHolder::Entity(entity), objective)?
                     else {
                         return Ok(false);
@@ -349,7 +350,7 @@ impl LootItemCondition {
                             origin.y + f64::from(*y),
                             origin.z + f64::from(*z),
                         ),
-                        c.facts,
+                        c.facts(),
                     )
                 })
             }
@@ -361,7 +362,7 @@ impl LootItemCondition {
                 raining,
                 thundering,
             } => {
-                let (rain, thunder) = c.facts.weather()?;
+                let (rain, thunder) = c.facts().weather()?;
                 Ok(raining.is_none_or(|v| v == rain) && thundering.is_none_or(|v| v == thunder))
             }
             Self::DamageSource(test) => {
@@ -372,14 +373,14 @@ impl LootItemCondition {
                     return Ok(false);
                 };
                 test.as_ref()
-                    .map_or(Ok(true), |test| test.matches(source, origin, c.facts))
+                    .map_or(Ok(true), |test| test.matches(source, origin, c.facts()))
             }
             Self::TimeCheck {
                 clock,
                 period,
                 value,
             } => {
-                let mut time = c.facts.clock_ticks(clock)?;
+                let mut time = c.facts().clock_ticks(clock)?;
                 if let Some(period) = period {
                     if *period == 0 {
                         return Err(LootError::Arithmetic);
@@ -405,7 +406,7 @@ impl LootItemCondition {
             }
             Self::EnvironmentAttribute {
                 attribute, value, ..
-            } => Ok(value.same_value(&c.facts.environment_value(attribute, c.params)?)),
+            } => Ok(value.same_value(&c.facts().environment_value(attribute, c.params)?)),
         }
     }
     pub(crate) fn params(&self) -> Vec<ContextParam> {

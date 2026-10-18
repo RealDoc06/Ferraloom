@@ -123,18 +123,10 @@ impl Persistent for HolderSet {
         set_value(self)
     }
 }
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
 pub struct DoubleBounds {
-    pub min: Option<f64>,
-    pub max: Option<f64>,
-}
-// Double.compare/equals canonicalize NaNs and distinguish signed zero.
-fn double_bits(value: f64) -> u64 {
-    if value.is_nan() {
-        f64::NAN.to_bits()
-    } else {
-        value.to_bits()
-    }
+    pub min: Option<JavaF64>,
+    pub max: Option<JavaF64>,
 }
 impl Persistent for DoubleBounds {
     fn from_nbt(v: &Tag) -> Result<Self> {
@@ -147,7 +139,7 @@ impl Persistent for DoubleBounds {
                 | Tag::Float(_)
                 | Tag::Double(_)
         ) {
-            let value = f64::from_nbt(v)?;
+            let value = JavaF64::from_nbt(v)?;
             Self {
                 min: Some(value),
                 max: Some(value),
@@ -166,7 +158,7 @@ impl Persistent for DoubleBounds {
     }
     fn from_json(v: &Json) -> Result<Self> {
         let result = if v.is_number() {
-            let n = f64::from_json(v)?;
+            let n = JavaF64::from_json(v)?;
             Self {
                 min: Some(n),
                 max: Some(n),
@@ -183,14 +175,12 @@ impl Persistent for DoubleBounds {
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
         if let (Some(min), Some(max)) = (self.min, self.max)
-            && f64::from_bits(double_bits(min))
-                .total_cmp(&f64::from_bits(double_bits(max)))
-                .is_gt()
+            && min > max
         {
             return Err(invalid("swapped bounds"));
         }
         if let (Some(min), Some(max)) = (self.min, self.max)
-            && double_bits(min) == double_bits(max)
+            && min == max
         {
             return min.to_persistent();
         }

@@ -5,6 +5,7 @@ use ferraloom_protocol::{
     codec::{HolderSet, VarInt},
     component::*,
 };
+use ferraloom_util::random::RandomSource;
 use serde_json::Value;
 
 /// Port of ExplorationMapFunction's codec. Its live search and saved map
@@ -95,7 +96,7 @@ impl WorldFunction {
         match self {
             Self::FurnaceSmelt { use_input_count } => {
                 if !stack.is_empty()
-                    && let Some(mut result) = c.facts.smelting_recipe_result(&stack)?
+                    && let Some(mut result) = c.facts().smelting_recipe_result(&stack)?
                     && !result.is_empty()
                 {
                     let count = if *use_input_count {
@@ -114,7 +115,7 @@ impl WorldFunction {
                 if !stack.is_empty()
                     && let Some(origin) = c.params.origin
                 {
-                    return c.facts.exploration_map(options, stack, origin);
+                    return c.facts().exploration_map(options, stack, origin);
                 }
             }
             Self::SetEnchantments { enchantments, add } => {
@@ -148,7 +149,7 @@ impl WorldFunction {
                 let ordered = if enchantments.iter().all(|(_,value)|matches!(value,Holder::Inline(value) if matches!(**value,ContextIntProvider::Constant(_)))) {
                     keys
                 } else {
-                    c.facts.enchantment_provider_order(&keys)?
+                    c.facts().enchantment_provider_order(&keys)?
                 };
                 for key in ordered {
                     let provider = &enchantments
@@ -189,7 +190,7 @@ impl WorldFunction {
                     return Ok(stack);
                 }
                 let (effect, duration) =
-                    &effects[c.random.next_int_bound(effects.len() as i32) as usize];
+                    &effects[c.random().next_int_bound(effects.len() as i32) as usize];
                 let mut duration = duration.get(data, c)?;
                 // MobEffects' only InstantaneousMobEffect subclasses in 26.3.
                 if !matches!(
