@@ -526,8 +526,11 @@ impl EntityQuery for MinecraftServer {
         })
     }
     fn shuffle(&mut self, entities: &mut [(EntityRef, f64)]) {
-        use rand::seq::SliceRandom;
-        entities.shuffle(&mut rand::thread_rng());
+        // Collections.shuffle retains one java.util.Random; it does not consume Level#random.
+        let random = self
+            .selector_random
+            .get_or_insert_with(|| ferraloom_util::random::LegacyRandomSource::new(rand::random()));
+        ferraloom_game::commands::arguments::selectors::shuffle_with_random(entities, random);
     }
 }
 

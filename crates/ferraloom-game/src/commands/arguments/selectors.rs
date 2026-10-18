@@ -709,11 +709,13 @@ impl EntitySelector {
                 result.push((entity, distance));
             }
         }
-        match self.sort {
-            SelectorSort::Nearest => result.sort_by(|a, b| a.1.total_cmp(&b.1)),
-            SelectorSort::Furthest => result.sort_by(|a, b| b.1.total_cmp(&a.1)),
-            SelectorSort::Random => query.shuffle(&mut result),
-            SelectorSort::Arbitrary => {}
+        if result.len() > 1 {
+            match self.sort {
+                SelectorSort::Nearest => result.sort_by(|a, b| a.1.total_cmp(&b.1)),
+                SelectorSort::Furthest => result.sort_by(|a, b| b.1.total_cmp(&a.1)),
+                SelectorSort::Random => query.shuffle(&mut result),
+                SelectorSort::Arbitrary => {}
+            }
         }
         result.truncate(self.max_results);
         Ok(result.into_iter().map(|(entity, _)| entity).collect())
@@ -766,6 +768,51 @@ pub trait EntityQuery {
         predicate: &SelectorPredicate,
     ) -> Result<bool, CommandSyntaxException>;
     fn shuffle(&mut self, entities: &mut [(EntityRef, f64)]);
+}
+/// Port of Collections#shuffle: descending Fisher-Yates with java.util.Random's bounded draws.
+pub fn shuffle_with_random<T>(
+    values: &mut [T],
+    random: &mut impl ferraloom_util::random::RandomSource,
+) {
+    for size in (2..=values.len()).rev() {
+        let index = random.next_int_bound(i32::try_from(size).expect("Java list size")) as usize;
+        values.swap(size - 1, index);
+    }
+}
+#[cfg(test)]
+mod random_tests {
+    use super::*;
+    use ferraloom_util::random::{LegacyRandomSource, RandomSource};
+    #[derive(serde::Deserialize)]
+    struct Vector {
+        seed: i64,
+        size: usize,
+        first: Vec<usize>,
+        second: Vec<usize>,
+        next_long: i64,
+    }
+    #[test]
+    fn random_selector_order_and_consumption_match_java_collections() {
+        let vectors: Vec<Vector> =
+            serde_json::from_str(include_str!("../vanilla/selector-shuffle-vectors.json")).unwrap();
+        for vector in vectors {
+            let mut random = LegacyRandomSource::new(vector.seed);
+            let mut values = (0..vector.size).collect::<Vec<_>>();
+            shuffle_with_random(&mut values, &mut random);
+            assert_eq!(
+                values, vector.first,
+                "seed {}, size {}",
+                vector.seed, vector.size
+            );
+            shuffle_with_random(&mut values, &mut random);
+            assert_eq!(
+                values, vector.second,
+                "seed {}, size {}",
+                vector.seed, vector.size
+            );
+            assert_eq!(random.next_long(), vector.next_long);
+        }
+    }
 }
 pub fn rotation_matches(range: NumberRange, value: f32) -> bool {
     let min = mth::wrap_degrees_f32(range.min.unwrap_or(0.) as f32);
