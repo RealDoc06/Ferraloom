@@ -338,6 +338,7 @@ public final class StructureGolden {
         SwampHutGolden.capture(registries,directory);RegionRandomGolden.capture(registries,directory);DesertPyramidGolden.capture(registries,directory);RuinedPortalGolden.capture(registries,directory);MineshaftGolden.capture(registries,directory);NetherFortressGolden.capture(registries,directory);StrongholdGolden.capture(registries,directory);
         MansionGolden.grids(directory);
         MansionGolden.pieces(registries,directory);
-        MansionFoundationGolden.capture(registries,directory);StrongholdBlocksGolden.capture(registries,directory);NetherFortressBlocksGolden.capture(registries,directory);MineshaftBlocksGolden.capture(registries,directory);
+        MansionFoundationGolden.capture(registries,directory);
+        MonumentGolden.capture(registries,directory);StrongholdBlocksGolden.capture(registries,directory);NetherFortressBlocksGolden.capture(registries,directory);MineshaftBlocksGolden.capture(registries,directory);
     }
 }
