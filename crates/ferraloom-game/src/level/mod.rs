@@ -233,17 +233,26 @@ impl Region {
 pub struct Level {
     region: Option<Region>,
     context: Arc<LevelContext>,
+    difficulty: ferraloom_protocol::play::Difficulty,
 }
 
 impl Level {
     pub fn new(region: Region, context: Arc<LevelContext>) -> Self {
         Self {
             region: Some(region),
+            difficulty: context.initial_difficulty,
             context,
         }
     }
     pub fn context(&self) -> &Arc<LevelContext> {
         &self.context
+    }
+    /// Port of Level#getDifficulty, published from canonical world data.
+    pub fn difficulty(&self) -> ferraloom_protocol::play::Difficulty {
+        self.difficulty
+    }
+    pub fn set_difficulty(&mut self, difficulty: ferraloom_protocol::play::Difficulty) {
+        self.difficulty = difficulty;
     }
     pub fn seed(&self) -> i64 {
         self.context.seed

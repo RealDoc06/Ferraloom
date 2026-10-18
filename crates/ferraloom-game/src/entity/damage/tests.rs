@@ -302,6 +302,7 @@ fn damage_cooldown_uses_the_contexts_loaded_tag_instead_of_a_caller_flag() {
         fixture.generator.clone(),
         fixture.features.clone(),
         registry,
+        fixture.initial_difficulty,
     ));
     static BEHAVIORS: Behaviors = Behaviors::EMPTY;
     let mut level = Level::new(Region::new(&BEHAVIORS), context);
@@ -354,4 +355,25 @@ fn damage_rule_snapshots_use_definition_defaults_and_current_canonical_values() 
     canonical.update_level_rules(&mut snapshot);
     assert!(snapshot.fire_damage);
     assert!(!snapshot.drowning_damage && !snapshot.fall_damage && !snapshot.freeze_damage);
+}
+
+#[test]
+fn difficulty_is_required_world_context_and_updates_without_replacing_it() {
+    use ferraloom_protocol::play::Difficulty;
+    let fixture = LevelContext::fixture(0, 63);
+    let context = Arc::new(LevelContext::new(
+        fixture.seed,
+        fixture.sea_level,
+        fixture.generator.clone(),
+        fixture.features.clone(),
+        fixture.damage_types().clone(),
+        Difficulty::Hard,
+    ));
+    static BEHAVIORS: Behaviors = Behaviors::EMPTY;
+    let mut level = Level::new(Region::new(&BEHAVIORS), context.clone());
+    assert_eq!(level.difficulty(), Difficulty::Hard);
+    level.set_difficulty(Difficulty::Peaceful);
+    assert_eq!(level.difficulty(), Difficulty::Peaceful);
+    assert_eq!(context.initial_difficulty, Difficulty::Hard);
+    assert!(Arc::ptr_eq(level.context(), &context));
 }

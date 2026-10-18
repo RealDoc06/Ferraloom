@@ -11,6 +11,7 @@ use ferraloom_game::level::{
 };
 use ferraloom_light::{LevelLightEngine, LightLayer, SectionSnapshots};
 use ferraloom_nbt::{CompoundTag, ListTag, NbtString, Tag};
+use ferraloom_protocol::play::Difficulty;
 use ferraloom_storage::{
     self as storage, ByteArray, IoWorker, LevelData, LevelStorageAccess, LongArray, SavedData,
     SavedDataStorage, SectionRegistry, SerializableChunkData,
@@ -603,6 +604,8 @@ impl World {
         } else {
             new_level_data(properties)
         };
+        // DedicatedServer#forceDifficulty ignores the saved lock at startup.
+        force_initial_difficulty(&mut level_data.data, properties.get("difficulty"));
         access.save_level_data(&level_data)?;
         let mut spawn = level_data
             .data
@@ -725,6 +728,7 @@ impl World {
             Arc::new(ferraloom_game::entity::damage::DamageTypeRegistry::load(
                 resources,
             )?),
+            read_difficulty_settings(&self.level_data.data).0,
         )))
     }
     /// Attach immutable dimension layers after the sole server clock manager
@@ -1179,6 +1183,48 @@ pub fn heightmap(heights: &[i32; 256]) -> Vec<i64> {
     }
     words.into_iter().map(|w| w as i64).collect()
 }
+/// Port of LevelSettings#parse and DifficultySettings.CODEC. A malformed record
+/// uses the native complete-record default, rather than mixing individual fields.
+fn read_difficulty_settings(data: &CompoundTag) -> (Difficulty, bool, bool) {
+    let decoded = (|| {
+        let settings = data.get_compound("difficulty_settings")?;
+        Some((
+            match settings
+                .get_string("difficulty")?
+                .to_string_checked()
+                .ok()?
+                .as_str()
+            {
+                "peaceful" => Difficulty::Peaceful,
+                "easy" => Difficulty::Easy,
+                "normal" => Difficulty::Normal,
+                "hard" => Difficulty::Hard,
+                _ => return None,
+            },
+            // NbtOps#getBooleanValue compares the number as double, unlike
+            // CompoundTag#getBoolean's narrowing byte conversion.
+            settings.get("hardcore")?.as_double()? != 0.0,
+            settings.get("locked")?.as_double()? != 0.0,
+        ))
+    })();
+    decoded.unwrap_or((Difficulty::Normal, false, false))
+}
+
+/// Port of DedicatedServer#forceDifficulty and MinecraftServer#setDifficulty.
+fn force_initial_difficulty(data: &mut CompoundTag, requested: &str) {
+    let (_, hardcore, locked) = read_difficulty_settings(data);
+    // ServerProperties has already normalized the requested difficulty name.
+    let difficulty = if hardcore { "hard" } else { requested };
+    let mut settings = data
+        .get_compound("difficulty_settings")
+        .cloned()
+        .unwrap_or_default();
+    settings.insert("difficulty", Tag::String(difficulty.into()));
+    settings.insert("hardcore", Tag::Byte(i8::from(hardcore)));
+    settings.insert("locked", Tag::Byte(i8::from(locked)));
+    data.insert("difficulty_settings", Tag::Compound(settings));
+}
+
 fn new_level_data(properties: &ServerProperties) -> LevelData {
     let mut data = CompoundTag::new();
     for (k, v) in [
@@ -1552,5 +1598,59 @@ mod light_worker_tests {
         );
         drop(send);
         worker.join().unwrap();
+    }
+}
+
+#[cfg(test)]
+mod difficulty_tests {
+    use super::*;
+
+    fn name(value: Difficulty) -> &'static str {
+        match value {
+            Difficulty::Peaceful => "peaceful",
+            Difficulty::Easy => "easy",
+            Difficulty::Normal => "normal",
+            Difficulty::Hard => "hard",
+        }
+    }
+
+    #[test]
+    fn initial_difficulty_uses_native_record_defaults_hardcore_and_lock_handling() {
+        let mut counts = (0, 0);
+        for row in include_str!("../../ferraloom-game/tests/java/entity/vectors.tsv").lines() {
+            let fields: Vec<_> = row.split('\t').collect();
+            match fields[0] {
+                "difficulty-read" => {
+                    let data = ferraloom_nbt::parse_compound(fields[1]).unwrap();
+                    let (difficulty, hardcore, locked) = read_difficulty_settings(&data);
+                    assert_eq!(name(difficulty), fields[2], "{row}");
+                    assert_eq!(hardcore, fields[3] == "true", "{row}");
+                    assert_eq!(locked, fields[4] == "true", "{row}");
+                    counts.0 += 1;
+                }
+                "difficulty-initial" => {
+                    let mut data = ferraloom_nbt::parse_compound(&format!(
+                        "{{difficulty_settings:{{difficulty:normal,hardcore:{}b,locked:{}b,future:42}}}}",
+                        i8::from(fields[1] == "true"),
+                        i8::from(fields[2] == "true"),
+                    ))
+                    .unwrap();
+                    force_initial_difficulty(&mut data, fields[3]);
+                    let (difficulty, hardcore, locked) = read_difficulty_settings(&data);
+                    assert_eq!(name(difficulty), fields[4], "{row}");
+                    assert_eq!(hardcore, fields[1] == "true", "{row}");
+                    assert_eq!(locked, fields[5] == "true", "{row}");
+                    assert_eq!(
+                        data.get_compound("difficulty_settings")
+                            .unwrap()
+                            .get_int("future"),
+                        Some(42)
+                    );
+                    counts.1 += 1;
+                }
+                _ => (),
+            }
+        }
+        assert_eq!(counts, (16, 16));
     }
 }

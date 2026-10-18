@@ -449,6 +449,7 @@ mod tests {
                 fixture.generator.clone(),
                 Arc::new(registry),
                 fixture.damage_types().clone(),
+                fixture.initial_difficulty,
             )),
         );
         level.set_block_tags(data.block_tags.clone());

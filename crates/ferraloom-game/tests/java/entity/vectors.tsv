@@ -314,6 +314,38 @@ damage-source	player	minecraft:player_attack	1	1	true	false	true	none	3ff0000000
 damage-source	mob	minecraft:mob_attack	2	2	true	true	false	none	3ff0000000000000,4000000000000000,4008000000000000	c010000000000000,4014000000000000,c018000000000000
 damage-source	thorns	minecraft:thorns	3	3	true	false	false	none	3ff0000000000000,4000000000000000,4008000000000000	c010000000000000,4014000000000000,c018000000000000
 damage-source	bad-respawn	minecraft:bad_respawn_point	0	0	true	true	false	8000000000000000,4059000000000000,4008000000000000	8000000000000000,4059000000000000,4008000000000000	8000000000000000,4059000000000000,4008000000000000
+difficulty-read	{}	normal	false	false
+difficulty-read	{difficulty_settings:{}}	normal	false	false
+difficulty-read	{difficulty_settings:{difficulty:hard,hardcore:1b,locked:1b}}	hard	true	true
+difficulty-read	{difficulty_settings:{difficulty:easy,hardcore:0b,locked:0b}}	easy	false	false
+difficulty-read	{difficulty_settings:{difficulty:peaceful,hardcore:0b,locked:1b}}	peaceful	false	true
+difficulty-read	{difficulty_settings:{difficulty:normal,hardcore:1b,locked:0b}}	normal	true	false
+difficulty-read	{difficulty_settings:{difficulty:wrong,hardcore:1b,locked:1b}}	normal	false	false
+difficulty-read	{difficulty_settings:{difficulty:hard,hardcore:1b}}	normal	false	false
+difficulty-read	{difficulty_settings:{difficulty:hard,locked:1b}}	normal	false	false
+difficulty-read	{difficulty_settings:{difficulty:hard,hardcore:yes,locked:1b}}	normal	false	false
+difficulty-read	{difficulty_settings:{difficulty:hard,hardcore:1b,locked:yes}}	normal	false	false
+difficulty-read	{difficulty_settings:{difficulty:3,hardcore:1b,locked:1b}}	normal	false	false
+difficulty-read	{difficulty_settings:{difficulty:hard,hardcore:256,locked:-1b}}	hard	true	true
+difficulty-read	{difficulty_settings:{difficulty:hard,hardcore:1.5d,locked:0.0d}}	hard	true	false
+difficulty-read	{difficulty_settings:{difficulty:hard,hardcore:0.5d,locked:-0.5d}}	hard	true	true
+difficulty-read	{difficulty_settings:{difficulty:hard,hardcore:0L,locked:4294967296L}}	hard	false	true
+difficulty-initial	false	false	peaceful	peaceful	false
+difficulty-initial	false	false	easy	easy	false
+difficulty-initial	false	false	normal	normal	false
+difficulty-initial	false	false	hard	hard	false
+difficulty-initial	false	true	peaceful	peaceful	true
+difficulty-initial	false	true	easy	easy	true
+difficulty-initial	false	true	normal	normal	true
+difficulty-initial	false	true	hard	hard	true
+difficulty-initial	true	false	peaceful	hard	false
+difficulty-initial	true	false	easy	hard	false
+difficulty-initial	true	false	normal	hard	false
+difficulty-initial	true	false	hard	hard	false
+difficulty-initial	true	true	peaceful	hard	true
+difficulty-initial	true	true	easy	hard	true
+difficulty-initial	true	true	normal	hard	true
+difficulty-initial	true	true	hard	hard	true
 entity-nbt	player-empty	false	true	{Air:300s,Fire:0s,Health:20.0f,Inventory:[],Invulnerable:0b,Motion:[0.0d,0.0d,0.0d],OnGround:0b,PortalCooldown:0,Pos:[1.0d,64.0d,2.0d],Rotation:[0.0f,0.0f],SelectedItemSlot:0,UUID:[I;0,0,0,1],abilities:{flySpeed:0.05f,flying:0b,instabuild:0b,invulnerable:0b,mayBuild:1b,mayfly:0b,walkSpeed:0.1f},fall_distance:0.0d}
 entity-nbt	player-selected	false	true	{Air:300s,Fire:0s,Health:20.0f,Inventory:[{Slot:0b,count:3,id:"minecraft:stone"}],Invulnerable:0b,Motion:[0.0d,0.0d,0.0d],OnGround:0b,PortalCooldown:0,Pos:[1.0d,64.0d,2.0d],Rotation:[0.0f,0.0f],SelectedItem:{count:3,id:"minecraft:stone"},SelectedItemSlot:0,UUID:[I;0,0,0,1],abilities:{flySpeed:0.05f,flying:0b,instabuild:0b,invulnerable:0b,mayBuild:1b,mayfly:0b,walkSpeed:0.1f},fall_distance:0.0d}
 entity-nbt	player-zero	false	true	{Air:300s,Fire:0s,Health:20.0f,Inventory:[],Invulnerable:0b,Motion:[0.0d,0.0d,0.0d],OnGround:0b,PortalCooldown:0,Pos:[1.0d,64.0d,2.0d],Rotation:[0.0f,0.0f],SelectedItemSlot:0,UUID:[I;0,0,0,1],abilities:{flySpeed:0.05f,flying:0b,instabuild:0b,invulnerable:0b,mayBuild:1b,mayfly:0b,walkSpeed:0.1f},fall_distance:0.0d}

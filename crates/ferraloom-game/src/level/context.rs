@@ -1,5 +1,6 @@
 //! Immutable dimension services known for the entire lifetime of a live Level.
 use crate::entity::damage::{DamageSources, DamageTypeRegistry};
+use ferraloom_protocol::play::Difficulty;
 use ferraloom_worldgen::{feature::FeatureRegistry, generator::ChunkGenerator};
 use std::sync::Arc;
 
@@ -10,6 +11,7 @@ pub struct LevelContext {
     pub sea_level: i32,
     pub generator: Arc<ChunkGenerator>,
     pub features: Arc<FeatureRegistry>,
+    pub initial_difficulty: Difficulty,
     damage_types: Arc<DamageTypeRegistry>,
 }
 
@@ -20,6 +22,7 @@ impl LevelContext {
         generator: Arc<ChunkGenerator>,
         features: Arc<FeatureRegistry>,
         damage_types: Arc<DamageTypeRegistry>,
+        initial_difficulty: Difficulty,
     ) -> Self {
         Self {
             seed,
@@ -27,6 +30,7 @@ impl LevelContext {
             generator,
             features,
             damage_types,
+            initial_difficulty,
         }
     }
 
@@ -39,7 +43,8 @@ impl LevelContext {
     }
 
     /// Explicit controlled-level context. Immutable vanilla flat-generator
-    /// services are loaded once; each fixture supplies its native seed/sea level.
+    /// services are loaded once; each fixture supplies its native seed/sea level
+    /// and starts at the controlled LevelSettings default difficulty, Normal.
     #[cfg(any(test, feature = "test-fixtures"))]
     pub fn fixture(seed: i64, sea_level: i32) -> Arc<Self> {
         use ferraloom_data::datapack::{Pack, ResourceManager};
@@ -73,6 +78,7 @@ impl LevelContext {
             services.generator.clone(),
             services.features.clone(),
             services.damage_types.clone(),
+            Difficulty::Normal,
         ))
     }
 }

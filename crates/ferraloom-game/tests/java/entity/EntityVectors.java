@@ -105,6 +105,7 @@ public final class EntityVectors {
         LivingVectors.run(new EntityFixture(r));
         TravelVectors.run(new EntityFixture(r));
         DamageVectors.run(new EntityFixture(r));
+        DifficultyVectors.run();
         NbtVectors.run(new EntityFixture(r));
         NameVectors.run(new EntityFixture(r));
         FreezingVectors.run(new EntityFixture(r));
