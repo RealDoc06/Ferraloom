@@ -403,10 +403,11 @@ impl RuinedPortalPiece {
                 Block::MAGMA_BLOCK,
             ));
         }
-        let mut ignored = vec![Block::STRUCTURE_BLOCK];
-        if !self.properties.air_pocket {
-            ignored.push(Block::AIR);
-        }
+        let ignored = if self.properties.air_pocket {
+            vec![Block::STRUCTURE_BLOCK]
+        } else {
+            vec![Block::AIR, Block::STRUCTURE_BLOCK]
+        };
         let mut processors = vec![
             StructureProcessor::BlockIgnore(ignored),
             StructureProcessor::Rule(rules),
