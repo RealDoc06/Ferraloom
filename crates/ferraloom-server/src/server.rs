@@ -1696,8 +1696,6 @@ impl MinecraftServer {
             | sb::Packet::CustomPayload(_)
             | sb::Packet::Pong(_)
             | sb::Packet::PlayerCommand(_)
-            | sb::Packet::RecipeBookChangeSettings(_)
-            | sb::Packet::RecipeBookSeenRecipe(_)
             | sb::Packet::SeenAdvancements(_) => {}
             // These gameplay ports are outside the terrain/join milestone.
             _ => {}
