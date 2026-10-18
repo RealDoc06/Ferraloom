@@ -17,6 +17,11 @@ pub trait Container {
     fn size(&self) -> usize;
     fn get_item(&self, slot: usize) -> ItemStack;
     fn set_item(&mut self, slot: usize, stack: ItemStack);
+    /// Container#setItem when its argument is the identical current object.
+    /// Run class callbacks without replacing that object's generation.
+    fn reassign_item(&mut self, _slot: usize) -> Result<()> {
+        Err(MenuError::Unsupported("container existing-stack setter"))
+    }
     /// ItemStack#setCount on the existing receiver. Slot#setChanged is a
     /// separate operation; this must not invoke Container#setItem callbacks.
     fn set_item_count(&mut self, _slot: usize, _amount: i32) -> Result<()> {
@@ -143,6 +148,13 @@ impl SimpleContainer {
     }
 }
 impl Container for SimpleContainer {
+    fn reassign_item(&mut self, slot: usize) -> Result<()> {
+        let amount = count(&self.items[slot])
+            .min(self.max_stack_size().min(max_stack_size(&self.items[slot])));
+        set_count(&mut self.items[slot], amount);
+        self.set_changed();
+        Ok(())
+    }
     fn stack_parts(&self, slot: usize) -> Option<(&StackGenerations, &ItemStack, usize)> {
         Some((&self.stack_generations, self.items.get(slot)?, slot))
     }
@@ -179,12 +191,10 @@ impl Container for SimpleContainer {
     fn get_item(&self, slot: usize) -> ItemStack {
         self.items.get(slot).cloned().unwrap_or_default()
     }
-    fn set_item(&mut self, slot: usize, mut stack: ItemStack) {
-        let n = count(&stack).min(self.max_stack_size().min(max_stack_size(&stack)));
-        set_count(&mut stack, n);
+    fn set_item(&mut self, slot: usize, stack: ItemStack) {
         self.stack_generations
             .replace(slot, &mut self.items[slot], stack);
-        self.set_changed();
+        self.reassign_item(slot).expect("simple container setter");
     }
     fn set_changed(&mut self) {
         self.times_changed = self.times_changed.wrapping_add(1);
@@ -206,6 +216,10 @@ pub struct PlayerContainer<'a> {
     pub equipment: &'a mut crate::entity::player::equipment::EntityEquipment,
 }
 impl Container for PlayerContainer<'_> {
+    fn reassign_item(&mut self, _slot: usize) -> Result<()> {
+        // Inventory#setItem and EntityEquipment#set only assign the object.
+        Ok(())
+    }
     fn stack_parts(&self, slot: usize) -> Option<(&StackGenerations, &ItemStack, usize)> {
         self.inventory.stack_parts(slot, self.equipment)
     }
@@ -277,6 +291,9 @@ impl Default for ResultContainer {
     }
 }
 impl Container for ResultContainer {
+    fn reassign_item(&mut self, _slot: usize) -> Result<()> {
+        Ok(())
+    }
     fn stack_parts(&self, _slot: usize) -> Option<(&StackGenerations, &ItemStack, usize)> {
         Some((&self.stack_generations, &self.stack, 0))
     }
@@ -340,6 +357,10 @@ impl TransientCraftingContainer {
     }
 }
 impl Container for TransientCraftingContainer {
+    fn reassign_item(&mut self, _slot: usize) -> Result<()> {
+        // Its owning menu invokes slotsChanged after the short storage borrow.
+        Ok(())
+    }
     fn stack_parts(&self, slot: usize) -> Option<(&StackGenerations, &ItemStack, usize)> {
         Some((&self.stack_generations, self.items.get(slot)?, slot))
     }
@@ -403,6 +424,13 @@ impl MenuContainer {
     }
 }
 impl Container for MenuContainer {
+    fn reassign_item(&mut self, slot: usize) -> Result<()> {
+        match self {
+            Self::Simple(container) => container.reassign_item(slot),
+            Self::Crafting(container) => container.reassign_item(slot),
+            Self::Result(container) => container.reassign_item(slot),
+        }
+    }
     fn stack_parts(&self, slot: usize) -> Option<(&StackGenerations, &ItemStack, usize)> {
         match self {
             Self::Simple(container) => container.stack_parts(slot),

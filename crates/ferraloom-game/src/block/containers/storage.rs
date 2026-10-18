@@ -122,6 +122,13 @@ impl BaseContainerBlockEntity {
     }
 }
 impl Container for BaseContainerBlockEntity {
+    fn reassign_item(&mut self, slot: usize) -> crate::inventory::Result<()> {
+        let size = count(&self.items[slot])
+            .min(self.max_stack_size().min(max_stack_size(&self.items[slot])));
+        set_count(&mut self.items[slot], size);
+        self.set_changed();
+        Ok(())
+    }
     fn stack_parts(&self, slot: usize) -> Option<(&StackGenerations, &ItemStack, usize)> {
         Some((&self.stack_generations, self.items.get(slot)?, slot))
     }
@@ -151,11 +158,9 @@ impl Container for BaseContainerBlockEntity {
     fn get_item(&self, slot: usize) -> ItemStack {
         self.items[slot].clone()
     }
-    fn set_item(&mut self, slot: usize, mut stack: ItemStack) {
-        let size = count(&stack).min(self.max_stack_size().min(max_stack_size(&stack)));
-        set_count(&mut stack, size);
+    fn set_item(&mut self, slot: usize, stack: ItemStack) {
         self.replace_item(slot, stack);
-        self.set_changed();
+        self.reassign_item(slot).expect("base container setter");
     }
     fn set_changed(&mut self) {
         self.times_changed = self.times_changed.wrapping_add(1);

@@ -87,6 +87,43 @@ public final class ListenerVectors {
     events.add("held:" + InventoryVectors.item(fresh));
     System.out.println("listener\toperation-" + (copy ? "copy" : "split") + "\t" + String.join(";", events));
   }
+  static final class InsertionContainer extends net.minecraft.world.SimpleContainer {
+    final net.minecraft.world.SimpleContainer source = new net.minecraft.world.SimpleContainer(1);
+    final ArrayList<String> events = new ArrayList<>();
+    final boolean replace;
+    ItemStack input, oldTarget;
+    boolean armed, fired;
+    InsertionContainer(boolean replace) {
+      super(1);
+      this.replace = replace;
+      source.setItem(0, new ItemStack(Items.STONE, 10));
+      setItem(0, new ItemStack(Items.STONE, 60));
+      input = source.getItem(0);
+      oldTarget = getItem(0);
+      armed = true;
+    }
+    @Override public void setChanged() {
+      super.setChanged();
+      if (!armed) return;
+      events.add("changed:" + InventoryVectors.item(input) + ":" + InventoryVectors.item(source.getItem(0))
+        + ":" + InventoryVectors.item(getItem(0)) + ":" + (getItem(0) == oldTarget));
+      if (!fired) {
+        fired = true;
+        if (replace) {
+          source.setItem(0, new ItemStack(Items.DIAMOND, 7));
+          setItem(0, new ItemStack(Items.DIRT, 2));
+        }
+        input.grow(1);
+      }
+    }
+  }
+  static void safeInsert(boolean replace) {
+    var container = new InsertionContainer(replace);
+    var returned = new Slot(container, 0, 0, 0).safeInsert(container.input, 10);
+    container.events.add("returned:" + (returned == container.input) + ":" + InventoryVectors.item(returned));
+    container.events.add("heldTarget:" + InventoryVectors.item(container.oldTarget));
+    System.out.println("listener\tinsert-" + (replace ? "replace" : "mutate") + "\t" + String.join(";", container.events));
+  }
   public static void main(String[] args) throws Exception {
     var output = System.out;
     var errors = System.err;
@@ -104,5 +141,7 @@ public final class ListenerVectors {
     alias(registries, false);
     operationStack(false);
     operationStack(true);
+    safeInsert(false);
+    safeInsert(true);
   }
 }

@@ -29,6 +29,16 @@ impl BlockMenuContainer<'_> {
     }
 }
 impl Container for BlockMenuContainer<'_> {
+    fn reassign_item(&mut self, slot: usize) -> Result<()> {
+        let (index, slot) = self.locate(slot);
+        if let BlockEntityState::Crafter(crafter) = &mut *self.states[index] {
+            crafter.set_slot_state(slot, true);
+        }
+        self.states[index]
+            .container_mut()
+            .unwrap()
+            .reassign_item(slot)
+    }
     fn set_item_count(&mut self, slot: usize, amount: i32) -> Result<()> {
         let (index, slot) = self.locate(slot);
         self.states[index]

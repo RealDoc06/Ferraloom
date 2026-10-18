@@ -358,24 +358,17 @@ impl AbstractContainerMenu {
         amount: i32,
         hooks: &mut dyn MenuHooks,
     ) -> Result<ItemStack> {
-        if input.is_empty() || !slot.may_place(&input, hooks)? {
-            return Ok(input);
-        }
-        let mut target = self.get_item(ctx, slot.index);
-        let n = amount
-            .min(count(&input))
-            .min(slot.max_stack_size(self.container(ctx, slot.container), &input) - count(&target));
-        if n > 0 {
-            if target.is_empty() {
-                self.set_item_live(ctx, slot.index, split(&mut input, n), hooks)?;
-            } else if is_same_item_same_components(&target, &input) {
-                let left = count(&input) - n;
-                let total = count(&target) + n;
-                set_count(&mut input, left);
-                set_count(&mut target, total);
-                self.set_item_live(ctx, slot.index, target, hooks)?;
-            }
-        }
+        super::transfer::safe_insert_menu_item_stack(
+            &mut super::transfer::PureMenuTransfer {
+                menu: self,
+                context: ctx,
+                source: &mut input,
+            },
+            slot.index,
+            super::transfer::PureStackRef::Source,
+            amount,
+            hooks,
+        )?;
         Ok(input)
     }
     fn safe_take(

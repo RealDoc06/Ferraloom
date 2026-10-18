@@ -8,6 +8,8 @@ It also transfers lastSlots between two menus sharing the player inventory,
 then replaces either menu's entry and mutates the original aliased copy.
 Fresh split/copy objects also move into a container, then remain independently
 mutable when a later setItem replaces them.
+Real Slot.safeInsert callbacks observe both count edits before setByPlayer,
+then replace or mutate the source/target while their original objects stay held.
 
 Both scripts use the pinned jar, JDK 25 and libraries in the main checkout's
 shared cache. Crafting uses the Mockito jars already used by the recipe harness
