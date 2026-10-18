@@ -42,6 +42,7 @@ pub enum LevelError {
     MissingChunk(ChunkPos),
     WorldgenMutationFailed(BlockPos),
     UnsupportedWorldgenEnvironment,
+    UnsupportedWorldgenBehavior,
     OutsideBuildHeight,
     MissingEntity(EntityRef),
     WrongEntityType(EntityRef),

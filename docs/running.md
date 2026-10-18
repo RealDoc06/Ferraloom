@@ -14,7 +14,13 @@ and every skipped call, including shape updates, increments the server's
 `unported_skipped_calls` statistic. Only that call is skipped; queries requiring
 a value still fail explicitly. Use `--unported-behavior strict` to fail on every
 unsupported call. Library callers, integration tests and parity runs default to
-Strict. This temporary mode will be removed when the block families are ported.
+Strict. Worldgen unit skips share these counters and log once per feature or
+structure piece and behavior. Pending block-entity activation is also counted and
+logged per block and factory in Warn; raw NBT is retained for saving and later
+activation. Drained generation callbacks do not imply live block-entity readiness,
+and required block-entity queries remain unsupported in both modes. Strict fails
+on any worldgen skip or pending activation. This temporary mode will be removed
+when the block families are ported.
 
 Generation uses the same policy. Strict fails the status step when a placed
 feature or structure piece requires an unported callback. Warn abandons only

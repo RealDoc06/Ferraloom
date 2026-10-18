@@ -34,8 +34,12 @@ impl LevelChunk {
         &self.pending_generation.block_entities
     }
     pub fn post_processing_complete(&self) -> bool {
+        self.generation_callbacks_drained() && self.pending_generation.block_entities.is_empty()
+    }
+    /// Generation callbacks can finish under Warn while raw block entities wait
+    /// for their live factories. This never reports those entities as activated.
+    pub fn generation_callbacks_drained(&self) -> bool {
         self.pending_generation.offsets.iter().all(Vec::is_empty)
-            && self.pending_generation.block_entities.is_empty()
             && self.pending_generation.upgrade.is_none()
     }
     pub fn save_pending_generation_data(&self, data: &mut SerializableChunkData) {
@@ -69,7 +73,8 @@ impl Level {
     }
     /// Port of LevelChunk#postProcessGeneration. Captured state is reused after
     /// the immediate fluid tick; section lists are cleared only after draining.
-    /// Pending block entities and upgrade data stay owned on explicit failure.
+    /// Strict rejects pending block entities; Warn counts each activation skip
+    /// and retains the raw NBT. Upgrade data stays owned on explicit failure.
     pub fn post_process_generation(&mut self, key: ChunkPos) -> Result<(), LevelError> {
         let chunk = self.chunk(key).ok_or(LevelError::MissingChunk(key))?;
         let min = chunk.min_section();
@@ -133,21 +138,30 @@ impl Level {
                 list.clear();
             }
         }
-        let chunk = self.chunk(key).unwrap();
-        if let Some(tag) = chunk.pending_block_entity_nbt().first() {
-            let position = || {
-                Some(BlockPos::new(
-                    tag.get_int("x")?,
-                    tag.get_int("y")?,
-                    tag.get_int("z")?,
-                ))
+        for index in 0..self.chunk(key).unwrap().pending_block_entity_nbt().len() {
+            let (pos, factory) = {
+                let tag = &self.chunk(key).unwrap().pending_block_entity_nbt()[index];
+                let position = || {
+                    Some(BlockPos::new(
+                        tag.get_int("x")?,
+                        tag.get_int("y")?,
+                        tag.get_int("z")?,
+                    ))
+                };
+                (
+                    position().ok_or(LevelError::InvalidPendingGenerationData)?,
+                    tag.get_string("id").cloned().unwrap_or_default(),
+                )
             };
-            let pos = position().ok_or(LevelError::InvalidPendingGenerationData)?;
-            return Err(LevelError::UnsupportedBlockEntity(
-                self.get_block_state(pos)?.block(),
-            ));
+            self.skip_block_entity_activation(self.get_block_state(pos)?.block(), factory)?;
         }
-        if chunk.pending_generation.upgrade.is_some() {
+        if self
+            .chunk(key)
+            .unwrap()
+            .pending_generation
+            .upgrade
+            .is_some()
+        {
             return Err(LevelError::UnsupportedChunkUpgrade);
         }
         Ok(())
