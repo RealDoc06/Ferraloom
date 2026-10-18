@@ -654,9 +654,9 @@ impl BlockBehavior for LiquidBlock {
     fn collision_shape(
         &self,
         state: BlockState,
-        _pos: BlockPos,
+        pos: BlockPos,
         context: &super::BlockCollisionContext<'_>,
-        _level: &super::LevelReaderRef<'_>,
+        level: &super::LevelReaderRef<'_>,
     ) -> Result<ferraloom_util::VoxelShape, LevelError> {
         use ferraloom_util::shapes::CollisionContext;
         if context.always_collide_with_fluid() {
@@ -665,18 +665,24 @@ impl BlockBehavior for LiquidBlock {
         if state.get(properties::LEVEL) != Some(0) {
             return Ok(ferraloom_util::shapes::empty());
         }
-        match context {
-            // LiquidBlock consults LivingEntity#getLiquidCollisionShape, which
-            // is empty in the base class. Specialized fluid-walking entities
-            // supply a nonempty shape in their separate behavior port.
-            super::BlockCollisionContext::Empty(_) | super::BlockCollisionContext::Position(_) => {
-                Ok(ferraloom_util::shapes::empty())
+        if let super::BlockCollisionContext::Entity(entity_context) = context {
+            let liquid_shape = match level {
+                super::LevelReaderRef::Server(level) => {
+                    entity_context.entity.liquid_collision_shape(level)?
+                }
+            };
+            if let Some(shape) = liquid_shape {
+                if context.is_above(&shape, pos, true)
+                    && context.can_stand_on_fluid(
+                        &level.get_block_state(pos.above(1))?.data().fluid,
+                        &state.data().fluid,
+                    )
+                {
+                    return Ok(shape);
+                }
             }
-            super::BlockCollisionContext::Entity(_) => Err(LevelError::UnsupportedBlockMethod(
-                state.block(),
-                super::BlockMethod::CollisionShape,
-            )),
         }
+        Ok(ferraloom_util::shapes::empty())
     }
     fn shape(
         &self,
