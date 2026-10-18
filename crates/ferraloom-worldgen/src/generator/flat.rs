@@ -137,6 +137,70 @@ pub struct FlatLevelSource {
     void_gen: bool,
 }
 impl FlatLevelSource {
+    pub fn layers(&self) -> &[Option<BlockState>] {
+        &self.layers
+    }
+    pub fn feature_registry(&self, resources: &ResourceManager) -> Result<FeatureRegistry, Error> {
+        self.load_features(resources).map(|(registry, _)| registry)
+    }
+    /// The current server can run deferred layers and an unmodified void
+    /// platform locally. Other records require the owned-neighborhood scheduler.
+    pub fn chunk_local_feature_registry(
+        &self,
+        resources: &ResourceManager,
+    ) -> Result<Option<FeatureRegistry>, Error> {
+        let (registry, local) = self.load_features(resources)?;
+        Ok(local.then_some(registry))
+    }
+    fn load_features(&self, resources: &ResourceManager) -> Result<(FeatureRegistry, bool), Error> {
+        let mut loader = crate::feature::FeatureLoader::new(resources)?;
+        loader.load_biome_features()?;
+        let mut named = Vec::new();
+        if (!self.void_gen || self.settings.biome == "the_void".parse()?) && self.settings.features
+        {
+            for (step, entries) in loader.registry().biome_features[&self.settings.biome]
+                .iter()
+                .enumerate()
+            {
+                if step != 3 && step != 4 && (!self.settings.lakes || step != 1) {
+                    named.extend(entries.iter().cloned());
+                }
+            }
+        }
+        if self.settings.lakes {
+            named.extend([
+                "lake_lava_underground".parse()?,
+                "lake_lava_surface".parse()?,
+            ]);
+        }
+        let mut local = true;
+        for name in named {
+            loader.placed(&Value::String(name.to_string()))?;
+            let path = name.with_path(format!("worldgen/placed_feature/{}.json", name.path()))?;
+            let Ok(resource) = resources.require(&path) else {
+                // Inline holders have no registry resource to inspect. Keep
+                // them on the general owned-region path conservatively.
+                local = false;
+                continue;
+            };
+            let placed = resource.json()?;
+            let encoded = field(&placed, "feature")?;
+            let feature = if encoded.is_string() {
+                let id = id(encoded)?;
+                resources
+                    .require(&id.with_path(format!("worldgen/feature/{}.json", id.path()))?)?
+                    .json()?
+            } else {
+                encoded.clone()
+            };
+            local &= list(field(&placed, "placement")?)?.is_empty()
+                && matches!(
+                    kind(&feature)?.to_string().as_str(),
+                    "minecraft:void_start_platform" | "minecraft:fill_layer" | "minecraft:no_op"
+                );
+        }
+        Ok((self.adjust_feature_registry(&loader.finish())?, local))
+    }
     pub fn new(
         data: Arc<GenerationData>,
         settings: FlatLevelGeneratorSettings,
