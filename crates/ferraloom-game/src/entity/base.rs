@@ -260,6 +260,18 @@ impl EntityData {
     pub fn set_bounding_box(&mut self, bb: Aabb) {
         self.bounding_box = bb;
     }
+    /// Port of Entity#setYRot. Non-finite input leaves the previous angle intact.
+    pub fn set_y_rot(&mut self, yaw: f32) {
+        if yaw.is_finite() {
+            self.yaw = yaw;
+        }
+    }
+    /// Port of Entity#setXRot, including the remainder before the pitch clamp.
+    pub fn set_x_rot(&mut self, pitch: f32) {
+        if pitch.is_finite() {
+            self.pitch = (pitch % 360.0).clamp(-90.0, 90.0);
+        }
+    }
     pub fn set_old_pos_and_rot(&mut self) {
         self.old_position = self.position;
         self.interpolation_old_position = self.position;
