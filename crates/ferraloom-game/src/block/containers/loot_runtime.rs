@@ -27,6 +27,7 @@ pub struct LiveLootRuntime<'a> {
     level: &'a mut Level,
     random: SelectedStream,
     dynamic: BTreeMap<Identifier, DynamicDrop>,
+    block_entity_source: Option<BlockEntityRef>,
     roots: Vec<BlockEntityRef>,
 }
 impl<'a> LiveLootRuntime<'a> {
@@ -51,6 +52,7 @@ impl<'a> LiveLootRuntime<'a> {
             level,
             random,
             dynamic: BTreeMap::new(),
+            block_entity_source: None,
             roots: Vec::new(),
         }
     }
@@ -67,6 +69,18 @@ impl<'a> LiveLootRuntime<'a> {
     }
     pub fn level_mut(&mut self) -> &mut Level {
         self.level
+    }
+    /// Retain the actual BLOCK_ENTITY receiver, independently of any dynamic
+    /// contents provider. Reentrant replacement cannot redirect later reads.
+    pub fn bind_block_entity_source(&mut self, handle: BlockEntityRef) -> Result<()> {
+        self.level.retain_block_entity(handle).map_err(required)?;
+        if let Some(old) = self.block_entity_source.replace(handle) {
+            self.level.release_block_entity(old);
+        }
+        Ok(())
+    }
+    pub fn block_entity_source(&self) -> Option<BlockEntityRef> {
+        self.block_entity_source
     }
 
     /// Port of LootParams.Builder#withDynamicDrop, including duplicate rejection.
@@ -124,6 +138,9 @@ impl LootRuntime for LiveLootRuntime<'_> {
 }
 impl Drop for LiveLootRuntime<'_> {
     fn drop(&mut self) {
+        if let Some(source) = self.block_entity_source {
+            self.level.release_block_entity(source);
+        }
         for root in self.roots.drain(..) {
             self.level.release_block_entity(root);
         }

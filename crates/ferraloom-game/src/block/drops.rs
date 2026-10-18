@@ -11,6 +11,13 @@ use ferraloom_nbt::Tag;
 use ferraloom_protocol::{Identifier, component::ItemStack};
 use ferraloom_util::{BlockPos, Direction, Vec3, mth};
 
+/// The native LootParams.Builder carries the receiver object, rather than only
+/// its initially serialized data. Keep that generation through block dispatch.
+pub struct BlockLootContext {
+    pub params: LootParams,
+    pub block_entity: Option<BlockEntityRef>,
+}
+
 /// Port of Block#popResource. The offsets are eager; the item constructor is
 /// deferred until the empty-stack and BLOCK_DROPS guards have passed.
 pub fn pop_resource(
@@ -179,7 +186,14 @@ pub fn get_drops_with_tool(
             )?));
         params.block_entity_components = Some(receiver.collect_components());
     }
-    get_drops_from_params(state, params, level)
+    get_drops_from_context(
+        state,
+        BlockLootContext {
+            params,
+            block_entity,
+        },
+        level,
+    )
 }
 /// Callers such as explosions can supply the native optional BLOCK parameters.
 pub fn get_drops_from_params(
@@ -187,19 +201,39 @@ pub fn get_drops_from_params(
     params: LootParams,
     level: &mut Level,
 ) -> Result<Vec<ItemStack>, LevelError> {
+    get_drops_from_context(
+        state,
+        BlockLootContext {
+            params,
+            block_entity: None,
+        },
+        level,
+    )
+}
+/// Live callers with BLOCK_ENTITY supply its original generation explicitly;
+/// an NBT position never substitutes for a receiver identity.
+pub fn get_drops_from_context(
+    state: BlockState,
+    context: BlockLootContext,
+    level: &mut Level,
+) -> Result<Vec<ItemStack>, LevelError> {
     level
         .required_block_behavior(state.block(), BlockMethod::GetDrops)?
-        .get_drops(state, params, level)
+        .get_drops(state, context, level)
 }
 /// Port of BlockBehaviour#getDrops; absence returns before context validation.
 pub(super) fn get_base_drops(
     state: BlockState,
-    mut params: LootParams,
+    context: BlockLootContext,
     level: &mut Level,
 ) -> Result<Vec<ItemStack>, LevelError> {
     let Some(name) = state.block().loot_table_name() else {
         return Ok(Vec::new());
     };
+    let BlockLootContext {
+        mut params,
+        block_entity,
+    } = context;
     params.block_state = Some(state);
     params
         .validate(
@@ -211,6 +245,11 @@ pub(super) fn get_base_drops(
     let table = Identifier::parse(name).expect("extracted loot-table identifier");
     let mut runtime = LiveLootRuntime::for_table(level, &resources.loot, &table, 0)
         .map_err(|_| LevelError::Inventory("block loot stream"))?;
+    if let Some(handle) = block_entity {
+        runtime
+            .bind_block_entity_source(handle)
+            .map_err(|_| LevelError::Inventory("block loot receiver"))?;
+    }
     resources
         .loot
         .get_random_items_with_runtime(&table, &params, &mut runtime)
@@ -261,6 +300,11 @@ pub fn drop_from_block_interact_loot_table(
         let drops = {
             let mut runtime = LiveLootRuntime::for_table(level, &resources.loot, table, 0)
                 .map_err(|_| LevelError::Inventory("block interact loot stream"))?;
+            if let Some(handle) = block_entity {
+                runtime
+                    .bind_block_entity_source(handle)
+                    .map_err(|_| LevelError::Inventory("block interact loot receiver"))?;
+            }
             resources
                 .loot
                 .get_random_items_with_runtime(table, &params, &mut runtime)

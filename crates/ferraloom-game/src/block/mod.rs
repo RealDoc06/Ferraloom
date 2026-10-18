@@ -184,10 +184,10 @@ pub trait BlockBehavior: Sync {
     fn get_drops(
         &self,
         state: BlockState,
-        params: crate::loot::LootParams,
+        context: drops::BlockLootContext,
         level: &mut Level,
     ) -> Result<Vec<ferraloom_protocol::component::ItemStack>, LevelError> {
-        drops::get_base_drops(state, params, level)
+        drops::get_base_drops(state, context, level)
     }
     /// Port of BlockBehaviour#spawnAfterBreak's base no-op.
     fn spawn_after_break(

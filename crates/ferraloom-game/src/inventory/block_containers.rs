@@ -236,6 +236,27 @@ mod tests {
         ));
     }
     #[test]
+    fn loot_source_retains_the_original_generation_without_a_dynamic_provider() {
+        use crate::{block::containers::loot_runtime::LiveLootRuntime, loot::LootRandomSelection};
+        let (mut level, _, original) = setup();
+        let mut runtime = LiveLootRuntime::new(&mut level, LootRandomSelection::Level);
+        runtime.bind_block_entity_source(original).unwrap();
+        runtime
+            .level_mut()
+            .set_block_entity(create(original.pos, Block::CHEST.default_state()).unwrap())
+            .unwrap();
+        runtime.level_mut().collect_detached_block_entities();
+        assert_eq!(runtime.block_entity_source(), Some(original));
+        assert_ne!(
+            runtime.level().block_entity_ref(original.pos).unwrap(),
+            Some(original)
+        );
+        assert!(runtime.level().block_entity_state(original).is_ok());
+        drop(runtime);
+        level.collect_detached_block_entities();
+        assert!(level.block_entity_state(original).is_err());
+    }
+    #[test]
     fn sign_edits_notify_at_set_text_and_after_clearing_editor() {
         use crate::block::containers::sign::{self, SignBlockEntity};
         let fixtures = include_str!("../../tests/java/blocks/entities/vectors.tsv");
