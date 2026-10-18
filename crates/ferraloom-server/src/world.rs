@@ -999,7 +999,16 @@ impl World {
         let mut next = None;
         while let Some(dispatch) = self.generation_dispatcher.next_dispatch() {
             match dispatch {
-                ChunkTaskDispatch::Batch { pos: _, mut tasks } => {
+                ChunkTaskDispatch::Batch { pos, mut tasks } => {
+                    // Release messages precede pending submissions in vanilla's
+                    // mailbox. A canceled submission can therefore still join
+                    // the retried position's batch; its owned token rejects it.
+                    tasks.retain(|task| !task.cancelled.load(Ordering::Relaxed));
+                    if tasks.is_empty() {
+                        self.generation_dispatcher.release(pos, false, None);
+                        self.generation_dispatcher.complete_batch();
+                        continue;
+                    }
                     next = tasks.pop();
                     ensure!(tasks.is_empty(), "duplicate generation request");
                     break;
@@ -1986,6 +1995,23 @@ mod generation_order_tests {
         assert!(world.io.load(cancelled).await.unwrap().is_some());
         assert!(blocker_reply.send(Ok(output(first, "blocker"))).is_ok());
         assert_eq!(world.poll_terrain().unwrap()[0].0, 2);
+        let retry = ChunkPos::new(128, 128);
+        world.request(4, retry);
+        assert_eq!(world.cancel_generation(retry), Some(4));
+        world.request(5, retry);
+        let completed = tokio::time::timeout(std::time::Duration::from_secs(30), async {
+            loop {
+                let done = world.poll_terrain().unwrap();
+                if !done.is_empty() {
+                    break done;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+            }
+        })
+        .await
+        .unwrap();
+        assert_eq!(completed.len(), 1);
+        assert_eq!((completed[0].0, completed[0].1.pos), (5, retry));
         world.close_chunk_storage().await.unwrap();
     }
 }
