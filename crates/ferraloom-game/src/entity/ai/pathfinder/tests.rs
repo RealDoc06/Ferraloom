@@ -195,7 +195,7 @@ fn native_heap_ties_changes_clear_and_growth() {
             );
         }
     }
-    assert_eq!(count, 4);
+    assert_eq!(count, 5);
 }
 #[test]
 fn native_path_copy_shares_nodes_and_list_but_not_cursor() {

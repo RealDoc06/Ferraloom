@@ -200,7 +200,7 @@ impl PathFinder {
                 .map(|(target, _)| Some(target))
                 .collect();
             path.set_debug(DebugData {
-                open_set: self.open_set.get_heap().to_vec(),
+                open_set: self.open_set.get_heap(),
                 closed_set: closed_nodes,
                 targets: order
                     .iter()

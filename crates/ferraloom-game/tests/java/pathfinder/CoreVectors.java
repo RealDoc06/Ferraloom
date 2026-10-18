@@ -37,6 +37,7 @@ public class CoreVectors {
   static void heaps() {
     heap("equal",new float[]{1,1,1,1,1},"peek","insert:0","insert:1","insert:2","insert:3","insert:4","peek","pop","pop","pop","pop","pop","peek");
     heap("change-remove-clear",new float[]{4,2,3,1,6,5},"insert:0","insert:1","insert:2","insert:3","insert:4","insert:5","change:4:0.0","change:4:9.0","remove:2","remove:3","pop","clear","peek","clear","peek","insert:0","insert:2","pop");
+    heap("cleared-storage",new float[]{4,2,3},"insert:0","insert:1","insert:2","clear","peek","change:2:0.0","peek","change:2:9.0","peek","clear","insert:2");
     heap("special-floats",new float[]{Float.NaN,-0.0f,0.0f,Float.POSITIVE_INFINITY,Float.NEGATIVE_INFINITY,3},"insert:0","insert:1","insert:2","insert:3","insert:4","insert:5","change:0:2.0","change:1:NaN","pop","pop","pop","pop","pop","pop","peek");
     BinaryHeap grown=new BinaryHeap();for(int i=0;i<140;i++){Node n=new Node(i,0,0);n.f=(i*31)%17;grown.insert(n);}JsonObject growth=new JsonObject();growth.addProperty("kind","heap-growth");JsonArray popped=new JsonArray();while(!grown.isEmpty())popped.add(grown.pop().x);growth.add("popped",popped);rows.add(growth);
   }

@@ -4,9 +4,9 @@ Run `python3 generate.py` on devbox with the pinned 26.3 vanilla cache and JDK25
 The harness invokes the real Node, Target, Path, BinaryHeap and PathFinder;
 its NodeEvaluator supplies an explicit graph without a simulated Mob or world.
 
-The 71 cases cover the 27 PathType IDs/default maluses and invalid ID fallback;
+The 72 cases cover the 27 PathType IDs/default maluses and invalid ID fallback;
 node hashes, overflow, distances, clone metadata and debug bytes; equal-cost and
-special-float heap order, changes, removal, stale indices after clear and growth
+special-float heap order, changes, removal, stale indices/backing slots after clear and growth
 past128; shared Path copy/list/node identity with independent and overflowing
 cursors; target best-heuristic ties; and search budgets, strict distance bounds,
 reach ranges, multiple targets, hash aliases, weighted heuristics, maluses,
