@@ -1810,3 +1810,79 @@ fn double_plant_and_moss_post_placement_match_native_updates_and_rng() {
     }
     assert_eq!(count, 4704);
 }
+
+#[test]
+fn creative_double_plant_destruction_matches_native_states_and_rng() {
+    use crate::entity::{
+        EntityRef, EntityState,
+        player::{GameType, ServerPlayer},
+    };
+    use ferraloom_util::{
+        Uuid, Vec3,
+        random::{LegacyRandomSource, Random, RandomSource},
+    };
+    use std::io::Read;
+    let mut text = String::new();
+    flate2::read::GzDecoder::new(
+        include_bytes!("../../../tests/java/blocks/plants/creative-destruction.tsv.gz").as_slice(),
+    )
+    .read_to_string(&mut text)
+    .unwrap();
+    let (blocks, fluids) = tags();
+    let pos = BlockPos::new(8, 5, 8);
+    let actor = EntityRef(1);
+    let mut count = 0;
+    for line in text.lines() {
+        let f: Vec<_> = line.split('\t').collect();
+        let state = BlockState::from_id(f[1].parse().unwrap()).unwrap();
+        let mut level = level();
+        level.set_block_tags(blocks.clone());
+        level.set_fluid_tags(fluids.clone());
+        level
+            .add_entity(
+                actor,
+                EntityState::Player(Box::new(ServerPlayer::new(
+                    Uuid::new(0, 1),
+                    "plants".into(),
+                    1,
+                    Vec3::ZERO,
+                    GameType::Creative,
+                ))),
+            )
+            .unwrap();
+        level
+            .set_block_state(pos.below(2), Block::CLAY.default_state())
+            .unwrap();
+        level
+            .set_block_state(
+                pos.below(1),
+                BlockState::from_id(f[2].parse().unwrap()).unwrap(),
+            )
+            .unwrap();
+        level.set_block_state(pos, state).unwrap();
+        level.set_random_streams(
+            Random::Legacy(LegacyRandomSource::new(f[3].parse().unwrap())),
+            0,
+        );
+        let result = level.player_will_destroy(state, pos, actor).unwrap();
+        assert_eq!(result.id(), f[4].parse::<u16>().unwrap(), "return {line}");
+        assert_eq!(
+            level.get_block_state(pos.below(1)).unwrap().id(),
+            f[5].parse::<u16>().unwrap(),
+            "lower {line}"
+        );
+        assert_eq!(
+            level.get_block_state(pos).unwrap().id(),
+            f[6].parse::<u16>().unwrap(),
+            "current {line}"
+        );
+        assert_eq!(
+            level.random().next_long(),
+            f[7].parse::<i64>().unwrap(),
+            "RNG {line}"
+        );
+        assert!(level.take_effects().iter().any(|effect|matches!(effect,LevelEffect::GameEvent{source:Some(source),affected_state:Some(affected),..} if *source==actor && *affected==state)),"actor {line}");
+        count += 1;
+    }
+    assert_eq!(count, 512);
+}

@@ -91,3 +91,7 @@ with tempfile.TemporaryDirectory(prefix='ferraloom-plants-java-') as directory:
     post='\n'.join(line for line in lines if line.startswith('post-place\t')) + '\n'
     (HERE/'post-placement.tsv.gz').write_bytes(gzip.compress(post.encode(),mtime=0))
     print(f'{len(post.splitlines())} native double-plant and moss post-placement vectors')
+
+    destroy='\n'.join(line for line in lines if line.startswith('creative-destroy\t')) + '\n'
+    (HERE/'creative-destruction.tsv.gz').write_bytes(gzip.compress(destroy.encode(),mtime=0))
+    print(f'{len(destroy.splitlines())} native creative double-plant destruction vectors')

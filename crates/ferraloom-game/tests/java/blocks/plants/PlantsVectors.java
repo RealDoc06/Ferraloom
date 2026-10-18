@@ -15,8 +15,14 @@ public final class PlantsVectors {
     static final class PlantLevel extends MutationFixture {
         int light;
         PlantLevel(RegistryAccess registry) { super(registry); }
+        @Override public void levelEvent(net.minecraft.world.entity.Entity source,int type,BlockPos pos,int data) { trace.add("event:"+type+":"+pos.getX()+":"+pos.getY()+":"+pos.getZ()+":"+data); }
+        @Override public void gameEvent(Holder event,net.minecraft.world.phys.Vec3 at,net.minecraft.world.level.gameevent.GameEvent.Context context) { trace.add("game:"+BuiltInRegistries.GAME_EVENT.getKey((net.minecraft.world.level.gameevent.GameEvent)event.value())); }
         @Override public int getRawBrightness(BlockPos p,int darkening) { return Math.max(0,light-darkening); }
         @Override public int getBrightness(LightLayer layer,BlockPos p) { return layer==LightLayer.SKY?light:0; }
+    }
+    static final class PlantPlayer extends net.minecraft.world.entity.player.Player {
+        PlantPlayer(Level level) {super(level,new com.mojang.authlib.GameProfile(new java.util.UUID(0,1),"plants"));getAbilities().instabuild=true;}
+        @Override public GameType gameMode() {return GameType.CREATIVE;}
     }
     public static void main(String[] args) throws Exception {
         var out=System.out;var err=System.err;
@@ -195,6 +201,15 @@ public final class PlantsVectors {
             }
             level.getRandom().setSeed(seed);block.setPlacedBy(level,pos,state,null,net.minecraft.world.item.ItemStack.EMPTY);
             System.out.println("post-place\t"+Block.getId(state)+"\t"+Block.getId(support)+"\t"+Block.getId(above)+"\t"+mode+"\t"+seed+"\t"+Block.getId(level.getBlockState(pos))+"\t"+Block.getId(level.getBlockState(pos.above()))+"\t"+level.getRandom().nextLong());
+        }
+        var creativePlayer=new PlantPlayer(level);
+        for(var block:List.of(Blocks.TALL_GRASS,Blocks.SUNFLOWER,Blocks.PITCHER_CROP,Blocks.SMALL_DRIPLEAF,Blocks.TALL_SEAGRASS))for(var state:block.getStateDefinition().getPossibleStates())for(int mode=0;mode<4;mode++)for(int seed=0;seed<4;seed++) {
+            var below=switch(mode) {case 0->state.setValue(BlockStateProperties.DOUBLE_BLOCK_HALF,net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER);case 1->state.setValue(BlockStateProperties.DOUBLE_BLOCK_HALF,net.minecraft.world.level.block.state.properties.DoubleBlockHalf.UPPER);case 2->Blocks.DIRT.defaultBlockState();default->Blocks.LARGE_FERN.defaultBlockState();};
+            level.chunks.clear();level.getChunkAt(pos.below(2)).setBlockState(pos.below(2),Blocks.CLAY.defaultBlockState(),816);
+            level.getChunkAt(pos.below()).setBlockState(pos.below(),below,816);level.getChunkAt(pos).setBlockState(pos,state,816);
+            level.trace.clear();level.getRandom().setSeed(seed);var result=block.playerWillDestroy(level,pos,state,creativePlayer);
+            String events=level.trace.stream().filter(t->t.startsWith("event:")||t.startsWith("game:")).collect(java.util.stream.Collectors.joining(","));
+            System.out.println("creative-destroy\t"+Block.getId(state)+"\t"+Block.getId(below)+"\t"+seed+"\t"+Block.getId(result)+"\t"+Block.getId(level.getBlockState(pos.below()))+"\t"+Block.getId(level.getBlockState(pos))+"\t"+level.getRandom().nextLong()+"\t"+events);
         }
         var leafNeighbors=List.of(Blocks.AIR.defaultBlockState(),Blocks.STONE.defaultBlockState(),Blocks.OAK_LOG.defaultBlockState(),Blocks.MANGROVE_ROOTS.defaultBlockState(),
             Blocks.OAK_LEAVES.defaultBlockState().setValue(BlockStateProperties.DISTANCE,1),Blocks.OAK_LEAVES.defaultBlockState().setValue(BlockStateProperties.DISTANCE,6),
