@@ -40,6 +40,7 @@ impl GameType {
 pub struct ServerPlayer {
     pub parent: LivingEntity,
     pub inventory: inventory::Inventory,
+    pub menus: crate::inventory::MenuSession,
     pub name: String,
     pub known_movement: Vec3,
     pub game_mode: GameType,
@@ -97,6 +98,7 @@ impl ServerPlayer {
             },
             name,
             inventory: Default::default(),
+            menus: Default::default(),
             known_movement: Vec3::ZERO,
             game_mode,
             flying: game_mode == GameType::Spectator,

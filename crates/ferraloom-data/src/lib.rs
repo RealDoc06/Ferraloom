@@ -271,9 +271,21 @@ pub enum Rarity {
     Epic,
 }
 
+/// Immutable ItemStackTemplate fact; component codecs belong to protocol.
+#[derive(Clone, Copy, Debug)]
+pub struct CraftingRemainder {
+    pub item: Item,
+    pub count: i32,
+    pub components_json: &'static str,
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct ItemData {
     pub max_stack_size: u32,
+    /// Item#getCraftingRemainder, independent of USE_REMAINDER.
+    pub crafting_remainder: Option<CraftingRemainder>,
+    /// BannerItem#getColor. None for all non-banner items.
+    pub banner_color: Option<&'static str>,
     pub max_damage: u32,
     pub rarity: Rarity,
     pub block: Option<Block>,

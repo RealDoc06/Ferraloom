@@ -480,14 +480,24 @@ fn voxel_shapes(data: &Value, block_properties: &Value) -> String {
     out
 }
 
-fn items(out: &mut String, items: &Value) {
+fn items(out: &mut String, items: &Value, crafting: &Value) {
     out.push_str("pub const ITEMS: &[ItemData] = &[\n");
     for (id, item) in items.as_array().unwrap().iter().enumerate() {
         assert_eq!(number(&item["id"]), id as u64);
         let block = item["block"]
             .as_u64()
             .map_or_else(|| "None".into(), |id| format!("Some(Block({id}))"));
-        writeln!(out, "ItemData {{ max_stack_size: {}, max_damage: {}, rarity: Rarity::{}, block: {block}, default_components_json: {:?} }},", item["max_stack_size"], item["max_damage"], pascal(string(&item["rarity"])), serde_json::to_string(&item["components"]).unwrap()).unwrap();
+        let facts = &crafting[id];
+        let remainder = facts["remainder"].as_object().map_or_else(|| "None".to_owned(), |r| {
+            let item_id = items.as_array().unwrap().iter().position(|item| item["name"] == r["id"]).expect("crafting remainder item");
+            let count = r.get("count").and_then(Value::as_i64).unwrap_or(1);
+            let components = r.get("components").cloned().unwrap_or_else(|| serde_json::json!({}));
+            format!("Some(CraftingRemainder {{ item: Item({item_id}), count: {count}, components_json: {:?} }})", serde_json::to_string(&components).unwrap())
+        });
+        let banner_color = facts["banner_color"]
+            .as_str()
+            .map_or_else(|| "None".to_owned(), |name| format!("Some({name:?})"));
+        writeln!(out, "ItemData {{ crafting_remainder: {remainder}, banner_color: {banner_color}, max_stack_size: {}, max_damage: {}, rarity: Rarity::{}, block: {block}, default_components_json: {:?} }},", item["max_stack_size"], item["max_damage"], pascal(string(&item["rarity"])), serde_json::to_string(&item["components"]).unwrap()).unwrap();
     }
     out.push_str("];\n");
 }
@@ -860,7 +870,7 @@ fn main() {
         redstone.iter().map(|v| number(v) as u8).collect::<Vec<_>>()
     )
     .unwrap();
-    items(&mut out, &item_report);
+    items(&mut out, &item_report, &load(root, "item_crafting"));
     entities(&mut out, &entity_report, &registries_report);
     attribute_properties(&mut out, &attribute_report, &registries_report);
     let path = Path::new(&std::env::var_os("OUT_DIR").unwrap()).join("data.rs");
