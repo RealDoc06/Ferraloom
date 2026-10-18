@@ -2,6 +2,9 @@ import java.util.*;
 import net.minecraft.nbt.*;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.entity.EntityTypes;
+import net.minecraft.world.entity.EntityReference;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.animal.cow.Cow;
 import net.minecraft.world.entity.item.PrimedTnt;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.storage.TagValueInput;
@@ -18,6 +21,18 @@ public final class PersistenceVectors {
     return Integer.toHexString(Float.floatToRawIntBits(entity.getYRot()))+","+Integer.toHexString(Float.floatToRawIntBits(entity.getXRot()))+","+Integer.toHexString(Float.floatToRawIntBits(entity.yRotO))+","+Integer.toHexString(Float.floatToRawIntBits(entity.xRotO));
   }
   public static void run(Level level) {
+    var owner=new Cow(EntityTypes.COW,level);
+    var reference=EntityReference.of((LivingEntity)owner);
+    var changedUuid=new UUID(3,4);owner.setUUID(changedUuid);
+    boolean currentUuid=reference.getUUID().equals(changedUuid);
+    boolean hidden=reference.getEntity(uuid->null,LivingEntity.class)==owner;
+    owner.discard();
+    var replacement=new Cow(EntityTypes.COW,level);replacement.setUUID(changedUuid);
+    boolean replaced=reference.getEntity(uuid->replacement,LivingEntity.class)==replacement;
+    boolean cached=reference.getEntity(uuid->null,LivingEntity.class)==replacement;
+    var unresolved=EntityReference.<LivingEntity>of(changedUuid);
+    boolean wrongType=unresolved.getEntity(uuid->new PrimedTnt(EntityTypes.TNT,level),LivingEntity.class)==null;
+    System.out.println("entity-reference\t"+currentUuid+","+hidden+","+replaced+","+cached+","+wrongType);
     for(long seed:List.of(0L,123L,-1L)) {
       level.getRandom().setSeed(seed);
       var tnt=new PrimedTnt(level,1,64,1,null);

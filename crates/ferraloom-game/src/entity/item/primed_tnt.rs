@@ -1,7 +1,8 @@
 //! Port of net.minecraft.world.entity.item.PrimedTnt.
 use crate::{
     entity::{
-        Entity, EntityData, EntityDataView, EntityRef, EntityState, RemovalReason, fluid,
+        Entity, EntityData, EntityDataView, EntityRef, EntityReference, EntityState, LivingEntity,
+        RemovalReason, fluid,
         movement::{MovementEmission, MoverType},
         persistence,
         synched_data::EntityDataAccessor,
@@ -18,7 +19,7 @@ pub const BLOCK_STATE: EntityDataAccessor<BlockState> = EntityDataAccessor::new(
 #[derive(Debug)]
 pub struct PrimedTnt {
     pub parent: EntityData,
-    pub owner: Option<Uuid>,
+    pub owner: Option<EntityReference<LivingEntity>>,
     pub used_portal: bool,
     pub explosion_power: f32,
 }
@@ -41,7 +42,11 @@ impl PrimedTnt {
     }
     /// Constructor creation order consumes the common network ID before the
     /// level's launch-angle random draw. Entity RNG comes from RandomSource.create.
-    pub fn new_at(level: &mut Level, position: Vec3, owner: Option<Uuid>) -> Self {
+    pub fn new_at(
+        level: &mut Level,
+        position: Vec3,
+        owner: Option<EntityRef>,
+    ) -> Result<Self, LevelError> {
         let mut entity = Self::with_parent(level.create_entity_data(EntityType::TNT));
         entity.parent.set_pos(position);
         let angle = level.random().next_double() * f64::from(mth::TWO_PI);
@@ -51,8 +56,10 @@ impl PrimedTnt {
             -angle.cos() * 0.02,
         );
         entity.parent.old_position = position;
-        entity.owner = owner;
-        entity
+        entity.owner = owner
+            .map(|owner| EntityReference::of(owner, level))
+            .transpose()?;
+        Ok(entity)
     }
     pub fn fuse(&self) -> i32 {
         self.parent.entity_data.get(FUSE).0
@@ -71,7 +78,7 @@ impl PrimedTnt {
             .next_int_bound((fuse / 4).max(1))
             .wrapping_add(fuse / 8)
     }
-    pub fn save_without_id(&self) -> CompoundTag {
+    pub fn save_without_id(&self, level: &Level) -> Result<CompoundTag, LevelError> {
         let mut tag = self.parent.save_without_id();
         tag.insert("fuse", Tag::Short(self.fuse() as i16));
         tag.insert(
@@ -84,9 +91,12 @@ impl PrimedTnt {
         }
         tag.remove("owner");
         if let Some(owner) = self.owner {
-            tag.insert("owner", Tag::IntArray(owner.to_int_array().to_vec()));
+            tag.insert(
+                "owner",
+                Tag::IntArray(owner.uuid(level)?.to_int_array().to_vec()),
+            );
         }
-        tag
+        Ok(tag)
     }
     pub fn load_nbt(&mut self, tag: CompoundTag) -> Result<(), persistence::EntityLoadError> {
         self.set_fuse(i32::from(tag.get_short_or("fuse", 80)));
@@ -99,9 +109,18 @@ impl PrimedTnt {
         self.owner = tag
             .get_int_array("owner")
             .and_then(|v| <[i32; 4]>::try_from(v).ok())
-            .map(Uuid::from_int_array);
+            .map(|uuid| EntityReference::unresolved(Uuid::from_int_array(uuid)));
         self.parent.load_nbt(tag)
     }
+}
+/// Port of PrimedTnt#getOwner, retaining the LivingEntity type restriction.
+pub fn get_owner(entity: EntityRef, level: &mut Level) -> Result<Option<EntityRef>, LevelError> {
+    let Some(mut reference) = level.entity::<PrimedTnt>(entity)?.owner else {
+        return Ok(None);
+    };
+    let owner = reference.resolve(level)?;
+    level.entity_mut::<PrimedTnt>(entity)?.owner = Some(reference);
+    Ok(owner)
 }
 impl EntityDataView for PrimedTnt {
     fn view(state: &EntityState) -> Option<&Self> {
@@ -127,6 +146,9 @@ impl Entity for PrimedTntBehavior {
         references: &mut Vec<crate::entity::EntityRef>,
     ) {
         crate::entity::trace_base_entity_refs(state.as_entity(), references);
+        if let Some(tnt) = PrimedTnt::view(state) {
+            references.extend(tnt.owner.and_then(EntityReference::cached_entity));
+        }
     }
 
     fn movement_emission(&self) -> MovementEmission {
@@ -156,6 +178,9 @@ impl Entity for PrimedTntBehavior {
         if fuse <= 0 {
             level.remove_entity_with_reason(entity, RemovalReason::Discarded)?;
             if level.rules().tnt_explodes {
+                let owner = get_owner(entity, level)?
+                    .map(|owner| level.entity::<EntityData>(owner).map(|owner| owner.uuid))
+                    .transpose()?;
                 let tnt = level.entity::<PrimedTnt>(entity)?;
                 let request = super::super::effects::EntityEffect::Explosion {
                     entity,
@@ -165,7 +190,7 @@ impl Entity for PrimedTntBehavior {
                         0.0,
                     ),
                     power: tnt.explosion_power,
-                    owner: tnt.owner,
+                    owner,
                     used_portal: tnt.used_portal,
                 };
                 level.emit_entity_effect(request);
@@ -202,7 +227,7 @@ mod tests {
             static BEHAVIORS: crate::Behaviors = crate::Behaviors::EMPTY;
             let mut level = Level::new(crate::level::Region::new(&BEHAVIORS));
             level.random().set_seed(fields[1].parse().unwrap());
-            let tnt = PrimedTnt::new_at(&mut level, Vec3::new(1.0, 64.0, 1.0), None);
+            let tnt = PrimedTnt::new_at(&mut level, Vec3::new(1.0, 64.0, 1.0), None).unwrap();
             let expected: Vec<_> = fields[2]
                 .split(',')
                 .map(|v| u64::from_str_radix(v, 16).unwrap())
@@ -227,7 +252,9 @@ mod tests {
     #[test]
     fn tnt_nbt_uses_native_lowercase_fields_and_keeps_unknown_data() {
         let mut tnt = PrimedTnt::new(1, 123);
-        let mut tag = tnt.save_without_id();
+        static BEHAVIORS: crate::Behaviors = crate::Behaviors::EMPTY;
+        let level = Level::new(crate::level::Region::new(&BEHAVIORS));
+        let mut tag = tnt.save_without_id(&level).unwrap();
         tag.insert("future", Tag::String("retained".into()));
         tag.insert("fuse", Tag::Short(17));
         tag.insert("explosion_power", Tag::Float(999.0));
@@ -236,8 +263,8 @@ mod tests {
         tnt.load_nbt(tag).unwrap();
         assert_eq!(tnt.fuse(), 17);
         assert_eq!(tnt.explosion_power, 128.0);
-        assert_eq!(tnt.owner, Some(owner));
-        let saved = tnt.save_without_id();
+        assert_eq!(tnt.owner.unwrap().uuid(&level).unwrap(), owner);
+        let saved = tnt.save_without_id(&level).unwrap();
         assert_eq!(
             saved.get_string("future").unwrap().to_string_lossy(),
             "retained"

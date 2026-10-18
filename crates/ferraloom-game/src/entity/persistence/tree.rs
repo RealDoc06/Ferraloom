@@ -172,8 +172,8 @@ impl Level {
                 }
                 tag
             }
-            EntityState::PrimedTnt(tnt) => tnt.save_without_id(),
-            EntityState::Item(item) => item.save_without_id(),
+            EntityState::PrimedTnt(tnt) => tnt.save_without_id(self)?,
+            EntityState::Item(item) => item.save_without_id(self)?,
             EntityState::FallingBlock(block) => block.save_without_id(),
             EntityState::ExperienceOrb(orb) => orb.save_without_id(),
             EntityState::Player(_) => unreachable!("player has no encode ID"),

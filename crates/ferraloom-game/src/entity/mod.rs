@@ -58,6 +58,8 @@ pub use lifecycle::{
     start_riding, stop_riding,
 };
 pub mod persistence;
+pub mod reference;
+pub use reference::EntityReference;
 pub mod synched_data;
 pub mod tracking;
 pub use base::{EntityData, EntityDimensions, Movement, RemovalReason};

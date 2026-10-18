@@ -655,7 +655,10 @@ fn vanilla_player_dropped_item_position_and_velocity_bits() {
         assert_vector(dropped.parent.velocity, vector(f[4]), row);
         assert_eq!(dropped.parent.network_id, 2);
         assert_eq!(dropped.pickup_delay, 40);
-        assert_eq!(dropped.thrower, Some(Uuid::new(1, 2)));
+        assert_eq!(
+            dropped.thrower.unwrap().uuid(&level).unwrap(),
+            Uuid::new(1, 2)
+        );
         n += 1;
     }
     assert_eq!(n, 3);
