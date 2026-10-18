@@ -5,10 +5,10 @@ use super::{
     stacked_contents::{crafting_remainder, default_crafting_remainders},
 };
 use ferraloom_protocol::{
-    codec::{BoundedList, VarInt},
+    codec::VarInt,
     component::{
-        ComponentTypeId as Id, DataComponent as C, DyeColor, FireworkExplosion, FireworkShape,
-        Fireworks, ItemEnchantments, ItemStack, MapPostProcessing, PotDecorations,
+        BoundedList, ComponentTypeId as Id, DataComponent as C, DyeColor, FireworkExplosion,
+        FireworkShape, Fireworks, ItemEnchantments, ItemStack, MapPostProcessing, PotDecorations,
     },
 };
 
@@ -710,7 +710,7 @@ fn assemble_repair(input: &CraftingInput, context: &impl CraftingContext) -> Res
             durability.wrapping_sub(remaining).max(0).min(durability),
         )),
     );
-    let mut curses: Vec<_> = Vec::new();
+    let mut curses: Vec<(ferraloom_protocol::component::Enchantment, VarInt)> = Vec::new();
     for source in [first, second] {
         let id = if stack::item(source) == ferraloom_data::Item::ENCHANTED_BOOK {
             Id::STORED_ENCHANTMENTS

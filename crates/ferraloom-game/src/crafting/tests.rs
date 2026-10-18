@@ -124,3 +124,340 @@ fn item_remainders_and_cooking_codecs_are_distinct() {
     assert_eq!(cooking.cooking_time(), Some(-3));
     assert_eq!(cooking.experience(), Some(-1.5));
 }
+
+struct OracleContext(serde_json::Value);
+impl ferraloom_protocol::codec::RegistryContext for OracleContext {
+    fn entry_id(
+        &self,
+        registry: &ferraloom_protocol::Identifier,
+        key: &ferraloom_protocol::Identifier,
+    ) -> Option<i32> {
+        self.0[registry.as_str()]
+            .as_array()?
+            .iter()
+            .position(|value| value.as_str() == Some(key.as_str()))
+            .map(|index| index as i32)
+    }
+    fn entry_key(
+        &self,
+        registry: &ferraloom_protocol::Identifier,
+        id: i32,
+    ) -> Option<ferraloom_protocol::Identifier> {
+        self.0[registry.as_str()]
+            .as_array()?
+            .get(usize::try_from(id).ok()?)?
+            .as_str()?
+            .parse()
+            .ok()
+    }
+    fn has_tag(
+        &self,
+        _registry: &ferraloom_protocol::Identifier,
+        _tag: &ferraloom_protocol::Identifier,
+    ) -> bool {
+        true
+    }
+}
+fn oracle() -> serde_json::Value {
+    serde_json::from_str(include_str!("vanilla.json")).unwrap()
+}
+fn builtins() -> RecipeManager {
+    use ferraloom_data::datapack::{Pack, ResourceManager};
+    let path = std::env::var_os("FERRALOOM_VANILLA_JAR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| "/home/doc/code/Ferraloom/.cache/vanilla/26.3/server.jar".into());
+    let resources = ResourceManager::new(vec![
+        Pack::vanilla_jar(&path)
+            .expect("fetch the pinned vanilla jar, or set FERRALOOM_VANILLA_JAR"),
+    ]);
+    let tags = TagSet::load(&resources).unwrap();
+    RecipeManager::load(&resources, &tags).unwrap()
+}
+fn oracle_stack(value: &serde_json::Value) -> ItemStack {
+    use ferraloom_protocol::component::Persistent;
+    if value.as_object().is_some_and(|v| v.is_empty()) {
+        ItemStack::default()
+    } else {
+        ItemStack::from_json(value).unwrap()
+    }
+}
+fn check_case(manager: &RecipeManager, test: &serde_json::Value) {
+    let items: Vec<_> = test["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(oracle_stack)
+        .collect();
+    let width = test["width"].as_u64().unwrap() as usize;
+    let height = test["height"].as_u64().unwrap() as usize;
+    let positioned;
+    let smithing;
+    let (kind, input) = match test["type"].as_str().unwrap() {
+        "crafting" => {
+            positioned = CraftingInput::of_positioned(width, height, items.clone()).unwrap();
+            assert_eq!(
+                (positioned.left, positioned.top),
+                (
+                    test["left"].as_u64().unwrap() as usize,
+                    test["top"].as_u64().unwrap() as usize
+                ),
+                "{}",
+                test["label"]
+            );
+            (
+                RecipeType::Crafting,
+                RecipeInput::Crafting(&positioned.input),
+            )
+        }
+        "smithing" => {
+            smithing = SmithingRecipeInput {
+                template: items[0].clone(),
+                base: items[1].clone(),
+                addition: items[2].clone(),
+            };
+            (RecipeType::Smithing, RecipeInput::Smithing(&smithing))
+        }
+        "brewing" => (
+            RecipeType::Brewing,
+            RecipeInput::Brewing {
+                input: &items[0],
+                reagent: &items[1],
+            },
+        ),
+        kind => (
+            match kind {
+                "smelting" => RecipeType::Smelting,
+                "blasting" => RecipeType::Blasting,
+                "smoking" => RecipeType::Smoking,
+                "campfire_cooking" => RecipeType::CampfireCooking,
+                "stonecutting" => RecipeType::Stonecutting,
+                _ => panic!("unknown type"),
+            },
+            RecipeInput::Single(&items[0]),
+        ),
+    };
+    let recipe = manager
+        .get_recipe_for(kind, input, &(), None)
+        .unwrap_or_else(|error| panic!("{}: {error}", test["label"]));
+    assert_eq!(
+        recipe.map(|recipe| recipe.id.to_string()).as_deref(),
+        test["recipe"].as_str(),
+        "{}",
+        test["label"]
+    );
+    if let Some(recipe) = recipe {
+        let assembled = recipe
+            .value
+            .assemble(input, &())
+            .unwrap_or_else(|error| panic!("{}: {error}", test["label"]));
+        let expected = oracle_stack(&test["result"]);
+        assert!(
+            stack::same_item_components(&assembled, &expected).unwrap(),
+            "{} result: {assembled:?} expected {expected:?}",
+            test["label"]
+        );
+        assert_eq!(
+            assembled.0.as_ref().map(|s| s.count),
+            expected.0.as_ref().map(|s| s.count),
+            "{} count",
+            test["label"]
+        );
+        if let RecipeInput::Crafting(input) = input {
+            let actual = recipe.value.remaining_items(input).unwrap();
+            let expected: Vec<_> = test["remaining"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(oracle_stack)
+                .collect();
+            for (a, b) in actual.iter().zip(&expected) {
+                assert!(
+                    stack::same_item_components(a, b).unwrap(),
+                    "{} remainder",
+                    test["label"]
+                );
+                assert_eq!(a.0.as_ref().map(|s| s.count), b.0.as_ref().map(|s| s.count));
+            }
+            assert_eq!(actual.len(), expected.len());
+        }
+    }
+}
+#[test]
+fn vanilla_all_recipes_and_random_grids() {
+    let oracle = oracle();
+    let manager = builtins();
+    assert_eq!(
+        manager
+            .recipes()
+            .iter()
+            .map(|recipe| recipe.id.to_string())
+            .collect::<Vec<_>>(),
+        oracle["ids"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|id| id.as_str().unwrap())
+            .collect::<Vec<_>>()
+    );
+    for test in oracle["cases"].as_array().unwrap() {
+        check_case(&manager, test);
+    }
+}
+fn unhex(text: &str) -> Vec<u8> {
+    text.as_bytes()
+        .chunks_exact(2)
+        .map(|pair| u8::from_str_radix(std::str::from_utf8(pair).unwrap(), 16).unwrap())
+        .collect()
+}
+#[test]
+fn vanilla_all_recipe_display_bytes_and_update_packet() {
+    use ferraloom_protocol::{Reader, Wire, Writer, play::clientbound::UpdateRecipes};
+    let oracle = oracle();
+    let manager = builtins();
+    let context = OracleContext(oracle["registries"].clone());
+    for test in oracle["displays"].as_array().unwrap() {
+        let id = test["id"].as_str().unwrap().parse().unwrap();
+        let actual = manager.by_key(&id).unwrap().value.display();
+        let expected = test["displays"].as_array().unwrap();
+        assert_eq!(actual.len(), expected.len(), "{id}");
+        for (actual, expected) in actual.iter().zip(expected) {
+            let mut writer = Writer::with_context(&context);
+            actual.encode(&mut writer).unwrap();
+            assert_eq!(writer.as_slice(), unhex(expected.as_str().unwrap()), "{id}");
+        }
+    }
+    let bytes = unhex(oracle["update_packet"].as_str().unwrap());
+    let mut reader = Reader::with_context(&bytes, &context);
+    let packet = UpdateRecipes::decode(&mut reader).unwrap();
+    assert!(reader.remaining().is_empty());
+    let mut writer = Writer::with_context(&context);
+    packet.encode(&mut writer).unwrap();
+    assert_eq!(writer.as_slice(), bytes);
+    let sync = RecipeSynchronization::new(&manager, |_| true);
+    assert_eq!(sync.update.stonecutter_recipes, packet.stonecutter_recipes);
+    for property in &sync.update.item_sets {
+        let expected = packet
+            .item_sets
+            .iter()
+            .find(|set| set.key == property.key)
+            .unwrap();
+        assert_eq!(property.items.len(), expected.items.len());
+        for item in &property.items {
+            assert!(
+                expected.items.contains(item),
+                "{} missing {}",
+                property.key,
+                item.name()
+            );
+        }
+    }
+}
+
+#[test]
+fn book_add_remove_highlight_and_persistence_follow_displays() {
+    let recipes = vec![
+        RecipeHolder {
+            id: "first".parse().unwrap(),
+            value: decode(
+                json!({"type":"crafting_transmute","input":"stone","material":"dirt","material_count":{"min":1,"max":3},"result":"diamond","show_notification":false}),
+            ),
+        },
+        RecipeHolder {
+            id: "special".parse().unwrap(),
+            value: decode(json!({"type":"crafting_special_repairitem"})),
+        },
+    ];
+    let manager = RecipeManager::new(recipes).unwrap();
+    let sync = RecipeSynchronization::new(&manager, |_| true);
+    let mut book = ServerRecipeBook::default();
+    let addition = book.add_recipes(manager.recipes(), &sync);
+    assert_eq!(addition.unlocked.len(), 1);
+    let packet = addition.packet.unwrap();
+    assert_eq!(packet.entries.len(), 3);
+    assert!(packet.entries.iter().all(|entry| entry.flags == 2));
+    assert!(!packet.replace);
+    assert!(book.add_recipes(manager.recipes(), &sync).packet.is_none());
+    book.change_settings(
+        ferraloom_protocol::play::RecipeBookType::Furnace,
+        true,
+        true,
+    );
+    let mut restored = ServerRecipeBook::default();
+    restored.load_untrusted(&book.to_nbt(), &manager).unwrap();
+    assert_eq!(restored.to_nbt(), book.to_nbt());
+    restored.mark_display_seen(&sync, packet.entries[0].contents.id);
+    assert!(!restored.highlighted(&manager.recipes()[0].id));
+    let (_, initial) = restored.initial_packets(&sync);
+    assert!(initial.replace);
+    assert!(initial.entries.iter().all(|entry| entry.flags == 0));
+    assert_eq!(
+        restored
+            .remove_recipes(manager.recipes(), &sync)
+            .unwrap()
+            .recipes
+            .len(),
+        3
+    );
+    assert!(restored.known().is_empty());
+}
+#[test]
+fn map_scaling_requires_saved_data_and_caps_at_four() {
+    struct Map(u8);
+    impl CraftingContext for Map {
+        fn map_scale(&self, _: i32) -> Result<Option<u8>> {
+            Ok(Some(self.0))
+        }
+    }
+    let recipe = decode(
+        json!({"type":"crafting_special_mapextending","map":"filled_map","material":"paper","result":{}}),
+    );
+    let mut map = stack(Item::FILLED_MAP, 1);
+    stack::set(
+        &mut map,
+        DataComponent::MapId(ferraloom_protocol::codec::VarInt(17)),
+    );
+    let mut grid = vec![stack(Item::PAPER, 1); 9];
+    grid[4] = map;
+    let input = CraftingInput::of(3, 3, grid).unwrap();
+    assert!(matches!(
+        recipe.matches(RecipeInput::Crafting(&input), &()),
+        Err(Error::ContextRequired(_))
+    ));
+    assert!(
+        recipe
+            .matches(RecipeInput::Crafting(&input), &Map(3))
+            .unwrap()
+    );
+    assert!(
+        !recipe
+            .matches(RecipeInput::Crafting(&input), &Map(4))
+            .unwrap()
+    );
+    let output = recipe
+        .assemble(RecipeInput::Crafting(&input), &Map(3))
+        .unwrap();
+    assert!(matches!(
+        stack::component(
+            &output,
+            ferraloom_protocol::component::ComponentTypeId::MAP_POST_PROCESSING
+        )
+        .unwrap(),
+        Some(DataComponent::MapPostProcessing(
+            ferraloom_protocol::component::MapPostProcessing::Scale
+        ))
+    ));
+}
+#[test]
+fn cache_keys_ignore_counts_and_invalidate_on_manager_change() {
+    let recipe =
+        decode(json!({"type":"crafting_shapeless","ingredients":["stone"],"result":"diamond"}));
+    let id = "test".parse().unwrap();
+    let manager = RecipeManager::new(vec![RecipeHolder { id, value: recipe }]).unwrap();
+    let input = CraftingInput::of(1, 1, vec![stack(Item::STONE, 1)]).unwrap();
+    let mut cache = RecipeCache::new(2);
+    assert!(cache.get(&manager, &input, &()).unwrap().is_some());
+    let input = CraftingInput::of(1, 1, vec![stack(Item::STONE, 64)]).unwrap();
+    assert!(cache.get(&manager, &input, &()).unwrap().is_some());
+    let empty = RecipeManager::new(Vec::new()).unwrap();
+    assert!(cache.get(&empty, &input, &()).unwrap().is_none());
+}

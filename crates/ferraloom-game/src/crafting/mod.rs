@@ -1,5 +1,7 @@
 //! Vanilla 26.3 recipes. Inputs are owned snapshots; matching never mutates menus.
 
+mod book;
+mod display;
 mod ingredient;
 mod input;
 mod manager;
@@ -7,12 +9,15 @@ mod recipe;
 mod special;
 mod stack;
 mod stacked_contents;
+mod sync;
 
+pub use book::{RecipeBookAddition, ServerRecipeBook};
 pub use ingredient::Ingredient;
 pub use input::{CraftingInput, PositionedCraftingInput, RecipeInput, SmithingRecipeInput};
 pub use manager::{CachedCheck, RecipeCache, RecipeHolder, RecipeManager};
 pub use recipe::{CraftingContext, Recipe, RecipeKind, RecipeType, ShapedRecipePattern};
 pub use stacked_contents::{PlacementInfo, StackedItemContents};
+pub use sync::{RecipeSynchronization, ServerDisplayInfo};
 
 use std::fmt;
 

@@ -4,17 +4,17 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 
 | ID | Feature | Vanilla source | Test | Vanilla | Ferraloom |
 |---|---|---|---|---|---|
-| crafting-recipes.manager.reload | Decode recipe registries, reject duplicate or invalid entries and build recipe lookup indexes | `RecipeManager` | | - | todo |
-| crafting-recipes.match.shaped-offset-mirror | Match shaped recipes at all valid offsets and mirrored orientations | `ShapedRecipe#matches; ShapedRecipePattern` | | - | todo |
-| crafting-recipes.match.shapeless | Match shapeless ingredient multisets with exact occupied slot counts | `ShapelessRecipe#matches; StackedContents` | | - | todo |
-| crafting-recipes.match.ingredients | Resolve item and tag ingredients against enabled features and current registries | `Ingredient` | | - | todo |
-| crafting-recipes.result.components | Produce result components and preserve or copy only those required by the recipe | `Recipe#assemble; TransmuteRecipe` | | - | todo |
+| crafting-recipes.manager.reload | Decode recipe registries, reject duplicate or invalid entries and build recipe lookup indexes | `RecipeManager` | `crafting::tests::vanilla_all_recipes_and_random_grids` | pass | partial |
+| crafting-recipes.match.shaped-offset-mirror | Match shaped recipes at all valid offsets and mirrored orientations | `ShapedRecipe#matches; ShapedRecipePattern` | `crafting::tests::vanilla_all_recipes_and_random_grids` | pass | partial |
+| crafting-recipes.match.shapeless | Match shapeless ingredient multisets with exact occupied slot counts | `ShapelessRecipe#matches; StackedContents` | `crafting::tests::vanilla_all_recipes_and_random_grids` | pass | partial |
+| crafting-recipes.match.ingredients | Resolve item and tag ingredients against enabled features and current registries | `Ingredient` | `crafting::tests::vanilla_all_recipes_and_random_grids` | pass | partial |
+| crafting-recipes.result.components | Produce result components and preserve or copy only those required by the recipe | `Recipe#assemble; TransmuteRecipe` | `crafting::tests::vanilla_all_recipes_and_random_grids` | pass | partial |
 | crafting-recipes.remainders | Return crafting remainders into input slots, inventory or world drops | `CraftingRecipe#getRemainingItems; ResultSlot` | | - | todo |
-| crafting-recipes.book.unlock | Unlock and remove recipes, track highlights and persist recipe-book state | `ServerRecipeBook` | | - | todo |
+| crafting-recipes.book.unlock | Unlock and remove recipes, track highlights and persist recipe-book state | `ServerRecipeBook` | `crafting::tests::book_add_remove_highlight_and_persistence_follow_displays` | pass | partial |
 | crafting-recipes.book.placement | Place recipe ingredients into crafting grids with stacked ingredient accounting | `ServerPlaceRecipe` | | - | todo |
 | crafting-recipes.book.limited-crafting | Restrict crafting to known recipes when limited crafting is enabled | `RecipeCraftingHolder` | | - | todo |
-| crafting-recipes.furnace.types | Keep furnace, smoker, blast furnace and campfire recipe matching and timing separate | `AbstractCookingRecipe; AbstractFurnaceBlockEntity; CampfireBlockEntity` | | - | todo |
-| crafting-recipes.special.transforms | Apply item-specific special recipe logic rather than generic shaped or shapeless matching | `RecipeSerializers` | | - | todo |
+| crafting-recipes.furnace.types | Keep furnace, smoker, blast furnace and campfire recipe matching and timing separate | `AbstractCookingRecipe; AbstractFurnaceBlockEntity; CampfireBlockEntity` | `crafting::tests::vanilla_all_recipes_and_random_grids` | pass | partial |
+| crafting-recipes.special.transforms | Apply item-specific special recipe logic rather than generic shaped or shapeless matching | `RecipeSerializers` | `crafting::tests::vanilla_all_recipes_and_random_grids` | pass | partial |
 | crafting-recipes.recipe-book-category.blast-furnace-blocks | `minecraft:blast_furnace_blocks` (recipe book category) | `net.minecraft.world.item.crafting.RecipeBookCategories#bootstrap; net.minecraft.world.item.crafting.RecipeBookCategory` | | - | todo |
 | crafting-recipes.recipe-book-category.blast-furnace-misc | `minecraft:blast_furnace_misc` (recipe book category) | `net.minecraft.world.item.crafting.RecipeBookCategories#bootstrap; net.minecraft.world.item.crafting.RecipeBookCategory` | | - | todo |
 | crafting-recipes.recipe-book-category.campfire | `minecraft:campfire` (recipe book category) | `net.minecraft.world.item.crafting.RecipeBookCategories#bootstrap; net.minecraft.world.item.crafting.RecipeBookCategory` | | - | todo |
