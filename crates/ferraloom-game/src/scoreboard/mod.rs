@@ -2,6 +2,8 @@
 mod save;
 mod server;
 pub use server::ServerScoreboard;
+#[cfg(test)]
+mod command_tests;
 mod team;
 #[cfg(test)]
 mod tests;

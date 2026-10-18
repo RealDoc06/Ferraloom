@@ -160,7 +160,7 @@ fn vanilla_saved_file_and_codec_defaults() {
             _ => {}
         }
     }
-    assert_eq!(count, 4);
+    assert_eq!(count, 5);
 }
 #[test]
 fn entity_names_snapshots_and_score_lifecycle() {

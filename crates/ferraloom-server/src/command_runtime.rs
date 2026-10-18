@@ -1,5 +1,7 @@
 //! Exclusive call-site adapters. Game code owns parsing, feedback policy and command behavior.
 use super::*;
+#[path = "scoreboard_commands.rs"]
+mod scoreboard_commands;
 use ferraloom_game::{
     commands::{
         PreparedCommand,
@@ -228,6 +230,7 @@ impl MinecraftServer {
         let stack = &command.source;
         let result = match command.command.as_str() {
             "gamerule" => builtins::gamerule(&mut self.game_rules, &command)?,
+            "scoreboard" | "team" | "trigger" => self.scoreboard_command(&command)?,
             "op" | "deop" => self.operator_command(source, &command)?,
             "kick" => self.kick_command(source, &command)?,
             "whitelist" => self.whitelist_command(source, &command)?,
