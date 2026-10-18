@@ -210,6 +210,12 @@ mod tests {
         );
         region.set_block_tags(data.block_tags.clone());
         region.set_fluid_tags(data.fluid_tags.clone());
+        assert_eq!(
+            LevelAccessRef::Worldgen(&mut region).fast_lava(),
+            Err(LevelError::UnsupportedWorldgenEnvironment)
+        );
+        region.set_fast_lava(dimension.fast_lava);
+        assert!(!LevelAccessRef::Worldgen(&mut region).fast_lava().unwrap());
         assert!(region.can_survive(flower, p).unwrap());
         region
             .set_block([p[0], p[1] - 1, p[2]], Block::STONE.default_state(), 16)
