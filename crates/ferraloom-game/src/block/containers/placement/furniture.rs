@@ -149,7 +149,7 @@ fn lectern(
     context: &BlockPlaceContext<'_>,
     reader: &LevelReaderRef<'_, '_>,
 ) -> Result<BlockState, LevelError> {
-    let stack = context.item_in_hand();
+    let stack = context.item_in_hand(reader)?;
     let can_use = if let Some(player) = context.player() {
         match reader {
             LevelReaderRef::Server(level) => level.can_use_game_master_blocks(player)?,
@@ -283,7 +283,7 @@ pub(super) fn get_state_for_placement(
             .unwrap(),
         C::TestBlock => {
             let properties = context
-                .item_in_hand()
+                .item_in_hand(reader)?
                 .component(ComponentTypeId::BLOCK_STATE)
                 .map_err(|_| LevelError::Inventory("test block placement components"))?;
             let mode = match properties {

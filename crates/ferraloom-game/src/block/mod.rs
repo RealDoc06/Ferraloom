@@ -13,10 +13,12 @@ mod families;
 pub mod flags;
 pub mod fluid;
 mod foundational;
-mod placement;
+pub mod placement;
 pub mod plants;
 pub mod redstone;
-pub use placement::{BlockPlaceContext, DirectionalPlaceContext, PlacementHit, UseOnContext};
+pub use placement::{
+    BlockPlaceContext, DirectionalPlaceContext, PlacementHit, StackView, UseOnContext,
+};
 pub use plants::multiface_spreader;
 mod shapes;
 pub use shapes::BlockCollisionContext;
@@ -24,7 +26,9 @@ mod unsupported;
 mod worldgen;
 pub use flags::{UPDATE_LIMIT, UpdateFlags};
 pub(crate) use unsupported::UnportedCalls;
-pub use unsupported::{BlockMethod, UnportedBehavior, UnportedBehaviorStats, UnportedOperation};
+pub use unsupported::{
+    BlockMethod, UnportedBehavior, UnportedBehaviorStats, UnportedOperation, WorldgenSkip,
+};
 pub use worldgen::GameWorldgenBlockBehavior;
 
 /// Shared LevelReader/LevelAccessor surface. The borrow of the region is
@@ -113,7 +117,7 @@ impl<'chunks> LevelAccessRef<'_, 'chunks> {
             Self::Server(level) => level.set_block(pos, state, flags, UPDATE_LIMIT),
             Self::Worldgen(region) => region
                 .set_block([pos.x, pos.y, pos.z], state, flags.0)
-                .map_err(|_| LevelError::WorldgenMutationFailed(pos)),
+                .map_err(|source| LevelError::WorldgenMutationFailed { pos, source }),
         }
     }
     pub fn destroy_block(&mut self, pos: BlockPos, drop: bool) -> Result<bool, LevelError> {
@@ -121,7 +125,7 @@ impl<'chunks> LevelAccessRef<'_, 'chunks> {
             Self::Server(level) => level.destroy_block(pos, drop, UPDATE_LIMIT),
             Self::Worldgen(region) => region
                 .destroy_block([pos.x, pos.y, pos.z], drop)
-                .map_err(|_| LevelError::WorldgenMutationFailed(pos)),
+                .map_err(|source| LevelError::WorldgenMutationFailed { pos, source }),
         }
     }
     pub fn schedule_block_tick(
@@ -206,7 +210,7 @@ pub trait BlockBehavior: Sync {
         _state: BlockState,
         _pos: BlockPos,
         _by: Option<crate::entity::EntityRef>,
-        _stack: &ferraloom_protocol::component::ItemStack,
+        _stack: StackView<'_>,
         _level: &mut Level,
     ) -> Result<(), LevelError> {
         Ok(())
@@ -362,12 +366,12 @@ pub trait BlockBehavior: Sync {
         &self,
         state: BlockState,
         context: &BlockPlaceContext<'_>,
-        _level: &LevelReaderRef<'_, '_>,
+        level: &LevelReaderRef<'_, '_>,
     ) -> Result<bool, LevelError> {
         Ok(state.data().replaceable
-            && (context.item_in_hand().is_empty()
+            && (context.item_in_hand(level)?.is_empty()
                 || context
-                    .item_in_hand()
+                    .item_in_hand(level)?
                     .0
                     .as_ref()
                     .is_none_or(|stack| stack.item != state.block().as_item())))

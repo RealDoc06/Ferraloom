@@ -21,8 +21,11 @@ fn level() -> Level {
     level_in_radius(1)
 }
 fn level_in_radius(radius: i32) -> Level {
+    level_with_behaviors(radius, &EMPTY)
+}
+pub(super) fn level_with_behaviors(radius: i32, behaviors: &'static Behaviors) -> Level {
     let mut level = Level::new(
-        Region::new(&EMPTY),
+        Region::new(behaviors),
         crate::level::LevelContext::fixture(0, 63),
     );
     for x in -radius..=radius {
@@ -700,7 +703,12 @@ fn redstone_post_placement_updates_match_vanilla() {
         level.set_block_state(ORIGIN, state).unwrap();
         level.take_effects();
         level
-            .set_placed_by(state, ORIGIN, None, &Default::default())
+            .set_placed_by(
+                state,
+                ORIGIN,
+                None,
+                crate::block::StackView::Borrowed(&Default::default()),
+            )
             .unwrap();
         let mut targets = vec![ORIGIN, ORIGIN.above(1)];
         targets.extend((1..=4).map(|i| ORIGIN.relative(direction, i)));

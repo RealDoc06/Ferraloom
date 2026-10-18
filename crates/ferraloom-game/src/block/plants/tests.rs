@@ -1100,12 +1100,21 @@ fn farmland_trampling_preserves_draw_order_permission_size_and_actor() {
             .update_entity_chunk_status(ChunkPos::ZERO, crate::level::entity::Visibility::Ticking)
             .unwrap();
         level.add_entity(actor, entity).unwrap();
+        let mut shared = crate::ServerShared::default();
+        shared.ops.set_operator(
+            &ferraloom_protocol::login::GameProfile {
+                id: Uuid::new(3, 4),
+                name: "Other".into(),
+                properties: vec![],
+            },
+            Some(crate::commands::permissions::PermissionLevel::Owners),
+        );
+        level.install_shared(Box::new(shared));
         level.set_spawn_protection(SpawnProtectionSnapshot::new(
             "minecraft:overworld".parse().unwrap(),
             "minecraft:overworld".parse().unwrap(),
             pos,
             if protected { 10 } else { 0 },
-            [Uuid::new(3, 4)],
         ));
         level.set_random_streams(Random::Legacy(LegacyRandomSource::new(42)), 0);
         let mut expected_random = LegacyRandomSource::new(42);
@@ -1796,7 +1805,12 @@ fn double_plant_and_moss_post_placement_match_native_updates_and_rng() {
             0,
         );
         level
-            .set_placed_by(state, pos, None, &ItemStack::default())
+            .set_placed_by(
+                state,
+                pos,
+                None,
+                crate::block::StackView::Borrowed(&ItemStack::default()),
+            )
             .unwrap();
         assert_eq!(
             level.get_block_state(pos).unwrap().id(),

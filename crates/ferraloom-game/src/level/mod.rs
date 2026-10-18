@@ -14,6 +14,7 @@ use crate::{
 
 pub mod acquisition;
 mod block_entity;
+pub mod blockscan;
 pub mod border;
 mod broadcast;
 pub mod chunk;
@@ -53,7 +54,7 @@ pub mod tickets;
 mod ticking;
 pub mod weather;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum LevelError {
     UnsupportedItemUseOn(ferraloom_data::Item),
     UnsupportedItemCraftedPostProcess(ferraloom_data::Item),
@@ -71,7 +72,10 @@ pub enum LevelError {
         acquisition::AcquireFailure,
     ),
     UnsupportedChunkEntityPublication(ChunkPos),
-    WorldgenMutationFailed(BlockPos),
+    WorldgenMutationFailed {
+        pos: BlockPos,
+        source: ferraloom_worldgen::Error,
+    },
     UnsupportedWorldgenEnvironment,
     UnsupportedWorldgenBehavior,
     OutsideBuildHeight,
@@ -108,6 +112,25 @@ pub enum LevelError {
     WrongChunkHeight(ChunkPos),
     InvalidChunkStructures(ChunkPos),
     InvalidStructureHolderSet,
+}
+
+impl std::fmt::Display for LevelError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::WorldgenMutationFailed { pos, source } => {
+                write!(formatter, "worldgen mutation at {pos:?}: {source}")
+            }
+            error => std::fmt::Debug::fmt(error, formatter),
+        }
+    }
+}
+impl std::error::Error for LevelError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::WorldgenMutationFailed { source, .. } => Some(source),
+            _ => None,
+        }
+    }
 }
 
 /// Dimension settings consumed by the live core. The server supplies the
@@ -348,9 +371,43 @@ impl Level {
     pub fn remove_chunk(&mut self, pos: ChunkPos) -> Option<chunk::LevelChunk> {
         self.acquisition.clear_cache();
         let region = self.region_mut();
+        // An unrelated competing registration cannot replace the stage's owned
+        // saved queue. Keep both records until its failed continuation resolves.
+        if region
+            .chunks
+            .get(&pos)
+            .and_then(|chunk| chunk.staged_publication.as_ref())
+            .is_some_and(|stage| {
+                (stage.block_ticks.borrow().is_some()
+                    && region.block_ticks.container(pos).is_some())
+                    || (stage.fluid_ticks.borrow().is_some()
+                        && region.fluid_ticks.container(pos).is_some())
+            })
+        {
+            return None;
+        }
         let mut chunk = region.chunks.remove(&pos)?;
-        chunk.block_ticks = region.block_ticks.remove_container(pos).unwrap_or_default();
-        chunk.fluid_ticks = region.fluid_ticks.remove_container(pos).unwrap_or_default();
+        chunk.block_ticks = region
+            .block_ticks
+            .remove_container(pos)
+            .or_else(|| {
+                chunk
+                    .staged_publication
+                    .as_mut()
+                    .and_then(|stage| stage.block_ticks.get_mut().take())
+            })
+            .unwrap_or_default();
+        chunk.fluid_ticks = region
+            .fluid_ticks
+            .remove_container(pos)
+            .or_else(|| {
+                chunk
+                    .staged_publication
+                    .as_mut()
+                    .and_then(|stage| stage.fluid_ticks.get_mut().take())
+            })
+            .unwrap_or_default();
+        chunk.loaded.set(false);
         self.remove_light_snapshot(pos);
         Some(chunk)
     }
@@ -368,6 +425,11 @@ impl Level {
         if region.min_y != chunk.min_y() || region.max_y != chunk.max_y() {
             return Err(LevelError::WrongChunkHeight(pos));
         }
+        if chunk.staged_publication.as_ref().is_some_and(|stage| {
+            stage.block_ticks.borrow().is_some() || stage.fluid_ticks.borrow().is_some()
+        }) {
+            return Err(LevelError::InvalidPendingGenerationData);
+        }
         chunk.publication_generation = region
             .next_chunk_generation
             .get()
@@ -376,9 +438,12 @@ impl Level {
         region
             .next_chunk_generation
             .set(chunk.publication_generation);
+        chunk.staged_publication = None;
+        chunk.loaded.set(true);
         region
             .block_entity_state
-            .register_published_chunk(&mut chunk, region.game_time);
+            .prepare_published_chunk(&mut chunk, region.game_time);
+        region.block_entity_state.register_published_chunk(&chunk);
         region
             .block_ticks
             .add_container(pos, std::mem::take(&mut chunk.block_ticks));
@@ -392,8 +457,16 @@ impl Level {
     /// FULL registration alone leaves saved delays relative until this point.
     pub fn start_ticking_chunk(&mut self, pos: ChunkPos) -> Result<(), LevelError> {
         let region = self.region_mut();
-        if !region.chunks.contains_key(&pos) {
-            return Err(LevelError::MissingChunk(pos));
+        let chunk = region
+            .chunks
+            .get(&pos)
+            .ok_or(LevelError::MissingChunk(pos))?;
+        if !chunk.full_publication_complete() {
+            return Err(LevelError::ChunkAcquisition(
+                pos,
+                chunk_holder::ChunkStatus::Full,
+                acquisition::AcquireFailure::ReentrantFull,
+            ));
         }
         region.block_ticks.unpack_container(pos, region.game_time);
         region.fluid_ticks.unpack_container(pos, region.game_time);

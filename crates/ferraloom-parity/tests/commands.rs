@@ -459,11 +459,7 @@ async fn spawn_and_return(session: &mut Session) -> Result<ObservationLog> {
 
 command_test!(parity_command_game_rules, game_rules);
 command_test!(parity_command_clocks_and_admin, clocks_and_admin);
-command_test!(
-    parity_command_message_arguments,
-    message_arguments,
-    "pending scoreboard multi-member team join/leave guard fix on restart"
-);
+command_test!(parity_command_message_arguments, message_arguments);
 command_test!(parity_command_spawn_and_return, spawn_and_return);
 
 async fn access_commands(session: &mut Session) -> Result<ObservationLog> {

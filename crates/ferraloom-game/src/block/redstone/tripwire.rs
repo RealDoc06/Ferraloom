@@ -362,7 +362,7 @@ impl BlockBehavior for TripWireHookBlock {
         state: BlockState,
         pos: BlockPos,
         _by: Option<EntityRef>,
-        _stack: &ferraloom_protocol::component::ItemStack,
+        _stack: crate::block::StackView<'_>,
         level: &mut Level,
     ) -> Result<(), LevelError> {
         calculate_state(level, pos, state, false, false, None)

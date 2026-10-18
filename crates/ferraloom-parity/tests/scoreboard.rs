@@ -67,6 +67,37 @@ async fn teams(session: &mut Session) -> Result<ObservationLog> {
         (13, "team remove red", "commands.team.remove.success"),
         (14, "team remove blue", "commands.team.remove.success"),
     ] {
+        if index == 10 {
+            for (step, text, key) in [
+                (
+                    "join",
+                    "team join blue ParityBot",
+                    "commands.team.join.success.single",
+                ),
+                (
+                    "rejoin",
+                    "team join blue ParityBot",
+                    "commands.team.join.success.single",
+                ),
+                (
+                    "transfer",
+                    "team join red ParityBot",
+                    "commands.team.join.success.single",
+                ),
+                (
+                    "leave",
+                    "team leave ParityBot",
+                    "commands.team.leave.success.single",
+                ),
+                (
+                    "dynamic",
+                    "team modify red displayName {selector:'@s'}",
+                    "commands.team.option.name.success",
+                ),
+            ] {
+                log.record(format!("entity.{step}"), command(bot, text, key).await?)?;
+            }
+        }
         log.record(index.to_string(), command(bot, text, key).await?)?;
     }
     Ok(log)
@@ -162,6 +193,61 @@ async fn scores(session: &mut Session) -> Result<ObservationLog> {
     );
     log.record("join.objective", json(display_name)?)?;
     let bot = session.bot(id)?;
+    for (step, text, key) in [
+        (
+            "add",
+            "scoreboard objectives add rich dummy {score:{name:'#two',objective:'divisor'}}",
+            "commands.scoreboard.objectives.add.success",
+        ),
+        (
+            "object",
+            "scoreboard objectives modify rich displayname {atlas:'minecraft:blocks',sprite:'minecraft:stone',fallback:{score:{name:'#two',objective:'divisor'}}}",
+            "commands.scoreboard.objectives.modify.displayname",
+        ),
+        (
+            "entity_nbt",
+            "scoreboard objectives modify rich displayname {nbt:'Air',entity:'@s',plain:true}",
+            "commands.scoreboard.objectives.modify.displayname",
+        ),
+        (
+            "name",
+            "scoreboard objectives modify rich displayname {selector:'@s'}",
+            "commands.scoreboard.objectives.modify.displayname",
+        ),
+        (
+            "holder",
+            "scoreboard players display name #one points {score:{name:'#two',objective:'divisor'}}",
+            "commands.scoreboard.players.display.name.set.success.single",
+        ),
+        (
+            "format",
+            "scoreboard objectives modify rich numberformat fixed {score:{name:'#two',objective:'divisor'}}",
+            "commands.scoreboard.objectives.modify.objectiveFormat.set",
+        ),
+        (
+            "remove",
+            "scoreboard objectives remove rich",
+            "commands.scoreboard.objectives.remove.success",
+        ),
+        ("team", "team add existing", "commands.team.add.success"),
+    ] {
+        log.record(format!("dynamic.{step}"), command(bot, text, key).await?)?;
+    }
+    let vectors: Vec<Value> = serde_json::from_str(include_str!(
+        "../../ferraloom-game/tests/java/scoreboard/dynamic-commands.json"
+    ))?;
+    ensure!(vectors.len() == 7, "native getter-order cases");
+    for (index, vector) in vectors.iter().enumerate() {
+        let text = vector["command"].as_str().expect("native command");
+        let key = vector["error"]["translate"]
+            .as_str()
+            .expect("native error key");
+        log.record(format!("getter.{index}"), command(bot, text, key).await?)?;
+    }
+    log.record(
+        "order.cleanup",
+        command(bot, "team remove existing", "commands.team.remove.success").await?,
+    )?;
     log.record(
         "reset",
         command(
