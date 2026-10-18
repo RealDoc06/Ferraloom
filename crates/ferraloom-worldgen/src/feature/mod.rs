@@ -28,6 +28,10 @@ pub mod tree;
 pub mod vegetation;
 
 pub trait Feature: Debug + Send + Sync {
+    /// TreeGrower#getMinimumHeight: only TreeFeature exposes its trunk base height.
+    fn tree_minimum_height(&self) -> Option<i32> {
+        None
+    }
     fn place(&self, context: &mut FeatureContext<'_, '_>) -> Result<bool, Error>;
 }
 pub struct FeatureContext<'a, 'r> {
