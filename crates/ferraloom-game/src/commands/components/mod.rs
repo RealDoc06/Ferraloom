@@ -24,6 +24,7 @@ pub enum ResolutionError {
     Syntax(CommandSyntaxException),
     Unsupported(UnsupportedContent),
     Storage(super::storage::StorageReadError),
+    EntityData(crate::level::LevelError),
     InvalidContent(String),
 }
 impl fmt::Display for ResolutionError {
@@ -34,6 +35,7 @@ impl fmt::Display for ResolutionError {
                 write!(f, "Component {content:?} resolution is not yet supported")
             }
             Self::Storage(error) => write!(f, "{error}"),
+            Self::EntityData(error) => write!(f, "Required entity read failed: {error:?}"),
             Self::InvalidContent(message) => f.write_str(message),
         }
     }
@@ -54,7 +56,12 @@ impl From<super::storage::StorageReadError> for ResolutionError {
 }
 impl From<CommandSyntaxException> for ResolutionError {
     fn from(error: CommandSyntaxException) -> Self {
-        Self::Syntax(error)
+        let raw = error.raw_message.as_ref() as &dyn std::any::Any;
+        if let Some(required) = raw.downcast_ref::<super::arguments::selectors::EntityReadError>() {
+            Self::EntityData(required.error)
+        } else {
+            Self::Syntax(error)
+        }
     }
 }
 /// Reads occur synchronously at the component's native resolution point.
@@ -214,7 +221,7 @@ fn resolve_contents<R: ComponentResolver>(
             let names = entities
                 .into_iter()
                 .map(|entity| resolver.display_name(entity))
-                .collect::<Vec<_>>();
+                .collect::<Result<Vec<_>, _>>()?;
             format_list(names, &separator)
         }
         Contents::Score { name, objective } => {
@@ -275,7 +282,8 @@ fn resolve_contents<R: ComponentResolver>(
                                     Ok(component) => values.push(component),
                                     Err(
                                         error @ (ResolutionError::Unsupported(_)
-                                        | ResolutionError::Storage(_)),
+                                        | ResolutionError::Storage(_)
+                                        | ResolutionError::EntityData(_)),
                                     ) => {
                                         return Err(error);
                                     }

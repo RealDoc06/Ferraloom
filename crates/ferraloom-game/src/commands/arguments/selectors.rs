@@ -1,4 +1,7 @@
 //! Port of EntitySelectorParser and EntitySelectorOptions. Evaluation remains at the caller.
+mod live;
+pub use live::{EntityReadError, live_entity_matches, selector_read_error};
+#[cfg(test)]
 mod player;
 use super::{identifier, nbt, range::NumberRange};
 use crate::{
@@ -13,7 +16,6 @@ use ferraloom_brigadier::{CommandSyntaxException, StringReader};
 use ferraloom_data::EntityType;
 use ferraloom_nbt::Tag;
 use ferraloom_util::{Aabb, Uuid, Vec3, mth};
-pub use player::player_nbt;
 use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -833,11 +835,13 @@ pub trait EntityQuery {
             info.position.z + info.width / 2.,
         ))
     }
-    fn display_name(&self, entity: EntityRef) -> ferraloom_protocol::chat::Component {
-        ferraloom_protocol::chat::Component::literal(
-            self.info(entity)
-                .map_or_else(String::new, |info| info.name.into_owned()),
-        )
+    fn display_name(
+        &self,
+        entity: EntityRef,
+    ) -> Result<ferraloom_protocol::chat::Component, CommandSyntaxException> {
+        self.info(entity)
+            .map(|info| ferraloom_protocol::chat::Component::literal(info.name))
+            .ok_or_else(|| error("argument.entity.notfound.entity", &[]))
     }
     fn matches(
         &mut self,

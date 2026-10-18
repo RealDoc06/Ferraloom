@@ -1,0 +1,35 @@
+liquid	air	0,0		0,0,0,0,0,0	fluid	false	0,0
+liquid	stone	0,0	0,0,0,1	0,0,0,0,0,0	fluid	false	0,0
+liquid	water	0,0	0,0,0,89	0,0,0,0,0,0	fluid	true	0,0
+liquid	flowing-water	0,0	0,0,0,96	0,0,0,0,0,0	fluid	true	0,0
+liquid	lava	0,0	0,0,0,105	0,0,0,0,0,0	fluid	true	0,0
+liquid	wet-slab	0,0	0,0,0,15251	0,0,0,0,0,0	fluid	true	0,0
+liquid	dry-slab	0,0	0,0,0,15252	0,0,0,0,0,0	fluid	false	0,0
+liquid	unloaded-neighbor-false	0,0		15,15,0,16,16,0	fluid	missing:1,0	0,0;1,0
+liquid	unloaded-neighbor-true	0,0	15,15,0,89	15,15,0,16,16,0	fluid	true	0,0
+liquid	outside-height	0,0		0,-2,0,0,-1,0	fluid	false	0,0
+liquid	outside-height	0,0		0,32,0,0,33,0	fluid	false	0,0
+liquid	outside-height	0,0		16,-2,0,16,-1,0	fluid	missing:1,0	1,0
+liquid	outside-height	0,0		16,32,0,16,33,0	fluid	missing:1,0	1,0
+liquid	inclusive-upper-corner	0,0;1,0	16,16,0,89	15.25,15.25,0,16,16,0	fluid	true	0,0;1,0
+liquid	negative-floor	-1,0;0,0	-1,0,0,89	-0.01,0,0,0,0,0	fluid	true	-1,0
+box	chunk-section-cell-order	0,0;0,1;1,0;1,1		15,15,15,16,16,16	all	15,15,15;15,16,15;15,15,16;15,16,16;16,15,15;16,16,15;16,15,16;16,16,16	0,0;0,1;1,0;1,1
+box	air-tail	0,0		0,-1,0,1,0,1	all	0,0,0;1,0,0;0,0,1;1,0,1;0,-1,0;1,-1,0;0,-1,1;1,-1,1	0,0
+box	air-wholly-below	0,0		0,-3,0,0,-2,0	air	0,-3,0;0,-2,0;0,-1,0	0,0
+reversed	0,0,0;1,0,0;0,0,1;1,0,1;0,1,0;1,1,0;0,1,1;1,1,1
+ordered	cache-collision-all	0,0;1,0;2,0	0,0,0,89	0,0,0;1,0,0;16,0,0;0,16,0;32,0,0;0,0,0	all	0,0,0;1,0,0;16,0,0;0,16,0;32,0,0;0,0,0	0,0;1,0;0,0;2,0;0,0
+ordered	cache-collision-none	0,0;1,0;2,0	0,0,0,89	0,0,0;1,0,0;16,0,0;0,16,0;32,0,0;0,0,0	none		0,0;1,0;0,0;2,0;0,0
+ordered	cache-collision-fluid	0,0;1,0;2,0	0,0,0,89	0,0,0;1,0,0;16,0,0;0,16,0;32,0,0;0,0,0	fluid	0,0,0;0,0,0	0,0;1,0;0,0;2,0;0,0
+ordered	missing	0,0		0,0,0;1,0,0;16,0,0;0,16,0;32,0,0;0,0,0	all	missing:1,0	0,0;1,0
+ordered	filter-before-read	0,0		16,0,0;0,0,0	all-pos	0,0,0	0,0
+ordered	outside-no-read			123,-1,456;123,32,456	air	123,-1,456;123,32,456	
+queries	all	true,false,true,true,false,true,false,true,false,true,true,false,false
+queries	none	false,true,false,false,true,false,true,false,true,false,true,false,true
+queries	fluid	true,false,false,true,false,true,false,true,true,false,true,false,false
+prune	false	7
+prune	true	7
+first	0,0,0	0,0,0
+manhattan	false	0,0,0;0,-1,0;0,0,1;0,1,0;1,0,0
+manhattan	true	0,0,0;0,-1,0;0,0,1;0,1,0;1,0,0;0,-1,1;0,1,1;1,-1,0;1,0,1;1,1,0;1,-1,1;1,1,1
+if-loaded	0,0		
+if-loaded	0,0;1,0	89,0,0,0	0,0;1,0;0,0;1,0

@@ -33,6 +33,10 @@ public final class MixedSelectorVector {
         doCallRealMethod().when(level).getEntities(any(EntityTypeTest.class),any(java.util.function.Predicate.class),anyList(),anyInt());
         doCallRealMethod().when(level).getEntities(any(EntityTypeTest.class),any(AABB.class),any(java.util.function.Predicate.class),anyList(),anyInt());
         doAnswer(call->getter.get((UUID)call.getArgument(0))).when(level).getEntity(any(UUID.class));
+        var scoreboard=new net.minecraft.server.ServerScoreboard(server);
+        doReturn(scoreboard).when(server).getScoreboard();doReturn(server).when(level).getServer();
+        var team=scoreboard.addPlayerTeam("mixed");
+        var objective=scoreboard.addObjective("selection",net.minecraft.world.scores.criteria.ObjectiveCriteria.DUMMY,Component.literal("selection"),net.minecraft.world.scores.criteria.ObjectiveCriteria.RenderType.INTEGER,false,null);
         var definitions=new JsonArray();var entities=new ArrayList<Entity>();var identities=new IdentityHashMap<Entity,Integer>();
         String[] names={"Alice","NearCow","FarItem","DeadCow","Bob"};
         double[] positions={32,1,17,2,0.25};
@@ -47,8 +51,14 @@ public final class MixedSelectorVector {
             doReturn(Set.of(index==1?"pet":"other")).when(entity).entityTags();
             doReturn(box).when(entity).getBoundingBox();doReturn(new Vec3(x,0,0)).when(entity).position();
             doAnswer(call->{Vec3 p=call.getArgument(0);return (x-p.x)*(x-p.x)+p.y*p.y+p.z*p.z;}).when(entity).distanceToSqr(any(Vec3.class));
+            String holder=entity instanceof ServerPlayer?names[index]:uuid.toString();
+            doReturn(holder).when(entity).getScoreboardName();doReturn(level).when(entity).level();
+            boolean member=index==1||index==4;
+            if(member){scoreboard.addPlayerToTeam(holder,team);doReturn(team).when(entity).getTeam();}
+            Integer score=index==1?Integer.valueOf(7):index==4?Integer.valueOf(0):null;
+            if(score!=null)scoreboard.getOrCreatePlayerScore(entity,objective).set(score);
             entities.add(entity);identities.put(entity,index+1);lookup.add(entity);sections.getOrCreateSection(SectionPos.of(new net.minecraft.core.BlockPos((int)Math.floor(x),0,0)).asLong()).add(entity);
-            var definition=new JsonObject();definition.addProperty("name",names[index]);definition.addProperty("kind",net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(type).toString());definition.addProperty("uuid",uuid.toString());definition.addProperty("x",x);definition.addProperty("alive",index!=3);definition.addProperty("tag",index==1?"pet":"other");definitions.add(definition);
+            var definition=new JsonObject();definition.addProperty("name",names[index]);definition.addProperty("kind",net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(type).toString());definition.addProperty("uuid",uuid.toString());definition.addProperty("x",x);definition.addProperty("alive",index!=3);definition.addProperty("tag",index==1?"pet":"other");definition.addProperty("team",member);if(score!=null)definition.addProperty("score",score);definitions.add(definition);
         }
         var levelPlayers=ServerLevel.class.getDeclaredField("players");levelPlayers.setAccessible(true);
         levelPlayers.set(level,List.of((ServerPlayer)entities.get(0),(ServerPlayer)entities.get(4)));
@@ -57,7 +67,7 @@ public final class MixedSelectorVector {
         doAnswer(call->entities.stream().filter(e->e instanceof ServerPlayer&&e.getPlainTextName().equalsIgnoreCase(call.getArgument(0))).findFirst().orElse(null)).when(players).getPlayerByName(anyString());
         doAnswer(call->entities.stream().filter(e->e instanceof ServerPlayer&&e.getUUID().equals(call.getArgument(0))).findFirst().orElse(null)).when(players).getPlayer(any(UUID.class));
         var vectors=new JsonArray();
-        var inputs=List.of("@e","@n","@a","@p","@e[type=player]","@e[type=!player]","@e[type=cow]","@e[tag=pet]","@e[name=NearCow]","@e[sort=nearest,limit=3]","@e[sort=furthest,limit=2]","@e[limit=2]","@e[dx=64,dy=2,dz=2]","@e[distance=..64]","@e[distance=1..20,sort=arbitrary]","@e[x=20,dx=-20,dy=2,dz=2]","@s","Alice","00000000-0000-0000-0000-000000000003","00000000-0000-0000-0000-000000000004","00000000-0000-0000-0000-000000000099");
+        var inputs=List.of("@e","@n","@a","@p","@e[type=player]","@e[type=!player]","@e[type=cow]","@e[tag=pet]","@e[name=NearCow]","@e[sort=nearest,limit=3]","@e[sort=furthest,limit=2]","@e[limit=2]","@e[dx=64,dy=2,dz=2]","@e[distance=..64]","@e[distance=1..20,sort=arbitrary]","@e[x=20,dx=-20,dy=2,dz=2]","@e[team=mixed]","@e[team=]","@e[team=!mixed]","@e[scores={selection=7..}]","@e[scores={selection=0}]","@e[scores={missing=0..}]","@e[team=mixed,scores={selection=7}]","@e[scores={}]","@s","Alice","00000000-0000-0000-0000-000000000003","00000000-0000-0000-0000-000000000004","00000000-0000-0000-0000-000000000099");
         for(int sourceIndex:new int[]{0,1})for(String input:inputs)for(boolean playerOnly:new boolean[]{false,true}) {
             var source=mock(CommandSourceStack.class);doReturn(server).when(source).getServer();doReturn(level).when(source).getLevel();doReturn(entities.get(sourceIndex)).when(source).getEntity();
             doReturn(Vec3.ZERO).when(source).getPosition();doReturn(PermissionSet.ALL_PERMISSIONS).when(source).permissions();doReturn(FeatureFlags.VANILLA_SET).when(source).enabledFeatures();

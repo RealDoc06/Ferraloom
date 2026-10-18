@@ -21,6 +21,8 @@ ferraloom-protocol.workspace = true
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1.0.154", features = ["arbitrary_precision", "preserve_order"] }
 
+jiff = { version = "0.2", default-features = false, features = ["std", "tz-system", "tzdb-zoneinfo"] }
+
 [dev-dependencies]
 serde = { version = "1", features = ["derive"] }
 flate2 = "1.1.10"

@@ -311,7 +311,7 @@ pub(crate) async fn launch(
                     unreachable!()
                 };
                 ensure!(
-                    p.content.to_json()?.contains("commands.gamerule.set"),
+                    game_rule_is_installed(&p.content, rule, value),
                     "game rule {rule}={value} failed: {:?}",
                     p.content
                 );
@@ -325,4 +325,78 @@ pub(crate) async fn launch(
         }
     }
     Ok(launched)
+}
+
+/// GameRuleCommand#setRule reports unchanged values as a translated error.
+/// That exact rule/value reply proves installation just as a successful set does.
+fn game_rule_is_installed(
+    message: &ferraloom_protocol::chat::Component,
+    rule: &str,
+    value: &str,
+) -> bool {
+    use ferraloom_protocol::chat::{Argument, Contents};
+    let installed = match &message.contents {
+        Contents::Translatable { key, args, .. } if key == "commands.gamerule.not_set" => {
+            matches!(args.as_slice(), [Argument::String(name), Argument::String(installed)]
+                if (name == rule || name == rule.strip_prefix("minecraft:").unwrap_or(rule))
+                    && installed == value)
+        }
+        Contents::Translatable { key, .. } => key == "commands.gamerule.set",
+        _ => false,
+    };
+    installed
+        || message
+            .extra
+            .iter()
+            .any(|child| game_rule_is_installed(child, rule, value))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::game_rule_is_installed;
+    use ferraloom_protocol::chat::{Argument, Component};
+
+    #[test]
+    fn unchanged_game_rule_requires_exact_rule_and_serialized_value() {
+        let response = |key: &str, rule: &str, value: Argument| {
+            Component::translatable(key, vec![Argument::String(rule.into()), value])
+        };
+        let value = || Argument::String("0".into());
+        let mut native_error = Component::literal("");
+        native_error.extra.push(response(
+            "commands.gamerule.not_set",
+            "random_tick_speed",
+            value(),
+        ));
+        let check = |message: &Component| {
+            game_rule_is_installed(message, "minecraft:random_tick_speed", "0")
+        };
+        assert!(check(&native_error));
+        assert!(check(&response(
+            "commands.gamerule.set",
+            "random_tick_speed",
+            value()
+        )));
+        assert!(!check(&response(
+            "commands.gamerule.not_set",
+            "random_tick_speed",
+            Argument::String("1".into())
+        )));
+        assert!(!check(&response(
+            "commands.gamerule.not_set",
+            "snow_accumulation_height",
+            value()
+        )));
+        assert!(!check(&response(
+            "commands.gamerule.query",
+            "random_tick_speed",
+            value()
+        )));
+        assert!(!check(&Component::literal("commands.gamerule.set")));
+        assert!(!check(&response(
+            "commands.gamerule.not_set",
+            "random_tick_speed",
+            Argument::Component(Box::new(Component::literal("0")))
+        )));
+    }
 }

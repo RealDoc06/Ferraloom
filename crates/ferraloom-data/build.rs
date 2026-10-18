@@ -904,6 +904,27 @@ fn main() {
         );
     }
     let mut out = String::from("// Generated from the pinned vanilla 26.3 server. Do not edit.\n");
+    let mut language = load(root, "en_us");
+    let deprecated = load(root, "deprecated_translations");
+    let entries = language.as_object_mut().unwrap();
+    for key in deprecated["removed"].as_array().unwrap() {
+        entries.remove(key.as_str().unwrap());
+    }
+    for (from, to) in deprecated["renamed"].as_object().unwrap() {
+        let value = entries.remove(from);
+        let to = to.as_str().unwrap();
+        if let Some(value) = value {
+            entries.insert(to.into(), value);
+        } else {
+            entries.remove(to);
+        }
+    }
+    writeln!(
+        out,
+        "pub const DEFAULT_LANGUAGE_JSON: &str = {:?};",
+        language.to_string()
+    )
+    .unwrap();
     registries(&mut out, &registries_report);
     let fluid_random_ticking = load(root, "fluid_random_ticking");
     let fluid_random_ticking = fluid_random_ticking

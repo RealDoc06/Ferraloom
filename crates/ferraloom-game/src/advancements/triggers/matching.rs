@@ -3,7 +3,11 @@ use super::{
 };
 use crate::{
     entity::EntityRef,
-    loot::{DamageSource, Holder, HolderSet, Identifier, LootData, LootError, LootParams, Result},
+    inventory::StackRef,
+    loot::{
+        DamageSource, Holder, HolderSet, Identifier, LootData, LootError, LootParams, LootRuntime,
+        Result,
+    },
     predicates::{EntityPredicate, EntitySubPredicate, ItemPredicate, match_components},
 };
 use ferraloom_data::BlockState;
@@ -33,9 +37,20 @@ pub enum TriggerEvent<'a> {
         empty: i32,
         occupied: i32,
     },
+    InventoryLive {
+        player: EntityRef,
+        changed: StackRef,
+        full: i32,
+        empty: i32,
+        occupied: i32,
+    },
     Recipe {
         id: &'a Identifier,
         ingredients: &'a [ItemStack],
+    },
+    RecipeLive {
+        id: &'a Identifier,
+        ingredients: &'a [StackRef],
     },
     Hurt {
         entity: Option<&'a LootParams>,
@@ -118,20 +133,70 @@ pub enum TriggerEvent<'a> {
 }
 /// A single evaluation uses the caller's RNG and canonical facts, shared by all
 /// listeners exactly as SimpleCriterionTrigger does. No world state is invented.
+/// Live adapters expose canonical facts through the same loot runtime used by
+/// conditions. No world borrow survives an RNG operation or an award callback.
+pub trait TriggerRuntime: LootRuntime {
+    fn trigger_facts(&self) -> &dyn TriggerFacts;
+    fn stack(&self, _stack: StackRef) -> Result<&ItemStack> {
+        Err(LootError::Unsupported("advancement.retained_stack".into()))
+    }
+    fn inventory_item(&self, _player: EntityRef, _slot: usize) -> Result<&ItemStack> {
+        Err(LootError::Unsupported(
+            "advancement.player_inventory".into(),
+        ))
+    }
+}
+enum MatchAccess<'a> {
+    Borrowed {
+        facts: &'a dyn TriggerFacts,
+        random: &'a mut dyn RandomSource,
+    },
+    Runtime(&'a mut dyn TriggerRuntime),
+}
 pub struct MatchContext<'a> {
     pub data: &'a LootData,
-    pub facts: &'a dyn TriggerFacts,
-    pub random: &'a mut dyn RandomSource,
     pub origin: Vec3,
+    access: MatchAccess<'a>,
 }
-impl MatchContext<'_> {
+impl<'a> MatchContext<'a> {
+    pub fn borrowed(
+        data: &'a LootData,
+        facts: &'a dyn TriggerFacts,
+        random: &'a mut dyn RandomSource,
+        origin: Vec3,
+    ) -> Self {
+        Self {
+            data,
+            origin,
+            access: MatchAccess::Borrowed { facts, random },
+        }
+    }
+    pub fn live(data: &'a LootData, runtime: &'a mut dyn TriggerRuntime, origin: Vec3) -> Self {
+        Self {
+            data,
+            origin,
+            access: MatchAccess::Runtime(runtime),
+        }
+    }
+    pub fn facts(&self) -> &dyn TriggerFacts {
+        match &self.access {
+            MatchAccess::Borrowed { facts, .. } => *facts,
+            MatchAccess::Runtime(runtime) => runtime.trigger_facts(),
+        }
+    }
     pub fn predicate(
         &mut self,
         predicate: &ContextAwarePredicate,
         params: &LootParams,
     ) -> Result<bool> {
-        self.data
-            .test_predicate(predicate, params, self.random, self.facts)
+        match &mut self.access {
+            MatchAccess::Borrowed { facts, random } => {
+                self.data.test_predicate(predicate, params, *random, *facts)
+            }
+            MatchAccess::Runtime(runtime) => self
+                .data
+                .test_predicate_with_runtime(predicate, params, *runtime),
+        }
     }
     fn optional(
         &mut self,
@@ -161,7 +226,7 @@ fn item_matches(
     context: &MatchContext<'_>,
 ) -> Result<bool> {
     test.as_ref()
-        .map_or(Ok(true), |test| test.matches(item, context.facts))
+        .map_or(Ok(true), |test| test.matches(item, context.facts()))
 }
 fn holder_contains<T>(
     set: &HolderSet<T>,
@@ -187,7 +252,7 @@ impl TriggerInstance {
             (C::Item(test), E::Item(item)) => item_matches(test, item, context)?,
             (C::Entity(test), E::Entity(params)) => context.optional(test, Some(params))?,
             (C::Location(test), E::Location(params)) => context.optional(test, Some(params))?,
-            (C::Block(test), E::Block(state)) => test.matches_state(state, context.facts)?,
+            (C::Block(test), E::Block(state)) => test.matches_state(state, context.facts())?,
             (
                 C::Killed {
                     entity,
@@ -199,7 +264,7 @@ impl TriggerInstance {
                 },
             ) => {
                 let damage = killing_blow.as_ref().map_or(Ok(true), |test| {
-                    test.matches(source, context.origin, context.facts)
+                    test.matches(source, context.origin, context.facts())
                 })?;
                 damage && context.optional(entity, Some(params))?
             }
@@ -213,29 +278,31 @@ impl TriggerInstance {
                     occupied,
                 },
             ) => {
+                slots.matches(full, empty, occupied)
+                    && inventory_matches(items, changed, inventory.iter().map(Ok), context.facts())?
+            }
+            (
+                C::Inventory { slots, items },
+                E::InventoryLive {
+                    player,
+                    changed,
+                    full,
+                    empty,
+                    occupied,
+                },
+            ) => {
                 if !slots.matches(full, empty, occupied) {
                     return Ok(false);
                 }
-                if items.len() == 1 {
-                    !changed.is_empty() && items[0].matches(changed, context.facts)?
-                } else {
-                    let mut remaining: Vec<_> = items.iter().collect();
-                    for item in inventory {
-                        if remaining.is_empty() {
-                            break;
-                        }
-                        if !item.is_empty() {
-                            let mut keep = Vec::new();
-                            for test in remaining {
-                                if !test.matches(item, context.facts)? {
-                                    keep.push(test);
-                                }
-                            }
-                            remaining = keep;
-                        }
-                    }
-                    remaining.is_empty()
-                }
+                let MatchAccess::Runtime(runtime) = &context.access else {
+                    return Err(LootError::Unsupported("advancement.retained_stack".into()));
+                };
+                inventory_matches(
+                    items,
+                    runtime.stack(changed)?,
+                    (0..43).map(|slot| runtime.inventory_item(player, slot)),
+                    runtime.trigger_facts(),
+                )?
             }
             (
                 C::Recipe {
@@ -246,25 +313,35 @@ impl TriggerInstance {
                     id,
                     ingredients: used,
                 },
+            ) => recipe_matches(
+                recipes,
+                ingredients,
+                id,
+                used.iter(),
+                |stack| Ok(*stack),
+                context.facts(),
+            )?,
+            (
+                C::Recipe {
+                    recipes,
+                    ingredients,
+                },
+                E::RecipeLive {
+                    id,
+                    ingredients: used,
+                },
             ) => {
-                if !holder_contains(recipes, id, |tag| context.facts.recipe_tag(tag))? {
-                    return Ok(false);
-                }
-                let mut remaining: Vec<_> = used.iter().collect();
-                for test in ingredients {
-                    let mut found = None;
-                    for (index, item) in remaining.iter().enumerate() {
-                        if test.matches(item, context.facts)? {
-                            found = Some(index);
-                            break;
-                        }
-                    }
-                    let Some(index) = found else {
-                        return Ok(false);
-                    };
-                    remaining.remove(index);
-                }
-                true
+                let MatchAccess::Runtime(runtime) = &context.access else {
+                    return Err(LootError::Unsupported("advancement.retained_stack".into()));
+                };
+                recipe_matches(
+                    recipes,
+                    ingredients,
+                    id,
+                    used.iter().copied(),
+                    |stack| runtime.stack(*stack),
+                    runtime.trigger_facts(),
+                )?
             }
             (
                 C::Hurt { damage, entity },
@@ -283,7 +360,7 @@ impl TriggerInstance {
                         original,
                         actual,
                         blocked,
-                        context.facts,
+                        context.facts(),
                     )
                 })?;
                 damage && context.optional(entity, params)?
@@ -306,7 +383,7 @@ impl TriggerInstance {
                             ComponentPredicate::Potions(test.clone()),
                         ]),
                     };
-                    match_components(&matcher, &components, context.facts)?
+                    match_components(&matcher, &components, context.facts())?
                 } else {
                     true
                 }
@@ -388,7 +465,7 @@ impl TriggerInstance {
                     let test = EntityPredicate {
                         parts: vec![EntitySubPredicate::Effects(effects.clone())],
                     };
-                    if !test.matches(Some(player), Some(context.origin), context.facts)? {
+                    if !test.matches(Some(player), Some(context.origin), context.facts())? {
                         return Ok(false);
                     }
                 }
@@ -407,7 +484,7 @@ impl TriggerInstance {
                 },
             ) => {
                 if let Some(test) = start_position
-                    && !test.matches(start, context.facts)?
+                    && !test.matches(start, context.facts())?
                 {
                     return Ok(false);
                 }
@@ -428,13 +505,13 @@ impl TriggerInstance {
                 if let Some(test) = item {
                     let mut found = false;
                     if let Some(entity) = hooked.this_entity
-                        && let Some(stack) = context.facts.hooked_item(entity)?
+                        && let Some(stack) = context.facts().hooked_item(entity)?
                     {
-                        found = test.matches(&stack, context.facts)?;
+                        found = test.matches(&stack, context.facts())?;
                     }
                     // Vanilla still checks the caught collection after a hooked-item match.
                     for item in items {
-                        if test.matches(item, context.facts)? {
+                        if test.matches(item, context.facts())? {
                             found = true;
                             break;
                         }
@@ -469,7 +546,7 @@ impl TriggerInstance {
                     let Some(weapon) = weapon else {
                         return Ok(false);
                     };
-                    if !test.matches(weapon, context.facts)? {
+                    if !test.matches(weapon, context.facts())? {
                         return Ok(false);
                     }
                 }
@@ -497,7 +574,7 @@ impl TriggerInstance {
                     bees: count,
                 },
             ) => {
-                block.matches_state(state, context.facts)?
+                block.matches_state(state, context.facts())?
                     && item_matches(item, stack, context)?
                     && bees.matches(count)
             }
@@ -512,7 +589,7 @@ impl TriggerInstance {
                 },
             ) => signal_strength.matches(value) && context.optional(projectile, Some(params))?,
             (C::Loot(tables), E::Loot(id)) => {
-                holder_contains(tables, id, |tag| context.facts.loot_table_tag(tag))?
+                holder_contains(tables, id, |tag| context.facts().loot_table_tag(tag))?
             }
             (
                 C::ItemEntity { item, entity },
@@ -551,4 +628,64 @@ impl InventorySlots {
     pub fn matches(&self, full: i32, empty: i32, occupied: i32) -> bool {
         self.full.matches(full) && self.empty.matches(empty) && self.occupied.matches(occupied)
     }
+}
+
+/// Port of InventoryChangeTrigger.TriggerInstance#matches. The live iterator
+/// reads canonical slots lazily and retains the native changed-stack receiver.
+fn inventory_matches<'a>(
+    items: &[ItemPredicate],
+    changed: &ItemStack,
+    inventory: impl IntoIterator<Item = Result<&'a ItemStack>>,
+    facts: &dyn TriggerFacts,
+) -> Result<bool> {
+    if items.len() == 1 {
+        return Ok(!changed.is_empty() && items[0].matches(changed, facts)?);
+    }
+    let mut remaining: Vec<_> = items.iter().collect();
+    for item in inventory {
+        if remaining.is_empty() {
+            break;
+        }
+        let item = item?;
+        if !item.is_empty() {
+            let mut keep = Vec::new();
+            for test in remaining {
+                if !test.matches(item, facts)? {
+                    keep.push(test);
+                }
+            }
+            remaining = keep;
+        }
+    }
+    Ok(remaining.is_empty())
+}
+
+/// Port of RecipeCraftedTrigger.TriggerInstance#matches. The working list holds
+/// the captured receiver identities; each predicate resolves its current value.
+fn recipe_matches<'a, T>(
+    recipes: &HolderSet<crate::crafting::Recipe>,
+    ingredients: &[ItemPredicate],
+    id: &Identifier,
+    used: impl IntoIterator<Item = T>,
+    resolve: impl Fn(&T) -> Result<&'a ItemStack>,
+    facts: &dyn TriggerFacts,
+) -> Result<bool> {
+    if !holder_contains(recipes, id, |tag| facts.recipe_tag(tag))? {
+        return Ok(false);
+    }
+    let mut remaining: Vec<_> = used.into_iter().collect();
+    for test in ingredients {
+        let mut found = None;
+        for (index, item) in remaining.iter().enumerate() {
+            if test.matches(resolve(item)?, facts)? {
+                found = Some(index);
+                break;
+            }
+        }
+        let Some(index) = found else {
+            return Ok(false);
+        };
+        remaining.remove(index);
+    }
+    Ok(true)
 }

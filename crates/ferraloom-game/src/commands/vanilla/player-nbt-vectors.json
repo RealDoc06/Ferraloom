@@ -51,13 +51,13 @@
     "count": 0,
     "pattern": "{DataVersion:5023}",
     "inverted": false,
-    "matches": false
+    "matches": true
   },
   {
     "count": 0,
     "pattern": "{DataVersion:5023}",
     "inverted": true,
-    "matches": true
+    "matches": false
   },
   {
     "count": 1,
@@ -111,13 +111,13 @@
     "count": 1,
     "pattern": "{DataVersion:5023}",
     "inverted": false,
-    "matches": false
+    "matches": true
   },
   {
     "count": 1,
     "pattern": "{DataVersion:5023}",
     "inverted": true,
-    "matches": true
+    "matches": false
   },
   {
     "count": 2,
@@ -171,12 +171,12 @@
     "count": 2,
     "pattern": "{DataVersion:5023}",
     "inverted": false,
-    "matches": false
+    "matches": true
   },
   {
     "count": 2,
     "pattern": "{DataVersion:5023}",
     "inverted": true,
-    "matches": true
+    "matches": false
   }
 ]
