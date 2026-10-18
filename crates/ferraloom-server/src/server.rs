@@ -850,6 +850,8 @@ impl MinecraftServer {
         }
         player.view_distance = i32::from(self.connections[&connection].information.view_distance);
         let center = player.chunk_position();
+        self.level.tickets.add_player_spawn(center, self.tick);
+        self.update_chunk_tickets()?;
         self.request_area(center, 3)?;
         let c = self.connections.get_mut(&connection).unwrap();
         c.player = Some(player);
@@ -1105,6 +1107,7 @@ impl MinecraftServer {
                 holder,
                 &self.world.light_ready,
                 &self.world.generation_statuses,
+                &self.world.ready,
                 &mut self.level.level,
             )?;
             if self.level.level.chunk(pos).is_some() {
@@ -1272,7 +1275,9 @@ impl MinecraftServer {
         }
         let positions = self.level.chunks.holder_positions().collect::<Vec<_>>();
         for pos in positions {
-            if !self.world.ready.contains(&pos)
+            if self.level.chunks.holders[&pos.pack()].requested_full_status()
+                >= FullChunkStatus::BlockTicking
+                && !self.world.ready.contains(&pos)
                 && self.world.light_ready.contains(&pos)
                 && full_chunk_range_ready(&self.world.light_ready, pos, 1)
             {
@@ -2016,12 +2021,16 @@ impl MinecraftServer {
                     if (-3..=3).all(|x| {
                         (-3..=3).all(|z| {
                             self.world
-                                .ready
+                                .light_ready
                                 .contains(&ChunkPos::new(center.x + x, center.z + z))
                         })
                     }) {
                         joining.push(id);
                     }
+                }
+                Phase::Configuration(ConfigTask::Finishing) => {
+                    let center = c.player.as_ref().unwrap().chunk_position();
+                    self.level.tickets.add_player_spawn(center, self.tick);
                 }
                 Phase::Play(entity) => {
                     let player = self
@@ -2047,6 +2056,9 @@ impl MinecraftServer {
         }
         for id in joining {
             let c = self.connections.get_mut(&id).unwrap();
+            self.level
+                .tickets
+                .add_player_spawn(c.player.as_ref().unwrap().chunk_position(), self.tick);
             c.phase = Phase::Configuration(ConfigTask::Finishing);
             c.push(cfg::ClientboundPacket::FinishConfiguration(
                 cfg::FinishConfiguration {},
@@ -2571,6 +2583,7 @@ fn update_holder_full_status(
     holder: &mut ferraloom_game::level::chunk_holder::ChunkHolder,
     ready: &HashSet<ChunkPos>,
     completed: &BTreeMap<ChunkPos, ChunkStatus>,
+    post_processed: &HashSet<ChunkPos>,
     level: &mut ferraloom_game::level::Level,
 ) -> Result<bool> {
     let mut status = holder.update_full_status();
@@ -2579,16 +2592,19 @@ fn update_holder_full_status(
             holder.position,
             promotion.status,
         );
-        if future.is_ready(|pos| {
-            if ready.contains(&pos) {
-                Some(ChunkStatus::Full)
-            } else {
-                completed
-                    .get(&pos)
-                    .copied()
-                    .filter(|status| *status < ChunkStatus::Full)
-            }
-        }) {
+        if (promotion.status != FullChunkStatus::BlockTicking
+            || post_processed.contains(&holder.position))
+            && future.is_ready(|pos| {
+                if ready.contains(&pos) {
+                    Some(ChunkStatus::Full)
+                } else {
+                    completed
+                        .get(&pos)
+                        .copied()
+                        .filter(|status| *status < ChunkStatus::Full)
+                }
+            })
+        {
             status = holder.confirm_full_status(promotion);
         }
     }
@@ -2829,7 +2845,10 @@ mod live_level_tests {
         let mut completed = BTreeMap::new();
         let mut level = Level::new(Region::new(&BEHAVIORS));
         holder.ticket_level = 33;
-        assert!(!update_holder_full_status(&mut holder, &ready, &completed, &mut level).unwrap());
+        assert!(
+            !update_holder_full_status(&mut holder, &ready, &completed, &ready, &mut level)
+                .unwrap()
+        );
         assert_eq!(level.entity_chunk_visibility(pos), Visibility::Hidden);
         ready.insert(pos);
         for x in -1..=1 {
@@ -2837,28 +2856,47 @@ mod live_level_tests {
                 completed.insert(ChunkPos::new(x, z), ChunkStatus::InitializeLight);
             }
         }
-        update_holder_full_status(&mut holder, &ready, &completed, &mut level).unwrap();
+        update_holder_full_status(&mut holder, &ready, &completed, &ready, &mut level).unwrap();
         assert_eq!(level.entity_chunk_visibility(pos), Visibility::Tracked);
+        holder.ticket_level = 32;
+        for x in -1..=1 {
+            for z in -1..=1 {
+                ready.insert(ChunkPos::new(x, z));
+            }
+        }
+        update_holder_full_status(&mut holder, &ready, &completed, &HashSet::new(), &mut level)
+            .unwrap();
+        assert_eq!(holder.confirmed_full_status(), FullChunkStatus::Full);
+        update_holder_full_status(&mut holder, &ready, &completed, &ready, &mut level).unwrap();
+        assert_eq!(
+            holder.confirmed_full_status(),
+            FullChunkStatus::BlockTicking
+        );
         holder.ticket_level = 31;
         for x in -1..=1 {
             for z in -1..=1 {
                 ready.insert(ChunkPos::new(x, z));
             }
         }
-        assert!(!update_holder_full_status(&mut holder, &ready, &completed, &mut level).unwrap());
+        assert!(
+            !update_holder_full_status(&mut holder, &ready, &completed, &ready, &mut level)
+                .unwrap()
+        );
         assert_eq!(level.entity_chunk_visibility(pos), Visibility::Tracked);
         for x in -2..=2 {
             for z in -2..=2 {
                 ready.insert(ChunkPos::new(x, z));
             }
         }
-        assert!(update_holder_full_status(&mut holder, &ready, &completed, &mut level).unwrap());
+        assert!(
+            update_holder_full_status(&mut holder, &ready, &completed, &ready, &mut level).unwrap()
+        );
         assert_eq!(level.entity_chunk_visibility(pos), Visibility::Ticking);
         holder.ticket_level = 32;
-        update_holder_full_status(&mut holder, &ready, &completed, &mut level).unwrap();
+        update_holder_full_status(&mut holder, &ready, &completed, &ready, &mut level).unwrap();
         assert_eq!(level.entity_chunk_visibility(pos), Visibility::Tracked);
         holder.ticket_level = 45;
-        update_holder_full_status(&mut holder, &ready, &completed, &mut level).unwrap();
+        update_holder_full_status(&mut holder, &ready, &completed, &ready, &mut level).unwrap();
         assert_eq!(level.entity_chunk_visibility(pos), Visibility::Hidden);
     }
 }
