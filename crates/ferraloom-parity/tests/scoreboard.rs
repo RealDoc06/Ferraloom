@@ -132,21 +132,33 @@ async fn scores(session: &mut Session) -> Result<ObservationLog> {
         log.record(index.to_string(), command(bot, text, key).await?)?;
     }
     let guest = session.join("ScoreGuest").await?;
-    let packet = session.bot(guest)?.wait_for("displayed objective on join",Ticks::DEFAULT,|_,packet|matches!(packet,cb::Packet::SetObjective(packet) if packet.objective_name=="points")).await?;
-    let cb::Packet::SetObjective(packet) = packet.as_ref() else {
-        unreachable!()
-    };
-    let ferraloom_parity::protocol::play::ObjectiveOperation::Add {
+    // Bot::connect already consumes the initial packet batch; inspect its retained client state.
+    let state = session.bot(guest)?.snapshot();
+    let Some(ferraloom_parity::protocol::play::ObjectiveOperation::Add {
         display_name,
         number_format,
         ..
-    } = &packet.operation
+    }) = state.objectives.get("points")
     else {
-        unreachable!()
+        ferraloom_parity::bail!("join omitted displayed objective")
     };
     ensure!(
-        number_format.is_some(),
-        "join omitted objective number format"
+        matches!(
+            number_format,
+            Some(ferraloom_parity::protocol::play::NumberFormat::Blank)
+        ),
+        "join omitted objective blank number format"
+    );
+    ensure!(
+        state
+            .display_objectives
+            .iter()
+            .any(|slot| slot.objective_name == "points"),
+        "join omitted objective display slot"
+    );
+    ensure!(
+        state.scores.get(&("points".into(), "#one".into())) == Some(&-3),
+        "join omitted current score"
     );
     log.record("join.objective", json(display_name)?)?;
     let bot = session.bot(id)?;
