@@ -3,6 +3,7 @@
 pub mod arguments;
 pub mod builtins;
 pub mod clocks;
+pub mod components;
 pub mod context;
 pub mod exceptions;
 pub mod execution;
