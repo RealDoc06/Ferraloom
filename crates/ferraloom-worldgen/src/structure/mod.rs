@@ -9,6 +9,7 @@ pub mod jigsaw;
 pub mod jigsaw_structure;
 mod nbt;
 pub mod placement;
+pub mod pipeline;
 pub mod pool;
 pub mod processor;
 pub mod references;
