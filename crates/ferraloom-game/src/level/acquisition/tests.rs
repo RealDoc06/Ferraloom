@@ -368,45 +368,53 @@ fn distance_promotion_and_prepared_chunk_publication_finish_before_return() {
 
 #[test]
 fn required_absence_and_terminal_failure_do_not_become_cached_success() {
-    let level = crate::level::Level::new(
+    let mut level = crate::level::Level::new(
         crate::level::Region::new(&crate::Behaviors::EMPTY),
         crate::level::LevelContext::fixture(0, 63),
     );
-    let cache = ChunkAcquisition::default();
-    let driver = Driver::new(None);
-    driver.promote.set(false);
-    assert_eq!(
-        cache.get_chunk(&driver, &level, POS, ChunkStatus::Full, true),
-        Err(LevelError::ChunkAcquisition(
-            POS,
-            ChunkStatus::Full,
-            AcquireFailure::MissingHolder
-        ))
-    );
-    driver.level.set(Some(33));
-    driver.result.set(false);
-    assert_eq!(
-        cache.get_chunk(&driver, &level, POS, ChunkStatus::Full, true),
-        Err(LevelError::ChunkAcquisition(
-            POS,
-            ChunkStatus::Full,
-            AcquireFailure::MissingResult
-        ))
-    );
-    let failure = LevelError::ChunkAcquisition(POS, ChunkStatus::Full, AcquireFailure::Cancelled);
-    driver.failure.set(Some(failure));
-    assert_eq!(
-        cache.get_chunk(&driver, &level, POS, ChunkStatus::Full, false),
-        Err(failure)
-    );
-    driver.failure.set(None);
-    driver.result.set(true);
-    assert!(
-        cache
-            .get_chunk(&driver, &level, POS, ChunkStatus::Full, false)
-            .unwrap()
-            .is_some()
-    );
+    for policy in [
+        crate::block::UnportedBehavior::Strict,
+        crate::block::UnportedBehavior::Warn,
+    ] {
+        level.set_unported_behavior(policy);
+        let cache = ChunkAcquisition::default();
+        let driver = Driver::new(None);
+        driver.promote.set(false);
+        assert_eq!(
+            cache.get_chunk(&driver, &level, POS, ChunkStatus::Full, true),
+            Err(LevelError::ChunkAcquisition(
+                POS,
+                ChunkStatus::Full,
+                AcquireFailure::MissingHolder
+            ))
+        );
+        driver.level.set(Some(33));
+        driver.result.set(false);
+        assert_eq!(
+            cache.get_chunk(&driver, &level, POS, ChunkStatus::Full, true),
+            Err(LevelError::ChunkAcquisition(
+                POS,
+                ChunkStatus::Full,
+                AcquireFailure::MissingResult
+            ))
+        );
+        let failure =
+            LevelError::ChunkAcquisition(POS, ChunkStatus::Full, AcquireFailure::Cancelled);
+        driver.failure.set(Some(failure));
+        assert_eq!(
+            cache.get_chunk(&driver, &level, POS, ChunkStatus::Full, false),
+            Err(failure)
+        );
+        driver.failure.set(None);
+        driver.result.set(true);
+        assert!(
+            cache
+                .get_chunk(&driver, &level, POS, ChunkStatus::Full, false)
+                .unwrap()
+                .is_some()
+        );
+        assert_eq!(level.unported_behavior_stats().skipped_calls, 0);
+    }
 }
 
 #[test]
