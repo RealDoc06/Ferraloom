@@ -1342,7 +1342,7 @@ impl MinecraftServer {
                 self.world.ready.insert(pos);
             }
         }
-        for (pos, epoch, result) in self.world.poll_unloads()? {
+        for (pos, request_id, result) in self.world.poll_unloads()? {
             if let Err(error) = result {
                 self.level
                     .level
@@ -1355,7 +1355,12 @@ impl MinecraftServer {
                 .chunks
                 .holders
                 .get(&pos.pack())
-                .is_some_and(|holder| holder.ticket_level > 44 && holder.epoch == epoch);
+                .is_some_and(|holder| {
+                    holder.ticket_level > 44
+                        && holder.request_id == request_id
+                        && holder.pending_full_status().is_none()
+                        && holder.confirmed_full_status() == FullChunkStatus::Inaccessible
+                });
             if eligible
                 && self
                     .level
@@ -1363,8 +1368,15 @@ impl MinecraftServer {
                     .chunk(pos)
                     .is_some_and(|chunk| !chunk.is_unsaved())
                 && !self.world.generation_pins(pos)
-                && self.level.chunks.remove_unloaded_holder(pos).is_some()
             {
+                self.level
+                    .level
+                    .detach_block_entities_for_unload(pos)
+                    .map_err(game_error)?;
+                ensure!(
+                    self.level.chunks.remove_unloaded_holder(pos).is_some(),
+                    "holder changed during block entity unload"
+                );
                 self.level.level.remove_chunk(pos);
                 self.world.finish_unload(pos)?;
             }
@@ -1389,7 +1401,7 @@ impl MinecraftServer {
                 self.world.schedule_unload(
                     &mut self.level.level,
                     pos,
-                    holder.epoch,
+                    holder.request_id,
                     self.level.game_time,
                 )?;
             }

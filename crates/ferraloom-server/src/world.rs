@@ -547,7 +547,7 @@ fn spawn_tag(p: BlockPos) -> Tag {
 }
 struct ChunkUnload {
     pos: ChunkPos,
-    epoch: u64,
+    request_id: u64,
     saving: oneshot::Receiver<Result<()>>,
 }
 pub struct World {
@@ -1152,7 +1152,7 @@ impl World {
         &mut self,
         level: &mut Level,
         pos: ChunkPos,
-        epoch: u64,
+        request_id: u64,
         game_time: i64,
     ) -> Result<()> {
         if self.generation_pins(pos) || self.unloading.iter().any(|job| job.pos == pos) {
@@ -1176,7 +1176,11 @@ impl World {
             io.store(pos, Some(snapshot.encode(&registry)?)).wait()?;
             Ok(())
         });
-        self.unloading.push_back(ChunkUnload { pos, epoch, saving });
+        self.unloading.push_back(ChunkUnload {
+            pos,
+            request_id,
+            saving,
+        });
         Ok(())
     }
     pub fn poll_unloads(&mut self) -> Result<Vec<(ChunkPos, u64, Result<()>)>> {
@@ -1185,7 +1189,7 @@ impl World {
             match job.saving.try_recv() {
                 Ok(result) => {
                     let job = self.unloading.pop_front().unwrap();
-                    done.push((job.pos, job.epoch, result));
+                    done.push((job.pos, job.request_id, result));
                 }
                 Err(oneshot::error::TryRecvError::Empty) => break,
                 Err(error) => return Err(error.into()),
