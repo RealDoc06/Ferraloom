@@ -107,6 +107,7 @@ public final class EntityVectors {
         DamageVectors.run(new EntityFixture(r));
         DifficultyVectors.run();
         ExperienceVectors.run(new EntityFixture(r));
+        DropVectors.run(new EntityFixture(r));
         EntityFactsVectors.run(new EntityFixture(r));
         NbtVectors.run(new EntityFixture(r));
         NameVectors.run(new EntityFixture(r));
