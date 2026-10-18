@@ -99,3 +99,59 @@ fn fluid_falling_adjustment_uses_captured_falling_state_and_live_sprint_flag() {
     }
     assert_eq!(count, 9);
 }
+
+#[test]
+fn native_climb_movement_clamps_axes_resets_fall_and_only_players_suppress_sliding() {
+    use crate::entity::{EntityState, player::GameType};
+    use ferraloom_data::BlockState;
+    use ferraloom_util::BlockPos;
+
+    let mut checked = 0;
+    for row in rows("travel-climb\t") {
+        let mut level = crate::entity::tests::level(false);
+        level
+            .set_block_state(
+                BlockPos::new(8, 64, 8),
+                BlockState::from_id(row[2].parse().unwrap()).unwrap(),
+            )
+            .unwrap();
+        let id = level.next_entity_ref();
+        let state = if row[1] == "cow" {
+            EntityState::Cow(Box::default())
+        } else {
+            EntityState::Player(Box::new(ServerPlayer::new(
+                Uuid::new(5, 6),
+                "climb".into(),
+                level.next_entity_id(),
+                Vec3::new(8.5, 64.0, 8.5),
+                if row[1] == "spectator" {
+                    GameType::Spectator
+                } else {
+                    GameType::Survival
+                },
+            )))
+        };
+        level.add_entity(id, state).unwrap();
+        level.set_entity_pos(id, Vec3::new(8.5, 64.0, 8.5)).unwrap();
+        let base = level.entity_mut::<EntityData>(id).unwrap();
+        base.set_shared_flag(1, row[3].parse().unwrap());
+        base.fall_distance = 10.5;
+        let behavior = level.entity_behavior(id).unwrap();
+        let actual = handle_on_climbable(behavior, id, vector(row[4]), &mut level).unwrap();
+        assert_eq!(bits(actual), row[5], "{row:?}");
+        assert_eq!(
+            format!(
+                "{:x}",
+                level
+                    .entity::<EntityData>(id)
+                    .unwrap()
+                    .fall_distance
+                    .to_bits()
+            ),
+            row[6],
+            "{row:?}"
+        );
+        checked += 1;
+    }
+    assert_eq!(checked, 36);
+}

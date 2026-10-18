@@ -1,6 +1,38 @@
 //! LivingEntity travel arithmetic; world-dependent travel phases build on these.
 use super::LivingEntity;
-use ferraloom_util::{Vec3, mth};
+use crate::{
+    entity::{Entity, EntityData, EntityRef},
+    level::{Level, LevelError},
+};
+use ferraloom_data::{Block, EntityType};
+use ferraloom_util::{Vec3, java, mth};
+
+/// Port of LivingEntity#handleOnClimbable, including player-only ladder
+/// suppression and the scaffolding exception. Reads use the canonical cache.
+pub fn handle_on_climbable<E: Entity + ?Sized>(
+    behavior: &E,
+    entity: EntityRef,
+    delta: Vec3,
+    level: &mut Level,
+) -> Result<Vec3, LevelError> {
+    if !super::climbable::on_climbable(behavior, entity, level)? {
+        return Ok(delta);
+    }
+    level.entity_mut::<EntityData>(entity)?.fall_distance = 0.0;
+    let x = mth::clamp(delta.x, -0.15000000596046448, 0.15000000596046448);
+    let z = mth::clamp(delta.z, -0.15000000596046448, 0.15000000596046448);
+    let mut y = java::max(delta.y, -0.15000000596046448);
+    if y < 0.0 {
+        let base = level.entity::<EntityData>(entity)?;
+        if base.in_block_state(level)?.block() != Block::SCAFFOLDING
+            && base.shared_flag(1)
+            && base.entity_type == EntityType::PLAYER
+        {
+            y = 0.0;
+        }
+    }
+    Ok(Vec3::new(x, y, z))
+}
 
 /// Port of LivingEntity#computeModifiedFriction, retaining every float step.
 pub fn compute_modified_friction(friction: f32, modifier: f32) -> f32 {
