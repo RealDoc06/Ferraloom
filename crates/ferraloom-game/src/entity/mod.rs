@@ -184,6 +184,15 @@ pub struct DamageSource {
 ///
 /// Dispatch objects are stateless. Never hold a state borrow across a world call.
 pub trait Entity: Sync {
+    /// Port of LivingEntity#getLiquidCollisionShape's inherited empty result.
+    fn liquid_collision_shape(
+        &self,
+        _entity: EntityRef,
+        _level: &Level,
+    ) -> Result<ferraloom_util::VoxelShape, LevelError> {
+        Ok(ferraloom_util::shapes::empty())
+    }
+
     /// Port of Entity#causeFallDamage's passenger propagation. LivingEntity
     /// overrides the damage calculation; the base entity itself takes none.
     fn cause_fall_damage(
@@ -279,4 +288,13 @@ pub fn hurt_unarmored(
     living.last_hurt = damage;
     living.health = (living.health - applied).max(0.0);
     Ok(true)
+}
+
+/// Built-in stateless dispatchers. Explicit behavior tables still override these.
+pub fn vanilla_behavior(kind: EntityType) -> Option<&'static dyn Entity> {
+    match kind {
+        EntityType::COW => Some(&animal::CowBehavior),
+        EntityType::PLAYER => Some(&player::PlayerBehavior),
+        _ => None,
+    }
 }

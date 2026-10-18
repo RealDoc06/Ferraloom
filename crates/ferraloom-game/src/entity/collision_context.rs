@@ -36,6 +36,21 @@ impl EntityCollisionData for EntityCollisionView {
     }
 }
 impl EntityCollisionView {
+    /// Port of LivingEntity#getLiquidCollisionShape's virtual query. None is a
+    /// nonliving entity, distinct from a living entity whose shape is empty.
+    pub fn liquid_collision_shape(
+        &self,
+        level: &Level,
+    ) -> Result<Option<ferraloom_util::VoxelShape>, LevelError> {
+        if level.entity_state(self.entity)?.as_living().is_none() {
+            return Ok(None);
+        }
+        let behavior = level.entity_behavior(self.entity)?;
+        behavior
+            .liquid_collision_shape(self.entity, level)
+            .map(Some)
+    }
+
     pub fn capture(
         entity: EntityRef,
         level: &Level,
