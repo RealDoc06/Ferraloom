@@ -10,6 +10,7 @@ use super::{Level, LevelError};
 use crate::entity::{EntityData, EntityRef, EntityState, RemovalReason};
 
 mod persistent;
+mod push;
 mod worldgen;
 pub use persistent::{
     ChunkLoadStatus, EntityLoadRequestId, EntityStorageError, EntityStorageRequest,

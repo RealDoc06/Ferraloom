@@ -599,6 +599,26 @@ impl crate::entity::Entity for PlayerBehavior {
         crate::entity::trace_base_entity_refs(state.as_entity(), references);
     }
 
+    fn known_movement(
+        &self,
+        entity: crate::entity::EntityRef,
+        level: &Level,
+    ) -> Result<Vec3, LevelError> {
+        super::teleport::player_known_movement(entity, level)
+    }
+    fn teleport_relative(
+        &self,
+        entity: crate::entity::EntityRef,
+        delta: Vec3,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        super::teleport::teleport_player(
+            entity,
+            super::teleport::position_move_rotation(delta, Vec3::ZERO, 0.0, 0.0),
+            super::teleport::Relative::ALL,
+            level,
+        )
+    }
     fn is_alive(
         &self,
         entity: crate::entity::EntityRef,

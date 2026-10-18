@@ -144,16 +144,25 @@ impl TeleportState {
 
 /// Port of Entity#getKnownMovement and ServerPlayer#getKnownMovement.
 pub fn known_movement(entity: EntityRef, level: &Level) -> Result<Vec3, LevelError> {
-    if let Ok(player) = level.entity::<ServerPlayer>(entity) {
-        if let Some(vehicle) = player.vehicle {
-            let behavior = level.entity_behavior(vehicle)?;
-            if behavior.controlling_passenger(vehicle, level)? != Some(entity) {
-                return known_movement(vehicle, level);
-            }
-        }
-        return Ok(player.known_movement);
+    level.entity_behavior(entity)?.known_movement(entity, level)
+}
+pub(crate) fn player_known_movement(entity: EntityRef, level: &Level) -> Result<Vec3, LevelError> {
+    let player = level.entity::<ServerPlayer>(entity)?;
+    if let Some(vehicle) = player.vehicle
+        && level
+            .entity_behavior(vehicle)?
+            .controlling_passenger(vehicle, level)?
+            != Some(entity)
+    {
+        return known_movement(vehicle, level);
     }
-    let behavior = level.entity_behavior(entity)?;
+    Ok(player.known_movement)
+}
+pub(crate) fn base_known_movement<E: super::Entity + ?Sized>(
+    behavior: &E,
+    entity: EntityRef,
+    level: &Level,
+) -> Result<Vec3, LevelError> {
     if let Some(controller) = behavior.controlling_passenger(entity, level)?
         && level.entity::<ServerPlayer>(controller).is_ok()
         && behavior.is_alive(entity, level)?
@@ -243,14 +252,15 @@ pub fn teleport_relative(
     delta: Vec3,
     level: &mut Level,
 ) -> Result<(), LevelError> {
-    if level.entity::<ServerPlayer>(entity).is_ok() {
-        return teleport_player(
-            entity,
-            position_move_rotation(delta, Vec3::ZERO, 0.0, 0.0),
-            Relative::ALL,
-            level,
-        );
-    }
+    level
+        .entity_behavior(entity)?
+        .teleport_relative(entity, delta, level)
+}
+pub(crate) fn base_teleport_relative(
+    entity: EntityRef,
+    delta: Vec3,
+    level: &mut Level,
+) -> Result<(), LevelError> {
     let position = level.entity::<EntityData>(entity)?.position + delta;
     snap_to(entity, position, level)?;
     teleport_passengers(entity, level)

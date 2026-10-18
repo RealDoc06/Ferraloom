@@ -245,6 +245,23 @@ pub trait Entity: Sync {
     ) -> Result<ferraloom_util::BlockPos, LevelError> {
         movement::get_on_pos(entity, 0.500_001_f32, level)
     }
+    /// Port of Entity#getKnownMovement; ServerPlayer supplies its client movement.
+    fn known_movement(
+        &self,
+        entity: EntityRef,
+        level: &Level,
+    ) -> Result<ferraloom_util::Vec3, LevelError> {
+        teleport::base_known_movement(self, entity, level)
+    }
+    /// Port of Entity#teleportRelative. The player override uses listener state.
+    fn teleport_relative(
+        &self,
+        entity: EntityRef,
+        delta: ferraloom_util::Vec3,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        teleport::base_teleport_relative(entity, delta, level)
+    }
     fn is_alive(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
         Ok(!level.entity::<EntityData>(entity)?.removed)
     }

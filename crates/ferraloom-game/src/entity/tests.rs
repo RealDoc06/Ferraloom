@@ -1764,3 +1764,173 @@ fn player_teleport_counter_confirmation_and_mounted_known_movement_are_canonical
         1
     );
 }
+
+#[test]
+fn push_entities_up_matches_native_shape_difference_query_order_and_spectators() {
+    struct PushRecorder;
+    impl Entity for PushRecorder {
+        fn trace_entity_refs(&self, state: &EntityState, references: &mut Vec<EntityRef>) {
+            trace_base_entity_refs(state.as_entity(), references);
+        }
+        fn teleport_relative(
+            &self,
+            entity: EntityRef,
+            delta: Vec3,
+            level: &mut Level,
+        ) -> Result<(), LevelError> {
+            level.game_event(
+                ferraloom_data::registries::game_event::Id::STEP,
+                delta,
+                Some(entity),
+                None,
+            );
+            teleport::base_teleport_relative(entity, delta, level)
+        }
+    }
+    static PUSH: PushRecorder = PushRecorder;
+    static DISPATCH: Behaviors =
+        Behaviors::EMPTY.with_entity(ferraloom_data::EntityType::TNT, &PUSH);
+    let pairs = [
+        (Block::DIRT_PATH, Block::DIRT),
+        (Block::FARMLAND, Block::DIRT),
+        (Block::AIR, Block::STONE),
+        (Block::STONE, Block::AIR),
+        (Block::STONE_SLAB, Block::STONE),
+        (Block::STONE, Block::STONE),
+    ];
+    let mut actual = Vec::new();
+    for (index, (old, new)) in pairs.into_iter().enumerate() {
+        let mut level = level_with_behaviors(false, &DISPATCH);
+        for (id, position) in [
+            (2, Vec3::new(8.75, 63.5, 8.5)),
+            (1, Vec3::new(8.5, 63.9375, 8.5)),
+        ] {
+            let mut tnt = item::PrimedTnt::new(id as i32, 123);
+            tnt.parent.set_pos(position);
+            level
+                .add_entity(EntityRef(id), EntityState::PrimedTnt(Box::new(tnt)))
+                .unwrap();
+        }
+        let spectator = player::ServerPlayer::new(
+            Uuid::new(1, 2),
+            "spectator".into(),
+            3,
+            Vec3::new(8.5, 63.9375, 8.5),
+            player::GameType::Spectator,
+        );
+        level
+            .add_entity(EntityRef(3), EntityState::Player(Box::new(spectator)))
+            .unwrap();
+        let state = level
+            .push_entities_up(
+                old.default_state(),
+                new.default_state(),
+                BlockPos::new(8, 63, 8),
+            )
+            .unwrap();
+        let calls: Vec<_> = level
+            .take_effects()
+            .into_iter()
+            .map(|effect| {
+                let crate::level::effects::LevelEffect::GameEvent {
+                    position,
+                    source: Some(entity),
+                    ..
+                } = effect
+                else {
+                    panic!("spectator must not receive a teleport")
+                };
+                format!(
+                    "{}:{:x},{:x},{:x}",
+                    entity.0,
+                    position.x.to_bits(),
+                    position.y.to_bits(),
+                    position.z.to_bits()
+                )
+            })
+            .collect();
+        let vec = |id| {
+            let p = level.entity::<EntityData>(EntityRef(id)).unwrap().position;
+            format!(
+                "{:x},{:x},{:x}",
+                p.x.to_bits(),
+                p.y.to_bits(),
+                p.z.to_bits()
+            )
+        };
+        actual.push(format!(
+            "push-entities\t{index}\t{}\t{}\t{}\t{}\t{}",
+            state.id(),
+            if calls.is_empty() {
+                "-".into()
+            } else {
+                calls.join(";")
+            },
+            vec(1),
+            vec(2),
+            vec(3)
+        ));
+    }
+    let expected: Vec<_> = VECTORS
+        .lines()
+        .filter(|row| row.starts_with("push-entities\t"))
+        .map(|row| {
+            row.split('\t')
+                .enumerate()
+                .filter_map(|(index, value)| (index != 3).then_some(value))
+                .collect::<Vec<_>>()
+                .join("\t")
+        })
+        .collect();
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn nonplayer_teleport_snaps_recursive_passengers_without_changing_motion_or_rotation() {
+    let mut level = level(false);
+    for index in 0..3 {
+        let mut entity = item::PrimedTnt::new(index + 1, 123);
+        entity
+            .parent
+            .set_pos(Vec3::new(8.5, 64.0 + f64::from(index) * 5.0, 8.5));
+        entity.parent.set_y_rot(index as f32 * 37.25);
+        entity.parent.set_x_rot(index as f32 * -14.5);
+        entity.parent.velocity = Vec3::new(0.25, -0.125, 0.5);
+        level
+            .add_entity(
+                EntityRef(index as u64 + 1),
+                EntityState::PrimedTnt(Box::new(entity)),
+            )
+            .unwrap();
+    }
+    start_riding(EntityRef(2), EntityRef(1), true, &mut level).unwrap();
+    start_riding(EntityRef(3), EntityRef(2), true, &mut level).unwrap();
+    EntityRef(1)
+        .teleport_relative(Vec3::new(2.0, 2.0, 4.0), &mut level)
+        .unwrap();
+    let mut actual = Vec::new();
+    for id in 1..=3 {
+        let entity = level.entity::<EntityData>(EntityRef(id)).unwrap();
+        let text = |p: Vec3| {
+            format!(
+                "{:x},{:x},{:x}",
+                p.x.to_bits(),
+                p.y.to_bits(),
+                p.z.to_bits()
+            )
+        };
+        actual.push(format!(
+            "teleport-passengers\t{id}\t{}\t{}\t{}\t{:x},{:x}",
+            text(entity.position),
+            text(entity.old_position),
+            text(entity.velocity),
+            entity.yaw.to_bits(),
+            entity.pitch.to_bits()
+        ));
+    }
+    let expected: Vec<_> = VECTORS
+        .lines()
+        .filter(|row| row.starts_with("teleport-passengers\t"))
+        .collect();
+    assert_eq!(actual, expected);
+}
