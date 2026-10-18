@@ -41,11 +41,30 @@ struct Parser<'a> {
     reader: &'a mut StringReader,
     context: &'a CommandBuildContext,
     best: Option<(usize, CommandSyntaxException)>,
+    completion: Option<(usize, Vec<Expected>)>,
+}
+#[derive(Clone, Copy)]
+enum Expected {
+    Character(u16),
+    Resource(Lookup),
 }
 impl Parser<'_> {
     fn record(&mut self, mark: usize, error: CommandSyntaxException) {
+        if let Some((cursor, expected)) = &mut self.completion {
+            if mark > *cursor {
+                *cursor = mark;
+                expected.clear();
+            }
+        }
         if self.best.as_ref().is_none_or(|(cursor, _)| mark > *cursor) {
             self.best = Some((mark, error));
+        }
+    }
+    fn expect(&mut self, mark: usize, value: Expected) {
+        if let Some((cursor, expected)) = &mut self.completion {
+            if mark == *cursor {
+                expected.push(value);
+            }
         }
     }
     fn character(&mut self, character: u16) -> bool {
@@ -63,6 +82,7 @@ impl Parser<'_> {
                 &[char::from_u32(character as u32).unwrap().to_string()],
             ),
         );
+        self.expect(at, Expected::Character(character));
         false
     }
     fn lookup(&mut self, kind: Lookup) -> Option<String> {
@@ -73,6 +93,7 @@ impl Parser<'_> {
             _ => {
                 self.reader.set_cursor(mark);
                 self.record(mark, error_at(self.reader, "argument.id.invalid", &[]));
+                self.expect(mark, Expected::Resource(kind));
                 return None;
             }
         };
@@ -100,6 +121,7 @@ impl Parser<'_> {
             Lookup::Predicate => "arguments.item.predicate.unknown",
         };
         self.record(mark, error_at(self.reader, key, &[id]));
+        self.expect(mark, Expected::Resource(kind));
         None
     }
     fn item(&mut self) -> Option<Option<ItemFilter>> {
@@ -162,15 +184,30 @@ impl Parser<'_> {
         })
     }
     fn value(&mut self, id: &str, predicate: bool) -> Option<ItemTest> {
+        self.reader.skip_whitespace();
+        let mark = self.reader.cursor();
         let tag = match nbt(self.reader, false) {
             Ok(value) => value,
             Err(error) => {
-                self.record(error.cursor.unwrap_or(self.reader.cursor()), error);
+                self.record(mark, error);
                 return None;
             }
         };
         let result = if id == "minecraft:count" {
             count(&tag).map(ItemTest::Count)
+        } else if predicate
+            && !self
+                .context
+                .contains("minecraft:data_component_predicate_type", id)
+        {
+            // ItemPredicateArgument falls back to an existence predicate with Unit's map codec.
+            if matches!(tag, Tag::Compound(_)) {
+                Ok(ItemTest::ComponentExists(
+                    ComponentTypeId::from_name(id).unwrap(),
+                ))
+            } else {
+                Err(format!("Not a map: {tag}"))
+            }
         } else {
             let key = Identifier::parse(id).unwrap();
             if predicate {
@@ -304,6 +341,7 @@ pub fn parse(
         reader,
         context,
         best: None,
+        completion: None,
     };
     if let Some(value) = parser.top() {
         return Ok(value);
@@ -314,4 +352,54 @@ pub fn parse(
         .unwrap_or_else(|| error("argument.id.invalid", &[]));
     parser.reader.set_cursor(start);
     Err(failure)
+}
+
+/// Port of Grammar#parseForSuggestions and ComponentPredicateParser's resource rules.
+pub fn suggestions(
+    context: &CommandBuildContext,
+    builder: ferraloom_brigadier::SuggestionsBuilder,
+) -> ferraloom_brigadier::Suggestions {
+    let mut reader = StringReader::new(&builder.input);
+    reader.set_cursor(builder.start);
+    let mut parser = Parser {
+        reader: &mut reader,
+        context,
+        best: None,
+        completion: Some((builder.start, Vec::new())),
+    };
+    let _ = parser.top();
+    let (cursor, expected) = parser.completion.unwrap();
+    let mut builder = builder.create_offset(cursor);
+    for value in expected {
+        match value {
+            Expected::Character(character) => {
+                let value = char::from_u32(u32::from(character)).unwrap().to_string();
+                if super::suggestions::matches_substring(&builder.remaining_lower_case(), &value) {
+                    builder.suggest(value);
+                }
+            }
+            Expected::Resource(kind) => {
+                let values: Vec<&str> = match kind {
+                    Lookup::Item => context.entries("minecraft:item"),
+                    Lookup::Tag => context
+                        .tags
+                        .get("minecraft:item")
+                        .map_or_else(Vec::new, |tags| tags.keys().map(String::as_str).collect()),
+                    Lookup::Component => std::iter::once("minecraft:count")
+                        .chain(
+                            context
+                                .entries("minecraft:data_component_type")
+                                .into_iter()
+                                .filter(|key| persistent_component_type(key).is_some()),
+                        )
+                        .collect(),
+                    Lookup::Predicate => std::iter::once("minecraft:count")
+                        .chain(context.entries("minecraft:data_component_predicate_type"))
+                        .collect(),
+                };
+                super::suggestions::resources(&mut builder, values, "");
+            }
+        }
+    }
+    builder.build()
 }

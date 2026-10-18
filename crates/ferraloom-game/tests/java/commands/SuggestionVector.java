@@ -77,6 +77,11 @@ public final class SuggestionVector {
             }
         };
         var blocks=net.minecraft.commands.CommandBuildContext.simple(boundRegistries,net.minecraft.world.flag.FeatureFlags.DEFAULT_FLAGS);
+        var itemPredicate=net.minecraft.commands.arguments.item.ItemPredicateArgument.itemPredicate(blocks);
+        for(var input:List.of("","sto","stone","stone ","*","#","#missing","*[","*[!","*[dam","*[damage","*[damage=","*[damage=1","*[damage=1,","*[damage=1|","*[damage~","*[damage~{}","*[count","*[count=1","*[count~{min:1}","*[count=1]","*[damage,","*[creative_slot_lock","*[creative_slot_lock~","*[enchantments~","*[!damage","*[!damage=1","*[damage=1, damage","*[damage=1,unknown","stone[damage=1]")) {
+            var context=new CommandContextBuilder<>(dispatcher,itemSource,dispatcher.getRoot(),0).build(input);
+            vectors.add(capture("item_predicate",input,4,itemPredicate.listSuggestions(context,new SuggestionsBuilder(input,0)).join()));
+        }
         var blockState=net.minecraft.commands.arguments.blocks.BlockStateArgument.block(blocks);
         var blockPredicate=net.minecraft.commands.arguments.blocks.BlockPredicateArgument.blockPredicate(blocks);
         for(var input:List.of("sto","stone","stone ","stone[","oak_log","oak_log[","oak_log[a","oak_log[axis","oak_log[axis=","oak_log[axis=q","oak_log[axis=x","oak_log[axis=x,","oak_log[axis=x]","oak_log[axis=x,axis=","chest","chest[","chest[facing=","chest[facing=north,","chest[facing=north]","chest[facing=north]{","wheat[age=","wheat[age=2","wheat[age=2]","stone{","#","#example:missing","#example:mixed","#example:mixed[","#example:mixed[a","#example:mixed[axis","#example:mixed[axis=","#example:mixed[axis=x","#example:mixed[axis=x,","#example:mixed[axis=x]","#example:mixed[facing=n","#example:mixed[unknown=x","#example:mixed[axis=x,axis=")) {

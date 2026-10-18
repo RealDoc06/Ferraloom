@@ -581,6 +581,9 @@ impl ArgumentType for MinecraftArgument {
                 matches!(self.wire, CommandArgument::BlockPredicate {}),
             ));
         }
+        if matches!(self.wire, CommandArgument::ItemPredicate {}) {
+            return Ok(item_predicate::suggestions(&self.context, builder));
+        }
         if matches!(self.wire, CommandArgument::ItemStack {}) {
             return Ok(items::suggestions(&self.context, builder));
         }

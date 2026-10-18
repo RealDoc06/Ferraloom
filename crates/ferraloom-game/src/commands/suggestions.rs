@@ -275,6 +275,8 @@ mod tests {
                     CommandArgument::BlockState {}
                 } else if vector.kind == "block_predicate" {
                     CommandArgument::BlockPredicate {}
+                } else if vector.kind == "item_predicate" {
+                    CommandArgument::ItemPredicate {}
                 } else if vector.kind == "item" {
                     CommandArgument::ItemStack {}
                 } else if vector.kind == "entity" {
