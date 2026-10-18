@@ -50,8 +50,17 @@ pub fn ported_behavior(block: Block, method: BlockMethod) -> Option<&'static dyn
     {
         return Some(&growing::GROWING_PLANT);
     }
-    if block.is_instance_of(C::SimpleWaterloggedBlock) && survival::supports(block,M::CanSurvive) && matches!(method,M::CanPlaceLiquid|M::PlaceLiquid|M::PickupBlock){return Some(&super::fluid::SIMPLE_WATERLOGGED_BLOCK);}
-    if matches!(block.class(),C::SeagrassBlock|C::TallSeagrassBlock) && matches!(method,M::CanPlaceLiquid|M::PlaceLiquid){return Some(&super::BASE_BLOCK);}
+    if block.is_instance_of(C::SimpleWaterloggedBlock)
+        && survival::supports(block, M::CanSurvive)
+        && matches!(method, M::CanPlaceLiquid | M::PlaceLiquid | M::PickupBlock)
+    {
+        return Some(&super::fluid::SIMPLE_WATERLOGGED_BLOCK);
+    }
+    if matches!(block.class(), C::SeagrassBlock | C::TallSeagrassBlock)
+        && matches!(method, M::CanPlaceLiquid | M::PlaceLiquid)
+    {
+        return Some(&super::BASE_BLOCK);
+    }
     let behavior: &'static dyn BlockBehavior = match block.class() {
         C::CoralBlock | C::CoralPlantBlock | C::CoralFanBlock | C::CoralWallFanBlock
             if matches!(
@@ -78,7 +87,7 @@ pub fn ported_behavior(block: Block, method: BlockMethod) -> Option<&'static dyn
         {
             &ground::GROUND
         }
-        C::SnowLayerBlock if matches!(method,M::RandomTick|M::IsFaceSturdy) => &snow::SNOW,
+        C::SnowLayerBlock if matches!(method, M::RandomTick | M::IsFaceSturdy) => &snow::SNOW,
 
         C::CropBlock | C::BeetrootBlock | C::TorchflowerCropBlock if method == M::RandomTick => {
             &crops::CROP

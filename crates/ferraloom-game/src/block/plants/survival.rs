@@ -381,6 +381,8 @@ impl BlockBehavior for Plant {
             C::BaseCoralPlantBlock
             | C::BaseCoralFanBlock
             | C::BaseCoralWallFanBlock
+            | C::CoralPlantBlock
+            | C::CoralFanBlock
             | C::CoralWallFanBlock => {
                 schedule_water(state, pos, level)?;
                 let check = if matches!(
