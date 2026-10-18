@@ -252,7 +252,7 @@ impl Entity for CrammingProbe {
         level: &mut Level,
     ) -> Result<(), LevelError> {
         let other = level.entity::<EntityData>(other)?;
-        let event = format!("push:{}:{}", other.id, other.removed);
+        let event = format!("push:{}:{}", other.network_id, other.removed);
         append_event(entity, level, event)
     }
 }
@@ -269,7 +269,7 @@ fn native_cramming_preserves_rng_gates_passenger_count_and_damage_before_capture
         let mut level = level();
         let mut cow = Cow::default();
         cow.as_living_mut().parent.uuid = Uuid::new(0, 1000);
-        cow.as_living_mut().parent.id = 1000;
+        cow.as_living_mut().parent.network_id = 1000;
         level
             .add_entity(EntityRef(1000), EntityState::Cow(Box::new(cow)))
             .unwrap();
