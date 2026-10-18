@@ -143,6 +143,7 @@ mod tests {
         loot.tables.insert(table, LootTable::decode(&serde_json::json!({"type":"chest","pools":[{"rolls":1,"entries":[{"type":"item","name":"stone"}]}]})).unwrap());
         level.set_container_resources(
             Arc::new(ContainerResources {
+                crafting: crate::inventory::RuntimeCraftingContext::fixture(),
                 recipes: Arc::new(RecipeManager::new(Vec::new()).unwrap()),
                 loot: Arc::new(loot),
             }),

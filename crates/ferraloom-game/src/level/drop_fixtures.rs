@@ -56,6 +56,7 @@ pub(crate) fn install(level: &mut Level) {
         let resources =
             ResourceManager::new(vec![Pack::vanilla_jar(std::path::Path::new(&jar)).unwrap()]);
         Arc::new(ContainerResources {
+            crafting: crate::inventory::RuntimeCraftingContext::fixture(),
             recipes: Arc::new(
                 RecipeManager::load(&resources, &TagSet::load(&resources).unwrap()).unwrap(),
             ),

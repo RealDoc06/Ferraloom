@@ -10,6 +10,7 @@ use std::sync::Arc;
 pub struct ContainerResources {
     pub recipes: Arc<RecipeManager>,
     pub loot: Arc<LootData>,
+    pub crafting: Arc<crate::inventory::RuntimeCraftingContext>,
 }
 #[derive(Default)]
 pub struct ContainerRuntime {

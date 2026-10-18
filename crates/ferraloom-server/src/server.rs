@@ -192,7 +192,7 @@ pub struct MinecraftServer {
     registries: RegistrySet,
     recipe_manager: Arc<RecipeManager>,
     recipe_synchronization: RecipeSynchronization,
-    crafting_context: RuntimeCraftingContext,
+    crafting_context: Arc<RuntimeCraftingContext>,
     access: AccessLists,
     level: ServerLevel,
     world: World,
@@ -265,7 +265,7 @@ impl MinecraftServer {
             &resources,
             Some(&LootRegistryLookup::new(&registries, &resources)),
         )?);
-        let crafting_context = RuntimeCraftingContext::load(&resources, &registries)?;
+        let crafting_context = Arc::new(RuntimeCraftingContext::load(&resources, &registries)?);
 
         let world = World::open(
             &options.root,
@@ -329,6 +329,7 @@ impl MinecraftServer {
             Arc::new(ContainerResources {
                 recipes: Arc::clone(&recipe_manager),
                 loot,
+                crafting: Arc::clone(&crafting_context),
             }),
             world.seed,
         );
@@ -2126,7 +2127,7 @@ impl MinecraftServer {
                 let mut callbacks = PendingCraftingCallbacks;
                 let mut hooks = RecipeMenuHooks {
                     manager: &self.recipe_manager,
-                    context: &self.crafting_context,
+                    context: self.crafting_context.as_ref(),
                     synchronization: &self.recipe_synchronization,
                     book,
                     limited_crafting: Some(
@@ -2318,7 +2319,7 @@ impl MinecraftServer {
             let mut callbacks = PendingCraftingCallbacks;
             let mut hooks = RecipeMenuHooks {
                 manager: &self.recipe_manager,
-                context: &self.crafting_context,
+                context: self.crafting_context.as_ref(),
                 synchronization: &self.recipe_synchronization,
                 book: &mut player.recipe_book,
                 limited_crafting: Some(
@@ -2409,7 +2410,7 @@ impl MinecraftServer {
                 let mut callbacks = PendingCraftingCallbacks;
                 let mut hooks = RecipeMenuHooks {
                     manager: &self.recipe_manager,
-                    context: &self.crafting_context,
+                    context: self.crafting_context.as_ref(),
                     synchronization: &self.recipe_synchronization,
                     book: &mut player.recipe_book,
                     limited_crafting: Some(

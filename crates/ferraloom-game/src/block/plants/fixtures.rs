@@ -93,6 +93,7 @@ pub(super) fn install_loot(level: &mut Level) {
         let recipes = RecipeManager::load(&resources, &items).unwrap();
         (
             Arc::new(ContainerResources {
+                crafting: crate::inventory::RuntimeCraftingContext::fixture(),
                 recipes: Arc::new(recipes),
                 loot: Arc::new(loot),
             }),
