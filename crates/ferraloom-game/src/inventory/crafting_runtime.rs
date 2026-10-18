@@ -18,11 +18,19 @@ impl RuntimeCraftingContext {
         resources: &ResourceManager,
         registry: &impl RegistryContext,
     ) -> crate::crafting::Result<Self> {
+        Self::load_with(resources, |name, key| {
+            let registry_id = Identifier::parse(name).expect("crafting registry");
+            registry.entry_id(&registry_id, key).is_some()
+        })
+    }
+    fn load_with(
+        resources: &ResourceManager,
+        contains: impl Fn(&str, &Identifier) -> bool,
+    ) -> crate::crafting::Result<Self> {
         let load = |name: &str| -> crate::crafting::Result<_> {
-            let registry_id = Identifier::parse(name)?;
             let tags = load_tags(resources, name, |id, _| {
                 let key = Identifier::parse(&id.to_string()).ok()?;
-                registry.entry_id(&registry_id, &key).map(|_| key)
+                contains(name, &key).then_some(key)
             });
             if !tags.diagnostics.is_empty() {
                 return Err(CraftingError::Invalid(format!(
@@ -38,6 +46,36 @@ impl RuntimeCraftingContext {
         })
     }
 }
+#[cfg(test)]
+impl RuntimeCraftingContext {
+    /// Test services use the real vanilla registry resources and tags too.
+    pub(crate) fn fixture() -> std::sync::Arc<Self> {
+        static CONTEXT: std::sync::LazyLock<std::sync::Arc<RuntimeCraftingContext>> =
+            std::sync::LazyLock::new(|| {
+                let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").expect("builder vanilla jar");
+                let resources = ResourceManager::new(vec![
+                    ferraloom_data::datapack::Pack::vanilla_jar(std::path::Path::new(&jar))
+                        .unwrap(),
+                ]);
+                std::sync::Arc::new(
+                    RuntimeCraftingContext::load_with(&resources, |registry, id| {
+                        ferraloom_data::registry_entries(&format!("minecraft:{registry}"))
+                            .is_some_and(|entries| entries.contains(&id.as_str()))
+                            || resources
+                                .get(
+                                    &format!("{}:{registry}/{}.json", id.namespace(), id.path())
+                                        .parse()
+                                        .unwrap(),
+                                )
+                                .is_some()
+                    })
+                    .unwrap(),
+                )
+            });
+        CONTEXT.clone()
+    }
+}
+
 impl CraftingContext for RuntimeCraftingContext {
     fn is_curse(&self, enchantment: &Identifier) -> crate::crafting::Result<bool> {
         let tag = "minecraft:curse".parse().expect("built-in tag");

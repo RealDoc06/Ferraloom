@@ -972,6 +972,7 @@ fn live_fixture(manager: ServerAdvancementManager) -> (crate::level::Level, Enti
     state.advancements = PlayerAdvancements::new(&manager);
     level.set_container_resources(
         Arc::new(crate::block::containers::runtime::ContainerResources {
+            crafting: crate::inventory::RuntimeCraftingContext::fixture(),
             recipes,
             loot: Arc::new(LootData::default()),
             advancements: Arc::new(manager),
@@ -1440,6 +1441,7 @@ fn award_recipes_counts_displays_after_synchronous_nested_unlocks() {
     let sync = Arc::new(RecipeSynchronization::new(&recipes, |_| true));
     level.set_container_resources(
         Arc::new(ContainerResources {
+            crafting: Arc::clone(&previous.crafting),
             recipes: Arc::clone(&recipes),
             loot: Arc::clone(&previous.loot),
             advancements: Arc::clone(&previous.advancements),
