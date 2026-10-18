@@ -6,7 +6,10 @@ use crate::{
     ticks::{ScheduledTick, TickPriority},
 };
 use ferraloom_data::{Block, registries::fluid::Id as Fluid};
-use ferraloom_util::{BlockPos, ChunkPos, random::Random};
+use ferraloom_util::{
+    BlockPos, ChunkPos,
+    random::{Random, RandomSource},
+};
 impl Level {
     pub fn set_game_time(&mut self, game_time: i64) {
         self.region_mut().game_time = game_time;
@@ -117,16 +120,37 @@ impl Level {
         }
         Ok(())
     }
+    /// Port of ServerLevel#tickThunder, called in the shuffled spawning pass.
+    /// Target/rod, biome rain, difficulty and lightning/trap effects are pending.
+    pub fn tick_thunder(&mut self, chunk_pos: ChunkPos) -> Result<(), LevelError> {
+        self.chunk(chunk_pos)
+            .ok_or(LevelError::MissingChunk(chunk_pos))?;
+        if self.is_raining() && self.is_thundering() && self.random().next_int_bound(100_000) == 0 {
+            self.get_block_random_pos(BlockPos::new(chunk_pos.x * 16, 0, chunk_pos.z * 16), 15);
+            self.unported_weather_strike()?;
+        }
+        Ok(())
+    }
+    /// Port of ServerLevel#tickChunk: precipitation slots, then section samples.
     pub fn tick_random_chunk(&mut self, chunk_pos: ChunkPos) -> Result<(), LevelError> {
         let speed = self.rules().random_tick_speed;
-        if speed == 0 {
-            return Ok(());
-        }
         let chunk = self
             .chunk(chunk_pos)
             .ok_or(LevelError::MissingChunk(chunk_pos))?;
         let min = chunk.min_section();
         let count = chunk.sections().count();
+        // ServerLevel#tickChunk always consumes the precipitation selection
+        // slots before visiting any randomly ticking section, even when dry.
+        for _ in 0..speed {
+            if self.random().next_int_bound(48) == 0 {
+                let pos = self
+                    .get_block_random_pos(BlockPos::new(chunk_pos.x * 16, 0, chunk_pos.z * 16), 15);
+                self.tick_precipitation(pos);
+            }
+        }
+        if speed == 0 {
+            return Ok(());
+        }
         for index in 0..count {
             // Vanilla tests section eligibility once, before sampling it. A
             // callback may change the section without cancelling later samples.

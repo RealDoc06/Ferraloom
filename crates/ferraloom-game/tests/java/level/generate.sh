@@ -27,4 +27,8 @@ rg '^fluid-tag:' "$classes/neighbors.tsv" > "$root/crates/ferraloom-game/tests/j
 
 rg '^water-slope:' "$classes/neighbors.tsv" > "$root/crates/ferraloom-game/tests/java/level/slopes.tsv"
 
+rg '^precipitation-slots:' "$classes/neighbors.tsv" > "$root/crates/ferraloom-game/tests/java/level/precipitation.tsv"
+
+rg '^thunder-slots:' "$classes/neighbors.tsv" > "$root/crates/ferraloom-game/tests/java/level/thunder.tsv"
+
 rg '^fluid-wall:' "$classes/neighbors.tsv" > "$root/crates/ferraloom-game/tests/java/level/walls.tsv"
