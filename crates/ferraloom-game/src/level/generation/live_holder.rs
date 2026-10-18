@@ -75,7 +75,8 @@ impl HolderGeneration {
         self.task
     }
     pub fn is_allowed(&self, status: ChunkStatus) -> bool {
-        self.highest_allowed.is_some_and(|highest| status <= highest)
+        self.highest_allowed
+            .is_some_and(|highest| status <= highest)
     }
 
     /// Port of scheduleChunkGenerationTask: an upgrade replaces the task, not
@@ -191,8 +192,7 @@ impl HolderGeneration {
             return Some(future.result);
         }
         let version = (id.0 - 1) / STATUS_COUNT as u64;
-        (version < self.future_versions[index])
-            .then_some(GenerationFutureResult::Complete(None))
+        (version < self.future_versions[index]).then_some(GenerationFutureResult::Complete(None))
     }
 
     pub fn future_id(&self, status: ChunkStatus) -> Option<GenerationFutureId> {
@@ -205,7 +205,10 @@ impl HolderGeneration {
             return false;
         }
         let parent = (status != ChunkStatus::Empty).then(|| STATUSES[status as usize - 1]);
-        assert_eq!(self.started_work, parent, "generation step skipped its parent");
+        assert_eq!(
+            self.started_work, parent,
+            "generation step skipped its parent"
+        );
         self.started_work = Some(status);
         true
     }
@@ -230,7 +233,10 @@ impl HolderGeneration {
     pub fn replace_proto_chunk(&mut self, chunk: ChunkReference) {
         for future in &mut self.futures[..ChunkStatus::Full as usize] {
             let future = future.as_mut().expect("FULL requires every parent future");
-            assert!(matches!(future.result, GenerationFutureResult::Complete(Some(_))));
+            assert!(matches!(
+                future.result,
+                GenerationFutureResult::Complete(Some(_))
+            ));
             future.result = GenerationFutureResult::Complete(Some(chunk));
         }
     }
@@ -312,8 +318,7 @@ mod tests {
         assert_eq!(completed.future, biomes.future);
         assert_eq!(completed.task, GenerationTaskChange::default());
 
-        let downgrade =
-            holder.update_highest_allowed_status(Some(ChunkStatus::Terrain), &mut task);
+        let downgrade = holder.update_highest_allowed_status(Some(ChunkStatus::Terrain), &mut task);
         assert_eq!(downgrade.cancel, full.task.schedule);
         assert_eq!(downgrade.schedule.unwrap().target, ChunkStatus::Terrain);
         assert_eq!(
@@ -381,4 +386,3 @@ mod tests {
         );
     }
 }
-

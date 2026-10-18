@@ -7,11 +7,11 @@ mod pyramid;
 mod range;
 mod task;
 pub use context::WorldGenContext;
+pub use ferraloom_worldgen::region::ChunkStatus;
 pub use live_holder::{
     GenerationFutureId, GenerationFutureResult, GenerationSchedule, GenerationTaskChange,
     GenerationTaskToken, HolderGeneration,
 };
-pub use ferraloom_worldgen::region::ChunkStatus;
 pub use proto::{ProtoChunk, promote};
 pub use pyramid::{
     ChunkDependencies, ChunkPyramid, ChunkStatusTask, ChunkStep, STATUSES, parse_status,

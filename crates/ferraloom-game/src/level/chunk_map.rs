@@ -59,10 +59,11 @@ impl ChunkMap {
     ) -> GenerationSchedule {
         self.ensure_holder(pos);
         let next_task = &mut self.next_task;
-        self.holders.get_mut(&pos.pack()).unwrap().generation.schedule(
-            status,
-            &mut |target| allocate_task(next_task, target),
-        )
+        self.holders
+            .get_mut(&pos.pack())
+            .unwrap()
+            .generation
+            .schedule(status, &mut |target| allocate_task(next_task, target))
     }
 
     /// Port of updateHighestAllowedStatus at updateFutures' native slot, after
@@ -83,15 +84,15 @@ impl ChunkMap {
             .get_mut(&pos.pack())
             .unwrap()
             .generation
-            .update_highest_allowed_status(allowed, &mut |target| {
-                allocate_task(next_task, target)
-            })
+            .update_highest_allowed_status(allowed, &mut |target| allocate_task(next_task, target))
     }
 }
 
 fn allocate_task(next: &mut u64, target: ChunkStatus) -> GenerationTaskToken {
     let id = *next;
-    *next = next.checked_add(1).expect("generation task identities exhausted");
+    *next = next
+        .checked_add(1)
+        .expect("generation task identities exhausted");
     GenerationTaskToken { id, target }
 }
 /// Port of PlayerChunkSender: quota, one initial unacknowledged batch, then ten.
@@ -222,26 +223,43 @@ mod tests {
         let pos = ChunkPos::ZERO;
         allow(&mut chunks, pos, 36);
         assert_eq!(
-            chunks.ensure_holder(pos).generation.highest_allowed_status(),
+            chunks
+                .ensure_holder(pos)
+                .generation
+                .highest_allowed_status(),
             Some(ChunkStatus::Biomes)
         );
         let biomes = chunks.schedule_generation_task(pos, ChunkStatus::Biomes);
         assert!(biomes.task.schedule.is_some());
         let disallowed = chunks.schedule_generation_task(pos, ChunkStatus::Full);
-        assert_eq!(disallowed.future, super::super::generation::GenerationFutureId::UNLOADED);
+        assert_eq!(
+            disallowed.future,
+            super::super::generation::GenerationFutureId::UNLOADED
+        );
         assert_eq!(disallowed.task, GenerationTaskChange::default());
         allow(&mut chunks, pos, 33);
         let full = chunks.schedule_generation_task(pos, ChunkStatus::Full);
         assert_eq!(full.task.cancel, biomes.task.schedule);
         assert_eq!(
-            chunks.ensure_holder(pos).generation.future_id(ChunkStatus::Biomes),
+            chunks
+                .ensure_holder(pos)
+                .generation
+                .future_id(ChunkStatus::Biomes),
             Some(biomes.future)
         );
         let downgraded = allow(&mut chunks, pos, 35);
         assert_eq!(downgraded.cancel, full.task.schedule);
         assert_eq!(downgraded.schedule.unwrap().target, ChunkStatus::Biomes);
-        assert!(!chunks.ensure_holder(pos).generation.remove_task(full.task.schedule.unwrap()));
-        assert_eq!(chunks.ensure_holder(pos).generation.current_task(), downgraded.schedule);
+        assert!(
+            !chunks
+                .ensure_holder(pos)
+                .generation
+                .remove_task(full.task.schedule.unwrap())
+        );
+        assert_eq!(
+            chunks.ensure_holder(pos).generation.current_task(),
+            downgraded.schedule
+        );
     }
 
     #[test]
@@ -250,17 +268,31 @@ mod tests {
         let a = ChunkPos::ZERO;
         let b = ChunkPos::new(1, 0);
         allow(&mut chunks, a, 33);
-        let first = chunks.schedule_generation_task(a, ChunkStatus::Full).task.schedule.unwrap();
+        let first = chunks
+            .schedule_generation_task(a, ChunkStatus::Full)
+            .task
+            .schedule
+            .unwrap();
         chunks.ensure_holder(b);
-        chunks.ensure_holder(a).generation.increase_generation_ref_count();
+        chunks
+            .ensure_holder(a)
+            .generation
+            .increase_generation_ref_count();
         let cancelled = allow(&mut chunks, a, 45);
         assert_eq!(cancelled.cancel, Some(first));
         assert!(chunks.remove_unloaded_holder(a).is_none());
-        chunks.ensure_holder(a).generation.decrease_generation_ref_count();
+        chunks
+            .ensure_holder(a)
+            .generation
+            .decrease_generation_ref_count();
         assert!(chunks.remove_unloaded_holder(a).is_some());
         assert_eq!(chunks.holder_positions().collect::<Vec<_>>(), vec![b]);
         allow(&mut chunks, a, 33);
-        let second = chunks.schedule_generation_task(a, ChunkStatus::Full).task.schedule.unwrap();
+        let second = chunks
+            .schedule_generation_task(a, ChunkStatus::Full)
+            .task
+            .schedule
+            .unwrap();
         assert!(second.id > first.id);
         assert_eq!(chunks.holder_positions().collect::<Vec<_>>(), vec![b, a]);
     }
