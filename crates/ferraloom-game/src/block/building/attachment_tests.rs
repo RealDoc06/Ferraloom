@@ -5,7 +5,7 @@ use crate::{
         PlacementHit, UseOnContext,
     },
     entity::{
-        EntityData, EntityRef, EntityState,
+        EntityRef, EntityState,
         player::{GameType, ServerPlayer},
     },
     level::Level,
@@ -101,8 +101,9 @@ fn attachments_match_every_variant_face_support_mask_and_actual_player_look_orde
             .unwrap();
             level.get_state_for_placement(block, &context)
         } else {
-            let actor = level.entity_mut::<EntityData>(EntityRef(1)).unwrap();
+            let actor = level.entity_mut::<ServerPlayer>(EntityRef(1)).unwrap();
             actor.yaw = f[3].parse().unwrap();
+            actor.y_head_rot = actor.yaw;
             actor.pitch = f[4].parse().unwrap();
             let context = player_context(&level, &item);
             level.get_state_for_placement(block, &context)
@@ -118,6 +119,55 @@ fn attachments_match_every_variant_face_support_mask_and_actual_player_look_orde
     }
     assert_eq!(blocks.len(), 20);
     assert_eq!(matched, 193536);
+}
+#[test]
+fn player_view_placement_uses_head_yaw_independently_of_body_yaw() {
+    let mut level = connected_level();
+    level
+        .add_entity(
+            EntityRef(1),
+            EntityState::Player(Box::new(ServerPlayer::new(
+                Uuid::new(1, 2),
+                "building".into(),
+                1,
+                Vec3::new(8.5, 64.5, 8.5),
+                GameType::Survival,
+            ))),
+        )
+        .unwrap();
+    mask(&mut level, 12);
+    level
+        .set_block_state(POS, Block::AIR.default_state())
+        .unwrap();
+    let item = ItemStack::default();
+    let line = cases("view\t").next().unwrap();
+    let f: Vec<_> = line.split('\t').collect();
+    let actor = level.entity_mut::<ServerPlayer>(EntityRef(1)).unwrap();
+    actor.yaw = f[1].parse().unwrap();
+    actor.y_head_rot = f[2].parse().unwrap();
+    actor.pitch = f[3].parse().unwrap();
+    let context = player_context(&level, &item);
+    let reader = LevelReaderRef::Server(&level);
+    assert_eq!(
+        context.nearest_looking_direction(&reader).unwrap(),
+        direction(f[4])
+    );
+    let expected: [Direction; 6] = f[5]
+        .split(',')
+        .map(direction)
+        .collect::<Vec<_>>()
+        .try_into()
+        .unwrap();
+    assert_eq!(
+        context.nearest_looking_directions(&reader).unwrap(),
+        expected
+    );
+    assert_eq!(
+        level
+            .get_state_for_placement(Block::WALL_TORCH, &context)
+            .unwrap(),
+        Some(state(f[6]))
+    );
 }
 #[test]
 fn attachment_survival_matches_native_full_face_center_and_unstable_support_footprints() {

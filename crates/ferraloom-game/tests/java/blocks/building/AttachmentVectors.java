@@ -53,7 +53,7 @@ public class AttachmentVectors extends MutationFixture {
                 emit("place\t"+BuiltInRegistries.BLOCK.getId(b)+"\t"+mask+"\t"+direction.get3DDataValue()+"\t"+face.get3DDataValue()+"\t"+id(fluid)+"\t"+id(b.getStateForPlacement(context)));
             }
             if(representatives.contains(b))for(int mask=0;mask<64;mask++)for(int yaw=0;yaw<360;yaw+=45)for(int pitch:new int[]{-80,-45,-10,10,45,80})for(var fluid:fluids){
-                level.mask(mask);level.raw(POS,fluid);actor.setYRot(yaw);actor.setXRot(pitch);
+                level.mask(mask);level.raw(POS,fluid);actor.setYRot(yaw);actor.setYHeadRot(yaw);actor.setXRot(pitch);
                 var context=new GeneralContext(level,actor,ItemStack.EMPTY);
                 emit("player\t"+BuiltInRegistries.BLOCK.getId(b)+"\t"+mask+"\t"+yaw+"\t"+pitch+"\t"+id(fluid)+"\t"+id(b.getStateForPlacement(context)));
             }
@@ -66,6 +66,12 @@ public class AttachmentVectors extends MutationFixture {
                 emit("update\t"+id(state)+"\t"+direction.get3DDataValue()+"\t"+mask+"\t"+id(captured)+"\t"+id(result)+"\t"+String.join(",",level.trace.stream().filter(s->s.startsWith("fluid:")||s.startsWith("schedule:")).toList()));
             }
         }
+        // Direction#orderedByNearest reads LivingEntity's head, while the
+        // horizontal placement direction still reads the independent body yaw.
+        level.mask(12);level.raw(POS,Blocks.AIR.defaultBlockState());
+        actor.setYRot(90);actor.setYHeadRot(0);actor.setXRot(-80);
+        var viewContext=new GeneralContext(level,actor,ItemStack.EMPTY);
+        emit("view\t90\t0\t-80\t"+viewContext.getNearestLookingDirection().get3DDataValue()+"\t"+String.join(",",Arrays.stream(viewContext.getNearestLookingDirections()).map(d->Integer.toString(d.get3DDataValue())).toList())+"\t"+id(Blocks.WALL_TORCH.getStateForPlacement(viewContext)));
         var atlas=new LinkedHashMap<Integer,BlockState>();
         for(var b:BuiltInRegistries.BLOCK)if(!b.hasDynamicShape())for(var state:b.getStateDefinition().getPossibleStates()){
             int bits=0;

@@ -20,7 +20,7 @@ source, bootstrap, expected = {
     'orientation': ('OrientationVectors.java', 'OrientationBootstrap', 42012),
     'stairs-slabs': ('StairSlabVectors.java', 'StairSlabBootstrap', 282160),
     'connected': ('ConnectedVectors.java', 'ConnectedBootstrap', 84864),
-    'attachments': ('AttachmentVectors.java', 'AttachmentBootstrap', 268940),
+    'attachments': ('AttachmentVectors.java', 'AttachmentBootstrap', 268941),
     'decorative': ('DecorativeVectors.java', 'DecorativeBootstrap', 35092),
     'fire-powder': ('FirePowderVectors.java', 'FirePowderBootstrap', 48298),
     'environmental': ('EnvironmentalVectors.java', 'EnvironmentalBootstrap', 6180),
