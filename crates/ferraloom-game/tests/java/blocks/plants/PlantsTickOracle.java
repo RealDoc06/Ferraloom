@@ -23,6 +23,8 @@ public final class PlantsTickOracle {
     public static void premain(String argument,Instrumentation instrumentation) {
         output=Path.of(argument);
         new AgentBuilder.Default().disableClassFormatChanges()
+            .with(AgentBuilder.RedefinitionStrategy.RETRANSFORMATION)
+            .with(AgentBuilder.Listener.StreamWriting.toSystemError().withErrorsOnly())
             .type(named("net.minecraft.server.level.ServerLevel"))
             .transform((builder,type,loader,module,domain)->builder.visit(Advice.to(OnTick.class).on(named("tick"))))
             .installOn(instrumentation);
