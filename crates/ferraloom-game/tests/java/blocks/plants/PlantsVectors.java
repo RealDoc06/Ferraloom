@@ -66,6 +66,18 @@ public final class PlantsVectors {
                 }
             }
         }
+        var shapeBlocks=new ArrayList<Block>(plants);shapeBlocks.add(Blocks.POWDER_SNOW);shapeBlocks.add(Blocks.OPEN_EYEBLOSSOM);
+        for(var block:shapeBlocks)for(var state:block.getStateDefinition().getPossibleStates())for(var at:List.of(BlockPos.ZERO,pos,new BlockPos(-7,11,17))){
+            for(boolean collision:new boolean[]{false,true}){
+                var shape=collision?state.getCollisionShape(level,at,net.minecraft.world.phys.shapes.CollisionContext.empty()):state.getShape(level,at);
+                var boxes=new ArrayList<String>();
+                for(var box:shape.toAabbs()){
+                    var coordinates=new ArrayList<String>();for(double d:new double[]{box.minX,box.minY,box.minZ,box.maxX,box.maxY,box.maxZ})coordinates.add(Long.toUnsignedString(Double.doubleToRawLongBits(d),16));
+                    boxes.add(String.join(":",coordinates));
+                }
+                System.out.println("shape\t"+Block.getId(state)+"\t"+at.getX()+"\t"+at.getY()+"\t"+at.getZ()+"\t"+collision+"\t"+String.join(";",boxes));
+            }
+        }
         var growthSpeed=CropBlock.class.getDeclaredMethod("getGrowthSpeed",Block.class,BlockGetter.class,BlockPos.class);
         growthSpeed.setAccessible(true);
         for(var block:List.of(Blocks.WHEAT,Blocks.BEETROOTS,Blocks.TORCHFLOWER_CROP)) {

@@ -1,15 +1,19 @@
 //! Shared vanilla vegetation, foliage and ground behavior, on live and generation levels.
 mod access;
 pub mod bonemeal;
+mod column;
 mod coral;
 mod crops;
+mod spread;
 pub use bonemeal::{BonemealSource, BonemealType, BonemealableBlock, bonemealable_behavior};
+mod geometry;
 mod ground;
 mod growing;
 mod leaves;
 mod moss;
 pub mod multiface;
 pub mod multiface_spreader;
+mod powder_snow;
 mod snow;
 mod survival;
 mod vines;
@@ -61,7 +65,23 @@ pub fn ported_behavior(block: Block, method: BlockMethod) -> Option<&'static dyn
     {
         return Some(&super::BASE_BLOCK);
     }
+    if matches!(method, M::OutlineShape | M::CollisionShape) && geometry::supports(block.class()) {
+        return Some(&geometry::PLANT_SHAPES);
+    }
     let behavior: &'static dyn BlockBehavior = match block.class() {
+        C::MushroomBlock if method == M::RandomTick => &spread::MUSHROOM,
+        C::StemBlock if method == M::RandomTick => &spread::STEM,
+        C::CactusBlock | C::SugarCaneBlock if method == M::RandomTick => &column::COLUMN_PLANT,
+
+        C::PowderSnowBlock
+            if matches!(
+                method,
+                M::CollisionShape | M::EntityInsideCollisionShape | M::PickupBlock
+            ) =>
+        {
+            &powder_snow::POWDER_SNOW
+        }
+
         C::CoralBlock | C::CoralPlantBlock | C::CoralFanBlock | C::CoralWallFanBlock
             if matches!(
                 method,

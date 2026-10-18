@@ -16,6 +16,7 @@ pub fn supports(block: Block, method: BlockMethod) -> bool {
     let survival = matches!(
         block.class(),
         C::FlowerBlock
+            | C::EyeblossomBlock
             | C::WitherRoseBlock
             | C::TallGrassBlock
             | C::BushBlock

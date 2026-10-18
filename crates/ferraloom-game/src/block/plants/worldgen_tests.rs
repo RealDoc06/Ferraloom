@@ -6,7 +6,6 @@ use ferraloom_data::{
 };
 use ferraloom_util::random::{Random, RandomSource, WorldgenRandom, XoroshiroRandomSource};
 use ferraloom_worldgen::{
-    Error,
     biome::BiomeSource,
     feature::{FeatureContext, FeatureLoader},
     generator::{GenerationData, NoiseBasedChunkGenerator},

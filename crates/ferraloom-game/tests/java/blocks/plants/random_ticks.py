@@ -8,6 +8,7 @@ import os
 import subprocess
 import tempfile
 import zipfile
+import urllib.request
 
 HERE=Path(__file__).resolve().parent
 VANILLA=Path(os.environ.get('FERRALOOM_VANILLA_DIR','/home/doc/code/Ferraloom/.cache/vanilla/26.3'))
@@ -15,7 +16,8 @@ JDK=Path(os.environ.get('JAVA_HOME','/home/doc/code/Ferraloom/.cache/toolchains/
 MOCK_CACHE=VANILLA/'tree-harness'
 BYTEBUDDY=MOCK_CACHE/'byte-buddy-1.15.4.jar'
 if not BYTEBUDDY.exists():
-    raise SystemExit('Missing cached ByteBuddy from existing Java feature harness')
+    MOCK_CACHE.mkdir(parents=True,exist_ok=True)
+    urllib.request.urlretrieve('https://repo.maven.apache.org/maven2/net/bytebuddy/byte-buddy/1.15.4/byte-buddy-1.15.4.jar',BYTEBUDDY)
 classpath=':'.join(map(str,[VANILLA/'versions/26.3/server-26.3.jar',*sorted((VANILLA/'libraries').rglob('*.jar')),BYTEBUDDY]))
 with tempfile.TemporaryDirectory(prefix='ferraloom-plant-ticks-') as temp:
     path=Path(temp)

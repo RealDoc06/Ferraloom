@@ -347,3 +347,49 @@ fn snow_melts_only_above_eleven_block_light_and_emits_destroy_context() {
         );
     }
 }
+
+#[test]
+fn plant_outline_and_empty_context_collision_shapes_match_vanilla() {
+    use crate::block::BlockCollisionContext;
+    use std::io::Read;
+    let mut text = String::new();
+    flate2::read::GzDecoder::new(
+        include_bytes!("../../../tests/java/blocks/plants/shapes.tsv.gz").as_slice(),
+    )
+    .read_to_string(&mut text)
+    .unwrap();
+    let level = level();
+    let reader = LevelReaderRef::Server(&level);
+    let mut count = 0;
+    for line in text.lines() {
+        let f = line.split('\t').collect::<Vec<_>>();
+        let state = BlockState::from_id(f[1].parse().unwrap()).unwrap();
+        let pos = BlockPos::new(
+            f[2].parse().unwrap(),
+            f[3].parse().unwrap(),
+            f[4].parse().unwrap(),
+        );
+        let shape = if f[5] == "true" {
+            reader
+                .collision_shape(state, pos, &BlockCollisionContext::empty())
+                .unwrap()
+        } else {
+            reader.shape(state, pos).unwrap()
+        };
+        let actual = shape
+            .to_aabbs()
+            .iter()
+            .map(|bb| {
+                [bb.min_x, bb.min_y, bb.min_z, bb.max_x, bb.max_y, bb.max_z]
+                    .iter()
+                    .map(|d| format!("{:x}", d.to_bits()))
+                    .collect::<Vec<_>>()
+                    .join(":")
+            })
+            .collect::<Vec<_>>()
+            .join(";");
+        assert_eq!(actual, f[6], "{line}");
+        count += 1;
+    }
+    assert_eq!(count, 3780);
+}

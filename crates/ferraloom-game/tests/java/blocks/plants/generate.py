@@ -28,3 +28,7 @@ with tempfile.TemporaryDirectory(prefix='ferraloom-plants-java-') as directory:
     growth='\n'.join(line for line in lines if line.startswith(('grow\t','speed\t'))) + '\n'
     (HERE/'growth.tsv.gz').write_bytes(gzip.compress(growth.encode(),mtime=0))
     print(f'{len(vectors.splitlines())} vanilla plant vectors; {len(growth.splitlines())} crop growth vectors')
+
+    shapes='\n'.join(line for line in lines if line.startswith('shape\t')) + '\n'
+    (HERE/'shapes.tsv.gz').write_bytes(gzip.compress(shapes.encode(),mtime=0))
+    print(f'{len(shapes.splitlines())} vanilla plant shape vectors')
