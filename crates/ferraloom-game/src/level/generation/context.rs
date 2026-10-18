@@ -8,6 +8,7 @@ use ferraloom_worldgen::{
     climate::SearchContext,
     decoration::DecorationPlan,
     density::SamplerContext,
+    environment::{DimensionEnvironment, EnvironmentDefinitions},
     feature::{FeatureLoader, FeatureRegistry},
     generator::{ChunkGenerator, ChunkGeneratorAccess},
     region::{RegionChunk, WorldGenRegion},
@@ -42,6 +43,8 @@ pub struct WorldGenContext {
     pub tags: BlockTags,
     pub decoration: DecorationPlan,
     pub generate_structures: bool,
+    pub environment: Arc<EnvironmentDefinitions>,
+    pub dimension_environment: DimensionEnvironment,
     pub unported_behavior: crate::block::UnportedBehavior,
 }
 impl WorldGenContext {
@@ -51,6 +54,8 @@ impl WorldGenContext {
         dimension: DimensionType,
         seed: i64,
         generate_structures: bool,
+        environment: Arc<EnvironmentDefinitions>,
+        dimension_environment: DimensionEnvironment,
     ) -> Result<Self, Error> {
         let mut loader = FeatureLoader::new(resources)?;
         let registry = StructureRegistry::load(resources, generator.data())?;
@@ -132,6 +137,8 @@ impl WorldGenContext {
             tags: BlockTags::load(resources)?,
             decoration,
             generate_structures,
+            environment,
+            dimension_environment,
             unported_behavior: crate::block::UnportedBehavior::Strict,
         })
     }
@@ -185,6 +192,11 @@ impl WorldGenContext {
         region.set_fast_lava(self.dimension.fast_lava);
         region.set_block_tags(self.generator.data().block_tags.clone());
         region.set_fluid_tags(self.generator.data().fluid_tags.clone());
+        region.set_environment_attributes(
+            self.environment.clone(),
+            &self.dimension_environment,
+            &self.generator.data().biome_names,
+        )?;
         region.set_random(self.generator.region_random(center, self.seed));
         Ok(region)
     }

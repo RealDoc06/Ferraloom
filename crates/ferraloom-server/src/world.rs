@@ -748,6 +748,8 @@ impl World {
             dimension,
             seed,
             generate_structures,
+            preset.dimensions.environment.clone(),
+            preset.dimensions.overworld().environment.clone(),
         )?;
         context.unported_behavior = unported_behavior;
         let mut generation_state = GenerationState::new(Arc::new(context), light_pool);

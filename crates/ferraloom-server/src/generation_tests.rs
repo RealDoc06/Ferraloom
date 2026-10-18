@@ -22,6 +22,35 @@ fn resources() -> ResourceManager {
     let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").expect("builder provides vanilla jar");
     ResourceManager::new(vec![Pack::vanilla_jar(Path::new(&jar)).unwrap()])
 }
+fn generation_context(
+    resources: &ResourceManager,
+    generator: Arc<ChunkGenerator>,
+    dimension: &str,
+    seed: i64,
+) -> WorldGenContext {
+    let value = resources
+        .require(
+            &format!("minecraft:dimension_type/{dimension}.json")
+                .parse()
+                .unwrap(),
+        )
+        .unwrap()
+        .json()
+        .unwrap();
+    let environment =
+        Arc::new(ferraloom_worldgen::environment::EnvironmentDefinitions::load(resources).unwrap());
+    let dimension_environment = environment.dimension(&value).unwrap();
+    WorldGenContext::load(
+        resources,
+        generator,
+        DimensionType::decode(&value).unwrap(),
+        seed,
+        true,
+        environment,
+        dimension_environment,
+    )
+    .unwrap()
+}
 #[test]
 fn live_structure_start_executor_matches_6534_vanilla_chunks() {
     let resources = resources();
@@ -47,20 +76,23 @@ fn live_structure_start_executor_matches_6534_vanilla_chunks() {
                 .split(':')
                 .nth(1)
                 .unwrap();
-            let dimension_type = DimensionType::decode(
-                &resources
-                    .require(
-                        &format!("minecraft:dimension_type/{dimension_name}.json")
-                            .parse()
-                            .unwrap(),
+            let context = generation_context(&resources, generator, dimension_name, seed);
+            let mut region_chunks = [context.empty_chunk([0, 0]).unwrap()];
+            let region = context
+                .region(
+                    &mut region_chunks,
+                    [0, 0],
+                    ChunkPyramid::generation().step_to(ChunkStatus::StructureStarts),
+                )
+                .unwrap();
+            assert_eq!(
+                region
+                    .get_dimension_value(
+                        ferraloom_worldgen::environment::EnvironmentAttributes::FAST_LAVA,
                     )
-                    .unwrap()
-                    .json()
                     .unwrap(),
-            )
-            .unwrap();
-            let context =
-                WorldGenContext::load(&resources, generator, dimension_type, seed, true).unwrap();
+                context.dimension.fast_lava,
+            );
             for expected in dimension["chunks"].as_array().unwrap() {
                 let pos = std::array::from_fn(|i| expected["chunk"][i].as_i64().unwrap() as i32);
                 let mut chunks = [context.empty_chunk(pos).unwrap()];
@@ -122,21 +154,7 @@ fn twenty_full_feature_chunks_match_vanilla_blocks_and_structure_nbt() {
             let generator = Arc::new(
                 ChunkGenerator::decode(&generator_json, &resources, data.clone(), seed).unwrap(),
             );
-            let dimension_type = DimensionType::decode(
-                &resources
-                    .require(
-                        &format!("minecraft:dimension_type/{dimension}.json")
-                            .parse()
-                            .unwrap(),
-                    )
-                    .unwrap()
-                    .json()
-                    .unwrap(),
-            )
-            .unwrap();
-            let context = Arc::new(
-                WorldGenContext::load(&resources, generator, dimension_type, seed, true).unwrap(),
-            );
+            let context = Arc::new(generation_context(&resources, generator, dimension, seed));
             let registries = crate::registries::RegistrySet::load(&resources).unwrap();
             let registry = RegistryAdapter::new(&registries).unwrap();
             let directory = tempfile::tempdir().unwrap();
@@ -224,16 +242,12 @@ fn saved_proto_resumes_and_full_reload_preserves_owned_payload_and_tick_delays()
     let resources = resources();
     let data = Arc::new(GenerationData::load(&resources).unwrap());
     let generator=Arc::new(ChunkGenerator::decode(&serde_json::json!({"type":"minecraft:flat","settings":{"layers":[{"height":1,"block":"minecraft:bedrock"},{"height":3,"block":"minecraft:stone"}],"biome":"minecraft:plains","features":false,"lakes":false,"structure_overrides":[]}}),&resources,data,8675309).unwrap());
-    let dimension = DimensionType::decode(
-        &resources
-            .require(&"minecraft:dimension_type/overworld.json".parse().unwrap())
-            .unwrap()
-            .json()
-            .unwrap(),
-    )
-    .unwrap();
-    let context =
-        Arc::new(WorldGenContext::load(&resources, generator, dimension, 8675309, true).unwrap());
+    let context = Arc::new(generation_context(
+        &resources,
+        generator,
+        "overworld",
+        8675309,
+    ));
     let registry =
         RegistryAdapter::new(&crate::registries::RegistrySet::load(&resources).unwrap()).unwrap();
     let directory = tempfile::tempdir().unwrap();
@@ -332,15 +346,7 @@ fn flat_stronghold_rings_use_zero_seed_and_fixed_biome_search() {
     let resources = resources();
     let data = Arc::new(GenerationData::load(&resources).unwrap());
     let generator=Arc::new(ChunkGenerator::decode(&serde_json::json!({"type":"minecraft:flat","settings":{"layers":[{"height":1,"block":"minecraft:bedrock"}],"biome":"minecraft:plains","features":false,"lakes":false,"structure_overrides":["minecraft:strongholds"]}}),&resources,data,8675309).unwrap());
-    let dimension = DimensionType::decode(
-        &resources
-            .require(&"minecraft:dimension_type/overworld.json".parse().unwrap())
-            .unwrap()
-            .json()
-            .unwrap(),
-    )
-    .unwrap();
-    let context = WorldGenContext::load(&resources, generator, dimension, 8675309, true).unwrap();
+    let context = generation_context(&resources, generator, "overworld", 8675309);
     let cases = fixtures(include_bytes!(
         "../../ferraloom-worldgen/src/structure/testdata/placements.json.gz"
     ));
