@@ -155,3 +155,114 @@ fn native_climb_movement_clamps_axes_resets_fall_and_only_players_suppress_slidi
     }
     assert_eq!(checked, 36);
 }
+
+#[test]
+fn native_air_travel_matches_collision_positions_flags_effects_and_drag_bits() {
+    use crate::entity::{EntityState, effect::MobEffectInstance, player::GameType, synched_data};
+    use ferraloom_data::BlockState;
+    use ferraloom_nbt::{ListTag, Tag};
+    use ferraloom_protocol::component::{EquipmentSlot, ItemStack, Persistent};
+    use ferraloom_util::BlockPos;
+
+    let mut checked = 0;
+    for row in rows("travel-air\t") {
+        let mut level = crate::entity::tests::level(true);
+        let pos = BlockPos::new(8, 64, 8);
+        level
+            .set_block_state(
+                pos.below(1),
+                BlockState::from_id(row[3].parse().unwrap()).unwrap(),
+            )
+            .unwrap();
+        if row[2] == "11" || row[2] == "12" {
+            level
+                .set_block_state(pos, Block::LADDER.default_state())
+                .unwrap();
+        }
+        let entity = level.next_entity_ref();
+        let mut state = if row[1] == "cow" {
+            EntityState::Cow(Box::default())
+        } else {
+            let mut player = ServerPlayer::new(
+                Uuid::new(3, 4),
+                "air".into(),
+                level.next_entity_id(),
+                vector(row[5]),
+                GameType::Survival,
+            );
+            player.flying = row[15].parse().unwrap();
+            player.set_ability_flying_speed(float(row[16]));
+            EntityState::Player(Box::new(player))
+        };
+        let living = state.as_living_mut().unwrap();
+        living.set_pos(vector(row[5]));
+        living.velocity = vector(row[6]);
+        living.yaw = float(row[8]);
+        living.on_ground = row[4].parse().unwrap();
+        living
+            .entity_data
+            .set(synched_data::NO_GRAVITY, row[9].parse().unwrap());
+        living.discard_friction = row[10].parse().unwrap();
+        living.speed = float(row[14]);
+        living.set_shared_flag(3, row[17].parse().unwrap());
+        living.jumping = row[18].parse().unwrap();
+        living.was_in_powder_snow = row[19].parse().unwrap();
+        for (attribute, value) in [
+            (Attribute::FRICTION_MODIFIER, double(row[11])),
+            (Attribute::AIR_DRAG_MODIFIER, double(row[12])),
+            (Attribute::GRAVITY, double(row[13])),
+            (Attribute::MOVEMENT_SPEED, 0.17),
+        ] {
+            living
+                .attributes
+                .get_instance(attribute)
+                .unwrap()
+                .set_base_value(value);
+        }
+        if row[20] == "true" {
+            living.equipment.set(
+                EquipmentSlot::Feet,
+                ItemStack::new(ferraloom_data::Item::LEATHER_BOOTS, 1, Default::default()),
+            );
+        }
+        if let Ok(effect) = row[21].parse::<u16>() {
+            // Neither fixture effect has attribute modifiers; load its canonical
+            // state without substituting any part of the travel method.
+            let effect = MobEffectInstance::new(
+                MobEffect::from_protocol_id(effect).unwrap(),
+                100,
+                row[22].parse().unwrap(),
+                false,
+                true,
+                true,
+                None,
+            );
+            let tag = Tag::List(ListTag(vec![effect.to_component().to_nbt().unwrap()]));
+            assert!(living.active_effects.load(Some(&tag)).is_empty());
+        }
+        level.add_entity(entity, state).unwrap();
+        let behavior = level.entity_behavior(entity).unwrap();
+        travel_in_air(behavior, entity, vector(row[7]), &mut level).unwrap();
+        let base = level.entity::<EntityData>(entity).unwrap();
+        assert_eq!(bits(base.position), row[23], "position {row:?}");
+        assert_eq!(bits(base.velocity), row[24], "velocity {row:?}");
+        let flags: String = [
+            base.on_ground,
+            base.horizontal_collision,
+            base.vertical_collision,
+            base.vertical_collision_below,
+            base.minor_horizontal_collision,
+        ]
+        .map(|flag| if flag { '1' } else { '0' })
+        .into_iter()
+        .collect();
+        assert_eq!(flags, row[25], "{row:?}");
+        assert_eq!(
+            format!("{:x}", base.fall_distance.to_bits()),
+            row[26],
+            "{row:?}"
+        );
+        checked += 1;
+    }
+    assert_eq!(checked, 42);
+}

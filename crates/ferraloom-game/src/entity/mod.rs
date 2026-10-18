@@ -598,17 +598,24 @@ pub trait Entity: Sync {
         Ok(0.0)
     }
     fn effective_gravity(&self, entity: EntityRef, level: &Level) -> Result<f64, LevelError> {
-        Ok(
-            if *level
-                .entity::<EntityData>(entity)?
-                .entity_data
-                .get(synched_data::NO_GRAVITY)
-            {
-                0.0
-            } else {
-                self.default_gravity(entity, level)?
-            },
-        )
+        base_effective_gravity(self, entity, level)
+    }
+    /// Port of LivingEntity#getSpeed; Player overrides its attribute read.
+    fn get_speed(&self, entity: EntityRef, level: &Level) -> Result<f32, LevelError> {
+        Ok(level.entity::<LivingEntity>(entity)?.speed)
+    }
+    fn get_flying_speed(&self, entity: EntityRef, level: &Level) -> Result<f32, LevelError> {
+        if let Some(passenger) = self.controlling_passenger(entity, level)?
+            && level.entity::<EntityData>(passenger)?.entity_type == EntityType::PLAYER
+        {
+            Ok(self.get_speed(entity, level)? * 0.1)
+        } else {
+            Ok(0.02)
+        }
+    }
+    /// Port of Entity#omnidirectionalAirMover's inherited default.
+    fn omnidirectional_air_mover(&self) -> bool {
+        false
     }
     fn air_drag(&self, _entity: EntityRef, _level: &Level) -> Result<f32, LevelError> {
         Ok(0.98)
@@ -826,6 +833,23 @@ pub trait Entity: Sync {
         } else {
             Ok(false)
         }
+    }
+}
+
+/// Entity#getEffectiveGravity's parent body, for LivingEntity's explicit super call.
+pub(crate) fn base_effective_gravity<E: Entity + ?Sized>(
+    behavior: &E,
+    entity: EntityRef,
+    level: &Level,
+) -> Result<f64, LevelError> {
+    if *level
+        .entity::<EntityData>(entity)?
+        .entity_data
+        .get(synched_data::NO_GRAVITY)
+    {
+        Ok(0.0)
+    } else {
+        behavior.default_gravity(entity, level)
     }
 }
 

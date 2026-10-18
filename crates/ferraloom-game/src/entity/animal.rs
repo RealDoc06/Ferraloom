@@ -224,6 +224,13 @@ impl Entity for CowBehavior {
             level,
         )
     }
+    fn effective_gravity(
+        &self,
+        entity: super::EntityRef,
+        level: &crate::level::Level,
+    ) -> Result<f64, crate::level::LevelError> {
+        super::living::travel::effective_gravity(self, entity, level)
+    }
     fn max_up_step(
         &self,
         entity: crate::entity::EntityRef,

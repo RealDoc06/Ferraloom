@@ -937,6 +937,21 @@ impl crate::entity::Entity for PlayerBehavior {
             level,
         )
     }
+    fn effective_gravity(&self, entity: EntityRef, level: &Level) -> Result<f64, LevelError> {
+        crate::entity::living::travel::effective_gravity(self, entity, level)
+    }
+    fn get_speed(&self, entity: EntityRef, level: &Level) -> Result<f32, LevelError> {
+        Ok(crate::entity::living::attribute(
+            entity,
+            ferraloom_data::registries::attribute::Id::MOVEMENT_SPEED,
+            level,
+        )? as f32)
+    }
+    fn get_flying_speed(&self, entity: EntityRef, level: &Level) -> Result<f32, LevelError> {
+        Ok(level
+            .entity::<ServerPlayer>(entity)?
+            .flying_movement_speed())
+    }
     fn max_up_step(
         &self,
         entity: crate::entity::EntityRef,

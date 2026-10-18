@@ -105,6 +105,7 @@ public final class EntityVectors {
         LivingVectors.run(new EntityFixture(r));
         TravelVectors.run(new EntityFixture(r));
         AbilityVectors.run(new EntityFixture(r));
+        AirTravelVectors.run(new EntityFixture(r));
         EffectVectors.run();
         EffectReadVectors.run(new EntityFixture(r));
         DamageVectors.run(new EntityFixture(r));
@@ -173,7 +174,7 @@ public final class EntityVectors {
           var names=new ArrayList<String>();for(var block:BuiltInRegistries.BLOCK)if(block.defaultBlockState().is(tag))names.add(BuiltInRegistries.BLOCK.getKey(block).toString());
           System.out.println("block-tag\\t"+tag.location()+"\\t"+String.join(",",names));
         }
-        for(var entityTag:List.of(net.minecraft.tags.EntityTypeTags.NON_CONTROLLING_RIDER,net.minecraft.tags.EntityTypeTags.FREEZE_IMMUNE_ENTITY_TYPES)){
+        for(var entityTag:List.of(net.minecraft.tags.EntityTypeTags.NON_CONTROLLING_RIDER,net.minecraft.tags.EntityTypeTags.FREEZE_IMMUNE_ENTITY_TYPES,net.minecraft.tags.EntityTypeTags.POWDER_SNOW_WALKABLE_MOBS,net.minecraft.tags.EntityTypeTags.CAN_FLOAT_WHILE_RIDDEN)){
           var entityNames=new ArrayList<String>();
           for(var type:BuiltInRegistries.ENTITY_TYPE)if(BuiltInRegistries.ENTITY_TYPE.wrapAsHolder(type).is(entityTag))entityNames.add(BuiltInRegistries.ENTITY_TYPE.getKey(type).toString());
           System.out.println("entity-tag\\t"+entityTag.location()+"\\t"+String.join(",",entityNames));

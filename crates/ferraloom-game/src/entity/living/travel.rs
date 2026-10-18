@@ -4,8 +4,120 @@ use crate::{
     entity::{Entity, EntityData, EntityRef},
     level::{Level, LevelError},
 };
-use ferraloom_data::{Block, EntityType};
+use ferraloom_data::{
+    Block, EntityType,
+    registries::{attribute::Id as Attribute, mob_effect::Id as MobEffect},
+};
 use ferraloom_util::{Vec3, java, mth};
+
+/// Port of LivingEntity#getEffectiveGravity, reading the falling flag before the
+/// active-effect lookup and the Entity parent's actual gravity query.
+pub fn effective_gravity<E: Entity + ?Sized>(
+    behavior: &E,
+    entity: EntityRef,
+    level: &Level,
+) -> Result<f64, LevelError> {
+    let living = level.entity::<LivingEntity>(entity)?;
+    let slow_falling = living.velocity.y <= 0.0 && living.has_effect(MobEffect::SLOW_FALLING);
+    let gravity = crate::entity::base_effective_gravity(behavior, entity, level)?;
+    Ok(if slow_falling {
+        java::min(gravity, 0.01)
+    } else {
+        gravity
+    })
+}
+
+/// Port of LivingEntity#handleRelativeFrictionAndCalculateMovement. The move
+/// uses Entity's collision engine and records its path for the later aiStep slot.
+pub fn handle_relative_friction_and_calculate_movement<E: Entity + ?Sized>(
+    behavior: &E,
+    entity: EntityRef,
+    input: Vec3,
+    friction: f32,
+    level: &mut Level,
+) -> Result<Vec3, LevelError> {
+    let speed = if level.entity::<EntityData>(entity)?.on_ground {
+        friction_influenced_speed(behavior.get_speed(entity, level)?, 0.0, true, friction)
+    } else {
+        behavior.get_flying_speed(entity, level)?
+    };
+    level
+        .entity_mut::<EntityData>(entity)?
+        .move_relative(speed, input);
+    let movement = level.entity::<EntityData>(entity)?.velocity;
+    let movement = handle_on_climbable(behavior, entity, movement, level)?;
+    level.entity_mut::<EntityData>(entity)?.velocity = movement;
+    behavior.move_by(
+        entity,
+        level,
+        crate::entity::movement::MoverType::SelfMovement,
+        movement,
+    )?;
+    let (mut movement, climb, powder_snow) = {
+        let living = level.entity::<LivingEntity>(entity)?;
+        (
+            living.velocity,
+            living.horizontal_collision || living.jumping,
+            living.was_in_powder_snow,
+        )
+    };
+    if climb
+        && (super::climbable::on_climbable(behavior, entity, level)?
+            || powder_snow && crate::block::plants::can_entity_walk_on_powder_snow(entity, level)?)
+    {
+        movement.y = 0.2;
+    }
+    Ok(movement)
+}
+
+/// Port of server-side LivingEntity#travelInAir. Levitation is queried after
+/// movement; gravity and all drag arithmetic preserve native evaluation order.
+pub fn travel_in_air<E: Entity + ?Sized>(
+    behavior: &E,
+    entity: EntityRef,
+    input: Vec3,
+    level: &mut Level,
+) -> Result<(), LevelError> {
+    let below = behavior.block_pos_below_that_affects_my_movement(entity, level)?;
+    let friction = if level.entity::<EntityData>(entity)?.on_ground {
+        compute_modified_friction(
+            level.get_block_state(below)?.block().data().friction,
+            super::attribute(entity, Attribute::FRICTION_MODIFIER, level)? as f32,
+        )
+    } else {
+        1.0
+    };
+    let movement =
+        handle_relative_friction_and_calculate_movement(behavior, entity, input, friction, level)?;
+    let levitation = level
+        .entity::<LivingEntity>(entity)?
+        .get_effect(MobEffect::LEVITATION)
+        .map(|effect| effect.amplifier());
+    let y = if let Some(amplifier) = levitation {
+        movement.y + (0.05 * f64::from(amplifier + 1) - movement.y) * 0.2
+    } else {
+        movement.y - behavior.effective_gravity(entity, level)?
+    };
+    let velocity = if level.entity::<LivingEntity>(entity)?.discard_friction {
+        Vec3::new(movement.x, y, movement.z)
+    } else {
+        let modifier = super::attribute(entity, Attribute::AIR_DRAG_MODIFIER, level)? as f32;
+        let air_drag = compute_modified_friction(0.91, modifier);
+        let horizontal = friction * air_drag;
+        let vertical = if behavior.omnidirectional_air_mover() {
+            air_drag
+        } else {
+            compute_modified_friction(0.98, modifier)
+        };
+        Vec3::new(
+            movement.x * f64::from(horizontal),
+            y * f64::from(vertical),
+            movement.z * f64::from(horizontal),
+        )
+    };
+    level.entity_mut::<EntityData>(entity)?.velocity = velocity;
+    Ok(())
+}
 
 /// Port of LivingEntity#handleOnClimbable, including player-only ladder
 /// suppression and the scaffolding exception. Reads use the canonical cache.
