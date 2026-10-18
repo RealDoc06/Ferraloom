@@ -220,7 +220,7 @@ public final class CommandVectors {
                     if (value instanceof net.minecraft.commands.arguments.coordinates.LocalCoordinates coordinates) vector.add("local_coordinates", JSON.toJsonTree(List.of(coordinates.left(), coordinates.up(), coordinates.forwards())));
                 } catch (com.mojang.brigadier.exceptions.CommandSyntaxException e) {
                     vector.addProperty("ok", false); vector.addProperty("error_cursor", e.getCursor()); vector.addProperty("message", e.getRawMessage().getString());
-                    if ((entry.getKey().equals("minecraft:nbt_tag") || entry.getKey().equals("minecraft:nbt_compound_tag")) && e.getRawMessage() instanceof net.minecraft.network.chat.Component component) {
+                    if (e.getRawMessage() instanceof net.minecraft.network.chat.Component component) {
                         vector.add("error_component",net.minecraft.network.chat.ComponentSerialization.CODEC.encodeStart(com.mojang.serialization.JsonOps.INSTANCE,component).getOrThrow());
                     }
                 } catch (RuntimeException e) {
