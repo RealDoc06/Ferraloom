@@ -39,6 +39,7 @@ pub struct GenerationOutput {
     pub skips: Vec<(String, String)>,
     pub statuses: Vec<(ChunkPos, ChunkStatus)>,
     pub full_structures: Vec<(ChunkPos, storage::StructureData)>,
+    pub initial_mob_spawning_pending: bool,
 }
 /// Port of ChunkMap's generation cache. FULL entries are read-only imposter
 /// protos. No references into this cache escape an owned generation job.
@@ -68,6 +69,17 @@ impl GenerationState {
             holders: BTreeMap::new(),
             structure_check: StructureCheck::default(),
         }
+    }
+    pub fn pending_initial_spawns(&self) -> BTreeSet<ChunkPos> {
+        self.holders
+            .iter()
+            .filter_map(|(&key, holder)| {
+                holder
+                    .chunk
+                    .initial_mob_spawning_pending
+                    .then_some(ChunkPos::unpack(key))
+            })
+            .collect()
     }
     pub fn refresh_full_chunks(&mut self, level: &ferraloom_game::level::Level) {
         for (&key, holder) in &mut self.holders {
@@ -197,7 +209,7 @@ impl GenerationState {
                         let proto = &mut self.holders.get_mut(&key).unwrap().chunk;
                         proto.initial_mob_spawning_pending = matches!(
                             self.context.generator.as_ref(),
-                            ferraloom_worldgen::generator::ChunkGenerator::Noise(_)
+                            ferraloom_worldgen::generator::ChunkGenerator::Noise(noise) if !noise.settings.disable_mob_generation
                         );
                         proto.region.status = proto.region.status.max(ChunkStatus::Spawn);
                     }
@@ -314,6 +326,7 @@ impl GenerationState {
             neighbors,
             skips,
             full_structures,
+            initial_mob_spawning_pending: proto.initial_mob_spawning_pending,
             statuses: self
                 .holders
                 .iter()

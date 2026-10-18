@@ -513,6 +513,7 @@ pub struct World {
     pub ready: std::collections::HashSet<ChunkPos>,
     pub light_ready: std::collections::HashSet<ChunkPos>,
     pub generation_skips: Vec<(String, String)>,
+    pub pending_initial_spawns: BTreeSet<ChunkPos>,
     pub generation_statuses: BTreeMap<ChunkPos, ChunkStatus>,
     pub pending_light_updates: std::collections::HashMap<ChunkPos, LightDirtySections>,
     pub light_chunks_to_broadcast: ferraloom_util::collections::LongLinkedOpenHashSet,
@@ -707,6 +708,7 @@ impl World {
         } else {
             io
         };
+        let pending_initial_spawns = generation_state.pending_initial_spawns();
         let (light_tx, light_in) = mpsc::channel::<LightJob>();
         let (light_out, light_rx) = tokio::sync::mpsc::unbounded_channel();
         std::thread::Builder::new()
@@ -744,6 +746,7 @@ impl World {
             ready: Default::default(),
             light_ready: Default::default(),
             generation_skips,
+            pending_initial_spawns,
             generation_statuses: BTreeMap::new(),
             pending_light_updates: Default::default(),
             light_chunks_to_broadcast: Default::default(),
@@ -982,6 +985,9 @@ impl World {
             self.failed_generation.push(pos);
         }
         let result = result.and_then(|output| {
+            if output.initial_mob_spawning_pending {
+                self.pending_initial_spawns.insert(output.terrain.pos);
+            }
             self.generation_skips.extend(output.skips);
             self.generation_statuses.extend(output.statuses);
             for (pos, structures) in output.full_structures {
