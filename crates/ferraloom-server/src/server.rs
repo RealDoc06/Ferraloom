@@ -38,7 +38,7 @@ use ferraloom_game::{
         teleport::{self as entity_teleport, position_move_rotation},
     },
     inventory::{
-        MenuContext, MenuHooks, PendingCraftingCallbacks, RecipeMenuHooks, RuntimeCraftingContext,
+        MenuContext, PendingCraftingCallbacks, RecipeMenuHooks, RuntimeCraftingContext,
         UnsupportedMenuHooks,
     },
     level::{

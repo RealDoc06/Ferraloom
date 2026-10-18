@@ -1229,7 +1229,7 @@ fn clear_grid_returns_lent_drop_receivers_and_preserves_native_comparator_reads(
             player::{GameType, ServerPlayer},
         },
     };
-    use ferraloom_data::{Block, block::properties as p};
+    use ferraloom_data::{Block, properties as p};
     use ferraloom_util::{BlockPos, Uuid, Vec3};
     let pos = BlockPos::new(8, 64, 8);
     let comparator = BlockPos::new(9, 64, 8);
@@ -1310,7 +1310,7 @@ fn clear_grid_returns_lent_drop_receivers_and_preserves_native_comparator_reads(
                 .unwrap();
             level.set_block_state(comparator, state).unwrap();
             level
-                .set_block_state(comparator.below(), Block::STONE.default_state())
+                .set_block_state(comparator.below(1), Block::STONE.default_state())
                 .unwrap();
             level
                 .set_block_entity(create(comparator, state).unwrap())

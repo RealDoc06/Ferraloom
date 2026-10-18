@@ -697,21 +697,6 @@ impl AbstractContainerMenu {
         }
         Ok(original)
     }
-    fn move_between(
-        &mut self,
-        ctx: &mut MenuContext<'_>,
-        stack: &mut ItemStack,
-        index: usize,
-        boundary: usize,
-        end: usize,
-        hooks: &mut dyn MenuHooks,
-    ) -> Result<bool> {
-        if index < boundary {
-            self.move_item_stack_to(ctx, stack, boundary, end, true, hooks)
-        } else {
-            self.move_item_stack_to(ctx, stack, 0, boundary, false, hooks)
-        }
-    }
     fn move_player_sections(
         &mut self,
         ctx: &mut MenuContext<'_>,

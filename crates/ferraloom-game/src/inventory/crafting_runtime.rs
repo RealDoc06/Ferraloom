@@ -58,7 +58,7 @@ impl RuntimeCraftingContext {
                         .unwrap(),
                 ]);
                 std::sync::Arc::new(
-                    Self::load_with(&resources, |registry, id| {
+                    RuntimeCraftingContext::load_with(&resources, |registry, id| {
                         ferraloom_data::registry_entries(&format!("minecraft:{registry}"))
                             .is_some_and(|entries| entries.contains(&id.as_str()))
                             || resources
