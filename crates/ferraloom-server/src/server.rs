@@ -935,8 +935,9 @@ impl MinecraftServer {
             player.game_mode = mode;
         }
         player.view_distance = i32::from(self.connections[&connection].information.view_distance);
-        player.text_filtering_enabled =
-            self.connections[&connection].information.text_filtering_enabled;
+        player.text_filtering_enabled = self.connections[&connection]
+            .information
+            .text_filtering_enabled;
         let center = player.chunk_position();
         self.request_area(center, 3)?;
         let c = self.connections.get_mut(&connection).unwrap();
@@ -2209,17 +2210,12 @@ impl MinecraftServer {
             let inventory = &mut player.inventory;
             let mut drop = None;
             if action == PlayerAction::SwapItemWithOffhand {
-                let offhand = std::mem::take(
-                    player
-                        .parent
-                        .equipment
-                        .get_mut(protocol::component::EquipmentSlot::Offhand),
-                );
-                let mainhand = inventory.set_selected_item(offhand);
-                player
-                    .parent
-                    .equipment
-                    .set(protocol::component::EquipmentSlot::Offhand, mainhand);
+                ferraloom_game::inventory::swap_player_hands(entity, &mut self.level.level)?;
+                return ferraloom_game::entity::living::stop_using_item(
+                    entity,
+                    &mut self.level.level,
+                )
+                .map_err(game_error);
             } else {
                 let amount = if action == PlayerAction::DropAllItems {
                     count(inventory.selected_item())
