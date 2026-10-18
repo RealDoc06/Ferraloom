@@ -4,7 +4,7 @@ pub use drop_item::drop_item;
 pub mod equipment;
 pub mod inventory;
 use crate::{
-    entity::{EntityData, EntityDataView, EntityState, LivingEntity},
+    entity::{Avatar, EntityData, EntityDataView, EntityState},
     level::{Level, LevelError},
 };
 use ferraloom_nbt::{CompoundTag, ListTag, Tag};
@@ -38,7 +38,7 @@ impl GameType {
 /// Port of ServerPlayer's join, position, game-mode and persistence state.
 #[derive(Debug)]
 pub struct ServerPlayer {
-    pub parent: LivingEntity,
+    pub parent: Avatar,
     pub inventory: inventory::Inventory,
     pub menus: crate::inventory::MenuSession,
     pub recipe_book: crate::crafting::ServerRecipeBook,
@@ -79,23 +79,26 @@ impl ServerPlayer {
         game_mode: GameType,
     ) -> Self {
         Self {
-            parent: LivingEntity {
-                equipment: Default::default(),
-                parent: {
-                    let mut base = EntityData::from_random(
-                        ferraloom_data::EntityType::PLAYER,
-                        network_id,
-                        crate::level::entity::new_entity_random(),
-                    );
-                    base.uuid = uuid;
-                    base.set_pos(position);
-                    base
-                },
-                health: 20.,
-                last_hurt: 0.,
-                damage_cooldown_time: 0,
-                hurt_time: 0,
-                hurt_duration: 0,
+            parent: {
+                let mut base = EntityData::from_random(
+                    ferraloom_data::EntityType::PLAYER,
+                    network_id,
+                    crate::level::entity::new_entity_random(),
+                );
+                base.uuid = uuid;
+                base.set_pos(position);
+                let mut avatar = Avatar::with_parent(base);
+                use super::synched_data as data;
+                use ferraloom_protocol::{codec::VarInt, entity_data::OptionalUnsignedInt};
+                avatar.entity_data.define(data::PLAYER_ABSORPTION, 0.0);
+                avatar.entity_data.define(data::PLAYER_SCORE, VarInt(0));
+                avatar
+                    .entity_data
+                    .define(data::SHOULDER_PARROT_LEFT, OptionalUnsignedInt(None));
+                avatar
+                    .entity_data
+                    .define(data::SHOULDER_PARROT_RIGHT, OptionalUnsignedInt(None));
+                avatar
             },
             name,
             inventory: Default::default(),
@@ -167,7 +170,7 @@ impl ServerPlayer {
         self.parent.parent.load_nbt(tag)?;
         self.game_mode =
             GameType::from_id(self.saved.get_int_or("playerGameType", self.game_mode.id()));
-        self.parent.health = self.saved.get_float_or("Health", 20.0);
+        self.parent.parent.read_additional_save_data();
         let inventory = self
             .saved
             .get_list("Inventory")
@@ -176,11 +179,6 @@ impl ServerPlayer {
         let selected = self.saved.get_int_or("SelectedItemSlot", 0);
         self.inventory.load(&inventory);
         self.inventory.set_selected_slot(selected as usize);
-        self.parent.equipment = self
-            .saved
-            .get("equipment")
-            .and_then(|v| equipment::EntityEquipment::from_tag(v).ok())
-            .unwrap_or_default();
         self.first_good = self.position;
         self.last_good = self.position;
         Ok(())
@@ -213,7 +211,7 @@ impl ServerPlayer {
             Tag::List(ListTag(vec![Tag::Float(self.yaw), Tag::Float(self.pitch)])),
         );
         tag.insert("playerGameType", Tag::Int(self.game_mode.id()));
-        tag.insert("Health", Tag::Float(self.parent.health));
+        self.parent.parent.add_additional_save_data(&mut tag);
         tag.insert("OnGround", Tag::Byte(i8::from(self.on_ground)));
         tag.insert(
             "Inventory",
@@ -223,18 +221,6 @@ impl ServerPlayer {
             "SelectedItemSlot",
             Tag::Int(self.inventory.selected_slot() as i32),
         );
-        tag.remove("equipment");
-        if !self.parent.equipment.is_empty() {
-            tag.insert(
-                "equipment",
-                Tag::Compound(
-                    self.parent
-                        .equipment
-                        .save()
-                        .expect("canonical equipment stacks"),
-                ),
-            );
-        }
         tag.insert("foodLevel", Tag::Int(20));
         tag.insert("foodSaturationLevel", Tag::Float(5.));
         let creative = matches!(self.game_mode, GameType::Creative | GameType::Spectator);
@@ -255,7 +241,7 @@ impl ServerPlayer {
 }
 /// Embedded-parent projection preserving the bring-up's public field access.
 impl std::ops::Deref for ServerPlayer {
-    type Target = LivingEntity;
+    type Target = Avatar;
     fn deref(&self) -> &Self::Target {
         &self.parent
     }
@@ -635,6 +621,47 @@ mod tests {
     use ferraloom_chunk::{BiomeId, IdMap, LevelChunkSection, Strategy};
     use ferraloom_data::Block;
     use std::sync::Arc;
+
+    #[test]
+    fn player_health_persistence_hydrates_attributes_before_clamping_health() {
+        let mut player = ServerPlayer::new(
+            Uuid::new(1, 2),
+            "health".into(),
+            1,
+            Vec3::ZERO,
+            GameType::Survival,
+        );
+        player
+            .attributes
+            .get_instance(ferraloom_data::registries::attribute::Id::MAX_HEALTH)
+            .unwrap()
+            .set_base_value(40.0);
+        player.set_health(35.0);
+        let saved = player.save();
+        let mut loaded = ServerPlayer::new(
+            Uuid::new(1, 2),
+            "health".into(),
+            2,
+            Vec3::ZERO,
+            GameType::Survival,
+        );
+        loaded
+            .try_load_with_recipes(
+                saved,
+                &crate::crafting::RecipeManager::new(Vec::new()).unwrap(),
+            )
+            .unwrap();
+        assert_eq!(loaded.health(), 35.0);
+        assert_eq!(loaded.max_health(), 40.0);
+        assert_eq!(
+            *loaded.entity_data.get(super::super::synched_data::HEALTH),
+            35.0
+        );
+        assert_eq!(
+            loaded.parent.main_arm(),
+            ferraloom_protocol::entity_data::HumanoidArm::Right
+        );
+    }
 
     #[test]
     fn player_recipe_book_load_requires_live_manager_and_filters_unknown_ids() {

@@ -138,6 +138,35 @@ attribute-nbt	1	false	0:
 attribute-nbt	2	false	403e000000000000:yes
 attribute-nbt	3	false	0:
 attribute-nbt	4	false	none
+living-data	0	0	0	false
+living-data	1	1	300	false
+living-data	2	6	none	false
+living-data	3	8	false	false
+living-data	4	8	false	false
+living-data	5	8	false	false
+living-data	6	20	0	false
+living-data	7	1	0	false
+living-data	8	0	0	false
+living-data	9	3	41a00000	true
+living-data	10	17	[]	false
+living-data	11	8	false	false
+living-data	12	1	0	false
+living-data	13	1	0	false
+living-data	14	11	none	false
+living-data	15	42	1	false
+living-data	16	0	0	false
+living-data	17	3	0	false
+living-data	18	1	0	false
+living-data	19	19	none	false
+living-data	20	19	none	false
+living-health	0	41a00000	false
+living-health	1	41f00000	true
+living-health	2	80000000	true
+living-health	3	7fc00000	true
+living-health	4	7fc00000	false
+living-health	5	41f00000	true
+living-health	6	0	true
+living-health	7	40f00000	true
 bubble	tnt	inside	false	-1.0	3fd0000000000000,bfee147ae147ae14,bfc0000000000000	0
 bubble	tnt	inside	false	-0.25	3fd0000000000000,bfc851eb851eb852,bfc0000000000000	0
 bubble	tnt	inside	false	0.65	3fd0000000000000,3fe6666666666666,bfc0000000000000	0

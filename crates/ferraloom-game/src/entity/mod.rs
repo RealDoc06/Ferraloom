@@ -4,6 +4,10 @@ use crate::level::{Level, LevelError};
 
 pub mod ai;
 pub mod animal;
+pub mod avatar;
+pub use avatar::Avatar;
+pub mod living;
+pub use living::LivingEntity;
 pub mod effects;
 pub mod experience_orb;
 pub mod item;
@@ -65,18 +69,6 @@ pub use reference::EntityReference;
 pub mod synched_data;
 pub mod tracking;
 pub use base::{EntityData, EntityDimensions, Movement, RemovalReason};
-
-/// Port of LivingEntity's unarmored damage/cooldown state.
-#[derive(Debug)]
-pub struct LivingEntity {
-    pub parent: EntityData,
-    pub equipment: player::equipment::EntityEquipment,
-    pub health: f32,
-    pub last_hurt: f32,
-    pub damage_cooldown_time: i32,
-    pub hurt_time: i32,
-    pub hurt_duration: i32,
-}
 
 /// Port of Mob's entity references. Goals/navigation are added here as ported.
 #[derive(Debug)]
@@ -206,19 +198,6 @@ impl EntityDataView for LivingEntity {
         state.as_living_mut()
     }
 }
-/// Embedded-parent projection; each struct dereferences only to its immediate parent.
-impl std::ops::Deref for LivingEntity {
-    type Target = EntityData;
-    fn deref(&self) -> &Self::Target {
-        &self.parent
-    }
-}
-impl std::ops::DerefMut for LivingEntity {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.parent
-    }
-}
-
 /// Narrow source used by the unarmored damage primitive; tags grow with ports.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct DamageSource {
@@ -530,7 +509,7 @@ pub fn hurt_unarmored(
         .entity_state_mut(entity)?
         .as_living_mut()
         .ok_or(LevelError::WrongEntityType(entity))?;
-    if living.parent.removed || living.health <= 0.0 {
+    if living.parent.removed || living.health() <= 0.0 {
         return Ok(false);
     }
     let damage = if damage < 0.0 { 0.0 } else { damage };
@@ -547,7 +526,7 @@ pub fn hurt_unarmored(
         damage
     };
     living.last_hurt = damage;
-    living.health = (living.health - applied).max(0.0);
+    living.set_health(living.health() - applied);
     Ok(true)
 }
 

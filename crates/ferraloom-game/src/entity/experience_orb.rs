@@ -222,7 +222,7 @@ pub(crate) fn follow_nearby_player(entity: EntityRef, level: &mut Level) -> Resu
         nearest.filter(|id| {
             level
                 .entity::<ServerPlayer>(*id)
-                .is_ok_and(|p| p.parent.health > 0.0)
+                .is_ok_and(|p| p.parent.health() > 0.0)
         })
     } else {
         current

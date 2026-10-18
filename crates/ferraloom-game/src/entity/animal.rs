@@ -33,15 +33,11 @@ impl Cow {
                     parent: AgeableMob {
                         parent: PathfinderMob {
                             parent: Mob {
-                                parent: LivingEntity {
-                                    equipment: Default::default(),
-                                    parent,
-                                    // AbstractCow#createAttributes, not a guessed mob default.
-                                    health: 10.0,
-                                    last_hurt: 0.0,
-                                    damage_cooldown_time: 0,
-                                    hurt_time: 0,
-                                    hurt_duration: 0,
+                                parent: {
+                                    let mut living = LivingEntity::with_parent(parent);
+                                    living.entity_data.define(super::synched_data::MOB_FLAGS, 0);
+                                    living.entity_data.define(super::synched_data::BABY, false);
+                                    living
                                 },
                                 target: None,
                             },

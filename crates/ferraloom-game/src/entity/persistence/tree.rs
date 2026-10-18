@@ -7,7 +7,6 @@ use crate::{
         animal::Cow,
         experience_orb::ExperienceOrb,
         item::{FallingBlockEntity, ItemEntity, PrimedTnt, falling_block::FallingBlockLoadError},
-        player::equipment::EntityEquipment,
     },
     level::{Level, LevelError},
 };
@@ -72,15 +71,10 @@ pub(crate) fn load_entity_tree(
     let parent = level.create_entity_data(kind);
     let state = if kind == EntityType::COW {
         let mut cow = Cow::with_parent(parent);
-        cow.as_living_mut().health = tag.get_float_or("Health", 10.0);
-        cow.as_living_mut().hurt_time = i32::from(tag.get_short_or("HurtTime", 0));
-        cow.as_living_mut().equipment = tag
-            .get_compound("equipment")
-            .and_then(|equipment| EntityEquipment::load(equipment).ok())
-            .unwrap_or_default();
         cow.parent.parent.parent.age = tag.get_int_or("Age", 0);
         cow.parent.parent.in_love = tag.get_int_or("InLove", 0);
         cow.as_living_mut().parent.load_nbt(tag)?;
+        cow.as_living_mut().read_additional_save_data();
         EntityState::Cow(Box::new(cow))
     } else if kind == EntityType::ITEM {
         let mut item = ItemEntity::with_parent(parent);
@@ -154,22 +148,10 @@ impl Level {
         let mut tag = match state {
             EntityState::Cow(cow) => {
                 let mut tag = base.save_without_id();
-                tag.insert("Health", Tag::Float(cow.as_living().health));
-                tag.insert("HurtTime", Tag::Short(cow.as_living().hurt_time as i16));
+                cow.as_living().add_additional_save_data(&mut tag);
                 tag.insert("Age", Tag::Int(cow.parent.parent.parent.age));
                 tag.insert("InLove", Tag::Int(cow.parent.parent.in_love));
-                tag.remove("equipment");
-                if !cow.as_living().equipment.is_empty() {
-                    tag.insert(
-                        "equipment",
-                        Tag::Compound(
-                            cow.as_living()
-                                .equipment
-                                .save()
-                                .expect("canonical equipment"),
-                        ),
-                    );
-                }
+
                 tag
             }
             EntityState::PrimedTnt(tnt) => tnt.save_without_id(self)?,

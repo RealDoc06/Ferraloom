@@ -71,6 +71,13 @@ value!(Pose, Pose);
 value!(Option<Box<Component>>, OptionalComponent);
 value!(ferraloom_data::BlockState, BlockState);
 value!(ferraloom_util::BlockPos, BlockPos);
+value!(Option<ferraloom_util::BlockPos>, OptionalBlockPos);
+value!(Vec<ferraloom_protocol::entity_data::Particle>, Particles);
+value!(ferraloom_protocol::entity_data::HumanoidArm, HumanoidArm);
+value!(
+    ferraloom_protocol::entity_data::OptionalUnsignedInt,
+    OptionalUnsignedInt
+);
 
 impl SynchedValue for f32 {
     fn from_value(value: &EntityDataValue) -> Option<&Self> {
@@ -131,6 +138,30 @@ pub const SILENT: EntityDataAccessor<bool> = EntityDataAccessor::new(4);
 pub const NO_GRAVITY: EntityDataAccessor<bool> = EntityDataAccessor::new(5);
 pub const POSE: EntityDataAccessor<Pose> = EntityDataAccessor::new(6);
 pub const TICKS_FROZEN: EntityDataAccessor<VarInt> = EntityDataAccessor::new(7);
+
+// Accessor IDs follow the immediate Java parent, so sibling classes reuse IDs.
+pub const LIVING_ENTITY_FLAGS: EntityDataAccessor<i8> = EntityDataAccessor::new(8);
+pub const HEALTH: EntityDataAccessor<f32> = EntityDataAccessor::new(9);
+pub const EFFECT_PARTICLES: EntityDataAccessor<Vec<ferraloom_protocol::entity_data::Particle>> =
+    EntityDataAccessor::new(10);
+pub const EFFECT_AMBIENCE: EntityDataAccessor<bool> = EntityDataAccessor::new(11);
+pub const ARROW_COUNT: EntityDataAccessor<VarInt> = EntityDataAccessor::new(12);
+pub const STINGER_COUNT: EntityDataAccessor<VarInt> = EntityDataAccessor::new(13);
+pub const SLEEPING_POS: EntityDataAccessor<Option<ferraloom_util::BlockPos>> =
+    EntityDataAccessor::new(14);
+pub const PLAYER_MAIN_HAND: EntityDataAccessor<ferraloom_protocol::entity_data::HumanoidArm> =
+    EntityDataAccessor::new(15);
+pub const PLAYER_MODEL_CUSTOMISATION: EntityDataAccessor<i8> = EntityDataAccessor::new(16);
+pub const PLAYER_ABSORPTION: EntityDataAccessor<f32> = EntityDataAccessor::new(17);
+pub const PLAYER_SCORE: EntityDataAccessor<VarInt> = EntityDataAccessor::new(18);
+pub const SHOULDER_PARROT_LEFT: EntityDataAccessor<
+    ferraloom_protocol::entity_data::OptionalUnsignedInt,
+> = EntityDataAccessor::new(19);
+pub const SHOULDER_PARROT_RIGHT: EntityDataAccessor<
+    ferraloom_protocol::entity_data::OptionalUnsignedInt,
+> = EntityDataAccessor::new(20);
+pub const MOB_FLAGS: EntityDataAccessor<i8> = EntityDataAccessor::new(15);
+pub const BABY: EntityDataAccessor<bool> = EntityDataAccessor::new(16);
 
 #[derive(Debug)]
 struct DataItem {
@@ -254,6 +285,91 @@ impl SynchedEntityData {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn real_player_metadata_follows_living_avatar_and_player_accessor_defaults() {
+        use crate::entity::player::{GameType, ServerPlayer};
+        let player = ServerPlayer::new(
+            ferraloom_util::Uuid::new(1, 2),
+            "metadata".into(),
+            1,
+            ferraloom_util::Vec3::ZERO,
+            GameType::Survival,
+        );
+        let data = &player.entity_data;
+        let actual: Vec<_> = data
+            .items
+            .iter()
+            .enumerate()
+            .map(|(id, item)| {
+                let value = match &item.value {
+                    EntityDataValue::Byte(value) => value.to_string(),
+                    EntityDataValue::Int(value) => value.0.to_string(),
+                    EntityDataValue::Float(value) => format!("{:x}", value.to_bits()),
+                    EntityDataValue::Boolean(value) => value.to_string(),
+                    EntityDataValue::Pose(value) => (*value as i32).to_string(),
+                    EntityDataValue::HumanoidArm(value) => (*value as i32).to_string(),
+                    EntityDataValue::OptionalComponent(None)
+                    | EntityDataValue::OptionalBlockPos(None)
+                    | EntityDataValue::OptionalUnsignedInt(
+                        ferraloom_protocol::entity_data::OptionalUnsignedInt(None),
+                    ) => "none".into(),
+                    EntityDataValue::Particles(values) if values.is_empty() => "[]".into(),
+                    other => panic!("unexpected default metadata: {other:?}"),
+                };
+                format!(
+                    "living-data\t{id}\t{}\t{value}\t{}",
+                    item.value.serializer() as i32,
+                    item.dirty
+                )
+            })
+            .collect();
+        let expected: Vec<_> = include_str!("../../tests/java/entity/vectors.tsv")
+            .lines()
+            .filter(|line| line.starts_with("living-data\t"))
+            .collect();
+        assert_eq!(actual, expected);
+    }
+    #[test]
+    fn real_health_setters_use_attribute_maximum_and_java_float_metadata_equality() {
+        use crate::entity::player::{GameType, ServerPlayer};
+        let mut player = ServerPlayer::new(
+            ferraloom_util::Uuid::new(1, 2),
+            "metadata".into(),
+            1,
+            ferraloom_util::Vec3::ZERO,
+            GameType::Survival,
+        );
+        player.entity_data.pack_dirty();
+        player
+            .attributes
+            .get_instance(ferraloom_data::registries::attribute::Id::MAX_HEALTH)
+            .unwrap()
+            .set_base_value(30.0);
+        let mut actual = Vec::new();
+        for (index, health) in [
+            20.0,
+            30.0,
+            -0.0,
+            f32::NAN,
+            f32::from_bits(0x7f80_0001),
+            f32::INFINITY,
+            f32::NEG_INFINITY,
+            7.5,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            player.set_health(health);
+            let bits = player.health().to_bits();
+            let dirty = player.entity_data.pack_dirty().is_some();
+            actual.push(format!("living-health\t{index}\t{bits:x}\t{dirty}"));
+        }
+        let expected: Vec<_> = include_str!("../../tests/java/entity/vectors.tsv")
+            .lines()
+            .filter(|line| line.starts_with("living-health\t"))
+            .collect();
+        assert_eq!(actual, expected);
+    }
     #[test]
     fn dirty_metadata_preserves_accessor_order_and_forced_updates() {
         let mut data = SynchedEntityData::default();

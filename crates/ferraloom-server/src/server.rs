@@ -927,7 +927,7 @@ impl MinecraftServer {
             packed_items: EntityDataItems(vec![
                 DataValue {
                     id: 9,
-                    value: EntityDataValue::Float(player.parent.health),
+                    value: EntityDataValue::Float(player.parent.health()),
                 },
                 DataValue {
                     id: 16,
@@ -943,7 +943,7 @@ impl MinecraftServer {
             show_advancements: true,
         }));
         c.push(cb::Packet::SetHealth(cb::SetHealth {
-            health: player.parent.health,
+            health: player.parent.health(),
             food: VarInt(20),
             saturation: 5.,
         }));
@@ -1303,7 +1303,7 @@ impl MinecraftServer {
                 .level
                 .entity_mut::<ServerPlayer>(entity)
                 .map_err(game_error)?;
-            let spectator = player.game_mode == GameType::Spectator || player.parent.health <= 0.;
+            let spectator = player.game_mode == GameType::Spectator || player.parent.health() <= 0.;
             let menu = player.menus.current_mut();
             if menu.container_id != packet.container_id.0 {
                 return Ok(());

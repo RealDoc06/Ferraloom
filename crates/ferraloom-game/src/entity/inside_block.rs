@@ -89,7 +89,7 @@ impl StepBasedCollector {
 
 fn is_alive(entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
     let state = level.entity_state(entity)?;
-    Ok(!state.as_entity().removed && state.as_living().is_none_or(|e| e.health > 0.0))
+    Ok(!state.as_entity().removed && state.as_living().is_none_or(|e| e.health() > 0.0))
 }
 fn affected(entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
     let base = level.entity::<EntityData>(entity)?;
