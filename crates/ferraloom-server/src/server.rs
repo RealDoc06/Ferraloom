@@ -1557,11 +1557,13 @@ impl MinecraftServer {
                     .loaded = true
             }
             sb::Packet::ClientInformation(p) => {
-                self.level
+                let player = self
+                    .level
                     .level
                     .entity_mut::<ServerPlayer>(entity)
-                    .map_err(game_error)?
-                    .view_distance = i32::from(p.view_distance);
+                    .map_err(game_error)?;
+                player.view_distance = i32::from(p.view_distance);
+                player.text_filtering_enabled = p.text_filtering_enabled;
                 self.connections.get_mut(&connection).unwrap().information = p;
             }
             sb::Packet::Chat(p) => {
@@ -1730,8 +1732,19 @@ impl MinecraftServer {
                 c.received_position_this_tick = false;
                 c.received_movement_this_tick = false;
             }
-            sb::Packet::PlayerInput(_)
-            | sb::Packet::CustomPayload(_)
+            sb::Packet::PlayerInput(p) => {
+                let player = self
+                    .level
+                    .level
+                    .entity_mut::<ServerPlayer>(entity)
+                    .map_err(game_error)?;
+                player.last_client_input = p.input;
+                if player.has_client_loaded() {
+                    self.connections.get_mut(&connection).unwrap().last_action = Instant::now();
+                    player.set_shared_flag(1, p.input.shift);
+                }
+            }
+            sb::Packet::CustomPayload(_)
             | sb::Packet::Pong(_)
             | sb::Packet::PlayerCommand(_)
             | sb::Packet::SeenAdvancements(_) => {}
