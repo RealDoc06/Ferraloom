@@ -73,7 +73,7 @@ fn fuel_properties(
             .evaluate_int_with_runtime(
                 &Holder::Reference(id),
                 &params,
-                &mut LiveLootRuntime::new(level, LootRandomSelection::Level),
+                &mut fuel_runtime(handle, level)?,
             )
             .map_err(|_| LevelError::Inventory("furnace burn-time provider"))?,
     };
@@ -85,11 +85,21 @@ fn fuel_properties(
             .evaluate_float_with_runtime(
                 &Holder::Reference(id),
                 &params,
-                &mut LiveLootRuntime::new(level, LootRandomSelection::Level),
+                &mut fuel_runtime(handle, level)?,
             )
             .map_err(|_| LevelError::Inventory("furnace speed provider"))?,
     };
     Ok((duration, speed))
+}
+fn fuel_runtime(
+    handle: BlockEntityRef,
+    level: &mut Level,
+) -> Result<LiveLootRuntime<'_>, LevelError> {
+    let mut runtime = LiveLootRuntime::new(level, LootRandomSelection::Level);
+    runtime
+        .bind_block_entity_source(handle)
+        .map_err(|_| LevelError::Inventory("furnace loot receiver"))?;
+    Ok(runtime)
 }
 fn can_burn(entity: &AbstractFurnaceBlockEntity, result: &ItemStack) -> bool {
     let output = &entity.parent.items[2];

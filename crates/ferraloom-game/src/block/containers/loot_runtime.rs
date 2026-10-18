@@ -3,13 +3,20 @@
 use crate::{
     block::{
         containers::{access, storage::BaseContainerBlockEntity},
-        entity::BlockEntityRef,
+        entity::{BlockEntityRef, BlockEntityState},
     },
     inventory::Container,
     level::Level,
-    loot::{LootData, LootError, LootFacts, LootParams, LootRandomSelection, LootRuntime, Result},
+    loot::{
+        LootData, LootError, LootFacts, LootParams, LootRandomSelection, LootRuntime, NameableName,
+        Result,
+    },
 };
-use ferraloom_protocol::{Identifier, component::ItemStack};
+use ferraloom_nbt::Tag;
+use ferraloom_protocol::{
+    Identifier,
+    component::{DataComponentMap, ItemStack},
+};
 use ferraloom_util::random::{LegacyRandomSource, RandomSource};
 use std::collections::BTreeMap;
 
@@ -82,6 +89,18 @@ impl<'a> LiveLootRuntime<'a> {
     pub fn block_entity_source(&self) -> Option<BlockEntityRef> {
         self.block_entity_source
     }
+    fn retained_receiver(&self, params: &LootParams) -> Result<Option<&BlockEntityState>> {
+        if params.block_entity.is_none() && params.block_entity_components.is_none() {
+            return Ok(None);
+        }
+        let handle = self
+            .block_entity_source
+            .ok_or_else(|| LootError::Unsupported("block_entity.retained_receiver".into()))?;
+        self.level
+            .block_entity_state(handle)
+            .map(Some)
+            .map_err(required)
+    }
 
     /// Port of LootParams.Builder#withDynamicDrop, including duplicate rejection.
     pub fn register_dynamic_drop(&mut self, id: Identifier, provider: DynamicDrop) -> Result<()> {
@@ -99,6 +118,38 @@ impl<'a> LiveLootRuntime<'a> {
 impl LootRuntime for LiveLootRuntime<'_> {
     fn facts(&self) -> &dyn LootFacts {
         &*self.level
+    }
+    fn block_entity_nbt(&self, params: &LootParams) -> Result<Option<Tag>> {
+        self.retained_receiver(params)?
+            .map(|receiver| {
+                receiver
+                    .save_with_full_metadata()
+                    .map(Tag::Compound)
+                    .map_err(|error| LootError::Decode(error.to_string()))
+            })
+            .transpose()
+    }
+    fn block_entity_components(&self, params: &LootParams) -> Result<Option<DataComponentMap>> {
+        Ok(self
+            .retained_receiver(params)?
+            .map(BlockEntityState::collect_components))
+    }
+    fn block_entity_display_name(&self, params: &LootParams) -> Result<Option<NameableName>> {
+        let Some(receiver) = self.retained_receiver(params)? else {
+            return Ok(None);
+        };
+        if !receiver.data().kind.is_nameable() {
+            return Ok(None);
+        }
+        let container = receiver.container().ok_or_else(|| {
+            LootError::Unsupported(format!(
+                "block_entity.custom_name: {}",
+                receiver.data().kind.name()
+            ))
+        })?;
+        Ok(Some(NameableName {
+            custom_name: container.custom_name.clone(),
+        }))
     }
     fn with_random(&mut self, operation: &mut dyn FnMut(&mut dyn RandomSource)) {
         match &mut self.random {
@@ -155,6 +206,39 @@ mod tests {
     use super::*;
     use crate::{Behaviors, level::Region};
     static BEHAVIORS: Behaviors = Behaviors::EMPTY;
+    #[test]
+    fn captured_data_without_a_bound_live_receiver_is_not_a_fallback() {
+        let mut level = Level::new(
+            Region::new(&BEHAVIORS),
+            crate::level::LevelContext::fixture(0, 63),
+        );
+        let runtime = LiveLootRuntime::new(&mut level, LootRandomSelection::Level);
+        let absent = LootParams::default();
+        assert!(runtime.block_entity_nbt(&absent).unwrap().is_none());
+        assert!(runtime.block_entity_components(&absent).unwrap().is_none());
+        assert!(
+            runtime
+                .block_entity_display_name(&absent)
+                .unwrap()
+                .is_none()
+        );
+        let present = LootParams {
+            block_entity: Some(Tag::Compound(ferraloom_nbt::CompoundTag::new())),
+            ..Default::default()
+        };
+        assert!(matches!(
+            runtime.block_entity_nbt(&present),
+            Err(LootError::Unsupported(_))
+        ));
+        assert!(matches!(
+            runtime.block_entity_components(&present),
+            Err(LootError::Unsupported(_))
+        ));
+        assert!(matches!(
+            runtime.block_entity_display_name(&present),
+            Err(LootError::Unsupported(_))
+        ));
+    }
     #[test]
     fn seeded_live_runtime_preserves_the_gaussian_cache_between_operations() {
         let mut level = Level::new(

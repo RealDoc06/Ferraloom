@@ -237,8 +237,38 @@ mod tests {
     }
     #[test]
     fn loot_source_retains_the_original_generation_without_a_dynamic_provider() {
-        use crate::{block::containers::loot_runtime::LiveLootRuntime, loot::LootRandomSelection};
+        use crate::{
+            block::containers::loot_runtime::LiveLootRuntime,
+            loot::{LootParams, LootRandomSelection, LootRuntime, NameableName},
+        };
+        use ferraloom_nbt::Tag;
+        use ferraloom_protocol::{
+            chat::Component,
+            component::{ComponentTypeId, DataComponent},
+        };
         let (mut level, _, original) = setup();
+        level
+            .block_entity_state_mut(original)
+            .unwrap()
+            .container_mut()
+            .unwrap()
+            .custom_name = Some(Component::literal("before"));
+        let params = LootParams {
+            block_entity: Some(Tag::Compound(
+                level
+                    .block_entity_state(original)
+                    .unwrap()
+                    .save_with_full_metadata()
+                    .unwrap(),
+            )),
+            block_entity_components: Some(
+                level
+                    .block_entity_state(original)
+                    .unwrap()
+                    .collect_components(),
+            ),
+            ..Default::default()
+        };
         let mut runtime = LiveLootRuntime::new(&mut level, LootRandomSelection::Level);
         runtime.bind_block_entity_source(original).unwrap();
         runtime
@@ -252,9 +282,84 @@ mod tests {
             Some(original)
         );
         assert!(runtime.level().block_entity_state(original).is_ok());
+        let after = Component::literal("after");
+        runtime
+            .level_mut()
+            .block_entity_state_mut(original)
+            .unwrap()
+            .container_mut()
+            .unwrap()
+            .custom_name = Some(after.clone());
+        let Some(Tag::Compound(saved)) = runtime.block_entity_nbt(&params).unwrap() else {
+            panic!("retained native tag")
+        };
+        assert_eq!(saved.get("CustomName"), Some(&after.to_nbt().unwrap()));
+        assert_eq!(
+            runtime
+                .block_entity_components(&params)
+                .unwrap()
+                .unwrap()
+                .get(ComponentTypeId::CUSTOM_NAME),
+            Some(&DataComponent::CustomName(Box::new(after.clone())))
+        );
+        assert_eq!(
+            runtime.block_entity_display_name(&params).unwrap(),
+            Some(NameableName {
+                custom_name: Some(after)
+            })
+        );
+        runtime
+            .level_mut()
+            .block_entity_state_mut(original)
+            .unwrap()
+            .container_mut()
+            .unwrap()
+            .custom_name = None;
+        assert_eq!(
+            runtime.block_entity_display_name(&params).unwrap(),
+            Some(NameableName { custom_name: None })
+        );
         drop(runtime);
         level.collect_detached_block_entities();
         assert!(level.block_entity_state(original).is_err());
+    }
+    #[test]
+    fn non_nameable_sign_keeps_its_class_even_with_a_custom_name_component() {
+        use crate::{
+            block::containers::loot_runtime::LiveLootRuntime,
+            loot::{LootParams, LootRandomSelection, LootRuntime},
+        };
+        use ferraloom_nbt::{CompoundTag, Tag};
+        use ferraloom_protocol::{chat::Component, component::DataComponent};
+        let (mut level, _, old) = setup();
+        let state = Block::OAK_SIGN.default_state();
+        level.set_block_state(old.pos, state).unwrap();
+        let mut receiver = create(old.pos, state).unwrap();
+        receiver
+            .data_mut()
+            .components
+            .entries
+            .push(DataComponent::CustomName(Box::new(Component::literal(
+                "component only",
+            ))));
+        level.set_block_entity(receiver).unwrap();
+        let handle = level.block_entity_ref(old.pos).unwrap().unwrap();
+        let params = LootParams {
+            block_entity: Some(Tag::Compound(CompoundTag::new())),
+            ..Default::default()
+        };
+        let mut runtime = LiveLootRuntime::new(&mut level, LootRandomSelection::Level);
+        runtime.bind_block_entity_source(handle).unwrap();
+        assert!(
+            runtime
+                .block_entity_components(&params)
+                .unwrap()
+                .unwrap()
+                .entries
+                .iter()
+                .any(|component| matches!(component, DataComponent::CustomName(_)))
+        );
+        assert_eq!(runtime.block_entity_display_name(&params).unwrap(), None);
     }
     #[test]
     fn sign_edits_notify_at_set_text_and_after_clearing_editor() {
