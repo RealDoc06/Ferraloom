@@ -353,6 +353,9 @@ impl World {
         let seed = settings
             .as_ref()
             .map_or_else(|| properties.seed(), |s| s.value().get_long_or("seed", 0));
+        let bonus_chest = settings
+            .as_ref()
+            .is_some_and(|settings| settings.value().get_boolean_or("bonus_chest", false));
         let data = Arc::new(GenerationData::load(resources)?);
         ensure!(
             data.biome_names
@@ -462,7 +465,7 @@ impl World {
                         &mut world,
                         generator.as_ref(),
                         matches!(generator.as_ref(), ChunkGenerator::Debug(_)),
-                        false,
+                        bonus_chest,
                     )?;
                     Ok((world.io, world.chunks, position))
                 })();
