@@ -12,7 +12,7 @@ use crate::{
 use ferraloom_data::BlockState;
 use ferraloom_util::{
     BlockPos, ChunkPos, Direction,
-    random::{LegacyRandomSource, Random},
+    random::{LegacyRandomSource, Random, RandomSource},
 };
 use std::sync::Arc;
 const ORIGIN: BlockPos = BlockPos::new(8, 0, 8);
@@ -357,7 +357,7 @@ fn pressure_plate_sensitivity_weighted_rounding_and_release_ticks_match_vanilla(
                 EntityState::PrimedTnt(Box::new(PrimedTnt::new(i as i32 + 1, 123 + i as i64)))
             } else {
                 EntityState::Player(Box::new(ServerPlayer::new(
-                    Uuid::new(1, i + 2),
+                    Uuid::new(1, i as i64 + 2),
                     format!("plate{i}"),
                     i as i32 + 1,
                     position,
@@ -368,7 +368,7 @@ fn pressure_plate_sensitivity_weighted_rounding_and_release_ticks_match_vanilla(
                     },
                 )))
             };
-            entity.as_entity_mut().uuid = Uuid::new(1, i + 2);
+            entity.as_entity_mut().uuid = Uuid::new(1, i as i64 + 2);
             entity.as_entity_mut().set_pos(position);
             level.add_entity(id, entity).unwrap();
             actors.push(id);
