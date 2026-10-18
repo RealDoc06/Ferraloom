@@ -59,6 +59,18 @@ impl BoundingBox {
         let span = self.span();
         std::array::from_fn(|i| self.min[i].wrapping_add(span[i] / 2))
     }
+    /// Port of BoundingBox#forAllCorners, preserving the callback order.
+    pub fn corners(self) -> [[i32; 3]; 8] {
+        std::array::from_fn(|i| {
+            std::array::from_fn(|axis| {
+                if i & (1 << axis) == 0 {
+                    self.max[axis]
+                } else {
+                    self.min[axis]
+                }
+            })
+        })
+    }
     pub fn is_close_to_chunk(self, chunk: [i32; 2], radius: i32) -> bool {
         let min = chunk.map(|v| v.wrapping_mul(16).wrapping_sub(radius));
         let max = chunk.map(|v| v.wrapping_mul(16).wrapping_add(15).wrapping_add(radius));

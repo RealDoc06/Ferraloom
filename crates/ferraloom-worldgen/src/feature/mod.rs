@@ -16,6 +16,9 @@ use std::{
     sync::Arc,
 };
 
+pub mod end;
+pub mod misc;
+pub mod nether;
 pub mod state_provider;
 
 pub trait Feature: Debug + Send + Sync {
@@ -94,6 +97,9 @@ impl<'a> FeatureLoader<'a> {
             next_inline: 0,
         };
         loader.register("no_op".parse()?, |_, _| Ok(Arc::new(NoOpFeature)))?;
+        nether::register(&mut loader)?;
+        end::register(&mut loader)?;
+        misc::register(&mut loader)?;
         Ok(loader)
     }
     pub fn register(&mut self, kind: Identifier, factory: FeatureFactory) -> Result<(), Error> {

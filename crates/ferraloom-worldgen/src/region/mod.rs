@@ -128,6 +128,71 @@ pub trait WorldgenBlockBehavior: Sync {
     ) -> Result<bool, Error> {
         Err(Error("Unsupported: destroy_block".into()))
     }
+    // --- ore and cave family ---
+    fn multiface_state_for_placement(
+        &self,
+        _region: &WorldGenRegion<'_>,
+        _block: Block,
+        _old: BlockState,
+        _p: [i32; 3],
+        _face: ferraloom_util::Direction,
+    ) -> Result<Option<BlockState>, Error> {
+        Err(Error("Unsupported: multiface_state_for_placement".into()))
+    }
+    #[allow(clippy::too_many_arguments)]
+    fn multiface_spread(
+        &self,
+        _region: &mut WorldGenRegion<'_>,
+        _state: BlockState,
+        _p: [i32; 3],
+        _face: ferraloom_util::Direction,
+        _random: &mut ferraloom_util::random::WorldgenRandom,
+        _mark_post_processing: bool,
+    ) -> Result<bool, Error> {
+        Err(Error("Unsupported: multiface_spread".into()))
+    }
+    fn sculk_can_spread_from(
+        &self,
+        _region: &WorldGenRegion<'_>,
+        _p: [i32; 3],
+    ) -> Result<bool, Error> {
+        Err(Error("Unsupported: sculk_can_spread_from".into()))
+    }
+    #[allow(clippy::too_many_arguments)]
+    fn sculk_spread(
+        &self,
+        _region: &mut WorldGenRegion<'_>,
+        _origin: [i32; 3],
+        _random: &mut ferraloom_util::random::WorldgenRandom,
+        _charge_count: i32,
+        _amount_per_charge: i32,
+        _spread_attempts: i32,
+        _growth_rounds: i32,
+        _spread_rounds: i32,
+    ) -> Result<(), Error> {
+        Err(Error("Unsupported: sculk_spread".into()))
+    }
+    fn set_loot_table(
+        &self,
+        _region: &mut WorldGenRegion<'_>,
+        _p: [i32; 3],
+        _table: &crate::Identifier,
+        _random: &mut ferraloom_util::random::WorldgenRandom,
+    ) -> Result<(), Error> {
+        Err(Error(
+            "Unsupported: RandomizableContainer#setBlockEntityLootTable".into(),
+        ))
+    }
+    fn set_spawner_entity(
+        &self,
+        _region: &mut WorldGenRegion<'_>,
+        _p: [i32; 3],
+        _kind: ferraloom_data::EntityType,
+        _random: &mut ferraloom_util::random::WorldgenRandom,
+    ) -> Result<(), Error> {
+        Err(Error("Unsupported: SpawnerBlockEntity#setEntityId".into()))
+    }
+    // --- end ore and cave family ---
     // --- tree family ---
     fn populate_worldgen_beehive(
         &self,
@@ -201,6 +266,51 @@ pub trait WorldgenBlockBehavior: Sync {
     ) -> Result<bool, Error> {
         Err(Error("Unsupported: finalize_template_entity".into()))
     }
+
+    // --- nether, end and misc family ---
+    /// Delegates ChorusFlowerBlock#generatePlant, including connected shapes.
+    fn generate_chorus_plant(
+        &self,
+        _region: &mut WorldGenRegion<'_>,
+        _p: [i32; 3],
+        _random: &mut ferraloom_util::random::WorldgenRandom,
+        _radius: i32,
+    ) -> Result<(), Error> {
+        Err(Error("Unsupported: ChorusFlowerBlock.generatePlant".into()))
+    }
+    fn configure_end_gateway(
+        &self,
+        _region: &mut WorldGenRegion<'_>,
+        _p: [i32; 3],
+        _exit: [i32; 3],
+        _exact: bool,
+    ) -> Result<(), Error> {
+        Err(Error(
+            "Unsupported: TheEndGatewayBlockEntity.setExitPosition".into(),
+        ))
+    }
+    fn is_collision_empty(
+        &self,
+        _region: &WorldGenRegion<'_>,
+        _p: [i32; 3],
+    ) -> Result<bool, Error> {
+        Err(Error("Unsupported: BlockState.getCollisionShape".into()))
+    }
+    /// Creates and inserts EndCrystal, draws its yaw only after successful
+    /// creation, then places bedrock and FireBlock#getState at its feet.
+    fn create_end_spike_crystal(
+        &self,
+        _region: &mut WorldGenRegion<'_>,
+        _p: [i32; 3],
+        _beam: Option<[i32; 3]>,
+        _invulnerable: bool,
+        _random: &mut ferraloom_util::random::WorldgenRandom,
+    ) -> Result<(), Error> {
+        Err(Error(
+            "Unsupported: EndCrystal creation and FireBlock.getState".into(),
+        ))
+    }
+    // --- end nether, end and misc family ---
 
     fn has_block_entity(&self, state: BlockState) -> bool {
         state.has_block_entity()
@@ -327,6 +437,70 @@ impl<'a> WorldGenRegion<'a> {
             sea_level,
         })
     }
+    // --- ore and cave family ---
+    pub fn multiface_state_for_placement(
+        &self,
+        block: Block,
+        old: BlockState,
+        p: [i32; 3],
+        face: ferraloom_util::Direction,
+    ) -> Result<Option<BlockState>, Error> {
+        self.behavior
+            .multiface_state_for_placement(self, block, old, p, face)
+    }
+    pub fn multiface_spread(
+        &mut self,
+        state: BlockState,
+        p: [i32; 3],
+        face: ferraloom_util::Direction,
+        random: &mut ferraloom_util::random::WorldgenRandom,
+        mark_post_processing: bool,
+    ) -> Result<bool, Error> {
+        self.behavior
+            .multiface_spread(self, state, p, face, random, mark_post_processing)
+    }
+    pub fn sculk_can_spread_from(&self, p: [i32; 3]) -> Result<bool, Error> {
+        self.behavior.sculk_can_spread_from(self, p)
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub fn sculk_spread(
+        &mut self,
+        origin: [i32; 3],
+        random: &mut ferraloom_util::random::WorldgenRandom,
+        charge_count: i32,
+        amount_per_charge: i32,
+        spread_attempts: i32,
+        growth_rounds: i32,
+        spread_rounds: i32,
+    ) -> Result<(), Error> {
+        self.behavior.sculk_spread(
+            self,
+            origin,
+            random,
+            charge_count,
+            amount_per_charge,
+            spread_attempts,
+            growth_rounds,
+            spread_rounds,
+        )
+    }
+    pub fn set_loot_table(
+        &mut self,
+        p: [i32; 3],
+        table: &crate::Identifier,
+        random: &mut ferraloom_util::random::WorldgenRandom,
+    ) -> Result<(), Error> {
+        self.behavior.set_loot_table(self, p, table, random)
+    }
+    pub fn set_spawner_entity(
+        &mut self,
+        p: [i32; 3],
+        kind: ferraloom_data::EntityType,
+        random: &mut ferraloom_util::random::WorldgenRandom,
+    ) -> Result<(), Error> {
+        self.behavior.set_spawner_entity(self, p, kind, random)
+    }
+    // --- end ore and cave family ---
     pub fn center(&self) -> [i32; 2] {
         self.center
     }
@@ -627,4 +801,38 @@ impl<'a> WorldGenRegion<'a> {
     pub fn is_unobstructed(&self, state: BlockState, p: [i32; 3]) -> Result<bool, Error> {
         self.behavior.is_unobstructed(state, self, p)
     }
+    // --- nether, end and misc family ---
+    pub fn generate_chorus_plant(
+        &mut self,
+        p: [i32; 3],
+        random: &mut ferraloom_util::random::WorldgenRandom,
+        radius: i32,
+    ) -> Result<(), Error> {
+        self.behavior.generate_chorus_plant(self, p, random, radius)
+    }
+    pub fn configure_end_gateway(
+        &mut self,
+        p: [i32; 3],
+        exit: [i32; 3],
+        exact: bool,
+    ) -> Result<(), Error> {
+        self.behavior.configure_end_gateway(self, p, exit, exact)
+    }
+    pub fn is_collision_empty(&self, p: [i32; 3]) -> Result<bool, Error> {
+        match self.block(p)?.cached_collision_empty() {
+            Some(empty) => Ok(empty),
+            None => self.behavior.is_collision_empty(self, p),
+        }
+    }
+    pub fn create_end_spike_crystal(
+        &mut self,
+        p: [i32; 3],
+        beam: Option<[i32; 3]>,
+        invulnerable: bool,
+        random: &mut ferraloom_util::random::WorldgenRandom,
+    ) -> Result<(), Error> {
+        self.behavior
+            .create_end_spike_crystal(self, p, beam, invulnerable, random)
+    }
+    // --- end nether, end and misc family ---
 }
