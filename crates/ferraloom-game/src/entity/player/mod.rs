@@ -527,6 +527,7 @@ impl crate::entity::Entity for PlayerBehavior {
         0.08
     }
     fn tick(&self, entity: crate::entity::EntityRef, level: &mut Level) -> Result<(), LevelError> {
+        crate::inventory::tick_container_menu(entity, level)?;
         let (spectator, passenger) = {
             let player = level.entity::<ServerPlayer>(entity)?;
             (
