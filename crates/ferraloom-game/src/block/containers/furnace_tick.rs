@@ -252,8 +252,7 @@ pub fn server_tick(handle: BlockEntityRef, level: &mut Level) -> Result<(), Leve
                                 burn(entity, result);
                                 let id = Identifier::parse(&recipe.id.to_string())
                                     .expect("validated recipe key");
-                                let used = entity.recipes_used.entry(id).or_default();
-                                *used = used.wrapping_add(1);
+                                entity.recipes_used.record(id);
                                 changed = true;
                             }
                         } else {
