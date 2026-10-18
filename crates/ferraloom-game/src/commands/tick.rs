@@ -181,3 +181,110 @@ pub fn run<A: TickRateAccess>(
     access.flush_events();
     Ok(result)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::commands::{CommandSourceStack, Commands};
+    use ferraloom_util::Vec3;
+
+    #[derive(serde::Deserialize)]
+    struct Vector {
+        command: String,
+        rate: f32,
+        average: i64,
+        frozen: bool,
+        stepping: bool,
+        sprinting: bool,
+        outcome: bool,
+        feedback: serde_json::Value,
+        value: Option<i32>,
+        error: Option<String>,
+    }
+    struct Host {
+        state: TickRateSnapshot,
+        outcome: bool,
+        calls: Vec<&'static str>,
+    }
+    impl TickRateAccess for Host {
+        fn snapshot(&self) -> TickRateSnapshot {
+            self.state.clone()
+        }
+        fn set_tick_rate(&mut self, _rate: f32) {
+            self.calls.push("rate");
+        }
+        fn set_frozen(&mut self, _frozen: bool) {
+            self.calls.push("freeze");
+        }
+        fn step_game_if_paused(&mut self, _ticks: i32) -> bool {
+            self.calls.push("step");
+            self.outcome
+        }
+        fn stop_stepping(&mut self) -> bool {
+            self.calls.push("stop_step");
+            self.outcome
+        }
+        fn request_game_to_sprint(&mut self, _ticks: i32) -> bool {
+            self.calls.push("sprint");
+            self.outcome
+        }
+        fn stop_sprinting(&mut self) -> bool {
+            self.calls.push("stop_sprint");
+            self.outcome
+        }
+        fn flush_events(&mut self) {
+            self.calls.push("flush");
+        }
+    }
+    #[test]
+    fn tick_feedback_and_errors_match_java_command_methods() {
+        let vectors: Vec<Vector> =
+            serde_json::from_str(include_str!("vanilla/tick-vectors.json")).unwrap();
+        let commands = Commands::default();
+        let source = CommandSourceStack::server(4, Vec3::ZERO);
+        for vector in vectors {
+            let mut host = Host {
+                state: TickRateSnapshot {
+                    rate: vector.rate,
+                    average_tick_time_nanos: vector.average,
+                    nanoseconds_per_tick: 50_000_000,
+                    tick_times_nanos: std::array::from_fn(|i| (99 - i) as i64 * 123_456),
+                    frozen: vector.frozen,
+                    stepping: vector.stepping,
+                    sprinting: vector.sprinting,
+                },
+                outcome: vector.outcome,
+                calls: Vec::new(),
+            };
+            let command = commands.prepare(&vector.command, source.clone()).unwrap();
+            match (run(&command, &mut host), vector.error) {
+                (Err(error), Some(expected)) => {
+                    assert_eq!(error.raw_message.text(), expected, "{}", vector.command);
+                }
+                (Ok(result), None) => {
+                    assert_eq!(result.value, vector.value.unwrap(), "{}", vector.command);
+                    let feedback = result.feedback.into_iter().map(|feedback| {
+                        serde_json::json!({
+                            "broadcast": feedback.broadcast,
+                            "message": serde_json::from_str::<serde_json::Value>(&feedback.message.to_json().unwrap()).unwrap(),
+                        })
+                    }).collect::<Vec<_>>();
+                    assert_eq!(
+                        serde_json::json!(feedback),
+                        vector.feedback,
+                        "{}",
+                        vector.command
+                    );
+                    assert_eq!(host.calls.last(), Some(&"flush"));
+                    if vector.command == "tick freeze" {
+                        assert_eq!(host.calls, ["stop_sprint", "stop_step", "freeze", "flush"]);
+                    }
+                }
+                (result, error) => panic!(
+                    "{}: unexpected result {result:?}, expected error {error:?}",
+                    vector.command
+                ),
+            }
+        }
+    }
+}
