@@ -3,6 +3,7 @@ mod behavior;
 pub mod block_item;
 pub mod block_transformer;
 pub mod bone_meal;
+pub mod enchantment;
 pub mod name;
 mod placement;
 mod pov;
