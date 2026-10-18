@@ -1505,6 +1505,18 @@ entity-position-fact	orb	11726	4050000000000000	true	7,63,9	7,63,9	7,63,9	7,63,9
 entity-position-fact	orb	11726	4050333333333333	false	7,63,9	7,63,9	7,63,9	7,63,9	false	true
 entity-position-fact	orb	10387	4050000000000000	true	7,63,9	7,63,9	7,63,9	7,63,9	true	true
 entity-position-fact	orb	10387	4050333333333333	false	7,63,9	7,63,9	7,63,9	7,63,9	false	true
+entity-careful-stepping	player	false	false	false
+entity-careful-stepping	player	false	true	false
+entity-careful-stepping	player	true	false	true
+entity-careful-stepping	player	true	true	true
+entity-careful-stepping	cow	false	false	false
+entity-careful-stepping	cow	false	true	false
+entity-careful-stepping	cow	true	false	true
+entity-careful-stepping	cow	true	true	true
+entity-careful-stepping	item	false	false	false
+entity-careful-stepping	item	false	true	false
+entity-careful-stepping	item	true	false	true
+entity-careful-stepping	item	true	true	true
 entity-flags-fact	base	true,false,true,true,true,false,false,false,true,false	true
 entity-flags-fact	player-base	true,true,true,true,true,false,false,true,true,false	false
 entity-flags-fact	player-flying	true,true,true,true,false,true,false,true,true,false	false
