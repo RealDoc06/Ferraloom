@@ -928,6 +928,12 @@ impl World {
             .save_chunk_ticks(pos, &mut disk)
             .map_err(|error| anyhow::anyhow!("{error:?}"))?;
         disk.inhabited_time = Some(chunk.inhabited_time());
+        chunk.save_pending_generation_data(&mut disk);
+        disk.block_entities = Some(
+            level
+                .block_entity_tags_for_saving(pos)
+                .map_err(|error| anyhow::anyhow!("{error:?}"))?,
+        );
         write_runtime_heightmaps(chunk, &mut disk)?;
         Ok(ChunkSaveSnapshot {
             pos,

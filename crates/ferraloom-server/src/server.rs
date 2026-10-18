@@ -674,7 +674,10 @@ impl MinecraftServer {
                     .tick_entities_with_tick_rate(&self.tick_rate_manager)
                     .map_err(game_error)?;
                 self.broadcast_container_changes()?;
-                self.pending_level_hooks.block_entities += 1;
+                self.level
+                    .level
+                    .tick_block_entities(self.tick_rate_manager.runs_normally())
+                    .map_err(game_error)?;
             }
             self.apply_level_effects()?;
             self.world
@@ -2601,7 +2604,11 @@ impl MinecraftServer {
                             },
                         ],
                         sections: chunk.sections().map(LevelChunkSectionData::from).collect(),
-                        block_entities: Vec::new(),
+                        block_entities: self
+                            .level
+                            .level
+                            .block_entity_chunk_packet_info(pos)
+                            .map_err(game_error)?,
                     },
                     light_data: light_packet(self.world.lights.get(&pos.pack())),
                 }));
