@@ -2,6 +2,8 @@
 mod save;
 mod server;
 pub use server::ServerScoreboard;
+mod shared;
+pub use shared::ServerShared;
 #[cfg(test)]
 mod command_tests;
 mod team;
