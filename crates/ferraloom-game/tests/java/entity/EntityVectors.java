@@ -81,11 +81,12 @@ public final class EntityVectors {
         TrackingVectors.run(new EntityFixture(r));
         PersistenceVectors.run(new EntityFixture(r));
         BorderVectors.run(new EntityFixture(r));
-        for(boolean player:List.of(false,true))for(boolean above:List.of(false,true))for(boolean drag:List.of(false,true))for(double speed:new double[]{-1,-0.25,0.65,2}){
-          var f=new EntityFixture(r);Entity e=player?new TestPlayer(f):new net.minecraft.world.entity.item.PrimedTnt(EntityTypes.TNT,f);
+        for(String kind:List.of("tnt","player","flying"))for(boolean above:List.of(false,true))for(boolean drag:List.of(false,true))for(double speed:new double[]{-1,-0.25,0.65,2}){
+          var f=new EntityFixture(r);Entity e=kind.equals("tnt")?new net.minecraft.world.entity.item.PrimedTnt(EntityTypes.TNT,f):new TestPlayer(f);
+          if(kind.equals("flying"))((Player)e).getAbilities().flying=true;
           e.setDeltaMovement(0.25,speed,-0.125);e.fallDistance=8;
           if(above)e.onAboveBubbleColumn(drag,BlockPos.ZERO);else e.onInsideBubbleColumn(drag);
-          System.out.println("bubble\\t"+(player?"player":"tnt")+"\\t"+(above?"above":"inside")+"\\t"+drag+"\\t"+speed+"\\t"+vec(e.getDeltaMovement())+"\\t"+bits(e.fallDistance));
+          System.out.println("bubble\\t"+kind+"\\t"+(above?"above":"inside")+"\\t"+drag+"\\t"+speed+"\\t"+vec(e.getDeltaMovement())+"\\t"+bits(e.fallDistance));
         }
         var orbLevel=new EntityFixture(r);orbLevel.floor();var orb=new net.minecraft.world.entity.ExperienceOrb(EntityTypes.EXPERIENCE_ORB,orbLevel);orb.setId(4);orb.setPos(8.5,64.7,8.5);orb.setDeltaMovement(0.1,0,0.01);
         for(int tick=1;tick<=12;tick++){orb.commonTick();orb.tick();System.out.println("orb-tick\\t"+tick+"\\t"+vec(orb.position())+"\\t"+vec(orb.getDeltaMovement())+"\\t"+flags(orb)+"\\t"+bits(orb.fallDistance));}

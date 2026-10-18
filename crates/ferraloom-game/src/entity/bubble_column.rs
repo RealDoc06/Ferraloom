@@ -100,7 +100,7 @@ mod tests {
             let mut level = Level::new(Region::new(&BEHAVIORS));
             let id = level.next_entity_ref();
             let network = level.next_entity_id();
-            let state = if fields[1] == "player" {
+            let state = if fields[1] != "tnt" {
                 EntityState::Player(Box::new(ServerPlayer::new(
                     Uuid::new(1, 2),
                     "bubble".into(),
@@ -112,6 +112,10 @@ mod tests {
                 EntityState::PrimedTnt(Box::new(PrimedTnt::new(network, 123)))
             };
             level.add_entity(id, state).unwrap();
+            if fields[1] == "flying" {
+                level.entity_mut::<ServerPlayer>(id).unwrap().flying = true;
+            }
+            level.random().set_seed(123);
             let base = level.entity_mut::<EntityData>(id).unwrap();
             base.velocity = Vec3::new(0.25, fields[4].parse().unwrap(), -0.125);
             base.fall_distance = 8.0;
@@ -135,9 +139,17 @@ mod tests {
                 base.fall_distance.to_bits()
             );
             assert_eq!(actual, format!("{}\t{}", fields[5], fields[6]), "{row}");
+            if fields[1] == "flying" {
+                assert!(level.take_entity_effects().is_empty(), "{row}");
+                assert_eq!(
+                    level.random().next_long(),
+                    LegacyRandomSource::new(123).next_long(),
+                    "{row}"
+                );
+            }
             rows += 1;
         }
-        assert_eq!(rows, 32);
+        assert_eq!(rows, 48);
     }
 
     #[test]

@@ -497,6 +497,33 @@ impl crate::entity::Entity for PlayerBehavior {
         Ok(true)
     }
 
+    fn on_above_bubble_column(
+        &self,
+        entity: crate::entity::EntityRef,
+        drag_down: bool,
+        pos: BlockPos,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        if !level.entity::<ServerPlayer>(entity)?.flying {
+            crate::entity::bubble_column::on_above_bubble_column(
+                self, entity, drag_down, pos, level,
+            )?;
+        }
+        Ok(())
+    }
+
+    fn on_inside_bubble_column(
+        &self,
+        entity: crate::entity::EntityRef,
+        drag_down: bool,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        if !level.entity::<ServerPlayer>(entity)?.flying {
+            crate::entity::bubble_column::on_inside_bubble_column(self, entity, drag_down, level)?;
+        }
+        Ok(())
+    }
+
     fn trace_entity_refs(
         &self,
         state: &crate::entity::EntityState,
