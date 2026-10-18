@@ -72,9 +72,10 @@ public final class PlantsTickOracle {
     static void extended(ServerLevel level,BlockPos pos,List<String> lines) {
         // Real bonemeal dispatch, including both halves/heads/bodies and blocked
         // growth. Snapshot every relevant cell before and after the callback.
+        level.getGameRules().set(net.minecraft.world.level.gamerules.GameRules.BLOCK_DROPS,false,level.getServer());
         var blocks=List.of(PITCHER_CROP,SEA_PICKLE,MELON_STEM,PUMPKIN_STEM,KELP,KELP_PLANT,
             TWISTING_VINES,TWISTING_VINES_PLANT,WEEPING_VINES,WEEPING_VINES_PLANT,
-            BIG_DRIPLEAF,BIG_DRIPLEAF_STEM,SMALL_DRIPLEAF,MANGROVE_LEAVES,NETHERRACK,ROOTED_DIRT,TALL_DRY_GRASS);
+            BIG_DRIPLEAF,BIG_DRIPLEAF_STEM,SMALL_DRIPLEAF,MANGROVE_LEAVES,NETHERRACK,ROOTED_DIRT,TALL_DRY_GRASS,SUNFLOWER,LILAC,ROSE_BUSH,PEONY,PINK_PETALS,WILDFLOWERS);
         for(var block:blocks)for(var state:block.getStateDefinition().getPossibleStates())for(int mode=0;mode<3;mode++)for(int seed=0;seed<8;seed++) {
             clear(level,pos);
             for(int x=-3;x<=3;x++)for(int z=-3;z<=3;z++)level.setBlock(pos.below().offset(x,0,z),FARMLAND.defaultBlockState().setValue(MOISTURE,7),816);
