@@ -1,6 +1,5 @@
 # Blocks
 
-Generic player interaction follows `ServerPlayerGameMode#useItemOn` through the block use virtuals, canonical hands and cooldowns. Item `useOn` and spectator portal effects remain explicit Strict/Warn policy seams until their owning ports land; live interaction parity is pending.
 
 One class row per bootstrapped runtime Block class, listing every block id assigned to it. Class membership covers all 1,286 report block ids. Additional rows isolate shared mechanics and edge cases.
 
@@ -339,3 +338,5 @@ One class row per bootstrapped runtime Block class, listing every block id assig
 | blocks.drops.spawn | Eager native offsets and face velocities, deferred canonical item construction, live BLOCK_DROPS, default pickup delay and ordered dropResources/spawnAfterBreak | `Block#popResource; popResourceFromFace; dropResources` | `eager_pop_random_draws_match_native_when_construction_is_suppressed` (18 Java cases); spawn parity pending | pass | partial |
 
 | blocks.interaction.menu-provider | Reflect exact native getMenuProvider ownership; share live container providers between block use and spectator access | `BlockBehaviour#getMenuProvider; ServerPlayerGameMode#useItemOn` | `block_containers` canonical menu binding tests; spectator integration pending | pass | partial |
+
+| blocks.interaction.server-routing | Native loaded gate, acknowledgement, enabled-item and range checks, hit validation, build limits, spawn protection, block use virtuals, cooldowns and ordered clicked/adjacent resends | `ServerGamePacketListenerImpl#handleUseItemOn; ServerPlayerGameMode#useItemOn` | `hit_location_rejects_non_finite_and_outside_values`; live parity pending on criteria, stats and swing | - | partial |

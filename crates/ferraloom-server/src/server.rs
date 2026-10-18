@@ -1,4 +1,6 @@
 //! Single-region MinecraftServer phase driver. Game state has one mutable owner.
+#[path = "interaction.rs"]
+mod interaction;
 use crate::{
     access::AccessLists,
     assets,
@@ -1571,6 +1573,12 @@ impl MinecraftServer {
                     .entity_mut::<ServerPlayer>(entity)
                     .map_err(game_error)?
                     .loaded = true
+            }
+            sb::Packet::UseItemOn(packet) => {
+                self.handle_use_item_on(connection, entity, packet)?;
+            }
+            sb::Packet::SignUpdate(packet) => {
+                self.handle_sign_update(connection, entity, packet)?;
             }
             sb::Packet::ClientInformation(p) => {
                 let player = self
