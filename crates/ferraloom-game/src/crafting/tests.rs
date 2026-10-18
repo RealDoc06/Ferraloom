@@ -796,3 +796,19 @@ fn manager_preserves_resource_filename_order_and_hint_precedence() {
         "a"
     );
 }
+
+#[test]
+fn vanilla_simple_stacked_contents_use_effective_damageability() {
+    let oracle = oracle();
+    let placement = PlacementInfo::create(vec![Ingredient::of(vec![Item::STONE]).unwrap()]);
+    for case in oracle["simple_stacks"].as_array().unwrap() {
+        let input = oracle_stack(&case["input"]);
+        let mut contents = StackedItemContents::default();
+        contents.account_simple_stack(&input).unwrap();
+        assert_eq!(
+            contents.can_craft(&placement, 1),
+            case["can_craft"].as_bool().unwrap(),
+            "{input:?}"
+        );
+    }
+}
