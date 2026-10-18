@@ -697,3 +697,45 @@ fn native_component_float_equality_and_hashes() {
         }
     }
 }
+
+#[test]
+fn native_component_map_and_patch_insertion_order() {
+    let rows: Value = serde_json::from_str(include_str!("map-order-fixtures.json")).unwrap();
+    let rows = rows.as_array().unwrap();
+    let (_, registries) = fixtures();
+    let values: Vec<_> = rows
+        .iter()
+        .map(|row| {
+            let bytes = unhex(row["wire"].as_str().unwrap());
+            let mut reader = Reader::with_context(&bytes, &registries);
+            let patch: DataComponentPatch = reader.read().unwrap();
+            reader.finish().unwrap();
+            let mut writer = Writer::with_context(&registries);
+            writer.write(&patch).unwrap();
+            assert_eq!(writer.as_slice(), bytes, "patch wire order {}", row["bits"]);
+            let map = DataComponentMap {
+                entries: patch.added.clone(),
+            };
+            let stack = ItemStack::new(ferraloom_data::Item::STONE, 1, patch.clone());
+            let other_count = ItemStack::new(ferraloom_data::Item::STONE, 7, patch.clone());
+            let template =
+                ItemStackTemplate::new(ferraloom_data::Item::STONE, 1, patch.clone()).unwrap();
+            (map, patch, stack, other_count, template)
+        })
+        .collect();
+    for (i, row) in rows.iter().enumerate() {
+        let left = &values[i];
+        for (j, right) in values.iter().enumerate() {
+            let expected = |key: &str| row[key].as_str().unwrap().as_bytes()[j] == b'1';
+            assert_eq!(left.0 == right.0, expected("map"), "map {i}/{j}");
+            assert_eq!(left.1 == right.1, expected("patch"), "patch {i}/{j}");
+            assert_eq!(left.2 == right.2, expected("stack"), "stack {i}/{j}");
+            assert_eq!(
+                left.2.is_same_item_same_components(&right.3).unwrap(),
+                expected("same_components"),
+                "stack components {i}/{j}"
+            );
+            assert_eq!(left.4 == right.4, expected("template"), "template {i}/{j}");
+        }
+    }
+}

@@ -40,13 +40,7 @@ impl ItemStack {
         if self.0.as_ref().map(|v| v.item) != other.0.as_ref().map(|v| v.item) {
             return Ok(false);
         }
-        let left = self.components()?;
-        let right = other.components()?;
-        Ok(left.entries.len() == right.entries.len()
-            && left
-                .entries
-                .iter()
-                .all(|value| right.get(value.component_type()) == Some(value)))
+        Ok(self.components()? == other.components()?)
     }
     /// Port of ItemStack#validatedStreamCodec's persistent codec validation.
     /// Empty stacks are accepted; nonempty stacks must encode through ItemStack.CODEC.

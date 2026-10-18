@@ -4,10 +4,18 @@ use ferraloom_data::Item;
 use serde_json::Value;
 
 /// Port of DataComponentMap. Item prototypes come from ferraloom-data's extracted defaults.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default)]
 pub struct DataComponentMap {
     pub entries: Vec<DataComponent>,
 }
+/// Port of DataComponentMap.Builder.SimpleMap#equals; insertion order affects only encoding.
+impl PartialEq for DataComponentMap {
+    fn eq(&self, other: &Self) -> bool {
+        super::unordered_eq(&self.entries, &other.entries)
+    }
+}
+impl Eq for DataComponentMap {}
+
 impl DataComponentMap {
     pub fn from_item_defaults(item: Item) -> Result<Self> {
         let value: Value = serde_json::from_str(item.data().default_components_json)
