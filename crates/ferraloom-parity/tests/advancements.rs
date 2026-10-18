@@ -34,6 +34,7 @@ async fn command(bot: &mut Bot, command: &str, expected: &str) -> Result<()> {
 async fn setup(session: &mut Session) -> Result<ferraloom_parity::BotId> {
     let player = session.join("ParityBot").await?;
     let bot = session.bot(player)?;
+    bot.synchronize().await?;
     // GameModeCommand emits success only when the persisted mode changes.
     if bot.snapshot().game_mode != Some(play::GameType::Creative) {
         command(bot, "gamemode creative", "commands.gamemode.success").await?;
