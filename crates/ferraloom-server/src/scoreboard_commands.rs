@@ -72,7 +72,7 @@ impl MinecraftServer {
             .ok_or_else(|| exceptions::error("argument.entity.notfound.entity", &[]))?;
         Ok(Holder {
             name: if info.player {
-                info.name.to_owned()
+                info.name.to_string()
             } else {
                 info.uuid.to_string()
             },
