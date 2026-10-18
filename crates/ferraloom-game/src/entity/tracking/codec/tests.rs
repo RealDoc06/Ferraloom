@@ -17,12 +17,16 @@ fn bits(position: Vec3) -> String {
 }
 fn path_text(path: &PositionPath) -> String {
     match path {
-        PositionPath::Linear(pos) => format!("L:{}", bits(*pos)),
+        PositionPath::Linear(pos) => format!("L:{}", bits(Vec3::new(pos.x, pos.y, pos.z))),
         PositionPath::Stepped(steps) => format!(
             "S:{}",
             steps
                 .iter()
-                .map(|step| format!("{}:{}", step.tick_offset.0, bits(step.position)))
+                .map(|step| format!(
+                    "{}:{}",
+                    step.tick_offset.0,
+                    bits(Vec3::new(step.position.x, step.position.y, step.position.z))
+                ))
                 .collect::<Vec<_>>()
                 .join(";")
         ),
@@ -30,7 +34,12 @@ fn path_text(path: &PositionPath) -> String {
 }
 fn path(value: &str) -> PositionPath {
     if let Some(pos) = value.strip_prefix("L:") {
-        return PositionPath::Linear(vector(pos));
+        let position = vector(pos);
+        return PositionPath::Linear(ferraloom_protocol::play::Vec3 {
+            x: position.x,
+            y: position.y,
+            z: position.z,
+        });
     }
     PositionPath::Stepped(
         value
@@ -39,8 +48,13 @@ fn path(value: &str) -> PositionPath {
             .split(';')
             .map(|step| {
                 let (ticks, position) = step.split_once(':').unwrap();
+                let position = vector(position);
                 PositionStep {
-                    position: vector(position),
+                    position: ferraloom_protocol::play::Vec3 {
+                        x: position.x,
+                        y: position.y,
+                        z: position.z,
+                    },
                     tick_offset: VarInt(ticks.parse().unwrap()),
                 }
             })

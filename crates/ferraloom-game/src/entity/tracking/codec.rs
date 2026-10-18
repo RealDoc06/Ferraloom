@@ -42,12 +42,15 @@ impl VecDeltaCodec {
     }
     pub fn try_encode_path(&self, path: &PositionPath) -> Option<VecDelta> {
         match path {
-            PositionPath::Linear(position) => self.try_encode(*position),
+            PositionPath::Linear(position) => {
+                self.try_encode(Vec3::new(position.x, position.y, position.z))
+            }
             PositionPath::Stepped(steps) => {
                 let mut codec = *self;
                 let mut output = Vec::with_capacity(steps.len());
                 for step in steps {
-                    let VecDelta::Linear { xa, ya, za } = codec.try_encode(step.position)? else {
+                    let position = Vec3::new(step.position.x, step.position.y, step.position.z);
+                    let VecDelta::Linear { xa, ya, za } = codec.try_encode(position)? else {
                         unreachable!()
                     };
                     output.push(DeltaStep {
@@ -56,7 +59,7 @@ impl VecDeltaCodec {
                         ya,
                         za,
                     });
-                    codec.base = step.position;
+                    codec.base = position;
                 }
                 Some(VecDelta::Stepped(output))
             }
@@ -131,7 +134,11 @@ impl SteppedInterpolationTracker {
     fn add_step(&mut self, position: Vec3) {
         if self.ticks_since_last_step > 0 {
             self.steps.push(PositionStep {
-                position,
+                position: ferraloom_protocol::play::Vec3 {
+                    x: position.x,
+                    y: position.y,
+                    z: position.z,
+                },
                 tick_offset: VarInt(self.ticks_since_last_step),
             });
             self.ticks_since_last_step = 0;
@@ -140,7 +147,9 @@ impl SteppedInterpolationTracker {
     pub fn update_tracking(&mut self, position: Vec3, sync_position: &mut bool) {
         if self.predicted_delta.length_sqr() > 9.999999747378752E-6 {
             for step in &mut self.steps {
-                step.position = step.position + self.predicted_delta;
+                step.position.x += self.predicted_delta.x;
+                step.position.y += self.predicted_delta.y;
+                step.position.z += self.predicted_delta.z;
             }
         }
         self.predicted_delta = Vec3::ZERO;
@@ -153,7 +162,11 @@ impl SteppedInterpolationTracker {
     pub fn position_path(&mut self, current_position: Vec3) -> PositionPath {
         self.add_step(current_position);
         if self.steps.is_empty() {
-            PositionPath::Linear(current_position)
+            PositionPath::Linear(ferraloom_protocol::play::Vec3 {
+                x: current_position.x,
+                y: current_position.y,
+                z: current_position.z,
+            })
         } else {
             PositionPath::Stepped(self.steps.clone())
         }
