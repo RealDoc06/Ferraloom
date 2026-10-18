@@ -37,6 +37,7 @@ public final class MessageVariantVector {
             })));
             dispatcher.execute("say hello",source);
             variants.put(signedContext ? "present_unsigned_argument" : "absent_argument", OutgoingChatMessage.create(result.get()).getClass().getSimpleName());
+            if(signedContext) {result.set(null);dispatcher.execute("say hello",source);variants.put("present_unsigned_argument_again",OutgoingChatMessage.create(result.get()).getClass().getSimpleName());}
         }
         Files.writeString(Path.of(args[0]),new GsonBuilder().setPrettyPrinting().create().toJson(variants)+"\n");
     }

@@ -1,7 +1,7 @@
 //! Owned command sources. Canonical entities and servers are referenced by handles.
 use super::permissions::PermissionSet;
 use crate::entity::EntityRef;
-use ferraloom_protocol::{Uuid, chat::Component};
+use ferraloom_protocol::{Uuid, chat::Component, play::MessageSignature};
 use ferraloom_util::{Vec3, mth};
 use std::{fmt, sync::Arc};
 
@@ -89,7 +89,11 @@ pub struct CommandSigningContext {
 pub struct SignedArgument {
     pub sender: Uuid,
     pub index: i32,
-    pub signature: Option<Arc<[u8]>>,
+    pub signature: Option<MessageSignature>,
+    pub content: String,
+    pub timestamp: i64,
+    pub salt: i64,
+    pub last_seen: Arc<[MessageSignature]>,
 }
 /// Port of CommandSourceStack. Runtime references are identities, never borrowed world data.
 #[derive(Clone, Debug)]

@@ -1765,8 +1765,11 @@ impl MinecraftServer {
         };
         let mut stack = CommandSourceStack::server(permission, position);
         if let Some(connection) = source {
-            let c = &self.connections[&connection];
-            if let Phase::Play(entity) = c.phase {
+            let (phase, signed_argument) = {
+                let c = self.connections.get_mut(&connection).unwrap();
+                (c.phase, c.command_message.take())
+            };
+            if let Phase::Play(entity) = phase {
                 let player = self.player(entity)?;
                 stack = stack
                     .with_entity(entity)
@@ -1778,16 +1781,17 @@ impl MinecraftServer {
                         yaw: player.yaw,
                     });
             }
-            if let Some((argument_name, message)) = &c.command_message {
+            if let Some((argument_name, message)) = signed_argument {
                 stack.signing_context.arguments = Arc::from([(
-                    argument_name.clone(),
+                    argument_name,
                     ferraloom_game::commands::source::SignedArgument {
                         sender: message.sender,
                         index: message.index,
-                        signature: message
-                            .signature
-                            .as_ref()
-                            .map(|signature| Arc::from(signature.0.as_slice())),
+                        signature: message.signature,
+                        content: message.content,
+                        timestamp: message.timestamp,
+                        salt: message.salt,
+                        last_seen: Arc::from(message.last_seen),
                     },
                 )]);
             }

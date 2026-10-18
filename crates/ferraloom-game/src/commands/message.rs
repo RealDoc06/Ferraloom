@@ -42,6 +42,10 @@ mod tests {
                     sender: Uuid::new(1, 2),
                     index: 0,
                     signature: None,
+                    content: "hello".into(),
+                    timestamp: 123,
+                    salt: 17,
+                    last_seen: Arc::from([]),
                 },
             )]),
         };
@@ -54,6 +58,15 @@ mod tests {
                 expected[key]
             );
         }
+        assert_eq!(
+            format!("{:?}", unsigned.clone().outgoing_chat_kind("message")),
+            expected["present_unsigned_argument_again"]
+        );
+        let argument = unsigned.argument("message").unwrap();
+        assert_eq!(
+            (&*argument.content, argument.timestamp, argument.salt),
+            ("hello", 123, 17)
+        );
         assert_eq!(
             unsigned.outgoing_chat_kind("another_argument"),
             OutgoingChatKind::Disguised

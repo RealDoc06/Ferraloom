@@ -691,11 +691,22 @@ impl MinecraftServer {
             unreachable!()
         };
         let content = message.to_component(&command.source, self)?;
-        let signed = source
-            .and_then(|connection| self.connections.get_mut(&connection))
-            .and_then(|c| c.command_message.take())
-            .filter(|(name, _)| name == argument)
-            .map(|(_, message)| message);
+        // Signing context belongs to the owned source. Reading it never consumes
+        // the argument; forks and source transformations reuse the same message.
+        let signed = command
+            .source
+            .signing_context
+            .argument(argument)
+            .filter(|message| message.sender != Uuid::NIL)
+            .map(|message| ValidatedMessage {
+                sender: message.sender,
+                index: message.index,
+                signature: message.signature.clone(),
+                content: message.content.clone(),
+                timestamp: message.timestamp,
+                salt: message.salt,
+                last_seen: message.last_seen.to_vec(),
+            });
         let name = command.source.display_name(|entity| {
             self.player(entity)
                 .map_or_else(|_| Component::literal(""), ServerPlayer::display_name)
