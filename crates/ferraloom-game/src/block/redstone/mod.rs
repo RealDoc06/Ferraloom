@@ -13,6 +13,7 @@ pub mod observer;
 pub mod opening;
 pub mod piston;
 mod placement;
+pub mod rail;
 pub mod signal;
 mod sources;
 mod state;
@@ -100,6 +101,20 @@ pub(crate) fn ported_behavior(
         }
         BlockClass::RedstoneLampBlock if matches!(method, M::NeighborChanged | M::Tick) => {
             Some(&lamp::LAMP)
+        }
+        BlockClass::RailBlock | BlockClass::PoweredRailBlock
+            if matches!(
+                method,
+                M::OutlineShape
+                    | M::CanSurvive
+                    | M::UpdateShape
+                    | M::UpdateFromNeighbourShapes
+                    | M::OnPlace
+                    | M::NeighborChanged
+                    | M::AffectNeighborsAfterRemoval
+            ) =>
+        {
+            Some(&rail::RAIL)
         }
         BlockClass::RepeaterBlock
             if matches!(

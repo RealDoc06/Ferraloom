@@ -29,6 +29,9 @@ pub(super) fn supports(block: Block) -> bool {
             | BlockClass::DispenserBlock
             | BlockClass::DropperBlock
             | BlockClass::HopperBlock
+            | BlockClass::RailBlock
+            | BlockClass::PoweredRailBlock
+            | BlockClass::DetectorRailBlock
     ) || block.is_instance_of(BlockClass::DoorBlock)
         || block.is_instance_of(BlockClass::TrapDoorBlock)
         || block.is_instance_of(BlockClass::FenceGateBlock)
@@ -125,6 +128,23 @@ impl BlockBehavior for RedstonePlacement {
                     },
                 )
             }
+            BlockClass::RailBlock
+            | BlockClass::PoweredRailBlock
+            | BlockClass::DetectorRailBlock => state
+                .with(
+                    p::SHAPE,
+                    if context.horizontal_direction(&reader)?.axis() == Axis::X {
+                        p::Shape::EastWest
+                    } else {
+                        p::Shape::NorthSouth
+                    },
+                )
+                .unwrap()
+                .with(
+                    p::WATERLOGGED,
+                    reader.get_block_state(pos)?.data().fluid.fluid_type == Fluid::WATER,
+                )
+                .unwrap(),
             BlockClass::LeverBlock
             | BlockClass::ButtonBlock
             | BlockClass::RedstoneWallTorchBlock => {

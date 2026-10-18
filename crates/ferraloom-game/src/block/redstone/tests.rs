@@ -105,6 +105,220 @@ fn snapshot(level: &Level, positions: &[BlockPos]) -> String {
         .collect::<Vec<_>>()
         .join(";")
 }
+
+fn rail_mutations(level: &mut Level) -> String {
+    level
+        .take_effects()
+        .into_iter()
+        .filter_map(|effect| match effect {
+            LevelEffect::BlockUpdated { pos, new, .. } => {
+                Some(format!("{}, {}, {}={}", pos.x, pos.y, pos.z, new.id()))
+            }
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join(";")
+}
+fn native_mutations(value: &str) -> String {
+    value
+        .split(';')
+        .filter(|s| !s.is_empty())
+        .map(|s| s.split_once('/').unwrap().0)
+        .collect::<Vec<_>>()
+        .join(";")
+}
+#[test]
+fn rail_junctions_slopes_and_connection_update_order_match_vanilla() {
+    use ferraloom_data::properties as p;
+    let directions = [
+        Direction::North,
+        Direction::South,
+        Direction::West,
+        Direction::East,
+    ];
+    for (name, expected) in cases("rail-place:") {
+        let mut args = name.split(':').skip(1);
+        let block = Block::from_name(args.next().unwrap()).unwrap();
+        let mut pattern = args.next().unwrap().parse::<u16>().unwrap();
+        let powered = args.next().unwrap().parse::<bool>().unwrap();
+        let initial = if args.next().unwrap().parse::<bool>().unwrap() {
+            p::Shape::EastWest
+        } else {
+            p::Shape::NorthSouth
+        };
+        let mut level = level();
+        let mut targets = vec![ORIGIN];
+        level
+            .set_block_state(ORIGIN.below(1), Block::STONE.default_state())
+            .unwrap();
+        for direction in directions {
+            let value = pattern & 3;
+            pattern >>= 2;
+            let pos = ORIGIN.relative(direction, 1).above(match value {
+                1 => -1,
+                3 => 1,
+                _ => 0,
+            });
+            targets.push(pos);
+            if value != 0 {
+                level
+                    .set_block_state(pos.below(1), Block::STONE.default_state())
+                    .unwrap();
+                level.set_block_state(pos, block.default_state()).unwrap();
+            }
+        }
+        let state = block.default_state().with(p::SHAPE, initial).unwrap();
+        level.set_block_state(ORIGIN, state).unwrap();
+        level.take_effects();
+        let mut rail = rail::RailState::new(ORIGIN, state);
+        rail.place(&mut level, powered, true, initial).unwrap();
+        let mut parts = expected.split('|');
+        assert_eq!(
+            rail.state().id().to_string(),
+            parts.next().unwrap(),
+            "{name} returned state"
+        );
+        assert_eq!(
+            positions(rail.connections()),
+            parts.next().unwrap(),
+            "{name} connections"
+        );
+        assert_eq!(
+            snapshot(&level, &targets),
+            parts.next().unwrap(),
+            "{name} canonical states"
+        );
+        assert_eq!(
+            rail_mutations(&mut level),
+            native_mutations(parts.next().unwrap()),
+            "{name} mutation order"
+        );
+    }
+}
+#[test]
+fn powered_and_activator_rails_preserve_search_limits_and_power_update_order() {
+    use ferraloom_data::properties as p;
+    for (name, expected) in cases("rail-find:") {
+        let mut args = name.split(':').skip(1);
+        let block = Block::from_name(args.next().unwrap()).unwrap();
+        let direction = Direction::VALUES[args.next().unwrap().parse::<usize>().unwrap()];
+        let length = args.next().unwrap().parse::<i32>().unwrap();
+        let obstruction = args.next().unwrap().parse::<u8>().unwrap();
+        let mut level = level();
+        let shape = if direction.axis() == ferraloom_util::Axis::X {
+            p::Shape::EastWest
+        } else {
+            p::Shape::NorthSouth
+        };
+        let state = block
+            .default_state()
+            .with(p::SHAPE, shape)
+            .unwrap()
+            .with(p::POWERED, true)
+            .unwrap();
+        for i in 0..=length {
+            level
+                .set_block_state(ORIGIN.relative(direction, i), state)
+                .unwrap();
+        }
+        if obstruction > 0 {
+            let changed = match obstruction {
+                1 => state.with(p::POWERED, false).unwrap(),
+                2 => state
+                    .with(
+                        p::SHAPE,
+                        if shape == p::Shape::EastWest {
+                            p::Shape::NorthSouth
+                        } else {
+                            p::Shape::EastWest
+                        },
+                    )
+                    .unwrap(),
+                3 => (if block == Block::ACTIVATOR_RAIL {
+                    Block::POWERED_RAIL
+                } else {
+                    Block::ACTIVATOR_RAIL
+                })
+                .default_state()
+                .with(p::SHAPE, shape)
+                .unwrap()
+                .with(p::POWERED, true)
+                .unwrap(),
+                _ => unreachable!(),
+            };
+            level
+                .set_block_state(ORIGIN.relative(direction, (length + 1) / 2), changed)
+                .unwrap();
+        }
+        level
+            .set_block_state(
+                ORIGIN.relative(direction, length).above(1),
+                Block::REDSTONE_BLOCK.default_state(),
+            )
+            .unwrap();
+        let forward = direction == Direction::South || direction == Direction::West;
+        let values = (0..=8)
+            .map(|depth| {
+                rail::find_powered_rail_signal(&level, ORIGIN, state, forward, depth)
+                    .unwrap()
+                    .to_string()
+            })
+            .collect::<Vec<_>>()
+            .join(";");
+        assert_eq!(values, expected, "{name}");
+    }
+    for block in [Block::POWERED_RAIL, Block::ACTIVATOR_RAIL] {
+        for direction in state::HORIZONTAL {
+            let mut level = level();
+            let shape = if direction.axis() == ferraloom_util::Axis::X {
+                p::Shape::EastWest
+            } else {
+                p::Shape::NorthSouth
+            };
+            let targets = (0..13)
+                .map(|i| ORIGIN.relative(direction, i))
+                .collect::<Vec<_>>();
+            for &pos in &targets {
+                level
+                    .set_block_state(pos.below(1), Block::STONE.default_state())
+                    .unwrap();
+                level
+                    .set_block_state(pos, block.default_state().with(p::SHAPE, shape).unwrap())
+                    .unwrap();
+            }
+            for change in 0..3 {
+                level.take_effects();
+                level
+                    .set_block_and_update(
+                        ORIGIN.relative(direction.opposite(), 1),
+                        if change == 1 {
+                            Block::AIR
+                        } else {
+                            Block::REDSTONE_BLOCK
+                        }
+                        .default_state(),
+                    )
+                    .unwrap();
+                let name = format!(
+                    "rail-power:{}:{}:{change}",
+                    block.name().strip_prefix("minecraft:").unwrap(),
+                    direction as u8
+                );
+                let expected = cases("rail-power:")
+                    .find(|(key, _)| *key == name)
+                    .unwrap()
+                    .1;
+                let (states, changes) = expected.split_once('|').unwrap();
+                assert_eq!(snapshot(&level, &targets), states, "{name} final state");
+                assert_eq!(
+                    rail_mutations(&mut level),
+                    native_mutations(changes),
+                    "{name} mutation order"
+                );
+            }
+        }
+    }
+}
 #[test]
 fn signal_sources_directions_and_conductor_relays_match_vanilla() {
     for (name, expected) in cases("signal:") {

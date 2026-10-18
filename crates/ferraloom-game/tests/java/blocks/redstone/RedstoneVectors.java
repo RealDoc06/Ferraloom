@@ -1,6 +1,7 @@
 import java.util.*;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.*;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.world.level.block.*;
 import net.minecraft.world.level.block.state.*;
@@ -255,13 +256,50 @@ public final class RedstoneVectors extends MutationFixture {
             System.out.println("dispenser-trigger:"+net.minecraft.core.registries.BuiltInRegistries.BLOCK.getId(block)+":"+layout+"\t"+String.join("|",samples));
         }
     }
+    static void rails(RegistryAccess r) throws Exception {
+        var directions=List.of(Direction.NORTH,Direction.SOUTH,Direction.WEST,Direction.EAST);
+        for(var block:List.of(Blocks.RAIL,Blocks.POWERED_RAIL,Blocks.ACTIVATOR_RAIL))for(int layout=0;layout<256;layout++)for(boolean powered:new boolean[]{false,true})for(boolean eastWest:new boolean[]{false,true}) {
+            var level=new RedstoneVectors(r);var positions=new ArrayList<BlockPos>();positions.add(ORIGIN);
+            level.raw(ORIGIN.below(),Blocks.STONE.defaultBlockState());
+            int pattern=layout;
+            for(var direction:directions){
+                int value=pattern&3;pattern>>=2;
+                var pos=ORIGIN.relative(direction).above(value==1?-1:value==3?1:0);positions.add(pos);
+                if(value!=0){level.raw(pos.below(),Blocks.STONE.defaultBlockState());level.raw(pos,block.defaultBlockState());}
+            }
+            var property=((BaseRailBlock)block).getShapeProperty();var initial=eastWest?RailShape.EAST_WEST:RailShape.NORTH_SOUTH;
+            var state=block.defaultBlockState().setValue(property,initial);level.raw(ORIGIN,state);level.begin();
+            var rail=new RailState(level,ORIGIN,state).place(powered,true,initial);
+            var states=new ArrayList<String>();for(var pos:positions)states.add(pos.toShortString()+"="+Block.getId(level.getBlockState(pos)));
+            System.out.println("rail-place:"+BuiltInRegistries.BLOCK.getKey(block).getPath()+":"+layout+":"+powered+":"+eastWest+"\t"+Block.getId(rail.getState())+"|"+positions(rail.getConnections())+"|"+String.join(";",states)+"|"+String.join(";",level.changes));
+        }
+        var finder=PoweredRailBlock.class.getDeclaredMethod("findPoweredRailSignal",net.minecraft.world.level.Level.class,BlockPos.class,BlockState.class,boolean.class,int.class);finder.setAccessible(true);
+        for(var block:List.of(Blocks.POWERED_RAIL,Blocks.ACTIVATOR_RAIL))for(var direction:directions)for(int length=1;length<=10;length++)for(int obstruction=0;obstruction<4;obstruction++) {
+            var level=new RedstoneVectors(r);var property=((BaseRailBlock)block).getShapeProperty();var railShape=direction.getAxis()==Direction.Axis.X?RailShape.EAST_WEST:RailShape.NORTH_SOUTH;
+            var state=block.defaultBlockState().setValue(property,railShape).setValue(PoweredRailBlock.POWERED,true);
+            for(int i=0;i<=length;i++)level.raw(ORIGIN.relative(direction,i),state);
+            if(obstruction>0){var middle=ORIGIN.relative(direction,(length+1)/2);level.raw(middle,obstruction==1?state.setValue(PoweredRailBlock.POWERED,false):obstruction==2?state.setValue(property,railShape==RailShape.EAST_WEST?RailShape.NORTH_SOUTH:RailShape.EAST_WEST):(block==Blocks.ACTIVATOR_RAIL?Blocks.POWERED_RAIL:Blocks.ACTIVATOR_RAIL).defaultBlockState().setValue(property,railShape).setValue(PoweredRailBlock.POWERED,true));}
+            level.raw(ORIGIN.relative(direction,length).above(),Blocks.REDSTONE_BLOCK.defaultBlockState());
+            var values=new ArrayList<String>();for(int depth=0;depth<=8;depth++)values.add(""+finder.invoke(block,level,ORIGIN,state,direction==Direction.SOUTH||direction==Direction.WEST,depth));
+            System.out.println("rail-find:"+BuiltInRegistries.BLOCK.getKey(block).getPath()+":"+direction.get3DDataValue()+":"+length+":"+obstruction+"\t"+String.join(";",values));
+        }
+        for(var block:List.of(Blocks.POWERED_RAIL,Blocks.ACTIVATOR_RAIL))for(var direction:directions) {
+            var level=new RedstoneVectors(r);var property=((BaseRailBlock)block).getShapeProperty();var railShape=direction.getAxis()==Direction.Axis.X?RailShape.EAST_WEST:RailShape.NORTH_SOUTH;
+            var positions=new ArrayList<BlockPos>();for(int i=0;i<13;i++){var pos=ORIGIN.relative(direction,i);positions.add(pos);level.raw(pos.below(),Blocks.STONE.defaultBlockState());level.raw(pos,block.defaultBlockState().setValue(property,railShape));}
+            for(int change=0;change<3;change++){
+                level.begin();level.setBlock(ORIGIN.relative(direction.getOpposite()),(change==1?Blocks.AIR:Blocks.REDSTONE_BLOCK).defaultBlockState(),3);
+                var states=new ArrayList<String>();for(var pos:positions)states.add(pos.toShortString()+"="+Block.getId(level.getBlockState(pos)));
+                System.out.println("rail-power:"+BuiltInRegistries.BLOCK.getKey(block).getPath()+":"+direction.get3DDataValue()+":"+change+"\t"+String.join(";",states)+"|"+String.join(";",level.changes));
+            }
+        }
+    }
     public static void main(String[] args) {
         var out=System.out;var err=System.err;SharedConstants.tryDetectVersion();Bootstrap.bootStrap();System.setOut(out);System.setErr(err);
         var registries=NeighborVectors.load();
         var builtin=RegistryAccess.fromRegistryOfRegistries(net.minecraft.core.registries.BuiltInRegistries.REGISTRY);
         var lookup=HolderLookup.Provider.create(java.util.stream.Stream.concat(builtin.listRegistries(),registries.listRegistries()));
         net.minecraft.core.registries.BuiltInRegistries.DATA_COMPONENT_INITIALIZERS.build(lookup).forEach(net.minecraft.core.component.DataComponentInitializers.PendingComponents::apply);
-        signals(registries);piston(registries);wires(registries);try{moving(registries);pushing(registries);comparators(registries);placements(registries);hoppers(registries);pistonTimelines(registries);dispensing(registries);dispenserTriggers(registries);}catch(Exception error){throw new RuntimeException(error);}
+        signals(registries);piston(registries);wires(registries);try{moving(registries);pushing(registries);comparators(registries);placements(registries);hoppers(registries);pistonTimelines(registries);dispensing(registries);dispenserTriggers(registries);rails(registries);}catch(Exception error){throw new RuntimeException(error);}
     }
 }
 
