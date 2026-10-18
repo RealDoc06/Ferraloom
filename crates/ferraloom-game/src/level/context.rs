@@ -1,4 +1,5 @@
 //! Immutable dimension services known for the entire lifetime of a live Level.
+use crate::entity::damage::{DamageSources, DamageTypeRegistry};
 use ferraloom_worldgen::{feature::FeatureRegistry, generator::ChunkGenerator};
 use std::sync::Arc;
 
@@ -9,6 +10,7 @@ pub struct LevelContext {
     pub sea_level: i32,
     pub generator: Arc<ChunkGenerator>,
     pub features: Arc<FeatureRegistry>,
+    damage_types: Arc<DamageTypeRegistry>,
 }
 
 impl LevelContext {
@@ -17,13 +19,23 @@ impl LevelContext {
         sea_level: i32,
         generator: Arc<ChunkGenerator>,
         features: Arc<FeatureRegistry>,
+        damage_types: Arc<DamageTypeRegistry>,
     ) -> Self {
         Self {
             seed,
             sea_level,
             generator,
             features,
+            damage_types,
         }
+    }
+
+    pub fn damage_types(&self) -> &Arc<DamageTypeRegistry> {
+        &self.damage_types
+    }
+
+    pub fn damage_sources(&self) -> &DamageSources {
+        self.damage_types.sources()
     }
 
     /// Explicit controlled-level context. Immutable vanilla flat-generator
@@ -36,24 +48,31 @@ impl LevelContext {
             flat::{FlatLevelGeneratorSettings, FlatLevelSource},
         };
         use std::{path::Path, sync::OnceLock};
-        static SERVICES: OnceLock<(Arc<ChunkGenerator>, Arc<FeatureRegistry>)> = OnceLock::new();
-        let (generator, features) = SERVICES.get_or_init(|| {
+        struct Services {
+            generator: Arc<ChunkGenerator>,
+            features: Arc<FeatureRegistry>,
+            damage_types: Arc<DamageTypeRegistry>,
+        }
+        static SERVICES: OnceLock<Services> = OnceLock::new();
+        let services = SERVICES.get_or_init(|| {
             let jar = std::env::var_os("FERRALOOM_VANILLA_JAR")
                 .expect("builder supplies the vanilla datapack for level fixtures");
             let resources = ResourceManager::new(vec![Pack::vanilla_jar(Path::new(&jar)).unwrap()]);
             let data = Arc::new(GenerationData::load(&resources).unwrap());
             let flat =
                 FlatLevelSource::new(data, FlatLevelGeneratorSettings::default_settings()).unwrap();
-            (
-                Arc::new(ChunkGenerator::Flat(Box::new(flat))),
-                Arc::new(FeatureRegistry::default()),
-            )
+            Services {
+                generator: Arc::new(ChunkGenerator::Flat(Box::new(flat))),
+                features: Arc::new(FeatureRegistry::default()),
+                damage_types: Arc::new(DamageTypeRegistry::load(&resources).unwrap()),
+            }
         });
         Arc::new(Self::new(
             seed,
             sea_level,
-            generator.clone(),
-            features.clone(),
+            services.generator.clone(),
+            services.features.clone(),
+            services.damage_types.clone(),
         ))
     }
 }

@@ -448,6 +448,7 @@ mod tests {
                 fixture.sea_level,
                 fixture.generator.clone(),
                 Arc::new(registry),
+                fixture.damage_types().clone(),
             )),
         );
         level.set_block_tags(data.block_tags.clone());

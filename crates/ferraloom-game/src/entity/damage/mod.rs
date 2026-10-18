@@ -148,5 +148,15 @@ impl DamageTypeRegistry {
     }
 }
 
+impl crate::level::Level {
+    pub fn damage_types(&self) -> &DamageTypeRegistry {
+        self.context().damage_types()
+    }
+    /// Port of Level#damageSources, using the immutable registry from this load.
+    pub fn damage_sources(&self) -> &DamageSources {
+        self.context().damage_sources()
+    }
+}
+
 #[cfg(test)]
 mod tests;

@@ -262,3 +262,23 @@ fn native_source_constructors_preserve_actor_identity_scaling_and_live_positions
     }
     assert_eq!(count, 14);
 }
+
+#[test]
+fn level_context_requires_actual_damage_resources_and_fixtures_load_vanilla() {
+    let fixture = LevelContext::fixture(0, 63);
+    assert_eq!(fixture.damage_types().len(), 51);
+    assert_eq!(
+        fixture.damage_sources().freeze().damage_type().effects,
+        DamageEffects::Freezing
+    );
+    assert!(matches!(
+        DamageTypeRegistry::load(&ResourceManager::new(vec![])),
+        Err(datapack::Error::MissingResource(_))
+    ));
+    let mut pack = Pack::new("invalid damage type");
+    pack.insert(
+        "minecraft:damage_type/freeze.json".parse().unwrap(),
+        br#"{"message_id":"invalid","scaling":"never"}"#.as_slice(),
+    );
+    assert!(DamageTypeRegistry::load(&ResourceManager::new(vec![vanilla_pack(), pack])).is_err());
+}
