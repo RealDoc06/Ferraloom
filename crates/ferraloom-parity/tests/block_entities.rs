@@ -1,10 +1,12 @@
 use ferraloom_data::{EntityType, Item};
 use ferraloom_nbt::{CompoundTag, Tag};
 use ferraloom_parity::{
-    Bot, LaunchOptions, ObservationLog, Result, RunMode, Session, Ticks, WorldPreset, ensure,
+    Bot, BotState, LaunchOptions, ObservationLog, Result, RunMode, Session, Ticks, WorldPreset,
+    ensure,
     protocol::{
         codec::VarInt,
         component::{DataComponentPatch, HashedStack, ItemStack, Persistent, SignText},
+        entity_data::EntityDataValue,
         play::{self, clientbound as cb, serverbound as sb},
     },
 };
@@ -129,6 +131,19 @@ fn items(tag: &CompoundTag) -> Result<Vec<(i8, ItemStack)>> {
         })
         .collect()
 }
+fn dropped_count(state: &BotState, item: Item) -> i32 {
+    state
+        .entities
+        .values()
+        .filter(|entity| entity.entity_type == i32::from(EntityType::ITEM.protocol_id()))
+        .filter_map(|entity| match entity.data.get(&8) {
+            Some(EntityDataValue::ItemStack(stack)) if stack.item() == item => {
+                stack.0.as_ref().map(|stack| stack.count)
+            }
+            _ => None,
+        })
+        .sum()
+}
 async fn chest_store_break(session: &mut Session) -> Result<ObservationLog> {
     let player = setup(session).await?;
     let bot = session.bot(player)?;
@@ -180,51 +195,12 @@ async fn chest_store_break(session: &mut Session) -> Result<ObservationLog> {
     )
     .await?;
     bot.wait_for("container item drops", Ticks::DEFAULT, |state, _| {
-        state
-            .entities
-            .values()
-            .filter(|entity| entity.entity_type == EntityType::ITEM.protocol_id() as i32)
-            .count()
-            >= 2
+        dropped_count(state, Item::STONE) == 37 && dropped_count(state, Item::CHEST) == 1
     })
     .await?;
     bot.synchronize().await?;
-    session.stop().await?;
-    let mut drops = Vec::new();
-    if let Some(entities) = session
-        .saved_world()?
-        .entities("minecraft:overworld", ChunkPos::new(0, 0))?
-    {
-        for entity in entities.entities.into_iter().flatten() {
-            if entity
-                .get_string("id")
-                .is_some_and(|id| id.to_string() == "minecraft:item")
-                && let Some(item) = entity.get_compound("Item")
-            {
-                drops.push(ItemStack::from_nbt(&Tag::Compound(item.clone()))?);
-            }
-        }
-    }
-    let stone = drops
-        .iter()
-        .filter_map(|stack| stack.0.as_ref())
-        .filter(|stack| stack.item == Item::STONE)
-        .map(|stack| stack.count)
-        .sum::<i32>();
-    ensure!(
-        stone == 37,
-        "container break must drop all stored stone, got {stone}"
-    );
-    log.record("dropped_stone", stone)?;
-    log.record(
-        "dropped_chest",
-        drops
-            .iter()
-            .filter_map(|stack| stack.0.as_ref())
-            .filter(|stack| stack.item == Item::CHEST)
-            .map(|stack| stack.count)
-            .sum::<i32>(),
-    )?;
+    log.record("dropped_stone", dropped_count(&bot.snapshot(), Item::STONE))?;
+    log.record("dropped_chest", dropped_count(&bot.snapshot(), Item::CHEST))?;
     Ok(log)
 }
 
@@ -372,8 +348,10 @@ async fn structure_loot_chest(session: &mut Session) -> Result<ObservationLog> {
         "loot",
         slots
             .iter()
-            .map(Persistent::to_json)
-            .collect::<std::result::Result<Vec<_>, _>>()?,
+            .enumerate()
+            .filter(|(_, stack)| !stack.is_empty())
+            .map(|(slot, stack)| Ok((slot, stack.to_json()?)))
+            .collect::<Result<Vec<_>>>()?,
     )?;
     bot.send(sb::Packet::ContainerClose(sb::ContainerClose {
         container_id: VarInt(menu),
