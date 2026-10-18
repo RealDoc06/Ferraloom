@@ -33,15 +33,11 @@ impl Cow {
                     parent: AgeableMob {
                         parent: PathfinderMob {
                             parent: Mob {
-                                parent: LivingEntity {
-                                    equipment: Default::default(),
-                                    parent,
-                                    // AbstractCow#createAttributes, not a guessed mob default.
-                                    health: 10.0,
-                                    last_hurt: 0.0,
-                                    damage_cooldown_time: 0,
-                                    hurt_time: 0,
-                                    hurt_duration: 0,
+                                parent: {
+                                    let mut living = LivingEntity::with_parent(parent);
+                                    living.entity_data.define(super::synched_data::MOB_FLAGS, 0);
+                                    living.entity_data.define(super::synched_data::BABY, false);
+                                    living
                                 },
                                 target: None,
                             },
@@ -73,6 +69,88 @@ impl Cow {
 /// Shared Cow dispatcher for the foundation's Entity/LivingEntity primitives.
 pub struct CowBehavior;
 impl Entity for CowBehavior {
+    fn is_alive(
+        &self,
+        entity: super::EntityRef,
+        level: &crate::level::Level,
+    ) -> Result<bool, crate::level::LevelError> {
+        let cow = level.entity::<Cow>(entity)?;
+        Ok(!cow.as_living().removed && cow.as_living().health() > 0.0)
+    }
+    fn controlling_passenger(
+        &self,
+        entity: super::EntityRef,
+        level: &crate::level::Level,
+    ) -> Result<Option<super::EntityRef>, crate::level::LevelError> {
+        let cow = level.entity::<Cow>(entity)?;
+        if *cow
+            .as_living()
+            .entity_data
+            .get(super::synched_data::MOB_FLAGS) as u8
+            & 1
+            != 0
+        {
+            return Ok(None);
+        }
+        let Some(&rider) = cow.as_living().passengers.first() else {
+            return Ok(None);
+        };
+        let Some(mob) = level.entity_state(rider)?.as_mob() else {
+            return Ok(None);
+        };
+        Ok((!level.entity_type_tags()?.contains_key(
+            ferraloom_data::tags::EntityTypeTags::NON_CONTROLLING_RIDER,
+            mob.parent.entity_type,
+        ))
+        .then_some(rider))
+    }
+
+    fn y_head_rot(
+        &self,
+        entity: super::EntityRef,
+        level: &crate::level::Level,
+    ) -> Result<f32, crate::level::LevelError> {
+        Ok(level.entity::<Cow>(entity)?.as_living().y_head_rot)
+    }
+    fn dimensions(
+        &self,
+        entity: super::EntityRef,
+        pose: ferraloom_protocol::entity_data::Pose,
+        level: &crate::level::Level,
+    ) -> Result<super::EntityDimensions, crate::level::LevelError> {
+        super::living::dimensions(self, entity, pose, level)
+    }
+    fn default_dimensions(
+        &self,
+        entity: super::EntityRef,
+        _pose: ferraloom_protocol::entity_data::Pose,
+        level: &crate::level::Level,
+    ) -> Result<super::EntityDimensions, crate::level::LevelError> {
+        let dimensions = super::EntityDimensions::for_type(ferraloom_data::EntityType::COW);
+        Ok(
+            if level.entity::<Cow>(entity)?.parent.parent.parent.age < 0 {
+                dimensions.scale(0.5, 0.5).with_eye_height(0.665)
+            } else {
+                dimensions
+            },
+        )
+    }
+    fn passenger_riding_position(
+        &self,
+        entity: super::EntityRef,
+        passenger: super::EntityRef,
+        level: &crate::level::Level,
+    ) -> Result<ferraloom_util::Vec3, crate::level::LevelError> {
+        super::living::passenger_riding_position(self, entity, passenger, level)
+    }
+    fn ride_tick(
+        &self,
+        entity: super::EntityRef,
+        level: &mut crate::level::Level,
+    ) -> Result<(), crate::level::LevelError> {
+        super::living_ride_tick(self, entity, level)
+    }
+
     fn trace_entity_refs(
         &self,
         state: &super::EntityState,
@@ -96,7 +174,59 @@ impl Entity for CowBehavior {
             Default::default(),
         )))
     }
-    fn default_gravity(&self) -> f64 {
-        0.08
+    fn default_gravity(
+        &self,
+        entity: crate::entity::EntityRef,
+        level: &crate::level::Level,
+    ) -> Result<f64, crate::level::LevelError> {
+        crate::entity::living::attribute(
+            entity,
+            ferraloom_data::registries::attribute::Id::GRAVITY,
+            level,
+        )
+    }
+    fn max_up_step(
+        &self,
+        entity: crate::entity::EntityRef,
+        level: &crate::level::Level,
+    ) -> Result<f32, crate::level::LevelError> {
+        Ok(crate::entity::living::attribute(
+            entity,
+            ferraloom_data::registries::attribute::Id::STEP_HEIGHT,
+            level,
+        )? as f32)
+    }
+    fn bounciness(
+        &self,
+        entity: crate::entity::EntityRef,
+        level: &crate::level::Level,
+    ) -> Result<f64, crate::level::LevelError> {
+        crate::entity::living::attribute(
+            entity,
+            ferraloom_data::registries::attribute::Id::BOUNCINESS,
+            level,
+        )
+    }
+    fn air_drag(
+        &self,
+        entity: crate::entity::EntityRef,
+        level: &crate::level::Level,
+    ) -> Result<f32, crate::level::LevelError> {
+        crate::entity::living::air_drag(entity, level)
+    }
+    fn block_speed_factor(
+        &self,
+        entity: crate::entity::EntityRef,
+        level: &crate::level::Level,
+    ) -> Result<f32, crate::level::LevelError> {
+        crate::entity::living::block_speed_factor(entity, level)
+    }
+    fn ignite_for_ticks(
+        &self,
+        entity: crate::entity::EntityRef,
+        ticks: i32,
+        level: &mut crate::level::Level,
+    ) -> Result<(), crate::level::LevelError> {
+        crate::entity::living::ignite_for_ticks(entity, ticks, level)
     }
 }

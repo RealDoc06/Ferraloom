@@ -14,6 +14,17 @@ components use vanilla's registry-aware `DataComponentMap.CODEC`. JSON objects
 have recursively sorted keys; registry arrays retain protocol order. No Mojang
 binaries, assets or Java sources are committed.
 
+`ExtractData <output-dir> --entities-only` regenerates only `entity_types.json`,
+including `EntityType#trackDeltas`. Delta tracking is independent of tracking
+range and update interval; game code must use the extracted boolean.
+Each type also retains all four `EntityDimensions.attachments` lists. Extraction
+reads the immutable native map directly, preserving unrotated double coordinates
+and registered offsets independently of bounding-box dimensions.
+
+`ExtractData <output-dir> --attributes-only` writes `attributes.json`: each
+registered Attribute's default, optional RangedAttribute bounds and syncable
+flag. These registry defaults remain separate from entity-type base overrides.
+
 Shapes are AABB lists in block-local coordinates, queried with
 `EmptyBlockGetter.INSTANCE`, `BlockPos.ZERO`, and an empty collision context.
 The shared shape table deduplicates collision, outline and occlusion shapes.
@@ -96,6 +107,11 @@ Reversing the item's single block field loses those aliases. The clone-stack
 method's reflected base is `BlockBehaviour`; it creates one item and ignores
 the include-data flag. Overriding block families still require their own port.
 
+`fluid_random_ticking` records `FluidState#isRandomlyTicking`, which delegates
+only to the fluid type's virtual `isRandomlyTicking`. It has no level, position
+or state-property inputs. Source and flowing variants retain their own registry
+entries; waterlogged states use the same fluid fact as ordinary water.
+
 `ExtractData <output-dir> --item-crafting-only` regenerates `item_crafting.json`.
 `Item#getCraftingRemainder` is final, returns the `craftingRemainingItem` field
 copied from `Item.Properties` by the constructor, and takes no stack or level.
@@ -117,3 +133,11 @@ are immutable registry facts: dimension, biome, clock and weather sampling does
 not participate. Float limits are measured with sanitizeValue at both infinities;
 unbounded ends remain null. The Rust build consumes this committed table without
 Java. No environment value is sampled from a fabricated live level.
+
+`ExtractData <output-dir> --block-render-shapes-only` writes the per-state
+`block_render_shapes.json` table, exposed as `BlockStateData::render_shape`.
+In 26.3 `BlockStateBase#getRenderShape` delegates to
+`BlockBehaviour#getRenderShape(BlockState)` with no level, position or context.
+The base returns `MODEL`; every override in the jar (air, barrier, liquids,
+bubble column, light, structure void, end portal/gateway and moving piston)
+returns constant `INVISIBLE`. This is independent of collision and block entities.

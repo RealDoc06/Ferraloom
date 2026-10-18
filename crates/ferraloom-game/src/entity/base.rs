@@ -13,36 +13,7 @@ use super::{
     synched_data::{self, SynchedEntityData},
 };
 
-/// Port of EntityDimensions. Width arithmetic is deliberately performed as float.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct EntityDimensions {
-    pub width: f32,
-    pub height: f32,
-    pub eye_height: f32,
-    pub fixed: bool,
-}
-impl EntityDimensions {
-    pub fn for_type(kind: EntityType) -> Self {
-        let data = kind.data();
-        Self {
-            width: data.width,
-            height: data.height,
-            eye_height: data.eye_height,
-            fixed: data.fixed_dimensions,
-        }
-    }
-    pub fn make_bounding_box(self, pos: Vec3) -> Aabb {
-        let radius = f64::from(self.width / 2.0);
-        Aabb::new(
-            pos.x - radius,
-            pos.y,
-            pos.z - radius,
-            pos.x + radius,
-            pos.y + f64::from(self.height),
-            pos.z + radius,
-        )
-    }
-}
+pub use super::dimensions::EntityDimensions;
 
 /// Port of Entity.RemovalReason, including chunk unload's persistence semantics.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -220,8 +191,8 @@ impl EntityData {
             tags: JavaHashSet::new(),
             piston_deltas: [0.0; 3],
             piston_deltas_game_time: 0,
-            dimensions,
             eye_height: dimensions.eye_height,
+            dimensions,
             is_in_powder_snow: false,
             was_in_powder_snow: false,
             supporting_block_pos: None,
@@ -272,6 +243,17 @@ impl EntityData {
             self.pitch = (pitch % 360.0).clamp(-90.0, 90.0);
         }
     }
+    /// Port of Entity#absSnapRotationTo, preserving position history.
+    pub fn abs_snap_rotation_to(&mut self, yaw: f32, pitch: f32) {
+        self.set_y_rot(yaw % 360.0);
+        self.set_x_rot(pitch.clamp(-90.0, 90.0) % 360.0);
+        self.old_yaw = self.yaw;
+        self.old_pitch = self.pitch;
+    }
+    /// Port of Entity#removeLatestMovementRecording; an empty queue is unchanged.
+    pub fn remove_latest_movement_recording(&mut self) {
+        self.movement_this_tick.pop_back();
+    }
     pub fn set_old_pos_and_rot(&mut self) {
         self.old_position = self.position;
         self.interpolation_old_position = self.position;
@@ -295,11 +277,27 @@ impl EntityData {
     pub fn ticks_frozen(&self) -> i32 {
         self.entity_data.get(synched_data::TICKS_FROZEN).0
     }
+    /// Port of Entity#isInLava: the first base tick is deliberately excluded.
+    pub fn is_in_lava(
+        &self,
+        level: &crate::level::Level,
+    ) -> Result<bool, crate::level::LevelError> {
+        Ok(!self.first_tick
+            && self
+                .fluid_interaction
+                .height(ferraloom_data::tags::FluidTags::LAVA, level)?
+                > 0.0)
+    }
     pub fn clear_freeze(&mut self) {
         self.entity_data.set(synched_data::TICKS_FROZEN, VarInt(0));
     }
     pub fn clear_fire(&mut self) {
         self.remaining_fire_ticks = self.remaining_fire_ticks.min(0);
+    }
+    /// Port of Entity#markHurt. This requests the forced velocity packet sent to
+    /// tracking players and self, independently of the normal interval gate.
+    pub fn mark_hurt(&mut self) {
+        self.sync_velocity = true;
     }
     pub fn ignite_for_ticks(&mut self, ticks: i32) {
         self.remaining_fire_ticks = self.remaining_fire_ticks.max(ticks);

@@ -1,5 +1,5 @@
 //! Entity common ticking and riding, with short canonical borrows around callbacks.
-use super::{EntityData, EntityRef, EntityState, synched_data};
+use super::{EntityData, EntityRef, EntityState};
 use crate::level::{Level, LevelError};
 use ferraloom_protocol::entity_data::Pose;
 
@@ -52,9 +52,9 @@ pub fn start_riding(
         .copied();
     let player_first = player
         && first.is_some_and(|id| !matches!(level.entity_state(id), Ok(EntityState::Player(_))));
+    super::dimensions::set_pose(entity, Pose::Standing, level)?;
     {
         let rider = level.entity_mut::<EntityData>(entity)?;
-        rider.entity_data.set(synched_data::POSE, Pose::Standing);
         rider.vehicle = Some(vehicle);
     }
     let passengers = &mut level.entity_mut::<EntityData>(vehicle)?.passengers;
@@ -96,18 +96,57 @@ pub fn position_rider(
     passenger: EntityRef,
     level: &mut Level,
 ) -> Result<(), LevelError> {
+    if let Some(position) = rider_position(vehicle, passenger, level)? {
+        level.set_entity_pos(passenger, position)?;
+    }
+    Ok(())
+}
+
+/// Captures the same virtual attachment queries for ordinary riding and snapTo.
+pub(crate) fn rider_position(
+    vehicle: EntityRef,
+    passenger: EntityRef,
+    level: &Level,
+) -> Result<Option<ferraloom_util::Vec3>, LevelError> {
     if !level
         .entity::<EntityData>(vehicle)?
         .passengers
         .contains(&passenger)
     {
-        return Ok(());
+        return Ok(None);
     }
     let behavior = level.entity_behavior(vehicle)?;
     let position = behavior.passenger_riding_position(vehicle, passenger, level)?;
     let rider_behavior = level.entity_behavior(passenger)?;
     let attachment = rider_behavior.vehicle_attachment_point(passenger, vehicle, level)?;
-    level.set_entity_pos(passenger, position - attachment)
+    Ok(Some(position - attachment))
+}
+
+/// Port of Entity#rideTick. Tick may replace or remove the vehicle; position
+/// against the live vehicle after returning from the derived dispatcher.
+pub fn ride_tick<E: super::Entity + ?Sized>(
+    behavior: &E,
+    entity: EntityRef,
+    level: &mut Level,
+) -> Result<(), LevelError> {
+    level.entity_mut::<EntityData>(entity)?.velocity = ferraloom_util::Vec3::ZERO;
+    behavior.tick(entity, level)?;
+    if let Some(vehicle) = level.entity::<EntityData>(entity)?.vehicle {
+        position_rider(vehicle, entity, level)?;
+    }
+    Ok(())
+}
+
+/// Port of LivingEntity#rideTick; `behavior` remains the concrete subclass for
+/// Entity#rideTick's virtual tick call, including when the rider dismounts.
+pub fn living_ride_tick<E: super::Entity + ?Sized>(
+    behavior: &E,
+    entity: EntityRef,
+    level: &mut Level,
+) -> Result<(), LevelError> {
+    ride_tick(behavior, entity, level)?;
+    level.entity_mut::<EntityData>(entity)?.fall_distance = 0.0;
+    Ok(())
 }
 
 /// Port of Entity#baseTick. Each borrow ends before fluid, damage or removal calls.
@@ -129,10 +168,6 @@ pub fn base_tick<E: super::Entity + ?Sized>(
     {
         stop_riding(entity, level)?;
     }
-    let was_eye = level
-        .entity::<EntityData>(entity)?
-        .fluid_interaction
-        .eyes_inside(ferraloom_data::tags::FluidTags::WATER, level)?;
     {
         let base = level.entity_mut::<EntityData>(entity)?;
         if base.boarding_cooldown > 0 {
@@ -141,6 +176,14 @@ pub fn base_tick<E: super::Entity + ?Sized>(
         if base.portal_cooldown > 0 {
             base.portal_cooldown -= 1;
         }
+    }
+    super::sounds::maybe_spawn_sprint_particle(behavior, entity, level)?;
+    let was_eye = level
+        .entity::<EntityData>(entity)?
+        .fluid_interaction
+        .eyes_inside(ferraloom_data::tags::FluidTags::WATER, level)?;
+    {
+        let base = level.entity_mut::<EntityData>(entity)?;
         base.was_in_powder_snow = base.is_in_powder_snow;
         base.is_in_powder_snow = false;
         base.was_eye_in_water = was_eye;
@@ -148,21 +191,17 @@ pub fn base_tick<E: super::Entity + ?Sized>(
     super::fluid::update_fluid_interaction(behavior, entity, level)?;
     update_swimming(entity, level)?;
     let base = level.entity::<EntityData>(entity)?;
-    let in_lava = base
-        .fluid_interaction
-        .height(ferraloom_data::tags::FluidTags::LAVA, level)?
-        > 0.0;
     if base.remaining_fire_ticks > 0 {
         if base.entity_type.data().fire_immune {
             level.entity_mut::<EntityData>(entity)?.clear_fire();
         } else {
-            if base.remaining_fire_ticks % 20 == 0 && !in_lava {
+            if base.remaining_fire_ticks % 20 == 0 && !base.is_in_lava(level)? {
                 behavior.hurt_server(entity, level, super::DamageSource::default(), 1.0)?;
             }
             level.entity_mut::<EntityData>(entity)?.remaining_fire_ticks -= 1;
         }
     }
-    if in_lava {
+    if level.entity::<EntityData>(entity)?.is_in_lava(level)? {
         level.entity_mut::<EntityData>(entity)?.fall_distance *= 0.5;
     }
     if level.entity::<EntityData>(entity)?.position.y < f64::from(level.min_build_height() - 64) {

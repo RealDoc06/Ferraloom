@@ -263,3 +263,46 @@ fn save_all_waits_for_pending_load_and_keeps_unported_chunks_pending() {
     assert!(level.take_entity_storage_requests().is_empty());
     assert!(!level.entity::<EntityData>(id).unwrap().removed);
 }
+
+#[test]
+fn duplicate_vehicle_uuid_keeps_held_object_without_stealing_the_visible_identity() {
+    let mut level = level();
+    let pos = ChunkPos::ZERO;
+    level
+        .update_entity_chunk_status(pos, Visibility::Ticking)
+        .unwrap();
+    let (request, _) = load_request(&mut level);
+    let original = orb_tag(1, Vec3::new(1.0, 64.0, 1.0));
+    let mut duplicate = original.clone();
+    duplicate.insert(
+        "Passengers",
+        Tag::List(ListTag(vec![Tag::Compound(orb_tag(
+            2,
+            Vec3::new(2.0, 65.0, 2.0),
+        ))])),
+    );
+    level
+        .complete_entity_chunk_load(request, Ok(Some(chunk(pos, vec![original, duplicate]))))
+        .unwrap();
+    level.tick_entity_management().unwrap();
+    let original = level.entity_by_uuid(Uuid::new(0, 1)).unwrap();
+    let passenger = level.entity_by_uuid(Uuid::new(0, 2)).unwrap();
+    let duplicate = level
+        .entity::<EntityData>(passenger)
+        .unwrap()
+        .vehicle
+        .unwrap();
+    assert_ne!(original, duplicate);
+    assert_eq!(level.all_entities(), vec![original, passenger]);
+    assert!(!level.entity::<EntityData>(duplicate).unwrap().removed);
+    level
+        .set_entity_pos(duplicate, Vec3::new(48.0, 64.0, 1.0))
+        .unwrap();
+    assert_eq!(level.all_entities(), vec![original, passenger]);
+    assert_eq!(level.entity_by_uuid(Uuid::new(0, 1)), Some(original));
+    crate::entity::stop_riding(passenger, &mut level).unwrap();
+    level.finish_entity_management();
+    assert!(level.entity_state(duplicate).is_err());
+    assert_eq!(level.entity_by_uuid(Uuid::new(0, 1)), Some(original));
+    assert_eq!(level.entity_chunk_load_status(pos), ChunkLoadStatus::Loaded);
+}
