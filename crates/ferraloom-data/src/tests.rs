@@ -517,6 +517,32 @@ fn cached_block_facts_preserve_dynamic_shape_fallback_and_post_processing() {
 }
 
 #[test]
+fn center_support_cache_keeps_support_type_and_dynamic_shape_distinctions() {
+    use ferraloom_util::Direction;
+    assert_eq!(
+        Block::SOUL_SAND
+            .default_state()
+            .cached_center_support(Direction::Up),
+        Some(true)
+    );
+    let fence = Block::OAK_FENCE.default_state();
+    assert_eq!(fence.cached_center_support(Direction::Up), Some(true));
+    assert_eq!(fence.cached_sturdy_face(Direction::Up), Some(false));
+    assert_eq!(
+        Block::OAK_LEAVES
+            .default_state()
+            .cached_center_support(Direction::Up),
+        Some(false)
+    );
+    assert_eq!(
+        Block::SCAFFOLDING
+            .default_state()
+            .cached_center_support(Direction::Up),
+        None
+    );
+}
+
+#[test]
 fn block_class_hierarchy_matches_extracted_vanilla_classes() {
     use crate::{Block, BlockClass};
     let data: serde_json::Value =
@@ -563,6 +589,41 @@ fn cached_air_fact_matches_vanilla_state_registry() {
     }
     const AIR: bool = crate::Block::AIR.default_state().is_air();
     assert!(std::hint::black_box(AIR));
+}
+
+#[test]
+fn dynamic_integer_properties_preserve_absence_and_invalid_values() {
+    use crate::{BlockStatePropertyError, properties};
+    let state = Block::WHEAT.default_state();
+    assert!(state.has_integer_property("age"));
+    assert_eq!(
+        state.with_integer_property("age", 7).unwrap(),
+        state.with(properties::AGE, 7).unwrap()
+    );
+    assert_eq!(
+        state.with_integer_property("age", 8),
+        Err(BlockStatePropertyError::InvalidValue(8))
+    );
+    assert_eq!(
+        state.with_integer_property("waterlogged", 0),
+        Err(BlockStatePropertyError::MissingOrNonInteger)
+    );
+    assert!(!Block::OAK_LOG.default_state().has_integer_property("axis"));
+    let wet = Block::OAK_STAIRS
+        .default_state()
+        .with(properties::WATERLOGGED, true)
+        .unwrap();
+    assert_eq!(
+        Block::STONE_STAIRS
+            .default_state()
+            .with_properties_of(wet)
+            .get(properties::WATERLOGGED),
+        Some(true)
+    );
+    // IntegerProperty equality includes its allowed range.
+    let wheat = state.with(properties::AGE, 7).unwrap();
+    let cactus = Block::CACTUS.default_state();
+    assert_eq!(cactus.with_properties_of(wheat), cactus);
 }
 
 #[test]
@@ -711,39 +772,4 @@ fn fluid_random_ticks_follow_the_fluid_type_and_preserve_waterlogged_states() {
             .fluid
             .is_randomly_ticking()
     );
-}
-
-#[test]
-fn dynamic_integer_properties_preserve_absence_and_invalid_values() {
-    use crate::{BlockStatePropertyError, properties};
-    let state = Block::WHEAT.default_state();
-    assert!(state.has_integer_property("age"));
-    assert_eq!(
-        state.with_integer_property("age", 7).unwrap(),
-        state.with(properties::AGE, 7).unwrap()
-    );
-    assert_eq!(
-        state.with_integer_property("age", 8),
-        Err(BlockStatePropertyError::InvalidValue(8))
-    );
-    assert_eq!(
-        state.with_integer_property("waterlogged", 0),
-        Err(BlockStatePropertyError::MissingOrNonInteger)
-    );
-    assert!(!Block::OAK_LOG.default_state().has_integer_property("axis"));
-    let wet = Block::OAK_STAIRS
-        .default_state()
-        .with(properties::WATERLOGGED, true)
-        .unwrap();
-    assert_eq!(
-        Block::STONE_STAIRS
-            .default_state()
-            .with_properties_of(wet)
-            .get(properties::WATERLOGGED),
-        Some(true)
-    );
-    // IntegerProperty equality includes its allowed range.
-    let wheat = state.with(properties::AGE, 7).unwrap();
-    let cactus = Block::CACTUS.default_state();
-    assert_eq!(cactus.with_properties_of(wheat), cactus);
 }

@@ -4,7 +4,7 @@ use super::{furnace::AbstractFurnaceBlockEntity, menu, storage::BaseContainerBlo
 use crate::{
     block::entity::{BlockEntityRef, BlockEntityState},
     entity::player::inventory::{component, count, max_stack_size, set_count, split},
-    inventory::Container,
+    inventory::{Container, ContainerHandle, ContainerSlot, StackOperation, StackValue},
     level::{Level, LevelError},
 };
 use ferraloom_data::{
@@ -101,13 +101,28 @@ pub fn get_item(
 pub fn set_item(
     handle: BlockEntityRef,
     slot: usize,
-    mut stack: ItemStack,
+    stack: ItemStack,
     level: &mut Level,
 ) -> Result<(), LevelError> {
-    level.with_block_entity_callback(handle, |level| {
+    set_item_value(handle, slot, StackValue::New(stack), level)
+}
+/// Native class setItem with a fresh value or the original mutable receiver.
+/// Existing delivery preserves its generation/alias, then runs the same class
+/// callbacks as New; it never clones a held stack into the destination.
+pub fn set_item_value(
+    handle: BlockEntityRef,
+    slot: usize,
+    value: StackValue,
+    level: &mut Level,
+) -> Result<(), LevelError> {
+    let mut operation = StackOperation::new(level);
+    if let StackValue::Existing(reference) = &value {
+        operation.pin_existing(*reference).map_err(stack_error)?;
+    }
+    operation.level.with_block_entity_callback(handle, |level| {
         super::loot::unpack_loot_table(handle, None, level)?;
         if matches!(level.block_entity_state(handle)?, BlockEntityState::Furnace(_)) {
-            return super::furnace::set_item(handle, slot, stack, level);
+            return super::furnace::set_item_value(handle, slot, value, level);
         }
         let enable_crafter_slot = matches!(level.block_entity_state(handle)?, BlockEntityState::Crafter(crafter) if crafter.disabled_slots[slot] && crafter.parent.parent.items[slot].is_empty());
         if enable_crafter_slot {
@@ -115,17 +130,45 @@ pub fn set_item(
             handle.set_changed(level)?;
         }
         let hopper = matches!(level.block_entity_state(handle)?, BlockEntityState::Hopper(_));
-        let container = level.block_entity_mut::<BaseContainerBlockEntity>(handle)?;
-        if hopper {
-            let size = count(&stack).min(container.max_stack_size().min(max_stack_size(&stack)));
-            set_count(&mut stack, size);
-            container.items[slot] = stack;
-        } else {
-            container.set_item(slot, stack);
+        replace_and_limit(handle, slot, value, level)?;
+        if !hopper {
+            level.block_entity_mut::<BaseContainerBlockEntity>(handle)?.set_changed();
             handle.set_changed(level)?;
         }
         Ok(())
     })
+}
+fn stack_error(error: crate::inventory::MenuError) -> LevelError {
+    match error {
+        crate::inventory::MenuError::Level(error) => error,
+        _ => LevelError::Inventory("container stack identity"),
+    }
+}
+/// Shared native items.set followed by limitSize. Class-specific notifications
+/// and furnace reset logic run in their callers after both mutations complete.
+pub(crate) fn replace_and_limit(
+    handle: BlockEntityRef,
+    slot: usize,
+    value: StackValue,
+    level: &mut Level,
+) -> Result<(), LevelError> {
+    let address = ContainerSlot {
+        container: ContainerHandle::BlockEntity(handle),
+        slot,
+    };
+    level
+        .replace_stack_object(address, value)
+        .map_err(stack_error)?;
+    let installed = level.stack_ref(address).map_err(stack_error)?;
+    let item = level.stack(installed).map_err(stack_error)?;
+    let size = count(item).min(
+        level
+            .block_entity::<BaseContainerBlockEntity>(handle)?
+            .max_stack_size()
+            .min(max_stack_size(item)),
+    );
+    set_count(level.stack_mut(installed).map_err(stack_error)?, size);
+    Ok(())
 }
 
 /// Port of ContainerHelper#removeItem and the receiver's change notification.
@@ -160,6 +203,15 @@ pub fn remove_item_no_update(
     level: &mut Level,
 ) -> Result<ItemStack, LevelError> {
     super::loot::unpack_loot_table(handle, None, level)?;
+    let container = level.block_entity::<BaseContainerBlockEntity>(handle)?;
+    if let Some((generations, item, index)) = container.stack_parts(slot)
+        && !item.is_empty()
+        && generations.is_retained(generations.current(index).unwrap())
+    {
+        return Err(LevelError::Inventory(
+            "retained removal requires an Existing stack value",
+        ));
+    }
     Ok(level
         .block_entity_mut::<BaseContainerBlockEntity>(handle)?
         .remove_item_no_update(slot))
@@ -272,11 +324,7 @@ pub fn can_take_item_through_face(
     tags: &TagSet<Item>,
 ) -> bool {
     if matches!(state, BlockEntityState::Furnace(_)) && face == Direction::Down && slot == 1 {
-        let item = if stack.is_empty() {
-            Item::AIR
-        } else {
-            stack.0.as_ref().unwrap().item
-        };
+        let item = stack.item();
         return tags.contains_key(ItemTags::FURNACE_FUEL_BOTTOM_TAKEABLE, item);
     }
     true
@@ -310,6 +358,95 @@ mod tests {
     use super::*;
     use crate::block::entity::create;
     use ferraloom_data::datapack::{Pack, ResourceManager};
+    #[test]
+    fn value_setter_preserves_aliases_and_native_class_callbacks() {
+        use crate::level::{Region, chunk::LevelChunk};
+        use ferraloom_util::ChunkPos;
+        use std::sync::Arc;
+        static BEHAVIORS: crate::Behaviors = crate::Behaviors::EMPTY;
+        let mut checked = 0;
+        for line in include_str!("../../../tests/java/blocks/entities/vectors.tsv")
+            .lines()
+            .filter(|line| line.starts_with("container-set-value\t"))
+        {
+            let fields: Vec<_> = line.split('\t').collect();
+            let mut level = Level::new(
+                Region::new(&BEHAVIORS),
+                crate::level::LevelContext::fixture(0, 63),
+            );
+            let pos = BlockPos::new(3, 3, 3);
+            let section = ferraloom_chunk::LevelChunkSection::new(
+                ferraloom_chunk::Strategy::block_states(),
+                ferraloom_chunk::Strategy::biomes(Arc::new(
+                    ferraloom_chunk::IdMap::new(vec![ferraloom_chunk::BiomeId(0)]).unwrap(),
+                )),
+                ferraloom_chunk::BiomeId(0),
+            );
+            let state = Block::from_name(&format!("minecraft:{}", fields[1]))
+                .unwrap()
+                .default_state();
+            let mut chunk = LevelChunk::new(ChunkPos::new(0, 0), 0..1, section);
+            chunk.set_block_state(pos, state);
+            level.add_chunk(chunk).unwrap();
+            level.set_block_entity(create(pos, state).unwrap()).unwrap();
+            let handle = level.block_entity_ref(pos).unwrap().unwrap();
+            set_item(
+                handle,
+                0,
+                ItemStack::new(Item::STONE, 10, Default::default()),
+                &mut level,
+            )
+            .unwrap();
+            let address = ContainerSlot {
+                container: ContainerHandle::BlockEntity(handle),
+                slot: 0,
+            };
+            let mut operation = StackOperation::new(&mut level);
+            let held = operation.pin(address).unwrap();
+            set_count(operation.level.stack_mut(held).unwrap(), 9);
+            let value = if fields[2] == "true" {
+                StackValue::Existing(held)
+            } else {
+                // Dropper's native path explicitly copies its result.
+                StackValue::New(operation.level.stack(held).unwrap().clone())
+            };
+            let before = operation
+                .level
+                .block_entity::<BaseContainerBlockEntity>(handle)
+                .unwrap()
+                .times_changed;
+            set_item_value(handle, 0, value, operation.level).unwrap();
+            let after = operation
+                .level
+                .block_entity::<BaseContainerBlockEntity>(handle)
+                .unwrap()
+                .times_changed;
+            assert_eq!(
+                after.wrapping_sub(before),
+                fields[3].parse::<u32>().unwrap(),
+                "{line}"
+            );
+            assert_eq!(
+                operation.level.stack_ref(address).unwrap() == held,
+                fields[4] == "true",
+                "{line}"
+            );
+            set_count(operation.level.stack_mut(held).unwrap(), 2);
+            let current = operation.level.stack_ref(address).unwrap();
+            assert_eq!(
+                count(operation.level.stack(current).unwrap()),
+                fields[5].parse::<i32>().unwrap(),
+                "{line}"
+            );
+            assert_eq!(
+                count(operation.level.stack(held).unwrap()),
+                fields[6].parse::<i32>().unwrap(),
+                "{line}"
+            );
+            checked += 1;
+        }
+        assert_eq!(checked, 6);
+    }
     #[test]
     fn furnace_sided_slots_and_rules_match_native_live_tags() {
         let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").expect("builder vanilla jar");

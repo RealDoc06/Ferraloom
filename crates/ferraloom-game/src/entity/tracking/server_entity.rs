@@ -180,7 +180,7 @@ impl ServerEntity {
         if !base.passengers.is_empty() {
             packets.push(passengers_packet(self.entity, level)?);
         }
-        if let Some(vehicle) = base.vehicle {
+        if let Some(vehicle) = base.vehicle.get() {
             packets.push(passengers_packet(vehicle, level)?);
         }
         Ok(packets)
@@ -254,7 +254,7 @@ impl ServerEntity {
             let rotation_changed = (i32::from(y_rot) - i32::from(self.last_sent_y_rot)).abs() >= 1
                 || (i32::from(x_rot) - i32::from(self.last_sent_x_rot)).abs() >= 1;
             let position = base.position;
-            if base.vehicle.is_some() {
+            if base.vehicle.get().is_some() {
                 if rotation_changed {
                     out.push(TrackingPacket::players(Packet::MoveEntityRot(
                         packet::MoveEntityRot {

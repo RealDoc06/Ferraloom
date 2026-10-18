@@ -169,6 +169,35 @@ fn empty_chunk(pos: ChunkPos) -> chunk::LevelChunk {
         ),
     )
 }
+
+#[test]
+fn shared_loading_status_changes_are_visible_to_an_existing_chunk_reader() {
+    use distance_manager::FullChunkStatus;
+    let mut level = Level::new(Region::new(&EMPTY), LevelContext::fixture(0, 63));
+    let pos = ChunkPos::ZERO;
+    level.add_chunk(empty_chunk(pos)).unwrap();
+    let reader = &level;
+    let chunk = reader.chunk(pos).unwrap();
+    for (requested, ready) in [
+        (FullChunkStatus::Full, false),
+        (FullChunkStatus::EntityTicking, false),
+        (FullChunkStatus::EntityTicking, true),
+        (FullChunkStatus::Full, false),
+    ] {
+        reader
+            .set_chunk_loading_status(pos, requested, ready)
+            .unwrap();
+        assert_eq!(chunk.full_status(), requested);
+        assert_eq!(chunk.ticking_ready(), ready);
+        assert!(!chunk.is_unsaved());
+    }
+    let absent = ChunkPos::new(1, 0);
+    assert_eq!(
+        reader.set_chunk_loading_status(absent, FullChunkStatus::Full, false),
+        Err(LevelError::MissingChunk(absent))
+    );
+}
+
 fn empty_level(behaviors: &'static Behaviors) -> Level {
     let mut level = Level::new(
         Region::new(behaviors),
@@ -925,10 +954,47 @@ fn block_and_fluid_ticks_survive_unload_nbt_and_reload_with_their_remaining_dela
     loaded.load_saved_ticks(&data).unwrap();
     level.set_game_time(100);
     level.add_chunk(loaded).unwrap();
+    level.set_game_time(200);
     let mut saved = ferraloom_storage::SerializableChunkData::default();
     level.save_chunk_ticks(chunk, &mut saved).unwrap();
     assert_eq!(saved.block_ticks.unwrap()[0].delay, Some(7));
     assert_eq!(saved.fluid_ticks.unwrap()[0].delay, Some(3));
+    level.start_ticking_chunk(chunk).unwrap();
+    assert_eq!(
+        level
+            .region()
+            .block_ticks
+            .container(chunk)
+            .unwrap()
+            .peek()
+            .unwrap()
+            .trigger_tick,
+        207
+    );
+    assert_eq!(
+        level
+            .region()
+            .fluid_ticks
+            .container(chunk)
+            .unwrap()
+            .peek()
+            .unwrap()
+            .trigger_tick,
+        203
+    );
+    level.set_game_time(300);
+    level.start_ticking_chunk(chunk).unwrap();
+    assert_eq!(
+        level
+            .region()
+            .block_ticks
+            .container(chunk)
+            .unwrap()
+            .peek()
+            .unwrap()
+            .trigger_tick,
+        207
+    );
 }
 #[test]
 fn shape_updates_skip_wire_and_apply_drop_suppression_at_the_shape_call() {
@@ -980,12 +1046,7 @@ fn shape_updates_skip_wire_and_apply_drop_suppression_at_the_shape_call() {
         )
         .unwrap();
     assert!(level.get_block_state(pos).unwrap().is_air());
-    assert!(
-        !level
-            .take_effects()
-            .iter()
-            .any(|e| matches!(e, LevelEffect::DropResources { .. }))
-    );
+    assert!(level.all_entities().is_empty());
 }
 
 #[test]

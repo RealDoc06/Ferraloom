@@ -47,9 +47,663 @@ registry	minecraft:test_block	minecraft:test_block
 registry	minecraft:test_instance_block	minecraft:test_instance_block
 registry	minecraft:copper_golem_statue	minecraft:copper_golem_statue,minecraft:exposed_copper_golem_statue,minecraft:weathered_copper_golem_statue,minecraft:oxidized_copper_golem_statue,minecraft:waxed_copper_golem_statue,minecraft:waxed_exposed_copper_golem_statue,minecraft:waxed_weathered_copper_golem_statue,minecraft:waxed_oxidized_copper_golem_statue
 registry	minecraft:potent_sulfur	minecraft:potent_sulfur
+cook-time	bf800000	1	1
+cook-time	bf800000	7	7
+cook-time	bf800000	100	100
+cook-time	bf800000	200	200
+cook-time	bf800000	2147483647	2147483647
+cook-time	0	1	1
+cook-time	0	7	7
+cook-time	0	100	100
+cook-time	0	200	200
+cook-time	0	2147483647	2147483647
+cook-time	3f000000	1	2
+cook-time	3f000000	7	14
+cook-time	3f000000	100	200
+cook-time	3f000000	200	400
+cook-time	3f000000	2147483647	2147483647
+cook-time	3f800000	1	1
+cook-time	3f800000	7	7
+cook-time	3f800000	100	100
+cook-time	3f800000	200	200
+cook-time	3f800000	2147483647	2147483647
+cook-time	3fc00000	1	1
+cook-time	3fc00000	7	5
+cook-time	3fc00000	100	67
+cook-time	3fc00000	200	134
+cook-time	3fc00000	2147483647	1431655808
+cook-time	40447ae1	1	1
+cook-time	40447ae1	7	3
+cook-time	40447ae1	100	33
+cook-time	40447ae1	200	66
+cook-time	40447ae1	2147483647	699506112
+sided-slots	minecraft:furnace	down	[2, 1]
+sided-rule	minecraft:furnace	down	false	minecraft:coal	true,true,true;true,true,false;false,false,true
+sided-rule	minecraft:furnace	down	false	minecraft:bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:furnace	down	false	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	down	false	minecraft:lava_bucket	true,true,true;true,true,false;false,false,true
+sided-rule	minecraft:furnace	down	false	minecraft:stone	true,true,true;false,false,false;false,false,true
+sided-rule	minecraft:furnace	down	false	minecraft:iron_ingot	true,true,true;false,false,false;false,false,true
+sided-rule	minecraft:furnace	down	true	minecraft:coal	true,true,true;true,true,false;false,false,true
+sided-rule	minecraft:furnace	down	true	minecraft:bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	down	true	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	down	true	minecraft:lava_bucket	true,true,true;true,true,false;false,false,true
+sided-rule	minecraft:furnace	down	true	minecraft:stone	true,true,true;false,false,false;false,false,true
+sided-rule	minecraft:furnace	down	true	minecraft:iron_ingot	true,true,true;false,false,false;false,false,true
+sided-slots	minecraft:furnace	up	[0]
+sided-rule	minecraft:furnace	up	false	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:furnace	up	false	minecraft:bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:furnace	up	false	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	up	false	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:furnace	up	false	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	up	false	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	up	true	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:furnace	up	true	minecraft:bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	up	true	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	up	true	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:furnace	up	true	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	up	true	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
+sided-slots	minecraft:furnace	north	[1]
+sided-rule	minecraft:furnace	north	false	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:furnace	north	false	minecraft:bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:furnace	north	false	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	north	false	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:furnace	north	false	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	north	false	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	north	true	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:furnace	north	true	minecraft:bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	north	true	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	north	true	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:furnace	north	true	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	north	true	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
+sided-slots	minecraft:furnace	south	[1]
+sided-rule	minecraft:furnace	south	false	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:furnace	south	false	minecraft:bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:furnace	south	false	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	south	false	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:furnace	south	false	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	south	false	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	south	true	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:furnace	south	true	minecraft:bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	south	true	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	south	true	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:furnace	south	true	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	south	true	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
+sided-slots	minecraft:furnace	west	[1]
+sided-rule	minecraft:furnace	west	false	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:furnace	west	false	minecraft:bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:furnace	west	false	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	west	false	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:furnace	west	false	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	west	false	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	west	true	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:furnace	west	true	minecraft:bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	west	true	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	west	true	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:furnace	west	true	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	west	true	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
+sided-slots	minecraft:furnace	east	[1]
+sided-rule	minecraft:furnace	east	false	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:furnace	east	false	minecraft:bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:furnace	east	false	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	east	false	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:furnace	east	false	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	east	false	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	east	true	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:furnace	east	true	minecraft:bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	east	true	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	east	true	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:furnace	east	true	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:furnace	east	true	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
+sided-slots	minecraft:smoker	down	[2, 1]
+sided-rule	minecraft:smoker	down	false	minecraft:coal	true,true,true;true,true,false;false,false,true
+sided-rule	minecraft:smoker	down	false	minecraft:bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:smoker	down	false	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	down	false	minecraft:lava_bucket	true,true,true;true,true,false;false,false,true
+sided-rule	minecraft:smoker	down	false	minecraft:stone	true,true,true;false,false,false;false,false,true
+sided-rule	minecraft:smoker	down	false	minecraft:iron_ingot	true,true,true;false,false,false;false,false,true
+sided-rule	minecraft:smoker	down	true	minecraft:coal	true,true,true;true,true,false;false,false,true
+sided-rule	minecraft:smoker	down	true	minecraft:bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	down	true	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	down	true	minecraft:lava_bucket	true,true,true;true,true,false;false,false,true
+sided-rule	minecraft:smoker	down	true	minecraft:stone	true,true,true;false,false,false;false,false,true
+sided-rule	minecraft:smoker	down	true	minecraft:iron_ingot	true,true,true;false,false,false;false,false,true
+sided-slots	minecraft:smoker	up	[0]
+sided-rule	minecraft:smoker	up	false	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:smoker	up	false	minecraft:bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:smoker	up	false	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	up	false	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:smoker	up	false	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	up	false	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	up	true	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:smoker	up	true	minecraft:bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	up	true	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	up	true	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:smoker	up	true	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	up	true	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
+sided-slots	minecraft:smoker	north	[1]
+sided-rule	minecraft:smoker	north	false	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:smoker	north	false	minecraft:bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:smoker	north	false	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	north	false	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:smoker	north	false	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	north	false	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	north	true	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:smoker	north	true	minecraft:bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	north	true	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	north	true	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:smoker	north	true	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	north	true	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
+sided-slots	minecraft:smoker	south	[1]
+sided-rule	minecraft:smoker	south	false	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:smoker	south	false	minecraft:bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:smoker	south	false	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	south	false	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:smoker	south	false	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	south	false	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	south	true	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:smoker	south	true	minecraft:bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	south	true	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	south	true	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:smoker	south	true	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	south	true	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
+sided-slots	minecraft:smoker	west	[1]
+sided-rule	minecraft:smoker	west	false	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:smoker	west	false	minecraft:bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:smoker	west	false	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	west	false	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:smoker	west	false	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	west	false	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	west	true	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:smoker	west	true	minecraft:bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	west	true	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	west	true	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:smoker	west	true	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	west	true	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
+sided-slots	minecraft:smoker	east	[1]
+sided-rule	minecraft:smoker	east	false	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:smoker	east	false	minecraft:bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:smoker	east	false	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	east	false	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:smoker	east	false	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	east	false	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	east	true	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:smoker	east	true	minecraft:bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	east	true	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	east	true	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:smoker	east	true	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:smoker	east	true	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
+sided-slots	minecraft:blast_furnace	down	[2, 1]
+sided-rule	minecraft:blast_furnace	down	false	minecraft:coal	true,true,true;true,true,false;false,false,true
+sided-rule	minecraft:blast_furnace	down	false	minecraft:bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:blast_furnace	down	false	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	down	false	minecraft:lava_bucket	true,true,true;true,true,false;false,false,true
+sided-rule	minecraft:blast_furnace	down	false	minecraft:stone	true,true,true;false,false,false;false,false,true
+sided-rule	minecraft:blast_furnace	down	false	minecraft:iron_ingot	true,true,true;false,false,false;false,false,true
+sided-rule	minecraft:blast_furnace	down	true	minecraft:coal	true,true,true;true,true,false;false,false,true
+sided-rule	minecraft:blast_furnace	down	true	minecraft:bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	down	true	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	down	true	minecraft:lava_bucket	true,true,true;true,true,false;false,false,true
+sided-rule	minecraft:blast_furnace	down	true	minecraft:stone	true,true,true;false,false,false;false,false,true
+sided-rule	minecraft:blast_furnace	down	true	minecraft:iron_ingot	true,true,true;false,false,false;false,false,true
+sided-slots	minecraft:blast_furnace	up	[0]
+sided-rule	minecraft:blast_furnace	up	false	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:blast_furnace	up	false	minecraft:bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:blast_furnace	up	false	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	up	false	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:blast_furnace	up	false	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	up	false	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	up	true	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:blast_furnace	up	true	minecraft:bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	up	true	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	up	true	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:blast_furnace	up	true	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	up	true	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
+sided-slots	minecraft:blast_furnace	north	[1]
+sided-rule	minecraft:blast_furnace	north	false	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:blast_furnace	north	false	minecraft:bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:blast_furnace	north	false	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	north	false	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:blast_furnace	north	false	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	north	false	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	north	true	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:blast_furnace	north	true	minecraft:bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	north	true	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	north	true	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:blast_furnace	north	true	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	north	true	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
+sided-slots	minecraft:blast_furnace	south	[1]
+sided-rule	minecraft:blast_furnace	south	false	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:blast_furnace	south	false	minecraft:bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:blast_furnace	south	false	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	south	false	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:blast_furnace	south	false	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	south	false	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	south	true	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:blast_furnace	south	true	minecraft:bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	south	true	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	south	true	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:blast_furnace	south	true	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	south	true	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
+sided-slots	minecraft:blast_furnace	west	[1]
+sided-rule	minecraft:blast_furnace	west	false	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:blast_furnace	west	false	minecraft:bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:blast_furnace	west	false	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	west	false	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:blast_furnace	west	false	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	west	false	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	west	true	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:blast_furnace	west	true	minecraft:bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	west	true	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	west	true	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:blast_furnace	west	true	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	west	true	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
+sided-slots	minecraft:blast_furnace	east	[1]
+sided-rule	minecraft:blast_furnace	east	false	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:blast_furnace	east	false	minecraft:bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:blast_furnace	east	false	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	east	false	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:blast_furnace	east	false	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	east	false	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	east	true	minecraft:coal	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:blast_furnace	east	true	minecraft:bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	east	true	minecraft:water_bucket	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	east	true	minecraft:lava_bucket	true,true,true;true,true,true;false,false,true
+sided-rule	minecraft:blast_furnace	east	true	minecraft:stone	true,true,true;false,false,true;false,false,true
+sided-rule	minecraft:blast_furnace	east	true	minecraft:iron_ingot	true,true,true;false,false,true;false,false,true
 ticker-phase	first	a
 ticker-phase	second	a,c
 ticker-phase	frozen	
+scatter	0	0		-1930858313
+scatter	0	1	1|bff53a778a81740c,40500b8bb62346b1,4004d312baf6ace8|bfb389c6a6947d68,3fc44dcc19a654d0,3fbc37c3491c38c0	755814641
+scatter	0	64	12|bff53a778a81740c,40500b8bb62346b1,4004d312baf6ace8|bfb389c6a6947d68,3fc44dcc19a654d0,3fbc37c3491c38c0;24|bff53a778a81740c,40500b8bb62346b1,4004d312baf6ace8|3f912d5e0f350e14,3fcb69ddeef27844,bfa8909b1d020024;12|bff53a778a81740c,40500b8bb62346b1,4004d312baf6ace8|bf6f1186e5f0218f,3fb6ec226e2ada8e,bf951a9166c29018;16|bff53a778a81740c,40500b8bb62346b1,4004d312baf6ace8|bf83cabf4efc0358,3fce308034e68c58,3fb680fbdac4faf7	356750287
+scatter	0	99	12|bff53a778a81740c,40500b8bb62346b1,4004d312baf6ace8|bfb389c6a6947d68,3fc44dcc19a654d0,3fbc37c3491c38c0;24|bff53a778a81740c,40500b8bb62346b1,4004d312baf6ace8|3f912d5e0f350e14,3fcb69ddeef27844,bfa8909b1d020024;12|bff53a778a81740c,40500b8bb62346b1,4004d312baf6ace8|bf6f1186e5f0218f,3fb6ec226e2ada8e,bf951a9166c29018;25|bff53a778a81740c,40500b8bb62346b1,4004d312baf6ace8|bf83cabf4efc0358,3fce308034e68c58,3fb680fbdac4faf7;19|bff53a778a81740c,40500b8bb62346b1,4004d312baf6ace8|bf8c6ed0e72554df,3fd1429f3ccca6c6,3f83f94f5d36c236;7|bff53a778a81740c,40500b8bb62346b1,4004d312baf6ace8|bfa048ad578fc830,3fc1f26bb5aa3a73,3f88e2c22cd217c2	-1663951485
+scatter	1	0		1429008869
+scatter	1	1	1|bff53abe00b2d62a,405013af12b0e3a8,40023f0ccc8dea15|bf7866f000d5362d,3fc97fd9f141f6a0,bfa4fc4eda72b891	2092024379
+scatter	1	64	24|bff53abe00b2d62a,405013af12b0e3a8,40023f0ccc8dea15|bf7866f000d5362d,3fc97fd9f141f6a0,bfa4fc4eda72b891;15|bff53abe00b2d62a,405013af12b0e3a8,40023f0ccc8dea15|3f775c0ed29b8dc2,3fc67a2718a1c905,bfb33ed092e1f582;19|bff53abe00b2d62a,405013af12b0e3a8,40023f0ccc8dea15|bfb5269be5070974,3fc5d8d6b96bdcea,3faa305e4c9bc394;6|bff53abe00b2d62a,405013af12b0e3a8,40023f0ccc8dea15|bf99f929ddd931cb,3fc49b267a28a9aa,bf6e9ed4669312a1	880097008
+scatter	1	99	24|bff53abe00b2d62a,405013af12b0e3a8,40023f0ccc8dea15|bf7866f000d5362d,3fc97fd9f141f6a0,bfa4fc4eda72b891;15|bff53abe00b2d62a,405013af12b0e3a8,40023f0ccc8dea15|3f775c0ed29b8dc2,3fc67a2718a1c905,bfb33ed092e1f582;19|bff53abe00b2d62a,405013af12b0e3a8,40023f0ccc8dea15|bfb5269be5070974,3fc5d8d6b96bdcea,3faa305e4c9bc394;13|bff53abe00b2d62a,405013af12b0e3a8,40023f0ccc8dea15|bf99f929ddd931cb,3fc49b267a28a9aa,bf6e9ed4669312a1;24|bff53abe00b2d62a,405013af12b0e3a8,40023f0ccc8dea15|3f83ba002fcd1f5f,3fbf24334150522a,bf22e622722b8561;4|bff53abe00b2d62a,405013af12b0e3a8,40023f0ccc8dea15|3fb56a9595c8a4a0,3fcc336ac093e0a9,3f9762db6bef0126	-472838325
+scatter	9123456	0		1426726698
+scatter	9123456	1	1|bff8f20eda609679,40500995195efff6,4001c113a3040f7a|3fa33a82fe1d73d4,3fc33a21a9a5a256,bfb0fdd25254d043	-492929270
+scatter	9123456	64	16|bff8f20eda609679,40500995195efff6,4001c113a3040f7a|3fa33a82fe1d73d4,3fc33a21a9a5a256,bfb0fdd25254d043;29|bff8f20eda609679,40500995195efff6,4001c113a3040f7a|3fb7c1cf702a66ed,3fc4007e62b638a0,3f6ecbba2db733b1;17|bff8f20eda609679,40500995195efff6,4001c113a3040f7a|3f8c40c4b8d3b233,3fd103b17596cae1,bf9bd598cc42350a;2|bff8f20eda609679,40500995195efff6,4001c113a3040f7a|bfaefa8d0cab9277,3fc10e544b31dc3e,3fb4c2e316ede380	-2132503002
+scatter	9123456	99	16|bff8f20eda609679,40500995195efff6,4001c113a3040f7a|3fa33a82fe1d73d4,3fc33a21a9a5a256,bfb0fdd25254d043;29|bff8f20eda609679,40500995195efff6,4001c113a3040f7a|3fb7c1cf702a66ed,3fc4007e62b638a0,3f6ecbba2db733b1;17|bff8f20eda609679,40500995195efff6,4001c113a3040f7a|3f8c40c4b8d3b233,3fd103b17596cae1,bf9bd598cc42350a;26|bff8f20eda609679,40500995195efff6,4001c113a3040f7a|bfaefa8d0cab9277,3fc10e544b31dc3e,3fb4c2e316ede380;11|bff8f20eda609679,40500995195efff6,4001c113a3040f7a|3fb09566c4e108b4,3fcc00c3733487b5,bf54cb66c1bc1dd5	282012429
+pop-resource-rng	0	NONE	0	-1930858313
+pop-resource-rng	0	up	0	-1728529858
+pop-resource-rng	0	east	0	-1728529858
+pop-resource-rng	0	NONE	3	-1930858313
+pop-resource-rng	0	up	3	-1728529858
+pop-resource-rng	0	east	3	-1728529858
+pop-resource-rng	1	NONE	0	1429008869
+pop-resource-rng	1	up	0	-138487339
+pop-resource-rng	1	east	0	-138487339
+pop-resource-rng	1	NONE	3	1429008869
+pop-resource-rng	1	up	3	-138487339
+pop-resource-rng	1	east	3	-138487339
+pop-resource-rng	9123456	NONE	0	1426726698
+pop-resource-rng	9123456	up	0	-1503499307
+pop-resource-rng	9123456	east	0	-1503499307
+pop-resource-rng	9123456	NONE	3	1426726698
+pop-resource-rng	9123456	up	3	-1503499307
+pop-resource-rng	9123456	east	3	-1503499307
+sign-edit	false	false	false	{back_text:{color:"black",has_glowing_text:0b,messages:["","","",""]},components:{},front_text:{color:"black",has_glowing_text:0b,messages:["","","",""]},is_waxed:0b}	false
+sign-edit-updates	false	false	false	[]
+sign-edit	false	false	true	{back_text:{color:"black",has_glowing_text:0b,messages:["","","",""]},components:{},front_text:{color:"black",has_glowing_text:0b,messages:["","","",""]},is_waxed:0b}	false
+sign-edit-updates	false	false	true	[]
+sign-edit	false	true	false	{back_text:{color:"black",has_glowing_text:0b,messages:["","","",""]},components:{},front_text:{color:"black",filtered_messages:["first","","third","fourth"],has_glowing_text:0b,messages:["first","second","third","fourth"]},is_waxed:0b}	true
+sign-edit-updates	false	true	false	[true,false]
+sign-edit	false	true	true	{back_text:{color:"black",has_glowing_text:0b,messages:["","","",""]},components:{},front_text:{color:"black",has_glowing_text:0b,messages:["first","","third","fourth"]},is_waxed:0b}	true
+sign-edit-updates	false	true	true	[true,false]
+sign-edit	true	false	false	{back_text:{color:"black",has_glowing_text:0b,messages:["","","",""]},components:{},front_text:{color:"black",has_glowing_text:0b,messages:["","","",""]},is_waxed:1b}	false
+sign-edit-updates	true	false	false	[]
+sign-edit	true	false	true	{back_text:{color:"black",has_glowing_text:0b,messages:["","","",""]},components:{},front_text:{color:"black",has_glowing_text:0b,messages:["","","",""]},is_waxed:1b}	false
+sign-edit-updates	true	false	true	[]
+sign-edit	true	true	false	{back_text:{color:"black",has_glowing_text:0b,messages:["","","",""]},components:{},front_text:{color:"black",has_glowing_text:0b,messages:["","","",""]},is_waxed:1b}	false
+sign-edit-updates	true	true	false	[]
+sign-edit	true	true	true	{back_text:{color:"black",has_glowing_text:0b,messages:["","","",""]},components:{},front_text:{color:"black",has_glowing_text:0b,messages:["","","",""]},is_waxed:1b}	false
+sign-edit-updates	true	true	true	[]
+sign-facing	6891	3fe0000000000000	400c000000000000	true
+sign-facing	6891	400c000000000000	400c000000000000	true
+sign-facing	6891	400c000000000000	3fe0000000000000	true
+sign-facing	6891	400c000000000000	c004000000000000	false
+sign-facing	6891	3fe0000000000000	c004000000000000	false
+sign-facing	6891	c004000000000000	c004000000000000	false
+sign-facing	6891	c004000000000000	3fe0000000000000	true
+sign-facing	6891	c004000000000000	400c000000000000	true
+sign-facing	6893	3fe0000000000000	400c000000000000	true
+sign-facing	6893	400c000000000000	400c000000000000	true
+sign-facing	6893	400c000000000000	3fe0000000000000	false
+sign-facing	6893	400c000000000000	c004000000000000	false
+sign-facing	6893	3fe0000000000000	c004000000000000	false
+sign-facing	6893	c004000000000000	c004000000000000	false
+sign-facing	6893	c004000000000000	3fe0000000000000	true
+sign-facing	6893	c004000000000000	400c000000000000	true
+sign-facing	6895	3fe0000000000000	400c000000000000	true
+sign-facing	6895	400c000000000000	400c000000000000	true
+sign-facing	6895	400c000000000000	3fe0000000000000	false
+sign-facing	6895	400c000000000000	c004000000000000	false
+sign-facing	6895	3fe0000000000000	c004000000000000	false
+sign-facing	6895	c004000000000000	c004000000000000	true
+sign-facing	6895	c004000000000000	3fe0000000000000	true
+sign-facing	6895	c004000000000000	400c000000000000	true
+sign-facing	6897	3fe0000000000000	400c000000000000	true
+sign-facing	6897	400c000000000000	400c000000000000	false
+sign-facing	6897	400c000000000000	3fe0000000000000	false
+sign-facing	6897	400c000000000000	c004000000000000	false
+sign-facing	6897	3fe0000000000000	c004000000000000	false
+sign-facing	6897	c004000000000000	c004000000000000	true
+sign-facing	6897	c004000000000000	3fe0000000000000	true
+sign-facing	6897	c004000000000000	400c000000000000	true
+sign-facing	6899	3fe0000000000000	400c000000000000	false
+sign-facing	6899	400c000000000000	400c000000000000	false
+sign-facing	6899	400c000000000000	3fe0000000000000	false
+sign-facing	6899	400c000000000000	c004000000000000	false
+sign-facing	6899	3fe0000000000000	c004000000000000	true
+sign-facing	6899	c004000000000000	c004000000000000	true
+sign-facing	6899	c004000000000000	3fe0000000000000	true
+sign-facing	6899	c004000000000000	400c000000000000	true
+sign-facing	6901	3fe0000000000000	400c000000000000	false
+sign-facing	6901	400c000000000000	400c000000000000	false
+sign-facing	6901	400c000000000000	3fe0000000000000	false
+sign-facing	6901	400c000000000000	c004000000000000	false
+sign-facing	6901	3fe0000000000000	c004000000000000	true
+sign-facing	6901	c004000000000000	c004000000000000	true
+sign-facing	6901	c004000000000000	3fe0000000000000	true
+sign-facing	6901	c004000000000000	400c000000000000	true
+sign-facing	6903	3fe0000000000000	400c000000000000	false
+sign-facing	6903	400c000000000000	400c000000000000	false
+sign-facing	6903	400c000000000000	3fe0000000000000	false
+sign-facing	6903	400c000000000000	c004000000000000	true
+sign-facing	6903	3fe0000000000000	c004000000000000	true
+sign-facing	6903	c004000000000000	c004000000000000	true
+sign-facing	6903	c004000000000000	3fe0000000000000	true
+sign-facing	6903	c004000000000000	400c000000000000	true
+sign-facing	6905	3fe0000000000000	400c000000000000	false
+sign-facing	6905	400c000000000000	400c000000000000	false
+sign-facing	6905	400c000000000000	3fe0000000000000	false
+sign-facing	6905	400c000000000000	c004000000000000	true
+sign-facing	6905	3fe0000000000000	c004000000000000	true
+sign-facing	6905	c004000000000000	c004000000000000	true
+sign-facing	6905	c004000000000000	3fe0000000000000	true
+sign-facing	6905	c004000000000000	400c000000000000	false
+sign-facing	6907	3fe0000000000000	400c000000000000	false
+sign-facing	6907	400c000000000000	400c000000000000	false
+sign-facing	6907	400c000000000000	3fe0000000000000	true
+sign-facing	6907	400c000000000000	c004000000000000	true
+sign-facing	6907	3fe0000000000000	c004000000000000	true
+sign-facing	6907	c004000000000000	c004000000000000	true
+sign-facing	6907	c004000000000000	3fe0000000000000	true
+sign-facing	6907	c004000000000000	400c000000000000	false
+sign-facing	6909	3fe0000000000000	400c000000000000	false
+sign-facing	6909	400c000000000000	400c000000000000	false
+sign-facing	6909	400c000000000000	3fe0000000000000	true
+sign-facing	6909	400c000000000000	c004000000000000	true
+sign-facing	6909	3fe0000000000000	c004000000000000	true
+sign-facing	6909	c004000000000000	c004000000000000	true
+sign-facing	6909	c004000000000000	3fe0000000000000	false
+sign-facing	6909	c004000000000000	400c000000000000	false
+sign-facing	6911	3fe0000000000000	400c000000000000	false
+sign-facing	6911	400c000000000000	400c000000000000	true
+sign-facing	6911	400c000000000000	3fe0000000000000	true
+sign-facing	6911	400c000000000000	c004000000000000	true
+sign-facing	6911	3fe0000000000000	c004000000000000	true
+sign-facing	6911	c004000000000000	c004000000000000	true
+sign-facing	6911	c004000000000000	3fe0000000000000	false
+sign-facing	6911	c004000000000000	400c000000000000	false
+sign-facing	6913	3fe0000000000000	400c000000000000	false
+sign-facing	6913	400c000000000000	400c000000000000	true
+sign-facing	6913	400c000000000000	3fe0000000000000	true
+sign-facing	6913	400c000000000000	c004000000000000	true
+sign-facing	6913	3fe0000000000000	c004000000000000	true
+sign-facing	6913	c004000000000000	c004000000000000	false
+sign-facing	6913	c004000000000000	3fe0000000000000	false
+sign-facing	6913	c004000000000000	400c000000000000	false
+sign-facing	6915	3fe0000000000000	400c000000000000	true
+sign-facing	6915	400c000000000000	400c000000000000	true
+sign-facing	6915	400c000000000000	3fe0000000000000	true
+sign-facing	6915	400c000000000000	c004000000000000	true
+sign-facing	6915	3fe0000000000000	c004000000000000	true
+sign-facing	6915	c004000000000000	c004000000000000	false
+sign-facing	6915	c004000000000000	3fe0000000000000	false
+sign-facing	6915	c004000000000000	400c000000000000	false
+sign-facing	6917	3fe0000000000000	400c000000000000	true
+sign-facing	6917	400c000000000000	400c000000000000	true
+sign-facing	6917	400c000000000000	3fe0000000000000	true
+sign-facing	6917	400c000000000000	c004000000000000	true
+sign-facing	6917	3fe0000000000000	c004000000000000	false
+sign-facing	6917	c004000000000000	c004000000000000	false
+sign-facing	6917	c004000000000000	3fe0000000000000	false
+sign-facing	6917	c004000000000000	400c000000000000	false
+sign-facing	6919	3fe0000000000000	400c000000000000	true
+sign-facing	6919	400c000000000000	400c000000000000	true
+sign-facing	6919	400c000000000000	3fe0000000000000	true
+sign-facing	6919	400c000000000000	c004000000000000	true
+sign-facing	6919	3fe0000000000000	c004000000000000	false
+sign-facing	6919	c004000000000000	c004000000000000	false
+sign-facing	6919	c004000000000000	3fe0000000000000	false
+sign-facing	6919	c004000000000000	400c000000000000	true
+sign-facing	6921	3fe0000000000000	400c000000000000	true
+sign-facing	6921	400c000000000000	400c000000000000	true
+sign-facing	6921	400c000000000000	3fe0000000000000	true
+sign-facing	6921	400c000000000000	c004000000000000	false
+sign-facing	6921	3fe0000000000000	c004000000000000	false
+sign-facing	6921	c004000000000000	c004000000000000	false
+sign-facing	6921	c004000000000000	3fe0000000000000	false
+sign-facing	6921	c004000000000000	400c000000000000	true
+sign-facing	7415	3fe0000000000000	400c000000000000	false
+sign-facing	7415	400c000000000000	400c000000000000	false
+sign-facing	7415	400c000000000000	3fe0000000000000	true
+sign-facing	7415	400c000000000000	c004000000000000	true
+sign-facing	7415	3fe0000000000000	c004000000000000	true
+sign-facing	7415	c004000000000000	c004000000000000	true
+sign-facing	7415	c004000000000000	3fe0000000000000	true
+sign-facing	7415	c004000000000000	400c000000000000	false
+sign-facing	7417	3fe0000000000000	400c000000000000	true
+sign-facing	7417	400c000000000000	400c000000000000	true
+sign-facing	7417	400c000000000000	3fe0000000000000	true
+sign-facing	7417	400c000000000000	c004000000000000	false
+sign-facing	7417	3fe0000000000000	c004000000000000	false
+sign-facing	7417	c004000000000000	c004000000000000	false
+sign-facing	7417	c004000000000000	3fe0000000000000	true
+sign-facing	7417	c004000000000000	400c000000000000	true
+sign-facing	7419	3fe0000000000000	400c000000000000	true
+sign-facing	7419	400c000000000000	400c000000000000	false
+sign-facing	7419	400c000000000000	3fe0000000000000	false
+sign-facing	7419	400c000000000000	c004000000000000	false
+sign-facing	7419	3fe0000000000000	c004000000000000	true
+sign-facing	7419	c004000000000000	c004000000000000	true
+sign-facing	7419	c004000000000000	3fe0000000000000	true
+sign-facing	7419	c004000000000000	400c000000000000	true
+sign-facing	7421	3fe0000000000000	400c000000000000	true
+sign-facing	7421	400c000000000000	400c000000000000	true
+sign-facing	7421	400c000000000000	3fe0000000000000	true
+sign-facing	7421	400c000000000000	c004000000000000	true
+sign-facing	7421	3fe0000000000000	c004000000000000	true
+sign-facing	7421	c004000000000000	c004000000000000	false
+sign-facing	7421	c004000000000000	3fe0000000000000	false
+sign-facing	7421	c004000000000000	400c000000000000	false
+sign-facing	7503	3fe0000000000000	400c000000000000	true
+sign-facing	7503	400c000000000000	400c000000000000	true
+sign-facing	7503	400c000000000000	3fe0000000000000	true
+sign-facing	7503	400c000000000000	c004000000000000	false
+sign-facing	7503	3fe0000000000000	c004000000000000	false
+sign-facing	7503	c004000000000000	c004000000000000	false
+sign-facing	7503	c004000000000000	3fe0000000000000	true
+sign-facing	7503	c004000000000000	400c000000000000	true
+sign-facing	7505	3fe0000000000000	400c000000000000	true
+sign-facing	7505	400c000000000000	400c000000000000	true
+sign-facing	7505	400c000000000000	3fe0000000000000	false
+sign-facing	7505	400c000000000000	c004000000000000	false
+sign-facing	7505	3fe0000000000000	c004000000000000	false
+sign-facing	7505	c004000000000000	c004000000000000	false
+sign-facing	7505	c004000000000000	3fe0000000000000	true
+sign-facing	7505	c004000000000000	400c000000000000	true
+sign-facing	7507	3fe0000000000000	400c000000000000	true
+sign-facing	7507	400c000000000000	400c000000000000	true
+sign-facing	7507	400c000000000000	3fe0000000000000	false
+sign-facing	7507	400c000000000000	c004000000000000	false
+sign-facing	7507	3fe0000000000000	c004000000000000	false
+sign-facing	7507	c004000000000000	c004000000000000	true
+sign-facing	7507	c004000000000000	3fe0000000000000	true
+sign-facing	7507	c004000000000000	400c000000000000	true
+sign-facing	7509	3fe0000000000000	400c000000000000	true
+sign-facing	7509	400c000000000000	400c000000000000	false
+sign-facing	7509	400c000000000000	3fe0000000000000	false
+sign-facing	7509	400c000000000000	c004000000000000	false
+sign-facing	7509	3fe0000000000000	c004000000000000	false
+sign-facing	7509	c004000000000000	c004000000000000	true
+sign-facing	7509	c004000000000000	3fe0000000000000	true
+sign-facing	7509	c004000000000000	400c000000000000	true
+sign-facing	7511	3fe0000000000000	400c000000000000	false
+sign-facing	7511	400c000000000000	400c000000000000	false
+sign-facing	7511	400c000000000000	3fe0000000000000	false
+sign-facing	7511	400c000000000000	c004000000000000	false
+sign-facing	7511	3fe0000000000000	c004000000000000	true
+sign-facing	7511	c004000000000000	c004000000000000	true
+sign-facing	7511	c004000000000000	3fe0000000000000	true
+sign-facing	7511	c004000000000000	400c000000000000	true
+sign-facing	7513	3fe0000000000000	400c000000000000	false
+sign-facing	7513	400c000000000000	400c000000000000	false
+sign-facing	7513	400c000000000000	3fe0000000000000	false
+sign-facing	7513	400c000000000000	c004000000000000	false
+sign-facing	7513	3fe0000000000000	c004000000000000	true
+sign-facing	7513	c004000000000000	c004000000000000	true
+sign-facing	7513	c004000000000000	3fe0000000000000	true
+sign-facing	7513	c004000000000000	400c000000000000	true
+sign-facing	7515	3fe0000000000000	400c000000000000	false
+sign-facing	7515	400c000000000000	400c000000000000	false
+sign-facing	7515	400c000000000000	3fe0000000000000	false
+sign-facing	7515	400c000000000000	c004000000000000	true
+sign-facing	7515	3fe0000000000000	c004000000000000	true
+sign-facing	7515	c004000000000000	c004000000000000	true
+sign-facing	7515	c004000000000000	3fe0000000000000	true
+sign-facing	7515	c004000000000000	400c000000000000	true
+sign-facing	7517	3fe0000000000000	400c000000000000	false
+sign-facing	7517	400c000000000000	400c000000000000	false
+sign-facing	7517	400c000000000000	3fe0000000000000	false
+sign-facing	7517	400c000000000000	c004000000000000	true
+sign-facing	7517	3fe0000000000000	c004000000000000	true
+sign-facing	7517	c004000000000000	c004000000000000	true
+sign-facing	7517	c004000000000000	3fe0000000000000	true
+sign-facing	7517	c004000000000000	400c000000000000	false
+sign-facing	7519	3fe0000000000000	400c000000000000	false
+sign-facing	7519	400c000000000000	400c000000000000	false
+sign-facing	7519	400c000000000000	3fe0000000000000	true
+sign-facing	7519	400c000000000000	c004000000000000	true
+sign-facing	7519	3fe0000000000000	c004000000000000	true
+sign-facing	7519	c004000000000000	c004000000000000	true
+sign-facing	7519	c004000000000000	3fe0000000000000	true
+sign-facing	7519	c004000000000000	400c000000000000	false
+sign-facing	7521	3fe0000000000000	400c000000000000	false
+sign-facing	7521	400c000000000000	400c000000000000	false
+sign-facing	7521	400c000000000000	3fe0000000000000	true
+sign-facing	7521	400c000000000000	c004000000000000	true
+sign-facing	7521	3fe0000000000000	c004000000000000	true
+sign-facing	7521	c004000000000000	c004000000000000	true
+sign-facing	7521	c004000000000000	3fe0000000000000	false
+sign-facing	7521	c004000000000000	400c000000000000	false
+sign-facing	7523	3fe0000000000000	400c000000000000	false
+sign-facing	7523	400c000000000000	400c000000000000	true
+sign-facing	7523	400c000000000000	3fe0000000000000	true
+sign-facing	7523	400c000000000000	c004000000000000	true
+sign-facing	7523	3fe0000000000000	c004000000000000	true
+sign-facing	7523	c004000000000000	c004000000000000	true
+sign-facing	7523	c004000000000000	3fe0000000000000	false
+sign-facing	7523	c004000000000000	400c000000000000	false
+sign-facing	7525	3fe0000000000000	400c000000000000	false
+sign-facing	7525	400c000000000000	400c000000000000	true
+sign-facing	7525	400c000000000000	3fe0000000000000	true
+sign-facing	7525	400c000000000000	c004000000000000	true
+sign-facing	7525	3fe0000000000000	c004000000000000	true
+sign-facing	7525	c004000000000000	c004000000000000	false
+sign-facing	7525	c004000000000000	3fe0000000000000	false
+sign-facing	7525	c004000000000000	400c000000000000	false
+sign-facing	7527	3fe0000000000000	400c000000000000	true
+sign-facing	7527	400c000000000000	400c000000000000	true
+sign-facing	7527	400c000000000000	3fe0000000000000	true
+sign-facing	7527	400c000000000000	c004000000000000	true
+sign-facing	7527	3fe0000000000000	c004000000000000	true
+sign-facing	7527	c004000000000000	c004000000000000	false
+sign-facing	7527	c004000000000000	3fe0000000000000	false
+sign-facing	7527	c004000000000000	400c000000000000	false
+sign-facing	7529	3fe0000000000000	400c000000000000	true
+sign-facing	7529	400c000000000000	400c000000000000	true
+sign-facing	7529	400c000000000000	3fe0000000000000	true
+sign-facing	7529	400c000000000000	c004000000000000	true
+sign-facing	7529	3fe0000000000000	c004000000000000	false
+sign-facing	7529	c004000000000000	c004000000000000	false
+sign-facing	7529	c004000000000000	3fe0000000000000	false
+sign-facing	7529	c004000000000000	400c000000000000	false
+sign-facing	7531	3fe0000000000000	400c000000000000	true
+sign-facing	7531	400c000000000000	400c000000000000	true
+sign-facing	7531	400c000000000000	3fe0000000000000	true
+sign-facing	7531	400c000000000000	c004000000000000	true
+sign-facing	7531	3fe0000000000000	c004000000000000	false
+sign-facing	7531	c004000000000000	c004000000000000	false
+sign-facing	7531	c004000000000000	3fe0000000000000	false
+sign-facing	7531	c004000000000000	400c000000000000	true
+sign-facing	7533	3fe0000000000000	400c000000000000	true
+sign-facing	7533	400c000000000000	400c000000000000	true
+sign-facing	7533	400c000000000000	3fe0000000000000	true
+sign-facing	7533	400c000000000000	c004000000000000	false
+sign-facing	7533	3fe0000000000000	c004000000000000	false
+sign-facing	7533	c004000000000000	c004000000000000	false
+sign-facing	7533	c004000000000000	3fe0000000000000	false
+sign-facing	7533	c004000000000000	400c000000000000	true
+sign-facing	8335	3fe0000000000000	400c000000000000	false
+sign-facing	8335	400c000000000000	400c000000000000	false
+sign-facing	8335	400c000000000000	3fe0000000000000	true
+sign-facing	8335	400c000000000000	c004000000000000	true
+sign-facing	8335	3fe0000000000000	c004000000000000	true
+sign-facing	8335	c004000000000000	c004000000000000	true
+sign-facing	8335	c004000000000000	3fe0000000000000	false
+sign-facing	8335	c004000000000000	400c000000000000	false
+sign-facing	8337	3fe0000000000000	400c000000000000	true
+sign-facing	8337	400c000000000000	400c000000000000	true
+sign-facing	8337	400c000000000000	3fe0000000000000	true
+sign-facing	8337	400c000000000000	c004000000000000	false
+sign-facing	8337	3fe0000000000000	c004000000000000	false
+sign-facing	8337	c004000000000000	c004000000000000	false
+sign-facing	8337	c004000000000000	3fe0000000000000	true
+sign-facing	8337	c004000000000000	400c000000000000	true
+sign-facing	8339	3fe0000000000000	400c000000000000	false
+sign-facing	8339	400c000000000000	400c000000000000	false
+sign-facing	8339	400c000000000000	3fe0000000000000	false
+sign-facing	8339	400c000000000000	c004000000000000	false
+sign-facing	8339	3fe0000000000000	c004000000000000	true
+sign-facing	8339	c004000000000000	c004000000000000	true
+sign-facing	8339	c004000000000000	3fe0000000000000	true
+sign-facing	8339	c004000000000000	400c000000000000	true
+sign-facing	8341	3fe0000000000000	400c000000000000	true
+sign-facing	8341	400c000000000000	400c000000000000	true
+sign-facing	8341	400c000000000000	3fe0000000000000	true
+sign-facing	8341	400c000000000000	c004000000000000	true
+sign-facing	8341	3fe0000000000000	c004000000000000	true
+sign-facing	8341	c004000000000000	c004000000000000	false
+sign-facing	8341	c004000000000000	3fe0000000000000	false
+sign-facing	8341	c004000000000000	400c000000000000	false
+sign-editor-tick	false	0.5	false
+sign-editor-tick	false	8.4	false
+sign-editor-tick	false	9.4	false
+sign-editor-tick	false	10.0	false
+sign-editor-tick	true	0.5	true
+sign-editor-tick	true	8.4	true
+sign-editor-tick	true	9.4	true
+sign-editor-tick	true	10.0	false
+menu-broadcast-reads	normal	27
+menu-broadcast-reads	suppressed	27
+menu-transfer-source	false	minecraft:stone:6:6,minecraft:stone:5:5,minecraft:air:0:0,minecraft:air:0:0,minecraft:air:0:0	0	minecraft:air:0
+menu-transfer-source	true	minecraft:stone:6:6,minecraft:diamond:7:5,minecraft:diamond:7:0,minecraft:diamond:7:0,minecraft:diamond:7:0	0	minecraft:diamond:7
+menu-swap-source	false	minecraft:diamond:7|minecraft:stone:10|10|7,minecraft:diamond:10|minecraft:stone:8|8|10,minecraft:diamond:10|minecraft:stone:8|8|10	minecraft:diamond:10	minecraft:stone:8	8	10
+menu-swap-source	true	minecraft:diamond:7|minecraft:stone:10|10|7,minecraft:diamond:10|minecraft:dirt:5|5|10,minecraft:diamond:10|minecraft:dirt:5|5|10	minecraft:diamond:10	minecraft:dirt:5	5	10
+menu-abilities	SURVIVAL	false	0	false
+menu-abilities	SURVIVAL	true	64	false
+menu-abilities	CREATIVE	false	0	true
+menu-abilities	CREATIVE	true	64	true
+container-set-value	dispenser	false	1	false	9	2
+container-set-value	dispenser	true	1	true	2	2
+container-set-value	dropper	false	1	false	9	2
+container-set-value	dropper	true	1	true	2	2
+container-set-value	hopper	false	0	false	9	2
+container-set-value	hopper	true	0	true	2	2
 default-save	minecraft:chest	{Items:[],components:{}}
 filled-save	minecraft:chest	{Items:[{Slot:0b,count:31,id:"minecraft:stone"},{Slot:26b,count:3,id:"minecraft:diamond"}],components:{},id:"minecraft:chest",x:1,y:64,z:2}
 roundtrip	minecraft:chest	true

@@ -1,22 +1,25 @@
 //! Region-owned canonical entity storage, vanilla ordered indexes and ticking.
-use std::collections::{BTreeMap, HashMap, HashSet};
-
-use ferraloom_util::{
-    Aabb, ChunkPos, SectionPos, Uuid, Vec3,
-    collections::{Int2ObjectLinkedOpenHashMap, Long2ObjectOpenHashMap},
+use std::{
+    cell::Cell,
+    collections::{HashMap, HashSet},
 };
 
-use super::{Level, LevelError};
+use ferraloom_util::{Aabb, ChunkPos, SectionPos, Uuid, Vec3};
+
+use super::{Level, LevelError, store::InsertOnlyMap};
 use crate::entity::{EntityData, EntityRef, EntityState, RemovalReason};
 
+mod indexes;
 mod persistent;
 mod push;
 mod worldgen;
+use indexes::EntityRegistration;
+pub use indexes::{EntityLookup, EntitySectionStorage, EntityTickList};
 pub use persistent::{
-    ChunkLoadStatus, EntityLoadRequestId, EntityStorageError, EntityStorageRequest,
-    PersistentEntitySectionManager,
+    ChunkLoadStatus, EntityChunkLoadError, EntityLoadRequestId, EntityStorageError,
+    EntityStorageRequest, PersistentEntitySectionManager,
 };
-pub use worldgen::WorldgenEntityLoadError;
+pub use worldgen::{WorldgenEntityLoadError, WorldgenEntityLoadStage};
 
 pub(crate) fn new_entity_random() -> ferraloom_util::random::LegacyRandomSource {
     let ferraloom_util::random::Random::Legacy(random) = super::random::new_level_random() else {
@@ -42,147 +45,31 @@ impl Visibility {
     }
 }
 
-/// Port of EntityTickList. Owned snapshots preserve membership across reentry.
-#[derive(Default)]
-pub struct EntityTickList {
-    active: Int2ObjectLinkedOpenHashMap<EntityRef>,
-}
-impl EntityTickList {
-    pub fn add(&mut self, id: i32, entity: EntityRef) {
-        self.active.insert(id, entity);
-    }
-    pub fn remove(&mut self, id: i32) {
-        self.active.remove(&id);
-    }
-    pub fn contains(&self, id: i32) -> bool {
-        self.active.contains_key(&id)
-    }
-    pub fn snapshot(&self) -> Vec<EntityRef> {
-        self.active.iter().map(|(_, id)| *id).collect()
-    }
-}
-
-/// Port of EntityLookup. Only the linked runtime-ID map supplies iteration.
-#[derive(Default)]
-pub struct EntityLookup {
-    by_id: Int2ObjectLinkedOpenHashMap<EntityRef>,
-    by_uuid: HashMap<Uuid, EntityRef>,
-}
-impl EntityLookup {
-    pub fn by_id(&self, id: i32) -> Option<EntityRef> {
-        self.by_id.get(&id).copied()
-    }
-    pub fn by_uuid(&self, uuid: Uuid) -> Option<EntityRef> {
-        self.by_uuid.get(&uuid).copied()
-    }
-    pub fn all(&self) -> Vec<EntityRef> {
-        self.by_id.iter().map(|(_, id)| *id).collect()
-    }
-    fn add(&mut self, id: i32, uuid: Uuid, entity: EntityRef) -> bool {
-        if self.by_uuid.contains_key(&uuid) || self.by_id.contains_key(&id) {
-            return false;
-        }
-        self.by_id.insert(id, entity);
-        self.by_uuid.insert(uuid, entity);
-        true
-    }
-    fn remove(&mut self, base: &EntityData) {
-        self.by_id.remove(&base.network_id);
-        self.by_uuid.remove(&base.uuid);
-    }
-}
-#[derive(Default)]
-pub struct EntitySection {
-    pub visibility: Visibility,
-    entities: Vec<EntityRef>,
-}
-
-/// Port of EntitySectionStorage. Signed packed SectionPos order matches LongAVLTreeSet.
-#[derive(Default)]
-pub struct EntitySectionStorage {
-    sections: BTreeMap<i64, EntitySection>,
-    // The AVL order serves spatial queries; the original open-map key order
-    // independently determines the save-chunk set's insertion history.
-    section_keys: Long2ObjectOpenHashMap<()>,
-    membership: HashMap<EntityRef, i64>,
-}
-impl EntitySectionStorage {
-    fn move_entity(&mut self, entity: EntityRef, position: Vec3, visibility: Visibility) {
-        let key = SectionPos::from_position(position).as_long();
-        if self.membership.get(&entity) == Some(&key) {
-            return;
-        }
-        self.remove(entity);
-        self.section_keys.insert(key, ());
-        self.sections
-            .entry(key)
-            .or_insert_with(|| EntitySection {
-                visibility,
-                entities: Vec::new(),
-            })
-            .entities
-            .push(entity);
-        self.membership.insert(entity, key);
-    }
-    fn remove(&mut self, entity: EntityRef) {
-        if let Some(key) = self.membership.remove(&entity)
-            && let Some(section) = self.sections.get_mut(&key)
-        {
-            section.entities.retain(|id| *id != entity);
-            if section.entities.is_empty() {
-                self.sections.remove(&key);
-                self.section_keys.remove(&key);
-            }
-        }
-    }
-    pub fn query(&self, bb: Aabb) -> Vec<EntityRef> {
-        let min =
-            SectionPos::from_position(Vec3::new(bb.min_x - 2.0, bb.min_y - 4.0, bb.min_z - 2.0));
-        let max = SectionPos::from_position(Vec3::new(bb.max_x + 2.0, bb.max_y, bb.max_z + 2.0));
-        let mut result = Vec::new();
-        for x in min.x..=max.x {
-            let low = SectionPos::new(x, 0, 0).as_long();
-            let high = SectionPos::new(x, -1, -1).as_long();
-            for (&key, section) in self.sections.range(low..=high) {
-                let pos = SectionPos::of(key);
-                if pos.y >= min.y
-                    && pos.y <= max.y
-                    && pos.z >= min.z
-                    && pos.z <= max.z
-                    && section.visibility.is_accessible()
-                {
-                    result.extend(section.entities.iter().copied());
-                }
-            }
-        }
-        result
-    }
-}
-
 /// Port of ServerLevel's server-wide counter, or a barrier-assigned regional block.
 #[derive(Debug, Default)]
 pub struct EntityIdAllocator {
-    next: i32,
-    remaining: Option<u32>,
+    next: Cell<i32>,
+    remaining: Cell<Option<u32>>,
 }
 impl EntityIdAllocator {
     pub fn regional(first: i32, count: u32) -> Self {
         Self {
-            next: first.wrapping_sub(1),
-            remaining: Some(count),
+            next: Cell::new(first.wrapping_sub(1)),
+            remaining: Cell::new(Some(count)),
         }
     }
-    pub fn allocate(&mut self, lookup: &EntityLookup) -> Option<i32> {
+    pub fn allocate(&self, lookup: &EntityLookup) -> Option<i32> {
         loop {
-            if let Some(remaining) = &mut self.remaining {
-                if *remaining == 0 {
+            if let Some(remaining) = self.remaining.get() {
+                if remaining == 0 {
                     return None;
                 }
-                *remaining -= 1;
+                self.remaining.set(Some(remaining - 1));
             }
-            self.next = self.next.wrapping_add(1);
-            if self.next != 0 && lookup.by_id(self.next).is_none() {
-                return Some(self.next);
+            let next = self.next.get().wrapping_add(1);
+            self.next.set(next);
+            if next != 0 && lookup.by_id(next).is_none() {
+                return Some(next);
             }
         }
     }
@@ -192,17 +79,12 @@ impl EntityIdAllocator {
 #[derive(Default)]
 pub struct EntityStorage {
     persistent: PersistentEntitySectionManager,
-    // Objects rejected by the UUID guard can still be held by a successfully
-    // loaded passenger. Their vanilla level callback remains NULL.
-    unmanaged: HashSet<EntityRef>,
-    known_uuids: HashSet<Uuid>,
-    chunk_visibility: Long2ObjectOpenHashMap<Visibility>,
-    management_events: Vec<EntityManagementEvent>,
-    next_ref: u64,
+    registration: EntityRegistration,
+    next_ref: Cell<u64>,
     effects: Vec<crate::entity::effects::EntityEffect>,
-    pending_retire: Vec<EntityRef>,
+    owner_roots: HashMap<EntityRef, usize>,
     pub border: crate::level::border::WorldBorder,
-    states: HashMap<EntityRef, EntityState>,
+    states: InsertOnlyMap<EntityRef, EntityState>,
     pub lookup: EntityLookup,
     pub sections: EntitySectionStorage,
     pub ids: EntityIdAllocator,
@@ -220,11 +102,11 @@ impl EntityStorage {
     pub fn get_mut(&mut self, id: &EntityRef) -> Option<&mut EntityState> {
         self.states.get_mut(id)
     }
-    fn add(&mut self, id: EntityRef, mut state: EntityState) -> Result<i32, LevelError> {
+    fn add(&self, id: EntityRef, mut state: EntityState) -> Result<i32, LevelError> {
         if self.states.contains_key(&id) {
             return Err(LevelError::DuplicateEntity(id));
         }
-        self.next_ref = self.next_ref.max(id.0);
+        self.next_ref.set(self.next_ref.get().max(id.0));
         let base = state.as_entity_mut();
         if !base.network_id_allocated {
             base.network_id = self
@@ -233,7 +115,7 @@ impl EntityStorage {
                 .expect("regional entity ID block exhausted at barrier");
             base.network_id_allocated = true;
         }
-        if !self.known_uuids.insert(base.uuid) {
+        if !self.registration.reserve_uuid(base.uuid) {
             return Err(LevelError::DuplicateEntity(id));
         }
         let network_id = base.network_id;
@@ -241,33 +123,28 @@ impl EntityStorage {
         if (status.is_accessible() || base.entity_type == ferraloom_data::EntityType::PLAYER)
             && !self.lookup.add(base.network_id, base.uuid, id)
         {
-            self.known_uuids.remove(&base.uuid);
+            self.registration.forget_uuid(base.uuid);
             return Err(LevelError::DuplicateEntity(id));
         }
         self.sections.move_entity(id, base.position, status);
-        self.states.insert(id, state);
+        self.states.publish(id, state).expect("new entity handle");
         Ok(network_id)
     }
     fn retire(&mut self, id: EntityRef) {
         self.states.remove(&id);
         self.sections.remove(id);
-        self.unmanaged.remove(&id);
+        self.registration.remove_unmanaged(id);
     }
-    fn stop_accessing(&mut self, id: EntityRef) {
+    fn stop_accessing(&self, id: EntityRef) {
         if let Some(state) = self.states.get(&id) {
             self.lookup.remove(state.as_entity());
             self.sections.remove(id);
-            self.known_uuids.remove(&state.as_entity().uuid);
+            self.registration.forget_uuid(state.as_entity().uuid);
         }
-        if !self.pending_retire.contains(&id) {
-            self.pending_retire.push(id);
-        }
+        self.registration.queue_retirement(id);
     }
     fn visibility(&self, chunk: ChunkPos) -> Visibility {
-        self.chunk_visibility
-            .get(&chunk.pack())
-            .copied()
-            .unwrap_or(Visibility::Hidden)
+        self.persistent.visibility(chunk)
     }
 }
 
@@ -285,24 +162,48 @@ pub enum EntityManagementEvent {
 }
 
 impl Level {
+    /// Hold a Java entity receiver across callbacks, including after removal.
+    /// Retention never restores lookup, spatial-query or tick visibility.
+    pub fn retain_entity(&mut self, entity: EntityRef) -> Result<(), LevelError> {
+        self.entity_state(entity)?;
+        let count = self
+            .region_mut()
+            .entities
+            .owner_roots
+            .entry(entity)
+            .or_default();
+        *count = count.checked_add(1).expect("entity owner roots exhausted");
+        Ok(())
+    }
+    pub fn release_entity(&mut self, entity: EntityRef) {
+        let roots = &mut self.region_mut().entities.owner_roots;
+        let count = roots
+            .get_mut(&entity)
+            .expect("unbalanced entity root release");
+        *count -= 1;
+        if *count == 0 {
+            roots.remove(&entity);
+        }
+    }
     pub fn are_entities_loaded(&self, pos: ChunkPos) -> bool {
         self.region().entities.are_entities_loaded(pos)
     }
 
     /// Server-lifetime handles never reuse a retired identity. Regional blocks
     /// are assigned by the scheduler before parallel execution is enabled.
-    pub fn next_entity_ref(&mut self) -> EntityRef {
-        let next = &mut self.region_mut().entities.next_ref;
-        *next = next
+    pub fn next_entity_ref(&self) -> EntityRef {
+        let counter = &self.region().entities.next_ref;
+        let next = counter
+            .get()
             .checked_add(1)
             .expect("entity reference space exhausted");
-        EntityRef(*next)
+        counter.set(next);
+        EntityRef(next)
     }
     /// Entity constructors share RandomSource.create's seed uniquifier with the
     /// level factory, while retaining a separate random stream per entity.
-    pub fn create_entity_data(&mut self, kind: ferraloom_data::EntityType) -> EntityData {
-        let network_id = self.next_entity_id();
-        EntityData::from_random(kind, network_id, new_entity_random())
+    pub fn create_entity_data(&self, kind: ferraloom_data::EntityType) -> EntityData {
+        EntityData::from_random_with_id(kind, new_entity_random(), || self.next_entity_id())
     }
     pub fn emit_entity_effect(&mut self, effect: crate::entity::effects::EntityEffect) {
         self.region_mut().entities.effects.push(effect);
@@ -312,8 +213,8 @@ impl Level {
     }
     /// Port of ServerLevel#getNextEntityId. Every entity constructor, including
     /// players, draws from this region's canonical creation-order allocator.
-    pub fn next_entity_id(&mut self) -> i32 {
-        let storage = &mut self.region_mut().entities;
+    pub fn next_entity_id(&self) -> i32 {
+        let storage = &self.region().entities;
         storage
             .ids
             .allocate(&storage.lookup)
@@ -336,12 +237,12 @@ impl Level {
         self.add_entity_with_origin(entity, state, false)
     }
     fn add_entity_with_origin(
-        &mut self,
+        &self,
         entity: EntityRef,
         state: EntityState,
         loaded: bool,
     ) -> Result<(), LevelError> {
-        let region = self.region_mut();
+        let region = self.region();
         let network_id = region.entities.add(entity, state)?;
         let base = region.entities.get(&entity).unwrap().as_entity();
         let status = if base.entity_type == ferraloom_data::EntityType::PLAYER {
@@ -352,34 +253,36 @@ impl Level {
         if !loaded {
             region
                 .entities
-                .management_events
-                .push(EntityManagementEvent::Created(entity));
+                .registration
+                .push_event(EntityManagementEvent::Created(entity));
         }
         if status.is_accessible() {
             region
                 .entities
-                .management_events
-                .push(EntityManagementEvent::TrackingStart(entity));
+                .registration
+                .push_event(EntityManagementEvent::TrackingStart(entity));
         }
         if status.is_ticking() {
             region.entity_tick_list.add(network_id, entity);
             region
                 .entities
-                .management_events
-                .push(EntityManagementEvent::TickingStart(entity));
+                .registration
+                .push_event(EntityManagementEvent::TickingStart(entity));
         }
         Ok(())
     }
-    fn retain_unmanaged_entity(&mut self, entity: EntityRef, state: EntityState) {
-        let storage = &mut self.region_mut().entities;
+    fn retain_unmanaged_entity(&self, entity: EntityRef, state: EntityState) {
+        let storage = &self.region().entities;
         assert!(!storage.states.contains_key(&entity), "new entity handle");
-        storage.next_ref = storage.next_ref.max(entity.0);
-        storage.states.insert(entity, state);
-        storage.unmanaged.insert(entity);
-        storage.pending_retire.push(entity);
+        storage.next_ref.set(storage.next_ref.get().max(entity.0));
+        storage
+            .states
+            .publish(entity, state)
+            .expect("new entity handle");
+        storage.registration.retain_unmanaged(entity);
     }
-    pub fn take_entity_management_events(&mut self) -> Vec<EntityManagementEvent> {
-        std::mem::take(&mut self.region_mut().entities.management_events)
+    pub fn take_entity_management_events(&self) -> Vec<EntityManagementEvent> {
+        self.region().entities.registration.take_events()
     }
     pub fn entity_chunk_visibility(&self, pos: ChunkPos) -> Visibility {
         self.region().entities.visibility(pos)
@@ -388,29 +291,29 @@ impl Level {
         self.entity::<EntityData>(entity)
             .is_ok_and(|base| base.entity_type == ferraloom_data::EntityType::PLAYER)
     }
-    fn start_entity_tracking(&mut self, entity: EntityRef) -> Result<(), LevelError> {
+    fn start_entity_tracking(&self, entity: EntityRef) -> Result<(), LevelError> {
         let base = self.entity::<EntityData>(entity)?;
         let (network, uuid) = (base.network_id, base.uuid);
-        let storage = &mut self.region_mut().entities;
+        let storage = &self.region().entities;
         if !storage.lookup.add(network, uuid, entity) {
             return Err(LevelError::DuplicateEntity(entity));
         }
         storage
-            .management_events
-            .push(EntityManagementEvent::TrackingStart(entity));
+            .registration
+            .push_event(EntityManagementEvent::TrackingStart(entity));
         Ok(())
     }
-    fn stop_entity_tracking(&mut self, entity: EntityRef) {
-        let storage = &mut self.region_mut().entities;
+    fn stop_entity_tracking(&self, entity: EntityRef) {
+        let storage = &self.region().entities;
         storage
-            .management_events
-            .push(EntityManagementEvent::TrackingEnd(entity));
+            .registration
+            .push_event(EntityManagementEvent::TrackingEnd(entity));
         storage
             .lookup
             .remove(storage.states.get(&entity).unwrap().as_entity());
     }
-    fn start_entity_ticking(&mut self, entity: EntityRef) {
-        let region = self.region_mut();
+    fn start_entity_ticking(&self, entity: EntityRef) {
+        let region = self.region();
         let id = region
             .entities
             .states
@@ -421,11 +324,11 @@ impl Level {
         region.entity_tick_list.add(id, entity);
         region
             .entities
-            .management_events
-            .push(EntityManagementEvent::TickingStart(entity));
+            .registration
+            .push_event(EntityManagementEvent::TickingStart(entity));
     }
-    fn stop_entity_ticking(&mut self, entity: EntityRef) {
-        let region = self.region_mut();
+    fn stop_entity_ticking(&self, entity: EntityRef) {
+        let region = self.region();
         let id = region
             .entities
             .states
@@ -436,45 +339,26 @@ impl Level {
         region.entity_tick_list.remove(id);
         region
             .entities
-            .management_events
-            .push(EntityManagementEvent::TickingEnd(entity));
+            .registration
+            .push_event(EntityManagementEvent::TickingEnd(entity));
     }
     /// Port of PersistentEntitySectionManager#updateChunkStatus. This is driven
     /// by FullChunkStatus/ticket eligibility, independently of loaded chunks.
     pub fn update_entity_chunk_status(
-        &mut self,
+        &self,
         pos: ChunkPos,
         status: Visibility,
     ) -> Result<(), LevelError> {
-        let storage = &mut self.region_mut().entities;
-        if status == Visibility::Hidden {
-            storage.chunk_visibility.remove(&pos.pack());
-            storage.persistent.chunks_to_unload.insert(pos.pack());
-        } else {
-            storage.chunk_visibility.insert(pos.pack(), status);
-            storage.persistent.chunks_to_unload.remove(&pos.pack());
-            storage.persistent.ensure_chunk_queued_for_load(pos);
-        }
-        let sections: Vec<_> = storage
-            .sections
-            .sections
-            .keys()
-            .copied()
-            .filter(|key| {
-                let section = SectionPos::of(*key);
-                section.x == pos.x && section.z == pos.z
-            })
-            .collect();
+        let storage = &self.region().entities;
+        storage.persistent.update_visibility(pos, status);
+        let sections = storage.sections.sections_in_chunk(pos);
         for section_key in sections {
-            let section = self
-                .region_mut()
+            let (previous, entities) = self
+                .region()
                 .entities
                 .sections
-                .sections
-                .get_mut(&section_key)
-                .unwrap();
-            let previous = std::mem::replace(&mut section.visibility, status);
-            let entities = section.entities.clone();
+                .replace_visibility(section_key, status)
+                .expect("existing section");
             let entities: Vec<_> = entities
                 .into_iter()
                 .filter(|id| !self.always_ticking(*id))
@@ -529,7 +413,7 @@ impl Level {
         for passenger in passengers {
             crate::entity::stop_riding(passenger, self)?;
         }
-        if self.region().entities.unmanaged.contains(&entity) {
+        if self.region().entities.registration.is_unmanaged(entity) {
             return Ok(());
         }
         if !was_removed {
@@ -542,8 +426,8 @@ impl Level {
             if reason.should_destroy() {
                 self.region_mut()
                     .entities
-                    .management_events
-                    .push(EntityManagementEvent::Destroyed(entity));
+                    .registration
+                    .push_event(EntityManagementEvent::Destroyed(entity));
             }
         }
         let region = self.region_mut();
@@ -553,19 +437,14 @@ impl Level {
         Ok(())
     }
     pub fn set_entity_pos(&mut self, entity: EntityRef, pos: Vec3) -> Result<(), LevelError> {
-        let old_key = self
-            .region()
-            .entities
-            .sections
-            .membership
-            .get(&entity)
-            .copied();
+        let sections = &self.region().entities.sections;
+        let old_key = sections.member_section(entity);
         let previous_status = old_key
-            .and_then(|key| self.region().entities.sections.sections.get(&key))
-            .map_or(Visibility::Hidden, |section| section.visibility);
+            .and_then(|key| sections.section_visibility(key))
+            .unwrap_or(Visibility::Hidden);
         self.entity_mut::<EntityData>(entity)?.set_pos(pos);
         if !self.entity::<EntityData>(entity)?.removed
-            && !self.region().entities.unmanaged.contains(&entity)
+            && !self.region().entities.registration.is_unmanaged(entity)
         {
             let section = SectionPos::from_position(pos);
             let new_key = section.as_long();
@@ -596,8 +475,8 @@ impl Level {
                 if after.is_accessible() {
                     self.region_mut()
                         .entities
-                        .management_events
-                        .push(EntityManagementEvent::SectionChange(entity));
+                        .registration
+                        .push_event(EntityManagementEvent::SectionChange(entity));
                 }
                 if self.entity::<EntityData>(entity)?.entity_type
                     == ferraloom_data::EntityType::PLAYER
@@ -668,7 +547,7 @@ impl Level {
             if !self.always_ticking(entity) && !self.is_entity_ticking_chunk(base.chunk_position) {
                 continue;
             }
-            if let Some(vehicle) = base.vehicle {
+            if let Some(vehicle) = base.vehicle.get() {
                 if self.entity_state(vehicle).is_ok_and(|state| {
                     !state.as_entity().removed && state.as_entity().passengers.contains(&entity)
                 }) {
@@ -676,17 +555,22 @@ impl Level {
                 }
                 crate::entity::stop_riding(entity, self)?;
             }
-            self.tick_non_passenger(entity)?;
+            self.tick_non_passenger(entity, tick_rate)?;
         }
         Ok(())
     }
     /// Port of ServerLevel#tickNonPassenger. Callbacks retain no canonical borrow.
-    fn tick_non_passenger(&mut self, mut entity: EntityRef) -> Result<(), LevelError> {
+    fn tick_non_passenger(
+        &mut self,
+        entity: EntityRef,
+        tick_rate: &super::tick_rate::TickRateManager,
+    ) -> Result<(), LevelError> {
         crate::entity::common_tick(entity, self)?;
-        entity.tick(self)?;
+        self.entity_behavior(entity)?
+            .tick_with_tick_rate(entity, self, tick_rate)?;
         let passengers = self.entity::<EntityData>(entity)?.passengers.clone();
         for passenger in passengers {
-            self.tick_passenger(entity, passenger)?;
+            self.tick_passenger(entity, passenger, tick_rate)?;
         }
         Ok(())
     }
@@ -694,9 +578,10 @@ impl Level {
         &mut self,
         vehicle: EntityRef,
         passenger: EntityRef,
+        tick_rate: &super::tick_rate::TickRateManager,
     ) -> Result<(), LevelError> {
         let base = self.entity::<EntityData>(passenger)?;
-        if base.removed || base.vehicle != Some(vehicle) {
+        if base.removed || base.vehicle.get() != Some(vehicle) {
             crate::entity::stop_riding(passenger, self)?;
             return Ok(());
         }
@@ -707,22 +592,29 @@ impl Level {
         }
         crate::entity::common_tick(passenger, self)?;
         self.entity_behavior(passenger)?
-            .ride_tick(passenger, self)?;
+            .ride_tick_with_tick_rate(passenger, self, tick_rate)?;
         let passengers = self.entity::<EntityData>(passenger)?.passengers.clone();
         for child in passengers {
-            self.tick_passenger(passenger, child)?;
+            self.tick_passenger(passenger, child, tick_rate)?;
         }
         Ok(())
     }
     pub fn finish_entity_management(&mut self) {
-        if self.region().entities.pending_retire.is_empty() {
+        if !self
+            .region()
+            .entities
+            .registration
+            .has_pending_retirements()
+        {
             return;
         }
         let mut reachable = HashSet::new();
-        let mut work = Vec::new();
-        // Map order affects only set membership, never simulation callbacks.
-        for (&id, state) in &self.region().entities.states {
-            if !state.as_entity().removed && !self.region().entities.unmanaged.contains(&id) {
+        let mut work: Vec<_> = self.region().entities.owner_roots.keys().copied().collect();
+        // Live registered objects and explicitly held callback receivers are
+        // roots, including the references traced from a held removed receiver.
+        for id in self.region().entities.sections.all_entities() {
+            let state = self.entity_state(id).expect("section entity");
+            if !state.as_entity().removed {
                 self.entity_behavior(id)
                     .expect("stored entity dispatcher")
                     .trace_entity_refs(state, &mut work);
@@ -737,10 +629,10 @@ impl Level {
                     .trace_entity_refs(state, &mut work);
             }
         }
-        let removed = std::mem::take(&mut self.region_mut().entities.pending_retire);
+        let removed = self.region().entities.registration.take_retirements();
         for id in removed {
             if reachable.contains(&id) {
-                self.region_mut().entities.pending_retire.push(id);
+                self.region().entities.registration.queue_retirement(id);
                 continue;
             }
             let region = self.region_mut();
@@ -828,6 +720,85 @@ mod tests {
 mod removal_tests {
     use super::*;
     use crate::{Behaviors, level::Region};
+
+    #[test]
+    fn held_item_owner_survives_removal_and_retires_after_its_final_release() {
+        use crate::entity::{
+            EntityReference,
+            item::ItemEntity,
+            player::inventory::{count, set_count},
+        };
+        use ferraloom_data::Item;
+        use ferraloom_protocol::component::ItemStack;
+
+        let mut level = crate::entity::tests::level(false);
+        let thrower = level.next_entity_ref();
+        level
+            .add_entity(thrower, EntityState::Cow(Box::default()))
+            .unwrap();
+        let mut item = ItemEntity::new_at(
+            &mut level,
+            Vec3::new(8.5, 64.0, 8.5),
+            ItemStack::new(Item::STONE, 7, Default::default()),
+        );
+        item.thrower = Some(EntityReference::of(thrower, &level).unwrap());
+        let id = level.next_entity_ref();
+        level
+            .add_entity(id, EntityState::Item(Box::new(item)))
+            .unwrap();
+        let base = level.entity::<EntityData>(id).unwrap();
+        let (uuid, network, bounds) = (base.uuid, base.network_id, base.bounding_box);
+        level.retain_entity(id).unwrap();
+        level.retain_entity(id).unwrap();
+        let (generations, _, slot) = level
+            .entity_mut::<ItemEntity>(id)
+            .unwrap()
+            .stack_parts_mut(0)
+            .unwrap();
+        let held = generations.current(slot).unwrap();
+        assert!(generations.retain(held));
+
+        level
+            .remove_entity_with_reason(id, RemovalReason::Discarded)
+            .unwrap();
+        level
+            .remove_entity_with_reason(thrower, RemovalReason::Discarded)
+            .unwrap();
+        level.finish_entity_management();
+        assert!(level.all_entities().is_empty());
+        assert!(level.entities_in(bounds, |_, _| true).is_empty());
+        assert_eq!(level.entity_by_uuid(uuid), None);
+        assert_eq!(level.entity_by_network_id(network), None);
+        assert!(!level.region().entity_tick_list.contains(network));
+        let (generations, stack, _) = level
+            .entity_mut::<ItemEntity>(id)
+            .unwrap()
+            .stack_parts_mut(0)
+            .unwrap();
+        set_count(generations.get_mut(held, stack).unwrap(), 3);
+        assert_eq!(count(level.entity::<ItemEntity>(id).unwrap().item()), 3);
+        assert!(level.entity::<EntityData>(thrower).unwrap().removed);
+
+        level.release_entity(id);
+        level.finish_entity_management();
+        assert_eq!(count(level.entity::<ItemEntity>(id).unwrap().item()), 3);
+        let (generations, _, _) = level
+            .entity_mut::<ItemEntity>(id)
+            .unwrap()
+            .stack_parts_mut(0)
+            .unwrap();
+        assert!(generations.release(held).is_none());
+        level.release_entity(id);
+        level.finish_entity_management();
+        assert!(
+            matches!(level.entity_state(id), Err(LevelError::MissingEntity(missing)) if missing == id)
+        );
+        assert!(
+            matches!(level.entity_state(thrower), Err(LevelError::MissingEntity(missing)) if missing == thrower)
+        );
+        assert_eq!(level.retain_entity(id), Err(LevelError::MissingEntity(id)));
+    }
+
     #[test]
     fn removal_hides_indexes_before_canonical_retirement() {
         static BEHAVIORS: Behaviors = Behaviors::EMPTY;
@@ -866,6 +837,109 @@ mod removal_tests {
 mod identity_tests {
     use super::*;
     use crate::{Behaviors, level::Region};
+
+    #[test]
+    fn shared_publication_preserves_borrowed_canonical_state_and_rejects_replacement() {
+        use crate::entity::item::PrimedTnt;
+        use ferraloom_data::EntityType;
+
+        let level = Level::new(
+            Region::new(&Behaviors::EMPTY),
+            crate::level::LevelContext::fixture(0, 63),
+        );
+        let make_state = || {
+            EntityState::PrimedTnt(Box::new(PrimedTnt::with_parent(
+                level.create_entity_data(EntityType::TNT),
+            )))
+        };
+        let original = level.next_entity_ref();
+        level
+            .add_entity_with_origin(original, make_state(), false)
+            .unwrap();
+        let borrowed = level.entity::<EntityData>(original).unwrap();
+        let original_uuid = borrowed.uuid;
+        let passenger_view = borrowed.passengers.as_slice();
+        for _ in 0..1024 {
+            level
+                .add_entity_with_origin(level.next_entity_ref(), make_state(), false)
+                .unwrap();
+        }
+        assert_eq!(
+            level.add_entity_with_origin(original, make_state(), false),
+            Err(LevelError::DuplicateEntity(original))
+        );
+        assert!(std::ptr::eq(
+            borrowed,
+            level.entity::<EntityData>(original).unwrap()
+        ));
+        assert_eq!(borrowed.uuid, original_uuid);
+        assert!(passenger_view.is_empty());
+        assert_eq!(level.region().entities.sections.all_entities().len(), 1025);
+    }
+
+    #[test]
+    fn shared_constructor_preparation_keeps_native_ids_and_borrowed_states() {
+        use crate::entity::{
+            persistence::load_entity_state,
+            player::{GameType, ServerPlayer},
+        };
+        use ferraloom_data::EntityType;
+        use ferraloom_nbt::{CompoundTag, Tag};
+
+        let mut level = crate::entity::tests::level(false);
+        let original = level.next_entity_ref();
+        let base = level.create_entity_data(EntityType::TNT);
+        level
+            .add_entity(
+                original,
+                EntityState::PrimedTnt(Box::new(crate::entity::item::PrimedTnt::with_parent(base))),
+            )
+            .unwrap();
+        let borrowed = level.entity::<EntityData>(original).unwrap();
+        let before = borrowed.network_id;
+        let mut actual = Vec::new();
+        for kind in [
+            EntityType::COW,
+            EntityType::ITEM,
+            EntityType::TNT,
+            EntityType::FALLING_BLOCK,
+            EntityType::EXPERIENCE_ORB,
+        ] {
+            let mut tag = CompoundTag::new();
+            tag.insert("id", Tag::String(kind.name().into()));
+            let (entity, state) = load_entity_state(&level, tag).unwrap();
+            assert_eq!(entity.0 as i32, state.as_entity().network_id);
+            actual.push(format!(
+                "entity-creation-order\t{}\t{}",
+                kind.name(),
+                state.as_entity().network_id - before
+            ));
+        }
+        let player = ServerPlayer::new(
+            Uuid::new(1, 2),
+            "shared".into(),
+            level.next_entity_id(),
+            Vec3::ZERO,
+            GameType::Survival,
+        );
+        assert_eq!(level.next_entity_ref().0 as i32, player.network_id);
+        actual.push(format!(
+            "entity-creation-order\t{}\t{}",
+            EntityType::PLAYER.name(),
+            player.network_id - before
+        ));
+        assert!(std::ptr::eq(
+            borrowed,
+            level.entity::<EntityData>(original).unwrap()
+        ));
+        assert_eq!(borrowed.network_id, before);
+        let expected: Vec<_> = include_str!("../../../tests/java/entity/vectors.tsv")
+            .lines()
+            .filter(|line| line.starts_with("entity-creation-order\t"))
+            .collect();
+        assert_eq!(actual, expected);
+    }
+
     #[test]
     fn entity_refs_observe_existing_handles_and_never_reuse_retired_ids() {
         static BEHAVIORS: Behaviors = Behaviors::EMPTY;
@@ -965,7 +1039,7 @@ mod visibility_tests {
             ]
         );
         assert_eq!(level.all_entities(), [player]);
-        assert!(level.region().entities.known_uuids.contains(&uuid));
+        assert!(level.region().entities.registration.knows_uuid(uuid));
     }
     #[test]
     fn movement_transitions_visibility_and_retirement_keeps_replacement_uuid_index() {

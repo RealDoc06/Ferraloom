@@ -3,7 +3,7 @@
 use super::{diode, state::HORIZONTAL};
 use crate::{
     block::{BlockBehavior, LevelAccessRef, LevelReaderRef},
-    level::{Level, LevelError, effects::LevelEffect, redstone::Orientation},
+    level::{Level, LevelError, redstone::Orientation},
 };
 use ferraloom_data::{Block, BlockClass, BlockState, properties as p, tags::BlockTags};
 use ferraloom_util::{BlockPos, Direction, VoxelShape, shapes};
@@ -466,7 +466,7 @@ impl BlockBehavior for RailBlock {
                 false
             };
         if unsupported {
-            level.emit(LevelEffect::DropResources { pos, state });
+            crate::block::drops::drop_resources_simple(state, pos, level)?;
             level.remove_block(pos, moved)?;
         } else if state.block().class() == BlockClass::RailBlock {
             if LevelReaderRef::Server(level).is_signal_source(source.default_state())?

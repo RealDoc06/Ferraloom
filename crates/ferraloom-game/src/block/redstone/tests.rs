@@ -65,6 +65,7 @@ fn level_in_radius(radius: i32) -> Level {
             Arc::new(TagSet::load(&resources).unwrap())
         });
     level.set_block_tags(Arc::clone(&BLOCK_TAGS));
+    crate::level::drop_fixtures::install(&mut level);
     level.set_random_streams(Random::Legacy(LegacyRandomSource::new(0)), 0);
     level
 }

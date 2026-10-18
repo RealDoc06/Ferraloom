@@ -1,4 +1,4 @@
-//! Vanilla 26.3 recipes. Inputs are owned snapshots; matching never mutates menus.
+//! Vanilla 26.3 recipes over owned inputs or read-only views of canonical slots.
 
 mod book;
 mod display;
@@ -15,7 +15,10 @@ mod sync;
 
 pub use book::{RecipeBookAddition, ServerRecipeBook};
 pub use ingredient::Ingredient;
-pub use input::{CraftingInput, PositionedCraftingInput, RecipeInput, SmithingRecipeInput};
+pub use input::{
+    CraftingInput, CraftingInputAccess, CraftingInputIter, CraftingInputView,
+    PositionedCraftingInput, PositionedCraftingInputView, RecipeInput, SmithingRecipeInput,
+};
 pub use manager::{CachedCheck, RecipeCache, RecipeHolder, RecipeManager};
 pub use placement::{PostPlaceAction, RecipePlacementAccess, place_recipe, place_recipe_slots};
 pub use recipe::{CraftingContext, Recipe, RecipeKind, RecipeType, ShapedRecipePattern};

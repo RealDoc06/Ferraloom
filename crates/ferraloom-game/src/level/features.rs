@@ -77,7 +77,10 @@ impl LiveWorldGenLevel for Level {
             }
             Heightmap::WorldSurfaceWg | Heightmap::OceanFloorWg => {
                 let key = ChunkPos::new(x >> 4, z >> 4);
-                let chunk = required(self.chunk(key).ok_or(LevelError::MissingChunk(key)))?;
+                if !self.has_chunk(key) {
+                    return Ok(self.min_build_height());
+                }
+                let chunk = required(self.get_full_chunk(key))?;
                 return Ok(chunk.generation_height_at(
                     map == Heightmap::OceanFloorWg,
                     (x & 15) as u8,
@@ -106,7 +109,7 @@ impl LiveWorldGenLevel for Level {
         // Live LevelChunk inherits ChunkAccess's warning-only implementation;
         // adding protochunk callbacks here would schedule work vanilla never does.
         let key = ChunkPos::containing(pos(p));
-        required(self.chunk(key).ok_or(LevelError::MissingChunk(key)))?;
+        required(self.get_full_chunk(key))?;
         eprintln!(
             "Trying to mark a block for post processing @ {p:?}, but this operation is not supported."
         );
@@ -448,6 +451,9 @@ mod tests {
                 fixture.sea_level,
                 fixture.generator.clone(),
                 Arc::new(registry),
+                fixture.structures.clone(),
+                fixture.damage_types().clone(),
+                fixture.initial_difficulty,
             )),
         );
         level.set_block_tags(data.block_tags.clone());
@@ -596,11 +602,11 @@ mod tests {
                     .0
                     .contains("MissingChunk")
             );
-            assert!(
-                LiveWorldGenLevel::height_at(&level, Heightmap::OceanFloorWg, 16, 0)
-                    .unwrap_err()
-                    .0
-                    .contains("MissingChunk")
+            // Level#getHeight returns minimum Y after its non-loading presence
+            // check; the block read above still requires the absent chunk.
+            assert_eq!(
+                LiveWorldGenLevel::height_at(&level, Heightmap::OceanFloorWg, 16, 0).unwrap(),
+                level.min_build_height()
             );
             assert_eq!(level.unported_behavior_stats().skipped_calls, 0);
         }

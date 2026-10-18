@@ -1,12 +1,9 @@
-use super::{
-    Container, ItemStack, MenuError, Result, count, is_same_item_same_components, max_stack_size,
-    set_count, split,
-};
+use super::{Container, ItemStack, MenuError, Result, count, max_stack_size};
 use ferraloom_data::Item;
 use ferraloom_protocol::component::{ComponentTypeId, DataComponent, EquipmentSlot};
 
 /// Stable references into canonical storage. External containers are borrowed per operation.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum ContainerId {
     Player,
     Local(usize),
@@ -157,10 +154,10 @@ impl Slot {
         self
     }
     pub fn may_place(&self, stack: &ItemStack, hooks: &dyn MenuHooks) -> Result<bool> {
-        let item = stack.item();
+        let item = Some(stack.item());
         Ok(match self.kind {
             SlotKind::Normal | SlotKind::Offhand | SlotKind::EnchantmentItem => true,
-            SlotKind::Banner => item.name().ends_with("_banner"),
+            SlotKind::Banner => item.is_some_and(|i| i.name().ends_with("_banner")),
             SlotKind::GrindstoneInput => {
                 let c = stack.components()?;
                 (c.get(ComponentTypeId::MAX_DAMAGE).is_some() && c.get(ComponentTypeId::DAMAGE).is_some() && c.get(ComponentTypeId::UNBREAKABLE).is_none()) || [ComponentTypeId::ENCHANTMENTS,ComponentTypeId::STORED_ENCHANTMENTS].into_iter().any(|key| matches!(c.get(key),Some(DataComponent::Enchantments(v)|DataComponent::StoredEnchantments(v)) if !v.0.is_empty()))
@@ -186,20 +183,20 @@ impl Slot {
                 }
                 _ => false,
             },
-            SlotKind::ShulkerBox => !item.name().ends_with("shulker_box"),
+            SlotKind::ShulkerBox => !item.is_some_and(|i| i.name().ends_with("shulker_box")),
             SlotKind::FurnaceFuel => {
                 stack
                     .components()?
                     .get(ComponentTypeId::COOKING_FUEL)
                     .is_some()
-                    || item == Item::BUCKET
+                    || item == Some(Item::BUCKET)
             }
             SlotKind::BrewingBottle => hooks.may_place(self.kind, stack)?,
             SlotKind::BrewingFuel => stack
                 .components()?
                 .get(ComponentTypeId::BREWING_FUEL)
                 .is_some(),
-            SlotKind::Lapis => item == Item::LAPIS_LAZULI,
+            SlotKind::Lapis => item == Some(Item::LAPIS_LAZULI),
             SlotKind::Dye => stack.components()?.get(ComponentTypeId::DYE).is_some(),
             SlotKind::BannerPattern => stack
                 .components()?
@@ -207,7 +204,7 @@ impl Slot {
                 .is_some(),
             SlotKind::Map => stack.components()?.get(ComponentTypeId::MAP_ID).is_some(),
             SlotKind::MapAddition => {
-                matches!(item, Item::PAPER | Item::MAP | Item::GLASS_PANE)
+                matches!(item, Some(Item::PAPER | Item::MAP | Item::GLASS_PANE))
             }
             _ => hooks.may_place(self.kind, stack)?,
         })
@@ -225,23 +222,37 @@ impl Slot {
             _ => Ok(true),
         }
     }
-    pub fn get_max_stack_size(&self, container: &dyn Container) -> i32 {
+    fn fixed_stack_limit(&self) -> Option<i32> {
         match self.kind {
             SlotKind::Armor(_)
             | SlotKind::BrewingBottle
             | SlotKind::EnchantmentItem
             | SlotKind::BeaconPayment
-            | SlotKind::MountEquipment(_) => 1,
-            _ => container.max_stack_size(),
+            | SlotKind::MountEquipment(_) => Some(1),
+            _ => None,
         }
     }
-    pub fn max_stack_size(&self, container: &dyn Container, stack: &ItemStack) -> i32 {
+    pub fn get_max_stack_size(&self, container: &dyn Container) -> i32 {
+        self.fixed_stack_limit()
+            .unwrap_or_else(|| container.max_stack_size())
+    }
+    pub(crate) fn max_stack_size_with_limit(
+        &self,
+        stack: &ItemStack,
+        container_limit: impl FnOnce() -> Result<i32>,
+    ) -> Result<i32> {
         if self.kind == SlotKind::FurnaceFuel && stack.item() == Item::BUCKET {
-            1
-        } else {
-            self.get_max_stack_size(container)
-                .min(max_stack_size(stack))
+            return Ok(1);
         }
+        let limit = match self.fixed_stack_limit() {
+            Some(limit) => limit,
+            None => container_limit()?,
+        };
+        Ok(limit.min(max_stack_size(stack)))
+    }
+    pub fn max_stack_size(&self, container: &dyn Container, stack: &ItemStack) -> i32 {
+        self.max_stack_size_with_limit(stack, || Ok(container.max_stack_size()))
+            .expect("pure container stack limit")
     }
     pub fn allow_modification(
         &self,
@@ -294,29 +305,11 @@ impl Slot {
     pub fn safe_insert(
         &self,
         container: &mut dyn Container,
-        mut input: ItemStack,
+        input: ItemStack,
         amount: i32,
         hooks: &dyn MenuHooks,
     ) -> Result<ItemStack> {
-        if input.is_empty() || !self.may_place(&input, hooks)? {
-            return Ok(input);
-        }
-        let mut target = container.get_item(self.container_slot);
-        let n = amount
-            .min(count(&input))
-            .min(self.max_stack_size(container, &input) - count(&target));
-        if n > 0 {
-            if target.is_empty() {
-                self.set_by_player(container, split(&mut input, n));
-            } else if is_same_item_same_components(&target, &input) {
-                let left = count(&input) - n;
-                let total = count(&target) + n;
-                set_count(&mut input, left);
-                set_count(&mut target, total);
-                self.set_by_player(container, target);
-            }
-        }
-        Ok(input)
+        super::transfer::safe_insert_container_item_stack(self, container, input, amount, hooks)
     }
     pub fn safe_clone(&self, container: &dyn Container) -> ItemStack {
         let stack = container.get_item(self.container_slot);

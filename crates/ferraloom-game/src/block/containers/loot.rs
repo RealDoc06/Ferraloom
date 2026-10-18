@@ -1,5 +1,6 @@
 //! Port of RandomizableContainer#unpackLootTable. Ordered fill placements are
 //! delivered to the original receiver, with synchronous callbacks between writes.
+use super::loot_runtime::LiveLootRuntime;
 use super::storage::RandomizableContainerBlockEntity;
 use crate::{
     advancements::criteria,
@@ -61,27 +62,31 @@ pub fn unpack_loot_table(
                 .expect("chest context"),
             )
             .map_err(|_| LevelError::Inventory("container loot context"))?;
-        let placements = level
-            .with_block_entity_and_loot_sources(handle, |receiver, sources| {
-                resources.loot.fill_seeded_placements(
-                    &table,
-                    &params,
-                    seed,
-                    sources,
-                    resources.facts.as_ref(),
-                    || {
-                        Ok(receiver
-                            .container()
-                            .expect("randomizable container")
-                            .items
-                            .iter()
-                            .enumerate()
-                            .filter_map(|(slot, stack)| stack.is_empty().then_some(slot))
-                            .collect())
-                    },
-                )
-            })?
-            .map_err(|_| LevelError::Inventory("container loot evaluation"))?;
+        let placements = {
+            let mut runtime = LiveLootRuntime::for_table(level, &resources.loot, &table, seed)
+                .map_err(|_| LevelError::Inventory("container loot stream"))?;
+            resources
+                .loot
+                .fill_placements_with_runtime(&table, &params, &mut runtime, |runtime| {
+                    let receiver = runtime
+                        .level()
+                        .block_entity_state(handle)
+                        .map_err(|error| {
+                            crate::loot::LootError::Unsupported(format!(
+                                "container available slots: {error:?}"
+                            ))
+                        })?;
+                    Ok(receiver
+                        .container()
+                        .expect("randomizable container")
+                        .items
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(slot, stack)| stack.is_empty().then_some(slot))
+                        .collect())
+                })
+                .map_err(|_| LevelError::Inventory("container loot evaluation"))?
+        };
         for (slot, stack) in placements {
             super::access::set_item(handle, slot, stack, level)?;
         }
@@ -102,23 +107,19 @@ mod tests {
         crafting::RecipeManager,
         entity::{EntityState, player::GameType},
         level::{Region, chunk::LevelChunk},
-        loot::{LootData, LootFacts, LootTable},
+        loot::{LootData, LootTable},
     };
     use ferraloom_data::{Block, Item};
     use ferraloom_protocol::component::ItemStack;
     use ferraloom_util::{BlockPos, ChunkPos, Uuid};
     use std::sync::Arc;
-    struct Features;
-    impl crate::predicates::PredicateContext for Features {}
-    impl LootFacts for Features {
-        fn item_enabled(&self, _: &ItemStack) -> crate::loot::Result<bool> {
-            Ok(true)
-        }
-    }
     static BEHAVIORS: Behaviors = Behaviors::EMPTY;
     #[test]
     fn lazy_fill_preserves_seed_occupied_slots_and_criterion_boundary() {
-        let mut level = Level::new(Region::new(&BEHAVIORS));
+        let mut level = Level::new(
+            Region::new(&BEHAVIORS),
+            crate::level::LevelContext::fixture(0, 63),
+        );
         let pos = BlockPos::new(3, 3, 3);
         let section = ferraloom_chunk::LevelChunkSection::new(
             ferraloom_chunk::Strategy::block_states(),
@@ -140,11 +141,33 @@ mod tests {
         let handle = level.block_entity_ref(pos).unwrap().unwrap();
         let mut loot = LootData::default();
         loot.tables.insert(table, LootTable::decode(&serde_json::json!({"type":"chest","pools":[{"rolls":1,"entries":[{"type":"item","name":"stone"}]}]})).unwrap());
+        let recipes = Arc::new(RecipeManager::new(Vec::new()).unwrap());
+        let recipe_synchronization = Arc::new(crate::crafting::RecipeSynchronization::new(
+            &recipes,
+            |_| true,
+        ));
+        let advancement_id = Identifier::parse("test:unsupported_food").unwrap();
+        let advancements =
+            Arc::new(crate::advancements::ServerAdvancementManager::new(
+                vec![crate::advancements::AdvancementHolder {
+            id: advancement_id,
+            value: crate::advancements::Advancement::decode(&serde_json::json!({
+                "criteria":{"food":{"trigger":"player_generates_container_loot","conditions":{
+                    "loot_tables":"test:chest",
+                    "player":{"type":"entity_properties","entity":"this","predicate":{
+                        "minecraft:type_specific/player":{"food":{"level":20}}
+                    }}
+                }}}
+            })).unwrap(),
+        }],
+            ));
         level.set_container_resources(
             Arc::new(ContainerResources {
-                recipes: Arc::new(RecipeManager::new(Vec::new()).unwrap()),
+                recipes: Arc::clone(&recipes),
                 loot: Arc::new(loot),
-                facts: Arc::new(Features),
+                advancements: Arc::clone(&advancements),
+                recipe_tags: Default::default(),
+                recipe_synchronization,
             }),
             0,
         );
@@ -161,6 +184,10 @@ mod tests {
                 ))),
             )
             .unwrap();
+        level
+            .entity_mut::<ServerPlayer>(player)
+            .unwrap()
+            .advancements = crate::advancements::PlayerAdvancements::new(&advancements);
         assert_eq!(
             unpack_loot_table(handle, Some(player), &mut level),
             Err(LevelError::UnsupportedAdvancementCriterion(

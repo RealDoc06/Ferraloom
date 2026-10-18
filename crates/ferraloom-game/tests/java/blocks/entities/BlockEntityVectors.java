@@ -20,7 +20,40 @@ public final class BlockEntityVectors {
     var dynamic=NeighborVectors.load();var builtin=RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
     var registries=HolderLookup.Provider.create(java.util.stream.Stream.concat(builtin.listRegistries(),dynamic.listRegistries()));
     BuiltInRegistries.DATA_COMPONENT_INITIALIZERS.build(registries).forEach(DataComponentInitializers.PendingComponents::apply);
+    var cookingRecipe=new net.minecraft.world.item.crafting.SmeltingRecipe(new net.minecraft.world.item.crafting.Recipe.CommonInfo(true),new net.minecraft.world.item.crafting.AbstractCookingRecipe.CookingBookInfo(net.minecraft.world.item.crafting.CookingBookCategory.MISC,""),net.minecraft.world.item.crafting.Ingredient.of(net.minecraft.world.item.Items.IRON_ORE),new net.minecraft.world.item.ItemStackTemplate(net.minecraft.world.item.Items.IRON_INGOT),0.7f,200);
+    var cookingKey=net.minecraft.resources.ResourceKey.create(Registries.RECIPE,net.minecraft.resources.Identifier.withDefaultNamespace("test_cooking"));
+    var cookTime=AbstractFurnaceBlockEntity.class.getDeclaredMethod("getTotalCookTime",net.minecraft.world.item.crafting.RecipeHolder.class,AbstractFurnaceBlockEntity.class);cookTime.setAccessible(true);
+    var speedField=AbstractFurnaceBlockEntity.class.getDeclaredField("speedMultiplier");speedField.setAccessible(true);
+    var cookingTimeField=net.minecraft.world.item.crafting.AbstractCookingRecipe.class.getDeclaredField("cookingTime");cookingTimeField.setAccessible(true);
+    var cookingEntity=new FurnaceBlockEntity(BlockPos.ZERO,Blocks.FURNACE.defaultBlockState());
+    for(float speed:new float[]{-1f,0f,0.5f,1f,1.5f,3.07f})for(int time:new int[]{1,7,100,200,Integer.MAX_VALUE}){
+      speedField.setFloat(cookingEntity,speed);cookingTimeField.setInt(cookingRecipe,time);
+      var holder=new net.minecraft.world.item.crafting.RecipeHolder(cookingKey,cookingRecipe);
+      System.out.println("cook-time\t"+Integer.toUnsignedString(Float.floatToRawIntBits(speed),16)+"\t"+time+"\t"+cookTime.invoke(null,holder,cookingEntity));
+    }
+    for(var block:List.of(Blocks.FURNACE,Blocks.SMOKER,Blocks.BLAST_FURNACE)){
+      var furnace=(AbstractFurnaceBlockEntity)((EntityBlock)block).newBlockEntity(BlockPos.ZERO,block.defaultBlockState());
+      for(var face:Direction.values()){
+        System.out.println("sided-slots\t"+BuiltInRegistries.BLOCK.getKey(block)+"\t"+face+"\t"+Arrays.toString(furnace.getSlotsForFace(face)));
+        for(boolean oldBucket:new boolean[]{false,true})for(var item:List.of(net.minecraft.world.item.Items.COAL,net.minecraft.world.item.Items.BUCKET,net.minecraft.world.item.Items.WATER_BUCKET,net.minecraft.world.item.Items.LAVA_BUCKET,net.minecraft.world.item.Items.STONE,net.minecraft.world.item.Items.IRON_INGOT)){
+          furnace.setItem(1,oldBucket?new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.BUCKET):net.minecraft.world.item.ItemStack.EMPTY);
+          var stack=new net.minecraft.world.item.ItemStack(item);var values=new ArrayList<String>();
+          for(int slot=0;slot<3;slot++)values.add(furnace.canPlaceItem(slot,stack)+","+furnace.canPlaceItemThroughFace(slot,stack,face)+","+furnace.canTakeItemThroughFace(slot,stack,face));
+          System.out.println("sided-rule\t"+BuiltInRegistries.BLOCK.getKey(block)+"\t"+face+"\t"+oldBucket+"\t"+BuiltInRegistries.ITEM.getKey(item)+"\t"+String.join(";",values));
+        }
+      }
+    }
     BlockEntityFixture.tickerPhases(dynamic);
+    BlockEntityFixture.scatter(dynamic);
+    BlockEntityFixture.popResourceRng(dynamic);
+    BlockEntityFixture.signEdits(dynamic);
+    BlockEntityFixture.signFacing(dynamic);
+    BlockEntityFixture.signEditorTick(dynamic);
+    BlockEntityFixture.menuBroadcastReads(dynamic);
+    BlockEntityFixture.menuTransferSources(dynamic);
+    BlockEntityFixture.menuSwapSources(dynamic);
+    BlockEntityFixture.menuAbilities(dynamic);
+    BlockEntityFixture.containerSetValues(dynamic);
     var level=new BlockEntityFixture(dynamic);
     for(var block:List.of(Blocks.CHEST,Blocks.COPPER_CHEST.asList().getFirst(),Blocks.TRAPPED_CHEST,Blocks.BARREL,Blocks.SHULKER_BOX,Blocks.CRAFTER,Blocks.FURNACE,Blocks.SMOKER,Blocks.BLAST_FURNACE,Blocks.OAK_SIGN,Blocks.OAK_HANGING_SIGN)){
       var state=block.defaultBlockState();var entity=((EntityBlock)block).newBlockEntity(new BlockPos(1,64,2),state);

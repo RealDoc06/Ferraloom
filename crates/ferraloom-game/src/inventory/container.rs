@@ -1,10 +1,32 @@
-use super::{ItemStack, count, is_same_item_same_components, max_stack_size, set_count, split};
+use super::{
+    ItemStack, MenuError, Result, StackGenerations, count, is_same_item_same_components,
+    max_stack_size, set_count, split,
+};
 
 /// Port of Container. The owner supplies live storage; menus never snapshot it.
 pub trait Container {
+    fn stack_parts(&self, _slot: usize) -> Option<(&StackGenerations, &ItemStack, usize)> {
+        None
+    }
+    fn stack_parts_mut(
+        &mut self,
+        _slot: usize,
+    ) -> Option<(&mut StackGenerations, &mut ItemStack, usize)> {
+        None
+    }
     fn size(&self) -> usize;
     fn get_item(&self, slot: usize) -> ItemStack;
     fn set_item(&mut self, slot: usize, stack: ItemStack);
+    /// Container#setItem when its argument is the identical current object.
+    /// Run class callbacks without replacing that object's generation.
+    fn reassign_item(&mut self, _slot: usize) -> Result<()> {
+        Err(MenuError::Unsupported("container existing-stack setter"))
+    }
+    /// ItemStack#setCount on the existing receiver. Slot#setChanged is a
+    /// separate operation; this must not invoke Container#setItem callbacks.
+    fn set_item_count(&mut self, _slot: usize, _amount: i32) -> Result<()> {
+        Err(MenuError::Unsupported("direct container stack mutation"))
+    }
     fn set_changed(&mut self) {}
     fn max_stack_size(&self) -> i32 {
         99
@@ -57,17 +79,20 @@ pub trait Container {
 #[derive(Clone, Debug)]
 pub struct SimpleContainer {
     items: Vec<ItemStack>,
+    stack_generations: StackGenerations,
     pub times_changed: u32,
 }
 impl SimpleContainer {
     pub fn new(size: usize) -> Self {
         Self {
             items: vec![ItemStack::default(); size],
+            stack_generations: StackGenerations::new(size),
             times_changed: 0,
         }
     }
     pub fn from_items(items: Vec<ItemStack>) -> Self {
         Self {
+            stack_generations: StackGenerations::new(items.len()),
             items,
             times_changed: 0,
         }
@@ -82,16 +107,16 @@ impl SimpleContainer {
             return remaining;
         }
         for slot in 0..self.size() {
-            let mut target = self.get_item(slot);
+            let target = self.get_item(slot);
             if is_same_item_same_components(&target, &remaining) {
                 let n = count(&remaining)
                     .min(max_stack_size(&target).min(self.max_stack_size()) - count(&target));
                 if n > 0 {
                     let total = count(&target) + n;
-                    set_count(&mut target, total);
+                    set_count(&mut self.items[slot], total);
                     let left = count(&remaining) - n;
                     set_count(&mut remaining, left);
-                    self.set_item(slot, target);
+                    self.set_changed();
                 }
                 if remaining.is_empty() {
                     return remaining;
@@ -114,34 +139,74 @@ impl SimpleContainer {
         })
     }
     pub fn remove_all_items(&mut self) -> Vec<ItemStack> {
-        let removed = self
-            .items
-            .iter_mut()
-            .map(std::mem::take)
-            .filter(|s| !s.is_empty())
+        let removed = (0..self.size())
+            .map(|slot| self.remove_item_no_update(slot))
+            .filter(|stack| !stack.is_empty())
             .collect();
-        self.set_changed();
+        self.clear_content();
         removed
     }
 }
 impl Container for SimpleContainer {
+    fn reassign_item(&mut self, slot: usize) -> Result<()> {
+        let amount = count(&self.items[slot])
+            .min(self.max_stack_size().min(max_stack_size(&self.items[slot])));
+        set_count(&mut self.items[slot], amount);
+        self.set_changed();
+        Ok(())
+    }
+    fn stack_parts(&self, slot: usize) -> Option<(&StackGenerations, &ItemStack, usize)> {
+        Some((&self.stack_generations, self.items.get(slot)?, slot))
+    }
+    fn stack_parts_mut(
+        &mut self,
+        slot: usize,
+    ) -> Option<(&mut StackGenerations, &mut ItemStack, usize)> {
+        Some((&mut self.stack_generations, self.items.get_mut(slot)?, slot))
+    }
+    fn remove_item(&mut self, slot: usize, amount: i32) -> ItemStack {
+        if amount <= 0 {
+            return ItemStack::default();
+        }
+        let result = split(&mut self.items[slot], amount);
+        if !result.is_empty() {
+            self.set_changed();
+        }
+        result
+    }
+    fn clear_content(&mut self) {
+        for slot in 0..self.items.len() {
+            self.stack_generations
+                .replace(slot, &mut self.items[slot], ItemStack::default());
+        }
+        self.set_changed();
+    }
+    fn set_item_count(&mut self, slot: usize, amount: i32) -> Result<()> {
+        set_count(&mut self.items[slot], amount);
+        Ok(())
+    }
     fn size(&self) -> usize {
         self.items.len()
     }
     fn get_item(&self, slot: usize) -> ItemStack {
         self.items.get(slot).cloned().unwrap_or_default()
     }
-    fn set_item(&mut self, slot: usize, mut stack: ItemStack) {
-        let n = count(&stack).min(self.max_stack_size().min(max_stack_size(&stack)));
-        set_count(&mut stack, n);
-        self.items[slot] = stack;
-        self.set_changed();
+    fn set_item(&mut self, slot: usize, stack: ItemStack) {
+        self.stack_generations
+            .replace(slot, &mut self.items[slot], stack);
+        self.reassign_item(slot).expect("simple container setter");
     }
     fn set_changed(&mut self) {
         self.times_changed = self.times_changed.wrapping_add(1);
     }
     fn remove_item_no_update(&mut self, slot: usize) -> ItemStack {
-        std::mem::take(&mut self.items[slot])
+        if self.items[slot].is_empty() {
+            return ItemStack::default();
+        }
+        self.stack_generations
+            .replace(slot, &mut self.items[slot], ItemStack::default())
+            .into_owned()
+            .expect("live value removal requires an unrooted stack")
     }
 }
 
@@ -151,6 +216,23 @@ pub struct PlayerContainer<'a> {
     pub equipment: &'a mut crate::entity::player::equipment::EntityEquipment,
 }
 impl Container for PlayerContainer<'_> {
+    fn reassign_item(&mut self, _slot: usize) -> Result<()> {
+        // Inventory#setItem and EntityEquipment#set only assign the object.
+        Ok(())
+    }
+    fn stack_parts(&self, slot: usize) -> Option<(&StackGenerations, &ItemStack, usize)> {
+        self.inventory.stack_parts(slot, self.equipment)
+    }
+    fn stack_parts_mut(
+        &mut self,
+        slot: usize,
+    ) -> Option<(&mut StackGenerations, &mut ItemStack, usize)> {
+        self.inventory.stack_parts_mut(slot, self.equipment)
+    }
+    fn set_item_count(&mut self, slot: usize, amount: i32) -> Result<()> {
+        set_count(self.inventory.get_item_mut(slot, self.equipment), amount);
+        Ok(())
+    }
     fn size(&self) -> usize {
         43
     }
@@ -195,11 +277,36 @@ impl SimpleContainer {
 
 /// Port of ResultContainer's storage semantics. Every index aliases its one
 /// result, and removeItem takes the entire result regardless of the requested count.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct ResultContainer {
     stack: ItemStack,
+    stack_generations: StackGenerations,
+}
+impl Default for ResultContainer {
+    fn default() -> Self {
+        Self {
+            stack: ItemStack::default(),
+            stack_generations: StackGenerations::new(1),
+        }
+    }
 }
 impl Container for ResultContainer {
+    fn reassign_item(&mut self, _slot: usize) -> Result<()> {
+        Ok(())
+    }
+    fn stack_parts(&self, _slot: usize) -> Option<(&StackGenerations, &ItemStack, usize)> {
+        Some((&self.stack_generations, &self.stack, 0))
+    }
+    fn stack_parts_mut(
+        &mut self,
+        _slot: usize,
+    ) -> Option<(&mut StackGenerations, &mut ItemStack, usize)> {
+        Some((&mut self.stack_generations, &mut self.stack, 0))
+    }
+    fn set_item_count(&mut self, _slot: usize, amount: i32) -> Result<()> {
+        set_count(&mut self.stack, amount);
+        Ok(())
+    }
     fn size(&self) -> usize {
         1
     }
@@ -207,13 +314,23 @@ impl Container for ResultContainer {
         self.stack.clone()
     }
     fn set_item(&mut self, _slot: usize, stack: ItemStack) {
-        self.stack = stack;
+        self.stack_generations.replace(0, &mut self.stack, stack);
     }
     fn remove_item(&mut self, _slot: usize, _amount: i32) -> ItemStack {
-        std::mem::take(&mut self.stack)
+        self.remove_item_no_update(0)
     }
     fn remove_item_no_update(&mut self, _slot: usize) -> ItemStack {
-        std::mem::take(&mut self.stack)
+        if self.stack.is_empty() {
+            return ItemStack::default();
+        }
+        self.stack_generations
+            .replace(0, &mut self.stack, ItemStack::default())
+            .into_owned()
+            .expect("live value removal requires an unrooted stack")
+    }
+    fn clear_content(&mut self) {
+        self.stack_generations
+            .replace(0, &mut self.stack, ItemStack::default());
     }
 }
 
@@ -222,11 +339,13 @@ impl Container for ResultContainer {
 #[derive(Clone, Debug)]
 pub struct TransientCraftingContainer {
     items: Vec<ItemStack>,
+    stack_generations: StackGenerations,
 }
 impl TransientCraftingContainer {
     pub fn new(size: usize) -> Self {
         Self {
             items: vec![ItemStack::default(); size],
+            stack_generations: StackGenerations::new(size),
         }
     }
     pub fn items(&self) -> &[ItemStack] {
@@ -238,6 +357,23 @@ impl TransientCraftingContainer {
     }
 }
 impl Container for TransientCraftingContainer {
+    fn reassign_item(&mut self, _slot: usize) -> Result<()> {
+        // Its owning menu invokes slotsChanged after the short storage borrow.
+        Ok(())
+    }
+    fn stack_parts(&self, slot: usize) -> Option<(&StackGenerations, &ItemStack, usize)> {
+        Some((&self.stack_generations, self.items.get(slot)?, slot))
+    }
+    fn stack_parts_mut(
+        &mut self,
+        slot: usize,
+    ) -> Option<(&mut StackGenerations, &mut ItemStack, usize)> {
+        Some((&mut self.stack_generations, self.items.get_mut(slot)?, slot))
+    }
+    fn set_item_count(&mut self, slot: usize, amount: i32) -> Result<()> {
+        set_count(&mut self.items[slot], amount);
+        Ok(())
+    }
     fn size(&self) -> usize {
         self.items.len()
     }
@@ -245,7 +381,8 @@ impl Container for TransientCraftingContainer {
         self.items.get(index).cloned().unwrap_or_default()
     }
     fn set_item(&mut self, index: usize, stack: ItemStack) {
-        self.items[index] = stack;
+        self.stack_generations
+            .replace(index, &mut self.items[index], stack);
     }
     fn remove_item(&mut self, index: usize, amount: i32) -> ItemStack {
         if amount <= 0 || self.items[index].is_empty() {
@@ -255,10 +392,19 @@ impl Container for TransientCraftingContainer {
         }
     }
     fn remove_item_no_update(&mut self, index: usize) -> ItemStack {
-        std::mem::take(&mut self.items[index])
+        if self.items[index].is_empty() {
+            return ItemStack::default();
+        }
+        self.stack_generations
+            .replace(index, &mut self.items[index], ItemStack::default())
+            .into_owned()
+            .expect("live value removal requires an unrooted stack")
     }
     fn clear_content(&mut self) {
-        self.items.fill(ItemStack::default());
+        for index in 0..self.items.len() {
+            self.stack_generations
+                .replace(index, &mut self.items[index], ItemStack::default());
+        }
     }
 }
 
@@ -278,6 +424,37 @@ impl MenuContainer {
     }
 }
 impl Container for MenuContainer {
+    fn reassign_item(&mut self, slot: usize) -> Result<()> {
+        match self {
+            Self::Simple(container) => container.reassign_item(slot),
+            Self::Crafting(container) => container.reassign_item(slot),
+            Self::Result(container) => container.reassign_item(slot),
+        }
+    }
+    fn stack_parts(&self, slot: usize) -> Option<(&StackGenerations, &ItemStack, usize)> {
+        match self {
+            Self::Simple(container) => container.stack_parts(slot),
+            Self::Crafting(container) => container.stack_parts(slot),
+            Self::Result(container) => container.stack_parts(slot),
+        }
+    }
+    fn stack_parts_mut(
+        &mut self,
+        slot: usize,
+    ) -> Option<(&mut StackGenerations, &mut ItemStack, usize)> {
+        match self {
+            Self::Simple(container) => container.stack_parts_mut(slot),
+            Self::Crafting(container) => container.stack_parts_mut(slot),
+            Self::Result(container) => container.stack_parts_mut(slot),
+        }
+    }
+    fn set_item_count(&mut self, slot: usize, amount: i32) -> Result<()> {
+        match self {
+            Self::Simple(container) => container.set_item_count(slot, amount),
+            Self::Crafting(container) => container.set_item_count(slot, amount),
+            Self::Result(container) => container.set_item_count(slot, amount),
+        }
+    }
     fn size(&self) -> usize {
         match self {
             Self::Simple(c) => c.size(),

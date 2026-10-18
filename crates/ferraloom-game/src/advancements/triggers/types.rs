@@ -122,7 +122,7 @@ impl TriggerType {
         Self::CrafterRecipeCrafted,
         Self::FallAfterExplosion,
     ];
-    pub fn name(self) -> &'static str {
+    pub const fn name(self) -> &'static str {
         match self {
             Self::Impossible => "minecraft:impossible",
             Self::PlayerKilledEntity => "minecraft:player_killed_entity",

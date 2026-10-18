@@ -1,5 +1,5 @@
 use super::{
-    CraftingContext, CraftingInput, Recipe, Result, StackedItemContents,
+    CraftingContext, CraftingInputAccess, Recipe, Result, StackedItemContents,
     recipe::{RecipeKind, ShapedRecipePattern},
     stack,
     stacked_contents::{crafting_remainder, default_crafting_remainders},
@@ -15,15 +15,11 @@ use ferraloom_protocol::{
 impl Recipe {
     pub(super) fn matches_crafting(
         &self,
-        input: &CraftingInput,
+        input: &dyn CraftingInputAccess,
         context: &impl CraftingContext,
     ) -> Result<bool> {
         use RecipeKind::*;
-        let occupied: Vec<_> = input
-            .items()
-            .iter()
-            .filter(|stack| !stack.is_empty())
-            .collect();
+        let occupied: Vec<_> = input.iter().filter(|stack| !stack.is_empty()).collect();
         let count = occupied.len();
         Ok(match &self.kind {
             Shaped { pattern, .. } => pattern.matches(input),
@@ -39,8 +35,9 @@ impl Recipe {
                 input.width() == 3
                     && input.height() == 3
                     && count == 9
-                    && (0..9)
-                        .all(|i| if i == 4 { source } else { material }.test(&input.items()[i]))
+                    && (0..9).all(|i| {
+                        if i == 4 { source } else { material }.test(input.get_item_index(i))
+                    })
             }
             Dye { target, dye, .. } => {
                 if count < 2 {
@@ -110,7 +107,7 @@ impl Recipe {
                     && [1, 3, 5, 7]
                         .into_iter()
                         .zip(walls)
-                        .all(|(i, wall)| wall.test(&input.items()[i]))
+                        .all(|(i, wall)| wall.test(input.get_item_index(i)))
             }
             BookCloning {
                 source,
@@ -278,7 +275,7 @@ impl Recipe {
     }
     pub(super) fn assemble_crafting(
         &self,
-        input: &CraftingInput,
+        input: &dyn CraftingInputAccess,
         context: &impl CraftingContext,
     ) -> Result<ItemStack> {
         use RecipeKind::*;
@@ -300,7 +297,6 @@ impl Recipe {
                 ..
             } => {
                 let mut sources = input
-                    .items()
                     .iter()
                     .filter(|stack| !stack.is_empty() && source.test(stack));
                 let source = if *add_material_count {
@@ -313,7 +309,6 @@ impl Recipe {
                 };
                 let materials = if *add_material_count {
                     input
-                        .items()
                         .iter()
                         .filter(|stack| {
                             !stack.is_empty()
@@ -337,7 +332,7 @@ impl Recipe {
             } => {
                 let mut source = None;
                 let mut dyes = Vec::new();
-                for item in input.items().iter().filter(|s| !s.is_empty()) {
+                for item in input.iter().filter(|s| !s.is_empty()) {
                     if target.test(item) {
                         if source.is_some() {
                             return Ok(ItemStack::default());
@@ -365,7 +360,7 @@ impl Recipe {
             }
             DecoratedPot { result, .. } => {
                 let template = |index: usize| {
-                    let stack = &input.items()[index];
+                    let stack = input.get_item_index(index);
                     stack
                         .0
                         .as_ref()
@@ -401,7 +396,7 @@ impl Recipe {
             } => {
                 let mut found = None;
                 let mut count = 0;
-                for stack in input.items().iter().filter(|s| !s.is_empty()) {
+                for stack in input.iter().filter(|s| !s.is_empty()) {
                     if source.test(stack)
                         && stack::component(stack, Id::WRITTEN_BOOK_CONTENT)?.is_some()
                     {
@@ -429,7 +424,7 @@ impl Recipe {
                 Ok(result)
             }
             MapExtending { result, .. } => {
-                for source in input.items() {
+                for source in input.iter() {
                     if stack::component(source, Id::MAP_ID)?.is_some() {
                         let mut result = stack::transmute(
                             &result.resolve(stack::item(source), result.count),
@@ -443,7 +438,7 @@ impl Recipe {
                 Ok(ItemStack::default())
             }
             BannerDuplicate { result, .. } => {
-                for source in input.items() {
+                for source in input.iter() {
                     let count = banner_patterns(source)?.len();
                     if !source.is_empty() && (1..=6).contains(&count) {
                         return Ok(stack::transmute(result, source, 0));
@@ -459,7 +454,7 @@ impl Recipe {
                 let mut found = None;
                 let mut patterns = None;
                 let mut color = DyeColor::White;
-                for source in input.items().iter().filter(|s| !s.is_empty()) {
+                for source in input.iter().filter(|s| !s.is_empty()) {
                     if banner.test(source)
                         && let Some(name) = stack::item(source).data().banner_color
                     {
@@ -487,7 +482,7 @@ impl Recipe {
             } => {
                 let mut count = 0;
                 let mut explosions = Vec::new();
-                for source in input.items().iter().filter(|s| !s.is_empty()) {
+                for source in input.iter().filter(|s| !s.is_empty()) {
                     if fuel.test(source) {
                         count += 1;
                     } else if star.test(source)
@@ -523,7 +518,7 @@ impl Recipe {
                 let mut has_trail = false;
                 let mut has_twinkle = false;
                 let mut colors = Vec::new();
-                for source in input.items().iter().filter(|s| !s.is_empty()) {
+                for source in input.iter().filter(|s| !s.is_empty()) {
                     if let Some((found, _)) = shapes
                         .iter()
                         .find(|(_, ingredient)| ingredient.test(source))
@@ -557,7 +552,7 @@ impl Recipe {
             } => {
                 let mut found = None;
                 let mut colors = Vec::new();
-                for source in input.items() {
+                for source in input.iter() {
                     if dye.test(source) {
                         colors.push(firework_color(dye_color(source)?));
                     } else if target.test(source) {
@@ -589,11 +584,11 @@ impl Recipe {
         }
     }
     /// Port of CraftingRecipe#getRemainingItems and the book/banner overrides.
-    pub fn remaining_items(&self, input: &CraftingInput) -> Result<Vec<ItemStack>> {
+    pub fn remaining_items(&self, input: &dyn CraftingInputAccess) -> Result<Vec<ItemStack>> {
         let mut result = vec![ItemStack::default(); input.size()];
         match self.kind {
             RecipeKind::BookCloning { .. } | RecipeKind::BannerDuplicate { .. } => {
-                for (index, source) in input.items().iter().enumerate() {
+                for (index, source) in input.iter().enumerate() {
                     let remainder = crafting_remainder(stack::item(source))?;
                     if !remainder.is_empty() {
                         result[index] = remainder;
@@ -660,11 +655,11 @@ fn mix_dyes(current: Option<i32>, dyes: &[DyeColor]) -> i32 {
     let [r, g, b] = average.map(|channel| (channel as f32 * average_intensity / peak) as i32);
     (r << 16) | (g << 8) | b
 }
-fn repair_pair(input: &CraftingInput) -> Result<Option<(&ItemStack, &ItemStack)>> {
+fn repair_pair(input: &dyn CraftingInputAccess) -> Result<Option<(&ItemStack, &ItemStack)>> {
     if input.ingredient_count() != 2 {
         return Ok(None);
     }
-    let mut items = input.items().iter().filter(|s| !s.is_empty());
+    let mut items = input.iter().filter(|s| !s.is_empty());
     let first = items.next().unwrap();
     let second = items.next().unwrap();
     if stack::item(first) != stack::item(second)
@@ -688,7 +683,10 @@ fn integer_component(stack: &ItemStack, id: Id) -> Result<i32> {
         _ => 0,
     })
 }
-fn assemble_repair(input: &CraftingInput, context: &impl CraftingContext) -> Result<ItemStack> {
+fn assemble_repair(
+    input: &dyn CraftingInputAccess,
+    context: &impl CraftingContext,
+) -> Result<ItemStack> {
     let Some((first, second)) = repair_pair(input)? else {
         return Ok(ItemStack::default());
     };

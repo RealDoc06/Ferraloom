@@ -133,8 +133,9 @@ impl MinecraftServer {
                 .map_err(|error| match error {
                     PlacementError::Syntax(error) => anyhow::Error::new(error),
                     PlacementError::Level(error) => anyhow::Error::new(CommandLevelFailure(error)),
-                })?;
-                self.apply_command_result(source, &command.source, result);
+                });
+                self.apply_level_effects()?;
+                self.apply_command_result(source, &command.source, result?);
             }
             "teleport" => {
                 let result = self.teleport_command(command)?;
@@ -153,6 +154,11 @@ impl MinecraftServer {
                 }
                 self.apply_command_result(source, &command.source, result?);
             }
+            "tick" => {
+                let result = ferraloom_game::commands::tick::run(command, self);
+                self.apply_tick_rate_events()?;
+                self.apply_command_result(source, &command.source, result?);
+            }
             "weather" => {
                 let result = ferraloom_game::commands::weather::run(command, &mut self.level.level);
                 self.apply_command_result(source, &command.source, result);
@@ -161,6 +167,7 @@ impl MinecraftServer {
                 let output =
                     ferraloom_game::commands::forceload::run(command, &mut ForcedChunks(self))
                         .await?;
+                self.apply_level_effects()?;
                 if let Some(message) = output.failure {
                     self.command_failure(source, &command.source, message);
                 }
@@ -189,82 +196,13 @@ impl MinecraftServer {
         request: u64,
         terrain: crate::world::Terrain,
     ) -> Result<()> {
-        let pos = terrain.pos;
-        if pos == ChunkPos::containing(self.world.spawn)
-            && !self.world.level_data.data.contains_key("spawn")
-        {
-            self.world.spawn.y = terrain.surface
-                [((self.world.spawn.z & 15) * 16 + (self.world.spawn.x & 15)) as usize];
-        }
-        let chunk = self.world.integrate(request, terrain)?;
-        self.level
-            .level
-            .add_chunk(chunk)
-            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
-        self.level
-            .level
-            .prime_chunk_heightmaps(pos)
-            .map_err(game_error)?;
-        self.level
-            .chunks
-            .holders
-            .get_mut(&pos.pack())
-            .unwrap()
-            .status = ChunkStatus::InitializeLight;
-        Ok(())
+        self.integrate_generation_terrain(request, terrain)
     }
     pub(super) fn integrate_command_light(&mut self, light: crate::world::LitChunk) -> Result<()> {
-        if let Some((request, pos)) = light.initialized {
-            let holder = self
-                .level
-                .chunks
-                .holders
-                .get_mut(&pos.pack())
-                .context("unknown light job")?;
-            ensure!(holder.request_id == request, "stale light completion");
-            holder.status = ChunkStatus::Full;
-            self.world.ready.insert(pos);
-        }
-        for (key, data) in light.updates {
-            self.level
-                .level
-                .set_light_snapshot(ChunkPos::unpack(key), data.snapshot());
-            self.world.lights.insert(key, data);
-        }
-        for (key, mask) in light.dirty {
-            self.world.light_chunks_to_broadcast.insert(key);
-            let dirty = self
-                .world
-                .pending_light_updates
-                .entry(ChunkPos::unpack(key))
-                .or_default();
-            dirty.sky |= mask.sky;
-            dirty.block |= mask.block;
-        }
-
-        Ok(())
+        self.integrate_generation_light(light)
     }
     async fn command_get_chunk(&mut self, position: ChunkPos) -> Result<()> {
-        self.request_area(position, 0)?;
-        loop {
-            self.integrate_jobs()?;
-            if self.world.ready.contains(&position) {
-                return Ok(());
-            }
-            if let Some((&request, _)) = self.world.pending.first_key_value() {
-                // Preserve the canonical request order even if a later job finished first.
-                let terrain = self.world.pending.remove(&request).unwrap().await??;
-                self.integrate_command_terrain(request, terrain)?;
-            } else {
-                let light = self
-                    .world
-                    .light_rx
-                    .recv()
-                    .await
-                    .context("chunk light worker stopped")?;
-                self.integrate_command_light(light)?;
-            }
-        }
+        self.await_generation_chunk(position).await
     }
     pub(super) async fn prepare_command_tickets(&mut self) -> Result<()> {
         self.level.tickets.activate_all_deactivated_tickets();
@@ -330,5 +268,38 @@ impl ferraloom_game::commands::forceload::ForceLoadAccess for ForcedChunks<'_> {
             self.0.command_get_chunk(position).await?;
         }
         Ok(changed)
+    }
+}
+
+impl ferraloom_game::commands::tick::TickRateAccess for MinecraftServer {
+    fn snapshot(&self) -> ferraloom_game::commands::tick::TickRateSnapshot {
+        let manager = &self.tick_rate_manager;
+        ferraloom_game::commands::tick::TickRateSnapshot {
+            rate: manager.tickrate(),
+            nanoseconds_per_tick: manager.nanoseconds_per_tick(),
+            average_tick_time_nanos: self.average_tick_time_nanos(),
+            tick_times_nanos: *self.tick_times_nanos(),
+            frozen: manager.is_frozen(),
+            stepping: manager.is_stepping_forward(),
+            sprinting: manager.is_sprinting(),
+        }
+    }
+    fn set_tick_rate(&mut self, rate: f32) {
+        self.tick_rate_manager.set_tick_rate(rate);
+    }
+    fn set_frozen(&mut self, frozen: bool) {
+        self.tick_rate_manager.set_frozen(frozen);
+    }
+    fn step_game_if_paused(&mut self, ticks: i32) -> bool {
+        self.tick_rate_manager.step_game_if_paused(ticks)
+    }
+    fn stop_stepping(&mut self) -> bool {
+        self.tick_rate_manager.stop_stepping()
+    }
+    fn request_game_to_sprint(&mut self, ticks: i32) -> bool {
+        self.tick_rate_manager.request_game_to_sprint(ticks)
+    }
+    fn stop_sprinting(&mut self) -> bool {
+        self.tick_rate_manager.stop_sprinting()
     }
 }

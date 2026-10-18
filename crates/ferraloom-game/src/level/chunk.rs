@@ -1,6 +1,10 @@
 use super::{distance_manager::FullChunkStatus, heightmap::Heightmap};
 use crate::ticks::LevelChunkTicks;
-use std::{cell::OnceCell, ops::Range};
+use ferraloom_worldgen::structure::pipeline::ChunkStructures;
+use std::{
+    cell::{Cell, OnceCell},
+    ops::Range,
+};
 
 pub use ferraloom_chunk::LevelChunkSection;
 use ferraloom_data::{Block, BlockState};
@@ -9,6 +13,7 @@ use ferraloom_util::{BlockPos, ChunkPos};
 /// Port of LevelChunk's section ownership. Absent sections use the supplied
 /// empty-section template, including the dimension's default biome registry.
 pub struct LevelChunk {
+    pub(super) publication_generation: u64,
     pos: ChunkPos,
     min_section: i32,
     sections: Vec<Option<LevelChunkSection>>,
@@ -17,29 +22,32 @@ pub struct LevelChunk {
     generation_heightmaps: [OnceCell<[i32; 256]>; 2],
     pub(super) block_ticks: LevelChunkTicks,
     pub(super) fluid_ticks: LevelChunkTicks<ferraloom_data::registries::fluid::Id>,
-    pub(super) requested_full_status: FullChunkStatus,
-    pub(super) ticking_ready: bool,
+    requested_full_status: Cell<FullChunkStatus>,
+    ticking_ready: Cell<bool>,
     pub(super) block_entities: super::block_entity::ChunkBlockEntities,
     inhabited_time: i64,
     pub(super) pending_generation: super::post_processing::PendingGenerationData,
-    pub unsaved: bool,
+    pub(super) structures: super::structure_manager::StructureVersions,
+    unsaved: Cell<bool>,
 }
 
 impl LevelChunk {
     /// Port of ChunkAccess#markUnsaved and tryMarkSaved. Clear immediately
     /// before capturing a save; later mutations set the flag again independently.
-    pub fn mark_unsaved(&mut self) {
-        self.unsaved = true;
+    pub fn mark_unsaved(&self) {
+        self.unsaved.set(true);
     }
     pub fn try_mark_saved(&mut self) -> bool {
-        std::mem::take(&mut self.unsaved)
+        self.collect_structure_versions();
+        self.unsaved.replace(false)
     }
     pub fn is_unsaved(&self) -> bool {
-        self.unsaved
+        self.unsaved.get()
     }
     pub fn new(pos: ChunkPos, sections: Range<i32>, empty_section: LevelChunkSection) -> Self {
         assert!(empty_section.has_only_air());
         Self {
+            publication_generation: 0,
             pos,
             min_section: sections.start,
             sections: sections.map(|_| None).collect(),
@@ -50,12 +58,13 @@ impl LevelChunk {
             fluid_ticks: LevelChunkTicks::default(),
             // LevelChunk#getFullStatus defaults to FULL until a holder's
             // supplier is attached. This alone never permits broadcasts.
-            requested_full_status: FullChunkStatus::Full,
-            ticking_ready: false,
+            requested_full_status: Cell::new(FullChunkStatus::Full),
+            ticking_ready: Cell::new(false),
             block_entities: Default::default(),
             inhabited_time: 0,
             pending_generation: Default::default(),
-            unsaved: false,
+            structures: super::structure_manager::StructureVersions::new(pos),
+            unsaved: Cell::new(false),
         }
     }
     pub fn from_sections(
@@ -73,18 +82,20 @@ impl LevelChunk {
         Self {
             pos,
             min_section,
+            publication_generation: 0,
             sections: sections.into_iter().map(Some).collect(),
             empty_section,
             heightmaps: None,
             generation_heightmaps: std::array::from_fn(|_| OnceCell::new()),
             block_ticks: LevelChunkTicks::default(),
             fluid_ticks: LevelChunkTicks::default(),
-            requested_full_status: FullChunkStatus::Full,
-            ticking_ready: false,
+            requested_full_status: Cell::new(FullChunkStatus::Full),
+            ticking_ready: Cell::new(false),
             block_entities: Default::default(),
             inhabited_time: 0,
             pending_generation: Default::default(),
-            unsaved: false,
+            structures: super::structure_manager::StructureVersions::new(pos),
+            unsaved: Cell::new(false),
         }
     }
     pub fn min_y(&self) -> i32 {
@@ -111,8 +122,17 @@ impl LevelChunk {
             .get(index)
             .map(|s| s.as_ref().unwrap_or(&self.empty_section))
     }
+    /// Port of LevelChunk#getFullStatus's holder-backed supplier. Requested
+    /// status is observable before the corresponding ticking future completes.
+    pub fn full_status(&self) -> FullChunkStatus {
+        self.requested_full_status.get()
+    }
     pub fn ticking_ready(&self) -> bool {
-        self.ticking_ready
+        self.ticking_ready.get()
+    }
+    pub(super) fn set_loading_status(&self, requested: FullChunkStatus, ticking_ready: bool) {
+        self.requested_full_status.set(requested);
+        self.ticking_ready.set(ticking_ready);
     }
     pub fn heightmap(&self, map: Heightmap) -> Option<&[i32; 256]> {
         self.heightmaps.as_ref().map(|maps| &maps[map as usize])
@@ -217,6 +237,39 @@ impl LevelChunk {
     }
     pub fn min_section(&self) -> i32 {
         self.min_section
+    }
+    /// Port of LevelChunk's proto constructor setAllStarts/setAllReferences.
+    /// Install the already decoded payload before attachment; no second decoder.
+    pub fn set_structures(
+        &mut self,
+        payload: ChunkStructures,
+        revision: u64,
+    ) -> Result<(), super::LevelError> {
+        self.structures.replace(self.pos, payload, revision)?;
+        self.mark_unsaved();
+        Ok(())
+    }
+    pub fn structures(&self) -> &ChunkStructures {
+        &self.structures.current().payload
+    }
+    pub fn structures_revision(&self) -> u64 {
+        self.structures.current().revision
+    }
+    pub(super) fn publish_structures(
+        &self,
+        payload: ChunkStructures,
+        revision: u64,
+    ) -> Result<bool, super::LevelError> {
+        let published = self.structures.publish(self.pos, payload, revision)?;
+        if published {
+            self.mark_unsaved();
+        }
+        Ok(published)
+    }
+    /// Exclusive phase boundary: previously returned structure references are no
+    /// longer live. Saves also collect these old immutable versions.
+    pub fn collect_structure_versions(&mut self) {
+        self.structures.collect();
     }
     pub fn pos(&self) -> ChunkPos {
         self.pos

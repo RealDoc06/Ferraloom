@@ -43,6 +43,10 @@ public final class EntityVectors {
       final net.minecraft.world.level.entity.EntitySectionStorage<Entity> contactSections=new net.minecraft.world.level.entity.EntitySectionStorage<>(Entity.class,key->net.minecraft.world.level.entity.Visibility.TICKING);
       final net.minecraft.world.level.entity.EntityLookup<Entity> contactLookup=new net.minecraft.world.level.entity.EntityLookup<>();
       final net.minecraft.world.level.entity.LevelEntityGetter<Entity> contactGetter=new net.minecraft.world.level.entity.LevelEntityGetterAdapter<>(contactLookup,contactSections);
+      // Controlled Level service: observe the real Entity constructor's ID calls.
+      boolean captureCreationIds;
+      int creationCounter;
+      @Override public int getNextEntityId(){return captureCreationIds?++creationCounter:super.getNextEntityId();}
       AABB lastContactBounds;
       void addContact(Entity entity){contactLookup.add(entity);contactSections.getOrCreateSection(SectionPos.asLong(entity.blockPosition())).add(entity);}
       void clearContacts(){for(Entity entity:List.copyOf(java.util.stream.StreamSupport.stream(contactLookup.getAllEntities().spliterator(),false).toList())){contactSections.getOrCreateSection(SectionPos.asLong(entity.blockPosition())).remove(entity);contactLookup.remove(entity);}lastContactBounds=null;}
@@ -71,7 +75,8 @@ public final class EntityVectors {
       @Override public java.util.List<net.minecraft.world.phys.shapes.VoxelShape> getEntityCollisions(Entity e,AABB bb){return List.of();}
       @Override public net.minecraft.world.level.block.entity.BlockEntity getBlockEntity(BlockPos pos){return null;}
       @Override public java.util.List<? extends net.minecraft.world.entity.player.Player> players(){return List.of();}
-      @Override public net.minecraft.world.scores.Scoreboard getScoreboard(){return new net.minecraft.world.scores.Scoreboard();}
+      final net.minecraft.world.scores.Scoreboard scoreboard=new net.minecraft.world.scores.Scoreboard();
+      @Override public net.minecraft.world.scores.Scoreboard getScoreboard(){return scoreboard;}
       @Override public long getGameTime(){return 0;}
       @Override public net.minecraft.world.attribute.EnvironmentAttributeSystem environmentAttributes(){return net.minecraft.world.attribute.EnvironmentAttributeSystem.builder().build();}
       @Override public void scheduleTick(BlockPos pos,Block block,int delay){}
@@ -98,7 +103,18 @@ public final class EntityVectors {
         SynchedDataVectors.run(new EntityFixture(r));
         AttributeVectors.run();
         LivingVectors.run(new EntityFixture(r));
-        TeleportVectors.run(new EntityFixture(r));
+        TravelVectors.run(new EntityFixture(r));
+        DamageVectors.run(new EntityFixture(r));
+        DifficultyVectors.run();
+        ExperienceVectors.run(new EntityFixture(r));
+        DropVectors.run(new EntityFixture(r));
+        EntityFactsVectors.run(new EntityFixture(r));
+        NbtVectors.run(new EntityFixture(r));
+        NameVectors.run(new EntityFixture(r));
+        FreezingVectors.run(new EntityFixture(r));
+        ClimbVectors.run(new EntityFixture(r));
+        PushingVectors.run(new EntityFixture(r));
+        CrammingVectors.run(new EntityFixture(r));
         DimensionVectors.run(new EntityFixture(r));
         PlayerTrackingVectors.run(new EntityFixture(r));
         WorldgenVectors.run(new EntityFixture(r));
@@ -151,13 +167,15 @@ public final class EntityVectors {
           var contacts=new ArrayList<String>();BlockGetter.forEachBlockIntersectedBetween(start,end,box,(pos,step)->{contacts.add(pos.getX()+","+pos.getY()+","+pos.getZ()+","+step);return true;});
           System.out.println("trace\\t"+(traceIndex++)+"\\t"+vec(start)+"\\t"+vec(end)+"\\t"+String.join(";",contacts));
         }
-        for(var tag:List.of(net.minecraft.tags.BlockTags.FENCES,net.minecraft.tags.BlockTags.WALLS,net.minecraft.tags.BlockTags.CLIMBABLE,net.minecraft.tags.BlockTags.SUPPRESSES_BOUNCE,net.minecraft.tags.BlockTags.FALL_DAMAGE_RESETTING,net.minecraft.tags.BlockTags.BLOCKS_FLUID_FLOW,net.minecraft.tags.BlockTags.FIRE,net.minecraft.tags.BlockTags.ANVIL,net.minecraft.tags.BlockTags.INSIDE_STEP_SOUND_BLOCKS,net.minecraft.tags.BlockTags.COMBINATION_STEP_SOUND_BLOCKS,net.minecraft.tags.BlockTags.CRYSTAL_SOUND_BLOCKS)){
+        for(var tag:List.of(net.minecraft.tags.BlockTags.FENCES,net.minecraft.tags.BlockTags.WALLS,net.minecraft.tags.BlockTags.CLIMBABLE,net.minecraft.tags.BlockTags.CAN_GLIDE_THROUGH,net.minecraft.tags.BlockTags.SUPPRESSES_BOUNCE,net.minecraft.tags.BlockTags.FALL_DAMAGE_RESETTING,net.minecraft.tags.BlockTags.BLOCKS_FLUID_FLOW,net.minecraft.tags.BlockTags.FIRE,net.minecraft.tags.BlockTags.ANVIL,net.minecraft.tags.BlockTags.INSIDE_STEP_SOUND_BLOCKS,net.minecraft.tags.BlockTags.COMBINATION_STEP_SOUND_BLOCKS,net.minecraft.tags.BlockTags.CRYSTAL_SOUND_BLOCKS)){
           var names=new ArrayList<String>();for(var block:BuiltInRegistries.BLOCK)if(block.defaultBlockState().is(tag))names.add(BuiltInRegistries.BLOCK.getKey(block).toString());
           System.out.println("block-tag\\t"+tag.location()+"\\t"+String.join(",",names));
         }
-        var entityTag=net.minecraft.tags.EntityTypeTags.NON_CONTROLLING_RIDER;var entityNames=new ArrayList<String>();
-        for(var type:BuiltInRegistries.ENTITY_TYPE)if(BuiltInRegistries.ENTITY_TYPE.wrapAsHolder(type).is(entityTag))entityNames.add(BuiltInRegistries.ENTITY_TYPE.getKey(type).toString());
-        System.out.println("entity-tag\\t"+entityTag.location()+"\\t"+String.join(",",entityNames));
+        for(var entityTag:List.of(net.minecraft.tags.EntityTypeTags.NON_CONTROLLING_RIDER,net.minecraft.tags.EntityTypeTags.FREEZE_IMMUNE_ENTITY_TYPES)){
+          var entityNames=new ArrayList<String>();
+          for(var type:BuiltInRegistries.ENTITY_TYPE)if(BuiltInRegistries.ENTITY_TYPE.wrapAsHolder(type).is(entityTag))entityNames.add(BuiltInRegistries.ENTITY_TYPE.getKey(type).toString());
+          System.out.println("entity-tag\\t"+entityTag.location()+"\\t"+String.join(",",entityNames));
+        }
         for(var tag:List.of(net.minecraft.tags.FluidTags.WATER,net.minecraft.tags.FluidTags.LAVA)){
           var names=new ArrayList<String>();for(var fluid:BuiltInRegistries.FLUID)if(fluid.is(tag))names.add(BuiltInRegistries.FLUID.getKey(fluid).toString());
           System.out.println("fluid-tag\\t"+tag.location()+"\\t"+String.join(",",names));

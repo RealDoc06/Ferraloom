@@ -376,6 +376,16 @@ impl AbstractContainerMenu {
         index: usize,
         hooks: &mut dyn MenuHooks,
     ) -> Result<ItemStack> {
+        if matches!(
+            self.kind,
+            MenuKind::Chest { .. } | MenuKind::Hopper | MenuKind::ShulkerBox | MenuKind::Dispenser
+        ) {
+            return quick_move_container_menu_item(
+                &mut super::in_memory::InMemoryMenuOperation::new(self, ctx),
+                index,
+                hooks,
+            );
+        }
         let mut stack = self.get_item(ctx, index);
         if stack.is_empty() {
             return Ok(ItemStack::default());
@@ -394,14 +404,13 @@ impl AbstractContainerMenu {
         let original = stack.clone();
         let slots = self.slots.len();
         let moved = match self.kind {
-            MenuKind::Chest { rows } => {
-                self.move_between(ctx, &mut stack, index, usize::from(rows) * 9, slots, hooks)?
+            MenuKind::Crafter => self.move_between(ctx, &mut stack, index, 9, 45, hooks)?,
+            MenuKind::Chest { .. }
+            | MenuKind::Hopper
+            | MenuKind::ShulkerBox
+            | MenuKind::Dispenser => {
+                unreachable!("simple containers use the shared retained quick-move kernel")
             }
-            MenuKind::Dispenser | MenuKind::Crafter => {
-                self.move_between(ctx, &mut stack, index, 9, 45, hooks)?
-            }
-            MenuKind::ShulkerBox => self.move_between(ctx, &mut stack, index, 27, slots, hooks)?,
-            MenuKind::Hopper => self.move_between(ctx, &mut stack, index, 5, slots, hooks)?,
             MenuKind::Inventory => {
                 if index == 0 {
                     self.move_item_stack_to(ctx, &mut stack, 9, 45, true, hooks)?
@@ -723,6 +732,8 @@ pub struct MenuSession {
     pub container_menu: Option<AbstractContainerMenu>,
     pub container_counter: i32,
     pub pending_packets: Vec<ferraloom_protocol::play::clientbound::Packet>,
+    pub(crate) listener_copies: ListenerCopyArena,
+    pub(crate) operation_stacks: super::operation_stacks::OperationStackArena,
     detached: std::collections::HashMap<MenuRef, AbstractContainerMenu>,
     retained: std::collections::HashMap<MenuRef, usize>,
     next_generation: u64,
@@ -739,6 +750,8 @@ impl Default for MenuSession {
             container_menu: None,
             container_counter: 0,
             pending_packets: Vec::new(),
+            listener_copies: ListenerCopyArena::default(),
+            operation_stacks: super::operation_stacks::OperationStackArena::default(),
             detached: std::collections::HashMap::new(),
             retained: std::collections::HashMap::new(),
             next_generation: 2,
@@ -748,6 +761,82 @@ impl Default for MenuSession {
     }
 }
 impl MenuSession {
+    pub(crate) fn menu_and_listener_copies_mut(
+        &mut self,
+        reference: MenuRef,
+    ) -> Result<(&mut AbstractContainerMenu, &mut ListenerCopyArena)> {
+        let menu = if self.inventory_menu.reference() == reference {
+            &mut self.inventory_menu
+        } else if self
+            .container_menu
+            .as_ref()
+            .is_some_and(|menu| menu.reference() == reference)
+        {
+            self.container_menu.as_mut().unwrap()
+        } else {
+            self.detached
+                .get_mut(&reference)
+                .ok_or(MenuError::MissingMenu(reference))?
+        };
+        Ok((menu, &mut self.listener_copies))
+    }
+    pub(crate) fn bind_listener_copies(&mut self, reference: MenuRef) -> Result<()> {
+        let (menu, arena) = self.menu_and_listener_copies_mut(reference)?;
+        if let Some(standalone) = menu.standalone_listener_copies.take() {
+            arena.import(standalone, &mut menu.last_slots);
+        }
+        Ok(())
+    }
+    fn retire_listener_copies(&mut self, menu: &AbstractContainerMenu) {
+        if menu.standalone_listener_copies.is_none() {
+            for &reference in menu.last_slots.iter().flatten() {
+                self.listener_copies.release(reference);
+            }
+        }
+    }
+    /// Port of doCloseContainer's inventoryMenu.transferState(containerMenu).
+    /// Only the player Inventory is shared with inventoryMenu; each menu's local
+    /// crafting/result containers have distinct native identities.
+    pub(crate) fn transfer_to_inventory_menu(&mut self, source: MenuRef) -> Result<()> {
+        let target = self.inventory_menu.reference();
+        if source == target {
+            return Ok(());
+        }
+        self.bind_listener_copies(source)?;
+        self.bind_listener_copies(target)?;
+        let source = self.menu(source)?;
+        let mut updates = Vec::new();
+        for (index, target_slot) in self.inventory_menu.slots.iter().enumerate() {
+            if target_slot.container != ContainerId::Player {
+                continue;
+            }
+            if let Some((source_index, _)) =
+                source.slots.iter().enumerate().rev().find(|(_, slot)| {
+                    slot.container == ContainerId::Player
+                        && slot.container_slot == target_slot.container_slot
+                })
+            {
+                updates.push((
+                    index,
+                    source.last_slots[source_index],
+                    (source.synchronized && self.inventory_menu.synchronized)
+                        .then(|| source.remote_slots[source_index].clone()),
+                ));
+            }
+        }
+        for (index, new, remote) in updates {
+            if let Some(new) = new {
+                assert!(self.listener_copies.retain(new));
+            }
+            if let Some(old) = std::mem::replace(&mut self.inventory_menu.last_slots[index], new) {
+                self.listener_copies.release(old);
+            }
+            if let Some(remote) = remote {
+                self.inventory_menu.remote_slots[index] = remote;
+            }
+        }
+        Ok(())
+    }
     pub fn current_ref(&self) -> MenuRef {
         self.current().reference()
     }
@@ -793,25 +882,54 @@ impl MenuSession {
             *count -= 1;
             if *count == 0 {
                 self.retained.remove(&reference);
-                self.detached.remove(&reference);
+                if let Some(menu) = self.detached.remove(&reference) {
+                    self.retire_listener_copies(&menu);
+                }
             }
         }
     }
-    /// Publish a new canonical receiver, retiring an old receiver only when no
-    /// active operation retains it. This is lifecycle movement, never writeback.
-    pub fn install_container_menu(&mut self, mut menu: AbstractContainerMenu) -> MenuRef {
+    /// Store and root a newly constructed receiver before initMenu callbacks.
+    /// It is addressable by generation while containerMenu still names the old menu.
+    pub fn register_container_menu(&mut self, mut menu: AbstractContainerMenu) -> MenuRef {
         menu.generation = self.next_generation;
         self.next_generation = self
             .next_generation
             .checked_add(1)
             .expect("menu generations exhausted");
         let reference = menu.reference();
+        self.detached.insert(reference, menu);
+        self.retained.insert(reference, 1);
+        reference
+    }
+    /// Port of ServerPlayer#openMenu's assignment after initMenu. Return the
+    /// displaced receiver's block roots for the level adapter to release.
+    pub fn publish_container_menu(
+        &mut self,
+        reference: MenuRef,
+    ) -> Result<Vec<crate::block::entity::BlockEntityRef>> {
+        let menu = self
+            .detached
+            .remove(&reference)
+            .ok_or(MenuError::MissingMenu(reference))?;
+        let mut displaced = Vec::new();
         if let Some(old) = self.container_menu.replace(menu) {
+            displaced.clone_from(&old.block_entities);
             let reference = old.reference();
             if self.retained.contains_key(&reference) {
                 self.detached.insert(reference, old);
+            } else {
+                self.retire_listener_copies(&old);
             }
         }
+        Ok(displaced)
+    }
+    /// In-memory lifecycle adapter; the live path initializes the registered
+    /// receiver before publishing it. No callbacks occur during either move.
+    pub fn install_container_menu(&mut self, menu: AbstractContainerMenu) -> MenuRef {
+        let reference = self.register_container_menu(menu);
+        self.publish_container_menu(reference)
+            .expect("newly registered menu");
+        self.release_menu(reference);
         reference
     }
     pub fn detach_menu(&mut self, reference: MenuRef) {
@@ -823,6 +941,8 @@ impl MenuSession {
             let old = self.container_menu.take().unwrap();
             if self.retained.contains_key(&reference) {
                 self.detached.insert(reference, old);
+            } else {
+                self.retire_listener_copies(&old);
             }
         }
     }
@@ -851,6 +971,9 @@ impl AbstractContainerMenu {
 
 /// Port of MenuProvider. Block behavior calls this at its synchronous openMenu site.
 pub trait MenuProvider {
+    fn block_entity_roots(&self) -> &[crate::block::entity::BlockEntityRef] {
+        &[]
+    }
     fn display_name(&self) -> ferraloom_protocol::chat::Component;
     fn create_menu(
         &self,
@@ -870,7 +993,7 @@ impl AbstractContainerMenu {
     ) -> Vec<crate::entity::player::inventory::InventoryEffect> {
         use crate::entity::player::inventory::InventoryEffect;
         let mut effects = Vec::new();
-        let mut carried = std::mem::take(&mut self.carried);
+        let mut carried = self.take_carried_unrooted();
         if !carried.is_empty() {
             if disconnected {
                 effects.push(InventoryEffect::Drop(carried));
@@ -879,7 +1002,7 @@ impl AbstractContainerMenu {
                     &mut carried,
                     true,
                     ctx.player.equipment,
-                    ctx.creative,
+                    ctx.infinite_materials,
                 ));
             }
         }
@@ -916,7 +1039,7 @@ impl AbstractContainerMenu {
                         &mut stack,
                         true,
                         ctx.player.equipment,
-                        ctx.creative,
+                        ctx.infinite_materials,
                     ));
                 }
             }
@@ -940,7 +1063,8 @@ impl MenuSession {
         if let Some(menu) = &mut self.container_menu {
             let reference = menu.reference();
             let effects = menu.removed(ctx, disconnected);
-            self.inventory_menu.transfer_state(menu);
+            self.transfer_to_inventory_menu(reference)
+                .expect("current menu transfer");
             self.detach_menu(reference);
             effects
         } else {
@@ -961,13 +1085,20 @@ impl MenuSession {
             } else {
                 inventory.pick_slot(slot);
             }
-        } else if ctx.creative {
+        } else if ctx.infinite_materials {
             inventory.add_and_pick_item(stack);
         }
         let mut packets = vec![cb::Packet::SetHeldSlot(cb::SetHeldSlot {
             slot: VarInt(inventory.selected_slot() as i32),
         })];
-        self.inventory_menu.broadcast_changes(ctx)?;
+        let reference = self.inventory_menu.reference();
+        self.bind_listener_copies(reference)?;
+        let (menu, copies) = self.menu_and_listener_copies_mut(reference)?;
+        super::operation::broadcast_menu_changes(&mut super::operation::PureMenuSynchronization {
+            menu,
+            context: ctx,
+            copies: Some(copies),
+        })?;
         packets.extend(self.inventory_menu.drain_packets());
         Ok(packets)
     }
@@ -1014,11 +1145,11 @@ impl AbstractContainerMenu {
                         };
                         let mut book = container.remove_item_no_update(slot.container_slot);
                         container.set_changed();
-                        if !ctx
-                            .player
-                            .inventory
-                            .add(&mut book, ctx.player.equipment, ctx.creative)
-                            && !book.is_empty()
+                        if !ctx.player.inventory.add(
+                            &mut book,
+                            ctx.player.equipment,
+                            ctx.infinite_materials,
+                        ) && !book.is_empty()
                         {
                             ctx.drops.push(DroppedStack {
                                 stack: book,
@@ -1034,7 +1165,7 @@ impl AbstractContainerMenu {
                 if !(0..3).contains(&button)
                     || self.data[button as usize] <= 0
                     || self.get_item(ctx, 0).is_empty()
-                    || !ctx.creative && count(&self.get_item(ctx, 1)) < button + 1
+                    || !ctx.infinite_materials && count(&self.get_item(ctx, 1)) < button + 1
                 {
                     Ok(false)
                 } else {

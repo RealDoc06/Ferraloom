@@ -1,15 +1,17 @@
 //! ServerPlayer gameplay state. Connections retain handles, never another player copy.
 mod drop_item;
-pub use drop_item::drop_item;
+pub use drop_item::{drop_item, drop_item_stack};
 mod contact;
 pub mod cooldowns;
 pub mod equipment;
+mod experience;
 mod interaction;
 mod spawn;
+pub use experience::{give_experience_levels, give_experience_points, send_experience_update};
 pub use interaction::swing_and_reset_attack_strength;
 pub mod inventory;
 use crate::{
-    entity::{Avatar, EntityData, EntityDataView, EntityState},
+    entity::{Avatar, EntityData, EntityDataView, EntityRef, EntityState},
     level::{Level, LevelError},
 };
 use ferraloom_nbt::{CompoundTag, ListTag, Tag};
@@ -49,6 +51,13 @@ pub struct ServerPlayer {
     pub inventory: inventory::Inventory,
     pub menus: crate::inventory::MenuSession,
     pub recipe_book: crate::crafting::ServerRecipeBook,
+    pub advancements: crate::advancements::PlayerAdvancements,
+    pub stats: crate::stats::ServerStatsCounter,
+    pub experience_level: i32,
+    pub experience_progress: f32,
+    pub total_experience: i32,
+    last_level_up_time: i32,
+    last_sent_experience: i32,
     pub name: String,
     pub known_movement: Vec3,
     pub game_mode: GameType,
@@ -165,6 +174,13 @@ impl ServerPlayer {
             inventory: Default::default(),
             menus: Default::default(),
             recipe_book: Default::default(),
+            advancements: Default::default(),
+            stats: Default::default(),
+            experience_level: 0,
+            experience_progress: 0.0,
+            total_experience: 0,
+            last_level_up_time: 0,
+            last_sent_experience: -99_999_999,
             known_movement: Vec3::ZERO,
             game_mode,
             flying: game_mode == GameType::Spectator,
@@ -246,6 +262,10 @@ impl ServerPlayer {
         self.parent.parent.load_nbt(tag)?;
         // Player#readAdditionalSaveData restores the profile UUID after super.
         self.uuid = self.profile_id;
+        self.experience_progress = self.saved.get_float_or("XpP", 0.0);
+        self.experience_level = self.saved.get_int_or("XpLevel", 0);
+        self.total_experience = self.saved.get_int_or("XpTotal", 0);
+        self.set_score(self.saved.get_int_or("Score", 0));
         if let Some(abilities) = self.saved.get_compound("abilities") {
             self.instabuild = abilities.get_boolean_or("instabuild", false);
         }
@@ -265,11 +285,20 @@ impl ServerPlayer {
         self.last_good = self.position;
         Ok(())
     }
-    /// Port of Entity#saveWithoutId, Player#addAdditionalSaveData and ServerPlayer.
+    /// PlayerDataStorage's payload uses the same full player save chain.
     pub fn save(&self) -> CompoundTag {
+        self.save_without_id()
+    }
+    /// Port of Entity#saveWithoutId, Player#addAdditionalSaveData and ServerPlayer.
+    pub fn save_without_id(&self) -> CompoundTag {
         let mut tag = self.parent.parent.save_without_id();
-        tag.insert("recipeBook", self.recipe_book.to_nbt());
+        // Player#addAdditionalSaveData writes the version even for predicate NBT.
         tag.insert("DataVersion", Tag::Int(5023));
+        tag.insert("recipeBook", self.recipe_book.to_nbt());
+        tag.insert("XpP", Tag::Float(self.experience_progress));
+        tag.insert("XpLevel", Tag::Int(self.experience_level));
+        tag.insert("XpTotal", Tag::Int(self.total_experience));
+        tag.insert("Score", Tag::Int(self.score()));
         tag.insert("UUID", Tag::IntArray(self.uuid.to_int_array().to_vec()));
         tag.insert("Dimension", Tag::String("minecraft:overworld".into()));
         tag.insert(
@@ -435,7 +464,7 @@ pub fn move_player_with_checks(
     let yaw = mth::wrap_degrees_f32(input.yaw);
     let pitch = mth::wrap_degrees_f32(input.pitch);
     let player = level.entity::<ServerPlayer>(entity)?;
-    if player.vehicle.is_some() {
+    if player.vehicle.get().is_some() {
         let player = level.entity_mut::<ServerPlayer>(entity)?;
         player.set_y_rot(yaw);
         player.set_x_rot(pitch);
@@ -587,6 +616,42 @@ fn jump_from_ground(entity: crate::entity::EntityRef, level: &mut Level) -> Resu
 }
 pub struct PlayerBehavior;
 impl crate::entity::Entity for PlayerBehavior {
+    /// Port of PlayerEquipment#get's selected main-hand projection.
+    fn item_by_slot<'level>(
+        &self,
+        entity: crate::entity::EntityRef,
+        slot: ferraloom_protocol::component::EquipmentSlot,
+        level: &'level Level,
+    ) -> Result<Option<&'level ferraloom_protocol::component::ItemStack>, LevelError> {
+        let player = level.entity::<ServerPlayer>(entity)?;
+        Ok(Some(
+            if slot == ferraloom_protocol::component::EquipmentSlot::Mainhand {
+                player.get_main_hand_item()
+            } else {
+                player.equipment.get(slot)
+            },
+        ))
+    }
+    fn can_freeze(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
+        super::living::freezing::can_freeze(self, entity, level)
+    }
+    fn name(
+        &self,
+        entity: EntityRef,
+        level: &Level,
+    ) -> Result<ferraloom_protocol::chat::Component, LevelError> {
+        Ok(ferraloom_protocol::chat::Component::literal(
+            &level.entity::<ServerPlayer>(entity)?.name,
+        ))
+    }
+    fn display_name(
+        &self,
+        entity: EntityRef,
+        level: &Level,
+        scoreboard: &crate::scoreboard::Scoreboard,
+    ) -> Result<ferraloom_protocol::chat::Component, LevelError> {
+        super::names::player_display_name(self, entity, level, scoreboard)
+    }
     fn y_head_rot(
         &self,
         entity: crate::entity::EntityRef,
@@ -610,6 +675,33 @@ impl crate::entity::Entity for PlayerBehavior {
     ) -> Result<crate::entity::EntityDimensions, LevelError> {
         Ok(Avatar::default_dimensions(pose))
     }
+    fn push(
+        &self,
+        entity: crate::entity::EntityRef,
+        other: crate::entity::EntityRef,
+        level: &mut crate::level::Level,
+    ) -> Result<(), crate::level::LevelError> {
+        crate::entity::pushing::living_push(self, entity, other, level)
+    }
+    fn is_pushable(
+        &self,
+        entity: crate::entity::EntityRef,
+        level: &crate::level::Level,
+    ) -> Result<bool, crate::level::LevelError> {
+        crate::entity::living::climbable::is_pushable(self, entity, level)
+    }
+    /// Port of ServerPlayer#pushEntities: frozen players do not push neighbors.
+    fn push_entities(
+        &self,
+        entity: crate::entity::EntityRef,
+        level: &mut Level,
+        tick_rate: &crate::level::tick_rate::TickRateManager,
+    ) -> Result<(), LevelError> {
+        if tick_rate.runs_normally() {
+            crate::entity::pushing::living_push_entities(self, entity, level)?;
+        }
+        Ok(())
+    }
     fn passenger_riding_position(
         &self,
         entity: crate::entity::EntityRef,
@@ -624,11 +716,24 @@ impl crate::entity::Entity for PlayerBehavior {
         entity: crate::entity::EntityRef,
         level: &mut Level,
     ) -> Result<(), LevelError> {
+        self.ride_tick_with_tick_rate(
+            entity,
+            level,
+            &crate::level::tick_rate::TickRateManager::default(),
+        )
+    }
+
+    fn ride_tick_with_tick_rate(
+        &self,
+        entity: crate::entity::EntityRef,
+        level: &mut Level,
+        tick_rate: &crate::level::tick_rate::TickRateManager,
+    ) -> Result<(), LevelError> {
         let player = level.entity::<ServerPlayer>(entity)?;
-        if player.shared_flag(1) && player.vehicle.is_some() {
+        if player.shared_flag(1) && player.vehicle.get().is_some() {
             crate::entity::stop_riding(entity, level)
         } else {
-            crate::entity::living_ride_tick(self, entity, level)
+            crate::entity::living_ride_tick_with_tick_rate(self, entity, level, tick_rate)
         }
     }
 
@@ -710,6 +815,13 @@ impl crate::entity::Entity for PlayerBehavior {
         level: &Level,
     ) -> Result<bool, LevelError> {
         Ok(level.entity::<ServerPlayer>(entity)?.game_mode == GameType::Spectator)
+    }
+    /// Port of Player#isSwimming. The final read invokes Entity's parent body.
+    fn is_swimming(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
+        if level.entity::<ServerPlayer>(entity)?.flying || self.is_spectator(entity, level)? {
+            return Ok(false);
+        }
+        Ok(level.entity::<super::EntityData>(entity)?.is_swimming())
     }
     fn sound_source(&self) -> ferraloom_protocol::play::SoundSource {
         ferraloom_protocol::play::SoundSource::Players
@@ -816,7 +928,7 @@ impl crate::entity::Entity for PlayerBehavior {
             let player = level.entity::<ServerPlayer>(entity)?;
             (
                 player.game_mode == GameType::Spectator,
-                player.vehicle.is_some(),
+                player.vehicle.get().is_some(),
             )
         };
         level

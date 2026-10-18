@@ -1,18 +1,12 @@
 //! Method-specific registration for the container block family.
-use super::{
-    menu::{self, ContainerMenuProvider},
-    storage::BaseContainerBlockEntity,
-};
+use super::menu;
 use crate::{
     block::{
         BlockBehavior, BlockMethod, InteractionResult, LevelAccessRef, LevelReaderRef, UseContext,
-        entity::BlockEntityType,
     },
-    inventory::MenuKind,
     level::{Level, LevelError},
 };
 use ferraloom_data::{Block, BlockClass, BlockState, properties as p};
-use ferraloom_protocol::chat::Component;
 use ferraloom_util::{BlockPos, Direction, VoxelShape, shapes};
 
 pub struct ContainerBlock;
@@ -42,13 +36,44 @@ pub(crate) fn ported_behavior(
     method: BlockMethod,
 ) -> Option<&'static dyn BlockBehavior> {
     use BlockMethod as M;
-    if block.class() == BlockClass::ShulkerBoxBlock && method == M::AnalogOutputSignal {
+    if matches!(
+        block.block_entity_type(),
+        Some(
+            crate::block::entity::BlockEntityType::SIGN
+                | crate::block::entity::BlockEntityType::HANGING_SIGN
+        )
+    ) && matches!(method, M::UseWithoutItem | M::UseItemOn)
+    {
+        return Some(&super::sign_block::SIGN_BLOCK);
+    }
+    if method == M::GetMenuProvider
+        && matches!(
+            block.block_entity_type(),
+            Some(
+                crate::block::entity::BlockEntityType::SIGN
+                    | crate::block::entity::BlockEntityType::HANGING_SIGN
+                    | crate::block::entity::BlockEntityType::END_PORTAL
+                    | crate::block::entity::BlockEntityType::DISPENSER
+                    | crate::block::entity::BlockEntityType::DROPPER
+                    | crate::block::entity::BlockEntityType::HOPPER
+            )
+        )
+    {
+        return Some(&CONTAINER_BLOCK);
+    }
+    if block.class() == BlockClass::ShulkerBoxBlock
+        && matches!(
+            method,
+            M::AnalogOutputSignal | M::GetMenuProvider | M::GetDrops
+        )
+    {
         return Some(&CONTAINER_BLOCK);
     }
     if supported(block)
         && matches!(
             method,
             M::UseWithoutItem
+                | M::GetMenuProvider
                 | M::TriggerEvent
                 | M::AffectNeighborsAfterRemoval
                 | M::AnalogOutputSignal
@@ -69,6 +94,23 @@ pub(crate) fn ported_behavior(
     None
 }
 impl BlockBehavior for ContainerBlock {
+    fn get_drops(
+        &self,
+        state: BlockState,
+        context: crate::block::drops::BlockLootContext,
+        level: &mut Level,
+    ) -> Result<Vec<ferraloom_protocol::component::ItemStack>, LevelError> {
+        crate::block::drops::get_shulker_drops(state, context, level)
+    }
+    fn get_menu_provider(
+        &self,
+        state: BlockState,
+        pos: BlockPos,
+        level: &Level,
+    ) -> Result<Option<Box<dyn crate::inventory::MenuProvider>>, LevelError> {
+        Ok(menu::provider(state, pos, level)?
+            .map(|provider| Box::new(provider) as Box<dyn crate::inventory::MenuProvider>))
+    }
     fn use_without_item(
         &self,
         state: BlockState,
@@ -76,59 +118,15 @@ impl BlockBehavior for ContainerBlock {
         context: &UseContext,
         level: &mut Level,
     ) -> Result<InteractionResult, LevelError> {
-        let refs = if chest(state.block()) {
-            menu::combine_chest(state, pos, false, level)?
-        } else {
-            level.block_entity_ref(pos)?.into_iter().collect()
-        };
-        if refs.is_empty() {
+        let Some(provider) = menu::provider(state, pos, level)? else {
             return Ok(InteractionResult::SUCCESS);
-        }
-        let kind = match state.block().block_entity_type().unwrap() {
-            BlockEntityType::CHEST | BlockEntityType::TRAPPED_CHEST | BlockEntityType::BARREL => {
-                MenuKind::Chest {
-                    rows: if refs.len() == 2 { 6 } else { 3 },
-                }
+        };
+        crate::inventory::open_menu_live(context.player, &provider, level).map_err(|error| {
+            match error {
+                crate::inventory::MenuError::Level(error) => error,
+                _ => LevelError::Inventory("container menu runtime"),
             }
-            BlockEntityType::FURNACE => MenuKind::Furnace,
-            BlockEntityType::SMOKER => MenuKind::Smoker,
-            BlockEntityType::BLAST_FURNACE => MenuKind::BlastFurnace,
-            BlockEntityType::CRAFTER => MenuKind::Crafter,
-            _ => return Err(LevelError::UnsupportedBlockEntity(state.block())),
-        };
-        let custom = refs.iter().find_map(|&handle| {
-            level
-                .block_entity::<BaseContainerBlockEntity>(handle)
-                .ok()
-                .and_then(|entity| entity.custom_name.clone())
-        });
-        let key = match kind {
-            MenuKind::Chest { rows: 6 } => "container.chestDouble",
-            MenuKind::Chest { .. } if state.block() == Block::BARREL => "container.barrel",
-            MenuKind::Chest { .. } => "container.chest",
-            MenuKind::Furnace => "container.furnace",
-            MenuKind::Smoker => "container.smoker",
-            MenuKind::BlastFurnace => "container.blast_furnace",
-            MenuKind::Crafter => "container.crafter",
-            _ => unreachable!(),
-        };
-        let provider = ContainerMenuProvider {
-            entities: refs,
-            kind,
-            title: custom.unwrap_or_else(|| Component::translatable(key, Vec::new())),
-        };
-        let packets =
-            crate::inventory::open_menu(context.player, &provider, level).map_err(|error| {
-                match error {
-                    crate::inventory::MenuError::Level(error) => error,
-                    _ => LevelError::Inventory("container menu runtime"),
-                }
-            })?;
-        level
-            .entity_mut::<crate::entity::player::ServerPlayer>(context.player)?
-            .menus
-            .pending_packets
-            .extend(packets);
+        })?;
         Ok(InteractionResult::SUCCESS)
     }
     fn trigger_event(
@@ -174,9 +172,9 @@ impl BlockBehavior for ContainerBlock {
         {
             return Ok(entity.analog_output());
         }
-        let container = match refs.as_slice() {
-            &[single] => super::access::ContainerRef::Single(single),
-            &[first, second] => super::access::ContainerRef::Double([first, second]),
+        let container = match *refs.as_slice() {
+            [single] => super::access::ContainerRef::Single(single),
+            [first, second] => super::access::ContainerRef::Double([first, second]),
             _ => unreachable!(),
         };
         super::access::analog_output(&container, level)

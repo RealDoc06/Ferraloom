@@ -127,6 +127,52 @@ fn vanilla_empty_stack_effective_accessors_and_restore() {
 fn decode(json: serde_json::Value) -> Recipe {
     Recipe::decode(&json, &tags()).unwrap()
 }
+
+#[test]
+fn borrowed_positioned_input_keeps_live_receivers_and_shares_recipe_evaluation() {
+    let mut grid = vec![ItemStack::default(); 9];
+    grid[4] = stack(Item::MILK_BUCKET, 1);
+    grid[5] = stack(Item::WHEAT, 3);
+    let recipe = decode(json!({
+        "type": "minecraft:crafting_shaped",
+        "pattern": ["AB"],
+        "key": { "A": "minecraft:milk_bucket", "B": "minecraft:wheat" },
+        "result": { "id": "minecraft:bread" }
+    }));
+    let owned = CraftingInput::of_positioned(3, 3, grid.clone()).unwrap();
+    {
+        let borrowed = CraftingInputView::of_positioned(3, 3, &grid).unwrap();
+        assert_eq!((borrowed.left, borrowed.top), (owned.left, owned.top));
+        assert_eq!((borrowed.input.width(), borrowed.input.height()), (2, 1));
+        assert!(std::ptr::eq(borrowed.input.get_item(0, 0), &grid[4]));
+        assert!(std::ptr::eq(borrowed.input.get_item(1, 0), &grid[5]));
+        assert!(std::ptr::eq(
+            borrowed.input.iter().next_back().unwrap(),
+            &grid[5]
+        ));
+        let input = RecipeInput::Crafting(&borrowed.input);
+        assert!(recipe.matches(input, &()).unwrap());
+        assert_eq!(
+            recipe.assemble(input, &()).unwrap(),
+            recipe
+                .assemble(RecipeInput::Crafting(&owned.input), &())
+                .unwrap()
+        );
+        assert_eq!(
+            recipe.remaining_items(&borrowed.input).unwrap(),
+            recipe.remaining_items(&owned.input).unwrap()
+        );
+    }
+    // The next native recipe query reborrows the changed canonical grid.
+    grid[5] = ItemStack::default();
+    let borrowed = CraftingInputView::of_positioned(3, 3, &grid).unwrap();
+    assert_eq!(borrowed.input.width(), 1);
+    assert!(
+        !recipe
+            .matches(RecipeInput::Crafting(&borrowed.input), &())
+            .unwrap()
+    );
+}
 #[test]
 fn positioned_mirror_and_empty_cells() {
     let recipe = decode(

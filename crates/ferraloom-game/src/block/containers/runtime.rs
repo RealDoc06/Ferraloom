@@ -1,16 +1,20 @@
 //! Immutable datapack services and region-owned random sequences for containers.
 use crate::{
-    crafting::RecipeManager,
-    loot::{LootData, LootFacts, RandomSequences},
+    advancements::ServerAdvancementManager,
+    crafting::{RecipeManager, RecipeSynchronization},
+    loot::{LootData, RandomSequences},
 };
-use std::sync::Arc;
+use ferraloom_protocol::Identifier;
+use std::{collections::BTreeMap, sync::Arc};
 
-/// Published alongside the level's datapack snapshot. Facts must report missing
-/// world services explicitly; the container port never substitutes guessed facts.
+/// Immutable services published alongside the level's datapack snapshot.
+/// World facts are borrowed from Level for each evaluation.
 pub struct ContainerResources {
     pub recipes: Arc<RecipeManager>,
     pub loot: Arc<LootData>,
-    pub facts: Arc<dyn LootFacts + Send + Sync>,
+    pub advancements: Arc<ServerAdvancementManager>,
+    pub recipe_tags: BTreeMap<Identifier, Vec<Identifier>>,
+    pub recipe_synchronization: Arc<RecipeSynchronization>,
 }
 #[derive(Default)]
 pub struct ContainerRuntime {
