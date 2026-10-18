@@ -400,6 +400,14 @@ impl MenuClickContext for InMemoryMenuOperation<'_, '_, '_> {
         }
         Ok(())
     }
+    fn prepare_swap_craft(&self, index: usize, hooks: &dyn MenuHooks) -> Result<()> {
+        if self.menu.slots[index].kind == SlotKind::Result(ResultKind::Crafting)
+            && let Some(crafting) = hooks.crafting_ref()
+        {
+            crafting.validate_take_result()?;
+        }
+        Ok(())
+    }
     fn slot_count(&self) -> Result<usize> {
         Ok(self.menu.slots.len())
     }

@@ -12,6 +12,8 @@ pub trait MenuClickContext: MenuTransferContext {
     fn set_inventory_stack(&mut self, slot: usize, stack: Self::Stack) -> Result<()>;
     fn add_to_inventory(&mut self, stack: Self::Stack) -> Result<bool>;
     fn drop_stack(&mut self, stack: Self::Stack, thrown_from_hand: bool) -> Result<()>;
+    /// Validate an unported result effect before the first native SWAP write.
+    fn prepare_swap_craft(&self, index: usize, hooks: &dyn MenuHooks) -> Result<()>;
     fn swap_craft(&mut self, index: usize, amount: i32) -> Result<()>;
     fn slot_count(&self) -> Result<usize>;
     fn can_take_for_pick_all(&self, index: usize) -> Result<bool>;
@@ -327,6 +329,7 @@ pub fn swap_menu_item<C: MenuClickContext>(
     }
     if context.stack(source)?.is_empty() {
         if context.may_pickup(index, hooks)? {
+            context.prepare_swap_craft(index, hooks)?;
             context.set_inventory_stack(button, target)?;
             context.swap_craft(index, count(&context.stack(target)?))?;
             let empty = context.own_stack(ItemStack::default())?;
@@ -551,6 +554,12 @@ impl MenuClickContext for super::transfer::LiveMenuTransfer<'_> {
         Err(MenuError::Unsupported("retained player drop constructor"))
     }
     fn swap_craft(&mut self, index: usize, _: i32) -> Result<()> {
+        if matches!(self.slot(index)?.kind, SlotKind::Result(_)) {
+            return Err(MenuError::Unsupported("live result-slot achievements"));
+        }
+        Ok(())
+    }
+    fn prepare_swap_craft(&self, index: usize, _: &dyn MenuHooks) -> Result<()> {
         if matches!(self.slot(index)?.kind, SlotKind::Result(_)) {
             return Err(MenuError::Unsupported("live result-slot achievements"));
         }
