@@ -48,6 +48,8 @@ pub enum LevelError {
     UnsupportedWorldgenEnvironment,
     UnsupportedWorldgenBehavior,
     OutsideBuildHeight,
+    MissingPlacementPlayer,
+    UninitializedPlacementDirection,
     MissingEntity(EntityRef),
     WrongEntityType(EntityRef),
     DuplicateEntity(EntityRef),
@@ -85,6 +87,8 @@ pub struct LevelRules {
     pub fast_lava: bool,
     pub redstone_experiments: bool,
     pub spread_fire: bool,
+    pub spread_vines: bool,
+    pub mob_griefing: bool,
 }
 impl Default for LevelRules {
     fn default() -> Self {
@@ -100,6 +104,8 @@ impl Default for LevelRules {
             fast_lava: false,
             redstone_experiments: false,
             spread_fire: true,
+            spread_vines: true,
+            mob_griefing: true,
         }
     }
 }
