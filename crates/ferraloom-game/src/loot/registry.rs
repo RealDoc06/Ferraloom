@@ -55,6 +55,7 @@ pub struct LootData {
     pub float_providers: BTreeMap<Identifier, ContextFloatProvider>,
     pub slot_sources: BTreeMap<Identifier, super::SlotSource>,
     pub tags: BTreeMap<(&'static str, Identifier), Vec<Identifier>>,
+    pub registry_bindings: Vec<super::RegistryHolder>,
 }
 pub trait RegistryValue: Sized {
     const REGISTRY: &'static str;
@@ -114,7 +115,12 @@ impl<T: RegistryValue> HolderSet<T> {
     }
 }
 impl LootData {
-    pub fn load(resources: &ResourceManager) -> Result<Self> {
+    /// Port of ReloadableServerRegistries' registry-aware loading phase.
+    /// External references require the owning registry snapshot before publication.
+    pub fn load(
+        resources: &ResourceManager,
+        lookup: Option<&dyn super::RegistryLookup>,
+    ) -> Result<Self> {
         let mut data = Self::default();
         macro_rules! load {
             ($field:ident,$ty:ty) => {{
@@ -154,6 +160,7 @@ impl LootData {
         if !fatal.is_empty() {
             return Err(LootError::Validation(fatal));
         }
+        data.registry_bindings = super::RegistryBindable::bind_registries(&data, lookup)?;
         Ok(data)
     }
 }

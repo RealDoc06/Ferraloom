@@ -340,7 +340,7 @@ fn item_predicate_acceptance_matches_real_java() {
 #[test]
 fn all_available_builtin_tables_match_real_java() {
     let resources = vanilla_resources();
-    let data = LootData::load(&resources).unwrap();
+    let data = LootData::load(&resources, Some(&OracleRegistries(&resources))).unwrap();
     let facts = ItemFacts::load(&resources);
     let vectors: serde_json::Value =
         serde_json::from_str(include_str!("../../tests/java/loot/vectors.json")).unwrap();
@@ -598,6 +598,91 @@ fn block_and_location_acceptance_matches_java() {
     }
 }
 
+// The real Java harness binds against this same vanilla datapack plus static
+// registries. Production supplies the validated server registry snapshot instead.
+struct OracleRegistries<'a>(&'a ferraloom_data::datapack::ResourceManager);
+impl RegistryLookup for OracleRegistries<'_> {
+    fn lookup(
+        &self,
+        registry: RegistryKey,
+        reference: &RegistryReference,
+    ) -> Result<Option<RegistryHolder>> {
+        use ferraloom_data::registries as r;
+        let id = reference.id();
+        let exists = match reference {
+            RegistryReference::Tag(_) => self
+                .0
+                .get(
+                    &format!(
+                        "{}:tags/{}/{}.json",
+                        id.namespace(),
+                        registry.name(),
+                        id.path()
+                    )
+                    .parse()
+                    .unwrap(),
+                )
+                .is_some(),
+            RegistryReference::Value(_) => match registry {
+                RegistryKey::Item => Item::from_name(id.as_str()).is_some(),
+                RegistryKey::Block => ferraloom_data::Block::from_name(id.as_str()).is_some(),
+                RegistryKey::EntityType => {
+                    ferraloom_data::EntityType::from_name(id.as_str()).is_some()
+                }
+                RegistryKey::Fluid => r::fluid::from_name(id.as_str()).is_some(),
+                RegistryKey::Potion => r::potion::from_name(id.as_str()).is_some(),
+                RegistryKey::MobEffect => r::mob_effect::from_name(id.as_str()).is_some(),
+                RegistryKey::Attribute => r::attribute::from_name(id.as_str()).is_some(),
+                RegistryKey::VillagerType => r::villager_type::from_name(id.as_str()).is_some(),
+                RegistryKey::EnvironmentAttribute => {
+                    r::environment_attribute::from_name(id.as_str()).is_some()
+                }
+                _ => self
+                    .0
+                    .get(
+                        &format!("{}:{}/{}.json", id.namespace(), registry.name(), id.path())
+                            .parse()
+                            .unwrap(),
+                    )
+                    .is_some(),
+            },
+        };
+        Ok(exists.then(|| RegistryHolder {
+            registry,
+            reference: reference.clone(),
+        }))
+    }
+}
+#[test]
+fn dynamic_registry_binding_matches_java_and_requires_a_lookup() {
+    use ferraloom_data::datapack::{Pack, ResourceManager};
+    let resources = vanilla_resources();
+    let lookup = OracleRegistries(&resources);
+    let vectors: serde_json::Value =
+        serde_json::from_str(include_str!("../../tests/java/loot/vectors.json")).unwrap();
+    for record in vectors["registry_codecs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|record| record["kind"] == "dynamic_function")
+    {
+        let mut pack = Pack::new("modifiers");
+        pack.insert(
+            "test:item_modifier/test.json".parse().unwrap(),
+            serde_json::to_vec(&record["definition"]).unwrap(),
+        );
+        let custom = ResourceManager::new(vec![pack]);
+        assert!(
+            matches!(LootData::load(&custom, None), Err(LootError::Unsupported(fact)) if fact == "registry.binding"),
+            "{record}"
+        );
+        assert_eq!(
+            LootData::load(&custom, Some(&lookup)).is_ok(),
+            record["accepted"].as_bool().unwrap(),
+            "{record}"
+        );
+    }
+}
 #[test]
 fn fixed_registry_rejection_and_normalized_keys_match_java() {
     let vectors: serde_json::Value =
@@ -640,7 +725,7 @@ fn named_modifier_registry_and_tags_match_inline_java_function() {
             "test:tags/item_modifier/chain.json".parse().unwrap(),
             br#"{"values":["test:direct"]}"#.to_vec(),
         );
-        let data = LootData::load(&ResourceManager::new(vec![pack])).unwrap();
+        let data = LootData::load(&ResourceManager::new(vec![pack]), None).unwrap();
         let mut random = LegacyRandomSource::new(record["seed"].as_i64().unwrap());
         let result = data
             .apply_modifier(

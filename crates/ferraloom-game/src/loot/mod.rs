@@ -2,6 +2,7 @@
 //!
 //! Callers own the random stream and live facts. Unsupported facts are errors,
 //! never fabricated world state. Named streams are managed by `RandomSequences`.
+mod binding;
 mod bonus;
 pub(crate) mod codec;
 mod component_function;
@@ -25,6 +26,9 @@ mod table;
 mod validation;
 mod world_function;
 
+pub use binding::{
+    RegistryBindable, RegistryHolder, RegistryKey, RegistryLookup, RegistryReference,
+};
 pub use bonus::BonusFormula;
 pub use component_function::{ComponentFunction, ComponentSource};
 pub use condition::LootItemCondition;
