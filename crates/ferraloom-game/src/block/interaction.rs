@@ -90,16 +90,12 @@ pub fn use_item_on(
             .required_block_behavior(state.block(), BlockMethod::GetMenuProvider)?
             .get_menu_provider(state, pos, level)?
         {
-            let packets = crate::inventory::open_menu(context.player, provider.as_ref(), level)
-                .map_err(|error| match error {
+            crate::inventory::open_menu_live(context.player, provider.as_ref(), level).map_err(
+                |error| match error {
                     crate::inventory::MenuError::Level(error) => error,
                     _ => LevelError::Inventory("spectator menu"),
-                })?;
-            level
-                .entity_mut::<ServerPlayer>(context.player)?
-                .menus
-                .pending_packets
-                .extend(packets);
+                },
+            )?;
             return Ok(Some(InteractionResult::CONSUME));
         }
         if matches!(

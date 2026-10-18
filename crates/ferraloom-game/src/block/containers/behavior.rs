@@ -110,18 +110,12 @@ impl BlockBehavior for ContainerBlock {
         let Some(provider) = menu::provider(state, pos, level)? else {
             return Ok(InteractionResult::SUCCESS);
         };
-        let packets =
-            crate::inventory::open_menu(context.player, &provider, level).map_err(|error| {
-                match error {
-                    crate::inventory::MenuError::Level(error) => error,
-                    _ => LevelError::Inventory("container menu runtime"),
-                }
-            })?;
-        level
-            .entity_mut::<crate::entity::player::ServerPlayer>(context.player)?
-            .menus
-            .pending_packets
-            .extend(packets);
+        crate::inventory::open_menu_live(context.player, &provider, level).map_err(|error| {
+            match error {
+                crate::inventory::MenuError::Level(error) => error,
+                _ => LevelError::Inventory("container menu runtime"),
+            }
+        })?;
         Ok(InteractionResult::SUCCESS)
     }
     fn trigger_event(

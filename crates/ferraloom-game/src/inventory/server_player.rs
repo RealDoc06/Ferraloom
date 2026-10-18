@@ -9,13 +9,34 @@ use crate::{
 };
 use ferraloom_protocol::{codec::VarInt, play::clientbound as cb};
 
-/// Port of ServerPlayer#openMenu. The block behavior owns the call site; socket
-/// delivery stays in the server adapter, in the returned packet order.
+/// Packet-capture adapter over the live open path, for callers that deliver a
+/// returned batch. Gameplay calls open_menu_live so nested sends remain ordered.
 pub fn open_menu(
     player: EntityRef,
     provider: &dyn MenuProvider,
     level: &mut Level,
 ) -> Result<Vec<cb::Packet>> {
+    let start = level
+        .entity::<ServerPlayer>(player)?
+        .menus
+        .pending_packets
+        .len();
+    open_menu_live(player, provider, level)?;
+    Ok(level
+        .entity_mut::<ServerPlayer>(player)?
+        .menus
+        .pending_packets
+        .drain(start..)
+        .collect())
+}
+
+/// Port of ServerPlayer#openMenu. Sends OpenScreen before initMenu and publishes
+/// the new receiver only after initialization and its callbacks return.
+pub fn open_menu_live(
+    player: EntityRef,
+    provider: &dyn MenuProvider,
+    level: &mut Level,
+) -> Result<Option<MenuRef>> {
     let roots = provider.block_entity_roots();
     for (index, &handle) in roots.iter().enumerate() {
         if let Err(error) = level.retain_block_entity(handle) {
@@ -35,22 +56,42 @@ fn open_menu_inner(
     player: EntityRef,
     provider: &dyn MenuProvider,
     level: &mut Level,
-) -> Result<Vec<cb::Packet>> {
-    let mut packets = Vec::new();
+) -> Result<Option<MenuRef>> {
     if level
         .entity::<ServerPlayer>(player)?
         .menus
         .container_menu
         .is_some()
     {
-        packets.extend(close_container(player, level, true, false)?);
+        let packets = close_container(player, level, true, false)?;
+        level
+            .entity_mut::<ServerPlayer>(player)?
+            .menus
+            .pending_packets
+            .extend(packets);
     }
     let id = level
         .entity_mut::<ServerPlayer>(player)?
         .menus
         .next_container_counter();
     let Some(menu) = provider.create_menu(id, player, level)? else {
-        return Ok(packets);
+        if level.entity::<ServerPlayer>(player)?.game_mode == GameType::Spectator {
+            let mut content = ferraloom_protocol::chat::Component::translatable(
+                "container.spectatorCantOpen",
+                Vec::new(),
+            );
+            content.style.color =
+                Some(ferraloom_protocol::chat::TextColor::parse("red").expect("native color"));
+            level
+                .entity_mut::<ServerPlayer>(player)?
+                .menus
+                .pending_packets
+                .push(cb::Packet::SystemChat(Box::new(cb::SystemChat {
+                    content,
+                    overlay: true,
+                })));
+        }
+        return Ok(None);
     };
     let menu_type = menu.kind.registry_id().ok_or(MenuError::Unsupported(
         "mount screens require MountScreenOpen",
@@ -64,39 +105,50 @@ fn open_menu_inner(
     {
         return Err(MenuError::Unsupported("mount container resolver"));
     }
-    for &handle in &refs {
-        level.retain_block_entity(handle)?;
+    for (index, &handle) in refs.iter().enumerate() {
+        if let Err(error) = level.retain_block_entity(handle) {
+            for &retained in &refs[..index] {
+                level.release_block_entity(retained);
+            }
+            return Err(error.into());
+        }
     }
-    packets.push(cb::Packet::OpenScreen(Box::new(cb::OpenScreen {
+    let packet = cb::Packet::OpenScreen(Box::new(cb::OpenScreen {
         container_id: VarInt(menu.container_id),
         menu_type,
         title: provider.display_name(),
-    })));
-    let reference = level
-        .entity_mut::<ServerPlayer>(player)?
-        .menus
-        .install_container_menu(menu);
-    let initial = with_block_menu_context(player, level, |menus, _book, context| {
-        let menu = menus.current_mut();
-        menu.broadcast_changes(context)?;
-        menu.set_synchronizer(context);
-        menu.changes.clear();
-        Ok(menu.drain_packets())
+    }));
+    let reference = {
+        let menus = &mut level.entity_mut::<ServerPlayer>(player)?.menus;
+        menus.pending_packets.push(packet);
+        menus.register_container_menu(menu)
+    };
+    let initial = with_menu_callback(player, reference, level, |context| {
+        broadcast_menu_changes(context)?;
+        set_menu_synchronizer(context)?;
+        context.menu_mut()?.changes.clear();
+        Ok(())
     });
-    match initial {
-        Ok(initial) => packets.extend(initial),
-        Err(error) => {
-            level
-                .entity_mut::<ServerPlayer>(player)?
-                .menus
-                .detach_menu(reference);
-            for handle in refs {
-                level.release_block_entity(handle);
-            }
-            return Err(error);
+    if let Err(error) = initial {
+        level
+            .entity_mut::<ServerPlayer>(player)?
+            .menus
+            .release_menu(reference);
+        for handle in refs {
+            level.release_block_entity(handle);
         }
+        return Err(error);
     }
-    Ok(packets)
+    let displaced = {
+        let menus = &mut level.entity_mut::<ServerPlayer>(player)?.menus;
+        let displaced = menus.publish_container_menu(reference)?;
+        menus.release_menu(reference);
+        displaced
+    };
+    for handle in displaced {
+        level.release_block_entity(handle);
+    }
+    Ok(Some(reference))
 }
 
 /// Port of ServerPlayer#closeContainer/doCloseContainer and menu removed hooks.
