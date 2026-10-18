@@ -2050,3 +2050,77 @@ fn save_snapshot_marker_keeps_subsequent_live_mutations_dirty() {
         Err(LevelError::MissingChunk(missing))
     );
 }
+
+struct PostProcessUnsupported;
+impl BlockBehavior for PostProcessUnsupported {
+    fn update_shape(
+        &self,
+        _state: BlockState,
+        pos: BlockPos,
+        _direction: Direction,
+        _neighbor_pos: BlockPos,
+        _neighbor: BlockState,
+        _level: &mut crate::block::LevelAccessRef<'_, '_>,
+    ) -> Result<BlockState, LevelError> {
+        if pos.x == 8 {
+            Err(LevelError::UnsupportedBlockMethod(
+                Block::DIRT,
+                crate::block::BlockMethod::UpdateShape,
+            ))
+        } else {
+            Ok(Block::STONE.default_state())
+        }
+    }
+}
+static POST_PROCESS_UNSUPPORTED: Behaviors =
+    Behaviors::EMPTY.with_block(Block::DIRT, &PostProcessUnsupported);
+#[test]
+fn warn_post_processing_retains_skipped_units_and_continues_in_position_order() {
+    use crate::block::UnportedBehavior;
+    let mut level = empty_level(&POST_PROCESS_UNSUPPORTED);
+    install_tags(&mut level);
+    let skipped = BlockPos::new(8, 0, 8);
+    let next = BlockPos::new(9, 0, 8);
+    for pos in [skipped, next] {
+        level
+            .set_block_state(pos, Block::DIRT.default_state())
+            .unwrap();
+        level.mark_pos_for_post_processing(pos).unwrap();
+    }
+    let chunk = ChunkPos::containing(skipped);
+    assert_eq!(
+        level.post_process_generation(chunk),
+        Err(LevelError::UnsupportedBlockMethod(
+            Block::DIRT,
+            crate::block::BlockMethod::UpdateShape
+        ))
+    );
+    assert_eq!(
+        level.get_block_state(next).unwrap(),
+        Block::DIRT.default_state()
+    );
+    level.set_unported_behavior(UnportedBehavior::Warn);
+    level.post_process_generation(chunk).unwrap();
+    assert_eq!(
+        level.get_block_state(skipped).unwrap(),
+        Block::DIRT.default_state()
+    );
+    assert_eq!(
+        level.get_block_state(next).unwrap(),
+        Block::STONE.default_state()
+    );
+    assert!(!level.chunk(chunk).unwrap().post_processing_complete());
+    assert!(!level.chunk(chunk).unwrap().generation_callbacks_drained());
+    let mut saved = ferraloom_storage::SerializableChunkData::default();
+    level
+        .chunk(chunk)
+        .unwrap()
+        .save_pending_generation_data(&mut saved);
+    assert_eq!(
+        saved.post_processing,
+        Some(vec![Vec::new(), vec![8 | (8 << 8)]])
+    );
+    level.post_process_generation(chunk).unwrap();
+    assert_eq!(level.unported_behavior_stats().skipped_calls, 2);
+    assert_eq!(level.unported_behavior_stats().distinct_calls, 1);
+}

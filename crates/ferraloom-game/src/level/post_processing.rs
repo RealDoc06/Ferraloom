@@ -1,7 +1,7 @@
 //! LevelChunk's pending proto data and postProcessGeneration call order.
 use super::{Level, LevelError, chunk::LevelChunk};
 use crate::block::{BlockMethod, UPDATE_LIMIT, UpdateFlags, fluid::FlowingFluid};
-use ferraloom_data::BlockClass;
+use ferraloom_data::{BlockClass, BlockState};
 use ferraloom_nbt::CompoundTag;
 use ferraloom_storage::{SerializableChunkData, UpgradeData};
 use ferraloom_util::{BlockPos, ChunkPos};
@@ -81,6 +81,7 @@ impl Level {
         let count = chunk.sections().count();
         for section in 0..count {
             let mut cursor = 0;
+            let mut skipped = Vec::new();
             loop {
                 let offset = self
                     .chunk(key)
@@ -104,26 +105,9 @@ impl Level {
                         .wrapping_add((i32::from(offset) >> 8) & 15),
                 );
                 let state = self.get_block_state(pos)?;
-                let fluid = state.data().fluid;
-                if !fluid.empty {
-                    FlowingFluid::from_id(fluid.fluid_type)
-                        .ok_or(LevelError::UnsupportedBlockMethod(
-                            state.block(),
-                            BlockMethod::FluidTick,
-                        ))?
-                        .tick(self, pos, state, fluid)?;
-                }
-                if state.block().is_instance_of(BlockClass::LiquidBlock) {
-                    self.optional_block_call(
-                        state.block(),
-                        BlockMethod::Tick,
-                        |behavior, level| behavior.tick(state, pos, level),
-                    )?;
-                } else {
-                    let next = self.update_from_neighbor_shapes(state, pos)?;
-                    if next != state {
-                        self.set_block(pos, next, UpdateFlags(276), UPDATE_LIMIT)?;
-                    }
+                if let Err(error) = self.post_process_position(pos, state) {
+                    self.skip_post_processing(error)?;
+                    skipped.push(offset);
                 }
             }
             if let Some(list) = self
@@ -135,7 +119,7 @@ impl Level {
                 .offsets
                 .get_mut(section)
             {
-                list.clear();
+                *list = skipped;
             }
         }
         for index in 0..self.chunk(key).unwrap().pending_block_entity_nbt().len() {
@@ -163,6 +147,31 @@ impl Level {
             .is_some()
         {
             return Err(LevelError::UnsupportedChunkUpgrade);
+        }
+        Ok(())
+    }
+    fn post_process_position(
+        &mut self,
+        pos: BlockPos,
+        state: BlockState,
+    ) -> Result<(), LevelError> {
+        let fluid = state.data().fluid;
+        if !fluid.empty {
+            FlowingFluid::from_id(fluid.fluid_type)
+                .ok_or(LevelError::UnsupportedBlockMethod(
+                    state.block(),
+                    BlockMethod::FluidTick,
+                ))?
+                .tick(self, pos, state, fluid)?;
+        }
+        if state.block().is_instance_of(BlockClass::LiquidBlock) {
+            self.behavior_for_method(state.block(), BlockMethod::Tick)?
+                .tick(state, pos, self)?;
+        } else {
+            let next = self.update_from_neighbor_shapes(state, pos)?;
+            if next != state {
+                self.set_block(pos, next, UpdateFlags(276), UPDATE_LIMIT)?;
+            }
         }
         Ok(())
     }

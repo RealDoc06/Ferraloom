@@ -148,6 +148,7 @@ enum UnportedCall {
     Operation(UnportedOperation),
     Worldgen(String, String),
     BlockEntity(Block, ferraloom_nbt::NbtString),
+    PostProcessing(Block, &'static str),
 }
 impl UnportedCalls {
     fn record(&mut self, call: UnportedCall) {
@@ -185,6 +186,11 @@ impl UnportedCalls {
                     block.name(),
                     self.stats.skipped_calls
                 ),
+                UnportedCall::PostProcessing(block, behavior) => eprintln!(
+                    "Post-processing unit skipped: {}#{behavior} (skipped calls: {})",
+                    block.name(),
+                    self.stats.skipped_calls
+                ),
             }
             self.seen.insert(call);
             self.stats.distinct_calls = self.seen.len();
@@ -192,6 +198,21 @@ impl UnportedCalls {
     }
 }
 impl Level {
+    pub(crate) fn skip_post_processing(&mut self, error: LevelError) -> Result<(), LevelError> {
+        let (block, behavior) = match error {
+            LevelError::UnsupportedBlockMethod(block, method) => (block, method.name()),
+            LevelError::UnsupportedShape(state) => (state.block(), "getCollisionShape"),
+            LevelError::UnsupportedBlock(block) => (block, "Block.updateFromNeighbourShapes"),
+            LevelError::UnsupportedBlockEntity(block) => (block, "setBlockState block entity"),
+            _ => return Err(error),
+        };
+        let calls = &mut self.region_mut().unported;
+        if calls.policy == UnportedBehavior::Strict {
+            return Err(error);
+        }
+        calls.record(UnportedCall::PostProcessing(block, behavior));
+        Ok(())
+    }
     /// Integrate owned generation-unit skips on the game thread. Strict rejects
     /// any skipped unit; Warn shares the live counters and logs each pair once.
     pub fn record_worldgen_skips(
