@@ -136,13 +136,15 @@ public final class NeighborVectors {
             final class MutationFixture extends NeighborFixture {
               final Map<ChunkPos,net.minecraft.world.level.chunk.LevelChunk> chunks=new HashMap<>();
               final Source source=new Source();
+              net.minecraft.server.level.FullChunkStatus fullStatus=net.minecraft.server.level.FullChunkStatus.BLOCK_TICKING;
+              net.minecraft.server.level.ChunkHolder holder;
               MutationFixture(RegistryAccess r){super(r,1000);}
               final class Source extends net.minecraft.world.level.chunk.ChunkSource {
                 final net.minecraft.world.level.lighting.LevelLightEngine lights=new net.minecraft.world.level.lighting.LevelLightEngine(this,false,false);
                 @Override public net.minecraft.world.level.BlockGetter getLevel(){return MutationFixture.this;}
                 @Override public net.minecraft.world.level.chunk.ChunkAccess getChunk(int x,int z,net.minecraft.world.level.chunk.status.ChunkStatus status,boolean load){
                   var p=new ChunkPos(x,z);return load?chunks.computeIfAbsent(p,k->new net.minecraft.world.level.chunk.LevelChunk(MutationFixture.this,k){
-                    @Override public net.minecraft.server.level.FullChunkStatus getFullStatus(){return net.minecraft.server.level.FullChunkStatus.BLOCK_TICKING;}
+                    @Override public net.minecraft.server.level.FullChunkStatus getFullStatus(){return MutationFixture.this.fullStatus;}
                   }):chunks.get(p);
                 }
                 @Override public void tick(java.util.function.BooleanSupplier time,boolean tick){}
@@ -153,7 +155,7 @@ public final class NeighborVectors {
               }
               @Override public net.minecraft.world.level.chunk.ChunkSource getChunkSource(){return source;}
               @Override public BlockState getBlockState(BlockPos p){return getChunkAt(p).getBlockState(p);}
-              @Override public void sendBlockUpdated(BlockPos p,BlockState a,BlockState b,int flags){trace.add("send");}
+              @Override public void sendBlockUpdated(BlockPos p,BlockState a,BlockState b,int flags){trace.add("send");if(holder!=null)holder.blockChanged(p);}
               @Override public void updatePOIOnBlockStateChange(BlockPos p,BlockState a,BlockState b){trace.add("poi");}
               @Override public void updateNeighborsAt(BlockPos p,Block b){trace.add("neighbors");neighborUpdater.updateNeighborsAtExceptFromFacing(p,b,null,null);}
               @Override public void neighborChanged(BlockState state,BlockPos p,Block b,Orientation o,boolean moved){trace.add("analog:"+p.toShortString());}
@@ -161,6 +163,17 @@ public final class NeighborVectors {
               @Override public void scheduleTick(BlockPos p,net.minecraft.world.level.material.Fluid f,int delay){trace.add("fluid:"+delay);}
 
               public static void run(RegistryAccess r) throws Exception {
+                for(var status:List.of(net.minecraft.server.level.FullChunkStatus.FULL,net.minecraft.server.level.FullChunkStatus.BLOCK_TICKING))for(boolean ready:new boolean[]{false,true}){
+                  var live=new MutationFixture(r);live.fullStatus=status;var updatePos=new BlockPos(8,0,8);
+                  var chunk=live.getChunkAt(updatePos);
+                  live.holder=new net.minecraft.server.level.ChunkHolder(chunk.getPos(),31,live,live.source.lights,(p,old,l,set)->{},(p,b)->List.of());
+                  if(ready){
+                    var future=net.minecraft.server.level.ChunkHolder.class.getDeclaredField("tickingChunkFuture");future.setAccessible(true);
+                    future.set(live.holder,java.util.concurrent.CompletableFuture.completedFuture(net.minecraft.server.level.ChunkResult.of(chunk)));
+                  }
+                  live.setBlock(updatePos,Blocks.STONE.defaultBlockState(),18,512);
+                  System.out.println("client-update:"+status+":"+ready+"\\t"+live.trace.contains("send")+":"+live.holder.hasChangesToBroadcast());
+                }
                 var contextClass=Class.forName("net.minecraft.world.level.material.FlowingFluid$SpreadContext");
                 var contextConstructor=contextClass.getDeclaredConstructor(net.minecraft.world.level.material.FlowingFluid.class,net.minecraft.world.level.BlockGetter.class,BlockPos.class);contextConstructor.setAccessible(true);
                 var slope=net.minecraft.world.level.material.FlowingFluid.class.getDeclaredMethod("getSlopeDistance",net.minecraft.world.level.LevelReader.class,BlockPos.class,int.class,Direction.class,BlockState.class,contextClass);slope.setAccessible(true);

@@ -1,4 +1,4 @@
-use super::heightmap::Heightmap;
+use super::{distance_manager::FullChunkStatus, heightmap::Heightmap};
 use crate::ticks::LevelChunkTicks;
 use std::ops::Range;
 
@@ -16,6 +16,8 @@ pub struct LevelChunk {
     heightmaps: Option<[[i32; 256]; 4]>,
     pub(super) block_ticks: LevelChunkTicks,
     pub(super) fluid_ticks: LevelChunkTicks<ferraloom_data::registries::fluid::Id>,
+    pub(super) requested_full_status: FullChunkStatus,
+    pub(super) ticking_ready: bool,
     pub unsaved: bool,
 }
 
@@ -30,6 +32,8 @@ impl LevelChunk {
             heightmaps: None,
             block_ticks: LevelChunkTicks::default(),
             fluid_ticks: LevelChunkTicks::default(),
+            requested_full_status: FullChunkStatus::Inaccessible,
+            ticking_ready: false,
             unsaved: false,
         }
     }
@@ -53,6 +57,8 @@ impl LevelChunk {
             heightmaps: None,
             block_ticks: LevelChunkTicks::default(),
             fluid_ticks: LevelChunkTicks::default(),
+            requested_full_status: FullChunkStatus::Inaccessible,
+            ticking_ready: false,
             unsaved: false,
         }
     }

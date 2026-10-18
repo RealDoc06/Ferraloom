@@ -48,6 +48,13 @@ fn empty_level(behaviors: &'static Behaviors) -> Level {
                     ),
                 ))
                 .unwrap();
+            level
+                .set_chunk_loading_status(
+                    ChunkPos::new(x, z),
+                    distance_manager::FullChunkStatus::EntityTicking,
+                    true,
+                )
+                .unwrap();
         }
     }
     level
@@ -298,6 +305,49 @@ fn block_broadcasts_deduplicate_and_capture_final_states_at_broadcast_time() {
         matches!(packets.as_slice(),[Packet::SectionBlocksUpdate(packet)] if packet.changes.len()==2)
     );
     assert!(level.take_block_updates(chunk).unwrap().is_empty());
+}
+#[test]
+fn client_updates_use_loading_status_and_ticking_future_independently_of_simulation() {
+    use crate::block::{UPDATE_LIMIT, UpdateFlags};
+    use distance_manager::FullChunkStatus;
+    for line in include_str!("../../tests/java/level/client-updates.tsv").lines() {
+        let (input, expected) = line.split_once('\t').unwrap();
+        let mut parts = input.split(':').skip(1);
+        let status = match parts.next().unwrap() {
+            "FULL" => FullChunkStatus::Full,
+            "BLOCK_TICKING" => FullChunkStatus::BlockTicking,
+            _ => panic!("unexpected vanilla full status"),
+        };
+        let ready = parts.next().unwrap().parse::<bool>().unwrap();
+        let mut level = empty_level(&EMPTY);
+        install_tags(&mut level);
+        let chunk = ChunkPos::new(0, 0);
+        let pos = BlockPos::new(8, 0, 8);
+        assert!(!level.should_tick_blocks_at(pos));
+        level
+            .set_chunk_loading_status(chunk, status, ready)
+            .unwrap();
+        level
+            .set_block(
+                pos,
+                Block::STONE.default_state(),
+                UpdateFlags::CLIENTS | UpdateFlags::KNOWN_SHAPE,
+                UPDATE_LIMIT,
+            )
+            .unwrap();
+        let navigation = level
+            .take_effects()
+            .iter()
+            .any(|effect| matches!(effect, LevelEffect::BlockUpdated { .. }));
+        let broadcast = !level.take_block_updates(chunk).unwrap().is_empty();
+        assert_eq!(format!("{navigation}:{broadcast}"), expected, "{input}");
+        // A subsequent future completion cannot retroactively queue a change
+        // made while the holder lacked a ticking chunk.
+        level
+            .set_chunk_loading_status(chunk, FullChunkStatus::BlockTicking, true)
+            .unwrap();
+        assert!(level.take_block_updates(chunk).unwrap().is_empty());
+    }
 }
 struct EventChain;
 impl BlockBehavior for EventChain {
@@ -903,6 +953,7 @@ static ANALOG: Behaviors = Behaviors::EMPTY.with_block(Block::COMPARATOR, &Trace
 #[test]
 fn comparator_notifications_match_vanilla_direct_and_through_conductors() {
     let mut level = empty_level(&ANALOG);
+    install_tags(&mut level);
     let center = BlockPos::new(8, 0, 8);
     for (pos, block) in [
         (center.north(1), Block::COMPARATOR),
