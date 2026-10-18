@@ -43,6 +43,8 @@ impl GameType {
 #[derive(Debug)]
 pub struct ServerPlayer {
     pub parent: Avatar,
+    // GameProfile identity is immutable; entity NBT cannot replace it.
+    profile_id: Uuid,
     pub inventory: inventory::Inventory,
     pub menus: crate::inventory::MenuSession,
     pub recipe_book: crate::crafting::ServerRecipeBook,
@@ -64,6 +66,10 @@ pub struct ServerPlayer {
     pub received_moves: u32,
 }
 impl ServerPlayer {
+    /// Port of Player#getGameProfile's identity, also used by Player#nameAndId.
+    pub fn profile_id(&self) -> Uuid {
+        self.profile_id
+    }
     /// Port of Player#getDisplayName (without a team).
     pub fn display_name(&self) -> ferraloom_protocol::chat::Component {
         self.decorate_display_name_component(ferraloom_protocol::chat::Component::literal(
@@ -141,6 +147,7 @@ impl ServerPlayer {
                     .define(data::SHOULDER_PARROT_RIGHT, OptionalUnsignedInt(None));
                 avatar
             },
+            profile_id: uuid,
             name,
             inventory: Default::default(),
             menus: Default::default(),
@@ -223,6 +230,8 @@ impl ServerPlayer {
         tag: CompoundTag,
     ) -> Result<(), super::persistence::EntityLoadError> {
         self.parent.parent.load_nbt(tag)?;
+        // Player#readAdditionalSaveData restores the profile UUID after super.
+        self.uuid = self.profile_id;
         self.game_mode =
             GameType::from_id(self.saved.get_int_or("playerGameType", self.game_mode.id()));
         // ServerPlayer reads saved abilities before applying its loaded game mode.
@@ -835,6 +844,47 @@ impl crate::entity::Entity for PlayerBehavior {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn player_load_restores_immutable_profile_identity_after_entity_nbt() {
+        use super::*;
+        let mut actual = Vec::new();
+        for scenario in 0..3 {
+            let mut player = ServerPlayer::new(
+                Uuid::new(1, 2),
+                "profile".into(),
+                1,
+                Vec3::ZERO,
+                GameType::Survival,
+            );
+            player.uuid = Uuid::new(5, 6);
+            let mut tag = CompoundTag::new();
+            if scenario != 0 {
+                let saved = if scenario == 1 {
+                    Uuid::new(3, 4)
+                } else {
+                    Uuid::new(1, 2)
+                };
+                tag.insert("UUID", Tag::IntArray(saved.to_int_array().to_vec()));
+            }
+            player.try_load(tag).unwrap();
+            let saved = player.save();
+            let Some(Tag::IntArray(words)) = saved.get("UUID") else {
+                panic!("saved UUID")
+            };
+            let saved = Uuid::from_int_array(words.as_slice().try_into().unwrap());
+            actual.push(format!(
+                "player-profile-uuid\t{scenario}\t{},{},{}",
+                player.uuid,
+                player.profile_id(),
+                saved
+            ));
+        }
+        let expected: Vec<_> = include_str!("../../../tests/java/entity/vectors.tsv")
+            .lines()
+            .filter(|line| line.starts_with("player-profile-uuid\t"))
+            .collect();
+        assert_eq!(actual, expected);
+    }
     use super::*;
     use crate::{
         Behaviors,

@@ -67,3 +67,5 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 
 | player.contact.ordered-touch | Touch nearby nonremoved entities in section order using health/spectator guards and vehicle-dependent bounds; select one experience orb after ordinary touches | `Player#aiStep; Entity#playerTouch; ItemEntity#playerTouch` | `entity::player::contact::tests` (6 real Player.aiStep oracle cases with controlled predecessors) | pass | partial |
 | player.contact.predecessors | Port server travel, block effects, freezing/damage and pushing before the contact point; slice 1 deliberately calls contact after its current base tick | `LivingEntity#aiStep; Player#aiStep` | live pickup parity pending these slice-2 phases | - | partial |
+
+| player.persistence.profile-uuid | Restore entity UUID from immutable GameProfile identity after base NBT loading; saved UUID cannot replace profile identity | `Player#readAdditionalSaveData; Player#nameAndId` | `entity::player::tests::player_load_restores_immutable_profile_identity_after_entity_nbt` (3 real Java cases) | pass | partial |
