@@ -517,6 +517,32 @@ fn cached_block_facts_preserve_dynamic_shape_fallback_and_post_processing() {
 }
 
 #[test]
+fn center_support_cache_keeps_support_type_and_dynamic_shape_distinctions() {
+    use ferraloom_util::Direction;
+    assert_eq!(
+        Block::SOUL_SAND
+            .default_state()
+            .cached_center_support(Direction::Up),
+        Some(true)
+    );
+    let fence = Block::OAK_FENCE.default_state();
+    assert_eq!(fence.cached_center_support(Direction::Up), Some(true));
+    assert_eq!(fence.cached_sturdy_face(Direction::Up), Some(false));
+    assert_eq!(
+        Block::OAK_LEAVES
+            .default_state()
+            .cached_center_support(Direction::Up),
+        Some(false)
+    );
+    assert_eq!(
+        Block::SCAFFOLDING
+            .default_state()
+            .cached_center_support(Direction::Up),
+        None
+    );
+}
+
+#[test]
 fn block_class_hierarchy_matches_extracted_vanilla_classes() {
     use crate::{Block, BlockClass};
     let data: serde_json::Value =
