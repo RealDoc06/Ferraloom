@@ -6,6 +6,7 @@ use crate::predicates::ItemPredicate;
 use ferraloom_data::Item;
 use ferraloom_nbt::{CompoundTag, Tag};
 use ferraloom_protocol::{codec::VarInt, component::*};
+use ferraloom_util::random::RandomSource;
 use serde_json::Value;
 
 /// Port of LootItemConditionalFunction and LootItemFunctions codecs.
@@ -271,7 +272,7 @@ impl LootItemFunction {
                         s.components.set(component.clone());
                     }
                 }
-                if !valid_components(&stack, c.facts)? {
+                if !valid_components(&stack, c.facts())? {
                     stack = previous;
                 }
             }
@@ -319,7 +320,7 @@ impl LootItemFunction {
                 on_pass,
                 on_fail,
             } => {
-                let function = if filter.matches(&stack, c.facts)? {
+                let function = if filter.matches(&stack, c.facts())? {
                     on_pass
                 } else {
                     on_fail
@@ -351,7 +352,7 @@ impl LootItemFunction {
                 only_compatible,
                 include_additional_cost_component,
             } => {
-                stack = c.facts.enchant_item(
+                stack = c.runtime.enchant_item(
                     &super::EnchantmentOperation::Randomly {
                         options: options.clone(),
                         only_compatible: *only_compatible,
@@ -359,7 +360,6 @@ impl LootItemFunction {
                     },
                     stack,
                     c.params,
-                    c.random,
                 )?;
             }
             FunctionKind::EnchantWithLevels {
@@ -368,7 +368,7 @@ impl LootItemFunction {
                 include_additional_cost_component,
             } => {
                 let levels = levels.get(data, c)?;
-                stack = c.facts.enchant_item(
+                stack = c.runtime.enchant_item(
                     &super::EnchantmentOperation::WithLevels {
                         levels,
                         options: options.clone(),
@@ -376,14 +376,13 @@ impl LootItemFunction {
                     },
                     stack,
                     c.params,
-                    c.random,
                 )?;
             }
             FunctionKind::ExplosionDecay => {
                 if let Some(radius) = c.params.explosion_radius {
                     let mut count = 0;
                     for _ in 0..stack_count(&stack) {
-                        if c.random.next_float() <= 1.0 / radius {
+                        if c.random().next_float() <= 1.0 / radius {
                             count += 1;
                         }
                     }

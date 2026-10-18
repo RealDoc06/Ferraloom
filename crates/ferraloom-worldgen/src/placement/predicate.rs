@@ -1,6 +1,6 @@
 //! Ports of all 26.3 BlockPredicate codecs. Context-dependent block behavior
 //! remains on WorldgenBlockBehavior rather than using extracted static shapes.
-use crate::{Error, Identifier, codec::*, material::VerticalAnchor, region::WorldGenRegion};
+use crate::{Error, Identifier, codec::*, material::VerticalAnchor};
 use ferraloom_data::{
     Block, BlockState,
     datapack::{ResourceManager, decode_block_state, load_tags},
@@ -215,7 +215,7 @@ impl BlockPredicate {
     }
     pub fn test(
         &self,
-        region: &WorldGenRegion<'_>,
+        region: &impl crate::feature::LiveWorldGenLevel,
         p: [i32; 3],
         generator: &dyn crate::generator::ChunkGeneratorAccess,
     ) -> Result<bool, Error> {
@@ -247,7 +247,7 @@ impl BlockPredicate {
             Self::MatchingBiomes(values) => values.contains(
                 &generator.data().biome_names[region
                     .noise_biome(crate::biome_manager::zoom_quart(
-                        crate::biome_manager::obfuscate_seed(region.seed),
+                        crate::biome_manager::obfuscate_seed(region.seed()),
                         p,
                     ))?
                     .0 as usize],

@@ -1,5 +1,5 @@
 use crate::structure::{BoundingBox, scattered_piece::ScatteredFeaturePiece};
-use crate::{Error, feature::FeatureContext};
+use crate::{Error, structure::StructurePlacementContext};
 use ferraloom_data::{
     Block,
     properties::{self, Facing},
@@ -51,7 +51,7 @@ impl DesertPyramidPiece {
     }
     pub fn post_process(
         &mut self,
-        context: &mut FeatureContext<'_, '_>,
+        context: &mut StructurePlacementContext<'_, '_>,
         bounds: BoundingBox,
     ) -> Result<(), Error> {
         let offset = -context.random.next_int_bound(3);
@@ -406,7 +406,7 @@ impl DesertPyramidPiece {
     }
     fn add_cellar(
         &mut self,
-        context: &mut FeatureContext<'_, '_>,
+        context: &mut StructurePlacementContext<'_, '_>,
         bounds: BoundingBox,
     ) -> Result<(), Error> {
         let data = &self.scattered.data;
@@ -581,7 +581,7 @@ pub fn archaeology_placements(
 }
 pub fn after_place(
     pieces: &[crate::structure::start::StructurePiece],
-    context: &mut FeatureContext<'_, '_>,
+    context: &mut StructurePlacementContext<'_, '_>,
     bounds: BoundingBox,
 ) -> Result<(), Error> {
     for (p, suspicious) in archaeology_placements(pieces, context.region.seed)? {
@@ -692,7 +692,7 @@ mod tests {
             ));
             piece
                 .post_process(
-                    &mut FeatureContext {
+                    &mut StructurePlacementContext {
                         region: &mut region,
                         random: &mut random,
                         origin: [0; 3],

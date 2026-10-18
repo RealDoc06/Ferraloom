@@ -9,7 +9,7 @@ use crate::{
         predicate::{BlockPredicate, move_direction, offset},
         providers::IntProvider,
     },
-    region::{SavedTick, WorldGenRegion},
+    region::SavedTick,
     structure::rule::BlockTags,
 };
 use ferraloom_data::{Block, BlockState, datapack::decode_block_state, registries::fluid};
@@ -105,7 +105,10 @@ pub fn register(loader: &mut FeatureLoader<'_>) -> Result<(), Error> {
 }
 
 /// Port of Feature#markAboveForPostProcessing.
-fn mark_above(region: &mut WorldGenRegion<'_>, mut p: [i32; 3]) -> Result<(), Error> {
+fn mark_above(
+    region: &mut impl crate::feature::LiveWorldGenLevel,
+    mut p: [i32; 3],
+) -> Result<(), Error> {
     for _ in 0..2 {
         p = move_direction(p, Direction::Up);
         if is_air(region.block(p)?) {
@@ -136,7 +139,7 @@ struct Column {
 
 /// Port of Column#scan. A missing column and a column with no edges are distinct.
 fn scan(
-    region: &WorldGenRegion<'_>,
+    region: &impl crate::feature::LiveWorldGenLevel,
     origin: [i32; 3],
     range: i32,
     inside: impl Fn(BlockState) -> bool,
@@ -176,12 +179,12 @@ impl Feature for ReplaceBlockFeature {
     fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
         for target in &self.targets {
             if target.target.test(
-                ctx.region.block(ctx.origin)?,
+                ctx.level.block(ctx.origin)?,
                 ctx.origin,
                 &self.tags,
-                ctx.random,
+                &mut ctx.random()?,
             ) {
-                ctx.region.set_block(ctx.origin, target.state, 2)?;
+                ctx.level.set_block(ctx.origin, target.state, 2)?;
                 break;
             }
         }
@@ -198,7 +201,7 @@ struct DiskFeature {
 }
 impl Feature for DiskFeature {
     fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
-        let radius = self.radius.sample(ctx.random);
+        let radius = self.radius.sample(&mut ctx.random()?);
         let mut placed = false;
         for dz in -radius..=radius {
             for dx in -radius..=radius {
@@ -209,11 +212,11 @@ impl Feature for DiskFeature {
                 for y in (ctx.origin[1] - self.half_height..=ctx.origin[1] + self.half_height).rev()
                 {
                     let p = [ctx.origin[0] + dx, y, ctx.origin[2] + dz];
-                    if self.target.test(ctx.region, p, ctx.generator)? {
+                    if self.target.test(&ctx.level, p, ctx.generator)? {
                         if let Some(state) = self.provider.get_optional_state(ctx, p)? {
-                            ctx.region.set_block(p, state, 2)?;
+                            ctx.level.set_block(p, state, 2)?;
                             if !above {
-                                mark_above(ctx.region, p)?;
+                                mark_above(&mut ctx.level, p)?;
                             }
                             placed = true;
                             above = true;
@@ -240,13 +243,13 @@ struct SpringFeature {
 impl Feature for SpringFeature {
     fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
         let p = ctx.origin;
-        let valid = |p| ctx.region.block(p).map(|s| self.valid.contains(&s.block()));
+        let valid = |p| ctx.level.block(p).map(|s| self.valid.contains(&s.block()));
         if !valid(move_direction(p, Direction::Up))?
             || self.requires_below && !valid(move_direction(p, Direction::Down))?
         {
             return Ok(false);
         }
-        let current = ctx.region.block(p)?;
+        let current = ctx.level.block(p)?;
         if !is_air(current) && !self.valid.contains(&current.block()) {
             return Ok(false);
         }
@@ -265,19 +268,22 @@ impl Feature for SpringFeature {
             }
         }
         for d in directions {
-            if is_air(ctx.region.block(move_direction(p, d))?) {
+            if is_air(ctx.level.block(move_direction(p, d))?) {
                 holes += 1;
             }
         }
         if rocks != self.rock_count || holes != self.hole_count {
             return Ok(false);
         }
-        ctx.region.set_block(p, self.state, 2)?;
-        ctx.region.schedule_fluid_tick(SavedTick {
-            position: p,
-            kind: self.fluid,
-            priority: 0,
-        })?;
+        ctx.level.set_block(p, self.state, 2)?;
+        ctx.level.schedule_fluid_tick(
+            SavedTick {
+                position: p,
+                kind: self.fluid,
+                priority: 0,
+            },
+            0,
+        )?;
         Ok(true)
     }
 }
@@ -291,7 +297,7 @@ struct UnderwaterMagmaFeature {
 impl Feature for UnderwaterMagmaFeature {
     fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
         let Some(Column { floor: Some(y), .. }) = scan(
-            ctx.region,
+            &ctx.level,
             ctx.origin,
             self.range,
             |s| s.block() == Block::WATER,
@@ -304,13 +310,13 @@ impl Feature for UnderwaterMagmaFeature {
         for dz in -self.radius..=self.radius {
             for dy in -self.radius..=self.radius {
                 for dx in -self.radius..=self.radius {
-                    if ctx.random.next_float() >= self.probability {
+                    if ctx.random()?.next_float() >= self.probability {
                         continue;
                     }
                     let p = [ctx.origin[0] + dx, y + dy, ctx.origin[2] + dz];
-                    if empty_or_water(ctx.region.block(p)?)
+                    if empty_or_water(ctx.level.block(p)?)
                         || !ctx
-                            .region
+                            .level
                             .block(move_direction(p, Direction::Down))?
                             .is_face_occlusion_full(Direction::Up)
                     {
@@ -319,7 +325,7 @@ impl Feature for UnderwaterMagmaFeature {
                     let mut enclosed = true;
                     for d in HORIZONTAL {
                         if !ctx
-                            .region
+                            .level
                             .block(move_direction(p, d))?
                             .is_face_occlusion_full(d.opposite())
                         {
@@ -328,7 +334,7 @@ impl Feature for UnderwaterMagmaFeature {
                         }
                     }
                     if enclosed {
-                        ctx.region
+                        ctx.level
                             .set_block(p, Block::MAGMA_BLOCK.default_state(), 2)?;
                         placed = true;
                     }

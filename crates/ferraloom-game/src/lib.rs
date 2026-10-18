@@ -2,8 +2,10 @@
 //!
 pub mod advancements;
 pub mod block;
+pub mod commands;
 pub mod crafting;
 pub mod entity;
+pub mod gamerules;
 pub mod inventory;
 pub mod level;
 pub mod loot;

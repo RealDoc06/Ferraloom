@@ -342,7 +342,7 @@ pub trait LootFacts: PredicateContext {
         Err(LootError::Unsupported("command_storage".into()))
     }
     fn dynamic_drops(&self, _id: &Identifier) -> Result<Vec<ItemStack>> {
-        Err(LootError::Unsupported("block_entity.dynamic_drops".into()))
+        Ok(Vec::new())
     }
     fn item_enabled(&self, stack: &ItemStack) -> Result<bool> {
         if stack.is_empty() {
@@ -359,7 +359,14 @@ impl LootFacts for NoFacts {}
 
 pub(crate) struct EvalContext<'a> {
     pub params: &'a LootParams,
-    pub random: &'a mut dyn RandomSource,
-    pub facts: &'a dyn LootFacts,
+    pub runtime: &'a mut dyn super::LootRuntime,
     pub visited: BTreeSet<(&'static str, Identifier)>,
+}
+impl EvalContext<'_> {
+    pub fn facts(&self) -> &dyn LootFacts {
+        self.runtime.facts()
+    }
+    pub fn random(&mut self) -> super::runtime::RuntimeRandom<'_> {
+        super::runtime::RuntimeRandom(self.runtime)
+    }
 }

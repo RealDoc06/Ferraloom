@@ -1,13 +1,13 @@
 use super::*;
 use crate::{
-    region::{ChunkStatus, RegionChunk},
+    region::{ChunkStatus, RegionChunk, WorldGenRegion},
     structure::{
         BoundingBox,
         processor::tests::{StaticBlocks, generator},
         template::{PlacementRandom, StructureTemplate},
     },
 };
-use ferraloom_util::{Mirror, Rotation};
+use ferraloom_util::{Mirror, Rotation, random::WorldgenRandom};
 use std::io::Read;
 #[test]
 fn capped_finalization_shuffle_changed_nbt_clipping_and_settings_rng_match_vanilla() {

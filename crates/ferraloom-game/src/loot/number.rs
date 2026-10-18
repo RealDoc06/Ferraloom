@@ -244,7 +244,7 @@ where
         match self {
             Self::Constant(v) => Ok(*v),
             Self::EnvironmentAttribute { attribute, .. } => {
-                T::from_float(c.facts.environment_float(attribute, c.params)?)
+                T::from_float(c.facts().environment_float(attribute, c.params)?)
             }
             Self::EnchantmentLevel(value) => {
                 T::from_float(value.calculate(c.params.enchantment_level.unwrap_or(0))?)
@@ -273,7 +273,7 @@ where
             Self::Uniform(min, max) => {
                 let min = eval(min, c)?;
                 let max = eval(max, c)?;
-                T::uniform(c.random, min, max)
+                T::uniform(&mut c.random(), min, max)
             }
             Self::Conditional(test, on_true, on_false) => eval(
                 if test.test(data, c)? {
@@ -293,7 +293,7 @@ where
             }
             Self::Weighted(values) => {
                 let total = values.iter().map(|(_, w)| *w).sum();
-                let mut index = c.random.next_int_bound(total);
+                let mut index = c.random().next_int_bound(total);
                 for (value, weight) in values {
                     index -= weight;
                     if index < 0 {
@@ -312,7 +312,7 @@ where
                 }
                 let mut value = 0;
                 for _ in 0..n {
-                    if c.random.next_float() < p {
+                    if c.random().next_float() < p {
                         value += 1;
                     }
                 }
@@ -320,7 +320,7 @@ where
             }
             Self::Score(target, objective, fallback) => {
                 let value = if let Some(holder) = target.holder(c.params) {
-                    c.facts.score(holder, objective)?
+                    c.facts().score(holder, objective)?
                 } else {
                     None
                 };
@@ -331,7 +331,7 @@ where
                 }
             }
             Self::Storage(id, path, fallback) => {
-                let storage = c.facts.storage(id)?;
+                let storage = c.facts().storage(id)?;
                 let selected = NbtPath::parse(path)
                     .expect("validated path")
                     .get(&storage)

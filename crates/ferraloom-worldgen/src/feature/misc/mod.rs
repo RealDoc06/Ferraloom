@@ -123,28 +123,48 @@ fn decode_selector(v: &Value, l: &mut FeatureLoader<'_>) -> Result<Arc<dyn Featu
     Ok(Arc::new(selector))
 }
 impl Feature for Selector {
+    fn sub_features(&self) -> Vec<&PlacedFeature> {
+        match self {
+            Self::Boolean { yes, no } => vec![yes.as_ref(), no.as_ref()],
+            Self::Random { features, default } => features
+                .iter()
+                .map(|(feature, _)| feature.as_ref())
+                .chain(std::iter::once(default.as_ref()))
+                .collect(),
+            Self::Weighted { features, .. } => features
+                .iter()
+                .map(|(feature, _)| feature.as_ref())
+                .collect(),
+            Self::Simple(features) | Self::Sequence(features) => {
+                features.iter().map(Arc::as_ref).collect()
+            }
+        }
+    }
     fn place(&self, ctx: &mut FeatureContext<'_, '_>) -> Result<bool, Error> {
         match self {
-            Self::Boolean { yes, no } => {
-                if ctx.random.next_boolean() { yes } else { no }.place(ctx, false)
+            Self::Boolean { yes, no } => if ctx.random()?.next_boolean() {
+                yes
+            } else {
+                no
             }
+            .place(ctx, false),
             Self::Random { features, default } => {
                 for (feature, chance) in features {
-                    if ctx.random.next_float() < *chance {
+                    if ctx.random()?.next_float() < *chance {
                         return feature.place(ctx, false);
                     }
                 }
                 default.place(ctx, false)
             }
             Self::Simple(features) => {
-                let i = ctx.random.next_int_bound(features.len() as i32) as usize;
+                let i = ctx.random()?.next_int_bound(features.len() as i32) as usize;
                 features[i].place(ctx, false)
             }
             Self::Weighted { features, total } => {
                 if *total == 0 {
                     return Ok(false);
                 }
-                let mut choice = ctx.random.next_int_bound(*total);
+                let mut choice = ctx.random()?.next_int_bound(*total);
                 for (feature, weight) in features {
                     choice -= weight;
                     if choice < 0 {
@@ -181,7 +201,7 @@ impl Feature for VoidStartPlatformFeature {
                     } else {
                         Block::STONE
                     };
-                    ctx.region.set_block(
+                    ctx.level.set_block(
                         [x, ctx.origin[1].wrapping_add(3), z],
                         block.default_state(),
                         2,
@@ -208,7 +228,7 @@ impl Feature for BonusChestFeature {
             .collect::<Vec<_>>();
         for values in [&mut xs, &mut zs] {
             for i in (2..=values.len()).rev() {
-                let j = ctx.random.next_int_bound(i as i32) as usize;
+                let j = ctx.random()?.next_int_bound(i as i32) as usize;
                 values.swap(i - 1, j);
             }
         }
@@ -216,13 +236,14 @@ impl Feature for BonusChestFeature {
             for &z in &zs {
                 let p = [
                     x,
-                    ctx.region
+                    ctx.level
                         .height_at(Heightmap::MotionBlockingNoLeaves, x, z)?,
                     z,
                 ];
-                if is_air(ctx.region.block(p)?) || ctx.region.is_collision_empty(p)? {
-                    ctx.region.set_block(p, Block::CHEST.default_state(), 2)?;
-                    ctx.region.set_loot_table(p, &self.loot_table, ctx.random)?;
+                if is_air(ctx.level.block(p)?) || ctx.level.is_collision_empty(p)? {
+                    ctx.level.set_block(p, Block::CHEST.default_state(), 2)?;
+                    ctx.level
+                        .set_loot_table(p, &self.loot_table, &mut ctx.random)?;
                     let torch = Block::TORCH.default_state();
                     for d in [
                         Direction::North,
@@ -231,8 +252,8 @@ impl Feature for BonusChestFeature {
                         Direction::West,
                     ] {
                         let p = move_direction(p, d);
-                        if ctx.region.can_survive(torch, p)? {
-                            ctx.region.set_block(p, torch, 2)?;
+                        if ctx.level.can_survive(torch, p)? {
+                            ctx.level.set_block(p, torch, 2)?;
                         }
                     }
                     return Ok(true);
