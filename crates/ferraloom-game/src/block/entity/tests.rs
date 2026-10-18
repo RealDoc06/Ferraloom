@@ -329,3 +329,43 @@ fn native_ticker_additions_wait_and_removed_tickers_skip_even_when_frozen() {
         .collect();
     assert_eq!(traces, expected);
 }
+
+#[test]
+fn sign_edits_obey_wax_editor_and_filtering_like_vanilla() {
+    use super::super::containers::sign::SignBlockEntity;
+    for line in include_str!("../../../tests/java/blocks/entities/vectors.tsv")
+        .lines()
+        .filter(|line| line.starts_with("sign-edit\t"))
+    {
+        let fields: Vec<_> = line.split('\t').collect();
+        let waxed = fields[1] == "true";
+        let allowed = fields[2] == "true";
+        let filtered = fields[3] == "true";
+        let mut entity = create(BlockPos::ZERO, Block::OAK_SIGN.default_state()).unwrap();
+        entity.data_mut().has_level = true;
+        let player = ferraloom_protocol::Uuid { most: 1, least: 2 };
+        let sign = SignBlockEntity::view_mut(&mut entity).unwrap();
+        sign.is_waxed = waxed;
+        sign.allowed_player_editor = Some(if allowed {
+            player
+        } else {
+            ferraloom_protocol::Uuid { most: 3, least: 4 }
+        });
+        let lines = [
+            ("first".into(), "first".into()),
+            ("second".into(), String::new()),
+            ("third".into(), "third".into()),
+            ("fourth".into(), "fourth".into()),
+        ];
+        assert_eq!(
+            sign.update_sign_text(player, true, &lines, filtered),
+            !waxed && allowed
+        );
+        assert_eq!(sign.allowed_player_editor.is_none(), fields[5] == "true");
+        assert_eq!(
+            entity.save_without_metadata().unwrap(),
+            ferraloom_nbt::parse_compound(fields[4]).unwrap(),
+            "{line}"
+        );
+    }
+}

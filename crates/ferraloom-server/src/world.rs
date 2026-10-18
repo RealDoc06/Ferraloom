@@ -1,12 +1,20 @@
 //! World snapshots cross worker boundaries; only tick integration mutates Level.
-use crate::{jobs::JobPool, properties::ServerProperties, registries::RegistrySet};
+use crate::{
+    generation::{
+        GenerationCompletion, GenerationOutput, GenerationRequest, GenerationRevision,
+        GenerationState, StructureSnapshot,
+    },
+    jobs::JobPool,
+    properties::ServerProperties,
+    registries::RegistrySet,
+};
 use anyhow::{Context, Result, ensure};
 use ferraloom_chunk::{BiomeId, IdMap, LevelChunkSection, Strategy};
 use ferraloom_data::{Block, BlockClass, BlockState, EntityType, datapack::ResourceManager};
-use ferraloom_game::block::GameWorldgenBlockBehavior as LocalBlockBehavior;
 use ferraloom_game::level::{
     Level,
     chunk::LevelChunk,
+    chunk_task_dispatcher::{ChunkTaskDispatch, ThrottlingChunkTaskDispatcher},
     entity::{EntityLoadRequestId, EntityStorageRequest},
 };
 use ferraloom_light::{LevelLightEngine, LightLayer, SectionSnapshots};
@@ -18,23 +26,25 @@ use ferraloom_storage::{
 };
 use ferraloom_util::{Aabb, BlockPos, ChunkPos, SectionPos};
 use ferraloom_worldgen::{
-    decoration::{DecorationPlan, GenerationStep, StructureDecoration},
-    feature::FeatureRegistry,
     generator::{
         ChunkGenerator, ChunkGeneratorAccess, GenerationData, WorldDimensions, WorldPreset,
     },
-    region::{ChunkStatus, Heightmap, RegionChunk, WorldGenRegion},
+    region::{ChunkStatus, Heightmap},
     settings::DimensionType,
     spawn::{self, SpawnWorld},
 };
 use serde::Deserialize;
 use std::{
     borrow::Cow,
-    collections::{BTreeMap, VecDeque},
+    collections::{BTreeMap, BTreeSet, VecDeque},
     future::Future,
     path::Path,
     pin::Pin,
-    sync::{Arc, mpsc},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+        mpsc,
+    },
     task::{Context as TaskContext, Poll, Waker},
 };
 use tokio::sync::oneshot;
@@ -111,11 +121,19 @@ impl SectionRegistry for RegistryAdapter {
     }
 }
 
+pub struct GenerationLightNeighbor {
+    pub pos: ChunkPos,
+    pub(crate) revision: GenerationRevision,
+    pub sections: Vec<LevelChunkSection>,
+    pub disk: SerializableChunkData,
+}
 pub struct Terrain {
     pub pos: ChunkPos,
+    pub(crate) revision: GenerationRevision,
     pub sections: Vec<LevelChunkSection>,
     pub disk: SerializableChunkData,
     pub surface: [i32; 256],
+    pub light_neighbors: Vec<GenerationLightNeighbor>,
 }
 #[derive(Clone, Default)]
 pub struct ChunkLight {
@@ -160,8 +178,14 @@ pub struct LitChunk {
 enum LightJob {
     Initialize {
         request: u64,
+        revision: GenerationRevision,
         pos: ChunkPos,
         sections: Vec<LevelChunkSection>,
+        saved_light: Option<Box<SerializableChunkData>>,
+        neighbors: Vec<GenerationLightNeighbor>,
+    },
+    Unload {
+        pos: ChunkPos,
     },
     Changed {
         chunks: Vec<(ChunkPos, Vec<LevelChunkSection>)>,
@@ -172,22 +196,35 @@ enum LightMutation {
     CheckBlock(BlockPos),
     SectionStatus(SectionPos, bool),
 }
+#[derive(Clone, Copy)]
+struct ImportedGenerationLight {
+    revision: GenerationRevision,
+    lighted: bool,
+}
 
 /// Off-tick ThreadedLevelLightEngine worker. Messages and dirty effects retain
 /// submission order; only owned section snapshots cross the worker boundary.
 fn run_light_worker(
     light_in: mpsc::Receiver<LightJob>,
     light_out: tokio::sync::mpsc::UnboundedSender<LitChunk>,
+    min_section: i32,
+    max_section: i32,
+    has_skylight: bool,
 ) {
-    let mut snapshots = SectionSnapshots::new(-4, 20);
-    let mut engine = LevelLightEngine::new(true, true);
+    let mut snapshots = SectionSnapshots::new(min_section, max_section);
+    let mut engine = LevelLightEngine::new(true, has_skylight);
     let mut lights: BTreeMap<i64, ChunkLight> = BTreeMap::new();
+    let mut full_chunks = std::collections::HashSet::new();
+    let mut imported = BTreeMap::<i64, ImportedGenerationLight>::new();
     while let Ok(job) = light_in.recv() {
         let (initialized, changes) = match job {
             LightJob::Initialize {
                 request,
+                revision,
                 pos,
                 sections,
+                saved_light,
+                neighbors,
             } => {
                 snapshots.insert_chunk(
                     pos,
@@ -196,9 +233,127 @@ fn run_light_worker(
                         .map(|section| Some(Cow::Owned(section)))
                         .collect(),
                 );
-                let mut changes = engine.initialize_light(&snapshots, pos, false).sections;
-                changes.extend(engine.light_chunk(&snapshots, pos, false).sections);
+                let neighbors = neighbors
+                    .into_iter()
+                    .filter(|neighbor| {
+                        !full_chunks.contains(&neighbor.pos)
+                            && imported
+                                .get(&neighbor.pos.pack())
+                                .is_none_or(|known| known.revision < neighbor.revision)
+                    })
+                    .collect::<Vec<_>>();
+                for neighbor in &neighbors {
+                    snapshots.insert_chunk(
+                        neighbor.pos,
+                        neighbor
+                            .sections
+                            .iter()
+                            .cloned()
+                            .map(|section| Some(Cow::Owned(section)))
+                            .collect(),
+                    );
+                }
+                let mut changes = Vec::new();
+                for neighbor in neighbors {
+                    let lighted = neighbor.disk.is_light_on == Some(true);
+                    for section in neighbor.disk.sections.as_deref().unwrap_or_default() {
+                        if let Some(y) = section.y {
+                            for (layer, data) in [
+                                (LightLayer::Sky, &section.sky_light),
+                                (LightLayer::Block, &section.block_light),
+                            ] {
+                                if let Some(data) = data {
+                                    let bytes = data
+                                        .0
+                                        .iter()
+                                        .map(|&b| b as u8)
+                                        .collect::<Vec<_>>()
+                                        .into_boxed_slice()
+                                        .try_into()
+                                        .expect("validated generation neighbor light");
+                                    engine.queue_section_data(
+                                        layer,
+                                        SectionPos::new(
+                                            neighbor.pos.x,
+                                            i32::from(y),
+                                            neighbor.pos.z,
+                                        ),
+                                        Some(ferraloom_light::DataLayer::from_bytes(bytes)),
+                                    );
+                                }
+                            }
+                        }
+                    }
+                    changes.extend(
+                        engine
+                            .initialize_light(&snapshots, neighbor.pos, lighted)
+                            .sections,
+                    );
+                    imported.insert(
+                        neighbor.pos.pack(),
+                        ImportedGenerationLight {
+                            revision: neighbor.revision,
+                            lighted,
+                        },
+                    );
+                }
+                let known = imported.get(&pos.pack()).copied();
+                let import = known.is_none_or(|known| known.revision < revision);
+                let lighted = if import {
+                    saved_light
+                        .as_ref()
+                        .is_some_and(|disk| disk.is_light_on == Some(true))
+                } else {
+                    known.unwrap().lighted
+                };
+                if import && let Some(disk) = saved_light {
+                    for section in disk.sections.as_deref().unwrap_or_default() {
+                        if let Some(y) = section.y {
+                            for (layer, data) in [
+                                (LightLayer::Sky, &section.sky_light),
+                                (LightLayer::Block, &section.block_light),
+                            ] {
+                                if let Some(data) = data {
+                                    let bytes = data
+                                        .0
+                                        .iter()
+                                        .map(|&b| b as u8)
+                                        .collect::<Vec<_>>()
+                                        .into_boxed_slice()
+                                        .try_into()
+                                        .expect("validated generation light");
+                                    engine.queue_section_data(
+                                        layer,
+                                        SectionPos::new(pos.x, i32::from(y), pos.z),
+                                        Some(ferraloom_light::DataLayer::from_bytes(bytes)),
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+                changes.extend(engine.initialize_light(&snapshots, pos, lighted).sections);
+                changes.extend(engine.light_chunk(&snapshots, pos, lighted).sections);
+                imported.insert(
+                    pos.pack(),
+                    ImportedGenerationLight {
+                        revision: known.map_or(revision, |known| known.revision.max(revision)),
+                        lighted: true,
+                    },
+                );
                 (Some((request, pos)), changes)
+            }
+            LightJob::Unload { pos } => {
+                imported.remove(&pos.pack());
+                for y in min_section..max_section {
+                    engine.update_section_status(SectionPos::new(pos.x, y, pos.z), true);
+                }
+                engine.set_light_enabled(&snapshots, pos, false);
+                snapshots.remove_chunk(pos);
+                engine.forget_chunk_sources(pos);
+                lights.remove(&pos.pack());
+                full_chunks.remove(&pos);
+                (None, engine.run_light_updates(&snapshots).sections)
             }
             LightJob::Changed { chunks, changes } => {
                 for (pos, sections) in chunks {
@@ -224,6 +379,7 @@ fn run_light_worker(
         let mut affected = std::collections::BTreeSet::new();
         let mut dirty = BTreeMap::<i64, LightDirtySections>::new();
         if let Some((_, pos)) = initialized {
+            full_chunks.insert(pos);
             affected.insert(pos.pack());
             lights.entry(pos.pack()).or_default();
         }
@@ -231,7 +387,7 @@ fn run_light_worker(
             let key = change.section.chunk().pack();
             affected.insert(key);
             let mask = dirty.entry(key).or_default();
-            let bit = 1_u64 << (change.section.y + 5);
+            let bit = 1_u64 << (change.section.y - min_section + 1);
             match change.layer {
                 LightLayer::Sky => mask.sky |= bit,
                 LightLayer::Block => mask.block |= bit,
@@ -264,21 +420,16 @@ fn run_light_worker(
     }
 }
 
-struct FlatDecoration {
-    registry: Option<FeatureRegistry>,
-    plan: Option<DecorationPlan>,
-}
-
 /// Startup owns every queried chunk. The same outputs are later transferred
 /// into the normal request/integration path, including decoration writes.
 struct SpawnChunks {
     generator: Arc<ChunkGenerator>,
     registry: Arc<RegistryAdapter>,
     dimension: DimensionType,
-    flat_decoration: Option<Arc<FlatDecoration>>,
-    seed: i64,
+    state: GenerationState,
     io: IoWorker,
     chunks: BTreeMap<i64, Terrain>,
+    skips: Vec<(String, String)>,
 }
 impl SpawnChunks {
     fn state(&mut self, p: [i32; 3]) -> std::result::Result<BlockState, ferraloom_worldgen::Error> {
@@ -305,24 +456,35 @@ impl SpawnWorld for SpawnChunks {
         position: [i32; 2],
     ) -> std::result::Result<(), ferraloom_worldgen::Error> {
         let pos = ChunkPos::new(position[0], position[1]);
-        if let std::collections::btree_map::Entry::Vacant(entry) = self.chunks.entry(pos.to_long())
-        {
-            let terrain = (|| -> Result<Terrain> {
-                if let Some(tag) = self.io.load(pos).wait()? {
-                    load_terrain(tag, &self.registry, pos)
-                } else {
-                    generate_terrain(
-                        &self.generator,
-                        self.dimension,
-                        self.flat_decoration.as_deref(),
-                        self.seed,
-                        pos,
-                    )
-                }
-            })()
-            .map_err(|error| ferraloom_worldgen::Error(error.to_string()))?;
-            entry.insert(terrain);
+        if self.chunks.contains_key(&pos.to_long()) {
+            return Ok(());
         }
+        let generated = self
+            .state
+            .generate(0, pos, ChunkStatus::Full, &self.registry, &self.io, None)
+            .map_err(|error| ferraloom_worldgen::Error(error.to_string()))?;
+        for (neighbor, disk) in generated.neighbors {
+            self.io
+                .store(
+                    neighbor,
+                    Some(
+                        disk.write()
+                            .map_err(|e| ferraloom_worldgen::Error(e.to_string()))?,
+                    ),
+                )
+                .wait()
+                .map_err(|e| ferraloom_worldgen::Error(e.to_string()))?;
+        }
+        for snapshot in generated.full_structures {
+            if let Some(terrain) = self.chunks.get_mut(&snapshot.pos.pack())
+                && terrain.revision < snapshot.revision
+            {
+                terrain.disk.structures = Some(snapshot.data);
+                terrain.revision = snapshot.revision;
+            }
+        }
+        self.skips.extend(generated.skips);
+        self.chunks.insert(pos.to_long(), generated.terrain);
         Ok(())
     }
     fn height(
@@ -427,52 +589,48 @@ fn spawn_tag(p: BlockPos) -> Tag {
         .collect(),
     )
 }
-struct NoStructures;
-impl StructureDecoration for NoStructures {
-    fn place_step(
-        &mut self,
-        _: GenerationStep,
-        _: &mut WorldGenRegion<'_>,
-        _: &mut ferraloom_util::random::WorldgenRandom,
-        _: i64,
-    ) -> std::result::Result<(), ferraloom_worldgen::Error> {
-        Ok(())
-    }
+struct ChunkUnload {
+    pos: ChunkPos,
+    request_id: u64,
+    saving: oneshot::Receiver<Result<()>>,
 }
-
-fn saved_tick(position: [i32; 3], name: &str, priority: i32) -> storage::SavedTick {
-    storage::SavedTick {
-        id: Some(name.into()),
-        x: Some(position[0]),
-        y: Some(position[1]),
-        z: Some(position[2]),
-        delay: Some(0),
-        priority: Some(priority),
-        ..Default::default()
-    }
-}
-
 pub struct World {
     pub access: Arc<LevelStorageAccess>,
     pub level_data: LevelData,
     pub seed: i64,
     pub spawn: BlockPos,
     pub registry: Arc<RegistryAdapter>,
-    pub io: IoWorker,
+    pub io: Arc<IoWorker>,
     entity_io: Option<EntityIo>,
     pub dimensions: WorldDimensions,
     generator: Arc<ChunkGenerator>,
     dimension: DimensionType,
-    flat_decoration: Option<Arc<FlatDecoration>>,
     initial_chunks: BTreeMap<i64, Terrain>,
+    structure_snapshots: BTreeMap<i64, StructureSnapshot>,
+    generation_save_revisions: BTreeMap<i64, GenerationRevision>,
     generation: Arc<JobPool>,
+    generation_state: Option<GenerationState>,
+    generation_work: Option<oneshot::Receiver<GenerationCompletion>>,
+    generation_dispatcher: ThrottlingChunkTaskDispatcher<GenerationRequest>,
+    active_generation: BTreeMap<i64, (u64, Arc<AtomicBool>)>,
+    running_generation: Option<(u64, ChunkPos)>,
+    retained_generation: BTreeSet<i64>,
+    pub failed_generation: Vec<(ChunkPos, u64)>,
+    proto_saves: VecDeque<storage::IoTask<()>>,
+    cancelled_outputs: Vec<GenerationOutput>,
+    unloading: VecDeque<ChunkUnload>,
+    evictions: Vec<ChunkPos>,
     saving: JobPool,
-    pub pending: BTreeMap<u64, oneshot::Receiver<Result<Terrain>>>,
+    pending: BTreeMap<u64, (ChunkPos, oneshot::Receiver<Result<GenerationOutput>>)>,
     light_tx: mpsc::Sender<LightJob>,
     pub light_rx: tokio::sync::mpsc::UnboundedReceiver<LitChunk>,
     pub saved: BTreeMap<i64, SerializableChunkData>,
     pub lights: BTreeMap<i64, ChunkLight>,
     pub ready: std::collections::HashSet<ChunkPos>,
+    pub light_ready: std::collections::HashSet<ChunkPos>,
+    pub generation_skips: Vec<(String, String)>,
+    pub pending_initial_spawns: BTreeSet<i64>,
+    pub generation_statuses: BTreeMap<i64, ChunkStatus>,
     pub pending_light_updates: std::collections::HashMap<ChunkPos, LightDirtySections>,
     pub light_chunks_to_broadcast: ferraloom_util::collections::LongLinkedOpenHashSet,
 }
@@ -524,6 +682,7 @@ impl World {
         properties: &ServerProperties,
         resources: &ResourceManager,
         registries: &RegistrySet,
+        unported_behavior: ferraloom_game::block::UnportedBehavior,
     ) -> Result<Self> {
         let access = Arc::new(LevelStorageAccess::open(
             root.join(properties.get("level-name")),
@@ -536,6 +695,12 @@ impl World {
         let bonus_chest = settings
             .as_ref()
             .is_some_and(|settings| settings.value().get_boolean_or("bonus_chest", false));
+        // WorldOptions.CODEC defaults a missing saved field to true. Server
+        // properties supply the value only when creating a world.
+        let generate_structures = settings.as_ref().map_or_else(
+            || properties.boolean("generate-structures"),
+            |settings| settings.value().get_boolean_or("generate_structures", true),
+        );
         let data = Arc::new(GenerationData::load(resources)?);
         ensure!(
             data.biome_names
@@ -573,8 +738,8 @@ impl World {
                 .context("world preset compound")?;
             settings.insert("seed", Tag::Long(seed));
             settings.insert(
-                "generate_features",
-                Tag::Byte(i8::from(properties.boolean("generate-structures"))),
+                "generate_structures",
+                Tag::Byte(i8::from(generate_structures)),
             );
             settings.insert("bonus_chest", Tag::Byte(0));
             saved_data.save(
@@ -585,20 +750,6 @@ impl World {
         };
         let dimension = preset.dimensions.overworld().dimension;
         let generator = preset.dimensions.overworld().generator.clone();
-        let flat_decoration = if let ChunkGenerator::Flat(flat) = generator.as_ref() {
-            let registry = flat.chunk_local_feature_registry(resources)?;
-            Some(Arc::new(FlatDecoration {
-                plan: registry
-                    .as_ref()
-                    .map(|registry| {
-                        DecorationPlan::new(registry, &flat.biome_source().possible_biomes())
-                    })
-                    .transpose()?,
-                registry,
-            }))
-        } else {
-            None
-        };
         let mut level_data = if access.path().join("level.dat").exists() {
             access.read_level_data()?
         } else {
@@ -625,22 +776,34 @@ impl World {
         )?;
         let registry = Arc::new(RegistryAdapter::new(registries)?);
         let generation = Arc::new(JobPool::new("ferraloom-worldgen", 2)?);
+        let light_pool = Arc::new(JobPool::new("ferraloom-generation-light", 1)?);
+        let mut context = ferraloom_game::level::generation::WorldGenContext::load(
+            resources,
+            generator.clone(),
+            dimension,
+            seed,
+            generate_structures,
+            preset.dimensions.environment.clone(),
+            preset.dimensions.overworld().environment.clone(),
+        )?;
+        context.unported_behavior = unported_behavior;
+        let mut generation_state = GenerationState::new(Arc::new(context), light_pool);
         let mut initial_chunks = BTreeMap::new();
+        let mut generation_skips = Vec::new();
         let io = if !level_data.data.contains_key("spawn") {
             let (reply, result) = mpsc::channel();
             let spawn_generator = generator.clone();
             let registry = registry.clone();
-            let flat_decoration = flat_decoration.clone();
             let _task = generation.submit(move || {
                 let outcome = (|| -> Result<_> {
                     let mut world = SpawnChunks {
                         generator: spawn_generator,
                         registry,
                         dimension,
-                        flat_decoration,
-                        seed,
+                        state: generation_state,
                         io,
                         chunks: BTreeMap::new(),
+                        skips: Vec::new(),
                     };
                     let generator = world.generator.clone();
                     let position = spawn::initial_spawn(
@@ -649,44 +812,83 @@ impl World {
                         matches!(generator.as_ref(), ChunkGenerator::Debug(_)),
                         bonus_chest,
                     )?;
-                    Ok((world.io, world.chunks, position))
+                    Ok((world.io, world.chunks, position, world.state, world.skips))
                 })();
                 let _ = reply.send(outcome);
             });
-            let (io, chunks, position) = result.recv().context("spawn worker terminated")??;
+            let (io, chunks, position, state, skips) =
+                result.recv().context("spawn worker terminated")??;
             initial_chunks = chunks;
+            generation_state = state;
+            generation_skips = skips;
             spawn = BlockPos::new(position[0], position[1], position[2]);
             level_data.data.insert("spawn", spawn_tag(spawn));
             level_data.data.insert("initialized", Tag::Byte(1));
             access.save_level_data(&level_data)?;
             if matches!(generator.as_ref(), ChunkGenerator::Noise(_)) {
                 println!(
-                    "Initial spawn search used real generated chunks; feature and structure statuses are passthrough."
+                    "Initial spawn terrain will continue through the chunk generation pipeline."
                 );
             }
             io
         } else {
             io
         };
+        let pending_initial_spawns = generation_state.pending_initial_spawns();
         let (light_tx, light_in) = mpsc::channel::<LightJob>();
         let (light_out, light_rx) = tokio::sync::mpsc::unbounded_channel();
         std::thread::Builder::new()
             .name("ferraloom-light".into())
-            .spawn(move || run_light_worker(light_in, light_out))?;
+            .spawn(move || {
+                run_light_worker(
+                    light_in,
+                    light_out,
+                    dimension.min_y >> 4,
+                    (dimension.min_y + dimension.height) >> 4,
+                    dimension.has_skylight,
+                )
+            })?;
         Ok(Self {
             access,
             level_data,
             seed,
             spawn,
             registry,
-            io,
+            io: Arc::new(io),
             entity_io: None,
             dimensions: preset.dimensions,
-            generator,
+            generator: generator.clone(),
             dimension,
-            flat_decoration,
+            structure_snapshots: initial_chunks
+                .iter()
+                .filter_map(|(&key, terrain)| {
+                    terrain.disk.structures.clone().map(|data| {
+                        (
+                            key,
+                            StructureSnapshot {
+                                pos: terrain.pos,
+                                revision: terrain.revision,
+                                data,
+                                unattached_disk: None,
+                            },
+                        )
+                    })
+                })
+                .collect(),
             initial_chunks,
+            generation_save_revisions: BTreeMap::new(),
             generation,
+            generation_state: Some(generation_state),
+            generation_work: None,
+            generation_dispatcher: ThrottlingChunkTaskDispatcher::new(4),
+            active_generation: BTreeMap::new(),
+            running_generation: None,
+            retained_generation: BTreeSet::new(),
+            failed_generation: Vec::new(),
+            proto_saves: VecDeque::new(),
+            cancelled_outputs: Vec::new(),
+            unloading: VecDeque::new(),
+            evictions: Vec::new(),
             saving: JobPool::new("ferraloom-save", 1)?,
             pending: BTreeMap::new(),
             light_tx,
@@ -694,6 +896,10 @@ impl World {
             saved: BTreeMap::new(),
             lights: BTreeMap::new(),
             ready: Default::default(),
+            light_ready: Default::default(),
+            generation_skips,
+            pending_initial_spawns,
+            generation_statuses: BTreeMap::new(),
             pending_light_updates: Default::default(),
             light_chunks_to_broadcast: Default::default(),
         })
@@ -762,8 +968,11 @@ impl World {
                 .block_tags()
                 .map_err(|error| anyhow::anyhow!("{error:?}"))?;
             for terrain in self.initial_chunks.values_mut() {
-                let mut chunk =
-                    LevelChunk::from_sections(terrain.pos, -4, terrain.sections.clone());
+                let mut chunk = LevelChunk::from_sections(
+                    terrain.pos,
+                    terrain.disk.y_pos.context("saved chunk minimum section")?,
+                    terrain.sections.clone(),
+                );
                 chunk.prime_heightmaps(tags);
                 write_runtime_heightmaps(&chunk, &mut terrain.disk)?;
             }
@@ -860,58 +1069,372 @@ impl World {
         }
         Ok(())
     }
-    pub fn request(&mut self, request: u64, pos: ChunkPos) {
-        if let Some(terrain) = self.initial_chunks.remove(&pos.to_long()) {
-            let (reply, answer) = oneshot::channel();
-            let _ = reply.send(Ok(terrain));
-            self.pending.insert(request, answer);
-            return;
+    pub fn update_generation_priority(&mut self, pos: ChunkPos, level: i32) {
+        self.generation_dispatcher
+            .on_level_change(pos, level.clamp(0, 45));
+        if level <= 44 {
+            self.retained_generation.insert(pos.pack());
+        } else {
+            self.retained_generation.remove(&pos.pack());
         }
-        let load = self.io.load(pos);
-        let generator = self.generator.clone();
-        let dimension = self.dimension;
-        let flat_decoration = self.flat_decoration.clone();
-        let seed = self.seed;
-        let registry = self.registry.clone();
-        let pool = self.generation.clone();
-        let (reply, answer) = oneshot::channel();
-        tokio::spawn(async move {
-            let result = async {
-                let disk = load.await?;
-                pool.run(move || -> Result<Terrain> {
-                    if let Some(tag) = disk {
-                        load_terrain(tag, &registry, pos)
-                    } else {
-                        generate_terrain(
-                            &generator,
-                            dimension,
-                            flat_decoration.as_deref(),
-                            seed,
-                            pos,
-                        )
-                    }
-                })
-                .await?
+    }
+    pub fn cancel_generation(&mut self, pos: ChunkPos) -> Option<u64> {
+        if let Some((request, cancelled)) = self.active_generation.get(&pos.pack()) {
+            let request = *request;
+            if !cancelled.swap(true, Ordering::Relaxed) {
+                if let Some((_, mut answer)) = self.pending.remove(&request)
+                    && let Ok(Ok(output)) = answer.try_recv()
+                {
+                    self.cancelled_outputs.push(output);
+                }
+                self.failed_generation.push((pos, request));
+                self.generation_dispatcher.release(pos, true, None);
             }
-            .await;
-            let _ = reply.send(result);
+            if self.running_generation != Some((request, pos)) {
+                self.active_generation.remove(&pos.pack());
+            }
+            return Some(request);
+        }
+        None
+    }
+    pub fn request(&mut self, request: u64, pos: ChunkPos) {
+        let (reply, answer) = oneshot::channel();
+        self.pending.insert(request, (pos, answer));
+        let cancelled = Arc::new(AtomicBool::new(false));
+        self.active_generation
+            .insert(pos.pack(), (request, cancelled.clone()));
+        self.generation_dispatcher.submit(
+            pos,
+            self.generation_dispatcher.queue_level(pos),
+            GenerationRequest {
+                id: request,
+                pos,
+                reply,
+                cancelled,
+            },
+        );
+    }
+    fn start_generation(&mut self) -> Result<()> {
+        if self.generation_work.is_some() {
+            return Ok(());
+        }
+        let mut next = None;
+        while let Some(dispatch) = self.generation_dispatcher.next_dispatch() {
+            match dispatch {
+                ChunkTaskDispatch::Batch { pos, mut tasks } => {
+                    // Release messages precede pending submissions in vanilla's
+                    // mailbox. A canceled submission can therefore still join
+                    // the retried position's batch; its owned token rejects it.
+                    tasks.retain(|task| !task.cancelled.load(Ordering::Relaxed));
+                    if tasks.is_empty() {
+                        self.generation_dispatcher.release(pos, false, None);
+                        self.generation_dispatcher.complete_batch();
+                        continue;
+                    }
+                    next = tasks.pop();
+                    ensure!(tasks.is_empty(), "duplicate generation request");
+                    break;
+                }
+                ChunkTaskDispatch::Released(_) => {
+                    unreachable!("generation release has no callback")
+                }
+            }
+        }
+        let Some(request) = next else {
+            return Ok(());
+        };
+        let mut state = self
+            .generation_state
+            .take()
+            .context("generation state in flight")?;
+        for pos in self.evictions.drain(..) {
+            state.forget(pos);
+        }
+        self.initial_chunks.remove(&request.pos.pack());
+        let registry = self.registry.clone();
+        let io = self.io.clone();
+        let mut retained = self.retained_generation.clone();
+        for &key in self.active_generation.keys() {
+            let center = ChunkPos::unpack(key);
+            for x in center.x - 11..=center.x + 11 {
+                for z in center.z - 11..=center.z + 11 {
+                    retained.insert(ChunkPos::new(x, z).pack());
+                }
+            }
+        }
+        self.running_generation = Some((request.id, request.pos));
+        self.generation_work = Some(self.generation.submit(move || {
+            let mut result = state.generate(
+                request.id,
+                request.pos,
+                ChunkStatus::Full,
+                &registry,
+                &io,
+                Some(&request.cancelled),
+            );
+            let cleanup = if request.cancelled.load(Ordering::Relaxed) {
+                state.save_proto_chunks(&registry, &io).and_then(|()| {
+                    if let Ok(output) = &result {
+                        io.store(request.pos, Some(output.terrain.disk.write()?))
+                            .wait()?;
+                    }
+                    Ok(())
+                })
+            } else if result.is_ok() {
+                state.save_unclaimed_protos(&retained, &registry, &io)
+            } else {
+                Ok(())
+            };
+            if let Ok(output) = &mut result {
+                output.statuses = state.completed_statuses();
+            }
+            GenerationCompletion {
+                state,
+                result,
+                request,
+                cleanup,
+            }
+        }));
+        Ok(())
+    }
+    fn complete_generation(&mut self, output: GenerationCompletion) -> Result<()> {
+        let GenerationCompletion {
+            mut state,
+            mut result,
+            request,
+            cleanup,
+        } = output;
+        let pos = request.pos;
+        // An unrelated unload may have completed while the cache was owned by
+        // this worker. Apply it before the cache or its status snapshot returns.
+        for evicted in self.evictions.drain(..) {
+            state.forget(evicted);
+            if let Ok(output) = &mut result {
+                output.statuses.retain(|&(position, _)| position != evicted);
+            }
+        }
+        self.generation_state = Some(state);
+        self.running_generation = None;
+        self.generation_dispatcher.release(pos, false, None);
+        self.generation_dispatcher.complete_batch();
+        cleanup?;
+        if request.cancelled.load(Ordering::Relaxed) {
+            if let Ok(output) = result {
+                self.cancelled_outputs.push(output);
+            }
+            if self
+                .active_generation
+                .get(&pos.pack())
+                .is_some_and(|(id, _)| *id == request.id)
+            {
+                self.active_generation.remove(&pos.pack());
+            }
+            return Ok(());
+        }
+        let _ = request.reply.send(result);
+        Ok(())
+    }
+    /// Pause dispatch while save captures canonical data. No worker owns live
+    /// chunks; pending requests resume at the next normal integration poll.
+    pub async fn finish_generation(&mut self) -> Result<()> {
+        if let Some(work) = self.generation_work.take() {
+            self.complete_generation(work.await?)?;
+        }
+        Ok(())
+    }
+    pub fn proto_saves_complete(&self) -> bool {
+        self.proto_saves.is_empty() && self.cancelled_outputs.is_empty()
+    }
+    pub fn forget_proto_holder(&mut self, pos: ChunkPos) {
+        self.generation_statuses.remove(&pos.pack());
+        self.structure_snapshots.remove(&pos.pack());
+        self.generation_save_revisions.remove(&pos.pack());
+        if let Some(state) = self.generation_state.as_mut() {
+            state.forget(pos);
+        } else {
+            self.evictions.push(pos);
+        }
+    }
+    /// Port of ChunkHolder#isReadyForSaving: generation claims and the FULL,
+    /// ticking and entity range futures must all have released their inputs.
+    pub fn chunk_ready_for_saving(
+        &self,
+        holder: &ferraloom_game::level::chunk_holder::ChunkHolder,
+    ) -> bool {
+        !self.generation_pins(holder.position)
+            && holder.pending_full_status().is_none()
+            && (holder.status != ChunkStatus::Full || self.light_ready.contains(&holder.position))
+            && (holder.requested_full_status()
+                < ferraloom_game::level::distance_manager::FullChunkStatus::BlockTicking
+                || self.ready.contains(&holder.position))
+    }
+    pub fn generation_pins(&self, pos: ChunkPos) -> bool {
+        self.active_generation.keys().any(|&key| {
+            let center = ChunkPos::unpack(key);
+            center.x.abs_diff(pos.x).max(center.z.abs_diff(pos.z)) <= 11
+        })
+    }
+    pub fn schedule_unload(
+        &mut self,
+        level: &mut Level,
+        pos: ChunkPos,
+        request_id: u64,
+        game_time: i64,
+    ) -> Result<()> {
+        if self.generation_pins(pos) || self.unloading.iter().any(|job| job.pos == pos) {
+            return Ok(());
+        }
+        let snapshot = self.capture_chunk_for_save(level, pos, game_time)?;
+        let registry = self.registry.clone();
+        let io = self.io.clone();
+        let saving = self.saving.submit(move || -> Result<()> {
+            io.store(pos, Some(snapshot.encode(&registry)?)).wait()?;
+            Ok(())
         });
-        self.pending.insert(request, answer);
+        self.unloading.push_back(ChunkUnload {
+            pos,
+            request_id,
+            saving,
+        });
+        Ok(())
+    }
+    pub fn poll_unloads(&mut self) -> Result<Vec<(ChunkPos, u64, Result<()>)>> {
+        let mut done = Vec::new();
+        while let Some(job) = self.unloading.front_mut() {
+            match job.saving.try_recv() {
+                Ok(result) => {
+                    let job = self.unloading.pop_front().unwrap();
+                    done.push((job.pos, job.request_id, result));
+                }
+                Err(oneshot::error::TryRecvError::Empty) => break,
+                Err(error) => return Err(error.into()),
+            }
+        }
+        Ok(done)
+    }
+    pub fn finish_unload(&mut self, pos: ChunkPos) -> Result<()> {
+        self.ready.remove(&pos);
+        self.light_ready.remove(&pos);
+        self.saved.remove(&pos.pack());
+        self.structure_snapshots.remove(&pos.pack());
+        self.generation_save_revisions.remove(&pos.pack());
+        self.lights.remove(&pos.pack());
+        self.generation_statuses.remove(&pos.pack());
+        if let Some(state) = self.generation_state.as_mut() {
+            state.forget(pos);
+        } else {
+            self.evictions.push(pos);
+        }
+        self.light_tx.send(LightJob::Unload { pos })?;
+        Ok(())
+    }
+    fn persist_cancelled_outputs(&mut self) -> Result<()> {
+        // A cancellation can arrive after the worker finished but before its
+        // ordered response was consumed. Persist that owned result before the
+        // holder/cache may be released, just as for an in-flight cancellation.
+        for output in std::mem::take(&mut self.cancelled_outputs) {
+            for snapshot in output.full_structures {
+                self.integrate_structure_snapshot(snapshot)?;
+            }
+            let revision = output.terrain.revision;
+            for (pos, disk) in output
+                .neighbors
+                .into_iter()
+                .chain(std::iter::once((output.terrain.pos, output.terrain.disk)))
+            {
+                self.store_generation_chunk(pos, revision, disk)?;
+            }
+        }
+        Ok(())
+    }
+    pub async fn close_chunk_storage(&mut self) -> Result<()> {
+        self.finish_generation().await?;
+        self.persist_cancelled_outputs()?;
+        while let Some(save) = self.proto_saves.pop_front() {
+            save.await?;
+        }
+        while let Some(job) = self.unloading.pop_front() {
+            job.saving.await??;
+        }
+        Arc::get_mut(&mut self.io)
+            .context("chunk IO still owned by generation")?
+            .shutdown()
+            .await?;
+        Ok(())
+    }
+    pub fn refresh_generation_snapshots(&mut self, level: &Level) {
+        if !self.pending.is_empty()
+            && let Some(state) = &mut self.generation_state
+        {
+            state.refresh_full_chunks(level);
+        }
     }
     /// Poll at ServerChunkCache's integration point, strictly by request ordinal.
     pub fn poll_terrain(&mut self) -> Result<Vec<(u64, Terrain)>> {
+        if let Some(work) = &mut self.generation_work {
+            match work.try_recv() {
+                Ok(output) => {
+                    self.generation_work = None;
+                    self.complete_generation(output)?;
+                }
+                Err(oneshot::error::TryRecvError::Empty) => {}
+                Err(error) => return Err(error.into()),
+            }
+        }
+        self.persist_cancelled_outputs()?;
+        let mut context = TaskContext::from_waker(Waker::noop());
+        while let Some(task) = self.proto_saves.front_mut() {
+            let Poll::Ready(result) = Pin::new(task).poll(&mut context) else {
+                break;
+            };
+            self.proto_saves.pop_front();
+            result?;
+        }
         let mut done = Vec::new();
-        while let Some((&request, receiver)) = self.pending.first_key_value() {
-            let _ = receiver;
-            let receiver = self.pending.get_mut(&request).unwrap();
-            match receiver.try_recv() {
+        while let Some((&request, _)) = self.pending.first_key_value() {
+            let (position, answer) = self.pending.get_mut(&request).unwrap();
+            let position = *position;
+            match answer.try_recv() {
                 Ok(result) => {
                     self.pending.remove(&request);
-                    done.push((request, result?));
+                    if self
+                        .active_generation
+                        .get(&position.pack())
+                        .is_some_and(|(id, _)| *id == request)
+                    {
+                        self.active_generation.remove(&position.pack());
+                    }
+                    if result.is_err() {
+                        self.failed_generation.push((position, request));
+                    }
+                    let output = result?;
+                    if output.initial_mob_spawning_pending {
+                        self.pending_initial_spawns
+                            .insert(output.terrain.pos.pack());
+                    }
+                    self.generation_skips.extend(output.skips);
+                    for (pos, status) in output.statuses {
+                        self.generation_statuses
+                            .entry(pos.pack())
+                            .and_modify(|known| *known = (*known).max(status))
+                            .or_insert(status);
+                    }
+                    for snapshot in output.full_structures {
+                        self.integrate_structure_snapshot(snapshot)?;
+                    }
+                    for (pos, disk) in output.neighbors {
+                        self.store_generation_chunk(pos, output.terrain.revision, disk)?;
+                    }
+                    done.push((request, output.terrain));
                 }
                 Err(oneshot::error::TryRecvError::Empty) => break,
-                Err(e) => return Err(e.into()),
+                Err(error) => return Err(error.into()),
             }
+        }
+        // Integrate completed results before capturing the next job's live
+        // imposter snapshots, including post-processing writes and heightmaps.
+        if done.is_empty() {
+            self.start_generation()?;
         }
         Ok(done)
     }
@@ -954,21 +1477,131 @@ impl World {
         self.light_tx.send(LightJob::Changed { chunks, changes })?;
         Ok(())
     }
-    pub fn integrate(&mut self, request: u64, terrain: Terrain) -> Result<LevelChunk> {
+    fn integrate_structure_snapshot(&mut self, mut snapshot: StructureSnapshot) -> Result<()> {
+        let key = snapshot.pos.pack();
+        if self
+            .structure_snapshots
+            .get(&key)
+            .is_some_and(|known| known.revision >= snapshot.revision)
+        {
+            return Ok(());
+        }
+        let unattached_disk = snapshot.unattached_disk.take();
+        let attached = self.saved.contains_key(&key) || self.initial_chunks.contains_key(&key);
+        if let Some(disk) = self.saved.get_mut(&key) {
+            disk.structures = Some(snapshot.data.clone());
+        }
+        if let Some(terrain) = self.initial_chunks.get_mut(&key)
+            && terrain.revision < snapshot.revision
+        {
+            terrain.disk.structures = Some(snapshot.data.clone());
+            terrain.revision = snapshot.revision;
+        }
+        if !attached && let Some(mut disk) = unattached_disk {
+            disk.structures = Some(snapshot.data.clone());
+            self.store_generation_chunk(snapshot.pos, snapshot.revision, disk)?;
+        }
+        self.structure_snapshots.insert(key, snapshot);
+        Ok(())
+    }
+    fn store_generation_chunk(
+        &mut self,
+        pos: ChunkPos,
+        revision: GenerationRevision,
+        mut disk: SerializableChunkData,
+    ) -> Result<()> {
+        let key = pos.pack();
+        if self
+            .generation_save_revisions
+            .get(&key)
+            .is_some_and(|&known| known > revision)
+        {
+            return Ok(());
+        }
+        let status = disk
+            .status
+            .as_ref()
+            .and_then(|s| ferraloom_game::level::generation::parse_status(&s.to_string_lossy()))
+            .context("unknown generation save status")?;
+        if self
+            .generation_statuses
+            .get(&key)
+            .is_some_and(|&known| known > status)
+        {
+            return Ok(());
+        }
+        if let Some(snapshot) = self.structure_snapshots.get(&key)
+            && snapshot.revision > revision
+        {
+            disk.structures = Some(snapshot.data.clone());
+        }
+        self.proto_saves
+            .push_back(self.io.store(pos, Some(disk.write()?)));
+        self.generation_save_revisions.insert(key, revision);
+        Ok(())
+    }
+    pub fn integrate(&mut self, request: u64, mut terrain: Terrain) -> Result<LevelChunk> {
+        let light_revision = terrain.revision;
+        if let Some(snapshot) = self.structure_snapshots.get(&terrain.pos.pack())
+            && snapshot.revision > terrain.revision
+        {
+            terrain.disk.structures = Some(snapshot.data.clone());
+            terrain.revision = snapshot.revision;
+        } else if let Some(data) = terrain.disk.structures.clone() {
+            self.integrate_structure_snapshot(StructureSnapshot {
+                pos: terrain.pos,
+                revision: terrain.revision,
+                data,
+                unattached_disk: None,
+            })?;
+        }
+
+        ensure!(
+            terrain
+                .disk
+                .status
+                .as_ref()
+                .is_some_and(|s| s.to_string_lossy() == "minecraft:full"),
+            "promotion before FULL"
+        );
         self.light_tx.send(LightJob::Initialize {
             request,
+            revision: light_revision,
             pos: terrain.pos,
             sections: terrain.sections.clone(),
+            saved_light: Some(Box::new(terrain.disk.clone())),
+            neighbors: terrain.light_neighbors,
         })?;
-        let mut chunk = LevelChunk::from_sections(terrain.pos, -4, terrain.sections);
-        chunk.set_inhabited_time(terrain.disk.inhabited_time.unwrap_or(0));
-        chunk
-            .load_saved_ticks(&terrain.disk)
-            .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        let chunk = ferraloom_game::level::generation::promote(
+            terrain.pos,
+            terrain.sections,
+            &terrain.disk,
+        )
+        .map_err(|e| anyhow::anyhow!("{e:?}"))?;
         self.saved.insert(terrain.pos.pack(), terrain.disk);
         Ok(chunk)
     }
     /// Capture owned sections here; palette/NBT encoding runs in the save pool.
+    /// Clear the marker before capture so a later mutation remains unsaved.
+    pub fn capture_chunk_for_save(
+        &self,
+        level: &mut Level,
+        pos: ChunkPos,
+        game_time: i64,
+    ) -> Result<ChunkSaveSnapshot> {
+        level
+            .try_mark_chunk_saved(pos)
+            .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        match self.capture_chunk(level, pos, game_time) {
+            Ok(snapshot) => Ok(snapshot),
+            Err(error) => {
+                level
+                    .mark_chunk_unsaved(pos)
+                    .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+                Err(error)
+            }
+        }
+    }
     pub fn capture_chunk(
         &self,
         level: &Level,
@@ -980,8 +1613,8 @@ impl World {
         level
             .save_chunk_ticks(pos, &mut disk)
             .map_err(|error| anyhow::anyhow!("{error:?}"))?;
-        disk.inhabited_time = Some(chunk.inhabited_time());
         chunk.save_pending_generation_data(&mut disk);
+        disk.inhabited_time = Some(chunk.inhabited_time());
         disk.block_entities = Some(
             level
                 .block_entity_tags_for_saving(pos)
@@ -994,11 +1627,11 @@ impl World {
             disk,
             light: self.lights.get(&pos.pack()).cloned(),
             game_time,
-            light_correct: self.ready.contains(&pos),
+            light_correct: self.light_ready.contains(&pos),
         })
     }
     pub async fn encode_saves(
-        &self,
+        &mut self,
         snapshots: Vec<ChunkSaveSnapshot>,
     ) -> Result<Vec<(ChunkPos, CompoundTag)>> {
         let registry = self.registry.clone();
@@ -1024,10 +1657,10 @@ impl World {
             .map(|terrain| ChunkSaveSnapshot {
                 pos: terrain.pos,
                 sections: terrain.sections,
+                light_correct: terrain.disk.is_light_on == Some(true),
                 disk: terrain.disk,
                 light: None,
                 game_time,
-                light_correct: false,
             })
             .collect();
         for (pos, tag) in self.encode_saves(snapshots).await? {
@@ -1090,10 +1723,12 @@ fn write_runtime_heightmaps(chunk: &LevelChunk, disk: &mut SerializableChunkData
     ] {
         maps.insert(
             name.into(),
-            LongArray(heightmap(
+            LongArray(heightmap_in_dimension(
                 chunk
                     .heightmap(map)
                     .context("full chunk heightmaps not primed")?,
+                chunk.min_y(),
+                chunk.max_y() - chunk.min_y(),
             )),
         );
     }
@@ -1117,25 +1752,27 @@ impl ChunkSaveSnapshot {
             .into_iter()
             .filter_map(|section| section.y.map(|y| (y, section)))
             .collect::<BTreeMap<_, _>>();
+        let min_section = self.disk.y_pos.context("saved chunk minimum section")?;
+        let max_section = min_section + self.sections.len() as i32;
         let mut sections = Vec::new();
         for (index, runtime) in self.sections.iter().enumerate() {
-            let y = -4 + index as i32;
+            let y = min_section + index as i32;
             let mut section = existing.remove(&(y as i8)).unwrap_or_default();
             section.y = Some(y as i8);
             section.update_from_runtime(runtime, registry)?;
-            section.sky_light = self
-                .light
-                .as_ref()
-                .and_then(|l| l.sky.get(&y))
-                .map(|v| ByteArray(v.iter().map(|v| *v as i8).collect()));
-            section.block_light = self
-                .light
-                .as_ref()
-                .and_then(|l| l.block.get(&y))
-                .map(|v| ByteArray(v.iter().map(|v| *v as i8).collect()));
+            if let Some(light) = &self.light {
+                section.sky_light = light
+                    .sky
+                    .get(&y)
+                    .map(|v| ByteArray(v.iter().map(|v| *v as i8).collect()));
+                section.block_light = light
+                    .block
+                    .get(&y)
+                    .map(|v| ByteArray(v.iter().map(|v| *v as i8).collect()));
+            }
             sections.push(section);
         }
-        for y in [-5, 20] {
+        for y in [min_section - 1, max_section] {
             if let Some(light) = &self.light {
                 let sky = light.sky.get(&y);
                 let block = light.block.get(&y);
@@ -1159,12 +1796,18 @@ impl ChunkSaveSnapshot {
     }
 }
 pub fn surface_heights(sections: &[LevelChunkSection]) -> [i32; 256] {
+    surface_heights_in_dimension(sections, -64)
+}
+pub(crate) fn surface_heights_in_dimension(
+    sections: &[LevelChunkSection],
+    min_y: i32,
+) -> [i32; 256] {
     std::array::from_fn(|index| {
         let x = (index & 15) as u8;
         let z = (index >> 4) as u8;
-        for y in (-64..320).rev() {
+        for y in (min_y..min_y + sections.len() as i32 * 16).rev() {
             if !matches!(
-                sections[((y + 64) / 16) as usize]
+                sections[((y - min_y) / 16) as usize]
                     .get_block_state(x, (y & 15) as u8, z)
                     .block(),
                 Block::AIR | Block::CAVE_AIR | Block::VOID_AIR
@@ -1172,16 +1815,21 @@ pub fn surface_heights(sections: &[LevelChunkSection]) -> [i32; 256] {
                 return y + 1;
             }
         }
-        -64
+        min_y
     })
 }
-/// Port of Heightmap's padded 9-bit SimpleBitStorage for an overworld height.
+/// Port of Heightmap's padded SimpleBitStorage for an overworld height.
 pub fn heightmap(heights: &[i32; 256]) -> Vec<i64> {
-    let mut words = vec![0u64; 256usize.div_ceil(7)];
-    for (i, &y) in heights.iter().enumerate() {
-        words[i / 7] |= ((y + 64) as u64 & 511) << ((i % 7) * 9);
+    heightmap_in_dimension(heights, -64, 384)
+}
+fn heightmap_in_dimension(heights: &[i32; 256], min_y: i32, height: i32) -> Vec<i64> {
+    let bits = 32 - (height as u32).leading_zeros();
+    let per_word = 64 / bits as usize;
+    let mut words = vec![0u64; 256usize.div_ceil(per_word)];
+    for (index, &y) in heights.iter().enumerate() {
+        words[index / per_word] |= ((y - min_y) as u64) << ((index % per_word) * bits as usize);
     }
-    words.into_iter().map(|w| w as i64).collect()
+    words.into_iter().map(|word| word as i64).collect()
 }
 /// Port of LevelSettings#parse and DifficultySettings.CODEC. A malformed record
 /// uses the native complete-record default, rather than mixing individual fields.
@@ -1349,130 +1997,6 @@ fn nbt_json(tag: &Tag) -> Result<serde_json::Value> {
     })
 }
 
-fn generate_terrain(
-    generator: &ChunkGenerator,
-    dimension: DimensionType,
-    flat_decoration: Option<&FlatDecoration>,
-    seed: i64,
-    pos: ChunkPos,
-) -> Result<Terrain> {
-    let generated = generator.build_terrain([pos.x, pos.z], dimension, None)?;
-    let mut chunks = [RegionChunk::new(generated, ChunkStatus::Terrain)];
-    {
-        let mut region = WorldGenRegion::new(
-            &mut chunks,
-            [pos.x, pos.z],
-            &[ChunkStatus::Terrain],
-            0,
-            None,
-            &LocalBlockBehavior,
-            seed,
-            generator.sea_level(),
-        )?;
-        region.set_has_skylight(dimension.has_skylight);
-        region.set_fast_lava(dimension.fast_lava);
-        region.set_random(generator.region_random([pos.x, pos.z], seed));
-        match generator {
-            ChunkGenerator::Debug(debug) => debug.apply_biome_decoration(&mut region)?,
-            ChunkGenerator::Flat(_) => {
-                let flat = flat_decoration.context("flat decoration plan")?;
-                let registry = flat.registry.as_ref().context("Unsupported: flat features and lakes require owned-neighborhood chunk-status scheduling")?;
-                let biomes = generator
-                    .biome_source()
-                    .possible_biomes()
-                    .into_iter()
-                    .collect();
-                flat.plan.as_ref().unwrap().apply_for_biomes(
-                    &mut region,
-                    generator,
-                    registry,
-                    &mut NoStructures,
-                    &biomes,
-                )?;
-            }
-            ChunkGenerator::Noise(_) => {}
-        }
-    }
-    let [chunk] = chunks;
-    ensure!(
-        chunk.entities.is_empty(),
-        "Unsupported: generation entities need owned-region integration"
-    );
-    let mut post_processing = vec![Vec::new(); (dimension.height / 16) as usize];
-    for [x, y, z] in &chunk.chunk.post_processing {
-        post_processing[((y - dimension.min_y) >> 4) as usize]
-            .push(((x & 15) | ((y & 15) << 4) | ((z & 15) << 8)) as i16);
-    }
-    let disk = SerializableChunkData {
-        data_version: Some(storage::DATA_VERSION),
-        x_pos: Some(pos.x),
-        y_pos: Some(dimension.min_y >> 4),
-        z_pos: Some(pos.z),
-        status: Some("minecraft:full".into()),
-        is_light_on: Some(true),
-        block_entities: Some(chunk.block_entities.into_values().collect()),
-        block_ticks: Some(
-            chunk
-                .block_ticks
-                .ticks()
-                .iter()
-                .map(|tick| saved_tick(tick.position, tick.kind.name(), tick.priority))
-                .collect(),
-        ),
-        fluid_ticks: Some(
-            chunk
-                .fluid_ticks
-                .ticks()
-                .iter()
-                .map(|tick| saved_tick(tick.position, tick.kind.name(), tick.priority))
-                .collect(),
-        ),
-        post_processing: Some(post_processing),
-        structures: Some(storage::StructureData::default()),
-        ..Default::default()
-    };
-    Ok(Terrain {
-        pos,
-        surface: surface_heights(&chunk.chunk.sections),
-        sections: chunk.chunk.sections,
-        disk,
-    })
-}
-
-fn load_terrain(tag: CompoundTag, registry: &RegistryAdapter, pos: ChunkPos) -> Result<Terrain> {
-    let disk = SerializableChunkData::parse(tag)?;
-    ensure!(
-        disk.status
-            .as_ref()
-            .is_some_and(|s| s.to_string_lossy() == "minecraft:full"),
-        "resuming protochunk generation is not ported"
-    );
-    let mut sections = (0..24)
-        .map(|_| {
-            LevelChunkSection::new(
-                Strategy::block_states(),
-                registry.biome_strategy(),
-                registry.default_biome(),
-            )
-        })
-        .collect::<Vec<_>>();
-    for section in disk.sections.as_deref().unwrap_or_default() {
-        if let Some(y) = section.y
-            && (-4..20).contains(&i32::from(y))
-            && let Some(runtime) = section.to_runtime(registry)?
-        {
-            sections[(i32::from(y) + 4) as usize] = runtime;
-        }
-    }
-    let surface = surface_heights(&sections);
-    Ok(Terrain {
-        pos,
-        sections,
-        disk,
-        surface,
-    })
-}
-
 #[cfg(test)]
 mod entity_io_tests {
     use super::*;
@@ -1542,10 +2066,89 @@ mod light_worker_tests {
     use super::*;
 
     #[test]
+    fn older_promotion_preserves_newer_neighbor_light_and_later_deltas() {
+        let (send, receive) = mpsc::channel();
+        let (reply, mut results) = tokio::sync::mpsc::unbounded_channel();
+        let worker = std::thread::spawn(move || run_light_worker(receive, reply, 0, 1, false));
+        let first = ChunkPos::new(1, 0);
+        let second = ChunkPos::new(0, 0);
+        let biome = BiomeId(0);
+        let empty = LevelChunkSection::new(
+            Strategy::block_states(),
+            Strategy::biomes(Arc::new(IdMap::new(vec![biome]).unwrap())),
+            biome,
+        );
+        let mut source = empty.clone();
+        source.set_block_state(8, 0, 8, Block::GLOWSTONE.default_state());
+        let disk = |light| {
+            let mut bytes = vec![0; 2048];
+            bytes[68] = light;
+            SerializableChunkData {
+                is_light_on: Some(true),
+                sections: Some(vec![storage::ChunkSection {
+                    y: Some(0),
+                    block_light: Some(ByteArray(bytes)),
+                    ..Default::default()
+                }]),
+                ..Default::default()
+            }
+        };
+        // B executed at revision 1; A then imported its updated light at 2.
+        send.send(LightJob::Initialize {
+            request: 0,
+            revision: GenerationRevision(2),
+            pos: first,
+            sections: vec![empty.clone()],
+            saved_light: None,
+            neighbors: vec![GenerationLightNeighbor {
+                pos: second,
+                revision: GenerationRevision(2),
+                sections: vec![source.clone()],
+                disk: disk(15),
+            }],
+        })
+        .unwrap();
+        let first_result = results.blocking_recv().unwrap();
+        assert_eq!(first_result.initialized, Some((0, first)));
+        assert_eq!(first_result.updates[&second.pack()].block[&0][68] & 15, 15);
+        send.send(LightJob::Initialize {
+            request: 1,
+            revision: GenerationRevision(1),
+            pos: second,
+            sections: vec![source],
+            saved_light: Some(Box::new(disk(0))),
+            neighbors: Vec::new(),
+        })
+        .unwrap();
+        let promoted = results.blocking_recv().unwrap();
+        assert_eq!(promoted.initialized, Some((1, second)));
+        assert_eq!(promoted.updates[&second.pack()].block[&0][68] & 15, 15);
+        send.send(LightJob::Changed {
+            chunks: vec![(second, vec![empty])],
+            changes: vec![
+                LightMutation::SectionStatus(SectionPos::new(0, 0, 0), true),
+                LightMutation::CheckBlock(BlockPos::new(8, 0, 8)),
+            ],
+        })
+        .unwrap();
+        let delta = results.blocking_recv().unwrap();
+        assert_eq!(delta.initialized, None);
+        assert_eq!(
+            delta.updates[&second.pack()]
+                .block
+                .get(&0)
+                .map_or(0, |data| data[68] & 15),
+            0
+        );
+        drop(send);
+        worker.join().unwrap();
+    }
+
+    #[test]
     fn block_light_deltas_update_real_sections_without_completing_generation() {
         let (send, receive) = mpsc::channel();
         let (reply, mut results) = tokio::sync::mpsc::unbounded_channel();
-        let worker = std::thread::spawn(move || run_light_worker(receive, reply));
+        let worker = std::thread::spawn(move || run_light_worker(receive, reply, -4, 20, true));
         let pos = ChunkPos::new(0, 0);
         let biome = BiomeId(0);
         let mut sections: Vec<_> = (0..24)
@@ -1559,8 +2162,11 @@ mod light_worker_tests {
             .collect();
         send.send(LightJob::Initialize {
             request: 7,
+            revision: GenerationRevision(1),
             pos,
             sections: sections.clone(),
+            saved_light: None,
+            neighbors: Vec::new(),
         })
         .unwrap();
         assert_eq!(results.blocking_recv().unwrap().initialized, Some((7, pos)));
@@ -1598,6 +2204,402 @@ mod light_worker_tests {
         );
         drop(send);
         worker.join().unwrap();
+    }
+}
+
+#[cfg(test)]
+mod generation_order_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn saved_world_structure_option_overrides_properties_and_defaults_to_true() {
+        let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").expect("builder vanilla jar");
+        let resources = ResourceManager::new(vec![
+            ferraloom_data::datapack::Pack::vanilla_jar(Path::new(&jar)).unwrap(),
+        ]);
+        let registries = RegistrySet::load(&resources).unwrap();
+        for generate_structures in [false, true] {
+            let directory = tempfile::tempdir().unwrap();
+            let mut properties = ServerProperties::from_values(Default::default());
+            properties.set("level-type", "minecraft:debug_all_block_states");
+            properties.set("level-seed", 8675309);
+            properties.set("generate-structures", generate_structures);
+            let mut world = World::open(
+                directory.path(),
+                &properties,
+                &resources,
+                &registries,
+                ferraloom_game::block::UnportedBehavior::Strict,
+            )
+            .unwrap();
+            let saved_data = SavedDataStorage::new(world.access.path().join("data"));
+            let saved = saved_data
+                .load::<CompoundTag>("minecraft:world_gen_settings")
+                .unwrap()
+                .unwrap();
+            assert_eq!(
+                saved.value().get_boolean("generate_structures"),
+                Some(generate_structures)
+            );
+            assert!(!saved.value().contains_key("generate_features"));
+            world.close_chunk_storage().await.unwrap();
+            drop(world);
+
+            properties.set("generate-structures", !generate_structures);
+            properties.set("level-seed", 0);
+            properties.set("level-type", "minecraft:flat");
+            let mut world = World::open(
+                directory.path(),
+                &properties,
+                &resources,
+                &registries,
+                ferraloom_game::block::UnportedBehavior::Strict,
+            )
+            .unwrap();
+            assert_eq!(
+                world
+                    .generation_state
+                    .as_ref()
+                    .unwrap()
+                    .context
+                    .generate_structures,
+                generate_structures
+            );
+            assert_eq!(world.seed, 8675309);
+            assert!(matches!(world.generator.as_ref(), ChunkGenerator::Debug(_)));
+            world.close_chunk_storage().await.unwrap();
+            drop(world);
+
+            if !generate_structures {
+                // The old, unrelated key does not override the codec default.
+                let mut settings = saved.value().clone();
+                settings.remove("generate_structures");
+                settings.insert("generate_features", Tag::Byte(0));
+                saved_data
+                    .save(
+                        "minecraft:world_gen_settings",
+                        &mut SavedData::new(settings),
+                    )
+                    .unwrap();
+                properties.set("generate-structures", false);
+                let mut world = World::open(
+                    directory.path(),
+                    &properties,
+                    &resources,
+                    &registries,
+                    ferraloom_game::block::UnportedBehavior::Strict,
+                )
+                .unwrap();
+                assert!(
+                    world
+                        .generation_state
+                        .as_ref()
+                        .unwrap()
+                        .context
+                        .generate_structures
+                );
+                world.close_chunk_storage().await.unwrap();
+            }
+        }
+    }
+
+    #[test]
+    fn saving_uses_dimension_sections_and_retains_generation_light_until_live_attachment() {
+        let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").expect("builder vanilla jar");
+        let resources = ResourceManager::new(vec![
+            ferraloom_data::datapack::Pack::vanilla_jar(Path::new(&jar)).unwrap(),
+        ]);
+        let registry = RegistryAdapter::new(&RegistrySet::load(&resources).unwrap()).unwrap();
+        let biome = BiomeId(0);
+        let section = LevelChunkSection::new(
+            Strategy::block_states(),
+            Strategy::biomes(Arc::new(IdMap::new(vec![biome]).unwrap())),
+            biome,
+        );
+        let disk = SerializableChunkData {
+            data_version: Some(storage::DATA_VERSION),
+            y_pos: Some(2),
+            status: Some("minecraft:full".into()),
+            sections: Some(vec![storage::ChunkSection {
+                y: Some(2),
+                sky_light: Some(ByteArray(vec![-1; 2048])),
+                ..Default::default()
+            }]),
+            ..Default::default()
+        };
+        for attached in [false, true] {
+            let snapshot = ChunkSaveSnapshot {
+                pos: ChunkPos::new(0, 0),
+                sections: vec![section.clone(); 2],
+                disk: disk.clone(),
+                light: attached.then(|| ChunkLight {
+                    sky: BTreeMap::from([(1, vec![255; 2048]), (4, vec![255; 2048])]),
+                    ..Default::default()
+                }),
+                game_time: 7,
+                light_correct: true,
+            };
+            let saved = SerializableChunkData::parse(snapshot.encode(&registry).unwrap()).unwrap();
+            let sections = saved.sections.unwrap();
+            let ys = sections.iter().map(|s| s.y.unwrap()).collect::<Vec<_>>();
+            assert_eq!(
+                ys,
+                if attached {
+                    vec![1, 2, 3, 4]
+                } else {
+                    vec![2, 3]
+                }
+            );
+            assert_eq!(saved.is_light_on, Some(true));
+            assert_eq!(
+                sections
+                    .iter()
+                    .find(|s| s.y == Some(2))
+                    .unwrap()
+                    .sky_light
+                    .is_some(),
+                !attached
+            );
+        }
+        let heights = heightmap_in_dimension(&[64; 256], 32, 32);
+        let packed = ferraloom_chunk::SimpleBitStorage::from_raw(
+            6,
+            256,
+            heights.into_iter().map(|word| word as u64).collect(),
+        )
+        .unwrap();
+        assert_eq!(packed.get(255), 32);
+    }
+
+    #[tokio::test]
+    async fn priority_completion_keeps_statuses_skips_and_chunks_in_request_order() {
+        use ferraloom_game::{Behaviors, level::Region, level::server_level::ServerLevel};
+        static BEHAVIORS: Behaviors = Behaviors::EMPTY;
+        let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").expect("builder vanilla jar");
+        let resources = ResourceManager::new(vec![
+            ferraloom_data::datapack::Pack::vanilla_jar(Path::new(&jar)).unwrap(),
+        ]);
+        let registries = RegistrySet::load(&resources).unwrap();
+        let mut properties = ServerProperties::from_values(Default::default());
+        properties.set("level-type", "minecraft:debug_all_block_states");
+        let directory = tempfile::tempdir().unwrap();
+        let mut world = World::open(
+            directory.path(),
+            &properties,
+            &resources,
+            &registries,
+            ferraloom_game::block::UnportedBehavior::Strict,
+        )
+        .unwrap();
+        let mut level = ServerLevel::new(
+            Region::new(&BEHAVIORS),
+            "minecraft:overworld",
+            world.level_context(&resources).unwrap(),
+        );
+        level
+            .level
+            .set_block_tags(world.generator.data().block_tags.clone());
+        level
+            .level
+            .set_unported_behavior(ferraloom_game::block::UnportedBehavior::Warn);
+        let empty_sections = world
+            .generation_state
+            .as_ref()
+            .unwrap()
+            .context
+            .empty_chunk([0, 0])
+            .unwrap()
+            .chunk
+            .sections;
+        let structure_data = |placed| storage::StructureData {
+            starts: Some(BTreeMap::from([(
+                "minecraft:jungle_pyramid".into(),
+                ferraloom_nbt::parse_compound(if placed {
+                    "{Children:[{placedMainChest:1b}]}"
+                } else {
+                    "{Children:[{placedMainChest:0b}]}"
+                })
+                .unwrap(),
+            )])),
+            ..Default::default()
+        };
+        let output = |pos, unit: &str| GenerationOutput {
+            terrain: Terrain {
+                pos,
+                revision: GenerationRevision::default(),
+                sections: empty_sections.clone(),
+                surface: [0; 256],
+                disk: SerializableChunkData {
+                    data_version: Some(storage::DATA_VERSION),
+                    x_pos: Some(pos.x),
+                    z_pos: Some(pos.z),
+                    y_pos: Some(-4),
+                    status: Some("minecraft:full".into()),
+                    ..Default::default()
+                },
+                light_neighbors: Vec::new(),
+            },
+            neighbors: Vec::new(),
+            skips: vec![(unit.into(), "pending callback".into())],
+            statuses: vec![(pos, ChunkStatus::Full)],
+            full_structures: Vec::new(),
+            initial_mob_spawning_pending: true,
+        };
+        let first = ChunkPos::new(0, 0);
+        let second = ChunkPos::new(1, 0);
+        // The forceload command publishes the ticket before awaiting generation.
+        assert!(level.set_chunk_forced(second, true));
+        for change in level.distance_manager.run_all_updates(&mut level.tickets) {
+            level.chunks.ensure_holder(change.pos).ticket_level = change.level;
+        }
+        assert_eq!(level.chunks.request(first), Some(0));
+        assert_eq!(level.chunks.request(second), Some(1));
+        assert!(
+            level.chunks.holders[&second.pack()].requested_full_status()
+                >= ferraloom_game::level::distance_manager::FullChunkStatus::BlockTicking
+        );
+        let (first_reply, first_result) = oneshot::channel();
+        let (second_reply, second_result) = oneshot::channel();
+        world.pending.insert(0, (first, first_result));
+        world.pending.insert(1, (second, second_result));
+        // Priority executes B first (revision 1). A then mutates B's shared
+        // StructureStart before A/B are integrated in their original order.
+        let mut second_output = output(second, "second");
+        second_output.terrain.revision = GenerationRevision(1);
+        second_output.terrain.disk.structures = Some(structure_data(false));
+        let auxiliary = ChunkPos::new(5, 0);
+        let proto = ChunkPos::new(6, 0);
+        let proto_disk = |status, marker| {
+            let mut disk = output(proto, "proto").terrain.disk;
+            disk.status = Some(ferraloom_game::level::generation::status_name(status).into());
+            disk.extra.insert("marker", Tag::Int(marker));
+            disk
+        };
+        second_output
+            .neighbors
+            .push((proto, proto_disk(ChunkStatus::Terrain, 1)));
+        second_output.statuses.push((proto, ChunkStatus::Terrain));
+        second_output.full_structures.push(StructureSnapshot {
+            pos: auxiliary,
+            revision: GenerationRevision(1),
+            data: structure_data(false),
+            unattached_disk: Some(output(auxiliary, "auxiliary").terrain.disk),
+        });
+        assert!(second_reply.send(Ok(second_output)).is_ok());
+        assert!(world.poll_terrain().unwrap().is_empty());
+        assert!(world.generation_statuses.is_empty());
+        assert!(world.generation_skips.is_empty());
+        assert!(world.pending_initial_spawns.is_empty());
+        assert!(world.structure_snapshots.is_empty());
+        assert_eq!(level.level.unported_behavior_stats().skipped_calls, 0);
+        assert!(level.level.chunk(second).is_none());
+        let mut first_output = output(first, "first");
+        first_output.terrain.revision = GenerationRevision(2);
+        first_output
+            .neighbors
+            .push((proto, proto_disk(ChunkStatus::Features, 2)));
+        first_output.statuses.push((proto, ChunkStatus::Features));
+        first_output.full_structures = [second, auxiliary]
+            .into_iter()
+            .map(|pos| StructureSnapshot {
+                pos,
+                revision: GenerationRevision(2),
+                data: structure_data(true),
+                unattached_disk: Some(output(pos, "unattached").terrain.disk),
+            })
+            .collect();
+        assert!(first_reply.send(Ok(first_output)).is_ok());
+        let chunks = world.poll_terrain().unwrap();
+        assert_eq!(chunks.iter().map(|(id, _)| *id).collect::<Vec<_>>(), [0, 1]);
+        assert_eq!(world.generation_skips[0].0, "first");
+        assert_eq!(world.generation_skips[1].0, "second");
+        assert_eq!(world.generation_statuses[&second.pack()], ChunkStatus::Full);
+        assert!(world.pending_initial_spawns.contains(&second.pack()));
+        assert_eq!(
+            world.structure_snapshots[&auxiliary.pack()].revision,
+            GenerationRevision(2)
+        );
+        let auxiliary_disk =
+            SerializableChunkData::parse(world.io.load(auxiliary).await.unwrap().unwrap()).unwrap();
+        assert_eq!(auxiliary_disk.structures, Some(structure_data(true)));
+        let proto_disk =
+            SerializableChunkData::parse(world.io.load(proto).await.unwrap().unwrap()).unwrap();
+        assert_eq!(proto_disk.extra.get_int("marker"), Some(2));
+        assert_eq!(
+            world.generation_statuses[&proto.pack()],
+            ChunkStatus::Features
+        );
+        crate::server::generation_completion::integrate_metadata(&mut level, &mut world).unwrap();
+        for (request, terrain) in chunks {
+            crate::server::generation_completion::integrate_terrain(
+                &mut level, &mut world, request, terrain,
+            )
+            .unwrap();
+        }
+        assert_eq!(level.level.unported_behavior_stats().skipped_calls, 2);
+        assert!(level.level.chunk(second).unwrap().is_unsaved());
+        assert!(!world.ready.contains(&second));
+        assert_eq!(
+            world.saved[&second.pack()].structures,
+            Some(structure_data(true))
+        );
+        assert_eq!(
+            world.structure_snapshots[&second.pack()].revision,
+            GenerationRevision(2)
+        );
+        // Cancel a completed later result while it is still held behind an
+        // earlier request. It must save its payload without promoting a holder.
+        let cancelled = ChunkPos::new(2, 0);
+        let (blocker_reply, blocker_result) = oneshot::channel();
+        let (cancelled_reply, cancelled_result) = oneshot::channel();
+        world.pending.insert(2, (first, blocker_result));
+        world.pending.insert(3, (cancelled, cancelled_result));
+        world
+            .active_generation
+            .insert(cancelled.pack(), (3, Arc::new(AtomicBool::new(false))));
+        let mut cancelled_output = output(cancelled, "cancelled");
+        cancelled_output.terrain.revision = GenerationRevision(3);
+        cancelled_output.full_structures.push(StructureSnapshot {
+            pos: auxiliary,
+            revision: GenerationRevision(3),
+            data: structure_data(false),
+            unattached_disk: Some(output(auxiliary, "unattached").terrain.disk),
+        });
+        assert!(cancelled_reply.send(Ok(cancelled_output)).is_ok());
+        assert!(world.generation_pins(cancelled));
+        assert_eq!(world.cancel_generation(cancelled), Some(3));
+        assert!(world.poll_terrain().unwrap().is_empty());
+        assert!(!world.generation_statuses.contains_key(&cancelled.pack()));
+        assert!(
+            !world
+                .generation_skips
+                .iter()
+                .any(|(unit, _)| unit == "cancelled")
+        );
+        assert!(world.io.load(cancelled).await.unwrap().is_some());
+        let auxiliary_disk =
+            SerializableChunkData::parse(world.io.load(auxiliary).await.unwrap().unwrap()).unwrap();
+        assert_eq!(auxiliary_disk.structures, Some(structure_data(false)));
+        assert!(blocker_reply.send(Ok(output(first, "blocker"))).is_ok());
+        assert_eq!(world.poll_terrain().unwrap()[0].0, 2);
+        let retry = ChunkPos::new(128, 128);
+        world.request(4, retry);
+        assert_eq!(world.cancel_generation(retry), Some(4));
+        world.request(5, retry);
+        let completed = tokio::time::timeout(std::time::Duration::from_secs(30), async {
+            loop {
+                let done = world.poll_terrain().unwrap();
+                if !done.is_empty() {
+                    break done;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+            }
+        })
+        .await
+        .unwrap();
+        assert_eq!(completed.len(), 1);
+        assert_eq!((completed[0].0, completed[0].1.pos), (5, retry));
+        world.close_chunk_storage().await.unwrap();
     }
 }
 

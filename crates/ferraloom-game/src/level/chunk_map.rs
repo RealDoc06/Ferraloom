@@ -5,6 +5,7 @@ use std::collections::{BTreeMap, HashSet};
 pub struct ChunkMap {
     pub holders: BTreeMap<i64, ChunkHolder>,
     next_request: u64,
+    next_holder_epoch: u64,
     holder_order: ferraloom_util::collections::LongLinkedOpenHashSet,
 }
 impl ChunkMap {
@@ -12,10 +13,18 @@ impl ChunkMap {
     pub fn holder_positions(&self) -> impl Iterator<Item = ChunkPos> + '_ {
         self.holder_order.iter().map(|&key| ChunkPos::unpack(key))
     }
+    /// Preserve ChunkMap#updateChunkScheduling's holder object identity until
+    /// final removal. An incarnation is distinct from each generation request.
     pub fn ensure_holder(&mut self, pos: ChunkPos) -> &mut ChunkHolder {
         self.holders.entry(pos.pack()).or_insert_with(|| {
+            self.next_holder_epoch = self
+                .next_holder_epoch
+                .checked_add(1)
+                .expect("chunk holder incarnations exhausted");
             self.holder_order.insert(pos.pack());
-            ChunkHolder::new(pos, 0)
+            let mut holder = ChunkHolder::new(pos, 0);
+            holder.epoch = self.next_holder_epoch;
+            holder
         })
     }
     /// Port of ChunkMap's final unloaded-holder removal. The runtime must first
@@ -150,6 +159,40 @@ mod tests {
         assert!(sender.next_batch(ChunkPos::new(0, 0), |_| true).is_empty());
         sender.acknowledge(f32::NAN);
         assert_eq!(sender.next_batch(ChunkPos::new(0, 0), |_| true).len(), 1);
+    }
+    #[test]
+    fn holder_incarnation_survives_requests_and_status_changes_until_final_removal() {
+        let mut chunks = ChunkMap::default();
+        let pos = ChunkPos::new(0, 0);
+        let other = ChunkPos::new(1, 0);
+        let epoch = chunks.ensure_holder(pos).epoch;
+        assert_ne!(epoch, 0);
+        let other_epoch = chunks.ensure_holder(other).epoch;
+        assert!(other_epoch > epoch);
+        assert_eq!(chunks.ensure_holder(pos).epoch, epoch);
+
+        let request = chunks.request(pos).unwrap();
+        assert_eq!(chunks.ensure_holder(pos).epoch, epoch);
+        assert!(chunks.cancel_generation_request(pos, request));
+        assert_ne!(chunks.request(pos).unwrap(), request);
+        assert_eq!(chunks.ensure_holder(pos).epoch, epoch);
+
+        let holder = chunks.ensure_holder(pos);
+        holder.status = super::super::chunk_holder::ChunkStatus::Terrain;
+        holder.ticket_level = 31;
+        holder.update_full_status();
+        let promotion = holder.pending_full_status().unwrap();
+        assert!(holder.confirm_full_status(promotion).is_some());
+        assert_eq!(holder.epoch, epoch);
+        holder.ticket_level = 45;
+        holder.update_full_status();
+        assert_eq!(chunks.remove_unloaded_holder(pos).unwrap().epoch, epoch);
+
+        let recreated = chunks.ensure_holder(pos).epoch;
+        assert!(recreated > other_epoch);
+        assert_eq!(chunks.ensure_holder(other).epoch, other_epoch);
+        chunks.request(pos).unwrap();
+        assert_eq!(chunks.ensure_holder(pos).epoch, recreated);
     }
     #[test]
     fn cancelled_generation_retries_with_fresh_identity_and_keeps_completed_full_data() {

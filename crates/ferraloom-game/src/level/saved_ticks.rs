@@ -5,8 +5,8 @@ use crate::ticks::{LevelChunkTicks, SavedTick};
 use ferraloom_data::{Block, registries::fluid::Id as Fluid};
 use ferraloom_util::ChunkPos;
 impl LevelChunk {
-    /// Load before attaching the chunk to a Level. Saved delays are unpacked
-    /// when Level#add_chunk registers the containers at the current game time.
+    /// Load before FULL attachment. Registration retains saved delays until
+    /// ServerLevel#startTickingChunk unpacks them at its current game time.
     pub fn load_saved_ticks(
         &mut self,
         data: &ferraloom_storage::SerializableChunkData,

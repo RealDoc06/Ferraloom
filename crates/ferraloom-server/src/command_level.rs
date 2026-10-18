@@ -189,82 +189,13 @@ impl MinecraftServer {
         request: u64,
         terrain: crate::world::Terrain,
     ) -> Result<()> {
-        let pos = terrain.pos;
-        if pos == ChunkPos::containing(self.world.spawn)
-            && !self.world.level_data.data.contains_key("spawn")
-        {
-            self.world.spawn.y = terrain.surface
-                [((self.world.spawn.z & 15) * 16 + (self.world.spawn.x & 15)) as usize];
-        }
-        let chunk = self.world.integrate(request, terrain)?;
-        self.level
-            .level
-            .add_chunk(chunk)
-            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
-        self.level
-            .level
-            .prime_chunk_heightmaps(pos)
-            .map_err(game_error)?;
-        self.level
-            .chunks
-            .holders
-            .get_mut(&pos.pack())
-            .unwrap()
-            .status = ChunkStatus::InitializeLight;
-        Ok(())
+        self.integrate_generation_terrain(request, terrain)
     }
     pub(super) fn integrate_command_light(&mut self, light: crate::world::LitChunk) -> Result<()> {
-        if let Some((request, pos)) = light.initialized {
-            let holder = self
-                .level
-                .chunks
-                .holders
-                .get_mut(&pos.pack())
-                .context("unknown light job")?;
-            ensure!(holder.request_id == request, "stale light completion");
-            holder.status = ChunkStatus::Full;
-            self.world.ready.insert(pos);
-        }
-        for (key, data) in light.updates {
-            self.level
-                .level
-                .set_light_snapshot(ChunkPos::unpack(key), data.snapshot());
-            self.world.lights.insert(key, data);
-        }
-        for (key, mask) in light.dirty {
-            self.world.light_chunks_to_broadcast.insert(key);
-            let dirty = self
-                .world
-                .pending_light_updates
-                .entry(ChunkPos::unpack(key))
-                .or_default();
-            dirty.sky |= mask.sky;
-            dirty.block |= mask.block;
-        }
-
-        Ok(())
+        self.integrate_generation_light(light)
     }
     async fn command_get_chunk(&mut self, position: ChunkPos) -> Result<()> {
-        self.request_area(position, 0)?;
-        loop {
-            self.integrate_jobs()?;
-            if self.world.ready.contains(&position) {
-                return Ok(());
-            }
-            if let Some((&request, _)) = self.world.pending.first_key_value() {
-                // Preserve the canonical request order even if a later job finished first.
-                let terrain = self.world.pending.remove(&request).unwrap().await??;
-                self.integrate_command_terrain(request, terrain)?;
-            } else {
-                let light = self
-                    .world
-                    .light_rx
-                    .recv()
-                    .await
-                    .context("chunk light worker stopped")?;
-                self.integrate_command_light(light)?;
-            }
-        }
+        self.await_generation_chunk(position).await
     }
     pub(super) async fn prepare_command_tickets(&mut self) -> Result<()> {
         self.level.tickets.activate_all_deactivated_tickets();

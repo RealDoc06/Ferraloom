@@ -158,3 +158,8 @@ and potion effect-name suffixes to `item_names.json`. `Item#getDescriptionId` an
 `Potion#name` return their final constructor fields, independent of stacks or
 world context. Potion suffixes deliberately differ from registry keys for strong
 and long variants. No state-fact bits are allocated.
+`ExtractBlockEntityTypes <output-json>` records valid blocks, OP-only NBT flags
+and whether each registered receiver implements `Nameable`. The last fact is
+checked against the actual factory receiver for every valid block, including
+aliases. It is independent of whether a receiver currently has a custom name;
+`CopyNameFunction` reads nullable `Nameable#getCustomName` at evaluation time.
