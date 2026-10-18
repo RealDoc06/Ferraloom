@@ -765,6 +765,17 @@ fn region_write_bounds_bulk_writes_and_tick_deduplication() {
             .post_processing,
         [[2, 0, 0]]
     );
+    assert!(region.destroy_block([0, 0, 0], true).unwrap());
+    assert_eq!(region.block([0, 0, 0]).unwrap().block(), Block::AIR);
+    assert!(!region.destroy_block([0, 0, 0], false).unwrap());
+    region
+        .update_neighbors_at([i32::MAX, 0, i32::MAX], Block::STONE)
+        .unwrap();
+    assert!(
+        region
+            .is_unobstructed(Block::STONE.default_state(), [i32::MAX, 0, i32::MAX])
+            .unwrap()
+    );
 }
 
 #[test]
@@ -1033,15 +1044,6 @@ fn all_block_predicates_match_vanilla_with_fixed_world_reads() {
             // This fixture exercises only vanilla's unconditional stone rule.
             assert_eq!(state.block(), Block::STONE);
             Ok(true)
-        }
-        fn is_unobstructed(
-            &self,
-            state: BlockState,
-            _: &WorldGenRegion<'_>,
-            p: [i32; 3],
-        ) -> Result<bool, Error> {
-            assert_eq!(state.block(), Block::STONE);
-            Ok(p[0] & 1 == 0)
         }
     }
     let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").unwrap();

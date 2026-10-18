@@ -239,14 +239,6 @@ pub trait WorldgenBlockBehavior: Sync {
     ) -> Result<BlockState, Error> {
         Err(Error("Unsupported: update_from_neighbor_shapes".into()))
     }
-    fn update_neighbors_at(
-        &self,
-        _region: &mut WorldGenRegion<'_>,
-        _p: [i32; 3],
-        _block: Block,
-    ) -> Result<(), Error> {
-        Err(Error("Unsupported: update_neighbors_at".into()))
-    }
     fn load_block_entity(
         &self,
         _region: &mut WorldGenRegion<'_>,
@@ -342,14 +334,6 @@ pub trait WorldgenBlockBehavior: Sync {
         _position: [i32; 3],
     ) -> Result<bool, Error> {
         Err(Error("block survival behavior is unavailable".into()))
-    }
-    fn is_unobstructed(
-        &self,
-        _state: BlockState,
-        _region: &WorldGenRegion<'_>,
-        _position: [i32; 3],
-    ) -> Result<bool, Error> {
-        Err(Error("block collision behavior is unavailable".into()))
     }
 }
 
@@ -718,8 +702,13 @@ impl<'a> WorldGenRegion<'a> {
         self.chunks[index].fluid_ticks.schedule(tick);
         Ok(())
     }
-    pub fn destroy_block(&mut self, p: [i32; 3], drop: bool) -> Result<bool, Error> {
-        self.behavior.destroy_block(self, p, drop)
+    /// Port of WorldGenRegion#destroyBlock. Generation ignores drops and the
+    /// breaker; only an existing non-air state triggers the normal region write.
+    pub fn destroy_block(&mut self, p: [i32; 3], _drop: bool) -> Result<bool, Error> {
+        if self.block(p)?.is_air() {
+            return Ok(false);
+        }
+        self.set_block(p, Block::AIR.default_state(), 3)
     }
     pub fn place_liquid(&mut self, p: [i32; 3], fluid: FluidState) -> Result<bool, Error> {
         self.behavior.place_liquid(self, p, fluid)
@@ -741,8 +730,9 @@ impl<'a> WorldGenRegion<'a> {
     ) -> Result<BlockState, Error> {
         self.behavior.update_from_neighbor_shapes(self, p, state)
     }
-    pub fn update_neighbors_at(&mut self, p: [i32; 3], block: Block) -> Result<(), Error> {
-        self.behavior.update_neighbors_at(self, p, block)
+    /// WorldGenRegion inherits LevelAccessor's empty updateNeighborsAt.
+    pub fn update_neighbors_at(&mut self, _p: [i32; 3], _block: Block) -> Result<(), Error> {
+        Ok(())
     }
     pub fn load_block_entity(
         &mut self,
@@ -788,8 +778,10 @@ impl<'a> WorldGenRegion<'a> {
     pub fn can_survive(&self, state: BlockState, p: [i32; 3]) -> Result<bool, Error> {
         self.behavior.can_survive(state, self, p)
     }
-    pub fn is_unobstructed(&self, state: BlockState, p: [i32; 3]) -> Result<bool, Error> {
-        self.behavior.is_unobstructed(state, self, p)
+    /// EntityGetter#isUnobstructed always succeeds: WorldGenRegion#getEntities
+    /// returns an empty list, including for shapes spanning other chunks.
+    pub fn is_unobstructed(&self, _state: BlockState, _p: [i32; 3]) -> Result<bool, Error> {
+        Ok(true)
     }
 }
 
