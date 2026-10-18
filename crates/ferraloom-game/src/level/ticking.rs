@@ -190,9 +190,12 @@ impl Level {
                 }
                 // The fluid is captured from the original state, even if the
                 // block callback changed it (LiquidBlock invokes lava twice).
-                if let Some(flow) = FlowingFluid::from_id(state.data().fluid.fluid_type) {
+                let fluid = state.data().fluid;
+                if fluid.is_randomly_ticking() {
                     self.optional_call(state.block(), BlockMethod::FluidRandomTick, |level| {
-                        flow.random_tick(level, pos, state.data().fluid)
+                        FlowingFluid::from_id(fluid.fluid_type)
+                            .ok_or(LevelError::UnsupportedFluidRandomTick)?
+                            .random_tick(level, pos, fluid)
                     })?;
                 }
             }
