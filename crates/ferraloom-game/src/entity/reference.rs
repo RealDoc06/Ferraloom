@@ -98,7 +98,10 @@ mod tests {
 
     fn level() -> Level {
         static BEHAVIORS: Behaviors = Behaviors::EMPTY;
-        Level::new(Region::new(&BEHAVIORS))
+        Level::new(
+            Region::new(&BEHAVIORS),
+            crate::level::LevelContext::fixture(0, 63),
+        )
     }
 
     #[test]

@@ -152,7 +152,10 @@ fn vanilla_ride_tick_uses_the_vehicle_after_derived_tick_and_resets_living_fall_
         .filter(|row| row.starts_with("riding\t"))
     {
         let fields: Vec<_> = row.split('\t').collect();
-        let mut level = Level::new(Region::new(&BEHAVIORS));
+        let mut level = Level::new(
+            Region::new(&BEHAVIORS),
+            crate::level::LevelContext::fixture(0, 63),
+        );
         level
             .update_entity_chunk_status(ChunkPos::ZERO, Visibility::Ticking)
             .unwrap();

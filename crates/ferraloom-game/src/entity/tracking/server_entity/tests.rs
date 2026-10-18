@@ -13,7 +13,10 @@ use std::{collections::BTreeMap, num::NonZeroI32};
 const VECTORS: &str = include_str!("../../../../tests/java/entity/vectors.tsv");
 fn level() -> Level {
     static BEHAVIORS: Behaviors = Behaviors::EMPTY;
-    Level::new(Region::new(&BEHAVIORS))
+    Level::new(
+        Region::new(&BEHAVIORS),
+        crate::level::LevelContext::fixture(0, 63),
+    )
 }
 fn bits(v: Vec3) -> String {
     format!(

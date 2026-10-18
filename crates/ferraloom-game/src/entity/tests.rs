@@ -504,7 +504,10 @@ fn native_dimensions_pose_scales_and_attachment_rotations_keep_float_and_double_
         ),
         row("happy-ghast", &ghast),
     ];
-    let mut level = Level::new(Region::new(&BEHAVIORS));
+    let mut level = Level::new(
+        Region::new(&BEHAVIORS),
+        crate::level::LevelContext::fixture(0, 63),
+    );
     let player = player::ServerPlayer::new(
         Uuid::new(1, 2),
         "dimensions".into(),
