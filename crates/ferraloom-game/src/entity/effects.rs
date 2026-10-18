@@ -4,9 +4,6 @@ use ferraloom_util::{Uuid, Vec3};
 
 #[derive(Clone, Debug)]
 pub enum EntityEffect {
-    /// ServerLevel#sendParticles output. The runtime applies its native player
-    /// distance and visibility guards; RNG is consumed at the calling hook.
-    Particles(Box<ferraloom_protocol::play::clientbound::LevelParticles>),
     /// Captured after successful synchronous placement, before entity removal.
     /// The tracker sends BlockUpdate then AddTransientBlock to its watchers.
     FallingBlockLanded {

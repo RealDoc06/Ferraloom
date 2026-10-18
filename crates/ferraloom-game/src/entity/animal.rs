@@ -69,6 +69,42 @@ impl Cow {
 /// Shared Cow dispatcher for the foundation's Entity/LivingEntity primitives.
 pub struct CowBehavior;
 impl Entity for CowBehavior {
+    fn is_alive(
+        &self,
+        entity: super::EntityRef,
+        level: &crate::level::Level,
+    ) -> Result<bool, crate::level::LevelError> {
+        let cow = level.entity::<Cow>(entity)?;
+        Ok(!cow.as_living().removed && cow.as_living().health() > 0.0)
+    }
+    fn controlling_passenger(
+        &self,
+        entity: super::EntityRef,
+        level: &crate::level::Level,
+    ) -> Result<Option<super::EntityRef>, crate::level::LevelError> {
+        let cow = level.entity::<Cow>(entity)?;
+        if *cow
+            .as_living()
+            .entity_data
+            .get(super::synched_data::MOB_FLAGS) as u8
+            & 1
+            != 0
+        {
+            return Ok(None);
+        }
+        let Some(&rider) = cow.as_living().passengers.first() else {
+            return Ok(None);
+        };
+        let Some(mob) = level.entity_state(rider)?.as_mob() else {
+            return Ok(None);
+        };
+        Ok((!level.entity_type_tags()?.contains_key(
+            ferraloom_data::tags::EntityTypeTags::NON_CONTROLLING_RIDER,
+            mob.parent.entity_type,
+        ))
+        .then_some(rider))
+    }
+
     fn y_head_rot(
         &self,
         entity: super::EntityRef,

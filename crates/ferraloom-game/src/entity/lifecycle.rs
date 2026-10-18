@@ -156,10 +156,6 @@ pub fn base_tick<E: super::Entity + ?Sized>(
     {
         stop_riding(entity, level)?;
     }
-    let was_eye = level
-        .entity::<EntityData>(entity)?
-        .fluid_interaction
-        .eyes_inside(ferraloom_data::tags::FluidTags::WATER, level)?;
     {
         let base = level.entity_mut::<EntityData>(entity)?;
         if base.boarding_cooldown > 0 {
@@ -168,6 +164,14 @@ pub fn base_tick<E: super::Entity + ?Sized>(
         if base.portal_cooldown > 0 {
             base.portal_cooldown -= 1;
         }
+    }
+    super::sounds::maybe_spawn_sprint_particle(behavior, entity, level)?;
+    let was_eye = level
+        .entity::<EntityData>(entity)?
+        .fluid_interaction
+        .eyes_inside(ferraloom_data::tags::FluidTags::WATER, level)?;
+    {
+        let base = level.entity_mut::<EntityData>(entity)?;
         base.was_in_powder_snow = base.is_in_powder_snow;
         base.is_in_powder_snow = false;
         base.was_eye_in_water = was_eye;

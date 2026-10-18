@@ -40,6 +40,9 @@ public final class EntityVectors {
     for(Class<?> cls=Level.class;cls!=null;cls=cls.getSuperclass())for(var m:cls.getDeclaredMethods())if(Modifier.isAbstract(m.getModifiers()))stub(out,m,seen);
     for(var m:Level.class.getMethods())if(Modifier.isAbstract(m.getModifiers()))stub(out,m,seen);
     out.append("""
+      boolean captureEntitySounds;
+      final List<String> soundCalls=new ArrayList<>();
+      final List<String> gameEvents=new ArrayList<>();
       final Map<ChunkPos,LevelChunk> chunks=new HashMap<>();
       final WorldBorder border=new WorldBorder();
       final Source source=new Source();
@@ -89,6 +92,7 @@ public final class EntityVectors {
         PlayerTrackingVectors.run(new EntityFixture(r));
         WorldgenVectors.run(new EntityFixture(r));
         CollisionVectors.run();
+        SoundVectors.run(new EntityFixture(r));
         for(String kind:List.of("tnt","player","flying"))for(boolean above:List.of(false,true))for(boolean drag:List.of(false,true))for(double speed:new double[]{-1,-0.25,0.65,2}){
           var f=new EntityFixture(r);Entity e=kind.equals("tnt")?new net.minecraft.world.entity.item.PrimedTnt(EntityTypes.TNT,f):new TestPlayer(f);
           if(kind.equals("flying"))((Player)e).getAbilities().flying=true;
@@ -130,10 +134,13 @@ public final class EntityVectors {
           var contacts=new ArrayList<String>();BlockGetter.forEachBlockIntersectedBetween(start,end,box,(pos,step)->{contacts.add(pos.getX()+","+pos.getY()+","+pos.getZ()+","+step);return true;});
           System.out.println("trace\\t"+(traceIndex++)+"\\t"+vec(start)+"\\t"+vec(end)+"\\t"+String.join(";",contacts));
         }
-        for(var tag:List.of(net.minecraft.tags.BlockTags.FENCES,net.minecraft.tags.BlockTags.WALLS,net.minecraft.tags.BlockTags.CLIMBABLE,net.minecraft.tags.BlockTags.SUPPRESSES_BOUNCE,net.minecraft.tags.BlockTags.FALL_DAMAGE_RESETTING,net.minecraft.tags.BlockTags.BLOCKS_FLUID_FLOW,net.minecraft.tags.BlockTags.FIRE,net.minecraft.tags.BlockTags.ANVIL)){
+        for(var tag:List.of(net.minecraft.tags.BlockTags.FENCES,net.minecraft.tags.BlockTags.WALLS,net.minecraft.tags.BlockTags.CLIMBABLE,net.minecraft.tags.BlockTags.SUPPRESSES_BOUNCE,net.minecraft.tags.BlockTags.FALL_DAMAGE_RESETTING,net.minecraft.tags.BlockTags.BLOCKS_FLUID_FLOW,net.minecraft.tags.BlockTags.FIRE,net.minecraft.tags.BlockTags.ANVIL,net.minecraft.tags.BlockTags.INSIDE_STEP_SOUND_BLOCKS,net.minecraft.tags.BlockTags.COMBINATION_STEP_SOUND_BLOCKS,net.minecraft.tags.BlockTags.CRYSTAL_SOUND_BLOCKS)){
           var names=new ArrayList<String>();for(var block:BuiltInRegistries.BLOCK)if(block.defaultBlockState().is(tag))names.add(BuiltInRegistries.BLOCK.getKey(block).toString());
           System.out.println("block-tag\\t"+tag.location()+"\\t"+String.join(",",names));
         }
+        var entityTag=net.minecraft.tags.EntityTypeTags.NON_CONTROLLING_RIDER;var entityNames=new ArrayList<String>();
+        for(var type:BuiltInRegistries.ENTITY_TYPE)if(BuiltInRegistries.ENTITY_TYPE.wrapAsHolder(type).is(entityTag))entityNames.add(BuiltInRegistries.ENTITY_TYPE.getKey(type).toString());
+        System.out.println("entity-tag\\t"+entityTag.location()+"\\t"+String.join(",",entityNames));
         for(var tag:List.of(net.minecraft.tags.FluidTags.WATER,net.minecraft.tags.FluidTags.LAVA)){
           var names=new ArrayList<String>();for(var fluid:BuiltInRegistries.FLUID)if(fluid.is(tag))names.add(BuiltInRegistries.FLUID.getKey(fluid).toString());
           System.out.println("fluid-tag\\t"+tag.location()+"\\t"+String.join(",",names));
@@ -189,7 +196,9 @@ public final class EntityVectors {
     var params=m.getParameterTypes();var key=m.getName()+Arrays.toString(params);if(!seen.add(key)||skip.contains(m.getName()))return;
     out.append("@Override public ").append(m.getReturnType().getCanonicalName()).append(' ').append(m.getName()).append('(');
     for(int i=0;i<params.length;i++){if(i>0)out.append(',');out.append(params[i].getCanonicalName()).append(" p").append(i);}
-    if(Set.of("playSeededSound","gameEvent").contains(m.getName()))out.append("){}\n");
+    if(m.getName().equals("playSeededSound")&&params.length==9)out.append("){if(captureEntitySounds)soundCalls.add(SoundVectors.capture(p0,p1,p2,p3,p4,p5,p6,p7,p8));}\n");
+    else if(m.getName().equals("gameEvent")&&params.length==3)out.append("){if(captureEntitySounds)gameEvents.add(SoundVectors.capture_game_event(p0,p1,p2));}\n");
+    else if(Set.of("playSeededSound","gameEvent").contains(m.getName()))out.append("){}\n");
     else out.append("){throw new UnsupportedOperationException(\"").append(m.getName()).append("\");}\n");
   }
 }

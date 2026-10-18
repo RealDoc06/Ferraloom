@@ -139,6 +139,252 @@ fn lava_fall_distance_starts_after_the_first_base_tick() {
 }
 
 #[test]
+fn entity_sound_packets_rng_and_events_match_real_native_call_sites() {
+    use crate::level::effects::LevelEffect;
+    use ferraloom_protocol::{codec::Holder, play::clientbound::Packet};
+    use ferraloom_util::random::RandomSource;
+    fn bits(position: Vec3) -> String {
+        format!(
+            "{:x},{:x},{:x}",
+            position.x.to_bits(),
+            position.y.to_bits(),
+            position.z.to_bits()
+        )
+    }
+    let mut actual = Vec::new();
+    for row in VECTORS
+        .lines()
+        .filter(|line| line.starts_with("entity-sound\t"))
+    {
+        let name = row.split('\t').nth(1).unwrap();
+        let mut level = level(false);
+        let pos = BlockPos::new(8, 63, 8);
+        level
+            .set_block_state(pos, Block::STONE.default_state())
+            .unwrap();
+        level.set_sound_seed(321);
+        let id = EntityRef(1);
+        let is_player = name.starts_with("player-")
+            || name == "sprint-player-spectator"
+            || name.starts_with("extinguish-player");
+        let state = if is_player {
+            EntityState::Player(Box::new(player::ServerPlayer::new(
+                Uuid::new(1, 2),
+                "sound".into(),
+                1,
+                Vec3::new(8.5, 64.0, 8.5),
+                player::GameType::Survival,
+            )))
+        } else if name.starts_with("orb-") {
+            EntityState::ExperienceOrb(Box::new(experience_orb::ExperienceOrb::new(1, 123)))
+        } else if name == "item-swim" {
+            EntityState::Item(Box::new(item::ItemEntity::new(1, 123)))
+        } else if name == "controller-splash" {
+            EntityState::Cow(Box::new(animal::Cow::with_parent(EntityData::new(
+                ferraloom_data::EntityType::COW,
+                1,
+                123,
+            ))))
+        } else {
+            EntityState::PrimedTnt(Box::new(item::PrimedTnt::new(1, 123)))
+        };
+        level.add_entity(id, state).unwrap();
+        let observer = EntityRef(99);
+        level
+            .add_entity(
+                observer,
+                EntityState::Player(Box::new(player::ServerPlayer::new(
+                    Uuid::new(9, 9),
+                    "listener".into(),
+                    99,
+                    Vec3::new(8.5, 64.0, 8.5),
+                    player::GameType::Survival,
+                ))),
+            )
+            .unwrap();
+        level.set_entity_pos(id, Vec3::new(8.5, 64.0, 8.5)).unwrap();
+        {
+            let base = level.entity_mut::<EntityData>(id).unwrap();
+            base.velocity = Vec3::new(0.25, -0.5, 0.125);
+            base.random.set_seed(123);
+            base.entity_data
+                .set(synched_data::SILENT, name.contains("silent"));
+        }
+        if name == "player-snow" {
+            level
+                .set_block_state(pos.above(1), Block::SNOW.default_state())
+                .unwrap();
+        }
+        if name == "player-lichen" {
+            level
+                .set_block_state(pos.above(1), Block::GLOW_LICHEN.default_state())
+                .unwrap();
+        }
+        if name == "player-water-step" {
+            level
+                .entity_mut::<EntityData>(id)
+                .unwrap()
+                .was_touching_water = true;
+        }
+        if name == "player-splash-high" {
+            level.entity_mut::<EntityData>(id).unwrap().velocity = Vec3::new(2.0, -3.0, 1.0);
+        }
+        if name.ends_with("spectator") {
+            level
+                .entity_mut::<player::ServerPlayer>(id)
+                .unwrap()
+                .game_mode = player::GameType::Spectator;
+        }
+        if name == "controller-splash" {
+            let mut rider =
+                animal::Cow::with_parent(EntityData::new(ferraloom_data::EntityType::COW, 2, 124));
+            rider.as_living_mut().velocity = Vec3::new(2.0, -3.0, 1.0);
+            level
+                .add_entity(EntityRef(2), EntityState::Cow(Box::new(rider)))
+                .unwrap();
+            start_riding(EntityRef(2), id, true, &mut level).unwrap();
+        }
+        level.take_effects();
+        let behavior = level.entity_behavior(id).unwrap();
+        if name == "crystal" {
+            level
+                .set_block_state(pos, Block::AMETHYST_BLOCK.default_state())
+                .unwrap();
+            level.take_effects();
+            for tick in [0, 20, 21, 40, 100] {
+                level.entity_mut::<EntityData>(id).unwrap().tick_count = tick;
+                sounds::walking_step_sound(
+                    behavior,
+                    id,
+                    pos,
+                    Block::AMETHYST_BLOCK.default_state(),
+                    &mut level,
+                )
+                .unwrap();
+            }
+        } else if name == "player-move-step" {
+            let base = level.entity_mut::<EntityData>(id).unwrap();
+            base.move_dist = 2.0;
+            base.on_ground = true;
+            behavior
+                .move_by(
+                    id,
+                    &mut level,
+                    movement::MoverType::SelfMovement,
+                    Vec3::new(0.4, -0.01, 0.0),
+                )
+                .unwrap();
+        } else if name.contains("step") || matches!(name, "player-snow" | "player-lichen") {
+            sounds::walking_step_sound(behavior, id, pos, Block::STONE.default_state(), &mut level)
+                .unwrap();
+        } else if name.ends_with("swim") {
+            sounds::water_swim_sound(behavior, id, &mut level).unwrap();
+        } else if name.contains("splash") {
+            behavior.do_water_splash_effect(id, &mut level).unwrap();
+        } else if name.starts_with("sprint-") {
+            if name == "sprint-barrier" {
+                level
+                    .set_block_state(pos, Block::BARRIER.default_state())
+                    .unwrap();
+            }
+            if name == "sprint-water" {
+                level
+                    .set_block_state(pos, Block::WATER.default_state())
+                    .unwrap();
+            }
+            if name == "sprint-crouch" {
+                dimensions::set_pose(
+                    id,
+                    ferraloom_protocol::entity_data::Pose::Crouching,
+                    &mut level,
+                )
+                .unwrap();
+            }
+            level
+                .entity_mut::<EntityData>(id)
+                .unwrap()
+                .set_shared_flag(3, true);
+            level.take_effects();
+            sounds::maybe_spawn_sprint_particle(behavior, id, &mut level).unwrap();
+        } else if name.starts_with("extinguish") {
+            behavior
+                .play_fire_extinguished_sound(id, &mut level)
+                .unwrap();
+        } else {
+            panic!("unknown native sound scenario {name}");
+        }
+        let random = level
+            .entity_mut::<EntityData>(id)
+            .unwrap()
+            .random
+            .next_int() as u32;
+        let mut packets = Vec::new();
+        let mut events = Vec::new();
+        for effect in level.take_effects() {
+            match effect {
+                LevelEffect::PlayerPacket { recipients, packet } => {
+                    assert!(
+                        recipients.contains(&observer),
+                        "{name}: listener should be in range"
+                    );
+                    let Packet::Sound(packet) = *packet else {
+                        panic!("unexpected particle or entity sound output in {name}");
+                    };
+                    let Holder::Reference(sound) = packet.sound.0 else {
+                        panic!("registered sound");
+                    };
+                    let except = if is_player && !recipients.contains(&id) {
+                        "1"
+                    } else {
+                        "none"
+                    };
+                    packets.push(format!(
+                        "{except}:{sound}:{}:{},{},{}:{:x}:{:x}:{:x}",
+                        packet.source as i32,
+                        packet.x,
+                        packet.y,
+                        packet.z,
+                        packet.volume.to_bits(),
+                        packet.pitch.to_bits(),
+                        packet.seed as u64
+                    ));
+                }
+                LevelEffect::GameEvent {
+                    event,
+                    position,
+                    source,
+                    affected_state,
+                } => {
+                    events.push(format!(
+                        "{}:{}:{}:{}",
+                        event.name(),
+                        source.map_or_else(|| "none".into(), |id| id.0.to_string()),
+                        affected_state
+                            .map_or_else(|| "none".into(), |state| state.id().to_string()),
+                        bits(position)
+                    ));
+                }
+                other => panic!("unexpected effect {other:?} in {name}"),
+            }
+        }
+        actual.push(format!(
+            "entity-sound\t{name}\t{}\t{random:x}\t{}",
+            packets.join(";"),
+            if events.is_empty() {
+                "-".into()
+            } else {
+                events.join(";")
+            }
+        ));
+    }
+    let expected: Vec<_> = VECTORS
+        .lines()
+        .filter(|line| line.starts_with("entity-sound\t"))
+        .collect();
+    assert_eq!(actual, expected);
+}
+
+#[test]
 fn living_movement_and_ignition_use_live_attributes_with_native_float_steps() {
     use ferraloom_data::registries::attribute::Id as Attribute;
     use ferraloom_protocol::codec::VarInt;
@@ -446,6 +692,34 @@ fn native_size_refresh_moves_nonplayers_out_of_blocks_and_preserves_player_posit
     check("player-growth", player, &level);
 }
 pub(super) fn tags(level: &mut Level) {
+    let entity_values = VECTORS
+        .lines()
+        .filter_map(|line| {
+            let mut fields = line.split('\t');
+            if fields.next()? != "entity-tag" {
+                return None;
+            }
+            let name = fields.next()?.parse().unwrap();
+            let values = fields
+                .next()?
+                .split(',')
+                .filter(|s| !s.is_empty())
+                .map(|s| ferraloom_data::EntityType::from_name(s).unwrap())
+                .collect();
+            Some((name, values))
+        })
+        .collect();
+    level.set_entity_type_tags(Arc::new(
+        TagSet::from_tags(
+            Tags {
+                values: entity_values,
+                diagnostics: Vec::new(),
+            },
+            ferraloom_data::ENTITY_TYPES.len(),
+        )
+        .unwrap(),
+    ));
+
     let block_values = VECTORS
         .lines()
         .filter_map(|line| {

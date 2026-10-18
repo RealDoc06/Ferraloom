@@ -597,6 +597,62 @@ impl crate::entity::Entity for PlayerBehavior {
         crate::entity::trace_base_entity_refs(state.as_entity(), references);
     }
 
+    fn is_alive(
+        &self,
+        entity: crate::entity::EntityRef,
+        level: &Level,
+    ) -> Result<bool, LevelError> {
+        Ok(!level.entity::<ServerPlayer>(entity)?.removed
+            && level.entity::<ServerPlayer>(entity)?.health() > 0.0)
+    }
+    fn is_spectator(
+        &self,
+        entity: crate::entity::EntityRef,
+        level: &Level,
+    ) -> Result<bool, LevelError> {
+        Ok(level.entity::<ServerPlayer>(entity)?.game_mode == GameType::Spectator)
+    }
+    fn sound_source(&self) -> ferraloom_protocol::play::SoundSource {
+        ferraloom_protocol::play::SoundSource::Players
+    }
+    fn swim_sound(&self) -> ferraloom_data::registries::sound_event::Id {
+        ferraloom_data::registries::sound_event::Id::ENTITY_PLAYER_SWIM
+    }
+    fn swim_splash_sound(&self) -> ferraloom_data::registries::sound_event::Id {
+        ferraloom_data::registries::sound_event::Id::ENTITY_PLAYER_SPLASH
+    }
+    fn swim_high_speed_splash_sound(&self) -> ferraloom_data::registries::sound_event::Id {
+        ferraloom_data::registries::sound_event::Id::ENTITY_PLAYER_SPLASH_HIGH_SPEED
+    }
+    fn play_sound(
+        &self,
+        entity: crate::entity::EntityRef,
+        sound: ferraloom_data::registries::sound_event::Id,
+        volume: f32,
+        pitch: f32,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        crate::entity::sounds::play_sound(self, entity, sound, volume, pitch, true, level)
+    }
+    fn play_step_sound(
+        &self,
+        entity: crate::entity::EntityRef,
+        pos: ferraloom_util::BlockPos,
+        state: ferraloom_data::BlockState,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        crate::entity::sounds::player_step_sound(self, entity, pos, state, level)
+    }
+    fn do_water_splash_effect(
+        &self,
+        entity: crate::entity::EntityRef,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        if !self.is_spectator(entity, level)? {
+            crate::entity::sounds::water_splash_effect(self, entity, level)?;
+        }
+        Ok(())
+    }
     fn fire_immune_ticks(&self) -> i32 {
         20
     }

@@ -25,6 +25,14 @@ pub enum MovementEmission {
     All,
 }
 impl MovementEmission {
+    const fn from_flags(sound: bool, event: bool) -> Self {
+        match (sound, event) {
+            (false, false) => Self::None,
+            (true, false) => Self::Sounds,
+            (false, true) => Self::Events,
+            (true, true) => Self::All,
+        }
+    }
     pub fn emits_sounds(self) -> bool {
         matches!(self, Self::Sounds | Self::All)
     }
@@ -32,38 +40,6 @@ impl MovementEmission {
         matches!(self, Self::Events | Self::All)
     }
 }
-#[derive(Clone, Debug)]
-pub enum MovementEffect {
-    LavaHurtSound {
-        entity: EntityRef,
-        pitch: f32,
-    },
-    ExtinguishSound {
-        entity: EntityRef,
-        pitch: f32,
-    },
-    HitGround {
-        entity: EntityRef,
-        pos: Vec3,
-        state: BlockState,
-    },
-    Bounce {
-        entity: EntityRef,
-    },
-    Step {
-        entity: EntityRef,
-        pos: BlockPos,
-        state: BlockState,
-        sound: bool,
-        event: bool,
-    },
-    Swim {
-        entity: EntityRef,
-        sound: bool,
-        event: bool,
-    },
-}
-
 /// Port of Entity#limitPistonMovement, preserving first-nonzero-axis selection.
 pub fn limit_piston_movement(base: &mut EntityData, movement: Vec3, game_time: i64) -> Vec3 {
     if movement.length_sqr() <= 1e-7 {
@@ -311,7 +287,15 @@ pub fn move_entity<E: Entity + ?Sized>(
     }
     let emission = behavior.movement_emission();
     if emission != MovementEmission::None && level.entity::<EntityData>(entity)?.vehicle.is_none() {
-        apply_movement_emission(entity, emission, movement, effect_pos, effect_state, level)?;
+        apply_movement_emission(
+            behavior,
+            entity,
+            emission,
+            movement,
+            effect_pos,
+            effect_state,
+            level,
+        )?;
     }
     let factor = f64::from(behavior.block_speed_factor(entity, level)?);
     let base = level.entity_mut::<EntityData>(entity)?;
@@ -346,11 +330,12 @@ pub fn check_fall_damage(
         } else {
             state
         };
-        level.emit_entity_movement_effect(MovementEffect::HitGround {
-            entity,
-            pos: position,
-            state: support_state,
-        });
+        level.game_event(
+            ferraloom_data::registries::game_event::Id::HIT_GROUND,
+            position,
+            Some(entity),
+            Some(support_state),
+        );
     }
     level.entity_mut::<EntityData>(entity)?.fall_distance = 0.0;
     Ok(())
@@ -414,7 +399,6 @@ fn restitute<E: Entity + ?Sized>(
         let pos = behavior.block_pos_below_that_affects_my_movement(entity, level)?;
         let distance = level.entity::<EntityData>(entity)?.fall_distance;
         level.call_bounce_on(state, pos, entity, distance)?;
-        level.emit_entity_movement_effect(MovementEffect::Bounce { entity });
         level.entity_mut::<EntityData>(entity)?.sync_position = true;
     }
     level.entity_mut::<EntityData>(entity)?.velocity = after;
@@ -426,7 +410,8 @@ fn climbable(state: BlockState, level: &Level) -> Result<bool, LevelError> {
             .block_tags()?
             .contains_key(BlockTags::CLIMBABLE, state.block()))
 }
-fn apply_movement_emission(
+fn apply_movement_emission<E: Entity + ?Sized>(
+    behavior: &E,
     entity: EntityRef,
     emission: MovementEmission,
     movement: Vec3,
@@ -450,44 +435,50 @@ fn apply_movement_emission(
     }
     let same = pos == effect_pos;
     let mut effects = emit_step(
+        behavior,
         entity,
         effect_pos,
         effect_state,
-        emission.emits_sounds(),
-        same,
+        MovementEmission::from_flags(emission.emits_sounds(), same),
         movement,
         level,
     )?;
     if !same {
         effects |= emit_step(
+            behavior,
             entity,
             pos,
             state,
-            false,
-            emission.emits_events(),
+            MovementEmission::from_flags(false, emission.emits_events()),
             movement,
             level,
         )?;
     }
     if effects || level.entity::<EntityData>(entity)?.was_touching_water {
         if !effects {
-            level.emit_entity_movement_effect(MovementEffect::Swim {
-                entity,
-                sound: emission.emits_sounds(),
-                event: emission.emits_events(),
-            });
+            if emission.emits_sounds() {
+                super::sounds::water_swim_sound(behavior, entity, level)?;
+            }
+            if emission.emits_events() {
+                level.game_event(
+                    ferraloom_data::registries::game_event::Id::SWIM,
+                    level.entity::<EntityData>(entity)?.position,
+                    Some(entity),
+                    None,
+                );
+            }
         }
         let base = level.entity_mut::<EntityData>(entity)?;
         base.next_step = base.move_dist as i32 as f32 + 1.0;
     }
     Ok(())
 }
-fn emit_step(
+fn emit_step<E: Entity + ?Sized>(
+    behavior: &E,
     entity: EntityRef,
     pos: BlockPos,
     state: BlockState,
-    sound: bool,
-    event: bool,
+    emission: MovementEmission,
     movement: Vec3,
     level: &mut Level,
 ) -> Result<bool, LevelError> {
@@ -501,13 +492,17 @@ fn emit_step(
         || base.pose() == ferraloom_protocol::entity_data::Pose::Crouching && movement.y == 0.0)
         && !base.shared_flag(4)
     {
-        level.emit_entity_movement_effect(MovementEffect::Step {
-            entity,
-            pos,
-            state,
-            sound,
-            event,
-        });
+        if emission.emits_sounds() {
+            super::sounds::walking_step_sound(behavior, entity, pos, state, level)?;
+        }
+        if emission.emits_events() {
+            level.game_event(
+                ferraloom_data::registries::game_event::Id::STEP,
+                level.entity::<EntityData>(entity)?.position,
+                Some(entity),
+                Some(state),
+            );
+        }
         Ok(true)
     } else {
         Ok(false)

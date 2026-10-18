@@ -193,9 +193,14 @@ pub fn apply_collected<E: Entity + ?Sized>(
                     {
                         let pitch =
                             2.0 + level.entity_mut::<EntityData>(entity)?.random.next_float() * 0.4;
-                        level.emit_entity_movement_effect(
-                            movement::MovementEffect::LavaHurtSound { entity, pitch },
-                        );
+                        level.play_sound(
+                            None,
+                            level.entity::<EntityData>(entity)?.position,
+                            ferraloom_data::registries::sound_event::Id::ENTITY_GENERIC_BURN,
+                            behavior.sound_source(),
+                            0.4,
+                            pitch,
+                        )?;
                     }
                 }
             }
@@ -401,12 +406,7 @@ pub fn apply_effects<E: Entity + ?Sized>(
     if was_on_fire && !is_on_fire(entity, level)?
         || was_freezing && level.entity::<EntityData>(entity)?.ticks_frozen() <= 0
     {
-        let base = level.entity_mut::<EntityData>(entity)?;
-        let pitch = 1.6 + (base.random.next_float() - base.random.next_float()) * 0.4;
-        level.emit_entity_movement_effect(movement::MovementEffect::ExtinguishSound {
-            entity,
-            pitch,
-        });
+        behavior.play_fire_extinguished_sound(entity, level)?;
     }
     let ignited = level.entity::<EntityData>(entity)?.remaining_fire_ticks > previous_fire_ticks;
     if !is_on_fire(entity, level)? && !ignited {

@@ -59,6 +59,7 @@ pub mod fluid;
 pub mod inside_block;
 mod lifecycle;
 pub mod movement;
+pub mod sounds;
 mod trace;
 pub use lifecycle::{
     base_tick, common_tick, count_player_passengers, eject_passengers, living_ride_tick,
@@ -234,6 +235,64 @@ pub trait Entity: Sync {
         level: &Level,
     ) -> Result<ferraloom_util::BlockPos, LevelError> {
         movement::get_on_pos(entity, 0.500_001_f32, level)
+    }
+    fn is_alive(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
+        Ok(!level.entity::<EntityData>(entity)?.removed)
+    }
+    fn is_spectator(&self, _entity: EntityRef, _level: &Level) -> Result<bool, LevelError> {
+        Ok(false)
+    }
+    fn controlling_passenger(
+        &self,
+        _entity: EntityRef,
+        _level: &Level,
+    ) -> Result<Option<EntityRef>, LevelError> {
+        Ok(None)
+    }
+    fn sound_source(&self) -> ferraloom_protocol::play::SoundSource {
+        ferraloom_protocol::play::SoundSource::Neutral
+    }
+    fn swim_sound(&self) -> ferraloom_data::registries::sound_event::Id {
+        ferraloom_data::registries::sound_event::Id::ENTITY_GENERIC_SWIM
+    }
+    fn swim_splash_sound(&self) -> ferraloom_data::registries::sound_event::Id {
+        ferraloom_data::registries::sound_event::Id::ENTITY_GENERIC_SPLASH
+    }
+    fn swim_high_speed_splash_sound(&self) -> ferraloom_data::registries::sound_event::Id {
+        ferraloom_data::registries::sound_event::Id::ENTITY_GENERIC_SPLASH
+    }
+    fn play_sound(
+        &self,
+        entity: EntityRef,
+        sound: ferraloom_data::registries::sound_event::Id,
+        volume: f32,
+        pitch: f32,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        sounds::play_sound(self, entity, sound, volume, pitch, false, level)
+    }
+    fn play_fire_extinguished_sound(
+        &self,
+        entity: EntityRef,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        sounds::play_fire_extinguished_sound(self, entity, level)
+    }
+    fn play_step_sound(
+        &self,
+        entity: EntityRef,
+        _pos: ferraloom_util::BlockPos,
+        state: ferraloom_data::BlockState,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        sounds::play_step_sound(self, entity, state, level)
+    }
+    fn do_water_splash_effect(
+        &self,
+        entity: EntityRef,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        sounds::water_splash_effect(self, entity, level)
     }
     fn fire_immune_ticks(&self) -> i32 {
         0

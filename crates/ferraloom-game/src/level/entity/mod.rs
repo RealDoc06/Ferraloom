@@ -200,7 +200,6 @@ pub struct EntityStorage {
     next_ref: u64,
     effects: Vec<crate::entity::effects::EntityEffect>,
     pending_retire: Vec<EntityRef>,
-    movement_effects: Vec<crate::entity::movement::MovementEffect>,
     pub border: crate::level::border::WorldBorder,
     states: HashMap<EntityRef, EntityState>,
     pub lookup: EntityLookup,
@@ -324,13 +323,6 @@ impl Level {
     }
     pub fn max_build_height(&self) -> i32 {
         self.region().max_y - 1
-    }
-
-    pub fn emit_entity_movement_effect(&mut self, effect: crate::entity::movement::MovementEffect) {
-        self.region_mut().entities.movement_effects.push(effect);
-    }
-    pub fn take_entity_movement_effects(&mut self) -> Vec<crate::entity::movement::MovementEffect> {
-        std::mem::take(&mut self.region_mut().entities.movement_effects)
     }
 
     pub fn entity_world_border(&self) -> &crate::level::border::WorldBorder {
