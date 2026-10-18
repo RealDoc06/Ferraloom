@@ -1092,8 +1092,12 @@ impl MinecraftServer {
         let positions: Vec<_> = self.level.chunks.holder_positions().collect();
         for pos in positions {
             let holder = self.level.chunks.holders.get_mut(&pos.pack()).unwrap();
-            if update_holder_full_status(holder, &self.world.ready, &mut self.level.level)?
-                && self.level.distance_manager.has_pending_player_loading(pos)
+            if update_holder_full_status(
+                holder,
+                &self.world.light_ready,
+                &self.world.generation_statuses,
+                &mut self.level.level,
+            )? && self.level.distance_manager.has_pending_player_loading(pos)
             {
                 self.level.distance_manager.complete_player_loading(pos);
             }
@@ -1165,10 +1169,6 @@ impl MinecraftServer {
                 .get_mut(&pos.pack())
                 .unwrap()
                 .status = ChunkStatus::Full;
-            self.level
-                .level
-                .post_process_generation(pos)
-                .map_err(game_error)?;
         }
         while let Ok(light) = self.world.light_rx.try_recv() {
             if let Some((request, pos)) = light.initialized {
@@ -1180,14 +1180,7 @@ impl MinecraftServer {
                     .context("unknown light job")?;
                 ensure!(holder.request_id == request, "stale light completion");
                 holder.status = ChunkStatus::Full;
-                if self
-                    .level
-                    .level
-                    .chunk(pos)
-                    .is_some_and(|chunk| chunk.generation_callbacks_drained())
-                {
-                    self.world.ready.insert(pos);
-                }
+                self.world.light_ready.insert(pos);
             }
             for (key, data) in light.updates {
                 self.level
@@ -1204,6 +1197,19 @@ impl MinecraftServer {
                     .or_default();
                 dirty.sky |= mask.sky;
                 dirty.block |= mask.block;
+            }
+        }
+        let positions = self.level.chunks.holder_positions().collect::<Vec<_>>();
+        for pos in positions {
+            if !self.world.ready.contains(&pos)
+                && self.world.light_ready.contains(&pos)
+                && full_chunk_range_ready(&self.world.light_ready, pos, 1)
+            {
+                self.level
+                    .level
+                    .post_process_generation(pos)
+                    .map_err(game_error)?;
+                self.world.ready.insert(pos);
             }
         }
         Ok(())
@@ -2441,17 +2447,25 @@ fn initialize_live_level(
 fn update_holder_full_status(
     holder: &mut ferraloom_game::level::chunk_holder::ChunkHolder,
     ready: &HashSet<ChunkPos>,
+    completed: &BTreeMap<ChunkPos, ChunkStatus>,
     level: &mut ferraloom_game::level::Level,
 ) -> Result<bool> {
     let mut status = holder.update_full_status();
     if let Some(promotion) = holder.pending_full_status() {
-        let radius = match promotion.status {
-            FullChunkStatus::Inaccessible => unreachable!(),
-            FullChunkStatus::Full => 0,
-            FullChunkStatus::BlockTicking => 1,
-            FullChunkStatus::EntityTicking => 2,
-        };
-        if full_chunk_range_ready(ready, holder.position, radius) {
+        let future = ferraloom_game::level::generation::ChunkRangeFuture::for_full_status(
+            holder.position,
+            promotion.status,
+        );
+        if future.is_ready(|pos| {
+            if ready.contains(&pos) {
+                Some(ChunkStatus::Full)
+            } else {
+                completed
+                    .get(&pos)
+                    .copied()
+                    .filter(|status| *status < ChunkStatus::Full)
+            }
+        }) {
             status = holder.confirm_full_status(promotion);
         }
     }
@@ -2689,12 +2703,18 @@ mod live_level_tests {
         let pos = ChunkPos::new(0, 0);
         let mut holder = ChunkHolder::new(pos, 0);
         let mut ready = HashSet::new();
+        let mut completed = BTreeMap::new();
         let mut level = Level::new(Region::new(&BEHAVIORS));
         holder.ticket_level = 33;
-        assert!(!update_holder_full_status(&mut holder, &ready, &mut level).unwrap());
+        assert!(!update_holder_full_status(&mut holder, &ready, &completed, &mut level).unwrap());
         assert_eq!(level.entity_chunk_visibility(pos), Visibility::Hidden);
         ready.insert(pos);
-        update_holder_full_status(&mut holder, &ready, &mut level).unwrap();
+        for x in -1..=1 {
+            for z in -1..=1 {
+                completed.insert(ChunkPos::new(x, z), ChunkStatus::InitializeLight);
+            }
+        }
+        update_holder_full_status(&mut holder, &ready, &completed, &mut level).unwrap();
         assert_eq!(level.entity_chunk_visibility(pos), Visibility::Tracked);
         holder.ticket_level = 31;
         for x in -1..=1 {
@@ -2702,20 +2722,20 @@ mod live_level_tests {
                 ready.insert(ChunkPos::new(x, z));
             }
         }
-        assert!(!update_holder_full_status(&mut holder, &ready, &mut level).unwrap());
+        assert!(!update_holder_full_status(&mut holder, &ready, &completed, &mut level).unwrap());
         assert_eq!(level.entity_chunk_visibility(pos), Visibility::Tracked);
         for x in -2..=2 {
             for z in -2..=2 {
                 ready.insert(ChunkPos::new(x, z));
             }
         }
-        assert!(update_holder_full_status(&mut holder, &ready, &mut level).unwrap());
+        assert!(update_holder_full_status(&mut holder, &ready, &completed, &mut level).unwrap());
         assert_eq!(level.entity_chunk_visibility(pos), Visibility::Ticking);
         holder.ticket_level = 32;
-        update_holder_full_status(&mut holder, &ready, &mut level).unwrap();
+        update_holder_full_status(&mut holder, &ready, &completed, &mut level).unwrap();
         assert_eq!(level.entity_chunk_visibility(pos), Visibility::Tracked);
         holder.ticket_level = 45;
-        update_holder_full_status(&mut holder, &ready, &mut level).unwrap();
+        update_holder_full_status(&mut holder, &ready, &completed, &mut level).unwrap();
         assert_eq!(level.entity_chunk_visibility(pos), Visibility::Hidden);
     }
 }

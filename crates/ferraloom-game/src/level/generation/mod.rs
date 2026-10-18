@@ -3,6 +3,7 @@
 mod context;
 mod proto;
 mod pyramid;
+mod range;
 mod task;
 pub use context::WorldGenContext;
 pub use ferraloom_worldgen::region::ChunkStatus;
@@ -11,4 +12,5 @@ pub use pyramid::{
     ChunkDependencies, ChunkPyramid, ChunkStatusTask, ChunkStep, STATUSES, parse_status,
     status_name,
 };
+pub use range::ChunkRangeFuture;
 pub use task::{ChunkGenerationTask, GenerationChunkHolder, GenerationError, GenerationLayer};

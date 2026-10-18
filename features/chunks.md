@@ -4,8 +4,8 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 
 | ID | Feature | Vanilla source | Test | Vanilla | Ferraloom |
 |---|---|---|---|---|---|
-| chunks.pipeline.dependencies | Generate chunk statuses with their required neighbor status and radius dependencies | `ChunkPyramid; ChunkStep; ChunkGenerationTask` | `generation::pyramid::tests::vanilla_pyramids_match_every_direct_and_accumulated_dependency`; `generation::task::tests::saved_full_uses_loading_footprint_but_a_missing_neighbor_expands_generation` | pass | partial |
-| chunks.pipeline.loading | Distinguish loading an existing chunk from generating missing stages | `ChunkStatusTasks; GenerationChunkHolder` | `join::offline_client_joins_walks_chats_and_saves` | - | partial |
+| chunks.pipeline.dependencies | Generate chunk statuses with their required neighbor status and radius dependencies | `ChunkPyramid; ChunkStep; ChunkGenerationTask` | `generation::pyramid::tests::vanilla_pyramids_match_every_direct_and_accumulated_dependency`; `generation::task::tests::saved_full_uses_loading_footprint_but_a_missing_neighbor_expands_generation`; `generation::range::tests::accessible_needs_initialized_neighbors_but_ticking_requires_full_neighbors` | pass | partial |
+| chunks.pipeline.loading | Distinguish loading an existing chunk from generating missing stages | `ChunkStatusTasks; GenerationChunkHolder` | `generation::task::tests::saved_full_uses_loading_footprint_but_a_missing_neighbor_expands_generation`; live proto reload and full promotion preserve saved ticks/NBT; old-world blending and retrogen pending | pass | partial |
 | chunks.pipeline.light-full | Promote chunks through light and full states before exposing ticking access | `ChunkStatusTasks; ChunkMap` | `join::offline_client_joins_walks_chats_and_saves` | - | partial |
 | chunks.tickets.level-propagation | Propagate ticket distance levels and choose loaded, block-ticking and entity-ticking states | `DistanceManager; ChunkLevel` | | - | todo |
 | chunks.tickets.expiry | Expire timeout-based tickets before distance-manager updates | `TicketStorage#purgeStaleTickets; ServerChunkCache#tick` | | - | todo |
@@ -42,3 +42,5 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | chunks.ticket-type.unknown | `minecraft:unknown` (ticket type) | `net.minecraft.server.level.TicketType#register` | | - | todo |
 
 | chunks.runtime.batch-quota | Apply PlayerChunkSender quota and acknowledgement window; pending-set tie traversal awaits shared collections | `PlayerChunkSender#sendNextChunks; #onChunkBatchReceivedByClient` | `chunk_map::tests::batches_wait_for_acknowledgement` | - | partial |
+
+| chunks.pipeline.warn-units | Strict fails missing game callbacks; Warn abandons one placed feature or structure piece, retaining partial writes and reporting shared counters | `ChunkGenerator#applyBiomeDecoration; StructureStart#placeInChunk` | `generation::default_noise_generation_warn_reaches_full_and_strict_rejects_missing_behavior` | - | partial |
