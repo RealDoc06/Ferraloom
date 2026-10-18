@@ -28,3 +28,10 @@ lists, including a repeated reference to the same stack. The retained live event
 and pure event use these cases to check greedy ingredient matching and receiver
 multiplicity. Rust tests also check retention cleanup after capture or predicate
 errors.
+
+`ItemTriggerVectors` calls the actual PLACED_BLOCK, ITEM_DURABILITY_CHANGED and
+CONSUME_ITEM triggers. It checks a component-bearing TOOL, reads the original
+damage/count synchronously inside rewards, and records that triggering does not
+apply the caller's later damage or consumption mutation. Rust replays these
+observations through the shared pure matcher and live entries, including a
+retained receiver whose original inventory slot has already been replaced.

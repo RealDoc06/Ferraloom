@@ -23,6 +23,7 @@ use ferraloom_util::{Vec3, random::RandomSource};
 pub enum TriggerEvent<'a> {
     Player,
     Item(&'a ItemStack),
+    ItemLive(StackRef),
     Entity(&'a LootParams),
     Block(BlockState),
     Location(&'a LootParams),
@@ -81,6 +82,10 @@ pub enum TriggerEvent<'a> {
     },
     Durability {
         item: &'a ItemStack,
+        new_damage: i32,
+    },
+    DurabilityLive {
+        stack: StackRef,
         new_damage: i32,
     },
     Levitation {
@@ -228,6 +233,32 @@ fn item_matches(
     test.as_ref()
         .map_or(Ok(true), |test| test.matches(item, context.facts()))
 }
+fn durability_matches(
+    item: &Option<ItemPredicate>,
+    durability: &crate::predicates::IntBounds,
+    delta: &crate::predicates::IntBounds,
+    stack: &ItemStack,
+    new_damage: i32,
+    facts: &dyn TriggerFacts,
+) -> Result<bool> {
+    if !item
+        .as_ref()
+        .map_or(Ok(true), |test| test.matches(stack, facts))?
+    {
+        return Ok(false);
+    }
+    let components = stack.components()?;
+    let max = match components.get(ComponentTypeId::MAX_DAMAGE) {
+        Some(DataComponent::MaxDamage(v)) => v.0,
+        _ => 0,
+    };
+    let old = match components.get(ComponentTypeId::DAMAGE) {
+        Some(DataComponent::Damage(v)) => v.0,
+        _ => 0,
+    };
+    Ok(durability.matches(max.wrapping_sub(new_damage))
+        && delta.matches(old.wrapping_sub(new_damage)))
+}
 fn holder_contains<T>(
     set: &HolderSet<T>,
     id: &Identifier,
@@ -250,6 +281,14 @@ impl TriggerInstance {
             (C::Impossible, _) => false,
             (C::Player, E::Player) => true,
             (C::Item(test), E::Item(item)) => item_matches(test, item, context)?,
+            (C::Item(test), E::ItemLive(stack)) => {
+                let MatchAccess::Runtime(runtime) = &context.access else {
+                    return Err(LootError::Unsupported("advancement.retained_stack".into()));
+                };
+                test.as_ref().map_or(Ok(true), |test| {
+                    test.matches(runtime.stack(stack)?, runtime.trigger_facts())
+                })?
+            }
             (C::Entity(test), E::Entity(params)) => context.optional(test, Some(params))?,
             (C::Location(test), E::Location(params)) => context.optional(test, Some(params))?,
             (C::Block(test), E::Block(state)) => test.matches_state(state, context.facts())?,
@@ -431,21 +470,26 @@ impl TriggerInstance {
                     item: stack,
                     new_damage,
                 },
+            ) => durability_matches(item, durability, delta, stack, new_damage, context.facts())?,
+            (
+                C::Durability {
+                    item,
+                    durability,
+                    delta,
+                },
+                E::DurabilityLive { stack, new_damage },
             ) => {
-                if !item_matches(item, stack, context)? {
-                    return Ok(false);
-                }
-                let components = stack.components()?;
-                let max = match components.get(ComponentTypeId::MAX_DAMAGE) {
-                    Some(DataComponent::MaxDamage(v)) => v.0,
-                    _ => 0,
+                let MatchAccess::Runtime(runtime) = &context.access else {
+                    return Err(LootError::Unsupported("advancement.retained_stack".into()));
                 };
-                let old = match components.get(ComponentTypeId::DAMAGE) {
-                    Some(DataComponent::Damage(v)) => v.0,
-                    _ => 0,
-                };
-                durability.matches(max.wrapping_sub(new_damage))
-                    && delta.matches(old.wrapping_sub(new_damage))
+                durability_matches(
+                    item,
+                    durability,
+                    delta,
+                    runtime.stack(stack)?,
+                    new_damage,
+                    runtime.trigger_facts(),
+                )?
             }
             (C::Levitation { distance, duration }, E::Levitation { start, duration: t }) => {
                 distance.is_none_or(|test| test.matches(start, context.origin))

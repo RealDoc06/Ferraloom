@@ -76,6 +76,64 @@ pub fn item_used_on_block(
         TriggerType::ItemUsedOnBlock,
     )
 }
+/// Port of BlockItem#place's PLACED_BLOCK call after setPlacedBy. The caller
+/// supplies the original operation-rooted receiver, before sound and consume.
+pub fn placed_block(
+    level: &mut Level,
+    player: EntityRef,
+    pos: BlockPos,
+    stack: StackRef,
+) -> Result<(), LevelError> {
+    level.retain_stack(stack).map_err(live::menu_error)?;
+    let result = (|| {
+        // ItemUsedOnLocationTrigger's predicates read TOOL synchronously and
+        // cannot mutate it or observe identity. Resolving its value here is
+        // equivalent to vanilla's reference; awards run after every match.
+        // ITEM_USED_ON_BLOCK separately receives vanilla's pre-use copy.
+        let tool = level.stack(stack).map_err(live::menu_error)?.clone();
+        location_event(level, player, pos, Some(&tool), TriggerType::PlacedBlock)
+    })();
+    level.release_stack(stack);
+    result
+}
+
+/// Port of ItemDurabilityTrigger#trigger, before the caller changes damage.
+pub fn item_durability_changed(
+    level: &mut Level,
+    player: EntityRef,
+    stack: StackRef,
+    new_damage: i32,
+) -> Result<(), LevelError> {
+    level.retain_stack(stack).map_err(live::menu_error)?;
+    let result = live::trigger(
+        level,
+        player,
+        TriggerType::ItemDurabilityChanged,
+        TriggerEvent::DurabilityLive { stack, new_damage },
+        None,
+    );
+    level.release_stack(stack);
+    result
+}
+
+/// Port of ConsumeItemTrigger#trigger with the caller's retained receiver.
+pub fn consume_item(
+    level: &mut Level,
+    player: EntityRef,
+    stack: StackRef,
+) -> Result<(), LevelError> {
+    level.retain_stack(stack).map_err(live::menu_error)?;
+    let result = live::trigger(
+        level,
+        player,
+        TriggerType::ConsumeItem,
+        TriggerEvent::ItemLive(stack),
+        None,
+    );
+    level.release_stack(stack);
+    result
+}
+
 /// Port of CriteriaTriggers.DEFAULT_BLOCK_USE.trigger (BLOCK_USE parameters).
 pub fn default_block_use(
     level: &mut Level,

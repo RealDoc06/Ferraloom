@@ -1179,6 +1179,137 @@ fn live_rewards_nest_recipe_awards_before_outer_announcement_and_visibility() {
 }
 
 #[test]
+fn vanilla_live_item_triggers_preserve_receivers_and_pre_damage_values() {
+    use crate::{
+        entity::player::{ServerPlayer, inventory},
+        inventory::{ContainerHandle, ContainerSlot, StackValue},
+        level::LevelChunk,
+    };
+    use ferraloom_chunk::{BiomeId, IdMap, LevelChunkSection, Strategy};
+    use ferraloom_protocol::component::{ComponentTypeId, DataComponent};
+    use ferraloom_util::{BlockPos, ChunkPos};
+    use std::sync::Arc;
+
+    let mut bytes = Vec::new();
+    flate2::read::GzDecoder::new(&include_bytes!("item-triggers.json.gz")[..])
+        .read_to_end(&mut bytes)
+        .unwrap();
+    let rows: Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(rows.as_array().unwrap().len(), 9);
+    for row in rows.as_array().unwrap() {
+        let stack = ItemStack::from_json(&row["stack"]).unwrap();
+        let block = Block::from_name(row["block"].as_str().unwrap()).unwrap();
+        let new_damage = row["new_damage"].as_i64().unwrap() as i32;
+        let criterion = Criterion::decode(&row["input"]["criteria"]["a"]).unwrap();
+        let params = LootParams {
+            origin: Some(Vec3::new(0.5, 0.5, 0.5)),
+            block_state: Some(block.default_state()),
+            tool: Some(stack.clone()),
+            ..Default::default()
+        };
+        let event = match criterion.trigger {
+            TriggerType::PlacedBlock => TriggerEvent::Location(&params),
+            TriggerType::ItemDurabilityChanged => TriggerEvent::Durability {
+                item: &stack,
+                new_damage,
+            },
+            TriggerType::ConsumeItem => TriggerEvent::Item(&stack),
+            _ => unreachable!(),
+        };
+        let mut random = LegacyRandomSource::new(42);
+        let data = LootData::default();
+        let mut context = MatchContext::borrowed(&data, &Facts, &mut random, Vec3::ZERO);
+        assert_eq!(
+            criterion.instance.matches(event, &mut context).unwrap(),
+            row["done"].as_bool().unwrap(),
+            "{}",
+            row["input"]
+        );
+
+        for detached in [false, true] {
+            let manager = ServerAdvancementManager::new(vec![AdvancementHolder {
+                id: id("test:item"),
+                value: Advancement::decode(&row["input"]).unwrap(),
+            }]);
+            let (mut level, player) = live_fixture(manager);
+            level
+                .add_chunk(LevelChunk::new(
+                    ChunkPos::new(0, 0),
+                    0..1,
+                    LevelChunkSection::new(
+                        Strategy::block_states(),
+                        Strategy::biomes(Arc::new(IdMap::new(vec![BiomeId(0)]).unwrap())),
+                        BiomeId(0),
+                    ),
+                ))
+                .unwrap();
+            let pos = BlockPos::new(0, 0, 0);
+            level.set_block_state(pos, block.default_state()).unwrap();
+            level
+                .entity_mut::<ServerPlayer>(player)
+                .unwrap()
+                .inventory
+                .items[0] = stack.clone();
+            let address = ContainerSlot {
+                container: ContainerHandle::PlayerInventory(player),
+                slot: 0,
+            };
+            let receiver = level.stack_ref(address).unwrap();
+            level.retain_stack(receiver).unwrap();
+            if detached {
+                level
+                    .replace_stack_object(address, StackValue::New(ItemStack::default()))
+                    .unwrap();
+            }
+            match criterion.trigger {
+                TriggerType::PlacedBlock => {
+                    criteria::placed_block(&mut level, player, pos, receiver)
+                }
+                TriggerType::ItemDurabilityChanged => {
+                    criteria::item_durability_changed(&mut level, player, receiver, new_damage)
+                }
+                TriggerType::ConsumeItem => criteria::consume_item(&mut level, player, receiver),
+                _ => unreachable!(),
+            }
+            .unwrap();
+            let owner = level.entity::<ServerPlayer>(player).unwrap();
+            assert_eq!(
+                owner
+                    .advancements
+                    .get_progress(&id("test:item"))
+                    .unwrap()
+                    .is_done(),
+                row["done"].as_bool().unwrap(),
+                "detached={detached}: {}",
+                row["input"]
+            );
+            assert_eq!(
+                owner.total_experience as usize,
+                row["reward_reads"].as_array().unwrap().len()
+            );
+            let after = level.stack(receiver).unwrap();
+            assert_eq!(after, &ItemStack::from_json(&row["after_trigger"]).unwrap());
+            if let Some(read) = row["reward_reads"].as_array().unwrap().first() {
+                let components = after.components().unwrap();
+                let damage = match components.get(ComponentTypeId::DAMAGE) {
+                    Some(DataComponent::Damage(value)) => value.0,
+                    _ => 0,
+                };
+                assert_eq!(
+                    json!({"count":inventory::count(after),"damage":damage}),
+                    *read
+                );
+            }
+            level.release_stack(receiver);
+            assert!(!level.stack_is_retained(address).unwrap());
+            if detached {
+                assert!(level.stack(receiver).is_err());
+            }
+        }
+    }
+}
+
+#[test]
 fn retained_inventory_trigger_and_stats_request_read_canonical_player() {
     use crate::{
         entity::player::{ServerPlayer, inventory},
