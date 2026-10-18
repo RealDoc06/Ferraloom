@@ -919,9 +919,46 @@ fn vanilla_liquid_legacy_state_canonicalizes_falling_levels() {
 #[test]
 fn strict_is_default_and_warn_records_each_skipped_call_without_query_fallbacks() {
     use crate::block::{BlockMethod, UnportedBehavior};
-    let mut level = empty_level(&EMPTY);
+    struct PendingPolicyFixture;
+    impl BlockBehavior for PendingPolicyFixture {
+        fn random_tick(
+            &self,
+            state: BlockState,
+            _: BlockPos,
+            _: &mut Level,
+        ) -> Result<(), LevelError> {
+            Err(LevelError::UnsupportedBlock(state.block()))
+        }
+        fn update_shape(
+            &self,
+            state: BlockState,
+            _: BlockPos,
+            _: Direction,
+            _: BlockPos,
+            _: BlockState,
+            _: &mut crate::block::LevelAccessRef<'_, '_>,
+        ) -> Result<BlockState, LevelError> {
+            Err(LevelError::UnsupportedBlockMethod(
+                state.block(),
+                BlockMethod::UpdateShape,
+            ))
+        }
+        fn can_survive(
+            &self,
+            state: BlockState,
+            _: BlockPos,
+            _: &crate::block::LevelReaderRef<'_, '_>,
+        ) -> Result<bool, LevelError> {
+            Err(LevelError::UnsupportedBlockMethod(
+                state.block(),
+                BlockMethod::CanSurvive,
+            ))
+        }
+    }
+    static PENDING: Behaviors = Behaviors::EMPTY.with_block(Block::STONE, &PendingPolicyFixture);
+    let mut level = empty_level(&PENDING);
     let pos = BlockPos::new(0, 0, 0);
-    let state = Block::CHORUS_FLOWER.default_state();
+    let state = Block::STONE.default_state();
     assert_eq!(level.unported_behavior(), UnportedBehavior::Strict);
     assert_eq!(
         level.optional_block_call(state.block(), BlockMethod::RandomTick, |behavior, level| {
@@ -962,7 +999,7 @@ fn strict_is_default_and_warn_records_each_skipped_call_without_query_fallbacks(
         }
     );
     assert!(matches!(
-        level.required_block_behavior(Block::CHORUS_PLANT, BlockMethod::CanSurvive),
+        level.can_survive(state, pos),
         Err(LevelError::UnsupportedBlockMethod(
             _,
             BlockMethod::CanSurvive

@@ -568,17 +568,6 @@ mod tests {
                     .0
                     .contains("MissingChunk")
             );
-            assert!(
-                LiveWorldGenLevel::generate_chorus_plant(
-                    &mut level,
-                    [8, 1, 8],
-                    &mut FeatureRandomSelector::Canonical,
-                    8
-                )
-                .unwrap_err()
-                .0
-                .starts_with("Unsupported:")
-            );
             assert_eq!(level.unported_behavior_stats().skipped_calls, 0);
         }
     }
