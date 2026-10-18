@@ -698,6 +698,12 @@ menu-abilities	SURVIVAL	false	0	false
 menu-abilities	SURVIVAL	true	64	false
 menu-abilities	CREATIVE	false	0	true
 menu-abilities	CREATIVE	true	64	true
+container-set-value	dispenser	false	1	false	9	2
+container-set-value	dispenser	true	1	true	2	2
+container-set-value	dropper	false	1	false	9	2
+container-set-value	dropper	true	1	true	2	2
+container-set-value	hopper	false	0	false	9	2
+container-set-value	hopper	true	0	true	2	2
 default-save	minecraft:chest	{Items:[],components:{}}
 filled-save	minecraft:chest	{Items:[{Slot:0b,count:31,id:"minecraft:stone"},{Slot:26b,count:3,id:"minecraft:diamond"}],components:{},id:"minecraft:chest",x:1,y:64,z:2}
 roundtrip	minecraft:chest	true

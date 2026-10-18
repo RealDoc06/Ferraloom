@@ -18,24 +18,28 @@ use std::collections::BTreeMap;
 pub fn set_item(
     handle: BlockEntityRef,
     slot: usize,
-    mut stack: ferraloom_protocol::component::ItemStack,
+    stack: ferraloom_protocol::component::ItemStack,
     level: &mut Level,
 ) -> Result<(), LevelError> {
-    use crate::{
-        entity::player::inventory::{
-            count, is_same_item_same_components, max_stack_size, set_count,
-        },
-        inventory::Container,
-    };
+    super::access::set_item(handle, slot, stack, level)
+}
+pub(crate) fn set_item_value(
+    handle: BlockEntityRef,
+    slot: usize,
+    value: crate::inventory::StackValue,
+    level: &mut Level,
+) -> Result<(), LevelError> {
+    use crate::{entity::player::inventory::is_same_item_same_components, inventory::Container};
     let reset = {
-        let furnace = level.block_entity_mut::<AbstractFurnaceBlockEntity>(handle)?;
+        let furnace = level.block_entity::<AbstractFurnaceBlockEntity>(handle)?;
+        let stack = value
+            .as_stack(level)
+            .map_err(|_| LevelError::Inventory("furnace stack receiver"))?;
         let same =
-            !stack.is_empty() && is_same_item_same_components(&furnace.parent.items[slot], &stack);
-        let size = count(&stack).min(furnace.parent.max_stack_size().min(max_stack_size(&stack)));
-        set_count(&mut stack, size);
-        furnace.parent.replace_item(slot, stack);
+            !stack.is_empty() && is_same_item_same_components(&furnace.parent.items[slot], stack);
         slot == 0 && !same && furnace.parent.parent.has_level
     };
+    super::access::replace_and_limit(handle, slot, value, level)?;
     if reset {
         let resources = level.container_resources()?;
         let furnace = level.block_entity::<AbstractFurnaceBlockEntity>(handle)?;

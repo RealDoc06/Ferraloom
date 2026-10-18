@@ -178,6 +178,21 @@ class BlockEntityFixture extends MutationFixture {
       System.out.println("menu-abilities\t"+mode+"\t"+infinite+"\t"+menu.getCarried().getCount()+"\t"+slot.mayPickup(player));
     }
   }
+  static void containerSetValues(RegistryAccess r){
+    for(String kind:new String[]{"dispenser","dropper","hopper"})for(boolean existing:new boolean[]{false,true}){
+      int[] changes={0};var pos=new BlockPos(0,64,0);var level=new BlockEntityFixture(r);
+      BlockEntity receiver=switch(kind){
+        case "dispenser" -> new DispenserBlockEntity(pos,net.minecraft.world.level.block.Blocks.DISPENSER.defaultBlockState()){@Override public void setChanged(){changes[0]++;super.setChanged();}};
+        case "dropper" -> new DropperBlockEntity(pos,net.minecraft.world.level.block.Blocks.DROPPER.defaultBlockState()){@Override public void setChanged(){changes[0]++;super.setChanged();}};
+        default -> new HopperBlockEntity(pos,net.minecraft.world.level.block.Blocks.HOPPER.defaultBlockState()){@Override public void setChanged(){changes[0]++;super.setChanged();}};
+      };
+      receiver.setLevel(level);var container=(net.minecraft.world.Container)receiver;
+      container.setItem(0,new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.STONE,10));
+      var held=container.getItem(0);held.shrink(1);var delivered=existing?held:held.copy();changes[0]=0;
+      container.setItem(0,delivered);int notifications=changes[0];held.setCount(2);
+      System.out.println("container-set-value\t"+kind+"\t"+existing+"\t"+notifications+"\t"+(container.getItem(0)==held)+"\t"+container.getItem(0).getCount()+"\t"+held.getCount());
+    }
+  }
   static void tickerPhases(RegistryAccess r){
     var level=new BlockEntityFixture(r);var events=new ArrayList<String>();
     class Ticker implements TickingBlockEntity {

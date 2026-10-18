@@ -16,6 +16,14 @@ pub enum StackValue {
     New(ItemStack),
     Existing(StackRef),
 }
+impl StackValue {
+    pub fn as_stack<'a>(&'a self, level: &'a crate::level::Level) -> super::Result<&'a ItemStack> {
+        match self {
+            Self::New(stack) => Ok(stack),
+            Self::Existing(reference) => level.stack(*reference),
+        }
+    }
+}
 /// Container-local result of replacing a stack. Live callers bind retained
 /// receivers to their owner handle; pure callers receive the unrooted value.
 #[derive(Debug)]
