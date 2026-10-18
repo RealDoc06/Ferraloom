@@ -969,6 +969,28 @@ impl MinecraftServer {
         if let Some(saved) = saved {
             player.try_load_with_recipes(saved, &self.recipe_manager)?;
         }
+        let advancement_manager = self
+            .level
+            .level
+            .container_resources()
+            .map_err(game_error)?
+            .advancements
+            .clone();
+        let progress_path = self.world.access.path().to_path_buf();
+        let progress_uuid = profile.id;
+        let progress = tokio::task::spawn_blocking(move || {
+            ferraloom_game::advancements::load_player_progress(
+                &progress_path,
+                progress_uuid,
+                &advancement_manager,
+            )
+        })
+        .await??;
+        for diagnostic in progress.diagnostics {
+            eprintln!("{diagnostic}");
+        }
+        player.advancements = progress.advancements;
+        player.stats = progress.stats;
         if self.properties.boolean("force-gamemode") {
             player.game_mode = mode;
             player.update_game_mode_abilities();
@@ -1567,13 +1589,6 @@ impl MinecraftServer {
                     value: EntityDataValue::Byte(c.information.model_customisation as i8),
                 },
             ]),
-        }));
-        c.push(cb::Packet::UpdateAdvancements(cb::UpdateAdvancements {
-            should_reset: true,
-            added: Vec::new(),
-            removed: Vec::new(),
-            progress: Vec::new(),
-            show_advancements: true,
         }));
         c.push(cb::Packet::SetHealth(cb::SetHealth {
             health: player.parent.health(),
