@@ -13,3 +13,23 @@ pub fn for_block(block: Block) -> Option<BlockEntityType> {
 pub fn only_op_can_set_nbt(kind: BlockEntityType) -> bool {
     kind.only_op_can_set_nbt()
 }
+
+/// Port of the two BlockBehaviour#shouldChangedStateKeepBlockEntity overrides.
+/// Tag membership is read from the live datapack snapshot, never extracted as
+/// a fixed set: resource packs may extend copper chest/statue membership.
+pub fn should_changed_state_keep_block_entity(
+    new_state: BlockState,
+    old_state: BlockState,
+    tags: &ferraloom_data::datapack::TagSet<Block>,
+) -> bool {
+    use ferraloom_data::{BlockClass, tags::BlockTags};
+    match new_state.block().class() {
+        BlockClass::CopperChestBlock | BlockClass::WeatheringCopperChestBlock => {
+            tags.contains_key(BlockTags::COPPER_CHESTS, old_state.block())
+        }
+        BlockClass::CopperGolemStatueBlock | BlockClass::WeatheringCopperGolemStatueBlock => {
+            tags.contains_key(BlockTags::COPPER_GOLEM_STATUES, old_state.block())
+        }
+        _ => false,
+    }
+}
