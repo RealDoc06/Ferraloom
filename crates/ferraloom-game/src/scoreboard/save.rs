@@ -41,16 +41,30 @@ fn default_text(map: &CompoundTag, key: &str, default: &str) -> StorageResult<St
         .transpose()
         .map(|s| s.unwrap_or_else(|| default.to_owned()))
 }
+// PrimitiveCodec.INT uses Number.intValue, not NumericTag.getAsInt's floor.
+fn integer(tag: &Tag) -> StorageResult<i32> {
+    match tag {
+        Tag::Byte(v) => Ok(i32::from(*v)),
+        Tag::Short(v) => Ok(i32::from(*v)),
+        Tag::Int(v) => Ok(*v),
+        Tag::Long(v) => Ok(*v as i32),
+        Tag::Float(v) => Ok(*v as i32),
+        Tag::Double(v) => Ok(*v as i32),
+        _ => Err(invalid("expected number")),
+    }
+}
 fn boolean(map: &CompoundTag, key: &str, default: bool) -> StorageResult<bool> {
     map.get(key)
-        .map(|v| {
-            v.as_double()
-                .map(|v| v != 0.0)
+        .map(|value| {
+            value
+                .as_double()
+                .map(|value| value != 0.0)
                 .ok_or_else(|| invalid(format!("invalid {key}")))
         })
         .transpose()
-        .map(|v| v.unwrap_or(default))
+        .map(|value| value.unwrap_or(default))
 }
+
 fn list<'a>(map: &'a CompoundTag, key: &str) -> StorageResult<&'a [Tag]> {
     map.get(key)
         .map(|v| {
@@ -162,11 +176,7 @@ impl SavedDataCodec for ScoreboardSaveData {
             let name = text(value, "Name")?;
             let objective = text(value, "Objective")?;
             let score = Score {
-                value: value
-                    .get("Score")
-                    .map(|v| v.as_int().ok_or_else(|| invalid("invalid Score")))
-                    .transpose()?
-                    .unwrap_or(0),
+                value: value.get("Score").map(integer).transpose()?.unwrap_or(0),
                 locked: boolean(value, "Locked", false)?,
                 display: component(value, "display")?,
                 number_format: get_format(value)?,

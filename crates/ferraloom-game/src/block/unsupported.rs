@@ -69,6 +69,7 @@ pub enum BlockMethod {
     SetPlacedBy,
     PlayerWillDestroy,
     SpawnDestroyByEntityParticles,
+    SpawnDestroyParticles,
 }
 impl BlockMethod {
     pub(crate) const fn vanilla_method(self) -> Option<ferraloom_data::BlockMethod> {
@@ -111,6 +112,7 @@ impl BlockMethod {
             Self::SetPlacedBy => Vanilla::SetPlacedBy,
             Self::PlayerWillDestroy => Vanilla::PlayerWillDestroy,
             Self::SpawnDestroyByEntityParticles => Vanilla::SpawnDestroyByEntityParticles,
+            Self::SpawnDestroyParticles => Vanilla::SpawnDestroyParticles,
             Self::CanPlaceLiquid => Vanilla::CanPlaceLiquid,
             Self::PlaceLiquid => Vanilla::PlaceLiquid,
             Self::PickupBlock => Vanilla::PickupBlock,
@@ -194,6 +196,7 @@ impl BlockMethod {
             Self::SetPlacedBy => "setPlacedBy",
             Self::PlayerWillDestroy => "playerWillDestroy",
             Self::SpawnDestroyByEntityParticles => "spawnDestroyByEntityParticles",
+            Self::SpawnDestroyParticles => "spawnDestroyParticles",
         }
     }
 }

@@ -6,7 +6,7 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 |---|---:|---:|---:|---:|---:|
 | [Advancements](features/advancements.md) | 1942 | 0 | 1933 | 9 | 0 |
 | [Block entities](features/block-entities.md) | 96 | 72 | 24 | 0 | 0 |
-| [Blocks](features/blocks.md) | 331 | 297 | 34 | 0 | 0 |
+| [Blocks](features/blocks.md) | 332 | 297 | 35 | 0 | 0 |
 | [Chat and text components](features/chat.md) | 23 | 21 | 2 | 0 | 0 |
 | [Chunks and tickets](features/chunks.md) | 41 | 21 | 20 | 0 | 0 |
 | [Combat and damage](features/combat-damage.md) | 204 | 204 | 0 | 0 | 0 |
@@ -15,7 +15,7 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Datapacks and resource reload](features/datapacks-reload.md) | 57 | 57 | 0 | 0 | 0 |
 | [Enchantments](features/enchantments.md) | 136 | 136 | 0 | 0 | 0 |
 | [Entities and AI](features/entities.md) | 725 | 672 | 53 | 0 | 0 |
-| [Fluids](features/fluids.md) | 25 | 25 | 0 | 0 | 0 |
+| [Fluids](features/fluids.md) | 26 | 25 | 1 | 0 | 0 |
 | [Binary data, geometry and randomness](features/foundations.md) | 63 | 18 | 17 | 28 | 0 |
 | [Functions and macros](features/functions-macros.md) | 10 | 10 | 0 | 0 | 0 |
 | [Game rules](features/game-rules.md) | 74 | 1 | 4 | 69 | 0 |
@@ -37,16 +37,16 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Protocol packets](features/protocol.md) | 270 | 47 | 0 | 223 | 0 |
 | [Raids](features/raids.md) | 8 | 8 | 0 | 0 | 0 |
 | [Redstone mechanics](features/redstone.md) | 61 | 12 | 49 | 0 | 0 |
-| [Scoreboard, teams and bossbars](features/scoreboard-teams-bossbars.md) | 63 | 56 | 7 | 0 | 0 |
+| [Scoreboard, teams and bossbars](features/scoreboard-teams-bossbars.md) | 74 | 49 | 25 | 0 | 0 |
 | [Server operations](features/server-operations.md) | 111 | 96 | 15 | 0 | 0 |
 | [Sounds and particles](features/sounds-particles.md) | 2146 | 2146 | 0 | 0 | 0 |
 | [Spawning, trial spawners and vaults](features/spawning.md) | 138 | 138 | 0 | 0 | 0 |
 | [Statistics](features/statistics.md) | 96 | 3 | 90 | 3 | 0 |
 | [Tags](features/tags.md) | 907 | 907 | 0 | 0 | 0 |
-| [Ticking, game events and vibrations](features/ticking.md) | 187 | 179 | 8 | 0 | 0 |
+| [Ticking, game events and vibrations](features/ticking.md) | 189 | 179 | 10 | 0 | 0 |
 | [Villages, trading and POI](features/villages-trading-poi.md) | 599 | 599 | 0 | 0 | 0 |
 | [Wandering traders](features/wandering-traders.md) | 5 | 5 | 0 | 0 | 0 |
 | [Weather, time and environment](features/weather-time.md) | 85 | 85 | 0 | 0 | 0 |
 | [World storage and data fixing](features/world-storage.md) | 307 | 306 | 1 | 0 | 0 |
 | [World generation](features/worldgen.md) | 3113 | 2640 | 173 | 300 | 0 |
-| **Total** | **19210** | **12081** | **4260** | **2869** | **0** |
+| **Total** | **19225** | **12074** | **4282** | **2869** | **0** |

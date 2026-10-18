@@ -77,11 +77,12 @@ public class ScoreboardVectors extends Scoreboard {
     var decoded = ScoreboardSaveData.Packed.CODEC.parse(NbtOps.INSTANCE,loaded.get("data")).getOrThrow();
     if (!decoded.equals(board.packed().value())) throw new AssertionError("disk round trip");
     row("saved",loaded.toString());
-    for (String minimal : List.of("{}", "{Teams:[{Name:'defaults'}]}","{Objectives:[{Name:'minimal',DisplayName:'Minimal'}],PlayerScores:[{Name:'Doc',Objective:'minimal'}]}")) {
+    for (String minimal : List.of("{}", "{Teams:[{Name:'defaults'}]}","{Objectives:[{Name:'minimal',DisplayName:'Minimal'}],PlayerScores:[{Name:'Doc',Objective:'minimal'}]}", "{Objectives:[{Name:'numeric',DisplayName:'Numeric'}],PlayerScores:[{Name:'Doc',Objective:'numeric',Score:-0.5d,Locked:-0.5d}],Teams:[{Name:'numeric',AllowFriendlyFire:0.5d,SeeFriendlyInvisibles:256}]}")) {
       Tag input = TagParser.parseCompoundFully(minimal);
       Tag output = ScoreboardSaveData.Packed.CODEC.encodeStart(NbtOps.INSTANCE,ScoreboardSaveData.Packed.CODEC.parse(NbtOps.INSTANCE,input).getOrThrow()).getOrThrow();
       row("codec",minimal,output);
     }
     row("criterion", "minecraft.mined:minecraft.stone",ObjectiveCriteria.byName("minecraft.mined:minecraft.stone").orElseThrow().isReadOnly());
+    for (String alias : List.of("mined:stone","minecraft.mined:stone","mined:minecraft.stone")) row("criterion-alias",alias,ObjectiveCriteria.byName(alias).orElseThrow().getName());
   }
 }

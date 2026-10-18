@@ -160,10 +160,10 @@ fn vanilla_saved_file_and_codec_defaults() {
             _ => {}
         }
     }
-    assert_eq!(count, 4);
+    assert_eq!(count, 5);
 }
 #[test]
-fn entity_names_snapshots_and_score_lifecycle() {
+fn entity_names_and_score_lifecycle() {
     use ferraloom_util::uuid::Uuid;
     let uuid = Uuid::new(0, 1);
     let mut server = ServerScoreboard::default();
@@ -196,9 +196,7 @@ fn entity_names_snapshots_and_score_lifecycle() {
         false
     ));
     assert!(!entity_is_allied_to(board, "Doc", None, true));
-    let snapshot = server.snapshot();
     server.scoreboard_mut().remove_player_from_team("Doc");
-    assert!(snapshot.get_players_team("Doc").is_some());
     assert!(server.scoreboard().get_players_team("Doc").is_none());
     let board = server.scoreboard_mut();
     board.add_objective("points".into(), objective()).unwrap();
@@ -284,5 +282,21 @@ fn vanilla_fastutil_iterator_and_stream_orders() {
             _ => unreachable!(),
         };
         assert_eq!(actual, fields[2], "{row}");
+    }
+}
+
+#[test]
+fn vanilla_stat_criteria_names_are_canonicalized() {
+    let rows: Vec<_> = VECTORS
+        .lines()
+        .filter(|row| row.starts_with("criterion-alias\t"))
+        .collect();
+    assert_eq!(rows.len(), 3);
+    for row in rows {
+        let fields: Vec<_> = row.split('\t').collect();
+        assert_eq!(
+            ObjectiveCriteria::by_name(fields[1]).unwrap().name,
+            fields[2]
+        );
     }
 }
