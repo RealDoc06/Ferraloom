@@ -182,3 +182,9 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | ticking.player.accepted-section-order | Capture each accepted player section before deferred effect drain, preserving A-to-B-to-A ticket transitions | `PersistentEntitySectionManager.Callback#onMove; ChunkMap#move` | `level::effects::tests::captured_player_sections_preserve_intermediate_transitions` | - | todo |
 
 | ticking.player.spawn-ticket | Prepare and refresh player-spawn loading tickets at radius three and timeout twenty, independently of simulation | `PrepareSpawnTask.Loading; PrepareSpawnTask.Ready#keepAlive` | `native tracker propagation vectors; runtime preparation integration pending` | - | todo |
+
+| ticking.tickets.remaining-time | Preserve signed native ticket countdown and saved records, pausing timed expiry on holder save dependencies; UNKNOWN may expire unloaded | `TicketStorage#canTicketExpire; Ticket#decreaseTicksLeft` | `level::tickets::tests::native_timeout_pauses_for_save_dependencies_and_expires_below_zero; native_saved_ticket_codec_activation_and_mutation_order_match_java (20 Java cases)` | pass | todo |
+
+| ticking.level.handling-tick | Expose the native handling-tick flag through weather, scheduled ticks and block events, clearing it before entity work | `ServerLevel#tick; ServerLevel#isHandlingTick` | `runtime source-order integration; piston short-pulse scenario pending` | - | todo |
+
+| ticking.block-entity.lifecycle | Run preRemove before removal, retain or replace canonical receivers after onPlace, promote supported pending NBT in Java map order and capture persistence/update packets | `LevelChunk#setBlockState; LevelChunk#postProcessGeneration; ChunkHolder#broadcastChanges` | `level::block_entity::tests::placement_updates_receiver_before_broadcast_and_skip_side_effects_removes_it; pending_supported_entity_activates_and_unload_retains_pinned_generation` | - | todo |
