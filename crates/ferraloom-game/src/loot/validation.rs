@@ -155,10 +155,10 @@ impl LootData {
         validate_registry!(tables, "loot_table", |v: &LootTable| {
             ContextKeySet::vanilla(&v.param_set).expect("decoded parameter set")
         });
-        let generic = |_| {
+        fn generic<T>(_: &T) -> ContextKeySet {
             ContextKeySet::vanilla(&Identifier::parse("generic").expect("vanilla id"))
                 .expect("generic context set")
-        };
+        }
         validate_registry!(predicates, "predicate", generic);
         validate_registry!(modifiers, "item_modifier", generic);
         validate_registry!(int_providers, "context_int_provider", generic);
@@ -208,6 +208,29 @@ impl Validatable for LootItemFunction {
         match &self.kind {
             FunctionKind::Sequence(functions) => c.set("functions", functions, 0),
             FunctionKind::SetCount { count, .. } => c.holder("count", count),
+            FunctionKind::ApplyBonus { .. } => c.params([ContextParam::Tool]),
+            FunctionKind::EnchantedCountIncrease { count, .. } => {
+                c.params([ContextParam::AttackingEntity]);
+                c.holder("count", count);
+            }
+            FunctionKind::EnchantWithLevels {
+                levels,
+                include_additional_cost_component,
+                ..
+            } => {
+                c.holder("levels", levels);
+                if *include_additional_cost_component {
+                    c.params([ContextParam::AdditionalCostComponentAllowed]);
+                }
+            }
+            FunctionKind::EnchantRandomly {
+                include_additional_cost_component,
+                ..
+            } => {
+                if *include_additional_cost_component {
+                    c.params([ContextParam::AdditionalCostComponentAllowed]);
+                }
+            }
             FunctionKind::SetDamage { damage, .. } => c.holder("damage", damage),
             FunctionKind::LimitCount { min, max } => {
                 c.optional("min", min);
@@ -255,6 +278,7 @@ where
     fn validate(&self, c: &mut ValidationContext<'_>) {
         match self {
             Self::Constant(_) => {}
+            Self::EnchantmentLevel(_) => c.params([ContextParam::EnchantmentLevel]),
             Self::Unary(_, p) => c.holder("input", p),
             Self::Binary(_, left, right) | Self::Uniform(left, right) => {
                 c.holder("left", left);

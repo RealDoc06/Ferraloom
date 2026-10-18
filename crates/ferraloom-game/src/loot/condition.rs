@@ -74,6 +74,12 @@ pub enum LootItemCondition {
     AllOf(HolderSet<Self>),
     AnyOf(HolderSet<Self>),
     RandomChance(Holder<ContextFloatProvider>),
+    TableBonus(super::Identifier, Vec<f32>),
+    RandomChanceWithEnchantedBonus {
+        unenchanted: f32,
+        enchanted: super::LevelBasedValue,
+        enchantment: super::Identifier,
+    },
     KilledByPlayer,
     SurvivesExplosion,
     MatchTool(Option<ItemPredicate>),
@@ -89,6 +95,7 @@ pub enum LootItemCondition {
         thundering: Option<bool>,
     },
     EnchantmentActive(bool),
+    DamageSource(Option<crate::predicates::DamageSourcePredicate>),
     IntValueCheck(
         Holder<ContextIntProvider>,
         ProviderRange<ContextIntProvider>,
@@ -115,6 +122,27 @@ impl LootItemCondition {
                 codec::field(v, "chance")?,
                 ContextFloatProvider::decode,
             )?),
+            "minecraft:table_bonus" => {
+                let chances = codec::list(codec::field(v, "chances")?, codec::float)?;
+                if chances.is_empty() {
+                    return Err(codec::error("empty chances"));
+                }
+                Self::TableBonus(codec::id(codec::field(v, "enchantment")?)?, chances)
+            }
+            "minecraft:random_chance_with_enchanted_bonus" => {
+                let unenchanted = codec::float(codec::field(v, "unenchanted_chance")?)?;
+                if !(0.0..=1.0).contains(&unenchanted) {
+                    return Err(codec::error("chance outside [0,1]"));
+                }
+                Self::RandomChanceWithEnchantedBonus {
+                    unenchanted,
+                    enchanted: super::LevelBasedValue::decode(codec::field(
+                        v,
+                        "enchanted_chance",
+                    )?)?,
+                    enchantment: codec::id(codec::field(v, "enchantment")?)?,
+                }
+            }
             "minecraft:killed_by_player" => Self::KilledByPlayer,
             "minecraft:survives_explosion" => Self::SurvivesExplosion,
             "minecraft:match_tool" => {
@@ -149,6 +177,11 @@ impl LootItemCondition {
                 raining: codec::optional(v, "raining", codec::boolean)?,
                 thundering: codec::optional(v, "thundering", codec::boolean)?,
             },
+            "minecraft:damage_source_properties" => Self::DamageSource(codec::optional(
+                v,
+                "predicate",
+                crate::predicates::DamageSourcePredicate::decode,
+            )?),
             "minecraft:enchantment_active_check" => {
                 Self::EnchantmentActive(codec::boolean(codec::field(v, "active")?)?)
             }
@@ -160,11 +193,7 @@ impl LootItemCondition {
                 Holder::decode(codec::field(v, "value")?, ContextFloatProvider::decode)?,
                 ProviderRange::decode(codec::field(v, "test")?, ContextFloatProvider::decode)?,
             ),
-            "minecraft:random_chance_with_enchanted_bonus"
-            | "minecraft:table_bonus"
-            | "minecraft:damage_source_properties"
-            | "minecraft:time_check"
-            | "minecraft:environment_attribute_check" => {
+            "minecraft:time_check" | "minecraft:environment_attribute_check" => {
                 return Err(LootError::Unsupported(format!("loot_condition.{kind}")));
             }
             _ => return Err(codec::error(format!("unknown loot condition {kind}"))),
@@ -191,6 +220,35 @@ impl LootItemCondition {
             }
             Self::RandomChance(chance) => {
                 let chance = chance.get(data, c)?;
+                Ok(c.random.next_float() < chance)
+            }
+            Self::TableBonus(enchantment, chances) => {
+                let level = c
+                    .params
+                    .tool
+                    .as_ref()
+                    .map(|tool| super::bonus::item_enchantment_level(tool, enchantment))
+                    .transpose()?
+                    .unwrap_or(0);
+                let chance = chances[(level as usize).min(chances.len() - 1)];
+                Ok(c.random.next_float() < chance)
+            }
+            Self::RandomChanceWithEnchantedBonus {
+                unenchanted,
+                enchanted,
+                enchantment,
+            } => {
+                let level = c
+                    .params
+                    .attacking_entity
+                    .map(|entity| c.facts.entity_enchantment_level(entity, enchantment))
+                    .transpose()?
+                    .unwrap_or(0);
+                let chance = if level > 0 {
+                    enchanted.calculate(level)?
+                } else {
+                    *unenchanted
+                };
                 Ok(c.random.next_float() < chance)
             }
             Self::KilledByPlayer => Ok(c.params.last_damage_player.is_some()),
@@ -272,6 +330,16 @@ impl LootItemCondition {
                 let (rain, thunder) = c.facts.weather()?;
                 Ok(raining.is_none_or(|v| v == rain) && thundering.is_none_or(|v| v == thunder))
             }
+            Self::DamageSource(test) => {
+                let Some(source) = &c.params.damage_source else {
+                    return Ok(false);
+                };
+                let Some(origin) = c.params.origin else {
+                    return Ok(false);
+                };
+                test.as_ref()
+                    .map_or(Ok(true), |test| test.matches(source, origin, c.facts))
+            }
             Self::EnchantmentActive(active) => Ok(c.params.enchantment_active == Some(*active)),
             Self::IntValueCheck(input, test) => {
                 if test.is_any() {
@@ -292,6 +360,8 @@ impl LootItemCondition {
     pub(crate) fn params(&self) -> Vec<ContextParam> {
         use ContextParam::*;
         match self {
+            Self::TableBonus(..) => vec![Tool],
+            Self::RandomChanceWithEnchantedBonus { .. } => vec![AttackingEntity],
             Self::KilledByPlayer => vec![LastDamagePlayer],
             Self::SurvivesExplosion => vec![ExplosionRadius],
             Self::MatchTool(_) => vec![Tool],
@@ -306,6 +376,7 @@ impl LootItemCondition {
                 vec![target.param()]
             }
             Self::LocationCheck(..) => vec![Origin],
+            Self::DamageSource(_) => vec![DamageSource, Origin],
             Self::EnchantmentActive(_) => vec![EnchantmentActive],
             _ => vec![],
         }

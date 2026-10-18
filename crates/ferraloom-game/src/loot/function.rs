@@ -39,18 +39,40 @@ pub enum FunctionKind {
         on_pass: Option<Holder<LootItemFunction>>,
         on_fail: Option<Holder<LootItemFunction>>,
     },
+    ApplyBonus {
+        enchantment: super::Identifier,
+        formula: super::BonusFormula,
+    },
+    EnchantedCountIncrease {
+        enchantment: super::Identifier,
+        count: Holder<ContextFloatProvider>,
+        limit: i32,
+    },
+    EnchantRandomly {
+        options: Option<ferraloom_protocol::codec::HolderSet>,
+        only_compatible: bool,
+        include_additional_cost_component: bool,
+    },
+    EnchantWithLevels {
+        levels: Holder<ContextIntProvider>,
+        options: Option<ferraloom_protocol::codec::HolderSet>,
+        include_additional_cost_component: bool,
+    },
     ExplosionDecay,
     Discard,
 }
 impl LootItemFunction {
     pub fn decode(v: &Value) -> Result<Self> {
         // SequenceFunction's inline codec accepts an array (and holder-set tags).
-        if v.is_array() {
+        if v.is_array() || v.is_string() {
             return Ok(Self {
                 condition: None,
-                kind: FunctionKind::Sequence(HolderSet::decode(v, Self::decode)?),
+                kind: FunctionKind::Sequence(HolderSet::decode(v, Self::decode_typed)?),
             });
         }
+        Self::decode_typed(v)
+    }
+    fn decode_typed(v: &Value) -> Result<Self> {
         let condition = codec::optional(v, "condition", |v| {
             Holder::decode(v, LootItemCondition::decode)
         })?;
@@ -58,7 +80,7 @@ impl LootItemFunction {
         let kind = match name.as_str() {
             "minecraft:sequence" => FunctionKind::Sequence(HolderSet::decode(
                 codec::field(v, "functions")?,
-                Self::decode,
+                Self::decode_typed,
             )?),
             "minecraft:set_count" => FunctionKind::SetCount {
                 count: Holder::decode(codec::field(v, "count")?, ContextIntProvider::decode)?,
@@ -102,6 +124,40 @@ impl LootItemFunction {
                 filter: ItemPredicate::decode(codec::field(v, "item_filter")?)?,
                 on_pass: codec::optional(v, "on_pass", |v| Holder::decode(v, Self::decode))?,
                 on_fail: codec::optional(v, "on_fail", |v| Holder::decode(v, Self::decode))?,
+            },
+            "minecraft:apply_bonus" => FunctionKind::ApplyBonus {
+                enchantment: codec::id(codec::field(v, "enchantment")?)?,
+                formula: super::BonusFormula::decode(v)?,
+            },
+            "minecraft:enchanted_count_increase" => FunctionKind::EnchantedCountIncrease {
+                enchantment: codec::id(codec::field(v, "enchantment")?)?,
+                count: Holder::decode(codec::field(v, "count")?, ContextFloatProvider::decode)?,
+                limit: codec::optional(v, "limit", codec::int)?.unwrap_or(0),
+            },
+            "minecraft:enchant_randomly" => FunctionKind::EnchantRandomly {
+                options: codec::optional(v, "options", |v| {
+                    Ok(ferraloom_protocol::codec::HolderSet::from_json(v)?)
+                })?,
+                only_compatible: codec::optional(v, "only_compatible", codec::boolean)?
+                    .unwrap_or(true),
+                include_additional_cost_component: codec::optional(
+                    v,
+                    "include_additional_cost_component",
+                    codec::boolean,
+                )?
+                .unwrap_or(false),
+            },
+            "minecraft:enchant_with_levels" => FunctionKind::EnchantWithLevels {
+                levels: Holder::decode(codec::field(v, "levels")?, ContextIntProvider::decode)?,
+                options: codec::optional(v, "options", |v| {
+                    Ok(ferraloom_protocol::codec::HolderSet::from_json(v)?)
+                })?,
+                include_additional_cost_component: codec::optional(
+                    v,
+                    "include_additional_cost_component",
+                    codec::boolean,
+                )?
+                .unwrap_or(false),
             },
             "minecraft:explosion_decay" => FunctionKind::ExplosionDecay,
             "minecraft:discard" => FunctionKind::Discard,
@@ -244,6 +300,57 @@ impl LootItemFunction {
                 if let Some(function) = function {
                     stack = function.apply(stack, data, c)?;
                 }
+            }
+            FunctionKind::ApplyBonus {
+                enchantment,
+                formula,
+            } => stack = formula.apply(stack, enchantment, c)?,
+            FunctionKind::EnchantedCountIncrease {
+                enchantment,
+                count,
+                limit,
+            } => {
+                stack = super::bonus::enchanted_count_increase(
+                    stack,
+                    enchantment,
+                    count,
+                    *limit,
+                    data,
+                    c,
+                )?
+            }
+            FunctionKind::EnchantRandomly {
+                options,
+                only_compatible,
+                include_additional_cost_component,
+            } => {
+                stack = c.facts.enchant_item(
+                    &super::EnchantmentOperation::Randomly {
+                        options: options.clone(),
+                        only_compatible: *only_compatible,
+                        include_additional_cost_component: *include_additional_cost_component,
+                    },
+                    stack,
+                    c.params,
+                    c.random,
+                )?;
+            }
+            FunctionKind::EnchantWithLevels {
+                levels,
+                options,
+                include_additional_cost_component,
+            } => {
+                let levels = levels.get(data, c)?;
+                stack = c.facts.enchant_item(
+                    &super::EnchantmentOperation::WithLevels {
+                        levels,
+                        options: options.clone(),
+                        include_additional_cost_component: *include_additional_cost_component,
+                    },
+                    stack,
+                    c.params,
+                    c.random,
+                )?;
             }
             FunctionKind::ExplosionDecay => {
                 if let Some(radius) = c.params.explosion_radius {

@@ -1,11 +1,13 @@
 //! Shared advancement, command and loot predicates.
 mod block;
 mod bounds;
+mod damage;
 mod entity;
 mod item;
 mod location;
 pub use block::*;
 pub use bounds::*;
+pub use damage::*;
 pub use entity::*;
 pub use item::*;
 pub use location::*;
@@ -22,6 +24,10 @@ use ferraloom_util::{BlockPos, Vec3};
 /// Registry identity for predicates whose holders belong to dynamic registries.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PredicateRegistry {
+    JukeboxSong,
+    TrimMaterial,
+    TrimPattern,
+    Attribute,
     Biome,
     Structure,
     Fluid,
@@ -33,6 +39,12 @@ pub enum PredicateRegistry {
 /// World facts remain typed and query canonical state at the evaluation point.
 /// Absence and unsupported facts have distinct meanings.
 pub trait PredicateContext {
+    fn potion_effects(
+        &self,
+        _id: &Identifier,
+    ) -> Result<Vec<ferraloom_protocol::component::MobEffectInstance>> {
+        Err(LootError::Unsupported("potion.effects".into()))
+    }
     fn item_tags(&self) -> Result<&TagSet<Item>> {
         Err(LootError::Unsupported("tags.item".into()))
     }

@@ -203,6 +203,9 @@ impl LootPoolEntryContainer {
                 }
                 success
             }
+            EntryKind::Group(children) if children.len() == 1 => {
+                children[0].expand(data, c, output)?
+            }
             EntryKind::Group(children) => {
                 for child in children {
                     child.expand(data, c, output)?;

@@ -2,21 +2,28 @@
 //!
 //! Callers own the random stream and live facts. Unsupported facts are errors,
 //! never fabricated world state. Named streams are managed by `RandomSequences`.
+mod bonus;
 pub(crate) mod codec;
 mod condition;
 mod context;
+mod enchantment;
 mod entry;
 mod function;
+mod nbt;
 mod number;
 mod registry;
 mod sequence;
 mod table;
 mod validation;
 
+pub use bonus::BonusFormula;
 pub use condition::LootItemCondition;
 pub use context::*;
+pub use enchantment::{EnchantmentOperation, LevelBasedValue};
 pub use entry::{EntryKind, LootPoolEntryContainer};
 pub use function::{FunctionKind, LootItemFunction};
+pub use nbt::{NbtProvider, NbtSource};
+pub use number::ScoreboardNameProvider;
 pub use number::{ContextFloatProvider, ContextIntProvider};
 pub use registry::{Holder, HolderSet, LootData};
 pub use sequence::RandomSequences;

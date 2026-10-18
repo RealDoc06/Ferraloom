@@ -251,6 +251,24 @@ pub enum ScoreHolder<'a> {
 /// Cold gameplay facts used by loot. Implementations read canonical world state.
 /// The default adapter deliberately makes unavailable facts explicit.
 pub trait LootFacts: PredicateContext {
+    fn enchant_item(
+        &self,
+        _operation: &super::EnchantmentOperation,
+        _stack: ItemStack,
+        _params: &LootParams,
+        _random: &mut dyn RandomSource,
+    ) -> Result<ItemStack> {
+        Err(LootError::Unsupported(
+            "enchantment.selection_and_application".into(),
+        ))
+    }
+    fn entity_enchantment_level(
+        &self,
+        _entity: EntityRef,
+        _enchantment: &Identifier,
+    ) -> Result<i32> {
+        Err(LootError::Unsupported("entity.enchantment_level".into()))
+    }
     fn game_time(&self) -> Result<i64> {
         Err(LootError::Unsupported("level.game_time".into()))
     }

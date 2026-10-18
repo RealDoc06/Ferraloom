@@ -43,6 +43,7 @@ pub enum AggregateOp {
 #[derive(Clone, Debug, PartialEq)]
 pub enum NumberProvider<T> {
     Constant(T),
+    EnchantmentLevel(super::LevelBasedValue),
     Unary(UnaryOp, Holder<Self>),
     Binary(BinaryOp, Holder<Self>, Holder<Self>),
     Aggregate(AggregateOp, HolderSet<Self>),
@@ -207,7 +208,10 @@ impl<T: Scalar> NumberProvider<T> {
                     default("fallback")?,
                 )
             }
-            "minecraft:environment_attribute" | "minecraft:enchantment_level" => {
+            "minecraft:enchantment_level" if T::FLOAT => {
+                Self::EnchantmentLevel(super::LevelBasedValue::decode(codec::field(v, "amount")?)?)
+            }
+            "minecraft:environment_attribute" => {
                 return Err(LootError::Unsupported(format!("number_provider.{kind}")));
             }
             _ => return Err(codec::error(format!("unknown number provider {kind}"))),
@@ -229,11 +233,14 @@ where
         let eval = |h: &Holder<Self>, c: &mut EvalContext<'_>| h.eval(data, c);
         match self {
             Self::Constant(v) => Ok(*v),
+            Self::EnchantmentLevel(value) => {
+                T::from_float(value.calculate(c.params.enchantment_level.unwrap_or(0))?)
+            }
             Self::Unary(op, input) => T::unary(*op, eval(input, c)?),
             Self::Binary(BinaryOp::Mod, left, right) if T::FLOAT => {
                 let r = eval(right, c)?;
                 if T::is_zero(r) {
-                    return Err(LootError::Arithmetic);
+                    return T::from_float(f32::NAN);
                 }
                 T::binary(BinaryOp::Mod, eval(left, c)?, r)
             }
@@ -444,7 +451,11 @@ impl Scalar for i32 {
         i32::try_from(v as i64).map_err(|_| LootError::Arithmetic)
     }
     fn from_tag(v: &Tag) -> Option<Self> {
-        v.as_int()
+        match v {
+            Tag::Float(n) => Some(*n as i32),
+            Tag::Double(n) => Some(*n as i32),
+            _ => v.as_int(),
+        }
     }
     fn sanitize(v: Self) -> Self {
         v

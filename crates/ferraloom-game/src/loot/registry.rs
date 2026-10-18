@@ -15,7 +15,10 @@ pub enum Holder<T> {
 impl<T> Holder<T> {
     pub fn decode(v: &Value, decode: impl FnOnce(&Value) -> Result<T>) -> Result<Self> {
         if v.is_string() {
-            Ok(Self::Reference(codec::id(v)?))
+            if let Ok(id) = codec::id(v) {
+                return Ok(Self::Reference(id));
+            }
+            Ok(Self::Inline(Box::new(decode(v)?)))
         } else {
             Ok(Self::Inline(Box::new(decode(v)?)))
         }
