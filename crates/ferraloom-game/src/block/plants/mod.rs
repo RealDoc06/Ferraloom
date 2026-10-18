@@ -8,6 +8,7 @@ mod coral;
 mod crops;
 mod dripleaf;
 mod spread;
+mod spreading;
 pub use bonemeal::{BonemealSource, BonemealType, BonemealableBlock, bonemealable_behavior};
 mod geometry;
 mod ground;
@@ -38,8 +39,19 @@ use ferraloom_data::{Block, BlockClass};
 pub fn ported_behavior(block: Block, method: BlockMethod) -> Option<&'static dyn BlockBehavior> {
     use BlockClass as C;
     use BlockMethod as M;
-    if block == Block::FROSTED_ICE && matches!(method, M::OnPlace | M::CloneItemStack) {
+    if block == Block::FROSTED_ICE
+        && matches!(
+            method,
+            M::OnPlace | M::CloneItemStack | M::Tick | M::NeighborChanged
+        )
+    {
         return Some(&ice::FROSTED_ICE);
+    }
+    if matches!(block, Block::ICE | Block::FROSTED_ICE) && method == M::RandomTick {
+        return Some(&ice::ICE);
+    }
+    if matches!(block, Block::GRASS_BLOCK | Block::MYCELIUM) && method == M::RandomTick {
+        return Some(&spreading::SPREADING_SNOWY);
     }
     if placement::supports(block, method) {
         return Some(&placement::PLANT_PLACEMENT);

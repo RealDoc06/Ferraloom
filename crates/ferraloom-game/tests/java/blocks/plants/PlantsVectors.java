@@ -89,6 +89,14 @@ public final class PlantsVectors {
             level.getChunkAt(pos).setBlockState(pos.above(),above,816);
             System.out.println("nylium-alive\t"+Block.getId(block.defaultBlockState())+"\t"+Block.getId(above)+"\t"+canBeNylium.invoke(null,block.defaultBlockState(),level,pos));
         }
+        var canStayAlive=SpreadingSnowyBlock.class.getDeclaredMethod("canStayAlive",BlockState.class,LevelReader.class,BlockPos.class);
+        var canPropagate=SpreadingSnowyBlock.class.getDeclaredMethod("canPropagate",BlockState.class,LevelReader.class,BlockPos.class);
+        canStayAlive.setAccessible(true);canPropagate.setAccessible(true);
+        for(var block:List.of(Blocks.GRASS_BLOCK,Blocks.MYCELIUM))for(var state:block.getStateDefinition().getPossibleStates())for(var support:supports)for(var above:support.getStateDefinition().getPossibleStates()) {
+            level.chunks.clear();level.getChunkAt(pos).setBlockState(pos,state,816);
+            level.getChunkAt(pos).setBlockState(pos.above(),above,816);
+            System.out.println("grass-support\t"+Block.getId(state)+"\t"+Block.getId(above)+"\t"+canStayAlive.invoke(null,state,level,pos)+"\t"+canPropagate.invoke(null,state,level,pos));
+        }
         var clickedVines=new ArrayList<BlockState>(Blocks.VINE.getStateDefinition().getPossibleStates());clickedVines.add(Blocks.AIR.defaultBlockState());
         for(var clicked:clickedVines)for(var direction:Direction.values())for(int mode=0;mode<4;mode++) {
             level.chunks.clear();level.getChunkAt(pos).setBlockState(pos,clicked,816);

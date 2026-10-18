@@ -55,3 +55,7 @@ with tempfile.TemporaryDirectory(prefix='ferraloom-plants-java-') as directory:
     frost='\n'.join(line for line in lines if line.startswith('frosted-place\t')) + '\n'
     (HERE/'frosted-place.tsv.gz').write_bytes(gzip.compress(frost.encode(),mtime=0))
     print(f'{len(frost.splitlines())} vanilla frosted-ice placement schedules')
+
+    grass='\n'.join(line for line in lines if line.startswith('grass-support\t')) + '\n'
+    (HERE/'grass-support.tsv.gz').write_bytes(gzip.compress(grass.encode(),mtime=0))
+    print(f'{len(grass.splitlines())} vanilla spreading snowy support vectors')
