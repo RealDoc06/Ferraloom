@@ -104,3 +104,22 @@ pub(super) fn install_loot(level: &mut Level) {
     level.set_item_tags(items.clone());
     level.set_entity_type_tags(entities.clone());
 }
+
+/// Read a fresh real-level oracle when the explicit integration gate supplies
+/// one; ordinary unit tests retain their checked-in native captures.
+pub(super) fn native_text(kind: &str, baseline: &[u8]) -> String {
+    use std::io::Read;
+    let bytes = std::env::var_os("FERRALOOM_PLANTS_ORACLE")
+        .map(|path| std::fs::read(path).expect("fresh native plant oracle"));
+    let mut text = String::new();
+    flate2::read::GzDecoder::new(bytes.as_deref().unwrap_or(baseline))
+        .read_to_string(&mut text)
+        .unwrap();
+    let result = text
+        .lines()
+        .filter(|line| line.split('\t').next() == Some(kind))
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(!result.is_empty(), "missing native plant records: {kind}");
+    result
+}
