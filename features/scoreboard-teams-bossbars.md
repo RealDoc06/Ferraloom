@@ -35,7 +35,7 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | scoreboard-teams-bossbars.criterion.air | Scoreboard criterion `air` | `ObjectiveCriteria#registerCustom; ObjectiveCriteria#byName` | | - | todo |
 | scoreboard-teams-bossbars.criterion.armor | Scoreboard criterion `armor` | `ObjectiveCriteria#registerCustom; ObjectiveCriteria#byName` | | - | todo |
 | scoreboard-teams-bossbars.criterion.death-count | Scoreboard criterion `deathCount` | `ObjectiveCriteria#registerCustom; ObjectiveCriteria#byName` | | - | todo |
-| scoreboard-teams-bossbars.criterion.dummy | Scoreboard criterion `dummy` | `ObjectiveCriteria#registerCustom; ObjectiveCriteria#byName` | | - | todo |
+| scoreboard-teams-bossbars.criterion.dummy | Scoreboard criterion `dummy` | `ObjectiveCriteria#registerCustom; ObjectiveCriteria#byName` | `scoreboard::command_tests::vanilla_registered_commands_feedback_and_packet_bytes` | pass | partial |
 | scoreboard-teams-bossbars.criterion.food | Scoreboard criterion `food` | `ObjectiveCriteria#registerCustom; ObjectiveCriteria#byName` | | - | todo |
 | scoreboard-teams-bossbars.criterion.health | Scoreboard criterion `health` | `ObjectiveCriteria#registerCustom; ObjectiveCriteria#byName` | | - | todo |
 | scoreboard-teams-bossbars.criterion.killed-by-team-aqua | Scoreboard criterion `killedByTeam.aqua` | `ObjectiveCriteria#registerCustom; ObjectiveCriteria#byName` | | - | todo |
@@ -75,6 +75,6 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | scoreboard-teams-bossbars.criterion.total-kill-count | Scoreboard criterion `totalKillCount` | `ObjectiveCriteria#registerCustom; ObjectiveCriteria#byName` | | - | todo |
 | scoreboard-teams-bossbars.criterion.trigger | Scoreboard criterion `trigger` | `ObjectiveCriteria#registerCustom; ObjectiveCriteria#byName` | | - | todo |
 | scoreboard-teams-bossbars.criterion.xp | Scoreboard criterion `xp` | `ObjectiveCriteria#registerCustom; ObjectiveCriteria#byName` | | - | todo |
-| scoreboard-teams-bossbars.number-format-type.blank | `minecraft:blank` (number format type) | `net.minecraft.network.chat.numbers.NumberFormatTypes#bootstrap` | | - | todo |
-| scoreboard-teams-bossbars.number-format-type.fixed | `minecraft:fixed` (number format type) | `net.minecraft.network.chat.numbers.NumberFormatTypes#bootstrap` | | - | todo |
-| scoreboard-teams-bossbars.number-format-type.styled | `minecraft:styled` (number format type) | `net.minecraft.network.chat.numbers.NumberFormatTypes#bootstrap` | | - | todo |
+| scoreboard-teams-bossbars.number-format-type.blank | `minecraft:blank` (number format type) | `net.minecraft.network.chat.numbers.NumberFormatTypes#bootstrap` | `scoreboard::command_tests::vanilla_score_contents_formatting_and_absent_scores` | pass | partial |
+| scoreboard-teams-bossbars.number-format-type.fixed | `minecraft:fixed` (number format type) | `net.minecraft.network.chat.numbers.NumberFormatTypes#bootstrap` | `scoreboard::command_tests::vanilla_score_contents_formatting_and_absent_scores` | pass | partial |
+| scoreboard-teams-bossbars.number-format-type.styled | `minecraft:styled` (number format type) | `net.minecraft.network.chat.numbers.NumberFormatTypes#bootstrap` | `scoreboard::command_tests::vanilla_score_contents_formatting_and_absent_scores` | pass | partial |
