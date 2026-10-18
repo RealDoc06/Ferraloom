@@ -4,6 +4,7 @@ use super::{BlockBehavior, BlockMethod};
 use ferraloom_data::{Block, BlockClass};
 
 pub mod comparator;
+pub mod device;
 pub mod diode;
 pub mod dispenser;
 pub mod hopper;
@@ -12,6 +13,7 @@ pub mod moving_piston;
 pub mod note;
 pub mod observer;
 pub mod opening;
+mod ore;
 pub mod piston;
 mod placement;
 pub mod rail;
@@ -62,6 +64,46 @@ pub(crate) fn ported_behavior(
     }
     if method == M::GetStateForPlacement && placement::supports(block) {
         return Some(&placement::PLACEMENT);
+    }
+    if block.class() == BlockClass::DetectorRailBlock {
+        if matches!(
+            method,
+            M::OnPlace | M::Tick | M::EntityInside | M::AnalogOutputSignal
+        ) {
+            return Some(&rail::DETECTOR);
+        }
+        if matches!(
+            method,
+            M::IsSignalSource | M::OwnSignal | M::Signal | M::DirectSignal
+        ) {
+            return Some(&sources::SOURCES);
+        }
+        if matches!(
+            method,
+            M::CanSurvive
+                | M::UpdateShape
+                | M::UpdateFromNeighbourShapes
+                | M::NeighborChanged
+                | M::AffectNeighborsAfterRemoval
+        ) {
+            return Some(&rail::RAIL);
+        }
+    }
+    if device::supports(block, method) {
+        return Some(&device::DEVICES);
+    }
+    if method == M::PlayerWillDestroy {
+        if block.is_instance_of(BlockClass::DoorBlock) {
+            return Some(&opening::OPENING);
+        }
+        if block.class() == BlockClass::PistonHeadBlock {
+            return Some(&piston::PISTON_HEAD);
+        }
+    }
+    if block.class() == BlockClass::RedStoneOreBlock
+        && matches!(method, M::RandomTick | M::StepOn | M::UseItemOn)
+    {
+        return Some(&ore::ORE);
     }
     match block.class() {
         BlockClass::PoweredBlock if matches!(method, M::IsSignalSource | M::OwnSignal) => {
@@ -155,7 +197,9 @@ pub(crate) fn ported_behavior(
         BlockClass::NoteBlock
             if matches!(
                 method,
-                M::UpdateShape
+                M::UseItemOn
+                    | M::UseWithoutItem
+                    | M::UpdateShape
                     | M::UpdateFromNeighbourShapes
                     | M::NeighborChanged
                     | M::TriggerEvent
@@ -314,7 +358,11 @@ pub(crate) fn ported_behavior(
         BlockClass::MovingPistonBlock
             if matches!(
                 method,
-                M::OutlineShape | M::CollisionShape | M::CloneItemStack | M::UseWithoutItem
+                M::GetDrops
+                    | M::OutlineShape
+                    | M::CollisionShape
+                    | M::CloneItemStack
+                    | M::UseWithoutItem
             ) =>
         {
             Some(&moving_piston::MOVING_PISTON)
@@ -367,3 +415,6 @@ mod tests;
 
 #[cfg(test)]
 mod identity_tests;
+
+#[cfg(test)]
+mod device_tests;
