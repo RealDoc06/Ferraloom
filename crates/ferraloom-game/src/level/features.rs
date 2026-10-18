@@ -230,6 +230,10 @@ impl LiveWorldGenLevel for Level {
             .map(|shape| shape.is_empty())
     }
     fn brightness(&self, layer: LightLayer, p: [i32; 3]) -> Result<u8, Error> {
+        let layer = match layer {
+            LightLayer::Sky => ferraloom_light::LightLayer::Sky,
+            LightLayer::Block => ferraloom_light::LightLayer::Block,
+        };
         required(Level::brightness(self, layer, pos(p)))
     }
     fn vine_acceptable_neighbor(&self, p: [i32; 3], direction: Direction) -> Result<bool, Error> {
