@@ -15,6 +15,7 @@ ferraloom-chunk.workspace = true
 ferraloom-worldgen.workspace = true
 ferraloom-storage.workspace = true
 ferraloom-brigadier.workspace = true
+ferraloom-protocol.workspace = true
 
 [lints]
 workspace = true

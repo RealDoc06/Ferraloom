@@ -24,6 +24,7 @@ pub mod nether;
 pub mod ore;
 pub mod state_provider;
 pub mod surface;
+pub mod tree;
 pub mod vegetation;
 
 pub trait Feature: Debug + Send + Sync {
@@ -102,6 +103,7 @@ impl<'a> FeatureLoader<'a> {
             next_inline: 0,
         };
         loader.register("no_op".parse()?, |_, _| Ok(Arc::new(NoOpFeature)))?;
+        tree::register(&mut loader)?;
         ore::register(&mut loader)?;
         cave::register(&mut loader)?;
         vegetation::register(&mut loader)?;

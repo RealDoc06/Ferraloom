@@ -138,7 +138,7 @@ struct SpawnChunks {
     flat_decoration: Option<Arc<FlatDecoration>>,
     seed: i64,
     io: IoWorker,
-    chunks: BTreeMap<ChunkPos, Terrain>,
+    chunks: BTreeMap<i64, Terrain>,
 }
 impl SpawnChunks {
     fn state(&mut self, p: [i32; 3]) -> std::result::Result<BlockState, ferraloom_worldgen::Error> {
@@ -146,7 +146,7 @@ impl SpawnChunks {
             return Ok(Block::VOID_AIR.default_state());
         }
         self.ensure_chunk([p[0] >> 4, p[2] >> 4])?;
-        let terrain = &self.chunks[&ChunkPos::new(p[0] >> 4, p[2] >> 4)];
+        let terrain = &self.chunks[&ChunkPos::new(p[0] >> 4, p[2] >> 4).to_long()];
         Ok(
             terrain.sections[((p[1] - self.dimension.min_y) >> 4) as usize].get_block_state(
                 (p[0] & 15) as u8,
@@ -165,7 +165,8 @@ impl SpawnWorld for SpawnChunks {
         position: [i32; 2],
     ) -> std::result::Result<(), ferraloom_worldgen::Error> {
         let pos = ChunkPos::new(position[0], position[1]);
-        if !self.chunks.contains_key(&pos) {
+        if let std::collections::btree_map::Entry::Vacant(entry) = self.chunks.entry(pos.to_long())
+        {
             let terrain = (|| -> Result<Terrain> {
                 if let Some(tag) = self.io.load(pos).wait()? {
                     load_terrain(tag, &self.registry, pos)
@@ -180,7 +181,7 @@ impl SpawnWorld for SpawnChunks {
                 }
             })()
             .map_err(|error| ferraloom_worldgen::Error(error.to_string()))?;
-            self.chunks.insert(pos, terrain);
+            entry.insert(terrain);
         }
         Ok(())
     }
@@ -335,7 +336,7 @@ pub struct World {
     generator: Arc<ChunkGenerator>,
     dimension: DimensionType,
     flat_decoration: Option<Arc<FlatDecoration>>,
-    initial_chunks: BTreeMap<ChunkPos, Terrain>,
+    initial_chunks: BTreeMap<i64, Terrain>,
     generation: Arc<JobPool>,
     saving: JobPool,
     pub pending: BTreeMap<u64, oneshot::Receiver<Result<Terrain>>>,
@@ -566,7 +567,7 @@ impl World {
         })
     }
     pub fn request(&mut self, request: u64, pos: ChunkPos) {
-        if let Some(terrain) = self.initial_chunks.remove(&pos) {
+        if let Some(terrain) = self.initial_chunks.remove(&pos.to_long()) {
             let (reply, answer) = oneshot::channel();
             let _ = reply.send(Ok(terrain));
             self.pending.insert(request, answer);

@@ -828,7 +828,9 @@ impl MinecraftServer {
         self.broadcast(cb::Packet::SystemChat(Box::new(cb::SystemChat {
             content: Component::translatable(
                 "multiplayer.player.joined",
-                vec![protocol::chat::Argument::String(c.profile.name.clone())],
+                vec![protocol::chat::Argument::Component(Box::new(
+                    player.display_name(),
+                ))],
             ),
             overlay: false,
         })));
@@ -1534,6 +1536,18 @@ impl MinecraftServer {
             .find(|c| c.profile.id == message.sender)
             .map(|c| c.profile.name.clone())
             .unwrap_or_default();
+        let display_name = self
+            .connections
+            .values()
+            .find(|c| c.profile.id == message.sender)
+            .and_then(|c| {
+                if let Phase::Play(entity) = c.phase {
+                    self.player(entity).ok()
+                } else {
+                    None
+                }
+            })
+            .map_or_else(|| Component::literal(&name), ServerPlayer::display_name);
         println!("<{name}> {}", message.content);
         for c in self.connections.values_mut() {
             if !matches!(c.phase, Phase::Play(_))
@@ -1561,7 +1575,7 @@ impl MinecraftServer {
                 filter_mask: FilterMask::PassThrough,
                 chat_type: ChatTypeBound {
                     chat_type: ChatTypeHolder(Holder::Reference(chat_type.clone())),
-                    name: Component::literal(name.clone()),
+                    name: display_name.clone(),
                     target_name: None,
                 },
             })));
@@ -1643,7 +1657,7 @@ impl MinecraftServer {
             let player = self.player(entity)?;
             let tag = player.save();
             let uuid = player.uuid.to_string();
-            let name = player.name.clone();
+            let name = player.display_name();
             let access = self.world.access.clone();
             tokio::task::spawn_blocking(move || access.player_data().save(&uuid, &tag)).await??;
             self.level.level.remove_entity(entity).map_err(game_error)?;
@@ -1654,7 +1668,7 @@ impl MinecraftServer {
             self.broadcast(cb::Packet::SystemChat(Box::new(cb::SystemChat {
                 content: Component::translatable(
                     "multiplayer.player.left",
-                    vec![protocol::chat::Argument::String(name)],
+                    vec![protocol::chat::Argument::Component(Box::new(name))],
                 ),
                 overlay: false,
             })));

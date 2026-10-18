@@ -178,9 +178,7 @@ fn pending(case: &Value) -> Option<&'static str> {
                 }
                 ("moss_patch", _, _)
                 | ("moss_patch_bonemeal", _, -1)
-                | ("pale_moss_patch_bonemeal", _, 8675309) => {
-                    Some("TallGrassBlock#canSurvive")
-                }
+                | ("pale_moss_patch_bonemeal", _, 8675309) => Some("TallGrassBlock#canSurvive"),
                 ("moss_patch_bonemeal", _, 0) => Some("AzaleaBlock#canSurvive"),
                 ("moss_patch_bonemeal", _, 8675309) => Some("CarpetBlock#canSurvive"),
                 ("pale_moss_patch" | "pale_moss_patch_bonemeal", _, _) => {

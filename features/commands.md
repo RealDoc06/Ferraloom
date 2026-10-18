@@ -1494,7 +1494,7 @@ Every literal and argument node from `reports/commands.json` has a row, includin
 | commands.path.function.arg-name.with.storage.arg-source | `/function <name> with storage <source>`; executable; parser `minecraft:resource_location` | `net.minecraft.server.commands.DebugCommand#register` | | - | todo |
 | commands.path.function.arg-name.with.storage.arg-source.arg-path | `/function <name> with storage <source> <path>`; executable; parser `minecraft:nbt_path` | `net.minecraft.server.commands.DebugCommand#register` | | - | todo |
 | commands.path.gamemode | `/gamemode` | `net.minecraft.server.commands.GameModeCommand#register` | | - | todo |
-| commands.path.gamemode.arg-gamemode | `/gamemode <gamemode>`; executable; parser `minecraft:gamemode` | `net.minecraft.server.commands.GameModeCommand#register` | | - | todo |
+| commands.path.gamemode.arg-gamemode | `/gamemode <gamemode>`; executable; parser `minecraft:gamemode` | `net.minecraft.server.commands.GameModeCommand#register` | `ferraloom-parity::starter::parity_commands` | pass | partial |
 | commands.path.gamemode.arg-gamemode.arg-target | `/gamemode <gamemode> <target>`; executable; parser `minecraft:entity` {"amount":"multiple","type":"players"} | `net.minecraft.server.commands.GameModeCommand#register` | | - | todo |
 | commands.path.gamerule | `/gamerule` | `net.minecraft.server.commands.GameRuleCommand#register` | | - | todo |
 | commands.path.gamerule.advance-time | `/gamerule advance_time`; executable | `net.minecraft.server.commands.GameRuleCommand#register` | | - | todo |
@@ -2154,7 +2154,7 @@ Every literal and argument node from `reports/commands.json` has a row, includin
 | commands.path.save-off | `/save-off`; executable | `net.minecraft.server.commands.SaveOffCommand#register` | | - | todo |
 | commands.path.save-on | `/save-on`; executable | `net.minecraft.server.commands.SaveOnCommand#register` | | - | todo |
 | commands.path.say | `/say` | `net.minecraft.server.commands.SayCommand#register` | | - | todo |
-| commands.path.say.arg-message | `/say <message>`; executable; parser `minecraft:message` | `net.minecraft.server.commands.SayCommand#register` | | - | todo |
+| commands.path.say.arg-message | `/say <message>`; executable; parser `minecraft:message` | `net.minecraft.server.commands.SayCommand#register` | `ferraloom-parity::starter::parity_commands` | pass | partial |
 | commands.path.schedule | `/schedule` | `net.minecraft.server.commands.ScheduleCommand#register` | | - | todo |
 | commands.path.schedule.clear | `/schedule clear` | `net.minecraft.server.commands.ScheduleCommand#register` | | - | todo |
 | commands.path.schedule.clear.arg-function | `/schedule clear <function>`; executable; parser `minecraft:resource_location` | `net.minecraft.server.commands.ScheduleCommand#register` | | - | todo |
@@ -2368,7 +2368,7 @@ Every literal and argument node from `reports/commands.json` has a row, includin
 | commands.path.teammsg.arg-message | `/teammsg <message>`; executable; parser `minecraft:message` | `net.minecraft.server.commands.TeamMsgCommand#register` | | - | todo |
 | commands.path.teleport | `/teleport` | `net.minecraft.server.commands.TeleportCommand#register` | | - | todo |
 | commands.path.teleport.arg-destination | `/teleport <destination>`; executable; parser `minecraft:entity` {"amount":"single","type":"entities"} | `net.minecraft.server.commands.TeleportCommand#register` | | - | todo |
-| commands.path.teleport.arg-location | `/teleport <location>`; executable; parser `minecraft:vec3` | `net.minecraft.server.commands.TeleportCommand#register` | | - | todo |
+| commands.path.teleport.arg-location | `/teleport <location>`; executable; parser `minecraft:vec3` | `net.minecraft.server.commands.TeleportCommand#register` | `ferraloom-parity::starter::parity_commands` | pass | partial |
 | commands.path.teleport.arg-targets | `/teleport <targets>`; parser `minecraft:entity` {"amount":"multiple","type":"entities"} | `net.minecraft.server.commands.TeleportCommand#register` | | - | todo |
 | commands.path.teleport.arg-targets.arg-destination | `/teleport <targets> <destination>`; executable; parser `minecraft:entity` {"amount":"single","type":"entities"} | `net.minecraft.server.commands.TeleportCommand#register` | | - | todo |
 | commands.path.teleport.arg-targets.arg-location | `/teleport <targets> <location>`; executable; parser `minecraft:vec3` | `net.minecraft.server.commands.TeleportCommand#register` | | - | todo |
@@ -2551,3 +2551,7 @@ Every literal and argument node from `reports/commands.json` has a row, includin
 | commands.path.worldborder.warning.time | `/worldborder warning time` | `net.minecraft.commands.Commands` | | - | todo |
 | commands.path.worldborder.warning.time.arg-time | `/worldborder warning time <time>`; executable; parser `minecraft:time` {"min":0} | `net.minecraft.commands.Commands` | | - | todo |
 | commands.path.xp | `/xp`; redirects to `/experience` | `net.minecraft.server.commands.ExperienceCommand#register` | | - | todo |
+
+| commands.source.player-display-name | Decorate player display names with tell suggestions, entity hover data and insertion; use in chat, say, join and leave | `Player#getDisplayName; Player#decorateDisplayNameComponent` | `entity::player::tests::display_name_matches_java_player_component` | pass | todo |
+| commands.say.unsigned-packet | Unsigned ChatCommand /say has no signing context and broadcasts DisguisedChat; known Ferraloom mismatch until `e52040c` + `b120a6f` | `MessageArgument#resolveChatMessage; SayCommand` | `ferraloom-parity::starter::parity_commands` | pass | fail |
+| commands.say.signable-packet | ChatCommandSigned with unsigned offline arguments broadcasts PlayerChat | `ServerGamePacketListenerImpl#collectUnsignedArguments; MessageArgument#resolveChatMessage` | `ferraloom-parity::starter::parity_commands` | pass | partial |
