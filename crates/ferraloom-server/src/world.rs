@@ -696,6 +696,7 @@ impl World {
         })
     }
     pub fn configure_live_rules(&self, level: &mut Level) {
+        level.set_has_skylight(self.dimension.has_skylight);
         let data = self.generator.data();
         level.set_weather_environment(ferraloom_game::level::weather::WeatherEnvironment {
             temperatures: data.temperatures.clone(),
