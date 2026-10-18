@@ -190,29 +190,21 @@ impl MinecraftServer {
 }
 
 impl MinecraftServer {
-    /// Shared completion points for polling and synchronous command chunk requests.
-    pub(super) fn integrate_command_terrain(
-        &mut self,
-        request: u64,
-        terrain: crate::world::Terrain,
-    ) -> Result<()> {
-        self.integrate_generation_terrain(request, terrain)
-    }
-    pub(super) fn integrate_command_light(&mut self, light: crate::world::LitChunk) -> Result<()> {
-        self.integrate_generation_light(light)
-    }
     async fn command_get_chunk(&mut self, position: ChunkPos) -> Result<()> {
         self.await_generation_chunk(position).await
     }
     pub(super) async fn prepare_command_tickets(&mut self) -> Result<()> {
-        self.level.tickets.activate_all_deactivated_tickets();
-        let positions = self
-            .level
-            .get_force_loaded_chunks()
-            .iter()
-            .copied()
-            .map(ChunkPos::unpack)
-            .collect::<Vec<_>>();
+        self.level
+            .generation()
+            .with_tickets_mut(|tickets| tickets.activate_all_deactivated_tickets());
+        let positions = self.level.generation().with_tickets(|tickets| {
+            tickets
+                .get_force_loaded_chunks()
+                .iter()
+                .copied()
+                .map(ChunkPos::unpack)
+                .collect::<Vec<_>>()
+        });
         for position in positions {
             self.command_get_chunk(position).await?;
         }
@@ -223,9 +215,13 @@ impl MinecraftServer {
     pub(super) fn save_command_tickets(
         &self,
     ) -> impl std::future::Future<Output = Result<()>> + Send + 'static {
-        let storage =
-            ferraloom_storage::SavedDataStorage::new(self.world.access.path().join("data"));
-        let mut data = ferraloom_storage::SavedData::new(self.level.tickets.clone());
+        let storage = ferraloom_storage::SavedDataStorage::new(
+            self.level
+                .generation()
+                .with_world(|world| world.access.path().join("data")),
+        );
+        let mut data =
+            ferraloom_storage::SavedData::new(self.level.generation().with_tickets(Clone::clone));
         async move {
             tokio::task::spawn_blocking(move || {
                 storage.save(
@@ -254,16 +250,21 @@ struct ForcedChunks<'a>(&'a mut MinecraftServer);
 impl ferraloom_game::commands::forceload::ForceLoadAccess for ForcedChunks<'_> {
     type Error = anyhow::Error;
     fn forced_chunks(&self) -> Vec<ChunkPos> {
-        self.0
-            .level
-            .get_force_loaded_chunks()
-            .iter()
-            .copied()
-            .map(ChunkPos::unpack)
-            .collect()
+        self.0.level.generation().with_tickets(|tickets| {
+            tickets
+                .get_force_loaded_chunks()
+                .iter()
+                .copied()
+                .map(ChunkPos::unpack)
+                .collect()
+        })
     }
     async fn set_chunk_forced(&mut self, position: ChunkPos, forced: bool) -> Result<bool> {
-        let changed = self.0.level.set_chunk_forced(position, forced);
+        let changed = self
+            .0
+            .level
+            .generation()
+            .with_tickets_mut(|tickets| tickets.set_chunk_forced(position, forced));
         if forced && changed {
             self.0.command_get_chunk(position).await?;
         }

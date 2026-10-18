@@ -1,6 +1,9 @@
 //! Reentrant owner of the live chunk pipeline. Backend guards cover pure plans
 //! only; owned actions execute after those guards end.
+mod live_level;
+mod promotion;
 mod tasks;
+pub(crate) use live_level::LiveLevel;
 
 use crate::{
     properties::ServerProperties,
@@ -11,7 +14,10 @@ use ferraloom_game::{
     entity::EntityRef,
     level::{
         Level, LevelError,
-        acquisition::{AcquireFailure, AcquireHandle, AcquireResult, ChunkReference},
+        acquisition::{
+            AcquireDriver, AcquireFailure, AcquireHandle, AcquireProgress, AcquireResult,
+            ChunkReference,
+        },
         chunk_map::ChunkMap,
         distance_manager::{DistanceManager, FullChunkStatus},
         generation::{
@@ -46,6 +52,26 @@ struct StatusPublication {
     epoch: u64,
     confirmed: Option<FullChunkStatus>,
 }
+struct OwnerAcquisition {
+    pos: ChunkPos,
+    status: ChunkStatus,
+    load: bool,
+    answer: mpsc::Sender<Result<Option<ChunkReference>, LevelError>>,
+}
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum PhaseOwner {
+    Task(tokio::task::Id),
+    Thread(ThreadId),
+}
+impl PhaseOwner {
+    fn current() -> Self {
+        tokio::task::try_id().map_or_else(|| Self::Thread(thread::current().id()), Self::Task)
+    }
+    fn is_current(self) -> bool {
+        self == Self::current()
+    }
+}
 
 /// Level solely owns this concrete driver. There is no detached backend during
 /// callbacks, no second simulation graph, and no guard crosses a publication.
@@ -58,8 +84,12 @@ pub(crate) struct GenerationRuntime {
     status_publications: RefCell<VecDeque<StatusPublication>>,
     player_loading_futures: RefCell<VecDeque<AcquireHandle>>,
     properties: Arc<ServerProperties>,
-    owner_thread: Cell<ThreadId>,
+    progress_failures: RefCell<Vec<anyhow::Error>>,
+    phase_owner: Cell<PhaseOwner>,
     progress: mpsc::Receiver<()>,
+    notify_progress: mpsc::Sender<()>,
+    owner_requests: mpsc::Receiver<OwnerAcquisition>,
+    send_owner_request: mpsc::Sender<OwnerAcquisition>,
 }
 
 impl GenerationRuntime {
@@ -71,7 +101,8 @@ impl GenerationRuntime {
         properties: Arc<ServerProperties>,
     ) -> Self {
         let (notify, progress) = mpsc::channel();
-        world.set_progress_waker(Waker::from(Arc::new(ProgressWake(notify))));
+        let (send_owner_request, owner_requests) = mpsc::channel();
+        world.set_progress_waker(Waker::from(Arc::new(ProgressWake(notify.clone()))));
         Self {
             world: RefCell::new(world),
             chunks: RefCell::new(chunks),
@@ -81,15 +112,27 @@ impl GenerationRuntime {
             status_publications: RefCell::new(VecDeque::new()),
             player_loading_futures: RefCell::new(VecDeque::new()),
             properties,
-            owner_thread: Cell::new(thread::current().id()),
+            progress_failures: RefCell::new(Vec::new()),
+            phase_owner: Cell::new(PhaseOwner::current()),
             progress,
+            notify_progress: notify,
+            owner_requests,
+            send_owner_request,
         }
     }
 
     /// Tokio may move the exclusive server continuation after an await. Bind
     /// ownership before entering a phase, never during a parked shared read.
     pub(crate) fn enter_owner_thread(&self) {
-        self.owner_thread.set(thread::current().id());
+        self.phase_owner.set(PhaseOwner::current());
+    }
+    pub(crate) fn from_level(level: &Level) -> &Self {
+        level
+            .acquire_driver()
+            .expect("live level has its generation driver")
+            .as_any()
+            .downcast_ref()
+            .expect("live level uses GenerationRuntime")
     }
 
     /// Cold metadata/IO plans return owned values. The closure must not enter
@@ -341,6 +384,121 @@ impl GenerationRuntime {
         }
     }
 
+    /// One owned completion starts at a time. Later completions stay on World
+    /// while this one enters callbacks, so reentrant acquisition can reach them.
+    fn poll_owned_step(&self, level: &Level) -> Result<bool> {
+        let mut progressed = {
+            let mut world = self.world.borrow_mut();
+            world.refresh_generation_snapshots(level);
+            world.poll_generation_progress()?
+        };
+        self.release_finished_jobs();
+        let completion = self.world.borrow_mut().take_generation_completion();
+        match completion {
+            Ok(Some((task, terrain))) => {
+                progressed = true;
+                self.publish_generation_statuses();
+                self.publish_generation_skips(level)?;
+                self.publish_structure_updates(level)?;
+                let current = self.jobs.borrow().is_current(&self.chunks.borrow(), task);
+                if current {
+                    let target = self.jobs.borrow().get(task).unwrap().token.target;
+                    if target == ChunkStatus::Full {
+                        self.begin_full_promotion(task, terrain)?;
+                    } else {
+                        self.world.borrow_mut().store_generation_chunk(
+                            terrain.pos,
+                            terrain.revision,
+                            terrain.disk,
+                        )?;
+                        self.jobs.borrow_mut().complete_integration(task);
+                    }
+                }
+            }
+            Ok(None) => {}
+            Err(error) => {
+                let failed = std::mem::take(&mut self.world.borrow_mut().failed_generation);
+                for (pos, task) in failed {
+                    if self.jobs.borrow().is_current(&self.chunks.borrow(), task) {
+                        self.chunks
+                            .borrow_mut()
+                            .holders
+                            .get_mut(&pos.pack())
+                            .unwrap()
+                            .generation
+                            .fail_pending(AcquireFailure::Generation);
+                        self.jobs.borrow_mut().complete_integration(task);
+                    }
+                }
+                self.release_finished_jobs();
+                return Err(error);
+            }
+        }
+        // Draining every light result into a local Vec would strand imports
+        // across a callback. Poll and publish just this owned actor completion.
+        let light = self.take_light_completion()?;
+        if let Some(light) = light {
+            self.import_light(level, light)?;
+            progressed = true;
+        }
+        if let Some(task) = self.next_full_promotion() {
+            self.resume_full_promotion(level, task)?;
+            progressed = true;
+        }
+        progressed |= self.poll_entity_progress(level)?;
+        self.confirm_ready_ranges(level)
+            .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        self.settle_player_loading_futures();
+        self.queue_exclusive_promotions();
+        self.release_finished_jobs();
+        Ok(progressed)
+    }
+
+    fn publish_generation_skips(&self, level: &Level) -> Result<()> {
+        let skips = std::mem::take(&mut self.world.borrow_mut().generation_skips)
+            .into_iter()
+            .map(ferraloom_game::block::WorldgenSkip::from)
+            .collect();
+        level
+            .record_worldgen_skips(skips)
+            .map_err(|error| anyhow::anyhow!("{error:?}"))
+    }
+
+    fn queue_exclusive_promotions(&self) {
+        for pos in self.holder_positions() {
+            let identity = {
+                let chunks = self.chunks.borrow();
+                let holder = &chunks.holders[&pos.pack()];
+                if holder.requested_full_status() < FullChunkStatus::BlockTicking
+                    || holder
+                        .generation
+                        .chunk_if_present_unchecked(ChunkStatus::Full)
+                        .is_none()
+                {
+                    continue;
+                }
+                super::GenerationIdentity::of(holder)
+            };
+            if self.range_ready(pos, FullChunkStatus::BlockTicking) {
+                let mut world = self.world.borrow_mut();
+                if !world.ready.contains(&pos) && !world.exclusive_ready_tasks.contains(&identity) {
+                    world.exclusive_ready_tasks.push_back(identity);
+                }
+            }
+        }
+    }
+
+    /// Exact error is retained for diagnostics; status futures carry the typed
+    /// failure category rather than losing ownership of a failed continuation.
+    fn retain_progress_failure(&self, error: anyhow::Error) -> LevelError {
+        self.progress_failures.borrow_mut().push(error);
+        LevelError::ChunkAcquisition(
+            ChunkPos::ZERO,
+            ChunkStatus::Full,
+            AcquireFailure::Generation,
+        )
+    }
+
     fn apply_task_change(&self, pos: ChunkPos, change: GenerationTaskChange) {
         if let Some(cancel) = change.cancel {
             self.jobs.borrow_mut().cancel(cancel.id);
@@ -540,9 +698,169 @@ impl GenerationRuntime {
     pub(crate) fn holder_positions(&self) -> Vec<ChunkPos> {
         self.chunks.borrow().holder_positions().collect()
     }
+    pub(crate) fn progress_jobs(&self, level: &Level) -> Result<()> {
+        while self
+            .poll_acquisition_step(level)
+            .map_err(|error| anyhow::anyhow!("{error:?}"))?
+            != AcquireProgress::Idle
+        {}
+        Ok(())
+    }
+
+    pub(crate) fn request_full(&self, level: &Level, pos: ChunkPos) -> Result<(), LevelError> {
+        self.run_distance_pass(level)?;
+        if self
+            .visible_ticket_level(pos)
+            .is_some_and(|level| level <= 33)
+        {
+            self.request_status(level, pos, ChunkStatus::Full)?;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn natural_spawn_chunks(&self) -> Vec<ChunkPos> {
+        self.distance_manager
+            .borrow()
+            .natural_spawn
+            .chunks()
+            .collect()
+    }
+
+    pub(crate) fn purge_stale_tickets(&self, tick: u64) {
+        let chunks = self.chunks.borrow();
+        let world = self.world.borrow();
+        self.tickets
+            .borrow_mut()
+            .purge_stale_with_readiness(tick, |pos| {
+                chunks
+                    .holders
+                    .get(&pos.pack())
+                    .is_none_or(|holder| world.chunk_ready_for_saving(holder))
+            });
+    }
 
     fn wait_for_worker(&self) -> Result<()> {
         self.progress.recv()?;
         Ok(())
     }
 }
+
+impl AcquireDriver for GenerationRuntime {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+    fn is_owner_thread(&self) -> bool {
+        // The sole server Tokio task may migrate between executor threads after
+        // an await. Its identity remains the owner; arbitrary tasks do not.
+        self.phase_owner.get().is_current()
+    }
+    fn visible_ticket_level(&self, pos: ChunkPos) -> Option<i32> {
+        self.chunks
+            .borrow()
+            .holders
+            .get(&pos.pack())
+            .map(|holder| holder.ticket_level)
+    }
+    fn add_unknown_ticket(&self, pos: ChunkPos, status: ChunkStatus) -> Result<(), LevelError> {
+        self.tickets.borrow_mut().add_unknown(pos, status);
+        Ok(())
+    }
+    fn run_distance_manager_updates(&self, level: &Level) -> Result<bool, LevelError> {
+        self.run_distance_pass(level)
+    }
+    fn request_status(
+        &self,
+        _level: &Level,
+        pos: ChunkPos,
+        status: ChunkStatus,
+    ) -> Result<AcquireHandle, LevelError> {
+        self.reject_reentrant_full(pos, status)?;
+        self.schedule_status(pos, status)
+    }
+    fn acquisition_result(&self, handle: AcquireHandle) -> Result<AcquireResult, LevelError> {
+        self.reject_reentrant_full(handle.pos, handle.status)?;
+        self.status_result(handle)
+    }
+    fn poll_acquisition_step(&self, level: &Level) -> Result<AcquireProgress, LevelError> {
+        if self.run_distance_pass(level)? {
+            return Ok(AcquireProgress::DistanceUpdates);
+        }
+        if let Ok(request) = self.owner_requests.try_recv() {
+            let result = level.get_chunk(request.pos, request.status, request.load);
+            let _ = request.answer.send(result);
+            return Ok(AcquireProgress::Task);
+        }
+        self.poll_owned_step(level)
+            .map(|progressed| {
+                if progressed {
+                    AcquireProgress::Task
+                } else {
+                    AcquireProgress::Idle
+                }
+            })
+            .map_err(|error| self.retain_progress_failure(error))
+    }
+    fn wait_for_progress(&self) -> Result<(), LevelError> {
+        self.wait_for_worker()
+            .map_err(|error| self.retain_progress_failure(error))
+    }
+    fn chunk_if_present(&self, pos: ChunkPos, status: ChunkStatus) -> Option<ChunkReference> {
+        self.chunks
+            .borrow()
+            .holders
+            .get(&pos.pack())?
+            .generation
+            .chunk_if_present(status)
+    }
+    fn chunk_if_present_unchecked(
+        &self,
+        pos: ChunkPos,
+        status: ChunkStatus,
+    ) -> Option<ChunkReference> {
+        self.chunks
+            .borrow()
+            .holders
+            .get(&pos.pack())?
+            .generation
+            .chunk_if_present_unchecked(status)
+    }
+    fn acquire_on_owner(
+        &self,
+        pos: ChunkPos,
+        status: ChunkStatus,
+        load: bool,
+    ) -> Result<Option<ChunkReference>, LevelError> {
+        let (answer, result) = mpsc::channel();
+        self.send_owner_request
+            .send(OwnerAcquisition {
+                pos,
+                status,
+                load,
+                answer,
+            })
+            .map_err(|_| LevelError::ChunkAcquisition(pos, status, AcquireFailure::Cancelled))?;
+        let _ = self.notify_progress.send(());
+        result
+            .recv()
+            .map_err(|_| LevelError::ChunkAcquisition(pos, status, AcquireFailure::Cancelled))?
+    }
+    fn proto_noise_biome(
+        &self,
+        chunk: ChunkReference,
+        quart: [i32; 3],
+    ) -> Result<ferraloom_chunk::BiomeId, LevelError> {
+        self.proto_biome(chunk, quart)
+    }
+    fn uncached_noise_biome(
+        &self,
+        quart: [i32; 3],
+    ) -> Result<ferraloom_chunk::BiomeId, LevelError> {
+        self.sample_uncached_biome(quart)
+    }
+}
+
+#[cfg(test)]
+mod tests;

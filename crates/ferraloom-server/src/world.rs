@@ -666,6 +666,11 @@ struct GenerationActivity {
     cancelled: Arc<AtomicBool>,
     radius: i32,
 }
+pub(crate) struct BlockLightChanges(LightJob);
+pub(crate) struct ChunkStorageDrain {
+    pub proto: Vec<storage::IoTask<()>>,
+    pub chunks: Vec<oneshot::Receiver<Result<()>>>,
+}
 /// The entity region worker is distinct from block-chunk storage. Completion
 /// polling returns owned responses; the game integrates its request ordinals.
 struct EntityIo {
@@ -1143,6 +1148,9 @@ impl World {
         }
         Ok(())
     }
+    pub(crate) fn begin_close_entity_storage(&mut self) -> Option<storage::IoTask<()>> {
+        self.entity_io.as_mut().map(|io| io.worker.shutdown())
+    }
     pub fn update_generation_priority(&mut self, pos: ChunkPos, level: i32) {
         self.generation_dispatcher
             .on_level_change(pos, level.clamp(0, 45));
@@ -1407,6 +1415,17 @@ impl World {
             return Ok(());
         }
         let snapshot = self.capture_chunk_for_save(level, pos, game_time)?;
+        self.schedule_unload_snapshot(pos, request_id, snapshot)
+    }
+    pub(crate) fn unload_pending(&self, pos: ChunkPos) -> bool {
+        self.unloading.iter().any(|job| job.pos == pos)
+    }
+    pub(crate) fn schedule_unload_snapshot(
+        &mut self,
+        pos: ChunkPos,
+        holder_epoch: u64,
+        snapshot: ChunkSaveSnapshot,
+    ) -> Result<()> {
         let registry = self.registry.clone();
         let io = self.io.clone();
         let saving = self.saving.submit(move || -> Result<()> {
@@ -1415,7 +1434,7 @@ impl World {
         });
         self.unloading.push_back(ChunkUnload {
             pos,
-            request_id,
+            request_id: holder_epoch,
             saving,
         });
         Ok(())
@@ -1476,8 +1495,26 @@ impl World {
     }
     pub async fn close_chunk_storage(&mut self) -> Result<()> {
         self.finish_generation().await?;
+        let drain = self.prepare_close_chunk_storage()?;
+        for save in drain.proto {
+            save.await?;
+        }
+        for save in drain.chunks {
+            save.await??;
+        }
+        self.begin_close_chunk_storage()?.await?;
+        Ok(())
+    }
+    pub(crate) fn prepare_close_chunk_storage(&mut self) -> Result<ChunkStorageDrain> {
+        ensure!(
+            !self.generation_running(),
+            "chunk storage closed with owned generation in flight"
+        );
         for continuation in std::mem::take(&mut self.full_promotions).into_values() {
-            if let Some(input) = continuation.input {
+            if let Some(mut input) = continuation.input {
+                if let Some(failure) = continuation.publication_failure {
+                    input.disk.entities = Some(failure.prepared.worldgen_entities);
+                }
                 self.store_generation_chunk(input.pos, input.revision, input.disk)?;
             }
         }
@@ -1492,17 +1529,15 @@ impl World {
             }
         }
         self.persist_cancelled_outputs()?;
-        while let Some(save) = self.proto_saves.pop_front() {
-            save.await?;
-        }
-        while let Some(job) = self.unloading.pop_front() {
-            job.saving.await??;
-        }
-        Arc::get_mut(&mut self.io)
+        Ok(ChunkStorageDrain {
+            proto: self.proto_saves.drain(..).collect(),
+            chunks: self.unloading.drain(..).map(|job| job.saving).collect(),
+        })
+    }
+    pub(crate) fn begin_close_chunk_storage(&mut self) -> Result<storage::IoTask<()>> {
+        Ok(Arc::get_mut(&mut self.io)
             .context("chunk IO still owned by generation")?
-            .shutdown()
-            .await?;
-        Ok(())
+            .shutdown())
     }
     pub fn refresh_generation_snapshots(&mut self, level: &Level) {
         if !self.pending.is_empty()
@@ -1514,20 +1549,9 @@ impl World {
     /// Receive owned results in request order without taking main-thread tasks
     /// off the canonical queue. No Level borrow or promotion callback runs here.
     pub fn poll_generation_progress(&mut self) -> Result<bool> {
-        let mut progressed = false;
+        let mut progressed = self.poll_running_generation()?;
         let waker = self.progress_waker.clone();
         let mut context = TaskContext::from_waker(&waker);
-        if let Some(work) = &mut self.generation_work {
-            match Pin::new(work).poll(&mut context) {
-                Poll::Ready(Ok(output)) => {
-                    self.generation_work = None;
-                    self.complete_generation(output)?;
-                    progressed = true;
-                }
-                Poll::Pending => {}
-                Poll::Ready(Err(error)) => return Err(error.into()),
-            }
-        }
         progressed |= !self.cancelled_outputs.is_empty();
         self.persist_cancelled_outputs()?;
         while let Some(task) = self.proto_saves.front_mut() {
@@ -1562,6 +1586,27 @@ impl World {
             progressed |= !running && self.generation_work.is_some();
         }
         Ok(progressed)
+    }
+    pub(crate) fn generation_running(&self) -> bool {
+        self.generation_work.is_some()
+    }
+    /// Settle the submitted layer without dispatching a new one. Receivers and
+    /// later completions stay reachable in the canonical backend during waits.
+    pub(crate) fn poll_running_generation(&mut self) -> Result<bool> {
+        let waker = self.progress_waker.clone();
+        let mut context = TaskContext::from_waker(&waker);
+        if let Some(work) = &mut self.generation_work {
+            match Pin::new(work).poll(&mut context) {
+                Poll::Ready(Ok(output)) => {
+                    self.generation_work = None;
+                    self.complete_generation(output)?;
+                    return Ok(true);
+                }
+                Poll::Pending => {}
+                Poll::Ready(Err(error)) => return Err(error.into()),
+            }
+        }
+        Ok(false)
     }
     pub(crate) fn set_progress_waker(&mut self, waker: Waker) {
         self.progress_waker = waker;
@@ -1639,6 +1684,9 @@ impl World {
     pub(crate) fn generator(&self) -> Arc<ChunkGenerator> {
         self.generator.clone()
     }
+    pub(crate) fn build_height(&self) -> std::ops::Range<i32> {
+        self.dimension.min_y..self.dimension.min_y + self.dimension.height
+    }
     #[cfg(test)]
     fn poll_terrain(&mut self) -> Result<Vec<(u64, Terrain)>> {
         self.poll_generation_progress()?;
@@ -1653,9 +1701,18 @@ impl World {
         level: &Level,
         effects: Vec<ferraloom_game::level::effects::LevelEffect>,
     ) -> Result<()> {
+        if let Some(changes) = Self::capture_block_light_changes(level, effects)? {
+            self.submit_block_light_changes(changes)?;
+        }
+        Ok(())
+    }
+    pub(crate) fn capture_block_light_changes(
+        level: &Level,
+        effects: Vec<ferraloom_game::level::effects::LevelEffect>,
+    ) -> Result<Option<BlockLightChanges>> {
         use ferraloom_game::level::effects::LevelEffect;
         if effects.is_empty() {
-            return Ok(());
+            return Ok(None);
         }
         let mut positions = std::collections::HashSet::new();
         let mut chunks = Vec::new();
@@ -1684,7 +1741,13 @@ impl World {
             }
             changes.push(change);
         }
-        self.light_tx.send(LightJob::Changed { chunks, changes })?;
+        Ok(Some(BlockLightChanges(LightJob::Changed {
+            chunks,
+            changes,
+        })))
+    }
+    pub(crate) fn submit_block_light_changes(&self, changes: BlockLightChanges) -> Result<()> {
+        self.light_tx.send(changes.0)?;
         Ok(())
     }
     fn integrate_structure_snapshot(&mut self, mut snapshot: StructureSnapshot) -> Result<()> {
@@ -1769,7 +1832,7 @@ impl World {
             terrain.revision = snapshot.revision;
         }
     }
-    fn store_generation_chunk(
+    pub(crate) fn store_generation_chunk(
         &mut self,
         pos: ChunkPos,
         revision: GenerationRevision,
@@ -1934,7 +1997,19 @@ impl World {
         game_time: i64,
         players: Vec<(String, CompoundTag)>,
     ) -> Result<()> {
-        let snapshots = std::mem::take(&mut self.initial_chunks)
+        let snapshots = self.take_bootstrap_save_snapshots(game_time);
+        for (pos, tag) in self.encode_saves(snapshots).await? {
+            self.io.store(pos, Some(tag)).await?;
+        }
+        self.begin_save_level_and_players(game_time, players)
+            .await??;
+        Ok(())
+    }
+    pub(crate) fn take_bootstrap_save_snapshots(
+        &mut self,
+        game_time: i64,
+    ) -> Vec<ChunkSaveSnapshot> {
+        std::mem::take(&mut self.initial_chunks)
             .into_values()
             .map(|terrain| ChunkSaveSnapshot {
                 pos: terrain.pos,
@@ -1944,13 +2019,7 @@ impl World {
                 light: None,
                 game_time,
             })
-            .collect();
-        for (pos, tag) in self.encode_saves(snapshots).await? {
-            self.io.store(pos, Some(tag)).await?;
-        }
-        self.begin_save_level_and_players(game_time, players)
-            .await??;
-        Ok(())
+            .collect()
     }
     /// Owned metadata IO operation. Caller first stores any bootstrap snapshots,
     /// then awaits this task without retaining World or its RefCell guard.
