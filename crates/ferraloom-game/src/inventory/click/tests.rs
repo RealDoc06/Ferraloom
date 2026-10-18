@@ -21,6 +21,91 @@ fn describe(stack: &ItemStack) -> String {
     )
 }
 
+#[test]
+fn outside_primary_click_moves_the_original_cursor_into_the_item_entity() {
+    use crate::entity::{effects::EntityEffect, item::ItemEntity};
+    for amount in [0, 7] {
+        let mut level = crate::entity::tests::level(false);
+        let player = level.next_entity_ref();
+        let mut state = ServerPlayer::new(
+            Uuid::new(1, 2),
+            "cursor".into(),
+            level.next_entity_id(),
+            Vec3::new(8.5, 64.0, 8.5),
+            GameType::Survival,
+        );
+        let menu = state.menus.current_ref();
+        state
+            .menus
+            .menu_mut(menu)
+            .unwrap()
+            .set_carried(ItemStack::new(Item::STONE, amount, Default::default()));
+        level
+            .add_entity(player, EntityState::Player(Box::new(state)))
+            .unwrap();
+        let mut outer = StackOperation::new(&mut level);
+        let held = outer
+            .pin(ContainerSlot {
+                container: ContainerHandle::MenuCarried { player, menu },
+                slot: 0,
+            })
+            .unwrap();
+        clicked_live_menu(
+            player,
+            menu,
+            -999,
+            0,
+            ferraloom_protocol::play::ContainerInput::Pickup,
+            &mut UnsupportedMenuHooks,
+            outer.level,
+        )
+        .unwrap();
+        assert!(
+            outer
+                .level
+                .entity::<ServerPlayer>(player)
+                .unwrap()
+                .menus
+                .menu(menu)
+                .unwrap()
+                .carried
+                .is_empty()
+        );
+        let effects = outer.level.take_entity_effects();
+        if amount == 0 {
+            assert!(effects.is_empty());
+            continue;
+        }
+        let [
+            EntityEffect::ItemDrop {
+                entity,
+                count: dropped,
+                thrown_from_hand: true,
+                ..
+            },
+        ] = effects.as_slice()
+        else {
+            panic!("missing canonical drop effect: {effects:?}")
+        };
+        assert_eq!(*dropped, amount);
+        assert!(std::ptr::eq(
+            outer.level.stack(held).unwrap(),
+            outer.level.entity::<ItemEntity>(*entity).unwrap().item()
+        ));
+        set_count(outer.level.stack_mut(held).unwrap(), 3);
+        assert_eq!(
+            count(outer.level.entity::<ItemEntity>(*entity).unwrap().item()),
+            3
+        );
+        outer.level.remove_entity(*entity).unwrap();
+        outer.level.finish_entity_management();
+        assert_eq!(count(outer.level.stack(held).unwrap()), 3);
+        drop(outer);
+        level.finish_entity_management();
+        assert!(level.entity_state(*entity).is_err());
+    }
+}
+
 fn swap_timeline<C: MenuClickContext>(
     context: &mut C,
     same: impl Fn(&C, C::Stack, C::Stack) -> bool,

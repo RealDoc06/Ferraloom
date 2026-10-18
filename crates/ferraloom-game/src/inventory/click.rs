@@ -715,12 +715,14 @@ impl MenuClickContext for super::transfer::LiveMenuTransfer<'_> {
     fn add_to_inventory(&mut self, stack: StackRef) -> Result<bool> {
         add_item_stack(self.player, stack, self.operation.level)
     }
-    fn drop_stack(&mut self, stack: StackRef, _: bool) -> Result<()> {
-        if self.operation.level.stack(stack)?.is_empty() {
-            return Ok(());
-        }
-        // The entity-owned Existing receiver constructor arrives via restart.
-        Err(MenuError::Unsupported("retained player drop constructor"))
+    fn drop_stack(&mut self, stack: StackRef, thrown_from_hand: bool) -> Result<()> {
+        crate::entity::player::drop_item_stack(
+            self.player,
+            StackValue::Existing(stack),
+            thrown_from_hand,
+            self.operation.level,
+        )?;
+        Ok(())
     }
     fn swap_craft(&mut self, index: usize, _: i32) -> Result<()> {
         if matches!(self.slot(index)?.kind, SlotKind::Result(_)) {
