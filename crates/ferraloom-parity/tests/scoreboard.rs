@@ -200,6 +200,16 @@ async fn scores(session: &mut Session) -> Result<ObservationLog> {
             "commands.scoreboard.objectives.add.success",
         ),
         (
+            "object",
+            "scoreboard objectives modify rich displayname {atlas:'minecraft:blocks',sprite:'minecraft:stone',fallback:{score:{name:'#two',objective:'divisor'}}}",
+            "commands.scoreboard.objectives.modify.displayname",
+        ),
+        (
+            "entity_nbt",
+            "scoreboard objectives modify rich displayname {nbt:'Air',entity:'@s',plain:true}",
+            "commands.scoreboard.objectives.modify.displayname",
+        ),
+        (
             "name",
             "scoreboard objectives modify rich displayname {selector:'@s'}",
             "commands.scoreboard.objectives.modify.displayname",
