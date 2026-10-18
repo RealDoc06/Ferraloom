@@ -1896,7 +1896,13 @@ fn post_processing_drains_sections_in_order_including_reentrant_appends() {
 }
 #[test]
 fn pending_block_entity_nbt_survives_full_without_claiming_live_factory_readiness() {
-    use ferraloom_nbt::{CompoundTag, Tag};
+    use crate::block::UnportedBehavior;
+    use ferraloom_nbt::{CompoundTag, Compression, NbtAccounter, NbtIo, NbtString, Tag};
+    fn encode(data: &ferraloom_storage::SerializableChunkData) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        NbtIo::write_compound(&mut bytes, Compression::None, &data.write().unwrap()).unwrap();
+        bytes
+    }
     let chunk = ChunkPos::new(0, 0);
     let pos = BlockPos::new(8, 0, 8);
     let mut tag = CompoundTag::new();
@@ -1904,7 +1910,18 @@ fn pending_block_entity_nbt_survives_full_without_claiming_live_factory_readines
     for (key, value) in [("x", pos.x), ("y", pos.y), ("z", pos.z), ("future", 42)] {
         tag.insert(key, Tag::Int(value));
     }
+    tag.insert("future_bytes", Tag::ByteArray(vec![-128, 0, 127]));
+    tag.insert("future_double", Tag::Double(-0.0));
+    tag.insert(
+        "future_utf16",
+        Tag::String(NbtString::from_utf16(vec![0xd800, 0, 0xdc00])),
+    );
     let data = ferraloom_storage::SerializableChunkData {
+        data_version: Some(ferraloom_storage::DATA_VERSION),
+        status: Some("minecraft:full".into()),
+        x_pos: Some(chunk.x),
+        y_pos: Some(-1),
+        z_pos: Some(chunk.z),
         block_entities: Some(vec![tag.clone()]),
         post_processing: Some(vec![Vec::new(), Vec::new()]),
         ..Default::default()
@@ -1924,10 +1941,70 @@ fn pending_block_entity_nbt_survives_full_without_claiming_live_factory_readines
         level.post_process_generation(chunk),
         Err(LevelError::UnsupportedBlockEntity(Block::CHEST))
     );
+    assert_eq!(level.unported_behavior_stats().skipped_calls, 0);
+    level.set_unported_behavior(UnportedBehavior::Warn);
+    level.post_process_generation(chunk).unwrap();
+    level.post_process_generation(chunk).unwrap();
+    assert_eq!(level.unported_behavior_stats().skipped_calls, 2);
+    assert_eq!(level.unported_behavior_stats().distinct_calls, 1);
     let block_chunk = level.chunk(chunk).unwrap();
     assert!(!block_chunk.post_processing_complete());
-    let mut saved = ferraloom_storage::SerializableChunkData::default();
+    assert!(block_chunk.generation_callbacks_drained());
+    let mut saved = data.clone();
     block_chunk.save_pending_generation_data(&mut saved);
     assert_eq!(saved.block_entities, Some(vec![tag]));
     assert_eq!(saved.post_processing, data.post_processing);
+    let bytes = encode(&saved);
+    assert_eq!(bytes, encode(&data));
+    let loaded = ferraloom_storage::SerializableChunkData::parse(
+        NbtIo::read_compound(
+            bytes.as_slice(),
+            Compression::None,
+            &mut NbtAccounter::uncompressed(),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let mut reloaded_chunk = empty_chunk(chunk);
+    reloaded_chunk
+        .load_pending_generation_data(&loaded)
+        .unwrap();
+    let mut resaved = loaded.clone();
+    reloaded_chunk.save_pending_generation_data(&mut resaved);
+    assert_eq!(encode(&resaved), bytes);
+}
+
+#[test]
+fn worldgen_skips_share_policy_counters_and_deduplicate_owned_unit_behavior_pairs() {
+    use crate::block::{UnportedBehavior, UnportedOperation};
+    let mut level = Level::new(Region::new(&EMPTY));
+    let pair = ("minecraft:oak".to_owned(), "canSurvive".to_owned());
+    level.record_worldgen_skips(Vec::new()).unwrap();
+    assert_eq!(
+        level.record_worldgen_skips(vec![pair.clone()]),
+        Err(LevelError::UnsupportedWorldgenBehavior)
+    );
+    assert_eq!(level.unported_behavior_stats().skipped_calls, 0);
+    level.set_unported_behavior(UnportedBehavior::Warn);
+    level
+        .unported_operation(UnportedOperation::PackReload)
+        .unwrap();
+    level
+        .record_worldgen_skips(vec![pair.clone(), pair.clone()])
+        .unwrap();
+    level
+        .record_worldgen_skips(vec![
+            pair,
+            ("minecraft:oak".to_owned(), "updateShape".to_owned()),
+            ("minecraft:birch".to_owned(), "canSurvive".to_owned()),
+        ])
+        .unwrap();
+    assert_eq!(level.unported_behavior_stats().skipped_calls, 6);
+    assert_eq!(level.unported_behavior_stats().distinct_calls, 4);
+    level.set_unported_behavior(UnportedBehavior::Strict);
+    assert_eq!(
+        level.record_worldgen_skips(vec![("minecraft:oak".into(), "canSurvive".into())]),
+        Err(LevelError::UnsupportedWorldgenBehavior)
+    );
+    assert_eq!(level.unported_behavior_stats().skipped_calls, 6);
 }
