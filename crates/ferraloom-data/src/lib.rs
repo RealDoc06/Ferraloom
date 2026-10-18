@@ -9,6 +9,7 @@
 //! ```
 
 pub mod datapack;
+pub use datapack::tags;
 
 use std::marker::PhantomData;
 
