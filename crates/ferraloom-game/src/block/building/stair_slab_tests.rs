@@ -1,6 +1,6 @@
 use super::{
     facing, stairs,
-    tests::{POS, level},
+    tests::{POS, level, tagged_level},
 };
 use crate::{
     block::{
@@ -265,7 +265,7 @@ fn slab_waterlogging_rejects_double_and_flowing_water_like_vanilla() {
             .unwrap()
             .data()
             .fluid;
-        let mut level = level();
+        let mut level = tagged_level();
         level.set_block_state(POS, state).unwrap();
         let query = level
             .required_block_behavior(state.block(), BlockMethod::CanPlaceLiquid)

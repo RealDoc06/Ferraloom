@@ -6,10 +6,17 @@ use crate::{
         chunk::{LevelChunk, LevelChunkSection},
     },
 };
-use ferraloom_data::{Block, BlockState};
+use ferraloom_data::{
+    Block, BlockState,
+    datapack::{Pack, ResourceManager, TagSet},
+};
 use ferraloom_protocol::component::ItemStack;
 use ferraloom_util::{BlockPos, ChunkPos, Direction};
-use std::{collections::BTreeSet, io::Read, sync::Arc};
+use std::{
+    collections::BTreeSet,
+    io::Read,
+    sync::{Arc, LazyLock},
+};
 
 pub(super) const POS: BlockPos = BlockPos::new(8, 64, 8);
 static EMPTY: Behaviors = Behaviors::EMPTY;
@@ -30,6 +37,19 @@ pub(super) fn level() -> Level {
             ),
         ))
         .unwrap();
+    level
+}
+/// The liquid-placement path executes real setBlock neighbor/output queries.
+/// Supply the same live vanilla tags as a production level, without a fallback.
+pub(super) fn tagged_level() -> Level {
+    static TAGS: LazyLock<Arc<TagSet<Block>>> = LazyLock::new(|| {
+        let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").expect("builder supplies native tags");
+        let resources =
+            ResourceManager::new(vec![Pack::vanilla_jar(std::path::Path::new(&jar)).unwrap()]);
+        Arc::new(TagSet::load(&resources).unwrap())
+    });
+    let mut level = level();
+    level.set_block_tags(Arc::clone(&TAGS));
     level
 }
 fn orientation_vectors() -> String {
