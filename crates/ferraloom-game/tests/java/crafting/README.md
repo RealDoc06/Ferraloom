@@ -31,3 +31,8 @@ Java float/double equality, ordering and hash codes in util's Rust vectors.
 record and stack equality, record hash codes, and raw component encodings. Each
 encoding gets a distinct RegistryInfoLookup identity so EncoderCache's NaN-value
 collapsing does not hide the codec's raw bits; that cache behavior is separate.
+
+`bash crates/ferraloom-game/tests/java/crafting/run-nbt-floats.sh` compares
+DataOutputStream and Netty writes for scalar and nested float/double tags, then
+reads both through DataInputStream and ByteBufInputStream. File writes canonicalize
+NaNs; network writes and both readers retain NaN payloads.
