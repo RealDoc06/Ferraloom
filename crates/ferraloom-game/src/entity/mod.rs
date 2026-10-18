@@ -59,6 +59,7 @@ pub use lifecycle::{
 };
 pub mod persistence;
 pub mod synched_data;
+pub mod tracking;
 pub use base::{EntityData, EntityDimensions, Movement, RemovalReason};
 
 /// Port of LivingEntity's unarmored damage/cooldown state.
