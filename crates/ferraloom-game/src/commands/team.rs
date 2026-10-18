@@ -16,6 +16,10 @@ pub fn execute(
 ) -> Result<super::builtins::CommandResult> {
     scoreboard::validate_components(command)?;
     let verb = command.literals[1].as_str();
+    // Entity feedback must resolve against the post-mutation team, via the canonical entity naming API.
+    if matches!(verb, "join" | "leave") && members.iter().any(|holder| holder.display.is_some()) {
+        return Err(error("ferraloom.team.entity_feedback.unsupported", &[]));
+    }
     let name = command.string("team");
     if verb == "list" && name.is_none() {
         let teams: Vec<_> = board
