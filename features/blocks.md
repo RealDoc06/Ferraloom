@@ -325,3 +325,5 @@ One class row per bootstrapped runtime Block class, listing every block id assig
 | blocks.plants.multiface-support-loss | Remove unsupported faces, preserving other attachments | `MultifaceBlock#updateShape` | `plants::tests::multiface_neighbor_loss_removes_only_the_unsupported_face` | - | todo |
 | blocks.plants.leaves-decay-callback | Persistent/distance gates, drops and removal without destroy particles | `LeavesBlock#randomTick` | `plants::tests::decaying_waterlogged_leaves_drop_and_restore_water_without_destroy_particles` | - | todo |
 | blocks.plants.shared-brightness | Shared reader requires canonical light context | `BlockAndLightGetter#getRawBrightness` | `plants::tests::shared_raw_brightness_requires_light_context` | - | todo |
+
+| blocks.drops.registry | Optional native block loot-table identities and exact getDrops/spawnAfterBreak virtual ownership | `BlockBehaviour#getLootTable; getDrops; spawnAfterBreak` | `ExtractBlockDropTables; ExtractBlockMethods` (1286 block registry entries) | pass | partial |

@@ -117,3 +117,8 @@ are immutable registry facts: dimension, biome, clock and weather sampling does
 not participate. Float limits are measured with sanitizeValue at both infinities;
 unbounded ends remain null. The Rust build consumes this committed table without
 Java. No environment value is sampled from a fabricated live level.
+
+`ExtractBlockDropTables <output-json>` records the optional actual block loot
+keys, including shared keys and absent drops. `ExtractBlockMethods` also records
+exact `getDrops` and `spawnAfterBreak` ownership, so unported subclass overrides
+cannot silently inherit the base drop behavior.
