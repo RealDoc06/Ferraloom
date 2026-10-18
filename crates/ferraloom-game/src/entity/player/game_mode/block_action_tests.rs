@@ -1,6 +1,6 @@
 use super::*;
 use crate::{
-    block::{BlockMethod, UnportedBehavior, UpdateFlags},
+    block::{UnportedBehavior, UpdateFlags},
     entity::{EntityData, EntityState, player::GameType},
     level::{effects::LevelEffect, interaction::SpawnProtectionSnapshot},
 };
@@ -334,7 +334,7 @@ fn crack_audience_is_captured_includes_spectators_and_encodes_native_byte() {
 }
 
 #[test]
-fn pending_item_and_player_destroy_branches_preserve_source_side_effects() {
+fn pending_item_and_missing_stat_context_preserve_source_side_effects() {
     for policy in [UnportedBehavior::Strict, UnportedBehavior::Warn] {
         let (mut level, player) = super::tests::fixture(false, true);
         level.set_unported_behavior(policy);
@@ -348,7 +348,24 @@ fn pending_item_and_player_destroy_branches_preserve_source_side_effects() {
         replace(&mut level, POS, Block::DIRT.default_state());
         let error = destroy_block(player, POS, &mut level).unwrap_err();
         assert!(
-            matches!(error,BlockBreakError::Level(ref error) if matches!(error.as_ref(),LevelError::UnsupportedBlockMethod(Block::DIRT,BlockMethod::PlayerDestroy)))
+            matches!(error,BlockBreakError::Level(ref error) if matches!(error.as_ref(),LevelError::MissingServerShared))
+        );
+        assert_eq!(
+            level
+                .entity::<ServerPlayer>(player)
+                .unwrap()
+                .stats
+                .get_value(crate::stats::Stat::Mined(Block::DIRT)),
+            1
+        );
+        assert_eq!(
+            level
+                .entity::<ServerPlayer>(player)
+                .unwrap()
+                .food_data
+                .exhaustion_level()
+                .to_bits(),
+            0,
         );
         assert!(level.get_block_state(POS).unwrap().is_air());
         assert!(

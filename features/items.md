@@ -12,6 +12,7 @@ One class row per bootstrapped runtime Item class, listing every item id assigne
 | items.use.cooldowns | Apply cooldown groups and synchronize cooldown starts and removals | `ItemCooldowns; ServerItemCooldowns` | | - | todo |
 | items.use.block-adventure | Respect can-place-on and can-break restrictions in adventure mode | `AdventureModePredicate; ItemStack` | | - | todo |
 | items.use.tool-actions | Apply mining tool rules, attack modifiers and block transformation actions | `Tool; BlockTransformers; BlockTransformer` | | - | todo |
+| items.use.mine-block | Read TOOL on the retained receiver, apply the base nonzero-hardness or Shears FIRE-tag wear guard, then award ITEM_USED for the pre-wear item; durability uses the canonical ItemHurtAndBreak effect seam | `ItemStack#mineBlock; Item#mineBlock; ShearsItem#mineBlock` | `player_destroy_tests::mine_block_native_tool_guards_award_used_only_after_the_wear_effect` (seven real native no-wear/absent-Tool cases; Rust policy assertions unrun; durability/enchantment effects pending item owner) | pass | partial |
 | items.use.equipment | Apply equippable slots, dispenser equipment and equip sounds and effects | `Equippable; EquipmentSlot` | | - | todo |
 | items.use.bows-crossbows | Charge, choose ammunition, enchant, release and spawn projectiles | `BowItem; CrossbowItem; ProjectileWeaponItem` | | - | todo |
 | items.use.shield | Apply blocking angle, damage reduction, durability and disabling cooldown | `BlocksAttacks; LivingEntity` | | - | todo |

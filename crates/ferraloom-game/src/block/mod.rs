@@ -201,21 +201,14 @@ pub trait BlockBehavior: Sync {
     ) -> Result<(), LevelError> {
         Ok(())
     }
-    /// Block#playerDestroy's ABI. The base stats, exhaustion and drops body is
-    /// explicitly pending slice C; family overrides cannot inherit a fake no-op.
+    /// Port of Block#playerDestroy. The original receiver stays independent
+    /// from the state passed by a family override's native super call.
     fn player_destroy(
         &self,
-        state: BlockState,
-        _pos: BlockPos,
-        _player: crate::entity::EntityRef,
-        _block_entity: Option<entity::BlockEntityRef>,
-        _destroyed_with: &ferraloom_protocol::component::ItemStack,
-        _level: &mut Level,
+        context: breaking::PlayerDestroyContext<'_>,
+        level: &mut Level,
     ) -> Result<(), LevelError> {
-        Err(LevelError::UnsupportedBlockMethod(
-            state.block(),
-            BlockMethod::PlayerDestroy,
-        ))
+        breaking::player_destroy(context, level)
     }
     /// Port of BlockBehaviour#getMenuProvider's absent base provider.
     fn get_menu_provider(
@@ -279,8 +272,7 @@ pub trait BlockBehavior: Sync {
             .required_block_behavior(state.block(), BlockMethod::SpawnDestroyByEntityParticles)?
             .spawn_destroy_by_entity_particles(state, pos, None, level)
     }
-    /// Port of Block#playerWillDestroy. The guarded-piglin AI side effect
-    /// remains a required unported call until PiglinAi is implemented.
+    /// Port of Block#playerWillDestroy, including PiglinAi's live nearby query.
     fn player_will_destroy(
         &self,
         state: BlockState,
@@ -295,9 +287,7 @@ pub trait BlockBehavior: Sync {
             ferraloom_data::tags::BlockTags::GUARDED_BY_PIGLINS,
             state.block(),
         ) {
-            return Err(LevelError::UnsupportedEntity(
-                ferraloom_data::EntityType::PIGLIN,
-            ));
+            crate::entity::monster::piglin::ai::anger_nearby_piglins(level, player, false)?;
         }
         level.game_event(
             ferraloom_data::registries::game_event::Id::BLOCK_DESTROY,

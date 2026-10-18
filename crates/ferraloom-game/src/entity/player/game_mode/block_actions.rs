@@ -47,16 +47,16 @@ pub struct BlockBreakAction {
     pub max_y: i32,
 }
 
-/// Required query failures retain their original cause. Pending item branches
-/// are explicit until the items/enchantments and playerDestroy slices land.
+/// Required queries retain their original cause; item/enchantment dependencies
+/// remain explicit until their canonical implementations land.
 #[derive(Debug)]
 pub enum BlockBreakError {
     Level(Box<LevelError>),
     Predicate(Box<LootError>),
     BlockEntityData(ferraloom_protocol::Error),
+    Inventory(Box<crate::inventory::MenuError>),
     ItemOnHitBlock(Item),
     ItemCanDestroyBlock(Item),
-    ItemMineBlock(Item),
 }
 impl From<LevelError> for BlockBreakError {
     fn from(error: LevelError) -> Self {
@@ -68,19 +68,27 @@ impl From<LootError> for BlockBreakError {
         Self::Predicate(Box::new(error))
     }
 }
+impl From<crate::inventory::MenuError> for BlockBreakError {
+    fn from(error: crate::inventory::MenuError) -> Self {
+        match error {
+            crate::inventory::MenuError::Level(error) => error.into(),
+            error => Self::Inventory(Box::new(error)),
+        }
+    }
+}
 impl std::fmt::Display for BlockBreakError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Level(error) => write!(f, "block action: {error:?}"),
             Self::Predicate(error) => std::fmt::Display::fmt(error, f),
             Self::BlockEntityData(error) => std::fmt::Display::fmt(error, f),
+            Self::Inventory(error) => std::fmt::Display::fmt(error, f),
             Self::ItemOnHitBlock(item) => {
                 write!(f, "unported EnchantmentHelper#onHitBlock: {}", item.name())
             }
             Self::ItemCanDestroyBlock(item) => {
                 write!(f, "unported Item#canDestroyBlock: {}", item.name())
             }
-            Self::ItemMineBlock(item) => write!(f, "unported ItemStack#mineBlock: {}", item.name()),
         }
     }
 }
@@ -89,6 +97,7 @@ impl std::error::Error for BlockBreakError {
         match self {
             Self::Predicate(error) => Some(error.as_ref()),
             Self::BlockEntityData(error) => Some(error),
+            Self::Inventory(error) => Some(error.as_ref()),
             _ => None,
         }
     }
@@ -389,7 +398,7 @@ fn destroy_and_ack(player: EntityRef, pos: BlockPos, level: &mut Level) -> Resul
 }
 
 /// Port of ServerPlayerGameMode#destroyBlock. The original block dispatch and
-/// block-entity generation survive removal; C supplies playerDestroy's base.
+/// block-entity generation survive removal; destroyedWith precedes tool wear.
 pub fn destroy_block(player: EntityRef, pos: BlockPos, level: &mut Level) -> Result<bool> {
     let state = level.get_block_state(pos)?;
     let entity = level.entity::<ServerPlayer>(player)?;
@@ -427,19 +436,37 @@ pub fn destroy_block(player: EntityRef, pos: BlockPos, level: &mut Level) -> Res
         if level.entity::<ServerPlayer>(player)?.prevents_block_drops() {
             return Ok(true);
         }
-        let entity = level.entity::<ServerPlayer>(player)?;
-        let destroyed_with = entity.get_main_hand_item().clone();
-        let correct = entity.has_correct_tool_for_drops(adjusted, level)?;
-        if inventory::component(entity.get_main_hand_item(), ComponentType::TOOL).is_some() {
-            return Err(BlockBreakError::ItemMineBlock(
-                entity.get_main_hand_item().item(),
-            ));
-        }
-        // ItemStack#mineBlock without a Tool returns false and awards no stat.
+        let selected = level
+            .entity::<ServerPlayer>(player)?
+            .inventory
+            .selected_slot();
+        let mut operation = crate::inventory::StackOperation::new(level);
+        let tool = operation.pin(crate::inventory::ContainerSlot {
+            container: crate::inventory::ContainerHandle::PlayerInventory(player),
+            slot: selected,
+        })?;
+        let receiver = operation.level.stack(tool)?;
+        let destroyed_with = receiver.copy_with_count(inventory::count(receiver));
+        let correct = operation
+            .level
+            .entity::<ServerPlayer>(player)?
+            .has_correct_tool_for_drops(adjusted, operation.level)?;
+        super::mining_item::mine_block(player, tool, adjusted, operation.level)?;
         if changed && correct {
-            level
+            operation
+                .level
                 .required_block_behavior(state.block(), BlockMethod::PlayerDestroy)?
-                .player_destroy(adjusted, pos, player, block_entity, &destroyed_with, level)?;
+                .player_destroy(
+                    crate::block::breaking::PlayerDestroyContext {
+                        block: state.block(),
+                        state: adjusted,
+                        pos,
+                        player,
+                        block_entity,
+                        destroyed_with: &destroyed_with,
+                    },
+                    operation.level,
+                )?;
         }
         Ok(true)
     })();

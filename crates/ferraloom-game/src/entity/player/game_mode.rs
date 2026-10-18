@@ -13,7 +13,9 @@ use ferraloom_data::{
 use ferraloom_util::{BlockPos, Direction};
 
 mod block_actions;
+mod mining_item;
 pub use block_actions::{BlockBreakAction, BlockBreakError, DestroyAction, destroy_block};
+pub use mining_item::mine_block;
 
 /// Port of ServerPlayerGameMode's destruction fields. Attachment to ServerPlayer
 /// and the native pre-menu tick slot wait for the entity landing.
@@ -124,5 +126,7 @@ pub fn get_destroy_speed(
 
 #[cfg(test)]
 mod block_action_tests;
+#[cfg(test)]
+mod player_destroy_tests;
 #[cfg(test)]
 mod tests;

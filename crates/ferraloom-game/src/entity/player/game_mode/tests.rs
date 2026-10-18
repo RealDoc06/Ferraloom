@@ -1,7 +1,7 @@
 use super::*;
 use crate::{
     Behaviors,
-    block::{BASE_BLOCK, BlockBehavior, BlockMethod, UnportedBehavior},
+    block::{BASE_BLOCK, BlockBehavior, UnportedBehavior},
     entity::{EntityData, EntityState, player::GameType},
     level::{LevelContext, Region, chunk::LevelChunk},
 };
@@ -257,7 +257,7 @@ fn first_underwater_query_creates_and_saves_the_canonical_attribute_instance() {
 }
 
 #[test]
-fn unbreakable_progress_skips_required_player_reads_and_player_destroy_stays_pending() {
+fn unbreakable_progress_skips_player_reads_and_player_destroy_requires_actor() {
     let mut level = Level::new(Region::new(&EMPTY), LevelContext::fixture(0, 63));
     let player = EntityRef(u64::MAX);
     for policy in [UnportedBehavior::Strict, UnportedBehavior::Warn] {
@@ -269,20 +269,16 @@ fn unbreakable_progress_skips_required_player_reads_and_player_destroy_stays_pen
                 .to_bits(),
             0
         );
-        assert_eq!(
+        assert!(matches!(
             BASE_BLOCK.player_destroy(
-                Block::STONE.default_state(),
-                POS,
-                player,
-                None,
-                &ItemStack::default(),
+                crate::block::breaking::PlayerDestroyContext {
+                    block: Block::STONE, state: Block::STONE.default_state(), pos: POS, player,
+                    block_entity: None, destroyed_with: &ItemStack::default(),
+                },
                 &mut level
             ),
-            Err(LevelError::UnsupportedBlockMethod(
-                Block::STONE,
-                BlockMethod::PlayerDestroy
-            )),
-        );
+            Err(LevelError::MissingEntity(entity)) if entity==player
+        ));
     }
     assert!(VECTORS.lines().any(|line| line == "hardness-null\t0"));
 }
