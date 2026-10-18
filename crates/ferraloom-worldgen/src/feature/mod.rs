@@ -17,9 +17,11 @@ use std::{
 };
 
 pub mod aquatic;
+pub mod cave;
 pub mod end;
 pub mod misc;
 pub mod nether;
+pub mod ore;
 pub mod state_provider;
 pub mod surface;
 pub mod tree;
@@ -102,6 +104,8 @@ impl<'a> FeatureLoader<'a> {
         };
         loader.register("no_op".parse()?, |_, _| Ok(Arc::new(NoOpFeature)))?;
         tree::register(&mut loader)?;
+        ore::register(&mut loader)?;
+        cave::register(&mut loader)?;
         vegetation::register(&mut loader)?;
         aquatic::register(&mut loader)?;
         surface::register(&mut loader)?;

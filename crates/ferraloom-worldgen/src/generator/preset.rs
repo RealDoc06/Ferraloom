@@ -80,6 +80,9 @@ impl ChunkGenerator {
     }
 }
 impl ChunkGeneratorAccess for ChunkGenerator {
+    fn get_origin(&self) -> Result<[i32; 2], Error> {
+        self.access().get_origin()
+    }
     fn data(&self) -> &GenerationData {
         self.access().data()
     }

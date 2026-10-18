@@ -49,4 +49,5 @@ pub mod placement;
 pub mod region;
 
 pub mod feature;
+pub mod spawn;
 pub mod structure;
