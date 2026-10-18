@@ -16,8 +16,11 @@ ferraloom-worldgen.workspace = true
 ferraloom-storage.workspace = true
 ferraloom-brigadier.workspace = true
 ferraloom-protocol.workspace = true
-
+serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["arbitrary_precision", "preserve_order"] }
+
+[dev-dependencies]
+flate2 = "1"
 
 [lints]
 workspace = true

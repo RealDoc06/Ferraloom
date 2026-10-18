@@ -1,4 +1,5 @@
 //! Vanilla 26.3 item data components, patches and stack representations.
+pub use ferraloom_util::java::{JavaF32, JavaF64};
 mod map;
 mod patch;
 pub use map::*;

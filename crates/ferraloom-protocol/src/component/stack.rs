@@ -32,6 +32,22 @@ impl ItemStack {
             .as_ref()
             .is_none_or(|v| v.count <= 0 || v.item == ferraloom_data::Item::AIR)
     }
+    /// Port of ItemStack#isSameItemSameComponents; counts and map entry order are ignored.
+    pub fn is_same_item_same_components(&self, other: &Self) -> Result<bool> {
+        if self.is_empty() || other.is_empty() {
+            return Ok(self.is_empty() && other.is_empty());
+        }
+        if self.0.as_ref().map(|v| v.item) != other.0.as_ref().map(|v| v.item) {
+            return Ok(false);
+        }
+        let left = self.components()?;
+        let right = other.components()?;
+        Ok(left.entries.len() == right.entries.len()
+            && left
+                .entries
+                .iter()
+                .all(|value| right.get(value.component_type()) == Some(value)))
+    }
     /// Port of ItemStack#validatedStreamCodec's persistent codec validation.
     /// Empty stacks are accepted; nonempty stacks must encode through ItemStack.CODEC.
     pub fn validate_persistent(&self) -> Result<()> {

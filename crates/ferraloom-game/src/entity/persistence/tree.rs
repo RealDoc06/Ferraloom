@@ -1,0 +1,204 @@
+//! Recursive entity storage codecs. Constructors run at the management polling
+//! point, in root/passenger order, before visibility callbacks can observe them.
+use super::{EntityLoadError, vector_tag};
+use crate::{
+    entity::{
+        EntityData, EntityRef, EntityState,
+        animal::Cow,
+        experience_orb::ExperienceOrb,
+        item::{FallingBlockEntity, ItemEntity, PrimedTnt, falling_block::FallingBlockLoadError},
+        player::equipment::EntityEquipment,
+    },
+    level::{Level, LevelError},
+};
+use ferraloom_data::EntityType;
+use ferraloom_nbt::{CompoundTag, ListTag, Tag};
+use ferraloom_util::Vec3;
+
+#[derive(Debug)]
+pub enum EntityPersistenceError {
+    Level(LevelError),
+    Base(EntityLoadError),
+    MissingType,
+    UnsupportedType(String),
+}
+impl From<LevelError> for EntityPersistenceError {
+    fn from(error: LevelError) -> Self {
+        Self::Level(error)
+    }
+}
+impl From<EntityLoadError> for EntityPersistenceError {
+    fn from(error: EntityLoadError) -> Self {
+        Self::Base(error)
+    }
+}
+impl std::fmt::Display for EntityPersistenceError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
+impl std::error::Error for EntityPersistenceError {}
+
+/// Port of EntityType#loadEntitiesRecursive's pre-order constructor/stream order.
+/// The resulting owned states already contain riding links when added to Level.
+pub(crate) fn load_entity_tree(
+    level: &mut Level,
+    tag: CompoundTag,
+    loaded: &mut Vec<(EntityRef, EntityState)>,
+) -> Result<EntityRef, EntityPersistenceError> {
+    let passengers = tag.get_list("Passengers").cloned().unwrap_or_default();
+    let name = tag
+        .get_string("id")
+        .ok_or(EntityPersistenceError::MissingType)?
+        .to_string_lossy();
+    let name = if name.contains(':') {
+        name
+    } else {
+        format!("minecraft:{name}")
+    };
+    let kind = EntityType::from_name(&name)
+        .ok_or_else(|| EntityPersistenceError::UnsupportedType(name.clone()))?;
+    // Reject unavailable factories before allocating, as EntityType#create does.
+    if !matches!(
+        kind,
+        EntityType::COW
+            | EntityType::ITEM
+            | EntityType::TNT
+            | EntityType::FALLING_BLOCK
+            | EntityType::EXPERIENCE_ORB
+    ) {
+        return Err(EntityPersistenceError::UnsupportedType(name));
+    }
+    let parent = level.create_entity_data(kind);
+    let state = if kind == EntityType::COW {
+        let mut cow = Cow::with_parent(parent);
+        cow.as_living_mut().health = tag.get_float_or("Health", 10.0);
+        cow.as_living_mut().hurt_time = i32::from(tag.get_short_or("HurtTime", 0));
+        cow.as_living_mut().equipment = tag
+            .get_compound("equipment")
+            .and_then(|equipment| EntityEquipment::load(equipment).ok())
+            .unwrap_or_default();
+        cow.parent.parent.parent.age = tag.get_int_or("Age", 0);
+        cow.parent.parent.in_love = tag.get_int_or("InLove", 0);
+        cow.as_living_mut().parent.load_nbt(tag)?;
+        EntityState::Cow(Box::new(cow))
+    } else if kind == EntityType::ITEM {
+        let mut item = ItemEntity::with_parent(parent);
+        item.load_nbt(tag)?;
+        EntityState::Item(Box::new(item))
+    } else if kind == EntityType::TNT {
+        let mut tnt = PrimedTnt::with_parent(parent);
+        tnt.load_nbt(tag)?;
+        EntityState::PrimedTnt(Box::new(tnt))
+    } else if kind == EntityType::FALLING_BLOCK {
+        let mut falling = FallingBlockEntity::with_parent(parent);
+        falling.load_nbt(tag, level).map_err(|error| match error {
+            FallingBlockLoadError::Base(error) => EntityPersistenceError::Base(error),
+            FallingBlockLoadError::Level(error) => EntityPersistenceError::Level(error),
+        })?;
+        EntityState::FallingBlock(Box::new(falling))
+    } else {
+        let mut orb = ExperienceOrb::with_parent(parent);
+        orb.load_nbt(tag)?;
+        EntityState::ExperienceOrb(Box::new(orb))
+    };
+    let entity = level.next_entity_ref();
+    let index = loaded.len();
+    loaded.push((entity, state));
+    for tag in passengers.iter().filter_map(Tag::as_compound) {
+        let passenger = load_entity_tree(level, tag.clone(), loaded)?;
+        // Entity#startRiding(force=true) still refuses a removed vehicle.
+        if !loaded[index].1.as_entity().removed {
+            let passenger_state = loaded.iter_mut().find(|(id, _)| *id == passenger).unwrap();
+            passenger_state.1.as_entity_mut().vehicle = Some(entity);
+            loaded[index].1.as_entity_mut().passengers.push(passenger);
+        }
+    }
+    Ok(entity)
+}
+
+impl Level {
+    /// Port of EntityAccess#shouldBeSaved. Single-player mounts are persisted by
+    /// the player's root-vehicle record rather than by entity chunk storage.
+    pub fn entity_should_be_saved(&self, entity: EntityRef) -> Result<bool, LevelError> {
+        let base = self.entity::<EntityData>(entity)?;
+        Ok(base.entity_type != EntityType::PLAYER
+            && base
+                .removal_reason
+                .is_none_or(|reason| reason.should_save())
+            && base.vehicle.is_none()
+            && (base.passengers.is_empty() || entity.count_player_passengers(self)? != 1))
+    }
+
+    /// Port of Entity#save; passengers are serialized only through their vehicle.
+    pub fn save_entity(&self, entity: EntityRef) -> Result<Option<CompoundTag>, LevelError> {
+        if self.entity::<EntityData>(entity)?.vehicle.is_some() {
+            return Ok(None);
+        }
+        self.save_entity_as_passenger(entity)
+    }
+
+    fn save_entity_as_passenger(
+        &self,
+        entity: EntityRef,
+    ) -> Result<Option<CompoundTag>, LevelError> {
+        let state = self.entity_state(entity)?;
+        let base = state.as_entity();
+        if matches!(state, EntityState::Player(_))
+            || base
+                .removal_reason
+                .is_some_and(|reason| !reason.should_save())
+        {
+            return Ok(None);
+        }
+        let mut tag = match state {
+            EntityState::Cow(cow) => {
+                let mut tag = base.save_without_id();
+                tag.insert("Health", Tag::Float(cow.as_living().health));
+                tag.insert("HurtTime", Tag::Short(cow.as_living().hurt_time as i16));
+                tag.insert("Age", Tag::Int(cow.parent.parent.parent.age));
+                tag.insert("InLove", Tag::Int(cow.parent.parent.in_love));
+                tag.remove("equipment");
+                if !cow.as_living().equipment.is_empty() {
+                    tag.insert(
+                        "equipment",
+                        Tag::Compound(
+                            cow.as_living()
+                                .equipment
+                                .save()
+                                .expect("canonical equipment"),
+                        ),
+                    );
+                }
+                tag
+            }
+            EntityState::PrimedTnt(tnt) => tnt.save_without_id(),
+            EntityState::Item(item) => item.save_without_id(),
+            EntityState::FallingBlock(block) => block.save_without_id(),
+            EntityState::ExperienceOrb(orb) => orb.save_without_id(),
+            EntityState::Player(_) => unreachable!("player has no encode ID"),
+        };
+        tag.insert("id", Tag::String(state.entity_type().name().into()));
+        if let Some(vehicle) = base.vehicle {
+            let mount = self.entity::<EntityData>(vehicle)?;
+            tag.insert(
+                "Pos",
+                vector_tag(Vec3::new(
+                    mount.position.x,
+                    base.position.y,
+                    mount.position.z,
+                )),
+            );
+        }
+        let mut passengers = ListTag::default();
+        for &passenger in &base.passengers {
+            if let Some(tag) = self.save_entity_as_passenger(passenger)? {
+                passengers.0.push(Tag::Compound(tag));
+            }
+        }
+        if !passengers.is_empty() {
+            tag.insert("Passengers", Tag::List(passengers));
+        }
+        Ok(Some(tag))
+    }
+}

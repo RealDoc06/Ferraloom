@@ -271,41 +271,6 @@ fn generic_static_registry_lookup_matches_numeric_reports() {
 }
 
 #[test]
-fn dynamic_integer_properties_preserve_absence_and_invalid_values() {
-    use crate::{BlockStatePropertyError, properties};
-    let state = Block::WHEAT.default_state();
-    assert!(state.has_integer_property("age"));
-    assert_eq!(
-        state.with_integer_property("age", 7).unwrap(),
-        state.with(properties::AGE, 7).unwrap()
-    );
-    assert_eq!(
-        state.with_integer_property("age", 8),
-        Err(BlockStatePropertyError::InvalidValue(8))
-    );
-    assert_eq!(
-        state.with_integer_property("waterlogged", 0),
-        Err(BlockStatePropertyError::MissingOrNonInteger)
-    );
-    assert!(!Block::OAK_LOG.default_state().has_integer_property("axis"));
-    let wet = Block::OAK_STAIRS
-        .default_state()
-        .with(properties::WATERLOGGED, true)
-        .unwrap();
-    assert_eq!(
-        Block::STONE_STAIRS
-            .default_state()
-            .with_properties_of(wet)
-            .get(properties::WATERLOGGED),
-        Some(true)
-    );
-    // IntegerProperty equality includes its allowed range.
-    let wheat = state.with(properties::AGE, 7).unwrap();
-    let cactus = Block::CACTUS.default_state();
-    assert_eq!(cactus.with_properties_of(wheat), cactus);
-}
-
-#[test]
 fn every_state_rotation_and_mirror_matches_vanilla_registry() {
     use ferraloom_util::{Mirror, Rotation};
     let captured: Value = serde_json::from_str(include_str!(
@@ -442,4 +407,187 @@ fn cached_air_fact_matches_vanilla_state_registry() {
     }
     const AIR: bool = crate::Block::AIR.default_state().is_air();
     assert!(std::hint::black_box(AIR));
+}
+
+#[test]
+fn dynamic_integer_properties_preserve_absence_and_invalid_values() {
+    use crate::{BlockStatePropertyError, properties};
+    let state = Block::WHEAT.default_state();
+    assert!(state.has_integer_property("age"));
+    assert_eq!(
+        state.with_integer_property("age", 7).unwrap(),
+        state.with(properties::AGE, 7).unwrap()
+    );
+    assert_eq!(
+        state.with_integer_property("age", 8),
+        Err(BlockStatePropertyError::InvalidValue(8))
+    );
+    assert_eq!(
+        state.with_integer_property("waterlogged", 0),
+        Err(BlockStatePropertyError::MissingOrNonInteger)
+    );
+    assert!(!Block::OAK_LOG.default_state().has_integer_property("axis"));
+    let wet = Block::OAK_STAIRS
+        .default_state()
+        .with(properties::WATERLOGGED, true)
+        .unwrap();
+    assert_eq!(
+        Block::STONE_STAIRS
+            .default_state()
+            .with_properties_of(wet)
+            .get(properties::WATERLOGGED),
+        Some(true)
+    );
+    // IntegerProperty equality includes its allowed range.
+    let wheat = state.with(properties::AGE, 7).unwrap();
+    let cactus = Block::CACTUS.default_state();
+    assert_eq!(cactus.with_properties_of(wheat), cactus);
+}
+
+#[test]
+fn liquid_and_lava_ignition_are_state_facts_independent_of_waterlogging() {
+    use crate::{Block, properties};
+    for block in [Block::WATER, Block::LAVA, Block::BUBBLE_COLUMN] {
+        assert!(block.default_state().liquid());
+    }
+    let wet_slab = Block::OAK_SLAB
+        .default_state()
+        .with(properties::WATERLOGGED, true)
+        .unwrap();
+    assert!(!wet_slab.data().fluid.empty);
+    assert!(!wet_slab.liquid());
+    assert!(wet_slab.ignited_by_lava());
+    assert!(!Block::STONE.default_state().ignited_by_lava());
+    // The independent higher fact bits must not change post-process offsets.
+    assert_eq!(
+        Block::BUBBLE_COLUMN.default_state().post_process_y_offset(),
+        None
+    );
+}
+
+#[test]
+fn comparator_and_conductor_facts_preserve_property_overrides() {
+    use crate::Block;
+    assert!(Block::CAKE.default_state().has_analog_output_signal());
+    assert!(!Block::STONE.default_state().has_analog_output_signal());
+    assert_eq!(
+        Block::STONE.default_state().cached_redstone_conductor(),
+        Some(true)
+    );
+    assert_eq!(
+        Block::GLASS.default_state().cached_redstone_conductor(),
+        Some(false)
+    );
+    assert_eq!(
+        Block::SOUL_SAND
+            .default_state()
+            .cached_collision_full_block(),
+        Some(false)
+    );
+    assert_eq!(
+        Block::SOUL_SAND.default_state().cached_redstone_conductor(),
+        Some(true)
+    );
+}
+
+#[test]
+fn block_landing_properties_preserve_float_restitution_and_reduction() {
+    assert_eq!(
+        Block::RED_BED.data().fall_distance_reduction.to_bits(),
+        0.5_f32.to_bits()
+    );
+    assert_eq!(
+        Block::SLIME_BLOCK.data().bounce_restitution.to_bits(),
+        1.0_f32.to_bits()
+    );
+    assert_eq!(Block::STONE.data().fall_distance_reduction, 0.0);
+    assert_eq!(Block::STONE.data().bounce_restitution, 0.0);
+    // Hay reduces the damage modifier in its fallOn override, independently
+    // of the base Block's fall-distance reduction property.
+    assert_eq!(Block::HAY_BLOCK.data().fall_distance_reduction, 0.0);
+}
+
+#[test]
+fn entity_inside_and_landing_virtual_owners_are_extracted_by_signature() {
+    use crate::{Block, BlockMethod};
+    assert!(!Block::OAK_LEAVES.overrides(BlockMethod::GetEntityInsideCollisionShape));
+    assert!(!Block::WATER.overrides(BlockMethod::EntityInside));
+    assert!(Block::POWDER_SNOW.overrides(BlockMethod::GetEntityInsideCollisionShape));
+    assert!(Block::TRIPWIRE.overrides(BlockMethod::GetEntityInsideCollisionShape));
+    assert!(Block::SLIME_BLOCK.overrides(BlockMethod::FallOn));
+    assert!(!Block::SLIME_BLOCK.overrides(BlockMethod::BounceOn));
+    assert!(Block::HAY_BLOCK.overrides(BlockMethod::FallOn));
+}
+
+#[test]
+fn collision_property_is_independent_of_the_empty_context_shape() {
+    assert!(Block::STONE.has_collision());
+    assert!(!Block::WATER.has_collision());
+    assert!(!Block::AIR.has_collision());
+    assert!(Block::POWDER_SNOW.has_collision());
+    assert!(
+        Block::POWDER_SNOW
+            .default_state()
+            .data()
+            .collision
+            .boxes()
+            .is_empty()
+    );
+}
+
+#[test]
+fn waterlogging_ownership_distinguishes_interfaces_and_slab_overrides() {
+    assert!(!Block::IRON_CHAIN.overrides(BlockMethod::CanPlaceLiquid));
+    assert!(!Block::IRON_CHAIN.overrides(BlockMethod::PlaceLiquid));
+    assert!(!Block::IRON_CHAIN.overrides(BlockMethod::PickupBlock));
+    assert!(Block::STONE_SLAB.overrides(BlockMethod::CanPlaceLiquid));
+    assert!(Block::STONE_SLAB.overrides(BlockMethod::PlaceLiquid));
+    assert!(!Block::STONE_SLAB.overrides(BlockMethod::PickupBlock));
+    assert!(Block::WATER.overrides(BlockMethod::PickupBlock));
+    assert!(Block::STONE.overrides(BlockMethod::PlaceLiquid));
+}
+
+#[test]
+fn clone_item_ownership_and_block_items_preserve_wall_aliases() {
+    assert_eq!(Block::STONE.as_item(), Item::STONE);
+    assert_eq!(Block::WALL_TORCH.as_item(), Item::TORCH);
+    assert_eq!(Block::AIR.as_item(), Item::AIR);
+    assert!(!Block::STONE.overrides(BlockMethod::GetCloneItemStack));
+    assert!(!Block::CHEST.overrides(BlockMethod::GetCloneItemStack));
+    assert!(Block::BEEHIVE.overrides(BlockMethod::GetCloneItemStack));
+}
+
+#[test]
+fn placement_replacement_signature_preserves_contextual_overrides() {
+    assert!(!Block::AIR.overrides(BlockMethod::CanBeReplaced));
+    assert!(!Block::STONE.overrides(BlockMethod::CanBeReplaced));
+    assert!(Block::SNOW.overrides(BlockMethod::CanBeReplaced));
+    assert!(Block::STONE_SLAB.overrides(BlockMethod::CanBeReplaced));
+    assert!(Block::SEA_PICKLE.overrides(BlockMethod::CanBeReplaced));
+}
+
+#[test]
+fn fluid_random_ticks_follow_the_fluid_type_and_preserve_waterlogged_states() {
+    for (block, ticks) in [(Block::WATER, false), (Block::LAVA, true)] {
+        for level in 0..16 {
+            let state = block
+                .default_state()
+                .with(properties::LEVEL, level)
+                .unwrap();
+            assert_eq!(state.data().fluid.is_randomly_ticking(), ticks);
+        }
+    }
+    let wet = Block::OAK_SLAB
+        .default_state()
+        .with(properties::WATERLOGGED, true)
+        .unwrap();
+    assert!(!wet.data().fluid.empty);
+    assert!(!wet.data().fluid.is_randomly_ticking());
+    assert!(
+        !Block::AIR
+            .default_state()
+            .data()
+            .fluid
+            .is_randomly_ticking()
+    );
 }

@@ -188,6 +188,8 @@ pub struct BlockData {
     pub friction: f32,
     pub speed_factor: f32,
     pub jump_factor: f32,
+    pub fall_distance_reduction: f32,
+    pub bounce_restitution: f32,
     properties: &'static [PropertyLayout],
 }
 
@@ -239,6 +241,13 @@ pub struct FluidState {
     pub empty: bool,
     pub falling: bool,
 }
+impl FluidState {
+    /// Port of FluidState#isRandomlyTicking, which delegates to its Fluid type
+    /// without reading a level, position or another fluid-state property.
+    pub const fn is_randomly_ticking(self) -> bool {
+        FLUID_RANDOM_TICKING[self.fluid_type.protocol_id() as usize]
+    }
+}
 
 /// Port of BlockBehaviour.BlockStateBase's cached state facts.
 #[derive(Clone, Copy, Debug)]
@@ -273,9 +282,21 @@ pub enum Rarity {
     Epic,
 }
 
+/// Immutable ItemStackTemplate fact; component codecs belong to protocol.
+#[derive(Clone, Copy, Debug)]
+pub struct CraftingRemainder {
+    pub item: Item,
+    pub count: i32,
+    pub components_json: &'static str,
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct ItemData {
     pub max_stack_size: u32,
+    /// Item#getCraftingRemainder, independent of USE_REMAINDER.
+    pub crafting_remainder: Option<CraftingRemainder>,
+    /// BannerItem#getColor. None for all non-banner items.
+    pub banner_color: Option<&'static str>,
     pub max_damage: u32,
     pub rarity: Rarity,
     pub block: Option<Block>,
@@ -408,6 +429,14 @@ impl BlockState {
     pub const fn is_solid(self) -> bool {
         BLOCK_STATE_FACTS[self.0 as usize] & 1 != 0
     }
+    /// Port of BlockStateBase#liquid, copied from Properties.liquid at construction.
+    pub const fn liquid(self) -> bool {
+        BLOCK_STATE_FACTS[self.0 as usize] & (1 << 12) != 0
+    }
+    /// Port of BlockStateBase#ignitedByLava, copied from Properties at construction.
+    pub const fn ignited_by_lava(self) -> bool {
+        BLOCK_STATE_FACTS[self.0 as usize] & (1 << 13) != 0
+    }
     /// Port of BlockStateBase#hasBlockEntity, a state-only EntityBlock test.
     pub const fn has_block_entity(self) -> bool {
         BLOCK_STATE_FACTS[self.0 as usize] & 2 != 0
@@ -438,9 +467,19 @@ impl BlockState {
         self.cached_collision_full_block()
             .map(|_| self.data().collision.boxes().is_empty())
     }
+    /// Port of BlockStateBase.Cache#largeCollisionShape. Dynamic shapes have no
+    /// cache; BlockCollisions treats that case as potentially large.
+    pub const fn has_large_collision_shape(self) -> Option<bool> {
+        let bits = BLOCK_STATE_FACTS[self.0 as usize];
+        if bits & 4 == 0 {
+            None
+        } else {
+            Some(bits & (1 << 14) != 0)
+        }
+    }
     /// Vanilla's registered PostProcess callbacks are null, self, and above.
     pub const fn post_process_y_offset(self) -> Option<i32> {
-        match BLOCK_STATE_FACTS[self.0 as usize] >> 10 {
+        match (BLOCK_STATE_FACTS[self.0 as usize] >> 10) & 3 {
             1 => Some(0),
             2 => Some(1),
             _ => None,
@@ -465,6 +504,36 @@ impl BlockState {
     /// Port of BlockBehaviour.BlockStateBase#isAir (cached from Properties).
     pub const fn is_air(self) -> bool {
         STATE_IS_AIR[self.id() as usize]
+    }
+}
+
+impl BlockState {
+    /// Port of BlockStateBase#hasAnalogOutputSignal (a state-only virtual query).
+    pub const fn has_analog_output_signal(self) -> bool {
+        REDSTONE_STATE_FACTS[self.0 as usize] & 1 != 0
+    }
+    /// Vanilla's predicate is cached collision-full or a constant. Dynamic
+    /// collision shapes still require a live query and return None here.
+    pub const fn cached_redstone_conductor(self) -> Option<bool> {
+        let bits = REDSTONE_STATE_FACTS[self.0 as usize];
+        if bits & 2 == 0 {
+            None
+        } else {
+            Some(bits & 4 != 0)
+        }
+    }
+}
+
+impl Block {
+    /// BlockBehaviour's final hasCollision property, independent of every shape
+    /// query and context. An empty collision shape does not imply false here.
+    pub const fn has_collision(self) -> bool {
+        BLOCK_HAS_COLLISION[self.protocol_id() as usize]
+    }
+    /// Port of Block#asItem, including shared standing/wall item mappings and
+    /// pure block subclass overrides. Air represents an absent block item.
+    pub const fn as_item(self) -> Item {
+        BLOCK_ITEMS[self.protocol_id() as usize]
     }
 }
 

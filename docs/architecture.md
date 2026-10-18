@@ -18,7 +18,8 @@ compile in parallel.
 | `ferraloom-protocol` | Every 26.3 packet in every state, both directions, plus text components and item data component codecs | util, nbt, data |
 | `ferraloom-worldgen` | Noise router, density functions, biome source, surface rules, aquifers, carvers, features, structures | util, nbt, data |
 | `ferraloom-storage` | Anvil region files, chunk and entity serialization, `level.dat`, player data, data fixing of older saves | util, nbt, data |
-| `ferraloom-brigadier` | Mojang's Brigadier (generic command dispatcher) | none |
+| `ferraloom-light` | The block and sky light engines (`LevelLightEngine`), run on the light pool | util, data, chunk |
+| `ferraloom-brigadier` | Mojang's Brigadier (generic command dispatcher) | util (for exact JDK `HashSet` suggestion order) |
 | `ferraloom-game` | The simulation: levels, chunks, block behaviors, fluids, redstone, entities and AI, items, menus, recipes, loot, advancements, commands, scoreboard, the GameTest framework | all of the above |
 | `ferraloom-server` | Binary: `server.properties`, networking, login and auth, the tick scheduler | all of the above |
 | `ferraloom-parity` | Headless bot plus scenario runner. Drives vanilla and Ferraloom with identical scenarios and compares observations | protocol, data, nbt |

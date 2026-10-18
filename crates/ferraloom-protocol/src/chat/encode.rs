@@ -147,8 +147,8 @@ fn numeric<O: EncodeOps>(value: Numeric, ops: &O) -> O::Value {
         Numeric::Short(v) => ops.create_short(v),
         Numeric::Int(v) => ops.create_int(v),
         Numeric::Long(v) => ops.create_long(v),
-        Numeric::Float(v) => ops.create_float(v),
-        Numeric::Double(v) => ops.create_double(v),
+        Numeric::Float(v) => ops.create_float(v.0),
+        Numeric::Double(v) => ops.create_double(v.0),
     }
 }
 pub(super) fn style<O: EncodeOps>(value: &Style, ops: &O) -> Result<O::Value> {

@@ -221,6 +221,7 @@ public final class ExtractData {
                     if (state.isFaceSturdy(EmptyBlockGetter.INSTANCE, BlockPos.ZERO, direction)) bits |= 1 << (3 + direction.get3DDataValue());
                 }
                 if (state.isCollisionShapeFullBlock(EmptyBlockGetter.INSTANCE, BlockPos.ZERO)) bits |= 1 << 9;
+                if (state.hasLargeCollisionShape()) bits |= 1 << 14;
             }
             var post = state.getPostProcessPos(EmptyBlockGetter.INSTANCE, BlockPos.ZERO);
             if (post != null) {
@@ -228,9 +229,55 @@ public final class ExtractData {
                 else if (post.equals(BlockPos.ZERO.above())) bits |= 2 << 10;
                 else throw new IllegalStateException("Unknown post process offset: " + state);
             }
+            // BlockStateBase copies these final booleans straight from
+            // Properties; neither query reads the level, position or context.
+            if (state.liquid()) bits |= 1 << 12;
+            if (state.ignitedByLava()) bits |= 1 << 13;
             table.add(bits);
         }
         write(dir, "block_state_facts", table);
+    }
+
+    // hasAnalogOutputSignal accepts only state. Vanilla's redstone-conductor
+    // predicates are the cached collision-full query or Blocks::always/never;
+    // non-dynamic caches therefore prove no level/position dependence.
+    private static void redstoneStateFacts(Path dir) throws Exception {
+        var table = new JsonArray();
+        for (var state : Block.BLOCK_STATE_REGISTRY) {
+            int bits = state.hasAnalogOutputSignal() ? 1 : 0;
+            if (!state.getBlock().hasDynamicShape()) {
+                bits |= 2;
+                if (state.isRedstoneConductor(EmptyBlockGetter.INSTANCE, BlockPos.ZERO)) bits |= 4;
+            }
+            table.add(bits);
+        }
+        write(dir, "redstone_state_facts", table);
+    }
+
+    // BlockBehaviour caches Properties.hasCollision in a final field. No public
+    // getter exists; reflect that exact field rather than infer it from shapes.
+    private static void blockCollisionFlags(Path dir) throws Exception {
+        var field = net.minecraft.world.level.block.state.BlockBehaviour.class.getDeclaredField("hasCollision");
+        field.setAccessible(true);
+        var table = new JsonArray();
+        for (var block : BuiltInRegistries.BLOCK) table.add(field.getBoolean(block));
+        write(dir, "block_collision_flags", table);
+    }
+
+    // Block#asItem reads a registry mapping (or a pure subclass override),
+    // never level state. Wall variants may share their standing block's item.
+    private static void blockItems(Path dir) throws Exception {
+        var table = new JsonArray();
+        for (var block : BuiltInRegistries.BLOCK) table.add(BuiltInRegistries.ITEM.getId(block.asItem()));
+        write(dir, "block_items", table);
+    }
+
+    // FluidState#isRandomlyTicking delegates only to its Fluid type. Query the
+    // real virtual method, without inferring behavior from a liquid block id.
+    private static void fluidRandomTicking(Path dir) throws Exception {
+        var table = new JsonArray();
+        for (var fluid : BuiltInRegistries.FLUID) table.add(fluid.defaultFluidState().isRandomlyTicking());
+        write(dir, "fluid_random_ticking", table);
     }
 
     private static void collectClasses(Class<?> type, Set<Class<?>> classes) {
@@ -268,15 +315,47 @@ public final class ExtractData {
         write(dir, "air_states", ids);
     }
 
+
+    /** Item#getCraftingRemainder is final and returns an immutable Properties field.
+     * No stack, level or component lookup participates in this item-only fact. */
+    private static void itemCrafting(Path dir, com.mojang.serialization.DynamicOps<JsonElement> ops) throws Exception {
+        Files.createDirectories(dir);
+        var entries = new JsonArray();
+        for (var item : BuiltInRegistries.ITEM) {
+            var row = new JsonObject();
+            row.addProperty("id", BuiltInRegistries.ITEM.getId(item));
+            var remainder = item.getCraftingRemainder();
+            row.add("remainder", remainder == null ? JsonNull.INSTANCE : ItemStackTemplate.CODEC.encodeStart(ops, remainder).getOrThrow());
+            if (item instanceof BannerItem banner) row.addProperty("banner_color", banner.getColor().getSerializedName());
+            else row.add("banner_color", JsonNull.INSTANCE);
+            entries.add(row);
+        }
+        write(dir, "item_crafting", entries);
+    }
+
     public static void main(String[] args) throws Exception {
         SharedConstants.tryDetectVersion();
         Bootstrap.bootStrap();
+        if (args.length > 1 && args[1].equals("--fluid-random-ticking-only")) { fluidRandomTicking(Path.of(args[0])); return; }
+        if (args.length > 1 && args[1].equals("--block-items-only")) { blockItems(Path.of(args[0])); return; }
+        if (args.length > 1 && args[1].equals("--block-collision-flags-only")) { blockCollisionFlags(Path.of(args[0])); return; }
+        if (args.length > 1 && args[1].equals("--redstone-facts-only")) { redstoneStateFacts(Path.of(args[0])); return; }
         if (args.length > 1 && args[1].equals("--state-facts-only")) { stateFacts(Path.of(args[0])); return; }
         if (args.length > 1 && args[1].equals("--face-occlusion-only")) { faceOcclusion(Path.of(args[0])); return; }
         if (args.length > 1 && args[1].equals("--state-transforms-only")) {
             stateTransforms(Path.of(args[0]));
             return;
         }
+        if (args.length > 1 && args[1].equals("--item-crafting-only")) {
+            var registries = net.minecraft.data.registries.VanillaRegistries.createWorldLookup();
+            BuiltInRegistries.DATA_COMPONENT_INITIALIZERS.build(registries).forEach(pending -> pending.apply());
+            itemCrafting(Path.of(args[0]), registries.createSerializationContext(JsonOps.INSTANCE));
+            return;
+        }
+        blockCollisionFlags(Path.of(args[0]));
+        blockItems(Path.of(args[0]));
+        fluidRandomTicking(Path.of(args[0]));
+        redstoneStateFacts(Path.of(args[0]));
         airStates(Path.of(args[0]));
         if (args.length > 1 && args[1].equals("--air-states-only")) return;
         blockClasses(Path.of(args[0]));
@@ -302,6 +381,8 @@ public final class ExtractData {
             out.addProperty("friction", block.getFriction());
             out.addProperty("speed_factor", block.getSpeedFactor());
             out.addProperty("jump_factor", block.getJumpFactor());
+            out.addProperty("fall_distance_reduction", block.getFallDistanceReduction());
+            out.addProperty("bounce_restitution", block.getBounceRestitution());
             // State-dependent defaults are retained on every individual state below.
             out.add("default_properties", state(block.defaultBlockState()));
             blocks.add(out);
@@ -311,6 +392,7 @@ public final class ExtractData {
         blockData.add("blocks", blocks);
         blockData.add("states", states);
         write(dir, "block_properties", blockData);
+        if (args.length > 1 && args[1].equals("--block-properties-only")) return;
         var shapes = new JsonArray();
         SHAPES.forEach(shapes::add);
         write(dir, "shapes", shapes);
@@ -336,6 +418,7 @@ public final class ExtractData {
             items.add(out);
         }
         write(dir, "items", items);
+        itemCrafting(dir, ops);
 
         var entities = new JsonArray();
         for (var type : BuiltInRegistries.ENTITY_TYPE) {

@@ -18,3 +18,14 @@ impl ServerLevel {
         }
     }
 }
+
+impl ServerLevel {
+    /// Ticket half of ServerLevel#setChunkForced. On a changed addition the runtime
+    /// must finish getChunk synchronously before returning to the command caller.
+    pub fn set_chunk_forced(&mut self, pos: ferraloom_util::ChunkPos, forced: bool) -> bool {
+        self.tickets.set_chunk_forced(pos, forced)
+    }
+    pub fn get_force_loaded_chunks(&self) -> &ferraloom_util::collections::LongOpenHashSet {
+        self.tickets.get_force_loaded_chunks()
+    }
+}

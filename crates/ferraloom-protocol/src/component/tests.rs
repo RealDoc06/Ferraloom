@@ -491,10 +491,10 @@ fn vanilla_persistent_primitive_coercions() {
             "{name}"
         );
         if let Ok(value) = decoded {
-            let bits = |n: f64| {
+            let bits = |n: JavaF64| {
                 format!(
                     "{:x}",
-                    if n.is_nan() {
+                    if n.0.is_nan() {
                         f64::NAN.to_bits()
                     } else {
                         n.to_bits()
@@ -584,6 +584,116 @@ fn vanilla_persistent_compound_or_snbt_alternatives() {
         } else {
             assert!(entity.is_err());
             assert!(block_entity.is_err());
+        }
+    }
+}
+
+/// Native record equality/hashCode and ItemStack#isSameItemSameComponents,
+/// independent of the encoder cache's separate value-equality behavior.
+#[test]
+fn native_component_float_equality_and_hashes() {
+    use ferraloom_util::collections::JavaHash;
+
+    let fixture: Value = serde_json::from_str(include_str!("float-fixtures.json")).unwrap();
+    let (_, registries) = fixtures();
+    for group in fixture["groups"].as_array().unwrap() {
+        let name = group["type"].as_str().unwrap();
+        let key = Identifier::parse(group["component"].as_str().unwrap()).unwrap();
+        let rows = group["rows"].as_array().unwrap();
+        let values: Vec<_> = rows
+            .iter()
+            .map(|row| {
+                let bytes = unhex(row["wire"].as_str().unwrap());
+                let mut reader = Reader::with_context(&bytes, &registries);
+                let value = DataComponent::decode_value(&key, &mut reader).unwrap();
+                reader.finish().unwrap();
+                let mut writer = Writer::with_context(&registries);
+                value.encode_value(&mut writer).unwrap();
+                assert_eq!(writer.as_slice(), bytes, "{name} {} wire", row["bits"]);
+                let record_hash = match &value {
+                    DataComponent::Food(value) => Some(value.java_hash_code()),
+                    DataComponent::UseEffects(value) => Some(value.java_hash_code()),
+                    DataComponent::AttackRange(value) => Some(value.java_hash_code()),
+                    _ => None,
+                };
+                assert_eq!(
+                    record_hash.map(i64::from),
+                    row["record_hash"].as_i64(),
+                    "{name} {} record hash",
+                    row["bits"]
+                );
+                assert_eq!(
+                    value.hash().ok().map(i64::from),
+                    row["hash"].as_i64(),
+                    "{name} {} HashOps",
+                    row["bits"]
+                );
+                if let Some(expected) = row["nbt"].as_str() {
+                    let mut writer = Writer::new();
+                    writer.nbt(&value.to_nbt().unwrap()).unwrap();
+                    assert_eq!(
+                        writer.as_slice(),
+                        unhex(expected),
+                        "{name} {} NBT",
+                        row["bits"]
+                    );
+                } else {
+                    assert!(value.to_nbt().is_err(), "{name} {} NBT", row["bits"]);
+                }
+                value
+            })
+            .collect();
+        let stacks = |count| {
+            values
+                .iter()
+                .map(|value| {
+                    ItemStack::new(
+                        ferraloom_data::Item::STONE,
+                        count,
+                        DataComponentPatch {
+                            added: vec![value.clone()],
+                            removed: vec![],
+                        },
+                    )
+                })
+                .collect::<Vec<_>>()
+        };
+        let left = stacks(1);
+        let right = stacks(7);
+        for (i, row) in rows.iter().enumerate() {
+            let equality = row["equal"].as_str().unwrap().as_bytes();
+            let stacks = row["stacks"].as_str().unwrap().as_bytes();
+            assert_eq!(equality.len(), values.len());
+            assert_eq!(stacks.len(), values.len());
+            for (j, other) in values.iter().enumerate() {
+                assert_eq!(
+                    &values[i] == other,
+                    equality[j] == b'1',
+                    "{name} {i}/{j} equality"
+                );
+                assert_eq!(
+                    left[i].is_same_item_same_components(&right[j]).unwrap(),
+                    stacks[j] == b'1',
+                    "{name} {i}/{j} stacks"
+                );
+            }
+        }
+    }
+    let rows = fixture["bounds"].as_array().unwrap();
+    let values: Vec<_> = rows
+        .iter()
+        .map(|row| {
+            let value =
+                JavaF64::from_bits(u64::from_str_radix(row["bits"].as_str().unwrap(), 16).unwrap());
+            DoubleBounds {
+                min: Some(value),
+                max: Some(value),
+            }
+        })
+        .collect();
+    for (i, row) in rows.iter().enumerate() {
+        for (j, expected) in row["equal"].as_str().unwrap().bytes().enumerate() {
+            assert_eq!(values[i] == values[j], expected == b'1', "bounds {i}/{j}");
         }
     }
 }

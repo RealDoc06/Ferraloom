@@ -265,6 +265,18 @@ own handles/rebindable wrappers, not copies or raw references. Validate current
 state/type and removal on every tick. This preserves `LevelChunk` replacement
 and `Level#tickBlockEntities` pending-list semantics without borrow aliasing.
 
+### Block entity identity
+
+`BlockEntityRef { pos, generation }` carries a per-creation identity, following the
+same principle as `EntityRef`. `level.block_entity_at(pos)` returns the current
+ref. Tickers and callbacks keep the ref they were given. When a block entity is
+removed or replaced, its state is detached from the chunk: it is no longer
+ticked, saved or synced. It stays reachable through refs that are still held,
+until the phase or callback stack holding them unwinds. A running callback that
+writes through its old ref changes the detached state, exactly like Java's
+retained receiver object, and never the replacement. Ticker wrappers re-bind by
+generation.
+
 ### Worldgen shares block behavior
 
 Vanilla block methods take `LevelReader`/`LevelAccessor`, which both
@@ -273,7 +285,8 @@ Vanilla block methods take `LevelReader`/`LevelAccessor`, which both
 keeps one implementation of each behavior in `ferraloom-game`:
 
 - Methods that vanilla calls on both kinds of level take a `LevelAccessRef<'_>`
-  enum (`Server(&mut ServerLevel)` / `Worldgen(&mut WorldGenRegion)`). It is
+  enum (`Server(&mut Level)` / `Worldgen(&mut WorldGenRegion)`). Read-only
+  methods use `LevelReaderRef` (`Server(&Level)` / `Worldgen(&WorldGenRegion)`). It is
   matched statically, so block code still inlines and no `dyn Level` appears
   on the hot path.
 - `ferraloom-worldgen` cannot depend on game, so it calls those behaviors

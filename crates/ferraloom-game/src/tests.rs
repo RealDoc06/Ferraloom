@@ -19,6 +19,10 @@ const PLACED: BlockPos = BlockPos::new(-1, 64, -1);
 
 struct TestCow;
 impl Entity for TestCow {
+    fn trace_entity_refs(&self, state: &EntityState, references: &mut Vec<EntityRef>) {
+        CowBehavior.trace_entity_refs(state, references);
+    }
+
     fn tick(&self, entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
         CowBehavior.tick(entity, level)?;
         // These borrows end before damage calls back into this active entity.
@@ -84,19 +88,25 @@ static TEST_BEHAVIORS: Behaviors = Behaviors::EMPTY
 
 fn region() -> Level {
     let mut region = Level::new(Region::new(&TEST_BEHAVIORS));
-    region
-        .add_chunk(LevelChunk::new(
-            ChunkPos::containing(PLACED),
-            -4..20,
-            ferraloom_chunk::LevelChunkSection::new(
-                ferraloom_chunk::Strategy::block_states(),
-                ferraloom_chunk::Strategy::biomes(std::sync::Arc::new(
-                    ferraloom_chunk::IdMap::new(vec![ferraloom_chunk::BiomeId(0)]).unwrap(),
-                )),
-                ferraloom_chunk::BiomeId(0),
-            ),
-        ))
-        .unwrap();
+    for pos in [ChunkPos::containing(PLACED), ChunkPos::ZERO] {
+        region
+            .add_chunk(LevelChunk::new(
+                pos,
+                -4..20,
+                ferraloom_chunk::LevelChunkSection::new(
+                    ferraloom_chunk::Strategy::block_states(),
+                    ferraloom_chunk::Strategy::biomes(std::sync::Arc::new(
+                        ferraloom_chunk::IdMap::new(vec![ferraloom_chunk::BiomeId(0)]).unwrap(),
+                    )),
+                    ferraloom_chunk::BiomeId(0),
+                ),
+            ))
+            .unwrap();
+        region
+            .update_entity_chunk_status(pos, crate::level::entity::Visibility::Ticking)
+            .unwrap();
+        region.set_chunk_entity_ticking(pos, true).unwrap();
+    }
     region
 }
 
@@ -105,9 +115,11 @@ fn entity_tick_reenters_attacker_and_places_a_scheduled_block() {
     let mut region = region();
     let mut cow = Cow::default();
     cow.as_mob_mut().target = Some(TARGET);
-    region.add_entity(ATTACKER, EntityState::Cow(cow)).unwrap();
     region
-        .add_entity(TARGET, EntityState::Cow(Cow::default()))
+        .add_entity(ATTACKER, EntityState::Cow(Box::new(cow)))
+        .unwrap();
+    region
+        .add_entity(TARGET, EntityState::Cow(Box::default()))
         .unwrap();
     region.tick_entities().unwrap();
     assert_eq!(
@@ -137,7 +149,7 @@ fn entity_tick_reenters_attacker_and_places_a_scheduled_block() {
 fn living_damage_cooldown_applies_only_the_increase() {
     let mut region = region();
     region
-        .add_entity(TARGET, EntityState::Cow(Cow::default()))
+        .add_entity(TARGET, EntityState::Cow(Box::default()))
         .unwrap();
     let mut entity = TARGET;
     assert!(
@@ -195,7 +207,7 @@ fn scheduled_ticks_use_container_then_intra_tick_order_and_deduplicate() {
 fn removed_entities_are_visible_until_management_and_never_tick() {
     let mut region = region();
     region
-        .add_entity(TARGET, EntityState::Cow(Cow::default()))
+        .add_entity(TARGET, EntityState::Cow(Box::default()))
         .unwrap();
     region.remove_entity(TARGET).unwrap();
     region.tick_entities().unwrap();
@@ -226,10 +238,10 @@ fn removed_entities_are_visible_until_management_and_never_tick() {
 #[test]
 fn block_access_does_not_hide_missing_neighbors_or_overwrite_replacements() {
     let mut region = region();
-    let missing = BlockPos::new(0, 64, 0);
+    let missing = BlockPos::new(16, 64, 0);
     assert_eq!(
         region.get_block_state(missing),
-        Err(LevelError::MissingChunk(ChunkPos::new(0, 0)))
+        Err(LevelError::MissingChunk(ChunkPos::new(1, 0)))
     );
     region
         .set_block_state(PLACED, Block::STONE.default_state())

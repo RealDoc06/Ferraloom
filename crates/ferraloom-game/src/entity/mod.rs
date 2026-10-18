@@ -3,6 +3,9 @@ use ferraloom_data::EntityType;
 use crate::level::{Level, LevelError};
 
 pub mod animal;
+pub mod effects;
+pub mod experience_orb;
+pub mod item;
 pub mod player;
 
 /// Server-lifetime identity, independent of storage location and network ID.
@@ -11,6 +14,20 @@ pub mod player;
 pub struct EntityRef(pub u64);
 
 impl EntityRef {
+    pub fn count_player_passengers(self, level: &Level) -> Result<i32, LevelError> {
+        count_player_passengers(self, level)
+    }
+
+    pub fn move_by(
+        &mut self,
+        level: &mut Level,
+        mover: movement::MoverType,
+        delta: ferraloom_util::Vec3,
+    ) -> Result<(), LevelError> {
+        let behavior = level.entity_behavior(*self)?;
+        behavior.move_by(*self, level, mover, delta)
+    }
+
     /// The mutable receiver is a call handle; canonical state stays in `level`.
     pub fn tick(&mut self, level: &mut Level) -> Result<(), LevelError> {
         let behavior = level.entity_behavior(*self)?;
@@ -28,28 +45,28 @@ impl EntityRef {
     }
 }
 
-/// Port of Entity's shared state. No world pointer or subclass behavior lives here.
-#[derive(Debug)]
-pub struct EntityData {
-    pub tick_count: i32,
-    pub first_tick: bool,
-    pub removed: bool,
-}
-
-impl Default for EntityData {
-    fn default() -> Self {
-        Self {
-            tick_count: 0,
-            first_tick: true,
-            removed: false,
-        }
-    }
-}
+mod base;
+pub mod collision;
+pub mod collision_context;
+pub mod fluid;
+pub mod inside_block;
+mod lifecycle;
+pub mod movement;
+mod trace;
+pub use lifecycle::{
+    base_tick, common_tick, count_player_passengers, eject_passengers, position_rider,
+    start_riding, stop_riding,
+};
+pub mod persistence;
+pub mod synched_data;
+pub mod tracking;
+pub use base::{EntityData, EntityDimensions, Movement, RemovalReason};
 
 /// Port of LivingEntity's unarmored damage/cooldown state.
 #[derive(Debug)]
 pub struct LivingEntity {
     pub parent: EntityData,
+    pub equipment: player::equipment::EntityEquipment,
     pub health: f32,
     pub last_hurt: f32,
     pub damage_cooldown_time: i32,
@@ -80,8 +97,12 @@ pub struct AgeableMob {
 /// Concrete stored subclasses. Parent accessors never copy canonical state.
 #[derive(Debug)]
 pub enum EntityState {
-    Cow(animal::Cow),
+    Cow(Box<animal::Cow>),
     Player(Box<player::ServerPlayer>),
+    PrimedTnt(Box<item::PrimedTnt>),
+    Item(Box<item::ItemEntity>),
+    FallingBlock(Box<item::FallingBlockEntity>),
+    ExperienceOrb(Box<experience_orb::ExperienceOrb>),
 }
 
 impl EntityState {
@@ -89,20 +110,24 @@ impl EntityState {
         match self {
             Self::Cow(_) => EntityType::COW,
             Self::Player(_) => EntityType::PLAYER,
+            Self::PrimedTnt(_) => EntityType::TNT,
+            Self::Item(_) => EntityType::ITEM,
+            Self::FallingBlock(_) => EntityType::FALLING_BLOCK,
+            Self::ExperienceOrb(_) => EntityType::EXPERIENCE_ORB,
         }
     }
 
     pub fn as_mob(&self) -> Option<&Mob> {
         match self {
             Self::Cow(cow) => Some(cow.as_mob()),
-            Self::Player(_) => None,
+            _ => None,
         }
     }
 
     pub fn as_mob_mut(&mut self) -> Option<&mut Mob> {
         match self {
             Self::Cow(cow) => Some(cow.as_mob_mut()),
-            Self::Player(_) => None,
+            _ => None,
         }
     }
 
@@ -122,12 +147,20 @@ impl EntityState {
         match self {
             Self::Cow(cow) => &cow.as_living().parent,
             Self::Player(p) => &p.parent.parent,
+            Self::PrimedTnt(tnt) => &tnt.parent,
+            Self::Item(item) => &item.parent,
+            Self::FallingBlock(block) => &block.parent,
+            Self::ExperienceOrb(orb) => &orb.parent,
         }
     }
     pub fn as_entity_mut(&mut self) -> &mut EntityData {
         match self {
             Self::Cow(cow) => &mut cow.as_living_mut().parent,
             Self::Player(p) => &mut p.parent.parent,
+            Self::PrimedTnt(tnt) => &mut tnt.parent,
+            Self::Item(item) => &mut item.parent,
+            Self::FallingBlock(block) => &mut block.parent,
+            Self::ExperienceOrb(orb) => &mut orb.parent,
         }
     }
 }
@@ -142,14 +175,43 @@ impl EntityDataView for animal::Cow {
     fn view(state: &EntityState) -> Option<&Self> {
         match state {
             EntityState::Cow(cow) => Some(cow),
-            EntityState::Player(_) => None,
+            _ => None,
         }
     }
     fn view_mut(state: &mut EntityState) -> Option<&mut Self> {
         match state {
             EntityState::Cow(cow) => Some(cow),
-            EntityState::Player(_) => None,
+            _ => None,
         }
+    }
+}
+
+impl EntityDataView for EntityData {
+    fn view(state: &EntityState) -> Option<&Self> {
+        Some(state.as_entity())
+    }
+    fn view_mut(state: &mut EntityState) -> Option<&mut Self> {
+        Some(state.as_entity_mut())
+    }
+}
+impl EntityDataView for LivingEntity {
+    fn view(state: &EntityState) -> Option<&Self> {
+        state.as_living()
+    }
+    fn view_mut(state: &mut EntityState) -> Option<&mut Self> {
+        state.as_living_mut()
+    }
+}
+/// Embedded-parent projection; each struct dereferences only to its immediate parent.
+impl std::ops::Deref for LivingEntity {
+    type Target = EntityData;
+    fn deref(&self) -> &Self::Target {
+        &self.parent
+    }
+}
+impl std::ops::DerefMut for LivingEntity {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.parent
     }
 }
 
@@ -160,14 +222,218 @@ pub struct DamageSource {
     pub bypasses_cooldown: bool,
 }
 
+/// Shared embedded Entity parent references for the host lifetime tracer.
+pub fn trace_base_entity_refs(base: &EntityData, references: &mut Vec<EntityRef>) {
+    references.extend(base.vehicle);
+    references.extend(base.passengers.iter().copied());
+}
+
 /// Vanilla virtual methods, separated from canonical embedded-parent state.
 ///
 /// Dispatch objects are stateless. Never hold a state borrow across a world call.
 pub trait Entity: Sync {
-    /// Subset of Entity#baseTick: finish the first tick. ServerLevel owns commonTick.
-    fn tick(&self, entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
-        level.entity_state_mut(entity)?.as_entity_mut().first_tick = false;
+    /// Host lifetime tracing is required for every dispatcher. Declare all held
+    /// EntityRef fields here; UUID lookup references do not retain old states.
+    fn trace_entity_refs(&self, state: &EntityState, references: &mut Vec<EntityRef>);
+    /// Port of Entity#getPickResult. Vanilla returns null; empty ItemStack is a
+    /// distinct successful result and must not erase that distinction.
+    fn get_pick_result(
+        &self,
+        _entity: EntityRef,
+        _level: &Level,
+    ) -> Result<Option<ferraloom_protocol::component::ItemStack>, LevelError> {
+        Ok(None)
+    }
+    fn block_pos_below_that_affects_my_movement(
+        &self,
+        entity: EntityRef,
+        level: &Level,
+    ) -> Result<ferraloom_util::BlockPos, LevelError> {
+        movement::get_on_pos(entity, 0.500_001_f32, level)
+    }
+    fn fire_immune_ticks(&self) -> i32 {
+        0
+    }
+    fn apply_effects_from_blocks(
+        &self,
+        entity: EntityRef,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        let movements = inside_block::collect_movements(entity, level)?;
+        inside_block::apply_effects(self, entity, &movements, level)
+    }
+    fn can_freeze(&self, _entity: EntityRef, _level: &Level) -> Result<bool, LevelError> {
+        Ok(true)
+    }
+    fn should_play_lava_hurt_sound(
+        &self,
+        _entity: EntityRef,
+        _level: &Level,
+    ) -> Result<bool, LevelError> {
+        Ok(true)
+    }
+    fn on_inside_block(
+        &self,
+        _entity: EntityRef,
+        _state: ferraloom_data::BlockState,
+        _level: &mut Level,
+    ) -> Result<(), LevelError> {
         Ok(())
+    }
+    fn move_by(
+        &self,
+        entity: EntityRef,
+        level: &mut Level,
+        mover: movement::MoverType,
+        delta: ferraloom_util::Vec3,
+    ) -> Result<(), LevelError> {
+        movement::move_entity(self, entity, mover, delta, level)
+    }
+    fn max_up_step(&self, entity: EntityRef, level: &Level) -> Result<f32, LevelError> {
+        let state = level.entity_state(entity)?;
+        if state.as_living().is_none() {
+            return Ok(0.0);
+        }
+        Ok(state
+            .entity_type()
+            .data()
+            .attributes
+            .iter()
+            .find(|(id, _)| *id == ferraloom_data::registries::attribute::Id::STEP_HEIGHT)
+            .map_or(0.6, |(_, value)| *value as f32))
+    }
+    fn maybe_back_off_from_edge(
+        &self,
+        _entity: EntityRef,
+        _level: &Level,
+        delta: ferraloom_util::Vec3,
+        _mover: movement::MoverType,
+    ) -> Result<ferraloom_util::Vec3, LevelError> {
+        Ok(delta)
+    }
+    fn is_local_instance_authoritative(
+        &self,
+        entity: EntityRef,
+        level: &Level,
+    ) -> Result<bool, LevelError> {
+        Ok(!matches!(
+            level.entity_state(entity)?,
+            EntityState::Player(_)
+        ))
+    }
+    fn is_horizontal_collision_minor(
+        &self,
+        _entity: EntityRef,
+        _level: &Level,
+        _movement: ferraloom_util::Vec3,
+    ) -> Result<bool, LevelError> {
+        Ok(false)
+    }
+    fn movement_emission(&self) -> movement::MovementEmission {
+        movement::MovementEmission::All
+    }
+    fn bounciness(&self, _entity: EntityRef, _level: &Level) -> Result<f64, LevelError> {
+        Ok(0.0)
+    }
+    fn default_gravity(&self) -> f64 {
+        0.0
+    }
+    fn effective_gravity(&self, entity: EntityRef, level: &Level) -> Result<f64, LevelError> {
+        Ok(
+            if *level
+                .entity::<EntityData>(entity)?
+                .entity_data
+                .get(synched_data::NO_GRAVITY)
+            {
+                0.0
+            } else {
+                self.default_gravity()
+            },
+        )
+    }
+    fn air_drag(&self) -> f32 {
+        0.98
+    }
+
+    /// Port of LivingEntity#getLiquidCollisionShape's inherited empty result.
+    fn liquid_collision_shape(
+        &self,
+        _entity: EntityRef,
+        _level: &Level,
+    ) -> Result<ferraloom_util::VoxelShape, LevelError> {
+        Ok(ferraloom_util::shapes::empty())
+    }
+
+    /// Port of Entity#causeFallDamage's passenger propagation. LivingEntity
+    /// overrides the damage calculation; the base entity itself takes none.
+    fn cause_fall_damage(
+        &self,
+        entity: EntityRef,
+        level: &mut Level,
+        fall_distance: f64,
+        damage_modifier: f32,
+    ) -> Result<bool, LevelError> {
+        let passengers = level.entity::<EntityData>(entity)?.passengers.clone();
+        for passenger in passengers {
+            let behavior = level.entity_behavior(passenger)?;
+            behavior.cause_fall_damage(passenger, level, fall_distance, damage_modifier)?;
+        }
+        Ok(false)
+    }
+
+    fn can_be_collided_with(
+        &self,
+        _entity: EntityRef,
+        _other: Option<EntityRef>,
+        _level: &Level,
+    ) -> Result<bool, LevelError> {
+        Ok(false)
+    }
+    fn passenger_riding_position(
+        &self,
+        entity: EntityRef,
+        _passenger: EntityRef,
+        level: &Level,
+    ) -> Result<ferraloom_util::Vec3, LevelError> {
+        let base = level.entity::<EntityData>(entity)?;
+        Ok(base
+            .position
+            .add_xyz(0.0, f64::from(base.dimensions.height), 0.0))
+    }
+    fn vehicle_attachment_point(
+        &self,
+        _entity: EntityRef,
+        _vehicle: EntityRef,
+        _level: &Level,
+    ) -> Result<ferraloom_util::Vec3, LevelError> {
+        Ok(ferraloom_util::Vec3::ZERO)
+    }
+
+    fn fluid_interaction_box(
+        &self,
+        entity: EntityRef,
+        level: &Level,
+    ) -> Result<Option<ferraloom_util::Aabb>, LevelError> {
+        Ok(Some(
+            level
+                .entity::<EntityData>(entity)?
+                .bounding_box
+                .deflate(0.001, 0.001, 0.001),
+        ))
+    }
+    fn is_pushed_by_fluid(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
+        Ok(match level.entity_state(entity)? {
+            EntityState::Player(player) => !player.flying,
+            _ => true,
+        })
+    }
+    /// Port of Entity#checkDespawn's base hook, before simulation eligibility.
+    fn check_despawn(&self, _entity: EntityRef, _level: &mut Level) -> Result<(), LevelError> {
+        Ok(())
+    }
+    /// Port of Entity#tick; ServerLevel owns commonTick separately.
+    fn tick(&self, entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
+        base_tick(self, entity, level)
     }
 
     fn hurt_server(
@@ -177,7 +443,11 @@ pub trait Entity: Sync {
         source: DamageSource,
         damage: f32,
     ) -> Result<bool, LevelError> {
-        hurt_unarmored(entity, level, source, damage)
+        if level.entity_state(entity)?.as_living().is_some() {
+            hurt_unarmored(entity, level, source, damage)
+        } else {
+            Ok(false)
+        }
     }
 }
 
@@ -215,3 +485,19 @@ pub fn hurt_unarmored(
     living.health = (living.health - applied).max(0.0);
     Ok(true)
 }
+
+/// Built-in stateless dispatchers. Explicit behavior tables still override these.
+pub fn vanilla_behavior(kind: EntityType) -> Option<&'static dyn Entity> {
+    match kind {
+        EntityType::COW => Some(&animal::CowBehavior),
+        EntityType::PLAYER => Some(&player::PlayerBehavior),
+        EntityType::TNT => Some(&item::PrimedTntBehavior),
+        EntityType::ITEM => Some(&item::ItemEntityBehavior),
+        EntityType::FALLING_BLOCK => Some(&item::FallingBlockBehavior),
+        EntityType::EXPERIENCE_ORB => Some(&experience_orb::ExperienceOrbBehavior),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests;

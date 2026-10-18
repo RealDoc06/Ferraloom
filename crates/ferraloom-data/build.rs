@@ -281,6 +281,8 @@ fn blocks(
             "friction",
             "speed_factor",
             "jump_factor",
+            "fall_distance_reduction",
+            "bounce_restitution",
         ] {
             write!(out, "{field}: {},", float(&block[field])).unwrap();
         }
@@ -478,14 +480,24 @@ fn voxel_shapes(data: &Value, block_properties: &Value) -> String {
     out
 }
 
-fn items(out: &mut String, items: &Value) {
+fn items(out: &mut String, items: &Value, crafting: &Value) {
     out.push_str("pub const ITEMS: &[ItemData] = &[\n");
     for (id, item) in items.as_array().unwrap().iter().enumerate() {
         assert_eq!(number(&item["id"]), id as u64);
         let block = item["block"]
             .as_u64()
             .map_or_else(|| "None".into(), |id| format!("Some(Block({id}))"));
-        writeln!(out, "ItemData {{ max_stack_size: {}, max_damage: {}, rarity: Rarity::{}, block: {block}, default_components_json: {:?} }},", item["max_stack_size"], item["max_damage"], pascal(string(&item["rarity"])), serde_json::to_string(&item["components"]).unwrap()).unwrap();
+        let facts = &crafting[id];
+        let remainder = facts["remainder"].as_object().map_or_else(|| "None".to_owned(), |r| {
+            let item_id = items.as_array().unwrap().iter().position(|item| item["name"] == r["id"]).expect("crafting remainder item");
+            let count = r.get("count").and_then(Value::as_i64).unwrap_or(1);
+            let components = r.get("components").cloned().unwrap_or_else(|| serde_json::json!({}));
+            format!("Some(CraftingRemainder {{ item: Item({item_id}), count: {count}, components_json: {:?} }})", serde_json::to_string(&components).unwrap())
+        });
+        let banner_color = facts["banner_color"]
+            .as_str()
+            .map_or_else(|| "None".to_owned(), |name| format!("Some({name:?})"));
+        writeln!(out, "ItemData {{ crafting_remainder: {remainder}, banner_color: {banner_color}, max_stack_size: {}, max_damage: {}, rarity: Rarity::{}, block: {block}, default_components_json: {:?} }},", item["max_stack_size"], item["max_damage"], pascal(string(&item["rarity"])), serde_json::to_string(&item["components"]).unwrap()).unwrap();
     }
     out.push_str("];\n");
 }
@@ -625,7 +637,7 @@ fn block_state_facts(out: &mut String, values: &Value, state_count: usize) {
     write!(out, "static BLOCK_STATE_FACTS: [u16; {state_count}] = [").unwrap();
     for value in values {
         let bits = number(value);
-        assert!(bits < 4096);
+        assert!(bits < 32768);
         write!(out, "{bits},").unwrap();
     }
     out.push_str("];\n");
@@ -702,6 +714,24 @@ fn main() {
     }
     let mut out = String::from("// Generated from the pinned vanilla 26.3 server. Do not edit.\n");
     registries(&mut out, &registries_report);
+    let fluid_random_ticking = load(root, "fluid_random_ticking");
+    let fluid_random_ticking = fluid_random_ticking
+        .as_array()
+        .expect("fluid random-tick facts");
+    let fluid_count = registries_report["minecraft:fluid"]["entries"]
+        .as_object()
+        .unwrap()
+        .len();
+    assert_eq!(fluid_random_ticking.len(), fluid_count);
+    writeln!(
+        out,
+        "static FLUID_RANDOM_TICKING: [bool; {fluid_count}] = {:?};",
+        fluid_random_ticking
+            .iter()
+            .map(|v| v.as_bool().unwrap())
+            .collect::<Vec<_>>()
+    )
+    .unwrap();
     block_classes(
         &mut out,
         &load(root, "block_classes"),
@@ -736,7 +766,39 @@ fn main() {
         &load(root, "block_state_facts"),
         block_properties["states"].as_array().unwrap().len(),
     );
-    items(&mut out, &item_report);
+    let collision_flags = load(root, "block_collision_flags");
+    let collision_flags = collision_flags.as_array().expect("block collision flags");
+    let block_count = block_properties["blocks"].as_array().unwrap().len();
+    assert_eq!(collision_flags.len(), block_count);
+    let block_items = load(root, "block_items");
+    let block_items = block_items.as_array().expect("block items");
+    assert_eq!(block_items.len(), block_count);
+    write!(out, "static BLOCK_ITEMS: [Item; {block_count}] = [").unwrap();
+    for item in block_items {
+        let item = number(item);
+        assert!((item as usize) < item_report.as_array().unwrap().len());
+        write!(out, "Item({item}),").unwrap();
+    }
+    out.push_str("];\n");
+    writeln!(
+        out,
+        "static BLOCK_HAS_COLLISION: [bool; {block_count}] = {:?};",
+        collision_flags
+            .iter()
+            .map(|v| v.as_bool().unwrap())
+            .collect::<Vec<_>>()
+    )
+    .unwrap();
+    let redstone = load(root, "redstone_state_facts");
+    let redstone = redstone.as_array().expect("redstone state facts array");
+    assert_eq!(redstone.len(), state_count);
+    writeln!(
+        out,
+        "static REDSTONE_STATE_FACTS: [u8; {state_count}] = {:?};",
+        redstone.iter().map(|v| number(v) as u8).collect::<Vec<_>>()
+    )
+    .unwrap();
+    items(&mut out, &item_report, &load(root, "item_crafting"));
     entities(&mut out, &entity_report, &registries_report);
     let path = Path::new(&std::env::var_os("OUT_DIR").unwrap()).join("data.rs");
     std::fs::write(path, out).unwrap();
