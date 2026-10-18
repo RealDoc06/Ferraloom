@@ -9,6 +9,44 @@ use crate::{
 };
 use ferraloom_util::random::RandomSource;
 
+/// Block#isFaceFull for the upward face of a cached collision shape. Dynamic
+/// shapes must be obtained from the live block behavior instead.
+pub fn cached_collision_up_face_full(state: ferraloom_data::BlockState) -> Option<bool> {
+    state.cached_collision_full_block()?;
+    let boxes = state
+        .data()
+        .collision
+        .boxes()
+        .iter()
+        .filter(|bounds| bounds.min_y <= 0.9999999 && bounds.max_y > 0.9999999)
+        .collect::<Vec<_>>();
+    if boxes.iter().any(|bounds| {
+        bounds.min_x < 0.0 || bounds.max_x > 1.0 || bounds.min_z < 0.0 || bounds.max_z > 1.0
+    }) {
+        return Some(false);
+    }
+    let mut xs = vec![0.0, 1.0];
+    let mut zs = vec![0.0, 1.0];
+    for bounds in &boxes {
+        xs.extend([bounds.min_x, bounds.max_x]);
+        zs.extend([bounds.min_z, bounds.max_z]);
+    }
+    xs.sort_by(f64::total_cmp);
+    xs.dedup();
+    zs.sort_by(f64::total_cmp);
+    zs.dedup();
+    Some(xs.windows(2).all(|x| {
+        zs.windows(2).all(|z| {
+            boxes.iter().any(|bounds| {
+                bounds.min_x <= x[0]
+                    && bounds.max_x >= x[1]
+                    && bounds.min_z <= z[0]
+                    && bounds.max_z >= z[1]
+            })
+        })
+    }))
+}
+
 /// Port of NoiseSpawnFinder. Density samples are quart-aligned; distance bias
 /// uses the original block coordinates and Java's wrapping long arithmetic.
 pub fn noise_spawn_position(random: &RandomState) -> [i32; 2] {

@@ -4,6 +4,7 @@ import java.nio.file.*;
 import java.util.*;
 import java.lang.classfile.*;
 import java.lang.constant.*;
+import java.lang.classfile.instruction.InvokeInstruction;
 import net.minecraft.core.*;
 import net.minecraft.core.registries.*;
 import net.minecraft.resources.Identifier;
@@ -16,6 +17,43 @@ import net.minecraft.world.phys.*;
 /** Real origin sampling and the private vanilla height-fixup algorithm. */
 public final class SpawnGolden {
     static JsonArray requests;
+    static ChunkPos searchOrigin;
+    static int searchHeight, hitIndex;
+    static BlockPos searchResult;
+    static JsonArray visited;
+    public static ChunkPos origin() { return searchOrigin; }
+    public static int height() { return searchHeight; }
+    public static void captureSpawn(Object ignored,net.minecraft.world.level.storage.LevelData.RespawnData data) { searchResult=data.pos(); }
+    public static BlockPos captureChunk(net.minecraft.server.level.ServerLevel ignored,ChunkPos pos) {
+        int index=visited.size();visited.add(FeaturesGolden.values(pos.x(),pos.z()));
+        return index==hitIndex?new BlockPos(pos.getMinBlockX()+1,65,pos.getMinBlockZ()+2):null;
+    }
+    /** Keep the real initial-spawn bytecode; inject only world queries and the
+     * chunk checker so this isolates origin, height, spiral and chosen position. */
+    static Class<?> capturedInitialSpawn() throws Exception {
+        var cf=ClassFile.of();
+        byte[] bytes=net.minecraft.server.MinecraftServer.class.getResourceAsStream("MinecraftServer.class").readAllBytes();
+        var method=cf.parse(bytes).methods().stream().filter(m->m.methodName().equalsString("setInitialSpawn")).findFirst().orElseThrow();
+        byte[] transformed=cf.build(ClassDesc.of("CapturedInitialSpawn"),builder->builder.withMethod("invoke",method.methodTypeSymbol(),ClassFile.ACC_PUBLIC|ClassFile.ACC_STATIC,
+            mb->mb.transformCode(method.code().orElseThrow(),(code,element)-> {
+                if(element instanceof InvokeInstruction call) {
+                    switch(call.name().stringValue()) {
+                        case "getChunkSource", "getGenerator", "randomState" -> {code.pop().aconst_null();return;}
+                        case "getOrigin" -> {code.pop2().invokestatic(ClassDesc.of("SpawnGolden"),"origin",MethodTypeDesc.of(ClassDesc.of("net.minecraft.world.level.ChunkPos")));return;}
+                        case "getSpawnHeight" -> {code.pop2().invokestatic(ClassDesc.of("SpawnGolden"),"height",MethodTypeDesc.of(ConstantDescs.CD_int));return;}
+                        case "getMinY" -> {code.pop().ldc(-64);return;}
+                        case "getHeight" -> {code.pop2().pop2().ldc(92);return;}
+                        case "dimension" -> {code.pop().getstatic(ClassDesc.of("net.minecraft.world.level.Level"),"OVERWORLD",ClassDesc.of("net.minecraft.resources.ResourceKey"));return;}
+                        case "setSpawn" -> {code.invokestatic(ClassDesc.of("SpawnGolden"),"captureSpawn",MethodTypeDesc.of(ConstantDescs.CD_void,ConstantDescs.CD_Object,ClassDesc.of("net.minecraft.world.level.storage.LevelData$RespawnData")));return;}
+                        case "getSpawnPosInChunk" -> {code.invokestatic(ClassDesc.of("SpawnGolden"),"captureChunk",call.typeSymbol());return;}
+                    }
+                }
+                code.with(element);
+            })));
+        return new ClassLoader(SpawnGolden.class.getClassLoader()) {
+            Class<?> define(){return defineClass("CapturedInitialSpawn",transformed,0,transformed.length);}
+        }.define();
+    }
     public static void captureCandidate(int x,int z,int index) { requests.add(FeaturesGolden.values(x,z,index)); }
     /** Replace only the asynchronous chunk-load boundary, leaving vanilla's
      * candidate selection bytecode intact. No transformed classes are saved. */
@@ -36,6 +74,9 @@ public final class SpawnGolden {
     }
     static void generate(RegistryAccess.Frozen registries, Path out) throws Exception {
         var origins = new JsonArray();
+        var initialCases=new JsonArray();
+        var initial=capturedInitialSpawn().getDeclaredMethods()[0];
+        var listener=(net.minecraft.server.level.progress.LevelLoadListener)Proxy.newProxyInstance(SpawnGolden.class.getClassLoader(),new Class<?>[]{net.minecraft.server.level.progress.LevelLoadListener.class},(proxy,method,args)->null);
         for (var preset : registries.lookupOrThrow(Registries.WORLD_PRESET).listElements().toList()) {
             var generator = preset.value().createWorldDimensions().overworld();
             for (long seed : FeaturesGolden.SEEDS) {
@@ -45,9 +86,16 @@ public final class SpawnGolden {
                 var origin = generator.getOrigin(random);
                 var item = new JsonObject(); item.addProperty("preset",preset.key().identifier().toString());
                 item.addProperty("seed",seed);item.add("origin",FeaturesGolden.values(origin.x(),origin.z()));origins.add(item);
+                searchOrigin=origin;searchHeight=generator.getSpawnHeight(LevelHeightAccessor.create(-64,384));
+                for(int hit:new int[]{0,1,2,3,17,120,-1}) {
+                    hitIndex=hit;visited=new JsonArray();searchResult=null;
+                    initial.invoke(null,null,null,false,false,listener);
+                    var test=item.deepCopy();test.addProperty("hit",hit);test.addProperty("spawn_height",searchHeight);test.add("visited",visited);test.add("position",FeaturesGolden.values(searchResult.getX(),searchResult.getY(),searchResult.getZ()));initialCases.add(test);
+                }
             }
         }
         WorldgenGolden.write(out.resolve("spawn_origins.json.gz"),origins);
+        WorldgenGolden.write(out.resolve("initial_spawn_spiral.json.gz"),initialCases);
         var fixup = PlayerSpawnFinder.class.getDeclaredMethod("fixupSpawnHeight",CollisionGetter.class,BlockPos.class);
         fixup.setAccessible(true);var cases = new JsonArray();
         // CollisionGetter owns bounding-box and liquid semantics. This fixture
@@ -84,5 +132,11 @@ public final class SpawnGolden {
             item.add("requests",requests);item.addProperty("next",random.nextLong());permutations.add(item);
         }
         WorldgenGolden.write(out.resolve("spawn_candidates.json.gz"),permutations);
+        var faces=new JsonArray();
+        for(var state:net.minecraft.world.level.block.Block.BLOCK_STATE_REGISTRY) {
+            try { faces.add(net.minecraft.world.level.block.Block.isFaceFull(state.getCollisionShape(EmptyBlockGetter.INSTANCE,BlockPos.ZERO),Direction.UP)); }
+            catch(Exception error) { faces.add(JsonNull.INSTANCE); }
+        }
+        WorldgenGolden.write(out.resolve("spawn_collision_faces.json.gz"),faces);
     }
 }
