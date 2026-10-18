@@ -119,9 +119,43 @@ impl RegionChunk {
     }
 }
 
+// --- structures family ---
+/// Options for the common EntityType#create(STRUCTURE) placement path.
+/// The game adapter applies persistence, position/yaw, optional finalizeSpawn,
+/// then the selected addFreshEntity or addFreshEntityWithPassengers operation.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct StructureEntitySpawnFlags {
+    pub persistent: bool,
+    pub finalize_spawn: bool,
+    pub with_passengers: bool,
+}
+// --- end structures family ---
+
 /// Context-dependent block behavior is supplied by the game adapter. Baseline
 /// extracted collision shapes cannot answer survival or neighbor shape queries.
 pub trait WorldgenBlockBehavior: Sync {
+    // --- structures family ---
+    /// False means EntityType#create returned null. None yaw preserves the
+    /// constructor's rotation and uses setPos, as end-city shulkers do.
+    fn spawn_structure_entity(
+        &self,
+        _region: &mut WorldGenRegion<'_>,
+        _entity_type: ferraloom_data::EntityType,
+        _position: [f64; 3],
+        _yaw: Option<f32>,
+        _flags: StructureEntitySpawnFlags,
+    ) -> Result<bool, Error> {
+        Err(Error("Unsupported: structure EntityType#create".into()))
+    }
+    fn spawn_end_city_elytra_frame(
+        &self,
+        _region: &mut WorldGenRegion<'_>,
+        _position: [i32; 3],
+        _facing: ferraloom_util::Direction,
+    ) -> Result<(), Error> {
+        Err(Error("Unsupported: end-city elytra item frame".into()))
+    }
+    // --- end structures family ---
     // --- ore and cave family ---
     fn multiface_state_for_placement(
         &self,
@@ -520,6 +554,26 @@ impl<'a> WorldGenRegion<'a> {
     pub fn center(&self) -> [i32; 2] {
         self.center
     }
+    // --- structures family ---
+    pub fn spawn_structure_entity(
+        &mut self,
+        entity_type: ferraloom_data::EntityType,
+        position: [f64; 3],
+        yaw: Option<f32>,
+        flags: StructureEntitySpawnFlags,
+    ) -> Result<bool, Error> {
+        self.behavior
+            .spawn_structure_entity(self, entity_type, position, yaw, flags)
+    }
+    pub fn spawn_end_city_elytra_frame(
+        &mut self,
+        position: [i32; 3],
+        facing: ferraloom_util::Direction,
+    ) -> Result<(), Error> {
+        self.behavior
+            .spawn_end_city_elytra_frame(self, position, facing)
+    }
+    // --- end structures family ---
     pub fn set_block_tags(
         &mut self,
         tags: std::sync::Arc<ferraloom_data::datapack::TagSet<Block>>,
