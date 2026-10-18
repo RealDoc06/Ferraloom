@@ -49,3 +49,9 @@ with tempfile.TemporaryDirectory(prefix='ferraloom-plants-java-') as directory:
     states='\n'.join(line for line in lines if line.startswith('plant-place\t')) + '\n'
     (HERE/'placement-states.tsv.gz').write_bytes(gzip.compress(states.encode(),mtime=0))
     print(f'{len(states.splitlines())} vanilla plant placement states and RNG vectors')
+    trees='\n'.join(line for line in lines if line.startswith('tree-select\t')) + '\n'
+    (HERE/'tree-selection.tsv.gz').write_bytes(gzip.compress(trees.encode(),mtime=0))
+    print(f'{len(trees.splitlines())} vanilla weighted tree-selection vectors')
+    frost='\n'.join(line for line in lines if line.startswith('frosted-place\t')) + '\n'
+    (HERE/'frosted-place.tsv.gz').write_bytes(gzip.compress(frost.encode(),mtime=0))
+    print(f'{len(frost.splitlines())} vanilla frosted-ice placement schedules')

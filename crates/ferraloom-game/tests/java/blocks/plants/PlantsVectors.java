@@ -46,14 +46,36 @@ public final class PlantsVectors {
             Blocks.HONEY_BLOCK,Blocks.BARRIER,Blocks.PALE_MOSS_CARPET);
         var pos=new BlockPos(8,5,8);
         var level=new PlantLevel(registries);
+        var treeClass=net.minecraft.world.level.block.grower.TreeGrower.class;
+        var selectTree=treeClass.getDeclaredMethod("getConfiguredFeature",RandomSource.class,boolean.class);selectTree.setAccessible(true);
+        var selectMega=treeClass.getDeclaredMethod("getConfiguredMegaFeature",RandomSource.class);selectMega.setAccessible(true);
+        for(var entry:List.of(Map.entry(Blocks.OAK_SAPLING,net.minecraft.world.level.block.grower.TreeGrower.OAK),Map.entry(Blocks.SPRUCE_SAPLING,net.minecraft.world.level.block.grower.TreeGrower.SPRUCE),
+            Map.entry(Blocks.MANGROVE_PROPAGULE,net.minecraft.world.level.block.grower.TreeGrower.MANGROVE),Map.entry(Blocks.AZALEA,net.minecraft.world.level.block.grower.TreeGrower.AZALEA),
+            Map.entry(Blocks.BIRCH_SAPLING,net.minecraft.world.level.block.grower.TreeGrower.BIRCH),Map.entry(Blocks.JUNGLE_SAPLING,net.minecraft.world.level.block.grower.TreeGrower.JUNGLE),
+            Map.entry(Blocks.ACACIA_SAPLING,net.minecraft.world.level.block.grower.TreeGrower.ACACIA),Map.entry(Blocks.CHERRY_SAPLING,net.minecraft.world.level.block.grower.TreeGrower.CHERRY),
+            Map.entry(Blocks.DARK_OAK_SAPLING,net.minecraft.world.level.block.grower.TreeGrower.DARK_OAK),Map.entry(Blocks.PALE_OAK_SAPLING,net.minecraft.world.level.block.grower.TreeGrower.PALE_OAK),
+            Map.entry(Blocks.POPLAR_SAPLING,net.minecraft.world.level.block.grower.TreeGrower.POPLAR))) {
+            for(boolean flowers:new boolean[]{false,true})for(boolean megaFirst:new boolean[]{false,true})for(int n=0;n<64;n++) {
+                long seed=n*0x9e3779b97f4a7c15L;var random=RandomSource.create(seed);
+                net.minecraft.resources.ResourceKey<?> tree,mega;
+                if(megaFirst){mega=(net.minecraft.resources.ResourceKey<?>)selectMega.invoke(entry.getValue(),random);tree=(net.minecraft.resources.ResourceKey<?>)selectTree.invoke(entry.getValue(),random,flowers);}
+                else{tree=(net.minecraft.resources.ResourceKey<?>)selectTree.invoke(entry.getValue(),random,flowers);mega=(net.minecraft.resources.ResourceKey<?>)selectMega.invoke(entry.getValue(),random);}
+                System.out.println("tree-select\t"+BuiltInRegistries.BLOCK.getId(entry.getKey())+"\t"+seed+"\t"+flowers+"\t"+megaFirst+"\t"+(tree==null?"-":tree.identifier())+"\t"+(mega==null?"-":mega.identifier())+"\t"+random.nextLong());
+            }
+        }
         for(var block:List.of(Blocks.WHEAT,Blocks.CARROTS,Blocks.POTATOES,Blocks.BEETROOTS,Blocks.TORCHFLOWER_CROP,
             Blocks.MELON_STEM,Blocks.ATTACHED_MELON_STEM,Blocks.PUMPKIN_STEM,Blocks.ATTACHED_PUMPKIN_STEM,
             Blocks.SWEET_BERRY_BUSH,Blocks.NETHER_WART,Blocks.BAMBOO_SAPLING,Blocks.CAVE_VINES,Blocks.CAVE_VINES_PLANT,
-            Blocks.BIG_DRIPLEAF_STEM,Blocks.TALL_SEAGRASS,Blocks.KELP_PLANT,Blocks.TWISTING_VINES_PLANT,Blocks.WEEPING_VINES_PLANT)) {
+            Blocks.BIG_DRIPLEAF_STEM,Blocks.TALL_SEAGRASS,Blocks.KELP_PLANT,Blocks.TWISTING_VINES_PLANT,Blocks.WEEPING_VINES_PLANT,Blocks.FROSTED_ICE)) {
             for(var state:block.getStateDefinition().getPossibleStates())for(boolean includeData:new boolean[]{false,true}) {
                 var stack=state.getCloneItemStack(level,pos,includeData);
                 System.out.println("clone\t"+Block.getId(state)+"\t"+BuiltInRegistries.ITEM.getId(stack.getItem())+"\t"+stack.getCount()+"\t"+includeData);
             }
+        }
+        for(var state:Blocks.FROSTED_ICE.getStateDefinition().getPossibleStates())for(int seed=0;seed<64;seed++) {
+            level.trace.clear();level.getRandom().setSeed(seed);
+            ((FrostedIceBlock)Blocks.FROSTED_ICE).onPlace(state,level,pos,Blocks.AIR.defaultBlockState(),false);
+            System.out.println("frosted-place\t"+Block.getId(state)+"\t"+seed+"\t"+level.trace.getFirst().substring("schedule:".length())+"\t"+level.getRandom().nextLong());
         }
         for(var block:List.of(Blocks.NETHERRACK,Blocks.ROOTED_DIRT,Blocks.WHEAT,Blocks.SEAGRASS,Blocks.GLOW_LICHEN,
             Blocks.PALE_MOSS_CARPET,Blocks.BAMBOO,Blocks.CAVE_VINES,Blocks.BIG_DRIPLEAF,Blocks.SEA_PICKLE)) {

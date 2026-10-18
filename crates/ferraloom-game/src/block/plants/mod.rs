@@ -13,6 +13,7 @@ mod geometry;
 mod ground;
 mod growing;
 mod hanging_moss;
+mod ice;
 mod leaves;
 mod moss;
 pub mod multiface;
@@ -24,6 +25,7 @@ mod powder_snow;
 mod sea_pickle;
 mod snow;
 mod survival;
+pub mod tree_grower;
 mod vines;
 pub use moss::place_at as place_mossy_carpet;
 pub use survival::place_double_plant;
@@ -36,6 +38,9 @@ use ferraloom_data::{Block, BlockClass};
 pub fn ported_behavior(block: Block, method: BlockMethod) -> Option<&'static dyn BlockBehavior> {
     use BlockClass as C;
     use BlockMethod as M;
+    if block == Block::FROSTED_ICE && matches!(method, M::OnPlace | M::CloneItemStack) {
+        return Some(&ice::FROSTED_ICE);
+    }
     if placement::supports(block, method) {
         return Some(&placement::PLANT_PLACEMENT);
     }

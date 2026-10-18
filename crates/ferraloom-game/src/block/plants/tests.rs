@@ -538,16 +538,14 @@ fn plant_clone_items_match_vanilla_for_all_registered_states() {
         let stack = reader
             .get_clone_item_stack(state, BlockPos::ZERO, f[4] == "true")
             .unwrap();
-        let stack = stack.0.unwrap();
-        assert_eq!(
-            stack.item.protocol_id(),
-            f[2].parse::<u16>().unwrap(),
-            "{line}"
-        );
-        assert_eq!(stack.count, f[3].parse::<i32>().unwrap(), "{line}");
+        let (item, amount) = stack.0.map_or((ferraloom_data::Item::AIR, 0), |stack| {
+            (stack.item, stack.count)
+        });
+        assert_eq!(item.protocol_id(), f[2].parse::<u16>().unwrap(), "{line}");
+        assert_eq!(amount, f[3].parse::<i32>().unwrap(), "{line}");
         count += 1;
     }
-    assert_eq!(count, 260);
+    assert_eq!(count, 268);
 }
 
 #[test]
@@ -817,4 +815,97 @@ fn plant_placement_states_and_rng_match_real_vanilla_contexts() {
         count += 1;
     }
     assert_eq!(count, 69600);
+}
+
+#[test]
+fn weighted_tree_selection_preserves_native_order_and_single_entry_draws() {
+    use ferraloom_util::random::{LegacyRandomSource, Random, RandomSource};
+    use std::io::Read;
+    let mut text = String::new();
+    flate2::read::GzDecoder::new(
+        include_bytes!("../../../tests/java/blocks/plants/tree-selection.tsv.gz").as_slice(),
+    )
+    .read_to_string(&mut text)
+    .unwrap();
+    let mut count = 0;
+    for line in text.lines() {
+        let f = line.split('\t').collect::<Vec<_>>();
+        let grower = tree_grower::TreeGrower::for_block(
+            Block::from_protocol_id(f[1].parse().unwrap()).unwrap(),
+        )
+        .unwrap();
+        let mut random = Random::Legacy(LegacyRandomSource::new(f[2].parse().unwrap()));
+        let flowers = f[3] == "true";
+        let (tree, mega) = if f[4] == "true" {
+            let mega = grower.configured_mega_feature(&mut random);
+            (grower.configured_feature(&mut random, flowers), mega)
+        } else {
+            let tree = grower.configured_feature(&mut random, flowers);
+            (tree, grower.configured_mega_feature(&mut random))
+        };
+        assert_eq!(
+            tree.map_or_else(|| "-".to_owned(), |id| format!("minecraft:{id}")),
+            f[5],
+            "tree {line}"
+        );
+        assert_eq!(
+            mega.map_or_else(|| "-".to_owned(), |id| format!("minecraft:{id}")),
+            f[6],
+            "mega {line}"
+        );
+        assert_eq!(
+            random.next_long(),
+            f[7].parse::<i64>().unwrap(),
+            "RNG {line}"
+        );
+        count += 1;
+    }
+    assert_eq!(count, 2816);
+}
+
+#[test]
+fn frosted_ice_on_place_schedules_native_delay_and_keeps_rng() {
+    use ferraloom_util::random::{LegacyRandomSource, Random, RandomSource};
+    use std::io::Read;
+    let mut text = String::new();
+    flate2::read::GzDecoder::new(
+        include_bytes!("../../../tests/java/blocks/plants/frosted-place.tsv.gz").as_slice(),
+    )
+    .read_to_string(&mut text)
+    .unwrap();
+    let pos = BlockPos::new(8, 5, 8);
+    let mut count = 0;
+    for line in text.lines() {
+        let f = line.split('\t').collect::<Vec<_>>();
+        let mut level = level();
+        let state = BlockState::from_id(f[1].parse().unwrap()).unwrap();
+        level.set_block_state(pos, state).unwrap();
+        level.set_random_streams(
+            Random::Legacy(LegacyRandomSource::new(f[2].parse().unwrap())),
+            0,
+        );
+        level
+            .required_block_behavior(state.block(), crate::block::BlockMethod::OnPlace)
+            .unwrap()
+            .on_place(state, pos, Block::AIR.default_state(), false, &mut level)
+            .unwrap();
+        let mut saved = ferraloom_storage::SerializableChunkData::default();
+        level
+            .save_chunk_ticks(ChunkPos::new(0, 0), &mut saved)
+            .unwrap();
+        let ticks = saved.block_ticks.unwrap();
+        assert_eq!(ticks.len(), 1);
+        assert_eq!(
+            ticks[0].delay.unwrap(),
+            f[3].parse::<i32>().unwrap(),
+            "{line}"
+        );
+        assert_eq!(
+            level.random().next_long(),
+            f[4].parse::<i64>().unwrap(),
+            "RNG {line}"
+        );
+        count += 1;
+    }
+    assert_eq!(count, 256);
 }
