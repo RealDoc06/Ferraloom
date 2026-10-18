@@ -110,6 +110,9 @@ impl StructureStart {
                 continue;
             }
             match piece {
+                StructurePiece::OceanRuin(piece) => {
+                    piece.post_process(context, templates, tags, *bounds, reference)?
+                }
                 StructurePiece::EndCity(piece) => {
                     piece.post_process(context, templates, tags, *bounds, reference)?
                 }

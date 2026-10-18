@@ -23,6 +23,7 @@ enum StructureGenerator {
     BuriedTreasure,
     Igloo,
     EndCity,
+    OceanRuin(super::structures::ocean_ruin::OceanRuinStructure),
     Shipwreck { beached: bool },
     NetherFossil { height: HeightProvider },
     Unsupported(worldgen_structure_type::Id),
@@ -67,6 +68,11 @@ impl StructureGenerators {
                     "minecraft:buried_treasure" => StructureGenerator::BuriedTreasure,
                     "minecraft:igloo" => StructureGenerator::Igloo,
                     "minecraft:end_city" => StructureGenerator::EndCity,
+                    "minecraft:ocean_ruin" => StructureGenerator::OceanRuin(
+                        super::structures::ocean_ruin::OceanRuinStructure::decode(
+                            &resource.json()?,
+                        )?,
+                    ),
                     "minecraft:shipwreck" => StructureGenerator::Shipwreck {
                         beached: crate::codec::boolean(crate::codec::field(
                             &resource.json()?,
@@ -152,7 +158,8 @@ impl StructureGenerators {
             }
             kind @ (StructureGenerator::BuriedTreasure
             | StructureGenerator::Igloo
-            | StructureGenerator::Shipwreck { .. }) => {
+            | StructureGenerator::Shipwreck { .. }
+            | StructureGenerator::OceanRuin(_)) => {
                 let [x, z] = context.chunk.map(|c| c.wrapping_mul(16).wrapping_add(8));
                 if !could_exist(x, z, context.min_y - 1, context.min_y + context.height - 1)? {
                     return Ok(StructureStart::invalid());
@@ -161,6 +168,7 @@ impl StructureGenerators {
                     kind,
                     StructureGenerator::BuriedTreasure
                         | StructureGenerator::Shipwreck { beached: false }
+                        | StructureGenerator::OceanRuin(_)
                 ) {
                     Heightmap::OceanFloorWg
                 } else {
@@ -197,6 +205,16 @@ impl StructureGenerators {
                         .into_iter()
                         .map(|p| StructurePiece::Igloo(Box::new(p)))
                         .collect(),
+                        StructureGenerator::OceanRuin(structure) => structure
+                            .add_pieces(
+                                context.templates,
+                                [x - 8, 90, z - 8],
+                                rotation,
+                                &mut random,
+                            )
+                            .into_iter()
+                            .map(|p| StructurePiece::OceanRuin(Box::new(p)))
+                            .collect(),
                         StructureGenerator::Shipwreck { beached } => {
                             let mut piece =
                                 super::structures::shipwreck::ShipwreckPiece::add_random(
