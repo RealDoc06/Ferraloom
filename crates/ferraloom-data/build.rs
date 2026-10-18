@@ -738,6 +738,19 @@ fn main() {
         &load(root, "block_state_facts"),
         block_properties["states"].as_array().unwrap().len(),
     );
+    let collision_flags = load(root, "block_collision_flags");
+    let collision_flags = collision_flags.as_array().expect("block collision flags");
+    let block_count = block_properties["blocks"].as_array().unwrap().len();
+    assert_eq!(collision_flags.len(), block_count);
+    writeln!(
+        out,
+        "static BLOCK_HAS_COLLISION: [bool; {block_count}] = {:?};",
+        collision_flags
+            .iter()
+            .map(|v| v.as_bool().unwrap())
+            .collect::<Vec<_>>()
+    )
+    .unwrap();
     let redstone = load(root, "redstone_state_facts");
     let redstone = redstone.as_array().expect("redstone state facts array");
     assert_eq!(redstone.len(), state_count);
