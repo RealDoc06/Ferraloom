@@ -74,6 +74,7 @@ fn vanilla_registered_commands_feedback_and_packet_bytes() {
     assert_eq!(cases.len(), 120);
     let commands = commands::Commands::default();
     let mut board = ServerScoreboard::default();
+    let mut failures = Vec::new();
     for case in cases {
         let command = commands
             .prepare(
@@ -104,33 +105,37 @@ fn vanilla_registered_commands_feedback_and_packet_bytes() {
             ),
             _ => unreachable!(),
         };
-        match result {
+        let (value, error, feedback) = match result {
             Ok(result) => {
-                assert!(
-                    case.error.is_none(),
-                    "{} expected {:?}",
-                    case.command,
-                    case.error
-                );
-                assert_eq!(Some(result.value), case.value, "{} result", case.command);
                 let feedback: Vec<_> = result.feedback.iter().map(|feedback|json!({"message":serde_json::from_str::<Value>(&feedback.message.to_json().unwrap()).unwrap(),"broadcast":feedback.broadcast})).collect();
-                assert_eq!(
-                    comparable_feedback(&case.command, feedback),
-                    comparable_feedback(&case.command, case.feedback),
-                    "{} feedback",
-                    case.command
-                );
+                (Some(result.value), None, feedback)
             }
             Err(error) => {
                 let component = commands::exceptions::error_component(&error);
                 let actual: Value = serde_json::from_str(&component.to_json().unwrap()).unwrap();
-                assert_eq!(Some(actual), case.error, "{} error", case.command);
-                assert!(case.feedback.is_empty());
+                (None, Some(actual), Vec::new())
+            }
+        };
+        let packets: Vec<_> = board.drain_packets().iter().map(packet_json).collect();
+        for (field, actual, expected) in [
+            ("result", json!(value), json!(case.value)),
+            ("error", json!(error), json!(case.error)),
+            (
+                "feedback",
+                json!(comparable_feedback(&case.command, feedback)),
+                json!(comparable_feedback(&case.command, case.feedback)),
+            ),
+            ("packets", json!(packets), json!(case.packets)),
+        ] {
+            if actual != expected {
+                failures.push(format!(
+                    "{} {field}: actual={actual}, expected={expected}",
+                    case.command
+                ));
             }
         }
-        let packets: Vec<_> = board.drain_packets().iter().map(packet_json).collect();
-        assert_eq!(packets, case.packets, "{} packets", case.command);
     }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 #[test]
 fn criterion_adapters_preserve_independent_stat_and_score_values() {
