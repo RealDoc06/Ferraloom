@@ -170,7 +170,7 @@ pub trait BlockBehavior: Sync {
         &self,
         block: Block,
         _context: &BlockPlaceContext<'_>,
-        _level: &LevelReaderRef<'_, '_>,
+        _level: &mut LevelAccessRef<'_, '_>,
     ) -> Result<Option<BlockState>, LevelError> {
         Ok(Some(block.default_state()))
     }
