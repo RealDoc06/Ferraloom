@@ -2754,6 +2754,7 @@ impl MinecraftServer {
     }
     fn send_chunks(&mut self) -> Result<()> {
         let ready = &self.world.ready;
+        let light_ready = &self.world.light_ready;
         let mut batches = Vec::new();
         for (&connection, c) in &mut self.connections {
             if c.close {
@@ -2761,10 +2762,10 @@ impl MinecraftServer {
             }
             if let Phase::Play(_) = c.phase {
                 let positions = c.chunks.next_batch(c.center.unwrap(), |pos| {
-                    ready.contains(&pos)
-                        && (-1..=1).all(|x| {
-                            (-1..=1).all(|z| ready.contains(&ChunkPos::new(pos.x + x, pos.z + z)))
-                        })
+                    // prepareTickingChunk already awaited the FULL neighborhood
+                    // and post-processing; sending does not await its neighbors'
+                    // own ticking futures. Retain the center light dependency.
+                    ready.contains(&pos) && light_ready.contains(&pos)
                 });
                 if !positions.is_empty() {
                     batches.push((connection, positions));
