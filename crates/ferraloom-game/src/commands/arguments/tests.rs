@@ -121,6 +121,7 @@ fn check_vector(vector: &Vector) {
     let mut argument =
         MinecraftArgument::new(wire::from_report(&vector.parser, &vector.properties));
     argument.context = Arc::new(crate::commands::context::CommandBuildContext {
+        features: Default::default(),
         registries: serde_json::from_str(include_str!("../vanilla/registry-elements.json"))
             .unwrap(),
         tags: serde_json::from_str(include_str!("../vanilla/registry-tags.json")).unwrap(),

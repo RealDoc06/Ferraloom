@@ -82,17 +82,20 @@ impl PreparedCommand {
 }
 pub struct Commands {
     dispatcher: CommandDispatcher<CommandSourceStack>,
+    features: crate::gamerules::RuleFeatures,
 }
 impl Default for Commands {
     fn default() -> Self {
         Self {
             dispatcher: tree::dispatcher(std::sync::Arc::default()),
+            features: Default::default(),
         }
     }
 }
 impl Commands {
     pub fn new(context: context::CommandBuildContext) -> Self {
         Self {
+            features: context.features,
             dispatcher: tree::dispatcher(std::sync::Arc::new(context)),
         }
     }
@@ -249,9 +252,9 @@ impl Commands {
         suggestions
     }
     pub fn packet(&self, permission: i32) -> play::clientbound::Packet {
-        play::clientbound::Packet::Commands(tree::packet(&CommandSourceStack::server(
-            permission,
-            Vec3::ZERO,
-        )))
+        play::clientbound::Packet::Commands(tree::packet(
+            &CommandSourceStack::server(permission, Vec3::ZERO),
+            self.features,
+        ))
     }
 }

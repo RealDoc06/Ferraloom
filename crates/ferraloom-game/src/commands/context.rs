@@ -4,6 +4,7 @@ use std::collections::BTreeMap;
 pub struct CommandBuildContext {
     pub registries: BTreeMap<String, Vec<String>>,
     pub tags: BTreeMap<String, BTreeMap<String, Vec<String>>>,
+    pub features: crate::gamerules::RuleFeatures,
 }
 impl CommandBuildContext {
     pub fn entries(&self, registry: &str) -> Vec<&str> {

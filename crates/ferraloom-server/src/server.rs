@@ -211,7 +211,11 @@ impl MinecraftServer {
         let world = World::open(&options.root, &properties, &resources, &registries)?;
         let game_rules = command_runtime::load_game_rules(&world)?;
         let clocks = command_runtime::load_clocks(&world, &resources)?;
-        let command_context = command_runtime::command_build_context(&registries, &resources);
+        let command_context = command_runtime::command_build_context(
+            &registries,
+            &resources,
+            command_runtime::rule_features(&world),
+        );
         let command_entity_tags =
             ferraloom_data::datapack::load_tags(&resources, "entity_type", |id, _| {
                 EntityType::from_name(&id.to_string())

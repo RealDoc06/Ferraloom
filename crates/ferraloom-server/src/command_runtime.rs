@@ -18,7 +18,23 @@ pub(super) fn load_game_rules(world: &World) -> Result<GameRules> {
         .load::<GameRuleMap>(GameRuleMap::STORAGE_ID)?
         .map(|data| data.value().clone())
         .unwrap_or_default();
-    Ok(GameRules::new(RuleFeatures::default(), map))
+    Ok(GameRules::new(rule_features(world), map))
+}
+/// GameRules and command registration share WorldData#enabledFeatures.
+pub(super) fn rule_features(world: &World) -> RuleFeatures {
+    RuleFeatures {
+        minecart_improvements: world
+            .level_data
+            .data
+            .get_list("enabled_features")
+            .is_some_and(|values| {
+                values.0.iter().any(|value| {
+                    value
+                        .as_string()
+                        .is_some_and(|id| id.to_string_lossy() == "minecraft:minecart_improvements")
+                })
+            }),
+    }
 }
 impl MinecraftServer {
     pub(super) async fn save_game_rules(&self) -> Result<()> {
@@ -545,8 +561,10 @@ pub(super) fn load_clocks(
 pub(super) fn command_build_context(
     registries: &RegistrySet,
     resources: &ResourceManager,
+    features: RuleFeatures,
 ) -> CommandBuildContext {
     let mut context = CommandBuildContext {
+        features,
         registries: registries.entries.clone(),
         tags: BTreeMap::new(),
     };

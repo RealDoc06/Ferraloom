@@ -242,6 +242,14 @@ public final class CommandVectors {
             var bytes = new byte[buf.readableBytes()]; buf.readBytes(bytes); buf.release();
             Files.write(out.resolve("tree-level-" + level + ".bin"), bytes);
         }
+        var enabled = net.minecraft.world.flag.FeatureFlagSet.of(FeatureFlags.VANILLA,FeatureFlags.MINECART_IMPROVEMENTS);
+        var experimental = new Commands(Commands.CommandSelection.DEDICATED, CommandBuildContext.simple(runtimeRegistries, enabled));
+        for (int level : new int[]{0,4}) {
+            var buf = new FriendlyByteBuf(Unpooled.buffer());
+            ClientboundCommandsPacket.STREAM_CODEC.encode(buf, new ClientboundCommandsPacket(filter(experimental.getDispatcher().getRoot(), level), inspector));
+            var bytes = new byte[buf.readableBytes()]; buf.readBytes(bytes); buf.release();
+            Files.write(out.resolve("tree-minecart-level-"+level+".bin"),bytes);
+        }
         var ruleParsing = new JsonArray();
         for (var rule : BuiltInRegistries.GAME_RULE) {
             var values = new LinkedHashSet<>(List.of("", " ", "true", "false", "TRUE", "true false", "0", "-1", "1", "1.5", "0001", "2147483647", "2147483648"));

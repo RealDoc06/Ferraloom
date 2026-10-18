@@ -3,6 +3,7 @@ use super::{
     arguments::{MinecraftArgument, wire},
     source::CommandSourceStack,
 };
+use crate::gamerules::{GameRule, RuleFeatures, RuleType};
 use ferraloom_brigadier::{ArgumentBuilder, CommandDispatcher, NodeId};
 use ferraloom_protocol::{
     Identifier,
@@ -11,6 +12,7 @@ use ferraloom_protocol::{
 };
 use serde::Deserialize;
 use std::{
+    borrow::Cow,
     collections::{BTreeSet, VecDeque},
     sync::{Arc, OnceLock},
 };
@@ -53,10 +55,65 @@ pub fn definitions() -> &'static [NodeDefinition] {
         nodes
     })
 }
+fn definitions_with_features(features: RuleFeatures) -> Cow<'static, [NodeDefinition]> {
+    if !features.minecart_improvements {
+        return Cow::Borrowed(definitions());
+    }
+    let mut nodes = definitions().to_vec();
+    let root = nodes
+        .iter()
+        .position(|n| n.name == "gamerule" && n.kind == "literal")
+        .unwrap();
+    let rule = GameRule::MaxMinecartSpeed.definition();
+    let RuleType::Integer { min, max, .. } = rule.kind else {
+        unreachable!()
+    };
+    for name in [rule.id.strip_prefix("minecraft:").unwrap(), rule.id] {
+        let literal = nodes.len();
+        nodes.push(NodeDefinition {
+            name: name.into(),
+            kind: "literal".into(),
+            executable: true,
+            fork: false,
+            restricted: false,
+            permissions: [true; 5],
+            redirect: None,
+            children: vec![literal + 1],
+            parser: None,
+            properties: serde_json::Value::Null,
+            examples: Vec::new(),
+            suggestions: None,
+        });
+        nodes.push(NodeDefinition {
+            name: "value".into(),
+            kind: "argument".into(),
+            executable: true,
+            fork: false,
+            restricted: false,
+            permissions: [true; 5],
+            redirect: None,
+            children: Vec::new(),
+            parser: Some("brigadier:integer".into()),
+            properties: serde_json::json!({"min":min,"max":max}),
+            examples: vec!["0".into(), "123".into(), "-123".into()],
+            suggestions: None,
+        });
+        nodes[root].children.push(literal);
+    }
+    let mut children = nodes[root].children.clone();
+    children.sort_by_key(|&index| {
+        (
+            GameRule::by_id(&nodes[index].name).unwrap() as usize,
+            nodes[index].name.starts_with("minecraft:"),
+        )
+    });
+    nodes[root].children = children;
+    Cow::Owned(nodes)
+}
 pub fn dispatcher(
     context: Arc<super::context::CommandBuildContext>,
 ) -> CommandDispatcher<CommandSourceStack> {
-    let definitions = definitions();
+    let definitions = definitions_with_features(context.features);
     let mut dispatcher = CommandDispatcher::new();
     dispatcher.set_exception_provider(Arc::new(super::exceptions::BrigadierExceptions));
     let mut handles = vec![None; definitions.len()];
@@ -117,7 +174,7 @@ pub fn dispatcher(
         id
     }
     for index in 1..definitions.len() {
-        build(index, definitions, &mut handles, &mut dispatcher, &context);
+        build(index, &definitions, &mut handles, &mut dispatcher, &context);
     }
     for (index, definition) in definitions.iter().enumerate() {
         for &child in &definition.children {
@@ -127,8 +184,8 @@ pub fn dispatcher(
     dispatcher
 }
 /// Network nodes are renumbered after recursively filtering; unreachable nodes never leak.
-pub fn packet(source: &CommandSourceStack) -> clientbound::Commands {
-    let definitions = definitions();
+pub fn packet(source: &CommandSourceStack, features: RuleFeatures) -> clientbound::Commands {
+    let definitions = definitions_with_features(features);
     let mut allowed = BTreeSet::from([0]);
     fn visit(
         index: usize,
@@ -148,7 +205,7 @@ pub fn packet(source: &CommandSourceStack) -> clientbound::Commands {
             }
         }
     }
-    visit(0, source, definitions, &mut allowed);
+    visit(0, source, &definitions, &mut allowed);
     let mut queue = VecDeque::from([0]);
     let mut order = Vec::new();
     let mut ids = vec![None; definitions.len()];
@@ -209,12 +266,65 @@ mod tests {
     use ferraloom_protocol::Wire;
     use ferraloom_util::Vec3;
     #[test]
+    fn minecart_feature_gates_rule_parsing_and_vanilla_tree() {
+        let features = RuleFeatures {
+            minecart_improvements: true,
+        };
+        let commands =
+            crate::commands::Commands::new(crate::commands::context::CommandBuildContext {
+                features,
+                ..Default::default()
+            });
+        let source = CommandSourceStack::server(4, Vec3::ZERO);
+        assert!(
+            crate::commands::Commands::default()
+                .prepare("gamerule max_minecart_speed", source.clone())
+                .is_err()
+        );
+        for name in ["max_minecart_speed", "minecraft:max_minecart_speed"] {
+            assert!(
+                commands
+                    .prepare(&format!("gamerule {name} 1000"), source.clone())
+                    .is_ok()
+            );
+            assert!(
+                commands
+                    .prepare(&format!("gamerule {name} 1001"), source.clone())
+                    .is_err()
+            );
+        }
+        for (level, bytes) in [
+            (
+                0,
+                include_bytes!("vanilla/tree-minecart-level-0.bin").as_slice(),
+            ),
+            (
+                4,
+                include_bytes!("vanilla/tree-minecart-level-4.bin").as_slice(),
+            ),
+        ] {
+            let actual = packet(&CommandSourceStack::server(level, Vec3::ZERO), features)
+                .to_bytes()
+                .unwrap();
+            let expected = clientbound::Commands::from_bytes(bytes).unwrap();
+            let expected = if level == 4 {
+                normalize_game_rules(expected).to_bytes().unwrap()
+            } else {
+                bytes.to_vec()
+            };
+            assert_eq!(actual, expected, "minecart feature, level {level}");
+        }
+    }
+    #[test]
     fn command_tree_packets_match_java_for_operator_and_non_operator() {
         for (level, expected) in [
             (0, include_bytes!("vanilla/tree-level-0.bin").as_slice()),
             (4, include_bytes!("vanilla/tree-level-4.bin").as_slice()),
         ] {
-            let packet = packet(&CommandSourceStack::server(level, Vec3::ZERO));
+            let packet = packet(
+                &CommandSourceStack::server(level, Vec3::ZERO),
+                RuleFeatures::default(),
+            );
             let expected_packet = clientbound::Commands::from_bytes(expected).unwrap();
             let expected = if level == 4 {
                 normalize_game_rules(expected_packet).to_bytes().unwrap()

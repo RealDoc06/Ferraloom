@@ -69,3 +69,4 @@ Every report rule has its type and bootstrapped default. Feature-gated entries a
 
 | game-rules.values.native-saved-data | Persist typed game-rule values at data/minecraft/game_rules.dat in 26.3 | `GameRuleMap#TYPE` | `gamerules::tests::native_saved_data_round_trip_and_feature_filtering` | pass | todo |
 | game-rules.values.all-parsers | All rule value parsers: bounds, leading zeros, malformed input and trailing partial values | `GameRule#deserialize` | `gamerules::tests::every_rule_value_parser_matches_java_including_partial_values` | pass | todo |
+| game-rules.minecart-enabled-features | Read WorldData enabled_features consistently for rule defaults, persistence and command registration | `GameRules#GameRules; MinecraftServer#MinecraftServer` | `commands::tree::tests::minecart_feature_gates_rule_parsing_and_vanilla_tree` | pass | todo |
