@@ -2,7 +2,7 @@
 use crate::{
     block::{DirectionalPlaceContext, LevelReaderRef, fluid::legacy_block},
     entity::{
-        Entity, EntityData, EntityDataView, EntityRef, EntityState, RemovalReason,
+        Entity, EntityData, EntityDataView, EntityRef, EntityState,
         effects::EntityEffect,
         item::ItemEntity,
         movement::{MovementEmission, MoverType},
