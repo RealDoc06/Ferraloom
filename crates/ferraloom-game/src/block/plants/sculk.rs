@@ -480,10 +480,10 @@ fn attempt_place_sculk(
 }
 fn can_place_growth(level: &LevelReaderRef<'_, '_>, pos: BlockPos) -> Result<bool, LevelError> {
     let above = level.get_block_state(pos.above(1))?;
-    if !above.is_air()
-        && !(above.block() == Block::WATER
-            && above.data().fluid.fluid_type == ferraloom_data::registries::fluid::Id::WATER)
-    {
+    let can_grow_into = above.is_air()
+        || above.block() == Block::WATER
+            && above.data().fluid.fluid_type == ferraloom_data::registries::fluid::Id::WATER;
+    if !can_grow_into {
         return Ok(false);
     }
     let (min_y, max_y) = match level {
@@ -502,6 +502,18 @@ fn can_place_growth(level: &LevelReaderRef<'_, '_>, pos: BlockPos) -> Result<boo
     let mut count = 0;
     for cx in (from.x >> 4)..=(to.x >> 4) {
         for cz in (from.z >> 4)..=(to.z >> 4) {
+            let chunk_pos = ferraloom_util::ChunkPos::new(cx, cz);
+            match level {
+                LevelReaderRef::Server(live) => {
+                    live.chunk(chunk_pos)
+                        .ok_or(LevelError::MissingChunk(chunk_pos))?;
+                }
+                LevelReaderRef::Worldgen(region) => {
+                    region
+                        .chunk([cx, cz], ferraloom_worldgen::region::ChunkStatus::Empty)
+                        .map_err(|_| LevelError::MissingChunk(chunk_pos))?;
+                }
+            }
             for cy in (from.y.max(min_y) >> 4)..=(to.y.min(max_y) >> 4) {
                 for y in from.y.max(cy << 4)..=to.y.min((cy << 4) + 15) {
                     for z in from.z.max(cz << 4)..=to.z.min((cz << 4) + 15) {
@@ -527,7 +539,7 @@ fn decay_penalty(settings: SpreadSettings, pos: BlockPos, origin: BlockPos, char
     let distance = distance_squared(pos, origin).sqrt() as f32 - settings.no_growth_radius as f32;
     let outer = distance * distance;
     let reach = 24_i32.wrapping_sub(settings.no_growth_radius);
-    let factor = (outer / reach.wrapping_mul(reach) as f32).min(1.0);
+    let factor = ferraloom_util::java::min_f32(1.0, outer / reach.wrapping_mul(reach) as f32);
     ((charge as f32 * factor * 0.5) as i32).max(1)
 }
 fn distance_squared(a: BlockPos, b: BlockPos) -> f64 {
@@ -720,3 +732,6 @@ pub fn spread_patch(
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests;
