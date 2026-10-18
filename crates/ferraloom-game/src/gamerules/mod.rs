@@ -171,6 +171,8 @@ impl GameRuleMap {
                 }
             }
         }
+        // DispatchedMapCodec's applicative accumulation prepends each entry's errors.
+        errors.reverse();
         let error =
             (!errors.is_empty()).then(|| format!("{} missed input: {missed}", errors.join("; ")));
         GameRuleMapResult {

@@ -7,7 +7,7 @@ import net.minecraft.nbt.*;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.world.level.gamerules.GameRuleMap;
 
-/** Error accumulation follows CompoundTag's JDK entry traversal, not key sorting. */
+/** Capture JDK entry traversal separately from DFU's reverse error accumulation. */
 public final class SavedRuleErrorVector {
     public static void main(String[] args) throws Exception {
         SharedConstants.tryDetectVersion();Bootstrap.bootStrap();var out=new JsonArray();
@@ -17,7 +17,9 @@ public final class SavedRuleErrorVector {
             "{Aa:1,BB:1,AaAa:1,BBBB:1,AaBB:1,BBAa:1,'minecraft:random_tick_speed':-1}",
             "{keep_inventory:'bad',random_tick_speed:-1,max_block_modifications:0,max_snow_accumulation_height:9}"
         )) {
-            var result=GameRuleMap.CODEC.parse(NbtOps.INSTANCE,TagParser.create(NbtOps.INSTANCE).parseFully(input));var row=new JsonObject();row.addProperty("input",input);result.error().ifPresent(error->row.addProperty("error",error.message()));result.resultOrPartial(error->{}).ifPresent(value->row.add("partial",GameRuleMap.CODEC.encodeStart(JsonOps.INSTANCE,value).getOrThrow()));out.add(row);
+            var compound=(CompoundTag)TagParser.create(NbtOps.INSTANCE).parseFully(input);
+            var result=GameRuleMap.CODEC.parse(NbtOps.INSTANCE,compound);var row=new JsonObject();
+            row.add("entries",new Gson().toJsonTree(new ArrayList<>(compound.keySet())));row.addProperty("input",input);result.error().ifPresent(error->row.addProperty("error",error.message()));result.resultOrPartial(error->{}).ifPresent(value->row.add("partial",GameRuleMap.CODEC.encodeStart(JsonOps.INSTANCE,value).getOrThrow()));out.add(row);
         }
         Files.writeString(Path.of(args[0]),new GsonBuilder().setPrettyPrinting().create().toJson(out)+"\n");
     }

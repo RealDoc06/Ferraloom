@@ -10,6 +10,7 @@ fn saved_rule_partial_values_and_errors_match_java() {
         empty_key: bool,
         partial: Option<serde_json::Value>,
         error: Option<String>,
+        entries: Option<Vec<String>>,
     }
     let mut vectors: Vec<Vector> =
         serde_json::from_str(include_str!("../commands/vanilla/saved-rule-vectors.json")).unwrap();
@@ -27,6 +28,15 @@ fn saved_rule_partial_values_and_errors_match_java() {
         } else {
             ferraloom_nbt::parse(&vector.input).unwrap()
         };
+        if let Some(expected) = vector.entries {
+            let actual = tag
+                .as_compound()
+                .unwrap()
+                .iter_java_order()
+                .map(|(key, _)| key.to_string_lossy())
+                .collect::<Vec<_>>();
+            assert_eq!(actual, expected, "{}: native map traversal", vector.input);
+        }
         let result = GameRuleMap::decode_partial(&tag);
         assert_eq!(result.error, vector.error, "{}", vector.input);
         assert_eq!(result.error.is_none(), vector.success, "{}", vector.input);
