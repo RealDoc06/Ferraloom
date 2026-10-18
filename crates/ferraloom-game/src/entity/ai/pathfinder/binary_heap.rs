@@ -3,6 +3,7 @@ use super::{NodeId, PathData};
 #[derive(Debug)]
 pub struct BinaryHeap {
     heap: Vec<NodeId>,
+    empty_root: Option<NodeId>,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HeapError {
@@ -12,6 +13,7 @@ impl Default for BinaryHeap {
     fn default() -> Self {
         Self {
             heap: Vec::with_capacity(128),
+            empty_root: None,
         }
     }
 }
@@ -21,6 +23,7 @@ impl BinaryHeap {
     }
     /// Native clear changes only size; stale Node.heapIdx values remain intact.
     pub fn clear(&mut self) {
+        self.empty_root = self.heap.first().copied().or(self.empty_root);
         self.heap.clear();
     }
     pub fn size(&self) -> usize {
@@ -32,8 +35,8 @@ impl BinaryHeap {
     pub fn get_heap(&self) -> &[NodeId] {
         &self.heap
     }
-    pub fn peek(&self) -> NodeId {
-        self.heap[0]
+    pub fn peek(&self) -> Option<NodeId> {
+        self.heap.first().copied().or(self.empty_root)
     }
     pub fn insert(&mut self, node: NodeId, data: &mut PathData) -> Result<NodeId, HeapError> {
         if data[node].heap_idx >= 0 {
@@ -51,6 +54,9 @@ impl BinaryHeap {
             self.heap[0] = last;
             self.down_heap(0, data);
         }
+        if self.heap.is_empty() {
+            self.empty_root = None;
+        }
         data[node].heap_idx = -1;
         node
     }
@@ -64,6 +70,9 @@ impl BinaryHeap {
             } else {
                 self.down_heap(index, data);
             }
+        }
+        if self.heap.is_empty() {
+            self.empty_root = None;
         }
         data[node].heap_idx = -1;
     }

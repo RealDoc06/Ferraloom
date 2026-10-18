@@ -176,7 +176,7 @@ fn native_heap_ties_changes_clear_and_growth() {
                     let id = heap.pop(&mut data);
                     assert_eq!(data[id].pos.x, step["popped"]);
                 }
-                "peek" => assert_eq!(data[heap.peek()].pos.x, step["peek"]),
+                "peek" => assert_eq!(json!(heap.peek().map(|id| data[id].pos.x)), step["peek"]),
                 "change" => heap.change_cost(
                     ids[parts[1].parse::<usize>().unwrap()],
                     parts[2].parse().unwrap(),
