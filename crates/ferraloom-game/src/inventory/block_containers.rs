@@ -169,9 +169,7 @@ pub fn with_block_menu_context<R>(
         (result, changed)
     };
     for handle in changed {
-        level.set_changed(handle.pos)?;
-        let block = level.block_entity_state(handle)?.data().block_state.block();
-        level.update_neighbour_for_output_signal(handle.pos, block)?;
+        handle.set_changed(level)?;
     }
     result
 }
