@@ -41,3 +41,8 @@ NaNs; network writes and both readers retain NaN payloads.
 map, patch, stack and template equality across component insertion orders, removal
 orders, signed zeros and NaN payloads. It checks native map entry-sum hashes and
 map/patch hash invariance, and records patch bytes in their original wire order.
+
+`bash crates/ferraloom-game/tests/java/crafting/run-stack-counts.sh` captures
+effective item, prototype, components and patch access for zero, negative and
+positive counts, together with copyWithCount, grow and template application.
+Empty accessors hide the payload; growing the original mutable stack restores it.

@@ -12,12 +12,10 @@ pub(super) fn create(template: &ItemStackTemplate) -> ItemStack {
     ))
 }
 pub(super) fn copy_with_count(stack: &ItemStack, count: i32) -> ItemStack {
-    stack.0.as_ref().map_or_else(ItemStack::default, |stack| {
-        ItemStack::new(stack.item, count, stack.components.clone())
-    })
+    stack.copy_with_count(count)
 }
 pub(super) fn component(stack: &ItemStack, id: ComponentTypeId) -> Result<Option<DataComponent>> {
-    Ok(stack.components()?.get(id).cloned())
+    Ok(stack.component(id)?.cloned())
 }
 pub(super) fn set(stack: &mut ItemStack, component: DataComponent) {
     if let Some(contents) = &mut stack.0 {
@@ -38,19 +36,11 @@ pub(super) fn remove(stack: &mut ItemStack, id: ComponentTypeId) {
     }
 }
 pub(super) fn item(stack: &ItemStack) -> Item {
-    if stack.is_empty() {
-        Item::AIR
-    } else {
-        stack.0.as_ref().expect("nonempty").item
-    }
+    stack.item()
 }
 /// Port of ItemStackTemplate#apply: the template patch overrides the source patch.
 pub(super) fn transmute(template: &ItemStackTemplate, source: &ItemStack, extra: i32) -> ItemStack {
-    let mut patch = source
-        .0
-        .as_ref()
-        .map(|stack| stack.components.clone())
-        .unwrap_or_default();
+    let mut patch = source.components_patch().clone();
     apply_patch(&mut patch, &template.components);
     validate_template(ItemStack::new(
         template.item,
