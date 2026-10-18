@@ -22,3 +22,9 @@ time, including DST, to match vanilla's timestamp format.
 all before/after chat-rule combinations, with the XP reward changing both the
 rule and display name. Its separate compressed fixture avoids recapturing
 identity-dependent tree order when observing this synchronous callback boundary.
+
+`RecipeCraftedVectors` observes the real recipe matcher with six ordered input
+lists, including a repeated reference to the same stack. The retained live event
+and pure event use these cases to check greedy ingredient matching and receiver
+multiplicity. Rust tests also check retention cleanup after capture or predicate
+errors.

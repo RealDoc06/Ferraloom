@@ -207,6 +207,42 @@ pub fn recipe_unlocked(
         None,
     )
 }
+/// Port of ServerPlayer#triggerRecipeCrafted and RecipeCraftedTrigger#trigger.
+/// The captured list contains native grid receiver identities, including empty
+/// stacks and repeated refs. Retain it across nested award effects, never copy it.
+pub fn recipe_crafted(
+    level: &mut Level,
+    player: EntityRef,
+    recipe: &RecipeHolder,
+    ingredients: &[StackRef],
+) -> Result<(), LevelError> {
+    for (index, &stack) in ingredients.iter().enumerate() {
+        if let Err(error) = level.retain_stack(stack) {
+            for &retained in &ingredients[..index] {
+                level.release_stack(retained);
+            }
+            return Err(live::menu_error(error));
+        }
+    }
+    let result = (|| {
+        let id = Identifier::parse(&recipe.id.to_string())
+            .map_err(|_| LevelError::Inventory("advancement recipe identifier"))?;
+        live::trigger(
+            level,
+            player,
+            TriggerType::RecipeCrafted,
+            TriggerEvent::RecipeLive {
+                id: &id,
+                ingredients,
+            },
+            None,
+        )
+    })();
+    for &stack in ingredients {
+        level.release_stack(stack);
+    }
+    result
+}
 /// Port of CriteriaTriggers.TICK at the native ServerPlayer#tick phase.
 pub fn tick(level: &mut Level, player: EntityRef) -> Result<(), LevelError> {
     live::trigger(level, player, TriggerType::Tick, TriggerEvent::Player, None)

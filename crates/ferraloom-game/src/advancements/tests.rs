@@ -1246,3 +1246,147 @@ fn vanilla_rewards_change_announcement_rule_and_name_before_chat() {
         );
     }
 }
+
+#[test]
+fn vanilla_recipe_crafted_retained_receivers_preserve_order_and_duplicates() {
+    use crate::{
+        crafting::RecipeHolder,
+        entity::player::ServerPlayer,
+        inventory::{ContainerHandle, ContainerSlot},
+    };
+    let mut bytes = Vec::new();
+    flate2::read::GzDecoder::new(&include_bytes!("recipe-crafted.json.gz")[..])
+        .read_to_end(&mut bytes)
+        .unwrap();
+    let rows: Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(rows.as_array().unwrap().len(), 6);
+    for row in rows.as_array().unwrap() {
+        let objects: Vec<_> = row["objects"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|object| ItemStack::from_json(object).unwrap())
+            .collect();
+        let used: Vec<_> = row["used"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|index| objects[index.as_u64().unwrap() as usize].clone())
+            .collect();
+        let recipe_id = id(row["recipe"].as_str().unwrap());
+        let data = LootData::default();
+        let mut random = LegacyRandomSource::new(42);
+        let mut context = MatchContext::borrowed(&data, &Facts, &mut random, Vec3::ZERO);
+        assert_eq!(
+            Criterion::decode(&row["input"])
+                .unwrap()
+                .instance
+                .matches(
+                    TriggerEvent::Recipe {
+                        id: &recipe_id,
+                        ingredients: &used,
+                    },
+                    &mut context,
+                )
+                .unwrap(),
+            row["matches"].as_bool().unwrap(),
+            "pure {row}"
+        );
+        let manager = ServerAdvancementManager::new(holders(
+            &json!([{"id":"test:crafted","value":{"criteria":{"used":row["input"]}}}]),
+        ));
+        let (mut level, player) = live_fixture(manager);
+        for (slot, object) in row["objects"].as_array().unwrap().iter().enumerate() {
+            level
+                .entity_mut::<ServerPlayer>(player)
+                .unwrap()
+                .inventory
+                .items[slot] = ItemStack::from_json(object).unwrap();
+        }
+        let inputs: Vec<_> = row["used"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|index| {
+                level
+                    .stack_ref(ContainerSlot {
+                        container: ContainerHandle::PlayerInventory(player),
+                        slot: index.as_u64().unwrap() as usize,
+                    })
+                    .unwrap()
+            })
+            .collect();
+        let resources = level.container_resources().unwrap();
+        let recipe = RecipeHolder {
+            id: row["recipe"].as_str().unwrap().parse().unwrap(),
+            value: resources.recipes.recipes()[0].value.clone(),
+        };
+        criteria::recipe_crafted(&mut level, player, &recipe, &inputs).unwrap();
+        assert_eq!(
+            level
+                .entity::<ServerPlayer>(player)
+                .unwrap()
+                .advancements
+                .get_progress(&id("test:crafted"))
+                .unwrap()
+                .is_done(),
+            row["matches"].as_bool().unwrap(),
+            "{row}"
+        );
+        for input in inputs {
+            assert!(!level.stack_is_retained(input.address()).unwrap());
+        }
+    }
+}
+
+#[test]
+fn recipe_crafted_releases_roots_on_capture_and_predicate_errors() {
+    use crate::{
+        entity::player::ServerPlayer,
+        inventory::{ContainerHandle, ContainerSlot, StackRef},
+    };
+    let manager = ServerAdvancementManager::new(holders(
+        &json!([{"id":"test:crafted","value":{"criteria":{"used":{
+            "trigger":"recipe_crafted","conditions":{"recipes":"crafting_table","ingredients":[{"items":"stone"}],
+            "player":{"type":"entity_properties","entity":"this","predicate":{"minecraft:type_specific/player":{"food":{"level":20}}}}}
+        }}}}]),
+    ));
+    let (mut level, player) = live_fixture(manager);
+    level
+        .entity_mut::<ServerPlayer>(player)
+        .unwrap()
+        .inventory
+        .items[0] = ItemStack::new(Item::STONE, 1, Default::default());
+    let address = ContainerSlot {
+        container: ContainerHandle::PlayerInventory(player),
+        slot: 0,
+    };
+    let input = level.stack_ref(address).unwrap();
+    let invalid = StackRef {
+        generation: input.generation + 1,
+        ..input
+    };
+    let resources = level.container_resources().unwrap();
+    let recipe = &resources.recipes.recipes()[0];
+    level.retain_stack(input).unwrap();
+    assert!(criteria::recipe_crafted(&mut level, player, recipe, &[input, invalid]).is_err());
+    assert!(level.stack_is_retained(address).unwrap());
+    level.release_stack(input);
+    assert!(!level.stack_is_retained(address).unwrap());
+    assert!(matches!(
+        criteria::recipe_crafted(&mut level, player, recipe, &[input]),
+        Err(crate::level::LevelError::UnsupportedAdvancementCriterion(
+            criteria::Trigger::Native(TriggerType::RecipeCrafted)
+        ))
+    ));
+    assert!(!level.stack_is_retained(address).unwrap());
+    assert!(
+        !level
+            .entity::<ServerPlayer>(player)
+            .unwrap()
+            .advancements
+            .get_progress(&id("test:crafted"))
+            .unwrap()
+            .is_done()
+    );
+}

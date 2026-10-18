@@ -48,6 +48,10 @@ pub enum TriggerEvent<'a> {
         id: &'a Identifier,
         ingredients: &'a [ItemStack],
     },
+    RecipeLive {
+        id: &'a Identifier,
+        ingredients: &'a [StackRef],
+    },
     Hurt {
         entity: Option<&'a LootParams>,
         source: &'a DamageSource,
@@ -309,25 +313,35 @@ impl TriggerInstance {
                     id,
                     ingredients: used,
                 },
+            ) => recipe_matches(
+                recipes,
+                ingredients,
+                id,
+                used.iter(),
+                |stack| Ok(*stack),
+                context.facts(),
+            )?,
+            (
+                C::Recipe {
+                    recipes,
+                    ingredients,
+                },
+                E::RecipeLive {
+                    id,
+                    ingredients: used,
+                },
             ) => {
-                if !holder_contains(recipes, id, |tag| context.facts().recipe_tag(tag))? {
-                    return Ok(false);
-                }
-                let mut remaining: Vec<_> = used.iter().collect();
-                for test in ingredients {
-                    let mut found = None;
-                    for (index, item) in remaining.iter().enumerate() {
-                        if test.matches(item, context.facts())? {
-                            found = Some(index);
-                            break;
-                        }
-                    }
-                    let Some(index) = found else {
-                        return Ok(false);
-                    };
-                    remaining.remove(index);
-                }
-                true
+                let MatchAccess::Runtime(runtime) = &context.access else {
+                    return Err(LootError::Unsupported("advancement.retained_stack".into()));
+                };
+                recipe_matches(
+                    recipes,
+                    ingredients,
+                    id,
+                    used.iter().copied(),
+                    |stack| runtime.stack(*stack),
+                    runtime.trigger_facts(),
+                )?
             }
             (
                 C::Hurt { damage, entity },
@@ -644,4 +658,34 @@ fn inventory_matches<'a>(
         }
     }
     Ok(remaining.is_empty())
+}
+
+/// Port of RecipeCraftedTrigger.TriggerInstance#matches. The working list holds
+/// the captured receiver identities; each predicate resolves its current value.
+fn recipe_matches<'a, T>(
+    recipes: &HolderSet<crate::crafting::Recipe>,
+    ingredients: &[ItemPredicate],
+    id: &Identifier,
+    used: impl IntoIterator<Item = T>,
+    resolve: impl Fn(&T) -> Result<&'a ItemStack>,
+    facts: &dyn TriggerFacts,
+) -> Result<bool> {
+    if !holder_contains(recipes, id, |tag| facts.recipe_tag(tag))? {
+        return Ok(false);
+    }
+    let mut remaining: Vec<_> = used.into_iter().collect();
+    for test in ingredients {
+        let mut found = None;
+        for (index, item) in remaining.iter().enumerate() {
+            if test.matches(resolve(item)?, facts)? {
+                found = Some(index);
+                break;
+            }
+        }
+        let Some(index) = found else {
+            return Ok(false);
+        };
+        remaining.remove(index);
+    }
+    Ok(true)
 }
