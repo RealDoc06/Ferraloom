@@ -1,6 +1,6 @@
 # Advancements
 
-Codecs, pure and live matching, progression, ordered reward delivery, game rules, packets and persistence adapters are implemented. Native tick and menu producers and Strict interaction parity await integration; LOCATION also awaits structure facts. Identity-set child order is captured for exact layout comparison; runtime identity collections use deterministic insertion order.
+Codecs, pure and live matching, progression, ordered reward delivery, game rules, packets and persistence adapters are implemented. Native tick and menu producers and Strict interaction parity await integration; LOCATION awaits its native player tick call point. Identity-set child order is captured for exact layout comparison; runtime identity collections use deterministic insertion order.
 
 Mechanics are identified from the 26.3 server source. Registry and resource entries are mechanically enumerated from the official reports, bootstrapped registries and built-in datapack.
 
@@ -1968,5 +1968,6 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | advancements.recipes.live-award | Shared live recipe award finishes each unlock trigger before the next holder, sends one aggregate packet and returns its display-entry count; skips known and special recipes | `ServerPlayer#awardRecipes; ServerRecipeBook#addRecipes` | `advancements::tests::award_recipes_counts_displays_after_synchronous_nested_unlocks; live_rewards_nest_recipe_awards_before_outer_announcement_and_visibility` | pass | partial |
 
 | advancements.parity.loaded-tab-save | Bedrock flat Strict scenario loads canonical UUID progress, selects the advancement tab, saves and repeats after rejoin | `PlayerList#getPlayerAdvancements; PlayerList#save; ServerGamePacketListenerImpl#handleSeenAdvancements` | `ferraloom-parity::loaded_statistics_and_advancement_tab_survive_save` | pass | pass |
+| advancements.parity.location-leather-boots | Native LOCATION awards the actual leather-boots powder-snow advancement, rejecting wrong boots and the wrong block; source prepared, awaiting the native tick call point and validation | `ServerPlayer#doTick; EntityPredicate; EntityEquipmentPredicate` | `advancements::tests::live_location_awards_native_leather_boots_predicate_from_canonical_facts; ferraloom-parity::location_awards_leather_boots_on_powder_snow` | - | todo |
 | advancements.persistence.level-resource | UUID saves use players/advancements and the shared player-progress path helper | `LevelResource.PLAYER_ADVANCEMENTS_DIR` | `advancements::persistence::tests::captured_save_uses_each_instant_offset_across_dst` | pass | pass |
 | advancements.persistence.old-layout-migration | Migrate older player advancement layouts through the filefix workstream; no fallback reader | `PlayerStorageFileFix` | pending | - | todo |

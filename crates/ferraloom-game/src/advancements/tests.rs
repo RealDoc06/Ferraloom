@@ -988,6 +988,127 @@ fn live_fixture(manager: ServerAdvancementManager) -> (crate::level::Level, Enti
 }
 
 #[test]
+fn live_location_awards_native_leather_boots_predicate_from_canonical_facts() {
+    use crate::{
+        entity::{EntityData, player::ServerPlayer},
+        level::LevelChunk,
+    };
+    use ferraloom_chunk::{BiomeId, IdMap, LevelChunkSection, Strategy};
+    use ferraloom_protocol::component::EquipmentSlot;
+    use ferraloom_util::{BlockPos, ChunkPos};
+    use std::sync::Arc;
+
+    let target = id("minecraft:adventure/walk_on_powder_snow_with_leather_boots");
+    // Keep the captured built-in and its actual parent chain, including display
+    // visibility, while isolating this trigger from unrelated advancements.
+    let builtins = oracle()["builtins"].as_array().unwrap();
+    let mut rows = Vec::new();
+    let mut next = Some(target.as_str());
+    while let Some(name) = next {
+        let row = builtins.iter().find(|row| row["id"] == name).unwrap();
+        rows.push(row.clone());
+        next = row["value"]["parent"].as_str();
+    }
+    for (label, boots, count, on_ground, supporting, block, expected) in [
+        (
+            "fallback",
+            Item::LEATHER_BOOTS,
+            1,
+            true,
+            false,
+            Block::POWDER_SNOW,
+            true,
+        ),
+        (
+            "supporting",
+            Item::LEATHER_BOOTS,
+            1,
+            true,
+            true,
+            Block::POWDER_SNOW,
+            true,
+        ),
+        (
+            "wrong boots",
+            Item::IRON_BOOTS,
+            1,
+            true,
+            false,
+            Block::POWDER_SNOW,
+            false,
+        ),
+        (
+            "empty boots",
+            Item::LEATHER_BOOTS,
+            0,
+            true,
+            false,
+            Block::POWDER_SNOW,
+            false,
+        ),
+        (
+            "airborne",
+            Item::LEATHER_BOOTS,
+            1,
+            false,
+            false,
+            Block::POWDER_SNOW,
+            false,
+        ),
+        (
+            "wrong block",
+            Item::LEATHER_BOOTS,
+            1,
+            true,
+            false,
+            Block::STONE,
+            false,
+        ),
+    ] {
+        let manager = ServerAdvancementManager::new(holders(&json!(rows)));
+        let (mut level, player) = live_fixture(manager);
+        level
+            .add_chunk(LevelChunk::new(
+                ChunkPos::new(0, 0),
+                -1..1,
+                LevelChunkSection::new(
+                    Strategy::block_states(),
+                    Strategy::biomes(Arc::new(IdMap::new(vec![BiomeId(0)]).unwrap())),
+                    BiomeId(0),
+                ),
+            ))
+            .unwrap();
+        let pos = BlockPos::new(if supporting { 1 } else { 0 }, -1, 0);
+        level.set_block_state(pos, block.default_state()).unwrap();
+        level
+            .entity_mut::<ServerPlayer>(player)
+            .unwrap()
+            .parent
+            .equipment
+            .set(
+                EquipmentSlot::Feet,
+                ItemStack::new(boots, count, Default::default()),
+            );
+        let base = level.entity_mut::<EntityData>(player).unwrap();
+        base.on_ground = on_ground;
+        base.supporting_block_pos = supporting.then_some(pos);
+
+        criteria::location(&mut level, player).unwrap();
+        assert_eq!(
+            level
+                .entity::<ServerPlayer>(player)
+                .unwrap()
+                .advancements
+                .get_progress(&target)
+                .unwrap()
+                .is_done(),
+            expected,
+            "{label}"
+        );
+    }
+}
+
+#[test]
 fn live_rewards_nest_recipe_awards_before_outer_announcement_and_visibility() {
     use crate::{entity::player::ServerPlayer, level::effects::LevelEffect};
     use ferraloom_protocol::play::clientbound as cb;
