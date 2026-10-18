@@ -103,7 +103,7 @@ impl StatType {
     }
 }
 /// Port of Stat. Variants prevent assigning items to block/entity stat types.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Stat {
     Mined(Block),
     Crafted(Item),
@@ -347,6 +347,47 @@ pub fn handle_client_command(
         ClientCommandAction::RequestStats => Some(counter.send_stats()),
         _ => None,
     }
+}
+
+/// Port of ServerPlayer#awardStat. Counter mutation precedes the synchronous
+/// scoreboard unit effect. The shared server bridge replaces this interim gate.
+pub fn award_stat(
+    level: &mut crate::level::Level,
+    player: crate::entity::EntityRef,
+    stat: Stat,
+    amount: i32,
+) -> std::result::Result<(), crate::level::LevelError> {
+    level
+        .entity_mut::<crate::entity::player::ServerPlayer>(player)?
+        .stats
+        .increment(stat, amount);
+    statistic_scoreboard(level, stat)
+}
+/// Port of ServerPlayer#resetStat (ScoreAccess#reset writes zero).
+pub fn reset_stat(
+    level: &mut crate::level::Level,
+    player: crate::entity::EntityRef,
+    stat: Stat,
+) -> std::result::Result<(), crate::level::LevelError> {
+    level
+        .entity_mut::<crate::entity::player::ServerPlayer>(player)?
+        .stats
+        .set_value(stat, 0);
+    statistic_scoreboard(level, stat)
+}
+fn statistic_scoreboard(
+    level: &mut crate::level::Level,
+    stat: Stat,
+) -> std::result::Result<(), crate::level::LevelError> {
+    let criterion = stat.objective_name();
+    if level
+        .scoreboard()
+        .objectives()
+        .any(|(_, objective)| objective.criteria.name == criterion)
+    {
+        level.unported_operation(crate::block::UnportedOperation::StatisticScoreboard(stat))?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]

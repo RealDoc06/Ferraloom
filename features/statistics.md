@@ -103,3 +103,5 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | statistics.counter.loaded-map-order | Preserve JDK 25 per-group putAll and fastutil destination sizing when loading saved statistics | `ServerStatsCounter.STATS_CODEC; ServerStatsCounter#parse` | `stats::tests::vanilla_dirty_packets_follow_jdk25_copy_capacity_boundaries` | pass | pass |
 
 | statistics.request-stats.live | REQUEST_STATS sends and clears the canonical player dirty set through ordered player output | `ServerGamePacketListenerImpl#handleClientCommand` | `stats::tests` | pass | partial |
+
+| statistics.live-counter-scoreboard-order | Player award/reset updates the counter before synchronous scoreboard effect; matching objectives use policy until ServerShared bridge lands | `ServerPlayer#awardStat; ServerPlayer#resetStat` | `stats::tests::live_stat_counter_precedes_interim_scoreboard_policy` | pass | partial |

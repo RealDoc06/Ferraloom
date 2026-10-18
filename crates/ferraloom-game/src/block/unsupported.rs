@@ -17,6 +17,7 @@ pub enum UnportedOperation {
     ItemUseOn(ferraloom_data::Item),
     PortalUse(Block),
     AdvancementCriterion(crate::advancements::criteria::Trigger),
+    StatisticScoreboard(crate::stats::Stat),
     WeatherStrike,
     PackReload,
     SnowAccumulation,
@@ -238,6 +239,12 @@ impl UnportedCalls {
                     block.name(),
                     self.stats.skipped_calls
                 ),
+                UnportedCall::Operation(UnportedOperation::StatisticScoreboard(stat)) => {
+                    eprintln!(
+                        "Skipping unported statistic scoreboard effect: {}",
+                        stat.objective_name()
+                    );
+                }
                 UnportedCall::Operation(UnportedOperation::AdvancementCriterion(trigger)) => {
                     eprintln!(
                         "Unported advancement criterion skipped: {} (skipped calls: {})",
@@ -341,6 +348,9 @@ impl Level {
                 }
                 UnportedOperation::ItemUseOn(item) => LevelError::UnsupportedItemUseOn(item),
                 UnportedOperation::PortalUse(block) => LevelError::UnsupportedPortalUse(block),
+                UnportedOperation::StatisticScoreboard(_) => {
+                    LevelError::Inventory("unsupported statistic scoreboard effect")
+                }
                 UnportedOperation::AdvancementCriterion(trigger) => {
                     LevelError::UnsupportedAdvancementCriterion(trigger)
                 }
