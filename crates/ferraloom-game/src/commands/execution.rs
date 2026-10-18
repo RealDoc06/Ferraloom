@@ -18,7 +18,7 @@ impl Frame {
         self.return_value_consumer.on_failure();
     }
 }
-type EntryAction<H> = Box<dyn FnOnce(&mut ExecutionContext<H>, &Frame, &mut H)>;
+type EntryAction<H> = Box<dyn FnOnce(&mut ExecutionContext<H>, &Frame, &mut H) + Send>;
 /// Port of CommandQueueEntry. The action owns its source and arguments.
 pub struct CommandQueueEntry<H> {
     pub frame: Frame,
@@ -27,7 +27,7 @@ pub struct CommandQueueEntry<H> {
 impl<H> CommandQueueEntry<H> {
     pub fn new(
         frame: Frame,
-        action: impl FnOnce(&mut ExecutionContext<H>, &Frame, &mut H) + 'static,
+        action: impl FnOnce(&mut ExecutionContext<H>, &Frame, &mut H) + Send + 'static,
     ) -> Self {
         Self {
             frame,
