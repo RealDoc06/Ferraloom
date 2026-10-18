@@ -40,6 +40,7 @@ public final class PrimitiveCodecs {
         catch (Exception e) { return null; }
     }
     public static void main(String[] args) throws Exception {
+        net.minecraft.SharedConstants.tryDetectVersion(); net.minecraft.server.Bootstrap.bootStrap();
         var root = new JsonObject(); var json = new JsonArray(); var nbt = new JsonArray(); var compounds = new JsonArray();
         var inputs = new ArrayList<>(List.of("null","true","false","\"1\"","\"hello\"","[]","{}","0","-0.0","2.9","-2.9",
             "2147483648","4294967297","9223372036854775808","18446744073709551617","-18446744073709551617.9",
@@ -59,7 +60,7 @@ public final class PrimitiveCodecs {
         numeric.put("double",DoubleTag.valueOf(-2.9)); numeric.put("doubleMax",DoubleTag.valueOf(Double.MAX_VALUE));
         numeric.put("negativeMax",DoubleTag.valueOf(-Double.MAX_VALUE)); numeric.put("nan",DoubleTag.valueOf(Double.NaN));
         numeric.put("floatNan",FloatTag.valueOf(Float.NaN)); numeric.put("positiveInfinity",FloatTag.valueOf(Float.POSITIVE_INFINITY));
-        numeric.put("negativeInfinity",DoubleTag.valueOf(Double.NEGATIVE_INFINITY)); numeric.put("negativeZero",DoubleTag.valueOf(-0.0));
+        numeric.put("negativeInfinity",DoubleTag.valueOf(Double.NEGATIVE_INFINITY)); numeric.put("negativeZero",new DoubleTag(-0.0));
         numeric.put("fraction",DoubleTag.valueOf(0.5)); numeric.put("string",StringTag.valueOf("1"));
         numeric.put("compound",new CompoundTag()); numeric.put("list",new ListTag());
         numeric.forEach((name,input) -> { var row=new JsonObject(); row.addProperty("name",name);row.addProperty("input",input.toString());row.add("values",values(NbtOps.INSTANCE,input));nbt.add(row); });
@@ -76,11 +77,15 @@ public final class PrimitiveCodecs {
         var nestedCodecs = new LinkedHashMap<String,Codec<?>>();
         nestedCodecs.put("fireworks",Fireworks.CODEC);
         nestedCodecs.put("details",((MapCodec<?>)detailsField.get(null)).codec());
+        nestedCodecs.put("mob_effects",net.minecraft.advancements.predicates.MobEffectsPredicate.CODEC);
+        nestedCodecs.put("int_bounds",net.minecraft.advancements.predicates.MinMaxBounds.Ints.CODEC);
         nestedCodecs.put("teleport",net.minecraft.world.item.consume_effects.TeleportRandomlyConsumeEffect.CODEC.codec());
         for (var entry : nestedCodecs.entrySet()) {
             String nbtText = switch(entry.getKey()) {
                 case "fireworks" -> "{flight_duration:257L,explosions:[{shape:'small_ball',has_trail:0.5d,has_twinkle:0b}]}";
                 case "details" -> "{amplifier:257L,duration:4294967297L,ambient:0.5d,show_particles:0b,hidden_effect:{amplifier:2b,ambient:1b}}";
+                case "mob_effects" -> "{'minecraft:speed':{duration:4294967297L,ambient:0.5d,visible:0b}}";
+                case "int_bounds" -> "{min:4294967297L,max:2b}";
                 default -> "{diameter:2.9d,directional_particles:0b}";
             };
             var row=new JsonObject(); row.addProperty("codec",entry.getKey());row.addProperty("nbt",nbtText);
@@ -88,6 +93,30 @@ public final class PrimitiveCodecs {
             nested.add(row);
         }
         root.add("nested",nested);
+        var bounds = new JsonArray();
+        for (String name : List.of("negative_nan","infinity","signed_zero","nan_max","nan_min","swapped")) {
+            Tag input;
+            if (name.equals("negative_nan")) input=DoubleTag.valueOf(Double.longBitsToDouble(0xfff8000000000001L));
+            else if (name.equals("infinity")) input=DoubleTag.valueOf(Double.POSITIVE_INFINITY);
+            else {
+                var compound=new CompoundTag();
+                compound.putDouble("min",switch(name) {case "signed_zero" -> -0.0; case "nan_min" -> Double.NaN; case "swapped" -> 2.0; default -> 0.0;});
+                if (name.equals("signed_zero")) compound.put("min",new DoubleTag(-0.0));
+                compound.putDouble("max",name.equals("nan_max") ? Double.NaN : 0.0);
+                input=compound;
+            }
+            var row=new JsonObject();row.addProperty("name",name);
+            var decoded=net.minecraft.advancements.predicates.MinMaxBounds.Doubles.CODEC.parse(NbtOps.INSTANCE,input);
+            row.addProperty("accepted",decoded.isSuccess());
+            if(decoded.isSuccess()) {
+                var value=decoded.getOrThrow();
+                row.addProperty("min",value.min().map(n->Long.toHexString(Double.doubleToLongBits(n))).orElse(null));
+                row.addProperty("max",value.max().map(n->Long.toHexString(Double.doubleToLongBits(n))).orElse(null));
+                row.addProperty("tag_id",net.minecraft.advancements.predicates.MinMaxBounds.Doubles.CODEC.encodeStart(NbtOps.INSTANCE,value).getOrThrow().getId());
+            }
+            bounds.add(row);
+        }
+        root.add("double_bounds",bounds);
         root.add("json",json);root.add("nbt",nbt);root.add("compounds",compounds);
         Files.writeString(Path.of(args[0]),JSON.toJson(root)+"\n");
         System.out.println("Primitive vectors: "+json.size()+" JSON, "+nbt.size()+" NBT, "+compounds.size()+" compound alternatives");

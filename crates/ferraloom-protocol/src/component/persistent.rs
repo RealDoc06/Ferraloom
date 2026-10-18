@@ -2203,21 +2203,24 @@ impl Persistent for DataComponentMatchers {
 
 impl Persistent for IntBounds {
     fn from_json(v: &Json) -> Result<Self> {
-        if v.is_number() {
+        let result = if v.is_number() {
             let n = i32::from_json(v)?;
-            Ok(Self {
+            Self {
                 min: Some(n),
                 max: Some(n),
-            })
+            }
         } else {
-            Ok(Self {
+            object(v)?;
+            Self {
                 min: field(v, "min", Some(None))?,
                 max: field(v, "max", Some(None))?,
-            })
-        }
+            }
+        };
+        result.to_persistent()?;
+        Ok(result)
     }
     fn from_nbt(v: &Tag) -> Result<Self> {
-        if matches!(
+        let result = if matches!(
             v,
             Tag::Byte(_)
                 | Tag::Short(_)
@@ -2227,16 +2230,21 @@ impl Persistent for IntBounds {
                 | Tag::Double(_)
         ) {
             let n = i32::from_nbt(v)?;
-            Ok(Self {
+            Self {
                 min: Some(n),
                 max: Some(n),
-            })
+            }
         } else {
-            Ok(Self {
+            if v.as_compound().is_none() {
+                return Err(invalid("integer bounds"));
+            }
+            Self {
                 min: field_nbt(v, "min", Some(None))?,
                 max: field_nbt(v, "max", Some(None))?,
-            })
-        }
+            }
+        };
+        result.to_persistent()?;
+        Ok(result)
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
         if let (Some(min), Some(max)) = (self.min, self.max)

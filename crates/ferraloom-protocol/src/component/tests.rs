@@ -407,6 +407,72 @@ fn vanilla_persistent_primitive_coercions() {
         let expected = ferraloom_nbt::parse(row["expected"].as_str().unwrap()).unwrap();
         assert_eq!(actual, expected, "nested {}", row["codec"]);
     }
+    for row in fixture["double_bounds"].as_array().unwrap() {
+        let name = row["name"].as_str().unwrap();
+        let input = match name {
+            "negative_nan" => Tag::Double(f64::from_bits(0xfff8_0000_0000_0001)),
+            "infinity" => Tag::Double(f64::INFINITY),
+            name => {
+                let mut tag = CompoundTag::new();
+                tag.insert(
+                    "min",
+                    Tag::Double(match name {
+                        "signed_zero" => -0.0,
+                        "nan_min" => f64::NAN,
+                        "swapped" => 2.0,
+                        _ => 0.0,
+                    }),
+                );
+                tag.insert(
+                    "max",
+                    Tag::Double(if name == "nan_max" { f64::NAN } else { 0.0 }),
+                );
+                Tag::Compound(tag)
+            }
+        };
+        let decoded = DoubleBounds::from_nbt(&input);
+        assert_eq!(
+            decoded.is_ok(),
+            row["accepted"].as_bool().unwrap(),
+            "{name}"
+        );
+        if let Ok(value) = decoded {
+            let bits = |n: f64| {
+                format!(
+                    "{:x}",
+                    if n.is_nan() {
+                        f64::NAN.to_bits()
+                    } else {
+                        n.to_bits()
+                    }
+                )
+            };
+            assert_eq!(
+                value.min.map(bits).as_deref(),
+                row["min"].as_str(),
+                "{name} min"
+            );
+            assert_eq!(
+                value.max.map(bits).as_deref(),
+                row["max"].as_str(),
+                "{name} max"
+            );
+            assert_eq!(
+                u64::from(value.to_nbt().unwrap().id()),
+                row["tag_id"].as_u64().unwrap(),
+                "{name} encoding shape"
+            );
+        }
+    }
+    assert!(IntBounds::from_nbt(&ferraloom_nbt::parse("{min:2,max:1}").unwrap()).is_err());
+    assert!(IntBounds::from_json(&serde_json::json!({"min":2,"max":1})).is_err());
+    for input in [
+        Tag::String("#minecraft:test".into()),
+        Tag::List(ListTag(vec![Tag::String("minecraft:pig".into())])),
+        Tag::IntArray(vec![]),
+    ] {
+        assert!(crate::codec::HolderSet::from_nbt(&input).is_ok());
+    }
     // A component nested in a recipe result must use the same primitive codec.
     assert_eq!(
         DataComponent::from_json(
