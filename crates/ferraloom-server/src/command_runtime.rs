@@ -172,6 +172,7 @@ impl MinecraftServer {
             "banlist" => self.ban_list_command(&command),
             "gamemode" => self.game_mode_command(source, &command)?,
             "teleport" => self.teleport_command(&command)?,
+            "setworldspawn" | "spawnpoint" => self.spawn_command(source, &command)?,
             "seed" => builtins::seed(self.world.seed),
             "help" => self.commands.help(&command)?,
             "say" | "me" | "msg" => self.message_command(source, &command)?,
@@ -1649,6 +1650,88 @@ impl MinecraftServer {
                     "commands.teleport.success.{kind}.{}",
                     if single { "single" } else { "multiple" }
                 ),
+                args,
+            ),
+            true,
+        ))
+    }
+}
+
+impl MinecraftServer {
+    pub(super) fn default_spawn_data(&self) -> ferraloom_game::commands::spawn::SpawnData {
+        let data = self.world.level_data.data.get_compound("spawn");
+        ferraloom_game::commands::spawn::SpawnData {
+            dimension: data
+                .and_then(|data| data.get_string("dimension"))
+                .map_or_else(|| "minecraft:overworld".into(), |id| id.to_string_lossy()),
+            position: self.world.spawn,
+            rotation: ferraloom_game::commands::source::Rotation {
+                yaw: data.map_or(0., |data| data.get_float_or("yaw", 0.)),
+                pitch: data.map_or(0., |data| data.get_float_or("pitch", 0.)),
+            },
+        }
+    }
+    fn spawn_command(
+        &mut self,
+        source: Option<ConnectionId>,
+        command: &PreparedCommand,
+    ) -> Result<CommandResult, ferraloom_brigadier::CommandSyntaxException> {
+        use ferraloom_game::commands::spawn::SpawnData;
+        // Player lists are captured before resolving the coordinates, as in SetSpawnCommand's executor.
+        let targets = if command.command == "spawnpoint" {
+            if command.argument("targets").is_some() {
+                self.selected_connections(command, "targets")?
+            } else {
+                vec![source.ok_or_else(|| exceptions::error("permissions.requires.player", &[]))?]
+            }
+        } else {
+            Vec::new()
+        };
+        let spawn = SpawnData::command(command)?;
+        if command.command == "setworldspawn" {
+            if self.default_spawn_data() != spawn {
+                self.world.spawn = spawn.position;
+                self.world
+                    .level_data
+                    .data
+                    .insert("spawn", Tag::Compound(spawn.to_nbt()));
+                self.broadcast(cb::Packet::SetDefaultSpawnPosition(
+                    cb::SetDefaultSpawnPosition {
+                        respawn_data: spawn.packet_data(),
+                    },
+                ));
+            }
+            return Ok(CommandResult::success(1, spawn.world_feedback(), true));
+        }
+        let mut only_name = None;
+        for id in &targets {
+            let Phase::Play(entity) = self.connections[id].phase else {
+                continue;
+            };
+            let player = self
+                .level
+                .level
+                .entity_mut::<ServerPlayer>(entity)
+                .map_err(|_| exceptions::error("argument.entity.notfound.player", &[]))?;
+            let mut config = spawn.to_nbt();
+            config.insert("forced", Tag::Byte(1));
+            player.saved.insert("respawn", Tag::Compound(config));
+            only_name = Some(player.display_name());
+        }
+        let mut args = spawn.feedback_arguments();
+        args.push(if targets.len() == 1 {
+            builtins::component(only_name.unwrap())
+        } else {
+            builtins::integer(targets.len() as i32)
+        });
+        Ok(CommandResult::success(
+            targets.len() as i32,
+            Component::translatable(
+                if targets.len() == 1 {
+                    "commands.spawnpoint.success.single"
+                } else {
+                    "commands.spawnpoint.success.multiple"
+                },
                 args,
             ),
             true,

@@ -10,6 +10,7 @@ pub mod feedback;
 pub mod message;
 pub mod permissions;
 pub mod source;
+pub mod spawn;
 pub mod teleport;
 mod tree;
 use arguments::{ArgumentValue, coordinates::Coordinates};

@@ -33,7 +33,7 @@ use ferraloom_game::{
 use ferraloom_protocol::{
     self as protocol, Uuid,
     chat::Component,
-    codec::{BitSet, GlobalPos, Holder, VarInt, VarLong},
+    codec::{BitSet, Holder, VarInt, VarLong},
     common::{self, clientbound as common_cb},
     configuration as cfg,
     login::GameProfile,
@@ -915,14 +915,7 @@ impl MinecraftServer {
         c.push(self.time_packet());
         c.push(cb::Packet::SetDefaultSpawnPosition(
             cb::SetDefaultSpawnPosition {
-                respawn_data: RespawnData {
-                    global_pos: GlobalPos {
-                        dimension: id("overworld"),
-                        pos: self.world.spawn,
-                    },
-                    yaw: 0.,
-                    pitch: 0.,
-                },
+                respawn_data: self.default_spawn_data().packet_data(),
             },
         ));
         c.push(cb::Packet::GameEvent(cb::GameEvent {
@@ -1775,7 +1768,11 @@ impl MinecraftServer {
                 self.player(entity)?.position,
             )
         } else {
-            (4, Vec3::ZERO)
+            let spawn = self.world.spawn;
+            (
+                4,
+                Vec3::new(f64::from(spawn.x), f64::from(spawn.y), f64::from(spawn.z)),
+            )
         };
         let mut stack = CommandSourceStack::server(permission, position);
         if let Some(connection) = source {
