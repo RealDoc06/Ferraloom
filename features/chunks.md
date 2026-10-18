@@ -44,6 +44,6 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 
 | chunks.runtime.batch-quota | Apply PlayerChunkSender quota and acknowledgement window; pending-set tie traversal awaits shared collections | `PlayerChunkSender#sendNextChunks; #onChunkBatchReceivedByClient` | `chunk_map::tests::batches_wait_for_acknowledgement` | - | partial |
 
-| chunks.pipeline.warn-units | Strict fails missing game callbacks; Warn abandons one placed feature or structure piece, retaining partial writes and reporting shared counters | `ChunkGenerator#applyBiomeDecoration; StructureStart#placeInChunk` | `generation::default_noise_generation_warn_reaches_full_and_strict_rejects_missing_behavior` | - | partial |
+| chunks.pipeline.warn-units | Strict fails missing game callbacks; Warn abandons one placed feature, structure piece or structure afterPlace callback, retaining partial writes and reporting shared counters | `ChunkGenerator#applyBiomeDecoration; StructureStart#placeInChunk` | `generation::default_noise_generation_warn_reaches_full_and_strict_rejects_missing_behavior` | - | partial |
 
 | chunks.pipeline.saved-region-parity | Compare saved FULL blocks, block entities, heightmaps and structure data after a bot walks into fresh terrain | `ChunkMap; SerializableChunkData` | `ferraloom-parity::chunk_generation::fresh_world_saved_regions_match_after_walking_into_new_terrain` gated on builder; Strict game shape/survival/liquid and entity factories pending | - | todo |

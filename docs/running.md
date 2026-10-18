@@ -23,9 +23,9 @@ on any worldgen skip or pending activation. This temporary mode will be removed
 when the block families are ported.
 
 Generation uses the same policy. Strict fails the status step when a placed
-feature or structure piece requires an unported callback. Warn abandons only
-that placed feature or piece, retaining partial writes and continuing to FULL.
-Each (feature or piece, behavior) is logged once, and every abandonment increments
+feature, structure piece or structure afterPlace callback requires unported behavior.
+Warn abandons only that unit, retaining partial writes and continuing to FULL.
+Each (unit, behavior) is logged once, and every abandonment increments
 the shared skip counter. Warn worlds therefore do not have vanilla generation
 parity. Lit proto mutation still needs the relight bridge; block-entity factories,
 UpgradeData and initial mob spawning remain pending. Generation jobs own their
