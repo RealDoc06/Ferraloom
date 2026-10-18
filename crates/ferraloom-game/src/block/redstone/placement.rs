@@ -35,6 +35,9 @@ pub(super) fn supports(block: Block) -> bool {
             | BlockClass::NoteBlock
             | BlockClass::TripWireBlock
             | BlockClass::TripWireHookBlock
+            | BlockClass::RedstoneLampBlock
+            | BlockClass::LightningRodBlock
+            | BlockClass::WeatheringLightningRodBlock
     ) || block.is_instance_of(BlockClass::DoorBlock)
         || block.is_instance_of(BlockClass::TrapDoorBlock)
         || block.is_instance_of(BlockClass::FenceGateBlock)
@@ -95,6 +98,17 @@ impl BlockBehavior for RedstonePlacement {
         let pos = context.clicked_pos();
         let state = block.default_state();
         let result = match block.class() {
+            BlockClass::RedstoneLampBlock => state
+                .with(p::LIT, reader.has_neighbor_signal(pos)?)
+                .unwrap(),
+            BlockClass::LightningRodBlock | BlockClass::WeatheringLightningRodBlock => {
+                with_facing(state, context.clicked_face())
+                    .with(
+                        p::WATERLOGGED,
+                        reader.get_block_state(pos)?.data().fluid.fluid_type == Fluid::WATER,
+                    )
+                    .unwrap()
+            }
             BlockClass::TripWireBlock => {
                 let mut placed = state;
                 for direction in HORIZONTAL {

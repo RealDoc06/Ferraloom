@@ -183,7 +183,9 @@ public final class RedstoneVectors extends MutationFixture {
         }
     }
     static void placements(RegistryAccess r) {
-        for(var block:List.<Block>of(Blocks.REDSTONE_WIRE,Blocks.REPEATER,Blocks.COMPARATOR,Blocks.OBSERVER,Blocks.REDSTONE_WALL_TORCH,Blocks.LEVER,Blocks.STONE_BUTTON,Blocks.OAK_BUTTON,Blocks.PISTON,Blocks.STICKY_PISTON,Blocks.DISPENSER,Blocks.DROPPER,Blocks.HOPPER,Blocks.OAK_DOOR,Blocks.IRON_DOOR,Blocks.COPPER_DOOR.weathering().unaffected(),Blocks.OAK_TRAPDOOR,Blocks.IRON_TRAPDOOR,Blocks.COPPER_TRAPDOOR.weathering().unaffected(),Blocks.OAK_FENCE_GATE))for(var direction:Direction.values())for(var face:Direction.values())for(int layout=0;layout<3;layout++) {
+        var blocks=new ArrayList<>(List.<Block>of(Blocks.REDSTONE_WIRE,Blocks.REPEATER,Blocks.COMPARATOR,Blocks.OBSERVER,Blocks.REDSTONE_WALL_TORCH,Blocks.LEVER,Blocks.STONE_BUTTON,Blocks.OAK_BUTTON,Blocks.PISTON,Blocks.STICKY_PISTON,Blocks.DISPENSER,Blocks.DROPPER,Blocks.HOPPER,Blocks.OAK_DOOR,Blocks.IRON_DOOR,Blocks.COPPER_DOOR.weathering().unaffected(),Blocks.OAK_TRAPDOOR,Blocks.IRON_TRAPDOOR,Blocks.COPPER_TRAPDOOR.weathering().unaffected(),Blocks.OAK_FENCE_GATE,Blocks.REDSTONE_LAMP,Blocks.RAIL,Blocks.POWERED_RAIL,Blocks.ACTIVATOR_RAIL,Blocks.DETECTOR_RAIL,Blocks.NOTE_BLOCK,Blocks.TRIPWIRE,Blocks.TRIPWIRE_HOOK));
+        for(var block:BuiltInRegistries.BLOCK)if(block instanceof LightningRodBlock)blocks.add(block);
+        for(var block:blocks)for(var direction:Direction.values())for(var face:Direction.values())for(int layout=0;layout<3;layout++) {
             var level=new RedstoneVectors(r);level.raw(ORIGIN.below(),Blocks.STONE.defaultBlockState());
             if(layout==1)level.raw(ORIGIN.relative(direction),Blocks.STONE.defaultBlockState());
             if(layout==2)level.raw(ORIGIN.relative(direction),Blocks.REDSTONE_BLOCK.defaultBlockState());
