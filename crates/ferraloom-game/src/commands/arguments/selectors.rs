@@ -670,7 +670,7 @@ impl EntitySelector {
                 || self
                     .player_name
                     .as_ref()
-                    .is_some_and(|name| *name != info.name)
+                    .is_some_and(|name| !name.eq_ignore_ascii_case(info.name))
                 || self.uuid.is_some_and(|uuid| uuid != info.uuid)
             {
                 continue;

@@ -1446,7 +1446,11 @@ impl MinecraftServer {
                 .iter()
                 .find_map(|id| {
                     let connection = &self.connections[id];
-                    (connection.profile.name == input).then(|| connection.address.ip().to_string())
+                    connection
+                        .profile
+                        .name
+                        .eq_ignore_ascii_case(input)
+                        .then(|| connection.address.ip().to_string())
                 })
                 .ok_or_else(|| exceptions::error("commands.banip.invalid", &[]))?
         } else {

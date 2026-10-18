@@ -273,7 +273,7 @@ async fn message_arguments(session: &mut Session) -> Result<ObservationLog> {
         (2, false, "me waves at @a"),
         (3, true, "me signs a wave"),
         (4, false, "msg CommandGuest hello @s"),
-        (5, true, "msg CommandGuest signed hello @s"),
+        (5, true, "msg cOmMaNdGuEsT signed hello @s"),
     ] {
         let bot = session.bot(sender)?;
         if signed {
@@ -488,7 +488,7 @@ async fn access_commands(session: &mut Session) -> Result<ObservationLog> {
         (16, "pardon-ip 198.51.100.9", "commands.pardonip.failed"),
         (17, "pardon-ip invalid", "commands.pardonip.invalid"),
         (18, "list uuids", "commands.list.players"),
-        (19, "kick CommandGuest", "commands.kick.success"),
+        (19, "kick cOmMaNdGuEsT", "commands.kick.success"),
     ] {
         log.record(
             format!("access.{index}"),
