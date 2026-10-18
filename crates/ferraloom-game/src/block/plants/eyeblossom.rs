@@ -1,9 +1,12 @@
 //! Port of EyeblossomBlock's environment-driven transitions and delayed neighbors.
 use super::super::{BlockBehavior, LevelAccessRef, UpdateFlags};
-use crate::level::{Level, LevelError, environment::EnvironmentAttributes};
+use crate::level::{Level, LevelError, environment::AttributeKey};
 use ferraloom_data::{
     Block, BlockState,
-    registries::{game_event::Id as GameEvent, sound_event::Id as SoundEvent},
+    registries::{
+        environment_attribute::Id as EnvironmentAttribute, game_event::Id as GameEvent,
+        sound_event::Id as SoundEvent,
+    },
 };
 use ferraloom_protocol::{
     codec::VarInt,
@@ -12,6 +15,9 @@ use ferraloom_protocol::{
 };
 use ferraloom_util::{BlockPos, ChunkPos, Vec3, random::RandomSource};
 use ferraloom_worldgen::environment::TriState;
+
+const EYEBLOSSOM_OPEN: AttributeKey<TriState> =
+    AttributeKey::new(EnvironmentAttribute::GAMEPLAY_EYEBLOSSOM_OPEN);
 
 pub struct Eyeblossom;
 pub static EYEBLOSSOM: Eyeblossom = Eyeblossom;
@@ -59,7 +65,7 @@ fn change_state(
     scheduled: bool,
 ) -> Result<(), LevelError> {
     let open = state.block() == Block::OPEN_EYEBLOSSOM;
-    let should_open = match level.get_value(EnvironmentAttributes::EYEBLOSSOM_OPEN, pos)? {
+    let should_open = match level.get_value(EYEBLOSSOM_OPEN, pos)? {
         TriState::True => true,
         TriState::False => false,
         TriState::Default => open,
@@ -81,9 +87,14 @@ fn change_state(
         level.random().next_double() + 1.0,
         level.random().next_double() - 0.5,
     );
+    let target = start + velocity.scale(lifetime);
     level.send_particles(
         Particle::Trail(Trail {
-            target: start + velocity.scale(lifetime),
+            target: ferraloom_protocol::entity_data::Vec3 {
+                x: target.x,
+                y: target.y,
+                z: target.z,
+            },
             color: if open { 6250335 } else { 16545810 },
             duration: VarInt((20.0 * lifetime) as i32),
         }),
@@ -103,10 +114,10 @@ fn change_state(
         level.schedule_block_tick_after(nearby, state.block(), delay)
     })?;
     let sound = match (open, scheduled) {
-        (false, false) => SoundEvent::EYEBLOSSOM_OPEN_LONG,
-        (false, true) => SoundEvent::EYEBLOSSOM_OPEN,
-        (true, false) => SoundEvent::EYEBLOSSOM_CLOSE_LONG,
-        (true, true) => SoundEvent::EYEBLOSSOM_CLOSE,
+        (false, false) => SoundEvent::BLOCK_EYEBLOSSOM_OPEN_LONG,
+        (false, true) => SoundEvent::BLOCK_EYEBLOSSOM_OPEN,
+        (true, false) => SoundEvent::BLOCK_EYEBLOSSOM_CLOSE_LONG,
+        (true, true) => SoundEvent::BLOCK_EYEBLOSSOM_CLOSE,
     };
     level.play_sound(None, start, sound, SoundSource::Blocks, 1.0, 1.0)
 }
