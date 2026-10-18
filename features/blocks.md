@@ -336,3 +336,8 @@ One class row per bootstrapped runtime Block class, listing every block id assig
 | blocks.plants.native-shapes | Plant outlines and collision shapes, including position offsets and all registered states | Real vanilla shape methods (3,810 vectors) | `plants::tests::plant_outline_and_empty_context_collision_shapes_match_vanilla` | pass | todo |
 
 | blocks.plants.bamboo-crown | Bamboo crown rewrites, age propagation and stopping-stage RNG | `BambooStalkBlock#growBamboo` on a real vanilla Level (384 vectors) | `plants::tests::bamboo_crown_rewrites_and_stage_draws_match_vanilla` | pass | todo |
+| blocks.plants.parity-crops | Crops mature under `/tick` with hydrated farmland | `CropBlock#randomTick` | `ferraloom-parity/tests/plants.rs::parity_crops_grow_under_tick` | - | todo |
+| blocks.plants.parity-bonemeal | Bone meal places vegetation on grass and grows oak saplings | Grass and sapling bonemeal methods | `ferraloom-parity/tests/plants.rs::parity_bone_meal_on_grass_and_saplings` | - | todo |
+| blocks.plants.parity-leaves | Leaves find adjacent logs and decay after removal | `LeavesBlock#tick/randomTick` | `ferraloom-parity/tests/plants.rs::parity_leaves_decay_after_log_removed` | - | todo |
+| blocks.plants.parity-cold | Precipitation accumulates snow and freezes water in snowy plains | Snow/ice biome precipitation | `ferraloom-parity/tests/plants.rs::parity_snow_and_ice_in_cold_biome` | - | todo |
+| blocks.plants.parity-support | Flower, double plant and cane break after support removal | Plant survival and shape updates | `ferraloom-parity/tests/plants.rs::parity_plants_break_when_support_removed` | - | todo |
