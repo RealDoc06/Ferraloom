@@ -431,7 +431,7 @@ impl BlockState {
         if bits & 4 == 0 {
             None
         } else {
-            Some(bits & (1 << 12) != 0)
+            Some(bits & (1 << 14) != 0)
         }
     }
     /// Vanilla's registered PostProcess callbacks are null, self, and above.
