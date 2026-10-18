@@ -112,7 +112,7 @@ fn setup(fields: &[&str]) -> (Level, EntityRef, EntityRef) {
             ))),
         )
         .unwrap();
-    for pos in [POS, POS.relative(Direction::East)] {
+    for pos in [POS, POS.relative(Direction::East, 1)] {
         replace(&mut level, pos, Block::STONE.default_state());
     }
     level.take_effects();
@@ -254,7 +254,7 @@ fn break_actions_match_real_native_sequences_and_packet_order() {
                         "{},{}",
                         level.get_block_state(POS).unwrap().id(),
                         level
-                            .get_block_state(POS.relative(Direction::East))
+                            .get_block_state(POS.relative(Direction::East, 1))
                             .unwrap()
                             .id()
                     ),
