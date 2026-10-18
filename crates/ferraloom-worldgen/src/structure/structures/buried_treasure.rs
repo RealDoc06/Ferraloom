@@ -160,8 +160,9 @@ mod tests {
     fn point(value: &Value) -> [i32; 3] {
         std::array::from_fn(|i| value[i].as_i64().unwrap() as i32)
     }
-    // The Java accessor returns null for every block entity, so assigning loot
-    // is a no-op and consumes no RNG. Real chest entities stay game-backed.
+    // The Java accessor never instantiates block entities, even after chest
+    // writes. Ignore pending NBT placeholders and consume no loot RNG here;
+    // real chest entity construction and loot assignment stay game-backed.
     struct AbsentBlockEntities;
     impl WorldgenBlockBehavior for AbsentBlockEntities {
         fn has_block_entity(&self, _state: BlockState) -> bool {
@@ -177,15 +178,11 @@ mod tests {
         }
         fn set_loot_table(
             &self,
-            region: &mut WorldGenRegion<'_>,
-            p: [i32; 3],
+            _region: &mut WorldGenRegion<'_>,
+            _p: [i32; 3],
             _table: &crate::Identifier,
             _random: &mut WorldgenRandom,
         ) -> Result<(), Error> {
-            assert!(
-                region.block_entity(p)?.is_none(),
-                "fixture has no block entities"
-            );
             Ok(())
         }
     }
