@@ -565,7 +565,10 @@ mod tests {
                 );
                 assert_eq!(tracker.count(), 17 * 17);
                 let mut spawning = tracker.chunks().collect::<Vec<_>>();
-                let mut level = Level::new(Region::new(&BEHAVIORS));
+                let mut level = Level::new(
+                    Region::new(&BEHAVIORS),
+                    crate::level::LevelContext::fixture(0, 63),
+                );
                 level.set_random_streams(Random::Legacy(LegacyRandomSource::new(0)), 0);
                 level.shuffle_spawning_chunks(&mut spawning);
                 let actual = spawning

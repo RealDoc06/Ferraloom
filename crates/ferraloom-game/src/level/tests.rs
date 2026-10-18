@@ -32,7 +32,10 @@ impl BlockBehavior for Trace {
 static EMPTY: Behaviors = Behaviors::EMPTY;
 #[test]
 fn block_drops_requires_the_published_rule_and_observes_each_change() {
-    let mut level = Level::new(Region::new(&EMPTY));
+    let mut level = Level::new(
+        Region::new(&EMPTY),
+        crate::level::LevelContext::fixture(0, 63),
+    );
     for policy in [
         crate::block::UnportedBehavior::Strict,
         crate::block::UnportedBehavior::Warn,
@@ -53,7 +56,10 @@ static PLAIN: Behaviors = Behaviors::EMPTY.with_block(Block::STONE, &Trace { nes
 static NESTED: Behaviors = Behaviors::EMPTY.with_block(Block::STONE, &Trace { nested: true });
 #[test]
 fn inactive_entity_phase_stops_after_300_running_ticks_and_active_tickets_reset_it_during_freeze() {
-    let mut level = Level::new(Region::new(&EMPTY));
+    let mut level = Level::new(
+        Region::new(&EMPTY),
+        crate::level::LevelContext::fixture(0, 63),
+    );
     for _ in 1..300 {
         assert!(level.update_empty_time(false, true));
     }
@@ -79,7 +85,10 @@ fn empty_chunk(pos: ChunkPos) -> chunk::LevelChunk {
     )
 }
 fn empty_level(behaviors: &'static Behaviors) -> Level {
-    let mut level = Level::new(Region::new(behaviors));
+    let mut level = Level::new(
+        Region::new(behaviors),
+        crate::level::LevelContext::fixture(0, 63),
+    );
     // Controlled test dimension: no timelines and native constant attributes.
     let resources = ferraloom_data::datapack::ResourceManager::new(vec![]);
     let environment = Arc::new(environment::EnvironmentDefinitions::load(&resources).unwrap());
@@ -522,7 +531,10 @@ fn flat_pool() -> Level {
 #[test]
 fn scheduled_phases_wait_for_entity_load_integration_simulation_and_ticking_future() {
     use ferraloom_data::registries::fluid::Id as Fluid;
-    let mut level = Level::new(Region::new(&EMPTY));
+    let mut level = Level::new(
+        Region::new(&EMPTY),
+        crate::level::LevelContext::fixture(0, 63),
+    );
     let chunk = ChunkPos::ZERO;
     let pos = BlockPos::new(8, 0, 8);
     level.add_chunk(empty_chunk(chunk)).unwrap();
@@ -1591,7 +1603,10 @@ fn slab_waterlogging_matches_vanilla_interface_overrides_and_source_identity() {
 #[test]
 fn clone_item_query_matches_vanilla_base_and_rejects_unported_overrides() {
     use crate::block::{BlockMethod, UnportedBehavior};
-    let mut level = Level::new(Region::new(&EMPTY));
+    let mut level = Level::new(
+        Region::new(&EMPTY),
+        crate::level::LevelContext::fixture(0, 63),
+    );
     for line in include_str!("../../tests/java/level/clone-items.tsv").lines() {
         let (case, expected) = line.split_once('\t').unwrap();
         let (block, include_data) = case
@@ -1988,7 +2003,10 @@ fn pending_block_entity_nbt_survives_full_without_claiming_live_factory_readines
         block_chunk.pending_block_entity_nbt(),
         std::slice::from_ref(&tag)
     );
-    let mut level = Level::new(Region::new(&EMPTY));
+    let mut level = Level::new(
+        Region::new(&EMPTY),
+        crate::level::LevelContext::fixture(0, 63),
+    );
     level.add_chunk(block_chunk).unwrap();
     assert_eq!(
         level.post_process_generation(chunk),
@@ -2030,7 +2048,10 @@ fn pending_block_entity_nbt_survives_full_without_claiming_live_factory_readines
 #[test]
 fn worldgen_skips_share_policy_counters_and_deduplicate_owned_unit_behavior_pairs() {
     use crate::block::{UnportedBehavior, UnportedOperation};
-    let mut level = Level::new(Region::new(&EMPTY));
+    let mut level = Level::new(
+        Region::new(&EMPTY),
+        crate::level::LevelContext::fixture(0, 63),
+    );
     let pair = ("minecraft:oak".to_owned(), "canSurvive".to_owned());
     level.record_worldgen_skips(Vec::new()).unwrap();
     assert_eq!(

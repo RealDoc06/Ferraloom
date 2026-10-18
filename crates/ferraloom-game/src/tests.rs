@@ -87,7 +87,10 @@ static TEST_BEHAVIORS: Behaviors = Behaviors::EMPTY
     .with_block(Block::DIRT, &TurnToAir);
 
 fn region() -> Level {
-    let mut region = Level::new(Region::new(&TEST_BEHAVIORS));
+    let mut region = Level::new(
+        Region::new(&TEST_BEHAVIORS),
+        crate::level::LevelContext::fixture(0, 63),
+    );
     for pos in [ChunkPos::containing(PLACED), ChunkPos::ZERO] {
         region
             .add_chunk(LevelChunk::new(

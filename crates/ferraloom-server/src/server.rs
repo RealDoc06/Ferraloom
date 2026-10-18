@@ -3379,7 +3379,10 @@ mod live_level_tests {
         let pos = ChunkPos::new(0, 0);
         let mut holder = ChunkHolder::new(pos, 0);
         let mut ready = HashSet::new();
-        let mut level = Level::new(Region::new(&BEHAVIORS));
+        let mut level = Level::new(
+            Region::new(&BEHAVIORS),
+            ferraloom_game::level::LevelContext::fixture(0, 63),
+        );
         holder.ticket_level = 33;
         assert!(!update_holder_full_status(&mut holder, &ready, &mut level).unwrap());
         assert_eq!(level.entity_chunk_visibility(pos), Visibility::Hidden);
