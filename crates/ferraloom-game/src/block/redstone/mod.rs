@@ -6,6 +6,7 @@ use ferraloom_data::{Block, BlockClass};
 pub mod comparator;
 pub mod diode;
 pub mod lamp;
+pub mod moving_piston;
 pub mod observer;
 pub mod piston;
 pub mod signal;
