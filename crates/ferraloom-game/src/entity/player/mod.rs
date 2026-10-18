@@ -5,6 +5,7 @@ mod contact;
 pub mod cooldowns;
 pub mod equipment;
 mod experience;
+pub mod food;
 mod interaction;
 pub(crate) mod item_tick;
 mod spawn;
@@ -56,6 +57,7 @@ pub struct ServerPlayer {
     pub recipe_book: crate::crafting::ServerRecipeBook,
     pub advancements: crate::advancements::PlayerAdvancements,
     pub stats: crate::stats::ServerStatsCounter,
+    pub food_data: food::FoodData,
     pub experience_level: i32,
     pub experience_progress: f32,
     pub total_experience: i32,
@@ -211,6 +213,7 @@ impl ServerPlayer {
             recipe_book: Default::default(),
             advancements: Default::default(),
             stats: Default::default(),
+            food_data: Default::default(),
             experience_level: 0,
             experience_progress: 0.0,
             total_experience: 0,
@@ -299,6 +302,7 @@ impl ServerPlayer {
         self.parent.parent.load_nbt(tag)?;
         // Player#readAdditionalSaveData restores the profile UUID after super.
         self.uuid = self.profile_id;
+        self.food_data.load(&self.saved);
         self.experience_progress = self.saved.get_float_or("XpP", 0.0);
         self.experience_level = self.saved.get_int_or("XpLevel", 0);
         self.total_experience = self.saved.get_int_or("XpTotal", 0);
@@ -393,8 +397,7 @@ impl ServerPlayer {
             "SelectedItemSlot",
             Tag::Int(self.inventory.selected_slot() as i32),
         );
-        tag.insert("foodLevel", Tag::Int(20));
-        tag.insert("foodSaturationLevel", Tag::Float(5.));
+        self.food_data.save(&mut tag);
         let creative = matches!(self.game_mode, GameType::Creative | GameType::Spectator);
         let mut abilities = CompoundTag::new();
         abilities.insert("invulnerable", Tag::Byte(i8::from(creative)));
