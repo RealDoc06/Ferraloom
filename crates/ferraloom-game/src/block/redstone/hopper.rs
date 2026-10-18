@@ -199,7 +199,7 @@ fn restore_failed_take(
     if count(&original) == 1 {
         access::set_item(handle, local, original, level)?;
     } else {
-                    let current = &mut level
+        let current = &mut level
             .block_entity_mut::<BaseContainerBlockEntity>(handle)?
             .items[local];
         let size = count(&original);
