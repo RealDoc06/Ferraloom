@@ -3,13 +3,13 @@ use super::{Error, Identifier, ResourceManager, TagDiagnostic, Tags, load_tags};
 use std::{collections::BTreeMap, marker::PhantomData};
 
 /// Registry ids used as bit positions. Dynamic registries supply their own ids.
-pub trait TagEntry: Copy + 'static {
+pub trait TagElement: Copy + 'static {
     const VANILLA_TAG_KEYS: &'static [TagKey<Self>] = &[];
     fn tag_index(self) -> usize;
 }
 
 /// Static registries can resolve tag entries without an external registry view.
-pub trait StaticTagEntry: TagEntry + Eq {
+pub trait StaticTagElement: TagElement + Eq {
     const REGISTRY: &'static str;
     const REGISTRY_SIZE: usize;
     fn from_tag_name(name: &Identifier) -> Option<Self>;
@@ -73,7 +73,7 @@ pub struct TagSet<T> {
     vanilla: Vec<Option<TagId<T>>>,
     pub diagnostics: Vec<TagDiagnostic>,
 }
-impl<T: TagEntry> TagSet<T> {
+impl<T: TagElement> TagSet<T> {
     pub fn from_tags(tags: Tags<T>, registry_size: usize) -> Result<Self, Error> {
         let mut names = BTreeMap::new();
         let mut resolved = Vec::with_capacity(tags.values.len());
@@ -156,7 +156,7 @@ impl<T: TagEntry> TagSet<T> {
         self.tags.is_empty()
     }
 }
-impl<T: StaticTagEntry> TagSet<T> {
+impl<T: StaticTagElement> TagSet<T> {
     pub fn load(resources: &ResourceManager) -> Result<Self, Error> {
         Self::from_tags(
             load_tags(resources, T::REGISTRY, |name, _| T::from_tag_name(name)),
