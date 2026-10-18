@@ -1240,7 +1240,18 @@ mod imposter_tests {
     };
     use ferraloom_data::datapack::{Pack, ResourceManager};
     struct Behavior;
-    impl WorldgenBlockBehavior for Behavior {}
+    impl WorldgenBlockBehavior for Behavior {
+        fn post_process_pos(
+            &self,
+            state: BlockState,
+            _region: &WorldGenRegion<'_>,
+            position: [i32; 3],
+        ) -> Result<Option<[i32; 3]>, Error> {
+            Ok(state
+                .post_process_y_offset()
+                .map(|offset| [position[0], position[1] + offset, position[2]]))
+        }
+    }
     #[test]
     fn full_imposter_ignores_generation_writes_while_lit_proto_requires_relight() {
         let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").expect("builder provides vanilla jar");
