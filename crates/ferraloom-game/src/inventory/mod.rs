@@ -10,7 +10,9 @@ mod menus;
 mod operation;
 mod server_player;
 mod slot;
+mod stacks;
 mod sync;
+mod transfer;
 
 pub use container::*;
 pub use crafting::*;
@@ -24,7 +26,9 @@ pub use operation::{
 };
 pub use server_player::*;
 pub use slot::*;
+pub use stacks::{StackGenerations, StackRef, StackSlotRef};
 pub use sync::*;
+pub use transfer::{MenuTransferContext, move_menu_item_stack_to};
 
 use crate::entity::player::inventory::{
     copy_with_count as with_count, count, is_same_item_same_components, is_stackable,

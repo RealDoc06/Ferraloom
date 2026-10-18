@@ -406,50 +406,18 @@ impl AbstractContainerMenu {
         backwards: bool,
         hooks: &mut dyn MenuHooks,
     ) -> Result<bool> {
-        let indices: Vec<_> = if backwards {
-            (start..end).rev().collect()
-        } else {
-            (start..end).collect()
-        };
-        let mut changed = false;
-        if is_stackable(stack) {
-            for &i in &indices {
-                if stack.is_empty() {
-                    break;
-                }
-                let mut target = self.get_item(ctx, i);
-                if !target.is_empty() && is_same_item_same_components(stack, &target) {
-                    let slot = &self.slots[i];
-                    let max = slot.max_stack_size(self.container(ctx, slot.container), &target);
-                    let total = count(&target) + count(stack);
-                    if total <= max {
-                        set_count(stack, 0);
-                        set_count(&mut target, total);
-                        self.set_item_live(ctx, i, target, hooks)?;
-                        changed = true;
-                    } else if count(&target) < max {
-                        let left = count(stack) - (max - count(&target));
-                        set_count(stack, left);
-                        set_count(&mut target, max);
-                        self.set_item_live(ctx, i, target, hooks)?;
-                        changed = true;
-                    }
-                }
-            }
-        }
-        if !stack.is_empty() {
-            for i in indices {
-                let slot = &self.slots[i];
-                if self.get_item(ctx, i).is_empty() && slot.may_place(stack, hooks)? {
-                    let max = slot.max_stack_size(self.container(ctx, slot.container), stack);
-                    let n = count(stack).min(max);
-                    self.set_item_live(ctx, i, split(stack, n), hooks)?;
-                    changed = true;
-                    break;
-                }
-            }
-        }
-        Ok(changed)
+        super::transfer::move_menu_item_stack_to(
+            &mut super::transfer::PureMenuTransfer {
+                menu: self,
+                context: ctx,
+                source: stack,
+            },
+            super::transfer::PureStackRef::Source,
+            start,
+            end,
+            backwards,
+            hooks,
+        )
     }
     /// Port of AbstractContainerMenu#clicked/doClick for all seven ContainerInput values.
     pub fn clicked(

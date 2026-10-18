@@ -10,7 +10,7 @@ use crate::{
     level::Level,
 };
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub enum ContainerHandle {
     PlayerInventory(EntityRef),
     BlockEntity(BlockEntityRef),
