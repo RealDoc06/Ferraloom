@@ -167,7 +167,7 @@ impl Level {
                 *list = skipped;
             }
         }
-        let mut pending = ferraloom_util::collections::JavaHashMap::new();
+        let mut pending = ferraloom_util::collections::JavaHashMap::<BlockPos, ()>::new();
         for tag in self.chunk(key).unwrap().pending_block_entity_nbt() {
             pending.insert(crate::block::entity::get_pos_from_tag(key, tag), ());
         }
