@@ -115,7 +115,15 @@ is included in scenario errors. External children are killed if a watchdog fires
 Commit first, then run on the dedicated builder:
 
 ```sh
-ferraloom-build -- sh -c 'cargo test -p ferraloom-parity --locked && cargo test -p ferraloom-parity --locked -- --ignored --test-threads=1 && cargo clippy -p ferraloom-parity --all-targets --locked -- -D warnings && cargo fmt -p ferraloom-parity -- --check'
+ferraloom-build -- sh -c '
+cargo test -p ferraloom-parity --locked; unit_status=$?
+cargo test -p ferraloom-parity --locked -- --ignored --test-threads=1; parity_status=$?
+env FERRALOOM_PARITY_SIDE=vanilla cargo test -p ferraloom-parity --locked --test starter parity_commands -- --ignored --exact; vanilla_status=$?
+env FERRALOOM_PARITY_SIDE=ferraloom cargo test -p ferraloom-parity --locked --test starter parity_join_and_spawn -- --ignored --exact; ferraloom_status=$?
+cargo clippy -p ferraloom-parity --all-targets --locked -- -D warnings; lint_status=$?
+cargo fmt -p ferraloom-parity -- --check; format_status=$?
+test "$unit_status" -eq 0 && test "$parity_status" -eq 0 && test "$vanilla_status" -eq 0 && test "$ferraloom_status" -eq 0 && test "$lint_status" -eq 0 && test "$format_status" -eq 0
+'
 ```
 
 For one side only, put the environment setting *inside* the builder command:
@@ -136,5 +144,6 @@ foundation. `parity_commands` currently fails on Ferraloom's unsigned `/say`
 packet variant: it emits `PlayerChat` where vanilla emits `DisguisedChat`.
 The server fix is `e52040c`, which requires foundation `b120a6f`; the coordinator
 will integrate those separately. This assertion is executed, never silently
-skipped. The signed-command branch runs first so it is still exercised. Remove
+skipped. Game mode, teleport, and the signed-command branch run before that assertion so
+they are still exercised. Remove
 this note once the integrated server passes both branches.

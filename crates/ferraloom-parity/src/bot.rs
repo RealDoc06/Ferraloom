@@ -488,11 +488,8 @@ impl Bot {
         })?
     }
     pub async fn wait_ticks(&mut self, ticks: Ticks) -> Result<()> {
-        let start = match self.state.lock().unwrap().game_time {
-            Some(t) => t,
-            None => i64::MIN,
-        };
-        if start == i64::MIN {
+        let initialized = self.state.lock().unwrap().game_time.is_some();
+        if !initialized {
             self.wait_for("initial tick clock", Ticks::DEFAULT, |_, p| {
                 matches!(p, cb::Packet::SetTime(_))
             })
@@ -965,10 +962,10 @@ fn apply(s: &mut BotState, p: &cb::Packet) -> Result<()> {
                 c.slots
                     .resize(c.slots.len().max(slot + 1), ItemStack::default());
                 c.slots[slot] = p.item_stack.clone();
-                if p.container_id.0 == 0 {
-                    if let Some(index) = inventory_slot(slot) {
-                        s.inventory.insert(index, p.item_stack.clone());
-                    }
+                if p.container_id.0 == 0
+                    && let Some(index) = inventory_slot(slot)
+                {
+                    s.inventory.insert(index, p.item_stack.clone());
                 }
             }
         }

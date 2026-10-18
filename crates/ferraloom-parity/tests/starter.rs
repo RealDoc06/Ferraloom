@@ -50,6 +50,22 @@ async fn commands(s: &mut Session) -> Result<ObservationLog> {
     let id = s.join("ParityBot").await?;
     let bot = s.bot(id)?;
     let mut log = ObservationLog::default();
+    bot.command("gamemode spectator").await?;
+    bot.wait_for(
+        "spectator mode",
+        Ticks::DEFAULT,
+        |_, p| matches!(p,cb::Packet::GameEvent(p) if p.event==3&&p.param==3.),
+    )
+    .await?;
+    bot.teleport([8.5, 150., 8.5]).await?;
+    let state = bot.snapshot();
+    ensure!(state.position == [8.5, 150., 8.5], "tp position differs");
+    ensure!(
+        state.game_mode == Some(play::GameType::Spectator),
+        "gamemode did not apply"
+    );
+    log.record("position", state.position)?;
+    log.record("mode", format!("{:?}", state.game_mode))?;
     for (signed, message) in [
         (true, "parity signed command"),
         (false, "parity unsigned command"),
@@ -103,22 +119,6 @@ async fn commands(s: &mut Session) -> Result<ObservationLog> {
         )?;
         log.record(format!("{prefix}.type"), format!("{chat_type:?}"))?;
     }
-    bot.command("gamemode spectator").await?;
-    bot.wait_for(
-        "spectator mode",
-        Ticks::DEFAULT,
-        |_, p| matches!(p,cb::Packet::GameEvent(p) if p.event==3&&p.param==3.),
-    )
-    .await?;
-    bot.teleport([8.5, 150., 8.5]).await?;
-    let state = bot.snapshot();
-    ensure!(state.position == [8.5, 150., 8.5], "tp position differs");
-    ensure!(
-        state.game_mode == Some(play::GameType::Spectator),
-        "gamemode did not apply"
-    );
-    log.record("position", state.position)?;
-    log.record("mode", format!("{:?}", state.game_mode))?;
     Ok(log)
 }
 async fn chunk_loading_while_walking(s: &mut Session) -> Result<ObservationLog> {
