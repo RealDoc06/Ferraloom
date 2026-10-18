@@ -336,7 +336,7 @@ mod tests {
             assert_eq!(context.events.join(","), fields[2], "{line}");
             assert_eq!(count(context.source(held)).to_string(), fields[3], "{line}");
             assert_eq!(visible(&context.source), fields[4], "{line}");
-            context.source_generations.release(held);
+            assert!(context.source_generations.release(held).is_none());
             assert_eq!(
                 context
                     .source_generations
