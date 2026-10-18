@@ -62,6 +62,14 @@ public class ScoreboardVectors extends Scoreboard {
     b.setAllowFriendlyFire(false); b.setSeeFriendlyInvisibles(false); b.setNameTagVisibility(Team.Visibility.HIDE_FOR_OTHER_TEAMS);
     b.setDeathMessageVisibility(Team.Visibility.NEVER); b.setCollisionRule(Team.CollisionRule.PUSH_OWN_TEAM);
     board.addPlayerToTeam("Doc",b); board.addPlayerToTeam("00000000-0000-0000-0000-000000000001",b);
+    row("ordering","teams",String.join(",",board.getPlayerTeams().stream().map(PlayerTeam::getName).toList()),String.join(",",board.getPlayerTeams().iterator().next().getName().equals("a")?List.of("a","b"):List.of("b","a")));
+    for (String name : List.of("a","b","c","d")) {
+      var extra = board.addObjective(name,ObjectiveCriteria.DUMMY,Component.literal(name),ObjectiveCriteria.RenderType.INTEGER,false,null);
+      board.getOrCreatePlayerScore(ScoreHolder.forNameOnly(name),objective).set(name.charAt(0));
+    }
+    row("ordering","objectives",String.join(",",board.getObjectives().stream().map(Objective::getName).toList()));
+    row("ordering","holders",String.join(",",board.getTrackedPlayers().stream().map(ScoreHolder::getScoreboardName).toList()));
+    row("ordering","scores",String.join(",",board.listPlayerScores(objective).stream().map(PlayerScoreEntry::owner).toList()));
     CompoundTag data = (CompoundTag)ScoreboardSaveData.Packed.CODEC.encodeStart(NbtOps.INSTANCE,board.packed().value()).getOrThrow();
     CompoundTag root = new CompoundTag(); root.put("data",data); root.putInt("DataVersion",5023);
     Path path = Path.of(args[0]); NbtIo.writeCompressed(root,path);

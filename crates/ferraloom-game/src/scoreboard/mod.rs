@@ -118,7 +118,7 @@ impl Scoreboard {
     pub fn get_objective(&self, name: &str) -> Option<&Objective> {
         self.objectives.get(&name.to_owned())
     }
-    pub fn objectives(&self) -> impl Iterator<Item = (&str, &Objective)> {
+    pub fn objectives(&self) -> impl DoubleEndedIterator<Item = (&str, &Objective)> {
         self.objectives.iter().map(|(k, v)| (k.as_str(), v))
     }
     pub fn add_objective(&mut self, name: String, objective: Objective) -> Result<()> {
@@ -207,7 +207,7 @@ impl Scoreboard {
         Ok(())
     }
     pub fn tracked_players(&self) -> impl Iterator<Item = &str> {
-        self.scores.keys().map(String::as_str)
+        self.scores.keys().rev().map(String::as_str)
     }
     pub fn player_scores(&self, holder: &str) -> impl Iterator<Item = (&str, &Score)> {
         self.scores
@@ -215,6 +215,18 @@ impl Scoreboard {
             .into_iter()
             .flatten()
             .map(|(key, score)| (key.as_str(), score))
+    }
+    /// Port of Scoreboard#listPlayerScores(Objective): fastutil forEach order, unlike getTrackedPlayers' stream.
+    pub fn scores_for_objective<'a>(
+        &'a self,
+        objective: &'a str,
+    ) -> impl Iterator<Item = (&'a str, &'a Score)> {
+        self.scores.iter().filter_map(move |(holder, scores)| {
+            scores
+                .iter()
+                .find(|(key, _)| key == objective)
+                .map(|(_, score)| (holder.as_str(), score))
+        })
     }
     pub fn reset_score(&mut self, holder: &str, objective: Option<&str>) {
         let key = holder.to_owned();
@@ -235,7 +247,7 @@ impl Scoreboard {
     pub fn get_players_team(&self, holder: &str) -> Option<&PlayerTeam> {
         self.get_player_team(self.teams_by_player.get(&holder.to_owned())?)
     }
-    pub fn teams(&self) -> impl Iterator<Item = &PlayerTeam> {
+    pub fn teams(&self) -> impl DoubleEndedIterator<Item = &PlayerTeam> {
         self.teams.values()
     }
     pub fn add_player_team(&mut self, name: &str) -> &mut PlayerTeam {

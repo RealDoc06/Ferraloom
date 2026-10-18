@@ -73,7 +73,11 @@ collision	3	pushOwnTeam	always	true
 collision	3	pushOwnTeam	never	true
 collision	3	pushOwnTeam	pushOtherTeams	true
 collision	3	pushOwnTeam	pushOwnTeam	true
-saved	{DataVersion:5023,data:{DisplaySlots:{sidebar:"points"},Objectives:[{DisplayName:"Points",Name:"points",display_auto_update:1b,format:{type:"minecraft:fixed",value:"fixed"}}],PlayerScores:[{Name:"Doc",Objective:"points",Score:42,display:"Display",format:{bold:1b,type:"minecraft:styled"}}],Teams:[{AllowFriendlyFire:0b,CollisionRule:"pushOwnTeam",DeathMessageVisibility:"never",DisplayName:"b",MemberNamePrefix:"[",MemberNameSuffix:"]",Name:"b",NameTagVisibility:"hideForOtherTeams",Players:["Doc","00000000-0000-0000-0000-000000000001"],SeeFriendlyInvisibles:0b,TeamColor:"red"},{CollisionRule:"pushOwnTeam",DisplayName:"a",Name:"a"}]}}
+ordering	teams	b,a	a,b
+ordering	objectives	b,d,points,a,c
+ordering	holders	Doc,b,d,a,c
+ordering	scores	c,a,d,b,Doc
+saved	{DataVersion:5023,data:{DisplaySlots:{sidebar:"points"},Objectives:[{DisplayName:"b",Name:"b"},{DisplayName:"d",Name:"d"},{DisplayName:"Points",Name:"points",display_auto_update:1b,format:{type:"minecraft:fixed",value:"fixed"}},{DisplayName:"a",Name:"a"},{DisplayName:"c",Name:"c"}],PlayerScores:[{Name:"Doc",Objective:"points",Score:42,display:"Display",format:{bold:1b,type:"minecraft:styled"}},{Locked:1b,Name:"b",Objective:"points",Score:98},{Locked:1b,Name:"d",Objective:"points",Score:100},{Locked:1b,Name:"a",Objective:"points",Score:97},{Locked:1b,Name:"c",Objective:"points",Score:99}],Teams:[{AllowFriendlyFire:0b,CollisionRule:"pushOwnTeam",DeathMessageVisibility:"never",DisplayName:"b",MemberNamePrefix:"[",MemberNameSuffix:"]",Name:"b",NameTagVisibility:"hideForOtherTeams",Players:["Doc","00000000-0000-0000-0000-000000000001"],SeeFriendlyInvisibles:0b,TeamColor:"red"},{CollisionRule:"pushOwnTeam",DisplayName:"a",Name:"a"}]}}
 codec	{}	{}
 codec	{Teams:[{Name:'defaults'}]}	{Teams:[{Name:"defaults"}]}
 codec	{Objectives:[{Name:'minimal',DisplayName:'Minimal'}],PlayerScores:[{Name:'Doc',Objective:'minimal'}]}	{Objectives:[{DisplayName:"Minimal",Name:"minimal"}],PlayerScores:[{Name:"Doc",Objective:"minimal"}]}

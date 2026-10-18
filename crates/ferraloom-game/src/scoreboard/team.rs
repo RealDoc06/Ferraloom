@@ -54,6 +54,26 @@ impl PlayerTeam {
         self.allow_friendly_fire = options & 1 != 0;
         self.see_friendly_invisibles = options & 2 != 0;
     }
+    /// Port of PlayerTeam#getFormattedDisplayName (brackets, insertion and hover on the display name).
+    pub fn formatted_display_name(&self) -> Component {
+        use ferraloom_protocol::chat::{Argument, HoverEvent, TextColor};
+        let mut display = self.display_name.clone();
+        display.style.insertion = Some(self.name.clone());
+        display.style.hover_event = Some(HoverEvent::ShowText(Box::new(Component::literal(
+            &self.name,
+        ))));
+        let mut result = Component::translatable(
+            "chat.square_brackets",
+            vec![Argument::Component(Box::new(display))],
+        );
+        if let Some(color) = self.color {
+            result.style.color = Some(
+                TextColor::parse(crate::commands::arguments::scoreboard::COLORS[color as usize])
+                    .expect("registered team color"),
+            );
+        }
+        result
+    }
     /// Port of PlayerTeam#getFormattedName, retaining component style inheritance.
     pub fn formatted_name(&self, name: Component) -> Component {
         let mut result = Component::default();

@@ -226,7 +226,7 @@ impl SavedDataCodec for ScoreboardSaveData {
         let board = &self.0;
         let mut map = CompoundTag::new();
         let mut objectives = Vec::new();
-        for (name, objective) in board.objectives() {
+        for (name, objective) in board.objectives().rev() {
             let mut value = CompoundTag::new();
             put(&mut value, "Name", name);
             if objective.criteria.name != "dummy" {
@@ -274,7 +274,7 @@ impl SavedDataCodec for ScoreboardSaveData {
             map.insert("DisplaySlots", Tag::Compound(slots));
         }
         let mut teams = Vec::new();
-        for team in board.teams() {
+        for team in board.teams().rev() {
             let mut value = CompoundTag::new();
             put(&mut value, "Name", team.name());
             put_component(&mut value, "DisplayName", &team.display_name)?;

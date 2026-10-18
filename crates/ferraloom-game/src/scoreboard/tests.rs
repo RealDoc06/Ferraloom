@@ -104,7 +104,10 @@ fn vanilla_saved_file_and_codec_defaults() {
                 // SNBT was read back from a real NbtIo.writeCompressed vanilla scoreboard.dat.
                 let root = parse_compound(fields[1]).unwrap();
                 let saved = SavedData::<ScoreboardSaveData>::from_nbt(root.clone()).unwrap();
-                assert_eq!(saved.to_nbt().unwrap(), root);
+                assert_eq!(
+                    Tag::Compound(saved.to_nbt().unwrap()).to_string(),
+                    Tag::Compound(root).to_string()
+                );
                 let mut bytes = Vec::new();
                 NbtIo::write_compound(&mut bytes, Compression::Gzip, &saved.to_nbt().unwrap())
                     .unwrap();
@@ -235,5 +238,51 @@ fn invalid_saved_scoreboard_is_not_silently_dropped() {
             ScoreboardSaveData::decode(&Tag::Compound(parse_compound(input).unwrap())).is_err(),
             "{input}"
         );
+    }
+}
+
+#[test]
+fn vanilla_fastutil_iterator_and_stream_orders() {
+    let row = VECTORS
+        .lines()
+        .find(|row| row.starts_with("saved\t"))
+        .unwrap();
+    let root = parse_compound(row.split_once('\t').unwrap().1).unwrap();
+    let saved = SavedData::<ScoreboardSaveData>::from_nbt(root).unwrap();
+    let board = &saved.value().0;
+    for row in VECTORS.lines().filter(|row| row.starts_with("ordering\t")) {
+        let fields: Vec<_> = row.split('\t').collect();
+        let actual = match fields[1] {
+            "teams" => {
+                assert_eq!(
+                    board
+                        .teams()
+                        .map(PlayerTeam::name)
+                        .collect::<Vec<_>>()
+                        .join(","),
+                    fields[3]
+                );
+                board
+                    .teams()
+                    .rev()
+                    .map(PlayerTeam::name)
+                    .collect::<Vec<_>>()
+                    .join(",")
+            }
+            "objectives" => board
+                .objectives()
+                .rev()
+                .map(|(name, _)| name)
+                .collect::<Vec<_>>()
+                .join(","),
+            "holders" => board.tracked_players().collect::<Vec<_>>().join(","),
+            "scores" => board
+                .scores_for_objective("points")
+                .map(|(holder, _)| holder)
+                .collect::<Vec<_>>()
+                .join(","),
+            _ => unreachable!(),
+        };
+        assert_eq!(actual, fields[2], "{row}");
     }
 }
