@@ -261,3 +261,22 @@ pub trait PredicateContext {
         Err(LootError::Unsupported("entity.flags".into()))
     }
 }
+
+/// Fixed registry holders reject absent entries before evaluation, like RegistryOps.
+pub(crate) fn validate_static_holders(
+    holders: &ferraloom_protocol::codec::HolderSet,
+    registry: &'static str,
+    contains: impl Fn(&str) -> bool,
+) -> Result<()> {
+    if let ferraloom_protocol::codec::HolderSet::Direct(ids) = holders {
+        for id in ids {
+            if !contains(id.as_str()) {
+                return Err(LootError::MissingReference {
+                    registry,
+                    id: id.clone(),
+                });
+            }
+        }
+    }
+    Ok(())
+}

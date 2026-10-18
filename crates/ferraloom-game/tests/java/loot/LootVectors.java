@@ -216,6 +216,28 @@ public final class LootVectors {
             var bounds=endpoints[0]==null?(endpoints[1]==null?net.minecraft.advancements.predicates.MinMaxBounds.Doubles.ANY:net.minecraft.advancements.predicates.MinMaxBounds.Doubles.atMost(Double.parseDouble(endpoints[1]))):(endpoints[1]==null?net.minecraft.advancements.predicates.MinMaxBounds.Doubles.atLeast(Double.parseDouble(endpoints[0])):net.minecraft.advancements.predicates.MinMaxBounds.Doubles.between(Double.parseDouble(endpoints[0]),Double.parseDouble(endpoints[1])));
             var record=new JsonObject();if(endpoints[0]!=null)record.addProperty("min",endpoints[0]);if(endpoints[1]!=null)record.addProperty("max",endpoints[1]);record.addProperty("value",Double.toString(value));record.addProperty("matches",bounds.matches(value));record.addProperty("matches_sqr",bounds.matchesSqr(value));doubleMatches.add(record);
         }output.add("double_matches",doubleMatches);
+        var registryCodecs=new JsonArray();
+        for(String[] test:new String[][]{
+            {"item","{\"items\":\"not_an_item\"}"},{"item","{\"items\":\"stone\"}"},{"item","{\"items\":[\"stone\",\"not_an_item\"]}"},
+            {"block","{\"blocks\":\"not_a_block\"}"},{"block","{\"blocks\":\"stone\"}"},
+            {"entity","{\"entity_type\":\"not_an_entity\"}"},{"entity","{\"entity_type\":\"pig\"}"},{"entity","{\"entity_type\":\"pig\",\"minecraft:entity_type\":\"sheep\"}"},
+            {"fluid","{\"fluids\":\"not_a_fluid\"}"},{"fluid","{\"fluids\":\"water\"}"},
+            {"function","{\"type\":\"set_enchantments\",\"enchantments\":{\"sharpness\":1,\"minecraft:sharpness\":2}}"},
+            {"dynamic_function","{\"type\":\"set_enchantments\",\"enchantments\":{\"not_an_enchantment\":1}}"},
+            {"dynamic_function","{\"type\":\"set_enchantments\",\"enchantments\":{\"sharpness\":1}}"},
+            {"dynamic_function","{\"type\":\"enchant_randomly\",\"options\":\"#not_a_tag\"}"},
+            {"dynamic_function","{\"type\":\"set_instrument\",\"options\":\"#regular_goat_horns\"}"}
+        }) {
+            var definition=JsonParser.parseString(test[1]);var ops=lookup.createSerializationContext(JsonOps.INSTANCE);
+            boolean accepted=switch(test[0]) {
+                case "item" -> net.minecraft.advancements.predicates.ItemPredicate.CODEC.parse(ops,definition).isSuccess();
+                case "block" -> net.minecraft.advancements.predicates.BlockPredicate.CODEC.parse(ops,definition).isSuccess();
+                case "entity" -> net.minecraft.advancements.predicates.entity.EntityPredicate.CODEC.parse(ops,definition).isSuccess();
+                case "fluid" -> net.minecraft.advancements.predicates.FluidPredicate.CODEC.parse(ops,definition).isSuccess();
+                default -> net.minecraft.world.level.storage.loot.functions.LootItemFunctions.DIRECT_CODEC.parse(ops,definition).isSuccess();
+            };
+            var record=new JsonObject();record.addProperty("kind",test[0]);record.add("definition",definition);record.addProperty("accepted",accepted);registryCodecs.add(record);
+        }output.add("registry_codecs",registryCodecs);
         var blockPredicates=new JsonArray();
         for(String block:List.of("stone","oak_log","oak_stairs","wheat"))for(String test:List.of("{}","{\"blocks\":\"stone\"}","{\"blocks\":\"#minecraft:logs\"}","{\"state\":{\"axis\":\"y\"}}","{\"state\":{\"age\":\"+0\"}}","{\"state\":{\"age\":\"٠\"}}","{\"state\":{\"age\":{\"min\":\"0\",\"max\":\"3\"}}}")) {
             var state=BuiltInRegistries.BLOCK.getValue(Identifier.parse(block)).defaultBlockState();

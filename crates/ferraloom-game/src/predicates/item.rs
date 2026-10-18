@@ -16,6 +16,9 @@ impl ItemPredicate {
             super::IntBounds::decode(count)?;
         }
         let value = LockCode::from_json(v)?;
+        if let Some(set) = &value.items {
+            super::validate_static_holders(&set.0, "item", |id| Item::from_name(id).is_some())?;
+        }
         value.to_persistent()?;
         Ok(Self(value))
     }

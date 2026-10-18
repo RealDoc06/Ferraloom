@@ -76,7 +76,13 @@ impl NbtPredicate {
 pub struct BlockPredicate(pub component::BlockPredicate);
 impl BlockPredicate {
     pub fn decode(v: &Value) -> Result<Self> {
-        Ok(Self(component::BlockPredicate::from_json(v)?))
+        let value = component::BlockPredicate::from_json(v)?;
+        if let Some(set) = &value.blocks {
+            super::validate_static_holders(&set.0, "block", |id| {
+                ferraloom_data::Block::from_name(id).is_some()
+            })?;
+        }
+        Ok(Self(value))
     }
     pub fn matches_state(&self, state: BlockState, facts: &dyn PredicateContext) -> Result<bool> {
         if let Some(set) = &self.0.blocks {
@@ -168,7 +174,13 @@ pub struct FluidPredicate {
 impl FluidPredicate {
     pub fn decode(v: &Value) -> Result<Self> {
         Ok(Self {
-            fluids: codec::optional(v, "fluids", |v| Ok(HolderSet::from_json(v)?))?,
+            fluids: codec::optional(v, "fluids", |v| {
+                let set = HolderSet::from_json(v)?;
+                super::validate_static_holders(&set, "fluid", |id| {
+                    ferraloom_data::registries::fluid::from_name(id).is_some()
+                })?;
+                Ok(set)
+            })?,
             state: codec::optional(v, "state", |v| {
                 Ok(component::StatePropertiesPredicate::from_json(v)?)
             })?,

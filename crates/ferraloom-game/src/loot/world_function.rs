@@ -47,13 +47,15 @@ impl WorldFunction {
             }),
             "minecraft:set_enchantments" => Self::SetEnchantments {
                 enchantments: codec::optional(v, "enchantments", |v| {
+                    let mut keys = std::collections::BTreeSet::new();
                     codec::object(v)?
                         .iter()
                         .map(|(key, value)| {
-                            Ok((
-                                Identifier::parse(key)?,
-                                Holder::decode(value, ContextIntProvider::decode)?,
-                            ))
+                            let id = Identifier::parse(key)?;
+                            if !keys.insert(id.clone()) {
+                                return Err(codec::error("duplicate enchantment"));
+                            }
+                            Ok((id, Holder::decode(value, ContextIntProvider::decode)?))
                         })
                         .collect::<Result<_>>()
                 })?

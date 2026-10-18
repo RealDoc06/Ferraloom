@@ -599,6 +599,24 @@ fn block_and_location_acceptance_matches_java() {
 }
 
 #[test]
+fn fixed_registry_rejection_and_normalized_keys_match_java() {
+    let vectors: serde_json::Value =
+        serde_json::from_str(include_str!("../../tests/java/loot/vectors.json")).unwrap();
+    for record in vectors["registry_codecs"].as_array().unwrap() {
+        let value = &record["definition"];
+        let accepted = match record["kind"].as_str().unwrap() {
+            "item" => crate::predicates::ItemPredicate::decode(value).is_ok(),
+            "block" => crate::predicates::BlockPredicate::decode(value).is_ok(),
+            "entity" => crate::predicates::EntityPredicate::decode(value).is_ok(),
+            "fluid" => crate::predicates::FluidPredicate::decode(value).is_ok(),
+            "function" => LootItemFunction::decode(value).is_ok(),
+            "dynamic_function" => continue,
+            kind => panic!("unexpected registry codec {kind}"),
+        };
+        assert_eq!(accepted, record["accepted"].as_bool().unwrap(), "{record}");
+    }
+}
+#[test]
 fn named_modifier_registry_and_tags_match_inline_java_function() {
     use ferraloom_data::datapack::{Pack, ResourceManager};
     let vectors: serde_json::Value =

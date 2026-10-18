@@ -77,10 +77,20 @@ pub struct EntityPredicate {
 impl EntityPredicate {
     pub fn decode(v: &Value) -> Result<Self> {
         let mut parts = Vec::new();
+        let mut keys = std::collections::BTreeSet::new();
         for (name, value) in codec::object(v)? {
             let id = Identifier::parse(name)?;
+            if !keys.insert(id.clone()) {
+                return Err(codec::error("duplicate entity sub-predicate"));
+            }
             let part = match id.as_str() {
-                "minecraft:entity_type" => EntitySubPredicate::Type(HolderSet::from_json(value)?),
+                "minecraft:entity_type" => {
+                    let set = HolderSet::from_json(value)?;
+                    super::validate_static_holders(&set, "entity_type", |id| {
+                        ferraloom_data::EntityType::from_name(id).is_some()
+                    })?;
+                    EntitySubPredicate::Type(set)
+                }
                 "minecraft:distance" => {
                     EntitySubPredicate::Distance(DistancePredicate::decode(value)?)
                 }
