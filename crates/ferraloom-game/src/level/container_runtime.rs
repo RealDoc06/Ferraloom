@@ -11,6 +11,57 @@ use crate::{
 use ferraloom_util::ChunkPos;
 use std::sync::Arc;
 impl Level {
+    /// Port of CrafterBlock#getPotentialResults with its shared ten-entry cache.
+    /// Matching borrows the canonical grid and never calls back into the level.
+    pub(crate) fn crafter_menu_result(
+        &mut self,
+        player: crate::entity::EntityRef,
+        menu: crate::inventory::MenuRef,
+    ) -> crate::inventory::Result<crate::inventory::ItemStack> {
+        use crate::{
+            crafting::{CraftingInputView, RecipeInput},
+            entity::{EntityDataView, player::ServerPlayer},
+            inventory::{ItemStack, MenuContainer, MenuError},
+        };
+        let services = self.container_resources()?;
+        let region = self.region_mut();
+        let owner = region
+            .entities
+            .get(&player)
+            .and_then(ServerPlayer::view)
+            .ok_or(LevelError::MissingEntity(player))?;
+        let menu = owner.menus.menu(menu)?;
+        let grid: &[ItemStack] = if let Some(handle) = menu.block_entities.first() {
+            let state = region
+                .chunks
+                .get(&ChunkPos::containing(handle.pos))
+                .and_then(|chunk| chunk.block_entities.get(handle.pos))
+                .filter(|state| state.data().generation == handle.generation)
+                .or_else(|| region.block_entity_state.detached.get(handle))
+                .ok_or(LevelError::MissingBlockEntity(*handle))?;
+            &state
+                .container()
+                .ok_or(MenuError::Unsupported("crafter grid container"))?
+                .items
+        } else {
+            match &menu.local[0] {
+                MenuContainer::Simple(container) => container.items(),
+                MenuContainer::Crafting(container) => container.items(),
+                MenuContainer::Result(_) => return Err(MenuError::Unsupported("crafter grid")),
+            }
+        };
+        let input = CraftingInputView::of_positioned(3, 3, grid)?.input;
+        match region.container_runtime.crafter_recipes.get(
+            &services.recipes,
+            &input,
+            services.crafting.as_ref(),
+        )? {
+            Some(recipe) => Ok(recipe
+                .value
+                .assemble(RecipeInput::Crafting(&input), services.crafting.as_ref())?),
+            None => Ok(ItemStack::default()),
+        }
+    }
     pub fn with_loot_sources<R>(
         &mut self,
         operation: impl FnOnce(&mut LootRandomSources<'_>) -> R,

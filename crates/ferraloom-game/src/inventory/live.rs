@@ -57,6 +57,25 @@ pub struct LiveMenuContext<'a> {
     pub player: EntityRef,
     pub menu: MenuRef,
 }
+
+/// Port of the bound menu's stillValid query, including retained-generation
+/// failure. Entity-container validity requires the entity owner's real view.
+pub fn live_menu_still_valid(
+    player: EntityRef,
+    menu: super::MenuRef,
+    level: &Level,
+) -> Result<bool> {
+    let menu = level.entity::<ServerPlayer>(player)?.menus.menu(menu)?;
+    if menu.block_entities.is_empty()
+        && menu
+            .slots
+            .iter()
+            .any(|slot| matches!(slot.container, super::ContainerId::External(_)))
+    {
+        return Err(MenuError::Unsupported("entity container validity"));
+    }
+    super::block_menu_still_valid(player, &menu.block_entities, level)
+}
 impl LiveMenuContext<'_> {
     pub fn slot_address(&self, index: usize) -> Result<ContainerSlot> {
         let menu = self
@@ -397,6 +416,17 @@ impl MenuContainerAccess for LiveMenuContext<'_> {
 /// Retain both the menu and its canonical block receivers for one dynamic call
 /// frame. Closing/replacing either receiver during a callback cannot retarget it.
 pub fn with_menu_callback<R>(
+    player: EntityRef,
+    menu: MenuRef,
+    level: &mut Level,
+    operation: impl FnOnce(&mut LiveMenuContext<'_>) -> Result<R>,
+) -> Result<R> {
+    level.retain_entity(player)?;
+    let result = with_menu_callback_inner(player, menu, level, operation);
+    level.release_entity(player);
+    result
+}
+fn with_menu_callback_inner<R>(
     player: EntityRef,
     menu: MenuRef,
     level: &mut Level,

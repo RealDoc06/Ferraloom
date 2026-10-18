@@ -91,6 +91,7 @@ pub(crate) fn install(level: &mut Level) {
             .unwrap(),
         );
         Arc::new(ContainerResources {
+            crafting: crate::inventory::RuntimeCraftingContext::fixture(),
             recipes,
             loot,
             advancements,

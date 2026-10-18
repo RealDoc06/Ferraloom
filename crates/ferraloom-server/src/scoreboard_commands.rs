@@ -103,7 +103,7 @@ impl MinecraftServer {
             } else {
                 info.uuid.to_string()
             },
-            display: Some(self.display_name(entity)),
+            display: Some(self.display_name(entity)?),
         })
     }
     fn score_holders(
