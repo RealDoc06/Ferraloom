@@ -191,20 +191,17 @@ async fn chest_store_break(session: &mut Session) -> Result<ObservationLog> {
     bot.synchronize().await?;
     session.stop().await?;
     let mut drops = Vec::new();
-    for chunk in [ChunkPos::new(0, 0)] {
-        if let Some(entities) = session
-            .saved_world()?
-            .entities("minecraft:overworld", chunk)?
-        {
-            for entity in entities.entities {
-                if entity
-                    .get_string("id")
-                    .is_some_and(|id| id.to_string() == "minecraft:item")
-                {
-                    if let Some(item) = entity.get_compound("Item") {
-                        drops.push(ItemStack::from_nbt(&Tag::Compound(item.clone()))?);
-                    }
-                }
+    if let Some(entities) = session
+        .saved_world()?
+        .entities("minecraft:overworld", ChunkPos::new(0, 0))?
+    {
+        for entity in entities.entities {
+            if entity
+                .get_string("id")
+                .is_some_and(|id| id.to_string() == "minecraft:item")
+                && let Some(item) = entity.get_compound("Item")
+            {
+                drops.push(ItemStack::from_nbt(&Tag::Compound(item.clone()))?);
             }
         }
     }
@@ -311,7 +308,7 @@ async fn edit_sign(session: &mut Session) -> Result<ObservationLog> {
     bot.send(sb::Packet::SignUpdate(sb::SignUpdate {
         pos: editor.pos,
         slot: editor.slot,
-        lines: lines.map(|line| protocol_utf8(line)),
+        lines: lines.map(protocol_utf8),
     }))
     .await?;
     bot.wait_for("sign text update",Ticks::DEFAULT,|_,packet|matches!(packet,cb::Packet::BlockEntityData(packet) if packet.pos==BlockPos::new(8,79,9))).await?;
