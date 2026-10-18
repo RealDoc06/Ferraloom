@@ -188,8 +188,37 @@ public final class ShapeVectors {
         var method=(s instanceof CubeVoxelShape?CubeVoxelShape.class:VoxelShape.class).getDeclaredMethod("findIndex",Direction.Axis.class,double.class);
         method.setAccessible(true);return (Integer)method.invoke(s,a,p);
     }
+    /** Independent registry-cache capture, used by ferraloom-data parity tests. */
+    static void registryCaches(Path target)throws Exception {
+        var identities=new IdentityHashMap<VoxelShape,Integer>();var values=new ArrayList<VoxelShape>();
+        var rows=new ArrayList<int[]>();var contexts=new ArrayList<Boolean>();
+        for(var block:BuiltInRegistries.BLOCK)for(var state:block.getStateDefinition().getPossibleStates()) {
+            if(Block.getId(state)!=rows.size())throw new AssertionError("state order");
+            var queries=new ArrayList<VoxelShape>();
+            queries.add(state.getCollisionShape(EmptyBlockGetter.INSTANCE,BlockPos.ZERO));
+            queries.add(state.getShape(EmptyBlockGetter.INSTANCE,BlockPos.ZERO));
+            queries.add(state.getOcclusionShape());
+            for(var direction:Direction.values())queries.add(state.getFaceOcclusionShape(direction));
+            int[] row=new int[9];
+            for(int i=0;i<9;i++) {
+                var shape=queries.get(i);Integer index=identities.get(shape);
+                if(index==null){index=values.size();identities.put(shape,index);values.add(shape);}row[i]=index;
+            }
+            rows.add(row);
+            contexts.add(block.hasDynamicShape()||state.hasOffsetFunction()||block instanceof net.minecraft.world.level.block.LiquidBlock||block instanceof net.minecraft.world.level.block.ScaffoldingBlock||block instanceof net.minecraft.world.level.block.PowderSnowBlock||block instanceof net.minecraft.world.level.block.LightBlock);
+        }
+        if(values.size()>65535)throw new AssertionError("shape index overflow");
+        try(var stream=new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(target)))) {
+            out=stream;out.writeInt(0x53484e31);out.writeInt(values.size());
+            for(var shape:values)result(shape);
+            out.writeInt(rows.size());out.writeByte(9);
+            for(int i=0;i<rows.size();i++){out.writeBoolean(contexts.get(i));for(int index:rows.get(i))out.writeShort(index);}
+        }
+        System.out.printf("registry_cache_states=%d instances=%d snapshots=%d%n",rows.size(),values.size(),snapshots.size());
+    }
     public static void main(String[] args) throws Exception {
         SharedConstants.tryDetectVersion();Bootstrap.bootStrap();
+        if(args.length>1&&args[1].equals("--registry-caches")){registryCaches(Path.of(args[0]));return;}
         try(var stream=new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(Path.of(args[0]))))) {
             out=stream;out.writeInt(0x53485031);
             int empty=imported(Shapes.empty()),block=imported(Shapes.block()),infinity=imported(Shapes.INFINITY);

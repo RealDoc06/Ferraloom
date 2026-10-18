@@ -37,6 +37,25 @@ pub struct ShapeHit {
 }
 
 impl VoxelShape {
+    /// Restores native registry geometry, preserving the representation and
+    /// the bounds-based emptiness rule used by SliceShape's SubShape.
+    pub fn from_snapshot(
+        discrete: DiscreteVoxelShape,
+        coords: [Coordinates; 3],
+        kind: VoxelShapeKind,
+    ) -> Self {
+        let discrete = if kind == VoxelShapeKind::Slice {
+            let size = Axis::VALUES.map(|a| discrete.size(a));
+            discrete.sub_shape([0; 3], size)
+        } else {
+            discrete
+        };
+        if kind == VoxelShapeKind::Cube {
+            assert!(coords.iter().all(Coordinates::is_cube));
+        }
+        Self::new(discrete, coords, kind)
+    }
+
     pub(super) fn new(
         discrete: DiscreteVoxelShape,
         coords: [Coordinates; 3],
