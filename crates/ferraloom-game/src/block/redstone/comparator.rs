@@ -128,11 +128,11 @@ pub(super) fn should_turn_on(
 fn refresh_output(level: &mut Level, pos: BlockPos, state: BlockState) -> Result<(), LevelError> {
     let output = calculate_output(level, pos, state)?;
     let mut old = 0;
-    if let Some(handle) = level.block_entity_ref(pos)? {
-        if let BlockEntityState::Comparator(entity) = level.block_entity_state_mut(handle)? {
-            old = entity.output;
-            entity.output = output;
-        }
+    if let Some(handle) = level.block_entity_ref(pos)?
+        && let BlockEntityState::Comparator(entity) = level.block_entity_state_mut(handle)?
+    {
+        old = entity.output;
+        entity.output = output;
     }
     if old != output || state.get(p::MODE).unwrap() == p::Mode::Compare {
         let source = should_turn_on(level, pos, state)?;
