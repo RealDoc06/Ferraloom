@@ -623,6 +623,8 @@ pub struct World {
     pending: BTreeMap<u64, (ChunkPos, oneshot::Receiver<Result<GenerationOutput>>)>,
     completed_generation: VecDeque<ReadyGeneration>,
     pub(crate) exclusive_ready_tasks: VecDeque<GenerationIdentity>,
+    pub(crate) full_promotions:
+        BTreeMap<u64, crate::server::generation_completion::PromotionContinuation>,
     light_tx: mpsc::Sender<LightJob>,
     pub light_rx: tokio::sync::mpsc::UnboundedReceiver<LitChunk>,
     pub saved: BTreeMap<i64, SerializableChunkData>,
@@ -892,6 +894,7 @@ impl World {
             pending: BTreeMap::new(),
             completed_generation: VecDeque::new(),
             exclusive_ready_tasks: VecDeque::new(),
+            full_promotions: BTreeMap::new(),
             light_tx,
             light_rx,
             saved: BTreeMap::new(),
@@ -1257,6 +1260,8 @@ impl World {
         self.proto_saves.is_empty() && self.cancelled_outputs.is_empty()
     }
     pub fn forget_proto_holder(&mut self, pos: ChunkPos) {
+        self.full_promotions
+            .retain(|_, continuation| continuation.identity.pos != pos);
         self.generation_statuses.remove(&pos.pack());
         self.structure_snapshots.remove(&pos.pack());
         self.generation_save_revisions.remove(&pos.pack());
@@ -1324,6 +1329,8 @@ impl World {
         Ok(done)
     }
     pub fn finish_unload(&mut self, pos: ChunkPos) -> Result<()> {
+        self.full_promotions
+            .retain(|_, continuation| continuation.identity.pos != pos);
         self.ready.remove(&pos);
         self.light_ready.remove(&pos);
         self.saved.remove(&pos.pack());
@@ -1360,6 +1367,11 @@ impl World {
     }
     pub async fn close_chunk_storage(&mut self) -> Result<()> {
         self.finish_generation().await?;
+        for continuation in std::mem::take(&mut self.full_promotions).into_values() {
+            if let Some(input) = continuation.input {
+                self.store_generation_chunk(input.pos, input.revision, input.disk)?;
+            }
+        }
         for (_, (_, mut answer)) in std::mem::take(&mut self.pending) {
             if let Ok(Ok(output)) = answer.try_recv() {
                 self.cancelled_outputs.push(output);
@@ -1596,8 +1608,12 @@ impl World {
         self.generation_save_revisions.insert(key, revision);
         Ok(())
     }
-    pub fn integrate(&mut self, request: u64, mut terrain: Terrain) -> Result<LevelChunk> {
-        let light_revision = terrain.revision;
+    pub(crate) fn integrate(
+        &mut self,
+        request: u64,
+        light_revision: GenerationRevision,
+        terrain: &mut Terrain,
+    ) -> Result<LevelChunk> {
         if let Some(snapshot) = self.structure_snapshots.get(&terrain.pos.pack())
             && snapshot.revision > terrain.revision
         {
@@ -1620,21 +1636,27 @@ impl World {
                 .is_some_and(|s| s.to_string_lossy() == "minecraft:full"),
             "promotion before FULL"
         );
-        self.light_tx.send(LightJob::Initialize {
+        let chunk = ferraloom_game::level::generation::promote(
+            terrain.pos,
+            terrain.sections.clone(),
+            &terrain.disk,
+        )
+        .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+        let light = LightJob::Initialize {
             request,
             revision: light_revision,
             pos: terrain.pos,
             sections: terrain.sections.clone(),
             saved_light: Some(Box::new(terrain.disk.clone())),
-            neighbors: terrain.light_neighbors,
-        })?;
-        let chunk = ferraloom_game::level::generation::promote(
-            terrain.pos,
-            terrain.sections,
-            &terrain.disk,
-        )
-        .map_err(|e| anyhow::anyhow!("{e:?}"))?;
-        self.saved.insert(terrain.pos.pack(), terrain.disk);
+            neighbors: std::mem::take(&mut terrain.light_neighbors),
+        };
+        if let Err(error) = self.light_tx.send(light) {
+            if let LightJob::Initialize { neighbors, .. } = error.0 {
+                terrain.light_neighbors = neighbors;
+            }
+            anyhow::bail!("light worker stopped during FULL preparation");
+        }
+        self.saved.insert(terrain.pos.pack(), terrain.disk.clone());
         Ok(chunk)
     }
     /// Capture owned sections here; palette/NBT encoding runs in the save pool.
@@ -2668,6 +2690,49 @@ mod generation_order_tests {
         );
         assert!(world.failed_generation.contains(&(cancelled, 8)));
         assert!(world.take_generation_completion().unwrap().is_none());
+        // A later heightmap/publication error must not replay successful
+        // postLoad entity creation when the owned continuation resumes.
+        let mut publishing = ServerLevel::new(
+            Region::new(&BEHAVIORS),
+            "minecraft:overworld",
+            world.level_context(&resources).unwrap(),
+        );
+        for x in 0..9 {
+            publishing.chunks.request(ChunkPos::new(-1024 - x, 0));
+        }
+        let publish_pos = ChunkPos::new(64, 0);
+        let publish_request = publishing.chunks.request(publish_pos).unwrap();
+        let mut terrain = output(publish_pos, "publication").terrain;
+        terrain.disk.entities = Some(vec![
+            ferraloom_nbt::parse_compound(
+                "{id:\"minecraft:tnt\",UUID:[I;1,2,3,4],Pos:[1024.5d,0.0d,0.5d],Motion:[0d,0d,0d],Rotation:[0f,0f]}",
+            )
+            .unwrap(),
+        ]);
+        let failure = crate::server::generation_completion::integrate_terrain(
+            &mut publishing,
+            &mut world,
+            publish_request,
+            terrain,
+        )
+        .unwrap_err();
+        assert!(failure.to_string().contains("MissingBlockTags"));
+        assert_eq!(publishing.level.next_entity_id(), 2);
+        publishing
+            .level
+            .set_block_tags(world.generator.data().block_tags.clone());
+        crate::server::generation_completion::resume_terrain(
+            &mut publishing,
+            &mut world,
+            publish_request,
+        )
+        .unwrap();
+        assert_eq!(publishing.level.next_entity_id(), 2);
+        assert_eq!(publishing.level.take_entity_management_events().len(), 1);
+        assert_eq!(
+            publishing.chunks.holders[&publish_pos.pack()].status,
+            ChunkStatus::Full
+        );
         world.close_chunk_storage().await.unwrap();
     }
 }

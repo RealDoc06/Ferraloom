@@ -1,6 +1,20 @@
 //! Canonical promotion and lighting completion, shared by ticks and commands.
 use super::*;
 use crate::world::{LitChunk, Terrain};
+use ferraloom_game::level::chunk::LevelChunk;
+
+/// Owned FULL continuation, retained through later publication errors. Entity
+/// callbacks commit once; reconstructing a chunk must never replay postLoad.
+pub(crate) struct PromotionContinuation {
+    pub identity: crate::generation::GenerationIdentity,
+    pub input: Option<Terrain>,
+    light_revision: crate::generation::GenerationRevision,
+    prepared_chunk: Option<LevelChunk>,
+    entities_registered: bool,
+    entity_failure: Option<String>,
+    attached: bool,
+    complete: bool,
+}
 
 pub(crate) fn integrate_metadata(level: &mut ServerLevel, world: &mut World) -> Result<()> {
     level
@@ -23,7 +37,7 @@ pub(crate) fn integrate_terrain(
     level: &mut ServerLevel,
     world: &mut World,
     request: u64,
-    mut terrain: Terrain,
+    terrain: Terrain,
 ) -> Result<()> {
     // A released holder can be recreated at the same position. Neither
     // entity post-load nor FULL attachment may target its newer request.
@@ -35,31 +49,127 @@ pub(crate) fn integrate_terrain(
     {
         return Ok(());
     }
-    let entities = terrain.disk.entities.take().unwrap_or_default();
-    if let Err(error) = level
-        .level
-        .add_worldgen_chunk_entities(terrain.pos, entities)
-    {
-        terrain.disk.entities = Some(error.entities);
-        world.saved.insert(terrain.pos.pack(), terrain.disk);
-        return Err(error.source.into());
+    let identity =
+        crate::generation::GenerationIdentity::of(&level.chunks.holders[&terrain.pos.pack()]);
+    world
+        .full_promotions
+        .entry(request)
+        .or_insert_with(|| PromotionContinuation {
+            identity,
+            light_revision: terrain.revision,
+            input: Some(terrain),
+            prepared_chunk: None,
+            entities_registered: false,
+            entity_failure: None,
+            attached: false,
+            complete: false,
+        });
+    resume_terrain(level, world, request)
+}
+
+pub(crate) fn resume_terrain(
+    level: &mut ServerLevel,
+    world: &mut World,
+    request: u64,
+) -> Result<()> {
+    let continuation = world
+        .full_promotions
+        .get_mut(&request)
+        .context("unknown FULL continuation")?;
+    let identity = continuation.identity;
+    if continuation.complete {
+        return Ok(());
     }
-    let pos = terrain.pos;
-    if pos == ChunkPos::containing(world.spawn) && !world.level_data.data.contains_key("spawn") {
-        world.spawn.y =
-            terrain.surface[((world.spawn.z & 15) * 16 + (world.spawn.x & 15)) as usize];
+    if let Some(failure) = &continuation.entity_failure {
+        anyhow::bail!("entity postLoad already failed; original NBT is retained: {failure}");
     }
-    let chunk = world.integrate(request, terrain)?;
-    level
-        .level
-        .add_chunk(chunk)
-        .map_err(|e| anyhow::anyhow!("{e:?}"))?;
-    level
-        .level
-        .prime_chunk_heightmaps(pos)
-        .map_err(game_error)?;
-    level.chunks.holders.get_mut(&pos.pack()).unwrap().status = ChunkStatus::Full;
-    Ok(())
+    ensure!(
+        level
+            .chunks
+            .holders
+            .get(&identity.pos.pack())
+            .is_some_and(|holder| identity.matches(holder)),
+        "stale FULL continuation"
+    );
+    // The record stays in the backend while its owned action runs. The shared
+    // driver will drop its cold guard before executing publication callbacks.
+    let mut terrain = continuation
+        .input
+        .take()
+        .context("FULL continuation already executing")?;
+    let result = (|| -> Result<()> {
+        let pos = identity.pos;
+        if !world.full_promotions[&request].attached
+            && world.full_promotions[&request].prepared_chunk.is_none()
+        {
+            let chunk = world.integrate(
+                request,
+                world.full_promotions[&request].light_revision,
+                &mut terrain,
+            )?;
+            world
+                .full_promotions
+                .get_mut(&request)
+                .unwrap()
+                .prepared_chunk = Some(chunk);
+        }
+        if !world.full_promotions[&request].entities_registered {
+            let entities = terrain.disk.entities.take().unwrap_or_default();
+            if let Err(error) = level.level.add_worldgen_chunk_entities(pos, entities) {
+                terrain.disk.entities = Some(error.entities);
+                world.saved.insert(pos.pack(), terrain.disk.clone());
+                // The current exclusive API cannot distinguish a factory
+                // preflight failure from partial publication. Never replay it.
+                world
+                    .full_promotions
+                    .get_mut(&request)
+                    .unwrap()
+                    .entity_failure = Some(error.source.to_string());
+                return Err(error.source.into());
+            }
+            world
+                .full_promotions
+                .get_mut(&request)
+                .unwrap()
+                .entities_registered = true;
+            world.saved.get_mut(&pos.pack()).unwrap().entities = None;
+        }
+        if !world.full_promotions[&request].attached {
+            let chunk = world
+                .full_promotions
+                .get_mut(&request)
+                .unwrap()
+                .prepared_chunk
+                .take()
+                .unwrap();
+            level.level.add_chunk(chunk).map_err(game_error)?;
+            world.full_promotions.get_mut(&request).unwrap().attached = true;
+        }
+        if pos == ChunkPos::containing(world.spawn) && !world.level_data.data.contains_key("spawn")
+        {
+            world.spawn.y =
+                terrain.surface[((world.spawn.z & 15) * 16 + (world.spawn.x & 15)) as usize];
+        }
+        level
+            .level
+            .prime_chunk_heightmaps(pos)
+            .map_err(game_error)?;
+        let holder = level
+            .chunks
+            .holders
+            .get_mut(&pos.pack())
+            .context("missing FULL holder")?;
+        ensure!(identity.matches(holder), "stale FULL publication");
+        holder.status = ChunkStatus::Full;
+        Ok(())
+    })();
+    let continuation = world.full_promotions.get_mut(&request).unwrap();
+    if result.is_ok() {
+        continuation.complete = true;
+    } else {
+        continuation.input = Some(terrain);
+    }
+    result
 }
 
 fn integrate_light(level: &mut ServerLevel, world: &mut World, light: LitChunk) -> Result<()> {
