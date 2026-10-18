@@ -288,11 +288,12 @@ impl AbstractContainerMenu {
         self.quickcraft_slots.clear();
     }
     fn can_take_for_pick_all(&self, slot: &Slot) -> bool {
-        !matches!(slot.kind, SlotKind::Result(_))
-            || matches!(
-                self.kind,
-                MenuKind::Furnace | MenuKind::Smoker | MenuKind::BlastFurnace
-            )
+        self.kind != MenuKind::Merchant
+            && (!matches!(slot.kind, SlotKind::Result(_))
+                || matches!(
+                    self.kind,
+                    MenuKind::Furnace | MenuKind::Smoker | MenuKind::BlastFurnace
+                ))
     }
     fn safe_take(
         &mut self,
@@ -393,6 +394,28 @@ impl AbstractContainerMenu {
         input: ContainerInput,
         hooks: &mut dyn MenuHooks,
     ) -> Result<()> {
+        // Result calculation is a synchronous recipe/enchantment/trade operation.
+        // Until its owning workstream supplies that operation, reject affected
+        // clicks before touching the canonical stacks.
+        let inputs = match self.kind {
+            MenuKind::Inventory => 5,
+            MenuKind::Crafting => 10,
+            MenuKind::Anvil | MenuKind::Grindstone | MenuKind::Cartography | MenuKind::Merchant => {
+                3
+            }
+            MenuKind::Loom | MenuKind::Smithing => 4,
+            MenuKind::Enchantment | MenuKind::Stonecutter => 2,
+            _ => 0,
+        };
+        if inputs > 0
+            && input != ContainerInput::Clone
+            && (slot_index >= 0 && (slot_index as usize) < inputs
+                || self.kind != MenuKind::Inventory && input == ContainerInput::QuickMove
+                || input == ContainerInput::PickupAll
+                    && (0..inputs).any(|i| !self.get_item(ctx, i).is_empty()))
+        {
+            hooks.prepare_recipe_click(self.kind)?;
+        }
         if input == ContainerInput::QuickCraft {
             return self.quick_craft(ctx, slot_index, button, hooks);
         }

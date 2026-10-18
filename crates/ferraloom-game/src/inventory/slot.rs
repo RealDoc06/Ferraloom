@@ -59,6 +59,11 @@ pub enum SlotKind {
 /// Pure domain hooks. Default errors make unported recipe, enchantment and trade work explicit.
 /// Implementations may hold immutable recipe/fuel tables; they do not own player stacks.
 pub trait MenuHooks {
+    fn prepare_recipe_click(&mut self, _kind: super::MenuKind) -> Result<()> {
+        Err(MenuError::Unsupported(
+            "synchronous recipe/enchantment/trade calculation",
+        ))
+    }
     fn may_place(&self, kind: SlotKind, _stack: &ItemStack) -> Result<bool> {
         Err(MenuError::Unsupported(match kind {
             SlotKind::FurnaceFuel => "furnace fuel registry",
@@ -70,7 +75,10 @@ pub trait MenuHooks {
             _ => "specialized slot predicate",
         }))
     }
-    fn may_pickup_armor(&self, _stack: &ItemStack) -> Result<bool> {
+    fn may_pickup_armor(&self, stack: &ItemStack) -> Result<bool> {
+        if !crate::entity::player::inventory::is_enchanted(stack) {
+            return Ok(true);
+        }
         Err(MenuError::Unsupported(
             "PREVENT_ARMOR_CHANGE enchantment effect",
         ))

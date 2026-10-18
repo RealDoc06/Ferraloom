@@ -680,6 +680,8 @@ pub struct MenuSession {
     pub inventory_menu: AbstractContainerMenu,
     pub container_menu: Option<AbstractContainerMenu>,
     pub container_counter: i32,
+    creative_drop_count: u64,
+    creative_drop_tick: u64,
 }
 impl Default for MenuSession {
     fn default() -> Self {
@@ -688,6 +690,8 @@ impl Default for MenuSession {
                 .expect("player menu"),
             container_menu: None,
             container_counter: 0,
+            creative_drop_count: 0,
+            creative_drop_tick: 0,
         }
     }
 }
@@ -715,4 +719,132 @@ pub trait MenuProvider {
         player: crate::entity::EntityRef,
         level: &mut crate::level::Level,
     ) -> Result<Option<AbstractContainerMenu>>;
+}
+
+impl AbstractContainerMenu {
+    /// Port of AbstractContainerMenu#removed and concrete menus' input cleanup.
+    /// Slot updates and drops remain in vanilla call order for the runtime adapter.
+    pub fn removed(
+        &mut self,
+        ctx: &mut MenuContext<'_>,
+        disconnected: bool,
+    ) -> Vec<crate::entity::player::inventory::InventoryEffect> {
+        use crate::entity::player::inventory::InventoryEffect;
+        let mut effects = Vec::new();
+        let mut carried = std::mem::take(&mut self.carried);
+        if !carried.is_empty() {
+            if disconnected {
+                effects.push(InventoryEffect::Drop(carried));
+            } else {
+                effects.extend(ctx.player.inventory.place_item_back_in_inventory(
+                    &mut carried,
+                    true,
+                    ctx.player.equipment,
+                    ctx.creative,
+                ));
+            }
+        }
+        if self.kind == MenuKind::Beacon {
+            let slot = self.slots[0].clone();
+            let mut payment = self.get_item(ctx, 0);
+            let amount = count(&payment).min(1);
+            let dropped = split(&mut payment, amount);
+            self.set_item(ctx, slot.index, payment);
+            if !dropped.is_empty() {
+                effects.push(InventoryEffect::Drop(dropped));
+            }
+            return effects;
+        }
+        let input_count = match self.kind {
+            MenuKind::Inventory => 4,
+            MenuKind::Crafting => 9,
+            MenuKind::Enchantment
+            | MenuKind::Anvil
+            | MenuKind::Grindstone
+            | MenuKind::Cartography
+            | MenuKind::Merchant => 2,
+            MenuKind::Loom | MenuKind::Smithing => 3,
+            MenuKind::Stonecutter => 1,
+            _ => 0,
+        };
+        for index in 0..input_count {
+            let mut stack = self.local[0].remove_item_no_update(index);
+            if !stack.is_empty() {
+                if disconnected {
+                    effects.push(InventoryEffect::Drop(stack));
+                } else {
+                    effects.extend(ctx.player.inventory.place_item_back_in_inventory(
+                        &mut stack,
+                        true,
+                        ctx.player.equipment,
+                        ctx.creative,
+                    ));
+                }
+            }
+        }
+        if self.kind == MenuKind::Inventory {
+            self.local[1].clear_content();
+        }
+        for container in &mut *ctx.external {
+            container.stop_open();
+        }
+        effects
+    }
+}
+impl MenuSession {
+    /// Port of ServerPlayer#doCloseContainer. A client close ignores its supplied ID.
+    pub fn do_close_container(
+        &mut self,
+        ctx: &mut MenuContext<'_>,
+        disconnected: bool,
+    ) -> Vec<crate::entity::player::inventory::InventoryEffect> {
+        if let Some(menu) = &mut self.container_menu {
+            let effects = menu.removed(ctx, disconnected);
+            self.inventory_menu.transfer_state(menu);
+            self.container_menu = None;
+            effects
+        } else {
+            self.inventory_menu.removed(ctx, disconnected)
+        }
+    }
+    /// Port of ServerGamePacketListenerImpl#tryPickItem, after the item's clone query.
+    pub fn try_pick_item(
+        &mut self,
+        ctx: &mut MenuContext<'_>,
+        stack: ItemStack,
+    ) -> Result<Vec<ferraloom_protocol::play::clientbound::Packet>> {
+        use ferraloom_protocol::{codec::VarInt, play::clientbound as cb};
+        let inventory = &mut ctx.player.inventory;
+        if let Some(slot) = inventory.find_slot_matching_item(&stack) {
+            if slot < 9 {
+                inventory.set_selected_slot(slot);
+            } else {
+                inventory.pick_slot(slot);
+            }
+        } else if ctx.creative {
+            inventory.add_and_pick_item(stack);
+        }
+        let mut packets = vec![cb::Packet::SetHeldSlot(cb::SetHeldSlot {
+            slot: VarInt(inventory.selected_slot() as i32),
+        })];
+        self.inventory_menu.broadcast_changes(ctx)?;
+        packets.extend(self.inventory_menu.drain_packets());
+        Ok(packets)
+    }
+}
+
+impl MenuSession {
+    /// Port of TickThrottler(20, 1480), decayed at the connection's doTick count.
+    pub fn allow_creative_drop(&mut self, connection_tick: u64) -> bool {
+        self.creative_drop_count = self
+            .creative_drop_count
+            .saturating_sub(connection_tick.saturating_sub(self.creative_drop_tick));
+        self.creative_drop_tick = connection_tick;
+        if self.creative_drop_count < 1480 {
+            self.creative_drop_count += 20;
+            true
+        } else {
+            false
+        }
+    }
 }

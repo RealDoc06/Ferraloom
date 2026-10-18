@@ -94,6 +94,14 @@ public final class InventoryVectors {
     }
     var edge=List.of(new int[]{0,1,0},new int[]{1,0,0},new int[]{2,0,0},new int[]{-999,1,0},new int[]{3,0,0},new int[]{4,0,0},new int[]{4,0,0},new int[]{5,0,5},new int[]{5,1,5},new int[]{6,1,5},new int[]{7,1,5},new int[]{-999,2,5},new int[]{8,0,0},new int[]{-999,0,0},new int[]{0,40,2},new int[]{1,0,2},new int[]{0,1,4},new int[]{2,0,3},new int[]{-999,0,0},new int[]{2,1,4});
     scenario(registries,"edges","chest1",true,edge,false);
+    scenario(registries,"furnace-result","furnace",false,List.of(new int[]{2,0,1},new int[]{3,1,0},new int[]{4,0,0},new int[]{2,0,6}),false);
+    for(int mode=0;mode<3;mode++){
+      var drag=new ArrayList<int[]>();drag.add(new int[]{1,0,0});drag.add(new int[]{-999,mode*4,5});
+      for(int target:new int[]{0,1,3,4,5,6})drag.add(new int[]{target,mode*4+1,5});
+      drag.add(new int[]{-999,mode*4+2,5});drag.add(new int[]{-999,0,0});
+      drag.add(new int[]{2,0,0});drag.add(new int[]{-999,mode*4,5});drag.add(new int[]{7,mode*4+1,5});drag.add(new int[]{-999,mode*4+2,5});
+      drag.add(new int[]{-999,0,0});scenario(registries,"drag-"+mode,"chest1",mode==2,drag,false);
+    }
     for(String type:List.of("inventory","chest1","chest2","chest3","chest4","chest5","chest6","dispenser","hopper","shulker","furnace","smoker","blast")){
       int boundary=switch(type){case "inventory"->9;case "hopper"->5;case "dispenser"->9;case "shulker"->27;case "furnace","smoker","blast"->3;default->Integer.parseInt(type.substring(5))*9;};
       var clicks=new ArrayList<int[]>();

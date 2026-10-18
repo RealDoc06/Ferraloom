@@ -2,12 +2,14 @@
 mod container;
 mod menu;
 mod menus;
+mod server_player;
 mod slot;
 mod sync;
 
 pub use container::*;
 pub use menu::*;
 pub use menus::*;
+pub use server_player::*;
 pub use slot::*;
 pub use sync::*;
 
@@ -25,6 +27,7 @@ pub enum MenuError {
     ContainerTooSmall { actual: usize, expected: usize },
     Unsupported(&'static str),
     Protocol(ferraloom_protocol::Error),
+    Level(crate::level::LevelError),
 }
 impl std::fmt::Display for MenuError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -35,6 +38,7 @@ impl std::fmt::Display for MenuError {
             }
             Self::Unsupported(operation) => write!(f, "unsupported menu behavior: {operation}"),
             Self::Protocol(error) => error.fmt(f),
+            Self::Level(error) => write!(f, "{error:?}"),
         }
     }
 }
@@ -60,3 +64,9 @@ fn matches(a: &ItemStack, b: &ItemStack) -> bool {
 
 #[cfg(test)]
 mod tests;
+
+impl From<crate::level::LevelError> for MenuError {
+    fn from(error: crate::level::LevelError) -> Self {
+        Self::Level(error)
+    }
+}

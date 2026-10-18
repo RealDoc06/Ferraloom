@@ -82,6 +82,9 @@ fn events(updates: Vec<ContainerUpdate>) -> String {
 // ServerLevel, so result achievements and recipes are outside this storage test.
 struct OracleHooks;
 impl MenuHooks for OracleHooks {
+    fn prepare_recipe_click(&mut self, _kind: MenuKind) -> Result<()> {
+        Ok(())
+    }
     fn may_pickup_armor(&self, _stack: &ItemStack) -> Result<bool> {
         Ok(true)
     }
@@ -178,8 +181,8 @@ fn real_vanilla_click_sequences_slots_carried_state_and_remote_updates() {
             _ => {}
         }
     }
-    assert_eq!(scenarios, 14);
-    assert_eq!(clicks, 1463);
+    assert_eq!(scenarios, 18);
+    assert_eq!(clicks, 1512);
 }
 
 #[test]
