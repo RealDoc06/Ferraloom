@@ -96,3 +96,4 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | predicates.predicate.tag-predicate | `TagPredicate` implementation; lifecycle `codec, is, isNot, matches` | `net.minecraft.advancements.predicates.TagPredicate#matches` |  | - | todo |
 | predicates.predicate.tool.can-shear | `minecraft:tool/can_shear` (predicate) | `data/minecraft/predicate/tool/can_shear.json`; `LootItemCondition#DIRECT_CODEC` |  | - | todo |
 | predicates.predicate.tool.can-silk-touch | `minecraft:tool/can_silk_touch` (predicate) | `data/minecraft/predicate/tool/can_silk_touch.json`; `LootItemCondition#DIRECT_CODEC` |  | - | todo |
+| predicates.state-property.java-integers | IntegerProperty accepts Java integer spellings including a plus sign, leading zeroes and BMP decimal digits | `IntegerProperty#getValue; StatePropertiesPredicate` | `loot::tests::block_and_location_acceptance_matches_java` | pass | todo |

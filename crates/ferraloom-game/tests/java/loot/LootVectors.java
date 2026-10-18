@@ -106,13 +106,45 @@ public final class LootVectors {
             var record=new JsonObject();record.add("item",itemJson);record.add("predicate",testJson);record.addProperty("matches",predicate.test(stack));predicates.add(record);
         }
         output.add("item_predicates",predicates);
+        var modifiers=new JsonArray();
+        var functionDefinitions=List.of(
+            "{\"type\":\"copy_components\",\"source\":\"tool\",\"include\":[\"damage\"]}",
+            "{\"type\":\"set_enchantments\",\"enchantments\":{\"sharpness\":3}}",
+            "{\"type\":\"set_stew_effect\",\"effects\":[{\"type\":\"poison\",\"duration\":{\"type\":\"uniform\",\"min\":2,\"max\":5}},{\"type\":\"instant_health\",\"duration\":3}]}",
+            "{\"type\":\"set_name\",\"name\":\"Doc\",\"target\":\"item_name\"}",
+            "{\"type\":\"set_random_potion\",\"options\":[\"water\",\"healing\"]}",
+            "{\"type\":\"set_banner_pattern\",\"patterns\":[{\"pattern\":\"stripe_bottom\",\"color\":\"white\"}],\"append\":true}",
+            "{\"type\":\"toggle_tooltips\",\"toggles\":{\"enchantments\":false,\"attribute_modifiers\":true}}",
+            "{\"type\":\"set_loot_table\",\"loot_table_id\":\"archaeology/desert_well\",\"seed\":42}",
+            "{\"type\":\"copy_state\",\"block\":\"wheat\",\"properties\":[\"age\",\"invalid\"]}",
+            "{\"type\":\"apply_bonus\",\"enchantment\":\"fortune\",\"formula\":\"ore_drops\"}",
+            "{\"type\":\"apply_bonus\",\"enchantment\":\"fortune\",\"formula\":\"uniform_bonus_count\",\"parameters\":{\"bonusMultiplier\":2}}",
+            "{\"type\":\"explosion_decay\"}"
+        );
+        for(var definition:functionDefinitions)for(String input:List.of("{\"id\":\"book\",\"count\":2}","{\"id\":\"suspicious_stew\"}","{\"id\":\"stone\",\"count\":16}"))for(long seed:SEEDS){
+            var functionJson=JsonParser.parseString(definition);var inputJson=JsonParser.parseString(input);
+            var function=net.minecraft.world.level.storage.loot.functions.LootItemFunctions.DIRECT_CODEC.parse(lookup.createSerializationContext(JsonOps.INSTANCE),functionJson).getOrThrow();
+            var item=ItemStack.CODEC.parse(lookup.createSerializationContext(JsonOps.INSTANCE),inputJson).getOrThrow();
+            var toolJson=JsonParser.parseString("{\"id\":\"diamond_pickaxe\",\"components\":{\"damage\":17,\"enchantments\":{\"fortune\":3}}}");
+            var tool=ItemStack.CODEC.parse(lookup.createSerializationContext(JsonOps.INSTANCE),toolJson).getOrThrow();
+            var params=new LootParams(level,ContextMap.builder().set(LootContextParams.TOOL,tool).set(LootContextParams.BLOCK_STATE,Blocks.WHEAT.defaultBlockState()).set(LootContextParams.EXPLOSION_RADIUS,3f).build(),Map.of(),0);
+            var random=RandomSource.create(seed);RANDOM.set(random);var context=new LootContext.Builder(params).withOptionalRandomSource(random).create(Optional.empty());
+            var record=new JsonObject();record.add("definition",functionJson);record.add("input",inputJson);record.add("tool",toolJson);record.addProperty("seed",seed);record.add("result",stack(function.apply(item,context)));record.addProperty("next",random.nextLong());modifiers.add(record);
+        }output.add("modifiers",modifiers);
         var numbers=new JsonArray();
-        for(String definition:List.of("{\"type\":\"uniform\",\"min\":-4,\"max\":9}","{\"type\":\"binomial\",\"n\":12,\"p\":0.3}","{\"type\":\"add\",\"inputs\":[5,{\"type\":\"div\",\"left\":1,\"right\":0}]}","{\"type\":\"floor_div\",\"left\":-7,\"right\":3}","{\"type\":\"from_float\",\"input\":-2.9}","{\"type\":\"pow\",\"base\":0,\"exponent\":0}")) {
+        for(String definition:List.of("9223372036854775808","1e100","2147483647.9","-2147483649.99","{\"type\":\"uniform\",\"min\":-4,\"max\":9}","{\"type\":\"binomial\",\"n\":12,\"p\":0.3}","{\"type\":\"add\",\"inputs\":[5,{\"type\":\"div\",\"left\":1,\"right\":0}]}","{\"type\":\"floor_div\",\"left\":-7,\"right\":3}","{\"type\":\"from_float\",\"input\":-2.9}","{\"type\":\"pow\",\"base\":0,\"exponent\":0}")) {
             var json=JsonParser.parseString(definition);var value=net.minecraft.world.level.storage.loot.providers.number.ints.ContextIntProviders.DIRECT_CODEC.parse(lookup.createSerializationContext(JsonOps.INSTANCE),json).getOrThrow();
             for(long seed:SEEDS) {var random=RandomSource.create(seed);RANDOM.set(random);var context=new LootContext.Builder(new LootParams(level,ContextMap.EMPTY,Map.of(),0)).withOptionalRandomSource(random).create(Optional.empty());
                 var record=new JsonObject();record.add("definition",json);record.addProperty("seed",seed);record.addProperty("value",value.getInt(context));record.addProperty("next",random.nextLong());numbers.add(record);}
         }
         output.add("int_providers",numbers);
+        var floats=new JsonArray();
+        for(String definition:List.of("1e100","{\"type\":\"round\",\"input\":{\"type\":\"mod\",\"left\":{\"type\":\"uniform\",\"min\":1,\"max\":2},\"right\":0}}","{\"type\":\"add\",\"inputs\":[3,{\"type\":\"round\",\"input\":{\"type\":\"div\",\"left\":0,\"right\":0}}]}","{\"type\":\"sin\",\"input\":2.3}"))for(long seed:SEEDS){
+            var json=JsonParser.parseString(definition);var value=net.minecraft.world.level.storage.loot.providers.number.floats.ContextFloatProviders.DIRECT_CODEC.parse(lookup.createSerializationContext(JsonOps.INSTANCE),json).getOrThrow();
+            var random=RandomSource.create(seed);RANDOM.set(random);var context=new LootContext.Builder(new LootParams(level,ContextMap.EMPTY,Map.of(),0)).withOptionalRandomSource(random).create(Optional.empty());
+            var record=new JsonObject();record.add("definition",json);record.addProperty("seed",seed);record.addProperty("bits",Float.floatToRawIntBits(value.getFloat(context)));record.addProperty("next",random.nextLong());floats.add(record);
+        }output.add("float_providers",floats);
+
         var sequences=new JsonArray();
         for(long worldSeed:SEEDS)for(int salt:new int[]{0,-712})for(boolean includeWorld:new boolean[]{false,true})for(boolean includeId:new boolean[]{false,true}) {
             var manager=new net.minecraft.world.RandomSequences();manager.setSeedDefaults(salt,includeWorld,includeId);
@@ -122,7 +154,7 @@ public final class LootVectors {
             record.add("saved",net.minecraft.world.RandomSequences.CODEC.encodeStart(JsonOps.INSTANCE,manager).getOrThrow());sequences.add(record);
         }output.add("random_sequences",sequences);
         var blockPredicates=new JsonArray();
-        for(String block:List.of("stone","oak_log","oak_stairs","wheat"))for(String test:List.of("{}","{\"blocks\":\"stone\"}","{\"blocks\":\"#minecraft:logs\"}","{\"state\":{\"axis\":\"y\"}}","{\"state\":{\"age\":{\"min\":\"0\",\"max\":\"3\"}}}")) {
+        for(String block:List.of("stone","oak_log","oak_stairs","wheat"))for(String test:List.of("{}","{\"blocks\":\"stone\"}","{\"blocks\":\"#minecraft:logs\"}","{\"state\":{\"axis\":\"y\"}}","{\"state\":{\"age\":\"+0\"}}","{\"state\":{\"age\":\"٠\"}}","{\"state\":{\"age\":{\"min\":\"0\",\"max\":\"3\"}}}")) {
             var state=BuiltInRegistries.BLOCK.getValue(Identifier.parse(block)).defaultBlockState();
             var json=JsonParser.parseString(test);var predicate=net.minecraft.advancements.predicates.BlockPredicate.CODEC.parse(lookup.createSerializationContext(JsonOps.INSTANCE),json).getOrThrow();
             var record=new JsonObject();record.addProperty("block",block);record.add("predicate",json);record.addProperty("matches",predicate.matchesState(state));blockPredicates.add(record);

@@ -161,6 +161,7 @@ impl LootData {
             ContextKeySet::vanilla(&Identifier::parse("generic").expect("vanilla id"))
                 .expect("generic context set")
         }
+        validate_registry!(slot_sources, "slot_source", generic);
         validate_registry!(predicates, "predicate", generic);
         validate_registry!(modifiers, "item_modifier", generic);
         validate_registry!(int_providers, "context_int_provider", generic);
@@ -189,6 +190,7 @@ impl Validatable for LootPoolEntryContainer {
         c.optional("condition", &self.condition);
         c.optional("modifier", &self.modifier);
         match &self.kind {
+            EntryKind::Slots(source) => c.holder("slot_source", source),
             EntryKind::Table { tables, .. } => c.set("value", tables, 0),
             EntryKind::Alternatives(children)
             | EntryKind::Sequence(children)
@@ -215,6 +217,47 @@ impl Validatable for LootItemFunction {
     fn validate(&self, c: &mut ValidationContext<'_>) {
         c.optional("condition", &self.condition);
         match &self.kind {
+            FunctionKind::Item(function) => match function {
+                super::ItemFunction::SetAttributes { modifiers, .. } => {
+                    for modifier in modifiers {
+                        c.holder("amount", &modifier.amount);
+                    }
+                }
+                super::ItemFunction::SetRandomDyes(value) => c.holder("number_of_dyes", value),
+                super::ItemFunction::FillPlayerHead(target) => c.params([target.param()]),
+            },
+            FunctionKind::CopyCustomData(function) => {
+                if let super::NbtProvider::Context(source) = function.source {
+                    c.params([source.param()]);
+                }
+            }
+            FunctionKind::Container(function) => match function {
+                super::ContainerFunction::Set { entries, .. } => {
+                    for (i, entry) in entries.iter().enumerate() {
+                        c.field(&format!("entries[{i}]"), |c| entry.validate(c));
+                    }
+                }
+                super::ContainerFunction::Modify { modifier, .. } => c.holder("modifier", modifier),
+            },
+            FunctionKind::List(function) => match function {
+                super::ListFunction::SetLore {
+                    entity: Some(target),
+                    ..
+                } => c.params([target.param()]),
+                super::ListFunction::SetCustomModelData { floats, colors, .. } => {
+                    if let Some(edit) = floats {
+                        for value in &edit.values {
+                            c.holder("floats", value);
+                        }
+                    }
+                    if let Some(edit) = colors {
+                        for value in &edit.values {
+                            c.holder("colors", value);
+                        }
+                    }
+                }
+                _ => {}
+            },
             FunctionKind::World(function) => match function {
                 super::WorldFunction::ExplorationMap(_) => c.params([ContextParam::Origin]),
                 super::WorldFunction::SetEnchantments { enchantments, .. } => {
@@ -311,6 +354,11 @@ where
         match self {
             Self::Constant(_) => {}
             Self::EnchantmentLevel(_) => c.params([ContextParam::EnchantmentLevel]),
+            Self::EnvironmentAttribute { positional, .. } => {
+                if *positional {
+                    c.params([ContextParam::Origin]);
+                }
+            }
             Self::Unary(_, p) => c.holder("input", p),
             Self::Binary(_, left, right) | Self::Uniform(left, right) => {
                 c.holder("left", left);
@@ -347,6 +395,19 @@ where
                 }
                 c.holder("fallback", fallback);
             }
+        }
+    }
+}
+
+impl Validatable for super::SlotSource {
+    fn validate(&self, c: &mut ValidationContext<'_>) {
+        match self {
+            Self::Empty => {}
+            Self::Group(sources) => c.set("terms", sources, 0),
+            Self::Range { source, .. } => c.params([source.param()]),
+            Self::Filtered { source, .. }
+            | Self::Limit { source, .. }
+            | Self::Contents { source, .. } => c.holder("slot_source", source),
         }
     }
 }

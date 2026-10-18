@@ -433,3 +433,53 @@ fn block_and_location_acceptance_matches_java() {
         );
     }
 }
+
+#[test]
+fn item_modifiers_and_float_arithmetic_match_java() {
+    let vectors: serde_json::Value =
+        serde_json::from_str(include_str!("../../tests/java/loot/vectors.json")).unwrap();
+    let data = LootData::default();
+    for record in vectors["modifiers"].as_array().unwrap() {
+        let modifier = Holder::direct(LootItemFunction::decode(&record["definition"]).unwrap());
+        let params = LootParams {
+            tool: Some(decode_stack(&record["tool"])),
+            block_state: Some(ferraloom_data::Block::WHEAT.default_state()),
+            explosion_radius: Some(3.0),
+            ..Default::default()
+        };
+        let mut random = LegacyRandomSource::new(record["seed"].as_i64().unwrap());
+        let result = data
+            .apply_modifier(
+                &modifier,
+                decode_stack(&record["input"]),
+                &params,
+                &mut random,
+                &NoFacts,
+            )
+            .unwrap();
+        assert_eq!(
+            canonical(&result),
+            canonical(&decode_stack(&record["result"])),
+            "{record}"
+        );
+        assert_eq!(
+            random.next_long(),
+            record["next"].as_i64().unwrap(),
+            "{record}"
+        );
+    }
+    for record in vectors["float_providers"].as_array().unwrap() {
+        let provider = Holder::direct(ContextFloatProvider::decode(&record["definition"]).unwrap());
+        let params = LootParams::default();
+        let mut random = LegacyRandomSource::new(record["seed"].as_i64().unwrap());
+        let result = data
+            .evaluate_float(&provider, &params, &mut random, &NoFacts)
+            .unwrap();
+        assert_eq!(
+            result.to_bits() as i32,
+            record["bits"].as_i64().unwrap() as i32,
+            "{record}"
+        );
+        assert_eq!(random.next_long(), record["next"].as_i64().unwrap());
+    }
+}

@@ -346,8 +346,9 @@ impl ComponentFunction {
                     },
                 };
                 for (key, shown) in toggles {
-                    value.hidden_components.entries.retain(|v| v != key);
-                    if !shown {
+                    if *shown {
+                        value.hidden_components.entries.retain(|v| v != key);
+                    } else if !value.hidden_components.entries.contains(key) {
                         value.hidden_components.entries.push(*key);
                     }
                 }

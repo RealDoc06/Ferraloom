@@ -34,6 +34,7 @@ pub enum EntryKind {
         expand: bool,
     },
     Dynamic(Identifier),
+    Slots(Holder<super::SlotSource>),
     Alternatives(Vec<LootPoolEntryContainer>),
     Sequence(Vec<LootPoolEntryContainer>),
     Group(Vec<LootPoolEntryContainer>),
@@ -44,6 +45,7 @@ pub(crate) enum ExpandedKind {
     Items(Vec<Item>),
     Tables(Vec<Holder<LootTable>>),
     Dynamic(Identifier),
+    Slots(Holder<super::SlotSource>),
 }
 pub(crate) struct ExpandedEntry {
     pub kind: ExpandedKind,
@@ -83,7 +85,10 @@ impl LootPoolEntryContainer {
             "minecraft:alternatives" => EntryKind::Alternatives(children()?),
             "minecraft:sequence" => EntryKind::Sequence(children()?),
             "minecraft:group" => EntryKind::Group(children()?),
-            "minecraft:slots" => return Err(super::LootError::Unsupported("slot_source".into())),
+            "minecraft:slots" => EntryKind::Slots(Holder::decode(
+                codec::field(v, "slot_source")?,
+                super::SlotSource::decode,
+            )?),
             _ => return Err(codec::error(format!("unknown entry type {kind}"))),
         };
         let composite = matches!(
@@ -116,12 +121,22 @@ impl LootPoolEntryContainer {
         c: &mut EvalContext<'_>,
         output: &mut Vec<ExpandedEntry>,
     ) -> Result<bool> {
+        self.expand_with(data, c, &mut |entry, _| {
+            output.push(entry);
+            Ok(())
+        })
+    }
+    pub(crate) fn expand_with(
+        &self,
+        data: &LootData,
+        c: &mut EvalContext<'_>,
+        output: &mut dyn FnMut(ExpandedEntry, &mut EvalContext<'_>) -> Result<()>,
+    ) -> Result<bool> {
         if let Some(condition) = &self.condition {
             if !condition.test(data, c)? {
                 return Ok(false);
             }
         }
-        let start = output.len();
         let weight = mth::floor(f64::from(
             self.weight as f32 + self.quality as f32 * c.params.luck,
         ))
@@ -131,17 +146,27 @@ impl LootPoolEntryContainer {
             weight,
             modifiers: Vec::new(),
         };
+        let mut decorated = |mut value: ExpandedEntry, c: &mut EvalContext<'_>| {
+            if let Some(modifier) = &self.modifier {
+                value.modifiers.push(modifier.clone());
+            }
+            output(value, c)
+        };
         let success = match &self.kind {
+            EntryKind::Slots(source) => {
+                decorated(entry(ExpandedKind::Slots(source.clone())), c)?;
+                true
+            }
             EntryKind::Empty => {
-                output.push(entry(ExpandedKind::Empty));
+                decorated(entry(ExpandedKind::Empty), c)?;
                 true
             }
             EntryKind::Item(item) => {
-                output.push(entry(ExpandedKind::Items(vec![*item])));
+                decorated(entry(ExpandedKind::Items(vec![*item])), c)?;
                 true
             }
             EntryKind::Dynamic(id) => {
-                output.push(entry(ExpandedKind::Dynamic(id.clone())));
+                decorated(entry(ExpandedKind::Dynamic(id.clone())), c)?;
                 true
             }
             EntryKind::Tag { items, expand } => {
@@ -167,10 +192,10 @@ impl LootPoolEntryContainer {
                 };
                 if *expand {
                     for item in items {
-                        output.push(entry(ExpandedKind::Items(vec![item])));
+                        decorated(entry(ExpandedKind::Items(vec![item])), c)?;
                     }
                 } else {
-                    output.push(entry(ExpandedKind::Items(items)));
+                    decorated(entry(ExpandedKind::Items(items)), c)?;
                 }
                 true
             }
@@ -178,17 +203,17 @@ impl LootPoolEntryContainer {
                 let tables = tables.resolve(data)?;
                 if *expand {
                     for table in tables {
-                        output.push(entry(ExpandedKind::Tables(vec![table])));
+                        decorated(entry(ExpandedKind::Tables(vec![table])), c)?;
                     }
                 } else {
-                    output.push(entry(ExpandedKind::Tables(tables)));
+                    decorated(entry(ExpandedKind::Tables(tables)), c)?;
                 }
                 true
             }
             EntryKind::Alternatives(children) => {
                 let mut success = false;
                 for child in children {
-                    if child.expand(data, c, output)? {
+                    if child.expand_with(data, c, &mut decorated)? {
                         success = true;
                         break;
                     }
@@ -198,7 +223,7 @@ impl LootPoolEntryContainer {
             EntryKind::Sequence(children) => {
                 let mut success = true;
                 for child in children {
-                    if !child.expand(data, c, output)? {
+                    if !child.expand_with(data, c, &mut decorated)? {
                         success = false;
                         break;
                     }
@@ -206,20 +231,15 @@ impl LootPoolEntryContainer {
                 success
             }
             EntryKind::Group(children) if children.len() == 1 => {
-                children[0].expand(data, c, output)?
+                children[0].expand_with(data, c, &mut decorated)?
             }
             EntryKind::Group(children) => {
                 for child in children {
-                    child.expand(data, c, output)?;
+                    child.expand_with(data, c, &mut decorated)?;
                 }
                 true
             }
         };
-        if let Some(modifier) = &self.modifier {
-            for item in &mut output[start..] {
-                item.modifiers.push(modifier.clone());
-            }
-        }
         Ok(success)
     }
 }
@@ -237,6 +257,13 @@ impl ExpandedEntry {
             output(stack, c)
         };
         match &self.kind {
+            ExpandedKind::Slots(source) => {
+                for stack in source.items(data, c)? {
+                    if !stack.is_empty() {
+                        decorated(stack, c)?;
+                    }
+                }
+            }
             ExpandedKind::Empty => {}
             ExpandedKind::Items(items) => {
                 for item in items {

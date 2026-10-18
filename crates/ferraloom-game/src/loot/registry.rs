@@ -53,6 +53,7 @@ pub struct LootData {
     pub modifiers: BTreeMap<Identifier, LootItemFunction>,
     pub int_providers: BTreeMap<Identifier, ContextIntProvider>,
     pub float_providers: BTreeMap<Identifier, ContextFloatProvider>,
+    pub slot_sources: BTreeMap<Identifier, super::SlotSource>,
     pub tags: BTreeMap<(&'static str, Identifier), Vec<Identifier>>,
 }
 pub trait RegistryValue: Sized {
@@ -69,6 +70,7 @@ macro_rules! registry {
         }
     };
 }
+registry!(super::SlotSource, slot_sources, "slot_source");
 registry!(LootTable, tables, "loot_table");
 registry!(LootItemCondition, predicates, "predicate");
 registry!(LootItemFunction, modifiers, "item_modifier");
@@ -138,6 +140,7 @@ impl LootData {
                 }
             }};
         }
+        load!(slot_sources, super::SlotSource);
         load!(tables, LootTable);
         load!(predicates, LootItemCondition);
         load!(modifiers, LootItemFunction);

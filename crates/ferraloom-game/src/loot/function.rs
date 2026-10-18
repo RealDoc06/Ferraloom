@@ -1,5 +1,5 @@
 use super::{
-    ContextFloatProvider, ContextIntProvider, EvalContext, Holder, HolderSet, LootData, LootError,
+    ContextFloatProvider, ContextIntProvider, EvalContext, Holder, HolderSet, LootData,
     LootItemCondition, Result, codec,
 };
 use crate::predicates::ItemPredicate;
@@ -19,6 +19,10 @@ pub enum FunctionKind {
     Sequence(HolderSet<LootItemFunction>),
     Component(super::ComponentFunction),
     World(super::WorldFunction),
+    List(super::ListFunction),
+    Container(super::ContainerFunction),
+    Item(super::ItemFunction),
+    CopyCustomData(super::CopyCustomData),
     SetCount {
         count: Holder<ContextIntProvider>,
         add: bool,
@@ -80,6 +84,9 @@ impl LootItemFunction {
         })?;
         let name = codec::kind(v)?;
         let kind = match name.as_str() {
+            "minecraft:copy_custom_data" => {
+                FunctionKind::CopyCustomData(super::CopyCustomData::decode(v)?)
+            }
             "minecraft:sequence" => FunctionKind::Sequence(HolderSet::decode(
                 codec::field(v, "functions")?,
                 Self::decode_typed,
@@ -163,13 +170,21 @@ impl LootItemFunction {
             },
             "minecraft:explosion_decay" => FunctionKind::ExplosionDecay,
             "minecraft:discard" => FunctionKind::Discard,
-            _ => match super::ComponentFunction::decode(name.as_str(), v)? {
-                Some(function) => FunctionKind::Component(function),
-                None => match super::WorldFunction::decode(name.as_str(), v)? {
-                    Some(function) => FunctionKind::World(function),
-                    None => return Err(LootError::Unsupported(format!("loot_function.{name}"))),
-                },
-            },
+            _ => {
+                if let Some(function) = super::ComponentFunction::decode(name.as_str(), v)? {
+                    FunctionKind::Component(function)
+                } else if let Some(function) = super::WorldFunction::decode(name.as_str(), v)? {
+                    FunctionKind::World(function)
+                } else if let Some(function) = super::ListFunction::decode(name.as_str(), v)? {
+                    FunctionKind::List(function)
+                } else if let Some(function) = super::ContainerFunction::decode(name.as_str(), v)? {
+                    FunctionKind::Container(function)
+                } else if let Some(function) = super::ItemFunction::decode(name.as_str(), v)? {
+                    FunctionKind::Item(function)
+                } else {
+                    return Err(codec::error(format!("unknown loot function {name}")));
+                }
+            }
         };
         Ok(Self { condition, kind })
     }
@@ -185,6 +200,10 @@ impl LootItemFunction {
             }
         }
         match &self.kind {
+            FunctionKind::Item(function) => stack = function.apply(stack, data, c)?,
+            FunctionKind::CopyCustomData(function) => stack = function.apply(stack, c)?,
+            FunctionKind::Container(function) => stack = function.apply(stack, data, c)?,
+            FunctionKind::List(function) => stack = function.apply(stack, data, c)?,
             FunctionKind::World(function) => stack = function.apply(stack, data, c)?,
             FunctionKind::Component(function) => stack = function.apply(stack, data, c)?,
             FunctionKind::Sequence(functions) => {

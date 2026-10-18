@@ -44,6 +44,10 @@ pub enum AggregateOp {
 pub enum NumberProvider<T> {
     Constant(T),
     EnchantmentLevel(super::LevelBasedValue),
+    EnvironmentAttribute {
+        attribute: Identifier,
+        positional: bool,
+    },
     Unary(UnaryOp, Holder<Self>),
     Binary(BinaryOp, Holder<Self>, Holder<Self>),
     Aggregate(AggregateOp, HolderSet<Self>),
@@ -212,7 +216,12 @@ impl<T: Scalar> NumberProvider<T> {
                 Self::EnchantmentLevel(super::LevelBasedValue::decode(codec::field(v, "amount")?)?)
             }
             "minecraft:environment_attribute" => {
-                return Err(LootError::Unsupported(format!("number_provider.{kind}")));
+                let attribute = codec::id(codec::field(v, "attribute")?)?;
+                let positional = super::environment::numeric_attribute(&attribute, T::FLOAT)?;
+                Self::EnvironmentAttribute {
+                    attribute,
+                    positional,
+                }
             }
             _ => return Err(codec::error(format!("unknown number provider {kind}"))),
         })
@@ -234,6 +243,9 @@ where
         let eval = |h: &Holder<Self>, c: &mut EvalContext<'_>| h.eval(data, c);
         match self {
             Self::Constant(v) => Ok(*v),
+            Self::EnvironmentAttribute { attribute, .. } => {
+                T::from_float(c.facts.environment_float(attribute, c.params)?)
+            }
             Self::EnchantmentLevel(value) => {
                 T::from_float(value.calculate(c.params.enchantment_level.unwrap_or(0))?)
             }
@@ -437,7 +449,7 @@ impl Scalar for i32 {
         } else {
             let bound = max.wrapping_sub(min).wrapping_add(1);
             if bound <= 0 {
-                return Err(LootError::Arithmetic);
+                return Err(codec::error("nonpositive random bound"));
             }
             Ok(r.next_int_bound(bound).wrapping_add(min))
         }

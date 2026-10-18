@@ -311,7 +311,7 @@ impl LootData {
         Ok(())
     }
 }
-fn split_stack(stack: ItemStack, output: &mut Vec<ItemStack>) -> Result<()> {
+pub(crate) fn split_stack(stack: ItemStack, output: &mut Vec<ItemStack>) -> Result<()> {
     let max = max_stack_size(&stack)?;
     let mut count = stack_count(&stack);
     if count < max {

@@ -293,6 +293,29 @@ pub trait LootFacts: PredicateContext {
             ))
         }
     }
+    fn environment_float(&self, _attribute: &Identifier, _params: &LootParams) -> Result<f32> {
+        Err(LootError::Unsupported("level.environment_attribute".into()))
+    }
+    fn bundle_contents(
+        &self,
+        _items: Vec<ItemStack>,
+    ) -> Result<Vec<ferraloom_protocol::component::ItemStackTemplate>> {
+        Err(LootError::Unsupported("inventory.bundle_insertion".into()))
+    }
+    fn player_profile(
+        &self,
+        _entity: EntityRef,
+    ) -> Result<Option<ferraloom_protocol::component::ResolvableProfile>> {
+        Err(LootError::Unsupported("entity.player_profile".into()))
+    }
+    fn slot_items(
+        &self,
+        _source: super::SlotTarget,
+        _slots: &[i32],
+        _params: &LootParams,
+    ) -> Result<Vec<ItemStack>> {
+        Err(LootError::Unsupported("inventory.slot_provider".into()))
+    }
     fn clock_ticks(&self, _clock: &Identifier) -> Result<i64> {
         Err(LootError::Unsupported("level.clock_ticks".into()))
     }

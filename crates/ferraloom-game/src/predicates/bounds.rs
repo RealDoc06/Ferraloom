@@ -9,11 +9,7 @@ pub struct DoubleBounds {
 }
 impl DoubleBounds {
     pub fn decode(v: &Value) -> Result<Self> {
-        let number = |v: &Value| {
-            v.as_f64()
-                .filter(|v| v.is_finite())
-                .ok_or_else(|| codec::error("expected finite double"))
-        };
+        let number = codec::double;
         if v.is_number() {
             let n = number(v)?;
             return Ok(Self {
@@ -25,7 +21,7 @@ impl DoubleBounds {
             min: codec::optional(v, "min", number)?,
             max: codec::optional(v, "max", number)?,
         };
-        if matches!((result.min,result.max),(Some(a),Some(b)) if a > b) {
+        if matches!((result.min,result.max),(Some(a),Some(b)) if a.total_cmp(&b).is_gt()) {
             return Err(codec::error("swapped bounds"));
         }
         Ok(result)
@@ -57,7 +53,7 @@ impl IntBounds {
             min: codec::optional(v, "min", codec::int)?,
             max: codec::optional(v, "max", codec::int)?,
         };
-        if matches!((result.min,result.max),(Some(a),Some(b)) if a > b) {
+        if matches!((result.min,result.max),(Some(a),Some(b)) if a.total_cmp(&b).is_gt()) {
             return Err(codec::error("swapped bounds"));
         }
         Ok(result)
