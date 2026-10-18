@@ -136,10 +136,12 @@ public final class FeaturesGolden {
                 case "codec" -> CodecGolden.generate(registries,out);
                 case "predicates" -> PredicateGolden.generate(registries,out);
                 case "flat" -> FlatGolden.generate(registries,out);
+                case "flat-codec" -> FlatGolden.codecs(registries,out);
+                case "spawn" -> SpawnGolden.generate(registries,out);
                 default -> throw new IllegalArgumentException("unknown fixture family "+args[1]);
             }
             return;
         }
-        providers(registries,out);masks(registries,out);terrain(registries,out);PlacementGolden.generate(registries,out);StateProviderGolden.generate(registries,out);SorterGolden.generate(registries,out);DecorationGolden.generate(registries,out);BiomeOrderGolden.generate(registries,out);BaseColumnGolden.generate(registries,out);CarvingFilterGolden.generate(registries,out);CodecGolden.generate(registries,out);HeightmapGolden.generate(registries,out);NumericGolden.generate(out);PredicateGolden.generate(registries,out);FlatGolden.generate(registries,out);
+        providers(registries,out);masks(registries,out);terrain(registries,out);PlacementGolden.generate(registries,out);StateProviderGolden.generate(registries,out);SorterGolden.generate(registries,out);DecorationGolden.generate(registries,out);BiomeOrderGolden.generate(registries,out);BaseColumnGolden.generate(registries,out);CarvingFilterGolden.generate(registries,out);CodecGolden.generate(registries,out);HeightmapGolden.generate(registries,out);NumericGolden.generate(out);PredicateGolden.generate(registries,out);FlatGolden.generate(registries,out);SpawnGolden.generate(registries,out);
     }
 }

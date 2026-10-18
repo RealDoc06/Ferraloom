@@ -136,10 +136,7 @@ fn missing_behavior(case: &Value) -> Option<&str> {
     {
         "chorus_plant" if case["result"] == true => Some("ChorusFlowerBlock.generatePlant"),
         "end_podium" if case["config"]["active"] == true => {
-            Some("Level.destroyBlock(dropResources=true)")
-        }
-        "template" if case["name"] == "custom:template_solid" => {
-            Some("StructureTemplate neighbor shapes and updateNeighborsAt")
+            Some("EndPortalBlockEntity initialization")
         }
         "bonus_chest" => Some("RandomizableContainer.setBlockEntityLootTable; torch canSurvive"),
         _ if case["entities"].as_array().is_some_and(|v| !v.is_empty()) => {
@@ -352,11 +349,11 @@ fn nether_end_blocks_results_and_rng_match_real_vanilla() {
     check_cases(|case| missing_behavior(case).is_none() && case["config"]["type"] != "template");
 }
 #[test]
-fn template_empty_placement_uses_shared_selection_and_palette_rng() {
+fn template_placement_uses_shared_selection_and_palette_rng() {
     check_cases(|case| missing_behavior(case).is_none() && case["config"]["type"] == "template");
 }
 #[test]
-#[ignore = "Needs shared game chorus, loot, collision, gateway, end crystal/fire and destroyBlock behaviors; cross-family children"]
+#[ignore = "Needs shared game chorus, loot, torch survival, portal/gateway block entities, end crystal/fire behaviors; cross-family children"]
 fn pending_game_behavior_and_composite_children() {
     check_cases(|case| missing_behavior(case).is_some() && case.get("vanilla_pending").is_none());
 }

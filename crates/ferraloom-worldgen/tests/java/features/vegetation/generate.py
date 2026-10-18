@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run real vanilla feature placement on an unlit controlled level; no world IO."""
+"""Run real vanilla feature placement on an unlit level with temporary storage."""
 from pathlib import Path
 import os
 import subprocess

@@ -26,28 +26,37 @@ impl FlatLayerInfo {
 #[derive(Clone, Debug)]
 pub struct FlatLevelGeneratorSettings {
     pub structure_overrides: Option<Vec<Identifier>>,
+    /// A named holder set retains its tag identity when world settings are saved.
+    pub structure_override_tag: Option<Identifier>,
     pub layers: Vec<FlatLayerInfo>,
     pub lakes: bool,
     pub features: bool,
     pub biome: Identifier,
 }
 impl FlatLevelGeneratorSettings {
-    /// The height validator supplies a partial result. DedicatedServerProperties
-    /// accepts that partial; ordinary codec consumers require a success.
+    /// DedicatedServerProperties accepts DataResult partials. Ordinary codec
+    /// consumers additionally require every layer/flag and the height validator.
     pub fn decode(v: &Value, resources: &ResourceManager) -> Result<Self, Error> {
-        let settings = Self::decode_partial(v, resources)?;
-        if settings
+        let (settings, invalid) = Self::decode_with_partial(v, resources)?;
+        let height = settings
             .layers
             .iter()
-            .map(|layer| i64::from(layer.height))
-            .sum::<i64>()
-            > 4064
-        {
-            return Err(Error("sum of flat layer heights exceeds 4064".into()));
+            .fold(0i32, |sum, layer| sum.wrapping_add(layer.height));
+        if invalid || height > 4064 {
+            return Err(Error("invalid flat layers, flags or total height".into()));
         }
         Ok(settings)
     }
     pub fn decode_partial(v: &Value, resources: &ResourceManager) -> Result<Self, Error> {
+        Self::decode_with_partial(v, resources).map(|(settings, _)| settings)
+    }
+    fn decode_with_partial(v: &Value, resources: &ResourceManager) -> Result<(Self, bool), Error> {
+        if v.get("biome").is_some_and(Value::is_object) {
+            return Err(Error(
+                "Unsupported: inline biome holders require section and protocol biome identity"
+                    .into(),
+            ));
+        }
         let known_biomes = resources.registry("worldgen/biome");
         let biome = v
             .get("biome")
@@ -78,16 +87,65 @@ impl FlatLevelGeneratorSettings {
                     .ok()
             }
         });
-        Ok(Self {
-            structure_overrides,
-            layers: list(field(v, "layers")?)?
-                .iter()
-                .map(FlatLayerInfo::decode)
-                .collect::<Result<_, _>>()?,
-            lakes: optional(v, "lakes", false, boolean)?,
-            features: optional(v, "features", false, boolean)?,
-            biome,
-        })
+        let structure_override_tag = structure_overrides.as_ref().and_then(|_| {
+            v.get("structure_overrides")
+                .and_then(Value::as_str)
+                .and_then(|name| name.strip_prefix('#'))
+                .and_then(|name| name.parse().ok())
+        });
+        let mut invalid = false;
+        let layers = list(field(v, "layers")?)?
+            .iter()
+            .filter_map(|value| match FlatLayerInfo::decode(value) {
+                Ok(layer) => Some(layer),
+                Err(_) => {
+                    invalid = true;
+                    None
+                }
+            })
+            .collect();
+        let mut flag = |name: &str| match v.get(name).map(boolean).transpose() {
+            Ok(value) => value.unwrap_or(false),
+            Err(_) => {
+                invalid = true;
+                false
+            }
+        };
+        let lakes = flag("lakes");
+        let features = flag("features");
+        Ok((
+            Self {
+                structure_overrides,
+                structure_override_tag,
+                layers,
+                lakes,
+                features,
+                biome,
+            },
+            invalid,
+        ))
+    }
+    /// FlatLevelGeneratorSettings.CODEC's canonical encoding, including defaults.
+    pub fn encode(&self) -> Value {
+        let mut value = serde_json::json!({
+            "layers":self.layers.iter().map(|layer|serde_json::json!({"height":layer.height,"block":layer.block.name()})).collect::<Vec<_>>(),
+            "biome":self.biome.to_string(), "lakes":self.lakes, "features":self.features,
+        });
+        if let Some(overrides) = &self.structure_overrides {
+            value["structure_overrides"] = if let Some(tag) = &self.structure_override_tag {
+                Value::String(format!("#{tag}"))
+            } else if let [only] = overrides.as_slice() {
+                Value::String(only.to_string())
+            } else {
+                serde_json::json!(
+                    overrides
+                        .iter()
+                        .map(ToString::to_string)
+                        .collect::<Vec<_>>()
+                )
+            };
+        }
+        value
     }
     pub fn default_settings() -> Self {
         Self {
@@ -96,6 +154,7 @@ impl FlatLevelGeneratorSettings {
                     .map(|name| name.parse().unwrap())
                     .to_vec(),
             ),
+            structure_override_tag: None,
             layers: [
                 (1, Block::BEDROCK),
                 (2, Block::DIRT),

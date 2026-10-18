@@ -19,7 +19,7 @@ use std::sync::Arc;
 pub fn register(loader: &mut FeatureLoader<'_>) -> Result<(), Error> {
     loader.register("bamboo".parse()?, |v, l| {
         Ok(Arc::new(BambooFeature {
-            probability: probability(field(v, "probability")?)?,
+            probability: float_range(field(v, "probability")?, 0.0, 1.0)?,
             podzol_replaceable: l.data.blocks(&Value::String(
                 "#minecraft:beneath_bamboo_podzol_replaceable".into(),
             ))?,
@@ -88,7 +88,7 @@ pub fn register(loader: &mut FeatureLoader<'_>) -> Result<(), Error> {
                 .iter()
                 .map(|id| Value::String(id.to_string()))
                 .collect()
-        } else if value.is_string() {
+        } else if value.is_string() || value.is_object() {
             vec![value.clone()]
         } else {
             list(value)?.to_vec()
@@ -110,18 +110,11 @@ pub fn register(loader: &mut FeatureLoader<'_>) -> Result<(), Error> {
                 BlockPredicate::decode(v, &l.data)
             })?,
             direction: vertical_direction(field(v, "direction")?)?,
-            chance: optional(v, "chance_to_continue", 1.0, probability)?,
+            chance: optional(v, "chance_to_continue", 1.0, |v| float_range(v, 0.0, 1.0))?,
             cap: v.get("cap_feature").map(|v| l.placed(v)).transpose()?,
         }))
     })?;
     Ok(())
-}
-fn probability(v: &Value) -> Result<f32, Error> {
-    let f = float(v)?;
-    if !(0.0..=1.0).contains(&f) {
-        return Err(Error("probability outside [0,1]".into()));
-    }
-    Ok(f)
 }
 pub(crate) fn relative(p: [i32; 3], d: Direction) -> [i32; 3] {
     let s = d.step();

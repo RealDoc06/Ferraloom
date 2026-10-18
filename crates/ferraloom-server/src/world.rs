@@ -2,7 +2,7 @@
 use crate::{jobs::JobPool, properties::ServerProperties, registries::RegistrySet};
 use anyhow::{Context, Result, ensure};
 use ferraloom_chunk::{BiomeId, IdMap, LevelChunkSection, Strategy};
-use ferraloom_data::{Block, BlockState, datapack::ResourceManager};
+use ferraloom_data::{Block, BlockClass, BlockState, EntityType, datapack::ResourceManager};
 use ferraloom_game::level::chunk::LevelChunk;
 use ferraloom_light::{LevelLightEngine, LightLayer, SectionSnapshots};
 use ferraloom_nbt::{CompoundTag, ListTag, NbtString, Tag};
@@ -10,16 +10,18 @@ use ferraloom_storage::{
     self as storage, ByteArray, IoWorker, LevelData, LevelStorageAccess, LongArray, SavedData,
     SavedDataStorage, SectionRegistry, SerializableChunkData,
 };
-use ferraloom_util::{BlockPos, ChunkPos};
+use ferraloom_util::{Aabb, BlockPos, ChunkPos};
 use ferraloom_worldgen::{
     decoration::{DecorationPlan, GenerationStep, StructureDecoration},
     feature::FeatureRegistry,
     generator::{
         ChunkGenerator, ChunkGeneratorAccess, GenerationData, WorldDimensions, WorldPreset,
     },
-    region::{ChunkStatus, RegionChunk, WorldGenRegion, WorldgenBlockBehavior},
+    region::{ChunkStatus, Heightmap, RegionChunk, WorldGenRegion, WorldgenBlockBehavior},
     settings::DimensionType,
+    spawn::{self, SpawnWorld},
 };
+use serde::Deserialize;
 use std::{
     borrow::Cow,
     collections::BTreeMap,
@@ -126,6 +128,164 @@ struct FlatDecoration {
     registry: Option<FeatureRegistry>,
     plan: Option<DecorationPlan>,
 }
+
+/// Startup owns every queried chunk. The same outputs are later transferred
+/// into the normal request/integration path, including decoration writes.
+struct SpawnChunks {
+    generator: Arc<ChunkGenerator>,
+    registry: Arc<RegistryAdapter>,
+    dimension: DimensionType,
+    flat_decoration: Option<Arc<FlatDecoration>>,
+    seed: i64,
+    io: IoWorker,
+    chunks: BTreeMap<ChunkPos, Terrain>,
+}
+impl SpawnChunks {
+    fn state(&mut self, p: [i32; 3]) -> std::result::Result<BlockState, ferraloom_worldgen::Error> {
+        if p[1] < self.dimension.min_y || p[1] >= self.dimension.min_y + self.dimension.height {
+            return Ok(Block::VOID_AIR.default_state());
+        }
+        self.ensure_chunk([p[0] >> 4, p[2] >> 4])?;
+        let terrain = &self.chunks[&ChunkPos::new(p[0] >> 4, p[2] >> 4)];
+        Ok(
+            terrain.sections[((p[1] - self.dimension.min_y) >> 4) as usize].get_block_state(
+                (p[0] & 15) as u8,
+                (p[1] & 15) as u8,
+                (p[2] & 15) as u8,
+            ),
+        )
+    }
+}
+impl SpawnWorld for SpawnChunks {
+    fn dimension(&self) -> DimensionType {
+        self.dimension
+    }
+    fn ensure_chunk(
+        &mut self,
+        position: [i32; 2],
+    ) -> std::result::Result<(), ferraloom_worldgen::Error> {
+        let pos = ChunkPos::new(position[0], position[1]);
+        if !self.chunks.contains_key(&pos) {
+            let terrain = (|| -> Result<Terrain> {
+                if let Some(tag) = self.io.load(pos).wait()? {
+                    load_terrain(tag, &self.registry, pos)
+                } else {
+                    generate_terrain(
+                        &self.generator,
+                        self.dimension,
+                        self.flat_decoration.as_deref(),
+                        self.seed,
+                        pos,
+                    )
+                }
+            })()
+            .map_err(|error| ferraloom_worldgen::Error(error.to_string()))?;
+            self.chunks.insert(pos, terrain);
+        }
+        Ok(())
+    }
+    fn height(
+        &mut self,
+        map: Heightmap,
+        x: i32,
+        z: i32,
+    ) -> std::result::Result<i32, ferraloom_worldgen::Error> {
+        for y in (self.dimension.min_y..self.dimension.min_y + self.dimension.height).rev() {
+            let state = self.state([x, y, z])?;
+            if self.generator.data().heightmap_matches(map, state) {
+                return Ok(y);
+            }
+        }
+        Ok(self.dimension.min_y - 1)
+    }
+    fn has_fluid(&mut self, p: [i32; 3]) -> std::result::Result<bool, ferraloom_worldgen::Error> {
+        Ok(!self.state(p)?.data().fluid.empty)
+    }
+    fn collision_up_face_full(
+        &mut self,
+        p: [i32; 3],
+    ) -> std::result::Result<bool, ferraloom_worldgen::Error> {
+        spawn::cached_collision_up_face_full(self.state(p)?).ok_or_else(|| {
+            ferraloom_worldgen::Error("Unsupported: dynamic spawn collision shape".into())
+        })
+    }
+    fn no_collision_no_liquid(
+        &mut self,
+        p: [i32; 3],
+    ) -> std::result::Result<bool, ferraloom_worldgen::Error> {
+        // Startup has no live entities; EntityGetter contributes no collisions.
+        no_spawn_block_collision(p, |p| self.state(p))
+    }
+}
+
+fn no_spawn_block_collision(
+    p: [i32; 3],
+    mut state: impl FnMut([i32; 3]) -> std::result::Result<BlockState, ferraloom_worldgen::Error>,
+) -> std::result::Result<bool, ferraloom_worldgen::Error> {
+    let dimensions = EntityType::PLAYER.data();
+    let radius = f64::from(dimensions.width) / 2.0;
+    let bbox = Aabb::new(
+        f64::from(p[0]) + 0.5 - radius,
+        f64::from(p[1]),
+        f64::from(p[2]) + 0.5 - radius,
+        f64::from(p[0]) + 0.5 + radius,
+        f64::from(p[1]) + f64::from(dimensions.height),
+        f64::from(p[2]) + 0.5 + radius,
+    );
+    for x in (bbox.min_x - 1e-7).floor() as i32 - 1..=(bbox.max_x + 1e-7).floor() as i32 + 1 {
+        for y in (bbox.min_y - 1e-7).floor() as i32 - 1..=(bbox.max_y + 1e-7).floor() as i32 + 1 {
+            for z in (bbox.min_z - 1e-7).floor() as i32 - 1..=(bbox.max_z + 1e-7).floor() as i32 + 1
+            {
+                let state = state([x, y, z])?;
+                // LiquidBlock's alwaysCollideWithFluid collision is a full cube.
+                if state.block().is_instance_of(BlockClass::LiquidBlock) {
+                    if bbox.intersects(Aabb::new(
+                        f64::from(x),
+                        f64::from(y),
+                        f64::from(z),
+                        f64::from(x + 1),
+                        f64::from(y + 1),
+                        f64::from(z + 1),
+                    )) {
+                        return Ok(false);
+                    }
+                } else {
+                    if state.cached_collision_full_block().is_none() {
+                        return Err(ferraloom_worldgen::Error(
+                            "Unsupported: dynamic spawn collision shape".into(),
+                        ));
+                    }
+                    if state.data().collision.boxes().iter().any(|shape| {
+                        bbox.intersects(Aabb::new(
+                            shape.min[0] + f64::from(x),
+                            shape.min[1] + f64::from(y),
+                            shape.min[2] + f64::from(z),
+                            shape.max[0] + f64::from(x),
+                            shape.max[1] + f64::from(y),
+                            shape.max[2] + f64::from(z),
+                        ))
+                    }) {
+                        return Ok(false);
+                    }
+                }
+            }
+        }
+    }
+    Ok(true)
+}
+
+fn spawn_tag(p: BlockPos) -> Tag {
+    Tag::Compound(
+        [
+            ("dimension", Tag::String("minecraft:overworld".into())),
+            ("pos", Tag::IntArray(vec![p.x, p.y, p.z])),
+            ("yaw", Tag::Float(0.0)),
+            ("pitch", Tag::Float(0.0)),
+        ]
+        .into_iter()
+        .collect(),
+    )
+}
 struct LocalBlockBehavior;
 impl WorldgenBlockBehavior for LocalBlockBehavior {
     fn post_process_pos(
@@ -175,6 +335,7 @@ pub struct World {
     generator: Arc<ChunkGenerator>,
     dimension: DimensionType,
     flat_decoration: Option<Arc<FlatDecoration>>,
+    initial_chunks: BTreeMap<ChunkPos, Terrain>,
     generation: Arc<JobPool>,
     saving: JobPool,
     pub pending: BTreeMap<u64, oneshot::Receiver<Result<Terrain>>>,
@@ -199,6 +360,9 @@ impl World {
         let seed = settings
             .as_ref()
             .map_or_else(|| properties.seed(), |s| s.value().get_long_or("seed", 0));
+        let bonus_chest = settings
+            .as_ref()
+            .is_some_and(|settings| settings.value().get_boolean_or("bonus_chest", false));
         let data = Arc::new(GenerationData::load(resources)?);
         ensure!(
             data.biome_names
@@ -216,7 +380,12 @@ impl World {
                 seed,
             )?
         } else {
-            let generator_settings = serde_json::from_str(properties.get("generator-settings"))
+            let text = properties.get("generator-settings");
+            // GsonHelper reads the first strict JSON object through its type
+            // adapter without requiring EOF. Only an empty property means {}.
+            let mut parser =
+                serde_json::Deserializer::from_str(if text.is_empty() { "{}" } else { text });
+            let generator_settings = serde_json::Value::deserialize(&mut parser)
                 .context("invalid generator-settings JSON")?;
             let preset = WorldPreset::from_server_properties(
                 properties.get("level-type"),
@@ -257,13 +426,13 @@ impl World {
         } else {
             None
         };
-        let level_data = if access.path().join("level.dat").exists() {
+        let mut level_data = if access.path().join("level.dat").exists() {
             access.read_level_data()?
         } else {
             new_level_data(properties)
         };
         access.save_level_data(&level_data)?;
-        let spawn = level_data
+        let mut spawn = level_data
             .data
             .get_compound("spawn")
             .and_then(|t| t.get_int_array("pos"))
@@ -280,6 +449,50 @@ impl World {
             properties.boolean("sync-chunk-writes"),
         )?;
         let registry = Arc::new(RegistryAdapter::new(registries)?);
+        let generation = Arc::new(JobPool::new("ferraloom-worldgen", 2)?);
+        let mut initial_chunks = BTreeMap::new();
+        let io = if !level_data.data.contains_key("spawn") {
+            let (reply, result) = mpsc::channel();
+            let spawn_generator = generator.clone();
+            let registry = registry.clone();
+            let flat_decoration = flat_decoration.clone();
+            let _task = generation.submit(move || {
+                let outcome = (|| -> Result<_> {
+                    let mut world = SpawnChunks {
+                        generator: spawn_generator,
+                        registry,
+                        dimension,
+                        flat_decoration,
+                        seed,
+                        io,
+                        chunks: BTreeMap::new(),
+                    };
+                    let generator = world.generator.clone();
+                    let position = spawn::initial_spawn(
+                        &mut world,
+                        generator.as_ref(),
+                        matches!(generator.as_ref(), ChunkGenerator::Debug(_)),
+                        bonus_chest,
+                    )?;
+                    Ok((world.io, world.chunks, position))
+                })();
+                let _ = reply.send(outcome);
+            });
+            let (io, chunks, position) = result.recv().context("spawn worker terminated")??;
+            initial_chunks = chunks;
+            spawn = BlockPos::new(position[0], position[1], position[2]);
+            level_data.data.insert("spawn", spawn_tag(spawn));
+            level_data.data.insert("initialized", Tag::Byte(1));
+            access.save_level_data(&level_data)?;
+            if matches!(generator.as_ref(), ChunkGenerator::Noise(_)) {
+                println!(
+                    "Initial spawn search used real generated chunks; feature and structure statuses are passthrough."
+                );
+            }
+            io
+        } else {
+            io
+        };
         let (light_tx, light_in) = mpsc::channel::<LightJob>();
         let (light_out, light_rx) = tokio::sync::mpsc::unbounded_channel();
         std::thread::Builder::new()
@@ -341,7 +554,8 @@ impl World {
             generator,
             dimension,
             flat_decoration,
-            generation: Arc::new(JobPool::new("ferraloom-worldgen", 2)?),
+            initial_chunks,
+            generation,
             saving: JobPool::new("ferraloom-save", 1)?,
             pending: BTreeMap::new(),
             light_tx,
@@ -352,6 +566,12 @@ impl World {
         })
     }
     pub fn request(&mut self, request: u64, pos: ChunkPos) {
+        if let Some(terrain) = self.initial_chunks.remove(&pos) {
+            let (reply, answer) = oneshot::channel();
+            let _ = reply.send(Ok(terrain));
+            self.pending.insert(request, answer);
+            return;
+        }
         let load = self.io.load(pos);
         let generator = self.generator.clone();
         let dimension = self.dimension;
@@ -365,84 +585,15 @@ impl World {
                 let disk = load.await?;
                 pool.run(move || -> Result<Terrain> {
                     if let Some(tag) = disk {
-                        let disk = SerializableChunkData::parse(tag)?;
-                        ensure!(
-                            disk.status
-                                .as_ref()
-                                .is_some_and(|s| s.to_string_lossy() == "minecraft:full"),
-                            "resuming protochunk generation is not ported"
-                        );
-                        let mut sections = (0..24)
-                            .map(|_| {
-                                LevelChunkSection::new(
-                                    Strategy::block_states(),
-                                    registry.biome_strategy(),
-                                    registry.default_biome(),
-                                )
-                            })
-                            .collect::<Vec<_>>();
-                        for section in disk.sections.as_deref().unwrap_or_default() {
-                            if let Some(y) = section.y
-                                && (-4..20).contains(&i32::from(y))
-                                && let Some(runtime) = section.to_runtime(registry.as_ref())?
-                            {
-                                sections[(i32::from(y) + 4) as usize] = runtime;
-                            }
-                        }
-                        let surface = surface_heights(&sections);
-                        Ok(Terrain {
-                            pos,
-                            sections,
-                            disk,
-                            surface,
-                        })
+                        load_terrain(tag, &registry, pos)
                     } else {
-                        let generated = generator.build_terrain([pos.x, pos.z], dimension, None)?;
-                        let mut chunks = [RegionChunk::new(generated, ChunkStatus::Terrain)];
-                        {
-                            let mut region = WorldGenRegion::new(
-                                &mut chunks, [pos.x, pos.z], &[ChunkStatus::Terrain], 0,
-                                None, &LocalBlockBehavior, seed, generator.sea_level(),
-                            )?;
-                            region.set_has_skylight(dimension.has_skylight);
-                            match generator.as_ref() {
-                                ChunkGenerator::Debug(debug) => debug.apply_biome_decoration(&mut region)?,
-                                ChunkGenerator::Flat(_) => {
-                                    let flat = flat_decoration.as_ref().context("flat decoration plan")?;
-                                    let registry = flat.registry.as_ref().context("Unsupported: flat features and lakes require owned-neighborhood chunk-status scheduling")?;
-                                    let biomes = generator.biome_source().possible_biomes().into_iter().collect();
-                                    flat.plan.as_ref().unwrap().apply_for_biomes(&mut region, generator.as_ref(), registry, &mut NoStructures, &biomes)?;
-                                }
-                                ChunkGenerator::Noise(_) => {}
-                            }
-                        }
-                        let [chunk] = chunks;
-                        ensure!(chunk.entities.is_empty(), "Unsupported: generation entities need owned-region integration");
-                        let mut post_processing = vec![Vec::new(); (dimension.height / 16) as usize];
-                        for [x, y, z] in &chunk.chunk.post_processing {
-                            post_processing[((y - dimension.min_y) >> 4) as usize]
-                                .push(((x & 15) | ((y & 15) << 4) | ((z & 15) << 8)) as i16);
-                        }
-                        let disk = SerializableChunkData {
-                            data_version: Some(storage::DATA_VERSION),
-                            x_pos: Some(pos.x),
-                            y_pos: Some(dimension.min_y >> 4),
-                            z_pos: Some(pos.z),
-                            status: Some("minecraft:full".into()),
-                            is_light_on: Some(true),
-                            block_entities: Some(chunk.block_entities.into_values().collect()),
-                            block_ticks: Some(chunk.block_ticks.ticks().iter().map(|tick| saved_tick(tick.position, tick.kind.name(), tick.priority)).collect()),
-                            fluid_ticks: Some(chunk.fluid_ticks.ticks().iter().map(|tick| saved_tick(tick.position, tick.kind.name(), tick.priority)).collect()),
-                            post_processing: Some(post_processing),
-                            structures: Some(storage::StructureData::default()),
-                            ..Default::default()
-                        };
-                        Ok(Terrain {
+                        generate_terrain(
+                            &generator,
+                            dimension,
+                            flat_decoration.as_deref(),
+                            seed,
                             pos,
-                            surface: surface_heights(&chunk.chunk.sections),
-                            sections: chunk.chunk.sections,
-                            disk,
-                        })
+                        )
                     }
                 })
                 .await?
@@ -511,6 +662,20 @@ impl World {
         game_time: i64,
         players: Vec<(String, CompoundTag)>,
     ) -> Result<()> {
+        let snapshots = std::mem::take(&mut self.initial_chunks)
+            .into_values()
+            .map(|terrain| ChunkSaveSnapshot {
+                pos: terrain.pos,
+                sections: terrain.sections,
+                disk: terrain.disk,
+                light: None,
+                game_time,
+                light_correct: false,
+            })
+            .collect();
+        for (pos, tag) in self.encode_saves(snapshots).await? {
+            self.io.store(pos, Some(tag)).await?;
+        }
         self.level_data.data.insert("Time", Tag::Long(game_time));
         self.level_data.data.insert(
             "LastPlayed",
@@ -752,5 +917,128 @@ fn nbt_json(tag: &Tag) -> Result<serde_json::Value> {
         Tag::ByteArray(values) => json!(values),
         Tag::IntArray(values) => json!(values),
         Tag::LongArray(values) => json!(values),
+    })
+}
+
+fn generate_terrain(
+    generator: &ChunkGenerator,
+    dimension: DimensionType,
+    flat_decoration: Option<&FlatDecoration>,
+    seed: i64,
+    pos: ChunkPos,
+) -> Result<Terrain> {
+    let generated = generator.build_terrain([pos.x, pos.z], dimension, None)?;
+    let mut chunks = [RegionChunk::new(generated, ChunkStatus::Terrain)];
+    {
+        let mut region = WorldGenRegion::new(
+            &mut chunks,
+            [pos.x, pos.z],
+            &[ChunkStatus::Terrain],
+            0,
+            None,
+            &LocalBlockBehavior,
+            seed,
+            generator.sea_level(),
+        )?;
+        region.set_has_skylight(dimension.has_skylight);
+        region.set_random(generator.region_random([pos.x, pos.z], seed));
+        match generator {
+            ChunkGenerator::Debug(debug) => debug.apply_biome_decoration(&mut region)?,
+            ChunkGenerator::Flat(_) => {
+                let flat = flat_decoration.context("flat decoration plan")?;
+                let registry = flat.registry.as_ref().context("Unsupported: flat features and lakes require owned-neighborhood chunk-status scheduling")?;
+                let biomes = generator
+                    .biome_source()
+                    .possible_biomes()
+                    .into_iter()
+                    .collect();
+                flat.plan.as_ref().unwrap().apply_for_biomes(
+                    &mut region,
+                    generator,
+                    registry,
+                    &mut NoStructures,
+                    &biomes,
+                )?;
+            }
+            ChunkGenerator::Noise(_) => {}
+        }
+    }
+    let [chunk] = chunks;
+    ensure!(
+        chunk.entities.is_empty(),
+        "Unsupported: generation entities need owned-region integration"
+    );
+    let mut post_processing = vec![Vec::new(); (dimension.height / 16) as usize];
+    for [x, y, z] in &chunk.chunk.post_processing {
+        post_processing[((y - dimension.min_y) >> 4) as usize]
+            .push(((x & 15) | ((y & 15) << 4) | ((z & 15) << 8)) as i16);
+    }
+    let disk = SerializableChunkData {
+        data_version: Some(storage::DATA_VERSION),
+        x_pos: Some(pos.x),
+        y_pos: Some(dimension.min_y >> 4),
+        z_pos: Some(pos.z),
+        status: Some("minecraft:full".into()),
+        is_light_on: Some(true),
+        block_entities: Some(chunk.block_entities.into_values().collect()),
+        block_ticks: Some(
+            chunk
+                .block_ticks
+                .ticks()
+                .iter()
+                .map(|tick| saved_tick(tick.position, tick.kind.name(), tick.priority))
+                .collect(),
+        ),
+        fluid_ticks: Some(
+            chunk
+                .fluid_ticks
+                .ticks()
+                .iter()
+                .map(|tick| saved_tick(tick.position, tick.kind.name(), tick.priority))
+                .collect(),
+        ),
+        post_processing: Some(post_processing),
+        structures: Some(storage::StructureData::default()),
+        ..Default::default()
+    };
+    Ok(Terrain {
+        pos,
+        surface: surface_heights(&chunk.chunk.sections),
+        sections: chunk.chunk.sections,
+        disk,
+    })
+}
+
+fn load_terrain(tag: CompoundTag, registry: &RegistryAdapter, pos: ChunkPos) -> Result<Terrain> {
+    let disk = SerializableChunkData::parse(tag)?;
+    ensure!(
+        disk.status
+            .as_ref()
+            .is_some_and(|s| s.to_string_lossy() == "minecraft:full"),
+        "resuming protochunk generation is not ported"
+    );
+    let mut sections = (0..24)
+        .map(|_| {
+            LevelChunkSection::new(
+                Strategy::block_states(),
+                registry.biome_strategy(),
+                registry.default_biome(),
+            )
+        })
+        .collect::<Vec<_>>();
+    for section in disk.sections.as_deref().unwrap_or_default() {
+        if let Some(y) = section.y
+            && (-4..20).contains(&i32::from(y))
+            && let Some(runtime) = section.to_runtime(registry)?
+        {
+            sections[(i32::from(y) + 4) as usize] = runtime;
+        }
+    }
+    let surface = surface_heights(&sections);
+    Ok(Terrain {
+        pos,
+        sections,
+        disk,
+        surface,
     })
 }

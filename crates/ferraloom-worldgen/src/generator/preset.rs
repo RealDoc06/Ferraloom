@@ -5,6 +5,7 @@ use crate::{
     region::{Heightmap, WorldGenRegion},
 };
 use ferraloom_data::datapack::ResourceManager;
+use ferraloom_util::random::{Algorithm, Random, RandomSource};
 use serde_json::Value;
 
 #[derive(Debug)]
@@ -57,6 +58,24 @@ impl ChunkGenerator {
             Self::Debug(g) => g,
         }
     }
+    /// WorldGenRegion's positional RNG. ChunkMap uses a non-legacy RandomState
+    /// with an empty router for generators other than NoiseBasedChunkGenerator.
+    pub fn region_random(&self, position: [i32; 2], seed: i64) -> Random {
+        let name: Identifier = "worldgen_region_random".parse().unwrap();
+        let positional = match self {
+            Self::Noise(generator) => generator.random.compiler.positional_random(&name),
+            Self::Flat(_) | Self::Debug(_) => Algorithm::Xoroshiro
+                .new_instance(seed)
+                .fork_positional()
+                .from_hash_of(&name.to_string())
+                .fork_positional(),
+        };
+        positional.at(
+            position[0].wrapping_mul(16),
+            0,
+            position[1].wrapping_mul(16),
+        )
+    }
     pub fn build_terrain(
         &self,
         p: [i32; 2],
@@ -80,6 +99,9 @@ impl ChunkGenerator {
     }
 }
 impl ChunkGeneratorAccess for ChunkGenerator {
+    fn get_origin(&self) -> Result<[i32; 2], Error> {
+        self.access().get_origin()
+    }
     fn data(&self) -> &GenerationData {
         self.access().data()
     }
@@ -332,10 +354,17 @@ impl WorldPreset {
             .filter(|name| known.contains_key(name))
             .unwrap_or(fallback);
         let mut preset = Self::load(&selected, resources, data.clone(), seed)?;
-        if selected == "flat".parse()?
-            && let Ok(settings) =
-                FlatLevelGeneratorSettings::decode_partial(generator_settings, resources)
-        {
+        let flat_settings = if selected == "flat".parse()? {
+            match FlatLevelGeneratorSettings::decode_partial(generator_settings, resources) {
+                Ok(settings) => Some(settings),
+                Err(error) if error.0.starts_with("Unsupported:") => return Err(error),
+                Err(_) => None,
+            }
+        } else {
+            None
+        };
+        if let Some(settings) = flat_settings {
+            let encoded = settings.encode();
             let generator = Arc::new(ChunkGenerator::Flat(Box::new(FlatLevelSource::new(
                 data, settings,
             )?)));
@@ -347,7 +376,7 @@ impl WorldPreset {
                 .unwrap();
             overworld.generator = generator;
             preset.definition["dimensions"]["minecraft:overworld"]["generator"]["settings"] =
-                generator_settings.clone();
+                encoded;
         }
         Ok(preset)
     }

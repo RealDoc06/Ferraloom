@@ -222,6 +222,26 @@ fn flat_chunks_steps_columns_and_real_void_features_match_vanilla() {
 fn every_world_preset_and_dedicated_level_type_matches_vanilla() {
     let resources = resources();
     let data = Arc::new(GenerationData::load(&resources).unwrap());
+    for case in golden(include_bytes!("golden/flat_codecs.json.gz"))
+        .as_array()
+        .unwrap()
+    {
+        let config = &case["config"];
+        assert_eq!(
+            FlatLevelGeneratorSettings::decode(config, &resources).is_ok(),
+            case["success"].as_bool().unwrap(),
+            "{config}"
+        );
+        let partial = FlatLevelGeneratorSettings::decode_partial(config, &resources);
+        assert_eq!(
+            partial.is_ok(),
+            case["partial"].as_bool().unwrap(),
+            "{config}"
+        );
+        if let Ok(settings) = partial {
+            assert_eq!(settings.encode(), case["decoded"], "{config}");
+        }
+    }
     for case in golden(include_bytes!("golden/world_presets.json.gz"))
         .as_array()
         .unwrap()
@@ -262,6 +282,27 @@ fn every_world_preset_and_dedicated_level_type_matches_vanilla() {
             case["level_type"]
         );
     }
+    let inline = resources
+        .require(&"worldgen/biome/plains.json".parse().unwrap())
+        .unwrap()
+        .json()
+        .unwrap();
+    let settings = json!({"layers":[{"height":1,"block":"stone"}],"biome":inline});
+    assert!(
+        WorldPreset::from_server_properties("flat", &settings, &resources, data, 0)
+            .unwrap_err()
+            .0
+            .starts_with("Unsupported: inline biome")
+    );
+    assert!(
+        ferraloom_worldgen::biome::BiomeSource::decode(
+            &json!({"type":"fixed","biome":settings["biome"]}),
+            &resources
+        )
+        .unwrap_err()
+        .0
+        .starts_with("Unsupported: inline biome")
+    );
 }
 
 #[test]

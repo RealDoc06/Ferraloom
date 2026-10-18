@@ -425,6 +425,7 @@ pub trait WorldgenBlockBehavior: Sync {
 pub use ferraloom_util::core::{Mirror, Rotation};
 
 pub struct WorldGenRegion<'a> {
+    random: Option<ferraloom_util::random::Random>,
     block_tags: Option<std::sync::Arc<ferraloom_data::datapack::TagSet<Block>>>,
     fluid_tags: Option<
         std::sync::Arc<ferraloom_data::datapack::TagSet<ferraloom_data::registries::fluid::Id>>,
@@ -487,6 +488,7 @@ impl<'a> WorldGenRegion<'a> {
             return Err(Error("duplicate worldgen chunk".into()));
         }
         Ok(Self {
+            random: None,
             block_tags: None,
             fluid_tags: None,
             chunks,
@@ -566,6 +568,16 @@ impl<'a> WorldGenRegion<'a> {
     // --- end ore and cave family ---
     pub fn center(&self) -> [i32; 2] {
         self.center
+    }
+    /// Install the job's WorldGenRegion stream once, at region construction.
+    /// This is independent of the feature and structure decoration seed stream.
+    pub fn set_random(&mut self, random: ferraloom_util::random::Random) {
+        self.random = Some(random);
+    }
+    pub fn random_mut(&mut self) -> Result<&mut ferraloom_util::random::Random, Error> {
+        self.random
+            .as_mut()
+            .ok_or_else(|| Error("Unsupported: WorldGenRegion random stream is unset".into()))
     }
     // --- structures family ---
     pub fn set_loot_table_seed(
@@ -899,6 +911,18 @@ impl<'a> WorldGenRegion<'a> {
             .block()
             .overrides(ferraloom_data::BlockMethod::UpdateShape)
         {
+            use ferraloom_util::Direction;
+            for direction in [
+                Direction::West,
+                Direction::East,
+                Direction::North,
+                Direction::South,
+                Direction::Down,
+                Direction::Up,
+            ] {
+                let step = direction.step();
+                self.block([p[0] + step.x, p[1] + step.y, p[2] + step.z])?;
+            }
             return Ok(state);
         }
         self.behavior.update_from_neighbor_shapes(self, p, state)
