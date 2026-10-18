@@ -256,9 +256,12 @@ fn blocks(
     reports: &Value,
     extracted: &Value,
     props: &BTreeMap<String, Property>,
+    render_shapes: &Value,
 ) {
+    let render_shapes = render_shapes.as_array().expect("per-state render shapes");
     let blocks = extracted["blocks"].as_array().unwrap();
     let states = extracted["states"].as_array().unwrap();
+    assert_eq!(states.len(), render_shapes.len());
     assert!(states.len() <= u16::MAX as usize + 1);
     assert_eq!(blocks.len(), reports.as_object().unwrap().len());
     out.push_str("pub const BLOCKS: &[BlockData] = &[\n");
@@ -383,6 +386,9 @@ fn blocks(
         ] {
             write!(out, "{field}: {},", state[field]).unwrap();
         }
+        let render = string(&render_shapes[id]);
+        assert!(matches!(render, "invisible" | "model"));
+        write!(out, "render_shape: RenderShape::{},", pascal(render)).unwrap();
         for field in ["collision", "outline", "occlusion"] {
             write!(out, "{field}: ShapeId({}),", state[field]).unwrap();
         }
@@ -811,7 +817,13 @@ fn main() {
     );
     packets(&mut out, &load(root, "packets"));
     let props = properties(&mut out, &block_report);
-    blocks(&mut out, &block_report, &block_properties, &props);
+    blocks(
+        &mut out,
+        &block_report,
+        &block_properties,
+        &props,
+        &load(root, "block_render_shapes"),
+    );
     shapes(&mut out, &load(root, "shapes"));
     state_transforms(
         &mut out,

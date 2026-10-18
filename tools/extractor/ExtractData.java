@@ -254,6 +254,14 @@ public final class ExtractData {
         write(dir, "redstone_state_facts", table);
     }
 
+    // BlockStateBase#getRenderShape delegates only its own BlockState. The
+    // base returns MODEL; all 26.3 overrides return constant INVISIBLE.
+    private static void blockRenderShapes(Path dir) throws Exception {
+        var table = new JsonArray();
+        for (var state : Block.BLOCK_STATE_REGISTRY) table.add(state.getRenderShape().name().toLowerCase(Locale.ROOT));
+        write(dir, "block_render_shapes", table);
+    }
+
     // BlockBehaviour caches Properties.hasCollision in a final field. No public
     // getter exists; reflect that exact field rather than infer it from shapes.
     private static void blockCollisionFlags(Path dir) throws Exception {
@@ -397,6 +405,7 @@ public final class ExtractData {
         if (args.length > 1 && args[1].equals("--entities-only")) { entityTypes(Path.of(args[0])); return; }
         if (args.length > 1 && args[1].equals("--fluid-random-ticking-only")) { fluidRandomTicking(Path.of(args[0])); return; }
         if (args.length > 1 && args[1].equals("--block-items-only")) { blockItems(Path.of(args[0])); return; }
+        if (args.length > 1 && args[1].equals("--block-render-shapes-only")) { blockRenderShapes(Path.of(args[0])); return; }
         if (args.length > 1 && args[1].equals("--block-collision-flags-only")) { blockCollisionFlags(Path.of(args[0])); return; }
         if (args.length > 1 && args[1].equals("--redstone-facts-only")) { redstoneStateFacts(Path.of(args[0])); return; }
         if (args.length > 1 && args[1].equals("--state-facts-only")) { stateFacts(Path.of(args[0])); return; }
@@ -411,6 +420,7 @@ public final class ExtractData {
             itemCrafting(Path.of(args[0]), registries.createSerializationContext(JsonOps.INSTANCE));
             return;
         }
+        blockRenderShapes(Path.of(args[0]));
         blockCollisionFlags(Path.of(args[0]));
         blockItems(Path.of(args[0]));
         fluidRandomTicking(Path.of(args[0]));

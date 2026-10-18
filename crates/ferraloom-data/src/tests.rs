@@ -3,6 +3,36 @@ use serde_json::Value;
 use std::fmt::Debug;
 
 #[test]
+fn render_shapes_remain_independent_of_air_collision_and_block_entities() {
+    for block in [
+        Block::AIR,
+        Block::BARRIER,
+        Block::WATER,
+        Block::BUBBLE_COLUMN,
+        Block::LIGHT,
+        Block::STRUCTURE_VOID,
+        Block::END_PORTAL,
+        Block::END_GATEWAY,
+        Block::MOVING_PISTON,
+    ] {
+        for state in BLOCK_STATES.iter().filter(|state| state.block == block) {
+            assert_eq!(state.render_shape, RenderShape::Invisible, "{state:?}");
+        }
+    }
+    for block in [
+        Block::STONE,
+        Block::TORCH,
+        Block::CHEST,
+        Block::OAK_SIGN,
+        Block::GLASS,
+    ] {
+        for state in BLOCK_STATES.iter().filter(|state| state.block == block) {
+            assert_eq!(state.render_shape, RenderShape::Model, "{state:?}");
+        }
+    }
+}
+
+#[test]
 fn entity_delta_tracking_is_native_type_data_independent_of_update_intervals() {
     for kind in [
         EntityType::PLAYER,

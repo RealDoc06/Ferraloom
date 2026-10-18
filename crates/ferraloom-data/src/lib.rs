@@ -238,6 +238,13 @@ impl FluidState {
     }
 }
 
+/// Port of RenderShape. Block#getRenderShape takes only the block state.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RenderShape {
+    Invisible,
+    Model,
+}
+
 /// Port of BlockBehaviour.BlockStateBase's cached state facts.
 #[derive(Clone, Copy, Debug)]
 pub struct BlockStateData {
@@ -260,6 +267,7 @@ pub struct BlockStateData {
     pub replaceable: bool,
     pub push_reaction: PushReaction,
     pub sound: &'static SoundType,
+    pub render_shape: RenderShape,
     pub fluid: FluidState,
 }
 

@@ -113,3 +113,11 @@ The generated `CraftingRemainder` holds a typed item id/count and persistent
 component patch JSON; the game resolves the patch through protocol codecs.
 `BannerItem#getColor` is recorded alongside it for component-independent banner
 crafting checks.
+
+`ExtractData <output-dir> --block-render-shapes-only` writes the per-state
+`block_render_shapes.json` table, exposed as `BlockStateData::render_shape`.
+In 26.3 `BlockStateBase#getRenderShape` delegates to
+`BlockBehaviour#getRenderShape(BlockState)` with no level, position or context.
+The base returns `MODEL`; every override in the jar (air, barrier, liquids,
+bubble column, light, structure void, end portal/gateway and moving piston)
+returns constant `INVISIBLE`. This is independent of collision and block entities.
