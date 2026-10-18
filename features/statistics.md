@@ -110,3 +110,4 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 
 | statistics.join-dirty-loaded | Joining marks all loaded statistics dirty before initial recipe packets, for the first REQUEST_STATS response | `PlayerList#placeNewPlayer` | `stats::tests::vanilla_stat_registries_json_and_dirty_packets` | pass | partial |
 | statistics.persistence.legacy-name-file | Native locateStatsFile renames valid name-based statistics files to UUID paths and retains the source path if moving fails; deferred with pre-UUID save/datafix compatibility | `PlayerList#locateStatsFile` | pending | pending | pending |
+| statistics.parity.loaded-save-request | Bedrock flat Strict scenario sends a loaded statistic once per join and retains its exact value through save/restart | `PlayerList#getPlayerStats; PlayerList#save; ServerGamePacketListenerImpl#handleClientCommand` | `ferraloom-parity::loaded_statistics_and_advancement_tab_survive_save` | pending | pending |

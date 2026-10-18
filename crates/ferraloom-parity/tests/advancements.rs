@@ -204,6 +204,73 @@ async fn inventory_progress_survives_restart(session: &mut Session) -> Result<Ob
     Ok(log)
 }
 
+async fn loaded_stats_and_tab(session: &mut Session) -> Result<ObservationLog> {
+    let mut log = ObservationLog::default();
+    for visit in ["join", "rejoin"] {
+        let player = setup(session).await?;
+        let bot = session.bot(player)?;
+        let first = stats(bot).await?;
+        ensure!(
+            chest_stat(&first) == Some(7),
+            "saved chest statistic lost on {visit}"
+        );
+        let second = stats(bot).await?;
+        ensure!(
+            chest_stat(&second).is_none(),
+            "dirty entry repeated on {visit}"
+        );
+        let tab = Identifier::parse("minecraft:story/root")?;
+        bot.send(sb::Packet::SeenAdvancements(
+            sb::SeenAdvancements::OpenedTab(tab.clone()),
+        ))
+        .await?;
+        let selected = bot.wait_for("loaded advancement tab", Ticks::DEFAULT, |_, packet| matches!(packet, cb::Packet::SelectAdvancementsTab(packet) if packet.tab.as_ref() == Some(&tab))).await?;
+        let cb::Packet::SelectAdvancementsTab(selected) = selected.as_ref() else {
+            unreachable!()
+        };
+        log.record(format!("{visit}_stat"), chest_stat(&first))?;
+        log.record(
+            format!("{visit}_dirty_cleared"),
+            chest_stat(&second).is_none(),
+        )?;
+        log.record(
+            format!("{visit}_tab"),
+            selected.tab.as_ref().map(Identifier::as_str),
+        )?;
+        if visit == "join" {
+            session.restart().await?;
+        }
+    }
+    Ok(log)
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "launches disposable vanilla/Ferraloom servers"]
+async fn loaded_statistics_and_advancement_tab_survive_save() -> Result<()> {
+    let fixture = tempfile::tempdir()?;
+    let uuid = ferraloom_util::Uuid::offline_player("ParityBot");
+    std::fs::create_dir(fixture.path().join("stats"))?;
+    std::fs::create_dir(fixture.path().join("advancements"))?;
+    std::fs::write(
+        fixture.path().join("stats").join(format!("{uuid}.json")),
+        serde_json::to_vec(
+            &serde_json::json!({"DataVersion":5023,"stats":{"minecraft:custom":{"minecraft:open_chest":7}}}),
+        )?,
+    )?;
+    std::fs::write(
+        fixture
+            .path()
+            .join("advancements")
+            .join(format!("{uuid}.json")),
+        serde_json::to_vec(
+            &serde_json::json!({"DataVersion":5023,"minecraft:story/root":{"criteria":{"crafting_table":"2026-10-18 00:00:00 +0000"},"done":true}}),
+        )?,
+    )?;
+    let mut options = options();
+    options.fixture = Some(fixture.path().to_path_buf());
+    ferraloom_parity::run(options, RunMode::from_env()?, loaded_stats_and_tab).await
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[ignore = "pending entity tick and BE listener/stat producer integration; run vanilla with FERRALOOM_PARITY_SIDE=vanilla"]
 async fn opening_chest_awards_and_flushes_statistics() -> Result<()> {
