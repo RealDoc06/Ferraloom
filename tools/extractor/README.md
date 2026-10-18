@@ -151,3 +151,9 @@ them for checks against an arbitrary live feature set.
 keys, including shared keys and absent drops. `ExtractBlockMethods` also records
 exact `getDrops` and `spawnAfterBreak` ownership, so unported subclass overrides
 cannot silently inherit the base drop behavior.
+
+`ExtractBlockEntityTypes <output-json>` records valid blocks, OP-only NBT flags
+and whether each registered receiver implements `Nameable`. The last fact is
+checked against the actual factory receiver for every valid block, including
+aliases. It is independent of whether a receiver currently has a custom name;
+`CopyNameFunction` reads nullable `Nameable#getCustomName` at evaluation time.

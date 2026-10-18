@@ -800,8 +800,9 @@ fn block_entity_types(out: &mut String, report: &Value, block_count: usize) {
         assert_eq!(number(&row["id"]) as usize, index);
         write!(
             out,
-            "BlockEntityTypeData {{ only_op_can_set_nbt: {}, valid_blocks: &[",
-            row["only_op_can_set_nbt"]
+            "BlockEntityTypeData {{ only_op_can_set_nbt: {}, is_nameable: {}, valid_blocks: &[",
+            row["only_op_can_set_nbt"],
+            row["is_nameable"].as_bool().expect("Nameable fact")
         )
         .unwrap();
         for block in row["valid_blocks"].as_array().unwrap() {

@@ -590,6 +590,7 @@ impl Block {
 pub struct BlockEntityTypeData {
     pub valid_blocks: &'static [Block],
     pub only_op_can_set_nbt: bool,
+    pub is_nameable: bool,
 }
 impl registries::block_entity_type::Id {
     pub const fn valid_blocks(self) -> &'static [Block] {
@@ -597,6 +598,10 @@ impl registries::block_entity_type::Id {
     }
     pub const fn only_op_can_set_nbt(self) -> bool {
         BLOCK_ENTITY_TYPES[self.protocol_id() as usize].only_op_can_set_nbt
+    }
+    /// Whether the type's native receiver implements Nameable, independent of its components.
+    pub const fn is_nameable(self) -> bool {
+        BLOCK_ENTITY_TYPES[self.protocol_id() as usize].is_nameable
     }
     pub const fn is_valid(self, state: BlockState) -> bool {
         matches!(state.block().block_entity_type(),Some(kind) if kind.protocol_id() == self.protocol_id())
