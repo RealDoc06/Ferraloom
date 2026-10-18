@@ -199,6 +199,178 @@ impl RoomPlacer<'_, '_, '_, '_> {
             LIGHT,
         )
     }
+    fn simple(&mut self, graph: &RoomGraph, id: usize, design: i32) -> Result<(), Error> {
+        let room = graph.room(id);
+        if room.index / 25 > 0 {
+            self.floor(0, 0, room.openings[Direction::Down as usize])?;
+        }
+        if room.connections[Direction::Up as usize].is_none() {
+            self.fill_water_only([1, 4, 1], [6, 4, 6], GRAY)?;
+        }
+        let pillar = design != 0
+            && self.context.random.next_boolean()
+            && !room.openings[Direction::Down as usize]
+            && !room.openings[Direction::Up as usize]
+            && room.openings.iter().filter(|&&v| v).count() > 1;
+        match design {
+            0 => {
+                for (x, z) in [(0, 0), (5, 0), (0, 5), (5, 5)] {
+                    self.fill([x, 1, z], [x + 2, 1, z + 2], LIGHT)?;
+                    self.fill([x, 3, z], [x + 2, 3, z + 2], LIGHT)?;
+                    let side_x = if x == 0 { 0 } else { 7 };
+                    let side_z = if z == 0 { 0 } else { 7 };
+                    self.fill([side_x, 2, z], [side_x, 2, z + 2], GRAY)?;
+                    self.fill(
+                        [if x == 0 { 1 } else { 5 }, 2, side_z],
+                        [if x == 0 { 2 } else { 6 }, 2, side_z],
+                        GRAY,
+                    )?;
+                    self.put(
+                        [if x == 0 { 1 } else { 6 }, 2, if z == 0 { 1 } else { 6 }],
+                        LAMP,
+                    )?;
+                }
+                for (direction, a, b, closed_a, closed_b, gray_a, gray_b) in [
+                    (
+                        Direction::South,
+                        [3, 3, 0],
+                        [4, 3, 0],
+                        [3, 3, 0],
+                        [4, 3, 1],
+                        [3, 2, 0],
+                        [4, 2, 0],
+                    ),
+                    (
+                        Direction::North,
+                        [3, 3, 7],
+                        [4, 3, 7],
+                        [3, 3, 6],
+                        [4, 3, 7],
+                        [3, 2, 7],
+                        [4, 2, 7],
+                    ),
+                    (
+                        Direction::West,
+                        [0, 3, 3],
+                        [0, 3, 4],
+                        [0, 3, 3],
+                        [1, 3, 4],
+                        [0, 2, 3],
+                        [0, 2, 4],
+                    ),
+                    (
+                        Direction::East,
+                        [7, 3, 3],
+                        [7, 3, 4],
+                        [6, 3, 3],
+                        [7, 3, 4],
+                        [7, 2, 3],
+                        [7, 2, 4],
+                    ),
+                ] {
+                    if room.openings[direction as usize] {
+                        self.fill(a, b, LIGHT)?;
+                    } else {
+                        self.fill(closed_a, closed_b, LIGHT)?;
+                        self.fill(gray_a, gray_b, GRAY)?;
+                        self.fill(
+                            [closed_a[0], 1, closed_a[2]],
+                            [closed_b[0], 1, closed_b[2]],
+                            LIGHT,
+                        )?;
+                    }
+                }
+            }
+            1 => {
+                for (x, z) in [(2, 2), (2, 5), (5, 5), (5, 2)] {
+                    self.fill([x, 1, z], [x, 3, z], LIGHT)?;
+                }
+                for (x, z) in [(2, 2), (2, 5), (5, 5), (5, 2)] {
+                    self.put([x, 2, z], LAMP)?;
+                }
+                self.boxes(
+                    &[
+                        ([0, 1, 0], [1, 3, 0]),
+                        ([0, 1, 1], [0, 3, 1]),
+                        ([0, 1, 7], [1, 3, 7]),
+                        ([0, 1, 6], [0, 3, 6]),
+                        ([6, 1, 7], [7, 3, 7]),
+                        ([7, 1, 6], [7, 3, 6]),
+                        ([6, 1, 0], [7, 3, 0]),
+                        ([7, 1, 1], [7, 3, 1]),
+                    ],
+                    LIGHT,
+                )?;
+                for p in [
+                    [1, 2, 0],
+                    [0, 2, 1],
+                    [1, 2, 7],
+                    [0, 2, 6],
+                    [6, 2, 7],
+                    [7, 2, 6],
+                    [6, 2, 0],
+                    [7, 2, 1],
+                ] {
+                    self.put(p, GRAY)?;
+                }
+                for (direction, a, b) in [
+                    (Direction::South, [1, 0, 0], [6, 0, 0]),
+                    (Direction::North, [1, 0, 7], [6, 0, 7]),
+                    (Direction::West, [0, 0, 1], [0, 0, 6]),
+                    (Direction::East, [7, 0, 1], [7, 0, 6]),
+                ] {
+                    if !room.openings[direction as usize] {
+                        for y in (1..=3).rev() {
+                            self.fill(
+                                [a[0], y, a[2]],
+                                [b[0], y, b[2]],
+                                if y == 2 { GRAY } else { LIGHT },
+                            )?;
+                        }
+                    }
+                }
+            }
+            2 => {
+                for y in 1..=3 {
+                    self.boxes(
+                        &[
+                            ([0, y, 0], [0, y, 7]),
+                            ([7, y, 0], [7, y, 7]),
+                            ([1, y, 0], [6, y, 0]),
+                            ([1, y, 7], [6, y, 7]),
+                        ],
+                        if y == 2 { BLACK } else { LIGHT },
+                    )?;
+                }
+                self.boxes(
+                    &[
+                        ([0, 1, 3], [0, 2, 4]),
+                        ([7, 1, 3], [7, 2, 4]),
+                        ([3, 1, 0], [4, 2, 0]),
+                        ([3, 1, 7], [4, 2, 7]),
+                    ],
+                    BLACK,
+                )?;
+                for (direction, a, b) in [
+                    (Direction::South, [3, 1, 0], [4, 2, 0]),
+                    (Direction::North, [3, 1, 7], [4, 2, 7]),
+                    (Direction::West, [0, 1, 3], [0, 2, 4]),
+                    (Direction::East, [7, 1, 3], [7, 2, 4]),
+                ] {
+                    if room.openings[direction as usize] {
+                        self.water(a, b)?;
+                    }
+                }
+            }
+            _ => return Err(Error("invalid monument simple-room design".into())),
+        }
+        if pillar {
+            for y in 1..=3 {
+                self.fill([3, y, 3], [4, y, 4], if y == 2 { GRAY } else { LIGHT })?;
+            }
+        }
+        Ok(())
+    }
     fn simple_top(&mut self, graph: &RoomGraph, id: usize) -> Result<(), Error> {
         let room = graph.room(id);
         if room.index / 25 > 0 {
@@ -265,6 +437,9 @@ impl MonumentRoom {
                 placer.entry(graph.room(self.room.expect("entry definition")).openings)
             }
             RoomKind::Core => placer.core(),
+            RoomKind::Simple { design } => {
+                placer.simple(graph, self.room.expect("simple definition"), design)
+            }
             RoomKind::SimpleTop => placer.simple_top(graph, self.room.expect("sponge definition")),
             _ => Err(Error(format!(
                 "Unsupported monument room geometry {:?}",
@@ -305,7 +480,7 @@ mod tests {
         }
     }
     #[test]
-    fn monument_entry_core_and_sponge_geometry_clipping_water_and_rng_match_vanilla() {
+    fn monument_single_core_and_sponge_geometry_clipping_water_and_rng_match_vanilla() {
         let (_, generator) = generator();
         let features = FeatureRegistry::default();
         let mut text = String::new();
