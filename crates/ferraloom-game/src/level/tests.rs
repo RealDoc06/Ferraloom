@@ -2085,6 +2085,11 @@ fn rain_queries_use_visible_sky_heightmap_and_zoomed_biome() {
     });
     assert_eq!(
         level.is_raining_at(p),
+        Err(LevelError::UnsupportedLightQuery)
+    );
+    level.set_has_skylight(true);
+    assert_eq!(
+        level.is_raining_at(p),
         Err(LevelError::UnsupportedWeatherQuery)
     );
     level
