@@ -109,6 +109,158 @@ impl RoomPlacer<'_, '_, '_, '_> {
         }
         Ok(())
     }
+    fn elder(&mut self, local: [i32; 3]) -> Result<(), Error> {
+        let p = self.data.world_position(local);
+        if self.bounds.contains(p) {
+            self.context.region.spawn_monument_elder([
+                f64::from(p[0]) + 0.5,
+                f64::from(p[1]),
+                f64::from(p[2]) + 0.5,
+            ])?;
+        }
+        Ok(())
+    }
+    fn penthouse(&mut self) -> Result<(), Error> {
+        self.boxes(&[([2, -1, 2], [11, -1, 11])], LIGHT)?;
+        self.boxes(
+            &[
+                ([0, -1, 0], [1, -1, 11]),
+                ([12, -1, 0], [13, -1, 11]),
+                ([2, -1, 0], [11, -1, 1]),
+                ([2, -1, 12], [11, -1, 13]),
+            ],
+            GRAY,
+        )?;
+        self.boxes(
+            &[
+                ([0, 0, 0], [0, 0, 13]),
+                ([13, 0, 0], [13, 0, 13]),
+                ([1, 0, 0], [12, 0, 0]),
+                ([1, 0, 13], [12, 0, 13]),
+            ],
+            LIGHT,
+        )?;
+        for i in (2..=11).step_by(3) {
+            self.put([0, 0, i], LAMP)?;
+            self.put([13, 0, i], LAMP)?;
+            self.put([i, 0, 0], LAMP)?;
+        }
+        self.boxes(
+            &[
+                ([2, 0, 3], [4, 0, 9]),
+                ([9, 0, 3], [11, 0, 9]),
+                ([4, 0, 9], [9, 0, 11]),
+                ([5, 0, 8], [5, 0, 8]),
+                ([8, 0, 8], [8, 0, 8]),
+                ([10, 0, 10], [10, 0, 10]),
+                ([3, 0, 10], [3, 0, 10]),
+            ],
+            LIGHT,
+        )?;
+        self.boxes(
+            &[
+                ([3, 0, 3], [3, 0, 7]),
+                ([10, 0, 3], [10, 0, 7]),
+                ([6, 0, 10], [7, 0, 10]),
+            ],
+            BLACK,
+        )?;
+        for x in [3, 10] {
+            for z in (2..=8).step_by(3) {
+                self.fill([x, 0, z], [x, 2, z], LIGHT)?;
+            }
+        }
+        self.boxes(&[([5, 0, 10], [5, 2, 10]), ([8, 0, 10], [8, 2, 10])], LIGHT)?;
+        self.fill([6, -1, 7], [7, -1, 8], BLACK)?;
+        self.water([6, -1, 3], [7, -1, 4])?;
+        self.elder([6, 1, 6])
+    }
+    fn wing(&mut self, design: i32) -> Result<(), Error> {
+        if design == 0 {
+            for i in 0..4 {
+                self.fill([10 - i, 3 - i, 20 - i], [12 + i, 3 - i, 20], LIGHT)?;
+            }
+            self.boxes(
+                &[
+                    ([7, 0, 6], [15, 0, 16]),
+                    ([6, 0, 6], [6, 3, 20]),
+                    ([16, 0, 6], [16, 3, 20]),
+                    ([7, 1, 7], [7, 1, 20]),
+                    ([15, 1, 7], [15, 1, 20]),
+                    ([7, 1, 6], [9, 3, 6]),
+                    ([13, 1, 6], [15, 3, 6]),
+                    ([8, 1, 7], [9, 1, 7]),
+                    ([13, 1, 7], [14, 1, 7]),
+                    ([9, 0, 5], [13, 0, 5]),
+                ],
+                LIGHT,
+            )?;
+            self.boxes(
+                &[
+                    ([10, 0, 7], [12, 0, 7]),
+                    ([8, 0, 10], [8, 0, 12]),
+                    ([14, 0, 10], [14, 0, 12]),
+                ],
+                BLACK,
+            )?;
+            for z in [18, 15, 12, 9] {
+                self.put([6, 3, z], LAMP)?;
+                self.put([16, 3, z], LAMP)?;
+            }
+            for p in [
+                [10, 0, 10],
+                [12, 0, 10],
+                [10, 0, 12],
+                [12, 0, 12],
+                [8, 3, 6],
+                [14, 3, 6],
+            ] {
+                self.put(p, LAMP)?;
+            }
+            for p in [[4, 2, 4], [18, 2, 4], [4, 2, 18], [18, 2, 18]] {
+                self.put(p, LIGHT)?;
+                self.put([p[0], 1, p[2]], LAMP)?;
+                self.put([p[0], 0, p[2]], LIGHT)?;
+            }
+            for p in [[9, 7, 20], [13, 7, 20]] {
+                self.put(p, LIGHT)?;
+            }
+            self.boxes(
+                &[([6, 0, 21], [7, 4, 21]), ([15, 0, 21], [16, 4, 21])],
+                LIGHT,
+            )?;
+            self.elder([11, 2, 16])?;
+        } else if design == 1 {
+            self.boxes(
+                &[
+                    ([9, 3, 18], [13, 3, 20]),
+                    ([9, 0, 18], [9, 2, 18]),
+                    ([13, 0, 18], [13, 2, 18]),
+                ],
+                LIGHT,
+            )?;
+            for x in [9, 13] {
+                self.put([x, 6, 20], LIGHT)?;
+                self.put([x, 5, 20], LAMP)?;
+                self.put([x, 4, 20], LIGHT)?;
+            }
+            self.fill([7, 3, 7], [15, 3, 14], LIGHT)?;
+            for x in [10, 12] {
+                self.fill([x, 0, 10], [x, 6, 10], LIGHT)?;
+                self.fill([x, 0, 12], [x, 6, 12], LIGHT)?;
+                for p in [[x, 0, 10], [x, 0, 12], [x, 4, 10], [x, 4, 12]] {
+                    self.put(p, LAMP)?;
+                }
+            }
+            for x in [8, 14] {
+                self.fill([x, 0, 7], [x, 2, 7], LIGHT)?;
+                self.fill([x, 0, 14], [x, 2, 14], LIGHT)?;
+            }
+            self.boxes(&[([8, 3, 8], [8, 3, 13]), ([14, 3, 8], [14, 3, 13])], BLACK)?;
+            self.elder([11, 5, 13])?;
+        }
+        Ok(())
+    }
     fn entry(&mut self, openings: [bool; 6]) -> Result<(), Error> {
         self.boxes(
             &[
@@ -700,8 +852,8 @@ impl RoomPlacer<'_, '_, '_, '_> {
     }
 }
 impl MonumentRoom {
-    /// Port of the monument child-room postProcess implementations. Unported
-    /// room families remain explicit errors while their geometry is added.
+    /// Port of every monument child-room postProcess implementation. Elder
+    /// creation remains an explicit game-adapter operation.
     pub fn post_process(
         &self,
         context: &mut FeatureContext<'_, '_>,
@@ -735,10 +887,8 @@ impl MonumentRoom {
                 placer.simple(graph, self.room.expect("simple definition"), design)
             }
             RoomKind::SimpleTop => placer.simple_top(graph, self.room.expect("sponge definition")),
-            _ => Err(Error(format!(
-                "Unsupported monument room geometry {:?}",
-                self.kind
-            ))),
+            RoomKind::Wing { design } => placer.wing(design),
+            RoomKind::Penthouse => placer.penthouse(),
         }
     }
 }

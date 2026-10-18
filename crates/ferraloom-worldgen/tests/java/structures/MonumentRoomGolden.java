@@ -22,13 +22,13 @@ public final class MonumentRoomGolden {
     }
     static void capture(RegistryAccess.Frozen registries,Path directory)throws Exception {
         var out=new JsonArray();var serialization=new StructurePieceSerializationContext(StructureGolden.RESOURCES,registries,null);
-        for(long sample=0;sample<8;sample++)for(var direction:Direction.Plane.HORIZONTAL) {
-            long seed=sample*341873128712L+132897987541L;
+        for(long sample=0;sample<9;sample++)for(var direction:Direction.Plane.HORIZONTAL) {
+            long seed=sample==8?18:sample*341873128712L+132897987541L;
             var building=new OceanMonumentPieces.MonumentBuilding(new LegacyRandomSource(seed),-46,8,direction);
             var children=(List<?>)MonumentGolden.field(building,"childPieces");
             for(int childIndex=0;childIndex<children.size();childIndex++) {
                 var child=(StructurePiece)children.get(childIndex);String kind=child.getClass().getSimpleName();
-                if(!Set.of("OceanMonumentEntryRoom","OceanMonumentCoreRoom","OceanMonumentSimpleTopRoom","OceanMonumentSimpleRoom","OceanMonumentDoubleXRoom","OceanMonumentDoubleYRoom","OceanMonumentDoubleZRoom","OceanMonumentDoubleXYRoom","OceanMonumentDoubleYZRoom").contains(kind))continue;
+                if(!Set.of("OceanMonumentEntryRoom","OceanMonumentCoreRoom","OceanMonumentSimpleTopRoom","OceanMonumentSimpleRoom","OceanMonumentDoubleXRoom","OceanMonumentDoubleYRoom","OceanMonumentDoubleZRoom","OceanMonumentDoubleXYRoom","OceanMonumentDoubleYZRoom","OceanMonumentWingRoom","OceanMonumentPenthouse").contains(kind))continue;
                 var original=child.getBoundingBox();child.getBoundingBox().move(-original.minX(),64-original.minY(),-original.minZ());
                 for(int mode=0;mode<2;mode++)for(int clip=0;clip<2;clip++) {
                     int terrain=mode;var changed=new HashMap<BlockPos,BlockState>();var writes=new JsonArray();
@@ -40,7 +40,8 @@ public final class MonumentRoomGolden {
                         case "scheduleTick" -> null;
                         default -> throw new UnsupportedOperationException(method.toString());
                     });
-                    var bounds=clip==0?new BoundingBox(0,-64,0,15,319,15):new BoundingBox(4,65,3,14,70,12);var random=new LegacyRandomSource(17);
+                    boolean entityClipped=kind.equals("OceanMonumentWingRoom")||kind.equals("OceanMonumentPenthouse");
+                    var bounds=entityClipped?(clip==0?new BoundingBox(0,-64,0,5,319,5):new BoundingBox(3,65,3,5,70,5)):(clip==0?new BoundingBox(0,-64,0,15,319,15):new BoundingBox(4,65,3,14,70,12));var random=new LegacyRandomSource(17);
                     child.postProcess(world,null,null,random,bounds,new ChunkPos(0,0),BlockPos.ZERO);
                     var item=new JsonObject();item.addProperty("seed",seed);item.addProperty("direction",direction.get2DDataValue());item.addProperty("child",childIndex);item.addProperty("kind",kind);item.addProperty("mode",mode);item.add("bounds",StructureGolden.bounds(bounds));item.addProperty("nbt",child.createTag(serialization).toString());item.addProperty("next",random.nextInt());item.add("writes",writes);out.add(item);
                 }
