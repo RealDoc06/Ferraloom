@@ -1,5 +1,3 @@
-mod command_support;
-
 use ferraloom_parity::{
     ObservationLog, Result, Session, Ticks, ensure, parity_test,
     protocol::{
@@ -247,7 +245,7 @@ async fn save_and_reload_player_position(s: &mut Session) -> Result<ObservationL
     Ok(log)
 }
 parity_test!(parity_join_and_spawn, join_and_spawn);
-command_support::command_test!(parity_commands, commands);
+parity_test!(parity_commands, commands);
 parity_test!(
     parity_chunk_loading_while_walking,
     chunk_loading_while_walking

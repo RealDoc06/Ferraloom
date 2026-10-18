@@ -1,7 +1,7 @@
 use ferraloom_parity::{LaunchOptions, WorldPreset};
 
 pub fn options() -> LaunchOptions {
-    // Bedrock isolates command parity from unported terrain random ticks under Strict.
+    // Bedrock keeps focused command checks independent of terrain random ticks.
     LaunchOptions {
         preset: WorldPreset::Flat {
             layers: vec![("minecraft:bedrock".into(), 1)],
