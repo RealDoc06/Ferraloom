@@ -396,6 +396,14 @@ impl BlockState {
     pub const fn is_solid(self) -> bool {
         BLOCK_STATE_FACTS[self.0 as usize] & 1 != 0
     }
+    /// Port of BlockStateBase#liquid, copied from Properties.liquid at construction.
+    pub const fn liquid(self) -> bool {
+        BLOCK_STATE_FACTS[self.0 as usize] & (1 << 12) != 0
+    }
+    /// Port of BlockStateBase#ignitedByLava, copied from Properties at construction.
+    pub const fn ignited_by_lava(self) -> bool {
+        BLOCK_STATE_FACTS[self.0 as usize] & (1 << 13) != 0
+    }
     /// Port of BlockStateBase#hasBlockEntity, a state-only EntityBlock test.
     pub const fn has_block_entity(self) -> bool {
         BLOCK_STATE_FACTS[self.0 as usize] & 2 != 0
@@ -463,5 +471,22 @@ impl BlockState {
     /// Port of BlockBehaviour.BlockStateBase#isAir (cached from Properties).
     pub const fn is_air(self) -> bool {
         STATE_IS_AIR[self.id() as usize]
+    }
+}
+
+impl BlockState {
+    /// Port of BlockStateBase#hasAnalogOutputSignal (a state-only virtual query).
+    pub const fn has_analog_output_signal(self) -> bool {
+        REDSTONE_STATE_FACTS[self.0 as usize] & 1 != 0
+    }
+    /// Vanilla's predicate is cached collision-full or a constant. Dynamic
+    /// collision shapes still require a live query and return None here.
+    pub const fn cached_redstone_conductor(self) -> Option<bool> {
+        let bits = REDSTONE_STATE_FACTS[self.0 as usize];
+        if bits & 2 == 0 {
+            None
+        } else {
+            Some(bits & 4 != 0)
+        }
     }
 }

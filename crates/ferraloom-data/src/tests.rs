@@ -471,3 +471,49 @@ fn block_landing_properties_preserve_float_restitution_and_reduction() {
     assert_eq!(Block::STONE.data().fall_distance_reduction, 0.0);
     assert_eq!(Block::STONE.data().bounce_restitution, 0.0);
 }
+
+#[test]
+fn liquid_and_lava_ignition_are_state_facts_independent_of_waterlogging() {
+    use crate::{Block, properties};
+    for block in [Block::WATER, Block::LAVA, Block::BUBBLE_COLUMN] {
+        assert!(block.default_state().liquid());
+    }
+    let wet_slab = Block::OAK_SLAB
+        .default_state()
+        .with(properties::WATERLOGGED, true)
+        .unwrap();
+    assert!(!wet_slab.data().fluid.empty);
+    assert!(!wet_slab.liquid());
+    assert!(wet_slab.ignited_by_lava());
+    assert!(!Block::STONE.default_state().ignited_by_lava());
+    // The independent higher fact bits must not change post-process offsets.
+    assert_eq!(
+        Block::BUBBLE_COLUMN.default_state().post_process_y_offset(),
+        None
+    );
+}
+
+#[test]
+fn comparator_and_conductor_facts_preserve_property_overrides() {
+    use crate::Block;
+    assert!(Block::CAKE.default_state().has_analog_output_signal());
+    assert!(!Block::STONE.default_state().has_analog_output_signal());
+    assert_eq!(
+        Block::STONE.default_state().cached_redstone_conductor(),
+        Some(true)
+    );
+    assert_eq!(
+        Block::GLASS.default_state().cached_redstone_conductor(),
+        Some(false)
+    );
+    assert_eq!(
+        Block::SOUL_SAND
+            .default_state()
+            .cached_collision_full_block(),
+        Some(false)
+    );
+    assert_eq!(
+        Block::SOUL_SAND.default_state().cached_redstone_conductor(),
+        Some(true)
+    );
+}
