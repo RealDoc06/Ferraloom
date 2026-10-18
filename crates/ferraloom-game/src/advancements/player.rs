@@ -493,9 +493,10 @@ pub fn announcement(holder: &AdvancementHolder, player_name: &Component) -> Comp
     tooltip.extra.push(display.description.clone());
     let mut title = display.title.clone();
     title.style.hover_event = Some(HoverEvent::ShowText(Box::new(tooltip)));
-    let mut name = Component::literal("[");
-    name.extra.push(title);
-    name.extra.push(Component::literal("]"));
+    let mut name = Component::translatable(
+        "chat.square_brackets",
+        vec![Argument::Component(Box::new(title))],
+    );
     name.style = color;
     Component::translatable(
         format!("chat.type.advancement.{frame}"),
