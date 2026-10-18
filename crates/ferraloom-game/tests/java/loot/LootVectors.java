@@ -90,7 +90,7 @@ public final class LootVectors {
         table.fill(container,params,0);var slots=new JsonArray();var slotsNbt=new JsonArray();for(int slot=0;slot<9;slot++){slots.add(stack(container.getItem(slot)));slotsNbt.add(stackNbt(container.getItem(slot)));}
         result.add("slots",slots);result.add("slots_nbt",slotsNbt);result.addProperty("fill_next",random.nextLong());return result;
     }
-    static void focused(JsonObject output) {
+    static void focused(JsonObject output) throws Exception {
         var focused=new JsonArray();
         var definitions=List.of(
             "{\"type\":\"empty\",\"pools\":[{\"rolls\":1,\"entries\":[{\"type\":\"item\",\"name\":\"stone\",\"modifier\":{\"type\":\"set_count\",\"count\":130}}]}]}",
@@ -178,6 +178,34 @@ public final class LootVectors {
             var record=new JsonObject();record.addProperty("world_seed",worldSeed);record.addProperty("salt",salt);record.addProperty("include_world_seed",includeWorld);record.addProperty("include_sequence_id",includeId);record.addProperty("key",key.toString());record.add("draws",draws);
             record.add("saved",net.minecraft.world.RandomSequences.CODEC.encodeStart(JsonOps.INSTANCE,manager).getOrThrow());sequences.add(record);
         }output.add("random_sequences",sequences);
+        var sequenceDirty=new JsonArray();
+        for(boolean initialDirty:new boolean[]{false,true})for(String action:List.of("get","defaults","clear","reset","consume_zero","consume_negative","int","bound","long","boolean","float","double","gaussian","fork","positional","seed","consume_one")) {
+            var manager=new net.minecraft.world.RandomSequences();var key=Identifier.withDefaultNamespace("entities/pig");var random=manager.get(key,42);manager.setDirty(initialDirty);
+            switch(action) {
+                case "get" -> manager.get(key,42);
+                case "defaults" -> manager.setSeedDefaults(71,false,false);
+                case "clear" -> manager.clear();
+                case "reset" -> manager.reset(key,42,-3,false,true);
+                case "consume_zero" -> random.consumeCount(0);
+                case "consume_negative" -> random.consumeCount(-1);
+                case "int" -> random.nextInt();
+                case "bound" -> random.nextInt(17);
+                case "long" -> random.nextLong();
+                case "boolean" -> random.nextBoolean();
+                case "float" -> random.nextFloat();
+                case "double" -> random.nextDouble();
+                case "gaussian" -> random.nextGaussian();
+                case "fork" -> random.fork();
+                case "positional" -> random.forkPositional();
+                case "seed" -> random.setSeed(-17);
+                case "consume_one" -> random.consumeCount(1);
+            }
+            var record=new JsonObject();record.addProperty("initial_dirty",initialDirty);record.addProperty("action",action);record.addProperty("dirty",manager.isDirty());record.addProperty("saved_nbt",net.minecraft.world.RandomSequences.CODEC.encodeStart(net.minecraft.nbt.NbtOps.INSTANCE,manager).getOrThrow().toString());record.addProperty("next",manager.get(key,42).nextLong());sequenceDirty.add(record);
+        }output.add("sequence_dirty",sequenceDirty);
+        var sequenceCodecs=new JsonArray();
+        for(String snbt:List.of("{salt:0,sequences:{}}","{salt:-1.9d,include_world_seed:0.5d,include_sequence_id:0b,sequences:{'minecraft:test':{source:[1,2]}}}","{salt:2147483648L,sequences:{'minecraft:test':{source:[B;1b,2b]}}}","{salt:0,sequences:{'minecraft:test':{source:[L;0L,0L]}}}","{salt:0,sequences:{'minecraft:test':{source:[1.9d,-1.9d]}}}","{salt:0,include_world_seed:'true',sequences:{}}","{sequences:{}}","{salt:0,sequences:{'minecraft:test':{source:[1]}}}")) {
+            var tag=net.minecraft.nbt.TagParser.parseCompoundFully(snbt);var decoded=net.minecraft.world.RandomSequences.CODEC.parse(net.minecraft.nbt.NbtOps.INSTANCE,tag);var record=new JsonObject();record.addProperty("input",snbt);record.addProperty("accepted",decoded.isSuccess());decoded.result().ifPresent(value->record.addProperty("output",net.minecraft.world.RandomSequences.CODEC.encodeStart(net.minecraft.nbt.NbtOps.INSTANCE,value).getOrThrow().toString()));sequenceCodecs.add(record);
+        }output.add("sequence_codecs",sequenceCodecs);
         var blockPredicates=new JsonArray();
         for(String block:List.of("stone","oak_log","oak_stairs","wheat"))for(String test:List.of("{}","{\"blocks\":\"stone\"}","{\"blocks\":\"#minecraft:logs\"}","{\"state\":{\"axis\":\"y\"}}","{\"state\":{\"age\":\"+0\"}}","{\"state\":{\"age\":\"٠\"}}","{\"state\":{\"age\":{\"min\":\"0\",\"max\":\"3\"}}}")) {
             var state=BuiltInRegistries.BLOCK.getValue(Identifier.parse(block)).defaultBlockState();

@@ -8,6 +8,7 @@ Environment checks defer five shared value families to the environment-attribute
 |---|---|---|---|---|---|
 | loot.context.parameters | Validate required and optional context parameters and reject unavailable context values | `LootParams; LootContext; LootContextParamSets` | `loot::tests::synthetic_tables_and_providers_match_real_java` | - | todo |
 | loot.context.random-sequence | Use persistent named random sequences and seed overrides for loot generation | `LootTable#getRandomItems; RandomSequences` | `loot::tests::random_sequence_seeds_and_saved_words_match_java` | pass | todo |
+| loot.context.random-sequence-dirty | Mark named sequence saved data dirty only on random source operations, preserving clean get/reset/clear/default changes | `RandomSequences.DirtyMarkingRandomSource` | `loot::tests::named_sequence_dirty_marking_matches_java` | pass | todo |
 | loot.pool.rolls-bonus | Compute pool rolls and bonus rolls using provider values and luck | `LootPool#addRandomItems` | `loot::tests::synthetic_tables_and_providers_match_real_java` | pass | todo |
 | loot.pool.weight-quality | Choose weighted entries with luck-adjusted quality and expand alternatives and sequences | `LootPool; LootPoolEntryContainer` | `loot::tests::synthetic_tables_and_providers_match_real_java` | pass | todo |
 | loot.pool.conditions-functions | Evaluate entry and pool conditions and apply composed functions in their defined order | `LootPool; SingleEntryContainerBase` | `loot::tests::synthetic_tables_and_providers_match_real_java` | pass | todo |

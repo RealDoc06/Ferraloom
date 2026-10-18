@@ -461,6 +461,92 @@ fn random_sequence_seeds_and_saved_words_match_java() {
     }
 }
 #[test]
+fn named_sequence_dirty_marking_matches_java() {
+    let vectors: serde_json::Value =
+        serde_json::from_str(include_str!("../../tests/java/loot/vectors.json")).unwrap();
+    let id = Identifier::parse("entities/pig").unwrap();
+    for record in vectors["sequence_dirty"].as_array().unwrap() {
+        let mut sequences = RandomSequences::default();
+        if record["initial_dirty"].as_bool().unwrap() {
+            sequences.get(&id, 42).next_int();
+            // Restore the initial source without clearing vanilla's dirty flag.
+            sequences.reset(id.clone(), 42, 0, true, true);
+        } else {
+            sequences.get(&id, 42);
+        }
+        match record["action"].as_str().unwrap() {
+            "get" => {
+                sequences.get(&id, 42);
+            }
+            "defaults" => sequences.set_seed_defaults(71, false, false),
+            "clear" => {
+                sequences.clear();
+            }
+            "reset" => sequences.reset(id.clone(), 42, -3, false, true),
+            "consume_zero" => sequences.get(&id, 42).consume_count(0),
+            "consume_negative" => sequences.get(&id, 42).consume_count(-1),
+            "int" => {
+                sequences.get(&id, 42).next_int();
+            }
+            "bound" => {
+                sequences.get(&id, 42).next_int_bound(17);
+            }
+            "long" => {
+                sequences.get(&id, 42).next_long();
+            }
+            "boolean" => {
+                sequences.get(&id, 42).next_boolean();
+            }
+            "float" => {
+                sequences.get(&id, 42).next_float();
+            }
+            "double" => {
+                sequences.get(&id, 42).next_double();
+            }
+            "gaussian" => {
+                sequences.get(&id, 42).next_gaussian();
+            }
+            "fork" => {
+                sequences.get(&id, 42).fork();
+            }
+            "positional" => {
+                sequences.get(&id, 42).fork_positional();
+            }
+            "seed" => sequences.get(&id, 42).set_seed(-17),
+            "consume_one" => sequences.get(&id, 42).consume_count(1),
+            action => panic!("unexpected action {action}"),
+        }
+        assert_eq!(
+            sequences.is_dirty(),
+            record["dirty"].as_bool().unwrap(),
+            "{record}"
+        );
+        let saved = sequences.to_nbt();
+        let expected = ferraloom_nbt::parse(record["saved_nbt"].as_str().unwrap()).unwrap();
+        assert_eq!(saved, expected, "{record}");
+        let restored = RandomSequences::from_nbt(&saved).unwrap();
+        assert!(!restored.is_dirty());
+        assert_eq!(
+            sequences.get(&id, 42).next_long(),
+            record["next"].as_i64().unwrap(),
+            "{record}"
+        );
+    }
+    for record in vectors["sequence_codecs"].as_array().unwrap() {
+        let input = ferraloom_nbt::parse(record["input"].as_str().unwrap()).unwrap();
+        let decoded = RandomSequences::from_nbt(&input);
+        assert_eq!(
+            decoded.is_ok(),
+            record["accepted"].as_bool().unwrap(),
+            "{record}"
+        );
+        if let Ok(decoded) = decoded {
+            let expected = ferraloom_nbt::parse(record["output"].as_str().unwrap()).unwrap();
+            assert_eq!(decoded.to_nbt(), expected, "{record}");
+        }
+    }
+}
+#[test]
 fn block_and_location_acceptance_matches_java() {
     use crate::predicates::*;
     let resources = vanilla_resources();

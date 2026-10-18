@@ -42,7 +42,7 @@ pub use nbt_function::{CopyCustomData, CopyOperation, NbtMergeStrategy};
 pub use number::ScoreboardNameProvider;
 pub use number::{ContextFloatProvider, ContextIntProvider};
 pub use registry::{Holder, HolderSet, LootData};
-pub use sequence::RandomSequences;
+pub use sequence::{DirtyMarkingRandomSource, RandomSequences};
 pub use slot::{SlotRange, SlotSource, SlotTarget};
 pub use table::{LootPool, LootRandomSources, LootTable};
 pub use validation::{ValidationContext, ValidationProblem};

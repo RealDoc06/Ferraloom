@@ -236,12 +236,12 @@ impl LootData {
                 registry: "loot_table",
                 id: table.clone(),
             })?;
-        let random = if let Some(sequence) = &value.random_sequence {
-            sources.sequences.get(sequence, sources.world_seed)
+        if let Some(sequence) = &value.random_sequence {
+            let mut random = sources.sequences.get(sequence, sources.world_seed);
+            self.get_random_items(table, params, &mut random, facts)
         } else {
-            &mut *sources.level_random
-        };
-        self.get_random_items(table, params, random, facts)
+            self.get_random_items(table, params, sources.level_random, facts)
+        }
     }
     pub fn test_predicate(
         &self,
@@ -336,12 +336,12 @@ impl LootData {
                 registry: "loot_table",
                 id: table.clone(),
             })?;
-        let random = if let Some(sequence) = &value.random_sequence {
-            sources.sequences.get(sequence, sources.world_seed)
+        if let Some(sequence) = &value.random_sequence {
+            let mut random = sources.sequences.get(sequence, sources.world_seed);
+            self.fill(table, container, params, &mut random, facts)
         } else {
-            &mut *sources.level_random
-        };
-        self.fill(table, container, params, random, facts)
+            self.fill(table, container, params, sources.level_random, facts)
+        }
     }
 }
 pub(crate) fn split_stack(stack: ItemStack, output: &mut Vec<ItemStack>) -> Result<()> {
