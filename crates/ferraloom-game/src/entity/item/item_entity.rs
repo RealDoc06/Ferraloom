@@ -2,8 +2,8 @@
 use crate::{
     block::LevelReaderRef,
     entity::{
-        Entity, EntityData, EntityDataView, EntityRef, EntityState, RemovalReason, fluid,
-        inside_block,
+        Entity, EntityData, EntityDataView, EntityRef, EntityReference, EntityState, RemovalReason,
+        fluid, inside_block,
         movement::{self, MovementEmission, MoverType},
         persistence,
         player::{
@@ -26,7 +26,7 @@ pub struct ItemEntity {
     pub age: i32,
     pub pickup_delay: i32,
     pub health: i32,
-    pub thrower: Option<Uuid>,
+    pub thrower: Option<EntityReference<EntityData>>,
     pub target: Option<Uuid>,
     pub bob_offs: f32,
 }
@@ -85,12 +85,20 @@ impl ItemEntity {
         set_count(from, count(from).wrapping_sub(delta));
         result
     }
-    pub fn save_without_id(&self) -> CompoundTag {
+    pub fn save_without_id(&self, level: &Level) -> Result<CompoundTag, LevelError> {
         let mut tag = self.parent.save_without_id();
         tag.insert("Health", Tag::Short(self.health as i16));
         tag.insert("Age", Tag::Short(self.age as i16));
         tag.insert("PickupDelay", Tag::Short(self.pickup_delay as i16));
-        for (name, uuid) in [("Thrower", self.thrower), ("Owner", self.target)] {
+        for (name, uuid) in [
+            (
+                "Thrower",
+                self.thrower
+                    .map(|reference| reference.uuid(level))
+                    .transpose()?,
+            ),
+            ("Owner", self.target),
+        ] {
             tag.remove(name);
             if let Some(uuid) = uuid {
                 tag.insert(name, Tag::IntArray(uuid.to_int_array().to_vec()));
@@ -100,7 +108,7 @@ impl ItemEntity {
         if !self.item().is_empty() {
             tag.insert("Item", self.item().to_nbt().expect("canonical item stack"));
         }
-        tag
+        Ok(tag)
     }
     pub fn load_nbt(&mut self, tag: CompoundTag) -> Result<(), persistence::EntityLoadError> {
         self.health = i32::from(tag.get_short_or("Health", 5));
@@ -111,7 +119,7 @@ impl ItemEntity {
                 .and_then(|v| <[i32; 4]>::try_from(v).ok())
                 .map(Uuid::from_int_array)
         };
-        self.thrower = uuid("Thrower");
+        self.thrower = uuid("Thrower").map(EntityReference::unresolved);
         self.target = uuid("Owner");
         self.set_item(
             tag.get("Item")
@@ -124,6 +132,15 @@ impl ItemEntity {
         }
         Ok(())
     }
+}
+/// Port of ItemEntity#getOwner, including EntityReference's cache mutation.
+pub fn get_owner(entity: EntityRef, level: &mut Level) -> Result<Option<EntityRef>, LevelError> {
+    let Some(mut thrower) = level.entity::<ItemEntity>(entity)?.thrower else {
+        return Ok(None);
+    };
+    let owner = thrower.resolve(level)?;
+    level.entity_mut::<ItemEntity>(entity)?.thrower = Some(thrower);
+    Ok(owner)
 }
 impl EntityDataView for ItemEntity {
     fn view(state: &EntityState) -> Option<&Self> {
@@ -237,19 +254,30 @@ pub fn player_touch(
 
 pub struct ItemEntityBehavior;
 impl Entity for ItemEntityBehavior {
+    fn sound_source(&self) -> ferraloom_protocol::play::SoundSource {
+        ferraloom_protocol::play::SoundSource::Ambient
+    }
+
     fn trace_entity_refs(
         &self,
         state: &crate::entity::EntityState,
         references: &mut Vec<crate::entity::EntityRef>,
     ) {
         crate::entity::trace_base_entity_refs(state.as_entity(), references);
+        if let Some(item) = ItemEntity::view(state) {
+            references.extend(item.thrower.and_then(EntityReference::cached_entity));
+        }
     }
 
     fn movement_emission(&self) -> MovementEmission {
         MovementEmission::None
     }
-    fn default_gravity(&self) -> f64 {
-        0.04
+    fn default_gravity(
+        &self,
+        _entity: crate::entity::EntityRef,
+        _level: &crate::level::Level,
+    ) -> Result<f64, crate::level::LevelError> {
+        Ok(0.04)
     }
     fn block_pos_below_that_affects_my_movement(
         &self,
@@ -331,7 +359,7 @@ impl Entity for ItemEntityBehavior {
             self.move_by(entity, level, MoverType::SelfMovement, delta)?;
             self.apply_effects_from_blocks(entity, level)?;
             let on_ground = level.entity::<EntityData>(entity)?.on_ground;
-            let air = self.air_drag();
+            let air = self.air_drag(entity, level)?;
             let friction = if on_ground {
                 let pos = self.block_pos_below_that_affects_my_movement(entity, level)?;
                 air * level.get_block_state(pos)?.block().data().friction
@@ -381,7 +409,7 @@ impl Entity for ItemEntityBehavior {
         if item.parent.permanently_invulnerable || item.parent.removed {
             return Ok(false);
         }
-        item.parent.needs_sync = true;
+        item.parent.mark_hurt();
         item.health = (item.health as f32 - damage) as i32;
         if item.health <= 0 {
             level.remove_entity(entity)?;

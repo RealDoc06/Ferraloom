@@ -2,6 +2,162 @@ use super::*;
 use serde_json::Value;
 use std::fmt::Debug;
 
+#[test]
+fn render_shapes_remain_independent_of_air_collision_and_block_entities() {
+    for block in [
+        Block::AIR,
+        Block::BARRIER,
+        Block::WATER,
+        Block::BUBBLE_COLUMN,
+        Block::LIGHT,
+        Block::STRUCTURE_VOID,
+        Block::END_PORTAL,
+        Block::END_GATEWAY,
+        Block::MOVING_PISTON,
+    ] {
+        for state in BLOCK_STATES.iter().filter(|state| state.block == block) {
+            assert_eq!(state.render_shape, RenderShape::Invisible, "{state:?}");
+        }
+    }
+    for block in [
+        Block::STONE,
+        Block::TORCH,
+        Block::CHEST,
+        Block::OAK_SIGN,
+        Block::GLASS,
+    ] {
+        for state in BLOCK_STATES.iter().filter(|state| state.block == block) {
+            assert_eq!(state.render_shape, RenderShape::Model, "{state:?}");
+        }
+    }
+}
+
+#[test]
+fn entity_delta_tracking_is_native_type_data_independent_of_update_intervals() {
+    for kind in [
+        EntityType::PLAYER,
+        EntityType::BAT,
+        EntityType::ITEM_FRAME,
+        EntityType::WITHER,
+    ] {
+        assert!(!kind.data().track_deltas, "{}", kind.name());
+    }
+    for kind in [
+        EntityType::COW,
+        EntityType::ITEM,
+        EntityType::EXPERIENCE_ORB,
+        EntityType::TNT,
+        EntityType::FALLING_BLOCK,
+    ] {
+        assert!(kind.data().track_deltas, "{}", kind.name());
+    }
+    assert_ne!(EntityType::PLAYER.data().update_interval, i32::MAX as u32);
+    assert_ne!(EntityType::BAT.data().update_interval, i32::MAX as u32);
+}
+
+#[test]
+fn native_entity_attachments_preserve_registered_offsets_and_all_fallbacks() {
+    use ferraloom_util::Vec3;
+    let cow = EntityType::COW.data();
+    assert_eq!(
+        cow.attachments.points(EntityAttachment::Passenger),
+        &[Vec3::new(0.0, f64::from(1.36875_f32), 0.0)]
+    );
+    assert_ne!(
+        cow.attachments.points(EntityAttachment::Passenger)[0].y,
+        f64::from(cow.height)
+    );
+    let tnt = EntityType::TNT.data();
+    assert_eq!(
+        tnt.attachments.points(EntityAttachment::Vehicle),
+        &[Vec3::ZERO]
+    );
+    assert_eq!(
+        tnt.attachments.points(EntityAttachment::NameTag)[0]
+            .y
+            .to_bits(),
+        f64::from(tnt.height).to_bits()
+    );
+    assert_eq!(
+        tnt.attachments.points(EntityAttachment::WardenChest)[0]
+            .y
+            .to_bits(),
+        f64::from(tnt.height / 2.0).to_bits()
+    );
+    assert_eq!(
+        EntityType::PLAYER
+            .data()
+            .attachments
+            .points(EntityAttachment::Vehicle),
+        &[Vec3::new(0.0, 0.6, 0.0)]
+    );
+    for data in ENTITY_TYPES {
+        for attachment in [
+            EntityAttachment::Passenger,
+            EntityAttachment::Vehicle,
+            EntityAttachment::NameTag,
+            EntityAttachment::WardenChest,
+        ] {
+            assert!(!data.attachments.points(attachment).is_empty());
+            assert!(
+                data.attachments
+                    .points(attachment)
+                    .iter()
+                    .all(|point| point.x.is_finite() && point.y.is_finite() && point.z.is_finite())
+            );
+        }
+    }
+}
+
+#[test]
+fn native_attribute_defaults_ranges_and_sync_flags_remain_distinct_from_type_overrides() {
+    use registries::attribute::Id;
+    assert_eq!(
+        *Id::MAX_HEALTH.data(),
+        AttributeData {
+            default_value: 20.0,
+            range: Some(AttributeRange {
+                min: 1.0,
+                max: 1024.0
+            }),
+            syncable: true
+        }
+    );
+    assert_eq!(
+        *Id::GRAVITY.data(),
+        AttributeData {
+            default_value: 0.08,
+            range: Some(AttributeRange {
+                min: -1.0,
+                max: 1.0
+            }),
+            syncable: true
+        }
+    );
+    assert!(!Id::FOLLOW_RANGE.data().syncable);
+    assert_eq!(Id::MOVEMENT_SPEED.data().default_value, 0.7);
+    assert_eq!(
+        EntityType::PLAYER
+            .data()
+            .attributes
+            .iter()
+            .find(|(id, _)| *id == Id::MOVEMENT_SPEED)
+            .unwrap()
+            .1,
+        f64::from(0.1_f32)
+    );
+    for id in registries::attribute::ALL {
+        let data = id.data();
+        if let Some(range) = data.range {
+            assert!(
+                range.min <= data.default_value && data.default_value <= range.max,
+                "{}",
+                id.name()
+            );
+        }
+    }
+}
+
 fn check_property<T: PropertyValue + Debug>(
     state: BlockState,
     property: Property<T>,

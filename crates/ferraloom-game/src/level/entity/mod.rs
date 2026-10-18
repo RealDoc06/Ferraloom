@@ -10,10 +10,13 @@ use super::{Level, LevelError};
 use crate::entity::{EntityData, EntityRef, EntityState, RemovalReason};
 
 mod persistent;
+mod push;
+mod worldgen;
 pub use persistent::{
     ChunkLoadStatus, EntityLoadRequestId, EntityStorageError, EntityStorageRequest,
     PersistentEntitySectionManager,
 };
+pub use worldgen::WorldgenEntityLoadError;
 
 pub(crate) fn new_entity_random() -> ferraloom_util::random::LegacyRandomSource {
     let ferraloom_util::random::Random::Legacy(random) = super::random::new_level_random() else {
@@ -189,13 +192,15 @@ impl EntityIdAllocator {
 #[derive(Default)]
 pub struct EntityStorage {
     persistent: PersistentEntitySectionManager,
+    // Objects rejected by the UUID guard can still be held by a successfully
+    // loaded passenger. Their vanilla level callback remains NULL.
+    unmanaged: HashSet<EntityRef>,
     known_uuids: HashSet<Uuid>,
     chunk_visibility: Long2ObjectOpenHashMap<Visibility>,
     management_events: Vec<EntityManagementEvent>,
     next_ref: u64,
     effects: Vec<crate::entity::effects::EntityEffect>,
     pending_retire: Vec<EntityRef>,
-    movement_effects: Vec<crate::entity::movement::MovementEffect>,
     pub border: crate::level::border::WorldBorder,
     states: HashMap<EntityRef, EntityState>,
     pub lookup: EntityLookup,
@@ -246,6 +251,7 @@ impl EntityStorage {
     fn retire(&mut self, id: EntityRef) {
         self.states.remove(&id);
         self.sections.remove(id);
+        self.unmanaged.remove(&id);
     }
     fn stop_accessing(&mut self, id: EntityRef) {
         if let Some(state) = self.states.get(&id) {
@@ -320,13 +326,6 @@ impl Level {
         self.region().max_y - 1
     }
 
-    pub fn emit_entity_movement_effect(&mut self, effect: crate::entity::movement::MovementEffect) {
-        self.region_mut().entities.movement_effects.push(effect);
-    }
-    pub fn take_entity_movement_effects(&mut self) -> Vec<crate::entity::movement::MovementEffect> {
-        std::mem::take(&mut self.region_mut().entities.movement_effects)
-    }
-
     pub fn entity_world_border(&self) -> &crate::level::border::WorldBorder {
         &self.region().entities.border
     }
@@ -370,6 +369,14 @@ impl Level {
                 .push(EntityManagementEvent::TickingStart(entity));
         }
         Ok(())
+    }
+    fn retain_unmanaged_entity(&mut self, entity: EntityRef, state: EntityState) {
+        let storage = &mut self.region_mut().entities;
+        assert!(!storage.states.contains_key(&entity), "new entity handle");
+        storage.next_ref = storage.next_ref.max(entity.0);
+        storage.states.insert(entity, state);
+        storage.unmanaged.insert(entity);
+        storage.pending_retire.push(entity);
     }
     pub fn take_entity_management_events(&mut self) -> Vec<EntityManagementEvent> {
         std::mem::take(&mut self.region_mut().entities.management_events)
@@ -522,6 +529,9 @@ impl Level {
         for passenger in passengers {
             crate::entity::stop_riding(passenger, self)?;
         }
+        if self.region().entities.unmanaged.contains(&entity) {
+            return Ok(());
+        }
         if !was_removed {
             if status.is_ticking() {
                 self.stop_entity_ticking(entity);
@@ -554,7 +564,9 @@ impl Level {
             .and_then(|key| self.region().entities.sections.sections.get(&key))
             .map_or(Visibility::Hidden, |section| section.visibility);
         self.entity_mut::<EntityData>(entity)?.set_pos(pos);
-        if !self.entity::<EntityData>(entity)?.removed {
+        if !self.entity::<EntityData>(entity)?.removed
+            && !self.region().entities.unmanaged.contains(&entity)
+        {
             let section = SectionPos::from_position(pos);
             let new_key = section.as_long();
             let status = self
@@ -681,7 +693,7 @@ impl Level {
     fn tick_passenger(
         &mut self,
         vehicle: EntityRef,
-        mut passenger: EntityRef,
+        passenger: EntityRef,
     ) -> Result<(), LevelError> {
         let base = self.entity::<EntityData>(passenger)?;
         if base.removed || base.vehicle != Some(vehicle) {
@@ -694,9 +706,8 @@ impl Level {
             return Ok(());
         }
         crate::entity::common_tick(passenger, self)?;
-        self.entity_mut::<EntityData>(passenger)?.velocity = Vec3::ZERO;
-        passenger.tick(self)?;
-        crate::entity::position_rider(vehicle, passenger, self)?;
+        self.entity_behavior(passenger)?
+            .ride_tick(passenger, self)?;
         let passengers = self.entity::<EntityData>(passenger)?.passengers.clone();
         for child in passengers {
             self.tick_passenger(passenger, child)?;
@@ -711,7 +722,7 @@ impl Level {
         let mut work = Vec::new();
         // Map order affects only set membership, never simulation callbacks.
         for (&id, state) in &self.region().entities.states {
-            if !state.as_entity().removed {
+            if !state.as_entity().removed && !self.region().entities.unmanaged.contains(&id) {
                 self.entity_behavior(id)
                     .expect("stored entity dispatcher")
                     .trace_entity_refs(state, &mut work);
