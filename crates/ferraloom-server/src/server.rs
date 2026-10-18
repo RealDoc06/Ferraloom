@@ -918,6 +918,7 @@ impl MinecraftServer {
         }
         if self.properties.boolean("force-gamemode") {
             player.game_mode = mode;
+            player.update_game_mode_abilities();
         }
         player.view_distance = i32::from(self.connections[&connection].information.view_distance);
         let center = player.chunk_position();
