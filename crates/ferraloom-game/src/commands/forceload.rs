@@ -242,9 +242,9 @@ mod tests {
                     "{}",
                     vector.command
                 );
-                let mut feedback = output.result.feedback.into_iter().map(|feedback| serde_json::json!({"failure":false,"broadcast":feedback.broadcast,"message":feedback.message.to_json().unwrap()})).collect::<Vec<_>>();
+                let mut feedback = output.result.feedback.into_iter().map(|feedback| serde_json::json!({"failure":false,"broadcast":feedback.broadcast,"message":serde_json::from_str::<serde_json::Value>(&feedback.message.to_json().unwrap()).unwrap()})).collect::<Vec<_>>();
                 if let Some(failure) = output.failure {
-                    feedback.push(serde_json::json!({"failure":true,"broadcast":false,"message":failure.to_json().unwrap()}));
+                    feedback.push(serde_json::json!({"failure":true,"broadcast":false,"message":serde_json::from_str::<serde_json::Value>(&failure.to_json().unwrap()).unwrap()}));
                 }
                 assert_eq!(
                     serde_json::json!(feedback),

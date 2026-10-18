@@ -120,7 +120,13 @@ mod tests {
                 Tag::Compound(spawn.to_nbt()),
                 ferraloom_nbt::parse(&vector.nbt).unwrap()
             );
-            assert_eq!(spawn.world_feedback().to_json().unwrap(), vector.component);
+            assert_eq!(
+                serde_json::from_str::<serde_json::Value>(
+                    &spawn.world_feedback().to_json().unwrap()
+                )
+                .unwrap(),
+                vector.component
+            );
         }
     }
 }
