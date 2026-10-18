@@ -42,7 +42,7 @@ public final class InventoryVectors {
     public void sendDataChange(AbstractContainerMenu m,int slot,int value){events.add("D:"+slot+":"+value);}
   }
   static String item(ItemStack stack){return stack.isEmpty()?"-":BuiltInRegistries.ITEM.getId(stack.getItem())+","+stack.getCount()+","+stack.getMaxStackSize();}
-  static String slots(AbstractContainerMenu menu){var result=new ArrayList<String>();for(int i=0;i<menu.slots.size();i++)if(menu.getSlot(i).hasItem())result.add(i+":"+item(menu.getSlot(i).getItem()));return String.join(";",result);}
+  static String slots(AbstractContainerMenu menu){var result=new ArrayList<String>();for(int i=0;i<menu.slots.size();i++)if(menu.getSlot(i).hasItem())result.add(i+":"+item(menu.getSlot(i).getItem()));return result.isEmpty()?"-":String.join(";",result);}
   static ItemStack stack(Item item,int count,int max){var stack=new ItemStack(item,count);if(max!=item.components().getOrDefault(DataComponents.MAX_STACK_SIZE,1))stack.set(DataComponents.MAX_STACK_SIZE,max);return stack;}
   static AbstractContainerMenu menu(String name,MenuPlayer player){var inv=player.getInventory();return switch(name){
     case "inventory"->new InventoryMenu(inv,true,player);
@@ -82,7 +82,7 @@ public final class InventoryVectors {
       int mode=step%4;menu.suppressRemoteUpdates();menu.clicked(slot,button,input,player);
       if(mode==1){for(int i=0;i<menu.slots.size();i++)menu.setRemoteSlotUnsafe(i,HashedStack.create(menu.getSlot(i).getItem(),sync.hasher));menu.setRemoteCarried(HashedStack.create(menu.getCarried(),sync.hasher));}
       menu.resumeRemoteUpdates();if(mode==3)menu.broadcastFullState();else menu.broadcastChanges();
-      System.out.println("click\t"+name+"\t"+(step++)+"\t"+slot+"\t"+button+"\t"+input.ordinal()+"\t"+slots(menu)+"\t"+item(menu.getCarried())+"\t"+menu.getStateId()+"\t"+String.join(";",sync.events)+"\t"+String.join(";",player.drops));
+      System.out.println("click\t"+name+"\t"+(step++)+"\t"+slot+"\t"+button+"\t"+input.ordinal()+"\t"+slots(menu)+"\t"+item(menu.getCarried())+"\t"+menu.getStateId()+"\t"+String.join(";",sync.events)+"\t"+(player.drops.isEmpty()?"-":String.join(";",player.drops)));
       sync.events.clear();player.drops.clear();
     }
   }

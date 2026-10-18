@@ -620,12 +620,11 @@ impl AbstractContainerMenu {
             // Direct quickMoveStack callers must provide the same result hook.
             self.take_hook(ctx, &slot, &stack, crafted, hooks)?;
         }
-        if matches!(self.kind, MenuKind::Inventory | MenuKind::Crafting) && index == 0
-            || self.kind == MenuKind::Stonecutter && index == 1
+        if ((matches!(self.kind, MenuKind::Inventory | MenuKind::Crafting) && index == 0)
+            || (self.kind == MenuKind::Stonecutter && index == 1))
+            && !stack.is_empty()
         {
-            if !stack.is_empty() {
-                ctx.drops.push(stack);
-            }
+            ctx.drops.push(stack);
         }
         Ok(original)
     }

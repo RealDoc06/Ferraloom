@@ -66,13 +66,19 @@ fn parse_item(value: &str) -> ItemStack {
     ItemStack::new(item, amount, patch)
 }
 fn slots(menu: &AbstractContainerMenu, ctx: &MenuContext<'_>) -> String {
-    menu.items(ctx)
+    let result = menu
+        .items(ctx)
         .iter()
         .enumerate()
         .filter(|(_, s)| !s.is_empty())
         .map(|(i, s)| format!("{i}:{}", item(s)))
         .collect::<Vec<_>>()
-        .join(";")
+        .join(";");
+    if result.is_empty() {
+        "-".into()
+    } else {
+        result
+    }
 }
 fn events(updates: Vec<ContainerUpdate>) -> String {
     updates
@@ -166,7 +172,7 @@ fn real_vanilla_click_sequences_slots_carried_state_and_remote_updates() {
                 menu = AbstractContainerMenu::new(k, if k == MenuKind::Inventory { 0 } else { 7 })
                     .unwrap();
                 let mut ctx = MenuContext::player(&mut inventory, &mut equipment, creative);
-                for entry in f[4].split(';').filter(|s| !s.is_empty()) {
+                for entry in f[4].split(';').filter(|s| !s.is_empty() && *s != "-") {
                     let (slot, stack) = entry.split_once(':').unwrap();
                     menu.set_item(&mut ctx, slot.parse().unwrap(), parse_item(stack));
                 }
@@ -209,7 +215,11 @@ fn real_vanilla_click_sequences_slots_carried_state_and_remote_updates() {
                     item(&menu.carried),
                     menu.state_id().to_string(),
                     events(std::mem::take(&mut menu.updates)),
-                    ctx.drops.iter().map(item).collect::<Vec<_>>().join(";"),
+                    if ctx.drops.is_empty() {
+                        "-".into()
+                    } else {
+                        ctx.drops.iter().map(item).collect::<Vec<_>>().join(";")
+                    },
                 ];
                 assert_eq!(
                     actual.iter().map(String::as_str).collect::<Vec<_>>(),
