@@ -54,12 +54,6 @@ async fn record(session: &mut Session) -> Result<ObservationLog> {
         "commands.fill.success",
     )
     .await?;
-    command(
-        bot,
-        "fill 4 -59 4 30 -56 20 minecraft:air strict",
-        "commands.fill.success",
-    )
-    .await?;
     let mut log = ObservationLog::default();
     command(
         bot,

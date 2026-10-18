@@ -55,12 +55,6 @@ async fn record(session: &mut Session) -> Result<ObservationLog> {
         "commands.fill.success",
     )
     .await?;
-    command(
-        bot,
-        "fill 4 -59 4 32 -56 24 minecraft:air strict",
-        "commands.fill.success",
-    )
-    .await?;
     let mut log = ObservationLog::default();
     let limit = [BlockPos::new(8, -59, 8), BlockPos::new(8, -59, 12)];
     for (pos, length) in limit.into_iter().zip([12, 13]) {
