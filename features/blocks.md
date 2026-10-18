@@ -327,3 +327,5 @@ One class row per bootstrapped runtime Block class, listing every block id assig
 | blocks.plants.shared-brightness | Shared reader requires canonical light context | `BlockAndLightGetter#getRawBrightness` | `plants::tests::shared_raw_brightness_requires_light_context` | - | todo |
 
 | blocks.drops.registry | Optional native block loot-table identities and exact getDrops/spawnAfterBreak virtual ownership | `BlockBehaviour#getLootTable; getDrops; spawnAfterBreak` | `ExtractBlockDropTables; ExtractBlockMethods` (1286 block registry entries) | pass | partial |
+
+| blocks.interaction.feature-eligibility | Check every block and item against the dedicated server advertised VANILLA_SET | `FeatureElement#isEnabled` | `tools/extractor/ExtractFeatureRequirements.java` (all native registry entries) | pass | partial |
