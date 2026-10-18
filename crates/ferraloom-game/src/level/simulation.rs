@@ -109,6 +109,9 @@ impl FixedPlayerDistanceChunkTracker {
     pub fn update_player_chunk(&mut self, pos: ChunkPos, present: bool) {
         self.graph.set_source_level(pos, present.then_some(0));
     }
+    pub fn update_source_level(&mut self, pos: ChunkPos, level: i32, only_decreased: bool) {
+        self.graph.update_source_level(pos, level, only_decreased);
+    }
     pub fn run_all_updates(&mut self) {
         self.graph.run_all_updates();
     }
