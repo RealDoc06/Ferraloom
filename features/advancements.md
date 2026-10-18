@@ -1,6 +1,6 @@
 # Advancements
 
-Phase 1 covers codecs, pure matching and player-local progression. Live player trigger calls, rewards delivery, and the game-rule adapter are pending phase 2. Identity-set child order is captured for exact layout comparison; runtime identity collections use deterministic insertion order.
+Codecs, pure and live matching, progression, ordered reward delivery, game rules, packets and persistence adapters are implemented. Native tick and menu producers and Strict interaction parity await integration; LOCATION also awaits structure facts. Identity-set child order is captured for exact layout comparison; runtime identity collections use deterministic insertion order.
 
 Mechanics are identified from the 26.3 server source. Registry and resource entries are mechanically enumerated from the official reports, bootstrapped registries and built-in datapack.
 
