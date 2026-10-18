@@ -601,8 +601,60 @@ impl crate::entity::Entity for PlayerBehavior {
     fn fire_immune_ticks(&self) -> i32 {
         20
     }
-    fn default_gravity(&self) -> f64 {
-        0.08
+    fn default_gravity(
+        &self,
+        entity: crate::entity::EntityRef,
+        level: &crate::level::Level,
+    ) -> Result<f64, crate::level::LevelError> {
+        crate::entity::living::attribute(
+            entity,
+            ferraloom_data::registries::attribute::Id::GRAVITY,
+            level,
+        )
+    }
+    fn max_up_step(
+        &self,
+        entity: crate::entity::EntityRef,
+        level: &crate::level::Level,
+    ) -> Result<f32, crate::level::LevelError> {
+        Ok(crate::entity::living::attribute(
+            entity,
+            ferraloom_data::registries::attribute::Id::STEP_HEIGHT,
+            level,
+        )? as f32)
+    }
+    fn bounciness(
+        &self,
+        entity: crate::entity::EntityRef,
+        level: &crate::level::Level,
+    ) -> Result<f64, crate::level::LevelError> {
+        crate::entity::living::attribute(
+            entity,
+            ferraloom_data::registries::attribute::Id::BOUNCINESS,
+            level,
+        )
+    }
+    fn air_drag(
+        &self,
+        entity: crate::entity::EntityRef,
+        level: &crate::level::Level,
+    ) -> Result<f32, crate::level::LevelError> {
+        crate::entity::living::air_drag(entity, level)
+    }
+    fn block_speed_factor(
+        &self,
+        entity: crate::entity::EntityRef,
+        level: &crate::level::Level,
+    ) -> Result<f32, crate::level::LevelError> {
+        crate::entity::living::block_speed_factor(entity, level)
+    }
+    fn ignite_for_ticks(
+        &self,
+        entity: crate::entity::EntityRef,
+        ticks: i32,
+        level: &mut crate::level::Level,
+    ) -> Result<(), crate::level::LevelError> {
+        crate::entity::living::ignite_for_ticks(entity, ticks, level)
     }
     fn tick(&self, entity: crate::entity::EntityRef, level: &mut Level) -> Result<(), LevelError> {
         crate::inventory::tick_container_menu(entity, level)?;

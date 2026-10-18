@@ -136,6 +136,50 @@ pub fn item_by_slot(
         .clone())
 }
 
+/// Port of LivingEntity#getAttributeValue for its required supplier attributes.
+pub fn attribute(
+    entity: super::EntityRef,
+    attribute: Attribute,
+    level: &crate::level::Level,
+) -> Result<f64, crate::level::LevelError> {
+    Ok(level
+        .entity::<LivingEntity>(entity)?
+        .attributes
+        .value(attribute)
+        .expect("living supplier defines this required attribute"))
+}
+/// Port of LivingEntity#getBlockSpeedFactor. Capture efficiency before calling
+/// the Entity parent, then interpolate using native float arithmetic.
+pub fn block_speed_factor(
+    entity: super::EntityRef,
+    level: &crate::level::Level,
+) -> Result<f32, crate::level::LevelError> {
+    let efficiency = attribute(entity, Attribute::MOVEMENT_EFFICIENCY, level)? as f32;
+    let base = super::movement::block_speed_factor(entity, level)?;
+    Ok(base + efficiency * (1.0 - base))
+}
+/// Port of LivingEntity#getAirDrag for the supported ground-moving families.
+pub fn air_drag(
+    entity: super::EntityRef,
+    level: &crate::level::Level,
+) -> Result<f32, crate::level::LevelError> {
+    let modifier = attribute(entity, Attribute::AIR_DRAG_MODIFIER, level)? as f32;
+    Ok((1.0_f32 - (1.0_f32 - 0.98_f32) * modifier).clamp(0.0, 1.0))
+}
+/// Port of LivingEntity#igniteForTicks followed by the Entity parent body.
+pub fn ignite_for_ticks(
+    entity: super::EntityRef,
+    ticks: i32,
+    level: &mut crate::level::Level,
+) -> Result<(), crate::level::LevelError> {
+    let scaled = f64::from(ticks) * attribute(entity, Attribute::BURNING_TIME, level)?;
+    let ticks = ferraloom_util::mth::ceil(scaled);
+    level
+        .entity_mut::<EntityData>(entity)?
+        .ignite_for_ticks(ticks);
+    Ok(())
+}
+
 /// Port of LivingEntity#getDimensions, retaining the subclass's default pose
 /// dimensions and applying the live SCALE attribute as a separate float step.
 pub fn dimensions<E: super::Entity + ?Sized>(

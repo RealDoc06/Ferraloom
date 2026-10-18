@@ -34,6 +34,79 @@ fn assert_vector(actual: Vec3, expected: Vec3, label: &str) {
 }
 
 #[test]
+fn living_movement_and_ignition_use_live_attributes_with_native_float_steps() {
+    use ferraloom_data::registries::attribute::Id as Attribute;
+    use ferraloom_protocol::codec::VarInt;
+    let mut level = level(true);
+    level
+        .set_block_state(BlockPos::new(8, 63, 8), Block::SOUL_SAND.default_state())
+        .unwrap();
+    let id = EntityRef(1);
+    let player = player::ServerPlayer::new(
+        Uuid::new(1, 2),
+        "movement".into(),
+        1,
+        Vec3::new(8.5, 64.0, 8.5),
+        player::GameType::Survival,
+    );
+    level
+        .add_entity(id, EntityState::Player(Box::new(player)))
+        .unwrap();
+    let attributes = [
+        Attribute::STEP_HEIGHT,
+        Attribute::GRAVITY,
+        Attribute::AIR_DRAG_MODIFIER,
+        Attribute::BOUNCINESS,
+        Attribute::MOVEMENT_EFFICIENCY,
+        Attribute::BURNING_TIME,
+    ];
+    let values = [
+        [0.6, 0.08, 1.0, 0.0, 0.0, 1.0],
+        [1.25, 0.015, 2.0, 0.75, 0.5, 0.125],
+        [0.0, -0.1, 0.0, 1.25, 1.0, 2.0],
+        [0.6, 0.08, 100.0, 0.0, 0.25, 1024.0],
+    ];
+    let mut actual = Vec::new();
+    for (index, values) in values.into_iter().enumerate() {
+        for (attribute, value) in attributes.into_iter().zip(values) {
+            level
+                .entity_mut::<LivingEntity>(id)
+                .unwrap()
+                .attributes
+                .get_instance(attribute)
+                .unwrap()
+                .set_base_value(value);
+        }
+        {
+            let base = level.entity_mut::<EntityData>(id).unwrap();
+            base.entity_data.set(synched_data::NO_GRAVITY, index == 2);
+            base.remaining_fire_ticks = -20;
+            base.entity_data
+                .set(synched_data::TICKS_FROZEN, VarInt(100));
+        }
+        inside_block::ignite_for_ticks(id, if index == 3 { i32::MAX } else { 123 }, &mut level)
+            .unwrap();
+        let behavior = level.entity_behavior(id).unwrap();
+        let base = level.entity::<EntityData>(id).unwrap();
+        actual.push(format!(
+            "living-movement\t{index}\t{:x},{:x},{:x},{:x},{:x},{},{}",
+            behavior.max_up_step(id, &level).unwrap().to_bits(),
+            behavior.effective_gravity(id, &level).unwrap().to_bits(),
+            behavior.air_drag(id, &level).unwrap().to_bits(),
+            behavior.bounciness(id, &level).unwrap().to_bits(),
+            behavior.block_speed_factor(id, &level).unwrap().to_bits(),
+            base.remaining_fire_ticks,
+            base.ticks_frozen(),
+        ));
+    }
+    let expected: Vec<_> = VECTORS
+        .lines()
+        .filter(|line| line.starts_with("living-movement\t"))
+        .collect();
+    assert_eq!(actual, expected);
+}
+
+#[test]
 fn native_dimensions_pose_scales_and_attachment_rotations_keep_float_and_double_steps() {
     use dimensions::EntityAttachment;
     use ferraloom_protocol::entity_data::Pose;

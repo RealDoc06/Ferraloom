@@ -268,8 +268,12 @@ impl Entity for ItemEntityBehavior {
     fn movement_emission(&self) -> MovementEmission {
         MovementEmission::None
     }
-    fn default_gravity(&self) -> f64 {
-        0.04
+    fn default_gravity(
+        &self,
+        _entity: crate::entity::EntityRef,
+        _level: &crate::level::Level,
+    ) -> Result<f64, crate::level::LevelError> {
+        Ok(0.04)
     }
     fn block_pos_below_that_affects_my_movement(
         &self,
@@ -351,7 +355,7 @@ impl Entity for ItemEntityBehavior {
             self.move_by(entity, level, MoverType::SelfMovement, delta)?;
             self.apply_effects_from_blocks(entity, level)?;
             let on_ground = level.entity::<EntityData>(entity)?.on_ground;
-            let air = self.air_drag();
+            let air = self.air_drag(entity, level)?;
             let friction = if on_ground {
                 let pos = self.block_pos_below_that_affects_my_movement(entity, level)?;
                 air * level.get_block_state(pos)?.block().data().friction

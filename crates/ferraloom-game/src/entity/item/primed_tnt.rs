@@ -154,8 +154,12 @@ impl Entity for PrimedTntBehavior {
     fn movement_emission(&self) -> MovementEmission {
         MovementEmission::None
     }
-    fn default_gravity(&self) -> f64 {
-        0.04
+    fn default_gravity(
+        &self,
+        _entity: crate::entity::EntityRef,
+        _level: &crate::level::Level,
+    ) -> Result<f64, crate::level::LevelError> {
+        Ok(0.04)
     }
     /// PrimedTnt deliberately does not call Entity#tick/baseTick.
     fn tick(&self, entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
@@ -166,9 +170,10 @@ impl Entity for PrimedTntBehavior {
         let movement = level.entity::<EntityData>(entity)?.velocity;
         self.move_by(entity, level, MoverType::SelfMovement, movement)?;
         self.apply_effects_from_blocks(entity, level)?;
+        let air = self.air_drag(entity, level)?;
         {
             let base = level.entity_mut::<EntityData>(entity)?;
-            base.velocity = base.velocity.scale(f64::from(self.air_drag()));
+            base.velocity = base.velocity.scale(f64::from(air));
             if base.on_ground {
                 base.velocity = base.velocity.multiply(0.7, -0.5, 0.7);
             }

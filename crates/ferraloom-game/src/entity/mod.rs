@@ -273,18 +273,8 @@ pub trait Entity: Sync {
     ) -> Result<(), LevelError> {
         movement::move_entity(self, entity, mover, delta, level)
     }
-    fn max_up_step(&self, entity: EntityRef, level: &Level) -> Result<f32, LevelError> {
-        let state = level.entity_state(entity)?;
-        if state.as_living().is_none() {
-            return Ok(0.0);
-        }
-        Ok(state
-            .entity_type()
-            .data()
-            .attributes
-            .iter()
-            .find(|(id, _)| *id == ferraloom_data::registries::attribute::Id::STEP_HEIGHT)
-            .map_or(0.6, |(_, value)| *value as f32))
+    fn max_up_step(&self, _entity: EntityRef, _level: &Level) -> Result<f32, LevelError> {
+        Ok(0.0)
     }
     fn maybe_back_off_from_edge(
         &self,
@@ -341,8 +331,8 @@ pub trait Entity: Sync {
     fn bounciness(&self, _entity: EntityRef, _level: &Level) -> Result<f64, LevelError> {
         Ok(0.0)
     }
-    fn default_gravity(&self) -> f64 {
-        0.0
+    fn default_gravity(&self, _entity: EntityRef, _level: &Level) -> Result<f64, LevelError> {
+        Ok(0.0)
     }
     /// Port of Entity#getYHeadRot; LivingEntity overrides its stored head angle.
     fn y_head_rot(&self, _entity: EntityRef, _level: &Level) -> Result<f32, LevelError> {
@@ -357,12 +347,26 @@ pub trait Entity: Sync {
             {
                 0.0
             } else {
-                self.default_gravity()
+                self.default_gravity(entity, level)?
             },
         )
     }
-    fn air_drag(&self) -> f32 {
-        0.98
+    fn air_drag(&self, _entity: EntityRef, _level: &Level) -> Result<f32, LevelError> {
+        Ok(0.98)
+    }
+    fn block_speed_factor(&self, entity: EntityRef, level: &Level) -> Result<f32, LevelError> {
+        movement::block_speed_factor(entity, level)
+    }
+    fn ignite_for_ticks(
+        &self,
+        entity: EntityRef,
+        ticks: i32,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        level
+            .entity_mut::<EntityData>(entity)?
+            .ignite_for_ticks(ticks);
+        Ok(())
     }
 
     /// Port of LivingEntity#getLiquidCollisionShape's inherited empty result.

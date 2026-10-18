@@ -4,6 +4,8 @@ import com.mojang.authlib.GameProfile;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.level.*;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.syncher.*;
 
 /** Real Player/Avatar/LivingEntity metadata and health setters. */
@@ -27,5 +29,16 @@ public final class LivingVectors extends Player {
     data.packDirty();player.getAttribute(Attributes.MAX_HEALTH).setBaseValue(30);
     float[] health={20,30,-0.0f,Float.NaN,Float.intBitsToFloat(0x7f800001),Float.POSITIVE_INFINITY,Float.NEGATIVE_INFINITY,7.5f};
     for(int i=0;i<health.length;i++) {player.setHealth(health[i]);System.out.println("living-health\t"+i+"\t"+Integer.toHexString(Float.floatToRawIntBits(player.getHealth()))+"\t"+(data.packDirty()!=null));}
+    var pos=new BlockPos(8,63,8);
+    level.getChunkAt(pos).getSection(level.getSectionIndex(pos.getY())).setBlockState(8,15,8,Blocks.SOUL_SAND.defaultBlockState());
+    player.setPos(8.5,64,8.5);
+    var attributes=List.of(Attributes.STEP_HEIGHT,Attributes.GRAVITY,Attributes.AIR_DRAG_MODIFIER,Attributes.BOUNCINESS,Attributes.MOVEMENT_EFFICIENCY,Attributes.BURNING_TIME);
+    double[][] values={{0.6,0.08,1,0,0,1},{1.25,0.015,2,0.75,0.5,0.125},{0,-0.1,0,1.25,1,2},{0.6,0.08,100,0,0.25,1024}};
+    for(int i=0;i<values.length;i++) {
+      for(int j=0;j<attributes.size();j++) player.getAttribute(attributes.get(j)).setBaseValue(values[i][j]);
+      player.setNoGravity(i==2);player.setRemainingFireTicks(-20);player.setTicksFrozen(100);
+      player.igniteForTicks(i==3?Integer.MAX_VALUE:123);
+      System.out.println("living-movement\t"+i+"\t"+Integer.toHexString(Float.floatToRawIntBits(player.maxUpStep()))+","+Long.toHexString(Double.doubleToRawLongBits(player.getEffectiveGravity()))+","+Integer.toHexString(Float.floatToRawIntBits(player.getAirDrag()))+","+Long.toHexString(Double.doubleToRawLongBits(player.getEntityBounciness()))+","+Integer.toHexString(Float.floatToRawIntBits(player.getBlockSpeedFactor()))+","+player.getRemainingFireTicks()+","+player.getTicksFrozen());
+    }
   }
 }

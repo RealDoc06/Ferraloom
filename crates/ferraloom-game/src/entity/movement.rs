@@ -313,7 +313,7 @@ pub fn move_entity<E: Entity + ?Sized>(
     if emission != MovementEmission::None && level.entity::<EntityData>(entity)?.vehicle.is_none() {
         apply_movement_emission(entity, emission, movement, effect_pos, effect_state, level)?;
     }
-    let factor = f64::from(block_speed_factor(entity, level)?);
+    let factor = f64::from(behavior.block_speed_factor(entity, level)?);
     let base = level.entity_mut::<EntityData>(entity)?;
     base.velocity = base.velocity.multiply(factor, 1.0, factor);
     Ok(())
@@ -403,7 +403,7 @@ fn restitute<E: Entity + ?Sized>(
             bounced = true;
             (
                 portion * gravity,
-                mth::lerp(portion, 1.0, f64::from(behavior.air_drag())),
+                mth::lerp(portion, 1.0, f64::from(behavior.air_drag(entity, level)?)),
             )
         } else {
             (0.0, 1.0)
