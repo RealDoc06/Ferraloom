@@ -219,9 +219,7 @@ impl StructureStart {
         if id.to_string_lossy() == "INVALID" {
             return Ok(Some(Self::invalid()));
         }
-        let Ok(id) = id.to_string_lossy().parse::<Identifier>() else {
-            return Ok(None);
-        };
+        let id = id.to_string_lossy().parse::<Identifier>()?;
         let Some(definition) = settings.structures.get(&id) else {
             return Ok(None);
         };
@@ -436,13 +434,7 @@ impl PoolElementStructurePiece {
         resources: &ResourceManager,
         decode_feature: &mut impl FnMut(&serde_json::Value) -> Result<Arc<PlacedFeature>, Error>,
     ) -> Result<Self, Error> {
-        if tag
-            .get("BB")
-            .and_then(Tag::as_int_array)
-            .is_none_or(|v| v.len() != 6)
-        {
-            return Err(Error("invalid piece bounding box".into()));
-        }
+        let data = super::piece::StructurePieceData::from_nbt(tag)?;
         let rotation = match tag
             .get_string("rotation")
             .map(|s| s.to_string_lossy())
@@ -500,12 +492,45 @@ impl PoolElementStructurePiece {
                 .and_then(|v| super::nbt::to_json(v).ok())
                 .and_then(|v| LiquidSettings::decode(&v).ok())
                 .unwrap_or_default(),
-            gen_depth: tag.get_int("GD").unwrap_or(0),
-            orientation: match tag.get_int("O").unwrap_or(0) {
-                -1 => None,
-                value => Some(Direction::from_2d_data_value(value)),
-            },
+            gen_depth: data.gen_depth,
+            orientation: data.orientation,
             junctions,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::structure::{pipeline::StructureRegistry, processor::tests::generator};
+    use serde_json::Value;
+    use std::io::Read;
+    #[test]
+    fn start_codec_numeric_bounds_aliases_invalid_children_and_ids_match_vanilla() {
+        let (resources, generator) = generator();
+        let registry = StructureRegistry::load(&resources, &generator.data).unwrap();
+        let templates = StructureTemplateManager::load_all(&resources).unwrap();
+        let mut text = String::new();
+        flate2::read::GzDecoder::new(&include_bytes!("testdata/structure_start_codec.json.gz")[..])
+            .read_to_string(&mut text)
+            .unwrap();
+        let cases: Value = serde_json::from_str(&text).unwrap();
+        for case in cases.as_array().unwrap() {
+            let input = ferraloom_nbt::parse_compound(case["input"].as_str().unwrap()).unwrap();
+            let result =
+                StructureStart::from_nbt(&input, &registry, &templates, &resources, &mut |_| {
+                    Err(Error("no inline features".into()))
+                });
+            match case["outcome"].as_str().unwrap() {
+                "throws" => assert!(result.is_err(), "{input:?}"),
+                "null" => assert!(result.unwrap().is_none(), "{input:?}"),
+                "start" => assert_eq!(
+                    result.unwrap().unwrap().to_nbt([-7, 11]).unwrap(),
+                    ferraloom_nbt::parse_compound(case["output"].as_str().unwrap()).unwrap(),
+                    "{input:?}"
+                ),
+                _ => unreachable!(),
+            }
+        }
     }
 }

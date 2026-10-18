@@ -39,9 +39,11 @@ impl StructurePieceData {
         // BoundingBox.CODEC consumes an int stream, including homogeneous lists.
         let bounds = match tag.get("BB") {
             Some(Tag::IntArray(a)) => a.clone(),
+            Some(Tag::ByteArray(a)) => a.iter().copied().map(i32::from).collect(),
+            Some(Tag::LongArray(a)) => a.iter().map(|v| *v as i32).collect(),
             Some(Tag::List(a)) => a
                 .iter()
-                .map(|v| v.as_int().ok_or_else(|| Error("invalid piece BB".into())))
+                .map(|v| super::nbt::ops_int(v).ok_or_else(|| Error("invalid piece BB".into())))
                 .collect::<Result<Vec<_>, _>>()?,
             _ => return Err(Error("missing piece BB".into())),
         };
