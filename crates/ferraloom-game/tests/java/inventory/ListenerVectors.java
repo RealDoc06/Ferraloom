@@ -211,6 +211,43 @@ public final class ListenerVectors {
     events.add("targets:" + InventoryVectors.item(menu.getSlot(0).getItem()) + ":" + InventoryVectors.item(menu.getSlot(1).getItem()));
     System.out.println("listener\tquickcraft\t" + String.join(";", events));
   }
+  static void resultAchievements(RegistryAccess registries, int amount) throws Exception {
+    var events = new ArrayList<String>();
+    var grid = new TransientCraftingContainer[1];
+    var slot = new ResultSlot[1];
+    var removeCount = ResultSlot.class.getDeclaredField("removeCount");
+    removeCount.setAccessible(true);
+    var player = new net.minecraft.world.entity.player.Player(new InventoryVectors.MenuLevel(registries),
+      new com.mojang.authlib.GameProfile(new UUID(3, 4), "result")) {
+      @Override public net.minecraft.world.level.GameType gameMode() { return net.minecraft.world.level.GameType.SURVIVAL; }
+      @Override public void awardStat(net.minecraft.stats.Stat<?> stat, int count) {
+        events.add("crafted:" + count);
+        grid[0].setItem(0, new ItemStack(Items.DIRT, 3));
+        try { removeCount.setInt(slot[0], 19); } catch (Exception error) { throw new RuntimeException(error); }
+      }
+    };
+    var menu = ChestMenu.oneRow(7, player.getInventory());
+    grid[0] = new TransientCraftingContainer(menu, 2, 2);
+    grid[0].setItem(0, new ItemStack(Items.STONE, 5));
+    var result = new ResultContainer() {
+      @Override public void awardUsedRecipes(net.minecraft.world.entity.player.Player receiver, List<ItemStack> input) {
+        try { events.add("award:" + removeCount.getInt(slot[0]) + ":" + input.size() + ":" + InventoryVectors.item(input.get(0))); }
+        catch (Exception error) { throw new RuntimeException(error); }
+        grid[0].setItem(0, new ItemStack(Items.DIAMOND, 7));
+        events.add("captured:" + InventoryVectors.item(input.get(0)));
+      }
+    };
+    class ExposedResultSlot extends ResultSlot {
+      ExposedResultSlot() { super(player, grid[0], result, 0, 0, 0); }
+      void check(ItemStack stack) { checkTakeAchievements(stack); }
+    }
+    var exposed = new ExposedResultSlot();
+    slot[0] = exposed;
+    removeCount.setInt(exposed, amount);
+    exposed.check(new ItemStack(Items.STONE, 4));
+    events.add("after:" + removeCount.getInt(exposed) + ":" + InventoryVectors.item(grid[0].getItem(0)));
+    System.out.println("listener\tresult-achievements-" + amount + "\t" + String.join(";", events));
+  }
   public static void main(String[] args) throws Exception {
     var output = System.out;
     var errors = System.err;
@@ -234,5 +271,7 @@ public final class ListenerVectors {
     for (var kind : new String[]{"partial", "infinite", "empty", "damaged", "detached"}) inventoryAdd(registries, kind);
     swap(registries);
     quickcraft(registries);
+    resultAchievements(registries, 0);
+    resultAchievements(registries, 4);
   }
 }

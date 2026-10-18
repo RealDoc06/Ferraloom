@@ -24,6 +24,6 @@ run([str(java/'java'), '-cp', f'{classes}:{cp}', 'EntityVectors', 'generate', st
 run([str(java/'javac'), '-cp', f'{classes}:{cp}', '-d', str(classes), str(classes/'EntityFixture.java'), str(source/'InventoryVectors.java'), str(source/'ListenerVectors.java')])
 output = run([str(java/'java'), '-Xmx768m', '-cp', f'{classes}:{cp}', 'ListenerVectors'])
 rows = [line for line in output.splitlines() if line.startswith('listener\t')]
-assert len(rows) == 16
+assert len(rows) == 18
 (source/'listeners.tsv').write_text('\n'.join(rows)+'\n')
 print(f'{len(rows)} native listener reentry timelines')

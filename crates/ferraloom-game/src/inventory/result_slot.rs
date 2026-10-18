@@ -143,3 +143,129 @@ impl CraftingResultContext for super::in_memory::InMemoryMenuOperation<'_, '_, '
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        crafting::{CraftingInputAccess, RecipeHolder},
+        entity::player::{equipment::EntityEquipment, inventory::Inventory},
+    };
+    use ferraloom_data::Item;
+
+    fn describe(stack: &ItemStack) -> String {
+        if stack.is_empty() {
+            "-".into()
+        } else {
+            format!(
+                "{},{},{}",
+                stack.item().protocol_id(),
+                count(stack),
+                max_stack_size(stack)
+            )
+        }
+    }
+    #[derive(Default)]
+    struct ReentrantCrafting(Vec<String>);
+    impl MenuHooks for ReentrantCrafting {
+        fn has_crafting(&self) -> bool {
+            true
+        }
+        fn crafting(&mut self) -> Option<&mut dyn CraftingMenuHooks> {
+            Some(self)
+        }
+    }
+    impl CraftingMenuHooks for ReentrantCrafting {
+        fn validate_take_result(&self) -> Result<()> {
+            Ok(())
+        }
+        fn result(
+            &self,
+            _: &dyn CraftingInputAccess,
+            _: Option<&Identifier>,
+        ) -> Result<CraftingResult> {
+            Err(MenuError::Unsupported("unused result query"))
+        }
+        fn remaining(&self, _: &dyn CraftingInputAccess) -> Result<Option<Vec<ItemStack>>> {
+            Err(MenuError::Unsupported("unused remainder query"))
+        }
+        fn matches(&self, _: &RecipeHolder, _: &dyn CraftingInputAccess) -> Result<bool> {
+            Err(MenuError::Unsupported("unused recipe query"))
+        }
+        fn item_crafted(
+            &mut self,
+            menu: &mut AbstractContainerMenu,
+            context: &mut MenuContext<'_>,
+            _: &ItemStack,
+            amount: Option<i32>,
+        ) -> Result<()> {
+            self.0.push(format!("crafted:{}", amount.unwrap()));
+            menu.set_item(
+                context,
+                1,
+                ItemStack::new(Item::DIRT, 3, Default::default()),
+            );
+            menu.crafting_remove_count = 19;
+            Ok(())
+        }
+        fn award(
+            &mut self,
+            menu: &mut AbstractContainerMenu,
+            context: &mut MenuContext<'_>,
+            _: &Identifier,
+            input: &[ItemStack],
+        ) -> Result<bool> {
+            self.0.push(format!(
+                "award:{}:{}:{}",
+                menu.crafting_remove_count,
+                input.len(),
+                describe(&input[0])
+            ));
+            menu.set_item(
+                context,
+                1,
+                ItemStack::new(Item::DIAMOND, 7, Default::default()),
+            );
+            self.0.push(format!("captured:{}", describe(&input[0])));
+            Ok(true)
+        }
+    }
+
+    #[test]
+    fn crafting_achievements_capture_inputs_after_item_callbacks_and_reset_after_awards() {
+        let mut cases = 0;
+        for line in include_str!("../../tests/java/inventory/listeners.tsv").lines() {
+            let fields: Vec<_> = line.split('\t').collect();
+            let Some(amount) = fields[1].strip_prefix("result-achievements-") else {
+                continue;
+            };
+            let mut inventory = Inventory::default();
+            let mut equipment = EntityEquipment::default();
+            let mut context = MenuContext::player(&mut inventory, &mut equipment, false);
+            let mut menu = AbstractContainerMenu::new(MenuKind::Inventory, 0).unwrap();
+            menu.set_item(
+                &mut context,
+                1,
+                ItemStack::new(Item::STONE, 5, Default::default()),
+            );
+            menu.crafting_remove_count = amount.parse().unwrap();
+            menu.crafting_recipe_used = Some("test:used".parse().unwrap());
+            let mut hooks = ReentrantCrafting::default();
+            {
+                let mut operation =
+                    super::super::in_memory::InMemoryMenuOperation::new(&mut menu, &mut context);
+                let output = operation.own(ItemStack::new(Item::STONE, 4, Default::default()));
+                check_crafting_take_achievements(&mut operation, output, &mut hooks).unwrap();
+            }
+            assert!(menu.crafting_recipe_used.is_none());
+            hooks.0.push(format!(
+                "after:{}:{}",
+                menu.crafting_remove_count,
+                describe(&menu.get_item(&context, 1))
+            ));
+            assert_eq!(hooks.0.join(";"), fields[2], "{line}");
+            cases += 1;
+        }
+        assert_eq!(cases, 2);
+    }
+}
