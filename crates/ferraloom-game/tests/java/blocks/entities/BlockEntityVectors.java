@@ -20,6 +20,18 @@ public final class BlockEntityVectors {
     var dynamic=NeighborVectors.load();var builtin=RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
     var registries=HolderLookup.Provider.create(java.util.stream.Stream.concat(builtin.listRegistries(),dynamic.listRegistries()));
     BuiltInRegistries.DATA_COMPONENT_INITIALIZERS.build(registries).forEach(DataComponentInitializers.PendingComponents::apply);
+    for(var block:List.of(Blocks.FURNACE,Blocks.SMOKER,Blocks.BLAST_FURNACE)){
+      var furnace=(AbstractFurnaceBlockEntity)((EntityBlock)block).newBlockEntity(BlockPos.ZERO,block.defaultBlockState());
+      for(var face:Direction.values()){
+        System.out.println("sided-slots\t"+BuiltInRegistries.BLOCK.getKey(block)+"\t"+face+"\t"+Arrays.toString(furnace.getSlotsForFace(face)));
+        for(boolean oldBucket:new boolean[]{false,true})for(var item:List.of(net.minecraft.world.item.Items.COAL,net.minecraft.world.item.Items.BUCKET,net.minecraft.world.item.Items.WATER_BUCKET,net.minecraft.world.item.Items.LAVA_BUCKET,net.minecraft.world.item.Items.STONE,net.minecraft.world.item.Items.IRON_INGOT)){
+          furnace.setItem(1,oldBucket?new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.BUCKET):net.minecraft.world.item.ItemStack.EMPTY);
+          var stack=new net.minecraft.world.item.ItemStack(item);var values=new ArrayList<String>();
+          for(int slot=0;slot<3;slot++)values.add(furnace.canPlaceItem(slot,stack)+","+furnace.canPlaceItemThroughFace(slot,stack,face)+","+furnace.canTakeItemThroughFace(slot,stack,face));
+          System.out.println("sided-rule\t"+BuiltInRegistries.BLOCK.getKey(block)+"\t"+face+"\t"+oldBucket+"\t"+BuiltInRegistries.ITEM.getKey(item)+"\t"+String.join(";",values));
+        }
+      }
+    }
     BlockEntityFixture.tickerPhases(dynamic);
     var level=new BlockEntityFixture(dynamic);
     for(var block:List.of(Blocks.CHEST,Blocks.COPPER_CHEST.asList().getFirst(),Blocks.TRAPPED_CHEST,Blocks.BARREL,Blocks.SHULKER_BOX,Blocks.CRAFTER,Blocks.FURNACE,Blocks.SMOKER,Blocks.BLAST_FURNACE,Blocks.OAK_SIGN,Blocks.OAK_HANGING_SIGN)){
