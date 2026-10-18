@@ -267,8 +267,12 @@ pub trait Entity: Sync {
         )
     }
     /// Port of Entity#getPistonPushReaction. Ported subclasses inherit PUSH_PULL.
-    fn piston_push_reaction(&self) -> ferraloom_data::PushReaction {
-        ferraloom_data::PushReaction::PushPull
+    fn piston_push_reaction(
+        &self,
+        _entity: EntityRef,
+        _level: &Level,
+    ) -> Result<ferraloom_data::PushReaction, LevelError> {
+        Ok(ferraloom_data::PushReaction::PushPull)
     }
     /// Port of Entity#isIgnoringBlockTriggers. Spectator filtering is separate.
     fn is_ignoring_block_triggers(
