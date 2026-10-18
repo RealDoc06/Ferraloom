@@ -268,7 +268,12 @@ pub fn player_touch(
 
 pub struct ItemEntityBehavior;
 impl Entity for ItemEntityBehavior {
-    fn player_touch(&self, entity: EntityRef, player: EntityRef, level: &mut Level) -> Result<(), LevelError> {
+    fn player_touch(
+        &self,
+        entity: EntityRef,
+        player: EntityRef,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
         player_touch(entity, player, level)
     }
     fn sound_source(&self) -> ferraloom_protocol::play::SoundSource {

@@ -1829,7 +1829,7 @@ fn push_entities_up_matches_native_shape_difference_query_order_and_spectators()
             (1, Vec3::new(8.5, 63.9375, 8.5)),
         ] {
             let mut tnt = item::PrimedTnt::new(id as i32, 123);
-            tnt.parent.uuid = Uuid::new(0, id);
+            tnt.parent.uuid = Uuid::new(0, id as i64);
             tnt.parent.set_pos(position);
             level
                 .add_entity(EntityRef(id), EntityState::PrimedTnt(Box::new(tnt)))
@@ -1914,7 +1914,7 @@ fn nonplayer_teleport_snaps_recursive_passengers_without_changing_motion_or_rota
     let mut level = level(false);
     for index in 0..3 {
         let mut entity = item::PrimedTnt::new(index + 1, 123);
-        entity.parent.uuid = Uuid::new(0, index as u64 + 1);
+        entity.parent.uuid = Uuid::new(0, i64::from(index) + 1);
         entity
             .parent
             .set_pos(Vec3::new(8.5, 64.0 + f64::from(index) * 5.0, 8.5));
