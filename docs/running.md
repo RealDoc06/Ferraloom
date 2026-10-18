@@ -8,6 +8,26 @@ other dimensions, chunk eviction and full ticket propagation remain incomplete.
 Player movement currently covers ordinary terrain, without vehicle, pose or
 floating checks. Recipe and advancement contents are placeholders.
 
+Block families are still being ported. The main binary temporarily defaults to
+`--unported-behavior warn`: each unsupported block/method pair is logged once,
+and every skipped call, including shape updates, increments the server's
+`unported_skipped_calls` statistic. Only that call is skipped; queries requiring
+a value still fail explicitly. Use `--unported-behavior strict` to fail on every
+unsupported call. Library callers, integration tests and parity runs default to
+Strict. This temporary mode will be removed when the block families are ported.
+
+Thunder strike targeting, lightning rods, difficulty and lightning/skeleton-trap
+spawns remain pending. Strict fails at the required target query after vanilla's
+strike gate and position draw. Warn counts and logs the remaining strike as one
+skipped effect and continues; its RNG stream is consequently not vanilla parity.
+Precipitation selections consume their vanilla RNG slots and increment the
+pending precipitation statistic; snow, ice and cauldron effects await live biome
+queries. Rain-at-position queries fail explicitly while those queries are absent.
+
+Level's canonical random source follows vanilla's nondeterministic unique-seed
+construction, independently of the world seed. Controlled tests install a fixed
+stream and block-position seed.
+
 On devbox, build a committed checkout on the dedicated builder:
 
 ```sh

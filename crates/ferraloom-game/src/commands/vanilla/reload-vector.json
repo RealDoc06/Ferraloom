@@ -1,0 +1,14 @@
+{
+  "value": 0,
+  "events": [
+    {
+      "feedback": {
+        "translate": "commands.reload.success"
+      },
+      "broadcast": true
+    },
+    {
+      "reload": 17
+    }
+  ]
+}
