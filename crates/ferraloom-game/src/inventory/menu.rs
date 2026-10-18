@@ -70,7 +70,8 @@ pub struct AbstractContainerMenu {
     quickcraft_type: i32,
     quickcraft_status: i32,
     quickcraft_slots: Vec<usize>,
-    pub(super) last_slots: Vec<ItemStack>,
+    pub(super) last_slots: Vec<Option<ListenerCopyRef>>,
+    pub(super) standalone_listener_copies: Option<ListenerCopyArena>,
     pub(super) last_data: Vec<i32>,
     pub(super) remote_slots: Vec<RemoteSlot>,
     pub(super) remote_carried: RemoteSlot,
@@ -100,6 +101,7 @@ impl AbstractContainerMenu {
             quickcraft_status: 0,
             quickcraft_slots: Vec::new(),
             last_slots: Vec::new(),
+            standalone_listener_copies: Some(ListenerCopyArena::default()),
             last_data: Vec::new(),
             remote_slots: Vec::new(),
             remote_carried: RemoteSlot::Placeholder,
@@ -128,7 +130,7 @@ impl AbstractContainerMenu {
     pub(crate) fn add_slot(&mut self, mut slot: Slot) {
         slot.index = self.slots.len();
         self.slots.push(slot);
-        self.last_slots.push(ItemStack::default());
+        self.last_slots.push(None);
         self.remote_slots.push(if self.synchronized {
             RemoteSlot::Unknown
         } else {
@@ -233,6 +235,7 @@ impl AbstractContainerMenu {
         super::operation::set_menu_synchronizer(&mut super::operation::PureMenuSynchronization {
             menu: self,
             context: ctx,
+            copies: None,
         })
         .expect("in-memory menu synchronization");
     }
@@ -240,6 +243,7 @@ impl AbstractContainerMenu {
         super::operation::send_all_menu_data(&mut super::operation::PureMenuSynchronization {
             menu: self,
             context: ctx,
+            copies: None,
         })
         .expect("in-memory menu synchronization");
     }
@@ -247,6 +251,7 @@ impl AbstractContainerMenu {
         super::operation::broadcast_menu_changes(&mut super::operation::PureMenuSynchronization {
             menu: self,
             context: ctx,
+            copies: None,
         })
     }
     pub fn broadcast_full_state(&mut self, ctx: &MenuContext<'_>) {
@@ -254,6 +259,7 @@ impl AbstractContainerMenu {
             &mut super::operation::PureMenuSynchronization {
                 menu: self,
                 context: ctx,
+                copies: None,
             },
         )
         .expect("in-memory menu synchronization");
@@ -274,18 +280,6 @@ impl AbstractContainerMenu {
     }
     pub fn set_remote_carried(&mut self, hash: HashedStack) {
         self.remote_carried.receive(hash);
-    }
-    pub fn transfer_state(&mut self, other: &Self) {
-        for (i, slot) in self.slots.iter().enumerate() {
-            if let Some(j) = other.slots.iter().position(|s| {
-                s.container == slot.container && s.container_slot == slot.container_slot
-            }) {
-                self.last_slots[i] = other.last_slots[j].clone();
-                if self.synchronized && other.synchronized {
-                    self.remote_slots[i] = other.remote_slots[j].clone();
-                }
-            }
-        }
     }
     pub fn drain_packets(&mut self) -> Vec<ferraloom_protocol::play::clientbound::Packet> {
         std::mem::take(&mut self.updates)
@@ -434,6 +428,7 @@ impl AbstractContainerMenu {
             &mut super::transfer::PureMenuTransfer {
                 menu: self,
                 context: ctx,
+                copies: None,
                 source: stack,
             },
             super::transfer::PureStackRef::Source,

@@ -36,6 +36,30 @@ impl Default for ListenerCopyArena {
     }
 }
 impl ListenerCopyArena {
+    /// Bind a standalone adapter's objects into its player's canonical arena.
+    /// This callback-free ownership move preserves aliases between its entries.
+    pub(crate) fn import(&mut self, mut source: Self, references: &mut [Option<ListenerCopyRef>]) {
+        let mut moved = std::collections::HashMap::new();
+        for reference in references.iter_mut().flatten() {
+            let old = *reference;
+            *reference = if let Some(&new) = moved.get(&old) {
+                assert!(self.retain(new));
+                new
+            } else {
+                let stack = if old.slot == 0 {
+                    ItemStack::default()
+                } else {
+                    source.objects[old.slot]
+                        .stack
+                        .take()
+                        .expect("standalone listener object")
+                };
+                let new = self.insert(stack);
+                moved.insert(old, new);
+                new
+            };
+        }
+    }
     /// Allocate one native copy with its initial ownership root.
     pub fn insert(&mut self, stack: ItemStack) -> ListenerCopyRef {
         if stack.is_empty() {

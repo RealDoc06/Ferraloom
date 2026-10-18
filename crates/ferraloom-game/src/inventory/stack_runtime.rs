@@ -9,6 +9,19 @@ use crate::{
 };
 
 impl Level {
+    pub(crate) fn pin_stack(&mut self, slot: ContainerSlot) -> Result<StackRef> {
+        self.retain_stack_owner(slot.container)?;
+        let result = (|| {
+            if let ContainerHandle::BlockEntity(handle) = slot.container {
+                crate::block::containers::access::get_item(handle, slot.slot, self)?;
+            }
+            let reference = self.stack_ref(slot)?;
+            self.retain_stack(reference)?;
+            Ok(reference)
+        })();
+        self.release_stack_owner(slot.container);
+        result
+    }
     fn stack_parts(&self, slot: ContainerSlot) -> Result<(&StackGenerations, &ItemStack, usize)> {
         match slot.container {
             ContainerHandle::PlayerInventory(entity) => {
@@ -363,17 +376,7 @@ impl<'a> StackOperation<'a> {
     /// Run native lazy getItem, then pin the receiver it returned. Owner roots
     /// keep a replaced block or closed menu addressable throughout that read.
     pub fn pin(&mut self, slot: ContainerSlot) -> Result<StackRef> {
-        self.level.retain_stack_owner(slot.container)?;
-        let result: Result<StackRef> = (|| {
-            if let ContainerHandle::BlockEntity(handle) = slot.container {
-                crate::block::containers::access::get_item(handle, slot.slot, self.level)?;
-            }
-            let reference = self.level.stack_ref(slot)?;
-            self.level.retain_stack(reference)?;
-            Ok(reference)
-        })();
-        self.level.release_stack_owner(slot.container);
-        let reference = result?;
+        let reference = self.level.pin_stack(slot)?;
         self.roots.push(reference);
         Ok(reference)
     }

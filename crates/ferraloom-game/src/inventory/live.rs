@@ -389,6 +389,10 @@ pub fn with_menu_callback<R>(
     level: &mut Level,
     operation: impl FnOnce(&mut LiveMenuContext<'_>) -> Result<R>,
 ) -> Result<R> {
+    level
+        .entity_mut::<ServerPlayer>(player)?
+        .menus
+        .bind_listener_copies(menu)?;
     let roots = level
         .entity::<ServerPlayer>(player)?
         .menus

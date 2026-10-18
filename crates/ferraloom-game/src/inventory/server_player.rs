@@ -9,27 +9,6 @@ use crate::{
 };
 use ferraloom_protocol::{codec::VarInt, play::clientbound as cb};
 
-/// Packet-capture adapter over the live open path, for callers that deliver a
-/// returned batch. Gameplay calls open_menu_live so nested sends remain ordered.
-pub fn open_menu(
-    player: EntityRef,
-    provider: &dyn MenuProvider,
-    level: &mut Level,
-) -> Result<Vec<cb::Packet>> {
-    let start = level
-        .entity::<ServerPlayer>(player)?
-        .menus
-        .pending_packets
-        .len();
-    open_menu_live(player, provider, level)?;
-    Ok(level
-        .entity_mut::<ServerPlayer>(player)?
-        .menus
-        .pending_packets
-        .drain(start..)
-        .collect())
-}
-
 /// Port of ServerPlayer#openMenu. Sends OpenScreen before initMenu and publishes
 /// the new receiver only after initialization and its callbacks return.
 pub fn open_menu_live(
@@ -37,6 +16,7 @@ pub fn open_menu_live(
     provider: &dyn MenuProvider,
     level: &mut Level,
 ) -> Result<Option<MenuRef>> {
+    flush_container_packets(player, level)?;
     let roots = provider.block_entity_roots();
     for (index, &handle) in roots.iter().enumerate() {
         if let Err(error) = level.retain_block_entity(handle) {
@@ -63,12 +43,7 @@ fn open_menu_inner(
         .container_menu
         .is_some()
     {
-        let packets = close_container(player, level, true, false)?;
-        level
-            .entity_mut::<ServerPlayer>(player)?
-            .menus
-            .pending_packets
-            .extend(packets);
+        close_container_live(player, level, true, false)?;
     }
     let id = level
         .entity_mut::<ServerPlayer>(player)?
@@ -82,14 +57,14 @@ fn open_menu_inner(
             );
             content.style.color =
                 Some(ferraloom_protocol::chat::TextColor::parse("red").expect("native color"));
-            level
-                .entity_mut::<ServerPlayer>(player)?
-                .menus
-                .pending_packets
-                .push(cb::Packet::SystemChat(Box::new(cb::SystemChat {
+            emit_menu_packet(
+                player,
+                cb::Packet::SystemChat(Box::new(cb::SystemChat {
                     content,
                     overlay: true,
-                })));
+                })),
+                level,
+            );
         }
         return Ok(None);
     };
@@ -118,9 +93,9 @@ fn open_menu_inner(
         menu_type,
         title: provider.display_name(),
     }));
+    emit_menu_packet(player, packet, level);
     let reference = {
         let menus = &mut level.entity_mut::<ServerPlayer>(player)?.menus;
-        menus.pending_packets.push(packet);
         menus.register_container_menu(menu)
     };
     let initial = with_menu_callback(player, reference, level, |context| {
@@ -312,6 +287,7 @@ pub fn broadcast_container_menu(
     player: EntityRef,
     level: &mut Level,
 ) -> std::result::Result<(), crate::level::LevelError> {
+    flush_container_packets(player, level)?;
     let reference = level.entity::<ServerPlayer>(player)?.menus.current_ref();
     with_menu_callback(player, reference, level, |context| {
         broadcast_menu_changes(context)?;

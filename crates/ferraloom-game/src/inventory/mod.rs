@@ -46,6 +46,7 @@ pub type Result<T> = std::result::Result<T, MenuError>;
 
 #[derive(Debug)]
 pub enum MenuError {
+    MissingListenerCopy(ListenerCopyRef),
     MissingStack(StackRef),
     MissingMenu(MenuRef),
     InvalidSlot(i32),
@@ -58,6 +59,9 @@ pub enum MenuError {
 impl std::fmt::Display for MenuError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::MissingListenerCopy(reference) => {
+                write!(f, "missing listener copy {reference:?}")
+            }
             Self::MissingStack(reference) => write!(f, "missing stack receiver {reference:?}"),
             Self::MissingMenu(reference) => write!(f, "missing menu receiver {reference:?}"),
             Self::InvalidSlot(slot) => write!(f, "invalid menu slot {slot}"),

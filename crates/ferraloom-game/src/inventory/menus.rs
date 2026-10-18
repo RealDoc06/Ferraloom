@@ -750,6 +750,82 @@ impl Default for MenuSession {
     }
 }
 impl MenuSession {
+    pub(crate) fn menu_and_listener_copies_mut(
+        &mut self,
+        reference: MenuRef,
+    ) -> Result<(&mut AbstractContainerMenu, &mut ListenerCopyArena)> {
+        let menu = if self.inventory_menu.reference() == reference {
+            &mut self.inventory_menu
+        } else if self
+            .container_menu
+            .as_ref()
+            .is_some_and(|menu| menu.reference() == reference)
+        {
+            self.container_menu.as_mut().unwrap()
+        } else {
+            self.detached
+                .get_mut(&reference)
+                .ok_or(MenuError::MissingMenu(reference))?
+        };
+        Ok((menu, &mut self.listener_copies))
+    }
+    pub(crate) fn bind_listener_copies(&mut self, reference: MenuRef) -> Result<()> {
+        let (menu, arena) = self.menu_and_listener_copies_mut(reference)?;
+        if let Some(standalone) = menu.standalone_listener_copies.take() {
+            arena.import(standalone, &mut menu.last_slots);
+        }
+        Ok(())
+    }
+    fn retire_listener_copies(&mut self, menu: &AbstractContainerMenu) {
+        if menu.standalone_listener_copies.is_none() {
+            for &reference in menu.last_slots.iter().flatten() {
+                self.listener_copies.release(reference);
+            }
+        }
+    }
+    /// Port of doCloseContainer's inventoryMenu.transferState(containerMenu).
+    /// Only the player Inventory is shared with inventoryMenu; each menu's local
+    /// crafting/result containers have distinct native identities.
+    pub(crate) fn transfer_to_inventory_menu(&mut self, source: MenuRef) -> Result<()> {
+        let target = self.inventory_menu.reference();
+        if source == target {
+            return Ok(());
+        }
+        self.bind_listener_copies(source)?;
+        self.bind_listener_copies(target)?;
+        let source = self.menu(source)?;
+        let mut updates = Vec::new();
+        for (index, target_slot) in self.inventory_menu.slots.iter().enumerate() {
+            if target_slot.container != ContainerId::Player {
+                continue;
+            }
+            if let Some((source_index, _)) =
+                source.slots.iter().enumerate().rev().find(|(_, slot)| {
+                    slot.container == ContainerId::Player
+                        && slot.container_slot == target_slot.container_slot
+                })
+            {
+                updates.push((
+                    index,
+                    source.last_slots[source_index],
+                    (source.synchronized && self.inventory_menu.synchronized)
+                        .then(|| source.remote_slots[source_index].clone()),
+                ));
+            }
+        }
+        for (index, new, remote) in updates {
+            if let Some(new) = new {
+                assert!(self.listener_copies.retain(new));
+            }
+            if let Some(old) = std::mem::replace(&mut self.inventory_menu.last_slots[index], new) {
+                self.listener_copies.release(old);
+            }
+            if let Some(remote) = remote {
+                self.inventory_menu.remote_slots[index] = remote;
+            }
+        }
+        Ok(())
+    }
     pub fn current_ref(&self) -> MenuRef {
         self.current().reference()
     }
@@ -795,7 +871,9 @@ impl MenuSession {
             *count -= 1;
             if *count == 0 {
                 self.retained.remove(&reference);
-                self.detached.remove(&reference);
+                if let Some(menu) = self.detached.remove(&reference) {
+                    self.retire_listener_copies(&menu);
+                }
             }
         }
     }
@@ -828,6 +906,8 @@ impl MenuSession {
             let reference = old.reference();
             if self.retained.contains_key(&reference) {
                 self.detached.insert(reference, old);
+            } else {
+                self.retire_listener_copies(&old);
             }
         }
         Ok(displaced)
@@ -850,6 +930,8 @@ impl MenuSession {
             let old = self.container_menu.take().unwrap();
             if self.retained.contains_key(&reference) {
                 self.detached.insert(reference, old);
+            } else {
+                self.retire_listener_copies(&old);
             }
         }
     }
@@ -970,7 +1052,8 @@ impl MenuSession {
         if let Some(menu) = &mut self.container_menu {
             let reference = menu.reference();
             let effects = menu.removed(ctx, disconnected);
-            self.inventory_menu.transfer_state(menu);
+            self.transfer_to_inventory_menu(reference)
+                .expect("current menu transfer");
             self.detach_menu(reference);
             effects
         } else {
@@ -997,7 +1080,14 @@ impl MenuSession {
         let mut packets = vec![cb::Packet::SetHeldSlot(cb::SetHeldSlot {
             slot: VarInt(inventory.selected_slot() as i32),
         })];
-        self.inventory_menu.broadcast_changes(ctx)?;
+        let reference = self.inventory_menu.reference();
+        self.bind_listener_copies(reference)?;
+        let (menu, copies) = self.menu_and_listener_copies_mut(reference)?;
+        super::operation::broadcast_menu_changes(&mut super::operation::PureMenuSynchronization {
+            menu,
+            context: ctx,
+            copies: Some(copies),
+        })?;
         packets.extend(self.inventory_menu.drain_packets());
         Ok(packets)
     }
