@@ -806,3 +806,63 @@ fn falling_sand_stays_on_a_waterlogged_solid_block() {
     );
     assert!(level.take_effects().is_empty());
 }
+
+#[test]
+fn random_phase_is_strict_and_warn_counts_both_vanilla_lava_callbacks() {
+    use crate::block::UnportedBehavior;
+    let mut level = empty_level(&EMPTY);
+    let chunk = ChunkPos::new(0, 0);
+    for x in 0..16 {
+        for y in 0..16 {
+            for z in 0..16 {
+                level
+                    .set_block_state(BlockPos::new(x, y, z), Block::LAVA.default_state())
+                    .unwrap();
+            }
+        }
+    }
+    assert_eq!(
+        level.tick_random_chunk(chunk),
+        Err(LevelError::UnsupportedFluidRandomTick)
+    );
+    level.set_unported_behavior(UnportedBehavior::Warn);
+    level.tick_random_chunk(chunk).unwrap();
+    assert_eq!(
+        level.unported_behavior_stats(),
+        crate::block::UnportedBehaviorStats {
+            skipped_calls: 6,
+            distinct_calls: 2
+        }
+    );
+}
+
+#[test]
+fn water_slope_search_matches_real_vanilla_across_chunk_borders_and_at_its_limit() {
+    use crate::block::fluid::FlowingFluid;
+    for line in include_str!("../../tests/java/level/slopes.tsv").lines() {
+        let (hole, expected) = line.split_once('\t').unwrap();
+        let distance = hole
+            .strip_prefix("water-slope:")
+            .unwrap()
+            .parse::<i32>()
+            .unwrap();
+        let mut level = flat_pool();
+        let origin = BlockPos::new(15, 0, 8);
+        level
+            .set_block_state(origin.east(distance).below(1), Block::AIR.default_state())
+            .unwrap();
+        assert_eq!(
+            FlowingFluid::Water
+                .slope_distance(
+                    &level,
+                    origin.east(1),
+                    1,
+                    Direction::West,
+                    Block::AIR.default_state()
+                )
+                .unwrap(),
+            expected.parse::<i32>().unwrap(),
+            "{hole}"
+        );
+    }
+}

@@ -66,7 +66,7 @@ public final class NeighborVectors {
               f.neighborUpdater.updateNeighborsAtExceptFromFacing(BlockPos.ZERO,block,skip,null);
               System.out.println(name+"\\t"+String.join(";",f.trace));
             }
-            public static void run(RegistryAccess r){
+            public static void run(RegistryAccess r) throws Exception {
               scenario(r,"direction-order",100,false,null);
               scenario(r,"skip-west",100,false,Direction.WEST);
               scenario(r,"nested-layer",100,true,null);
@@ -122,7 +122,18 @@ public final class NeighborVectors {
               @Override public void scheduleTick(BlockPos p,Block b,int delay){trace.add("schedule:"+delay);}
               @Override public void scheduleTick(BlockPos p,net.minecraft.world.level.material.Fluid f,int delay){trace.add("fluid:"+delay);}
 
-              public static void run(RegistryAccess r){
+              public static void run(RegistryAccess r) throws Exception {
+                var contextClass=Class.forName("net.minecraft.world.level.material.FlowingFluid$SpreadContext");
+                var contextConstructor=contextClass.getDeclaredConstructor(net.minecraft.world.level.material.FlowingFluid.class,net.minecraft.world.level.BlockGetter.class,BlockPos.class);contextConstructor.setAccessible(true);
+                var slope=net.minecraft.world.level.material.FlowingFluid.class.getDeclaredMethod("getSlopeDistance",net.minecraft.world.level.LevelReader.class,BlockPos.class,int.class,Direction.class,BlockState.class,contextClass);slope.setAccessible(true);
+                for(int holeDistance:new int[]{2,3,5,6}){
+                  var pool=new MutationFixture(r);var origin=new BlockPos(15,0,8);
+                  for(int x=7;x<=24;x++)for(int z=0;z<=16;z++)pool.getChunkAt(new BlockPos(x,-1,z)).setBlockState(new BlockPos(x,-1,z),Blocks.STONE.defaultBlockState(),816);
+                  var hole=origin.east(holeDistance).below();pool.getChunkAt(hole).setBlockState(hole,Blocks.AIR.defaultBlockState(),816);
+                  var context=contextConstructor.newInstance(net.minecraft.world.level.material.Fluids.WATER,pool,origin);
+                  int distance=(Integer)slope.invoke(net.minecraft.world.level.material.Fluids.WATER,pool,origin.east(),1,Direction.WEST,Blocks.AIR.defaultBlockState(),context);
+                  System.out.println("water-slope:"+holeDistance+"\\t"+distance);
+                }
                 var waterlogged=new MutationFixture(r);var pos=new BlockPos(8,0,8);
                 waterlogged.setBlock(pos,Blocks.IRON_CHAIN.defaultBlockState(),528,512);waterlogged.trace.clear();
                 var fluid=net.minecraft.world.level.material.Fluids.WATER.getSource(false);

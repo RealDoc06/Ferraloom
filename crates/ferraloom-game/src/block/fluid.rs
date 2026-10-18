@@ -230,7 +230,7 @@ impl FlowingFluid {
             self.flowing(amount, false)
         })
     }
-    fn slope_distance(
+    pub(crate) fn slope_distance(
         self,
         level: &Level,
         pos: BlockPos,

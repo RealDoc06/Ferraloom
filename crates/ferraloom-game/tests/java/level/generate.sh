@@ -23,3 +23,5 @@ rg '^tag:' "$classes/neighbors.tsv" > "$root/crates/ferraloom-game/tests/java/le
 rg '^fluid-legacy:' "$classes/neighbors.tsv" > "$root/crates/ferraloom-game/tests/java/level/fluids.tsv"
 
 rg '^fluid-tag:' "$classes/neighbors.tsv" > "$root/crates/ferraloom-game/tests/java/level/fluid-tags.tsv"
+
+rg '^water-slope:' "$classes/neighbors.tsv" > "$root/crates/ferraloom-game/tests/java/level/slopes.tsv"
