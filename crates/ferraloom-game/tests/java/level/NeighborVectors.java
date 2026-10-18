@@ -94,6 +94,10 @@ public final class NeighborVectors {
                 System.out.println("thunder-slots:"+seed+":"+weather+"\\t"+strike+"|"+slots.random.nextInt()+"|"+slots.getBlockRandomPos(0,0,0,15).toShortString());
               }
               System.out.println("valid-chunk-bound\\t"+net.minecraft.world.level.chunk.status.ChunkPyramid.MAX_CHUNK_COORDINATE_VALUE);
+              for(var block:List.of(Blocks.STONE,Blocks.AIR,Blocks.WALL_TORCH,Blocks.CHEST))for(boolean includeData:new boolean[]{false,true}){
+                var stack=block.defaultBlockState().getCloneItemStack(null,BlockPos.ZERO,includeData);
+                System.out.println("clone-item:"+net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(block)+":"+includeData+"\\t"+net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem())+":"+stack.getCount());
+              }
               for(int i=0;i<48;i++){
                 var orientation=Orientation.fromIndex(i);var fronts=new ArrayList<String>();var ups=new ArrayList<String>();
                 for(var direction:Direction.values()){fronts.add(""+orientation.withFront(direction).getIndex());ups.add(""+orientation.withUp(direction).getIndex());}

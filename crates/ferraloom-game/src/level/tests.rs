@@ -1277,3 +1277,37 @@ fn slab_waterlogging_matches_vanilla_interface_overrides_and_source_identity() {
         );
     }
 }
+
+#[test]
+fn clone_item_query_matches_vanilla_base_and_rejects_unported_overrides() {
+    use crate::block::{BlockMethod, UnportedBehavior};
+    let mut level = Level::new(Region::new(&EMPTY));
+    for line in include_str!("../../tests/java/level/clone-items.tsv").lines() {
+        let (case, expected) = line.split_once('\t').unwrap();
+        let (block, include_data) = case
+            .strip_prefix("clone-item:")
+            .unwrap()
+            .rsplit_once(':')
+            .unwrap();
+        let state = Block::from_name(block).unwrap().default_state();
+        let stack = level
+            .get_clone_item_stack(state, BlockPos::ZERO, include_data.parse().unwrap())
+            .unwrap();
+        let (item, count) = stack
+            .0
+            .as_ref()
+            .map_or((ferraloom_data::Item::AIR, 0), |stack| {
+                (stack.item, stack.count)
+            });
+        assert_eq!(format!("{}:{count}", item.name()), expected, "{case}");
+    }
+    level.set_unported_behavior(UnportedBehavior::Warn);
+    assert_eq!(
+        level.get_clone_item_stack(Block::BEEHIVE.default_state(), BlockPos::ZERO, true),
+        Err(LevelError::UnsupportedBlockMethod(
+            Block::BEEHIVE,
+            BlockMethod::CloneItemStack
+        ))
+    );
+    assert_eq!(level.unported_behavior_stats().skipped_calls, 0);
+}

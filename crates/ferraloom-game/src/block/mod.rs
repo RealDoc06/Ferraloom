@@ -2,6 +2,7 @@
 use crate::level::{Level, LevelError, redstone::Orientation};
 use ferraloom_data::{Block, BlockState, FluidState};
 use ferraloom_util::{BlockPos, Direction};
+mod clone_item;
 pub mod dispatch;
 pub mod flags;
 pub mod fluid;
@@ -114,6 +115,21 @@ impl LevelAccessRef<'_> {
 /// Port of BlockBehaviour's virtual methods. Defaults are vanilla base behavior;
 /// only classes explicitly registered by dispatch may inherit these defaults.
 pub trait BlockBehavior: Sync {
+    /// Port of BlockBehaviour#getCloneItemStack's base item constructor. Only
+    /// inherited implementations select this default through method dispatch.
+    fn get_clone_item_stack(
+        &self,
+        state: BlockState,
+        _pos: BlockPos,
+        _include_data: bool,
+        _level: &LevelReaderRef<'_>,
+    ) -> Result<ferraloom_protocol::component::ItemStack, LevelError> {
+        Ok(ferraloom_protocol::component::ItemStack::new(
+            state.block().as_item(),
+            1,
+            ferraloom_protocol::component::DataComponentPatch::default(),
+        ))
+    }
     /// Port of BlockBehaviour#getEntityInsideCollisionShape's base full cube.
     fn entity_inside_collision_shape(
         &self,

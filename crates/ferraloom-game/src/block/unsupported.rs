@@ -43,6 +43,7 @@ pub enum BlockMethod {
     UpdateFromNeighbourShapes,
     TriggerEvent,
     IsCollisionShapeFullBlock,
+    CloneItemStack,
 }
 impl BlockMethod {
     pub(crate) const fn vanilla_method(self) -> Option<ferraloom_data::BlockMethod> {
@@ -66,6 +67,7 @@ impl BlockMethod {
             Self::IsCollisionShapeFullBlock => Vanilla::IsCollisionShapeFullBlock,
             Self::EntityInsideCollisionShape => Vanilla::GetEntityInsideCollisionShape,
             Self::TriggerEvent => Vanilla::TriggerEvent,
+            Self::CloneItemStack => Vanilla::GetCloneItemStack,
             Self::CanPlaceLiquid => Vanilla::CanPlaceLiquid,
             Self::PlaceLiquid => Vanilla::PlaceLiquid,
             Self::PickupBlock => Vanilla::PickupBlock,
@@ -86,6 +88,7 @@ impl BlockMethod {
                 | Self::UpdateFromNeighbourShapes
                 | Self::TriggerEvent
                 | Self::IsCollisionShapeFullBlock
+                | Self::CloneItemStack
         )
     }
     pub const fn name(self) -> &'static str {
@@ -115,6 +118,7 @@ impl BlockMethod {
             Self::UpdateFromNeighbourShapes => "Block.updateFromNeighbourShapes",
             Self::TriggerEvent => "triggerEvent",
             Self::IsCollisionShapeFullBlock => "isCollisionShapeFullBlock",
+            Self::CloneItemStack => "getCloneItemStack",
         }
     }
 }

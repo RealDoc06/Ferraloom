@@ -36,4 +36,6 @@ rg '^slab-waterlogged:' "$classes/neighbors.tsv" > "$root/crates/ferraloom-game/
 
 rg '^(orientation|initial-orientation):' "$classes/neighbors.tsv" > "$root/crates/ferraloom-game/tests/java/level/orientation.tsv"
 
+rg '^clone-item:' "$classes/neighbors.tsv" > "$root/crates/ferraloom-game/tests/java/level/clone-items.tsv"
+
 rg '^fluid-wall:' "$classes/neighbors.tsv" > "$root/crates/ferraloom-game/tests/java/level/walls.tsv"
