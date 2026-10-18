@@ -282,7 +282,10 @@ fn check(
             (pos, marker)
         })
         .collect::<BTreeMap<_, _>>();
-    assert_eq!(entities, expected_entities, "protochunk block entities {label}");
+    assert_eq!(
+        entities, expected_entities,
+        "protochunk block entities {label}"
+    );
     let group_ticks = |values: &[Value]| {
         let mut groups = BTreeMap::<_, Vec<_>>::new();
         for value in values {
