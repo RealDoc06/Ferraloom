@@ -34,6 +34,10 @@ pub mod tree;
 pub mod vegetation;
 
 pub trait Feature: Debug + Send + Sync {
+    /// MushroomBlock#isValidBonemealTarget: only huge mushroom features supply a radius.
+    fn huge_mushroom_foliage_radius(&self) -> Option<i32> {
+        None
+    }
     /// TreeGrower#getMinimumHeight: only TreeFeature exposes its trunk base height.
     fn tree_minimum_height(&self) -> Option<i32> {
         None
