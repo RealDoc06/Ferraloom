@@ -26,7 +26,7 @@ pub trait BonemealableBlock: Sync {
         &self,
         state: BlockState,
         pos: BlockPos,
-        level: &LevelReaderRef<'_, '_>,
+        level: &mut LevelAccessRef<'_, '_>,
         source: BonemealSource,
     ) -> Result<bool, LevelError>;
     fn is_bonemeal_success(
@@ -144,9 +144,10 @@ impl BonemealableBlock for PlantBonemeal {
         &self,
         state: BlockState,
         pos: BlockPos,
-        level: &LevelReaderRef<'_, '_>,
+        access: &mut LevelAccessRef<'_, '_>,
         _source: BonemealSource,
     ) -> Result<bool, LevelError> {
+        let level = &access.as_reader();
         use BlockClass as C;
         match state.block().class() {
             C::NetherrackBlock => nylium::netherrack_target(pos, level),
