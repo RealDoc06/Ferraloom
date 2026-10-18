@@ -1,7 +1,9 @@
 //! ServerPlayer gameplay state. Connections retain handles, never another player copy.
 mod drop_item;
 pub use drop_item::drop_item;
+pub mod cooldowns;
 pub mod equipment;
+mod interaction;
 pub mod inventory;
 use crate::{
     entity::{Avatar, EntityData, EntityDataView, EntityState},
@@ -46,6 +48,11 @@ pub struct ServerPlayer {
     pub known_movement: Vec3,
     pub game_mode: GameType,
     pub flying: bool,
+    pub may_build: bool,
+    pub last_client_input: ferraloom_protocol::play::Input,
+    pub text_filtering_enabled: bool,
+    pub cooldowns: cooldowns::ServerItemCooldowns,
+    interaction_range_modifiers: [std::sync::Arc<super::ai::attributes::AttributeModifier>; 2],
     pub view_distance: i32,
     pub loaded: bool,
     pub connection_ticks: u64,
@@ -77,6 +84,22 @@ impl ServerPlayer {
         self.attributes
             .value(ferraloom_data::registries::attribute::Id::LUCK)
             .expect("player attribute supplier defines LUCK") as f32
+    }
+
+    /// Port of Player#mayBuild. This ability can differ from the game mode.
+    pub fn may_build(&self) -> bool {
+        self.may_build
+    }
+
+    /// Port of GameType#updatePlayerAbilities for the currently ported fields.
+    /// Runtime game-mode transitions also handle their packets and other effects.
+    pub fn update_game_mode_abilities(&mut self) {
+        self.may_build = matches!(self.game_mode, GameType::Survival | GameType::Creative);
+        match self.game_mode {
+            GameType::Creative => {}
+            GameType::Spectator => self.flying = true,
+            GameType::Survival | GameType::Adventure => self.flying = false,
+        }
     }
 
     pub fn new(
@@ -115,6 +138,19 @@ impl ServerPlayer {
             known_movement: Vec3::ZERO,
             game_mode,
             flying: game_mode == GameType::Spectator,
+            may_build: matches!(game_mode, GameType::Survival | GameType::Creative),
+            last_client_input: ferraloom_protocol::play::Input {
+                forward: false,
+                backward: false,
+                left: false,
+                right: false,
+                jump: false,
+                shift: false,
+                sprint: false,
+            },
+            text_filtering_enabled: false,
+            cooldowns: Default::default(),
+            interaction_range_modifiers: interaction::range_modifiers(),
             view_distance: 10,
             loaded: false,
             connection_ticks: 0,
@@ -179,6 +215,8 @@ impl ServerPlayer {
         self.parent.parent.load_nbt(tag)?;
         self.game_mode =
             GameType::from_id(self.saved.get_int_or("playerGameType", self.game_mode.id()));
+        // ServerPlayer reads saved abilities before applying its loaded game mode.
+        self.update_game_mode_abilities();
         let inventory = self
             .saved
             .get_list("Inventory")
@@ -240,7 +278,7 @@ impl ServerPlayer {
             "instabuild",
             Tag::Byte(i8::from(self.game_mode == GameType::Creative)),
         );
-        abilities.insert("mayBuild", Tag::Byte(1));
+        abilities.insert("mayBuild", Tag::Byte(i8::from(self.may_build)));
         abilities.insert("flySpeed", Tag::Float(0.05));
         abilities.insert("walkSpeed", Tag::Float(0.1));
         tag.insert("abilities", Tag::Compound(abilities));
@@ -754,7 +792,12 @@ impl crate::entity::Entity for PlayerBehavior {
         if spectator || passenger {
             crate::entity::movement::set_on_ground(entity, false, None, level)?;
         }
-        crate::entity::base_tick(self, entity, level)
+        crate::entity::base_tick(self, entity, level)?;
+        cooldowns::tick(entity, level)?;
+        level
+            .entity_mut::<ServerPlayer>(entity)?
+            .update_interaction_range_attributes();
+        Ok(())
     }
 
     fn maybe_back_off_from_edge(

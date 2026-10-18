@@ -53,7 +53,7 @@ fn no_collision_stops_at_first_shape_and_retains_later_required_reads() {
                     assert_eq!(pos, ChunkPos::new(0, 1));
                     "required-read".to_owned()
                 }
-                Err(error) => panic!("unexpected collision query error: {error}"),
+                Err(error) => panic!("unexpected collision query error: {error:?}"),
             };
             actual.push(format!(
                 "no-collision-order\t{}\t{liquids}\t{result}",
@@ -775,7 +775,7 @@ pub(super) fn tags(level: &mut Level) {
         .unwrap(),
     ));
 }
-fn level(floor: bool) -> Level {
+pub(super) fn level(floor: bool) -> Level {
     level_with_behaviors(floor, &BEHAVIORS)
 }
 fn level_with_behaviors(floor: bool, behaviors: &'static Behaviors) -> Level {
@@ -2093,6 +2093,51 @@ fn teleport_confirmation_uses_native_clamp_and_preserves_interpolation_history()
     let expected: Vec<_> = VECTORS
         .lines()
         .filter(|row| row.starts_with("teleport-confirm-snap\t"))
+        .collect();
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn may_build_is_independent_and_game_mode_updates_match_native_abilities() {
+    let mut actual = Vec::new();
+    for mode in [
+        player::GameType::Survival,
+        player::GameType::Creative,
+        player::GameType::Adventure,
+        player::GameType::Spectator,
+    ] {
+        for flying in [false, true] {
+            let mut player = player::ServerPlayer::new(
+                Uuid::new(1, 2),
+                "ability".into(),
+                1,
+                Vec3::ZERO,
+                player::GameType::Survival,
+            );
+            player.game_mode = mode;
+            player.flying = flying;
+            player.update_game_mode_abilities();
+            let may_build = player.may_build();
+            let result_flying = player.flying;
+            player.may_build = !may_build;
+            let saved = player.save();
+            let saved_may_build = saved
+                .get_compound("abilities")
+                .unwrap()
+                .get_boolean("mayBuild")
+                .unwrap();
+            actual.push(format!(
+                "player-may-build\t{}\t{flying}\t{may_build},{result_flying},{},{}",
+                mode.id(),
+                player.may_build(),
+                saved_may_build
+            ));
+            assert_eq!(player.game_mode, mode);
+        }
+    }
+    let expected: Vec<_> = VECTORS
+        .lines()
+        .filter(|row| row.starts_with("player-may-build\t"))
         .collect();
     assert_eq!(actual, expected);
 }
