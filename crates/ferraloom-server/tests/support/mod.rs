@@ -18,9 +18,18 @@ use tokio::net::TcpStream;
 pub const NAME: &str = "JoinBot";
 pub fn properties(root: &Path) -> Result<()> {
     std::fs::write(root.join("eula.txt"), "eula=true\n")?;
+    // Both servers use this featureless flat world for Strict protocol/join
+    // coverage. Restore default noise once the block families clear the skips.
+    let generator = serde_json::json!({
+        "layers": [{"height":4,"block":"minecraft:bedrock"}],
+        "biome":"minecraft:plains", "features":false, "lakes":false,
+        "structure_overrides":[]
+    });
     std::fs::write(
         root.join("server.properties"),
-        "server-ip=127.0.0.1\nserver-port=0\nonline-mode=false\nwhite-list=false\nenforce-secure-profile=false\nview-distance=2\nsimulation-distance=2\nlevel-seed=12345\ngenerate-structures=false\npause-when-empty-seconds=0\n",
+        format!(
+            "server-ip=127.0.0.1\nserver-port=0\nonline-mode=false\nwhite-list=false\nenforce-secure-profile=false\nview-distance=2\nsimulation-distance=2\nlevel-seed=12345\ngenerate-structures=false\npause-when-empty-seconds=0\nlevel-type=flat\ngenerator-settings={generator}\n"
+        ),
     )?;
     std::fs::write(
         root.join("ops.json"),
