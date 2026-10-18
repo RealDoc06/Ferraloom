@@ -36,8 +36,21 @@ pub struct NodeDefinition {
 pub fn definitions() -> &'static [NodeDefinition] {
     static DEFINITIONS: OnceLock<Vec<NodeDefinition>> = OnceLock::new();
     DEFINITIONS.get_or_init(|| {
-        serde_json::from_str(include_str!("vanilla/tree.json"))
-            .expect("vanilla dedicated command definitions")
+        let mut nodes: Vec<NodeDefinition> =
+            serde_json::from_str(include_str!("vanilla/tree.json"))
+                .expect("vanilla dedicated command definitions");
+        let rules = nodes
+            .iter()
+            .position(|node| node.name == "gamerule" && node.kind == "literal")
+            .unwrap();
+        let mut children = nodes[rules].children.clone();
+        children.sort_by_key(|&index| {
+            let name = &nodes[index].name;
+            let rule = crate::gamerules::GameRule::by_id(name).expect("vanilla rule literal");
+            (rule as usize, name.starts_with("minecraft:"))
+        });
+        nodes[rules].children = children;
+        nodes
     })
 }
 pub fn dispatcher() -> CommandDispatcher<CommandSourceStack> {
@@ -198,11 +211,81 @@ mod tests {
             (4, include_bytes!("vanilla/tree-level-4.bin").as_slice()),
         ] {
             let packet = packet(&CommandSourceStack::server(level, Vec3::ZERO));
+            let expected_packet = clientbound::Commands::from_bytes(expected).unwrap();
+            let expected = if level == 4 {
+                normalize_game_rules(expected_packet).to_bytes().unwrap()
+            } else {
+                expected.to_vec()
+            };
             assert_eq!(
                 packet.to_bytes().unwrap(),
                 expected,
                 "permission level {level}"
             );
+            if level == 4 {
+                let second = clientbound::Commands::from_bytes(include_bytes!(
+                    "vanilla/tree-level-4-second-jvm.bin"
+                ))
+                .unwrap();
+                assert_eq!(
+                    packet.to_bytes().unwrap(),
+                    normalize_game_rules(second).to_bytes().unwrap()
+                );
+            }
         }
+    }
+}
+
+#[cfg(test)]
+fn normalize_game_rules(mut packet: clientbound::Commands) -> clientbound::Commands {
+    // Vanilla iterates identity-hashed rule keys. Two fresh JVMs produce different
+    // orders; canonicalize ONLY those children and their consequent BFS indices.
+    let rules = packet
+        .entries
+        .iter()
+        .position(|node| matches!(&node.kind, CommandNodeKind::Literal(name) if name=="gamerule"))
+        .unwrap();
+    let mut children = packet.entries[rules].children.clone();
+    children.sort_by_key(|index| {
+        let CommandNodeKind::Literal(name) = &packet.entries[index.0 as usize].kind else {
+            panic!("rule literal")
+        };
+        (
+            crate::gamerules::GameRule::by_id(name).unwrap() as usize,
+            name.starts_with("minecraft:"),
+        )
+    });
+    packet.entries[rules].children = children;
+    let mut order = Vec::new();
+    let mut ids = vec![None; packet.entries.len()];
+    let mut queue = VecDeque::from([packet.root_index.0 as usize]);
+    while let Some(index) = queue.pop_front() {
+        if ids[index].is_some() {
+            continue;
+        }
+        ids[index] = Some(order.len() as i32);
+        order.push(index);
+        let node = &packet.entries[index];
+        queue.extend(node.children.iter().map(|index| index.0 as usize));
+        if let Some(redirect) = node.redirect {
+            queue.push_back(redirect.0 as usize);
+        }
+    }
+    let entries = order
+        .into_iter()
+        .map(|index| {
+            let mut node = packet.entries[index].clone();
+            for child in &mut node.children {
+                child.0 = ids[child.0 as usize].unwrap();
+            }
+            if let Some(redirect) = &mut node.redirect {
+                redirect.0 = ids[redirect.0 as usize].unwrap();
+            }
+            node
+        })
+        .collect();
+    clientbound::Commands {
+        entries,
+        root_index: VarInt(0),
     }
 }

@@ -1,8 +1,10 @@
 //! Minecraft argument values retain their parsed type and their network descriptor.
+pub mod blocks;
 pub mod coordinates;
 pub mod operation;
 pub mod range;
 pub mod selectors;
+pub mod slots;
 pub mod wire;
 use crate::{
     commands::{
@@ -30,6 +32,8 @@ use std::sync::Arc;
 
 #[derive(Clone, Debug)]
 pub enum ArgumentValue {
+    Slots(slots::SlotRange),
+    Block(blocks::BlockInput),
     Boolean(bool),
     Integer(i32),
     Long(i64),
@@ -200,7 +204,7 @@ impl MinecraftArgument {
                 if reader.can_read() && reader.peek() == 64 {
                     let selector = EntitySelector::parse(reader, allow_selectors)?;
                     if selector.includes_entities {
-                        return Err(error("argument.player.entities", &[]));
+                        return Err(error_at(reader, "argument.player.entities", &[]));
                     }
                     V::Entity(selector)
                 } else {
@@ -218,7 +222,19 @@ impl MinecraftArgument {
             A::ResourceLocation {} | A::Dimension {} | A::ResourceKey { .. } => {
                 V::Identifier(identifier(reader)?)
             }
-            A::Resource { .. } => V::Identifier(identifier(reader)?),
+            A::Resource { registry } => {
+                let value = identifier(reader)?;
+                if !ferraloom_data::registry_entries(registry.as_str())
+                    .is_some_and(|entries| entries.contains(&value.as_str()))
+                {
+                    return Err(error_at(
+                        reader,
+                        "argument.resource.not_found",
+                        &[value, registry.to_string()],
+                    ));
+                }
+                V::Identifier(value)
+            }
             A::Function {} | A::ResourceOrTag { .. } | A::ResourceOrTagKey { .. } => {
                 let tag = reader.can_read() && reader.peek() == 35;
                 if tag {
@@ -227,6 +243,9 @@ impl MinecraftArgument {
                 let value = identifier(reader)?;
                 V::Identifier(if tag { format!("#{value}") } else { value })
             }
+            A::BlockState {} => V::Block(blocks::parse(reader)?),
+            A::ItemSlot {} => V::Integer(slots::parse(reader, true)?.slots[0]),
+            A::ItemSlots {} => V::Slots(slots::parse(reader, false)?),
             A::NbtTag {} => V::Tag(nbt(reader, false)?),
             A::NbtCompoundTag {} => V::Tag(nbt(reader, true)?),
             A::NbtPath {} => {
@@ -369,7 +388,6 @@ impl MinecraftArgument {
                     "light_purple",
                     "yellow",
                     "white",
-                    "reset",
                 ],
                 "argument.color.invalid",
             )?),
@@ -406,14 +424,14 @@ impl MinecraftArgument {
             A::SwingAnimation {} => V::String(enum_word(
                 reader,
                 &["none", "whack", "stab"],
-                "argument.enum.invalid",
+                "argument.swing_animation.invalid",
             )?),
             A::Objective {} | A::Team {} => V::String(reader.read_unquoted_string()),
             A::ScoreHolder { flags } => {
                 if reader.can_read() && reader.peek() == 64 {
                     let selector = EntitySelector::parse(reader, allow_selectors)?;
                     if !flags.multiple && selector.max_results > 1 {
-                        return Err(error("argument.entity.toomany", &[]));
+                        return Err(error_at(reader, "argument.entity.toomany", &[]));
                     }
                     V::Entity(selector)
                 } else {
@@ -554,3 +572,6 @@ fn nbt_path_text(reader: &mut StringReader) -> String {
     }
     reader.slice(start, reader.cursor())
 }
+
+#[cfg(test)]
+mod tests;

@@ -91,6 +91,50 @@ public final class CommandVectors {
             tree.add(entry);
         }
         write(out, "tree.json", tree);
+        var argumentTypes = new LinkedHashMap<String,ArgumentType<?>>();
+        var propertiesByType = new LinkedHashMap<String,JsonObject>();
+        for (var node : nodes) if (node instanceof ArgumentCommandNode<CommandSourceStack,?> argument) {
+            var serialized = ArgumentUtils.serializeNodeToJson(dispatcher, node);
+            var parser = serialized.get("parser").getAsString();
+            argumentTypes.putIfAbsent(parser, argument.getType());
+            propertiesByType.putIfAbsent(parser, serialized.has("properties") ? serialized.getAsJsonObject("properties") : new JsonObject());
+        }
+        argumentTypes.put("brigadier:long", LongArgumentType.longArg());
+        argumentTypes.put("minecraft:angle", net.minecraft.commands.arguments.AngleArgument.angle());
+        argumentTypes.put("minecraft:item_slots", net.minecraft.commands.arguments.SlotsArgument.slots());
+        var vectors = new JsonArray();
+        for (var entry : argumentTypes.entrySet()) {
+            var inputs = new LinkedHashSet<String>(entry.getValue().getExamples());
+            inputs.addAll(List.of("", " ", "?", "-1", "1.5", "~ ~ ~", "0 1", "0 1 2", "^ ^ ^", "~ ^ ~", "@a", "@e[type=minecraft:player,limit=1]"));
+            if (entry.getKey().equals("minecraft:entity")) inputs.addAll(List.of("@", "@z", "@a[", "@a[limit=0]", "@a[x=1,x=2]", "@a[name=!A,name=B]", "@e[type=#minecraft:undead,type=minecraft:player]", "@a[distance=3..1]", "@a[scores={foo=1..2}]", "@a[advancements={minecraft:story/root={foo=true}}]"));
+            for (var input : inputs) {
+                var reader = new com.mojang.brigadier.StringReader(input);
+                var vector = new JsonObject();
+                vector.addProperty("parser", entry.getKey());
+                vector.add("properties", propertiesByType.getOrDefault(entry.getKey(), new JsonObject()));
+                vector.addProperty("input", input);
+                try {
+                    Object value = entry.getValue().parse(reader);
+                    vector.addProperty("ok", true);
+                    if (value instanceof Number || value instanceof Boolean || value instanceof String) vector.add("value", JSON.toJsonTree(value));
+                    if (value instanceof net.minecraft.commands.arguments.coordinates.WorldCoordinates coordinates) {
+                        var coordinatesJson = new JsonArray();
+                        for (var coordinate : List.of(coordinates.x(), coordinates.y(), coordinates.z())) {
+                            var c = new JsonObject(); c.addProperty("relative", coordinate.relative()); c.addProperty("value", coordinate.value()); coordinatesJson.add(c);
+                        }
+                        vector.add("world_coordinates", coordinatesJson);
+                    }
+                    if (value instanceof net.minecraft.commands.arguments.coordinates.LocalCoordinates coordinates) vector.add("local_coordinates", JSON.toJsonTree(List.of(coordinates.left(), coordinates.up(), coordinates.forwards())));
+                } catch (com.mojang.brigadier.exceptions.CommandSyntaxException e) {
+                    vector.addProperty("ok", false); vector.addProperty("error_cursor", e.getCursor()); vector.addProperty("message", e.getRawMessage().getString());
+                } catch (RuntimeException e) {
+                    vector.addProperty("runtime_exception", e.getClass().getName()); vector.addProperty("runtime_message", e.getMessage());
+                }
+                vector.addProperty("cursor", reader.getCursor());
+                vectors.add(vector);
+            }
+        }
+        write(out, "parser-vectors.json", vectors);
         var inspector = new ClientboundCommandsPacket.NodeInspector<CommandSourceStack>() {
             public Identifier suggestionId(ArgumentCommandNode<CommandSourceStack,?> node) {
                 return node.getCustomSuggestions() == null ? null : SuggestionProviders.getName(node.getCustomSuggestions());

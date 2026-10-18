@@ -9,4 +9,4 @@ while IFS= read -r jar; do CP="$CP:$jar"; done < <(find "$VANILLA/libraries" -na
 mkdir -p "$CLASSES"
 "$JDK/bin/javac" --release 25 -cp "$CP" -d "$CLASSES" "$ROOT/crates/ferraloom-game/tests/java/commands/CommandVectors.java"
 cd "$VANILLA"
-"$JDK/bin/java" -Xmx1G -cp "$CLASSES:$CP" CommandVectors "$ROOT/crates/ferraloom-game/src/commands/vanilla"
+"$JDK/bin/java" -Xmx1G -cp "$CLASSES:$CP" CommandVectors "${1:-$ROOT/crates/ferraloom-game/src/commands/vanilla}"

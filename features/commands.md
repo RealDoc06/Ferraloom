@@ -10,10 +10,10 @@ Every literal and argument node from `reports/commands.json` has a row, includin
 | commands.brigadier.suggestions | Return context-aware argument and command suggestions with input cursor ranges | `ServerGamePacketListenerImpl#handleCustomCommandSuggestions; CommandDispatcher` | | - | todo |
 | commands.selectors.filters | Apply selector type, name, tag, team, scores, predicate, NBT, distance, box and rotation filters | `EntitySelectorParser; EntitySelectorOptions` | | - | todo |
 | commands.selectors.order-limit | Apply nearest, furthest, random and arbitrary selector ordering and result limits | `EntitySelectorParser; EntitySelector` | | - | todo |
-| commands.coordinates.relative-local | Resolve absolute, relative and local coordinate triples with source rotation and centering | `WorldCoordinates; LocalCoordinates` | | - | todo |
+| commands.coordinates.relative-local | Resolve absolute, relative and local coordinate triples with source rotation and centering | `WorldCoordinates; LocalCoordinates` | `commands::arguments::tests::argument_parser_vectors_match_java_errors_cursors_and_values` | pass | todo |
 | commands.result.store | Store success and result into scores, bossbars, NBT or storage with scale and numeric type | `ExecuteCommand` | | - | todo |
-| commands.context.anchor-dimension | Apply execution position, rotation, facing, anchor, entity and dimension source changes | `ExecuteCommand; CommandSourceStack` | | - | todo |
-| commands.execution.return | Propagate command result and return behavior through functions and condition branches | `ReturnCommand; ExecutionContext` | | - | todo |
+| commands.context.anchor-dimension | Apply execution position, rotation, facing, anchor, entity and dimension source changes | `ExecuteCommand; CommandSourceStack` | `commands::source::tests::entity_source_and_dimension_changes_preserve_vanilla_fields` | pass | todo |
+| commands.execution.return | Propagate command result and return behavior through functions and condition branches | `ReturnCommand; ExecutionContext` | `commands::execution::tests::return_callbacks_run_inline_and_discard_pending_siblings` | pass | todo |
 | commands.execution.feedback | Route command feedback, failures and operator broadcasts according to source and rules | `CommandSourceStack` | | - | todo |
 | commands.command-argument-type.angle | `minecraft:angle` (command argument type) | `net.minecraft.commands.synchronization.ArgumentTypeInfos#bootstrap; net.minecraft.commands.synchronization.SingletonArgumentInfo` | | - | todo |
 | commands.command-argument-type.block-pos | `minecraft:block_pos` (command argument type) | `net.minecraft.commands.synchronization.ArgumentTypeInfos#bootstrap; net.minecraft.commands.synchronization.SingletonArgumentInfo` | | - | todo |
@@ -2557,3 +2557,5 @@ Every literal and argument node from `reports/commands.json` has a row, includin
 | commands.framework.tree-packets | Dedicated command tree retains registration order, permission filtering, redirects, restriction flags and wire templates | `Commands#sendCommands; ClientboundCommandsPacket` | `commands::tree::tests::command_tree_packets_match_java_for_operator_and_non_operator` | pass | todo |
 
 | commands.framework.message-signing-context | Distinguish missing message arguments from present unsigned player arguments when selecting DisguisedChat or PlayerChat | `MessageArgument#resolveChatMessage; OutgoingChatMessage#create` | `commands::message::tests::unsigned_player_argument_and_absent_argument_match_java_packet_variants` | pass | todo |
+
+| commands.execution.queue-order | Execute newly queued commands before siblings; discard returning frames inline and enforce sequence/fork limits | `ExecutionContext; BuildContexts; Frame` | `commands::execution::tests` | - | todo |

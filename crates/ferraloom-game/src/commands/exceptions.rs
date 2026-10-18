@@ -125,3 +125,63 @@ impl BuiltInExceptionProvider for BrigadierExceptions {
         Arc::new(translated(&key, &args))
     }
 }
+
+/// Server-side rendering for console feedback; clients receive the original component.
+pub fn plain_text(component: &Component) -> String {
+    use ferraloom_protocol::chat::{Argument, Contents};
+    let mut result = match &component.contents {
+        Contents::Text(text) => text.clone(),
+        Contents::Translatable { key, args, .. } => render(
+            key,
+            &args
+                .iter()
+                .map(|arg| match arg {
+                    Argument::String(s) => s.clone(),
+                    Argument::Number(n) => match n {
+                        ferraloom_protocol::chat::Numeric::Byte(v) => v.to_string(),
+                        ferraloom_protocol::chat::Numeric::Short(v) => v.to_string(),
+                        ferraloom_protocol::chat::Numeric::Int(v) => v.to_string(),
+                        ferraloom_protocol::chat::Numeric::Long(v) => v.to_string(),
+                        ferraloom_protocol::chat::Numeric::Float(v) => v.to_string(),
+                        ferraloom_protocol::chat::Numeric::Double(v) => v.to_string(),
+                    },
+                    Argument::Boolean(v) => v.to_string(),
+                    Argument::Component(c) => plain_text(c),
+                })
+                .collect::<Vec<_>>(),
+        ),
+        _ => String::new(),
+    };
+    for extra in &component.extra {
+        result.push_str(&plain_text(extra));
+    }
+    result
+}
+/// Port of Commands#finishParsing's second failure line and its suggest-command action.
+pub fn syntax_context(error: &CommandSyntaxException, command: &str) -> Option<Component> {
+    use ferraloom_protocol::chat::{ClickEvent, TextColor};
+    let input = error.input.as_ref()?.encode_utf16().collect::<Vec<_>>();
+    let cursor = error.cursor?.min(input.len());
+    let mut context = Component::literal("");
+    context.style.color = Some(TextColor::parse("gray").unwrap());
+    context.style.click_event = Some(ClickEvent::SuggestCommand(format!("/{command}")));
+    if cursor > 10 {
+        context.extra.push(Component::literal("..."));
+    }
+    context
+        .extra
+        .push(Component::literal(String::from_utf16_lossy(
+            &input[cursor.saturating_sub(10)..cursor],
+        )));
+    if cursor < input.len() {
+        let mut remaining = Component::literal(String::from_utf16_lossy(&input[cursor..]));
+        remaining.style.color = Some(TextColor::parse("red").unwrap());
+        remaining.style.underlined = Some(true);
+        context.extra.push(remaining);
+    }
+    let mut here = Component::translatable("command.context.here", vec![]);
+    here.style.color = Some(TextColor::parse("red").unwrap());
+    here.style.italic = Some(true);
+    context.extra.push(here);
+    Some(context)
+}
