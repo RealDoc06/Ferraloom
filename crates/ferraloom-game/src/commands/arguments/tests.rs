@@ -158,9 +158,10 @@ fn check_vector(vector: &Vector) {
             let ArgumentValue::Particle(particle) = &value else {
                 panic!("{label}: expected particle")
             };
-            let actual = particle
-                .to_bytes()
-                .unwrap()
+            let mut writer = ferraloom_protocol::Writer::with_context(argument.context.as_ref());
+            particle.encode(&mut writer).unwrap();
+            let actual = writer
+                .into_inner()
                 .iter()
                 .map(|b| format!("{b:02x}"))
                 .collect::<String>();

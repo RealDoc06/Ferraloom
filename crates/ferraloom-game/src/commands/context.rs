@@ -30,3 +30,33 @@ impl CommandBuildContext {
         self.tags.get(registry)?.get(id).map(Vec::as_slice)
     }
 }
+
+/// Registry references in command argument payloads use the same captured registry view.
+impl ferraloom_protocol::codec::RegistryContext for CommandBuildContext {
+    fn entry_id(
+        &self,
+        registry: &ferraloom_protocol::Identifier,
+        entry: &ferraloom_protocol::Identifier,
+    ) -> Option<i32> {
+        self.entries(registry.as_str())
+            .iter()
+            .position(|key| *key == entry.as_str())
+            .map(|id| id as i32)
+    }
+    fn entry_key(
+        &self,
+        registry: &ferraloom_protocol::Identifier,
+        id: i32,
+    ) -> Option<ferraloom_protocol::Identifier> {
+        self.entries(registry.as_str())
+            .get(usize::try_from(id).ok()?)
+            .and_then(|key| ferraloom_protocol::Identifier::parse(key).ok())
+    }
+    fn has_tag(
+        &self,
+        registry: &ferraloom_protocol::Identifier,
+        tag: &ferraloom_protocol::Identifier,
+    ) -> bool {
+        self.tag(registry.as_str(), tag.as_str()).is_some()
+    }
+}

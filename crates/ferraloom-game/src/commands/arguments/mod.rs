@@ -330,11 +330,18 @@ impl MinecraftArgument {
                 };
                 let ticks = (value * factor + 0.5).floor() as i32;
                 if ticks < *min {
-                    return Err(error_at(
-                        reader,
+                    return Err(crate::commands::exceptions::error_with_arguments(
                         "argument.time.tick_count_too_low",
-                        &[min.to_string(), ticks.to_string()],
-                    ));
+                        vec![
+                            ferraloom_protocol::chat::Argument::Number(
+                                ferraloom_protocol::chat::Numeric::Int(*min),
+                            ),
+                            ferraloom_protocol::chat::Argument::Number(
+                                ferraloom_protocol::chat::Numeric::Int(ticks),
+                            ),
+                        ],
+                    )
+                    .with_context(reader.string(), reader.cursor()));
                 }
                 V::Integer(ticks)
             }
@@ -430,12 +437,7 @@ impl MinecraftArgument {
             )?),
             A::TemplateRotation {} => V::String(enum_word(
                 reader,
-                &[
-                    "none",
-                    "clockwise_90",
-                    "clockwise_180",
-                    "counterclockwise_90",
-                ],
+                &["none", "clockwise_90", "180", "counterclockwise_90"],
                 "argument.enum.invalid",
             )?),
             A::Heightmap {} => V::String(enum_word(
@@ -628,12 +630,9 @@ impl ArgumentType for MinecraftArgument {
             CommandArgument::TeamColor {} => scoreboard::COLORS,
             CommandArgument::ScoreboardSlot {} => scoreboard::DISPLAY_SLOTS,
             CommandArgument::TemplateMirror {} => &["none", "front_back", "left_right"],
-            CommandArgument::TemplateRotation {} => &[
-                "none",
-                "clockwise_90",
-                "clockwise_180",
-                "counterclockwise_90",
-            ],
+            CommandArgument::TemplateRotation {} => {
+                &["none", "clockwise_90", "180", "counterclockwise_90"]
+            }
             CommandArgument::Heightmap {} => &[
                 "world_surface",
                 "motion_blocking",
@@ -765,17 +764,29 @@ fn enum_word(
     values: &[&str],
     key: &str,
 ) -> Result<String, CommandSyntaxException> {
+    let start = reader.cursor();
     let value = reader.read_unquoted_string();
     if values.contains(&value.as_str()) {
         Ok(value)
     } else {
+        if key == "argument.anchor.invalid" {
+            reader.set_cursor(start);
+        }
         Err(error_at(reader, key, &[value]))
     }
 }
 pub fn nbt(reader: &mut StringReader, compound: bool) -> Result<Tag, CommandSyntaxException> {
     let start = reader.cursor();
-    let (tag, used) = ferraloom_nbt::parse_prefix(&reader.remaining())
-        .map_err(|e| snbt_error(&e.message).with_context(reader.string(), start + e.cursor))?;
+    let (tag, used) = ferraloom_nbt::parse_prefix(&reader.remaining()).map_err(|e| {
+        // SnbtGrammar's numeric semantic actions throw directly after consuming
+        // the number. Structural failures roll the grammar reader back instead.
+        if e.message == "Expected a non-negative number"
+            || e.message.starts_with("Failed to parse number: ")
+        {
+            reader.set_cursor(start + e.cursor);
+        }
+        snbt_error(&e.message).with_context(reader.string(), start + e.cursor)
+    })?;
     reader.set_cursor(start + used);
     if compound && !matches!(tag, Tag::Compound(_)) {
         return Err(error_at(reader, "argument.nbt.expected.compound", &[]));

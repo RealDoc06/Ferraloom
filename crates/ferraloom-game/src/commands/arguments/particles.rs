@@ -32,7 +32,7 @@ pub fn parse(
     let Tag::Compound(map) = options else {
         unreachable!("particle options begin with a compound")
     };
-    decode(&id, &map).map_err(|message| error("particle.invalidOptions", &[message]))
+    decode(&id, &map, context).map_err(|message| error("particle.invalidOptions", &[message]))
 }
 /// RecordCodecBuilder aggregates failures in reverse field order.
 struct Fields<'a> {
@@ -59,7 +59,7 @@ impl Fields<'_> {
         default
     }
 }
-fn decode(id: &str, map: &CompoundTag) -> Result<Particle, String> {
+fn decode(id: &str, map: &CompoundTag, context: &CommandBuildContext) -> Result<Particle, String> {
     let mut fields = Fields {
         map,
         errors: Vec::new(),
@@ -188,7 +188,11 @@ fn decode(id: &str, map: &CompoundTag) -> Result<Particle, String> {
             let id = particle_type::Id::from_name(id).expect("registered vanilla particle type");
             let mut bytes = Writer::new();
             bytes.var_int(id.protocol_id() as i32);
-            Particle::from_bytes(&bytes.into_inner()).expect("unit particle codec")
+            let bytes = bytes.into_inner();
+            Particle::decode(&mut ferraloom_protocol::Reader::with_context(
+                &bytes, context,
+            ))
+            .expect("unit particle codec")
         }
     };
     if fields.errors.is_empty() {

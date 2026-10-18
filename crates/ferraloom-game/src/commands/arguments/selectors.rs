@@ -869,6 +869,14 @@ mod capture_tests {
             entity: EntityRef,
             predicate: &SelectorPredicate,
         ) -> Result<bool, CommandSyntaxException> {
+            if let SelectorPredicate::Type {
+                value,
+                tag: false,
+                inverted,
+            } = predicate
+            {
+                return Ok((value == "minecraft:player") != *inverted);
+            }
             let SelectorPredicate::Name { value, inverted } = predicate else {
                 panic!("unexpected predicate: {predicate:?}")
             };

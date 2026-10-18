@@ -705,6 +705,8 @@
   "parsing.quote.escape": "Invalid escape sequence '\\%s' in quoted string",
   "parsing.quote.expected.end": "Unclosed quoted string",
   "parsing.quote.expected.start": "Expected quote to start a string",
+  "particle.invalidOptions": "Can't parse particle options: %s",
+  "particle.notFound": "Unknown particle: %s",
   "permissions.requires.entity": "An entity is required to run this command here",
   "permissions.requires.player": "A player is required to run this command here",
   "slot.only_single_allowed": "Only single slots allowed: got '%s'",

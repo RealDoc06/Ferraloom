@@ -3,7 +3,7 @@ use ferraloom_brigadier::{
     BuiltInExceptionProvider, CommandSyntaxException, ExceptionKind, Message, MessageRef,
     StringReader,
 };
-use ferraloom_protocol::chat::{Argument, Component};
+use ferraloom_protocol::chat::{Argument, Component, Numeric};
 use std::{
     collections::BTreeMap,
     sync::{Arc, OnceLock},
@@ -126,8 +126,8 @@ impl BuiltInExceptionProvider for BrigadierExceptions {
                     }
                 )
             }
-            ExpectedNumber(t) => format!("parsing.{}.expected", t.to_lowercase()),
-            InvalidNumber(t) => format!("parsing.{}.invalid", t.to_lowercase()),
+            ExpectedNumber(t) => format!("parsing.{}.expected", parsing_number_name(t)),
+            InvalidNumber(t) => format!("parsing.{}.invalid", parsing_number_name(t)),
             LiteralIncorrect => "argument.literal.incorrect".into(),
             ExpectedStartOfQuote => "parsing.quote.expected.start".into(),
             ExpectedEndOfQuote => "parsing.quote.expected.end".into(),
@@ -141,7 +141,32 @@ impl BuiltInExceptionProvider for BrigadierExceptions {
             ParseException => "command.exception".into(),
             Custom(key) => key.clone(),
         };
-        Arc::new(translated(&key, &args))
+        let mut message = translated(&key, &args);
+        if let TooLow(kind) | TooHigh(kind) = kind {
+            message.component = Component::translatable(
+                key,
+                args.iter()
+                    .map(|value| {
+                        Argument::Number(match *kind {
+                            "Integer" => Numeric::Int(value.parse().expect("integer bound")),
+                            "Long" => Numeric::Long(value.parse().expect("long bound")),
+                            "Float" => Numeric::Float(value.parse().expect("float bound")),
+                            "Double" => Numeric::Double(value.parse().expect("double bound")),
+                            _ => unreachable!("Brigadier numeric argument type"),
+                        })
+                    })
+                    .collect(),
+            );
+        }
+        Arc::new(message)
+    }
+}
+
+fn parsing_number_name(kind: &str) -> String {
+    if kind.eq_ignore_ascii_case("integer") {
+        "int".into()
+    } else {
+        kind.to_lowercase()
     }
 }
 
