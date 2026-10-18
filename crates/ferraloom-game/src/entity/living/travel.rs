@@ -13,6 +13,25 @@ use ferraloom_util::{Vec3, java, mth};
 pub mod fall_flying;
 pub mod fluid;
 
+/// Port of LivingEntity#travel. The current block's required fluid-state read
+/// precedes all mode tests, even when the entity ultimately travels in air.
+pub fn travel<E: Entity + ?Sized>(
+    behavior: &E,
+    entity: EntityRef,
+    input: Vec3,
+    level: &mut Level,
+) -> Result<(), LevelError> {
+    let pos = level.entity::<EntityData>(entity)?.block_position;
+    let state = level.get_block_state(pos)?.data().fluid;
+    if fluid::should_travel_in_fluid(behavior, entity, state, level)? {
+        fluid::travel_in_fluid(behavior, entity, input, level)
+    } else if level.entity::<EntityData>(entity)?.shared_flag(7) {
+        fall_flying::travel_fall_flying(behavior, entity, input, level)
+    } else {
+        travel_in_air(behavior, entity, input, level)
+    }
+}
+
 /// Port of LivingEntity#getEffectiveGravity, reading the falling flag before the
 /// active-effect lookup and the Entity parent's actual gravity query.
 pub fn effective_gravity<E: Entity + ?Sized>(

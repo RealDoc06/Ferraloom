@@ -7,6 +7,7 @@ pub mod equipment;
 mod experience;
 mod interaction;
 mod spawn;
+pub mod travel;
 pub use experience::{give_experience_levels, give_experience_points, send_experience_update};
 pub use interaction::swing_and_reset_attack_strength;
 pub mod inventory;
@@ -946,6 +947,9 @@ impl crate::entity::Entity for PlayerBehavior {
     }
     fn effective_gravity(&self, entity: EntityRef, level: &Level) -> Result<f64, LevelError> {
         crate::entity::living::travel::effective_gravity(self, entity, level)
+    }
+    fn travel(&self, entity: EntityRef, input: Vec3, level: &mut Level) -> Result<(), LevelError> {
+        travel::travel(self, entity, input, level)
     }
     fn get_speed(&self, entity: EntityRef, level: &Level) -> Result<f32, LevelError> {
         Ok(crate::entity::living::attribute(

@@ -609,6 +609,10 @@ pub trait Entity: Sync {
         base_effective_gravity(self, entity, level)
     }
     /// Port of LivingEntity#getSpeed; Player overrides its attribute read.
+    /// Port of LivingEntity#travel; Player preserves its explicit parent call.
+    fn travel(&self, entity: EntityRef, input: Vec3, level: &mut Level) -> Result<(), LevelError> {
+        living::travel::travel(self, entity, input, level)
+    }
     fn get_speed(&self, entity: EntityRef, level: &Level) -> Result<f32, LevelError> {
         Ok(level.entity::<LivingEntity>(entity)?.speed)
     }
