@@ -1958,8 +1958,8 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 
 | advancements.persistence.live-save-zone | Save capture uses the system zone at each obtained instant; IO workers write captured JSON | `PlayerList#save; AdvancementProgress.OBTAINED_TIME_CODEC` | `advancements::persistence::tests::captured_save_uses_each_instant_offset_across_dst` | pass | partial |
 
-| advancements.parity.consumed-inventory-and-tab | Bedrock flat Strict scenario grants crafting table through native inventory listener and selects root tab | `ServerPlayer.containerListener; ServerGamePacketListenerImpl#handleSeenAdvancements` | `ferraloom-parity::inventory_changed_awards_and_selects_advancement_tab` | pass | pending |
-| advancements.parity.player-save-rejoin | Bedrock flat awarded inventory criterion persists through player/world save and rejoin | `PlayerList#save; PlayerAdvancements#load` | `ferraloom-parity::inventory_advancement_persists_across_player_save` | pass | pending |
+| advancements.parity.consumed-inventory-and-tab | Bedrock flat Strict scenario grants crafting table through native inventory listener and selects root tab | `ServerPlayer.containerListener; ServerGamePacketListenerImpl#handleSeenAdvancements` | `ferraloom-parity::inventory_changed_awards_and_selects_advancement_tab` | pass | todo |
+| advancements.parity.player-save-rejoin | Bedrock flat awarded inventory criterion persists through player/world save and rejoin | `PlayerList#save; PlayerAdvancements#load` | `ferraloom-parity::inventory_advancement_persists_across_player_save` | pass | todo |
 
 | advancements.announcement.application-time | Announcement descriptor reads SHOW_ADVANCEMENT_MESSAGES and team-formatted player name after synchronous rewards return | `PlayerAdvancements#award` | `advancements::tests::announcement_descriptor_reads_rule_and_team_at_application_time; vanilla_rewards_change_announcement_rule_and_name_before_chat` | pass | partial |
 
@@ -1967,6 +1967,6 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 
 | advancements.recipes.live-award | Shared live recipe award finishes each unlock trigger before the next holder, sends one aggregate packet and returns its display-entry count; skips known and special recipes | `ServerPlayer#awardRecipes; ServerRecipeBook#addRecipes` | `advancements::tests::award_recipes_counts_displays_after_synchronous_nested_unlocks; live_rewards_nest_recipe_awards_before_outer_announcement_and_visibility` | pass | partial |
 
-| advancements.parity.loaded-tab-save | Bedrock flat Strict scenario loads canonical UUID progress, selects the advancement tab, saves and repeats after rejoin | `PlayerList#getPlayerAdvancements; PlayerList#save; ServerGamePacketListenerImpl#handleSeenAdvancements` | `ferraloom-parity::loaded_statistics_and_advancement_tab_survive_save` | pass | pending |
+| advancements.parity.loaded-tab-save | Bedrock flat Strict scenario loads canonical UUID progress, selects the advancement tab, saves and repeats after rejoin | `PlayerList#getPlayerAdvancements; PlayerList#save; ServerGamePacketListenerImpl#handleSeenAdvancements` | `ferraloom-parity::loaded_statistics_and_advancement_tab_survive_save` | pass | todo |
 | advancements.persistence.level-resource | UUID saves use players/advancements and the shared player-progress path helper | `LevelResource.PLAYER_ADVANCEMENTS_DIR` | `advancements::persistence::tests::captured_save_uses_each_instant_offset_across_dst` | pass | pass |
 | advancements.persistence.old-layout-migration | Migrate older player advancement layouts through the filefix workstream; no fallback reader | `PlayerStorageFileFix` | pending | - | todo |
