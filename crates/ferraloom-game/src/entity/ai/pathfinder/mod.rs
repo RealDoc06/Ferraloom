@@ -7,14 +7,19 @@ mod path;
 mod path_computation_type;
 mod path_finder;
 mod path_type;
+mod path_type_cache;
 mod target;
+pub mod walk_node_evaluator;
 pub use binary_heap::{BinaryHeap, HeapError};
 pub use node::{Node, NodeId, NodeKey, PathData, PathNodesId};
 pub use path::{DebugData, Path};
 pub use path_computation_type::PathComputationType;
 pub use path_finder::{DistanceMetric, NodeEvaluator, PathFinder, SearchError};
 pub use path_type::PathType;
+pub use path_type_cache::PathTypeCache;
 pub use target::Target;
+#[cfg(test)]
+mod classification_tests;
 #[cfg(test)]
 mod pathfindability_tests;
 #[cfg(test)]

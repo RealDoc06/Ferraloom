@@ -33,6 +33,7 @@ impl Level {
                 .or_default()
                 .insert(SectionPos::section_relative_pos(pos));
         }
+        self.path_type_cache_mut().invalidate(pos);
         self.emit(LevelEffect::BlockUpdated { pos, old, new });
     }
     /// Drain this phase's holder notifications separately from retained section
