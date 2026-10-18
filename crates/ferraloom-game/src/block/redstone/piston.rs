@@ -374,7 +374,7 @@ fn move_blocks(
     if !resolver.resolve(level)? {
         return Ok(false);
     }
-    let mut delete = JavaHashMap::new();
+    let mut delete = JavaHashMap::<BlockPos, BlockState>::new();
     let mut moved_states = Vec::with_capacity(resolver.to_push.len());
     for &pos in &resolver.to_push {
         let state = level.get_block_state(pos)?;

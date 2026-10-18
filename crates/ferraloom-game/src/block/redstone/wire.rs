@@ -169,7 +169,7 @@ fn default_update(level: &mut Level, pos: BlockPos, state: BlockState) -> Result
                 UPDATE_LIMIT,
             )?;
         }
-        let mut updates = JavaHashSet::new();
+        let mut updates = JavaHashSet::<BlockPos>::new();
         updates.insert(pos);
         for direction in Direction::VALUES {
             updates.insert(pos.relative(direction, 1));
