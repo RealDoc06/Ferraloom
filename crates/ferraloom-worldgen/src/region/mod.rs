@@ -135,6 +135,19 @@ pub struct StructureEntitySpawnFlags {
 /// extracted collision shapes cannot answer survival or neighbor shape queries.
 pub trait WorldgenBlockBehavior: Sync {
     // --- structures family ---
+    /// Mansion allay markers create every mob before finalizing any of them.
+    /// For each non-null mob: persistence, bottom-center snap with zero rotation,
+    /// STRUCTURE finalizeSpawn, addFreshEntityWithPassengers, then clear the marker
+    /// to air with flags 2. Null creations consume no later operations.
+    fn spawn_mansion_allays(
+        &self,
+        _region: &mut WorldGenRegion<'_>,
+        _position: [i32; 3],
+        _count: i32,
+    ) -> Result<(), Error> {
+        Err(Error("Unsupported: mansion allay group creation".into()))
+    }
+
     /// Block#canSupportCenter includes the unstable-bottom-center tag and the
     /// live SupportType.CENTER face query.
     fn can_support_center(
@@ -611,6 +624,10 @@ impl<'a> WorldGenRegion<'a> {
             .ok_or_else(|| Error("Unsupported: WorldGenRegion random stream is unset".into()))
     }
     // --- structures family ---
+    pub fn spawn_mansion_allays(&mut self, position: [i32; 3], count: i32) -> Result<(), Error> {
+        self.behavior.spawn_mansion_allays(self, position, count)
+    }
+
     pub fn can_support_center(
         &self,
         position: [i32; 3],
