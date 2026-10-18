@@ -1185,8 +1185,28 @@ impl World {
         self.light_tx.send(LightJob::Unload { pos })?;
         Ok(())
     }
+    fn persist_cancelled_outputs(&mut self) -> Result<()> {
+        // A cancellation can arrive after the worker finished but before its
+        // ordered response was consumed. Persist that owned result before the
+        // holder/cache may be released, just as for an in-flight cancellation.
+        for output in self.cancelled_outputs.drain(..) {
+            for (pos, disk) in output
+                .neighbors
+                .into_iter()
+                .chain(std::iter::once((output.terrain.pos, output.terrain.disk)))
+            {
+                self.proto_saves
+                    .push_back(self.io.store(pos, Some(disk.write()?)));
+            }
+        }
+        Ok(())
+    }
     pub async fn close_chunk_storage(&mut self) -> Result<()> {
         self.finish_generation().await?;
+        self.persist_cancelled_outputs()?;
+        while let Some(save) = self.proto_saves.pop_front() {
+            save.await?;
+        }
         while let Some(job) = self.unloading.pop_front() {
             job.saving.await??;
         }
@@ -1215,19 +1235,7 @@ impl World {
                 Err(error) => return Err(error.into()),
             }
         }
-        // A cancellation can arrive after the worker finished but before its
-        // ordered response was consumed. Persist that owned result before the
-        // holder/cache may be released, just as for an in-flight cancellation.
-        for output in self.cancelled_outputs.drain(..) {
-            for (pos, disk) in output
-                .neighbors
-                .into_iter()
-                .chain(std::iter::once((output.terrain.pos, output.terrain.disk)))
-            {
-                self.proto_saves
-                    .push_back(self.io.store(pos, Some(disk.write()?)));
-            }
-        }
+        self.persist_cancelled_outputs()?;
         let mut context = TaskContext::from_waker(Waker::noop());
         while let Some(task) = self.proto_saves.front_mut() {
             let Poll::Ready(result) = Pin::new(task).poll(&mut context) else {
