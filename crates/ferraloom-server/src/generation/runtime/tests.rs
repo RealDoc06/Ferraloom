@@ -268,6 +268,33 @@ async fn resumed_full_promotion_keeps_the_successful_entity_post_load_checkpoint
     assert!(runtime.with_world(|world| world.full_promotions[&task].finalized));
     assert!(runtime.with_world(|world| world.light_ready.contains(&pos)));
     assert!(!runtime.with_world(|world| world.ready.contains(&pos)));
+    // A later task can demote the holder before its queued range confirmation
+    // runs. Validate the cancellable token when publishing visibility.
+    let (epoch, promotion) = runtime.with_chunks_mut(|chunks| {
+        let holder = chunks.holders.get_mut(&pos.pack()).unwrap();
+        holder.ticket_level = 31;
+        holder.update_full_status();
+        (holder.epoch, holder.pending_full_status().unwrap())
+    });
+    runtime
+        .status_publications
+        .borrow_mut()
+        .push_back(StatusPublication {
+            pos,
+            epoch,
+            confirmed: None,
+            promotion: Some(promotion),
+        });
+    runtime.with_chunks_mut(|chunks| {
+        let holder = chunks.holders.get_mut(&pos.pack()).unwrap();
+        holder.ticket_level = 45;
+        holder.update_full_status();
+    });
+    runtime.publish_status_changes(&live.level).unwrap();
+    assert_eq!(
+        live.level.entity_chunk_visibility(pos),
+        ferraloom_game::level::entity::Visibility::Hidden
+    );
     let drain = runtime
         .with_world_mut(World::prepare_close_chunk_storage)
         .unwrap();

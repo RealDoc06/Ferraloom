@@ -18,6 +18,7 @@ use ferraloom_game::{
             AcquireDriver, AcquireFailure, AcquireHandle, AcquireProgress, AcquireResult,
             ChunkReference,
         },
+        chunk_holder::FullStatusPromotion,
         chunk_map::ChunkMap,
         distance_manager::{DistanceManager, FullChunkStatus},
         generation::{
@@ -51,6 +52,7 @@ struct StatusPublication {
     pos: ChunkPos,
     epoch: u64,
     confirmed: Option<FullChunkStatus>,
+    promotion: Option<FullStatusPromotion>,
 }
 struct OwnerAcquisition {
     pos: ChunkPos,
@@ -219,6 +221,7 @@ impl GenerationRuntime {
                         pos: change.pos,
                         epoch: holder.epoch,
                         confirmed: holder.update_full_status(),
+                        promotion: None,
                     }
                 };
                 self.status_publications.borrow_mut().push_back(publication);
@@ -262,14 +265,21 @@ impl GenerationRuntime {
                 return Ok(());
             };
             let current = {
-                let chunks = self.chunks.borrow();
+                let mut chunks = self.chunks.borrow_mut();
                 chunks
                     .holders
-                    .get(&publication.pos.pack())
+                    .get_mut(&publication.pos.pack())
                     .filter(|holder| holder.epoch == publication.epoch)
-                    .map(|holder| holder.requested_full_status())
+                    .map(|holder| {
+                        let confirmed = publication
+                            .promotion
+                            .map_or(publication.confirmed, |promotion| {
+                                holder.confirm_full_status(promotion)
+                            });
+                        (holder.requested_full_status(), confirmed)
+                    })
             };
-            let Some(requested) = current else {
+            let Some((requested, confirmed)) = current else {
                 continue;
             };
             if level.chunk(publication.pos).is_some() {
@@ -278,7 +288,7 @@ impl GenerationRuntime {
                     && self.range_ready(publication.pos, FullChunkStatus::BlockTicking);
                 level.set_chunk_loading_status(publication.pos, requested, ticking)?;
             }
-            if let Some(status) = publication.confirmed {
+            if let Some(status) = confirmed {
                 use ferraloom_game::level::entity::Visibility;
                 let visibility = match status {
                     FullChunkStatus::Inaccessible => Visibility::Hidden,
@@ -319,22 +329,16 @@ impl GenerationRuntime {
             {
                 continue;
             }
-            let confirmed = {
-                let mut chunks = self.chunks.borrow_mut();
-                chunks
-                    .holders
-                    .get_mut(&pos.pack())
-                    .filter(|holder| holder.epoch == epoch)
-                    .and_then(|holder| holder.confirm_full_status(promotion))
-            };
-            if confirmed.is_some() {
-                self.status_publications
-                    .borrow_mut()
-                    .push_back(StatusPublication {
-                        pos,
-                        epoch,
-                        confirmed,
-                    });
+            let mut publications = self.status_publications.borrow_mut();
+            if !publications.iter().any(|queued| {
+                queued.pos == pos && queued.epoch == epoch && queued.promotion == Some(promotion)
+            }) {
+                publications.push_back(StatusPublication {
+                    pos,
+                    epoch,
+                    confirmed: None,
+                    promotion: Some(promotion),
+                });
             }
         }
         self.publish_status_changes(level)
@@ -517,6 +521,7 @@ impl GenerationRuntime {
                 pos,
                 epoch,
                 confirmed: None,
+                promotion: None,
             });
         self.publish_status_changes(level)
     }
