@@ -228,6 +228,16 @@ impl EntityData {
         self.set_pos_raw(pos);
         self.bounding_box = self.dimensions.make_bounding_box(self.position);
     }
+    /// Port of Entity#snapTo before registration. Registered entities use Level's
+    /// handle operations so section membership follows the accepted position.
+    pub fn snap_to(&mut self, position: Vec3, yaw: f32, pitch: f32) {
+        self.set_pos_raw(position);
+        self.set_y_rot(yaw);
+        self.set_x_rot(pitch);
+        self.set_old_pos_and_rot();
+        self.last_known_position = None;
+        self.set_pos(self.position);
+    }
     pub fn set_bounding_box(&mut self, bb: Aabb) {
         self.bounding_box = bb;
     }

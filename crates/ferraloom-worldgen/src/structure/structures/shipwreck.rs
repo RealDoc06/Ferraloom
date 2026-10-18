@@ -7,7 +7,9 @@ use crate::structure::{
     template::{StructurePlaceSettings, StructureTemplateManager},
     template_piece::TemplateStructurePiece,
 };
-use crate::{Error, feature::FeatureContext, generator::ChunkGeneratorAccess, region::Heightmap};
+use crate::{
+    Error, generator::ChunkGeneratorAccess, region::Heightmap, structure::StructurePlacementContext,
+};
 use ferraloom_data::Block;
 use ferraloom_nbt::{CompoundTag, Tag};
 use ferraloom_util::{Rotation, random::RandomSource};
@@ -183,7 +185,7 @@ impl ShipwreckPiece {
     }
     pub fn post_process(
         &mut self,
-        context: &mut FeatureContext<'_, '_>,
+        context: &mut StructurePlacementContext<'_, '_>,
         templates: &StructureTemplateManager,
         tags: &BlockTags,
         bounds: BoundingBox,

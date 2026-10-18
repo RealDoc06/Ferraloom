@@ -300,6 +300,14 @@ keeps one implementation of each behavior in `ferraloom-game`:
 - Pure state transforms (rotate, mirror) are generated data tables in
   `ferraloom-data`, extracted from vanilla's own methods.
 
+Live configured features use `LiveWorldGenLevel` implemented by the concrete
+`Level` at the cold feature boundary. `Level` construction requires an immutable
+`Arc<LevelContext>` containing the actual WorldOptions seed, generator sea level,
+generator and configured-feature registry. Tests supply explicit fixture context;
+production has no missing-context state or default services. A canonical
+`FeatureRandomSelector` resolves short borrows of `Level#random` between world
+callbacks, so placement never takes, replaces or copies that stream.
+
 ## Global state, commands and messages
 
 The global phase is a sequence of the serial slots above, not a second tick

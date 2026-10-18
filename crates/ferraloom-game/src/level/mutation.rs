@@ -51,6 +51,15 @@ impl Level {
     pub fn set_entity_type_tags(&mut self, tags: Arc<TagSet<ferraloom_data::EntityType>>) {
         self.region_mut().entity_type_tags = Some(tags);
     }
+    pub fn set_item_tags(&mut self, tags: Arc<TagSet<ferraloom_data::Item>>) {
+        self.region_mut().item_tags = Some(tags);
+    }
+    pub fn item_tags(&self) -> Result<&TagSet<ferraloom_data::Item>, LevelError> {
+        self.region()
+            .item_tags
+            .as_deref()
+            .ok_or(LevelError::MissingItemTags)
+    }
     pub fn entity_type_tags(&self) -> Result<&TagSet<ferraloom_data::EntityType>, LevelError> {
         self.region()
             .entity_type_tags
@@ -345,19 +354,55 @@ impl Level {
         drop: bool,
         limit: i32,
     ) -> Result<bool, LevelError> {
+        self.destroy_block_with_breaker(pos, drop, None, limit)
+    }
+    /// Port of Level#destroyBlock, including synchronous drops before the live
+    /// fluid replacement is read. Particle dispatch uses no breaker exclusion.
+    pub fn destroy_block_with_breaker(
+        &mut self,
+        pos: BlockPos,
+        drop: bool,
+        breaker: Option<crate::entity::EntityRef>,
+        limit: i32,
+    ) -> Result<bool, LevelError> {
         let state = self.get_block_state(pos)?;
         if state.is_air() {
             return Ok(false);
         }
-        self.emit(LevelEffect::DestroyParticles { pos, state });
+        self.optional_block_call(
+            state.block(),
+            BlockMethod::SpawnDestroyParticles,
+            |behavior, level| behavior.spawn_destroy_particles(state, pos, level),
+        )?;
         if drop {
-            self.emit(LevelEffect::DropResources { pos, state });
+            let block_entity = if state.has_block_entity() {
+                self.get_or_promote_block_entity(pos)?
+            } else {
+                None
+            };
+            crate::block::drops::drop_resources_with_tool(
+                state,
+                pos,
+                block_entity,
+                breaker,
+                &ferraloom_protocol::component::ItemStack::default(),
+                self,
+            )?;
         }
-        let fluid = state.data().fluid;
+        let fluid = self.get_block_state(pos)?.data().fluid;
         let replacement = crate::block::fluid::legacy_block(fluid);
         let destroyed = self.set_block(pos, replacement, UpdateFlags::ALL, limit)?;
         if destroyed {
-            self.emit(LevelEffect::BlockDestroyed { pos, state });
+            self.game_event(
+                ferraloom_data::registries::game_event::Id::BLOCK_DESTROY,
+                ferraloom_util::Vec3::new(
+                    f64::from(pos.x) + 0.5,
+                    f64::from(pos.y) + 0.5,
+                    f64::from(pos.z) + 0.5,
+                ),
+                breaker,
+                Some(state),
+            );
         }
         Ok(destroyed)
     }

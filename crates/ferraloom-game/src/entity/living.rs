@@ -4,7 +4,7 @@ use super::{
 };
 use ferraloom_data::registries::attribute::Id as Attribute;
 use ferraloom_nbt::{CompoundTag, Tag};
-use ferraloom_protocol::codec::VarInt;
+use ferraloom_protocol::{codec::VarInt, component::ItemStack};
 use ferraloom_util::random::RandomSource;
 
 /// Port of LivingEntity's canonical attributes, metadata, equipment and current
@@ -14,6 +14,8 @@ pub struct LivingEntity {
     pub parent: EntityData,
     pub attributes: AttributeMap,
     pub equipment: EntityEquipment,
+    pub use_item: ItemStack,
+    pub use_item_remaining: i32,
     pub y_head_rot: f32,
     pub old_y_head_rot: f32,
     pub y_body_rot: f32,
@@ -39,6 +41,8 @@ impl LivingEntity {
             parent,
             attributes,
             equipment: EntityEquipment::default(),
+            use_item: ItemStack::default(),
+            use_item_remaining: 0,
             y_head_rot: 0.0,
             old_y_head_rot: 0.0,
             y_body_rot: 0.0,
@@ -55,6 +59,30 @@ impl LivingEntity {
         living.parent.set_y_rot(rotation);
         living.y_head_rot = living.parent.yaw;
         living
+    }
+    /// Port of LivingEntity#isUsingItem (mask 1, not a bit index).
+    pub fn is_using_item(&self) -> bool {
+        self.parent.entity_data.get(data::LIVING_ENTITY_FLAGS) & 1 > 0
+    }
+    /// Port of LivingEntity#getUseItem.
+    pub fn get_use_item(&self) -> &ItemStack {
+        &self.use_item
+    }
+    /// Port of LivingEntity#getUseItemRemainingTicks.
+    pub fn get_use_item_remaining_ticks(&self) -> i32 {
+        self.use_item_remaining
+    }
+    /// Port of LivingEntity#setLivingEntityFlag, preserving the other byte flags.
+    pub fn set_living_entity_flag(&mut self, mask: i32, value: bool) {
+        let current = i32::from(*self.parent.entity_data.get(data::LIVING_ENTITY_FLAGS));
+        let flags = if value {
+            current | mask
+        } else {
+            current & !mask
+        };
+        self.parent
+            .entity_data
+            .set(data::LIVING_ENTITY_FLAGS, flags as i8);
     }
     pub fn health(&self) -> f32 {
         *self.parent.entity_data.get(data::HEALTH)
@@ -112,6 +140,40 @@ impl LivingEntity {
             );
         }
     }
+}
+
+/// Port of server-side LivingEntity#stopUsingItem and ItemStack#causeUseVibration.
+/// Clear the flag before the game event, then reset the stack and remaining ticks.
+pub fn stop_using_item(
+    entity: super::EntityRef,
+    level: &mut crate::level::Level,
+) -> Result<(), crate::level::LevelError> {
+    let (position, vibrates) = {
+        use ferraloom_data::registries::data_component_type::Id as ComponentType;
+        use ferraloom_protocol::component::DataComponent;
+        let state = level.entity_mut::<LivingEntity>(entity)?;
+        let was_using = state.is_using_item();
+        state.set_living_entity_flag(1, false);
+        let vibrates = was_using
+            && !state.use_item.is_empty()
+            && matches!(
+                super::player::inventory::component(&state.use_item, ComponentType::USE_EFFECTS),
+                Some(DataComponent::UseEffects(value)) if value.interact_vibrations
+            );
+        (state.position, vibrates)
+    };
+    if vibrates {
+        level.game_event(
+            ferraloom_data::registries::game_event::Id::ITEM_INTERACT_FINISH,
+            position,
+            Some(entity),
+            None,
+        );
+    }
+    let state = level.entity_mut::<LivingEntity>(entity)?;
+    state.use_item = ItemStack::default();
+    state.use_item_remaining = 0;
+    Ok(())
 }
 
 /// Embedded-parent projection. Each struct dereferences to its immediate parent.
@@ -248,3 +310,6 @@ pub fn passenger_riding_position<E: super::Entity + ?Sized>(
             level,
         )?)
 }
+
+#[cfg(test)]
+mod tests;

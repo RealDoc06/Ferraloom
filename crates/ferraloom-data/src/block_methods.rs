@@ -28,5 +28,15 @@ mod tests {
         assert!(Block::OAK_LOG.overrides(BlockMethod::Rotate));
         assert!(!Block::STONE.overrides(BlockMethod::GetStateForPlacement));
         assert!(Block::OAK_LOG.overrides(BlockMethod::GetStateForPlacement));
+        assert!(!Block::STONE.overrides(BlockMethod::SetPlacedBy));
+        assert!(Block::OAK_DOOR.overrides(BlockMethod::SetPlacedBy));
+        assert!(Block::REPEATER.overrides(BlockMethod::SetPlacedBy));
+        assert!(!Block::STONE.overrides(BlockMethod::PlayerWillDestroy));
+        assert!(Block::TRIPWIRE.overrides(BlockMethod::PlayerWillDestroy));
+        assert!(!Block::REDSTONE_WIRE.overrides(BlockMethod::SpawnDestroyByEntityParticles));
+        assert!(Block::FIRE.overrides(BlockMethod::SpawnDestroyByEntityParticles));
+        assert!(!Block::FIRE.overrides(BlockMethod::SpawnDestroyParticles));
+        assert!(!Block::STONE.overrides(BlockMethod::SpawnDestroyParticles));
+        assert!(Block::STRAW_BED.overrides(BlockMethod::SpawnDestroyParticles));
     }
 }

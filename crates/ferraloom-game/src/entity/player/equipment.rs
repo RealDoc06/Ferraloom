@@ -1,4 +1,5 @@
 //! Port of EntityEquipment, embedded once in LivingEntity.
+use crate::inventory::{StackGenerations, StackReplacement};
 use ferraloom_nbt::{CompoundTag, Tag};
 use ferraloom_protocol::{
     Result,
@@ -43,11 +44,13 @@ pub fn slot_name(slot: EquipmentSlot) -> &'static str {
 #[derive(Clone, Debug)]
 pub struct EntityEquipment {
     items: [ItemStack; 8],
+    stack_generations: StackGenerations,
 }
 impl Default for EntityEquipment {
     fn default() -> Self {
         Self {
             items: std::array::from_fn(|_| ItemStack::default()),
+            stack_generations: StackGenerations::new(8),
         }
     }
 }
@@ -58,17 +61,34 @@ impl EntityEquipment {
     pub fn get_mut(&mut self, slot: EquipmentSlot) -> &mut ItemStack {
         &mut self.items[index(slot)]
     }
-    pub fn set(&mut self, slot: EquipmentSlot, stack: ItemStack) -> ItemStack {
-        std::mem::replace(self.get_mut(slot), stack)
+    pub fn set(&mut self, slot: EquipmentSlot, stack: ItemStack) -> StackReplacement {
+        let slot = index(slot);
+        self.stack_generations
+            .replace(slot, &mut self.items[slot], stack)
+    }
+    pub fn stack_parts(&self, slot: EquipmentSlot) -> (&StackGenerations, &ItemStack, usize) {
+        let slot = index(slot);
+        (&self.stack_generations, &self.items[slot], slot)
+    }
+    pub fn stack_parts_mut(
+        &mut self,
+        slot: EquipmentSlot,
+    ) -> (&mut StackGenerations, &mut ItemStack, usize) {
+        let slot = index(slot);
+        (&mut self.stack_generations, &mut self.items[slot], slot)
     }
     pub fn is_empty(&self) -> bool {
         self.items.iter().all(ItemStack::is_empty)
     }
     pub fn clear(&mut self) {
-        self.items.fill_with(ItemStack::default);
+        for slot in SLOTS {
+            self.set(slot, ItemStack::default());
+        }
     }
     pub fn set_all(&mut self, other: &Self) {
-        self.clone_from(other);
+        for slot in SLOTS {
+            self.set(slot, other.get(slot).clone());
+        }
     }
     pub fn iter(&self) -> impl Iterator<Item = (EquipmentSlot, &ItemStack)> {
         SLOTS.into_iter().map(|slot| (slot, self.get(slot)))

@@ -130,7 +130,10 @@ fn mixed_native_selectors_use_player_lookup_and_section_iteration() {
     let vectors: Vectors =
         serde_json::from_str(include_str!("../../vanilla/mixed-selector-vectors.json")).unwrap();
     static BEHAVIORS: Behaviors = Behaviors::new();
-    let mut level = Level::new(Region::new(&BEHAVIORS));
+    let mut level = Level::new(
+        Region::new(&BEHAVIORS),
+        crate::level::LevelContext::fixture(0, 63),
+    );
     for x in 0..3 {
         level
             .update_entity_chunk_status(ChunkPos::new(x, 0), Visibility::Ticking)

@@ -103,6 +103,9 @@ impl EnvironmentAttributeSystem {
     pub fn is_affected_by_position(&self, id: Id) -> bool {
         self.samplers[id.protocol_id() as usize].positional
     }
+    pub fn clock_ticks(&self, clock: &crate::Identifier) -> Option<i64> {
+        self.clocks.ticks(clock)
+    }
     pub fn get_dimension_value<T: AttributeValue>(
         &self,
         key: AttributeKey<T>,

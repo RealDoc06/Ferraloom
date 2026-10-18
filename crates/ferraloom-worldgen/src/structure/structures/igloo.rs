@@ -6,7 +6,7 @@ use crate::structure::{
     template::{LiquidSettings, StructurePlaceSettings, StructureTemplateManager, transform_block},
     template_piece::TemplateStructurePiece,
 };
-use crate::{Error, feature::FeatureContext, region::Heightmap};
+use crate::{Error, region::Heightmap, structure::StructurePlacementContext};
 use ferraloom_data::Block;
 use ferraloom_nbt::CompoundTag;
 use ferraloom_util::{Mirror, Rotation, random::RandomSource};
@@ -90,7 +90,7 @@ impl IglooPiece {
     }
     pub fn post_process(
         &mut self,
-        context: &mut FeatureContext<'_, '_>,
+        context: &mut StructurePlacementContext<'_, '_>,
         templates: &StructureTemplateManager,
         tags: &BlockTags,
         bounds: BoundingBox,

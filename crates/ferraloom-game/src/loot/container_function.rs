@@ -70,7 +70,7 @@ impl ContainerFunction {
                 for entry in entries {
                     entry.expand_with(data, c, &mut |entry, c| {
                         entry.create(data, c, &mut |stack, c| {
-                            if c.facts.item_enabled(&stack)? {
+                            if c.facts().item_enabled(&stack)? {
                                 super::table::split_stack(stack, &mut items)?;
                             }
                             Ok(())
@@ -128,7 +128,7 @@ impl ContainerFunction {
                 BoundedList(items.iter().filter_map(template).collect()),
             ),
             ContainerComponent::BundleContents => {
-                DataComponent::BundleContents(c.facts.bundle_contents(items)?)
+                DataComponent::BundleContents(c.facts().bundle_contents(items)?)
             }
         };
         stack.0.as_mut().expect("nonempty").components.set(value);

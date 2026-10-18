@@ -9,4 +9,5 @@ pub(super) fn ported_behavior(
 ) -> Option<&'static dyn BlockBehavior> {
     super::plants::ported_behavior(block, method)
         .or_else(|| super::redstone::ported_behavior(block, method))
+        .or_else(|| super::containers::ported_behavior(block, method))
 }

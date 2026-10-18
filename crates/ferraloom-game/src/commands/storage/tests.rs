@@ -126,7 +126,10 @@ fn real_native_saved_file_loads_and_level_reads_share_namespace_touches() {
     let mut commands = CommandStorage::preload(&directory.0);
     assert!(commands.keys().is_empty());
     static BEHAVIORS: crate::Behaviors = crate::Behaviors::new();
-    let mut level = crate::level::Level::new(crate::level::Region::new(&BEHAVIORS));
+    let mut level = crate::level::Level::new(
+        crate::level::Region::new(&BEHAVIORS),
+        crate::level::LevelContext::fixture(0, 63),
+    );
     assert!(level.command_storage().is_none());
     level.set_command_storage(commands.snapshot());
     assert_eq!(

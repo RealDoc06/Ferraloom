@@ -78,8 +78,8 @@ impl SpawnData {
             builtins::integer(self.position.x),
             builtins::integer(self.position.y),
             builtins::integer(self.position.z),
-            Argument::Number(Numeric::Float(self.rotation.yaw)),
-            Argument::Number(Numeric::Float(self.rotation.pitch)),
+            Argument::Number(Numeric::Float(self.rotation.yaw.into())),
+            Argument::Number(Numeric::Float(self.rotation.pitch.into())),
             builtins::string(&self.dimension),
         ]
     }

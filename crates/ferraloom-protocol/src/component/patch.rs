@@ -32,7 +32,7 @@ components! {
     Unbreakable(Unit) => UNBREAKABLE, "unbreakable",
     UseEffects(UseEffects) => USE_EFFECTS, "use_effects",
     CustomName(Box<Component>) => CUSTOM_NAME, "custom_name",
-    MinimumAttackCharge(f32) => MINIMUM_ATTACK_CHARGE, "minimum_attack_charge",
+    MinimumAttackCharge(JavaF32) => MINIMUM_ATTACK_CHARGE, "minimum_attack_charge",
     DamageType(DamageType) => DAMAGE_TYPE, "damage_type",
     ItemName(Box<Component>) => ITEM_NAME, "item_name",
     ItemModel(Identifier) => ITEM_MODEL, "item_model",
@@ -79,7 +79,7 @@ components! {
     ChargedProjectiles(BoundedList<ItemStackTemplate, 1024>) => CHARGED_PROJECTILES, "charged_projectiles",
     BundleContents(Vec<ItemStackTemplate>) => BUNDLE_CONTENTS, "bundle_contents",
     PotionContents(PotionContents) => POTION_CONTENTS, "potion_contents",
-    PotionDurationScale(f32) => POTION_DURATION_SCALE, "potion_duration_scale",
+    PotionDurationScale(JavaF32) => POTION_DURATION_SCALE, "potion_duration_scale",
     SuspiciousStewEffects(Vec<StewEffect>) => SUSPICIOUS_STEW_EFFECTS, "suspicious_stew_effects",
     WritableBookContent(BoundedList<Filterable<BoundedString<1024>>, 100>) => WRITABLE_BOOK_CONTENT, "writable_book_content",
     WrittenBookContent(WrittenBookContent) => WRITTEN_BOOK_CONTENT, "written_book_content",
@@ -150,11 +150,20 @@ components! {
 }
 
 /// Port of DataComponentPatch. Order is preserved within additions and removals.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default)]
 pub struct DataComponentPatch {
     pub added: Vec<DataComponent>,
     pub removed: Vec<ComponentTypeId>,
 }
+/// Port of DataComponentPatch#equals; additions and removals each compare as map entries.
+impl PartialEq for DataComponentPatch {
+    fn eq(&self, other: &Self) -> bool {
+        super::unordered_eq(&self.added, &other.added)
+            && super::unordered_eq(&self.removed, &other.removed)
+    }
+}
+impl Eq for DataComponentPatch {}
+
 impl DataComponentPatch {
     pub fn decode_delimited(r: &mut Reader<'_>) -> Result<Self> {
         Self::decode_with(r, true)

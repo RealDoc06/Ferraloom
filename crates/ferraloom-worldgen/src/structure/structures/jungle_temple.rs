@@ -1,6 +1,6 @@
 use crate::{
     Error,
-    feature::FeatureContext,
+    structure::StructurePlacementContext,
     structure::{BoundingBox, scattered_piece::ScatteredFeaturePiece},
 };
 use ferraloom_data::{
@@ -57,7 +57,7 @@ impl JungleTemplePiece {
     }
     pub fn post_process(
         &mut self,
-        context: &mut FeatureContext<'_, '_>,
+        context: &mut StructurePlacementContext<'_, '_>,
         bounds: BoundingBox,
     ) -> Result<(), Error> {
         if !self
@@ -67,7 +67,7 @@ impl JungleTemplePiece {
             return Ok(());
         }
         let data = &self.scattered.data;
-        let stone_box = |context: &mut FeatureContext<'_, '_>,
+        let stone_box = |context: &mut StructurePlacementContext<'_, '_>,
                          min: [i32; 3],
                          max: [i32; 3]|
          -> Result<(), Error> {
@@ -85,7 +85,7 @@ impl JungleTemplePiece {
             }
             Ok(())
         };
-        let air_box = |context: &mut FeatureContext<'_, '_>, min, max| {
+        let air_box = |context: &mut StructurePlacementContext<'_, '_>, min, max| {
             data.generate_box(
                 context.region,
                 bounds,
@@ -488,7 +488,7 @@ mod tests {
             );
             piece
                 .post_process(
-                    &mut FeatureContext {
+                    &mut StructurePlacementContext {
                         region: &mut region,
                         random: &mut random,
                         origin: [0, 0, 0],

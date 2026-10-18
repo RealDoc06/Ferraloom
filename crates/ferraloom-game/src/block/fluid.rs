@@ -66,19 +66,22 @@ impl FlowingFluid {
             }
         }
     }
-    fn drop_off(self, level: &Level) -> u8 {
-        if self == Self::Lava && !level.rules().fast_lava {
+    pub fn tick_delay_for(self, level: &Level) -> Result<i32, LevelError> {
+        Ok(self.tick_delay(self == Self::Lava && level.fast_lava()?))
+    }
+    fn drop_off(self, level: &Level) -> Result<u8, LevelError> {
+        Ok(if self == Self::Lava && !level.fast_lava()? {
             2
         } else {
             1
-        }
+        })
     }
-    fn slope_find_distance(self, level: &Level) -> i32 {
-        if self == Self::Lava && !level.rules().fast_lava {
+    fn slope_find_distance(self, level: &Level) -> Result<i32, LevelError> {
+        Ok(if self == Self::Lava && !level.fast_lava()? {
             2
         } else {
             4
-        }
+        })
     }
     fn can_convert_to_source(self, level: &Level) -> bool {
         match self {
@@ -290,7 +293,7 @@ impl FlowingFluid {
         {
             return Ok(self.flowing(8, true));
         }
-        let amount = highest.saturating_sub(self.drop_off(level));
+        let amount = highest.saturating_sub(self.drop_off(level)?);
         Ok(if amount == 0 {
             empty_fluid()
         } else {
@@ -323,7 +326,7 @@ impl FlowingFluid {
                 )? {
                     return Ok(pass);
                 }
-                if pass < self.slope_find_distance(level) {
+                if pass < self.slope_find_distance(level)? {
                     lowest = lowest.min(self.slope_distance(
                         level,
                         target,
@@ -426,7 +429,12 @@ impl FlowingFluid {
         } else {
             if !state.is_air() {
                 if self == Self::Water {
-                    level.emit(LevelEffect::DropResources { pos, state });
+                    let block_entity = if state.has_block_entity() {
+                        level.get_or_promote_block_entity(pos)?
+                    } else {
+                        None
+                    };
+                    crate::block::drops::drop_resources(state, pos, block_entity, level)?;
                 } else {
                     fizz(level, pos);
                 }
@@ -446,7 +454,7 @@ impl FlowingFluid {
         let amount = if fluid.falling {
             7
         } else {
-            fluid.amount.saturating_sub(self.drop_off(level))
+            fluid.amount.saturating_sub(self.drop_off(level)?)
         };
         if amount > 0 {
             for (direction, new_fluid) in self.get_spread(level, pos, state)? {
@@ -526,7 +534,7 @@ impl FlowingFluid {
         let ticking_fluid = fluid.fluid_type;
         if !fluid.source {
             let new = self.get_new_liquid(level, pos, level.get_block_state(pos)?)?;
-            let mut delay = self.tick_delay(level.rules().fast_lava);
+            let mut delay = self.tick_delay_for(level)?;
             if self == Self::Lava
                 && !fluid.empty
                 && !new.empty
@@ -694,6 +702,15 @@ impl LiquidBlock {
     }
 }
 impl BlockBehavior for LiquidBlock {
+    /// Port of LiquidBlock#getDrops's empty override, without a loot lookup.
+    fn get_drops(
+        &self,
+        _state: BlockState,
+        _context: super::drops::BlockLootContext,
+        _level: &mut Level,
+    ) -> Result<Vec<ferraloom_protocol::component::ItemStack>, LevelError> {
+        Ok(Vec::new())
+    }
     fn collision_shape(
         &self,
         state: BlockState,
@@ -753,7 +770,7 @@ impl BlockBehavior for LiquidBlock {
             level.schedule_fluid_tick_after(
                 pos,
                 state.data().fluid.fluid_type,
-                flow.tick_delay(level.rules().fast_lava),
+                flow.tick_delay_for(level)?,
             )?;
         }
         if level.fluid_tags()?.contains_key(

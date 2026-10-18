@@ -27,6 +27,28 @@ pub struct ParticleEmission {
     pub randomization: ParticleRandomization,
 }
 impl Level {
+    /// Port of ServerLevel#levelEvent's dimension-local, non-global broadcast.
+    /// Its 64-block audience uses the integer position, excluding only source.
+    pub fn level_event(
+        &mut self,
+        source: Option<EntityRef>,
+        id: i32,
+        pos: ferraloom_util::BlockPos,
+        data: i32,
+    ) -> Result<(), LevelError> {
+        let position = Vec3::new(f64::from(pos.x), f64::from(pos.y), f64::from(pos.z));
+        let recipients = self.broadcast_audience(source, position, 64.0)?;
+        self.emit(LevelEffect::PlayerPacket {
+            recipients,
+            packet: Box::new(cb::Packet::LevelEvent(cb::LevelEvent {
+                event_type: id,
+                pos,
+                data,
+                global_event: false,
+            })),
+        });
+        Ok(())
+    }
     /// Controlled tests may seed the native sound stream independently.
     pub fn set_sound_seed(&mut self, seed: i64) {
         self.region_mut().sound_seed_generator = Random::Legacy(LegacyRandomSource::new(seed));
@@ -56,7 +78,8 @@ impl Level {
         pitch: f32,
         seed: i64,
     ) -> Result<(), LevelError> {
-        let recipients = self.sound_audience(except, position, f64::from(sound.range(volume)))?;
+        let recipients =
+            self.broadcast_audience(except, position, f64::from(sound.range(volume)))?;
         self.emit(LevelEffect::PlayerPacket {
             recipients,
             packet: Box::new(cb::Packet::Sound(cb::Sound {
@@ -99,7 +122,8 @@ impl Level {
     ) -> Result<(), LevelError> {
         let data = self.entity::<EntityData>(entity)?;
         let (position, id) = (data.position, data.network_id);
-        let recipients = self.sound_audience(except, position, f64::from(sound.range(volume)))?;
+        let recipients =
+            self.broadcast_audience(except, position, f64::from(sound.range(volume)))?;
         self.emit(LevelEffect::PlayerPacket {
             recipients,
             packet: Box::new(cb::Packet::SoundEntity(cb::SoundEntity {
@@ -115,7 +139,9 @@ impl Level {
         });
         Ok(())
     }
-    fn sound_audience(
+    /// Port of PlayerList#broadcast's dimension-local distance/exclusion filter.
+    /// Capture before subsequent callbacks can move any recipient.
+    pub(super) fn broadcast_audience(
         &self,
         except: Option<EntityRef>,
         position: Vec3,
@@ -236,7 +262,10 @@ mod tests {
     use ferraloom_util::Uuid;
     static EMPTY: Behaviors = Behaviors::EMPTY;
     fn level() -> Level {
-        Level::new(Region::new(&EMPTY))
+        Level::new(
+            Region::new(&EMPTY),
+            crate::level::LevelContext::fixture(0, 63),
+        )
     }
     fn player(level: &mut Level, id: u64, position: Vec3) -> EntityRef {
         let handle = EntityRef(id);

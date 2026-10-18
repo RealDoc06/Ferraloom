@@ -165,16 +165,20 @@ impl DecorationPlan {
                     .get(id)
                     .ok_or_else(|| Error(format!("placed feature unavailable: {id}")))?;
                 random.set_feature_seed(decoration_seed, index as i32, step as i32);
-                feature.place(
+                let result = feature.place(
                     &mut FeatureContext {
-                        region,
-                        random: &mut random,
+                        level: crate::feature::WorldGenLevel::Region(region),
+                        random: crate::feature::FeatureRandomSelector::External(
+                            crate::feature::FeatureRandom::Region(&mut random),
+                        ),
                         origin,
                         generator,
                         registry,
                     },
                     true,
-                )?;
+                );
+                region
+                    .finish_generation_unit(format!("placed_feature:{id}"), result.map(|_| ()))?;
             }
         }
         Ok(())

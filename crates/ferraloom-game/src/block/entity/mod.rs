@@ -22,6 +22,21 @@ pub struct BlockEntityRef {
     pub generation: u64,
 }
 
+impl BlockEntityRef {
+    /// Port of BlockEntity#setChanged, including comparator-neighbor updates.
+    pub fn set_changed(self, level: &mut Level) -> Result<(), LevelError> {
+        let data = level.block_entity::<BlockEntityData>(self)?;
+        let (has_level, state) = (data.has_level, data.block_state);
+        if has_level {
+            level.mark_chunk_unsaved(ChunkPos::containing(self.pos))?;
+            if !state.is_air() {
+                level.update_neighbour_for_output_signal(self.pos, state.block())?;
+            }
+        }
+        Ok(())
+    }
+}
+
 /// Port of BlockEntity's shared state. Mutable behavior belongs to the chunk.
 #[derive(Clone, Debug)]
 pub struct BlockEntityData {
@@ -90,6 +105,7 @@ pub trait BlockEntity: Sync {
     ) -> &'static [ComponentTypeId] {
         &[]
     }
+    fn remove_components_from_tag(&self, _tag: &mut CompoundTag) {}
     fn collect_implicit_components(
         &self,
         _state: &BlockEntityState,
@@ -130,7 +146,11 @@ static THE_END_PORTAL: TheEndPortal = TheEndPortal;
 pub enum BlockEntityState {
     Sign(Box<super::containers::sign::SignBlockEntity>),
     Furnace(Box<super::containers::furnace::AbstractFurnaceBlockEntity>),
+    Dispenser(Box<super::redstone::storage::DispenserBlockEntity>),
+    Hopper(Box<super::redstone::storage::HopperBlockEntity>),
+    MovingPiston(Box<super::redstone::moving_piston::PistonMovingBlockEntity>),
     EndPortal(BlockEntityData),
+    Comparator(Box<super::redstone::comparator::ComparatorBlockEntity>),
     Chest(Box<ChestBlockEntity>),
     Barrel(Box<BarrelBlockEntity>),
     ShulkerBox(Box<ShulkerBoxBlockEntity>),
@@ -141,7 +161,11 @@ impl BlockEntityState {
         match self {
             Self::Sign(entity) => &entity.parent,
             Self::Furnace(entity) => &entity.parent.parent,
+            Self::Dispenser(entity) => &entity.parent.parent.parent,
+            Self::Hopper(entity) => &entity.parent.parent.parent,
+            Self::MovingPiston(entity) => &entity.parent,
             Self::EndPortal(data) => data,
+            Self::Comparator(entity) => &entity.parent,
             Self::Chest(entity) => &entity.parent.parent.parent,
             Self::Barrel(entity) => &entity.parent.parent.parent,
             Self::ShulkerBox(entity) => &entity.parent.parent.parent,
@@ -152,7 +176,11 @@ impl BlockEntityState {
         match self {
             Self::Sign(entity) => &mut entity.parent,
             Self::Furnace(entity) => &mut entity.parent.parent,
+            Self::Dispenser(entity) => &mut entity.parent.parent.parent,
+            Self::Hopper(entity) => &mut entity.parent.parent.parent,
+            Self::MovingPiston(entity) => &mut entity.parent,
             Self::EndPortal(data) => data,
+            Self::Comparator(entity) => &mut entity.parent,
             Self::Chest(entity) => &mut entity.parent.parent.parent,
             Self::Barrel(entity) => &mut entity.parent.parent.parent,
             Self::ShulkerBox(entity) => &mut entity.parent.parent.parent,
@@ -163,13 +191,19 @@ impl BlockEntityState {
         match self {
             Self::Sign(_) => &super::containers::sign::SIGN_ENTITY,
             Self::Furnace(_) => &super::containers::furnace::FURNACE_ENTITY,
+            Self::Dispenser(_) => &super::redstone::storage::DISPENSER_ENTITY,
+            Self::Hopper(_) => &super::redstone::storage::HOPPER_ENTITY,
+            Self::MovingPiston(_) => &super::redstone::moving_piston::MOVING_PISTON_ENTITY,
             Self::EndPortal(_) => &THE_END_PORTAL,
+            Self::Comparator(_) => &super::redstone::comparator::COMPARATOR_ENTITY,
             Self::Crafter(_) => &super::containers::crafter::CRAFTER_ENTITY,
             _ => &super::containers::chest::STORAGE_ENTITY,
         }
     }
     pub fn randomizable(&self) -> Option<&RandomizableContainerBlockEntity> {
         match self {
+            Self::Dispenser(entity) => Some(&entity.parent),
+            Self::Hopper(entity) => Some(&entity.parent),
             Self::Chest(entity) => Some(&entity.parent),
             Self::Barrel(entity) => Some(&entity.parent),
             Self::ShulkerBox(entity) => Some(&entity.parent),
@@ -179,6 +213,8 @@ impl BlockEntityState {
     }
     pub fn randomizable_mut(&mut self) -> Option<&mut RandomizableContainerBlockEntity> {
         match self {
+            Self::Dispenser(entity) => Some(&mut entity.parent),
+            Self::Hopper(entity) => Some(&mut entity.parent),
             Self::Chest(entity) => Some(&mut entity.parent),
             Self::Barrel(entity) => Some(&mut entity.parent),
             Self::ShulkerBox(entity) => Some(&mut entity.parent),
@@ -246,6 +282,23 @@ impl BlockEntityState {
                 .collect(),
         };
     }
+    pub fn apply_components_from_item_stack(
+        &mut self,
+        stack: &ferraloom_protocol::component::ItemStack,
+    ) -> ferraloom_protocol::Result<()> {
+        if let Some(stack) = &stack.0 {
+            self.apply_components(
+                DataComponentMap::item_defaults(stack.item)?,
+                &stack.components,
+            );
+        } else {
+            self.apply_components(&DataComponentMap::default(), &DataComponentPatch::default());
+        }
+        Ok(())
+    }
+    pub fn remove_components_from_tag(&self, tag: &mut CompoundTag) {
+        self.behavior().remove_components_from_tag(tag);
+    }
     pub fn collect_components(&self) -> DataComponentMap {
         let mut result = self.data().components.clone();
         self.behavior()
@@ -308,6 +361,15 @@ pub fn create(pos: BlockPos, state: BlockState) -> Result<BlockEntityState, Leve
     let data = BlockEntityData::new(kind, pos, state)?;
     match kind {
         BlockEntityType::END_PORTAL => Ok(BlockEntityState::EndPortal(data)),
+        BlockEntityType::PISTON => Ok(BlockEntityState::MovingPiston(Box::new(
+            super::redstone::moving_piston::PistonMovingBlockEntity::new(data),
+        ))),
+        BlockEntityType::DISPENSER | BlockEntityType::DROPPER => Ok(BlockEntityState::Dispenser(
+            Box::new(super::redstone::storage::DispenserBlockEntity::new(data)),
+        )),
+        BlockEntityType::HOPPER => Ok(BlockEntityState::Hopper(Box::new(
+            super::redstone::storage::HopperBlockEntity::new(data),
+        ))),
         BlockEntityType::SIGN | BlockEntityType::HANGING_SIGN => Ok(BlockEntityState::Sign(
             Box::new(super::containers::sign::SignBlockEntity::new(data)),
         )),
@@ -316,6 +378,9 @@ pub fn create(pos: BlockPos, state: BlockState) -> Result<BlockEntityState, Leve
                 super::containers::furnace::AbstractFurnaceBlockEntity::new(data),
             )))
         }
+        BlockEntityType::COMPARATOR => Ok(BlockEntityState::Comparator(Box::new(
+            super::redstone::comparator::ComparatorBlockEntity::new(data),
+        ))),
         BlockEntityType::CHEST | BlockEntityType::TRAPPED_CHEST => Ok(BlockEntityState::Chest(
             Box::new(ChestBlockEntity::new(data)),
         )),
@@ -368,11 +433,16 @@ pub fn supports(block: Block) -> bool {
         registry::for_block(block),
         Some(
             BlockEntityType::END_PORTAL
+                | BlockEntityType::PISTON
+                | BlockEntityType::DISPENSER
+                | BlockEntityType::DROPPER
+                | BlockEntityType::HOPPER
                 | BlockEntityType::SIGN
                 | BlockEntityType::HANGING_SIGN
                 | BlockEntityType::FURNACE
                 | BlockEntityType::SMOKER
                 | BlockEntityType::BLAST_FURNACE
+                | BlockEntityType::COMPARATOR
                 | BlockEntityType::CHEST
                 | BlockEntityType::TRAPPED_CHEST
                 | BlockEntityType::BARREL
@@ -424,8 +494,20 @@ impl BlockEntityDataView for RandomizableContainerBlockEntity {
     }
 }
 
-/// Port of EntityBlock#newBlockEntity. A null constructor is distinct from an
-/// unported type factory: moving pistons install their receiver explicitly.
+projection!(
+    super::redstone::comparator::ComparatorBlockEntity,
+    Comparator
+);
+
+projection!(super::containers::sign::SignBlockEntity, Sign);
+projection!(
+    super::containers::furnace::AbstractFurnaceBlockEntity,
+    Furnace
+);
+
+/// Port of EntityBlock#newBlockEntity, whose nullable result is distinct from an
+/// unported factory. MovingPistonBlock creates no entity until the piston installs
+/// its explicit moved-state receiver after setBlock returns.
 pub fn new_block_entity(
     pos: BlockPos,
     state: BlockState,
@@ -439,8 +521,10 @@ pub fn supports_creation(block: Block) -> bool {
     block == Block::MOVING_PISTON || supports(block)
 }
 
-projection!(super::containers::sign::SignBlockEntity, Sign);
+projection!(super::redstone::storage::DispenserBlockEntity, Dispenser);
+projection!(super::redstone::storage::HopperBlockEntity, Hopper);
+
 projection!(
-    super::containers::furnace::AbstractFurnaceBlockEntity,
-    Furnace
+    super::redstone::moving_piston::PistonMovingBlockEntity,
+    MovingPiston
 );

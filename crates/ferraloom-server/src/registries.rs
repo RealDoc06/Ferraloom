@@ -1,6 +1,7 @@
 //! Port of RegistryDataLoader, RegistrySynchronization and TagNetworkSerialization.
 use anyhow::{Result, ensure};
 use ferraloom_data::datapack::{ResourceManager, load_tags};
+use ferraloom_game::loot::{self, RegistryHolder, RegistryKey, RegistryLookup, RegistryReference};
 use ferraloom_protocol::{
     Identifier,
     codec::VarInt,
@@ -176,5 +177,176 @@ impl ferraloom_protocol::codec::RegistryContext for RegistrySet {
             .iter()
             .find(|tags| &tags.registry == registry)
             .is_some_and(|tags| tags.tags.iter().any(|entry| &entry.name == tag))
+    }
+}
+
+/// Cold RegistryOps view over the published registry and datapack snapshot.
+/// Loot retains only qualified identities; registry values stay with their owner.
+pub(crate) struct LootRegistryLookup<'a> {
+    registries: &'a RegistrySet,
+    resources: &'a ResourceManager,
+}
+impl<'a> LootRegistryLookup<'a> {
+    pub(crate) fn new(registries: &'a RegistrySet, resources: &'a ResourceManager) -> Self {
+        Self {
+            registries,
+            resources,
+        }
+    }
+    fn value_exists(&self, registry: RegistryKey, value: &Identifier) -> bool {
+        let key = format!("minecraft:{}", registry.name());
+        if let Some(entries) = self.registries.entries.get(&key) {
+            return entries.iter().any(|entry| entry == value.as_str());
+        }
+        // Structures are datapack registries outside the synchronized wire set.
+        if registry == RegistryKey::Structure {
+            let Ok(resource) = ferraloom_data::datapack::Identifier::new(
+                value.namespace(),
+                format!("{}/{}.json", registry.name(), value.path()),
+            ) else {
+                return false;
+            };
+            return self.resources.get(&resource).is_some();
+        }
+        ferraloom_data::registry_entries(&key)
+            .is_some_and(|entries| entries.contains(&value.as_str()))
+    }
+}
+impl RegistryLookup for LootRegistryLookup<'_> {
+    fn lookup(
+        &self,
+        registry: RegistryKey,
+        reference: &RegistryReference,
+    ) -> loot::Result<Option<RegistryHolder>> {
+        let exists = match reference {
+            RegistryReference::Value(value) => self.value_exists(registry, value),
+            RegistryReference::Tag(tag) => {
+                let loaded = load_tags(self.resources, registry.name(), |entry, _| {
+                    let entry = Identifier::parse(&entry.to_string()).ok()?;
+                    self.value_exists(registry, &entry).then_some(entry)
+                });
+                if !loaded.diagnostics.is_empty() {
+                    return Err(loot::LootError::Decode(format!(
+                        "invalid {} tags: {:?}",
+                        registry.name(),
+                        loaded.diagnostics
+                    )));
+                }
+                loaded
+                    .values
+                    .keys()
+                    .any(|entry| entry.namespace() == tag.namespace() && entry.path() == tag.path())
+            }
+        };
+        Ok(exists.then(|| RegistryHolder {
+            registry,
+            reference: reference.clone(),
+        }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ferraloom_data::datapack::Pack;
+
+    fn resources(files: &[(&str, &str)]) -> ResourceManager {
+        let mut pack = Pack::new("lookup-fixture");
+        for (name, contents) in files {
+            pack.insert(name.parse().unwrap(), contents.as_bytes());
+        }
+        ResourceManager::new(vec![pack])
+    }
+    fn registries() -> RegistrySet {
+        RegistrySet {
+            entries: [(
+                "minecraft:enchantment".into(),
+                vec!["example:published".into()],
+            )]
+            .into(),
+            tags: UpdateTags { tags: Vec::new() },
+        }
+    }
+
+    #[test]
+    fn loot_values_use_published_registries_and_actual_structure_resources() {
+        let resources = resources(&[
+            ("example:worldgen/structure/room.json", "{}"),
+            ("example:enchantment/unpublished.json", "{}"),
+        ]);
+        let registries = registries();
+        let lookup = LootRegistryLookup::new(&registries, &resources);
+        for (registry, name, exists) in [
+            (RegistryKey::Item, "minecraft:stone", true),
+            (RegistryKey::Item, "example:stone", false),
+            (RegistryKey::Enchantment, "example:published", true),
+            (RegistryKey::Enchantment, "example:unpublished", false),
+            (RegistryKey::Structure, "example:room", true),
+            (RegistryKey::Structure, "minecraft:room", false),
+            (RegistryKey::Structure, "minecraft:village_plains", false),
+        ] {
+            let reference = RegistryReference::Value(id(name));
+            assert_eq!(
+                lookup.lookup(registry, &reference).unwrap(),
+                exists.then_some(RegistryHolder {
+                    registry,
+                    reference,
+                })
+            );
+        }
+    }
+
+    #[test]
+    fn loot_tags_resolve_nested_optional_and_empty_sets() {
+        let resources = resources(&[
+            ("example:worldgen/structure/room.json", "{}"),
+            (
+                "example:tags/worldgen/structure/rooms.json",
+                r#"{"values":["example:room"]}"#,
+            ),
+            (
+                "example:tags/item/base.json",
+                r#"{"values":["minecraft:stone"]}"#,
+            ),
+            (
+                "example:tags/item/nested.json",
+                r##"{"values":["#example:base",{"id":"example:missing","required":false}]}"##,
+            ),
+            ("example:tags/item/empty.json", r#"{"values":[]}"#),
+        ]);
+        let registries = registries();
+        let lookup = LootRegistryLookup::new(&registries, &resources);
+        for (registry, name, exists) in [
+            (RegistryKey::Item, "example:nested", true),
+            (RegistryKey::Item, "example:empty", true),
+            (RegistryKey::Item, "example:missing", false),
+            (RegistryKey::Structure, "example:rooms", true),
+            (RegistryKey::Structure, "minecraft:rooms", false),
+        ] {
+            let reference = RegistryReference::Tag(id(name));
+            assert_eq!(
+                lookup.lookup(registry, &reference).unwrap(),
+                exists.then_some(RegistryHolder {
+                    registry,
+                    reference,
+                })
+            );
+        }
+    }
+
+    #[test]
+    fn loot_tags_reject_unresolved_required_entries() {
+        let resources = resources(&[(
+            "example:tags/item/invalid.json",
+            r#"{"values":["example:missing"]}"#,
+        )]);
+        let registries = registries();
+        assert!(matches!(
+            LootRegistryLookup::new(&registries, &resources).lookup(
+                RegistryKey::Item,
+                &RegistryReference::Tag(id("example:invalid"))
+            ),
+            Err(loot::LootError::Decode(message)) if message.contains("invalid item tags")
+        ));
     }
 }

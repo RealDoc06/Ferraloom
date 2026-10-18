@@ -24,3 +24,25 @@ limit probes; vanilla's strict resource reader separately rejects number tokens
 of 1,024 characters. It also compares native NBT encoding and HashOps CRC32C,
 including raw negative zero and NaN payloads. NbtOps canonicalizes signed zero;
 HashOps preserves raw bits.
+
+`bash crates/ferraloom-game/tests/java/crafting/run-java-floats.sh` captures boxed
+Java float/double equality, ordering and hash codes in util's Rust vectors.
+`bash crates/ferraloom-game/tests/java/crafting/run-component-floats.sh` captures
+record and stack equality, record hash codes, and raw component encodings. Each
+encoding gets a distinct RegistryInfoLookup identity so EncoderCache's NaN-value
+collapsing does not hide the codec's raw bits; that cache behavior is separate.
+
+`bash crates/ferraloom-game/tests/java/crafting/run-nbt-floats.sh` compares
+DataOutputStream and Netty writes for scalar and nested float/double tags, then
+reads both through DataInputStream and ByteBufInputStream. File writes canonicalize
+NaNs; network writes and both readers retain NaN payloads.
+
+`bash crates/ferraloom-game/tests/java/crafting/run-component-maps.sh` captures
+map, patch, stack and template equality across component insertion orders, removal
+orders, signed zeros and NaN payloads. It checks native map entry-sum hashes and
+map/patch hash invariance, and records patch bytes in their original wire order.
+
+`bash crates/ferraloom-game/tests/java/crafting/run-stack-counts.sh` captures
+effective item, prototype, components and patch access for zero, negative and
+positive counts, together with copyWithCount, grow and template application.
+Empty accessors hide the payload; growing the original mutable stack restores it.

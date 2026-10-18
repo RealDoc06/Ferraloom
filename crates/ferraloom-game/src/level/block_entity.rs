@@ -7,7 +7,10 @@ use crate::{
     entity::{EntityDataView, EntityRef, player::ServerPlayer},
 };
 use ferraloom_util::{BlockPos, ChunkPos, collections::Object2ObjectOpenHashMap};
-use std::collections::HashMap;
+use std::{
+    cell::{Cell, RefCell},
+    collections::HashMap,
+};
 
 /// Positions retain fastutil traversal; slot storage permits safe disjoint borrows
 /// without taking a receiver out of the canonical chunk during a callback.
@@ -21,7 +24,7 @@ impl ChunkBlockEntities {
     pub(super) fn get(&self, pos: BlockPos) -> Option<&BlockEntityState> {
         self.slots[*self.positions.get(&pos)?].as_ref()
     }
-    fn get_mut(&mut self, pos: BlockPos) -> Option<&mut BlockEntityState> {
+    pub(super) fn get_mut(&mut self, pos: BlockPos) -> Option<&mut BlockEntityState> {
         self.slots[*self.positions.get(&pos)?].as_mut()
     }
     fn insert(&mut self, state: BlockEntityState) {
@@ -74,10 +77,10 @@ impl ChunkBlockEntities {
 }
 #[derive(Default)]
 pub(super) struct BlockEntityRuntime {
-    next_generation: u64,
-    detached: HashMap<BlockEntityRef, BlockEntityState>,
+    next_generation: Cell<u64>,
+    pub(super) detached: HashMap<BlockEntityRef, BlockEntityState>,
     roots: HashMap<BlockEntityRef, usize>,
-    pub(super) tickers: BlockEntityTickers,
+    pub(super) tickers: RefCell<BlockEntityTickers>,
 }
 impl Level {
     /// Current positional receiver. Unactivated raw NBT is a required unsupported
@@ -172,21 +175,23 @@ impl Level {
                 .insert(old.data().reference(), old);
         }
         let runtime = &mut region.block_entity_state;
-        runtime.next_generation = runtime
+        let generation = runtime
             .next_generation
+            .get()
             .checked_add(1)
             .expect("block entity generations exhausted");
+        runtime.next_generation.set(generation);
         let data = state.data_mut();
-        data.generation = runtime.next_generation;
+        data.generation = generation;
         data.block_state = block;
         data.removed = false;
         data.has_level = true;
         let reference = data.reference();
         let kind = data.kind;
         if state.behavior().has_server_ticker() {
-            runtime.tickers.bind(reference, kind);
+            runtime.tickers.get_mut().bind(reference, kind);
         } else {
-            runtime.tickers.unbind(pos);
+            runtime.tickers.get_mut().unbind(pos);
         }
         region
             .chunks
@@ -212,7 +217,7 @@ impl Level {
                 .detached
                 .insert(state.data().reference(), state);
         }
-        region.block_entity_state.tickers.unbind(pos);
+        region.block_entity_state.tickers.get_mut().unbind(pos);
         Ok(())
     }
     /// LevelChunk#setBlockState's post-onPlace receiver validation and binding.
@@ -238,9 +243,14 @@ impl Level {
                 self.region_mut()
                     .block_entity_state
                     .tickers
+                    .get_mut()
                     .bind(handle, kind);
             } else {
-                self.region_mut().block_entity_state.tickers.unbind(pos);
+                self.region_mut()
+                    .block_entity_state
+                    .tickers
+                    .get_mut()
+                    .unbind(pos);
             }
         } else if let Some(entity) = crate::block::entity::new_block_entity(pos, state)? {
             self.set_block_entity(entity)?;
@@ -251,20 +261,35 @@ impl Level {
     /// drain and pending additions. Bound callbacks also check native holder,
     /// entity-load, border and live state validity before invoking the ticker.
     pub fn tick_block_entities(&mut self, runs_normally: bool) -> Result<(), LevelError> {
-        self.region_mut().block_entity_state.tickers.begin_phase();
+        self.region_mut()
+            .block_entity_state
+            .tickers
+            .get_mut()
+            .begin_phase();
         let result = self.tick_bound_block_entities(runs_normally);
-        self.region_mut().block_entity_state.tickers.end_phase();
+        self.region_mut()
+            .block_entity_state
+            .tickers
+            .get_mut()
+            .end_phase();
         self.collect_detached_block_entities();
         result
     }
     fn tick_bound_block_entities(&mut self, runs_normally: bool) -> Result<(), LevelError> {
-        while let Some(ticker) = self.region_mut().block_entity_state.tickers.next_ticker() {
+        while let Some(ticker) = self
+            .region_mut()
+            .block_entity_state
+            .tickers
+            .get_mut()
+            .next_ticker()
+        {
             let handle = ticker.entity;
             let entity = self.block_entity_state(handle)?;
             if entity.data().removed {
                 self.region_mut()
                     .block_entity_state
                     .tickers
+                    .get_mut()
                     .unbind(handle.pos);
                 continue;
             }
@@ -456,7 +481,7 @@ impl Level {
         )
         .ok_or(LevelError::WrongEntityType(player))?;
         let mut selected = Vec::with_capacity(refs.len());
-        for (key, chunk) in &mut region.chunks {
+        for (key, chunk) in region.chunks.iter_mut() {
             if refs
                 .iter()
                 .any(|handle| ChunkPos::containing(handle.pos) == *key)
@@ -491,7 +516,10 @@ mod tests {
     use std::sync::Arc;
     static BEHAVIORS: Behaviors = Behaviors::EMPTY;
     fn level() -> Level {
-        let mut level = Level::new(Region::new(&BEHAVIORS));
+        let mut level = Level::new(
+            Region::new(&BEHAVIORS),
+            crate::level::LevelContext::fixture(0, 63),
+        );
         for x in 0..=1 {
             level
                 .add_chunk(LevelChunk::new(

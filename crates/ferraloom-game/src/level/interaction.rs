@@ -114,7 +114,10 @@ mod tests {
 
     fn level() -> Level {
         static BEHAVIORS: Behaviors = Behaviors::EMPTY;
-        let mut level = Level::new(Region::new(&BEHAVIORS));
+        let mut level = Level::new(
+            Region::new(&BEHAVIORS),
+            crate::level::LevelContext::fixture(0, 63),
+        );
         level
             .add_entity(
                 PLAYER,

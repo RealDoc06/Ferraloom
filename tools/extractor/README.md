@@ -121,6 +121,14 @@ component patch JSON; the game resolves the patch through protocol codecs.
 `BannerItem#getColor` is recorded alongside it for component-independent banner
 crafting checks.
 
+`ExtractData <output-dir> --block-render-shapes-only` writes the per-state
+`block_render_shapes.json` table, exposed as `BlockStateData::render_shape`.
+In 26.3 `BlockStateBase#getRenderShape` delegates to
+`BlockBehaviour#getRenderShape(BlockState)` with no level, position or context.
+The base returns `MODEL`; every override in the jar (air, barrier, liquids,
+bubble column, light, structure void, end portal/gateway and moving piston)
+returns constant `INVISIBLE`. This is independent of collision and block entities.
+
 `fluid_random_ticking` records `FluidState#isRandomlyTicking`, which delegates
 only to the fluid type's virtual `isRandomlyTicking`. It has no level, position
 or state-property inputs. Source and flowing variants retain their own registry
@@ -134,10 +142,26 @@ not participate. Float limits are measured with sanitizeValue at both infinities
 unbounded ends remain null. The Rust build consumes this committed table without
 Java. No environment value is sampled from a fabricated live level.
 
-`ExtractData <output-dir> --block-render-shapes-only` writes the per-state
-`block_render_shapes.json` table, exposed as `BlockStateData::render_shape`.
-In 26.3 `BlockStateBase#getRenderShape` delegates to
-`BlockBehaviour#getRenderShape(BlockState)` with no level, position or context.
-The base returns `MODEL`; every override in the jar (air, barrier, liquids,
-bubble column, light, structure void, end portal/gateway and moving piston)
-returns constant `INVISIBLE`. This is independent of collision and block entities.
+`ExtractBlockDropTables <output-json>` records the optional actual block loot
+keys, including shared keys and absent drops. `ExtractBlockMethods` also records
+exact `getDrops` and `spawnAfterBreak` ownership, so unported subclass overrides
+cannot silently inherit the base drop behavior.
+
+`ExtractFeatureRequirements <output-json>` captures `FeatureElement#isEnabled`
+against `FeatureFlags.VANILLA_SET` for every block and item. The dedicated server
+currently advertises precisely that set. The generated const queries are named
+`is_enabled_in_vanilla` so a future experimental-feature runtime cannot mistake
+them for checks against an arbitrary live feature set.
+
+`ExtractBlockEntityTypes <output-json>` records valid blocks, OP-only NBT flags
+and whether each registered receiver implements `Nameable`. The last fact is
+checked against the actual factory receiver for every valid block, including
+aliases. It is independent of whether a receiver currently has a custom name;
+`CopyNameFunction` reads nullable `Nameable#getCustomName` at evaluation time.
+
+`ExtractBlockMethods` records `spawnDestroyParticles` independently from
+`spawnDestroyByEntityParticles`: `Level#destroyBlock` calls the former, whose
+base `Block` implementation redispatches the latter with a null source. The
+only former-method override is `StrawBedBlock` (level event 2014);
+`BaseFireBlock` overrides the latter with no particles. DestroyBlock's breaker
+is loot/game-event context and is not excluded from level event 2001.

@@ -21,6 +21,13 @@ public final class PersistenceVectors {
     return Integer.toHexString(Float.floatToRawIntBits(entity.getYRot()))+","+Integer.toHexString(Float.floatToRawIntBits(entity.getXRot()))+","+Integer.toHexString(Float.floatToRawIntBits(entity.yRotO))+","+Integer.toHexString(Float.floatToRawIntBits(entity.xRotO));
   }
   public static void run(Level level) {
+    for(int scenario=0;scenario<3;scenario++) {
+      var player=new LivingVectors(level);player.setUUID(new UUID(5,6));
+      var tag=new CompoundTag();
+      if(scenario!=0)tag.putIntArray("UUID",scenario==1?new int[]{0,3,0,4}:new int[]{0,1,0,2});
+      player.load(TagValueInput.create(ProblemReporter.DISCARDING,level.registryAccess(),tag));
+      System.out.println("player-profile-uuid\t"+scenario+"\t"+player.getUUID()+","+player.getGameProfile().id()+","+player.nameAndId().id());
+    }
     var owner=new Cow(EntityTypes.COW,level);
     var reference=EntityReference.of((LivingEntity)owner);
     var changedUuid=new UUID(3,4);owner.setUUID(changedUuid);

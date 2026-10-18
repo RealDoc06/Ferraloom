@@ -1,8 +1,19 @@
 //! Turns pinned vanilla reports and extracted facts into allocation-free tables.
+#[path = "build/block_drop_tables.rs"]
+mod block_drop_tables;
 #[path = "build/block_methods.rs"]
 mod block_methods;
 #[path = "build/environment_attributes.rs"]
 mod environment_attributes;
+#[path = "build/feature_requirements.rs"]
+mod feature_requirements;
+
+#[path = "build/dispenser_properties.rs"]
+mod dispenser_properties;
+#[path = "build/note_properties.rs"]
+mod note_properties;
+#[path = "build/redstone_properties.rs"]
+mod redstone_properties;
 
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
@@ -796,8 +807,9 @@ fn block_entity_types(out: &mut String, report: &Value, block_count: usize) {
         assert_eq!(number(&row["id"]) as usize, index);
         write!(
             out,
-            "BlockEntityTypeData {{ only_op_can_set_nbt: {}, valid_blocks: &[",
-            row["only_op_can_set_nbt"]
+            "BlockEntityTypeData {{ only_op_can_set_nbt: {}, is_nameable: {}, valid_blocks: &[",
+            row["only_op_can_set_nbt"],
+            row["is_nameable"].as_bool().expect("Nameable fact")
         )
         .unwrap();
         for block in row["valid_blocks"].as_array().unwrap() {
@@ -827,6 +839,9 @@ fn main() {
     let block_report = load(root, "blocks");
     let block_properties = load(root, "block_properties");
     block_methods::generate(root, &block_properties);
+    redstone_properties::generate(root);
+    dispenser_properties::generate(root);
+    note_properties::generate(root);
     let item_report = load(root, "items");
     let entity_report = load(root, "entity_types");
     let attribute_report = load(root, "attributes");
@@ -939,6 +954,13 @@ fn main() {
     )
     .unwrap();
     items(&mut out, &item_report, &load(root, "item_crafting"));
+    block_drop_tables::generate(&mut out, &load(root, "block_drop_tables"), block_count);
+    feature_requirements::generate(
+        &mut out,
+        &load(root, "feature_requirements"),
+        block_count,
+        item_report.as_array().expect("item report").len(),
+    );
     sound_events(
         &mut out,
         &load(root, "sound_events"),

@@ -20,13 +20,43 @@ pub(super) fn range_modifiers() -> [Arc<AttributeModifier>; 2] {
     .map(|(id, amount)| {
         Arc::new(AttributeModifier {
             id: Identifier::parse(id).expect("native modifier identifier"),
-            amount,
+            amount: amount.into(),
             operation: AttributeOperation::AddValue,
         })
     })
 }
 
+/// Typed pending port of ServerPlayer#swingAndResetAttackStrength. Its full
+/// SwingState, effect-modified duration and attack ticker belong to slice 2.
+/// This unit effect uses the same counted Strict/Warn policy as block effects.
+pub fn swing_and_reset_attack_strength(
+    entity: crate::entity::EntityRef,
+    _hand: InteractionHand,
+    _animation: ferraloom_protocol::component::SwingAnimation,
+    _send_to_self: bool,
+    level: &mut crate::level::Level,
+) -> Result<(), crate::level::LevelError> {
+    level.entity::<ServerPlayer>(entity)?;
+    level.unported_operation(crate::block::UnportedOperation::EntityMethod(
+        ferraloom_data::EntityType::PLAYER,
+        crate::entity::EntityMethod::SwingAndResetAttackStrength,
+    ))
+}
+
 impl ServerPlayer {
+    /// Port of Player#hasCorrectToolForDrops, including the native short circuit.
+    pub fn has_correct_tool_for_drops(
+        &self,
+        state: ferraloom_data::BlockState,
+        level: &crate::level::Level,
+    ) -> Result<bool, crate::level::LevelError> {
+        Ok(!state.data().requires_correct_tool
+            || super::inventory::is_correct_tool_for_drops(
+                self.inventory.selected_item(),
+                state,
+                level,
+            )?)
+    }
     /// Port of LivingEntity#getItemInHand with Player's main-hand inventory slot.
     pub fn get_item_in_hand(&self, hand: InteractionHand) -> &ItemStack {
         match hand {
@@ -125,6 +155,41 @@ mod tests {
         )
     }
     #[test]
+    fn instabuild_is_mutable_independent_of_mode_and_persists_native_abilities() {
+        let mut actual = Vec::new();
+        for mode in [
+            GameType::Survival,
+            GameType::Creative,
+            GameType::Adventure,
+            GameType::Spectator,
+        ] {
+            for flying in [false, true] {
+                let mut player = player();
+                player.game_mode = mode;
+                player.flying = flying;
+                player.update_game_mode_abilities();
+                let applied = player.instabuild();
+                player.instabuild = !applied;
+                let prevents = player.prevents_block_drops();
+                let mut tag = player.save();
+                let saved = tag
+                    .get_compound("abilities")
+                    .unwrap()
+                    .get_boolean("instabuild")
+                    .unwrap();
+                let packet_flag = player.instabuild();
+                tag.remove("recipeBook");
+                player.try_load(tag).unwrap();
+                actual.push(format!("player-instabuild\t{}\t{flying}\t{applied},{prevents},{saved},{packet_flag},{}",mode.id(),player.instabuild()));
+            }
+        }
+        let expected: Vec<_> = include_str!("../../../tests/java/entity/vectors.tsv")
+            .lines()
+            .filter(|line| line.starts_with("player-instabuild\t"))
+            .collect();
+        assert_eq!(actual, expected);
+    }
+    #[test]
     fn native_hands_input_flags_and_strict_eye_to_block_range() {
         let mut player = player();
         player.inventory.set_selected_slot(5);
@@ -145,13 +210,7 @@ mod tests {
                 player.is_secondary_use_active(),
                 player.inventory.selected_slot(),
                 inventory::count(player.get_item_in_hand(InteractionHand::MainHand)),
-                player
-                    .get_item_in_hand(InteractionHand::OffHand)
-                    .0
-                    .as_ref()
-                    .unwrap()
-                    .item
-                    == Item::SHIELD,
+                player.get_item_in_hand(InteractionHand::OffHand).item() == Item::SHIELD,
             ));
         }
         for (i, range) in [4.5, 5.0, 5.000000000000001, 0.0, f64::NAN]
@@ -193,6 +252,69 @@ mod tests {
         assert!(player.is_text_filtering_enabled());
         assert!(player.has_client_loaded());
     }
+    #[test]
+    fn required_swing_effect_is_typed_and_uses_the_shared_strict_warn_policy() {
+        use crate::{
+            block::UnportedBehavior,
+            entity::{EntityMethod, EntityRef, EntityState},
+            level::LevelError,
+        };
+        use ferraloom_protocol::{
+            codec::VarInt,
+            component::{SwingAnimation, SwingAnimationType},
+        };
+        let mut level = crate::entity::tests::level(false);
+        let id = EntityRef(93);
+        level
+            .add_entity(id, EntityState::Player(Box::new(player())))
+            .unwrap();
+        level.take_effects();
+        let animation = SwingAnimation {
+            animation_type: SwingAnimationType::Whack,
+            duration: VarInt(6),
+        };
+        level.set_unported_behavior(UnportedBehavior::Strict);
+        assert_eq!(
+            swing_and_reset_attack_strength(
+                id,
+                InteractionHand::MainHand,
+                animation.clone(),
+                true,
+                &mut level
+            ),
+            Err(LevelError::UnsupportedEntityMethod(
+                ferraloom_data::EntityType::PLAYER,
+                EntityMethod::SwingAndResetAttackStrength
+            ))
+        );
+        assert_eq!(level.unported_behavior_stats().skipped_calls, 0);
+        level.set_unported_behavior(UnportedBehavior::Warn);
+        for send_to_self in [false, true] {
+            swing_and_reset_attack_strength(
+                id,
+                InteractionHand::OffHand,
+                animation.clone(),
+                send_to_self,
+                &mut level,
+            )
+            .unwrap();
+        }
+        assert_eq!(level.unported_behavior_stats().skipped_calls, 2);
+        assert_eq!(level.unported_behavior_stats().distinct_calls, 1);
+        assert!(level.take_effects().is_empty());
+        assert_eq!(
+            swing_and_reset_attack_strength(
+                EntityRef(94),
+                InteractionHand::MainHand,
+                animation,
+                false,
+                &mut level
+            ),
+            Err(LevelError::MissingEntity(EntityRef(94)))
+        );
+        assert_eq!(level.unported_behavior_stats().skipped_calls, 2);
+    }
+
     #[test]
     fn creative_ranges_keep_modifier_identity_are_transient_and_follow_game_mode() {
         let mut player = player();

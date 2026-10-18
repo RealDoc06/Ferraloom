@@ -3,7 +3,7 @@ use crate::structure::template::PlacementRandom;
 use crate::{
     biome::BiomeSource,
     generator::{GenerationData, NoiseBasedChunkGenerator},
-    region::{ChunkStatus, RegionChunk, WorldgenBlockBehavior},
+    region::{ChunkStatus, RegionChunk, WorldGenRegion, WorldgenBlockBehavior},
     settings::NoiseGeneratorSettings,
 };
 use ferraloom_data::datapack::{Pack, ResourceManager};

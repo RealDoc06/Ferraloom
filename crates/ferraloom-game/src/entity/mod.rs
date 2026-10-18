@@ -209,6 +209,21 @@ impl EntityDataView for LivingEntity {
         state.as_living_mut()
     }
 }
+/// Typed virtual effects whose complete implementation belongs to a later slice.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum EntityMethod {
+    PlayerTouch,
+    SwingAndResetAttackStrength,
+}
+impl EntityMethod {
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::PlayerTouch => "playerTouch",
+            Self::SwingAndResetAttackStrength => "swingAndResetAttackStrength",
+        }
+    }
+}
+
 /// Narrow source used by the unarmored damage primitive; tags grow with ports.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct DamageSource {
@@ -226,6 +241,15 @@ pub fn trace_base_entity_refs(base: &EntityData, references: &mut Vec<EntityRef>
 ///
 /// Dispatch objects are stateless. Never hold a state borrow across a world call.
 pub trait Entity: Sync {
+    /// Port of Entity#playerTouch; concrete pickup entities override this hook.
+    fn player_touch(
+        &self,
+        _entity: EntityRef,
+        _player: EntityRef,
+        _level: &mut Level,
+    ) -> Result<(), LevelError> {
+        Ok(())
+    }
     /// Host lifetime tracing is required for every dispatcher. Declare all held
     /// EntityRef fields here; UUID lookup references do not retain old states.
     fn trace_entity_refs(&self, state: &EntityState, references: &mut Vec<EntityRef>);

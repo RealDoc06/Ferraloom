@@ -1,4 +1,6 @@
-use super::{ContextParam, EntityTarget, Identifier, LootFacts, LootParams, Result, codec};
+use super::{
+    ContextParam, EntityTarget, Identifier, LootFacts, LootParams, LootRuntime, Result, codec,
+};
 use ferraloom_nbt::Tag;
 use serde_json::Value;
 
@@ -48,6 +50,17 @@ impl NbtProvider {
                 .map(|entity| facts.entity_nbt(entity))
                 .transpose(),
             Self::Storage(id) => Ok(Some(facts.storage(id)?)),
+        }
+    }
+    /// Read the retained block-entity receiver when this provider is evaluated.
+    pub fn get_with_runtime(
+        &self,
+        params: &LootParams,
+        runtime: &dyn LootRuntime,
+    ) -> Result<Option<Tag>> {
+        match self {
+            Self::Context(NbtSource::BlockEntity) => runtime.block_entity_nbt(params),
+            _ => self.get(params, runtime.facts()),
         }
     }
 }

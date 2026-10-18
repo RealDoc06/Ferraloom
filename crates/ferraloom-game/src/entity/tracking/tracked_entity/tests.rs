@@ -15,7 +15,10 @@ use std::sync::Arc;
 
 fn level() -> Level {
     static BEHAVIORS: Behaviors = Behaviors::EMPTY;
-    Level::new(Region::new(&BEHAVIORS))
+    Level::new(
+        Region::new(&BEHAVIORS),
+        crate::level::LevelContext::fixture(0, 63),
+    )
 }
 fn item(level: &mut Level) -> EntityRef {
     let id = level.next_entity_ref();

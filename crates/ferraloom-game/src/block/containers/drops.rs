@@ -55,39 +55,41 @@ pub fn drop_item_stack(
 /// Live-slot counterpart of Containers#dropContents. The same receiver generation
 /// is reborrowed after every spawn, even if an entity callback replaced its block.
 pub fn drop_contents(entity: BlockEntityRef, level: &mut Level) -> Result<(), LevelError> {
-    use super::storage::{BaseContainerBlockEntity, RandomizableContainerBlockEntity};
-    if let Ok(container) = level.block_entity::<RandomizableContainerBlockEntity>(entity)
-        && container.loot_table.is_some()
-    {
-        return Err(LevelError::UnsupportedBlockEntity(
-            container.parent.parent.block_state.block(),
-        ));
-    }
+    use super::storage::BaseContainerBlockEntity;
     let size = level
         .block_entity::<BaseContainerBlockEntity>(entity)?
         .size();
+    let mut operation = crate::inventory::StackOperation::new(level);
     for slot in 0..size {
+        let stack = operation
+            .pin(crate::inventory::ContainerSlot {
+                container: crate::inventory::ContainerHandle::BlockEntity(entity),
+                slot,
+            })
+            .map_err(|_| LevelError::Inventory("container drop stack receiver"))?;
         let origin = scatter_origin(
-            level,
+            operation.level,
             Vec3::new(
                 f64::from(entity.pos.x),
                 f64::from(entity.pos.y),
                 f64::from(entity.pos.z),
             ),
         );
-        while !level
-            .block_entity::<BaseContainerBlockEntity>(entity)?
-            .items[slot]
+        while !operation
+            .level
+            .stack(stack)
+            .map_err(|_| LevelError::Inventory("container drop stack receiver"))?
             .is_empty()
         {
-            let amount = level.random().next_int_bound(21) + 10;
+            let amount = operation.level.random().next_int_bound(21) + 10;
             let piece = split(
-                &mut level
-                    .block_entity_mut::<BaseContainerBlockEntity>(entity)?
-                    .items[slot],
+                operation
+                    .level
+                    .stack_mut(stack)
+                    .map_err(|_| LevelError::Inventory("container drop stack receiver"))?,
                 amount,
             );
-            spawn_piece(level, origin, piece)?;
+            spawn_piece(operation.level, origin, piece)?;
         }
     }
     Ok(())
@@ -109,7 +111,10 @@ mod tests {
             let fields: Vec<_> = line.split('\t').collect();
             let seed = fields[1].parse().unwrap();
             let count = fields[2].parse().unwrap();
-            let mut level = Level::new(Region::new(&BEHAVIORS));
+            let mut level = Level::new(
+                Region::new(&BEHAVIORS),
+                crate::level::LevelContext::fixture(0, 63),
+            );
             level.set_random_streams(Random::Legacy(LegacyRandomSource::new(seed)), 0);
             let mut stack = ItemStack::new(Item::STONE, count, Default::default());
             let ids = drop_item_stack(&mut level, Vec3::new(-1.2, 64.7, 2.8), &mut stack).unwrap();
