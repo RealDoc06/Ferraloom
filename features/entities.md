@@ -52,6 +52,8 @@ Includes every entity type, concrete goal implementation (including nested goals
 | entities.ai.brain-memory | Expire timed memories and enforce behavior memory preconditions | `Brain#tick; ExpirableValue; Behavior` | | - | todo |
 | entities.ai.activity-switch | Select core, default and scheduled brain activities and stop behaviors on activity change | `Brain; EnvironmentAttributes` | | - | todo |
 | entities.ai.sensor-rate | Run sensors at their configured scan rate and update visible and nearby memories | `Sensor; SensorType` | | - | todo |
+| entities.ai.path-region.snapshot | Capture X-major nullable getChunkNow references without loading; retain empty slots, distinguish VOID_AIR from outside-height AIR, and reject cross-owner or stale reuse | `PathNavigationRegion; EmptyLevelChunk; ChunkAccess#isYSpaceEmpty` | `level::path_navigation_region::tests` (8 native capture/mutation cases) | pass | partial |
+| entities.ai.path-region.collisions | Bound nested block and block-entity shape reads to the captured region; use native entity context, empty entity collisions and final world-border check | `PathNavigationRegion; CollisionGetter#noCollision; BlockCollisions` | `level::path_navigation_region::tests` (12 native collision/piston cases plus forbidden-load and required-query tests) | pass | partial |
 | entities.ai.path-search | Search nodes with vanilla cost, heuristic, visited-node budget and target reach rules | `PathFinder#findPath` | | - | todo |
 | entities.ai.path-follow | Follow waypoints, handle doors and recompute or abandon stuck paths | `PathNavigation` | | - | todo |
 | entities.ai.target-visibility | Apply targeting range, line of sight, invisibility, team and attackability tests | `TargetingConditions; Sensing` | | - | todo |
