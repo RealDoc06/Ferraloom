@@ -480,7 +480,7 @@ impl Level {
         let state = self.get_block_state(top)?;
         if state.block() == Block::SNOW {
             let layers = state.get(properties::LAYERS).unwrap();
-            if layers < self.rules().max_snow_accumulation_height.min(8) {
+            if i32::from(layers) < self.rules().max_snow_accumulation_height.min(8) {
                 let next = state.with(properties::LAYERS, layers + 1).unwrap();
                 self.unported_operation(crate::block::UnportedOperation::PushEntitiesUp)?;
                 self.set_block_and_update(top, next)?;
@@ -527,7 +527,7 @@ mod tests {
         });
         assert_eq!(
             level.is_raining_at(pos),
-            Err(LevelError::UnsupportedWeatherQuery)
+            Err(LevelError::MissingChunk(ChunkPos::new(0, 0)))
         );
         level.rules_mut().can_have_weather = false;
         assert_eq!(level.is_raining_at(pos), Ok(false));
