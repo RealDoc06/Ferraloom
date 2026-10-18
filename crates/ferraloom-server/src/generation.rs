@@ -14,7 +14,7 @@ use ferraloom_game::level::generation::{
 use ferraloom_light::{LevelLightEngine, LightLayer, SectionSnapshots};
 use ferraloom_storage::{self as storage, IoWorker, SerializableChunkData};
 use ferraloom_util::{ChunkPos, SectionPos};
-use ferraloom_worldgen::structure::check::StructureCheck;
+use ferraloom_worldgen::structure::{check::StructureCheck, pipeline::ChunkStructures};
 use std::{
     borrow::Cow,
     collections::{BTreeMap, BTreeSet},
@@ -34,6 +34,7 @@ pub(crate) struct StructureSnapshot {
     pub pos: ChunkPos,
     pub revision: GenerationRevision,
     pub data: storage::StructureData,
+    pub structures: ChunkStructures,
     /// An unattached FULL imposter still needs a save when its shared starts
     /// change. Attached chunks instead save their canonical live payload.
     pub unattached_disk: Option<SerializableChunkData>,
@@ -392,6 +393,7 @@ impl GenerationState {
                     pos: ChunkPos::unpack(key),
                     revision: self.revision,
                     data: storage::StructureData::from_nbt(proto.region.structures.to_nbt()?)?,
+                    structures: proto.region.structures.clone(),
                     unattached_disk: Some(
                         proto
                             .capture(&self.context, registry)
@@ -441,6 +443,7 @@ impl GenerationState {
             surface: surface_heights_in_dimension(&sections, self.context.dimension.min_y),
             sections,
             disk,
+            structures: proto.region.structures.clone(),
         };
         Ok(GenerationOutput {
             terrain,

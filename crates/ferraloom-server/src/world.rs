@@ -31,6 +31,7 @@ use ferraloom_worldgen::{
     region::{ChunkStatus, Heightmap},
     settings::DimensionType,
     spawn::{self, SpawnWorld},
+    structure::pipeline::ChunkStructures,
 };
 use serde::Deserialize;
 use std::{
@@ -131,6 +132,8 @@ pub struct Terrain {
     pub(crate) revision: GenerationRevision,
     pub sections: Vec<LevelChunkSection>,
     pub disk: SerializableChunkData,
+    /// Already reconstructed at disk load; never decode monuments again at FULL.
+    pub structures: ChunkStructures,
     pub surface: [i32; 256],
     pub light_neighbors: Vec<GenerationLightNeighbor>,
 }
@@ -494,6 +497,7 @@ impl SpawnWorld for SpawnChunks {
                 && terrain.revision < snapshot.revision
             {
                 terrain.disk.structures = Some(snapshot.data);
+                terrain.structures = snapshot.structures;
                 terrain.revision = snapshot.revision;
             }
         }
@@ -885,6 +889,7 @@ impl World {
                                 pos: terrain.pos,
                                 revision: terrain.revision,
                                 data,
+                                structures: terrain.structures.clone(),
                                 unattached_disk: None,
                             },
                         )
@@ -1561,6 +1566,10 @@ impl World {
         Ok(())
     }
     fn integrate_structure_snapshot(&mut self, mut snapshot: StructureSnapshot) -> Result<()> {
+        ensure!(
+            snapshot.structures.position == [snapshot.pos.x, snapshot.pos.z],
+            "structure snapshot belongs to another chunk"
+        );
         let key = snapshot.pos.pack();
         if self
             .structure_snapshots
@@ -1578,11 +1587,22 @@ impl World {
             && terrain.revision < snapshot.revision
         {
             terrain.disk.structures = Some(snapshot.data.clone());
+            terrain.structures = snapshot.structures.clone();
             terrain.revision = snapshot.revision;
         }
         if !attached && let Some(mut disk) = unattached_disk {
             disk.structures = Some(snapshot.data.clone());
             self.store_generation_chunk(snapshot.pos, snapshot.revision, disk)?;
+        }
+        for continuation in self.full_promotions.values_mut() {
+            if let Some(input) = &mut continuation.input
+                && input.pos == snapshot.pos
+                && input.revision < snapshot.revision
+            {
+                input.disk.structures = Some(snapshot.data.clone());
+                input.structures = snapshot.structures.clone();
+                input.revision = snapshot.revision;
+            }
         }
         self.structure_snapshots.insert(key, snapshot);
         Ok(())
@@ -1629,16 +1649,22 @@ impl World {
         light_revision: GenerationRevision,
         terrain: &mut Terrain,
     ) -> Result<LevelChunk> {
+        ensure!(
+            terrain.structures.position == [terrain.pos.x, terrain.pos.z],
+            "promotion structures belong to another chunk"
+        );
         if let Some(snapshot) = self.structure_snapshots.get(&terrain.pos.pack())
             && snapshot.revision > terrain.revision
         {
             terrain.disk.structures = Some(snapshot.data.clone());
+            terrain.structures = snapshot.structures.clone();
             terrain.revision = snapshot.revision;
         } else if let Some(data) = terrain.disk.structures.clone() {
             self.integrate_structure_snapshot(StructureSnapshot {
                 pos: terrain.pos,
                 revision: terrain.revision,
                 data,
+                structures: terrain.structures.clone(),
                 unattached_disk: None,
             })?;
         }
@@ -2483,17 +2509,50 @@ mod generation_order_tests {
             .unwrap()
             .chunk
             .sections;
-        let structure_data = |placed| storage::StructureData {
-            starts: Some(BTreeMap::from([(
-                "minecraft:jungle_pyramid".into(),
-                ferraloom_nbt::parse_compound(if placed {
-                    "{Children:[{placedMainChest:1b}]}"
-                } else {
-                    "{Children:[{placedMainChest:0b}]}"
-                })
-                .unwrap(),
-            )])),
-            ..Default::default()
+        let structures = |pos: ChunkPos, placed| {
+            use ferraloom_worldgen::structure::{
+                TerrainAdjustment,
+                references::StructureReferences,
+                scattered_piece::ScatteredFeaturePiece,
+                start::{StructurePiece, StructureStart},
+                structures::jungle_temple::JungleTemplePiece,
+            };
+            let id = "minecraft:jungle_pyramid".parse().unwrap();
+            let mut structures = ChunkStructures::new([pos.x, pos.z]);
+            structures.starts.insert(
+                id,
+                StructureStart::new(
+                    "minecraft:jungle_pyramid".parse().unwrap(),
+                    ferraloom_data::registries::worldgen_structure_type::Id::from_name(
+                        "minecraft:jungle_temple",
+                    )
+                    .unwrap(),
+                    [pos.x, pos.z],
+                    0,
+                    TerrainAdjustment::None,
+                    vec![StructurePiece::JungleTemple(JungleTemplePiece {
+                        scattered: ScatteredFeaturePiece::new(
+                            [pos.x * 16, 64, pos.z * 16],
+                            [12, 10, 15],
+                            ferraloom_util::Direction::North,
+                        ),
+                        placed_main_chest: placed,
+                        placed_hidden_chest: false,
+                        placed_traps: [false; 2],
+                    })],
+                ),
+            );
+            structures.references.insert(
+                "minecraft:jungle_pyramid".parse().unwrap(),
+                StructureReferences::from_array(&[
+                    pos.pack(),
+                    ChunkPos::new(pos.x + 1, pos.z).pack(),
+                ]),
+            );
+            structures
+        };
+        let structure_data = |pos, placed| {
+            storage::StructureData::from_nbt(structures(pos, placed).to_nbt().unwrap()).unwrap()
         };
         let output = |pos, unit: &str| GenerationOutput {
             terrain: Terrain {
@@ -2509,6 +2568,7 @@ mod generation_order_tests {
                     status: Some("minecraft:full".into()),
                     ..Default::default()
                 },
+                structures: ChunkStructures::new([pos.x, pos.z]),
                 light_neighbors: Vec::new(),
             },
             neighbors: Vec::new(),
@@ -2538,7 +2598,8 @@ mod generation_order_tests {
         // StructureStart before A/B are integrated in their original order.
         let mut second_output = output(second, "second");
         second_output.terrain.revision = GenerationRevision(1);
-        second_output.terrain.disk.structures = Some(structure_data(false));
+        second_output.terrain.disk.structures = Some(structure_data(second, false));
+        second_output.terrain.structures = structures(second, false);
         let auxiliary = ChunkPos::new(5, 0);
         let proto = ChunkPos::new(6, 0);
         let proto_disk = |status, marker| {
@@ -2554,7 +2615,8 @@ mod generation_order_tests {
         second_output.full_structures.push(StructureSnapshot {
             pos: auxiliary,
             revision: GenerationRevision(1),
-            data: structure_data(false),
+            data: structure_data(auxiliary, false),
+            structures: structures(auxiliary, false),
             unattached_disk: Some(output(auxiliary, "auxiliary").terrain.disk),
         });
         assert!(second_reply.send(Ok(second_output)).is_ok());
@@ -2576,7 +2638,8 @@ mod generation_order_tests {
             .map(|pos| StructureSnapshot {
                 pos,
                 revision: GenerationRevision(2),
-                data: structure_data(true),
+                data: structure_data(pos, true),
+                structures: structures(pos, true),
                 unattached_disk: Some(output(pos, "unattached").terrain.disk),
             })
             .collect();
@@ -2593,7 +2656,10 @@ mod generation_order_tests {
         );
         let auxiliary_disk =
             SerializableChunkData::parse(world.io.load(auxiliary).await.unwrap().unwrap()).unwrap();
-        assert_eq!(auxiliary_disk.structures, Some(structure_data(true)));
+        assert_eq!(
+            auxiliary_disk.structures,
+            Some(structure_data(auxiliary, true))
+        );
         let proto_disk =
             SerializableChunkData::parse(world.io.load(proto).await.unwrap().unwrap()).unwrap();
         assert_eq!(proto_disk.extra.get_int("marker"), Some(2));
@@ -2613,12 +2679,21 @@ mod generation_order_tests {
         assert!(!world.ready.contains(&second));
         assert_eq!(
             world.saved[&second.pack()].structures,
-            Some(structure_data(true))
+            Some(structure_data(second, true))
         );
         assert_eq!(
             world.structure_snapshots[&second.pack()].revision,
             GenerationRevision(2)
         );
+        assert_eq!(
+            world.structure_snapshots[&second.pack()]
+                .structures
+                .to_nbt()
+                .unwrap(),
+            structures(second, true).to_nbt().unwrap()
+        );
+        let captured = world.capture_chunk(&level.level, second, 0).unwrap();
+        assert_eq!(captured.disk.structures, Some(structure_data(second, true)));
         for x in second.x - 1..=second.x + 1 {
             for z in second.z - 1..=second.z + 1 {
                 world.light_ready.insert(ChunkPos::new(x, z));
@@ -2660,7 +2735,8 @@ mod generation_order_tests {
         cancelled_output.full_structures.push(StructureSnapshot {
             pos: auxiliary,
             revision: GenerationRevision(3),
-            data: structure_data(false),
+            data: structure_data(auxiliary, false),
+            structures: structures(auxiliary, false),
             unattached_disk: Some(output(auxiliary, "unattached").terrain.disk),
         });
         assert!(cancelled_reply.send(Ok(cancelled_output)).is_ok());
@@ -2677,7 +2753,10 @@ mod generation_order_tests {
         assert!(world.io.load(cancelled).await.unwrap().is_some());
         let auxiliary_disk =
             SerializableChunkData::parse(world.io.load(auxiliary).await.unwrap().unwrap()).unwrap();
-        assert_eq!(auxiliary_disk.structures, Some(structure_data(false)));
+        assert_eq!(
+            auxiliary_disk.structures,
+            Some(structure_data(auxiliary, false))
+        );
         assert!(blocker_reply.send(Ok(output(first, "blocker"))).is_ok());
         assert_eq!(world.poll_terrain().unwrap()[0].0, 2);
         let retry = ChunkPos::new(128, 128);
