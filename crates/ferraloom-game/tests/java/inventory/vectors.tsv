@@ -23,6 +23,48 @@ layout	21	0,8,48;1,26,48;2,44,48;3,98,48;9,8,84;10,26,84;11,44,84;12,62,84;13,80
 layout	22	0,56,17;1,56,53;2,116,35;9,8,84;10,26,84;11,44,84;12,62,84;13,80,84;14,98,84;15,116,84;16,134,84;17,152,84;18,8,102;19,26,102;20,44,102;21,62,102;22,80,102;23,98,102;24,116,102;25,134,102;26,152,102;27,8,120;28,26,120;29,44,120;30,62,120;31,80,120;32,98,120;33,116,120;34,134,120;35,152,120;0,8,142;1,26,142;2,44,142;3,62,142;4,80,142;5,98,142;6,116,142;7,134,142;8,152,142
 layout	23	0,15,15;1,15,52;2,145,39;9,8,84;10,26,84;11,44,84;12,62,84;13,80,84;14,98,84;15,116,84;16,134,84;17,152,84;18,8,102;19,26,102;20,44,102;21,62,102;22,80,102;23,98,102;24,116,102;25,134,102;26,152,102;27,8,120;28,26,120;29,44,120;30,62,120;31,80,120;32,98,120;33,116,120;34,134,120;35,152,120;0,8,142;1,26,142;2,44,142;3,62,142;4,80,142;5,98,142;6,116,142;7,134,142;8,152,142
 layout	24	0,20,33;1,143,33;9,8,84;10,26,84;11,44,84;12,62,84;13,80,84;14,98,84;15,116,84;16,134,84;17,152,84;18,8,102;19,26,102;20,44,102;21,62,102;22,80,102;23,98,102;24,116,102;25,134,102;26,152,102;27,8,120;28,26,120;29,44,120;30,62,120;31,80,120;32,98,120;33,116,120;34,134,120;35,152,120;0,8,142;1,26,142;2,44,142;3,62,142;4,80,142;5,98,142;6,116,142;7,134,142;8,152,142
+button	inventory	-1	false	1	-
+button	inventory	0	false	1	-
+button	inventory	1	false	1	-
+button	inventory	2	false	1	-
+button	inventory	3	false	1	-
+button	inventory	100	false	1	-
+button	inventory	103	false	1	-
+button	chest1	-1	false	1	-
+button	chest1	0	false	1	-
+button	chest1	1	false	1	-
+button	chest1	2	false	1	-
+button	chest1	3	false	1	-
+button	chest1	100	false	1	-
+button	chest1	103	false	1	-
+button	enchantment	-1	false	1	-
+button	enchantment	0	false	1	-
+button	enchantment	1	false	1	-
+button	enchantment	2	false	1	-
+button	enchantment	3	false	1	-
+button	enchantment	100	false	1	-
+button	enchantment	103	false	1	-
+button	stonecutter	-1	true	1	-
+button	stonecutter	0	false	1	-
+button	stonecutter	1	true	1	-
+button	stonecutter	2	true	1	-
+button	stonecutter	3	true	1	-
+button	stonecutter	100	true	1	-
+button	stonecutter	103	true	1	-
+button	loom	-1	false	1	-
+button	loom	0	false	1	-
+button	loom	1	false	1	-
+button	loom	2	false	1	-
+button	loom	3	false	1	-
+button	loom	100	false	1	-
+button	loom	103	false	1	-
+button	lectern	-1	false	1	-
+button	lectern	0	false	1	-
+button	lectern	1	true	1	D:0:-1
+button	lectern	2	true	1	D:0:1
+button	lectern	3	true	1	-
+button	lectern	100	true	1	-
+button	lectern	103	true	1	D:0:3
 start	edges	chest1	true	0:1,63,64;1:1,5,64;2:55,12,64;3:1,4,7
 click	edges	0	-2	0	0	0:1,63,64;1:1,5,64;2:55,12,64;3:1,4,7	-	1		-
 click	edges	1	-2	0	1	0:1,63,64;1:1,5,64;2:55,12,64;3:1,4,7	-	1		-

@@ -23,6 +23,6 @@ run([str(java/'javac'), '-cp', cp, '-d', str(classes), str(source.parent/'entity
 run([str(java/'java'), '-cp', f'{classes}:{cp}', 'EntityVectors', 'generate', str(classes/'EntityFixture.java')])
 run([str(java/'javac'), '-cp', f'{classes}:{cp}', '-d', str(classes), str(classes/'EntityFixture.java'), str(source/'InventoryVectors.java')])
 output = run([str(java/'java'), '-Xmx768m', '-cp', f'{classes}:{cp}', 'InventoryVectors'])
-rows = [line for line in output.splitlines() if line.split('\t',1)[0] in {'layout','start','click'}]
+rows = [line for line in output.splitlines() if line.split('\t',1)[0] in {'layout','start','click','button'}]
 (source/'vectors.tsv').write_text('\n'.join(rows)+'\n')
 print(f'{len(rows)} vanilla menu vectors')

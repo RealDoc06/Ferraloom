@@ -317,3 +317,37 @@ fn remote_slot_promotes_matching_hash_and_suppression_preserves_listener_changes
     }
     assert_eq!(menu.state_id(), 0);
 }
+
+#[test]
+fn real_vanilla_button_acceptance_and_lectern_data_updates() {
+    let mut cases = 0;
+    for row in include_str!("../../tests/java/inventory/vectors.tsv")
+        .lines()
+        .filter(|line| line.starts_with("button\t"))
+    {
+        let f: Vec<_> = row.split('\t').collect();
+        let mut inventory = Inventory::default();
+        let mut equipment = EntityEquipment::default();
+        let mut context = MenuContext::player(&mut inventory, &mut equipment, false);
+        let mut menu = AbstractContainerMenu::new(kind(f[1]), 7).unwrap();
+        menu.set_synchronizer(&context);
+        menu.updates.clear();
+        let accepted = menu
+            .click_menu_button(
+                &mut context,
+                f[2].parse().unwrap(),
+                true,
+                &mut UnsupportedMenuHooks,
+            )
+            .unwrap();
+        if accepted {
+            menu.broadcast_changes(&context).unwrap();
+        }
+        assert_eq!(accepted, f[3] == "true", "{} button {}", f[1], f[2]);
+        assert_eq!(menu.state_id().to_string(), f[4]);
+        let actual = events(menu.updates);
+        assert_eq!(if actual.is_empty() { "-" } else { &actual }, f[5]);
+        cases += 1;
+    }
+    assert_eq!(cases, 42);
+}

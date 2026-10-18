@@ -97,6 +97,11 @@ public final class InventoryVectors {
       for(var slot:m.slots)layout.add(slot.getContainerSlot()+","+slot.x+","+slot.y);
       System.out.println("layout\t"+BuiltInRegistries.MENU.getId(type)+"\t"+String.join(";",layout));
     }
+    for(String type:List.of("inventory","chest1","enchantment","stonecutter","loom","lectern"))for(int button:new int[]{-1,0,1,2,3,100,103}){
+      var p=new MenuPlayer(new MenuLevel(registries),false);var m=menu(type,p);var sync=new Sync(registries);m.setSynchronizer(sync);sync.events.clear();
+      boolean accepted=m.clickMenuButton(p,button);if(accepted)m.broadcastChanges();
+      System.out.println("button\t"+type+"\t"+button+"\t"+accepted+"\t"+m.getStateId()+"\t"+(sync.events.isEmpty()?"-":String.join(";",sync.events)));
+    }
     var edge=List.of(new int[]{-2,0,0},new int[]{-2,0,1},new int[]{0,1,0},new int[]{1,0,0},new int[]{2,0,0},new int[]{-999,1,0},new int[]{3,0,0},new int[]{4,0,0},new int[]{4,0,0},new int[]{5,0,5},new int[]{5,1,5},new int[]{6,1,5},new int[]{7,1,5},new int[]{-999,2,5},new int[]{8,0,0},new int[]{-999,0,0},new int[]{0,40,2},new int[]{1,0,2},new int[]{0,1,4},new int[]{2,0,3},new int[]{-999,0,0},new int[]{2,1,4});
     scenario(registries,"edges","chest1",true,edge,false);
     scenario(registries,"crafted-result","inventory",false,List.of(new int[]{0,1,0},new int[]{-999,0,0}),false);

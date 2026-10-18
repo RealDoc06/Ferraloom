@@ -26,7 +26,7 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | inventory-menus.loom.banner | Select banner patterns and special pattern items with layer limits | `LoomMenu` | | - | todo |
 | inventory-menus.merchant.result | Match offers, apply demand prices, consume inputs and award merchant XP | `MerchantMenu; MerchantResultSlot; MerchantContainer` | | - | todo |
 | inventory-menus.beacon.selection | Validate beacon payment and allowed primary and secondary effect tiers | `BeaconMenu` | | - | todo |
-| inventory-menus.lectern.pages | Handle lectern page buttons, book pickup and permission checks | `LecternMenu` | | - | todo |
+| inventory-menus.lectern.pages | Handle lectern page buttons, book pickup and permission checks | `LecternMenu` | `inventory::tests::real_vanilla_button_acceptance_and_lectern_data_updates` (unbound data; block entity page clamping pending) | pass | partial |
 | inventory-menus.horse.nautilus-slots | Validate mount equipment, inventory and access restrictions | `HorseInventoryMenu; NautilusInventoryMenu` | | - | todo |
 | inventory-menus.sided-automation | Apply face-specific slot availability and insertion or extraction predicates | `WorldlyContainer; HopperBlockEntity` | | - | todo |
 | inventory-menus.menu.anvil | `minecraft:anvil` (menu); implementation `AnvilMenu` | `net.minecraft.world.inventory.MenuType#register; AnvilMenu` | `inventory::tests::all_registered_menu_slot_layouts_match_real_vanilla_constructors` (layout only) | pass | partial |

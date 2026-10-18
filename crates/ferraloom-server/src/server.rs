@@ -1356,7 +1356,7 @@ impl MinecraftServer {
         packet: sb::ContainerButtonClick,
     ) -> Result<()> {
         self.connections.get_mut(&connection).unwrap().last_action = Instant::now();
-        let packets = {
+        let (packets, drops) = {
             let player = self
                 .level
                 .level
@@ -1367,7 +1367,8 @@ impl MinecraftServer {
             {
                 return Ok(());
             }
-            let context = MenuContext::player(
+            let may_build = player.game_mode != GameType::Adventure;
+            let mut context = MenuContext::player(
                 &mut player.inventory,
                 &mut player.parent.equipment,
                 player.game_mode == GameType::Creative,
@@ -1376,12 +1377,19 @@ impl MinecraftServer {
             if !menu.still_valid(&context) {
                 return Ok(());
             }
-            use ferraloom_game::inventory::MenuHooks;
-            if UnsupportedMenuHooks.click_button(packet.button_id.0)? {
+            if menu.click_menu_button(
+                &mut context,
+                packet.button_id.0,
+                may_build,
+                &mut UnsupportedMenuHooks,
+            )? {
                 menu.broadcast_changes(&context)?;
             }
-            menu.drain_packets()
+            (menu.drain_packets(), context.drops)
         };
+        for drop in drops {
+            self.drop_inventory_stack(entity, drop.stack, drop.thrown_from_hand)?;
+        }
         for packet in packets {
             self.connections.get_mut(&connection).unwrap().push(packet);
         }

@@ -870,3 +870,94 @@ impl MenuSession {
         }
     }
 }
+
+impl AbstractContainerMenu {
+    /// Port of concrete menus' clickMenuButton overrides. Menus without buttons
+    /// return false, even for unexpected client button IDs.
+    pub fn click_menu_button(
+        &mut self,
+        ctx: &mut MenuContext<'_>,
+        button: i32,
+        may_build: bool,
+        hooks: &mut dyn MenuHooks,
+    ) -> Result<bool> {
+        match self.kind {
+            MenuKind::Lectern => {
+                match button {
+                    100.. => self.data[0] = button - 100,
+                    1 => self.data[0] = self.data[0].wrapping_sub(1),
+                    2 => self.data[0] = self.data[0].wrapping_add(1),
+                    3 if may_build => {
+                        let slot = self.slots[0].clone();
+                        let container: &mut dyn Container = match slot.container {
+                            ContainerId::Local(i) => &mut self.local[i],
+                            ContainerId::Player => &mut ctx.player,
+                            ContainerId::External(i) => &mut *ctx.external[i],
+                        };
+                        let mut book = container.remove_item_no_update(slot.container_slot);
+                        container.set_changed();
+                        if !ctx
+                            .player
+                            .inventory
+                            .add(&mut book, ctx.player.equipment, ctx.creative)
+                            && !book.is_empty()
+                        {
+                            ctx.drops.push(DroppedStack {
+                                stack: book,
+                                thrown_from_hand: false,
+                            });
+                        }
+                    }
+                    _ => return Ok(false),
+                }
+                Ok(true)
+            }
+            MenuKind::Enchantment => {
+                if !(0..3).contains(&button)
+                    || self.data[button as usize] <= 0
+                    || self.get_item(ctx, 0).is_empty()
+                    || !ctx.creative && count(&self.get_item(ctx, 1)) < button + 1
+                {
+                    Ok(false)
+                } else {
+                    hooks.click_button(button)
+                }
+            }
+            MenuKind::Stonecutter => {
+                if self.data[0] == button {
+                    Ok(false)
+                } else if self.get_item(ctx, 0).is_empty() {
+                    Ok(true)
+                } else {
+                    hooks.click_button(button)
+                }
+            }
+            MenuKind::Loom => {
+                if button < 0
+                    || self.get_item(ctx, 0).is_empty()
+                    || self.get_item(ctx, 1).is_empty()
+                {
+                    Ok(false)
+                } else {
+                    hooks.click_button(button)
+                }
+            }
+            _ => Ok(false),
+        }
+    }
+    /// Port of CrafterMenu#setSlotState; the block-entity owner invokes this after
+    /// updating its canonical ContainerData. Disabled slots still allow extraction.
+    pub fn set_crafter_slot_state(
+        &mut self,
+        ctx: &MenuContext<'_>,
+        slot: usize,
+        enabled: bool,
+    ) -> Result<()> {
+        if self.kind != MenuKind::Crafter || slot >= 9 {
+            return Err(MenuError::InvalidSlot(slot as i32));
+        }
+        self.data[slot] = i32::from(!enabled);
+        self.slots[slot].disabled = !enabled;
+        self.broadcast_changes(ctx)
+    }
+}
