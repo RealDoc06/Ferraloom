@@ -1,4 +1,5 @@
 use super::*;
+
 use crate::{Behaviors, block::BlockBehavior};
 use effects::LevelEffect;
 use ferraloom_util::Direction;
@@ -29,6 +30,25 @@ impl BlockBehavior for Trace {
     }
 }
 static EMPTY: Behaviors = Behaviors::EMPTY;
+#[test]
+fn block_drops_requires_the_published_rule_and_observes_each_change() {
+    let mut level = Level::new(Region::new(&EMPTY));
+    for policy in [
+        crate::block::UnportedBehavior::Strict,
+        crate::block::UnportedBehavior::Warn,
+    ] {
+        level.set_unported_behavior(policy);
+        assert_eq!(
+            level.block_drops_enabled(),
+            Err(LevelError::UnsupportedGameRule("minecraft:block_drops"))
+        );
+    }
+    for enabled in [true, false, true] {
+        level.rules_mut().block_drops = Some(enabled);
+        assert_eq!(level.block_drops_enabled(), Ok(enabled));
+    }
+    assert_eq!(level.unported_behavior_stats().skipped_calls, 0);
+}
 static PLAIN: Behaviors = Behaviors::EMPTY.with_block(Block::STONE, &Trace { nested: false });
 static NESTED: Behaviors = Behaviors::EMPTY.with_block(Block::STONE, &Trace { nested: true });
 #[test]
@@ -876,7 +896,7 @@ fn strict_is_default_and_warn_records_each_skipped_call_without_query_fallbacks(
     use crate::block::{BlockMethod, UnportedBehavior};
     let mut level = empty_level(&EMPTY);
     let pos = BlockPos::new(0, 0, 0);
-    let state = Block::OAK_LEAVES.default_state();
+    let state = Block::CHORUS_FLOWER.default_state();
     assert_eq!(level.unported_behavior(), UnportedBehavior::Strict);
     assert_eq!(
         level.optional_block_call(state.block(), BlockMethod::RandomTick, |behavior, level| {
@@ -917,7 +937,7 @@ fn strict_is_default_and_warn_records_each_skipped_call_without_query_fallbacks(
         }
     );
     assert!(matches!(
-        level.required_block_behavior(Block::OAK_SAPLING, BlockMethod::CanSurvive),
+        level.required_block_behavior(Block::CHORUS_PLANT, BlockMethod::CanSurvive),
         Err(LevelError::UnsupportedBlockMethod(
             _,
             BlockMethod::CanSurvive
@@ -1273,18 +1293,20 @@ fn reflected_method_ownership_ports_inherited_defaults_without_masking_overrides
             .unwrap()
             .ptr_eq(&ferraloom_util::shapes::block())
     );
-    assert!(matches!(
-        level.behavior_for_method(leaves.block(), BlockMethod::RandomTick),
-        Err(LevelError::UnsupportedBlock(Block::OAK_LEAVES))
-    ));
-    assert!(matches!(
-        level.behavior_for_method(leaves.block(), BlockMethod::UpdateShape),
-        Err(LevelError::UnsupportedBlock(Block::OAK_LEAVES))
-    ));
+    assert!(
+        level
+            .behavior_for_method(leaves.block(), BlockMethod::RandomTick)
+            .is_ok()
+    );
+    assert!(
+        level
+            .behavior_for_method(leaves.block(), BlockMethod::UpdateShape)
+            .is_ok()
+    );
     level.set_unported_behavior(UnportedBehavior::Warn);
     assert!(matches!(
         LevelReaderRef::Server(&level).entity_inside_collision_shape(
-            Block::POWDER_SNOW.default_state(),
+            Block::END_PORTAL.default_state(),
             pos,
             crate::entity::EntityRef(0)
         ),
@@ -1777,7 +1799,22 @@ fn live_freeze_and_snow_predicates_match_real_biome_calls() {
 #[test]
 fn snow_accumulation_wraps_unsupported_survival_without_inventing_a_query_result() {
     use crate::block::{BlockMethod, UnportedBehavior};
-    let mut level = empty_level(&EMPTY);
+    struct PendingSnow;
+    impl BlockBehavior for PendingSnow {
+        fn can_survive(
+            &self,
+            _state: BlockState,
+            _pos: BlockPos,
+            _level: &crate::block::LevelReaderRef<'_, '_>,
+        ) -> Result<bool, LevelError> {
+            Err(LevelError::UnsupportedBlockMethod(
+                Block::SNOW,
+                BlockMethod::CanSurvive,
+            ))
+        }
+    }
+    static PENDING_SNOW: Behaviors = Behaviors::EMPTY.with_block(Block::SNOW, &PendingSnow);
+    let mut level = empty_level(&PENDING_SNOW);
     let p = BlockPos::new(8, 0, 8);
     level
         .set_block_state(p.below(1), Block::STONE.default_state())

@@ -23,9 +23,11 @@ pub mod distance_manager;
 pub mod effects;
 pub mod emission;
 pub mod entity;
+pub mod environment;
 pub mod events;
 pub mod generation;
 pub mod heightmap;
+mod lighting;
 mod mutation;
 mod post_processing;
 mod random;
@@ -40,6 +42,7 @@ pub mod weather;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum LevelError {
+    UnsupportedAdvancementCriterion(crate::advancements::criteria::Trigger),
     Inventory(&'static str),
     MissingBlockEntity(crate::block::entity::BlockEntityRef),
     WrongBlockEntityType(crate::block::entity::BlockEntityRef),
@@ -49,6 +52,8 @@ pub enum LevelError {
     UnsupportedWorldgenEnvironment,
     UnsupportedWorldgenBehavior,
     OutsideBuildHeight,
+    MissingPlacementPlayer,
+    UninitializedPlacementDirection,
     MissingEntity(EntityRef),
     WrongEntityType(EntityRef),
     DuplicateEntity(EntityRef),
@@ -57,6 +62,10 @@ pub enum LevelError {
     UnsupportedBlock(Block),
     UnsupportedBlockMethod(Block, crate::block::BlockMethod),
     UnsupportedBlockEntity(Block),
+    UnsupportedGameRule(&'static str),
+    UnsupportedLightQuery,
+    UnsupportedEnvironmentAttribute(ferraloom_data::registries::environment_attribute::Id),
+    MissingEnvironmentContext,
     MissingBlockTags,
     MissingFluidTags,
     MissingEntityTypeTags,
@@ -75,6 +84,8 @@ pub enum LevelError {
 /// dimension's FAST_LAVA attribute and synchronized game-rule snapshot.
 #[derive(Clone, Copy, Debug)]
 pub struct LevelRules {
+    /// Published by the canonical GameRules owner after load and each change.
+    pub block_drops: Option<bool>,
     pub tnt_explodes: bool,
     pub entity_drops: bool,
     pub debug: bool,
@@ -86,10 +97,13 @@ pub struct LevelRules {
     pub fast_lava: bool,
     pub redstone_experiments: bool,
     pub spread_fire: bool,
+    pub spread_vines: bool,
+    pub mob_griefing: bool,
 }
 impl Default for LevelRules {
     fn default() -> Self {
         Self {
+            block_drops: None,
             tnt_explodes: true,
             entity_drops: true,
             debug: false,
@@ -101,6 +115,8 @@ impl Default for LevelRules {
             fast_lava: false,
             redstone_experiments: false,
             spread_fire: true,
+            spread_vines: true,
+            mob_griefing: true,
         }
     }
 }
@@ -121,6 +137,8 @@ pub struct Region {
     min_y: i32,
     max_y: i32,
     rules: LevelRules,
+    has_skylight: Option<bool>,
+    environment: Option<environment::EnvironmentRuntime>,
     random: ferraloom_util::random::Random,
     sound_seed_generator: ferraloom_util::random::Random,
     rand_value: i32,
@@ -158,6 +176,8 @@ impl Region {
             min_y: -64,
             max_y: 320,
             rules: LevelRules::default(),
+            has_skylight: None,
+            environment: None,
             random: random::new_level_random(),
             sound_seed_generator: random::new_sound_random(),
             rand_value: random::new_position_seed(),

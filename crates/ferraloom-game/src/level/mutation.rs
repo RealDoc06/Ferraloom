@@ -20,6 +20,13 @@ impl Level {
     pub fn rules_mut(&mut self) -> &mut LevelRules {
         &mut self.region_mut().rules
     }
+    /// Port of the GameRules.BLOCK_DROPS query used by Block's drop helpers.
+    /// An unpublished rule is a required-query error under either policy.
+    pub fn block_drops_enabled(&self) -> Result<bool, LevelError> {
+        self.rules()
+            .block_drops
+            .ok_or(LevelError::UnsupportedGameRule("minecraft:block_drops"))
+    }
     /// Install LevelChunk's four live heightmaps when a full chunk enters the
     /// simulation. Raw section writes remain a storage-only operation.
     pub fn prime_chunk_heightmaps(&mut self, pos: ChunkPos) -> Result<(), LevelError> {
