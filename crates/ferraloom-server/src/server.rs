@@ -25,8 +25,12 @@ use ferraloom_game::{
         player::{GameType, MovementResult, PlayerBehavior, ServerPlayer, move_player},
     },
     level::{
-        LevelError, Region, chunk_holder::ChunkStatus, chunk_map::PlayerChunkSender,
-        distance_manager::tracking_view, server_level::ServerLevel,
+        LevelError, Region,
+        chunk_holder::ChunkStatus,
+        chunk_map::PlayerChunkSender,
+        distance_manager::tracking_view,
+        server_level::ServerLevel,
+        tick_rate::{ServerTickRateManager, TickRateEvent},
     },
 };
 use ferraloom_protocol::{
@@ -169,6 +173,9 @@ pub struct MinecraftServer {
     status: watch::Sender<status::ServerStatus>,
     shutdown: watch::Sender<bool>,
     tick: u64,
+    pub(crate) tick_rate_manager: ServerTickRateManager,
+    tick_times_nanos: [i64; 100],
+    aggregated_tick_times_nanos: i64,
     stop: bool,
     empty_ticks: i32,
     was_paused: bool,
@@ -301,6 +308,9 @@ impl MinecraftServer {
             status,
             shutdown,
             tick: 0,
+            tick_rate_manager: ServerTickRateManager::default(),
+            tick_times_nanos: [0; 100],
+            aggregated_tick_times_nanos: 0,
             stop: false,
             empty_ticks: 0,
             was_paused: false,
@@ -318,30 +328,98 @@ impl MinecraftServer {
             task,
         })
     }
-    /// Port of MinecraftServer#runServer's 50ms deadline and overload catch-up.
+    /// Port of MinecraftServer#runServer's tick-rate deadline and sprint slots.
     async fn run(mut self) -> Result<()> {
-        println!(
-            "Ferraloom 26.3 running; single-region mode. Structure starts/references, general biome decoration and original mob spawning are passthrough."
-        );
-        let mut next = tokio::time::Instant::now();
-        let mut last_overload = next;
+        println!("Ferraloom 26.3 running; single-region mode.");
+        let origin = tokio::time::Instant::now();
+        let mut next = 0_i64;
+        let mut last_overload = 0_i64;
         while !self.stop {
-            let now = tokio::time::Instant::now();
-            let behind = now.saturating_duration_since(next);
-            if behind > Duration::from_secs(2)
-                && now.duration_since(last_overload) > Duration::from_secs(15)
+            let now = origin.elapsed().as_nanos() as i64;
+            let this_tick_nanos = if !self.was_paused
+                && self.tick_rate_manager.is_sprinting()
+                && self.tick_rate_manager.check_should_sprint_this_tick(now)
             {
-                let skipped = behind.as_millis() / 50;
-                eprintln!("Can't keep up! Running {skipped} ticks behind");
-                next += Duration::from_millis(skipped as u64 * 50);
-                last_overload = now;
-            }
+                next = now;
+                last_overload = next;
+                0
+            } else {
+                let nanos = self.tick_rate_manager.nanoseconds_per_tick();
+                let behind = now.wrapping_sub(next);
+                if behind > 1_000_000_000 + 20 * nanos
+                    && next.wrapping_sub(last_overload) >= 10_000_000_000 + 100 * nanos
+                {
+                    let skipped = behind / nanos;
+                    eprintln!(
+                        "Can't keep up! Running {}ms or {skipped} ticks behind",
+                        behind / 1_000_000
+                    );
+                    next = next.wrapping_add(skipped * nanos);
+                    last_overload = next;
+                }
+                nanos
+            };
+            next = next.wrapping_add(this_tick_nanos);
+            self.apply_tick_rate_events()?;
             self.process_packets().await?;
             self.tick_server().await?;
-            next += Duration::from_millis(50);
-            tokio::time::sleep_until(next).await;
+            tokio::time::sleep_until(origin + Duration::from_nanos(next.max(0) as u64)).await;
+            if this_tick_nanos == 0 {
+                self.tick_rate_manager
+                    .end_tick_work(origin.elapsed().as_nanos() as i64);
+            }
         }
         self.stop_server().await
+    }
+    pub fn average_tick_time_nanos(&self) -> i64 {
+        self.aggregated_tick_times_nanos / self.tick.clamp(1, 100) as i64
+    }
+    pub fn tick_times_nanos(&self) -> &[i64; 100] {
+        &self.tick_times_nanos
+    }
+    fn next_autosave_interval(&self) -> i32 {
+        let tps = if self.tick_rate_manager.is_sprinting() {
+            1_000_000_000_f32 / self.average_tick_time_nanos().wrapping_add(1) as f32
+        } else {
+            self.tick_rate_manager.tickrate()
+        };
+        (tps * 300.0_f32).max(100.0) as i32
+    }
+    /// Drain immediately before command feedback and at the outer sprint slot.
+    pub(crate) fn apply_tick_rate_events(&mut self) -> Result<()> {
+        for event in self.tick_rate_manager.take_events() {
+            match event {
+                TickRateEvent::State {
+                    tick_rate,
+                    is_frozen,
+                } => {
+                    self.broadcast(cb::Packet::TickingState(cb::TickingState {
+                        tick_rate,
+                        is_frozen,
+                    }));
+                }
+                TickRateEvent::Step { ticks } => {
+                    self.broadcast(cb::Packet::TickingStep(cb::TickingStep {
+                        tick_steps: VarInt(ticks),
+                    }));
+                }
+                TickRateEvent::RateChanged => {
+                    self.autosave = self.autosave.min(self.next_autosave_interval())
+                }
+                TickRateEvent::SprintReport {
+                    completed_ticks,
+                    ticks_per_second,
+                    milliseconds_per_tick,
+                } => {
+                    // The commands branch connects the server command source's
+                    // operator feedback when its canonical adapter lands.
+                    println!(
+                        "commands.tick.sprint.report: {completed_ticks} {ticks_per_second} {milliseconds_per_tick}"
+                    );
+                }
+            }
+        }
+        Ok(())
     }
     /// Port of MinecraftServer#processPacketsAndTick. No IO task applies play state.
     async fn process_packets(&mut self) -> Result<()> {
@@ -487,7 +565,8 @@ impl MinecraftServer {
     }
     /// TickChildren retains level-before-connection and chunk-send-after-player order.
     async fn tick_server(&mut self) -> Result<()> {
-        self.empty_ticks = if self.players.is_empty() {
+        let started = Instant::now();
+        self.empty_ticks = if self.players.is_empty() && !self.tick_rate_manager.is_sprinting() {
             self.empty_ticks.saturating_add(1)
         } else {
             0
@@ -499,7 +578,8 @@ impl MinecraftServer {
         }
         self.was_paused = paused;
         if !paused {
-            self.tick += 1;
+            self.tick = self.tick.wrapping_add(1);
+            self.tick_rate_manager.tick();
             // Functions and server clocks occupy this serial slot as their ports arrive.
             if self.tick.is_multiple_of(20) {
                 let packet = self.time_packet();
@@ -509,19 +589,26 @@ impl MinecraftServer {
                     }
                 }
             }
-            self.level.game_time += 1;
-            self.level
-                .level
-                .tick_scheduled_blocks(self.level.game_time, 65536)
-                .map_err(|e| anyhow::anyhow!("{e:?}"))?;
-            // Fluid ticks and raids have no queued content in this generation slice.
-            self.level.tickets.purge_stale(self.tick);
+            if self.tick_rate_manager.runs_normally() {
+                self.level.level.advance_weather_cycle(true);
+                self.level.game_time = self.level.game_time.wrapping_add(1);
+                self.level.level.set_game_time(self.level.game_time);
+                self.level
+                    .level
+                    .tick_block_phase(self.level.game_time, 65536)
+                    .map_err(game_error)?;
+                self.level
+                    .level
+                    .tick_fluid_phase(self.level.game_time, 65536)
+                    .map_err(game_error)?;
+                self.level.tickets.purge_stale(self.tick);
+            }
             self.integrate_jobs()?;
             self.track_players()?;
             // ChunkMap tracking precedes entity ticks, per ServerLevel#tick.
             self.level
                 .level
-                .tick_entities()
+                .tick_entities_with_tick_rate(&self.tick_rate_manager)
                 .map_err(|e| anyhow::anyhow!("{e:?}"))?;
             self.world
                 .tick_entity_management(&mut self.level.level, &self.properties)?;
@@ -536,8 +623,17 @@ impl MinecraftServer {
             self.autosave -= 1;
             if self.autosave <= 0 {
                 self.save_all(false).await?;
-                self.autosave = 6000;
+                self.autosave = self.next_autosave_interval();
             }
+        }
+        if !paused {
+            let index = (self.tick % 100) as usize;
+            let elapsed = started.elapsed().as_nanos() as i64;
+            self.aggregated_tick_times_nanos = self
+                .aggregated_tick_times_nanos
+                .wrapping_sub(self.tick_times_nanos[index])
+                .wrapping_add(elapsed);
+            self.tick_times_nanos[index] = elapsed;
         }
         Ok(())
     }
@@ -894,11 +990,11 @@ impl MinecraftServer {
             param: 0.,
         }));
         c.push(cb::Packet::TickingState(cb::TickingState {
-            tick_rate: 20.,
-            is_frozen: false,
+            tick_rate: self.tick_rate_manager.tickrate(),
+            is_frozen: self.tick_rate_manager.is_frozen(),
         }));
         c.push(cb::Packet::TickingStep(cb::TickingStep {
-            tick_steps: VarInt(0),
+            tick_steps: VarInt(self.tick_rate_manager.frozen_ticks_to_run()),
         }));
         c.push(cb::Packet::SetChunkCacheCenter(cb::SetChunkCacheCenter {
             x: VarInt(center.x),
