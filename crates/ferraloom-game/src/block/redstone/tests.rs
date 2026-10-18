@@ -427,13 +427,18 @@ fn pressure_plate_sensitivity_weighted_rounding_and_release_ticks_match_vanilla(
         let expected = expected
             .split('|')
             .map(|sample| {
-                let mut parts = sample.splitn(4, '/');
+                let mut parts = sample.splitn(3, '/');
+                let state = parts.next().unwrap();
+                let scheduled = parts.next().unwrap();
+                // Mutation records contain their own /flags suffixes. The
+                // final slash separates those records from game events.
+                let (mutations, gameplay) = parts.next().unwrap().rsplit_once('/').unwrap();
                 format!(
                     "{}/{}/{}/{}",
-                    parts.next().unwrap(),
-                    parts.next().unwrap(),
-                    native_mutations(parts.next().unwrap()),
-                    parts.next().unwrap()
+                    state,
+                    scheduled,
+                    native_mutations(mutations),
+                    gameplay
                 )
             })
             .collect::<Vec<_>>()
