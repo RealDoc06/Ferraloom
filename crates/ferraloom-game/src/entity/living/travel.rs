@@ -10,6 +10,8 @@ use ferraloom_data::{
 };
 use ferraloom_util::{Vec3, java, mth};
 
+pub mod fluid;
+
 /// Port of LivingEntity#getEffectiveGravity, reading the falling flag before the
 /// active-effect lookup and the Entity parent's actual gravity query.
 pub fn effective_gravity<E: Entity + ?Sized>(

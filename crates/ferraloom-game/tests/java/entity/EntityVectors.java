@@ -106,6 +106,7 @@ public final class EntityVectors {
         TravelVectors.run(new EntityFixture(r));
         AbilityVectors.run(new EntityFixture(r));
         AirTravelVectors.run(new EntityFixture(r));
+        FluidTravelVectors.run(new EntityFixture(r));
         EffectVectors.run();
         EffectReadVectors.run(new EntityFixture(r));
         DamageVectors.run(new EntityFixture(r));
@@ -179,7 +180,7 @@ public final class EntityVectors {
           for(var type:BuiltInRegistries.ENTITY_TYPE)if(BuiltInRegistries.ENTITY_TYPE.wrapAsHolder(type).is(entityTag))entityNames.add(BuiltInRegistries.ENTITY_TYPE.getKey(type).toString());
           System.out.println("entity-tag\\t"+entityTag.location()+"\\t"+String.join(",",entityNames));
         }
-        for(var tag:List.of(net.minecraft.tags.FluidTags.WATER,net.minecraft.tags.FluidTags.LAVA)){
+        for(var tag:List.of(net.minecraft.tags.FluidTags.WATER,net.minecraft.tags.FluidTags.LAVA,net.minecraft.tags.FluidTags.ENTITY_FLOATABLE)){
           var names=new ArrayList<String>();for(var fluid:BuiltInRegistries.FLUID)if(fluid.is(tag))names.add(BuiltInRegistries.FLUID.getKey(fluid).toString());
           System.out.println("fluid-tag\\t"+tag.location()+"\\t"+String.join(",",names));
         }

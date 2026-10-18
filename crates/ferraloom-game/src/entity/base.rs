@@ -355,6 +355,15 @@ impl EntityData {
                 .height(ferraloom_data::tags::FluidTags::LAVA, level)?
                 > 0.0)
     }
+    /// Port of Entity#getFluidJumpThreshold; the eye-height float is widened
+    /// before comparing it with the native double literal.
+    pub fn fluid_jump_threshold(&self) -> f64 {
+        if f64::from(self.eye_height) < 0.4 {
+            0.0
+        } else {
+            0.4
+        }
+    }
     pub fn clear_freeze(&mut self) {
         self.entity_data.set(synched_data::TICKS_FROZEN, VarInt(0));
     }

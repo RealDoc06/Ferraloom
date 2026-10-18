@@ -952,6 +952,9 @@ impl crate::entity::Entity for PlayerBehavior {
             .entity::<ServerPlayer>(entity)?
             .flying_movement_speed())
     }
+    fn is_affected_by_fluids(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
+        Ok(!level.entity::<ServerPlayer>(entity)?.flying)
+    }
     fn max_up_step(
         &self,
         entity: crate::entity::EntityRef,

@@ -613,6 +613,41 @@ pub trait Entity: Sync {
             Ok(0.02)
         }
     }
+    /// Port of LivingEntity#isAffectedByFluids; Player checks its flying ability.
+    fn is_affected_by_fluids(
+        &self,
+        _entity: EntityRef,
+        _level: &Level,
+    ) -> Result<bool, LevelError> {
+        Ok(true)
+    }
+    /// Port of LivingEntity#canStandOnFluid's inherited default.
+    fn can_stand_on_fluid(
+        &self,
+        _entity: EntityRef,
+        _fluid: ferraloom_data::FluidState,
+        _level: &Level,
+    ) -> Result<bool, LevelError> {
+        Ok(false)
+    }
+    /// Port of LivingEntity#getWaterSlowDown's inherited default.
+    fn water_slow_down(&self) -> f32 {
+        0.8
+    }
+    /// Port of Entity#isFree: fluid scanning runs only after collision succeeds.
+    fn is_free(
+        &self,
+        entity: EntityRef,
+        movement: Vec3,
+        level: &Level,
+    ) -> Result<bool, LevelError> {
+        let bounds = level
+            .entity::<EntityData>(entity)?
+            .bounding_box
+            .move_vec(movement);
+        Ok(level.no_collision(Some(entity), bounds, false)?
+            && !level.contains_any_liquid(bounds)?)
+    }
     /// Port of Entity#omnidirectionalAirMover's inherited default.
     fn omnidirectional_air_mover(&self) -> bool {
         false
