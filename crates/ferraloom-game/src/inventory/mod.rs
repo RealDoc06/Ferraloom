@@ -6,6 +6,7 @@ mod click;
 mod container;
 mod crafted;
 mod in_memory;
+mod inventory_return;
 pub use block_containers::{block_menu_still_valid, with_block_menu_context};
 mod crafting;
 mod crafting_runtime;
