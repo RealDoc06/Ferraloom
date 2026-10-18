@@ -1,6 +1,28 @@
 mod support;
 use anyhow::Result;
-use ferraloom_server::server::{MinecraftServer, ServerOptions};
+use ferraloom_server::server::{MinecraftServer, RunningServer, ServerOptions};
+
+async fn ferraloom_scenario(server: RunningServer) -> Result<support::Outcome> {
+    match support::scenario(server.address).await {
+        Ok(outcome) => {
+            server.wait().await?;
+            Ok(outcome)
+        }
+        Err(error) => {
+            let stopped = tokio::time::timeout(std::time::Duration::from_secs(60), async {
+                let _ = server.command("stop").await;
+                server.wait().await
+            })
+            .await;
+            match stopped {
+                Ok(Ok(())) => Err(error),
+                stopped => Err(error.context(format!(
+                    "Ferraloom stop/wait after failed join scenario:\n{stopped:?}"
+                ))),
+            }
+        }
+    }
+}
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn flat_world_boots_and_retains_generator_settings_on_reload() -> Result<()> {
@@ -82,8 +104,7 @@ async fn offline_client_joins_walks_chats_and_saves() -> Result<()> {
     options.console = false;
     options.port = Some(0);
     let server = MinecraftServer::start(options).await?;
-    let outcome = support::scenario(server.address).await?;
-    server.wait().await?;
+    let outcome = ferraloom_scenario(server).await?;
     assert!(outcome.chunks >= 9);
     assert!(outcome.unloaded > 0);
     support::verify_save(root.path(), outcome.position)?;
@@ -165,8 +186,7 @@ async fn join_and_configuration_sequence_matches_vanilla() -> Result<()> {
     options.console = false;
     options.port = Some(0);
     let server = MinecraftServer::start(options).await?;
-    let outcome = support::scenario(server.address).await?;
-    server.wait().await?;
+    let outcome = ferraloom_scenario(server).await?;
     support::verify_save(root.path(), outcome.position)?;
     for (name, sequence) in [
         ("Vanilla", &vanilla_outcome.sequence),
