@@ -205,6 +205,17 @@ pub struct DamageSource {
 ///
 /// Dispatch objects are stateless. Never hold a state borrow across a world call.
 pub trait Entity: Sync {
+    fn fire_immune_ticks(&self) -> i32 {
+        0
+    }
+    fn apply_effects_from_blocks(
+        &self,
+        entity: EntityRef,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        let movements = inside_block::collect_movements(entity, level)?;
+        inside_block::apply_effects(self, entity, &movements, level)
+    }
     fn can_freeze(&self, _entity: EntityRef, _level: &Level) -> Result<bool, LevelError> {
         Ok(true)
     }

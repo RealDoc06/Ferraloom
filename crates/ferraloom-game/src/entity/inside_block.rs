@@ -6,7 +6,7 @@ use crate::{
 };
 use ferraloom_data::EntityType;
 use ferraloom_protocol::codec::VarInt;
-use ferraloom_util::{Aabb, Direction, Vec3, random::RandomSource, shapes};
+use ferraloom_util::{Aabb, BlockPos, Direction, Vec3, random::RandomSource, shapes};
 
 /// Declaration order is InsideBlockEffectType's observable application order.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -403,4 +403,50 @@ mod tests {
         );
         assert!(c.drain().is_empty());
     }
+}
+
+/// Port of Entity#applyEffectsFromBlocks(List). Rain remains a required world
+/// query; the Level implementation short-circuits dry weather before precipitation.
+pub fn apply_effects<E: Entity + ?Sized>(
+    behavior: &E,
+    entity: EntityRef,
+    movements: &[Movement],
+    level: &mut Level,
+) -> Result<(), LevelError> {
+    if !affected(entity, level)? {
+        return Ok(());
+    }
+    if level.entity::<EntityData>(entity)?.on_ground {
+        let pos = movement::get_on_pos(entity, 0.2_f32, level)?;
+        let state = level.get_block_state(pos)?;
+        level.call_step_on(state, pos, entity)?;
+    }
+    let was_on_fire = is_on_fire(entity, level)?;
+    let base = level.entity::<EntityData>(entity)?;
+    let was_freezing = base.ticks_frozen() > 0;
+    let previous_fire_ticks = base.remaining_fire_ticks;
+    check_inside_blocks(behavior, entity, movements, level)?;
+    apply_collected(behavior, entity, level)?;
+    let base = level.entity::<EntityData>(entity)?;
+    let pos = base.block_position;
+    let top = BlockPos::containing(base.position.x, base.bounding_box.max_y, base.position.z);
+    if level.is_raining_at(pos)? || level.is_raining_at(top)? {
+        clear_fire(entity, level)?;
+    }
+    if was_on_fire && !is_on_fire(entity, level)?
+        || was_freezing && level.entity::<EntityData>(entity)?.ticks_frozen() <= 0
+    {
+        let base = level.entity_mut::<EntityData>(entity)?;
+        let pitch = 1.6 + (base.random.next_float() - base.random.next_float()) * 0.4;
+        level.emit_entity_movement_effect(movement::MovementEffect::ExtinguishSound {
+            entity,
+            pitch,
+        });
+    }
+    let ignited = level.entity::<EntityData>(entity)?.remaining_fire_ticks > previous_fire_ticks;
+    if !is_on_fire(entity, level)? && !ignited {
+        level.entity_mut::<EntityData>(entity)?.remaining_fire_ticks =
+            -behavior.fire_immune_ticks();
+    }
+    Ok(())
 }
