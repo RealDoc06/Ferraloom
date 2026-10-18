@@ -287,8 +287,16 @@ pub fn accept_teleport(entity: EntityRef, id: i32, level: &mut Level) -> Result<
     let Some(position) = player.teleport.awaiting_position else {
         return Ok(false);
     };
-    snap_to(entity, position, level)?;
+    let bounded = Vec3::new(
+        position.x.clamp(-3.0e7, 3.0e7),
+        position.y,
+        position.z.clamp(-3.0e7, 3.0e7),
+    );
+    level.entity_mut::<EntityData>(entity)?.old_position = bounded;
+    level.set_entity_pos(entity, bounded)?;
     let player = level.entity_mut::<ServerPlayer>(entity)?;
+    let (yaw, pitch) = (player.yaw, player.pitch);
+    player.abs_snap_rotation_to(yaw, pitch);
     player.last_good = position;
     player.teleport.awaiting_position = None;
     Ok(true)

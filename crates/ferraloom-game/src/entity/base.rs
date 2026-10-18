@@ -243,6 +243,13 @@ impl EntityData {
             self.pitch = (pitch % 360.0).clamp(-90.0, 90.0);
         }
     }
+    /// Port of Entity#absSnapRotationTo, preserving position history.
+    pub fn abs_snap_rotation_to(&mut self, yaw: f32, pitch: f32) {
+        self.set_y_rot(yaw % 360.0);
+        self.set_x_rot(pitch.clamp(-90.0, 90.0) % 360.0);
+        self.old_yaw = self.yaw;
+        self.old_pitch = self.pitch;
+    }
     /// Port of Entity#removeLatestMovementRecording; an empty queue is unchanged.
     pub fn remove_latest_movement_recording(&mut self) {
         self.movement_this_tick.pop_back();

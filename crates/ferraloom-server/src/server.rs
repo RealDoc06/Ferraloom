@@ -2363,6 +2363,14 @@ impl MinecraftServer {
                     position_move_rotation(position, Vec3::ZERO, player.yaw, player.pitch);
                 self.teleport_player(entity, destination, 0)?;
             }
+            self.level
+                .level
+                .entity_mut::<ServerPlayer>(entity)
+                .map_err(game_error)?
+                .abs_snap_rotation_to(
+                    ferraloom_util::mth::wrap_degrees_f32(yaw),
+                    ferraloom_util::mth::wrap_degrees_f32(pitch),
+                );
             return Ok(());
         }
         let player = self

@@ -1978,10 +1978,7 @@ fn piston_effects_use_only_the_explicit_path_and_keep_recorded_movements() {
         to: Vec3::new(21.5, 64.0, 8.5),
         axis_dependent_original_movement: None,
     };
-    entity
-        .parent
-        .movement_this_tick
-        .push_back(recording);
+    entity.parent.movement_this_tick.push_back(recording);
     level
         .add_entity(id, EntityState::PrimedTnt(Box::new(entity)))
         .unwrap();
@@ -2010,4 +2007,92 @@ fn piston_effects_use_only_the_explicit_path_and_keep_recorded_movements() {
     assert!(entity.movement_this_tick.is_empty());
     entity.remove_latest_movement_recording();
     assert!(entity.movement_this_tick.is_empty());
+}
+
+#[test]
+fn pending_teleport_rotation_matches_native_absolute_snap_without_moving_history() {
+    let mut actual = Vec::new();
+    for (yaw, pitch) in [(721.25_f32, 270_f32), (-721.25, -360.0), (37.25, -28.125)] {
+        let mut entity = EntityData::new(ferraloom_data::EntityType::PLAYER, 1, 123);
+        entity.set_pos(Vec3::new(8.5, 64.25, -12.75));
+        entity.set_old_pos_and_rot();
+        entity.abs_snap_rotation_to(
+            ferraloom_util::mth::wrap_degrees_f32(yaw),
+            ferraloom_util::mth::wrap_degrees_f32(pitch),
+        );
+        actual.push(format!(
+            "teleport-pending-rotation\t{:x},{:x}\t{:x},{:x},{:x},{:x}\t{:x},{:x},{:x}",
+            yaw.to_bits(),
+            pitch.to_bits(),
+            entity.yaw.to_bits(),
+            entity.pitch.to_bits(),
+            entity.old_yaw.to_bits(),
+            entity.old_pitch.to_bits(),
+            entity.old_position.x.to_bits(),
+            entity.old_position.y.to_bits(),
+            entity.old_position.z.to_bits()
+        ));
+    }
+    let expected: Vec<_> = VECTORS
+        .lines()
+        .filter(|row| row.starts_with("teleport-pending-rotation\t"))
+        .collect();
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn teleport_confirmation_uses_native_clamp_and_preserves_interpolation_history() {
+    let mut actual = Vec::new();
+    for destination in [
+        Vec3::new(8.5, 64.0, 8.5),
+        Vec3::new(3.0e7 + 1.0, 65.0, -3.0e7 - 1.0),
+    ] {
+        let mut level = level(false);
+        let id = EntityRef(1);
+        level
+            .add_entity(
+                id,
+                EntityState::Player(Box::new(player::ServerPlayer::new(
+                    Uuid::new(1, 2),
+                    "confirm".into(),
+                    1,
+                    Vec3::ZERO,
+                    player::GameType::Survival,
+                ))),
+            )
+            .unwrap();
+        teleport::teleport_player(
+            id,
+            teleport::position_move_rotation(destination, Vec3::ZERO, 721.25, -28.125),
+            0,
+            &mut level,
+        )
+        .unwrap();
+        assert!(teleport::accept_teleport(id, 1, &mut level).unwrap());
+        let player = level.entity::<player::ServerPlayer>(id).unwrap();
+        let text = |p: Vec3| {
+            format!(
+                "{:x},{:x},{:x}",
+                p.x.to_bits(),
+                p.y.to_bits(),
+                p.z.to_bits()
+            )
+        };
+        actual.push(format!(
+            "teleport-confirm-snap\t{}\t{}\t{}\t{}\t{:x},{:x},{:x}",
+            text(destination),
+            text(player.position),
+            text(player.old_position),
+            text(player.interpolation_old_position),
+            player.yaw.to_bits(),
+            player.y_head_rot.to_bits(),
+            player.old_yaw.to_bits()
+        ));
+        assert_eq!(player.last_good, destination);
+    }
+    let expected: Vec<_> = VECTORS
+        .lines()
+        .filter(|row| row.starts_with("teleport-confirm-snap\t"))
+        .collect();
+    assert_eq!(actual, expected);
 }
