@@ -2583,3 +2583,4 @@ Every literal and argument node from `reports/commands.json` has a row, includin
 | `/teleport`: live player destinations and facing entity/position packets | pending command parity scenarios | todo | todo |
 | `/setworldspawn`: rotation clamping, native spawn codec and exact feedback component | `commands::spawn::tests::spawn_rotation_persistence_and_feedback_match_java` | pass | todo |
 | `/spawnpoint`: live player capture and persisted forced respawn config | pending saved-player command parity scenario | todo | todo |
+| `/forceload`: limits, capture order, unchanged sets and exact success/failure feedback | `commands::forceload::tests::force_load_feedback_limits_and_mutation_sequence_match_java` (12 Java steps); live ticket adapter pending level merge | pass | todo |
