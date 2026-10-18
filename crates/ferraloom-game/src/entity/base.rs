@@ -326,6 +326,20 @@ impl EntityData {
     pub fn ticks_frozen(&self) -> i32 {
         self.entity_data.get(synched_data::TICKS_FROZEN).0
     }
+    pub fn set_ticks_frozen(&mut self, ticks: i32) {
+        self.entity_data
+            .set(synched_data::TICKS_FROZEN, VarInt(ticks));
+    }
+    pub const fn ticks_required_to_freeze(&self) -> i32 {
+        140
+    }
+    pub fn percent_frozen(&self) -> f32 {
+        self.ticks_frozen().min(self.ticks_required_to_freeze()) as f32
+            / self.ticks_required_to_freeze() as f32
+    }
+    pub fn is_fully_frozen(&self) -> bool {
+        self.ticks_frozen() >= self.ticks_required_to_freeze()
+    }
     /// Port of Entity#isInLava: the first base tick is deliberately excluded.
     pub fn is_in_lava(
         &self,

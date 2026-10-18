@@ -107,6 +107,7 @@ public final class EntityVectors {
         DamageVectors.run(new EntityFixture(r));
         NbtVectors.run(new EntityFixture(r));
         NameVectors.run(new EntityFixture(r));
+        FreezingVectors.run(new EntityFixture(r));
         ClimbVectors.run(new EntityFixture(r));
         PushingVectors.run(new EntityFixture(r));
         DimensionVectors.run(new EntityFixture(r));
@@ -165,9 +166,11 @@ public final class EntityVectors {
           var names=new ArrayList<String>();for(var block:BuiltInRegistries.BLOCK)if(block.defaultBlockState().is(tag))names.add(BuiltInRegistries.BLOCK.getKey(block).toString());
           System.out.println("block-tag\\t"+tag.location()+"\\t"+String.join(",",names));
         }
-        var entityTag=net.minecraft.tags.EntityTypeTags.NON_CONTROLLING_RIDER;var entityNames=new ArrayList<String>();
-        for(var type:BuiltInRegistries.ENTITY_TYPE)if(BuiltInRegistries.ENTITY_TYPE.wrapAsHolder(type).is(entityTag))entityNames.add(BuiltInRegistries.ENTITY_TYPE.getKey(type).toString());
-        System.out.println("entity-tag\\t"+entityTag.location()+"\\t"+String.join(",",entityNames));
+        for(var entityTag:List.of(net.minecraft.tags.EntityTypeTags.NON_CONTROLLING_RIDER,net.minecraft.tags.EntityTypeTags.FREEZE_IMMUNE_ENTITY_TYPES)){
+          var entityNames=new ArrayList<String>();
+          for(var type:BuiltInRegistries.ENTITY_TYPE)if(BuiltInRegistries.ENTITY_TYPE.wrapAsHolder(type).is(entityTag))entityNames.add(BuiltInRegistries.ENTITY_TYPE.getKey(type).toString());
+          System.out.println("entity-tag\\t"+entityTag.location()+"\\t"+String.join(",",entityNames));
+        }
         for(var tag:List.of(net.minecraft.tags.FluidTags.WATER,net.minecraft.tags.FluidTags.LAVA)){
           var names=new ArrayList<String>();for(var fluid:BuiltInRegistries.FLUID)if(fluid.is(tag))names.add(BuiltInRegistries.FLUID.getKey(fluid).toString());
           System.out.println("fluid-tag\\t"+tag.location()+"\\t"+String.join(",",names));

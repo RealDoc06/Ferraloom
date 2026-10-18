@@ -695,6 +695,7 @@ fn native_size_refresh_moves_nonplayers_out_of_blocks_and_preserves_player_posit
     check("player-growth", player, &level);
 }
 pub(super) fn tags(level: &mut Level) {
+    level.set_item_tags(level.context().generator.access().data().item_tags.clone());
     let entity_values = VECTORS
         .lines()
         .filter_map(|line| {

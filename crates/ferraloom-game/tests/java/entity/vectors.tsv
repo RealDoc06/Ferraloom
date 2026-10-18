@@ -352,6 +352,84 @@ entity-name	item	true	00000000-0000-0000-0000-000000000001	{"translate":"block.m
 entity-name	item-stack-custom	true	00000000-0000-0000-0000-000000000001	{"translate":"block.minecraft.stone"}	{"text":"","extra":[{"text":"<","bold":true},{"translate":"block.minecraft.stone"},{"text":">","italic":false}],"color":"red","hover_event":{"id":"minecraft:item","uuid":[0,0,0,1],"name":{"translate":"block.minecraft.stone"},"action":"show_entity"},"insertion":"00000000-0000-0000-0000-000000000001"}
 entity-name	item-custom	true	00000000-0000-0000-0000-000000000001	{"text":"named","extra":[{"text":"child","click_event":{"command":"/child","action":"suggest_command"}}],"bold":true,"click_event":{"command":"/root","action":"run_command"},"insertion":"custom"}	{"text":"","extra":[{"text":"<","bold":true},{"text":"named","extra":[{"text":"child","click_event":{"command":"/child","action":"suggest_command"}}],"bold":true,"click_event":{"command":"/root","action":"run_command"},"insertion":"custom"},{"text":">","italic":false}],"color":"red","hover_event":{"id":"minecraft:item","uuid":[0,0,0,1],"name":{"text":"named","extra":[{"text":"child","click_event":{"command":"/child","action":"suggest_command"}}],"bold":true,"click_event":{"command":"/root","action":"run_command"},"insertion":"custom"},"action":"show_entity"},"insertion":"00000000-0000-0000-0000-000000000001"}
 entity-name	item-zero	true	00000000-0000-0000-0000-000000000001	{"translate":"block.minecraft.air"}	{"text":"","extra":[{"text":"<","bold":true},{"translate":"block.minecraft.air"},{"text":">","italic":false}],"color":"red","hover_event":{"id":"minecraft:item","uuid":[0,0,0,1],"name":{"translate":"block.minecraft.air"},"action":"show_entity"},"insertion":"00000000-0000-0000-0000-000000000001"}
+freeze-counter	-2147483648	cb6a0ea1	false	140
+freeze-counter	-141	bf80ea0f	false	140
+freeze-counter	-1	bbea0ea1	false	140
+freeze-counter	0	0	false	140
+freeze-counter	1	3bea0ea1	false	140
+freeze-counter	70	3f000000	false	140
+freeze-counter	139	3f7e2be3	false	140
+freeze-counter	140	3f800000	true	140
+freeze-counter	141	3f800000	true	140
+freeze-counter	2147483647	3f800000	true	140
+freeze-armor	false	mainhand	1	true
+freeze-armor	false	mainhand	0	true
+freeze-armor	false	mainhand	-1	true
+freeze-armor	false	offhand	1	true
+freeze-armor	false	offhand	0	true
+freeze-armor	false	offhand	-1	true
+freeze-armor	false	feet	1	false
+freeze-armor	false	feet	0	true
+freeze-armor	false	feet	-1	true
+freeze-armor	false	legs	1	false
+freeze-armor	false	legs	0	true
+freeze-armor	false	legs	-1	true
+freeze-armor	false	chest	1	false
+freeze-armor	false	chest	0	true
+freeze-armor	false	chest	-1	true
+freeze-armor	false	head	1	false
+freeze-armor	false	head	0	true
+freeze-armor	false	head	-1	true
+freeze-armor	false	body	1	false
+freeze-armor	false	body	0	true
+freeze-armor	false	body	-1	true
+freeze-armor	false	saddle	1	true
+freeze-armor	false	saddle	0	true
+freeze-armor	false	saddle	-1	true
+freeze-armor	true	mainhand	1	false
+freeze-armor	true	mainhand	0	false
+freeze-armor	true	mainhand	-1	false
+freeze-armor	true	offhand	1	false
+freeze-armor	true	offhand	0	false
+freeze-armor	true	offhand	-1	false
+freeze-armor	true	feet	1	false
+freeze-armor	true	feet	0	false
+freeze-armor	true	feet	-1	false
+freeze-armor	true	legs	1	false
+freeze-armor	true	legs	0	false
+freeze-armor	true	legs	-1	false
+freeze-armor	true	chest	1	false
+freeze-armor	true	chest	0	false
+freeze-armor	true	chest	-1	false
+freeze-armor	true	head	1	false
+freeze-armor	true	head	0	false
+freeze-armor	true	head	-1	false
+freeze-armor	true	body	1	false
+freeze-armor	true	body	0	false
+freeze-armor	true	body	-1	false
+freeze-armor	true	saddle	1	false
+freeze-armor	true	saddle	0	false
+freeze-armor	true	saddle	-1	false
+freeze-frost	false	-2147483648	1	none	3fb99999a0000000
+freeze-frost	false	-141	1	none	3fb99999a0000000
+freeze-frost	false	-1	1	none	3fb99999a0000000
+freeze-frost	false	0	1	none	3fb99999a0000000
+freeze-frost	false	1	1	bf3767dce0000000	3fb98231c3200000
+freeze-frost	false	70	1	bf999999a0000000	3fb3333338000000
+freeze-frost	false	139	1	bfa96ac9e0000000	3fa9c86960000000
+freeze-frost	false	140	1	bfa99999a0000000	3fa99999a0000000
+freeze-frost	false	141	1	bfa99999a0000000	3fa99999a0000000
+freeze-frost	false	2147483647	1	bfa99999a0000000	3fa99999a0000000
+freeze-frost	true	-2147483648	1	none	3fb99999a0000000
+freeze-frost	true	-141	1	none	3fb99999a0000000
+freeze-frost	true	-1	1	none	3fb99999a0000000
+freeze-frost	true	0	1	none	3fb99999a0000000
+freeze-frost	true	1	1	none	3fb99999a0000000
+freeze-frost	true	70	1	none	3fb99999a0000000
+freeze-frost	true	139	1	none	3fb99999a0000000
+freeze-frost	true	140	1	none	3fb99999a0000000
+freeze-frost	true	141	1	none	3fb99999a0000000
+freeze-frost	true	2147483647	1	none	3fb99999a0000000
 living-climb	0	0	0	0	false	41a00000	false	true	none
 living-climb	1	7308	0	0	false	41a00000	true	false	8,64,8
 living-climb	2	10123	0	0	false	41a00000	true	false	8,64,8
@@ -905,6 +983,7 @@ block-tag	minecraft:inside_step_sound_blocks	minecraft:glow_lichen,minecraft:lil
 block-tag	minecraft:combination_step_sound_blocks	minecraft:snow,minecraft:resin_clump,minecraft:white_carpet,minecraft:orange_carpet,minecraft:magenta_carpet,minecraft:light_blue_carpet,minecraft:yellow_carpet,minecraft:lime_carpet,minecraft:pink_carpet,minecraft:gray_carpet,minecraft:light_gray_carpet,minecraft:cyan_carpet,minecraft:purple_carpet,minecraft:blue_carpet,minecraft:brown_carpet,minecraft:green_carpet,minecraft:red_carpet,minecraft:black_carpet,minecraft:warped_roots,minecraft:nether_sprouts,minecraft:crimson_roots,minecraft:moss_carpet,minecraft:pale_moss_carpet
 block-tag	minecraft:crystal_sound_blocks	minecraft:amethyst_block,minecraft:budding_amethyst
 entity-tag	minecraft:non_controlling_rider	minecraft:magma_cube,minecraft:slime,minecraft:sulfur_cube
+entity-tag	minecraft:freeze_immune_entity_types	minecraft:polar_bear,minecraft:snow_golem,minecraft:stray,minecraft:wither
 fluid-tag	minecraft:water	minecraft:flowing_water,minecraft:water
 fluid-tag	minecraft:lava	minecraft:flowing_lava,minecraft:lava
 move	obstacle-0	cow	1	4008000000000000,4050000000000000,4012000000000000	3ff8000000000000,0,0	false	false	0	400c666668000000,4050000000000000,4012000000000000	01000	0	8000000000000000,0,0

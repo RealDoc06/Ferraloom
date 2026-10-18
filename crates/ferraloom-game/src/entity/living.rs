@@ -8,6 +8,7 @@ use ferraloom_protocol::{codec::VarInt, component::ItemStack};
 use ferraloom_util::random::RandomSource;
 
 pub mod climbable;
+pub mod freezing;
 pub mod travel;
 
 /// Port of LivingEntity's canonical attributes, metadata, equipment and current

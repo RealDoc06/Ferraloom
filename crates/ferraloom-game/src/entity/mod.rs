@@ -447,8 +447,8 @@ pub trait Entity: Sync {
     ) -> Result<bool, LevelError> {
         Ok(false)
     }
-    fn can_freeze(&self, _entity: EntityRef, _level: &Level) -> Result<bool, LevelError> {
-        Ok(true)
+    fn can_freeze(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
+        living::freezing::entity_can_freeze(entity, level)
     }
     fn should_play_lava_hurt_sound(
         &self,

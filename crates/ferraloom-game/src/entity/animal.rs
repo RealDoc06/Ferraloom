@@ -69,6 +69,13 @@ impl Cow {
 /// Shared Cow dispatcher for the foundation's Entity/LivingEntity primitives.
 pub struct CowBehavior;
 impl Entity for CowBehavior {
+    fn can_freeze(
+        &self,
+        entity: super::EntityRef,
+        level: &crate::level::Level,
+    ) -> Result<bool, crate::level::LevelError> {
+        super::living::freezing::can_freeze(self, entity, level)
+    }
     fn is_alive(
         &self,
         entity: super::EntityRef,
