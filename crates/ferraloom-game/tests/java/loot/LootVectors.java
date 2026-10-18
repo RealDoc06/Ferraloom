@@ -113,6 +113,11 @@ public final class LootVectors {
         output.add("item_predicates",predicates);
         var modifiers=new JsonArray();
         var functionDefinitions=List.of(
+            "{\"type\":\"discard\"}",
+            "{\"type\":\"limit_count\",\"limit\":{\"min\":{\"type\":\"uniform\",\"min\":1,\"max\":5},\"max\":{\"type\":\"uniform\",\"min\":2,\"max\":6}}}",
+            "{\"type\":\"set_ominous_bottle_amplifier\",\"amplifier\":{\"type\":\"uniform\",\"min\":-3,\"max\":8}}",
+            "{\"type\":\"set_potion\",\"id\":\"healing\"}",
+            "{\"type\":\"set_instrument\",\"options\":[\"ponder_goat_horn\",\"sing_goat_horn\"]}",
             "{\"type\":\"sequence\",\"functions\":[{\"type\":\"set_custom_data\",\"tag\":\"{targets:[{keep:1},{keep:2},17],lists:[[1],{skip:1},[3]]}\"},{\"type\":\"copy_custom_data\",\"source\":\"block_entity\",\"ops\":[{\"source\":\"data.obj\",\"target\":\"targets[]\",\"op\":\"merge\"},{\"source\":\"data.values[]\",\"target\":\"lists[]\",\"op\":\"append\"}]}]}",
             "{\"type\":\"set_loot_table\",\"loot_table_id\":\"archaeology/desert_well\",\"seed\":9223372036854775808}",
             "{\"type\":\"set_components\",\"components\":{\"container\":[{\"slot\":0,\"item\":{\"id\":\"stone\",\"count\":65}}]}}",
