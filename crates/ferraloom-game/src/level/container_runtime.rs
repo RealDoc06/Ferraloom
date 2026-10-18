@@ -11,6 +11,17 @@ use crate::{
 use ferraloom_util::ChunkPos;
 use std::sync::Arc;
 impl Level {
+    pub fn with_loot_sources<R>(
+        &mut self,
+        operation: impl FnOnce(&mut LootRandomSources<'_>) -> R,
+    ) -> R {
+        let region = self.region_mut();
+        operation(&mut LootRandomSources {
+            world_seed: region.container_runtime.world_seed,
+            sequences: &mut region.container_runtime.sequences,
+            level_random: &mut region.random,
+        })
+    }
     pub fn container_runtime(&self) -> &ContainerRuntime {
         &self.region().container_runtime
     }

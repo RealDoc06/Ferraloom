@@ -354,7 +354,7 @@ impl AbstractContainerMenu {
                 } else if !ctx.player.inventory.add(
                     &mut replacement,
                     ctx.player.equipment,
-                    ctx.creative,
+                    ctx.infinite_materials,
                 ) && !replacement.is_empty()
                 {
                     ctx.drops.push(DroppedStack {
@@ -420,7 +420,7 @@ impl crate::crafting::RecipePlacementAccess for CraftingPlacement<'_, '_> {
                 &mut stack,
                 false,
                 self.ctx.player.equipment,
-                self.ctx.creative,
+                self.ctx.infinite_materials,
             ) {
                 if let crate::entity::player::inventory::InventoryEffect::Drop(stack) = effect {
                     self.ctx.drops.push(DroppedStack {

@@ -1,8 +1,8 @@
 # Running Ferraloom on Linux
 
 This is the first playable terrain slice for **Minecraft Java 26.3**, protocol
-777. It uses a single simulation region. Structures, carvers, features and mob
-spawning are not generated yet. Block interactions and the rest of vanilla
+777. It uses a single simulation region. Structures, terrain, carvers and biome features use the native chunk status graph.
+Initial mob spawning awaits NaturalSpawner. Block interactions and the rest of vanilla
 simulation are still being ported. This runtime joins players into the overworld;
 other dimensions, chunk eviction and full ticket propagation remain incomplete.
 Player movement currently covers ordinary terrain, without vehicle, pose or
@@ -21,6 +21,17 @@ activation. Drained generation callbacks do not imply live block-entity readines
 and required block-entity queries remain unsupported in both modes. Strict fails
 on any worldgen skip or pending activation. This temporary mode will be removed
 when the block families are ported.
+
+Generation uses the same policy. Strict fails the status step when a placed
+feature, structure piece or structure afterPlace callback requires unported behavior.
+Warn abandons only that unit, retaining partial writes and continuing to FULL.
+Each (unit, behavior) is logged once, and every abandonment increments
+the shared skip counter. Warn worlds therefore do not have vanilla generation
+parity. Lit proto mutation still needs the relight bridge; unsupported block-entity
+factories, UpgradeData and initial mob spawning remain pending. Generation jobs own their
+neighborhoods and integrate in request order. Overlapping feature jobs follow
+vanilla's X-major layer traversal; vanilla's concurrent overlapping writes and
+JVM identity-based cross-structure Beardifier iteration can themselves vary.
 
 Thunder strike targeting, lightning rods, difficulty and lightning/skeleton-trap
 spawns remain pending. Strict fails at the required target query after vanilla's

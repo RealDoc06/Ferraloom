@@ -98,6 +98,7 @@ public final class EntityVectors {
         SynchedDataVectors.run(new EntityFixture(r));
         AttributeVectors.run();
         LivingVectors.run(new EntityFixture(r));
+        TeleportVectors.run(new EntityFixture(r));
         DimensionVectors.run(new EntityFixture(r));
         PlayerTrackingVectors.run(new EntityFixture(r));
         WorldgenVectors.run(new EntityFixture(r));

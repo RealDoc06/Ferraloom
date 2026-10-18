@@ -152,3 +152,9 @@ against `FeatureFlags.VANILLA_SET` for every block and item. The dedicated serve
 currently advertises precisely that set. The generated const queries are named
 `is_enabled_in_vanilla` so a future experimental-feature runtime cannot mistake
 them for checks against an arbitrary live feature set.
+
+`ExtractBlockEntityTypes <output-json>` records valid blocks, OP-only NBT flags
+and whether each registered receiver implements `Nameable`. The last fact is
+checked against the actual factory receiver for every valid block, including
+aliases. It is independent of whether a receiver currently has a custom name;
+`CopyNameFunction` reads nullable `Nameable#getCustomName` at evaluation time.

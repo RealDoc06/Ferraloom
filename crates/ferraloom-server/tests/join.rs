@@ -1,6 +1,31 @@
 mod support;
 use anyhow::Result;
-use ferraloom_server::server::{MinecraftServer, ServerOptions};
+use ferraloom_server::server::{MinecraftServer, RunningServer, ServerOptions};
+
+async fn ferraloom_scenario(
+    server: RunningServer,
+    sample_periodic_time: bool,
+) -> Result<support::Outcome> {
+    match support::scenario(server.address, sample_periodic_time).await {
+        Ok(outcome) => {
+            server.wait().await?;
+            Ok(outcome)
+        }
+        Err(error) => {
+            let stopped = tokio::time::timeout(std::time::Duration::from_secs(60), async {
+                let _ = server.command("stop").await;
+                server.wait().await
+            })
+            .await;
+            match stopped {
+                Ok(Ok(())) => Err(error),
+                stopped => Err(error.context(format!(
+                    "Ferraloom stop/wait after failed join scenario:\n{stopped:?}"
+                ))),
+            }
+        }
+    }
+}
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn flat_world_boots_and_retains_generator_settings_on_reload() -> Result<()> {
@@ -65,7 +90,10 @@ async fn flat_world_boots_and_retains_generator_settings_on_reload() -> Result<(
         if iteration == 0 {
             // Existing saved dimensions, rather than changed properties, select
             // the generator on the second boot.
-            std::fs::write(&properties_path, &properties)?;
+            std::fs::write(
+                &properties_path,
+                format!("{properties}level-type=minecraft:debug_all_block_states\n"),
+            )?;
         }
     }
     Ok(())
@@ -75,24 +103,11 @@ async fn flat_world_boots_and_retains_generator_settings_on_reload() -> Result<(
 async fn offline_client_joins_walks_chats_and_saves() -> Result<()> {
     let root = tempfile::tempdir()?;
     support::properties(root.path())?;
-    // Keep Strict while grass random ticks await the plants landing on restart.
-    let properties_path = root.path().join("server.properties");
-    let properties = std::fs::read_to_string(&properties_path)?;
-    let config = serde_json::json!({
-        "layers": [{"height":4,"block":"minecraft:bedrock"}],
-        "biome":"minecraft:plains", "features":false, "lakes":false,
-        "structure_overrides":[]
-    });
-    std::fs::write(
-        &properties_path,
-        format!("{properties}level-type=flat\ngenerator-settings={config}\n"),
-    )?;
     let mut options = ServerOptions::new(root.path());
     options.console = false;
     options.port = Some(0);
     let server = MinecraftServer::start(options).await?;
-    let outcome = support::scenario(server.address).await?;
-    server.wait().await?;
+    let outcome = ferraloom_scenario(server, false).await?;
     assert!(outcome.chunks >= 9);
     assert!(outcome.unloaded > 0);
     support::verify_save(root.path(), outcome.position)?;
@@ -105,7 +120,7 @@ async fn offline_client_joins_walks_chats_and_saves() -> Result<()> {
 
 /// Java is confined to the explicit parity gate; ordinary tests remain Java-free.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-#[ignore = "requires JAVA_HOME and FERRALOOM_VANILLA_JAR; run on the builder"]
+#[ignore = "periodic SetTime must carry an empty clock map; command_runtime clock_packet(None) fills all clocks (clock owner: commands)"]
 async fn join_and_configuration_sequence_matches_vanilla() -> Result<()> {
     use std::{
         io::Write,
@@ -153,7 +168,7 @@ async fn join_and_configuration_sequence_matches_vanilla() -> Result<()> {
     })
     .await;
     ready?;
-    let vanilla_result = support::scenario(address).await;
+    let vanilla_result = support::scenario(address, true).await;
     if vanilla_result.is_err() {
         eprintln!(
             "Vanilla log: {}",
@@ -174,8 +189,7 @@ async fn join_and_configuration_sequence_matches_vanilla() -> Result<()> {
     options.console = false;
     options.port = Some(0);
     let server = MinecraftServer::start(options).await?;
-    let outcome = support::scenario(server.address).await?;
-    server.wait().await?;
+    let outcome = ferraloom_scenario(server, true).await?;
     support::verify_save(root.path(), outcome.position)?;
     for (name, sequence) in [
         ("Vanilla", &vanilla_outcome.sequence),
@@ -187,6 +201,21 @@ async fn join_and_configuration_sequence_matches_vanilla() -> Result<()> {
         );
     }
     assert_eq!(outcome.sequence, vanilla_outcome.sequence);
+    for (root, outcome) in [
+        (vanilla_root.path(), &vanilla_outcome),
+        (root.path(), &outcome),
+    ] {
+        let saved =
+            ferraloom_storage::LevelStorageAccess::open(root.join("world"))?.read_level_data()?;
+        let expected = ferraloom_protocol::play::clientbound::SetTime {
+            game_time: saved.data.get_long("Time").expect("saved overworld Time"),
+            clock_updates: Vec::new(),
+        };
+        assert_eq!(outcome.frozen_periodic_time.as_ref(), Some(&expected));
+        for time in outcome.time_updates.iter().skip(1) {
+            assert!(time.clock_updates.is_empty(), "periodic SetTime: {time:?}");
+        }
+    }
     struct VanillaGuard(std::process::Child);
     impl Drop for VanillaGuard {
         fn drop(&mut self) {
