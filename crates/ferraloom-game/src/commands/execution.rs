@@ -287,6 +287,115 @@ mod tests {
         assert_eq!(*results.lock().unwrap(), [(true, 7), (true, 7)]);
         assert!(context.append_forks(&mut vec![0], vec![1]).is_err());
     }
+    #[test]
+    fn quota_and_frame_discard_boundaries_match_java() {
+        #[derive(serde::Deserialize)]
+        struct Vector {
+            mode: String,
+            quota: i32,
+            output: Vec<i32>,
+            remaining: i32,
+            depth: usize,
+        }
+        fn add(context: &mut ExecutionContext<Vec<i32>>, frame: Frame, value: i32) {
+            context.queue_next(CommandQueueEntry::new(
+                frame,
+                move |next, _, output: &mut Vec<i32>| {
+                    output.push(value);
+                    next.increment_cost();
+                },
+            ));
+        }
+        let vectors: Vec<Vector> =
+            serde_json::from_str(include_str!("vanilla/execution-vectors.json")).unwrap();
+        for vector in vectors {
+            let mut context = ExecutionContext::<Vec<i32>>::new(vector.quota, 10);
+            let root = context.top_frame(CommandResultCallback::default());
+            match vector.mode.as_str() {
+                mode if mode.starts_with("quota:") => {
+                    add(&mut context, root.clone(), 1);
+                    add(&mut context, root, 2);
+                }
+                "insertion" => {
+                    context.queue_next(CommandQueueEntry::new(
+                        root.clone(),
+                        |next, frame, output: &mut Vec<i32>| {
+                            output.push(1);
+                            next.increment_cost();
+                            add(next, frame.clone(), 2);
+                            add(next, frame.clone(), 3);
+                        },
+                    ));
+                    add(&mut context, root, 4);
+                }
+                "discard-root" | "discard-new" => {
+                    let add_new = vector.mode == "discard-new";
+                    context.queue_next(CommandQueueEntry::new(
+                        root.clone(),
+                        move |next, frame, output: &mut Vec<i32>| {
+                            output.push(1);
+                            next.increment_cost();
+                            if add_new {
+                                add(next, frame.clone(), 2);
+                            }
+                            next.discard(frame);
+                        },
+                    ));
+                    add(&mut context, root, 9);
+                }
+                "discard-depth" => {
+                    let child = Frame {
+                        depth: 1,
+                        return_value_consumer: CommandResultCallback::default(),
+                        discard_all: false,
+                    };
+                    let grandchild = Frame {
+                        depth: 2,
+                        ..child.clone()
+                    };
+                    context.queue_next(CommandQueueEntry::new(
+                        child.clone(),
+                        |next, frame, output: &mut Vec<i32>| {
+                            output.push(1);
+                            next.increment_cost();
+                            next.discard(frame);
+                        },
+                    ));
+                    add(&mut context, grandchild.clone(), 2);
+                    add(&mut context, child, 3);
+                    add(&mut context, root, 4);
+                    add(&mut context, grandchild, 5);
+                }
+                "reentrant" => {
+                    let child = Frame {
+                        depth: 2,
+                        return_value_consumer: CommandResultCallback::default(),
+                        discard_all: false,
+                    };
+                    context.queue_next(CommandQueueEntry::new(
+                        child,
+                        |next, _, output: &mut Vec<i32>| {
+                            output.push(
+                                next.top_frame(CommandResultCallback::default()).depth as i32,
+                            );
+                            next.increment_cost();
+                        },
+                    ));
+                }
+                _ => unreachable!(),
+            }
+            let mut output = Vec::new();
+            context.run_command_queue(&mut output);
+            assert_eq!(output, vector.output, "{}", vector.mode);
+            assert_eq!(
+                context.remaining_quota(),
+                vector.remaining,
+                "{}",
+                vector.mode
+            );
+            assert_eq!(context.current_frame_depth, vector.depth, "{}", vector.mode);
+        }
+    }
 }
 
 #[cfg(test)]
