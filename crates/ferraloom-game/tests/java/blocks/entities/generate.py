@@ -20,6 +20,6 @@ fixture=classes/'NeighborFixture.java'
 fixture.write_text(fixture.read_text().replace('final class MutationFixture','class MutationFixture'))
 run([str(jdk/'javac'),'-cp',f'{classes}:{cp}','-d',str(classes),str(fixture),str(source/'BlockEntityFixture.java'),str(source/'BlockEntityVectors.java')])
 output=run([str(jdk/'java'),'-Xmx512m','-cp',f'{classes}:{cp}','BlockEntityVectors'])
-rows=[line for line in output.splitlines() if line.startswith(('registry\t','position\t','base-','default-save\t','filled-save\t','roundtrip\t','update-tag\t','update-packet\t','loot-save\t','loot-zero\t','ticker-phase\t','scatter\t','sign-edit\t','sign-edit-updates\t','sign-editor-tick\t','menu-broadcast-reads\t','sided-slots\t','sided-rule\t','cook-time\t','sign-facing\t','pop-resource-rng\t'))]
+rows=[line for line in output.splitlines() if line.startswith(('registry\t','position\t','base-','default-save\t','filled-save\t','roundtrip\t','update-tag\t','update-packet\t','loot-save\t','loot-zero\t','ticker-phase\t','scatter\t','sign-edit\t','sign-edit-updates\t','sign-editor-tick\t','menu-broadcast-reads\t','menu-transfer-source\t','sided-slots\t','sided-rule\t','cook-time\t','sign-facing\t','pop-resource-rng\t'))]
 (source/'vectors.tsv').write_text('\n'.join(rows)+'\n')
 print(f'{len(rows)} vanilla block-entity vectors')

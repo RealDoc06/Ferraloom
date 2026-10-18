@@ -98,6 +98,36 @@ class BlockEntityFixture extends MutationFixture {
     container.reads=0;menu.broadcastChanges();System.out.println("menu-broadcast-reads\tnormal\t"+container.reads);
     container.reads=0;menu.suppressRemoteUpdates();menu.broadcastChanges();System.out.println("menu-broadcast-reads\tsuppressed\t"+container.reads);
   }
+  static void menuTransferSources(RegistryAccess r)throws Exception{
+    var method=net.minecraft.world.inventory.AbstractContainerMenu.class.getDeclaredMethod("moveItemStackTo",net.minecraft.world.item.ItemStack.class,int.class,int.class,boolean.class);
+    method.setAccessible(true);
+    for(boolean replace:new boolean[]{false,true}){
+      var level=new BlockEntityFixture(r);var player=new SignPlayer(level,false);
+      var source=new net.minecraft.world.SimpleContainer(1);
+      source.setItem(0,new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.STONE,10));
+      var held=source.getItem(0);var events=new ArrayList<String>();
+      class ObservedContainer extends net.minecraft.world.SimpleContainer {
+        boolean observe;
+        ObservedContainer(){super(9);}
+        @Override public void setChanged(){
+          if(observe){
+            events.add(source.getItem(0).getItem().toString()+":"+source.getItem(0).getCount()+":"+held.getCount());
+            if(replace&&events.size()==1)source.setItem(0,new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.DIAMOND,7));
+          }
+          super.setChanged();
+        }
+      }
+      var target=new ObservedContainer();
+      target.setItem(0,new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.STONE,60));
+      target.setItem(1,new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.STONE,63));
+      var menu=new net.minecraft.world.inventory.ChestMenu(net.minecraft.world.inventory.MenuType.GENERIC_9x1,1,player.getInventory(),target,1);
+      target.observe=true;
+      method.invoke(menu,held,0,9,false);
+      if(held.getCount()!=0||events.size()!=5)throw new AssertionError("incomplete transfer");
+      if(replace&&(!source.getItem(0).is(net.minecraft.world.item.Items.DIAMOND)||source.getItem(0).getCount()!=7))throw new AssertionError("orphaned source redirected to replacement");
+      System.out.println("menu-transfer-source\t"+replace+"\t"+String.join(",",events)+"\t"+held.getCount()+"\t"+source.getItem(0).getItem()+":"+source.getItem(0).getCount());
+    }
+  }
   static void tickerPhases(RegistryAccess r){
     var level=new BlockEntityFixture(r);var events=new ArrayList<String>();
     class Ticker implements TickingBlockEntity {
