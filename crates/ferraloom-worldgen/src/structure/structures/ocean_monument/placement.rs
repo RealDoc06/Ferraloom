@@ -984,7 +984,7 @@ mod tests {
                         generator: &generator,
                         registry: &features,
                     },
-                    &building.graph,
+                    building.graph.as_ref().unwrap(),
                     bounds,
                 )
                 .unwrap();

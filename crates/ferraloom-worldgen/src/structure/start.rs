@@ -26,6 +26,7 @@ pub enum StructurePiece {
     WoodlandMansion(Box<super::structures::woodland_mansion::WoodlandMansionPiece>),
     OceanRuin(Box<super::structures::ocean_ruin::OceanRuinPiece>),
     Stronghold(super::structures::stronghold::StrongholdPiece),
+    OceanMonument(Box<super::structures::ocean_monument::MonumentBuilding>),
     NetherFortress(super::structures::nether_fortress::FortressPiece),
     Mineshaft(super::structures::mineshaft::MineshaftPiece),
     RuinedPortal(Box<super::structures::ruined_portal::RuinedPortalPiece>),
@@ -63,6 +64,7 @@ impl StructurePiece {
             Self::WoodlandMansion(p) => p.template.data.bounds,
             Self::OceanRuin(p) => p.template.data.bounds,
             Self::Stronghold(p) => p.data.bounds,
+            Self::OceanMonument(p) => p.data.bounds,
             Self::NetherFortress(p) => p.data.bounds,
             Self::Mineshaft(p) => p.data.bounds,
             Self::RuinedPortal(p) => p.template.data.bounds,
@@ -82,6 +84,7 @@ impl StructurePiece {
             Self::WoodlandMansion(p) => Ok(p.to_nbt()),
             Self::OceanRuin(p) => Ok(p.to_nbt()),
             Self::Stronghold(p) => Ok(p.to_nbt()),
+            Self::OceanMonument(p) => Ok(p.to_nbt()),
             Self::NetherFortress(p) => Ok(p.to_nbt()),
             Self::Mineshaft(p) => Ok(p.to_nbt()),
             Self::RuinedPortal(p) => Ok(p.to_nbt()),
@@ -212,6 +215,39 @@ impl StructureStart {
     }
     /// Current-version start codec. Old chunks pass through storage's data
     /// fixer before this call. Unknown structure ids are discarded like vanilla.
+    /// Port of StructureStart#loadStaticStart, including seed-dependent monument
+    /// reconstruction. Use this when restoring starts for generation/decoration.
+    pub fn load_from_nbt(
+        tag: &CompoundTag,
+        seed: i64,
+        settings: &super::pipeline::StructureRegistry,
+        templates: &StructureTemplateManager,
+        resources: &ResourceManager,
+        decode_feature: &mut impl FnMut(&serde_json::Value) -> Result<Arc<PlacedFeature>, Error>,
+    ) -> Result<Option<Self>, Error> {
+        let Some(mut start) = Self::from_nbt(tag, settings, templates, resources, decode_feature)?
+        else {
+            return Ok(None);
+        };
+        if start
+            .kind
+            .is_some_and(|kind| kind.name() == "minecraft:ocean_monument")
+            && let Some(first) = start.pieces.first()
+        {
+            let saved = super::piece::StructurePieceData::from_nbt(&first.to_nbt()?)?;
+            let building = super::structures::ocean_monument::MonumentBuilding::regenerate(
+                seed,
+                start.chunk,
+                &saved,
+            );
+            start.pieces = vec![StructurePiece::OceanMonument(Box::new(building))];
+            start.cached_bounds = OnceLock::new();
+        }
+        Ok(Some(start))
+    }
+    /// Decode the structure compound without seed-dependent reconstruction.
+    /// This codec preserves the persisted representation for storage round trips;
+    /// live restored starts must use load_from_nbt instead.
     pub fn from_nbt(
         tag: &CompoundTag,
         settings: &super::pipeline::StructureRegistry,
@@ -311,6 +347,13 @@ impl StructureStart {
                             super::structures::ocean_ruin::OceanRuinPiece::from_nbt(templates, tag)
                         {
                             pieces.push(StructurePiece::OceanRuin(Box::new(piece)));
+                        }
+                    }
+                    "minecraft:omb" => {
+                        if let Ok(piece) =
+                            super::structures::ocean_monument::MonumentBuilding::from_nbt(tag)
+                        {
+                            pieces.push(StructurePiece::OceanMonument(Box::new(piece)));
                         }
                     }
                     "minecraft:wmp" => {

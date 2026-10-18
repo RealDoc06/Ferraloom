@@ -408,7 +408,13 @@ impl MonumentBuilding {
         }
         for child in &self.children {
             if child.data.bounds.intersects(bounds) {
-                child.post_process(context, &self.graph, bounds)?;
+                child.post_process(
+                    context,
+                    self.graph
+                        .as_ref()
+                        .ok_or_else(|| Error("missing monument child graph".into()))?,
+                    bounds,
+                )?;
             }
         }
         Ok(())

@@ -24,6 +24,7 @@ enum StructureGenerator {
     Igloo,
     EndCity,
     WoodlandMansion,
+    OceanMonument,
     SwampHut,
     JungleTemple,
     NetherFortress,
@@ -78,6 +79,7 @@ impl StructureGenerators {
                     "minecraft:igloo" => StructureGenerator::Igloo,
                     "minecraft:end_city" => StructureGenerator::EndCity,
                     "minecraft:woodland_mansion" => StructureGenerator::WoodlandMansion,
+                    "minecraft:ocean_monument" => StructureGenerator::OceanMonument,
                     "minecraft:mineshaft" => StructureGenerator::Mineshaft(
                         super::structures::mineshaft::MineshaftType::decode(&resource.json()?)?,
                     ),
@@ -345,6 +347,69 @@ impl StructureGenerators {
                     references,
                     settings.terrain,
                     pieces,
+                ));
+            }
+            StructureGenerator::OceanMonument => {
+                use ferraloom_util::{
+                    Direction,
+                    random::{Algorithm, RandomSource, WorldgenRandom},
+                };
+                let [x, z] = context.chunk.map(|v| v.wrapping_mul(16).wrapping_add(9));
+                let sea = generator.sea_level();
+                let surrounding = generator
+                    .data()
+                    .biome_tags
+                    .get(&"minecraft:required_ocean_monument_surrounding".parse()?);
+                let mut surrounds = true;
+                for qz in ((z - 29) >> 2)..=((z + 29) >> 2) {
+                    for qx in ((x - 29) >> 2)..=((x + 29) >> 2) {
+                        for qy in ((sea - 29) >> 2)..=((sea + 29) >> 2) {
+                            let sampled = biome([qx, qy, qz])?;
+                            surrounds &= surrounding.is_some_and(|set| set.contains(&sampled));
+                        }
+                    }
+                }
+                if !surrounds {
+                    return Ok(StructureStart::invalid());
+                }
+                let [x, z] = [x - 1, z - 1];
+                let mut exists = false;
+                for qy in ((context.min_y - 1) >> 2)..=((context.min_y + context.height - 1) >> 2) {
+                    if valid(&biome([x >> 2, qy, z >> 2])?) {
+                        exists = true;
+                        break;
+                    }
+                }
+                if !exists {
+                    return Ok(StructureStart::invalid());
+                }
+                let y = generator
+                    .get_base_height(x, z, Heightmap::OceanFloorWg, context.min_y, context.height)?
+                    .wrapping_sub(1);
+                if !valid(&biome([x >> 2, y >> 2, z >> 2])?) {
+                    return Ok(StructureStart::invalid());
+                }
+                let mut random = WorldgenRandom::new(Algorithm::Legacy.new_instance(0));
+                random.set_large_feature_seed(context.seed, context.chunk[0], context.chunk[1]);
+                let direction = [
+                    Direction::North,
+                    Direction::East,
+                    Direction::South,
+                    Direction::West,
+                ][random.next_int_bound(4) as usize];
+                let piece = super::structures::ocean_monument::MonumentBuilding::new(
+                    &mut random,
+                    x - 8 - 29,
+                    z - 8 - 29,
+                    direction,
+                );
+                return Ok(StructureStart::new(
+                    id.clone(),
+                    settings.kind,
+                    context.chunk,
+                    references,
+                    settings.terrain,
+                    vec![StructurePiece::OceanMonument(Box::new(piece))],
                 ));
             }
             kind @ (StructureGenerator::EndCity | StructureGenerator::WoodlandMansion) => {

@@ -17,7 +17,10 @@ fn registered_structure_generation_matches_vanilla_with_biome_rejection() {
     // The Java harness supplies a controlled valid-biome predicate instead of
     // each structure's builtin biome set, isolating Structure#generate itself.
     for settings in registry.structures.values_mut() {
-        settings.biomes = vec!["minecraft:plains".parse().unwrap()];
+        settings.biomes = vec![
+            "minecraft:plains".parse().unwrap(),
+            "minecraft:deep_ocean".parse().unwrap(),
+        ];
     }
     let structures = StructureGenerators::load(&resources, registry, &mut |_| {
         Err(Error("no inline features".into()))
@@ -36,7 +39,9 @@ fn registered_structure_generation_matches_vanilla_with_biome_rejection() {
         let chunk = std::array::from_fn(|i| case["chunk"][i].as_i64().unwrap() as i32);
         let accept = case["accept"].as_bool().unwrap();
         let mut biome = |_quart| {
-            Ok(if accept {
+            Ok(if accept && case["id"] == "minecraft:monument" {
+                "minecraft:deep_ocean"
+            } else if accept {
                 "minecraft:plains"
             } else {
                 "minecraft:ocean"
@@ -109,8 +114,9 @@ fn registered_structure_generation_matches_vanilla_with_biome_rejection() {
             &ferraloom_nbt::parse_compound(case["nbt"].as_str().unwrap()).unwrap(),
             &label,
         );
-        let loaded = StructureStart::from_nbt(
+        let loaded = StructureStart::load_from_nbt(
             &start.to_nbt(chunk).unwrap(),
+            seed,
             &structures.registry,
             &templates,
             &resources,
@@ -188,7 +194,10 @@ fn oversized_datapack_shipwreck_heights_match_vanilla_asymmetric_corners() {
     let terrain = AsymmetricHeightTerrain(&flat);
     let mut registry = StructureRegistry::load(&resources, &noise.data).unwrap();
     for settings in registry.structures.values_mut() {
-        settings.biomes = vec!["minecraft:plains".parse().unwrap()];
+        settings.biomes = vec![
+            "minecraft:plains".parse().unwrap(),
+            "minecraft:deep_ocean".parse().unwrap(),
+        ];
     }
     let structures = StructureGenerators::load(&resources, registry, &mut |_| {
         Err(Error("no inline features".into()))

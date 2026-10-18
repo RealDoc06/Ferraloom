@@ -16,10 +16,43 @@ pub struct MonumentRoom {
 #[derive(Clone, Debug)]
 pub struct MonumentBuilding {
     pub data: StructurePieceData,
-    pub graph: RoomGraph,
+    pub graph: Option<RoomGraph>,
     pub children: Vec<MonumentRoom>,
 }
 impl MonumentBuilding {
+    pub fn to_nbt(&self) -> ferraloom_nbt::CompoundTag {
+        self.data
+            .to_nbt(&"minecraft:omb".parse().expect("piece id"))
+    }
+    /// The vanilla NBT constructor has no room graph or children. The structure
+    /// load path regenerates those using the world seed before decoration.
+    pub fn from_nbt(tag: &ferraloom_nbt::CompoundTag) -> Result<Self, crate::Error> {
+        Ok(Self {
+            data: StructurePieceData::from_nbt(tag)?,
+            graph: None,
+            children: Vec::new(),
+        })
+    }
+    /// Port of OceanMonumentStructure#regeneratePiecesAfterLoad, including the
+    /// discarded default-direction draw when a saved orientation is present.
+    pub fn regenerate(seed: i64, chunk: [i32; 2], saved: &StructurePieceData) -> Self {
+        use ferraloom_util::random::{Algorithm, WorldgenRandom};
+        let mut random = WorldgenRandom::new(Algorithm::Legacy.new_instance(0));
+        random.set_large_feature_seed(seed, chunk[0], chunk[1]);
+        let fallback = [
+            Direction::North,
+            Direction::East,
+            Direction::South,
+            Direction::West,
+        ][random.next_int_bound(4) as usize];
+        Self::new(
+            &mut random,
+            saved.bounds.min[0],
+            saved.bounds.min[2],
+            saved.orientation.unwrap_or(fallback),
+        )
+    }
+
     pub fn new(
         random: &mut impl RandomSource,
         west: i32,
@@ -73,7 +106,7 @@ impl MonumentBuilding {
         }
         Self {
             data,
-            graph,
+            graph: Some(graph),
             children,
         }
     }
@@ -132,20 +165,20 @@ mod tests {
                 case["next"].as_i64().unwrap() as i32,
                 "{label}"
             );
+            let graph = piece.graph.as_ref().unwrap();
             assert_eq!(
-                piece.graph.core,
+                graph.core,
                 case["core"].as_u64().unwrap() as usize,
                 "{label}"
             );
             assert_eq!(
-                piece.graph.rooms.iter().flatten().count(),
+                graph.rooms.iter().flatten().count(),
                 case["rooms"].as_array().unwrap().len(),
                 "{label}"
             );
             for expected in case["rooms"].as_array().unwrap() {
                 let index = expected["index"].as_i64().unwrap() as i32;
-                let room = piece
-                    .graph
+                let room = graph
                     .rooms
                     .iter()
                     .flatten()
@@ -173,7 +206,7 @@ mod tests {
                         "{label} room={index} face={face}"
                     );
                     assert_eq!(
-                        room.connections[face].map_or(-1, |id| piece.graph.room(id).index),
+                        room.connections[face].map_or(-1, |id| graph.room(id).index),
                         expected["connections"][face].as_i64().unwrap() as i32,
                         "{label} room={index} face={face}"
                     );
@@ -188,7 +221,7 @@ mod tests {
                     "{label} child={i}"
                 );
                 assert_eq!(
-                    child.room.map_or(-1, |id| piece.graph.room(id).index),
+                    child.room.map_or(-1, |id| graph.room(id).index),
                     expected["room"].as_i64().unwrap() as i32,
                     "{label} child={i}"
                 );
@@ -196,6 +229,65 @@ mod tests {
                     assert!(
                         matches!(child.kind,RoomKind::Simple{design:d}|RoomKind::Wing{design:d} if d==design.as_i64().unwrap() as i32),
                         "{label} child={i}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod reload_tests {
+    use super::*;
+    use crate::structure::{
+        pipeline::StructureRegistry,
+        start::{StructurePiece, StructureStart},
+        template::StructureTemplateManager,
+    };
+    use std::io::Read;
+    #[test]
+    fn monument_start_reload_rebuilds_children_with_saved_origin_orientation_and_world_seed() {
+        let (resources, generator) = crate::structure::processor::tests::generator();
+        let registry = StructureRegistry::load(&resources, &generator.data).unwrap();
+        let templates = StructureTemplateManager::load_all(&resources).unwrap();
+        let mut text = String::new();
+        flate2::read::GzDecoder::new(&include_bytes!("../testdata/monument_reload.json.gz")[..])
+            .read_to_string(&mut text)
+            .unwrap();
+        let cases: serde_json::Value = serde_json::from_str(&text).unwrap();
+        for case in cases.as_array().unwrap() {
+            let seed = case["seed"].as_i64().unwrap();
+            let tag = ferraloom_nbt::parse_compound(case["initial"].as_str().unwrap()).unwrap();
+            let start = StructureStart::load_from_nbt(
+                &tag,
+                seed,
+                &registry,
+                &templates,
+                &resources,
+                &mut |_| Err(crate::Error("no inline features".into())),
+            )
+            .unwrap()
+            .unwrap();
+            assert_eq!(
+                start.to_nbt(start.chunk).unwrap(),
+                ferraloom_nbt::parse_compound(case["loaded"].as_str().unwrap()).unwrap(),
+                "seed={seed} initial={tag:?}"
+            );
+            let StructurePiece::OceanMonument(building) = &start.pieces[0] else {
+                panic!("loaded monument");
+            };
+            let expected = case["children"].as_array().unwrap();
+            assert_eq!(building.children.len(), expected.len());
+            for (i, (child, expected)) in building.children.iter().zip(expected).enumerate() {
+                assert_eq!(
+                    child.data.to_nbt(&child.kind.piece_id().parse().unwrap()),
+                    ferraloom_nbt::parse_compound(expected["nbt"].as_str().unwrap()).unwrap(),
+                    "seed={seed} child={i}"
+                );
+                if let Some(design) = expected.get("design") {
+                    assert!(
+                        matches!(child.kind,RoomKind::Simple{design:d}|RoomKind::Wing{design:d} if d==design.as_i64().unwrap() as i32),
+                        "seed={seed} child={i}"
                     );
                 }
             }
