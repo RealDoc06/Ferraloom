@@ -14,6 +14,9 @@ statistic aliases (`mined:stone` becomes `minecraft.mined:minecraft.stone`).
 `CommandVectors` adds 120 real dispatcher cases. Each case compares exact
 feedback components, return values/errors and the ordered bytes emitted by real
 ServerScoreboard hooks through all five native scoreboard packet codecs.
+Only `/scoreboard players list <holder>` entry lines compare without ordering:
+vanilla keys those entries by Objective identity hash, which varies with JVM
+allocation. Their full components and header remain checked; packet order is exact.
 
 Separate fixtures invoke real PlayerList join synchronization (one ordered
 packet sequence), ReadOnlyScoreInfo formatting (four cases), and actual

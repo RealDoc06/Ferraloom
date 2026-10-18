@@ -258,6 +258,8 @@ impl Scoreboard {
     pub fn tracked_players(&self) -> impl Iterator<Item = &str> {
         self.scores.keys().rev().map(String::as_str)
     }
+    /// Scores for one holder. Native PlayerScores keys by Objective identity,
+    /// so their iteration order depends on the JVM allocation's identity hash.
     pub fn player_scores(&self, holder: &str) -> impl Iterator<Item = (&str, &Score)> {
         self.scores
             .get(&holder.to_owned())
