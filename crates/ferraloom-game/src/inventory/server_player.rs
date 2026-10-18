@@ -16,6 +16,26 @@ pub fn open_menu(
     provider: &dyn MenuProvider,
     level: &mut Level,
 ) -> Result<Vec<cb::Packet>> {
+    let roots = provider.block_entity_roots();
+    for (index, &handle) in roots.iter().enumerate() {
+        if let Err(error) = level.retain_block_entity(handle) {
+            for &retained in &roots[..index] {
+                level.release_block_entity(retained);
+            }
+            return Err(error.into());
+        }
+    }
+    let result = open_menu_inner(player, provider, level);
+    for &handle in roots {
+        level.release_block_entity(handle);
+    }
+    result
+}
+fn open_menu_inner(
+    player: EntityRef,
+    provider: &dyn MenuProvider,
+    level: &mut Level,
+) -> Result<Vec<cb::Packet>> {
     let mut packets = Vec::new();
     if level
         .entity::<ServerPlayer>(player)?
@@ -86,13 +106,26 @@ pub fn close_container(
     send_close: bool,
     disconnected: bool,
 ) -> Result<Vec<cb::Packet>> {
-    let mut packets = Vec::new();
     let bound = level
         .entity::<ServerPlayer>(player)?
         .menus
         .current()
         .block_entities
         .clone();
+    let result = close_container_inner(player, level, send_close, disconnected, &bound);
+    for handle in bound {
+        level.release_block_entity(handle);
+    }
+    result
+}
+fn close_container_inner(
+    player: EntityRef,
+    level: &mut Level,
+    send_close: bool,
+    disconnected: bool,
+    bound: &[crate::block::entity::BlockEntityRef],
+) -> Result<Vec<cb::Packet>> {
+    let mut packets = Vec::new();
     let effects = {
         let player = level.entity_mut::<ServerPlayer>(player)?;
         if send_close {
@@ -120,10 +153,8 @@ pub fn close_container(
             }
         }
     }
-    for handle in bound {
-        let result = crate::block::containers::menu::stop_open(handle, player, level);
-        level.release_block_entity(handle);
-        result?;
+    for &handle in bound {
+        crate::block::containers::menu::stop_open(handle, player, level)?;
     }
     Ok(packets)
 }

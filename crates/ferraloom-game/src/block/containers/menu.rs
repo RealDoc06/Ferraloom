@@ -25,6 +25,9 @@ pub struct ContainerMenuProvider {
     pub title: Component,
 }
 impl MenuProvider for ContainerMenuProvider {
+    fn block_entity_roots(&self) -> &[BlockEntityRef] {
+        &self.entities
+    }
     fn display_name(&self) -> Component {
         self.title.clone()
     }

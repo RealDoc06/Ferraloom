@@ -749,6 +749,9 @@ impl MenuSession {
 
 /// Port of MenuProvider. Block behavior calls this at its synchronous openMenu site.
 pub trait MenuProvider {
+    fn block_entity_roots(&self) -> &[crate::block::entity::BlockEntityRef] {
+        &[]
+    }
     fn display_name(&self) -> ferraloom_protocol::chat::Component;
     fn create_menu(
         &self,

@@ -9,7 +9,8 @@ use crate::{
     },
     level::Level,
 };
-use ferraloom_util::{Aabb, Vec3};
+#[cfg(test)]
+use ferraloom_util::Vec3;
 
 pub(crate) struct BlockMenuContainer<'a> {
     pub states: Vec<&'a mut BlockEntityState>,
@@ -67,39 +68,18 @@ impl Container for BlockMenuContainer<'_> {
     }
 }
 /// Port of Container#stillValidBlockEntity and Player#isWithinBlockInteractionRange.
-/// Current player gameplay supports the native base range and creative modifier.
+/// Uses the canonical live interaction-range attribute and exact generation.
 pub fn block_menu_still_valid(
     player: EntityRef,
     refs: &[BlockEntityRef],
     level: &Level,
 ) -> Result<bool> {
     let player = level.entity::<ServerPlayer>(player)?;
-    let base = &player.parent.parent;
-    let eye = Vec3::new(
-        base.position.x,
-        base.position.y + f64::from(base.eye_height),
-        base.position.z,
-    );
-    let range =
-        4.5 + if player.game_mode == GameType::Creative {
-            0.5
-        } else {
-            0.0
-        } + 4.0;
     for &handle in refs {
         if level.block_entity_ref(handle.pos)? != Some(handle) {
             return Ok(false);
         }
-        let pos = handle.pos;
-        let bounds = Aabb::new(
-            f64::from(pos.x),
-            f64::from(pos.y),
-            f64::from(pos.z),
-            f64::from(pos.x) + 1.0,
-            f64::from(pos.y) + 1.0,
-            f64::from(pos.z) + 1.0,
-        );
-        if bounds.distance_to_sqr(eye) >= range * range {
+        if !player.is_within_block_interaction_range(handle.pos, 4.0) {
             return Ok(false);
         }
     }
