@@ -20,7 +20,9 @@ public final class ExtractBlockMethods {
         "getBlockSupportShape", "isCollisionShapeFullBlock", "getVisualShape",
         "getFluidState", "getOcclusionShape", "getInteractionShape",
         "updateIndirectNeighbourShapes", "propagatesSkylightDown",
-        "useShapeForLightOcclusion", "isPathfindable", "getLightDampening"
+        "useShapeForLightOcclusion", "isPathfindable", "getLightDampening",
+        "getEntityInsideCollisionShape", "bounceOn", "triggerEvent",
+        "getAnalogOutputSignal", "hasAnalogOutputSignal"
     );
 
     private static Method baseMethod(String name) {

@@ -503,3 +503,14 @@ fn block_landing_properties_preserve_float_restitution_and_reduction() {
     assert_eq!(Block::STONE.data().fall_distance_reduction, 0.0);
     assert_eq!(Block::STONE.data().bounce_restitution, 0.0);
 }
+
+#[test]
+fn entity_inside_and_landing_virtual_owners_are_extracted_by_signature() {
+    use crate::{Block, BlockMethod};
+    assert!(!Block::OAK_LEAVES.overrides(BlockMethod::GetEntityInsideCollisionShape));
+    assert!(!Block::WATER.overrides(BlockMethod::EntityInside));
+    assert!(Block::POWDER_SNOW.overrides(BlockMethod::GetEntityInsideCollisionShape));
+    assert!(Block::TRIPWIRE.overrides(BlockMethod::GetEntityInsideCollisionShape));
+    assert!(Block::SLIME_BLOCK.overrides(BlockMethod::BounceOn));
+    assert!(!Block::HAY_BLOCK.overrides(BlockMethod::FallOn));
+}
