@@ -1,6 +1,4 @@
 //! Single-region MinecraftServer phase driver. Game state has one mutable owner.
-#[cfg(test)]
-use ferraloom_game::level::{distance_manager::FullChunkStatus, entity::Visibility};
 #[path = "command_level.rs"]
 mod command_level;
 #[path = "command_runtime.rs"]
@@ -3427,51 +3425,6 @@ fn initialize_live_level(
     command_level::load_command_tickets(level, world)?;
     Ok(())
 }
-#[cfg(test)]
-fn update_holder_full_status(
-    holder: &mut ferraloom_game::level::chunk_holder::ChunkHolder,
-    ready: &HashSet<ChunkPos>,
-    completed: &BTreeMap<i64, ChunkStatus>,
-    post_processed: &HashSet<ChunkPos>,
-    level: &mut ferraloom_game::level::Level,
-) -> Result<bool> {
-    let mut status = holder.update_full_status();
-    if let Some(promotion) = holder.pending_full_status() {
-        let future = ferraloom_game::level::generation::ChunkRangeFuture::for_full_status(
-            holder.position,
-            promotion.status,
-        );
-        if (promotion.status != FullChunkStatus::BlockTicking
-            || post_processed.contains(&holder.position))
-            && future.is_ready(|pos| {
-                if ready.contains(&pos) {
-                    Some(ChunkStatus::Full)
-                } else {
-                    completed
-                        .get(&pos.pack())
-                        .copied()
-                        .filter(|status| *status < ChunkStatus::Full)
-                }
-            })
-        {
-            status = holder.confirm_full_status(promotion);
-        }
-    }
-    if let Some(status) = status {
-        level
-            .update_entity_chunk_status(holder.position, full_status_visibility(status))
-            .map_err(game_error)?;
-    }
-    Ok(status == Some(FullChunkStatus::EntityTicking))
-}
-#[cfg(test)]
-fn full_status_visibility(status: FullChunkStatus) -> Visibility {
-    match status {
-        FullChunkStatus::Inaccessible => Visibility::Hidden,
-        FullChunkStatus::Full | FullChunkStatus::BlockTicking => Visibility::Tracked,
-        FullChunkStatus::EntityTicking => Visibility::Ticking,
-    }
-}
 fn game_error(error: LevelError) -> anyhow::Error {
     anyhow::anyhow!("{error:?}")
 }
@@ -3656,7 +3609,6 @@ fn load_conduct(root: &Path, properties: &ServerProperties) -> Result<BTreeMap<S
 #[cfg(test)]
 mod live_level_tests {
     use super::*;
-    use ferraloom_game::level::{Level, chunk_holder::ChunkHolder};
 
     #[test]
     fn abilities_packet_reads_mutable_instabuild_instead_of_mode() {
@@ -3676,73 +3628,5 @@ mod live_level_tests {
                 assert_eq!(packet.instabuild, value);
             }
         }
-    }
-
-    #[test]
-    fn entity_visibility_follows_confirmed_holder_ranges_and_immediate_demotions() {
-        let pos = ChunkPos::new(0, 0);
-        let mut holder = ChunkHolder::new(pos);
-        let mut ready = HashSet::new();
-
-        let mut completed = BTreeMap::new();
-        let mut level = Level::new(
-            Region::new(&BEHAVIORS),
-            ferraloom_game::level::LevelContext::fixture(0, 63),
-        );
-
-        holder.ticket_level = 33;
-        assert!(
-            !update_holder_full_status(&mut holder, &ready, &completed, &ready, &mut level)
-                .unwrap()
-        );
-        assert_eq!(level.entity_chunk_visibility(pos), Visibility::Hidden);
-        ready.insert(pos);
-        for x in -1..=1 {
-            for z in -1..=1 {
-                completed.insert(ChunkPos::new(x, z).pack(), ChunkStatus::InitializeLight);
-            }
-        }
-        update_holder_full_status(&mut holder, &ready, &completed, &ready, &mut level).unwrap();
-        assert_eq!(level.entity_chunk_visibility(pos), Visibility::Tracked);
-        holder.ticket_level = 32;
-        for x in -1..=1 {
-            for z in -1..=1 {
-                ready.insert(ChunkPos::new(x, z));
-            }
-        }
-        update_holder_full_status(&mut holder, &ready, &completed, &HashSet::new(), &mut level)
-            .unwrap();
-        assert_eq!(holder.confirmed_full_status(), FullChunkStatus::Full);
-        update_holder_full_status(&mut holder, &ready, &completed, &ready, &mut level).unwrap();
-        assert_eq!(
-            holder.confirmed_full_status(),
-            FullChunkStatus::BlockTicking
-        );
-        holder.ticket_level = 31;
-        for x in -1..=1 {
-            for z in -1..=1 {
-                ready.insert(ChunkPos::new(x, z));
-            }
-        }
-        assert!(
-            !update_holder_full_status(&mut holder, &ready, &completed, &ready, &mut level)
-                .unwrap()
-        );
-        assert_eq!(level.entity_chunk_visibility(pos), Visibility::Tracked);
-        for x in -2..=2 {
-            for z in -2..=2 {
-                ready.insert(ChunkPos::new(x, z));
-            }
-        }
-        assert!(
-            update_holder_full_status(&mut holder, &ready, &completed, &ready, &mut level).unwrap()
-        );
-        assert_eq!(level.entity_chunk_visibility(pos), Visibility::Ticking);
-        holder.ticket_level = 32;
-        update_holder_full_status(&mut holder, &ready, &completed, &ready, &mut level).unwrap();
-        assert_eq!(level.entity_chunk_visibility(pos), Visibility::Tracked);
-        holder.ticket_level = 45;
-        update_holder_full_status(&mut holder, &ready, &completed, &ready, &mut level).unwrap();
-        assert_eq!(level.entity_chunk_visibility(pos), Visibility::Hidden);
     }
 }

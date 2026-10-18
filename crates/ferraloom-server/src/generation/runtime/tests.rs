@@ -268,6 +268,7 @@ async fn resumed_full_promotion_keeps_the_successful_entity_post_load_checkpoint
     assert!(runtime.with_world(|world| world.full_promotions[&task].finalized));
     assert!(runtime.with_world(|world| world.light_ready.contains(&pos)));
     assert!(!runtime.with_world(|world| world.ready.contains(&pos)));
+    assert_entity_visibility_follows_holder_ranges(runtime, &live.level, pos);
     // A later task can demote the holder before its queued range confirmation
     // runs. Validate the cancellable token when publishing visibility.
     let (epoch, promotion) = runtime.with_chunks_mut(|chunks| {
@@ -308,4 +309,103 @@ async fn resumed_full_promotion_keeps_the_successful_entity_post_load_checkpoint
         .with_world_mut(World::begin_close_chunk_storage)
         .unwrap();
     close.await.unwrap();
+}
+
+/// Controlled neighboring status futures isolate the native range requirements;
+/// the center, driver, light publication and postLoad above use the real path.
+fn assert_entity_visibility_follows_holder_ranges(
+    runtime: &GenerationRuntime,
+    level: &Level,
+    pos: ChunkPos,
+) {
+    use ferraloom_game::level::entity::Visibility;
+    runtime.with_chunks_mut(|chunks| {
+        for x in pos.x - 2..=pos.x + 2 {
+            for z in pos.z - 2..=pos.z + 2 {
+                let neighbor = ChunkPos::new(x, z);
+                if neighbor != pos {
+                    chunks.ensure_holder(neighbor).generation = Default::default();
+                }
+            }
+        }
+    });
+    let set_ticket = |ticket_level| {
+        let publication = runtime.with_chunks_mut(|chunks| {
+            let holder = chunks.holders.get_mut(&pos.pack()).unwrap();
+            holder.ticket_level = ticket_level;
+            StatusPublication {
+                pos,
+                epoch: holder.epoch,
+                confirmed: holder.update_full_status(),
+                promotion: None,
+            }
+        });
+        runtime
+            .status_publications
+            .borrow_mut()
+            .push_back(publication);
+        runtime.publish_status_changes(level).unwrap();
+    };
+    let complete_neighbors = |radius, target: ChunkStatus| {
+        runtime.with_chunks_mut(|chunks| {
+            for x in pos.x - radius..=pos.x + radius {
+                for z in pos.z - radius..=pos.z + radius {
+                    let neighbor = ChunkPos::new(x, z);
+                    if neighbor == pos {
+                        continue;
+                    }
+                    let holder = chunks.ensure_holder(neighbor);
+                    let reference = ChunkReference {
+                        pos: neighbor,
+                        generation: holder.epoch,
+                        kind: if target == ChunkStatus::Full {
+                            ChunkKind::Full
+                        } else {
+                            ChunkKind::Proto
+                        },
+                    };
+                    for status in STATUSES[..=target as usize].iter().copied() {
+                        if holder.generation.acquire_status_bump(status) {
+                            holder.generation.complete(status, reference);
+                        }
+                    }
+                }
+            }
+        });
+    };
+    let confirmed =
+        || runtime.with_chunks(|chunks| chunks.holders[&pos.pack()].confirmed_full_status());
+
+    set_ticket(45);
+    set_ticket(33);
+    runtime.confirm_ready_ranges(level).unwrap();
+    assert_eq!(level.entity_chunk_visibility(pos), Visibility::Hidden);
+    complete_neighbors(1, ChunkStatus::InitializeLight);
+    runtime.confirm_ready_ranges(level).unwrap();
+    assert_eq!(level.entity_chunk_visibility(pos), Visibility::Tracked);
+    assert_eq!(confirmed(), FullChunkStatus::Full);
+
+    set_ticket(32);
+    complete_neighbors(1, ChunkStatus::Full);
+    runtime.confirm_ready_ranges(level).unwrap();
+    assert_eq!(confirmed(), FullChunkStatus::Full);
+    assert!(!level.chunk(pos).unwrap().ticking_ready());
+    runtime.with_world_mut(|world| {
+        world.ready.insert(pos);
+    });
+    runtime.confirm_ready_ranges(level).unwrap();
+    assert_eq!(confirmed(), FullChunkStatus::BlockTicking);
+    assert!(level.chunk(pos).unwrap().ticking_ready());
+
+    set_ticket(31);
+    runtime.confirm_ready_ranges(level).unwrap();
+    assert_eq!(level.entity_chunk_visibility(pos), Visibility::Tracked);
+    complete_neighbors(2, ChunkStatus::Full);
+    runtime.confirm_ready_ranges(level).unwrap();
+    assert_eq!(level.entity_chunk_visibility(pos), Visibility::Ticking);
+    set_ticket(32);
+    assert_eq!(level.entity_chunk_visibility(pos), Visibility::Tracked);
+    set_ticket(45);
+    assert_eq!(level.entity_chunk_visibility(pos), Visibility::Hidden);
+    assert!(!level.chunk(pos).unwrap().ticking_ready());
 }
