@@ -302,7 +302,7 @@ impl TriggerInstance {
                     };
                     let matcher = DataComponentMatchers {
                         exact: Vec::new(),
-                        partial: ferraloom_protocol::codec::BoundedList(vec![
+                        partial: ferraloom_protocol::component::BoundedList(vec![
                             ComponentPredicate::Potions(test.clone()),
                         ]),
                     };

@@ -79,7 +79,7 @@ fn partial_item(predicate: ComponentPredicate) -> ItemPredicate {
         count: Default::default(),
         components: DataComponentMatchers {
             exact: Vec::new(),
-            partial: ferraloom_protocol::codec::BoundedList(vec![predicate]),
+            partial: ferraloom_protocol::component::BoundedList(vec![predicate]),
         },
     })
 }
