@@ -30,6 +30,18 @@ impl MinecraftServer {
                 } else {
                     Vec::new()
                 };
+                // Native argument getter order: targets, writable target objective, then sources.
+                if command
+                    .literals
+                    .get(2)
+                    .is_some_and(|verb| verb == "operation")
+                {
+                    scoreboard::objective(
+                        self.scoreboard.scoreboard(),
+                        command.string("targetObjective").unwrap(),
+                        true,
+                    )?;
+                }
                 let sources = if command.argument("source").is_some() {
                     self.score_holders(command, "source", true)?
                 } else {
@@ -38,6 +50,13 @@ impl MinecraftServer {
                 scoreboard::execute(&mut self.scoreboard, command, &targets, &sources)
             }
             "team" => {
+                // TeamArgument#getTeam precedes either the member selector or getEntityOrException.
+                if command.literals[1] == "join" {
+                    let name = command.string("team").unwrap();
+                    if self.scoreboard.scoreboard().get_player_team(name).is_none() {
+                        return Err(exceptions::error("team.notFound", &[name.to_owned()]));
+                    }
+                }
                 let members =
                     if command.argument("members").is_some() {
                         self.score_holders(command, "members", true)?

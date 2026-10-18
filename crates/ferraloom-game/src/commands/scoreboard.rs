@@ -108,11 +108,7 @@ pub(super) fn checked<T>(value: crate::scoreboard::Result<T>) -> Result<T> {
         other => error("ferraloom.scoreboard.invalid", &[other.to_string()]),
     })
 }
-pub(super) fn objective<'a>(
-    board: &'a Scoreboard,
-    name: &str,
-    writable: bool,
-) -> Result<&'a Objective> {
+pub fn objective<'a>(board: &'a Scoreboard, name: &str, writable: bool) -> Result<&'a Objective> {
     let objective = board
         .get_objective(name)
         .ok_or_else(|| error("arguments.objective.notFound", &[name.to_owned()]))?;
