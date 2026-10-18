@@ -9,6 +9,7 @@
 //! ```
 
 mod block_methods;
+mod copper_chest_properties;
 pub mod dispenser_properties;
 mod environment_attributes;
 mod item_names;
@@ -16,6 +17,7 @@ pub mod note_properties;
 pub mod redstone_properties;
 mod sound_events;
 pub use block_methods::BlockMethod;
+pub use copper_chest_properties::CopperChestProperties;
 pub use environment_attributes::EnvironmentAttributeData;
 
 pub mod datapack;

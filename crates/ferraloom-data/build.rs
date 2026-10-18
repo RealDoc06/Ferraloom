@@ -5,6 +5,8 @@ mod block_drop_tables;
 mod block_methods;
 #[path = "build/center_support.rs"]
 mod center_support;
+#[path = "build/copper_chest_properties.rs"]
+mod copper_chest_properties;
 #[path = "build/environment_attributes.rs"]
 mod environment_attributes;
 #[path = "build/feature_requirements.rs"]
@@ -905,6 +907,17 @@ fn main() {
     }
     let mut out = String::from("// Generated from the pinned vanilla 26.3 server. Do not edit.\n");
     registries(&mut out, &registries_report);
+    let mut copper = String::new();
+    copper_chest_properties::generate(
+        &mut copper,
+        &load(root, "copper_chest_properties"),
+        block_report.as_object().unwrap().len(),
+    );
+    std::fs::write(
+        Path::new(&std::env::var_os("OUT_DIR").unwrap()).join("copper_chest_properties.rs"),
+        copper,
+    )
+    .unwrap();
     let fluid_random_ticking = load(root, "fluid_random_ticking");
     let fluid_random_ticking = fluid_random_ticking
         .as_array()
