@@ -104,7 +104,11 @@ copied into that universe, excluding `session.lock`; symlinks are rejected.
 loopback, offline login, port and world directory cannot be overridden.
 Unsupported in-process presets, game rules and `Regions::On` fail explicitly.
 `ferraloom_binary` uses an external binary with `--regions off|on` instead;
-that binary is responsible for supporting the selected options. Vanilla launch
+that binary is responsible for supporting the selected options. The launcher has
+an explicit one-line insertion point for mandatory `--unported-behavior strict`
+once the level-core flag lands; enable it together with that integration so a
+parity binary can never default to warning and skipping unported behavior.
+Vanilla launch
 uses `JAVA_HOME` and `FERRALOOM_VANILLA_JAR`, or explicit java/jar paths. Its output
 is included in scenario errors. External children are killed if a watchdog fires.
 
