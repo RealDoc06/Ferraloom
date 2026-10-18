@@ -107,7 +107,7 @@ pub struct EntityData {
     pub has_visual_fire: bool,
     pub last_known_speed: Vec3,
     pub last_known_position: Option<Vec3>,
-    pub in_block_state: Option<BlockState>,
+    pub in_block_state: Cell<Option<BlockState>>,
     pub movement_this_tick: VecDeque<Movement>,
     pub final_movements_this_tick: Vec<Movement>,
     pub inside_effect_collector: super::inside_block::StepBasedCollector,
@@ -212,7 +212,7 @@ impl EntityData {
             has_visual_fire: false,
             last_known_speed: Vec3::ZERO,
             last_known_position: None,
-            in_block_state: None,
+            in_block_state: Cell::new(None),
             movement_this_tick: VecDeque::with_capacity(100),
             final_movements_this_tick: Vec::new(),
             inside_effect_collector: super::inside_block::StepBasedCollector::default(),
@@ -228,7 +228,7 @@ impl EntityData {
             let block = BlockPos::new(mth::floor(pos.x), mth::floor(pos.y), mth::floor(pos.z));
             if block != self.block_position {
                 self.block_position = block;
-                self.in_block_state = None;
+                self.in_block_state.set(None);
                 self.chunk_position = ChunkPos::containing(block);
             }
         }
@@ -250,6 +250,19 @@ impl EntityData {
     }
     pub fn set_bounding_box(&mut self, bb: Aabb) {
         self.bounding_box = bb;
+    }
+    /// Port of Entity#getInBlockState. The cache belongs to this entity and is
+    /// invalidated on block-position changes and at the native base-tick point.
+    pub fn in_block_state(
+        &self,
+        level: &crate::level::Level,
+    ) -> Result<BlockState, crate::level::LevelError> {
+        if let Some(state) = self.in_block_state.get() {
+            return Ok(state);
+        }
+        let state = level.get_block_state(self.block_position)?;
+        self.in_block_state.set(Some(state));
+        Ok(state)
     }
     /// Port of Entity#moveRelative. Input acceleration does not mark needsSync.
     pub fn move_relative(&mut self, speed: f32, input: Vec3) {

@@ -7,6 +7,7 @@ use ferraloom_nbt::{CompoundTag, Tag};
 use ferraloom_protocol::{codec::VarInt, component::ItemStack};
 use ferraloom_util::random::RandomSource;
 
+pub mod climbable;
 pub mod travel;
 
 /// Port of LivingEntity's canonical attributes, metadata, equipment and current
@@ -24,7 +25,7 @@ pub struct LivingEntity {
     pub zza: f32,
     pub no_jump_delay: i32,
     pub speed: f32,
-    pub last_climbable_pos: Option<ferraloom_util::BlockPos>,
+    pub last_climbable_pos: std::cell::Cell<Option<ferraloom_util::BlockPos>>,
     pub y_head_rot: f32,
     pub old_y_head_rot: f32,
     pub y_body_rot: f32,
@@ -58,7 +59,7 @@ impl LivingEntity {
             zza: 0.0,
             no_jump_delay: 0,
             speed: 0.0,
-            last_climbable_pos: None,
+            last_climbable_pos: std::cell::Cell::new(None),
             y_head_rot: 0.0,
             old_y_head_rot: 0.0,
             y_body_rot: 0.0,

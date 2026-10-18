@@ -39,7 +39,7 @@ Includes every entity type, concrete goal implementation (including nested goals
 | entities.movement.gravity-drag | Port input acceleration, ground/air friction arithmetic and fluid-falling adjustment; complete gravity, travel dispatch and terminal updates next | `LivingEntity#travel; Entity#moveRelative` | `entity::living::travel::tests` (35 native arithmetic vectors) | pass | partial |
 | entities.movement.portal-cooldown | Tick portal processing and portal cooldown without repeated transfers | `Entity; PortalProcessor` | | - | todo |
 | entities.movement.fall-damage | Track fall distance and reset it on qualifying landing, fluid and movement conditions | `Entity#checkFallDamage; LivingEntity#causeFallDamage` | `entity::tests::vanilla_entity_move_positions_flags_fall_distance_and_velocity_bits` | - | partial |
-| entities.movement.push-cramming | Push overlapping entities and apply entity-cramming damage rules | `LivingEntity#pushEntities` | | - | todo |
+| entities.movement.push-cramming | Port climbing-dependent pushability and current cramming rule input; pair pushing, team selection and cramming damage follow | `LivingEntity#onClimbable; LivingEntity#isPushable; LivingEntity#pushEntities` | `entity::living::climbable::tests` (13 native climb/cache cases) | pass | partial |
 | entities.movement.leash | Tick leash slack, pulling, snapping and cross-entity leash state | `Leashable` | | - | todo |
 | entities.ai.goal-priority | Stop invalid goals and arbitrate conflicting flags by priority and interruptibility | `GoalSelector#tick` | | - | todo |
 | entities.ai.brain-memory | Expire timed memories and enforce behavior memory preconditions | `Brain#tick; ExpirableValue; Behavior` | | - | todo |

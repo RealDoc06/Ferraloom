@@ -610,6 +610,13 @@ impl crate::entity::Entity for PlayerBehavior {
     ) -> Result<crate::entity::EntityDimensions, LevelError> {
         Ok(Avatar::default_dimensions(pose))
     }
+    fn is_pushable(
+        &self,
+        entity: crate::entity::EntityRef,
+        level: &crate::level::Level,
+    ) -> Result<bool, crate::level::LevelError> {
+        crate::entity::living::climbable::is_pushable(self, entity, level)
+    }
     fn passenger_riding_position(
         &self,
         entity: crate::entity::EntityRef,

@@ -103,6 +103,7 @@ public final class EntityVectors {
         AttributeVectors.run();
         LivingVectors.run(new EntityFixture(r));
         TravelVectors.run(new EntityFixture(r));
+        ClimbVectors.run(new EntityFixture(r));
         DimensionVectors.run(new EntityFixture(r));
         PlayerTrackingVectors.run(new EntityFixture(r));
         WorldgenVectors.run(new EntityFixture(r));
@@ -155,7 +156,7 @@ public final class EntityVectors {
           var contacts=new ArrayList<String>();BlockGetter.forEachBlockIntersectedBetween(start,end,box,(pos,step)->{contacts.add(pos.getX()+","+pos.getY()+","+pos.getZ()+","+step);return true;});
           System.out.println("trace\\t"+(traceIndex++)+"\\t"+vec(start)+"\\t"+vec(end)+"\\t"+String.join(";",contacts));
         }
-        for(var tag:List.of(net.minecraft.tags.BlockTags.FENCES,net.minecraft.tags.BlockTags.WALLS,net.minecraft.tags.BlockTags.CLIMBABLE,net.minecraft.tags.BlockTags.SUPPRESSES_BOUNCE,net.minecraft.tags.BlockTags.FALL_DAMAGE_RESETTING,net.minecraft.tags.BlockTags.BLOCKS_FLUID_FLOW,net.minecraft.tags.BlockTags.FIRE,net.minecraft.tags.BlockTags.ANVIL,net.minecraft.tags.BlockTags.INSIDE_STEP_SOUND_BLOCKS,net.minecraft.tags.BlockTags.COMBINATION_STEP_SOUND_BLOCKS,net.minecraft.tags.BlockTags.CRYSTAL_SOUND_BLOCKS)){
+        for(var tag:List.of(net.minecraft.tags.BlockTags.FENCES,net.minecraft.tags.BlockTags.WALLS,net.minecraft.tags.BlockTags.CLIMBABLE,net.minecraft.tags.BlockTags.CAN_GLIDE_THROUGH,net.minecraft.tags.BlockTags.SUPPRESSES_BOUNCE,net.minecraft.tags.BlockTags.FALL_DAMAGE_RESETTING,net.minecraft.tags.BlockTags.BLOCKS_FLUID_FLOW,net.minecraft.tags.BlockTags.FIRE,net.minecraft.tags.BlockTags.ANVIL,net.minecraft.tags.BlockTags.INSIDE_STEP_SOUND_BLOCKS,net.minecraft.tags.BlockTags.COMBINATION_STEP_SOUND_BLOCKS,net.minecraft.tags.BlockTags.CRYSTAL_SOUND_BLOCKS)){
           var names=new ArrayList<String>();for(var block:BuiltInRegistries.BLOCK)if(block.defaultBlockState().is(tag))names.add(BuiltInRegistries.BLOCK.getKey(block).toString());
           System.out.println("block-tag\\t"+tag.location()+"\\t"+String.join(",",names));
         }

@@ -77,6 +77,13 @@ impl Entity for CowBehavior {
         let cow = level.entity::<Cow>(entity)?;
         Ok(!cow.as_living().removed && cow.as_living().health() > 0.0)
     }
+    fn is_pushable(
+        &self,
+        entity: crate::entity::EntityRef,
+        level: &crate::level::Level,
+    ) -> Result<bool, crate::level::LevelError> {
+        crate::entity::living::climbable::is_pushable(self, entity, level)
+    }
     fn controlling_passenger(
         &self,
         entity: super::EntityRef,

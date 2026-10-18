@@ -236,7 +236,7 @@ pub fn base_tick<E: super::Entity + ?Sized>(
         let previous = base.last_known_position.unwrap_or(base.position);
         base.last_known_speed = base.position - previous;
         base.last_known_position = Some(base.position);
-        base.in_block_state = None;
+        base.in_block_state.set(None);
     }
     let vehicle = level.entity::<EntityData>(entity)?.vehicle.get();
     if let Some(vehicle) = vehicle

@@ -305,6 +305,9 @@ pub trait Entity: Sync {
     fn is_spectator(&self, _entity: EntityRef, _level: &Level) -> Result<bool, LevelError> {
         Ok(false)
     }
+    fn is_pushable(&self, _entity: EntityRef, _level: &Level) -> Result<bool, LevelError> {
+        Ok(false)
+    }
     fn controlling_passenger(
         &self,
         _entity: EntityRef,
