@@ -35,6 +35,7 @@ fn native_jump_power_ground_sync_and_liquid_impulse_preserve_bits() {
     {
         let row: Vec<_> = line.split('\t').collect();
         let mut level = crate::entity::tests::level(true);
+        level.install_shared(Box::default());
         level
             .set_block_state(
                 BlockPos::new(8, 63, 8),

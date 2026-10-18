@@ -1376,6 +1376,7 @@ fn vanilla_player_dropped_item_position_and_velocity_bits() {
     for row in VECTORS.lines().filter(|s| s.starts_with("drop\t")) {
         let f: Vec<_> = row.split('\t').collect();
         let mut level = level(false);
+        level.install_shared(Box::default());
         let player_id = level.next_entity_ref();
         let mut player = player::ServerPlayer::new(
             Uuid::new(1, 2),

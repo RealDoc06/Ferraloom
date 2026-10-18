@@ -24,13 +24,6 @@ pub enum EntityEffect {
         item: ferraloom_data::Item,
         count: i32,
     },
-    ItemDrop {
-        player: EntityRef,
-        entity: EntityRef,
-        item: ferraloom_data::Item,
-        count: i32,
-        thrown_from_hand: bool,
-    },
     /// PrimedTnt#explode's synchronous explosion call. The explosion port owns
     /// damage and block destruction; used_portal selects its native calculator.
     Explosion {

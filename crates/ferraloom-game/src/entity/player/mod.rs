@@ -174,6 +174,12 @@ impl ServerPlayer {
         }
     }
 
+    /// Port of server-side Player#causeFoodExhaustion, using the independent ability.
+    pub fn cause_food_exhaustion(&mut self, amount: f32) {
+        if !self.abilities.invulnerable {
+            self.food_data.add_exhaustion(amount);
+        }
+    }
     /// Port of Player#preventsBlockDrops, independent of the game mode.
     pub fn prevents_block_drops(&self) -> bool {
         self.abilities.instabuild
@@ -688,7 +694,7 @@ fn colliding_with_anything_new(
         .any(|shape| !shapes::join_is_not_empty(shape, &old_shape, BooleanOp::And)))
 }
 /// Dispatch the canonical jump body used by packet-driven ground departure.
-/// ServerPlayer's stat/exhaustion producer remains pending its shared hooks.
+/// The ServerPlayer override synchronously awards its stat and exhaustion.
 fn jump_from_ground(entity: crate::entity::EntityRef, level: &mut Level) -> Result<(), LevelError> {
     level
         .entity_behavior(entity)?
@@ -1032,6 +1038,20 @@ impl crate::entity::Entity for PlayerBehavior {
         } else {
             crate::entity::living::block_speed_factor(entity, level)
         }
+    }
+    /// Port of ServerPlayer#jumpFromGround, retaining virtual parent calls.
+    fn jump_from_ground(&self, entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
+        crate::entity::living::jump::jump_from_ground(self, entity, level)?;
+        award_stat(
+            entity,
+            crate::stats::Stat::Custom(crate::stats::custom::JUMP),
+            1,
+            level,
+        )?;
+        let player = level.entity_mut::<ServerPlayer>(entity)?;
+        let exhaustion = if player.shared_flag(3) { 0.2 } else { 0.05 };
+        player.cause_food_exhaustion(exhaustion);
+        Ok(())
     }
     fn ignite_for_ticks(
         &self,

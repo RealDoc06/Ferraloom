@@ -1071,6 +1071,22 @@ living-jump	cow	20	1	3eb0c6f7a0b5ed8d	3f800000	2	443a4000	true	8000000000000000,
 living-jump	cow	21	25173	3ee4f8b588e368f1	3f000000	0	44439000	false	8000000000000000,bfb47ae147ae147b,3fc0000000000000	3dccce1d	3dcccf6c	8000000000000000,3fb999ed80000000,3fc0000000000000	true	0,3fcc28f5c28f5c28,3fc0000000000000
 living-jump	cow	22	1	3ee4f8b580000001	bf800000	1	444ce000	true	8000000000000000,bfb47ae147ae147b,3fc0000000000000	3e4cca2e	3e4ccf6c	bfc93fc3e6666667,3fc999ed80000000,3fb78d361999999a	true	0,3fcc28f5c28f5c28,3fc0000000000000
 living-jump	cow	23	1	3ff4000000000000	0	255	44563000	false	8000000000000000,bfb47ae147ae147b,3fc0000000000000	41cccccd	41d6cccd	8000000000000000,403ad999a0000000,3fc0000000000000	true	0,3fcc28f5c28f5c28,3fc0000000000000
+server-jump	0	false	false	0	3f9eb851eb851eb8,bfb999999999999a,3fb1eb851eb851ec	1	20,40a00000,3d4ccccd,0
+server-jump	0	false	true	3fdae147ae147ae1	bfb74f7951eb851f,3fdae147a0000000,3fcd567f75c28f5d	1	20,40a00000,3e4ccccd,0
+server-jump	0	true	false	0	3f9eb851eb851eb8,bfb999999999999a,3fb1eb851eb851ec	1	20,40a00000,0,0
+server-jump	0	true	true	3fdae147ae147ae1	bfb74f7951eb851f,3fdae147a0000000,3fcd567f75c28f5d	1	20,40a00000,0,0
+server-jump	1	false	false	0	3f9eb851eb851eb8,bfb999999999999a,3fb1eb851eb851ec	1	20,40a00000,3d4ccccd,0
+server-jump	1	false	true	3fdae147ae147ae1	bfb74f7951eb851f,3fdae147a0000000,3fcd567f75c28f5d	1	20,40a00000,3e4ccccd,0
+server-jump	1	true	false	0	3f9eb851eb851eb8,bfb999999999999a,3fb1eb851eb851ec	1	20,40a00000,0,0
+server-jump	1	true	true	3fdae147ae147ae1	bfb74f7951eb851f,3fdae147a0000000,3fcd567f75c28f5d	1	20,40a00000,0,0
+server-jump	2	false	false	0	3f9eb851eb851eb8,bfb999999999999a,3fb1eb851eb851ec	1	20,40a00000,3d4ccccd,0
+server-jump	2	false	true	3fdae147ae147ae1	bfb74f7951eb851f,3fdae147a0000000,3fcd567f75c28f5d	1	20,40a00000,3e4ccccd,0
+server-jump	2	true	false	0	3f9eb851eb851eb8,bfb999999999999a,3fb1eb851eb851ec	1	20,40a00000,0,0
+server-jump	2	true	true	3fdae147ae147ae1	bfb74f7951eb851f,3fdae147a0000000,3fcd567f75c28f5d	1	20,40a00000,0,0
+server-jump	3	false	false	0	3f9eb851eb851eb8,bfb999999999999a,3fb1eb851eb851ec	1	20,40a00000,3d4ccccd,0
+server-jump	3	false	true	3fdae147ae147ae1	bfb74f7951eb851f,3fdae147a0000000,3fcd567f75c28f5d	1	20,40a00000,3e4ccccd,0
+server-jump	3	true	false	0	3f9eb851eb851eb8,bfb999999999999a,3fb1eb851eb851ec	1	20,40a00000,0,0
+server-jump	3	true	true	3fdae147ae147ae1	bfb74f7951eb851f,3fdae147a0000000,3fcd567f75c28f5d	1	20,40a00000,0,0
 item-inventory-tick-override	minecraft:compass	CompassItem#inventoryTick
 item-inventory-tick-override	minecraft:filled_map	MapItem#inventoryTick
 item-inventory-tick-override	minecraft:ocean_monument_map	MapItem#inventoryTick
