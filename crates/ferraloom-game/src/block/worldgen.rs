@@ -19,6 +19,82 @@ fn result<T>(value: Result<T, LevelError>) -> Result<T, Error> {
     value.map_err(|error| Error(format!("game block behavior: {error:?}")))
 }
 impl WorldgenBlockBehavior for GameWorldgenBlockBehavior {
+    fn vine_acceptable_neighbor(
+        &self,
+        region: &WorldGenRegion<'_>,
+        p: [i32; 3],
+        direction: Direction,
+    ) -> Result<bool, Error> {
+        result(super::plants::vine_acceptable_neighbor(
+            &LevelReaderRef::Worldgen(region),
+            pos(p),
+            direction,
+        ))
+    }
+    fn place_double_plant(
+        &self,
+        region: &mut WorldGenRegion<'_>,
+        state: BlockState,
+        p: [i32; 3],
+        flags: u32,
+    ) -> Result<(), Error> {
+        result(super::plants::place_double_plant(
+            &mut LevelAccessRef::Worldgen(region),
+            state,
+            pos(p),
+            super::UpdateFlags(flags),
+        ))
+    }
+    fn place_mossy_carpet(
+        &self,
+        region: &mut WorldGenRegion<'_>,
+        p: [i32; 3],
+        flags: u32,
+    ) -> Result<(), Error> {
+        result(super::plants::place_mossy_carpet(
+            &mut LevelAccessRef::Worldgen(region),
+            pos(p),
+            super::UpdateFlags(flags),
+        ))
+    }
+    fn multiface_state_for_placement(
+        &self,
+        region: &WorldGenRegion<'_>,
+        block: ferraloom_data::Block,
+        old: BlockState,
+        p: [i32; 3],
+        face: Direction,
+    ) -> Result<Option<BlockState>, Error> {
+        result(super::plants::multiface::state_for_placement(
+            &LevelReaderRef::Worldgen(region),
+            block,
+            old,
+            pos(p),
+            face,
+        ))
+    }
+    #[allow(clippy::too_many_arguments)]
+    fn multiface_spread(
+        &self,
+        region: &mut WorldGenRegion<'_>,
+        state: BlockState,
+        p: [i32; 3],
+        face: Direction,
+        random: &mut ferraloom_util::random::WorldgenRandom,
+        post: bool,
+    ) -> Result<bool, Error> {
+        result(
+            super::plants::multiface_spreader::spread_from_face_toward_random_direction(
+                &mut LevelAccessRef::Worldgen(region),
+                state,
+                pos(p),
+                face,
+                random,
+                post,
+            ),
+        )
+        .map(|value| value.is_some())
+    }
     fn post_process_pos(
         &self,
         state: BlockState,

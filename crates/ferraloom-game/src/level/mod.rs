@@ -120,6 +120,9 @@ pub struct Region {
     block_ticking_chunks: HashSet<ChunkPos>,
     entity_ticking_chunks: HashSet<ChunkPos>,
     neighbor_updater: redstone::CollectingNeighborUpdater,
+    // The family owner replaces its pending state/registration stub together.
+    #[allow(dead_code)]
+    pub(crate) redstone: crate::block::redstone::RedstoneState,
     block_events: events::BlockEvents,
     effects: Vec<effects::LevelEffect>,
     block_changes: broadcast::BlockChanges,
@@ -152,6 +155,7 @@ impl Region {
             block_ticking_chunks: HashSet::new(),
             entity_ticking_chunks: HashSet::new(),
             neighbor_updater: redstone::CollectingNeighborUpdater::default(),
+            redstone: crate::block::redstone::RedstoneState::default(),
             block_events: events::BlockEvents::default(),
             effects: Vec::new(),
             block_changes: broadcast::BlockChanges::default(),
