@@ -662,17 +662,35 @@ impl Level {
         Ok(())
     }
     pub fn finish_entity_management(&mut self) {
+        if self.region().entities.pending_retire.is_empty() {
+            return;
+        }
+        let mut reachable = HashSet::new();
+        let mut work = Vec::new();
+        // Map order affects only set membership, never simulation callbacks.
+        for (&id, state) in &self.region().entities.states {
+            if !state.as_entity().removed {
+                self.entity_behavior(id)
+                    .expect("stored entity dispatcher")
+                    .trace_entity_refs(state, &mut work);
+            }
+        }
+        while let Some(id) = work.pop() {
+            if reachable.insert(id)
+                && let Some(state) = self.region().entities.get(&id)
+            {
+                self.entity_behavior(id)
+                    .expect("referenced entity dispatcher")
+                    .trace_entity_refs(state, &mut work);
+            }
+        }
         let removed = std::mem::take(&mut self.region_mut().entities.pending_retire);
         for id in removed {
-            let network_id = self
-                .region()
-                .entities
-                .get(&id)
-                .unwrap()
-                .as_entity()
-                .network_id;
+            if reachable.contains(&id) {
+                self.region_mut().entities.pending_retire.push(id);
+                continue;
+            }
             let region = self.region_mut();
-            region.entity_tick_list.remove(network_id);
             region.entities.retire(id);
         }
     }

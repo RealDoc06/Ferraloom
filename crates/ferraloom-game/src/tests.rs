@@ -19,6 +19,10 @@ const PLACED: BlockPos = BlockPos::new(-1, 64, -1);
 
 struct TestCow;
 impl Entity for TestCow {
+    fn trace_entity_refs(&self, state: &EntityState, references: &mut Vec<EntityRef>) {
+        CowBehavior.trace_entity_refs(state, references);
+    }
+
     fn tick(&self, entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
         CowBehavior.tick(entity, level)?;
         // These borrows end before damage calls back into this active entity.

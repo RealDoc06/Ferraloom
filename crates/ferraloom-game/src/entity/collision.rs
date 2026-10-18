@@ -330,3 +330,30 @@ impl Level {
         Ok(true)
     }
 }
+
+/// Port of CollisionGetter#findFreePosition, with the constructor's captured
+/// context available before the new entity enters world lookup/tracking.
+pub(crate) fn find_free_position_from_context(
+    level: &Level,
+    context: &crate::block::BlockCollisionContext<'_>,
+    allowed: &VoxelShape,
+    preferred: Vec3,
+    size: Vec3,
+) -> Result<Option<Vec3>, LevelError> {
+    if allowed.is_empty() {
+        return Ok(None);
+    }
+    let search = allowed.bounds().inflate(size.x, size.y, size.z);
+    let mut expanded = shapes::empty();
+    for (_, shape) in block_collisions_from_context(level, context, search)? {
+        if level.entity_world_border().is_within_aabb(shape.bounds()) {
+            for bounds in shape.to_aabbs() {
+                expanded = shapes::or(
+                    &expanded,
+                    &shapes::create_aabb(bounds.inflate(size.x / 2.0, size.y / 2.0, size.z / 2.0)),
+                );
+            }
+        }
+    }
+    Ok(shapes::join(allowed, &expanded, BooleanOp::OnlyFirst).closest_point_to(preferred))
+}

@@ -119,6 +119,14 @@ impl EntityDataView for PrimedTnt {
 }
 pub struct PrimedTntBehavior;
 impl Entity for PrimedTntBehavior {
+    fn trace_entity_refs(
+        &self,
+        state: &crate::entity::EntityState,
+        references: &mut Vec<crate::entity::EntityRef>,
+    ) {
+        crate::entity::trace_base_entity_refs(state.as_entity(), references);
+    }
+
     fn movement_emission(&self) -> MovementEmission {
         MovementEmission::None
     }

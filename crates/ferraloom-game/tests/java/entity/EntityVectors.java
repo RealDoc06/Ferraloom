@@ -78,6 +78,10 @@ public final class EntityVectors {
         System.out.println("move\\t"+name+"\\t"+(player?"player":"cow")+"\\t"+(obstacle==null?-1:Block.getId(obstacle))+"\\t"+vec(from)+"\\t"+vec(delta)+"\\t"+ground+"\\t"+sneak+"\\t"+bits(fall)+"\\t"+vec(e.position())+"\\t"+flags(e)+"\\t"+bits(e.fallDistance)+"\\t"+vec(e.getDeltaMovement()));
       }
       public static void run(RegistryAccess r)throws Exception {
+        var orbLevel=new EntityFixture(r);orbLevel.floor();var orb=new net.minecraft.world.entity.ExperienceOrb(EntityTypes.EXPERIENCE_ORB,orbLevel);orb.setId(4);orb.setPos(8.5,64.7,8.5);orb.setDeltaMovement(0.1,0,0.01);
+        for(int tick=1;tick<=12;tick++){orb.commonTick();orb.tick();System.out.println("orb-tick\\t"+tick+"\\t"+vec(orb.position())+"\\t"+vec(orb.getDeltaMovement())+"\\t"+flags(orb)+"\\t"+bits(orb.fallDistance));}
+        var retained=new net.minecraft.world.entity.ExperienceOrb(EntityTypes.EXPERIENCE_ORB,orbLevel);retained.setPos(1.5,64,1.5);var disconnected=new TestPlayer(orbLevel);disconnected.setPos(4.5,64,1.5);var following=net.minecraft.world.entity.ExperienceOrb.class.getDeclaredField("followingPlayer");following.setAccessible(true);following.set(retained,disconnected);disconnected.discard();var follow=net.minecraft.world.entity.ExperienceOrb.class.getDeclaredMethod("followNearbyPlayer");follow.setAccessible(true);follow.invoke(retained);
+        System.out.println("orb-removed-follow\\t"+vec(retained.getDeltaMovement())+"\\t"+(following.get(retained)==disconnected));
         var fallingLevel=new EntityFixture(r);fallingLevel.floor();var falling=new net.minecraft.world.entity.item.FallingBlockEntity(EntityTypes.FALLING_BLOCK,fallingLevel);falling.setId(3);falling.setPos(8.5,68,8.5);
         for(int tick=1;tick<=4;tick++){falling.commonTick();falling.tick();System.out.println("falling-tick\\t"+tick+"\\t"+vec(falling.position())+"\\t"+vec(falling.getDeltaMovement())+"\\t"+flags(falling)+"\\t"+falling.time+"\\t"+bits(falling.fallDistance));}
         for(float[] rotation:List.of(new float[]{0,0},new float[]{37.25f,-28.125f},new float[]{90,180})){

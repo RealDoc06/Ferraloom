@@ -163,6 +163,14 @@ fn drop_block_item(entity: EntityRef, level: &mut Level) -> Result<(), LevelErro
 
 pub struct FallingBlockBehavior;
 impl Entity for FallingBlockBehavior {
+    fn trace_entity_refs(
+        &self,
+        state: &crate::entity::EntityState,
+        references: &mut Vec<crate::entity::EntityRef>,
+    ) {
+        crate::entity::trace_base_entity_refs(state.as_entity(), references);
+    }
+
     fn cause_fall_damage(
         &self,
         entity: EntityRef,
