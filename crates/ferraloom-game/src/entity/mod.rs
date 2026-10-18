@@ -99,6 +99,7 @@ pub enum EntityState {
     Player(Box<player::ServerPlayer>),
     PrimedTnt(Box<item::PrimedTnt>),
     Item(Box<item::ItemEntity>),
+    FallingBlock(Box<item::FallingBlockEntity>),
 }
 
 impl EntityState {
@@ -108,6 +109,7 @@ impl EntityState {
             Self::Player(_) => EntityType::PLAYER,
             Self::PrimedTnt(_) => EntityType::TNT,
             Self::Item(_) => EntityType::ITEM,
+            Self::FallingBlock(_) => EntityType::FALLING_BLOCK,
         }
     }
 
@@ -143,6 +145,7 @@ impl EntityState {
             Self::Player(p) => &p.parent.parent,
             Self::PrimedTnt(tnt) => &tnt.parent,
             Self::Item(item) => &item.parent,
+            Self::FallingBlock(block) => &block.parent,
         }
     }
     pub fn as_entity_mut(&mut self) -> &mut EntityData {
@@ -151,6 +154,7 @@ impl EntityState {
             Self::Player(p) => &mut p.parent.parent,
             Self::PrimedTnt(tnt) => &mut tnt.parent,
             Self::Item(item) => &mut item.parent,
+            Self::FallingBlock(block) => &mut block.parent,
         }
     }
 }
@@ -470,6 +474,7 @@ pub fn vanilla_behavior(kind: EntityType) -> Option<&'static dyn Entity> {
         EntityType::PLAYER => Some(&player::PlayerBehavior),
         EntityType::TNT => Some(&item::PrimedTntBehavior),
         EntityType::ITEM => Some(&item::ItemEntityBehavior),
+        EntityType::FALLING_BLOCK => Some(&item::FallingBlockBehavior),
         _ => None,
     }
 }

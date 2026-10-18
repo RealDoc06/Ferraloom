@@ -4,6 +4,13 @@ use ferraloom_util::{Uuid, Vec3};
 
 #[derive(Clone, Debug)]
 pub enum EntityEffect {
+    /// Captured after successful synchronous placement, before entity removal.
+    /// The tracker sends BlockUpdate then AddTransientBlock to its watchers.
+    FallingBlockLanded {
+        entity: EntityRef,
+        pos: ferraloom_util::BlockPos,
+        state: ferraloom_data::BlockState,
+    },
     TakeItem {
         entity: EntityRef,
         player: EntityRef,

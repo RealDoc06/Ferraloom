@@ -89,13 +89,16 @@ pub(super) fn tags(level: &mut Level) {
     ));
 }
 fn level(floor: bool) -> Level {
+    level_with_behaviors(floor, &BEHAVIORS)
+}
+fn level_with_behaviors(floor: bool, behaviors: &'static Behaviors) -> Level {
     use ferraloom_chunk::{BiomeId, IdMap, LevelChunkSection, Strategy};
     let template = LevelChunkSection::new(
         Strategy::block_states(),
         Strategy::biomes(Arc::new(IdMap::new(vec![BiomeId(0)]).unwrap())),
         BiomeId(0),
     );
-    let mut level = Level::new(Region::new(&BEHAVIORS));
+    let mut level = Level::new(Region::new(behaviors));
     for x in -2..=2 {
         for z in -2..=2 {
             level
@@ -656,4 +659,100 @@ fn vanilla_player_dropped_item_position_and_velocity_bits() {
         n += 1;
     }
     assert_eq!(n, 3);
+}
+
+#[test]
+fn vanilla_falling_block_airborne_motion_flags_and_fall_distance_bits() {
+    let mut level = level(true);
+    let mut falling = item::FallingBlockEntity::new(3, 123);
+    falling.parent.set_pos(Vec3::new(8.5, 68.0, 8.5));
+    let mut id = EntityRef(1);
+    level
+        .add_entity(id, EntityState::FallingBlock(Box::new(falling)))
+        .unwrap();
+    let mut n = 0;
+    for row in VECTORS.lines().filter(|s| s.starts_with("falling-tick\t")) {
+        let f: Vec<_> = row.split('\t').collect();
+        common_tick(id, &mut level).unwrap();
+        id.tick(&mut level).unwrap();
+        let falling = level.entity::<item::FallingBlockEntity>(id).unwrap();
+        assert_vector(falling.parent.position, vector(f[2]), row);
+        assert_vector(falling.parent.velocity, vector(f[3]), row);
+        assert_eq!(flags(&falling.parent), f[4], "{row}");
+        assert_eq!(falling.time, f[5].parse::<i32>().unwrap());
+        assert_eq!(
+            falling.parent.fall_distance.to_bits(),
+            double(f[6]).to_bits(),
+            "{row}"
+        );
+        n += 1;
+    }
+    assert_eq!(n, 4);
+}
+
+#[test]
+fn falling_sand_is_constructed_before_source_replacement_then_lands() {
+    struct OrderingProbe;
+    impl crate::block::BlockBehavior for OrderingProbe {
+        fn affect_neighbors_after_removal(
+            &self,
+            _state: BlockState,
+            pos: BlockPos,
+            _moved: bool,
+            level: &mut Level,
+        ) -> Result<(), crate::level::LevelError> {
+            if pos.y == 66 {
+                let tnt = item::PrimedTnt::new(level.next_entity_id(), 123);
+                let id = level.next_entity_ref();
+                level.add_entity(id, EntityState::PrimedTnt(Box::new(tnt)))?;
+            }
+            Ok(())
+        }
+    }
+    static ORDERING: Behaviors = Behaviors::EMPTY.with_block(Block::SAND, &OrderingProbe);
+    let mut level = level_with_behaviors(true, &ORDERING);
+    let source = BlockPos::new(8, 66, 8);
+    level
+        .set_block_state(source, Block::SAND.default_state())
+        .unwrap();
+    let id = item::falling_block::fall(&mut level, source, Block::SAND.default_state()).unwrap();
+    assert!(level.get_block_state(source).unwrap().is_air());
+    assert_eq!(
+        level
+            .entity::<item::FallingBlockEntity>(id)
+            .unwrap()
+            .parent
+            .network_id,
+        1
+    );
+    let probe = level
+        .entity_by_network_id(2)
+        .expect("neighbor callback allocated second");
+    assert_eq!(level.all_entities(), [probe, id]);
+    assert_eq!(
+        level
+            .entity::<item::FallingBlockEntity>(id)
+            .unwrap()
+            .start_pos(),
+        source
+    );
+    for _ in 0..30 {
+        if level.entity::<EntityData>(id).unwrap().removed {
+            break;
+        }
+        common_tick(id, &mut level).unwrap();
+        EntityRef(id.0).tick(&mut level).unwrap();
+    }
+    assert!(level.entity::<EntityData>(id).unwrap().removed);
+    assert_eq!(
+        level.get_block_state(BlockPos::new(8, 64, 8)).unwrap(),
+        Block::SAND.default_state()
+    );
+    assert!(matches!(
+        level.take_entity_effects().last(),
+        Some(effects::EntityEffect::FallingBlockLanded {
+            pos: BlockPos { x: 8, y: 64, z: 8 },
+            ..
+        })
+    ));
 }
