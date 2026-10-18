@@ -13,6 +13,22 @@ use ferraloom_util::{
 use serde_json::{Value, json};
 use std::{io::Read, sync::OnceLock};
 
+#[derive(Clone, Copy)]
+struct AwardContext<'a> {
+    now: ObtainedTime,
+    player_name: &'a ferraloom_protocol::chat::Component,
+    announce_advancements: bool,
+}
+fn resolve_announcement(
+    manager: &ServerAdvancementManager,
+    id: &Identifier,
+    award: AwardContext<'_>,
+) -> Option<ferraloom_protocol::chat::Component> {
+    award
+        .announce_advancements
+        .then(|| announcement(manager.get(id).unwrap(), award.player_name))
+}
+
 fn oracle() -> &'static Value {
     static FIXTURE: OnceLock<Value> = OnceLock::new();
     FIXTURE.get_or_init(|| {
@@ -96,18 +112,43 @@ fn vanilla_trigger_codecs_and_synthetic_matches() {
             row["input"]
         );
     }
+    struct Runtime<'a> {
+        facts: &'a Facts,
+        random: LegacyRandomSource,
+    }
+    impl LootRuntime for Runtime<'_> {
+        fn facts(&self) -> &dyn LootFacts {
+            self.facts
+        }
+        fn with_random(&mut self, operation: &mut dyn FnMut(&mut dyn RandomSource)) {
+            operation(&mut self.random);
+        }
+    }
+    impl TriggerRuntime for Runtime<'_> {
+        fn trigger_facts(&self) -> &dyn TriggerFacts {
+            self.facts
+        }
+    }
     let mut covered = std::collections::BTreeSet::new();
     for row in oracle()["trigger_matches"].as_array().unwrap() {
         let criterion = Criterion::decode(&row["input"]).unwrap();
         covered.insert(criterion.trigger);
         let n = row["scenario"].as_i64().unwrap() as i32;
         let mut random = LegacyRandomSource::new(42);
-        let mut context = MatchContext {
-            data: &data,
+        let mut context =
+            MatchContext::borrowed(&data, &facts, &mut random, Vec3::new(1.0, 64.0, 2.0));
+        let mut runtime = Runtime {
             facts: &facts,
-            random: &mut random,
-            origin: Vec3::new(1.0, 64.0, 2.0),
+            random: LegacyRandomSource::new(42),
         };
+        let mut live_context = MatchContext::live(&data, &mut runtime, context.origin);
+        let runtime_matched = scenario(&criterion.instance, n, &mut live_context).unwrap();
+        assert_eq!(
+            runtime_matched,
+            row["matches"].as_bool().unwrap(),
+            "live {} scenario {n}",
+            row["input"]
+        );
         let matched = scenario(&criterion.instance, n, &mut context);
         assert_eq!(
             matched.unwrap_or_else(|e| panic!("{} scenario {n}: {e}", row["input"])),
@@ -441,12 +482,8 @@ impl RewardHarness {
                         let params = create_context(origin, EntityRef(0));
                         let data = LootData::default();
                         let mut random = LegacyRandomSource::new(42);
-                        let mut context = MatchContext {
-                            data: &data,
-                            facts: &Facts,
-                            random: &mut random,
-                            origin,
-                        };
+                        let mut context =
+                            MatchContext::borrowed(&data, &Facts, &mut random, origin);
                         let matched = player
                             .matching_listeners(
                                 TriggerType::RecipeUnlocked,
@@ -465,13 +502,15 @@ impl RewardHarness {
                             .unwrap();
                         for key in matched {
                             let result =
-                                player.award(manager, &key.advancement, &key.criterion, award);
+                                player.award(manager, &key.advancement, &key.criterion, award.now);
                             effects.extend(self.effects(result, player, book, manager, award));
                         }
                     }
                 }
-                AdvancementEffect::Announcement(component) => {
-                    effects.push(json!(component.as_ref().to_json().unwrap()))
+                AdvancementEffect::AnnounceAdvancement(id) => {
+                    if let Some(component) = resolve_announcement(manager, &id, award) {
+                        effects.push(json!(component.to_json().unwrap()));
+                    }
                 }
                 AdvancementEffect::MarkVisibility(id) => {
                     player.apply_mark_visibility(manager, &id);
@@ -503,7 +542,7 @@ fn vanilla_player_listeners_visibility_packets_rewards_and_persistence() {
             let parts: Vec<_> = action.split(':').collect();
             let key = id(&format!("{}:{}", parts[1], parts[2]));
             if parts[0] == "award" {
-                let result = player.award(&manager, &key, parts[3], award);
+                let result = player.award(&manager, &key, parts[3], award.now);
                 changed = result.changed;
                 effects.extend(rewards.effects(result, &mut player, &mut book, &manager, award));
             } else {
@@ -514,12 +553,7 @@ fn vanilla_player_listeners_visibility_packets_rewards_and_persistence() {
             let params = create_context(origin, EntityRef(0));
             let data = LootData::default();
             let mut random = LegacyRandomSource::new(42);
-            let mut context = MatchContext {
-                data: &data,
-                facts: &Facts,
-                random: &mut random,
-                origin,
-            };
+            let mut context = MatchContext::borrowed(&data, &Facts, &mut random, origin);
             let matched = player
                 .matching_listeners(
                     TriggerType::Tick,
@@ -529,7 +563,7 @@ fn vanilla_player_listeners_visibility_packets_rewards_and_persistence() {
                 )
                 .unwrap();
             for key in matched {
-                let result = player.award(&manager, &key.advancement, &key.criterion, award);
+                let result = player.award(&manager, &key.advancement, &key.criterion, award.now);
                 effects.extend(rewards.effects(result, &mut player, &mut book, &manager, award));
             }
         } else if let Some(key) = action.strip_prefix("tab:")
@@ -617,12 +651,7 @@ fn unavailable_trigger_facts_are_errors_and_impossible_never_awards() {
     let criterion=Criterion::decode(&json!({"trigger":"location","conditions":{"player":{"type":"entity_properties","entity":"this","predicate":{"location":{"biomes":"plains"}}}}})).unwrap();
     let data = LootData::default();
     let mut random = LegacyRandomSource::new(0);
-    let mut context = MatchContext {
-        data: &data,
-        facts: &NoFacts,
-        random: &mut random,
-        origin: Vec3::ZERO,
-    };
+    let mut context = MatchContext::borrowed(&data, &NoFacts, &mut random, Vec3::ZERO);
     assert!(
         context
             .predicate(
@@ -834,12 +863,8 @@ fn vanilla_nested_reward_visibility_order_and_post_reward_revoke() {
                             let origin = Vec3::new(1.0, 64.0, 2.0);
                             let data = LootData::default();
                             let mut random = LegacyRandomSource::new(42);
-                            let mut context = MatchContext {
-                                data: &data,
-                                facts: &Facts,
-                                random: &mut random,
-                                origin,
-                            };
+                            let mut context =
+                                MatchContext::borrowed(&data, &Facts, &mut random, origin);
                             let matched = player
                                 .matching_listeners(
                                     TriggerType::RecipeUnlocked,
@@ -861,7 +886,7 @@ fn vanilla_nested_reward_visibility_order_and_post_reward_revoke() {
                                     self.manager,
                                     &key.advancement,
                                     &key.criterion,
-                                    self.award,
+                                    self.award.now,
                                 );
                                 self.apply(player, nested);
                             }
@@ -871,7 +896,11 @@ fn vanilla_nested_reward_visibility_order_and_post_reward_revoke() {
                             }
                         }
                     }
-                    AdvancementEffect::Announcement(_) => self.effects.push(json!("chat")),
+                    AdvancementEffect::AnnounceAdvancement(id) => {
+                        if resolve_announcement(self.manager, &id, self.award).is_some() {
+                            self.effects.push(json!("chat"));
+                        }
+                    }
                     AdvancementEffect::MarkVisibility(id) => {
                         player.apply_mark_visibility(self.manager, &id);
                     }
@@ -894,10 +923,588 @@ fn vanilla_nested_reward_visibility_order_and_post_reward_revoke() {
             effects: Vec::new(),
             revoke: row["revoke"].as_bool().unwrap(),
         };
-        let result = player.award(&manager, &id("test:an"), "a", apply.award);
+        let result = player.award(&manager, &id("test:an"), "a", apply.award.now);
         apply.apply(&mut player, result);
         apply.flush(&mut player);
         assert_eq!(json!(apply.effects), row["effects"]);
         assert_eq!(json!(apply.packets), row["packets"]);
     }
+}
+
+fn live_fixture(manager: ServerAdvancementManager) -> (crate::level::Level, EntityRef) {
+    use crate::{
+        Behaviors,
+        crafting::{Recipe, RecipeHolder, RecipeManager, RecipeSynchronization},
+        entity::{
+            EntityState,
+            player::{GameType, ServerPlayer},
+        },
+        level::{Level, Region},
+    };
+    use std::sync::Arc;
+    static BEHAVIORS: Behaviors = Behaviors::EMPTY;
+    let tags = ferraloom_data::datapack::TagSet::<Item>::load(
+        &ferraloom_data::datapack::ResourceManager::new(Vec::new()),
+    )
+    .unwrap();
+    let recipe = Recipe::decode(&json!({"type":"crafting_shapeless","ingredients":["stone"],"result":{"id":"crafting_table"}}), &tags).unwrap();
+    let recipes = Arc::new(
+        RecipeManager::new(vec![RecipeHolder {
+            id: "crafting_table".parse().unwrap(),
+            value: recipe,
+        }])
+        .unwrap(),
+    );
+    let sync = Arc::new(RecipeSynchronization::new(&recipes, |_| true));
+    let mut level = Level::new(
+        Region::new(&BEHAVIORS),
+        crate::level::LevelContext::fixture(0, 63),
+    );
+    level.install_shared(Box::default());
+    let player = level.next_entity_ref();
+    let mut state = ServerPlayer::new(
+        ferraloom_util::Uuid::NIL,
+        "Live".into(),
+        1,
+        Vec3::ZERO,
+        GameType::Survival,
+    );
+    state.advancements = PlayerAdvancements::new(&manager);
+    level.set_container_resources(
+        Arc::new(crate::block::containers::runtime::ContainerResources {
+            crafting: crate::inventory::RuntimeCraftingContext::fixture(),
+            recipes,
+            loot: Arc::new(LootData::default()),
+            advancements: Arc::new(manager),
+            recipe_tags: Default::default(),
+            recipe_synchronization: sync,
+        }),
+        0,
+    );
+    level
+        .add_entity(player, EntityState::Player(Box::new(state)))
+        .unwrap();
+    level.take_effects();
+    (level, player)
+}
+
+#[test]
+fn live_rewards_nest_recipe_awards_before_outer_announcement_and_visibility() {
+    use crate::{entity::player::ServerPlayer, level::effects::LevelEffect};
+    use ferraloom_protocol::play::clientbound as cb;
+    let row = &oracle()["nested_visibility"][0];
+    let mut manager = ServerAdvancementManager::new(holders(&row["inputs"]));
+    for holder in &mut manager.advancements {
+        holder.value.display.as_mut().unwrap().title =
+            ferraloom_protocol::chat::Component::literal(holder.id.to_string());
+    }
+    let (mut level, player) = live_fixture(manager);
+    criteria::tick(&mut level, player).unwrap();
+    let resources = level.container_resources().unwrap();
+    let owner = level.entity::<ServerPlayer>(player).unwrap();
+    assert!(
+        owner
+            .recipe_book
+            .contains(&"crafting_table".parse().unwrap())
+    );
+    for id in [id("test:an"), id("test:c0")] {
+        assert!(owner.advancements.get_progress(&id).unwrap().is_done());
+    }
+    let name = owner.display_name();
+    let expected = ["test:c0", "test:an"]
+        .map(|id_text| announcement(resources.advancements.get(&id(id_text)).unwrap(), &name));
+    let packets: Vec<_> = level
+        .take_effects()
+        .into_iter()
+        .filter_map(|effect| match effect {
+            LevelEffect::PlayerPacket { packet, .. } => Some(*packet),
+            _ => None,
+        })
+        .collect();
+    let announcements: Vec<_> = packets
+        .iter()
+        .filter_map(|packet| match packet {
+            cb::Packet::SystemChat(packet) => Some(packet.content.clone()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(announcements, expected);
+    assert!(matches!(
+        packets.as_slice(),
+        [cb::Packet::SystemChat(_), cb::Packet::RecipeBookAdd(packet), cb::Packet::SystemChat(_)]
+            if !packet.replace && packet.entries.len() == 1
+    ));
+    flush_dirty(&mut level, player).unwrap();
+    let packet = level
+        .take_effects()
+        .into_iter()
+        .find_map(|effect| match effect {
+            LevelEffect::PlayerPacket { packet, .. } => match *packet {
+                cb::Packet::UpdateAdvancements(packet) => Some(packet),
+                _ => None,
+            },
+            _ => None,
+        })
+        .unwrap();
+    assert_eq!(
+        json!(
+            packet
+                .added
+                .iter()
+                .map(|value| value.advancement.id.as_str())
+                .collect::<Vec<_>>()
+        ),
+        row["root_order"]
+    );
+}
+
+#[test]
+fn retained_inventory_trigger_and_stats_request_read_canonical_player() {
+    use crate::{
+        entity::player::{ServerPlayer, inventory},
+        inventory::{ContainerHandle, ContainerSlot},
+        level::effects::LevelEffect,
+        predicates::PredicateContext,
+        stats::{Stat, custom},
+    };
+    use ferraloom_protocol::play::clientbound as cb;
+    let manager = ServerAdvancementManager::new(holders(
+        &json!([{ "id":"test:inventory", "value": {
+            "criteria":{"stone":{"trigger":"inventory_changed","conditions":{"items":[{"items":"stone"}],"slots":{"occupied":1,"full":1,"empty":42}}}}
+        }}]),
+    ));
+    let (mut level, player) = live_fixture(manager);
+    level
+        .entity_mut::<ServerPlayer>(player)
+        .unwrap()
+        .inventory
+        .items[0] = ItemStack::new(Item::STONE, 64, Default::default());
+    let receiver = level
+        .stack_ref(ContainerSlot {
+            container: ContainerHandle::PlayerInventory(player),
+            slot: 0,
+        })
+        .unwrap();
+    criteria::inventory_changed(&mut level, player, receiver).unwrap();
+    assert!(
+        level
+            .entity::<ServerPlayer>(player)
+            .unwrap()
+            .advancements
+            .get_progress(&id("test:inventory"))
+            .unwrap()
+            .is_done()
+    );
+    assert!(
+        PredicateContext::player_advancement(&level, player, &id("test:inventory"))
+            .unwrap()
+            .unwrap()
+            .done
+    );
+    let owner = level.entity_mut::<ServerPlayer>(player).unwrap();
+    inventory::set_count(&mut owner.inventory.items[0], 1);
+    owner
+        .stats
+        .increment(Stat::Custom(custom::Id::OPEN_CHEST), 2);
+    assert_eq!(
+        PredicateContext::player_stat(&level, player, &id("custom"), &id("open_chest")).unwrap(),
+        2
+    );
+    crate::stats::request_stats(&mut level, player).unwrap();
+    crate::stats::request_stats(&mut level, player).unwrap();
+    let packets: Vec<_> = level
+        .take_effects()
+        .into_iter()
+        .filter_map(|effect| match effect {
+            LevelEffect::PlayerPacket { packet, .. } => match *packet {
+                cb::Packet::AwardStats(packet) => Some(packet),
+                _ => None,
+            },
+            _ => None,
+        })
+        .collect();
+    assert_eq!(packets[0].stats.len(), 1);
+    assert_eq!(packets[0].stats[0].count.0, 2);
+    assert!(packets[1].stats.is_empty());
+}
+
+#[test]
+fn announcement_descriptor_reads_rule_and_team_at_application_time() {
+    use crate::{entity::player::ServerPlayer, level::effects::LevelEffect};
+    use ferraloom_protocol::{chat::Component, play::clientbound as cb};
+    let manager =
+        ServerAdvancementManager::new(holders(&oracle()["nested_visibility"][0]["inputs"]));
+    let (mut level, player) = live_fixture(manager);
+    let resources = level.container_resources().unwrap();
+    let result = level
+        .entity_mut::<ServerPlayer>(player)
+        .unwrap()
+        .advancements
+        .award(
+            &resources.advancements,
+            &id("test:an"),
+            "a",
+            ObtainedTime::from_millis(1),
+        );
+    let descriptor = result
+        .effects
+        .into_iter()
+        .find(|effect| matches!(effect, AdvancementEffect::AnnounceAdvancement(_)))
+        .unwrap();
+    level.rules_mut().show_advancement_messages = false;
+    super::live::apply_effect(
+        &mut level,
+        player,
+        &resources.advancements,
+        descriptor.clone(),
+    )
+    .unwrap();
+    assert!(level.take_effects().is_empty());
+    let scoreboard = &mut level.shared_mut().unwrap().scoreboard;
+    scoreboard.add_player_team("after_rewards");
+    scoreboard
+        .update_team("after_rewards", |team| {
+            team.prefix = Component::literal("after ")
+        })
+        .unwrap();
+    scoreboard
+        .add_player_to_team("Live", "after_rewards")
+        .unwrap();
+    level.rules_mut().show_advancement_messages = true;
+    let expected = announcement(
+        resources.advancements.get(&id("test:an")).unwrap(),
+        &level.entity_display_name(player).unwrap(),
+    );
+    super::live::apply_effect(&mut level, player, &resources.advancements, descriptor).unwrap();
+    let content = level
+        .take_effects()
+        .into_iter()
+        .find_map(|effect| match effect {
+            LevelEffect::PlayerPacket { packet, .. } => match *packet {
+                cb::Packet::SystemChat(chat) => Some(chat.content),
+                _ => None,
+            },
+            _ => None,
+        })
+        .unwrap();
+    assert_eq!(content, expected);
+    assert!(content.to_json().unwrap().contains("after "));
+}
+
+#[test]
+fn vanilla_rewards_change_announcement_rule_and_name_before_chat() {
+    let mut bytes = Vec::new();
+    flate2::read::GzDecoder::new(&include_bytes!("announcement.json.gz")[..])
+        .read_to_end(&mut bytes)
+        .unwrap();
+    let cases: Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(cases.as_array().unwrap().len(), 4);
+    for row in cases.as_array().unwrap() {
+        let manager = ServerAdvancementManager::new(vec![AdvancementHolder {
+            id: id("test:announcement"),
+            value: Advancement::decode(&row["input"]).unwrap(),
+        }]);
+        let mut player = PlayerAdvancements::new(&manager);
+        let effects = player
+            .award(
+                &manager,
+                &id("test:announcement"),
+                "a",
+                ObtainedTime::from_millis(1),
+            )
+            .effects;
+        let mut rule = row["before"].as_bool().unwrap();
+        let mut name = ferraloom_protocol::chat::Component::literal("Before");
+        let mut chats = Vec::new();
+        for effect in effects {
+            match effect {
+                AdvancementEffect::Rewards { .. } => {
+                    rule = row["after"].as_bool().unwrap();
+                    name = ferraloom_protocol::chat::Component::literal("After");
+                }
+                AdvancementEffect::AnnounceAdvancement(id) => {
+                    if let Some(component) = resolve_announcement(
+                        &manager,
+                        &id,
+                        AwardContext {
+                            now: ObtainedTime::from_millis(1),
+                            player_name: &name,
+                            announce_advancements: rule,
+                        },
+                    ) {
+                        chats.push(
+                            serde_json::from_str::<Value>(&component.to_json().unwrap()).unwrap(),
+                        );
+                    }
+                }
+                AdvancementEffect::MarkVisibility(id) => {
+                    player.apply_mark_visibility(&manager, &id)
+                }
+            }
+        }
+        assert_eq!(
+            json!(chats),
+            row["chats"],
+            "before={} after={}",
+            row["before"],
+            row["after"]
+        );
+    }
+}
+
+#[test]
+fn vanilla_recipe_crafted_retained_receivers_preserve_order_and_duplicates() {
+    use crate::{
+        crafting::RecipeHolder,
+        entity::player::ServerPlayer,
+        inventory::{ContainerHandle, ContainerSlot},
+    };
+    let mut bytes = Vec::new();
+    flate2::read::GzDecoder::new(&include_bytes!("recipe-crafted.json.gz")[..])
+        .read_to_end(&mut bytes)
+        .unwrap();
+    let rows: Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(rows.as_array().unwrap().len(), 6);
+    for row in rows.as_array().unwrap() {
+        let objects: Vec<_> = row["objects"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|object| ItemStack::from_json(object).unwrap())
+            .collect();
+        let used: Vec<_> = row["used"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|index| objects[index.as_u64().unwrap() as usize].clone())
+            .collect();
+        let recipe_id = id(row["recipe"].as_str().unwrap());
+        let data = LootData::default();
+        let mut random = LegacyRandomSource::new(42);
+        let mut context = MatchContext::borrowed(&data, &Facts, &mut random, Vec3::ZERO);
+        assert_eq!(
+            Criterion::decode(&row["input"])
+                .unwrap()
+                .instance
+                .matches(
+                    TriggerEvent::Recipe {
+                        id: &recipe_id,
+                        ingredients: &used,
+                    },
+                    &mut context,
+                )
+                .unwrap(),
+            row["matches"].as_bool().unwrap(),
+            "pure {row}"
+        );
+        let manager = ServerAdvancementManager::new(holders(
+            &json!([{"id":"test:crafted","value":{"criteria":{"used":row["input"]}}}]),
+        ));
+        let (mut level, player) = live_fixture(manager);
+        for (slot, object) in row["objects"].as_array().unwrap().iter().enumerate() {
+            level
+                .entity_mut::<ServerPlayer>(player)
+                .unwrap()
+                .inventory
+                .items[slot] = ItemStack::from_json(object).unwrap();
+        }
+        let inputs: Vec<_> = row["used"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|index| {
+                level
+                    .stack_ref(ContainerSlot {
+                        container: ContainerHandle::PlayerInventory(player),
+                        slot: index.as_u64().unwrap() as usize,
+                    })
+                    .unwrap()
+            })
+            .collect();
+        let resources = level.container_resources().unwrap();
+        let recipe = RecipeHolder {
+            id: row["recipe"].as_str().unwrap().parse().unwrap(),
+            value: resources.recipes.recipes()[0].value.clone(),
+        };
+        criteria::recipe_crafted(&mut level, player, &recipe, &inputs).unwrap();
+        assert_eq!(
+            level
+                .entity::<ServerPlayer>(player)
+                .unwrap()
+                .advancements
+                .get_progress(&id("test:crafted"))
+                .unwrap()
+                .is_done(),
+            row["matches"].as_bool().unwrap(),
+            "{row}"
+        );
+        for input in inputs {
+            assert!(!level.stack_is_retained(input.address()).unwrap());
+        }
+    }
+}
+
+#[test]
+fn recipe_crafted_releases_roots_on_capture_and_predicate_errors() {
+    use crate::{
+        entity::player::ServerPlayer,
+        inventory::{ContainerHandle, ContainerSlot, StackRef},
+    };
+    let manager = ServerAdvancementManager::new(holders(
+        &json!([{"id":"test:crafted","value":{"criteria":{"used":{
+            "trigger":"recipe_crafted","conditions":{"recipes":"crafting_table","ingredients":[{"items":"stone"}],
+            "player":{"type":"entity_properties","entity":"this","predicate":{"minecraft:type_specific/player":{"food":{"level":20}}}}}
+        }}}}]),
+    ));
+    let (mut level, player) = live_fixture(manager);
+    level
+        .entity_mut::<ServerPlayer>(player)
+        .unwrap()
+        .inventory
+        .items[0] = ItemStack::new(Item::STONE, 1, Default::default());
+    let address = ContainerSlot {
+        container: ContainerHandle::PlayerInventory(player),
+        slot: 0,
+    };
+    let input = level.stack_ref(address).unwrap();
+    let invalid = StackRef {
+        generation: input.generation + 1,
+        ..input
+    };
+    let resources = level.container_resources().unwrap();
+    let recipe = &resources.recipes.recipes()[0];
+    level.retain_stack(input).unwrap();
+    assert!(criteria::recipe_crafted(&mut level, player, recipe, &[input, invalid]).is_err());
+    assert!(level.stack_is_retained(address).unwrap());
+    level.release_stack(input);
+    assert!(!level.stack_is_retained(address).unwrap());
+    assert!(matches!(
+        criteria::recipe_crafted(&mut level, player, recipe, &[input]),
+        Err(crate::level::LevelError::UnsupportedAdvancementCriterion(
+            criteria::Trigger::Native(TriggerType::RecipeCrafted)
+        ))
+    ));
+    assert!(!level.stack_is_retained(address).unwrap());
+    assert!(
+        !level
+            .entity::<ServerPlayer>(player)
+            .unwrap()
+            .advancements
+            .get_progress(&id("test:crafted"))
+            .unwrap()
+            .is_done()
+    );
+}
+
+#[test]
+fn award_recipes_counts_displays_after_synchronous_nested_unlocks() {
+    use crate::{
+        block::containers::runtime::ContainerResources,
+        crafting::{Recipe, RecipeHolder, RecipeManager, RecipeSynchronization},
+        entity::player::ServerPlayer,
+        level::effects::LevelEffect,
+    };
+    use ferraloom_protocol::play::clientbound as cb;
+    use std::sync::Arc;
+
+    let manager = ServerAdvancementManager::new(holders(&json!([
+        {"id":"test:outer","value":{
+            "criteria":{"unlocked":{"trigger":"recipe_unlocked","conditions":{"recipes":"test:multi"}}},
+            "rewards":{"recipes":["crafting_table"]}
+        }},
+        {"id":"test:nested","value":{
+            "criteria":{"unlocked":{"trigger":"recipe_unlocked","conditions":{"recipes":"crafting_table"}}}
+        }}
+    ])));
+    let (mut level, player) = live_fixture(manager);
+    let previous = level.container_resources().unwrap();
+    let tags = ferraloom_data::datapack::TagSet::<Item>::load(
+        &ferraloom_data::datapack::ResourceManager::new(Vec::new()),
+    )
+    .unwrap();
+    let recipes = Arc::new(
+        RecipeManager::new(vec![
+            RecipeHolder {
+                id: "test:multi".parse().unwrap(),
+                value: Recipe::decode(
+                    &json!({"type":"crafting_transmute","input":"stone","material":"dirt","material_count":{"min":1,"max":3},"result":"diamond","show_notification":false}),
+                    &tags,
+                ).unwrap(),
+            },
+            previous.recipes.recipes()[0].clone(),
+            RecipeHolder {
+                id: "test:special".parse().unwrap(),
+                value: Recipe::decode(&json!({"type":"crafting_special_repairitem"}), &tags).unwrap(),
+            },
+        ]).unwrap(),
+    );
+    let sync = Arc::new(RecipeSynchronization::new(&recipes, |_| true));
+    level.set_container_resources(
+        Arc::new(ContainerResources {
+            crafting: Arc::clone(&previous.crafting),
+            recipes: Arc::clone(&recipes),
+            loot: Arc::clone(&previous.loot),
+            advancements: Arc::clone(&previous.advancements),
+            recipe_tags: previous.recipe_tags.clone(),
+            recipe_synchronization: Arc::clone(&sync),
+        }),
+        0,
+    );
+    let ordered = [
+        &recipes.recipes()[0],
+        &recipes.recipes()[1],
+        &recipes.recipes()[2],
+        &recipes.recipes()[0],
+    ];
+    // The nested award unlocks crafting_table before the outer loop reaches it.
+    assert_eq!(award_recipes(&mut level, player, ordered).unwrap(), 3);
+    let owner = level.entity::<ServerPlayer>(player).unwrap();
+    assert_eq!(
+        owner.recipe_book.known(),
+        &[
+            recipes.recipes()[0].id.clone(),
+            recipes.recipes()[1].id.clone()
+        ]
+    );
+    for advancement in ["test:outer", "test:nested"] {
+        assert!(
+            owner
+                .advancements
+                .get_progress(&id(advancement))
+                .unwrap()
+                .is_done()
+        );
+    }
+    let packets: Vec<_> = level
+        .take_effects()
+        .into_iter()
+        .filter_map(|effect| match effect {
+            LevelEffect::PlayerPacket { packet, .. } => Some(*packet),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(packets.len(), 2);
+    for (packet, recipe) in packets
+        .iter()
+        .zip([&recipes.recipes()[1], &recipes.recipes()[0]])
+    {
+        let cb::Packet::RecipeBookAdd(packet) = packet else {
+            panic!("expected recipe book packet")
+        };
+        assert!(!packet.replace);
+        let expected: Vec<_> = sync
+            .displays_for_recipe(&recipe.id)
+            .map(|entry| entry.id)
+            .collect();
+        assert_eq!(
+            packet
+                .entries
+                .iter()
+                .map(|entry| entry.contents.id)
+                .collect::<Vec<_>>(),
+            expected
+        );
+    }
+    assert_eq!(award_recipes(&mut level, player, ordered).unwrap(), 0);
+    assert!(level.take_effects().is_empty());
 }

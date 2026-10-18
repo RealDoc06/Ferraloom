@@ -506,7 +506,7 @@ impl BlockBehavior for PistonBaseBlock {
         state: BlockState,
         pos: BlockPos,
         _by: Option<crate::entity::EntityRef>,
-        _stack: &ferraloom_protocol::component::ItemStack,
+        _stack: crate::block::StackView<'_>,
         level: &mut Level,
     ) -> Result<(), LevelError> {
         check_if_extend(level, pos, state)

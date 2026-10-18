@@ -99,6 +99,13 @@ pub(super) fn player_display_name<E: Entity + ?Sized>(
 }
 
 impl Level {
+    /// Port of Nameable#getPlainTextName, including Player's profile-name override.
+    pub fn entity_plain_text_name(&self, entity: EntityRef) -> Result<String, LevelError> {
+        if let EntityState::Player(player) = self.entity_state(entity)? {
+            return Ok(player.name.clone());
+        }
+        Ok(crate::language::plain_text(&self.entity_name(entity)?))
+    }
     pub fn entity_name(&self, entity: EntityRef) -> Result<Component, LevelError> {
         self.entity_behavior(entity)?.name(entity, self)
     }

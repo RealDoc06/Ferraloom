@@ -6,7 +6,10 @@ use super::{
 };
 use crate::{
     block::{LevelReaderRef, entity::BlockEntityRef},
-    entity::{EntityData, EntityRef, EntityState},
+    entity::{
+        EntityData, EntityRef, EntityState,
+        player::{GameType, ServerPlayer},
+    },
     loot::{EnvironmentValue, Identifier, LootError, LootFacts, LootParams, Result},
     predicates::{EntityFlags, PredicateContext, PredicateRegistry},
 };
@@ -135,6 +138,95 @@ impl PredicateContext for Level {
             .can_see_sky(pos)
             .map_err(required)
     }
+    fn player_experience_level(&self, entity: EntityRef) -> Result<Option<i32>> {
+        if self
+            .entity::<EntityData>(entity)
+            .map_err(required)?
+            .entity_type
+            != EntityType::PLAYER
+        {
+            return Ok(None);
+        }
+        Ok(Some(
+            self.entity::<ServerPlayer>(entity)
+                .map_err(required)?
+                .experience_level,
+        ))
+    }
+    fn player_gamemode(&self, entity: EntityRef) -> Result<ferraloom_protocol::play::GameType> {
+        use ferraloom_protocol::play::GameType as Wire;
+        Ok(
+            match self
+                .entity::<ServerPlayer>(entity)
+                .map_err(required)?
+                .game_mode
+            {
+                GameType::Survival => Wire::Survival,
+                GameType::Creative => Wire::Creative,
+                GameType::Adventure => Wire::Adventure,
+                GameType::Spectator => Wire::Spectator,
+            },
+        )
+    }
+    fn player_stat(
+        &self,
+        entity: EntityRef,
+        stat_type: &Identifier,
+        stat: &Identifier,
+    ) -> Result<i32> {
+        let kind = crate::stats::StatType::from_name(stat_type.as_str()).ok_or_else(|| {
+            LootError::MissingReference {
+                registry: "stat_type",
+                id: stat_type.clone(),
+            }
+        })?;
+        Ok(self
+            .entity::<ServerPlayer>(entity)
+            .map_err(required)?
+            .stats
+            .get_value(kind.decode_stat(stat)?))
+    }
+    fn player_recipe(&self, entity: EntityRef, recipe: &Identifier) -> Result<bool> {
+        Ok(self
+            .entity::<ServerPlayer>(entity)
+            .map_err(required)?
+            .recipe_book
+            .contains(&recipe.as_str().parse()?))
+    }
+    fn player_advancement(
+        &self,
+        entity: EntityRef,
+        id: &Identifier,
+    ) -> Result<Option<crate::predicates::AdvancementFacts>> {
+        Ok(self
+            .entity::<ServerPlayer>(entity)
+            .map_err(required)?
+            .advancements
+            .get_progress(id)
+            .map(|progress| crate::predicates::AdvancementFacts {
+                done: progress.is_done(),
+                criteria: progress
+                    .criteria
+                    .iter()
+                    .map(|(name, criterion)| (name.clone(), criterion.obtained.is_some()))
+                    .collect(),
+            }))
+    }
+    fn player_input(&self, entity: EntityRef) -> Result<[bool; 7]> {
+        let input = self
+            .entity::<ServerPlayer>(entity)
+            .map_err(required)?
+            .last_client_input;
+        Ok([
+            input.forward,
+            input.backward,
+            input.left,
+            input.right,
+            input.jump,
+            input.shift,
+            input.sprint,
+        ])
+    }
     fn entity_type(&self, entity: EntityRef) -> Result<EntityType> {
         Ok(self
             .entity::<EntityData>(entity)
@@ -254,6 +346,15 @@ impl PredicateContext for Level {
     }
 }
 impl LootFacts for Level {
+    /// Port of StorageNbtProvider#get on the server's canonical CommandStorage.
+    /// Missing services and deferred namespace load failures remain required.
+    fn storage(&self, id: &Identifier) -> Result<Tag> {
+        self.command_storage()
+            .ok_or_else(|| LootError::Unsupported("command_storage".into()))?
+            .get(id)
+            .map(Tag::Compound)
+            .map_err(LootError::CommandStorage)
+    }
     fn item_enabled(&self, stack: &ItemStack) -> Result<bool> {
         Ok(stack.is_empty()
             || stack
@@ -307,6 +408,40 @@ mod tests {
     use ferraloom_util::ChunkPos;
     use std::sync::Arc;
     static EMPTY: Behaviors = Behaviors::EMPTY;
+
+    #[test]
+    fn missing_command_storage_snapshot_is_a_required_loot_fact() {
+        let level = Level::new(
+            Region::new(&EMPTY),
+            crate::level::LevelContext::fixture(0, 63),
+        );
+        let id = "test:read".parse().unwrap();
+        let error = LootFacts::storage(&level, &id).unwrap_err();
+        assert!(matches!(error, LootError::Unsupported(ref fact) if fact == "command_storage"));
+        assert!(std::error::Error::source(&error).is_none());
+    }
+
+    #[test]
+    fn command_storage_loot_read_preserves_the_actual_error_source() {
+        use crate::commands::storage::{CommandStorage, StorageReadError};
+        let mut level = Level::new(
+            Region::new(&EMPTY),
+            crate::level::LevelContext::fixture(0, 63),
+        );
+        // The test executable is a file, not a directory. Preload retains that
+        // real IO failure until the namespace's first required read.
+        let storage = CommandStorage::preload(&std::env::current_exe().unwrap());
+        let id = "test:read".parse().unwrap();
+        let original = storage.get(&id).unwrap_err();
+        level.set_command_storage(storage.snapshot());
+        let error = LootFacts::storage(&level, &id).unwrap_err();
+        let source = std::error::Error::source(&error).unwrap();
+        let source = source.downcast_ref::<StorageReadError>().unwrap();
+        assert_eq!(source.namespace, "test");
+        assert!(Arc::ptr_eq(&source.source, &original.source));
+        assert!(std::error::Error::source(source).is_some());
+        assert_eq!(error.to_string(), original.to_string());
+    }
 
     #[test]
     fn canonical_facts_observe_mutations_and_keep_missing_context_explicit() {

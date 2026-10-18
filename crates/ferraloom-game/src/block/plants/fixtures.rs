@@ -90,11 +90,47 @@ pub(super) fn install_loot(level: &mut Level) {
         let entities =
             Arc::new(TagSet::from_tags(entities, ferraloom_data::ENTITY_TYPES.len()).unwrap());
         let loot = LootData::load(&resources, Some(&FixtureLookup(&resources))).unwrap();
-        let recipes = RecipeManager::load(&resources, &items).unwrap();
+        let recipes = Arc::new(RecipeManager::load(&resources, &items).unwrap());
+        let recipe_synchronization = Arc::new(crate::crafting::RecipeSynchronization::new(
+            &recipes,
+            |_| true,
+        ));
+        let tags = load_tags(&resources, "recipe", |id, _| {
+            recipes.by_key(id).map(|recipe| {
+                ferraloom_protocol::Identifier::parse(&recipe.id.to_string()).unwrap()
+            })
+        });
+        assert!(tags.diagnostics.is_empty());
+        let recipe_tags = tags
+            .values
+            .into_iter()
+            .map(|(id, values)| {
+                (
+                    ferraloom_protocol::Identifier::parse(&id.to_string()).unwrap(),
+                    values,
+                )
+            })
+            .collect();
+        let advancements = Arc::new(
+            crate::advancements::ServerAdvancementManager::load(
+                &resources,
+                &crate::advancements::AdvancementRegistryContext {
+                    loot: &loot,
+                    recipes: &recipes,
+                    recipe_tags: &recipe_tags,
+                    lookup: Some(&FixtureLookup(&resources)),
+                },
+            )
+            .unwrap(),
+        );
         (
             Arc::new(ContainerResources {
-                recipes: Arc::new(recipes),
+                crafting: crate::inventory::RuntimeCraftingContext::fixture(),
+                recipes,
                 loot: Arc::new(loot),
+                advancements,
+                recipe_tags,
+                recipe_synchronization,
             }),
             items,
             entities,

@@ -38,7 +38,7 @@ use ferraloom_game::{
         teleport::{self as entity_teleport, position_move_rotation},
     },
     inventory::{
-        MenuContext, MenuHooks, PendingCraftingCallbacks, RecipeMenuHooks, RuntimeCraftingContext,
+        MenuContext, PendingCraftingCallbacks, RecipeMenuHooks, RuntimeCraftingContext,
         UnsupportedMenuHooks,
     },
     level::{
@@ -190,8 +190,8 @@ pub struct MinecraftServer {
     root: PathBuf,
     registries: RegistrySet,
     recipe_manager: Arc<RecipeManager>,
-    recipe_synchronization: RecipeSynchronization,
-    crafting_context: RuntimeCraftingContext,
+    recipe_synchronization: Arc<RecipeSynchronization>,
+    crafting_context: Arc<RuntimeCraftingContext>,
     access: AccessLists,
     level: crate::generation::runtime::LiveLevel,
     commands: Commands,
@@ -257,12 +257,13 @@ impl MinecraftServer {
         let resources = ResourceManager::new(vec![Pack::vanilla_jar(&jar)?]);
         let registries = RegistrySet::load(&resources)?;
         let recipe_manager = Arc::new(RecipeManager::load(&resources, &TagSet::load(&resources)?)?);
-        let recipe_synchronization = RecipeSynchronization::new(&recipe_manager, |_| true);
+        let recipe_synchronization =
+            Arc::new(RecipeSynchronization::new(&recipe_manager, |_| true));
         let loot = Arc::new(LootData::load(
             &resources,
             Some(&LootRegistryLookup::new(&registries, &resources)),
         )?);
-        let crafting_context = RuntimeCraftingContext::load(&resources, &registries)?;
+        let crafting_context = Arc::new(RuntimeCraftingContext::load(&resources, &registries)?);
 
         let world = World::open(
             &options.root,
@@ -322,10 +323,55 @@ impl MinecraftServer {
             &properties,
             options.unported_behavior,
         )?;
+        let loaded_recipe_tags =
+            ferraloom_data::datapack::load_tags(&resources, "recipe", |id, _| {
+                recipe_manager.by_key(id).map(|recipe| {
+                    protocol::Identifier::parse(&recipe.id.to_string())
+                        .expect("validated recipe identifier")
+                })
+            });
+        for diagnostic in loaded_recipe_tags.diagnostics {
+            eprintln!("Recipe tag: {diagnostic:?}");
+        }
+        let recipe_tags = loaded_recipe_tags
+            .values
+            .into_iter()
+            .map(|(id, values)| {
+                (
+                    protocol::Identifier::parse(&id.to_string())
+                        .expect("validated recipe tag identifier"),
+                    values,
+                )
+            })
+            .collect();
+        let advancements = Arc::new(
+            ferraloom_game::advancements::ServerAdvancementManager::load(
+                &resources,
+                &ferraloom_game::advancements::AdvancementRegistryContext {
+                    loot: &loot,
+                    recipes: &recipe_manager,
+                    recipe_tags: &recipe_tags,
+                    lookup: Some(&LootRegistryLookup::new(&registries, &resources)),
+                },
+            )?,
+        );
+        for warning in &advancements.validation_problems {
+            eprintln!(
+                "Advancement {} criterion {} {}: {}",
+                warning.advancement,
+                warning.criterion,
+                warning.problem.path,
+                warning.problem.message
+            );
+        }
         level.level.set_container_resources(
             Arc::new(ContainerResources {
                 recipes: Arc::clone(&recipe_manager),
                 loot,
+                crafting: Arc::clone(&crafting_context),
+                advancements,
+                recipe_tags,
+                recipe_synchronization: Arc::clone(&recipe_synchronization),
             }),
             world.seed,
         );
@@ -1069,6 +1115,31 @@ impl MinecraftServer {
         if let Some(saved) = saved {
             player.try_load_with_recipes(saved, &self.recipe_manager)?;
         }
+        let advancement_manager = self
+            .level
+            .level
+            .container_resources()
+            .map_err(game_error)?
+            .advancements
+            .clone();
+        let progress_path = self
+            .level
+            .generation()
+            .with_world(|world| world.access.path().to_path_buf());
+        let progress_uuid = profile.id;
+        let progress = tokio::task::spawn_blocking(move || {
+            ferraloom_game::advancements::load_player_progress(
+                &progress_path,
+                progress_uuid,
+                &advancement_manager,
+            )
+        })
+        .await??;
+        for diagnostic in progress.diagnostics {
+            eprintln!("{diagnostic}");
+        }
+        player.advancements = progress.advancements;
+        player.stats = progress.stats;
         if self.properties.boolean("force-gamemode") {
             player.game_mode = mode;
             player.update_game_mode_abilities();
@@ -1383,6 +1454,7 @@ impl MinecraftServer {
             event_id: 24 + permission.clamp(0, 4) as i8,
         }));
         c.push(self.commands.packet(permission));
+        player.stats.mark_all_dirty();
         let (settings, recipes) = player
             .recipe_book
             .initial_packets(&self.recipe_synchronization);
@@ -1490,13 +1562,6 @@ impl MinecraftServer {
                             value: EntityDataValue::Byte(c.information.model_customisation as i8),
                         },
                     ]),
-                }),
-                cb::Packet::UpdateAdvancements(cb::UpdateAdvancements {
-                    should_reset: true,
-                    added: Vec::new(),
-                    removed: Vec::new(),
-                    progress: Vec::new(),
-                    show_advancements: true,
                 }),
                 cb::Packet::SetHealth(cb::SetHealth {
                     health: player.parent.health(),
@@ -1894,10 +1959,21 @@ impl MinecraftServer {
                     player.set_shared_flag(1, p.input.shift);
                 }
             }
-            sb::Packet::CustomPayload(_)
-            | sb::Packet::Pong(_)
-            | sb::Packet::PlayerCommand(_)
-            | sb::Packet::SeenAdvancements(_) => {}
+            sb::Packet::SeenAdvancements(packet) => {
+                ferraloom_game::advancements::seen_advancements(
+                    &mut self.level.level,
+                    entity,
+                    &packet,
+                )
+                .map_err(game_error)?;
+            }
+            sb::Packet::ClientCommand(packet)
+                if packet.action == play::ClientCommandAction::RequestStats =>
+            {
+                ferraloom_game::stats::request_stats(&mut self.level.level, entity)
+                    .map_err(game_error)?;
+            }
+            sb::Packet::CustomPayload(_) | sb::Packet::Pong(_) | sb::Packet::PlayerCommand(_) => {}
             // These gameplay ports are outside the terrain/join milestone.
             _ => {}
         }
@@ -1932,86 +2008,99 @@ impl MinecraftServer {
         entity: EntityRef,
         packet: sb::ContainerClick,
     ) -> Result<()> {
+        use ferraloom_game::inventory::{self, LiveRecipeMenuHooks, MenuSynchronization};
         self.connections.get_mut(&connection).unwrap().last_action = Instant::now();
-        let spectator = {
+        let (menu, spectator, valid_slot) = {
             let player = self
                 .level
                 .level
                 .entity::<ServerPlayer>(entity)
                 .map_err(game_error)?;
-            player.game_mode == GameType::Spectator || player.parent.health() <= 0.0
+            let menu = player.menus.current();
+            (
+                player.menus.current_ref(),
+                player.game_mode == GameType::Spectator || player.parent.health() <= 0.0,
+                menu.is_valid_slot_index(i32::from(packet.slot_num)),
+            )
         };
-        let (synchronization, packets, drops) = ferraloom_game::inventory::with_block_menu_context(
-            entity,
-            &mut self.level.level,
-            |menus, book, context| {
-                let mut callbacks = PendingCraftingCallbacks;
-                let mut hooks = RecipeMenuHooks {
-                    manager: &self.recipe_manager,
-                    context: &self.crafting_context,
-                    synchronization: &self.recipe_synchronization,
-                    book,
-                    limited_crafting: Some(
-                        self.game_rules
-                            .boolean(ferraloom_game::gamerules::GameRule::LimitedCrafting),
-                    ),
-                    callbacks: &mut callbacks,
-                };
-                let menu = menus.current_mut();
-                if menu.container_id != packet.container_id.0 {
-                    return Ok((None, Vec::new(), Vec::new()));
-                }
-                let synchronization = if spectator {
-                    Some(ferraloom_game::inventory::MenuSynchronization::Contents)
-                } else if menu.still_valid(context)
-                    && menu.is_valid_slot_index(i32::from(packet.slot_num))
-                {
-                    let mismatch = menu.state_id() != packet.state_id.0;
-                    menu.suppress_remote_updates();
-                    let result = menu.clicked(
-                        context,
-                        i32::from(packet.slot_num),
-                        i32::from(packet.button_num),
-                        packet.container_input,
-                        &mut hooks,
-                    );
-                    result?;
-                    for changed in packet.changed_slots.0 {
-                        menu.set_remote_slot_unsafe(i32::from(changed.slot), changed.stack);
-                    }
-                    menu.set_remote_carried(packet.carried_item);
-                    menu.resume_remote_updates();
-                    Some(if mismatch {
-                        ferraloom_game::inventory::MenuSynchronization::FullState
-                    } else {
-                        ferraloom_game::inventory::MenuSynchronization::Changes
-                    })
-                } else {
-                    None
-                };
-                Ok((
-                    synchronization,
-                    menu.drain_packets(),
-                    std::mem::take(&mut context.drops),
-                ))
-            },
-        )?;
-        ferraloom_game::inventory::send_container_packets(entity, packets, &mut self.level.level)?;
-        for drop in drops {
-            self.drop_inventory_stack(entity, drop.stack, drop.thrown_from_hand)?;
+        if menu.container_id != packet.container_id.0 {
+            return Ok(());
         }
-        if let Some(synchronization) = synchronization {
-            let menu = self
+        if spectator {
+            inventory::synchronize_menu(
+                entity,
+                menu,
+                MenuSynchronization::Contents,
+                &mut self.level.level,
+            )?;
+        } else {
+            if !inventory::live_menu_still_valid(entity, menu, &self.level.level)? || !valid_slot {
+                return Ok(());
+            }
+            let mismatch = {
+                let receiver = self
+                    .level
+                    .level
+                    .entity_mut::<ServerPlayer>(entity)
+                    .map_err(game_error)?
+                    .menus
+                    .menu_mut(menu)?;
+                let mismatch = receiver.state_id() != packet.state_id.0;
+                receiver.suppress_remote_updates();
+                mismatch
+            };
+            let resources = self.level.level.container_resources().map_err(game_error)?;
+            let kind = self
                 .level
                 .level
                 .entity::<ServerPlayer>(entity)
                 .map_err(game_error)?
                 .menus
-                .current_ref();
-            ferraloom_game::inventory::synchronize_menu(
+                .menu(menu)?
+                .kind;
+            let mut hooks = LiveRecipeMenuHooks {
+                resources,
+                kind,
+                limited_crafting: self
+                    .game_rules
+                    .boolean(ferraloom_game::gamerules::GameRule::LimitedCrafting),
+            };
+            inventory::clicked_live_menu(
                 entity,
                 menu,
-                synchronization,
+                i32::from(packet.slot_num),
+                i32::from(packet.button_num),
+                packet.container_input,
+                &mut hooks,
+                &mut self.level.level,
+            )?;
+            // Java re-reads player.containerMenu after clicked: a callback may
+            // have replaced it. The captured old receiver was rooted only for
+            // clicked itself, and must never receive the new remote state.
+            let current = {
+                let menus = &mut self
+                    .level
+                    .level
+                    .entity_mut::<ServerPlayer>(entity)
+                    .map_err(game_error)?
+                    .menus;
+                let current = menus.current_ref();
+                let receiver = menus.menu_mut(current)?;
+                for changed in packet.changed_slots.0 {
+                    receiver.set_remote_slot_unsafe(i32::from(changed.slot), changed.stack);
+                }
+                receiver.set_remote_carried(packet.carried_item);
+                receiver.resume_remote_updates();
+                current
+            };
+            inventory::synchronize_menu(
+                entity,
+                current,
+                if mismatch {
+                    MenuSynchronization::FullState
+                } else {
+                    MenuSynchronization::Changes
+                },
                 &mut self.level.level,
             )?;
         }
@@ -2091,7 +2180,27 @@ impl MinecraftServer {
         entity: EntityRef,
         packet: sb::PlaceRecipe,
     ) -> Result<()> {
+        use ferraloom_game::inventory::{self, LiveRecipeMenuHooks, MenuKind};
         self.connections.get_mut(&connection).unwrap().last_action = Instant::now();
+        let (menu, allow_dropping) = {
+            let player = self
+                .level
+                .level
+                .entity::<ServerPlayer>(entity)
+                .map_err(game_error)?;
+            if player.game_mode == GameType::Spectator
+                || player.menus.current().container_id != packet.container_id.0
+            {
+                return Ok(());
+            }
+            (
+                player.menus.current_ref(),
+                player.game_mode == GameType::Creative,
+            )
+        };
+        if !inventory::live_menu_still_valid(entity, menu, &self.level.level)? {
+            return Ok(());
+        }
         let Some(display) = self
             .recipe_synchronization
             .get_recipe_from_display(packet.recipe)
@@ -2102,78 +2211,63 @@ impl MinecraftServer {
             .recipe_manager
             .by_key(&display.parent)
             .context("recipe display without parent")?;
-        let (packets, drops) = {
+        let kind = {
             let player = self
                 .level
                 .level
-                .entity_mut::<ServerPlayer>(entity)
+                .entity::<ServerPlayer>(entity)
                 .map_err(game_error)?;
-            if player.game_mode == GameType::Spectator
-                || player.menus.current().container_id != packet.container_id.0
-                || !player.recipe_book.contains(&recipe.id)
-                || recipe.value.placement_info().is_impossible_to_place()
-            {
+            if !player.recipe_book.contains(&recipe.id) {
                 return Ok(());
             }
-            let infinite_materials = player.instabuild();
-            let mut context = MenuContext::player_with_abilities(
-                &mut player.inventory,
-                &mut player.parent.equipment,
-                player.game_mode == GameType::Creative,
-                infinite_materials,
-            );
-            let menu = player.menus.current_mut();
-            if !menu.still_valid(&context) {
-                return Ok(());
-            }
-            if menu.crafting_grid_size().is_none() {
-                if matches!(
-                    menu.kind,
-                    ferraloom_game::inventory::MenuKind::Furnace
-                        | ferraloom_game::inventory::MenuKind::Smoker
-                        | ferraloom_game::inventory::MenuKind::BlastFurnace
-                ) {
-                    bail!("Unsupported: furnace recipe-book placement");
-                }
-                return Ok(());
-            }
-            let mut callbacks = PendingCraftingCallbacks;
-            let mut hooks = RecipeMenuHooks {
-                manager: &self.recipe_manager,
-                context: &self.crafting_context,
-                synchronization: &self.recipe_synchronization,
-                book: &mut player.recipe_book,
-                limited_crafting: Some(
-                    self.game_rules
-                        .boolean(ferraloom_game::gamerules::GameRule::LimitedCrafting),
-                ),
-                callbacks: &mut callbacks,
-            };
-            hooks.prepare_recipe_click(menu.kind)?;
-            let allow_dropping = context.is_creative;
-            let action = menu.handle_crafting_placement(
-                &mut context,
-                recipe,
-                packet.use_max_items,
-                allow_dropping,
-                &mut hooks,
-            )?;
-            let mut packets = menu.drain_packets();
-            if action == ferraloom_game::crafting::PostPlaceAction::PlaceGhostRecipe {
-                packets.push(cb::Packet::PlaceGhostRecipe(cb::PlaceGhostRecipe {
-                    container_id: VarInt(menu.container_id),
-                    recipe_display: display.display.display.clone(),
-                }));
-            }
-            (packets, context.drops)
+            player.menus.menu(menu)?.kind
         };
-        for drop in drops {
-            self.drop_inventory_stack(entity, drop.stack, drop.thrown_from_hand)?;
+        if !matches!(
+            kind,
+            MenuKind::Inventory
+                | MenuKind::Crafting
+                | MenuKind::Furnace
+                | MenuKind::Smoker
+                | MenuKind::BlastFurnace
+        ) || recipe.value.placement_info().is_impossible_to_place()
+        {
+            return Ok(());
         }
-        for packet in packets {
-            self.connections.get_mut(&connection).unwrap().push(packet);
+        let mut hooks = LiveRecipeMenuHooks {
+            resources: self.level.level.container_resources().map_err(game_error)?,
+            kind,
+            limited_crafting: self
+                .game_rules
+                .boolean(ferraloom_game::gamerules::GameRule::LimitedCrafting),
+        };
+        let action = inventory::place_live_menu_recipe(
+            entity,
+            menu,
+            recipe,
+            packet.use_max_items,
+            allow_dropping,
+            &mut hooks,
+            &mut self.level.level,
+        )?;
+        if action == ferraloom_game::crafting::PostPlaceAction::PlaceGhostRecipe {
+            let container_id = self
+                .level
+                .level
+                .entity::<ServerPlayer>(entity)
+                .map_err(game_error)?
+                .menus
+                .current()
+                .container_id;
+            inventory::send_container_packets(
+                entity,
+                [cb::Packet::PlaceGhostRecipe(cb::PlaceGhostRecipe {
+                    container_id: VarInt(container_id),
+                    recipe_display: display.display.display.clone(),
+                })],
+                &mut self.level.level,
+            )?;
         }
-        Ok(())
+        self.apply_level_effects()
     }
     /// Port of ServerGamePacketListenerImpl#handleRecipeBookChangeSettingsPacket.
     fn handle_recipe_book_change_settings(
@@ -2231,7 +2325,7 @@ impl MinecraftServer {
                 let mut callbacks = PendingCraftingCallbacks;
                 let mut hooks = RecipeMenuHooks {
                     manager: &self.recipe_manager,
-                    context: &self.crafting_context,
+                    context: self.crafting_context.as_ref(),
                     synchronization: &self.recipe_synchronization,
                     book: &mut player.recipe_book,
                     limited_crafting: Some(
@@ -2989,6 +3083,12 @@ impl MinecraftServer {
             && let Phase::Play(entity) = c.phase
         {
             let player = self.player(entity)?;
+            let progress_path = self
+                .level
+                .generation()
+                .with_world(|world| world.access.path().to_path_buf());
+            let progress =
+                ferraloom_game::advancements::PlayerProgressSave::capture(player, &progress_path)?;
             let tag = player.save();
             let uuid = player.uuid.to_string();
             let name = player.display_name();
@@ -2996,7 +3096,12 @@ impl MinecraftServer {
                 .level
                 .generation()
                 .with_world(|world| world.access.clone());
-            tokio::task::spawn_blocking(move || access.player_data().save(&uuid, &tag)).await??;
+            tokio::task::spawn_blocking(move || -> Result<()> {
+                access.player_data().save(&uuid, &tag)?;
+                progress.write()?;
+                Ok(())
+            })
+            .await??;
             self.level.generation().update_player(entity, None);
             self.level.level.remove_entity(entity).map_err(game_error)?;
             self.players.retain(|&id| id != connection);
@@ -3241,6 +3346,25 @@ impl MinecraftServer {
                 .with_world(|world| world.io.store(pos, Some(tag)));
             save.await?;
         }
+        let progress_path = self
+            .level
+            .generation()
+            .with_world(|world| world.access.path().to_path_buf());
+        let progress = self
+            .players
+            .iter()
+            .filter_map(|id| self.connections.get(id))
+            .filter_map(|connection| match connection.phase {
+                Phase::Play(entity) => Some(entity),
+                _ => None,
+            })
+            .map(|entity| {
+                Ok(ferraloom_game::advancements::PlayerProgressSave::capture(
+                    self.player(entity)?,
+                    &progress_path,
+                )?)
+            })
+            .collect::<Result<Vec<_>>>()?;
         let players = self
             .players
             .iter()
@@ -3276,6 +3400,8 @@ impl MinecraftServer {
             world.begin_save_level_and_players(self.level.game_time, players)
         });
         save.await??;
+        tokio::task::spawn_blocking(move || progress.into_iter().try_for_each(|save| save.write()))
+            .await??;
         let synchronize = self
             .level
             .generation()

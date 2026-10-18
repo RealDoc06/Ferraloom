@@ -1,6 +1,6 @@
 # Advancements
 
-Phase 1 covers codecs, pure matching and player-local progression. Live player trigger calls, rewards delivery, and the game-rule adapter are pending phase 2. Identity-set child order is captured for exact layout comparison; runtime identity collections use deterministic insertion order.
+Codecs, pure and live matching, progression, ordered reward delivery, game rules, packets and persistence adapters are implemented. Native tick and menu producers and Strict interaction parity await integration; LOCATION also awaits structure facts. Identity-set child order is captured for exact layout comparison; runtime identity collections use deterministic insertion order.
 
 Mechanics are identified from the 26.3 server source. Registry and resource entries are mechanically enumerated from the official reports, bootstrapped registries and built-in datapack.
 
@@ -1949,3 +1949,24 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | advancements.persistence.obtained-time | Match SMART midnight resolution, extended years and system-zone offset formatting, including historical offset seconds | `AdvancementProgress.OBTAINED_TIME_CODEC` | `advancements::tests::vanilla_obtained_time_offsets_years_and_smart_midnight; advancements::tests::vanilla_progress_award_revoke_dates_and_wire` | pass | pass |
 | advancements.progress.nested-visibility-order | Apply nested reward effects before chat and the final completion reread, including colliding root hashes and reward-time revoke/flush | `PlayerAdvancements#award` | `advancements::tests::vanilla_nested_reward_visibility_order_and_post_reward_revoke` | pass | pass |
 | advancements.progress.empty-obtained-map | Serialize an explicit empty criteria object when live criteria exist but none are granted | `AdvancementProgress.CRITERIA_CODEC; AdvancementProgress.CODEC` | `advancements::tests::vanilla_progress_award_revoke_dates_and_wire` | pass | pass |
+
+| advancements.matching.live-runtime | Shared listener matcher evaluates pure and canonical-runtime contexts with identical condition order and RNG use | `SimpleCriterionTrigger#trigger` | `advancements::tests::vanilla_trigger_codecs_and_synthetic_matches` | pass | partial |
+
+| advancements.player-food-unconstrained | Unconstrained food bounds need no runtime food state; constrained bounds remain Unsupported until food is available | `PlayerPredicate#matches` | `predicates::player::tests::unconstrained_food_needs_no_unavailable_state` | pass | partial |
+
+| advancements.live-trigger-effects | Live consumed block, retained inventory, recipe and tick triggers apply synchronous rewards, announcements and visibility; canonical equipment/stepping facts are available and LOCATION remains off until the native tick seam lands | `SimpleCriterionTrigger#trigger; AdvancementRewards#grant` | `advancements::tests::vanilla_nested_reward_visibility_order_and_post_reward_revoke; live_rewards_nest_recipe_awards_before_outer_announcement_and_visibility; retained_inventory_trigger_and_stats_request_read_canonical_player` | pass | partial |
+
+| advancements.persistence.live-save-zone | Save capture uses the system zone at each obtained instant; IO workers write captured JSON | `PlayerList#save; AdvancementProgress.OBTAINED_TIME_CODEC` | `advancements::persistence::tests::captured_save_uses_each_instant_offset_across_dst` | pass | partial |
+
+| advancements.parity.consumed-inventory-and-tab | Bedrock flat Strict scenario grants crafting table through native inventory listener and selects root tab | `ServerPlayer.containerListener; ServerGamePacketListenerImpl#handleSeenAdvancements` | `ferraloom-parity::inventory_changed_awards_and_selects_advancement_tab` | pass | todo |
+| advancements.parity.player-save-rejoin | Bedrock flat awarded inventory criterion persists through player/world save and rejoin | `PlayerList#save; PlayerAdvancements#load` | `ferraloom-parity::inventory_advancement_persists_across_player_save` | pass | todo |
+
+| advancements.announcement.application-time | Announcement descriptor reads SHOW_ADVANCEMENT_MESSAGES and team-formatted player name after synchronous rewards return | `PlayerAdvancements#award` | `advancements::tests::announcement_descriptor_reads_rule_and_team_at_application_time; vanilla_rewards_change_announcement_rule_and_name_before_chat` | pass | partial |
+
+| advancements.recipe-crafted.retained-inputs | Shared pure/live matcher preserves ordered ingredient receivers and duplicate refs; trigger releases roots after capture or predicate errors; ResultSlot producer pending | `ServerPlayer#triggerRecipeCrafted; RecipeCraftedTrigger.TriggerInstance#matches` | `advancements::tests::vanilla_recipe_crafted_retained_receivers_preserve_order_and_duplicates; recipe_crafted_releases_roots_on_capture_and_predicate_errors` | pass | partial |
+
+| advancements.recipes.live-award | Shared live recipe award finishes each unlock trigger before the next holder, sends one aggregate packet and returns its display-entry count; skips known and special recipes | `ServerPlayer#awardRecipes; ServerRecipeBook#addRecipes` | `advancements::tests::award_recipes_counts_displays_after_synchronous_nested_unlocks; live_rewards_nest_recipe_awards_before_outer_announcement_and_visibility` | pass | partial |
+
+| advancements.parity.loaded-tab-save | Bedrock flat Strict scenario loads canonical UUID progress, selects the advancement tab, saves and repeats after rejoin | `PlayerList#getPlayerAdvancements; PlayerList#save; ServerGamePacketListenerImpl#handleSeenAdvancements` | `ferraloom-parity::loaded_statistics_and_advancement_tab_survive_save` | pass | pass |
+| advancements.persistence.level-resource | UUID saves use players/advancements and the shared player-progress path helper | `LevelResource.PLAYER_ADVANCEMENTS_DIR` | `advancements::persistence::tests::captured_save_uses_each_instant_offset_across_dst` | pass | pass |
+| advancements.persistence.old-layout-migration | Migrate older player advancement layouts through the filefix workstream; no fallback reader | `PlayerStorageFileFix` | pending | - | todo |

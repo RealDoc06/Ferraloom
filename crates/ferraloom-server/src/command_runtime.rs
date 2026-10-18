@@ -358,6 +358,7 @@ impl MinecraftServer {
                             .data
                             .insert("difficulty_settings", Tag::Compound(settings))
                     });
+                    self.level.level.set_difficulty(difficulty(changed));
                     self.broadcast(cb::Packet::ChangeDifficulty(cb::ChangeDifficulty {
                         difficulty: difficulty(changed),
                         locked,
@@ -496,7 +497,7 @@ fn game_mode_name(mode: GameType) -> &'static str {
 }
 
 use ferraloom_game::commands::arguments::selectors::{
-    EntityQuery, SelectorEntity, SelectorPredicate, rotation_matches,
+    EntityQuery, SelectorEntity, SelectorPredicate, selector_read_error,
 };
 impl EntityQuery for MinecraftServer {
     fn candidates(&self, players_only: bool) -> Vec<EntityRef> {
@@ -556,110 +557,52 @@ impl EntityQuery for MinecraftServer {
         &self,
         entity: EntityRef,
     ) -> std::result::Result<(), ferraloom_brigadier::CommandSyntaxException> {
-        if self
+        self.level
             .level
-            .level
-            .entity_state(entity)
-            .is_ok_and(|state| !matches!(state, ferraloom_game::entity::EntityState::Player(_)))
-        {
-            // The later entity naming/NBT read API has not landed in this base.
-            return Err(exceptions::error("ferraloom.selector.pending", &[]));
-        }
-        Ok(())
+            .entity_plain_text_name(entity)
+            .map(|_| ())
+            .map_err(selector_read_error)
     }
     fn info(&self, entity: EntityRef) -> Option<SelectorEntity<'_>> {
-        let player = self.player(entity).ok()?;
+        let state = self.level.level.entity_state(entity).ok()?;
+        let base = state.as_entity();
+        let player = matches!(state, ferraloom_game::entity::EntityState::Player(_));
+        let name = if let ferraloom_game::entity::EntityState::Player(player) = state {
+            std::borrow::Cow::Borrowed(player.name.as_str())
+        } else {
+            std::borrow::Cow::Owned(self.level.level.entity_plain_text_name(entity).ok()?)
+        };
         Some(SelectorEntity {
-            name: player.name.as_str().into(),
-            uuid: player.uuid,
-            player: true,
-            dimension: "minecraft:overworld",
-            position: player.position,
-            width: f64::from(player.dimensions.width),
-            height: f64::from(player.dimensions.height),
+            name,
+            uuid: base.uuid,
+            player,
+            dimension: &self.level.dimension,
+            position: base.position,
+            width: f64::from(base.dimensions.width),
+            height: f64::from(base.dimensions.height),
         })
     }
-    fn display_name(&self, entity: EntityRef) -> Component {
-        let Ok(player) = self.player(entity) else {
-            return Component::literal("");
-        };
-        let plain = Component::literal(&player.name);
-        let name = self
-            .shared()
-            .scoreboard
-            .scoreboard()
-            .get_players_team(&player.name)
-            .map_or_else(|| plain.clone(), |team| team.formatted_name(plain.clone()));
-        player.decorate_display_name_component(name)
+    fn display_name(
+        &self,
+        entity: EntityRef,
+    ) -> std::result::Result<Component, ferraloom_brigadier::CommandSyntaxException> {
+        self.level
+            .level
+            .entity_display_name_with_scoreboard(entity, self.shared().scoreboard.scoreboard())
+            .map_err(selector_read_error)
     }
     fn matches(
         &mut self,
         entity: EntityRef,
         predicate: &SelectorPredicate,
     ) -> Result<bool, ferraloom_brigadier::CommandSyntaxException> {
-        let player = self
-            .player(entity)
-            .map_err(|_| exceptions::error("argument.entity.notfound.entity", &[]))?;
-        Ok(match predicate {
-            SelectorPredicate::Alive => player.parent.health() > 0.,
-            SelectorPredicate::Name { value, inverted } => (player.name == *value) != *inverted,
-            SelectorPredicate::GameMode { value, inverted } => {
-                (player.game_mode == *value) != *inverted
-            }
-            SelectorPredicate::Team { value, inverted } => {
-                let team = self
-                    .shared()
-                    .scoreboard
-                    .scoreboard()
-                    .get_players_team(&player.name);
-                (team.map_or("", |team| team.name()) == value) != *inverted
-            }
-            SelectorPredicate::Type {
-                value,
-                tag,
-                inverted,
-            } => {
-                let matched = if *tag {
-                    self.command_entity_tags
-                        .get(value)
-                        .is_some_and(|types| types.contains(&EntityType::PLAYER))
-                } else {
-                    value == "minecraft:player"
-                };
-                matched != *inverted
-            }
-            SelectorPredicate::Tag { value, inverted } => {
-                let matched = if value.is_empty() {
-                    player.tags.is_empty()
-                } else {
-                    player.tags.contains(value)
-                };
-                matched != *inverted
-            }
-            SelectorPredicate::Nbt { value, inverted } => {
-                let tag = ferraloom_game::commands::arguments::selectors::player_nbt(player)
-                    .map_err(|_| exceptions::error("ferraloom.selector.pending", &[]))?;
-                ferraloom_nbt::compare_nbt(Some(value), Some(&Tag::Compound(tag)), true)
-                    != *inverted
-            }
-            SelectorPredicate::Level(range) => {
-                range.contains(f64::from(player.saved.get_int_or("XpLevel", 0)))
-            }
-            SelectorPredicate::Pitch(range) => rotation_matches(*range, player.pitch),
-            SelectorPredicate::Yaw(range) => rotation_matches(*range, player.yaw),
-            SelectorPredicate::Scores(scores) => {
-                let scoreboard = self.shared().scoreboard.scoreboard();
-                scores.iter().all(|(objective, range)| {
-                    scoreboard.get_objective(objective).is_some()
-                        && scoreboard
-                            .get_player_score(&player.name, objective)
-                            .is_some_and(|score| range.contains(f64::from(score.value)))
-                })
-            }
-            SelectorPredicate::Advancements(_) | SelectorPredicate::Predicate { .. } => {
-                return Err(exceptions::error("ferraloom.selector.pending", &[]));
-            }
-        })
+        ferraloom_game::commands::arguments::selectors::live_entity_matches(
+            &self.level.level,
+            self.shared().scoreboard.scoreboard(),
+            &self.command_entity_tags,
+            entity,
+            predicate,
+        )
     }
     fn shuffle(&mut self, entities: &mut [(EntityRef, f64)]) {
         // Collections.shuffle retains one java.util.Random; it does not consume Level#random.
@@ -893,9 +836,16 @@ impl MinecraftServer {
                 salt: message.salt,
                 last_seen: message.last_seen.to_vec(),
             });
-        let name = command
-            .source
-            .display_name(|entity| self.display_name(entity));
+        let name = &command.source;
+        let name = match &name.names {
+            ferraloom_game::commands::source::NamesProvider::Constant(name) => {
+                name.as_ref().clone()
+            }
+            ferraloom_game::commands::source::NamesProvider::Entity => match name.entity {
+                Some(entity) => self.display_name(entity)?,
+                None => Component::default(),
+            },
+        };
         let count = if let Some((entity, receivers, target)) = team_receivers {
             for receiver in &receivers {
                 let outgoing = matches!(self.connections[receiver].phase, Phase::Play(handle) if handle == entity);
@@ -917,7 +867,7 @@ impl MinecraftServer {
             receivers.len() as i32
         } else if let Some(targets) = targets {
             for entity in &targets {
-                let target_name = self.display_name(*entity);
+                let target_name = self.display_name(*entity)?;
                 let target=self.players.iter().copied().find(|id|matches!(self.connections[id].phase,Phase::Play(handle) if handle==*entity)).unwrap();
                 let outgoing = ChatTypeBound {
                     chat_type: ChatTypeHolder(Holder::Reference(id("msg_command_outgoing"))),
@@ -2131,7 +2081,7 @@ impl ferraloom_game::commands::components::ComponentResolver for MinecraftServer
 
     fn nbt_data(
         &mut self,
-        _source: &CommandSourceStack,
+        source: &CommandSourceStack,
         data: &protocol::chat::DataSource,
     ) -> std::result::Result<
         Vec<ferraloom_nbt::CompoundTag>,
@@ -2139,6 +2089,23 @@ impl ferraloom_game::commands::components::ComponentResolver for MinecraftServer
     > {
         use ferraloom_game::commands::components::{ResolutionError, UnsupportedContent};
         match data {
+            protocol::chat::DataSource::Entity(pattern) => {
+                let selector =
+                    ferraloom_game::commands::arguments::selectors::EntitySelector::parse(
+                        &mut ferraloom_brigadier::StringReader::new(pattern),
+                        true,
+                    )?;
+                let entities = selector.find(source, self, false)?;
+                entities
+                    .into_iter()
+                    .map(|entity| {
+                        self.level
+                            .level
+                            .entity_nbt_to_compare(entity)
+                            .map_err(ResolutionError::EntityData)
+                    })
+                    .collect()
+            }
             protocol::chat::DataSource::Storage(id) => {
                 let storage = self
                     .level

@@ -4,13 +4,13 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 
 | Area | Rows | Ferraloom todo | Ferraloom partial | Ferraloom pass | Ferraloom fail |
 |---|---:|---:|---:|---:|---:|
-| [Advancements](features/advancements.md) | 1942 | 0 | 1933 | 9 | 0 |
-| [Block entities](features/block-entities.md) | 112 | 72 | 40 | 0 | 0 |
-| [Blocks](features/blocks.md) | 393 | 313 | 47 | 33 | 0 |
+| [Advancements](features/advancements.md) | 1954 | 3 | 1940 | 11 | 0 |
+| [Block entities](features/block-entities.md) | 114 | 72 | 40 | 2 | 0 |
+| [Blocks](features/blocks.md) | 396 | 310 | 50 | 36 | 0 |
 | [Chat and text components](features/chat.md) | 23 | 21 | 2 | 0 | 0 |
-| [Chunks and tickets](features/chunks.md) | 46 | 21 | 25 | 0 | 0 |
+| [Chunks and tickets](features/chunks.md) | 52 | 21 | 31 | 0 | 0 |
 | [Combat and damage](features/combat-damage.md) | 204 | 204 | 0 | 0 | 0 |
-| [Commands and argument types](features/commands.md) | 2663 | 2512 | 35 | 116 | 0 |
+| [Commands and argument types](features/commands.md) | 2664 | 2509 | 35 | 120 | 0 |
 | [Crafting and recipes](features/crafting-recipes.md) | 2137 | 2 | 29 | 2106 | 0 |
 | [Datapacks and resource reload](features/datapacks-reload.md) | 57 | 57 | 0 | 0 | 0 |
 | [Enchantments](features/enchantments.md) | 136 | 136 | 0 | 0 | 0 |
@@ -24,7 +24,7 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Item modifiers](features/item-modifiers.md) | 4 | 1 | 3 | 0 | 0 |
 | [Items and data components](features/items.md) | 242 | 116 | 123 | 3 | 0 |
 | [Lighting](features/lighting.md) | 13 | 2 | 0 | 11 | 0 |
-| [Loot](features/loot.md) | 1671 | 159 | 1512 | 0 | 0 |
+| [Loot](features/loot.md) | 1671 | 158 | 1513 | 0 | 0 |
 | [Management JSON-RPC](features/management.md) | 101 | 101 | 0 | 0 | 0 |
 | [Maps, decoration and variants](features/maps-decoration.md) | 255 | 255 | 0 | 0 | 0 |
 | [Networking and login](features/networking-login.md) | 46 | 10 | 36 | 0 | 0 |
@@ -41,7 +41,7 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Server operations](features/server-operations.md) | 111 | 96 | 15 | 0 | 0 |
 | [Sounds and particles](features/sounds-particles.md) | 2146 | 2146 | 0 | 0 | 0 |
 | [Spawning, trial spawners and vaults](features/spawning.md) | 138 | 138 | 0 | 0 | 0 |
-| [Statistics](features/statistics.md) | 96 | 3 | 90 | 3 | 0 |
+| [Statistics](features/statistics.md) | 104 | 5 | 94 | 5 | 0 |
 | [Tags](features/tags.md) | 907 | 907 | 0 | 0 | 0 |
 | [Ticking, game events and vibrations](features/ticking.md) | 191 | 181 | 10 | 0 | 0 |
 | [Villages, trading and POI](features/villages-trading-poi.md) | 599 | 599 | 0 | 0 | 0 |
@@ -49,4 +49,4 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Weather, time and environment](features/weather-time.md) | 85 | 85 | 0 | 0 | 0 |
 | [World storage and data fixing](features/world-storage.md) | 307 | 306 | 1 | 0 | 0 |
 | [World generation](features/worldgen.md) | 3113 | 2640 | 173 | 300 | 0 |
-| **Total** | **19345** | **12101** | **4343** | **2901** | **0** |
+| **Total** | **19377** | **12099** | **4364** | **2914** | **0** |

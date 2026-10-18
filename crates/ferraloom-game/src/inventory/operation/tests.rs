@@ -317,3 +317,156 @@ fn menu_transfer_keeps_the_native_copy_alias_when_either_cache_is_replaced() {
     }
     assert_eq!(checked, 2);
 }
+
+struct CrafterListener<'a> {
+    live: LiveMenuContext<'a>,
+    events: Vec<String>,
+}
+impl MenuSynchronizationContext for CrafterListener<'_> {
+    type Receiver = StackRef;
+    fn menu(&self) -> Result<&AbstractContainerMenu> {
+        self.live.menu()
+    }
+    fn menu_mut(&mut self) -> Result<&mut AbstractContainerMenu> {
+        self.live.menu_mut()
+    }
+    fn capture_slot(&mut self, slot: usize) -> Result<StackRef> {
+        self.live.capture_slot(slot)
+    }
+    fn capture_carried(&mut self) -> Result<StackRef> {
+        self.live.capture_carried()
+    }
+    fn current_stack<'a>(&'a self, receiver: &'a StackRef) -> Result<&'a ItemStack> {
+        self.live.current_stack(receiver)
+    }
+    fn release_current(&mut self, receiver: StackRef) {
+        self.live.release_current(receiver);
+    }
+    fn listener_copies(&self) -> Result<&ListenerCopyArena> {
+        self.live.listener_copies()
+    }
+    fn listener_copies_mut(&mut self) -> Result<&mut ListenerCopyArena> {
+        self.live.listener_copies_mut()
+    }
+    fn data_at(&mut self, index: usize) -> Result<i32> {
+        self.live.data_at(index)
+    }
+    fn internal_slot_changed(&mut self, index: usize) -> Result<()> {
+        self.live.internal_slot_changed(index)
+    }
+    fn slot_changed(&mut self, index: usize, copy: ListenerCopyRef) -> Result<()> {
+        let copy = self.listener_copies()?.get(copy).unwrap();
+        let output = self.live.level.stack_ref(self.live.slot_address(45)?)?;
+        self.events.push(format!(
+            "{index}:{}:{}",
+            short_item(copy),
+            short_item(self.live.level.stack(output)?)
+        ));
+        Ok(())
+    }
+}
+fn short_item(stack: &ItemStack) -> String {
+    if stack.is_empty() {
+        "-".into()
+    } else {
+        describe(stack)
+    }
+}
+
+#[test]
+fn crafter_internal_listener_refreshes_before_later_listeners_and_inside_slot_setter() {
+    let mut level = crate::entity::tests::level(false);
+    crate::level::drop_fixtures::install(&mut level);
+    let player = level.next_entity_ref();
+    let mut state = ServerPlayer::new(
+        Uuid::new(1, 2),
+        "crafter".into(),
+        1,
+        Vec3::ZERO,
+        GameType::Survival,
+    );
+    let mut menu = AbstractContainerMenu::new(MenuKind::Crafter, 7).unwrap();
+    menu.crafter_listener = true;
+    let menu = state.menus.install_container_menu(menu);
+    level
+        .add_entity(player, EntityState::Player(Box::new(state)))
+        .unwrap();
+    with_menu_callback(player, menu, &mut level, |live| {
+        let mut listener = CrafterListener {
+            live: LiveMenuContext {
+                level: live.level,
+                player,
+                menu,
+            },
+            events: Vec::new(),
+        };
+        let input = listener.live.slot_address(0)?;
+        listener.live.level.replace_stack_object(
+            input,
+            StackValue::New(ItemStack::new(Item::OAK_LOG, 1, Default::default())),
+        )?;
+        broadcast_menu_changes(&mut listener)?;
+        let result = listener.live.slot_address(45)?;
+        let mut operation = StackOperation::new(listener.live.level);
+        let held = operation.pin(result)?;
+        listener
+            .events
+            .push(format!("set:{}", short_item(operation.level.stack(held)?)));
+        operation.level.replace_stack_object(
+            ContainerSlot {
+                container: ContainerHandle::PlayerInventory(player),
+                slot: 0,
+            },
+            StackValue::New(ItemStack::new(Item::DIRT, 1, Default::default())),
+        )?;
+        // The result is held across a second native broadcast, whose inventory
+        // listener replaces it even though the crafting grid did not change.
+        let mut nested = CrafterListener {
+            live: LiveMenuContext {
+                level: operation.level,
+                player,
+                menu,
+            },
+            events: Vec::new(),
+        };
+        broadcast_menu_changes(&mut nested)?;
+        listener.events.append(&mut nested.events);
+        let current = nested.live.level.stack_ref(result)?;
+        listener.events.push(format!(
+            "refresh:{}:{}",
+            std::ptr::eq(
+                nested.live.level.stack(held)?,
+                nested.live.level.stack(current)?
+            ),
+            short_item(nested.live.level.stack(held)?)
+        ));
+        let expected = include_str!("../../../tests/java/inventory/listeners.tsv")
+            .lines()
+            .find_map(|line| line.strip_prefix("listener\tcrafter-internal\t"))
+            .unwrap();
+        assert_eq!(listener.events.join(";"), expected);
+        drop(operation);
+        let mut transfer = super::super::transfer::LiveMenuTransfer {
+            player,
+            menu,
+            operation: StackOperation::new(listener.live.level),
+        };
+        transfer.set_by_player(
+            0,
+            ItemStack::new(Item::DIRT, 1, Default::default()),
+            &mut UnsupportedMenuHooks,
+        )?;
+        drop(transfer);
+        // CrafterSlot#setChanged has refreshed the result before the setter
+        // returns, independently of a later handler broadcast.
+        let output = listener.live.level.stack_ref(result)?;
+        let actual = format!("empty:{}", short_item(listener.live.level.stack(output)?));
+        let expected = include_str!("../../../tests/java/inventory/listeners.tsv")
+            .lines()
+            .find_map(|line| line.strip_prefix("listener\tcrafter-slot\t"))
+            .unwrap();
+        assert_eq!(actual, expected);
+        Ok(())
+    })
+    .unwrap();
+}

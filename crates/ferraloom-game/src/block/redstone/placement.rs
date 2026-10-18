@@ -21,7 +21,7 @@ impl Level {
         state: BlockState,
         pos: ferraloom_util::BlockPos,
         by: Option<crate::entity::EntityRef>,
-        stack: &ferraloom_protocol::component::ItemStack,
+        stack: crate::block::StackView<'_>,
     ) -> Result<(), LevelError> {
         self.required_block_behavior(state.block(), crate::block::BlockMethod::SetPlacedBy)?
             .set_placed_by(state, pos, by, stack, self)
