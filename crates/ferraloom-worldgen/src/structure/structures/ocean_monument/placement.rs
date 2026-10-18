@@ -1,3 +1,4 @@
+mod building;
 use super::{
     MonumentRoom,
     graph::{RoomGraph, RoomKind},

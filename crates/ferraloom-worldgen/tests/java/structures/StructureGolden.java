@@ -340,6 +340,7 @@ public final class StructureGolden {
         MansionGolden.pieces(registries,directory);
         MansionFoundationGolden.capture(registries,directory);
         MonumentGolden.capture(registries,directory);
-        MonumentRoomGolden.capture(registries,directory);StrongholdBlocksGolden.capture(registries,directory);NetherFortressBlocksGolden.capture(registries,directory);MineshaftBlocksGolden.capture(registries,directory);
+        MonumentRoomGolden.capture(registries,directory);
+        MonumentBuildingGolden.capture(directory);StrongholdBlocksGolden.capture(registries,directory);NetherFortressBlocksGolden.capture(registries,directory);MineshaftBlocksGolden.capture(registries,directory);
     }
 }
