@@ -78,8 +78,8 @@ impl Feature for FossilFeature {
             Rotation::CounterClockwise90,
         ][ctx.random.next_int_bound(4) as usize];
         let index = ctx.random.next_int_bound(self.base.len() as i32) as usize;
-        let base = self.templates.get(&self.base[index])?;
-        let overlay = self.templates.get(&self.overlay[index])?;
+        let base = self.templates.get_or_create(&self.base[index]);
+        let overlay = self.templates.get_or_create(&self.overlay[index]);
         let min = [
             (ctx.origin[0] >> 4) * 16 - 16,
             ctx.region.min_y(),

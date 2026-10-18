@@ -156,6 +156,10 @@ public final class OreCaveGolden {
         var fullFlowGeode=features.get("amethyst_geode").deepCopy();
         fullFlowGeode.getAsJsonObject("blocks").add("filling_provider",JsonParser.parseString("{id:'minecraft:water',properties:{level:'8'}}"));
         features.put("fixture/geode_full_flow",fullFlowGeode);
+        var missingFossil=features.get("fossil_coal").deepCopy();
+        missingFossil.add("fossil_structures",JsonParser.parseString("['fixture:missing_fossil']"));
+        missingFossil.add("overlay_structures",JsonParser.parseString("['fixture:missing_fossil_overlay']"));
+        features.put("fixture/fossil_missing",missingFossil);
         for(String type:List.of("ore","scattered_ore"))features.put("fixture/"+type+"_zero",JsonParser.parseString("{type:'minecraft:"+type+"',size:0,discard_chance_on_air_exposure:0.5,targets:[{target:{predicate_type:'minecraft:block_match',block:'minecraft:stone'},state:'minecraft:iron_ore'}]}").getAsJsonObject());
         var settings=registries.lookupOrThrow(Registries.NOISE_SETTINGS).getValue(Identifier.withDefaultNamespace("overworld"));
         var generator=new NoiseBasedChunkGenerator(WorldgenGolden.source(registries,"overworld"),Holder.direct(settings));
