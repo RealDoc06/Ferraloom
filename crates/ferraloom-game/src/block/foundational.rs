@@ -23,7 +23,7 @@ impl BlockBehavior for FallingBlock {
         _direction: Direction,
         _neighbor_pos: BlockPos,
         _neighbor: BlockState,
-        level: &mut LevelAccessRef<'_>,
+        level: &mut LevelAccessRef<'_, '_>,
     ) -> Result<BlockState, LevelError> {
         level.schedule_block_tick(pos, state.block(), 2)?;
         Ok(state)
@@ -49,15 +49,13 @@ impl BlockBehavior for VegetationBlock {
         &self,
         _state: BlockState,
         pos: BlockPos,
-        level: &LevelReaderRef<'_>,
+        level: &LevelReaderRef<'_, '_>,
     ) -> Result<bool, LevelError> {
         let below = level.get_block_state(pos.below(1))?;
-        match level {
-            LevelReaderRef::Server(level) => Ok(level.block_tags()?.contains_key(
-                ferraloom_data::tags::BlockTags::SUPPORTS_VEGETATION,
-                below.block(),
-            )),
-        }
+        Ok(level.block_tags()?.contains_key(
+            ferraloom_data::tags::BlockTags::SUPPORTS_VEGETATION,
+            below.block(),
+        ))
     }
     fn update_shape(
         &self,
@@ -66,7 +64,7 @@ impl BlockBehavior for VegetationBlock {
         _direction: Direction,
         _neighbor_pos: BlockPos,
         _neighbor: BlockState,
-        level: &mut LevelAccessRef<'_>,
+        level: &mut LevelAccessRef<'_, '_>,
     ) -> Result<BlockState, LevelError> {
         Ok(if self.can_survive(state, pos, &level.as_reader())? {
             state
@@ -88,7 +86,7 @@ impl BlockBehavior for ChainBlock {
         _direction: Direction,
         _neighbor_pos: BlockPos,
         _neighbor: BlockState,
-        level: &mut LevelAccessRef<'_>,
+        level: &mut LevelAccessRef<'_, '_>,
     ) -> Result<BlockState, LevelError> {
         if state.get(ferraloom_data::properties::WATERLOGGED) == Some(true) {
             level.schedule_fluid_tick(pos, ferraloom_data::registries::fluid::Id::WATER, 5)?;
@@ -107,7 +105,7 @@ impl BlockBehavior for ChainBlock {
         state: BlockState,
         pos: BlockPos,
         fluid: ferraloom_data::FluidState,
-        level: &mut LevelAccessRef<'_>,
+        level: &mut LevelAccessRef<'_, '_>,
     ) -> Result<bool, LevelError> {
         super::fluid::SimpleWaterloggedBlock::place_liquid(state, pos, fluid, level)
     }
@@ -115,7 +113,7 @@ impl BlockBehavior for ChainBlock {
         &self,
         state: BlockState,
         pos: BlockPos,
-        level: &mut LevelAccessRef<'_>,
+        level: &mut LevelAccessRef<'_, '_>,
     ) -> Result<Option<ferraloom_data::Item>, LevelError> {
         super::fluid::SimpleWaterloggedBlock::pickup_block(state, pos, level)
     }
@@ -129,7 +127,7 @@ impl BlockBehavior for AirBlock {
         &self,
         _state: BlockState,
         _pos: BlockPos,
-        _level: &LevelReaderRef<'_>,
+        _level: &LevelReaderRef<'_, '_>,
     ) -> Result<ferraloom_util::VoxelShape, LevelError> {
         Ok(ferraloom_util::shapes::empty())
     }
@@ -147,7 +145,7 @@ impl BlockBehavior for SlabWaterlogging {
         direction: Direction,
         neighbor_pos: BlockPos,
         neighbor: BlockState,
-        level: &mut LevelAccessRef<'_>,
+        level: &mut LevelAccessRef<'_, '_>,
     ) -> Result<BlockState, LevelError> {
         // SlabBlock and ChainBlock schedule the same water tick, then return
         // BlockBehaviour's identity shape update.
@@ -167,7 +165,7 @@ impl BlockBehavior for SlabWaterlogging {
         state: BlockState,
         pos: BlockPos,
         fluid: ferraloom_data::FluidState,
-        level: &mut LevelAccessRef<'_>,
+        level: &mut LevelAccessRef<'_, '_>,
     ) -> Result<bool, LevelError> {
         if state.get(ferraloom_data::properties::TYPE_)
             == Some(ferraloom_data::properties::Type::Double)

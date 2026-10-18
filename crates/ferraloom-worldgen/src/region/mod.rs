@@ -436,6 +436,7 @@ pub use ferraloom_util::core::{Mirror, Rotation};
 
 pub struct WorldGenRegion<'a> {
     random: Option<ferraloom_util::random::Random>,
+    fast_lava: Option<bool>,
     block_tags: Option<std::sync::Arc<ferraloom_data::datapack::TagSet<Block>>>,
     fluid_tags: Option<
         std::sync::Arc<ferraloom_data::datapack::TagSet<ferraloom_data::registries::fluid::Id>>,
@@ -499,6 +500,7 @@ impl<'a> WorldGenRegion<'a> {
         }
         Ok(Self {
             random: None,
+            fast_lava: None,
             block_tags: None,
             fluid_tags: None,
             chunks,
@@ -578,6 +580,16 @@ impl<'a> WorldGenRegion<'a> {
     // --- end ore and cave family ---
     pub fn center(&self) -> [i32; 2] {
         self.center
+    }
+    /// Install FAST_LAVA from the dimension's static environment attributes.
+    pub fn set_fast_lava(&mut self, fast_lava: bool) {
+        self.fast_lava = Some(fast_lava);
+    }
+    /// Port of EnvironmentAttributeReader#getDimensionValue(FAST_LAVA).
+    /// Missing context is distinct from the vanilla attribute's false default.
+    pub fn fast_lava(&self) -> Result<bool, Error> {
+        self.fast_lava
+            .ok_or_else(|| Error("Unsupported: worldgen FAST_LAVA environment is unset".into()))
     }
     /// Install the job's WorldGenRegion stream once, at region construction.
     /// This is independent of the feature and structure decoration seed stream.

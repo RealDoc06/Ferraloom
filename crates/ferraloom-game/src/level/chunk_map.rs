@@ -5,16 +5,29 @@ use std::collections::{BTreeMap, HashSet};
 pub struct ChunkMap {
     pub holders: BTreeMap<i64, ChunkHolder>,
     next_request: u64,
+    holder_order: ferraloom_util::collections::LongLinkedOpenHashSet,
 }
 impl ChunkMap {
+    /// Preserve holder insertion order independently of its lookup map.
+    pub fn holder_positions(&self) -> impl Iterator<Item = ChunkPos> + '_ {
+        self.holder_order.iter().map(|&key| ChunkPos::unpack(key))
+    }
+    pub fn ensure_holder(&mut self, pos: ChunkPos) -> &mut ChunkHolder {
+        self.holders.entry(pos.pack()).or_insert_with(|| {
+            self.holder_order.insert(pos.pack());
+            ChunkHolder::new(pos, 0)
+        })
+    }
     pub fn request(&mut self, pos: ChunkPos) -> Option<u64> {
-        if self.holders.contains_key(&pos.pack()) {
+        let holder = self.ensure_holder(pos);
+        if holder.generation_requested {
             return None;
         }
         let request = self.next_request;
-        self.next_request += 1;
-        self.holders
-            .insert(pos.pack(), ChunkHolder::new(pos, request));
+        self.next_request = self.next_request.wrapping_add(1);
+        let holder = self.holders.get_mut(&pos.pack()).unwrap();
+        holder.request_id = request;
+        holder.generation_requested = true;
         Some(request)
     }
 }

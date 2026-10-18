@@ -272,9 +272,11 @@ Vanilla block methods take `LevelReader`/`LevelAccessor`, which both
 `updateShape`, `canSurvive`, `placeLiquid` and block-entity loading. Ferraloom
 keeps one implementation of each behavior in `ferraloom-game`:
 
-- Methods that vanilla calls on both kinds of level take a `LevelAccessRef<'_>`
+- Methods that vanilla calls on both kinds of level take a `LevelAccessRef<'call, 'chunks>`
   enum (`Server(&mut Level)` / `Worldgen(&mut WorldGenRegion)`). Read-only
-  methods use `LevelReaderRef` (`Server(&Level)` / `Worldgen(&WorldGenRegion)`). It is
+  methods use `LevelReaderRef<'call, 'chunks>` (`Server(&Level)` /
+  `Worldgen(&WorldGenRegion)`). The call borrow and chunk-neighborhood lifetime
+  are independent. It is
   matched statically, so block code still inlines and no `dyn Level` appears
   on the hot path.
 - `ferraloom-worldgen` cannot depend on game, so it calls those behaviors

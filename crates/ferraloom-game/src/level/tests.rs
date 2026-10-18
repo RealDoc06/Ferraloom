@@ -974,6 +974,7 @@ fn random_phase_is_strict_and_warn_counts_both_vanilla_lava_callbacks() {
             }
         }
     }
+    install_weather_environment(&mut level, "plains");
     assert_eq!(
         level.tick_random_chunk(chunk),
         Err(LevelError::UnsupportedFluidRandomTick)
@@ -1059,7 +1060,7 @@ impl BlockBehavior for DynamicFluidWall {
         state: BlockState,
         pos: BlockPos,
         _context: &crate::block::BlockCollisionContext<'_>,
-        _level: &crate::block::LevelReaderRef<'_>,
+        _level: &crate::block::LevelReaderRef<'_, '_>,
     ) -> Result<ferraloom_util::VoxelShape, LevelError> {
         match pos.x {
             0 => Ok(ferraloom_util::shapes::block()),
@@ -1295,6 +1296,47 @@ fn reflected_method_ownership_ports_inherited_defaults_without_masking_overrides
     assert_eq!(level.unported_behavior_stats().skipped_calls, 0);
 }
 
+fn weather_test_temperatures() -> Arc<ferraloom_worldgen::biome_manager::BiomeTemperatures> {
+    use ferraloom_data::datapack::{Pack, ResourceManager};
+    use ferraloom_worldgen::biome_manager::BiomeTemperatures;
+    static TEMPERATURES: std::sync::OnceLock<Arc<BiomeTemperatures>> = std::sync::OnceLock::new();
+    TEMPERATURES
+        .get_or_init(|| {
+            let jar = std::env::var_os("FERRALOOM_VANILLA_JAR")
+                .expect("builder supplies the vanilla datapack");
+            let resources =
+                ResourceManager::new(vec![Pack::vanilla_jar(std::path::Path::new(&jar)).unwrap()]);
+            Arc::new(BiomeTemperatures::load(&resources).unwrap())
+        })
+        .clone()
+}
+fn install_weather_environment(level: &mut Level, biome: &str) {
+    use weather::{ChunkLightSnapshot, WeatherEnvironment};
+    let temperatures = weather_test_temperatures();
+    level.set_weather_environment(WeatherEnvironment {
+        temperatures: temperatures.clone(),
+        biome_names: Arc::new(vec![biome.parse().unwrap()]),
+        biome_zoom_seed: 0,
+        sea_level: 63,
+    });
+    install_tags(level);
+    for x in -1..=1 {
+        for z in -1..=1 {
+            let p = ChunkPos::new(x, z);
+            level.prime_chunk_heightmaps(p).unwrap();
+            level.set_light_snapshot(
+                p,
+                ChunkLightSnapshot {
+                    sky: (-1..=0)
+                        .map(|y| (y, ferraloom_light::DataLayer::new(15)))
+                        .collect(),
+                    block: std::collections::BTreeMap::new(),
+                },
+            );
+        }
+    }
+}
+
 #[test]
 fn precipitation_selection_slots_match_vanilla_random_and_position_streams_when_dry() {
     use ferraloom_util::random::{LegacyRandomSource, Random, RandomSource};
@@ -1306,6 +1348,7 @@ fn precipitation_selection_slots_match_vanilla_random_and_position_streams_when_
             .split_once(':')
             .unwrap();
         let mut level = empty_level(&EMPTY);
+        install_weather_environment(&mut level, "plains");
         level.set_random_streams(
             Random::Legacy(LegacyRandomSource::new(seed.parse().unwrap())),
             0,
@@ -1602,4 +1645,191 @@ fn directional_replacement_matches_vanilla_and_keeps_required_override_errors() 
         ))
     ));
     assert_eq!(level.unported_behavior_stats().skipped_calls, 0);
+}
+
+#[test]
+fn broadcast_membership_drains_separately_from_retained_section_changes() {
+    use crate::block::UpdateFlags;
+    let mut level = empty_level(&EMPTY);
+    install_tags(&mut level);
+    let chunk = ChunkPos::new(0, 0);
+    let p = BlockPos::new(8, 0, 8);
+    level
+        .set_block(
+            p,
+            Block::STONE.default_state(),
+            UpdateFlags::CLIENTS | UpdateFlags::KNOWN_SHAPE,
+            512,
+        )
+        .unwrap();
+    assert_eq!(level.take_block_update_chunks(), vec![chunk]);
+    level
+        .set_chunk_loading_status(chunk, distance_manager::FullChunkStatus::Full, false)
+        .unwrap();
+    // The server skips this holder after its ticking future is cancelled.
+    assert!(level.take_block_update_chunks().is_empty());
+    level
+        .set_chunk_loading_status(chunk, distance_manager::FullChunkStatus::BlockTicking, true)
+        .unwrap();
+    assert!(level.take_block_update_chunks().is_empty());
+    level
+        .set_block(
+            p.above(1),
+            Block::STONE.default_state(),
+            UpdateFlags::CLIENTS | UpdateFlags::KNOWN_SHAPE,
+            512,
+        )
+        .unwrap();
+    assert_eq!(level.take_block_update_chunks(), vec![chunk]);
+    let packets = level.take_block_updates(chunk).unwrap();
+    assert!(
+        matches!(&packets[..],[ferraloom_protocol::play::clientbound::Packet::SectionBlocksUpdate(packet)] if packet.changes.len()==2)
+    );
+}
+
+struct SnowSurvivalFixture;
+impl BlockBehavior for SnowSurvivalFixture {
+    fn can_survive(
+        &self,
+        _state: BlockState,
+        _pos: BlockPos,
+        _level: &crate::block::LevelReaderRef<'_, '_>,
+    ) -> Result<bool, LevelError> {
+        // Every native predicate vector supplies a full stone support block.
+        Ok(true)
+    }
+}
+static SNOW_SURVIVAL: Behaviors = Behaviors::EMPTY.with_block(Block::SNOW, &SnowSurvivalFixture);
+#[test]
+fn live_freeze_and_snow_predicates_match_real_biome_calls() {
+    use ferraloom_light::{DataLayer, LightLayer};
+    use ferraloom_worldgen::biome_manager::Precipitation;
+    for row in include_str!("../../tests/java/level/weather.tsv").lines() {
+        let (input, expected) = row.split_once('\t').unwrap();
+        let args: Vec<_> = input.split(':').collect();
+        let biome = args[0].parse().unwrap();
+        let light = args[1].parse().unwrap();
+        let y: i32 = args[3].parse().unwrap();
+        let surrounded = args[4] == "true";
+        let pos = BlockPos::new(8, y, 8);
+        let mut level = empty_level(&SNOW_SURVIVAL);
+        install_weather_environment(&mut level, args[0]);
+        let state = match args[2] {
+            "water" => Block::WATER.default_state(),
+            "flowing" => Block::WATER
+                .default_state()
+                .with(ferraloom_data::properties::LEVEL, 3)
+                .unwrap(),
+            "snow" => Block::SNOW.default_state(),
+            "stone" => Block::STONE.default_state(),
+            _ => Block::AIR.default_state(),
+        };
+        if (-16..16).contains(&y) {
+            level.set_block_state(pos, state).unwrap();
+            for direction in [
+                Direction::West,
+                Direction::East,
+                Direction::North,
+                Direction::South,
+            ] {
+                if surrounded {
+                    level
+                        .set_block_state(pos.relative(direction, 1), Block::WATER.default_state())
+                        .unwrap();
+                }
+            }
+        }
+        if (-16..16).contains(&(y - 1)) {
+            level
+                .set_block_state(pos.below(1), Block::STONE.default_state())
+                .unwrap();
+        }
+        level.set_light_snapshot(
+            ChunkPos::new(0, 0),
+            weather::ChunkLightSnapshot {
+                sky: std::collections::BTreeMap::new(),
+                block: (-1..=0).map(|y| (y, DataLayer::new(light))).collect(),
+            },
+        );
+        let resources = weather_test_temperatures();
+        let climate = resources.precipitation_at(&biome, [pos.x, pos.y, pos.z], 63);
+        let climate = match climate {
+            Precipitation::None => "none",
+            Precipitation::Rain => "rain",
+            Precipitation::Snow => "snow",
+        };
+        assert_eq!(
+            format!(
+                "{},{},{},{}",
+                level.should_freeze(&biome, pos, false).unwrap(),
+                level.should_freeze(&biome, pos, true).unwrap(),
+                level.should_snow(&biome, pos).unwrap(),
+                climate
+            ),
+            expected,
+            "{input}"
+        );
+        if (-16..16).contains(&y) {
+            assert_eq!(level.brightness(LightLayer::Block, pos).unwrap(), light);
+        }
+    }
+}
+#[test]
+fn snow_accumulation_wraps_unsupported_survival_without_inventing_a_query_result() {
+    use crate::block::{BlockMethod, UnportedBehavior};
+    let mut level = empty_level(&EMPTY);
+    let p = BlockPos::new(8, 0, 8);
+    level
+        .set_block_state(p.below(1), Block::STONE.default_state())
+        .unwrap();
+    install_weather_environment(&mut level, "snowy_plains");
+    level.load_weather(weather::WeatherData {
+        raining: true,
+        ..Default::default()
+    });
+    let biome = "snowy_plains".parse().unwrap();
+    let unsupported = Err(LevelError::UnsupportedBlockMethod(
+        Block::SNOW,
+        BlockMethod::CanSurvive,
+    ));
+    assert_eq!(level.should_snow(&biome, p), unsupported);
+    assert_eq!(level.tick_precipitation(p), unsupported.map(|_| ()));
+    level.set_unported_behavior(UnportedBehavior::Warn);
+    assert_eq!(level.should_snow(&biome, p), unsupported);
+    level.tick_precipitation(p).unwrap();
+    level.tick_precipitation(p).unwrap();
+    assert!(level.get_block_state(p).unwrap().is_air());
+    assert_eq!(level.unported_behavior_stats().skipped_calls, 2);
+    assert_eq!(level.unported_behavior_stats().distinct_calls, 1);
+}
+#[test]
+fn rain_queries_use_visible_sky_heightmap_and_zoomed_biome() {
+    use ferraloom_light::DataLayer;
+    let mut level = empty_level(&EMPTY);
+    let p = BlockPos::new(8, 0, 8);
+    assert!(!level.is_raining_at(p).unwrap());
+    level.load_weather(weather::WeatherData {
+        raining: true,
+        ..Default::default()
+    });
+    assert_eq!(
+        level.is_raining_at(p),
+        Err(LevelError::UnsupportedWeatherQuery)
+    );
+    level
+        .set_block_state(p.below(1), Block::STONE.default_state())
+        .unwrap();
+    install_weather_environment(&mut level, "plains");
+    assert!(level.is_raining_at(p).unwrap());
+    assert!(!level.is_raining_at(p.below(1)).unwrap());
+    level.set_light_snapshot(
+        ChunkPos::new(0, 0),
+        weather::ChunkLightSnapshot {
+            sky: [(1, DataLayer::new(14))].into_iter().collect(),
+            block: Default::default(),
+        },
+    );
+    assert!(!level.is_raining_at(p).unwrap());
+    install_weather_environment(&mut level, "snowy_plains");
+    assert!(!level.is_raining_at(p).unwrap());
 }
