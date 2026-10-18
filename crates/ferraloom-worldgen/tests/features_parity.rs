@@ -729,6 +729,17 @@ fn region_write_bounds_bulk_writes_and_tick_deduplication() {
             .can_survive(Block::OAK_SAPLING.default_state(), [0, 0, 0])
             .is_err()
     );
+    assert_eq!(
+        region
+            .update_from_neighbor_shapes([0, 0, 0], Block::STONE.default_state())
+            .unwrap(),
+        Block::STONE.default_state()
+    );
+    assert!(
+        region
+            .update_from_neighbor_shapes([0, 0, 0], Block::OAK_SAPLING.default_state())
+            .is_err()
+    );
     for direction in ferraloom_util::Direction::VALUES {
         assert_eq!(
             region

@@ -737,6 +737,14 @@ impl<'a> WorldGenRegion<'a> {
         p: [i32; 3],
         state: BlockState,
     ) -> Result<BlockState, Error> {
+        // Block#updateFromNeighbourShapes applies updateShape in each direction.
+        // The base implementation is identity and consumes no random values.
+        if !state
+            .block()
+            .overrides(ferraloom_data::BlockMethod::UpdateShape)
+        {
+            return Ok(state);
+        }
         self.behavior.update_from_neighbor_shapes(self, p, state)
     }
     /// WorldGenRegion inherits LevelAccessor's empty updateNeighborsAt.
