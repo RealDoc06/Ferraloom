@@ -1,0 +1,336 @@
+[
+  {
+    "parser": "minecraft:entity",
+    "properties": {
+      "amount": "single",
+      "type": "entities"
+    },
+    "wire": "0601"
+  },
+  {
+    "parser": "minecraft:block_pos",
+    "properties": {},
+    "wire": "08"
+  },
+  {
+    "parser": "minecraft:gamemode",
+    "properties": {},
+    "wire": "2a"
+  },
+  {
+    "parser": "minecraft:message",
+    "properties": {},
+    "wire": "14"
+  },
+  {
+    "parser": "minecraft:function",
+    "properties": {},
+    "wire": "25"
+  },
+  {
+    "parser": "brigadier:string",
+    "properties": {
+      "type": "greedy"
+    },
+    "wire": "0502"
+  },
+  {
+    "parser": "minecraft:particle",
+    "properties": {},
+    "wire": "1b"
+  },
+  {
+    "parser": "minecraft:resource_location",
+    "properties": {},
+    "wire": "24"
+  },
+  {
+    "parser": "brigadier:integer",
+    "properties": {},
+    "wire": "0300"
+  },
+  {
+    "parser": "minecraft:vec2",
+    "properties": {},
+    "wire": "0b"
+  },
+  {
+    "parser": "minecraft:resource",
+    "properties": {
+      "registry": "minecraft:entity_type"
+    },
+    "wire": "2e156d696e6563726166743a656e746974795f74797065"
+  },
+  {
+    "parser": "minecraft:vec3",
+    "properties": {},
+    "wire": "0a"
+  },
+  {
+    "parser": "minecraft:objective",
+    "properties": {},
+    "wire": "18"
+  },
+  {
+    "parser": "minecraft:game_profile",
+    "properties": {},
+    "wire": "07"
+  },
+  {
+    "parser": "minecraft:rotation",
+    "properties": {},
+    "wire": "1d"
+  },
+  {
+    "parser": "minecraft:swizzle",
+    "properties": {},
+    "wire": "20"
+  },
+  {
+    "parser": "minecraft:entity_anchor",
+    "properties": {},
+    "wire": "26"
+  },
+  {
+    "parser": "minecraft:dimension",
+    "properties": {},
+    "wire": "29"
+  },
+  {
+    "parser": "minecraft:item_predicate",
+    "properties": {},
+    "wire": "0f"
+  },
+  {
+    "parser": "brigadier:float",
+    "properties": {
+      "min": 0.0
+    },
+    "wire": "010100000000"
+  },
+  {
+    "parser": "minecraft:column_pos",
+    "properties": {},
+    "wire": "09"
+  },
+  {
+    "parser": "minecraft:nbt_compound_tag",
+    "properties": {},
+    "wire": "15"
+  },
+  {
+    "parser": "brigadier:bool",
+    "properties": {},
+    "wire": "00"
+  },
+  {
+    "parser": "minecraft:item_stack",
+    "properties": {},
+    "wire": "0e"
+  },
+  {
+    "parser": "minecraft:resource_or_tag_key",
+    "properties": {
+      "registry": "minecraft:worldgen/structure"
+    },
+    "wire": "2d1c6d696e6563726166743a776f726c6467656e2f737472756374757265"
+  },
+  {
+    "parser": "minecraft:resource_or_tag",
+    "properties": {
+      "registry": "minecraft:worldgen/biome"
+    },
+    "wire": "2c186d696e6563726166743a776f726c6467656e2f62696f6d65"
+  },
+  {
+    "parser": "minecraft:feature",
+    "properties": {},
+    "wire": "3b"
+  },
+  {
+    "parser": "minecraft:resource_key",
+    "properties": {
+      "registry": "minecraft:worldgen/template_pool"
+    },
+    "wire": "2f206d696e6563726166743a776f726c6467656e2f74656d706c6174655f706f6f6c"
+  },
+  {
+    "parser": "minecraft:int_range",
+    "properties": {},
+    "wire": "27"
+  },
+  {
+    "parser": "minecraft:uuid",
+    "properties": {},
+    "wire": "3d"
+  },
+  {
+    "parser": "minecraft:block_state",
+    "properties": {},
+    "wire": "0c"
+  },
+  {
+    "parser": "minecraft:team",
+    "properties": {},
+    "wire": "21"
+  },
+  {
+    "parser": "minecraft:score_holder",
+    "properties": {
+      "amount": "multiple"
+    },
+    "wire": "1f01"
+  },
+  {
+    "parser": "minecraft:component",
+    "properties": {},
+    "wire": "12"
+  },
+  {
+    "parser": "minecraft:resource_selector",
+    "properties": {
+      "registry": "minecraft:test_instance"
+    },
+    "wire": "30176d696e6563726166743a746573745f696e7374616e6365"
+  },
+  {
+    "parser": "minecraft:time",
+    "properties": {
+      "min": 1
+    },
+    "wire": "2b00000001"
+  },
+  {
+    "parser": "brigadier:double",
+    "properties": {
+      "min": -5.9999968E7,
+      "max": 5.9999968E7
+    },
+    "wire": "0203c18c9c3700000000418c9c3700000000"
+  },
+  {
+    "parser": "minecraft:loot_predicate",
+    "properties": {},
+    "wire": "35"
+  },
+  {
+    "parser": "minecraft:heightmap",
+    "properties": {},
+    "wire": "33"
+  },
+  {
+    "parser": "minecraft:context_float_provider",
+    "properties": {},
+    "wire": "37"
+  },
+  {
+    "parser": "minecraft:context_int_provider",
+    "properties": {},
+    "wire": "38"
+  },
+  {
+    "parser": "minecraft:dialog",
+    "properties": {},
+    "wire": "3a"
+  },
+  {
+    "parser": "minecraft:swing_animation",
+    "properties": {},
+    "wire": "3c"
+  },
+  {
+    "parser": "minecraft:scoreboard_slot",
+    "properties": {},
+    "wire": "1e"
+  },
+  {
+    "parser": "minecraft:block_predicate",
+    "properties": {},
+    "wire": "0d"
+  },
+  {
+    "parser": "minecraft:float_range",
+    "properties": {},
+    "wire": "28"
+  },
+  {
+    "parser": "minecraft:nbt_path",
+    "properties": {},
+    "wire": "17"
+  },
+  {
+    "parser": "minecraft:slot_source",
+    "properties": {},
+    "wire": "39"
+  },
+  {
+    "parser": "minecraft:item_slot",
+    "properties": {},
+    "wire": "22"
+  },
+  {
+    "parser": "minecraft:loot_table",
+    "properties": {},
+    "wire": "34"
+  },
+  {
+    "parser": "minecraft:template_rotation",
+    "properties": {},
+    "wire": "32"
+  },
+  {
+    "parser": "minecraft:objective_criteria",
+    "properties": {},
+    "wire": "19"
+  },
+  {
+    "parser": "minecraft:team_color",
+    "properties": {},
+    "wire": "10"
+  },
+  {
+    "parser": "minecraft:loot_modifier",
+    "properties": {},
+    "wire": "36"
+  },
+  {
+    "parser": "minecraft:template_mirror",
+    "properties": {},
+    "wire": "31"
+  },
+  {
+    "parser": "minecraft:operation",
+    "properties": {},
+    "wire": "1a"
+  },
+  {
+    "parser": "minecraft:hex_color",
+    "properties": {},
+    "wire": "11"
+  },
+  {
+    "parser": "minecraft:style",
+    "properties": {},
+    "wire": "13"
+  },
+  {
+    "parser": "minecraft:nbt_tag",
+    "properties": {},
+    "wire": "16"
+  },
+  {
+    "parser": "brigadier:long",
+    "properties": {},
+    "wire": "0400"
+  },
+  {
+    "parser": "minecraft:angle",
+    "properties": {},
+    "wire": "1c"
+  },
+  {
+    "parser": "minecraft:item_slots",
+    "properties": {},
+    "wire": "23"
+  }
+]

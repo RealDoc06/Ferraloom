@@ -18,8 +18,8 @@ pub fn from_report(parser: &str, properties: &Value) -> CommandArgument {
         },
         "brigadier:double" => CommandArgument::Double {
             bounds: NumericBounds {
-                min: properties["min"].as_f64().map(|v| v as f64),
-                max: properties["max"].as_f64().map(|v| v as f64),
+                min: properties["min"].as_f64(),
+                max: properties["max"].as_f64(),
             },
         },
         "brigadier:integer" => CommandArgument::Integer {
@@ -30,8 +30,8 @@ pub fn from_report(parser: &str, properties: &Value) -> CommandArgument {
         },
         "brigadier:long" => CommandArgument::Long {
             bounds: NumericBounds {
-                min: properties["min"].as_i64().map(|v| v as i64),
-                max: properties["max"].as_i64().map(|v| v as i64),
+                min: properties["min"].as_i64(),
+                max: properties["max"].as_i64(),
             },
         },
         "brigadier:string" => CommandArgument::String {
@@ -125,5 +125,33 @@ pub fn from_report(parser: &str, properties: &Value) -> CommandArgument {
         "minecraft:swing_animation" => CommandArgument::SwingAnimation {},
         "minecraft:uuid" => CommandArgument::Uuid {},
         _ => panic!("Unknown vanilla argument type {parser}"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ferraloom_protocol::Wire;
+    #[derive(serde::Deserialize)]
+    struct Vector {
+        parser: String,
+        properties: Value,
+        wire: String,
+    }
+    #[test]
+    fn every_argument_network_template_matches_java() {
+        let vectors: Vec<Vector> =
+            serde_json::from_str(include_str!("../vanilla/argument-wire.json")).unwrap();
+        assert_eq!(vectors.len(), 62);
+        for vector in vectors {
+            let expected = vector
+                .wire
+                .as_bytes()
+                .chunks_exact(2)
+                .map(|pair| u8::from_str_radix(std::str::from_utf8(pair).unwrap(), 16).unwrap())
+                .collect::<Vec<_>>();
+            let argument = from_report(&vector.parser, &vector.properties);
+            assert_eq!(argument.to_bytes().unwrap(), expected, "{}", vector.parser);
+        }
     }
 }

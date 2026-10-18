@@ -134,6 +134,20 @@ public final class CommandVectors {
         argumentTypes.put("brigadier:long", LongArgumentType.longArg());
         argumentTypes.put("minecraft:angle", net.minecraft.commands.arguments.AngleArgument.angle());
         argumentTypes.put("minecraft:item_slots", net.minecraft.commands.arguments.SlotsArgument.slots());
+        var wireVectors = new JsonArray();
+        for (var entry : argumentTypes.entrySet()) {
+            var template = ArgumentTypeInfos.unpack(entry.getValue());
+            var buf = new FriendlyByteBuf(Unpooled.buffer());
+            buf.writeVarInt(BuiltInRegistries.COMMAND_ARGUMENT_TYPE.getId(template.type()));
+            ((ArgumentTypeInfo)template.type()).serializeToNetwork(template, buf);
+            var bytes = new byte[buf.readableBytes()]; buf.readBytes(bytes); buf.release();
+            var vector = new JsonObject();
+            vector.addProperty("parser", entry.getKey());
+            vector.add("properties", propertiesByType.getOrDefault(entry.getKey(), new JsonObject()));
+            vector.addProperty("wire", HexFormat.of().formatHex(bytes));
+            wireVectors.add(vector);
+        }
+        write(out, "argument-wire.json", wireVectors);
         var vectors = new JsonArray();
         for (var entry : argumentTypes.entrySet()) {
             var inputs = new LinkedHashSet<String>(entry.getValue().getExamples());
