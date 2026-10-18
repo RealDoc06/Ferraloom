@@ -72,10 +72,10 @@ fn open_menu_inner(
         menu_type,
         title: provider.display_name(),
     })));
-    level
+    let reference = level
         .entity_mut::<ServerPlayer>(player)?
         .menus
-        .container_menu = Some(menu);
+        .install_container_menu(menu);
     let initial = with_block_menu_context(player, level, |menus, _book, context| {
         let menu = menus.current_mut();
         menu.broadcast_changes(context)?;
@@ -89,7 +89,7 @@ fn open_menu_inner(
             level
                 .entity_mut::<ServerPlayer>(player)?
                 .menus
-                .container_menu = None;
+                .detach_menu(reference);
             for handle in refs {
                 level.release_block_entity(handle);
             }

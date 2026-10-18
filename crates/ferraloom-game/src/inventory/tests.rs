@@ -1,4 +1,30 @@
 use super::*;
+
+#[test]
+fn retained_menu_receiver_survives_replacement_with_the_same_container_id() {
+    let mut menus = MenuSession::default();
+    let first = menus.install_container_menu(
+        AbstractContainerMenu::new(MenuKind::Chest { rows: 3 }, 7).unwrap(),
+    );
+    menus.retain_menu(first).unwrap();
+    let replacement = menus.install_container_menu(
+        AbstractContainerMenu::new(MenuKind::Chest { rows: 3 }, 7).unwrap(),
+    );
+    assert_ne!(first, replacement);
+    menus.menu_mut(first).unwrap().carried = ItemStack::new(Item::STONE, 3, Default::default());
+    assert!(menus.menu(replacement).unwrap().carried.is_empty());
+    assert_eq!(
+        menus.menu(first).unwrap().carried,
+        ItemStack::new(Item::STONE, 3, Default::default())
+    );
+    menus.detach_menu(first);
+    assert_eq!(menus.current_ref(), replacement);
+    menus.release_menu(first);
+    assert!(
+        matches!(menus.menu(first), Err(MenuError::MissingMenu(reference)) if reference == first)
+    );
+    assert_eq!(menus.current_ref(), replacement);
+}
 use crate::entity::player::{
     equipment::EntityEquipment,
     inventory::{Inventory, component},

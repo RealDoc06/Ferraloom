@@ -710,29 +710,122 @@ impl AbstractContainerMenu {
 }
 
 /// Port of ServerPlayer's inventoryMenu/containerMenu fields and container counter.
+/// Generation distinguishes receiver identity when vanilla reuses container IDs.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct MenuRef {
+    pub container_id: i32,
+    pub generation: u64,
+}
+
 #[derive(Debug)]
 pub struct MenuSession {
     pub inventory_menu: AbstractContainerMenu,
     pub container_menu: Option<AbstractContainerMenu>,
     pub container_counter: i32,
     pub pending_packets: Vec<ferraloom_protocol::play::clientbound::Packet>,
+    detached: std::collections::HashMap<MenuRef, AbstractContainerMenu>,
+    retained: std::collections::HashMap<MenuRef, usize>,
+    next_generation: u64,
     creative_drop_count: u64,
     creative_drop_tick: u64,
 }
 impl Default for MenuSession {
     fn default() -> Self {
+        let mut inventory_menu =
+            AbstractContainerMenu::new(MenuKind::Inventory, 0).expect("player menu");
+        inventory_menu.generation = 1;
         Self {
-            inventory_menu: AbstractContainerMenu::new(MenuKind::Inventory, 0)
-                .expect("player menu"),
+            inventory_menu,
             container_menu: None,
             container_counter: 0,
             pending_packets: Vec::new(),
+            detached: std::collections::HashMap::new(),
+            retained: std::collections::HashMap::new(),
+            next_generation: 2,
             creative_drop_count: 0,
             creative_drop_tick: 0,
         }
     }
 }
 impl MenuSession {
+    pub fn current_ref(&self) -> MenuRef {
+        self.current().reference()
+    }
+    pub fn menu(&self, reference: MenuRef) -> Result<&AbstractContainerMenu> {
+        if self.inventory_menu.reference() == reference {
+            return Ok(&self.inventory_menu);
+        }
+        if let Some(menu) = self
+            .container_menu
+            .as_ref()
+            .filter(|menu| menu.reference() == reference)
+        {
+            return Ok(menu);
+        }
+        self.detached
+            .get(&reference)
+            .ok_or(MenuError::MissingMenu(reference))
+    }
+    pub fn menu_mut(&mut self, reference: MenuRef) -> Result<&mut AbstractContainerMenu> {
+        if self.inventory_menu.reference() == reference {
+            return Ok(&mut self.inventory_menu);
+        }
+        if self
+            .container_menu
+            .as_ref()
+            .is_some_and(|menu| menu.reference() == reference)
+        {
+            return Ok(self.container_menu.as_mut().unwrap());
+        }
+        self.detached
+            .get_mut(&reference)
+            .ok_or(MenuError::MissingMenu(reference))
+    }
+    /// Root the exact receiver across an in-flight menu operation and callbacks.
+    pub fn retain_menu(&mut self, reference: MenuRef) -> Result<()> {
+        self.menu(reference)?;
+        let count = self.retained.entry(reference).or_default();
+        *count = count.checked_add(1).expect("menu roots exhausted");
+        Ok(())
+    }
+    pub fn release_menu(&mut self, reference: MenuRef) {
+        if let Some(count) = self.retained.get_mut(&reference) {
+            *count -= 1;
+            if *count == 0 {
+                self.retained.remove(&reference);
+                self.detached.remove(&reference);
+            }
+        }
+    }
+    /// Publish a new canonical receiver, retiring an old receiver only when no
+    /// active operation retains it. This is lifecycle movement, never writeback.
+    pub fn install_container_menu(&mut self, mut menu: AbstractContainerMenu) -> MenuRef {
+        menu.generation = self.next_generation;
+        self.next_generation = self
+            .next_generation
+            .checked_add(1)
+            .expect("menu generations exhausted");
+        let reference = menu.reference();
+        if let Some(old) = self.container_menu.replace(menu) {
+            let reference = old.reference();
+            if self.retained.contains_key(&reference) {
+                self.detached.insert(reference, old);
+            }
+        }
+        reference
+    }
+    pub fn detach_menu(&mut self, reference: MenuRef) {
+        if self
+            .container_menu
+            .as_ref()
+            .is_some_and(|menu| menu.reference() == reference)
+        {
+            let old = self.container_menu.take().unwrap();
+            if self.retained.contains_key(&reference) {
+                self.detached.insert(reference, old);
+            }
+        }
+    }
     pub fn current(&self) -> &AbstractContainerMenu {
         self.container_menu.as_ref().unwrap_or(&self.inventory_menu)
     }
@@ -744,6 +837,15 @@ impl MenuSession {
     pub fn next_container_counter(&mut self) -> i32 {
         self.container_counter = self.container_counter % 100 + 1;
         self.container_counter
+    }
+}
+
+impl AbstractContainerMenu {
+    pub fn reference(&self) -> MenuRef {
+        MenuRef {
+            container_id: self.container_id,
+            generation: self.generation,
+        }
     }
 }
 
@@ -839,9 +941,10 @@ impl MenuSession {
         disconnected: bool,
     ) -> Vec<crate::entity::player::inventory::InventoryEffect> {
         if let Some(menu) = &mut self.container_menu {
+            let reference = menu.reference();
             let effects = menu.removed(ctx, disconnected);
             self.inventory_menu.transfer_state(menu);
-            self.container_menu = None;
+            self.detach_menu(reference);
             effects
         } else {
             self.inventory_menu.removed(ctx, disconnected)
