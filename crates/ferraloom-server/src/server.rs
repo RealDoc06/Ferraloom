@@ -1305,6 +1305,9 @@ impl MinecraftServer {
             .initial_packets(&self.recipe_synchronization);
         c.push(cb::Packet::RecipeBookSettings(settings));
         c.push(cb::Packet::RecipeBookAdd(recipes));
+        for packet in self.scoreboard.join_packets() {
+            c.push(packet);
+        }
         self.broadcast(cb::Packet::SystemChat(Box::new(cb::SystemChat {
             content: Component::translatable(
                 "multiplayer.player.joined",

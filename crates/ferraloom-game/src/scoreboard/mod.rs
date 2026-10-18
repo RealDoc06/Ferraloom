@@ -1,5 +1,7 @@
 //! Canonical vanilla scoreboard state. The server publishes immutable phase snapshots to Levels.
 mod save;
+mod server;
+pub use server::ServerScoreboard;
 mod team;
 #[cfg(test)]
 mod tests;
@@ -8,7 +10,6 @@ use ferraloom_protocol::chat::Component;
 pub use ferraloom_protocol::play::{DisplaySlot, NumberFormat, ObjectiveRenderType as RenderType};
 use ferraloom_util::collections::Object2ObjectOpenHashMap as Map;
 pub use save::ScoreboardSaveData;
-use std::sync::Arc;
 pub use team::{
     CollisionRule, PlayerTeam, TeamColor, TeamRead, Visibility, can_collide, entity_is_allied_to,
     entity_team, scoreboard_name,
@@ -98,6 +99,7 @@ impl Default for Score {
 #[derive(Clone, Debug)]
 pub struct Scoreboard {
     objectives: Map<String, Objective>,
+    objectives_by_criteria: Map<String, Vec<String>>,
     scores: Map<String, Vec<(String, Score)>>,
     display_slots: [Option<String>; 19],
     teams: Map<String, PlayerTeam>,
@@ -107,7 +109,8 @@ impl Default for Scoreboard {
     fn default() -> Self {
         Self {
             objectives: Map::with_capacity_and_load_factor(16, 0.5),
-            scores: Map::new(),
+            objectives_by_criteria: Map::new(),
+            scores: Map::with_capacity_and_load_factor(16, 0.5),
             display_slots: std::array::from_fn(|_| None),
             teams: Map::new(),
             teams_by_player: Map::new(),
@@ -125,8 +128,19 @@ impl Scoreboard {
         if self.get_objective(&name).is_some() {
             return Err(Error::DuplicateObjective(name));
         }
+        self.objectives_by_criteria
+            .get_or_insert_with(objective.criteria.name.clone(), Vec::new)
+            .push(name.clone());
         self.objectives.insert(name, objective);
         Ok(())
+    }
+    /// Port of objectivesByCriteria's insertion-ordered objective lists.
+    pub fn objectives_for_criterion(&self, criterion: &str) -> impl Iterator<Item = &str> {
+        self.objectives_by_criteria
+            .get(&criterion.to_owned())
+            .into_iter()
+            .flatten()
+            .map(String::as_str)
     }
     pub fn objective_mut(&mut self, name: &str) -> Result<&mut Objective> {
         self.objectives
@@ -138,6 +152,10 @@ impl Scoreboard {
             .objectives
             .remove(&name.to_owned())
             .ok_or_else(|| Error::UnknownObjective(name.to_owned()))?;
+        self.objectives_by_criteria
+            .get_mut(&objective.criteria.name)
+            .unwrap()
+            .retain(|key| key != name);
         for slot in &mut self.display_slots {
             if slot.as_deref() == Some(name) {
                 *slot = None;
@@ -172,6 +190,24 @@ impl Scoreboard {
             .iter()
             .find(|(key, _)| key == objective)
             .map(|(_, score)| score)
+    }
+    /// Port of ScoreContents#getScore and ReadOnlyScoreInfo#formatValue. Missing objective or score resolves to Component.empty().
+    pub fn formatted_score(&self, holder: &str, objective: &str) -> Component {
+        let Some(obj) = self.get_objective(objective) else {
+            return Component::default();
+        };
+        let Some(score) = self.get_player_score(holder, objective) else {
+            return Component::default();
+        };
+        match score.number_format.as_ref().or(obj.number_format.as_ref()) {
+            Some(NumberFormat::Blank {}) => Component::default(),
+            Some(NumberFormat::Fixed { value }) => value.clone(),
+            Some(NumberFormat::Styled { style }) => Component {
+                style: style.clone(),
+                ..Component::literal(score.value.to_string())
+            },
+            None => Component::literal(score.value.to_string()),
+        }
     }
     pub fn get_or_create_score(&mut self, holder: &str, objective: &str) -> Result<&mut Score> {
         self.require_objective(objective)?;
@@ -310,28 +346,5 @@ impl Scoreboard {
         }
         self.remove_player_from_team(holder);
         Ok(())
-    }
-}
-
-/// Port of ServerScoreboard's server ownership. Published snapshots are immutable and replaced at phase barriers.
-#[derive(Default, Debug)]
-pub struct ServerScoreboard {
-    data: Arc<Scoreboard>,
-}
-impl ServerScoreboard {
-    pub fn new(data: Scoreboard) -> Self {
-        Self {
-            data: Arc::new(data),
-        }
-    }
-    pub fn scoreboard(&self) -> &Scoreboard {
-        &self.data
-    }
-    pub fn snapshot(&self) -> Arc<Scoreboard> {
-        Arc::clone(&self.data)
-    }
-    /// Mutate only in the server's exclusive lane, then publish snapshot() to all Levels before resuming simulation.
-    pub fn scoreboard_mut(&mut self) -> &mut Scoreboard {
-        Arc::make_mut(&mut self.data)
     }
 }
