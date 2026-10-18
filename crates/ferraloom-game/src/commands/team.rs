@@ -16,8 +16,26 @@ pub fn execute(
 ) -> Result<super::builtins::CommandResult> {
     scoreboard::validate_components(command)?;
     let verb = command.literals[1].as_str();
-    // Entity feedback must resolve against the post-mutation team, via the canonical entity naming API.
-    if matches!(verb, "join" | "leave") && members.iter().any(|holder| holder.display.is_some()) {
+    // CommandResponseTracker uses successful operations, not input count, for leave feedback.
+    let single = match verb {
+        "join" if members.len() == 1 => members.first(),
+        "leave" => {
+            let mut seen = std::collections::HashSet::new();
+            let mut changed = members.iter().filter(|holder| {
+                seen.insert(holder.name.as_str())
+                    && board.scoreboard().get_players_team(&holder.name).is_some()
+            });
+            let first = changed.next();
+            if changed.next().is_none() {
+                first
+            } else {
+                None
+            }
+        }
+        _ => None,
+    };
+    // Only single-entity feedback needs the pending post-mutation entity naming API.
+    if single.is_some_and(|holder| holder.display.is_some()) {
         return Err(error("ferraloom.team.entity_feedback.unsupported", &[]));
     }
     let name = command.string("team");
