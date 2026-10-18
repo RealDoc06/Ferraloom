@@ -24,7 +24,12 @@ fn vanilla_empty_stack_effective_accessors_and_restore() {
         component, copy_with_count, count, is_damaged, is_stackable, max_stack_size, set_count,
     };
     use crate::inventory::{ContainerId, Slot, SlotKind, UnsupportedMenuHooks};
-    use ferraloom_protocol::{Writer, chat::Component, codec::VarInt, component::ComponentTypeId};
+    use ferraloom_protocol::{
+        Writer,
+        chat::Component,
+        codec::VarInt,
+        component::{ComponentTypeId, ItemStackTemplate},
+    };
 
     fn check(stack: &ItemStack, expected: &serde_json::Value) {
         let components = stack.components().unwrap();
