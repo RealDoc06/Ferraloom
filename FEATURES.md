@@ -11,7 +11,7 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Chunks and tickets](features/chunks.md) | 37 | 31 | 6 | 0 | 0 |
 | [Combat and damage](features/combat-damage.md) | 204 | 204 | 0 | 0 | 0 |
 | [Commands and argument types](features/commands.md) | 2550 | 2545 | 4 | 0 | 1 |
-| [Crafting and recipes](features/crafting-recipes.md) | 2112 | 2112 | 0 | 0 | 0 |
+| [Crafting and recipes](features/crafting-recipes.md) | 2130 | 2 | 29 | 2099 | 0 |
 | [Datapacks and resource reload](features/datapacks-reload.md) | 57 | 57 | 0 | 0 | 0 |
 | [Enchantments](features/enchantments.md) | 136 | 136 | 0 | 0 | 0 |
 | [Entities and AI](features/entities.md) | 696 | 673 | 23 | 0 | 0 |
@@ -20,7 +20,7 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Functions and macros](features/functions-macros.md) | 10 | 10 | 0 | 0 | 0 |
 | [Game rules](features/game-rules.md) | 62 | 62 | 0 | 0 | 0 |
 | [GameTest](features/gametest.md) | 23 | 23 | 0 | 0 | 0 |
-| [Inventory and menus](features/inventory-menus.md) | 50 | 50 | 0 | 0 | 0 |
+| [Inventory and menus](features/inventory-menus.md) | 63 | 12 | 51 | 0 | 0 |
 | [Item modifiers](features/item-modifiers.md) | 4 | 4 | 0 | 0 | 0 |
 | [Items and data components](features/items.md) | 242 | 116 | 123 | 3 | 0 |
 | [Lighting](features/lighting.md) | 13 | 2 | 0 | 11 | 0 |
@@ -31,7 +31,7 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Patrols](features/patrols.md) | 4 | 4 | 0 | 0 | 0 |
 | [Permissions](features/permissions.md) | 7 | 7 | 0 | 0 | 0 |
 | [Phantoms](features/phantoms.md) | 3 | 3 | 0 | 0 | 0 |
-| [Player mechanics](features/player.md) | 44 | 33 | 11 | 0 | 0 |
+| [Player mechanics](features/player.md) | 46 | 33 | 13 | 0 | 0 |
 | [Portals and dimension travel](features/portals-travel.md) | 13 | 13 | 0 | 0 | 0 |
 | [Predicates](features/predicates.md) | 92 | 92 | 0 | 0 | 0 |
 | [Protocol packets](features/protocol.md) | 270 | 47 | 0 | 223 | 0 |
@@ -48,5 +48,5 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Wandering traders](features/wandering-traders.md) | 5 | 5 | 0 | 0 | 0 |
 | [Weather, time and environment](features/weather-time.md) | 85 | 85 | 0 | 0 | 0 |
 | [World storage and data fixing](features/world-storage.md) | 307 | 306 | 1 | 0 | 0 |
-| [World generation](features/worldgen.md) | 3079 | 2647 | 142 | 290 | 0 |
-| **Total** | **18830** | **17894** | **380** | **555** | **1** |
+| [World generation](features/worldgen.md) | 3102 | 2645 | 166 | 291 | 0 |
+| **Total** | **18886** | **15744** | **486** | **2655** | **1** |
