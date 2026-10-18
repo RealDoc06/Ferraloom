@@ -209,6 +209,19 @@ impl EntityDataView for LivingEntity {
         state.as_living_mut()
     }
 }
+/// Typed virtual effects whose complete implementation belongs to a later slice.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum EntityMethod {
+    SwingAndResetAttackStrength,
+}
+impl EntityMethod {
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::SwingAndResetAttackStrength => "swingAndResetAttackStrength",
+        }
+    }
+}
+
 /// Narrow source used by the unarmored damage primitive; tags grow with ports.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct DamageSource {
