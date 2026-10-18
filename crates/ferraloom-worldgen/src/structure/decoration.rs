@@ -126,9 +126,7 @@ impl StructureStart {
             }
             match piece {
                 StructurePiece::DesertPyramid(piece) => piece.post_process(context, *bounds)?,
-                StructurePiece::Mineshaft(_) => {
-                    return Err(Error("Unsupported: mineshaft piece postProcess".into()));
-                }
+                StructurePiece::Mineshaft(piece) => piece.post_process(context, *bounds)?,
                 StructurePiece::RuinedPortal(piece) => {
                     piece.post_process(context, templates, tags, bounds, reference)?
                 }
