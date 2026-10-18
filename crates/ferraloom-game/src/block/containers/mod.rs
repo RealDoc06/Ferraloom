@@ -3,6 +3,5 @@ pub mod chest;
 pub mod crafter;
 pub mod drops;
 pub mod furnace;
-pub mod runtime;
 pub mod sign;
 pub mod storage;
