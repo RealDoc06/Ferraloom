@@ -961,11 +961,17 @@ impl MinecraftServer {
             return Ok(vec![profile]);
         }
         if !self.properties.boolean("online-mode") {
-            return Ok(vec![GameProfile {
-                id: Uuid::offline_player(name),
-                name: name.into(),
+            // CachedUserNameToIdResolver#get lowercases before querying its offline fallback.
+            let name = name.to_lowercase();
+            let profile = GameProfile {
+                id: Uuid::offline_player(&name),
+                name,
                 properties: Vec::new(),
-            }]);
+            };
+            if let Err(error) = self.access.remember(&profile) {
+                eprintln!("Failed to save profile cache: {error:#}");
+            }
+            return Ok(vec![profile]);
         }
         Err(exceptions::error("argument.player.unknown", &[]))
     }

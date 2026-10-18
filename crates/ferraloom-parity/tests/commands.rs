@@ -424,6 +424,8 @@ async fn access_commands(session: &mut Session) -> Result<ObservationLog> {
         "nonop.context",
         feedback(session.bot(guest)?, "command.context.here").await?,
     )?;
+    // The uncached profile below exceeds 16 characters, so vanilla takes its deterministic
+    // offline fallback without consulting the external account repository.
     for (index, text, key) in [
         (
             0,
@@ -448,8 +450,12 @@ async fn access_commands(session: &mut Session) -> Result<ObservationLog> {
         ),
         (5, "whitelist on", "commands.whitelist.enabled"),
         (6, "whitelist off", "commands.whitelist.disabled"),
-        (7, "ban AbsentUser reason @s", "commands.ban.success"),
-        (8, "ban AbsentUser", "commands.ban.failed"),
+        (
+            7,
+            "ban AbsentCommandProfile reason @s",
+            "commands.ban.success",
+        ),
+        (8, "ban AbsentCommandProfile", "commands.ban.failed"),
         (9, "banlist players", "commands.banlist.list"),
     ] {
         log.record(
@@ -462,8 +468,8 @@ async fn access_commands(session: &mut Session) -> Result<ObservationLog> {
         feedback(session.bot(operator)?, "commands.banlist.entry").await?,
     )?;
     for (index, text, key) in [
-        (10, "pardon AbsentUser", "commands.pardon.success"),
-        (11, "pardon AbsentUser", "commands.pardon.failed"),
+        (10, "pardon AbsentCommandProfile", "commands.pardon.success"),
+        (11, "pardon AbsentCommandProfile", "commands.pardon.failed"),
         (12, "banlist players", "commands.banlist.none"),
         (13, "ban-ip 198.51.100.9", "commands.banip.success"),
         (14, "banlist ips", "commands.banlist.list"),
