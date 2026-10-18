@@ -293,7 +293,11 @@ mod tests {
             ))
             .unwrap(),
         );
-        let commands = Commands::default();
+        let commands = Commands::new(crate::commands::context::CommandBuildContext {
+            registries: serde_json::from_str(include_str!("vanilla/registry-elements.json"))
+                .unwrap(),
+            ..Default::default()
+        });
         let mut data = SuggestionData {
             players: vec!["Alex".into(), "Alice".into(), "Doc".into()],
             ..Default::default()
