@@ -41,7 +41,7 @@ pub struct AbstractContainerMenu {
     pub kind: MenuKind,
     pub container_id: i32,
     pub slots: Vec<Slot>,
-    pub local: Vec<SimpleContainer>,
+    pub local: Vec<MenuContainer>,
     pub data: Vec<i32>,
     pub carried: ItemStack,
     state_id: i32,
@@ -96,6 +96,35 @@ impl AbstractContainerMenu {
         self.data.resize(count, 0);
         self.last_data.resize(count, 0);
         self.remote_data.resize(count, 0);
+    }
+    /// Port of AbstractContainerMenu#setItem/initializeContents on the receiving side.
+    pub fn initialize_contents(
+        &mut self,
+        ctx: &mut MenuContext<'_>,
+        state_id: i32,
+        items: &[ItemStack],
+        carried: ItemStack,
+    ) {
+        for (i, stack) in items.iter().enumerate() {
+            self.set_item(ctx, i, stack.clone());
+        }
+        self.carried = carried;
+        self.state_id = state_id;
+    }
+    pub fn set_item_with_state(
+        &mut self,
+        ctx: &mut MenuContext<'_>,
+        slot: usize,
+        state_id: i32,
+        stack: ItemStack,
+    ) {
+        self.set_item(ctx, slot, stack);
+        self.state_id = state_id;
+    }
+    pub fn find_slot(&self, container: ContainerId, container_slot: usize) -> Option<usize> {
+        self.slots
+            .iter()
+            .position(|s| s.container == container && s.container_slot == container_slot)
     }
     pub fn state_id(&self) -> i32 {
         self.state_id
@@ -288,12 +317,15 @@ impl AbstractContainerMenu {
         self.quickcraft_slots.clear();
     }
     fn can_take_for_pick_all(&self, slot: &Slot) -> bool {
-        self.kind != MenuKind::Merchant
-            && (!matches!(slot.kind, SlotKind::Result(_))
-                || matches!(
-                    self.kind,
-                    MenuKind::Furnace | MenuKind::Smoker | MenuKind::BlastFurnace
-                ))
+        match self.kind {
+            MenuKind::Merchant => false,
+            MenuKind::Inventory
+            | MenuKind::Crafting
+            | MenuKind::Stonecutter
+            | MenuKind::Cartography
+            | MenuKind::Smithing => !matches!(slot.kind, SlotKind::Result(_)),
+            _ => true,
+        }
     }
     fn safe_take(
         &mut self,
@@ -715,8 +747,8 @@ impl AbstractContainerMenu {
         }
         Ok(())
     }
-    fn can_drag_to(&self, slot: &Slot) -> bool {
-        !matches!(self.kind, MenuKind::Merchant) || !matches!(slot.kind, SlotKind::Result(_))
+    fn can_drag_to(&self, _slot: &Slot) -> bool {
+        true
     }
     fn pickup_all(
         &mut self,

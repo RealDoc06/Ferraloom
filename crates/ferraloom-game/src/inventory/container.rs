@@ -20,6 +20,21 @@ pub trait Container {
     }
     fn start_open(&mut self) {}
     fn stop_open(&mut self) {}
+    fn count_item(&self, item: ferraloom_data::Item) -> i32 {
+        (0..self.size())
+            .map(|slot| self.get_item(slot))
+            .filter(|stack| stack.0.as_ref().is_some_and(|s| s.item == item))
+            .map(|stack| count(&stack))
+            .sum()
+    }
+    fn has_any_of(&self, items: &[ferraloom_data::Item]) -> bool {
+        (0..self.size()).any(|slot| {
+            self.get_item(slot)
+                .0
+                .as_ref()
+                .is_some_and(|s| s.count > 0 && items.contains(&s.item))
+        })
+    }
     fn is_empty(&self) -> bool {
         (0..self.size()).all(|i| self.get_item(i).is_empty())
     }
@@ -155,5 +170,107 @@ impl Container for PlayerContainer<'_> {
     }
     fn remove_item_no_update(&mut self, slot: usize) -> ItemStack {
         self.inventory.remove_item_no_update(slot, self.equipment)
+    }
+}
+
+impl SimpleContainer {
+    /// Port of SimpleContainer#removeItemType, scanning backwards and comparing only item type.
+    pub fn remove_item_type(&mut self, item: ferraloom_data::Item, amount: i32) -> ItemStack {
+        let mut removed = ItemStack::new(item, 1, Default::default());
+        set_count(&mut removed, 0);
+        for slot in (0..self.size()).rev() {
+            if self.items[slot].0.as_ref().is_some_and(|s| s.item == item) {
+                let part = split(&mut self.items[slot], amount - count(&removed));
+                let total = count(&removed) + count(&part);
+                set_count(&mut removed, total);
+                if count(&removed) == amount {
+                    break;
+                }
+            }
+        }
+        if !removed.is_empty() {
+            self.set_changed();
+        }
+        removed
+    }
+}
+
+/// Port of ResultContainer's storage semantics. Every index aliases its one
+/// result, and removeItem takes the entire result regardless of the requested count.
+#[derive(Clone, Debug, Default)]
+pub struct ResultContainer {
+    stack: ItemStack,
+}
+impl Container for ResultContainer {
+    fn size(&self) -> usize {
+        1
+    }
+    fn get_item(&self, _slot: usize) -> ItemStack {
+        self.stack.clone()
+    }
+    fn set_item(&mut self, _slot: usize, stack: ItemStack) {
+        self.stack = stack;
+    }
+    fn remove_item(&mut self, _slot: usize, _amount: i32) -> ItemStack {
+        std::mem::take(&mut self.stack)
+    }
+    fn remove_item_no_update(&mut self, _slot: usize) -> ItemStack {
+        std::mem::take(&mut self.stack)
+    }
+}
+
+/// Canonical player-owned menu storage. Block inventories are borrowed separately.
+#[derive(Clone, Debug)]
+pub enum MenuContainer {
+    Simple(SimpleContainer),
+    Result(ResultContainer),
+}
+impl MenuContainer {
+    pub fn simple(size: usize) -> Self {
+        Self::Simple(SimpleContainer::new(size))
+    }
+}
+impl Container for MenuContainer {
+    fn size(&self) -> usize {
+        match self {
+            Self::Simple(c) => c.size(),
+            Self::Result(c) => c.size(),
+        }
+    }
+    fn get_item(&self, slot: usize) -> ItemStack {
+        match self {
+            Self::Simple(c) => c.get_item(slot),
+            Self::Result(c) => c.get_item(slot),
+        }
+    }
+    fn set_item(&mut self, slot: usize, stack: ItemStack) {
+        match self {
+            Self::Simple(c) => c.set_item(slot, stack),
+            Self::Result(c) => c.set_item(slot, stack),
+        }
+    }
+    fn set_changed(&mut self) {
+        match self {
+            Self::Simple(c) => c.set_changed(),
+            Self::Result(c) => c.set_changed(),
+        }
+    }
+    fn remove_item(&mut self, slot: usize, amount: i32) -> ItemStack {
+        match self {
+            Self::Simple(c) => c.remove_item(slot, amount),
+            Self::Result(c) => c.remove_item(slot, amount),
+        }
+    }
+    fn remove_item_no_update(&mut self, slot: usize) -> ItemStack {
+        match self {
+            Self::Simple(c) => c.remove_item_no_update(slot),
+            Self::Result(c) => c.remove_item_no_update(slot),
+        }
+    }
+    fn clear_content(&mut self) {
+        match self {
+            Self::Simple(c) => c.clear_content(),
+            Self::Result(c) => c.clear_content(),
+        }
     }
 }

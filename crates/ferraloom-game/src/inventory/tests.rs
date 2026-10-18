@@ -13,6 +13,19 @@ use ferraloom_protocol::{
 fn kind(name: &str) -> MenuKind {
     match name {
         "inventory" => MenuKind::Inventory,
+        "crafter" => MenuKind::Crafter,
+        "anvil" => MenuKind::Anvil,
+        "beacon" => MenuKind::Beacon,
+        "brewing" => MenuKind::BrewingStand,
+        "crafting" => MenuKind::Crafting,
+        "enchantment" => MenuKind::Enchantment,
+        "grindstone" => MenuKind::Grindstone,
+        "lectern" => MenuKind::Lectern,
+        "loom" => MenuKind::Loom,
+        "merchant" => MenuKind::Merchant,
+        "smithing" => MenuKind::Smithing,
+        "cartography" => MenuKind::Cartography,
+        "stonecutter" => MenuKind::Stonecutter,
         "dispenser" => MenuKind::Dispenser,
         "hopper" => MenuKind::Hopper,
         "shulker" => MenuKind::ShulkerBox,
@@ -94,6 +107,9 @@ impl MenuHooks for OracleHooks {
     fn on_take(&mut self, _kind: ResultKind, _stack: &ItemStack, _count: i32) -> Result<()> {
         Ok(())
     }
+    fn accepts_stonecutter(&self, _stack: &ItemStack) -> Result<bool> {
+        Ok(false)
+    }
     fn can_smelt(&self, _stack: &ItemStack) -> Result<bool> {
         Ok(false)
     }
@@ -102,7 +118,32 @@ impl MenuHooks for OracleHooks {
             return Ok(component(stack, ComponentTypeId::COOKING_FUEL).is_some()
                 || stack.0.as_ref().is_some_and(|s| s.item == Item::BUCKET));
         }
-        Err(MenuError::Unsupported("oracle predicate"))
+        match kind {
+            SlotKind::BeaconPayment => Ok(stack.0.as_ref().is_some_and(|s| {
+                matches!(
+                    s.item,
+                    Item::IRON_INGOT
+                        | Item::GOLD_INGOT
+                        | Item::DIAMOND
+                        | Item::EMERALD
+                        | Item::NETHERITE_INGOT
+                )
+            })),
+            SlotKind::BrewingBottle => Ok(stack.0.as_ref().is_some_and(|s| {
+                matches!(
+                    s.item,
+                    Item::POTION
+                        | Item::SPLASH_POTION
+                        | Item::LINGERING_POTION
+                        | Item::GLASS_BOTTLE
+                )
+            })),
+            SlotKind::BrewingIngredient
+            | SlotKind::SmithingTemplate
+            | SlotKind::SmithingBase
+            | SlotKind::SmithingAddition => Ok(false),
+            _ => Err(MenuError::Unsupported("oracle predicate")),
+        }
     }
 }
 
@@ -181,8 +222,8 @@ fn real_vanilla_click_sequences_slots_carried_state_and_remote_updates() {
             _ => {}
         }
     }
-    assert_eq!(scenarios, 18);
-    assert_eq!(clicks, 1512);
+    assert_eq!(scenarios, 32);
+    assert_eq!(clicks, 2954);
 }
 
 #[test]

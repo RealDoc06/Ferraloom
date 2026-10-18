@@ -95,6 +95,22 @@ async fn clicks(session: &mut Session) -> Result<ObservationLog> {
             &full_click(bot, slot, button, input).await?,
         )?;
     }
+    record(
+        &mut log,
+        "before_close",
+        &full_click(bot, 39, 0, play::ContainerInput::Pickup).await?,
+    )?;
+    bot.send(sb::Packet::ContainerClose(sb::ContainerClose {
+        container_id: VarInt(99),
+    }))
+    .await?;
+    bot.synchronize().await?;
+    let closed = full_click(bot, -1, 0, play::ContainerInput::Pickup).await?;
+    ensure!(
+        closed.carried.is_empty(),
+        "close did not return the carried stack"
+    );
+    record(&mut log, "closed", &closed)?;
     Ok(log)
 }
 async fn drops(session: &mut Session) -> Result<ObservationLog> {

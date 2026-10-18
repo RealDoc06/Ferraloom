@@ -77,7 +77,7 @@ impl AbstractContainerMenu {
         let mut inventory_xy = (8, 84);
         match kind {
             MenuKind::Inventory => {
-                menu.local = vec![SimpleContainer::new(4), SimpleContainer::new(4)];
+                menu.local = vec![MenuContainer::simple(4), MenuContainer::simple(4)];
                 menu.add_slot(
                     Slot::new(result, 0, 154, 28).with_kind(SlotKind::Result(ResultKind::Crafting)),
                 );
@@ -101,12 +101,13 @@ impl AbstractContainerMenu {
                 let MenuKind::Chest { rows } = kind else {
                     unreachable!()
                 };
-                menu.local.push(SimpleContainer::new(usize::from(rows) * 9));
+                menu.local
+                    .push(MenuContainer::simple(usize::from(rows) * 9));
                 menu.grid(local, 9, usize::from(rows), 8, 18, SlotKind::Normal);
                 inventory_xy.1 = 18 + i32::from(rows) * 18 + 13;
             }
             MenuKind::Dispenser | MenuKind::Crafter => {
-                menu.local = vec![SimpleContainer::new(9), SimpleContainer::new(4)];
+                menu.local = vec![MenuContainer::simple(9), MenuContainer::simple(4)];
                 menu.grid(
                     local,
                     3,
@@ -124,16 +125,16 @@ impl AbstractContainerMenu {
                 }
             }
             MenuKind::ShulkerBox => {
-                menu.local.push(SimpleContainer::new(27));
+                menu.local.push(MenuContainer::simple(27));
                 menu.grid(local, 9, 3, 8, 18, SlotKind::ShulkerBox);
             }
             MenuKind::Hopper => {
-                menu.local.push(SimpleContainer::new(5));
+                menu.local.push(MenuContainer::simple(5));
                 menu.grid(local, 5, 1, 44, 20, SlotKind::Normal);
                 inventory_xy.1 = 51;
             }
             MenuKind::Furnace | MenuKind::Smoker | MenuKind::BlastFurnace => {
-                menu.local.push(SimpleContainer::new(3));
+                menu.local.push(MenuContainer::simple(3));
                 menu.add_slot(Slot::new(local, 0, 56, 17));
                 menu.add_slot(Slot::new(local, 1, 56, 53).with_kind(SlotKind::FurnaceFuel));
                 menu.add_slot(
@@ -142,21 +143,21 @@ impl AbstractContainerMenu {
                 menu.add_data(4);
             }
             MenuKind::Crafting => {
-                menu.local = vec![SimpleContainer::new(9), SimpleContainer::new(4)];
+                menu.local = vec![MenuContainer::simple(9), MenuContainer::simple(4)];
                 menu.add_slot(
                     Slot::new(result, 0, 124, 35).with_kind(SlotKind::Result(ResultKind::Crafting)),
                 );
                 menu.grid(local, 3, 3, 30, 17, SlotKind::Normal);
             }
             MenuKind::Enchantment => {
-                menu.local.push(SimpleContainer::new(2));
+                menu.local.push(MenuContainer::simple(2));
                 menu.add_slot(Slot::new(local, 0, 15, 47).with_kind(SlotKind::EnchantmentItem));
                 menu.add_slot(Slot::new(local, 1, 35, 47).with_kind(SlotKind::Lapis));
                 menu.add_data(10);
                 menu.data[4..].fill(-1);
             }
             MenuKind::Anvil => {
-                menu.local = vec![SimpleContainer::new(2), SimpleContainer::new(4)];
+                menu.local = vec![MenuContainer::simple(2), MenuContainer::simple(4)];
                 menu.add_slot(Slot::new(local, 0, 27, 47));
                 menu.add_slot(Slot::new(local, 1, 76, 47));
                 menu.add_slot(
@@ -165,7 +166,7 @@ impl AbstractContainerMenu {
                 menu.add_data(1);
             }
             MenuKind::Smithing => {
-                menu.local = vec![SimpleContainer::new(3), SimpleContainer::new(4)];
+                menu.local = vec![MenuContainer::simple(3), MenuContainer::simple(4)];
                 for (i, rule) in [
                     SlotKind::SmithingTemplate,
                     SlotKind::SmithingBase,
@@ -182,7 +183,7 @@ impl AbstractContainerMenu {
                 menu.add_data(1);
             }
             MenuKind::Grindstone => {
-                menu.local = vec![SimpleContainer::new(2), SimpleContainer::new(4)];
+                menu.local = vec![MenuContainer::simple(2), MenuContainer::simple(4)];
                 menu.add_slot(Slot::new(local, 0, 49, 19).with_kind(SlotKind::GrindstoneInput));
                 menu.add_slot(Slot::new(local, 1, 49, 40).with_kind(SlotKind::GrindstoneInput));
                 menu.add_slot(
@@ -191,7 +192,7 @@ impl AbstractContainerMenu {
                 );
             }
             MenuKind::Stonecutter => {
-                menu.local = vec![SimpleContainer::new(1), SimpleContainer::new(4)];
+                menu.local = vec![MenuContainer::simple(1), MenuContainer::simple(4)];
                 menu.add_slot(Slot::new(local, 0, 20, 33));
                 menu.add_slot(
                     Slot::new(result, 1, 143, 33)
@@ -201,7 +202,7 @@ impl AbstractContainerMenu {
                 menu.data[0] = -1;
             }
             MenuKind::Loom => {
-                menu.local = vec![SimpleContainer::new(3), SimpleContainer::new(4)];
+                menu.local = vec![MenuContainer::simple(3), MenuContainer::simple(4)];
                 for (i, (x, y, rule)) in [
                     (13, 26, SlotKind::Banner),
                     (33, 26, SlotKind::Dye),
@@ -219,7 +220,7 @@ impl AbstractContainerMenu {
                 menu.data[0] = -1;
             }
             MenuKind::Cartography => {
-                menu.local = vec![SimpleContainer::new(2), SimpleContainer::new(4)];
+                menu.local = vec![MenuContainer::simple(2), MenuContainer::simple(4)];
                 menu.add_slot(Slot::new(local, 0, 15, 15).with_kind(SlotKind::Map));
                 menu.add_slot(Slot::new(local, 1, 15, 52).with_kind(SlotKind::MapAddition));
                 menu.add_slot(
@@ -228,13 +229,13 @@ impl AbstractContainerMenu {
                 );
             }
             MenuKind::Beacon => {
-                menu.local.push(SimpleContainer::new(1));
+                menu.local.push(MenuContainer::simple(1));
                 menu.add_slot(Slot::new(local, 0, 136, 110).with_kind(SlotKind::BeaconPayment));
                 menu.add_data(3);
                 inventory_xy = (36, 137);
             }
             MenuKind::BrewingStand => {
-                menu.local.push(SimpleContainer::new(5));
+                menu.local.push(MenuContainer::simple(5));
                 for (i, (x, y)) in [(56, 51), (79, 58), (102, 51)].into_iter().enumerate() {
                     menu.add_slot(Slot::new(local, i, x, y).with_kind(SlotKind::BrewingBottle));
                 }
@@ -243,7 +244,7 @@ impl AbstractContainerMenu {
                 menu.add_data(4);
             }
             MenuKind::Merchant => {
-                menu.local.push(SimpleContainer::new(3));
+                menu.local.push(MenuContainer::simple(3));
                 menu.add_slot(Slot::new(local, 0, 136, 37));
                 menu.add_slot(Slot::new(local, 1, 162, 37));
                 menu.add_slot(
@@ -252,7 +253,7 @@ impl AbstractContainerMenu {
                 inventory_xy = (108, 84);
             }
             MenuKind::Lectern => {
-                menu.local.push(SimpleContainer::new(1));
+                menu.local.push(MenuContainer::simple(1));
                 menu.add_slot(Slot::new(local, 0, 0, 0));
                 menu.add_data(1);
                 return Ok(menu);
@@ -264,9 +265,9 @@ impl AbstractContainerMenu {
                     0
                 };
                 menu.local = vec![
-                    SimpleContainer::new(usize::from(columns) * 3),
-                    SimpleContainer::new(1),
-                    SimpleContainer::new(1),
+                    MenuContainer::simple(usize::from(columns) * 3),
+                    MenuContainer::simple(1),
+                    MenuContainer::simple(1),
                 ];
                 menu.add_slot(
                     Slot::new(ContainerId::Local(1), 0, 8, 18)
@@ -281,6 +282,20 @@ impl AbstractContainerMenu {
             MenuKind::Chest { .. } => {
                 return Err(MenuError::Unsupported("chest rows outside 1..=6"));
             }
+        }
+        if matches!(
+            kind,
+            MenuKind::Inventory
+                | MenuKind::Crafting
+                | MenuKind::Crafter
+                | MenuKind::Anvil
+                | MenuKind::Grindstone
+                | MenuKind::Smithing
+                | MenuKind::Stonecutter
+                | MenuKind::Loom
+                | MenuKind::Cartography
+        ) {
+            menu.local[1] = MenuContainer::Result(ResultContainer::default());
         }
         menu.standard_inventory(inventory_xy.0, inventory_xy.1);
         if kind == MenuKind::Inventory {

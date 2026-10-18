@@ -48,6 +48,10 @@ public final class InventoryVectors {
     case "inventory"->new InventoryMenu(inv,true,player);
     case "chest1"->ChestMenu.oneRow(7,inv);case "chest2"->ChestMenu.twoRows(7,inv);case "chest3"->ChestMenu.threeRows(7,inv);
     case "chest4"->ChestMenu.fourRows(7,inv);case "chest5"->ChestMenu.fiveRows(7,inv);case "chest6"->ChestMenu.sixRows(7,inv);
+    case "crafter"->new CrafterMenu(7,inv);case "anvil"->new AnvilMenu(7,inv);case "beacon"->new BeaconMenu(7,inv);
+    case "brewing"->new BrewingStandMenu(7,inv);case "crafting"->new CraftingMenu(7,inv);case "enchantment"->new EnchantmentMenu(7,inv);
+    case "grindstone"->new GrindstoneMenu(7,inv);case "lectern"->new LecternMenu(7);case "loom"->new LoomMenu(7,inv);case "merchant"->new MerchantMenu(7,inv);
+    case "smithing"->new SmithingMenu(7,inv);case "cartography"->new CartographyTableMenu(7,inv);case "stonecutter"->new StonecutterMenu(7,inv);
     case "dispenser"->new DispenserMenu(7,inv);case "hopper"->new HopperMenu(7,inv);case "shulker"->new ShulkerBoxMenu(7,inv);
     case "furnace"->new FurnaceMenu(7,inv);case "smoker"->new SmokerMenu(7,inv);case "blast"->new BlastFurnaceMenu(7,inv);
     default->throw new IllegalArgumentException(name);
@@ -68,6 +72,7 @@ public final class InventoryVectors {
       menu.getSlot(start+3).set(stack(Items.STONE,4,7));
       if(type.equals("furnace")||type.equals("smoker")||type.equals("blast"))menu.getSlot(2).set(stack(Items.IRON_INGOT,64,64));
     }
+    if(name.equals("crafted-result"))menu.getSlot(0).set(stack(Items.STONE,4,64));
     menu.setSynchronizer(sync);sync.events.clear();
     System.out.println("start\t"+name+"\t"+type+"\t"+creative+"\t"+slots(menu));
     int step=0;
@@ -94,6 +99,7 @@ public final class InventoryVectors {
     }
     var edge=List.of(new int[]{0,1,0},new int[]{1,0,0},new int[]{2,0,0},new int[]{-999,1,0},new int[]{3,0,0},new int[]{4,0,0},new int[]{4,0,0},new int[]{5,0,5},new int[]{5,1,5},new int[]{6,1,5},new int[]{7,1,5},new int[]{-999,2,5},new int[]{8,0,0},new int[]{-999,0,0},new int[]{0,40,2},new int[]{1,0,2},new int[]{0,1,4},new int[]{2,0,3},new int[]{-999,0,0},new int[]{2,1,4});
     scenario(registries,"edges","chest1",true,edge,false);
+    scenario(registries,"crafted-result","inventory",false,List.of(new int[]{0,1,0},new int[]{-999,0,0}),false);
     scenario(registries,"furnace-result","furnace",false,List.of(new int[]{2,0,1},new int[]{3,1,0},new int[]{4,0,0},new int[]{2,0,6}),false);
     for(int mode=0;mode<3;mode++){
       var drag=new ArrayList<int[]>();drag.add(new int[]{1,0,0});drag.add(new int[]{-999,mode*4,5});
@@ -102,13 +108,13 @@ public final class InventoryVectors {
       drag.add(new int[]{2,0,0});drag.add(new int[]{-999,mode*4,5});drag.add(new int[]{7,mode*4+1,5});drag.add(new int[]{-999,mode*4+2,5});
       drag.add(new int[]{-999,0,0});scenario(registries,"drag-"+mode,"chest1",mode==2,drag,false);
     }
-    for(String type:List.of("inventory","chest1","chest2","chest3","chest4","chest5","chest6","dispenser","hopper","shulker","furnace","smoker","blast")){
-      int boundary=switch(type){case "inventory"->9;case "hopper"->5;case "dispenser"->9;case "shulker"->27;case "furnace","smoker","blast"->3;default->Integer.parseInt(type.substring(5))*9;};
+    for(String type:List.of("inventory","chest1","chest2","chest3","chest4","chest5","chest6","dispenser","hopper","shulker","furnace","smoker","blast","crafter","anvil","beacon","brewing","crafting","enchantment","grindstone","lectern","loom","merchant","smithing","cartography","stonecutter")){
+      int boundary=switch(type){case "inventory"->9;case "hopper"->5;case "dispenser","crafter"->9;case "shulker"->27;case "furnace","smoker","blast","anvil","grindstone","merchant","cartography"->3;case "beacon"->1;case "brewing"->5;case "crafting"->10;case "enchantment","stonecutter"->2;case "loom","smithing"->4;case "lectern"->0;default->Integer.parseInt(type.substring(5))*9;};
       var clicks=new ArrayList<int[]>();
       clicks.add(new int[]{type.equals("furnace")||type.equals("smoker")||type.equals("blast")?2:boundary,0,1});
       clicks.add(new int[]{boundary,1,0});
-      clicks.add(new int[]{-999,0,5});for(int i=0;i<4;i++)clicks.add(new int[]{boundary+i,1,5});clicks.add(new int[]{-999,2,5});
-      clicks.add(new int[]{boundary,0,0});clicks.add(new int[]{boundary+8,0,6});clicks.add(new int[]{-999,0,0});
+      clicks.add(new int[]{-999,0,5});for(int i=0;i<(type.equals("lectern")?1:4);i++)clicks.add(new int[]{boundary+i,1,5});clicks.add(new int[]{-999,2,5});
+      clicks.add(new int[]{boundary,0,0});clicks.add(new int[]{type.equals("lectern")?0:boundary+8,0,6});clicks.add(new int[]{-999,0,0});
       var random=new Random(1302);
       int total=menu(type,new MenuPlayer(new MenuLevel(registries),false)).slots.size();
       for(int i=0;i<100;i++){
