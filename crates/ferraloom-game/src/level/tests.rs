@@ -1833,3 +1833,98 @@ fn rain_queries_use_visible_sky_heightmap_and_zoomed_biome() {
     install_weather_environment(&mut level, "snowy_plains");
     assert!(!level.is_raining_at(p).unwrap());
 }
+
+struct PostProcessTrace;
+impl BlockBehavior for PostProcessTrace {
+    fn update_shape(
+        &self,
+        state: BlockState,
+        pos: BlockPos,
+        direction: Direction,
+        _neighbor_pos: BlockPos,
+        _neighbor: BlockState,
+        access: &mut crate::block::LevelAccessRef<'_, '_>,
+    ) -> Result<BlockState, LevelError> {
+        let crate::block::LevelAccessRef::Server(level) = access else {
+            return Err(LevelError::UnsupportedWorldgenEnvironment);
+        };
+        level.emit(LevelEffect::LevelEvent {
+            pos,
+            id: 321,
+            data: direction as i32,
+        });
+        let added = BlockPos::new(9, 0, 8);
+        if pos == BlockPos::new(8, 0, 8)
+            && direction == Direction::Down
+            && level.get_block_state(added)?.is_air()
+        {
+            level.set_block_state(added, Block::DIRT.default_state())?;
+            level.mark_pos_for_post_processing(added)?;
+        }
+        Ok(state)
+    }
+}
+static POST_PROCESS_TRACE: Behaviors = Behaviors::EMPTY.with_block(Block::DIRT, &PostProcessTrace);
+#[test]
+fn post_processing_drains_sections_in_order_including_reentrant_appends() {
+    let mut level = empty_level(&POST_PROCESS_TRACE);
+    let upper = BlockPos::new(8, 0, 8);
+    let lower = upper.below(1);
+    for pos in [upper, lower] {
+        level
+            .set_block_state(pos, Block::DIRT.default_state())
+            .unwrap();
+        level.mark_pos_for_post_processing(pos).unwrap();
+    }
+    let chunk = ChunkPos::new(0, 0);
+    assert!(!level.chunk(chunk).unwrap().post_processing_complete());
+    level.post_process_generation(chunk).unwrap();
+    assert!(level.chunk(chunk).unwrap().post_processing_complete());
+    let trace: Vec<_> = level
+        .take_effects()
+        .into_iter()
+        .map(|effect| match effect {
+            LevelEffect::LevelEvent { pos, id: 321, data } => (pos, data),
+            other => panic!("unexpected post-process effect {other:?}"),
+        })
+        .collect();
+    let expected: Vec<_> = [lower, upper, BlockPos::new(9, 0, 8)]
+        .into_iter()
+        .flat_map(|pos| redstone::UPDATE_SHAPE_ORDER.map(|direction| (pos, direction as i32)))
+        .collect();
+    assert_eq!(trace, expected);
+}
+#[test]
+fn pending_block_entity_nbt_survives_full_without_claiming_live_factory_readiness() {
+    use ferraloom_nbt::{CompoundTag, Tag};
+    let chunk = ChunkPos::new(0, 0);
+    let pos = BlockPos::new(8, 0, 8);
+    let mut tag = CompoundTag::new();
+    tag.insert("id", Tag::String("minecraft:chest".into()));
+    for (key, value) in [("x", pos.x), ("y", pos.y), ("z", pos.z), ("future", 42)] {
+        tag.insert(key, Tag::Int(value));
+    }
+    let data = ferraloom_storage::SerializableChunkData {
+        block_entities: Some(vec![tag.clone()]),
+        post_processing: Some(vec![Vec::new(), Vec::new()]),
+        ..Default::default()
+    };
+    let mut block_chunk = empty_chunk(chunk);
+    block_chunk
+        .set_block_state(pos, Block::CHEST.default_state())
+        .unwrap();
+    block_chunk.load_pending_generation_data(&data).unwrap();
+    assert_eq!(block_chunk.pending_block_entity_nbt(), &[tag.clone()]);
+    let mut level = Level::new(Region::new(&EMPTY));
+    level.add_chunk(block_chunk).unwrap();
+    assert_eq!(
+        level.post_process_generation(chunk),
+        Err(LevelError::UnsupportedBlockEntity(Block::CHEST))
+    );
+    let block_chunk = level.chunk(chunk).unwrap();
+    assert!(!block_chunk.post_processing_complete());
+    let mut saved = ferraloom_storage::SerializableChunkData::default();
+    block_chunk.save_pending_generation_data(&mut saved);
+    assert_eq!(saved.block_entities, Some(vec![tag]));
+    assert_eq!(saved.post_processing, data.post_processing);
+}
