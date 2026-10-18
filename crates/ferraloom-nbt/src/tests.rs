@@ -18,6 +18,39 @@ fn vectors(kind: &str) -> impl Iterator<Item = Vec<&'static str>> {
 }
 
 #[test]
+fn vanilla_file_and_network_floating_outputs() {
+    for line in include_str!("float-output-vectors.tsv").lines() {
+        let p: Vec<_> = line.split('\t').collect();
+        let scalar = match p[0] {
+            "float" => Tag::Float(f32::from_bits(u32::from_str_radix(p[1], 16).unwrap())),
+            "double" => Tag::Double(f64::from_bits(u64::from_str_radix(p[1], 16).unwrap())),
+            _ => unreachable!(),
+        };
+        let tag = if p[2] == "scalar" {
+            scalar
+        } else {
+            let mut compound = CompoundTag::new();
+            compound.insert("value", scalar.clone());
+            compound.insert("list", Tag::List(ListTag(vec![scalar.clone(), scalar])));
+            Tag::Compound(compound)
+        };
+        let mut file = Vec::new();
+        NbtIo::write_any_tag(&mut file, &tag).unwrap();
+        assert_eq!(file, unhex(p[3]), "file {line}");
+        let mut network = Vec::new();
+        NbtIo::write_network(&mut network, &tag).unwrap();
+        assert_eq!(network, unhex(p[4]), "network {line}");
+        for (bytes, expected) in [(file, p[5]), (network, p[6])] {
+            let decoded =
+                NbtIo::read_any_tag(bytes.as_slice(), &mut NbtAccounter::unlimited()).unwrap();
+            let mut encoded = Vec::new();
+            NbtIo::write_network(&mut encoded, &decoded).unwrap();
+            assert_eq!(encoded, unhex(expected), "read {line}");
+        }
+    }
+}
+
+#[test]
 fn vanilla_snbt_and_binary_vectors() {
     for p in vectors("parse") {
         let input = text(p[1]);

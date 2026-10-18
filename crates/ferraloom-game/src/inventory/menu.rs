@@ -47,6 +47,7 @@ impl<'a> MenuContext<'a> {
 /// listener snapshots are copied. Clicks themselves never increment the state ID.
 #[derive(Debug)]
 pub struct AbstractContainerMenu {
+    pub(crate) generation: u64,
     pub kind: MenuKind,
     pub container_id: i32,
     pub slots: Vec<Slot>,
@@ -73,6 +74,7 @@ pub struct AbstractContainerMenu {
 impl AbstractContainerMenu {
     pub(crate) fn empty(kind: MenuKind, container_id: i32) -> Self {
         Self {
+            generation: 0,
             kind,
             container_id,
             slots: Vec::new(),

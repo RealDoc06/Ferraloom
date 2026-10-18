@@ -136,6 +136,10 @@ impl MinecraftServer {
                 })?;
                 self.apply_command_result(source, &command.source, result);
             }
+            "teleport" => {
+                let result = self.teleport_command(command)?;
+                self.apply_command_result(source, &command.source, result);
+            }
             "time" => {
                 let (result, changed) = self.clocks.command(command, self.level.game_time);
                 if let Some(clock) = changed {

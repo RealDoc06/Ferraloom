@@ -32,7 +32,8 @@ impl LevelContext {
     pub fn fixture(seed: i64, sea_level: i32) -> Arc<Self> {
         use ferraloom_data::datapack::{Pack, ResourceManager};
         use ferraloom_worldgen::generator::{
-            FlatLevelGeneratorSettings, FlatLevelSource, GenerationData,
+            GenerationData,
+            flat::{FlatLevelGeneratorSettings, FlatLevelSource},
         };
         use std::{path::Path, sync::OnceLock};
         static SERVICES: OnceLock<(Arc<ChunkGenerator>, Arc<FeatureRegistry>)> = OnceLock::new();

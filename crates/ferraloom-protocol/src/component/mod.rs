@@ -1,4 +1,5 @@
 //! Vanilla 26.3 item data components, patches and stack representations.
+pub use ferraloom_util::java::{JavaF32, JavaF64};
 mod map;
 mod patch;
 pub use map::*;
@@ -18,6 +19,12 @@ pub(crate) fn registry(name: &str) -> Identifier {
 }
 pub(crate) fn invalid(kind: &'static str) -> crate::Error {
     crate::Error::invalid(kind, "invalid value")
+}
+
+fn unordered_eq<T: PartialEq>(left: &[T], right: &[T]) -> bool {
+    left.len() == right.len()
+        && left.iter().all(|value| right.contains(value))
+        && right.iter().all(|value| left.contains(value))
 }
 
 /// Static vanilla data-component registry ID, generated from registry reports.

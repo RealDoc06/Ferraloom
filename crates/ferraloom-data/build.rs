@@ -284,9 +284,12 @@ fn blocks(
     reports: &Value,
     extracted: &Value,
     props: &BTreeMap<String, Property>,
+    render_shapes: &Value,
 ) {
+    let render_shapes = render_shapes.as_array().expect("per-state render shapes");
     let blocks = extracted["blocks"].as_array().unwrap();
     let states = extracted["states"].as_array().unwrap();
+    assert_eq!(states.len(), render_shapes.len());
     assert!(states.len() <= u16::MAX as usize + 1);
     assert_eq!(blocks.len(), reports.as_object().unwrap().len());
     out.push_str("pub const BLOCKS: &[BlockData] = &[\n");
@@ -411,6 +414,9 @@ fn blocks(
         ] {
             write!(out, "{field}: {},", state[field]).unwrap();
         }
+        let render = string(&render_shapes[id]);
+        assert!(matches!(render, "invisible" | "model"));
+        write!(out, "render_shape: RenderShape::{},", pascal(render)).unwrap();
         for field in ["collision", "outline", "occlusion"] {
             write!(out, "{field}: ShapeId({}),", state[field]).unwrap();
         }
@@ -530,6 +536,54 @@ fn items(out: &mut String, items: &Value, crafting: &Value) {
     out.push_str("];\n");
 }
 
+fn attribute_properties(out: &mut String, attributes: &Value, registries: &Value) {
+    let attributes = attributes.as_array().unwrap();
+    assert_eq!(
+        attributes.len(),
+        registries["minecraft:attribute"]["entries"]
+            .as_object()
+            .unwrap()
+            .len()
+    );
+    writeln!(
+        out,
+        "const ATTRIBUTE_DATA: [AttributeData; {}] = [",
+        attributes.len()
+    )
+    .unwrap();
+    for (id, attribute) in attributes.iter().enumerate() {
+        assert_eq!(number(&attribute["id"]), id as u64);
+        assert_eq!(
+            number(
+                &registries["minecraft:attribute"]["entries"][string(&attribute["name"])]["protocol_id"]
+            ),
+            id as u64
+        );
+        write!(
+            out,
+            "AttributeData {{ default_value: {}, syncable: {}, range: ",
+            float(&attribute["default_value"]),
+            attribute["syncable"]
+        )
+        .unwrap();
+        match (&attribute["min_value"], &attribute["max_value"]) {
+            (Value::Null, Value::Null) => out.push_str("None"),
+            (min, max) => {
+                assert!(min.as_f64().unwrap() <= max.as_f64().unwrap());
+                write!(
+                    out,
+                    "Some(AttributeRange {{ min: {}, max: {} }})",
+                    float(min),
+                    float(max)
+                )
+                .unwrap();
+            }
+        }
+        out.push_str(" },\n");
+    }
+    out.push_str("];\n");
+}
+
 fn entities(out: &mut String, entities: &Value, registries: &Value) {
     out.push_str("pub const ENTITY_TYPES: &[EntityTypeData] = &[\n");
     for (id, entity) in entities.as_array().unwrap().iter().enumerate() {
@@ -542,6 +596,7 @@ fn entities(out: &mut String, entities: &Value, registries: &Value) {
             "fixed_dimensions",
             "tracking_range",
             "update_interval",
+            "track_deltas",
             "fire_immune",
             "summonable",
         ] {
@@ -557,7 +612,29 @@ fn entities(out: &mut String, entities: &Value, registries: &Value) {
             let id = number(&registries["minecraft:attribute"]["entries"][name]["protocol_id"]);
             write!(out, "(registries::attribute::Id({id}), {}),", float(value)).unwrap();
         }
-        out.push_str("] },\n");
+        out.push_str("], attachments: EntityAttachments { points: [");
+        for attachment in ["passenger", "vehicle", "name_tag", "warden_chest"] {
+            let points = entity["attachments"][attachment].as_array().unwrap();
+            assert!(
+                !points.is_empty(),
+                "entity attachment has no fallback points"
+            );
+            out.push_str("&[");
+            for point in points {
+                let values = point.as_array().unwrap();
+                assert_eq!(values.len(), 3);
+                write!(
+                    out,
+                    "ferraloom_util::Vec3 {{ x: {}, y: {}, z: {} }},",
+                    float(&values[0]),
+                    float(&values[1]),
+                    float(&values[2])
+                )
+                .unwrap();
+            }
+            out.push_str("],");
+        }
+        out.push_str("] } },\n");
     }
     out.push_str("];\n");
 }
@@ -756,6 +833,7 @@ fn main() {
     block_methods::generate(root, &block_properties);
     let item_report = load(root, "items");
     let entity_report = load(root, "entity_types");
+    let attribute_report = load(root, "attributes");
     for (name, count) in [
         (
             "block",
@@ -799,7 +877,13 @@ fn main() {
     );
     packets(&mut out, &load(root, "packets"));
     let props = properties(&mut out, &block_report);
-    blocks(&mut out, &block_report, &block_properties, &props);
+    blocks(
+        &mut out,
+        &block_report,
+        &block_properties,
+        &props,
+        &load(root, "block_render_shapes"),
+    );
     shapes(&mut out, &load(root, "shapes"));
     state_transforms(
         &mut out,
@@ -886,6 +970,7 @@ fn main() {
         &registries_report["minecraft:environment_attribute"],
     );
     entities(&mut out, &entity_report, &registries_report);
+    attribute_properties(&mut out, &attribute_report, &registries_report);
     let path = Path::new(&std::env::var_os("OUT_DIR").unwrap()).join("data.rs");
     std::fs::write(path, out).unwrap();
     let native = voxel_shapes(&load(root, "voxel_shapes"), &block_properties);

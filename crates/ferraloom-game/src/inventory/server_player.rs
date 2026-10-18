@@ -59,7 +59,7 @@ pub fn open_menu(
     menu.set_synchronizer(&context);
     menu.changes.clear();
     packets.extend(menu.drain_packets());
-    player.menus.container_menu = Some(menu);
+    player.menus.install_container_menu(menu);
     Ok(packets)
 }
 

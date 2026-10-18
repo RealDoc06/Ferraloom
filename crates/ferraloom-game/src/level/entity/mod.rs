@@ -10,6 +10,7 @@ use super::{Level, LevelError};
 use crate::entity::{EntityData, EntityRef, EntityState, RemovalReason};
 
 mod persistent;
+mod push;
 mod worldgen;
 pub use persistent::{
     ChunkLoadStatus, EntityLoadRequestId, EntityStorageError, EntityStorageRequest,
@@ -200,7 +201,6 @@ pub struct EntityStorage {
     next_ref: u64,
     effects: Vec<crate::entity::effects::EntityEffect>,
     pending_retire: Vec<EntityRef>,
-    movement_effects: Vec<crate::entity::movement::MovementEffect>,
     pub border: crate::level::border::WorldBorder,
     states: HashMap<EntityRef, EntityState>,
     pub lookup: EntityLookup,
@@ -324,13 +324,6 @@ impl Level {
     }
     pub fn max_build_height(&self) -> i32 {
         self.region().max_y - 1
-    }
-
-    pub fn emit_entity_movement_effect(&mut self, effect: crate::entity::movement::MovementEffect) {
-        self.region_mut().entities.movement_effects.push(effect);
-    }
-    pub fn take_entity_movement_effects(&mut self) -> Vec<crate::entity::movement::MovementEffect> {
-        std::mem::take(&mut self.region_mut().entities.movement_effects)
     }
 
     pub fn entity_world_border(&self) -> &crate::level::border::WorldBorder {
@@ -700,7 +693,7 @@ impl Level {
     fn tick_passenger(
         &mut self,
         vehicle: EntityRef,
-        mut passenger: EntityRef,
+        passenger: EntityRef,
     ) -> Result<(), LevelError> {
         let base = self.entity::<EntityData>(passenger)?;
         if base.removed || base.vehicle != Some(vehicle) {
@@ -713,9 +706,8 @@ impl Level {
             return Ok(());
         }
         crate::entity::common_tick(passenger, self)?;
-        self.entity_mut::<EntityData>(passenger)?.velocity = Vec3::ZERO;
-        passenger.tick(self)?;
-        crate::entity::position_rider(vehicle, passenger, self)?;
+        self.entity_behavior(passenger)?
+            .ride_tick(passenger, self)?;
         let passengers = self.entity::<EntityData>(passenger)?.passengers.clone();
         for child in passengers {
             self.tick_passenger(passenger, child)?;

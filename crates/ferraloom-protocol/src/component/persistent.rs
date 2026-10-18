@@ -17,8 +17,8 @@ pub enum PersistentValue {
     Boolean(bool),
     String(NbtString),
     Int(i32),
-    Float(f32),
-    Double(f64),
+    Float(JavaF32),
+    Double(JavaF64),
     List(Vec<PersistentValue>),
     Map(Vec<(String, PersistentValue)>),
 }
@@ -30,8 +30,8 @@ impl PersistentValue {
             Self::Boolean(v) => ops.create_boolean(*v),
             Self::String(v) => ops.create_string_utf16(v.as_utf16()),
             Self::Int(v) => ops.create_int(*v),
-            Self::Float(v) => ops.create_float(*v),
-            Self::Double(v) => ops.create_double(*v),
+            Self::Float(v) => ops.create_float(v.0),
+            Self::Double(v) => ops.create_double(v.0),
             Self::List(v) => {
                 ops.create_list(v.iter().map(|v| v.encode_ops(ops)).collect::<Result<_>>()?)
             }
@@ -102,11 +102,11 @@ pub(super) fn entry<T: Persistent + PartialEq>(
 fn float_range(value: f32, min: f32, max: f32) -> bool {
     value.total_cmp(&min).is_ge() && value.total_cmp(&max).is_le()
 }
-fn nonnegative_float(value: &f32) -> bool {
-    float_range(*value, 0.0, f32::MAX)
+fn nonnegative_float(value: &JavaF32) -> bool {
+    float_range(value.0, 0.0, f32::MAX)
 }
-fn positive_float(value: &f32) -> bool {
-    value.total_cmp(&0.0).is_gt() && value.total_cmp(&f32::MAX).is_le()
+fn positive_float(value: &JavaF32) -> bool {
+    value.0.total_cmp(&0.0).is_gt() && value.0.total_cmp(&f32::MAX).is_le()
 }
 fn player_name(value: &str) -> bool {
     value.encode_utf16().count() <= 16 && value.bytes().all(|v| v > 32 && v < 127)
@@ -277,7 +277,7 @@ impl Persistent for f32 {
         nbt_number!(v, f32)
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
-        Ok(PersistentValue::Float(*self))
+        Ok(PersistentValue::Float(JavaF32(*self)))
     }
 }
 impl Persistent for f64 {
@@ -286,6 +286,28 @@ impl Persistent for f64 {
     }
     fn from_nbt(v: &Tag) -> Result<Self> {
         nbt_number!(v, f64)
+    }
+    fn to_persistent(&self) -> Result<PersistentValue> {
+        Ok(PersistentValue::Double(JavaF64(*self)))
+    }
+}
+impl Persistent for JavaF32 {
+    fn from_json(v: &Json) -> Result<Self> {
+        f32::from_json(v).map(Self)
+    }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        f32::from_nbt(v).map(Self)
+    }
+    fn to_persistent(&self) -> Result<PersistentValue> {
+        Ok(PersistentValue::Float(*self))
+    }
+}
+impl Persistent for JavaF64 {
+    fn from_json(v: &Json) -> Result<Self> {
+        f64::from_json(v).map(Self)
+    }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        f64::from_nbt(v).map(Self)
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
         Ok(PersistentValue::Double(*self))
@@ -1354,22 +1376,22 @@ persistent_record!(Instrument {sound_event => "sound_event" [None],use_duration 
 persistent_record!(JukeboxSong {sound_event => "sound_event" [None],description => "description" [None],length_in_seconds => "length_in_seconds" [None; positive_float],comparator_output => "comparator_output" [None; |v: &VarInt| (0..=15).contains(&v.0)]});
 persistent_record!(BannerPattern {asset_id => "asset_id" [None],translation_key => "translation_key" [None]});
 persistent_record!(PaintingVariant {width => "width" [None; |v: &VarInt| (1..=16).contains(&v.0)],height => "height" [None; |v: &VarInt| (1..=16).contains(&v.0)],asset_id => "asset_id" [None],title => "title" [Some(None)],author => "author" [Some(None)]});
-persistent_record!(UseEffects {can_sprint => "can_sprint" [Some(false)],interact_vibrations => "interact_vibrations" [Some(true)],speed_multiplier => "speed_multiplier" [Some(0.2f32); |v: &f32| float_range(*v, 0.0, 1.0)]});
+persistent_record!(UseEffects {can_sprint => "can_sprint" [Some(false)],interact_vibrations => "interact_vibrations" [Some(true)],speed_multiplier => "speed_multiplier" [Some(JavaF32(0.2)); |v: &JavaF32| float_range(v.0, 0.0, 1.0)]});
 persistent_record!(FoodProperties {nutrition => "nutrition" [None; |v: &VarInt| v.0 >= 0],saturation => "saturation" [None],can_always_eat => "can_always_eat" [Some(false)]});
-persistent_record!(Weapon {item_damage_per_attack => "item_damage_per_attack" [Some(VarInt(1)); |v: &VarInt| v.0 >= 0],disable_blocking_for_seconds => "disable_blocking_for_seconds" [Some(0.0f32); nonnegative_float]});
+persistent_record!(Weapon {item_damage_per_attack => "item_damage_per_attack" [Some(VarInt(1)); |v: &VarInt| v.0 >= 0],disable_blocking_for_seconds => "disable_blocking_for_seconds" [Some(JavaF32(0.0)); nonnegative_float]});
 persistent_record!(UseCooldown {seconds => "seconds" [None; positive_float],cooldown_group => "cooldown_group" [Some(None)]});
-persistent_record!(AttackRange {min_reach => "min_reach" [Some(0.0f32); |v: &f32| float_range(*v, 0.0, 64.0)],max_reach => "max_reach" [Some(3.0f32); |v: &f32| float_range(*v, 0.0, 64.0)],min_creative_reach => "min_creative_reach" [Some(0.0f32); |v: &f32| float_range(*v, 0.0, 64.0)],max_creative_reach => "max_creative_reach" [Some(5.0f32); |v: &f32| float_range(*v, 0.0, 64.0)],hitbox_margin => "hitbox_margin" [Some(0.3f32); |v: &f32| float_range(*v, 0.0, 1.0)],mob_factor => "mob_factor" [Some(1.0f32); |v: &f32| float_range(*v, 0.0, 2.0)]});
-persistent_record!(Consumable {consume_seconds => "consume_seconds" [Some(1.6f32); nonnegative_float],animation => "animation" [Some(ItemUseAnimation::Eat)],sound => "sound" [Some(sound("entity.generic.eat"))],has_consume_particles => "has_consume_particles" [Some(true)],on_consume_effects => "on_consume_effects" [Some(vec![])]});
+persistent_record!(AttackRange {min_reach => "min_reach" [Some(JavaF32(0.0)); |v: &JavaF32| float_range(v.0, 0.0, 64.0)],max_reach => "max_reach" [Some(JavaF32(3.0)); |v: &JavaF32| float_range(v.0, 0.0, 64.0)],min_creative_reach => "min_creative_reach" [Some(JavaF32(0.0)); |v: &JavaF32| float_range(v.0, 0.0, 64.0)],max_creative_reach => "max_creative_reach" [Some(JavaF32(5.0)); |v: &JavaF32| float_range(v.0, 0.0, 64.0)],hitbox_margin => "hitbox_margin" [Some(JavaF32(0.3)); |v: &JavaF32| float_range(v.0, 0.0, 1.0)],mob_factor => "mob_factor" [Some(JavaF32(1.0)); |v: &JavaF32| float_range(v.0, 0.0, 2.0)]});
+persistent_record!(Consumable {consume_seconds => "consume_seconds" [Some(JavaF32(1.6)); nonnegative_float],animation => "animation" [Some(ItemUseAnimation::Eat)],sound => "sound" [Some(sound("entity.generic.eat"))],has_consume_particles => "has_consume_particles" [Some(true)],on_consume_effects => "on_consume_effects" [Some(vec![])]});
 persistent_record!(DeathProtection {death_effects => "death_effects" [Some(vec![])]});
-persistent_record!(Tool {rules => "rules" [None],default_mining_speed => "default_mining_speed" [Some(1.0f32)],damage_per_block => "damage_per_block" [Some(VarInt(1)); |v: &VarInt| v.0 >= 0],can_destroy_blocks_in_creative => "can_destroy_blocks_in_creative" [Some(true)]});
-persistent_record!(ToolRule {blocks => "blocks" [None],speed => "speed" [Some(None); |v: &Option<f32>| v.as_ref().is_none_or(positive_float)],correct_for_drops => "correct_for_drops" [Some(None)]});
+persistent_record!(Tool {rules => "rules" [None],default_mining_speed => "default_mining_speed" [Some(JavaF32(1.0))],damage_per_block => "damage_per_block" [Some(VarInt(1)); |v: &VarInt| v.0 >= 0],can_destroy_blocks_in_creative => "can_destroy_blocks_in_creative" [Some(true)]});
+persistent_record!(ToolRule {blocks => "blocks" [None],speed => "speed" [Some(None); |v: &Option<JavaF32>| v.as_ref().is_none_or(positive_float)],correct_for_drops => "correct_for_drops" [Some(None)]});
 persistent_record!(Equippable {slot => "slot" [None],equip_sound => "equip_sound" [Some(sound("item.armor.equip_generic"))],asset_id => "asset_id" [Some(None)],camera_overlay => "camera_overlay" [Some(None)],allowed_entities => "allowed_entities" [Some(None)],dispensable => "dispensable" [Some(true)],swappable => "swappable" [Some(true)],damage_on_hurt => "damage_on_hurt" [Some(true)],equip_on_interact => "equip_on_interact" [Some(false)],can_be_sheared => "can_be_sheared" [Some(false)],shearing_sound => "shearing_sound" [Some(sound("item.shears.snip"))]});
-persistent_record!(BlocksAttacks {block_delay_seconds => "block_delay_seconds" [Some(0.0f32); nonnegative_float],disable_cooldown_scale => "disable_cooldown_scale" [Some(1.0f32); nonnegative_float],damage_reductions => "damage_reductions" [Some(vec![DamageReduction {horizontal_blocking_angle:90.0,types:None,base:0.0,factor:1.0}])],item_damage => "item_damage" [Some(ItemDamageFunction {threshold:1.0,base:0.0,factor:1.0})],bypassed_by => "bypassed_by" [Some(None)],block_sound => "block_sound" [Some(None)],disable_sound => "disabled_sound" [Some(None)]});
-persistent_record!(DamageReduction {horizontal_blocking_angle => "horizontal_blocking_angle" [Some(90.0f32); positive_float],types => "type" [Some(None)],base => "base" [None],factor => "factor" [None]});
+persistent_record!(BlocksAttacks {block_delay_seconds => "block_delay_seconds" [Some(JavaF32(0.0)); nonnegative_float],disable_cooldown_scale => "disable_cooldown_scale" [Some(JavaF32(1.0)); nonnegative_float],damage_reductions => "damage_reductions" [Some(vec![DamageReduction {horizontal_blocking_angle:JavaF32(90.0),types:None,base:JavaF32(0.0),factor:JavaF32(1.0)}])],item_damage => "item_damage" [Some(ItemDamageFunction {threshold:JavaF32(1.0),base:JavaF32(0.0),factor:JavaF32(1.0)})],bypassed_by => "bypassed_by" [Some(None)],block_sound => "block_sound" [Some(None)],disable_sound => "disabled_sound" [Some(None)]});
+persistent_record!(DamageReduction {horizontal_blocking_angle => "horizontal_blocking_angle" [Some(JavaF32(90.0)); positive_float],types => "type" [Some(None)],base => "base" [None],factor => "factor" [None]});
 persistent_record!(ItemDamageFunction {threshold => "threshold" [None; nonnegative_float],base => "base" [None],factor => "factor" [None]});
 persistent_record!(PiercingWeapon {deals_knockback => "deals_knockback" [Some(true)],dismounts => "dismounts" [Some(false)],sound => "sound" [Some(None)],hit_sound => "hit_sound" [Some(None)]});
-persistent_record!(KineticWeapon {contact_cooldown_ticks => "contact_cooldown_ticks" [Some(VarInt(10)); |v: &VarInt| v.0 >= 0],delay_ticks => "delay_ticks" [Some(VarInt(0)); |v: &VarInt| v.0 >= 0],dismount_conditions => "dismount_conditions" [Some(None)],knockback_conditions => "knockback_conditions" [Some(None)],damage_conditions => "damage_conditions" [Some(None)],forward_movement => "forward_movement" [Some(0.0f32)],damage_multiplier => "damage_multiplier" [Some(1.0f32)],sound => "sound" [Some(None)],hit_sound => "hit_sound" [Some(None)]});
-persistent_record!(KineticCondition {max_duration_ticks => "max_duration_ticks" [None; |v: &VarInt| v.0 >= 0],min_speed => "min_speed" [Some(0.0f32)],min_relative_speed => "min_relative_speed" [Some(0.0f32)]});
+persistent_record!(KineticWeapon {contact_cooldown_ticks => "contact_cooldown_ticks" [Some(VarInt(10)); |v: &VarInt| v.0 >= 0],delay_ticks => "delay_ticks" [Some(VarInt(0)); |v: &VarInt| v.0 >= 0],dismount_conditions => "dismount_conditions" [Some(None)],knockback_conditions => "knockback_conditions" [Some(None)],damage_conditions => "damage_conditions" [Some(None)],forward_movement => "forward_movement" [Some(JavaF32(0.0))],damage_multiplier => "damage_multiplier" [Some(JavaF32(1.0))],sound => "sound" [Some(None)],hit_sound => "hit_sound" [Some(None)]});
+persistent_record!(KineticCondition {max_duration_ticks => "max_duration_ticks" [None; |v: &VarInt| v.0 >= 0],min_speed => "min_speed" [Some(JavaF32(0.0))],min_relative_speed => "min_relative_speed" [Some(JavaF32(0.0))]});
 persistent_record!(SwingAnimation {animation_type => "type" [Some(SwingAnimationType::Whack)],duration => "duration" [Some(VarInt(6)); |v: &VarInt| v.0 >= 0]});
 persistent_record!(CustomModelData {floats => "floats" [Some(vec![])],flags => "flags" [Some(vec![])],strings => "strings" [Some(vec![])],colors => "colors" [Some(vec![])]});
 persistent_record!(FireworkExplosion {shape => "shape" [None],colors => "colors" [Some(vec![])],fade_colors => "fade_colors" [Some(vec![])],has_trail => "has_trail" [Some(false)],has_twinkle => "has_twinkle" [Some(false)]});
@@ -1420,7 +1442,7 @@ persistent_record!(PotDecorations {back => "back" [Some(None)],left => "left" [S
 persistent_record!(Compostable {layers => "layers" [None]});
 persistent_record!(CookingFuel {burn_time => "burn_time" [None],speed_multiplier => "speed_multiplier" [None]});
 persistent_record!(BrewingFuel {uses => "uses" [None],speed_multiplier => "speed_multiplier" [None]});
-persistent_record!(MobVisibility {targeting_entity_types => "targeting_entity_types" [None],visibility => "visibility" [None; |v: &f32| float_range(*v, 0.0, 10.0)]});
+persistent_record!(MobVisibility {targeting_entity_types => "targeting_entity_types" [None],visibility => "visibility" [None; |v: &JavaF32| float_range(v.0, 0.0, 10.0)]});
 persistent_record!(TooltipDisplay {hide_tooltip => "hide_tooltip" [Some(false)],hidden_components => "hidden_components" [Some(ComponentTypeList {entries:vec![]})]});
 persistent_record!(VillagerFood {nutrition => "nutrition" [None; |v: &VarInt| v.0 > 0]});
 persistent_record!(SkinPatch {body => "texture" [Some(None)],cape => "cape" [Some(None)],elytra => "elytra" [Some(None)],model => "model" [Some(None)]});
@@ -1989,7 +2011,7 @@ impl Persistent for ConsumeEffect {
         match v.get("type").and_then(Json::as_str) {
             Some("minecraft:apply_effects" | "apply_effects") => Ok(Self::ApplyEffects {
                 effects: field(v, "effects", None)?,
-                probability: field(v, "probability", Some(1.0))?,
+                probability: field(v, "probability", Some(JavaF32(1.0)))?,
             }),
             Some("minecraft:remove_effects" | "remove_effects") => {
                 Ok(Self::RemoveEffects(field(v, "effects", None)?))
@@ -1997,7 +2019,7 @@ impl Persistent for ConsumeEffect {
             Some("minecraft:clear_all_effects" | "clear_all_effects") => Ok(Self::ClearAllEffects),
             Some("minecraft:teleport_randomly" | "teleport_randomly") => {
                 Ok(Self::TeleportRandomly {
-                    diameter: field(v, "diameter", Some(16.0))?,
+                    diameter: field(v, "diameter", Some(JavaF32(16.0)))?,
                     directional_particles: field(v, "directional_particles", Some(true))?,
                 })
             }
@@ -2011,14 +2033,14 @@ impl Persistent for ConsumeEffect {
         match field_nbt::<String>(v, "type", None)?.as_str() {
             "minecraft:apply_effects" | "apply_effects" => Ok(Self::ApplyEffects {
                 effects: field_nbt(v, "effects", None)?,
-                probability: field_nbt(v, "probability", Some(1.0))?,
+                probability: field_nbt(v, "probability", Some(JavaF32(1.0)))?,
             }),
             "minecraft:remove_effects" | "remove_effects" => {
                 Ok(Self::RemoveEffects(field_nbt(v, "effects", None)?))
             }
             "minecraft:clear_all_effects" | "clear_all_effects" => Ok(Self::ClearAllEffects),
             "minecraft:teleport_randomly" | "teleport_randomly" => Ok(Self::TeleportRandomly {
-                diameter: field_nbt(v, "diameter", Some(16.0))?,
+                diameter: field_nbt(v, "diameter", Some(JavaF32(16.0)))?,
                 directional_particles: field_nbt(v, "directional_particles", Some(true))?,
             }),
             "minecraft:play_sound" | "play_sound" => {
@@ -2034,11 +2056,11 @@ impl Persistent for ConsumeEffect {
                 effects,
                 probability,
             } => {
-                if !float_range(*probability, 0.0, 1.0) {
+                if !float_range(probability.0, 0.0, 1.0) {
                     return Err(invalid("effect probability"));
                 }
                 v.push(("effects".into(), effects.to_persistent()?));
-                entry(&mut v, "probability", probability, Some(1.0))?;
+                entry(&mut v, "probability", probability, Some(JavaF32(1.0)))?;
                 "apply_effects"
             }
             Self::RemoveEffects(e) => {
@@ -2053,7 +2075,7 @@ impl Persistent for ConsumeEffect {
                 if !positive_float(diameter) {
                     return Err(invalid("teleport diameter"));
                 }
-                entry(&mut v, "diameter", diameter, Some(16.0))?;
+                entry(&mut v, "diameter", diameter, Some(JavaF32(16.0)))?;
                 entry(
                     &mut v,
                     "directional_particles",
@@ -2484,7 +2506,7 @@ pub(super) fn component_from_json(key: &Identifier, value: &Json) -> Result<Data
             DataComponent::CustomName(<Box<Component> as Persistent>::from_json(value)?)
         }
         "minecraft:minimum_attack_charge" => {
-            DataComponent::MinimumAttackCharge(<f32 as Persistent>::from_json(value)?)
+            DataComponent::MinimumAttackCharge(<JavaF32 as Persistent>::from_json(value)?)
         }
         "minecraft:damage_type" => {
             DataComponent::DamageType(<DamageType as Persistent>::from_json(value)?)
@@ -2601,7 +2623,7 @@ pub(super) fn component_from_json(key: &Identifier, value: &Json) -> Result<Data
             DataComponent::PotionContents(<PotionContents as Persistent>::from_json(value)?)
         }
         "minecraft:potion_duration_scale" => {
-            DataComponent::PotionDurationScale(<f32 as Persistent>::from_json(value)?)
+            DataComponent::PotionDurationScale(<JavaF32 as Persistent>::from_json(value)?)
         }
         "minecraft:suspicious_stew_effects" => {
             DataComponent::SuspiciousStewEffects(<Vec<StewEffect> as Persistent>::from_json(value)?)
@@ -2821,7 +2843,7 @@ pub(super) fn component_from_nbt(key: &Identifier, value: &Tag) -> Result<DataCo
             DataComponent::CustomName(<Box<Component> as Persistent>::from_nbt(value)?)
         }
         "minecraft:minimum_attack_charge" => {
-            DataComponent::MinimumAttackCharge(<f32 as Persistent>::from_nbt(value)?)
+            DataComponent::MinimumAttackCharge(<JavaF32 as Persistent>::from_nbt(value)?)
         }
         "minecraft:damage_type" => {
             DataComponent::DamageType(<DamageType as Persistent>::from_nbt(value)?)
@@ -2938,7 +2960,7 @@ pub(super) fn component_from_nbt(key: &Identifier, value: &Tag) -> Result<DataCo
             DataComponent::PotionContents(<PotionContents as Persistent>::from_nbt(value)?)
         }
         "minecraft:potion_duration_scale" => {
-            DataComponent::PotionDurationScale(<f32 as Persistent>::from_nbt(value)?)
+            DataComponent::PotionDurationScale(<JavaF32 as Persistent>::from_nbt(value)?)
         }
         "minecraft:suspicious_stew_effects" => {
             DataComponent::SuspiciousStewEffects(<Vec<StewEffect> as Persistent>::from_nbt(value)?)
@@ -3290,7 +3312,7 @@ fn validate_component(value: &DataComponent) -> Result<()> {
         DataComponent::Damage(v) | DataComponent::RepairCost(v) if v.0 < 0 => {
             Err(invalid("nonnegative component"))
         }
-        DataComponent::MinimumAttackCharge(v) if !float_range(*v, 0.0, 1.0) => {
+        DataComponent::MinimumAttackCharge(v) if !float_range(v.0, 0.0, 1.0) => {
             Err(invalid("minimum attack charge"))
         }
         DataComponent::PotionDurationScale(v) if !nonnegative_float(v) => {

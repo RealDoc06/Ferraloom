@@ -1,30 +1,57 @@
 //! Port of Player's Inventory and the ItemStack operations used by containers.
+#[cfg(test)]
+mod tool_tests;
 use super::equipment::EntityEquipment;
 use ferraloom_data::registries::data_component_type::Id as ComponentType;
 use ferraloom_nbt::{ListTag, Tag};
 use ferraloom_protocol::{
     Result,
-    component::{DataComponent, DataComponentMap, EquipmentSlot, ItemStack, Persistent},
+    component::{DataComponent, EquipmentSlot, ItemStack, Persistent},
 };
 
 /// Access a stack's effective component without cloning its immutable prototype.
 pub fn component(stack: &ItemStack, key: ComponentType) -> Option<&DataComponent> {
-    let stack = stack.0.as_ref()?;
-    if let Some(value) = stack
-        .components
-        .added
-        .iter()
-        .rev()
-        .find(|v| v.component_type() == key)
-    {
-        return Some(value);
-    }
-    if stack.components.removed.contains(&key) {
-        return None;
-    }
-    DataComponentMap::item_defaults(stack.item)
+    stack
+        .component(key)
         .expect("generated vanilla item components")
-        .get(key)
+}
+/// Port of ItemStack#isCorrectToolForDrops, Item#isCorrectToolForDrops and
+/// Tool#isCorrectForDrops. Membership uses the current datapack's block tags.
+pub fn is_correct_tool_for_drops(
+    stack: &ItemStack,
+    state: ferraloom_data::BlockState,
+    level: &crate::level::Level,
+) -> std::result::Result<bool, crate::level::LevelError> {
+    use crate::level::LevelError;
+    use ferraloom_protocol::codec::HolderSet;
+    if stack.is_empty() {
+        return Ok(false);
+    }
+    let Some(DataComponent::Tool(tool)) = component(stack, ComponentType::TOOL) else {
+        return Ok(false);
+    };
+    for rule in &tool.rules {
+        let Some(correct) = rule.correct_for_drops else {
+            continue;
+        };
+        let matches = match &rule.blocks.0 {
+            HolderSet::Direct(blocks) => {
+                blocks.iter().any(|id| id.as_str() == state.block().name())
+            }
+            HolderSet::Named(name) => {
+                let tags = level.block_tags()?;
+                let key = ferraloom_data::datapack::Identifier::new(name.namespace(), name.path())
+                    .map_err(|_| LevelError::MissingBlockTag)?;
+                // TODO(5a): registry-aware component decoding must reject missing tags.
+                let tag = tags.resolve_name(&key).ok_or(LevelError::MissingBlockTag)?;
+                tags.contains(tag, state.block())
+            }
+        };
+        if matches {
+            return Ok(correct);
+        }
+    }
+    Ok(false)
 }
 pub fn count(stack: &ItemStack) -> i32 {
     if stack.is_empty() {
@@ -41,12 +68,7 @@ pub fn set_count(stack: &mut ItemStack, count: i32) {
     }
 }
 pub fn copy_with_count(stack: &ItemStack, amount: i32) -> ItemStack {
-    if stack.is_empty() {
-        return ItemStack::default();
-    }
-    let mut copy = stack.clone();
-    set_count(&mut copy, amount);
-    copy
+    stack.copy_with_count(amount)
 }
 pub fn split(stack: &mut ItemStack, amount: i32) -> ItemStack {
     let amount = amount.min(count(stack));
@@ -75,18 +97,8 @@ pub fn is_enchanted(stack: &ItemStack) -> bool {
     matches!(component(stack, ComponentType::ENCHANTMENTS), Some(DataComponent::Enchantments(v)) if !v.0.is_empty())
 }
 pub fn is_same_item_same_components(a: &ItemStack, b: &ItemStack) -> bool {
-    if a.is_empty() || b.is_empty() {
-        return a.is_empty() && b.is_empty();
-    }
-    if a.0.as_ref().unwrap().item != b.0.as_ref().unwrap().item {
-        return false;
-    }
-    let a = a.components().expect("canonical item components");
-    let b = b.components().expect("canonical item components");
-    a.entries.len() == b.entries.len()
-        && a.entries
-            .iter()
-            .all(|value| b.get(value.component_type()) == Some(value))
+    a.is_same_item_same_components(b)
+        .expect("canonical item components")
 }
 /// Inventory's 26.3 mapping includes body armor and saddle after offhand.
 pub fn equipment_slot(slot: usize) -> Option<EquipmentSlot> {
@@ -268,9 +280,9 @@ impl Inventory {
             self.set_item(slot, copy_with_count(stack, 0), equipment);
         }
         let target = self.get_item_mut(slot, equipment);
-        // A zero-count stack retains its component payload for this calculation.
+        // The first grow sees the empty stack's effective default maximum (1).
         let max = max_stack_size(target).min(99);
-        let old = target.0.as_ref().map_or(0, |v| v.count);
+        let old = count(target);
         let added = count(stack).min(max - old);
         if added == 0 {
             return count(stack);
@@ -468,7 +480,7 @@ mod tests {
                     slots.push(format!(
                         "{}:{}:{}:{}",
                         slot,
-                        item.0.as_ref().unwrap().item.name(),
+                        item.item().name(),
                         count(item),
                         damage
                     ));

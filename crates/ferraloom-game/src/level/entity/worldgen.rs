@@ -148,7 +148,40 @@ mod tests {
     }
     fn level() -> Level {
         static BEHAVIORS: Behaviors = Behaviors::EMPTY;
-        Level::new(Region::new(&BEHAVIORS))
+        Level::new(
+            Region::new(&BEHAVIORS),
+            crate::level::LevelContext::fixture(0, 63),
+        )
+    }
+    fn oracle(case: &str) -> Vec<&'static str> {
+        include_str!("../../../tests/java/entity/vectors.tsv")
+            .lines()
+            .find(|line| line.starts_with(&format!("worldgen-entities\t{case}\t")))
+            .unwrap()
+            .split('\t')
+            .collect()
+    }
+    fn created_ids(level: &Level, events: &[EntityManagementEvent]) -> Vec<String> {
+        events
+            .iter()
+            .map(|event| {
+                let EntityManagementEvent::Created(entity) = event else {
+                    panic!("hidden worldgen entities only emit Created");
+                };
+                level
+                    .entity::<EntityData>(*entity)
+                    .unwrap()
+                    .uuid
+                    .least
+                    .to_string()
+            })
+            .collect()
+    }
+    fn expected_created(fields: &[&str]) -> Vec<String> {
+        fields[2]
+            .split(',')
+            .map(|event| event.split(':').next().unwrap().to_owned())
+            .collect()
     }
     #[test]
     fn worldgen_registers_preorder_as_created_and_does_not_complete_entity_io() {
@@ -166,14 +199,28 @@ mod tests {
         level
             .add_worldgen_chunk_entities(pos, vec![root, tag("minecraft:tnt", Uuid::new(1, 4))])
             .unwrap();
-        assert_eq!(
-            level.take_entity_management_events(),
-            vec![
-                EntityManagementEvent::Created(EntityRef(1)),
-                EntityManagementEvent::Created(EntityRef(2)),
-                EntityManagementEvent::Created(EntityRef(3))
-            ]
-        );
+        let events = level.take_entity_management_events();
+        let native = oracle("preorder");
+        assert_eq!(created_ids(&level, &events), expected_created(&native));
+        let links = [EntityRef(1), EntityRef(2), EntityRef(3)]
+            .map(|id| {
+                let base = level.entity::<EntityData>(id).unwrap();
+                let vehicle = base.vehicle.map_or_else(
+                    || "none".to_owned(),
+                    |vehicle| {
+                        level
+                            .entity::<EntityData>(vehicle)
+                            .unwrap()
+                            .uuid
+                            .least
+                            .to_string()
+                    },
+                );
+                format!("{}:{}:{vehicle}", base.uuid.least, base.passengers.len())
+            })
+            .join(",");
+        assert_eq!(links, native[3]);
+        assert_eq!(level.are_entities_loaded(pos).to_string(), native[4]);
         assert_eq!(
             level.entity::<EntityData>(EntityRef(1)).unwrap().passengers,
             [EntityRef(2)]
@@ -198,6 +245,27 @@ mod tests {
         assert_eq!(level.entity_chunk_visibility(pos), Visibility::Hidden);
         assert_eq!(level.entity_chunk_load_status(pos), ChunkLoadStatus::Fresh);
         assert!(level.take_entity_storage_requests().is_empty());
+    }
+    #[test]
+    fn unknown_worldgen_roots_skip_their_entire_passenger_tree() {
+        let mut level = level();
+        let mut root = tag("missing:unknown", Uuid::new(1, 1));
+        root.insert(
+            "Passengers",
+            Tag::List(ListTag(vec![Tag::Compound(tag(
+                "minecraft:tnt",
+                Uuid::new(1, 2),
+            ))])),
+        );
+        level
+            .add_worldgen_chunk_entities(ChunkPos::new(0, 0), vec![root])
+            .unwrap();
+        assert_eq!(
+            level.take_entity_management_events().len().to_string(),
+            oracle("unknown-root")[2]
+        );
+        assert_eq!(level.next_entity_id(), 1);
+        assert_eq!(level.next_entity_ref(), EntityRef(1));
     }
     #[test]
     fn unported_worldgen_factories_retain_owned_nbt_before_allocating() {
@@ -252,12 +320,18 @@ mod tests {
             Vec3::new(1.5, 64.0, 1.5)
         );
         assert_eq!(level.region().entities.known_uuids.len(), 2);
+        let events = level.take_entity_management_events();
+        let native = oracle("duplicate");
+        assert_eq!(created_ids(&level, &events), expected_created(&native));
+        let child = level.entity::<EntityData>(EntityRef(3)).unwrap();
+        let vehicle = child.vehicle.unwrap();
         assert_eq!(
-            level.take_entity_management_events(),
-            vec![
-                EntityManagementEvent::Created(EntityRef(1)),
-                EntityManagementEvent::Created(EntityRef(3))
-            ]
+            format!(
+                "{}:{}",
+                level.entity::<EntityData>(vehicle).unwrap().uuid.least,
+                vehicle != EntityRef(1)
+            ),
+            native[3]
         );
     }
 }

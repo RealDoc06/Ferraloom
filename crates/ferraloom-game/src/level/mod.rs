@@ -28,6 +28,7 @@ pub mod emission;
 pub mod entity;
 pub mod environment;
 pub mod events;
+mod features;
 pub mod generation;
 pub mod heightmap;
 mod lighting;
@@ -46,6 +47,7 @@ pub mod weather;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum LevelError {
+    UnsupportedEntityMethod(EntityType, crate::entity::EntityMethod),
     UnsupportedAdvancementCriterion(crate::advancements::criteria::Trigger),
     Inventory(&'static str),
     MissingBlockEntity(crate::block::entity::BlockEntityRef),
@@ -71,6 +73,7 @@ pub enum LevelError {
     UnsupportedEnvironmentAttribute(ferraloom_data::registries::environment_attribute::Id),
     MissingEnvironmentContext,
     MissingBlockTags,
+    MissingBlockTag,
     MissingFluidTags,
     MissingEntityTypeTags,
     MissingItemTags,
