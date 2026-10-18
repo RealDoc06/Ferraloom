@@ -186,8 +186,12 @@ pub fn plain_text(component: &Component) -> String {
                         ferraloom_protocol::chat::Numeric::Short(v) => v.to_string(),
                         ferraloom_protocol::chat::Numeric::Int(v) => v.to_string(),
                         ferraloom_protocol::chat::Numeric::Long(v) => v.to_string(),
-                        ferraloom_protocol::chat::Numeric::Float(v) => v.to_string(),
-                        ferraloom_protocol::chat::Numeric::Double(v) => v.to_string(),
+                        ferraloom_protocol::chat::Numeric::Float(v) => java_float_string(*v),
+                        ferraloom_protocol::chat::Numeric::Double(v) => {
+                            let mut text = ferraloom_nbt::Tag::Double(*v).to_string();
+                            text.pop();
+                            text
+                        }
                     },
                     Argument::Boolean(v) => v.to_string(),
                     Argument::Component(c) => plain_text(c),
@@ -212,11 +216,13 @@ pub fn syntax_context(error: &CommandSyntaxException, command: &str) -> Option<C
     if cursor > 10 {
         context.extra.push(Component::literal("..."));
     }
-    context
-        .extra
-        .push(Component::literal(String::from_utf16_lossy(
-            &input[cursor.saturating_sub(10)..cursor],
-        )));
+    if cursor > 0 {
+        context
+            .extra
+            .push(Component::literal(String::from_utf16_lossy(
+                &input[cursor.saturating_sub(10)..cursor],
+            )));
+    }
     if cursor < input.len() {
         let mut remaining = Component::literal(String::from_utf16_lossy(&input[cursor..]));
         remaining.style.color = Some(TextColor::parse("red").unwrap());

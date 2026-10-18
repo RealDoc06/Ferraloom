@@ -121,6 +121,7 @@ async fn clocks_and_admin(session: &mut Session) -> Result<ObservationLog> {
     for (index, text, key) in [
         (0, "gamerule advance_time false", "commands.gamerule.set"),
         (1, "time set 1000", "commands.time.set.absolute"),
+        (20, "time set 1000", "commands.time.set.already_at_time"),
         (2, "time query time", "commands.time.query.absolute"),
         (3, "time add 20", "commands.time.set.absolute"),
         (4, "time pause", "commands.time.pause"),

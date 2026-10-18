@@ -254,9 +254,9 @@ impl ServerClockManager {
             if command.literals.iter().any(|literal| literal == "set") {
                 if let Some(time) = command.integer("time") {
                     if state.total_ticks == i64::from(time) {
-                        return Err(error(
+                        return Err(super::exceptions::error_with_arguments(
                             "commands.time.set.already_at_time",
-                            &[clock.clone(), time.to_string()],
+                            vec![builtins::string(&clock), builtins::integer(time)],
                         ));
                     }
                     state.total_ticks = i64::from(time);
@@ -359,9 +359,12 @@ impl ServerClockManager {
             }
             if let Some(ArgumentValue::Float(rate)) = command.argument("rate") {
                 if state.rate == *rate {
-                    return Err(error(
+                    return Err(super::exceptions::error_with_arguments(
                         "commands.time.rate.already_same",
-                        &[clock.clone(), super::exceptions::java_float_string(*rate)],
+                        vec![
+                            builtins::string(&clock),
+                            Argument::Number(Numeric::Float(*rate)),
+                        ],
                     ));
                 }
                 state.rate = *rate;
@@ -439,6 +442,62 @@ fn wrap_time(value: i64) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn unchanged_clock_errors_keep_native_numeric_components_and_text() {
+        #[derive(serde::Deserialize)]
+        struct Vector {
+            command: String,
+            value: serde_json::Value,
+            rate: bool,
+            message: String,
+            component: serde_json::Value,
+        }
+        let vectors: Vec<Vector> =
+            serde_json::from_str(include_str!("vanilla/time-error-vectors.json")).unwrap();
+        let commands = crate::commands::Commands::default();
+        for vector in vectors {
+            let state = if vector.rate {
+                ClockState {
+                    rate: vector.value.as_f64().unwrap() as f32,
+                    ..Default::default()
+                }
+            } else {
+                ClockState {
+                    total_ticks: vector.value.as_i64().unwrap(),
+                    ..Default::default()
+                }
+            };
+            let mut clocks = ServerClockManager {
+                states: PackedClockStates(BTreeMap::from([("minecraft:overworld".into(), state)])),
+                timelines: BTreeMap::new(),
+                markers: BTreeMap::new(),
+            };
+            let command = commands
+                .prepare(
+                    &vector.command,
+                    crate::commands::CommandSourceStack::server(4, ferraloom_util::Vec3::ZERO),
+                )
+                .unwrap();
+            let error = clocks.command(&command, 0).0.unwrap_err();
+            assert_eq!(
+                error.raw_message.text(),
+                vector.message,
+                "{}",
+                vector.command
+            );
+            assert_eq!(
+                serde_json::from_str::<serde_json::Value>(
+                    &super::super::exceptions::error_component(&error)
+                        .to_json()
+                        .unwrap()
+                )
+                .unwrap(),
+                vector.component,
+                "{}",
+                vector.command
+            );
+        }
+    }
     #[test]
     fn fractional_rate_pause_and_saved_state_preserve_clock_values() {
         let mut state = ClockState {
