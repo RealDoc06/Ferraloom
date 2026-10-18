@@ -705,4 +705,4 @@ Includes every entity type, concrete goal implementation (including nested goals
 | entities.lifecycle.base-nbt | Round-trip 26.3 Entity base NBT, clear optional fields and retain unrecognized data | `Entity#saveWithoutId; Entity#load` | `entity::persistence::tests` | - | partial |
 | entities.storage.query-order | Traverse accessible sections by signed packed section key and insertion order within sections | `EntitySectionStorage; EntityLookup; EntityTickList` |  | - | partial |
 | entities.movement.large-shape-cursor | Preserve BlockCollisions cursor boundary exclusions and cached large-shape facts | `BlockCollisions; BlockStateBase.Cache` | `data::tests::cached_block_facts_preserve_dynamic_shape_fallback_and_post_processing; entity::tests` | - | partial |
-| entities.movement.world-border | Clamp movement with border bounds and tick-based lerping; retain border saved data | `WorldBorder` | `level::border::tests` | - | partial |
+| entities.movement.world-border | Clamp movement with border bounds and native partial-tick lerping, including zero duration and wrapping start times; retain border saved data | `WorldBorder` | `level::border::tests` | - | partial |

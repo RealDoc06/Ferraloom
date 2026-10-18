@@ -80,6 +80,7 @@ public final class EntityVectors {
       public static void run(RegistryAccess r)throws Exception {
         TrackingVectors.run(new EntityFixture(r));
         PersistenceVectors.run(new EntityFixture(r));
+        BorderVectors.run(new EntityFixture(r));
         for(boolean player:List.of(false,true))for(boolean above:List.of(false,true))for(boolean drag:List.of(false,true))for(double speed:new double[]{-1,-0.25,0.65,2}){
           var f=new EntityFixture(r);Entity e=player?new TestPlayer(f):new net.minecraft.world.entity.item.PrimedTnt(EntityTypes.TNT,f);
           e.setDeltaMovement(0.25,speed,-0.125);e.fallDistance=8;
