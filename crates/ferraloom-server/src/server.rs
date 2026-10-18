@@ -3234,7 +3234,7 @@ fn abilities(player: &ServerPlayer) -> cb::Packet {
         invulnerable: privileged,
         is_flying: player.flying,
         can_fly: privileged,
-        instabuild: player.game_mode == GameType::Creative,
+        instabuild: player.instabuild(),
         flying_speed: 0.05,
         walking_speed: 0.1,
     })
@@ -3394,6 +3394,26 @@ fn load_conduct(root: &Path, properties: &ServerProperties) -> Result<BTreeMap<S
 mod live_level_tests {
     use super::*;
     use ferraloom_game::level::{Level, chunk_holder::ChunkHolder};
+
+    #[test]
+    fn abilities_packet_reads_mutable_instabuild_instead_of_mode() {
+        for mode in [
+            GameType::Survival,
+            GameType::Creative,
+            GameType::Adventure,
+            GameType::Spectator,
+        ] {
+            let mut player =
+                ServerPlayer::new(Uuid::new(1, 2), "abilities".into(), 1, Vec3::ZERO, mode);
+            for value in [false, true] {
+                player.instabuild = value;
+                let cb::Packet::PlayerAbilities(packet) = abilities(&player) else {
+                    unreachable!()
+                };
+                assert_eq!(packet.instabuild, value);
+            }
+        }
+    }
 
     #[test]
     fn entity_visibility_follows_confirmed_holder_ranges_and_immediate_demotions() {

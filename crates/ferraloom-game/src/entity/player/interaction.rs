@@ -142,6 +142,41 @@ mod tests {
         )
     }
     #[test]
+    fn instabuild_is_mutable_independent_of_mode_and_persists_native_abilities() {
+        let mut actual = Vec::new();
+        for mode in [
+            GameType::Survival,
+            GameType::Creative,
+            GameType::Adventure,
+            GameType::Spectator,
+        ] {
+            for flying in [false, true] {
+                let mut player = player();
+                player.game_mode = mode;
+                player.flying = flying;
+                player.update_game_mode_abilities();
+                let applied = player.instabuild();
+                player.instabuild = !applied;
+                let prevents = player.prevents_block_drops();
+                let mut tag = player.save();
+                let saved = tag
+                    .get_compound("abilities")
+                    .unwrap()
+                    .get_boolean("instabuild")
+                    .unwrap();
+                let packet_flag = player.instabuild();
+                tag.remove("recipeBook");
+                player.try_load(tag).unwrap();
+                actual.push(format!("player-instabuild\t{}\t{flying}\t{applied},{prevents},{saved},{packet_flag},{}",mode.id(),player.instabuild()));
+            }
+        }
+        let expected: Vec<_> = include_str!("../../../tests/java/entity/vectors.tsv")
+            .lines()
+            .filter(|line| line.starts_with("player-instabuild\t"))
+            .collect();
+        assert_eq!(actual, expected);
+    }
+    #[test]
     fn native_hands_input_flags_and_strict_eye_to_block_range() {
         let mut player = player();
         player.inventory.set_selected_slot(5);

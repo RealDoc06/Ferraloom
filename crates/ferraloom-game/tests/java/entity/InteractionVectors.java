@@ -24,6 +24,18 @@ public final class InteractionVectors {
     cooldowns.calls.clear();
   }
   public static void run(Level level) throws Exception {
+    for(var mode:net.minecraft.world.level.GameType.values())for(boolean flying:List.of(false,true)) {
+      var abilityPlayer=new LivingVectors(level);var abilities=abilityPlayer.getAbilities();abilities.flying=flying;
+      mode.updatePlayerAbilities(abilities);boolean applied=abilities.instabuild;abilities.instabuild=!applied;
+      var packed=net.minecraft.world.entity.player.Abilities.Packed.CODEC.encodeStart(net.minecraft.nbt.NbtOps.INSTANCE,abilities.pack()).getOrThrow();
+      boolean saved=((net.minecraft.nbt.CompoundTag)packed).getBooleanOr("instabuild",false);
+      boolean packet=new net.minecraft.network.protocol.game.ClientboundPlayerAbilitiesPacket(abilities).canInstabuild();
+      boolean prevents=abilityPlayer.preventsBlockDrops();
+      var tag=new net.minecraft.nbt.CompoundTag();tag.put("abilities",packed);
+      abilityPlayer.load(net.minecraft.world.level.storage.TagValueInput.create(net.minecraft.util.ProblemReporter.DISCARDING,level.registryAccess(),tag));
+      mode.updatePlayerAbilities(abilities);
+      System.out.println("player-instabuild\t"+mode.getId()+"\t"+flying+"\t"+applied+","+prevents+","+saved+","+packet+","+abilities.instabuild);
+    }
     var player=new LivingVectors(level);player.setPos(0,64,0);
     player.getInventory().setSelectedSlot(5);
     player.setItemInHand(InteractionHand.MAIN_HAND,new ItemStack(Items.STONE,3));

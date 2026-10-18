@@ -328,6 +328,14 @@ push-entities	2	1	1	2:0,3fe0000000000000,0;1:0,3fb0000000000000,0	40210000000000
 push-entities	3	0	0	-	4021000000000000,404ff80000000000,4021000000000000	4021800000000000,404fc00000000000,4021000000000000	4021000000000000,404ff80000000000,4021000000000000
 push-entities	4	1	1	2:0,3fe0000000000000,0;1:0,3fb0000000000000,0	4021000000000000,4050000000000000,4021000000000000	4021800000000000,4050000000000000,4021000000000000	4021000000000000,404ff80000000000,4021000000000000
 push-entities	5	1	0	-	4021000000000000,404ff80000000000,4021000000000000	4021800000000000,404fc00000000000,4021000000000000	4021000000000000,404ff80000000000,4021000000000000
+player-instabuild	0	false	false,true,true,true,false
+player-instabuild	0	true	false,true,true,true,false
+player-instabuild	1	false	true,false,false,false,true
+player-instabuild	1	true	true,false,false,false,true
+player-instabuild	2	false	false,true,true,true,false
+player-instabuild	2	true	false,true,true,true,false
+player-instabuild	3	false	false,true,true,true,false
+player-instabuild	3	true	false,true,true,true,false
 player-interaction	false	false,5,3,true
 player-interaction	true	true,5,3,true
 player-range	0	0.0	5,65,0	false

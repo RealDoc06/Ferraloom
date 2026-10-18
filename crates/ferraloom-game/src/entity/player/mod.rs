@@ -53,6 +53,7 @@ pub struct ServerPlayer {
     pub game_mode: GameType,
     pub flying: bool,
     pub may_build: bool,
+    pub instabuild: bool,
     pub last_client_input: ferraloom_protocol::play::Input,
     pub text_filtering_enabled: bool,
     pub cooldowns: cooldowns::ServerItemCooldowns,
@@ -107,10 +108,21 @@ impl ServerPlayer {
         self.may_build
     }
 
+    /// Port of Abilities.instabuild.
+    pub fn instabuild(&self) -> bool {
+        self.instabuild
+    }
+
+    /// Port of Player#preventsBlockDrops, independent of the game mode.
+    pub fn prevents_block_drops(&self) -> bool {
+        self.instabuild
+    }
+
     /// Port of GameType#updatePlayerAbilities for the currently ported fields.
     /// Runtime game-mode transitions also handle their packets and other effects.
     pub fn update_game_mode_abilities(&mut self) {
         self.may_build = matches!(self.game_mode, GameType::Survival | GameType::Creative);
+        self.instabuild = self.game_mode == GameType::Creative;
         match self.game_mode {
             GameType::Creative => {}
             GameType::Spectator => self.flying = true,
@@ -156,6 +168,7 @@ impl ServerPlayer {
             game_mode,
             flying: game_mode == GameType::Spectator,
             may_build: matches!(game_mode, GameType::Survival | GameType::Creative),
+            instabuild: game_mode == GameType::Creative,
             last_client_input: ferraloom_protocol::play::Input {
                 forward: false,
                 backward: false,
@@ -232,6 +245,9 @@ impl ServerPlayer {
         self.parent.parent.load_nbt(tag)?;
         // Player#readAdditionalSaveData restores the profile UUID after super.
         self.uuid = self.profile_id;
+        if let Some(abilities) = self.saved.get_compound("abilities") {
+            self.instabuild = abilities.get_boolean_or("instabuild", false);
+        }
         self.game_mode =
             GameType::from_id(self.saved.get_int_or("playerGameType", self.game_mode.id()));
         // ServerPlayer reads saved abilities before applying its loaded game mode.
@@ -293,10 +309,7 @@ impl ServerPlayer {
         abilities.insert("invulnerable", Tag::Byte(i8::from(creative)));
         abilities.insert("mayfly", Tag::Byte(i8::from(creative)));
         abilities.insert("flying", Tag::Byte(i8::from(self.flying)));
-        abilities.insert(
-            "instabuild",
-            Tag::Byte(i8::from(self.game_mode == GameType::Creative)),
-        );
+        abilities.insert("instabuild", Tag::Byte(i8::from(self.instabuild)));
         abilities.insert("mayBuild", Tag::Byte(i8::from(self.may_build)));
         abilities.insert("flySpeed", Tag::Float(0.05));
         abilities.insert("walkSpeed", Tag::Float(0.1));
