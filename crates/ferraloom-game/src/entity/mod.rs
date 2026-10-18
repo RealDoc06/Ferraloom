@@ -216,6 +216,10 @@ pub fn trace_base_entity_refs(base: &EntityData, references: &mut Vec<EntityRef>
 ///
 /// Dispatch objects are stateless. Never hold a state borrow across a world call.
 pub trait Entity: Sync {
+    /// Port of Entity#isSpectator; the player dispatcher supplies its game mode.
+    fn is_spectator(&self, _entity: EntityRef, _level: &Level) -> Result<bool, LevelError> {
+        Ok(false)
+    }
     /// Host lifetime tracing is required for every dispatcher. Declare all held
     /// EntityRef fields here; UUID lookup references do not retain old states.
     fn trace_entity_refs(&self, state: &EntityState, references: &mut Vec<EntityRef>);

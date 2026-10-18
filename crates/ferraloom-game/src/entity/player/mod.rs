@@ -534,6 +534,14 @@ fn jump_from_ground(entity: crate::entity::EntityRef, level: &mut Level) -> Resu
 }
 pub struct PlayerBehavior;
 impl crate::entity::Entity for PlayerBehavior {
+    /// Port of Player#isSpectator through canonical ServerPlayer state.
+    fn is_spectator(
+        &self,
+        entity: crate::entity::EntityRef,
+        level: &Level,
+    ) -> Result<bool, LevelError> {
+        Ok(level.entity::<ServerPlayer>(entity)?.game_mode == GameType::Spectator)
+    }
     fn y_head_rot(
         &self,
         entity: crate::entity::EntityRef,
