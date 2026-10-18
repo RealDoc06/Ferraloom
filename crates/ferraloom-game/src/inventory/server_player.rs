@@ -173,18 +173,20 @@ pub fn tick_container_menu(
     })
 }
 fn tick_container_menu_inner(player: EntityRef, level: &mut Level) -> Result<()> {
-    let (valid, packets) = with_block_menu_context(player, level, |menus, _book, ctx| {
-        let menu = menus.current_mut();
-        menu.broadcast_changes(ctx)?;
-        let valid = menu.still_valid(ctx);
-        menu.changes.clear();
-        Ok((valid, menu.drain_packets()))
+    let reference = level.entity::<ServerPlayer>(player)?.menus.current_ref();
+    with_menu_callback(player, reference, level, |context| {
+        broadcast_menu_changes(context)?;
+        context.menu_mut()?.changes.clear();
+        Ok(())
     })?;
-    level
-        .entity_mut::<ServerPlayer>(player)?
+    // Java reads containerMenu again after broadcasting: a synchronous slot
+    // callback may have closed or replaced the menu just broadcast.
+    let bound = &level
+        .entity::<ServerPlayer>(player)?
         .menus
-        .pending_packets
-        .extend(packets);
+        .current()
+        .block_entities;
+    let valid = block_menu_still_valid(player, bound, level)?;
     if !valid {
         let packets = close_container(player, level, true, false)?;
         level

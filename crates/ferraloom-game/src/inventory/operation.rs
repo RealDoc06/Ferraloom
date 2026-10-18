@@ -6,6 +6,10 @@ pub trait MenuSynchronizationContext {
     fn menu_mut(&mut self) -> Result<&mut AbstractContainerMenu>;
     fn item_at(&mut self, slot: usize) -> Result<ItemStack>;
     fn data_at(&mut self, index: usize) -> Result<i32>;
+    fn send_update(&mut self, update: ContainerUpdate) -> Result<()> {
+        self.menu_mut()?.updates.push(update);
+        Ok(())
+    }
 }
 pub(crate) struct PureMenuSynchronization<'a, 'b, 'c> {
     pub menu: &'a mut AbstractContainerMenu,
@@ -99,6 +103,14 @@ impl MenuSynchronizationContext for LiveMenuContext<'_> {
         }
         Ok(self.menu()?.data[index])
     }
+    fn send_update(&mut self, update: ContainerUpdate) -> Result<()> {
+        self.level
+            .entity_mut::<crate::entity::player::ServerPlayer>(self.player)?
+            .menus
+            .pending_packets
+            .extend(update.into_packets());
+        Ok(())
+    }
 }
 
 /// Port of AbstractContainerMenu#broadcastChanges. Resolve each getItem once,
@@ -113,12 +125,13 @@ pub fn broadcast_menu_changes(context: &mut impl MenuSynchronizationContext) -> 
             menu.remote_slots[index].force(&current);
             if menu.synchronized {
                 let state_id = menu.increment_state_id();
-                menu.updates.push(ContainerUpdate::Slot {
+                let update = ContainerUpdate::Slot {
                     container_id: menu.container_id,
                     state_id,
                     slot: index,
                     stack: current,
-                });
+                };
+                context.send_update(update)?;
             }
         }
     }
@@ -126,8 +139,8 @@ pub fn broadcast_menu_changes(context: &mut impl MenuSynchronizationContext) -> 
     if !menu.suppressed && !menu.remote_carried.matches(&menu.carried)? {
         menu.remote_carried.force(&menu.carried);
         if menu.synchronized {
-            menu.updates
-                .push(ContainerUpdate::Carried(menu.carried.clone()));
+            let update = ContainerUpdate::Carried(menu.carried.clone());
+            context.send_update(update)?;
         }
     }
     let size = context.menu()?.data.len();
@@ -138,11 +151,12 @@ pub fn broadcast_menu_changes(context: &mut impl MenuSynchronizationContext) -> 
         if !menu.suppressed && menu.remote_data[index] != current {
             menu.remote_data[index] = current;
             if menu.synchronized {
-                menu.updates.push(ContainerUpdate::Data {
+                let update = ContainerUpdate::Data {
                     container_id: menu.container_id,
                     id: index,
                     value: current,
-                });
+                };
+                context.send_update(update)?;
             }
         }
     }
@@ -180,13 +194,14 @@ pub fn send_all_menu_data(context: &mut impl MenuSynchronizationContext) -> Resu
     let menu = context.menu_mut()?;
     if menu.synchronized {
         let state_id = menu.increment_state_id();
-        menu.updates.push(ContainerUpdate::Initial {
+        let update = ContainerUpdate::Initial {
             container_id: menu.container_id,
             state_id,
             items,
             carried,
             data: menu.remote_data.clone(),
-        });
+        };
+        context.send_update(update)?;
     }
     Ok(())
 }
