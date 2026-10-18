@@ -58,7 +58,7 @@ fn packet_json(packet: &cb::Packet) -> Value {
 fn vanilla_registered_commands_feedback_and_packet_bytes() {
     let cases: Vec<Case> =
         serde_json::from_str(include_str!("../../tests/java/scoreboard/commands.json")).unwrap();
-    assert_eq!(cases.len(), 118);
+    assert_eq!(cases.len(), 120);
     let commands = commands::Commands::default();
     let mut board = ServerScoreboard::default();
     for case in cases {
@@ -260,5 +260,53 @@ fn vanilla_score_contents_formatting_and_absent_scores() {
         .collect();
     let expected: Vec<Value> =
         serde_json::from_str(include_str!("../../tests/java/scoreboard/formatting.json")).unwrap();
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn readonly_swap_keeps_target_write_and_native_failure_feedback() {
+    let mut board = ServerScoreboard::default();
+    for (name, criterion, display) in [
+        ("points", "dummy", "Points"),
+        ("health", "health", "Health"),
+    ] {
+        board
+            .add_objective(
+                name.into(),
+                Objective::new(
+                    ObjectiveCriteria::by_name(criterion).unwrap(),
+                    Component::literal(display),
+                ),
+            )
+            .unwrap();
+    }
+    board.set_score("#one", "points", 5, None, false).unwrap();
+    board.set_score("#two", "health", 3, None, true).unwrap();
+    board
+        .set_display_objective(DisplaySlot::Sidebar, Some("points".into()))
+        .unwrap();
+    board.drain_packets();
+    let command = commands::Commands::default()
+        .prepare(
+            "scoreboard players operation #one points >< #two health",
+            CommandSourceStack::server(4, ferraloom_util::Vec3::ZERO),
+        )
+        .unwrap();
+    let error = commands::scoreboard::execute(
+        &mut board,
+        &command,
+        &[Holder::for_name("#one")],
+        &[Holder::for_name("#two")],
+    )
+    .unwrap_err();
+    let failure: Value = serde_json::from_str(
+        &commands::exceptions::error_component(&error)
+            .to_json()
+            .unwrap(),
+    )
+    .unwrap();
+    let actual = json!({"failures":[failure],"packets":board.drain_packets().iter().map(packet_json).collect::<Vec<_>>(),"target":board.scoreboard().get_player_score("#one","points").unwrap().value,"source":board.scoreboard().get_player_score("#two","health").unwrap().value});
+    let expected: Value =
+        serde_json::from_str(include_str!("../../tests/java/scoreboard/readonly.json")).unwrap();
     assert_eq!(actual, expected);
 }

@@ -23,6 +23,6 @@ with tempfile.TemporaryDirectory(prefix='scoreboard-vectors-') as temp:
     (source/'vectors.tsv').write_text('\n'.join(rows)+'\n')
     print(f'{len(rows)} vanilla scoreboard cases')
 
-    run([str(java/'java'),'-Xmx768m','-XX:+EnableDynamicAgentLoading','-Dnet.bytebuddy.experimental=true','-cp',f'{classes}:{cp}','CommandVectors',str(source/'commands.json'),str(source/'join.json'),str(source/'formatting.json'),str(source/'producers.json')])
+    run([str(java/'java'),'-Xmx768m','-XX:+EnableDynamicAgentLoading','-Dnet.bytebuddy.experimental=true','-cp',f'{classes}:{cp}','CommandVectors',str(source/'commands.json'),str(source/'join.json'),str(source/'formatting.json'),str(source/'producers.json'),str(source/'readonly.json')])
     import json
     print(f"{len(json.loads((source/'commands.json').read_text()))} vanilla command cases")

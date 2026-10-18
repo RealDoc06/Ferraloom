@@ -693,14 +693,26 @@ fn perform_operation(
             ))?;
             target_new = false;
             if *operation == super::arguments::operation::Operation::Swap {
-                checked(board.set_score_with_sync(
+                let result = board.set_score_with_sync(
                     &from.name,
                     source,
                     b,
                     from.display.as_ref(),
                     false,
                     source_new,
-                ))?;
+                );
+                if matches!(result, Err(crate::scoreboard::Error::ReadOnly(_))) {
+                    // Port of Commands#performCommand's runtime-exception feedback after the target's write.
+                    let mut message = super::exceptions::translated("command.failed", &[]);
+                    message.component.style.hover_event = Some(HoverEvent::ShowText(Box::new(
+                        Component::literal("Cannot modify read-only score"),
+                    )));
+                    return Err(CommandSyntaxException::new(
+                        ferraloom_brigadier::ExceptionKind::Custom("command.failed".into()),
+                        std::sync::Arc::new(message),
+                    ));
+                }
+                checked(result)?;
             }
         }
         total = total.wrapping_add(

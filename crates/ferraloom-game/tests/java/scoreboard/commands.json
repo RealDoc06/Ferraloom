@@ -1778,6 +1778,80 @@
     "packets": []
   },
   {
+    "command": "scoreboard players set Doc points 7",
+    "value": 7,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.scoreboard.players.set.success.single",
+          "with": [
+            {
+              "translate": "chat.square_brackets",
+              "with": [
+                {
+                  "text": "New",
+                  "hover_event": {
+                    "value": "points",
+                    "action": "show_text"
+                  }
+                }
+              ]
+            },
+            {
+              "text": "Doc",
+              "hover_event": {
+                "value": "Doc",
+                "action": "show_text"
+              }
+            },
+            7
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "packets": [
+      {
+        "type": "ClientboundSetScorePacket",
+        "hex": "03446f6306706f696e74730701080003446f6300"
+      }
+    ]
+  },
+  {
+    "command": "scoreboard players operation #new points \u003d #source other",
+    "value": 0,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.scoreboard.players.operation.success.single",
+          "with": [
+            {
+              "translate": "chat.square_brackets",
+              "with": [
+                {
+                  "text": "New",
+                  "hover_event": {
+                    "value": "points",
+                    "action": "show_text"
+                  }
+                }
+              ]
+            },
+            "#new",
+            0
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "packets": [
+      {
+        "type": "ClientboundSetScorePacket",
+        "hex": "04236e657706706f696e7473000000"
+      }
+    ]
+  },
+  {
     "command": "scoreboard objectives modify points numberformat blank",
     "value": 0,
     "feedback": [
@@ -2852,13 +2926,13 @@
   },
   {
     "command": "scoreboard players list",
-    "value": 3,
+    "value": 5,
     "feedback": [
       {
         "message": {
           "translate": "commands.scoreboard.players.list.success",
           "with": [
-            3,
+            5,
             {
               "text": "",
               "extra": [
@@ -2872,7 +2946,17 @@
                   "text": ", ",
                   "color": "gray"
                 },
-                "#two"
+                "#two",
+                {
+                  "text": ", ",
+                  "color": "gray"
+                },
+                "#new",
+                {
+                  "text": ", ",
+                  "color": "gray"
+                },
+                "#source"
               ]
             }
           ]

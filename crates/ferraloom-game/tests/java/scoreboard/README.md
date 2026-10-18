@@ -11,10 +11,13 @@ default cases, four iterator/stream traversal checks and the writable statistic-
 Additional codec/criterion cases cover fractional numeric decoding and three
 statistic aliases (`mined:stone` becomes `minecraft.mined:minecraft.stone`).
 
-`CommandVectors` adds 118 real dispatcher cases. Each case compares exact
+`CommandVectors` adds 120 real dispatcher cases. Each case compares exact
 feedback components, return values/errors and the ordered bytes emitted by real
 ServerScoreboard hooks through all five native scoreboard packet codecs.
 
 Separate fixtures invoke real PlayerList join synchronization (one ordered
 packet sequence), ReadOnlyScoreInfo formatting (four cases), and actual
 ServerPlayer.awardStat/resetStat methods (two cases).
+
+A real Commands.performCommand case captures a swap against a read-only source:
+the target is already written and broadcast when the source write throws.
