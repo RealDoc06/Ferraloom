@@ -72,6 +72,21 @@ public final class ListenerVectors {
       + String.join(";", events) + "\t" + String.join(";", sync.events) + "\t"
       + InventoryVectors.item(menu.getSlot(36).getItem()));
   }
+  static void operationStack(boolean copy) {
+    var container = new net.minecraft.world.SimpleContainer(2);
+    container.setItem(0, new ItemStack(Items.STONE, 10));
+    var source = container.getItem(0);
+    var fresh = copy ? source.copyWithCount(4) : source.split(4);
+    var events = new ArrayList<String>();
+    events.add("source:" + InventoryVectors.item(source));
+    container.setItem(1, fresh);
+    events.add("alias:" + (fresh == container.getItem(1)));
+    container.setItem(1, new ItemStack(Items.DIRT, 3));
+    fresh.grow(2);
+    events.add("destination:" + InventoryVectors.item(container.getItem(1)));
+    events.add("held:" + InventoryVectors.item(fresh));
+    System.out.println("listener\toperation-" + (copy ? "copy" : "split") + "\t" + String.join(";", events));
+  }
   public static void main(String[] args) throws Exception {
     var output = System.out;
     var errors = System.err;
@@ -87,5 +102,7 @@ public final class ListenerVectors {
     scenario(registries, false);
     alias(registries, true);
     alias(registries, false);
+    operationStack(false);
+    operationStack(true);
   }
 }

@@ -10,6 +10,7 @@ mod live;
 mod menu;
 mod menus;
 mod operation;
+mod operation_stacks;
 mod server_player;
 mod slot;
 mod stack_runtime;

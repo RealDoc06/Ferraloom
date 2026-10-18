@@ -57,6 +57,12 @@ impl Level {
             ContainerHandle::MenuListenerCopies { .. } => Err(MenuError::Unsupported(
                 "listener copy objects use the menu arena",
             )),
+            ContainerHandle::MenuOperationStacks { player } => self
+                .entity::<ServerPlayer>(player)?
+                .menus
+                .operation_stacks
+                .parts(slot.slot)
+                .ok_or(MenuError::InvalidSlot(slot.slot as i32)),
             ContainerHandle::Entity(_) => {
                 Err(MenuError::Unsupported("entity stack generation storage"))
             }
@@ -103,6 +109,12 @@ impl Level {
             ContainerHandle::MenuListenerCopies { .. } => Err(MenuError::Unsupported(
                 "listener copy objects use the menu arena",
             )),
+            ContainerHandle::MenuOperationStacks { player } => self
+                .entity_mut::<ServerPlayer>(player)?
+                .menus
+                .operation_stacks
+                .parts_mut(slot.slot)
+                .ok_or(MenuError::InvalidSlot(slot.slot as i32)),
             ContainerHandle::Entity(_) => {
                 Err(MenuError::Unsupported("entity stack generation storage"))
             }
@@ -131,7 +143,9 @@ impl Level {
                     .menus
                     .retain_menu(menu)?;
             }
-            ContainerHandle::PlayerInventory(_) | ContainerHandle::MenuListenerCopies { .. } => {}
+            ContainerHandle::PlayerInventory(_)
+            | ContainerHandle::MenuListenerCopies { .. }
+            | ContainerHandle::MenuOperationStacks { .. } => {}
             ContainerHandle::Entity(_) => {
                 return Err(MenuError::Unsupported("entity stack generation storage"));
             }
@@ -224,6 +238,19 @@ impl Level {
                     });
                 }
                 return;
+            }
+            if let ContainerHandle::MenuOperationStacks { player } = reference.container {
+                let forwarded = match self.entity_mut::<ServerPlayer>(player) {
+                    Ok(player) => player.menus.operation_stacks.release(reference.local()),
+                    Err(_) => return,
+                };
+                match forwarded {
+                    Some(next) => {
+                        reference = next;
+                        continue;
+                    }
+                    None => return,
+                }
             }
             let Ok((generations, _, index)) = self.stack_parts_mut(reference.address()) else {
                 return;
@@ -373,6 +400,23 @@ impl<'a> StackOperation<'a> {
             roots: Vec::new(),
         }
     }
+    /// Own a fresh split/remove/copy result in the player's canonical operation
+    /// arena. Its root and forwarding destination retire when this frame ends.
+    pub fn own(&mut self, player: EntityRef, stack: ItemStack) -> Result<StackRef> {
+        let local = self
+            .level
+            .entity_mut::<ServerPlayer>(player)?
+            .menus
+            .operation_stacks
+            .insert(stack);
+        let reference = StackRef {
+            container: ContainerHandle::MenuOperationStacks { player },
+            slot: local.slot,
+            generation: local.generation,
+        };
+        self.roots.push(reference);
+        Ok(reference)
+    }
     /// Run native lazy getItem, then pin the receiver it returned. Owner roots
     /// keep a replaced block or closed menu addressable throughout that read.
     pub fn pin(&mut self, slot: ContainerSlot) -> Result<StackRef> {
@@ -445,6 +489,116 @@ mod tests {
     };
     use ferraloom_data::Item;
     use ferraloom_util::{Uuid, Vec3};
+
+    #[test]
+    fn fresh_operation_objects_follow_moves_and_retire_after_the_final_root() {
+        static BEHAVIORS: crate::Behaviors = crate::Behaviors::EMPTY;
+        let mut checked = 0;
+        for line in include_str!("../../tests/java/inventory/listeners.tsv")
+            .lines()
+            .filter(|line| line.starts_with("listener\toperation-"))
+        {
+            let fields: Vec<_> = line.split('\t').collect();
+            let mut level = Level::new(
+                Region::new(&BEHAVIORS),
+                crate::level::LevelContext::fixture(0, 63),
+            );
+            let player = EntityRef(1);
+            let mut state = ServerPlayer::new(
+                Uuid::new(0, 1),
+                "operation".into(),
+                1,
+                Vec3::ZERO,
+                GameType::Survival,
+            );
+            state
+                .inventory
+                .set_selected_item(ItemStack::new(Item::STONE, 10, Default::default()));
+            level
+                .add_entity(player, EntityState::Player(Box::new(state)))
+                .unwrap();
+            let destination = ContainerSlot {
+                container: ContainerHandle::PlayerInventory(player),
+                slot: 1,
+            };
+            let held;
+            {
+                let mut operation = StackOperation::new(&mut level);
+                let source = operation
+                    .pin(ContainerSlot {
+                        slot: 0,
+                        ..destination
+                    })
+                    .unwrap();
+                let fresh = if fields[1] == "operation-copy" {
+                    operation.level.stack(source).unwrap().copy_with_count(4)
+                } else {
+                    super::super::split(operation.level.stack_mut(source).unwrap(), 4)
+                };
+                held = operation.own(player, fresh).unwrap();
+                let describe = |stack: &ItemStack| {
+                    format!(
+                        "{},{},{}",
+                        stack.item().id(),
+                        count(stack),
+                        super::super::max_stack_size(stack)
+                    )
+                };
+                let mut events = vec![format!(
+                    "source:{}",
+                    describe(operation.level.stack(source).unwrap())
+                )];
+                operation
+                    .level
+                    .replace_stack_object(destination, StackValue::Existing(held))
+                    .unwrap();
+                // A count edit through the new slot observes the same object.
+                let installed = operation.level.stack_ref(destination).unwrap();
+                set_count(operation.level.stack_mut(installed).unwrap(), 5);
+                assert_eq!(count(operation.level.stack(held).unwrap()), 5);
+                set_count(operation.level.stack_mut(held).unwrap(), 4);
+                events.push("alias:true".into());
+                operation
+                    .level
+                    .replace_stack_object(
+                        destination,
+                        StackValue::New(ItemStack::new(Item::DIRT, 3, Default::default())),
+                    )
+                    .unwrap();
+                set_count(operation.level.stack_mut(held).unwrap(), 6);
+                events.push(format!(
+                    "destination:{}",
+                    describe(
+                        operation
+                            .level
+                            .stack(operation.level.stack_ref(destination).unwrap())
+                            .unwrap()
+                    )
+                ));
+                events.push(format!(
+                    "held:{}",
+                    describe(operation.level.stack(held).unwrap())
+                ));
+                assert_eq!(events.join(";"), fields[2], "{line}");
+                // An enclosing callback can outlive the operation that made it.
+                operation.level.retain_stack(held).unwrap();
+            }
+            assert_eq!(count(level.stack(held).unwrap()), 6);
+            level.release_stack(held);
+            assert!(level.stack(held).is_err());
+            {
+                let mut next = StackOperation::new(&mut level);
+                let reused = next
+                    .own(player, ItemStack::new(Item::DIAMOND, 1, Default::default()))
+                    .unwrap();
+                assert_eq!(reused.slot, held.slot);
+                assert_ne!(reused.generation, held.generation);
+                assert!(next.level.stack(held).is_err());
+            }
+            checked += 1;
+        }
+        assert_eq!(checked, 2);
+    }
 
     #[test]
     fn hand_exchange_preserves_outer_roots_and_replaced_moved_receivers() {
