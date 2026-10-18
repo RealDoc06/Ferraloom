@@ -33,6 +33,8 @@ public final class TeleportVector {
                 var relatives = (Set<Relative>)relativesMethod.invoke(null, coordinates, rotation, true);
                 var vector = new JsonObject(); vector.addProperty("input", input); vector.addProperty("rotation", rotationText);
                 var victim = mock(Entity.class);
+                doReturn(1d).when(victim).getX(); doReturn(2d).when(victim).getY(); doReturn(3d).when(victim).getZ();
+                doReturn(370f).when(victim).getYRot(); doReturn(30f).when(victim).getXRot();
                 doAnswer(invocation -> {
                     var change = new PositionMoveRotation(new Vec3(invocation.getArgument(1), invocation.getArgument(2), invocation.getArgument(3)), Vec3.ZERO, invocation.getArgument(5), invocation.getArgument(6));
                     var absolute = PositionMoveRotation.calculateAbsolute(new PositionMoveRotation(new Vec3(1,2,3), Vec3.ZERO, 370,30), change, invocation.getArgument(4));
