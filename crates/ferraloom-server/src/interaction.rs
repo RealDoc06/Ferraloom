@@ -5,6 +5,7 @@ use ferraloom_game::{
     advancements::criteria,
     block::{InteractionResult, UseContext, interaction::SwingSource},
     entity::player::{inventory, swing_and_reset_attack_strength},
+    inventory::StackOperation,
 };
 use ferraloom_util::Direction;
 use protocol::{
@@ -98,39 +99,52 @@ impl MinecraftServer {
                     hand: packet.hand,
                     hit: packet.hit_result.clone(),
                 };
+                let mut operation = StackOperation::new(&mut self.level.level);
                 if let Some(result) =
-                    ferraloom_game::block::interaction::use_item_on(&context, &mut self.level.level)
+                    ferraloom_game::block::interaction::use_item_on(&context, &mut operation)
                         .map_err(game_error)?
                 {
                     if result.consumes_action() {
-                        criteria::any_block_use(&mut self.level.level, entity, pos, &stack)
+                        criteria::any_block_use(operation.level, entity, pos, &stack)
                             .map_err(game_error)?;
                     }
                     let direction = packet.hit_result.direction;
                     if direction == Direction::Up
                         && !result.consumes_action()
                         && pos.y >= max_y
-                        && self.was_block_placement_attempt(entity, &stack)?
+                        && was_block_placement_attempt(operation.level, entity, &stack)?
                     {
-                        self.send_build_limit(connection, true, max_y);
+                        send_build_limit_to(
+                            self.connections.get_mut(&connection).unwrap(),
+                            true,
+                            max_y,
+                        );
                     } else {
                         swing_for_result(
                             entity,
                             packet.hand,
                             &animation,
                             &result,
-                            &mut self.level.level,
+                            operation.level,
                         )?;
                     }
                     // 26.3 performs both checks and both swing calls. The entity
                     // swing receiver owns the native suppression of a restart.
                     if !result.consumes_action()
-                        && self.was_block_placement_attempt(entity, &stack)?
+                        && was_block_placement_attempt(operation.level, entity, &stack)?
                     {
                         if direction == Direction::Up && pos.y >= max_y {
-                            self.send_build_limit(connection, true, max_y);
+                            send_build_limit_to(
+                                self.connections.get_mut(&connection).unwrap(),
+                                true,
+                                max_y,
+                            );
                         } else if direction == Direction::Down && pos.y <= min_y {
-                            self.send_build_limit(connection, false, min_y);
+                            send_build_limit_to(
+                                self.connections.get_mut(&connection).unwrap(),
+                                false,
+                                min_y,
+                            );
                         }
                     } else {
                         swing_for_result(
@@ -138,7 +152,7 @@ impl MinecraftServer {
                             packet.hand,
                             &animation,
                             &result,
-                            &mut self.level.level,
+                            operation.level,
                         )?;
                     }
                 }
@@ -159,32 +173,8 @@ impl MinecraftServer {
         Ok(())
     }
 
-    fn was_block_placement_attempt(
-        &self,
-        entity: EntityRef,
-        stack: &protocol::component::ItemStack,
-    ) -> Result<bool> {
-        Ok(!stack.is_empty()
-            && stack.item().is_block_placement_attempt()
-            && !self
-                .level
-                .level
-                .entity::<ServerPlayer>(entity)
-                .map_err(game_error)?
-                .cooldowns
-                .is_on_cooldown(stack))
-    }
-
     fn send_build_limit(&mut self, connection: ConnectionId, high: bool, limit: i32) {
-        self.send_interaction_overlay(
-            connection,
-            if high {
-                "build.tooHigh"
-            } else {
-                "build.tooLow"
-            },
-            Argument::Number(Numeric::Int(limit)),
-        );
+        send_build_limit_to(self.connections.get_mut(&connection).unwrap(), high, limit);
     }
     fn send_interaction_overlay(
         &mut self,
@@ -192,15 +182,11 @@ impl MinecraftServer {
         key: &str,
         argument: Argument,
     ) {
-        let mut content = Component::translatable(key, vec![argument]);
-        content.style.color = Some(TextColor::parse("red").expect("native color"));
-        self.connections
-            .get_mut(&connection)
-            .unwrap()
-            .push(cb::Packet::SystemChat(Box::new(cb::SystemChat {
-                content,
-                overlay: true,
-            })));
+        send_interaction_overlay_to(
+            self.connections.get_mut(&connection).unwrap(),
+            key,
+            argument,
+        );
     }
 
     /// Port of handleSignUpdate/filterTextPacket/updateSignText with the native
@@ -269,6 +255,39 @@ impl MinecraftServer {
         }
         Ok(())
     }
+}
+
+fn was_block_placement_attempt(
+    level: &ferraloom_game::level::Level,
+    entity: EntityRef,
+    stack: &protocol::component::ItemStack,
+) -> Result<bool> {
+    Ok(!stack.is_empty()
+        && stack.item().is_block_placement_attempt()
+        && !level
+            .entity::<ServerPlayer>(entity)
+            .map_err(game_error)?
+            .cooldowns
+            .is_on_cooldown(stack))
+}
+fn send_build_limit_to(connection: &mut Connection, high: bool, limit: i32) {
+    send_interaction_overlay_to(
+        connection,
+        if high {
+            "build.tooHigh"
+        } else {
+            "build.tooLow"
+        },
+        Argument::Number(Numeric::Int(limit)),
+    );
+}
+fn send_interaction_overlay_to(connection: &mut Connection, key: &str, argument: Argument) {
+    let mut content = Component::translatable(key, vec![argument]);
+    content.style.color = Some(TextColor::parse("red").expect("native color"));
+    connection.push(cb::Packet::SystemChat(Box::new(cb::SystemChat {
+        content,
+        overlay: true,
+    })));
 }
 
 fn swing_for_result(
