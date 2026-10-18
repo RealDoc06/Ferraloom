@@ -67,10 +67,10 @@ impl WorldGenContext {
             &structure_state,
             &generator.biome_source().possible_biomes(),
         )?;
-        if let ChunkGenerator::Flat(flat) = generator.as_ref() {
-            if let Some(overrides) = &flat.settings.structure_overrides {
-                possible_sets.retain(|id| overrides.contains(id));
-            }
+        if let ChunkGenerator::Flat(flat) = generator.as_ref()
+            && let Some(overrides) = &flat.settings.structure_overrides
+        {
+            possible_sets.retain(|id| overrides.contains(id));
         }
         if matches!(generator.as_ref(), ChunkGenerator::Debug(_)) || !generate_structures {
             possible_sets.clear();

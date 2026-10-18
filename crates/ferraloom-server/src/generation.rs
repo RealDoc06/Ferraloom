@@ -27,7 +27,7 @@ use std::{
 pub(crate) struct GenerationRequest {
     pub id: u64,
     pub pos: ChunkPos,
-    pub reply: tokio::sync::oneshot::Sender<Result<Terrain>>,
+    pub reply: tokio::sync::oneshot::Sender<Result<GenerationOutput>>,
     pub cancelled: Arc<AtomicBool>,
 }
 pub(crate) struct GenerationCompletion {
@@ -72,6 +72,12 @@ impl GenerationState {
             holders: BTreeMap::new(),
             structure_check: StructureCheck::default(),
         }
+    }
+    pub fn completed_statuses(&self) -> Vec<(ChunkPos, ChunkStatus)> {
+        self.holders
+            .iter()
+            .map(|(&key, holder)| (ChunkPos::unpack(key), holder.completed))
+            .collect()
     }
     pub fn pending_initial_spawns(&self) -> BTreeSet<ChunkPos> {
         self.holders
@@ -336,14 +342,18 @@ impl GenerationState {
             .iter()
             .filter_map(|(&key, holder)| {
                 let neighbor = ChunkPos::unpack(key);
-                (neighbor != pos
+                if neighbor != pos
                     && neighbor.x.abs_diff(pos.x).max(neighbor.z.abs_diff(pos.z)) <= 1
-                    && holder.completed >= ChunkStatus::InitializeLight)
-                    .then(|| GenerationLightNeighbor {
+                    && holder.completed >= ChunkStatus::InitializeLight
+                {
+                    Some(GenerationLightNeighbor {
                         pos: neighbor,
                         sections: holder.chunk.region.chunk.sections.clone(),
                         disk: holder.chunk.disk.clone(),
                     })
+                } else {
+                    None
+                }
             })
             .collect();
         let terrain = Terrain {
@@ -359,11 +369,7 @@ impl GenerationState {
             skips,
             full_structures,
             initial_mob_spawning_pending: proto.initial_mob_spawning_pending,
-            statuses: self
-                .holders
-                .iter()
-                .map(|(&key, h)| (ChunkPos::unpack(key), h.completed))
-                .collect(),
+            statuses: self.completed_statuses(),
         })
     }
     fn apply_light(&mut self, pos: ChunkPos, target: ChunkStatus) -> Result<()> {

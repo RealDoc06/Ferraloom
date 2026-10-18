@@ -1,6 +1,6 @@
 //! World snapshots cross worker boundaries; only tick integration mutates Level.
 use crate::{
-    generation::{GenerationCompletion, GenerationRequest, GenerationState},
+    generation::{GenerationCompletion, GenerationOutput, GenerationRequest, GenerationState},
     jobs::JobPool,
     properties::ServerProperties,
     registries::RegistrySet,
@@ -571,7 +571,7 @@ pub struct World {
     unloading: VecDeque<ChunkUnload>,
     evictions: Vec<ChunkPos>,
     saving: JobPool,
-    pub pending: BTreeMap<u64, oneshot::Receiver<Result<Terrain>>>,
+    pending: BTreeMap<u64, (ChunkPos, oneshot::Receiver<Result<GenerationOutput>>)>,
     light_tx: mpsc::Sender<LightJob>,
     pub light_rx: tokio::sync::mpsc::UnboundedReceiver<LitChunk>,
     pub saved: BTreeMap<i64, SerializableChunkData>,
@@ -956,7 +956,7 @@ impl World {
     }
     pub fn request(&mut self, request: u64, pos: ChunkPos) {
         let (reply, answer) = oneshot::channel();
-        self.pending.insert(request, answer);
+        self.pending.insert(request, (pos, answer));
         let cancelled = Arc::new(AtomicBool::new(false));
         self.active_generation
             .insert(pos, (request, cancelled.clone()));
@@ -1011,7 +1011,7 @@ impl World {
         }
         self.running_generation = Some((request.id, request.pos));
         self.generation_work = Some(self.generation.submit(move || {
-            let result = state.generate(
+            let mut result = state.generate(
                 request.id,
                 request.pos,
                 ChunkStatus::Full,
@@ -1032,6 +1032,9 @@ impl World {
             } else {
                 Ok(())
             };
+            if let Ok(output) = &mut result {
+                output.statuses = state.completed_statuses();
+            }
             GenerationCompletion {
                 state,
                 result,
@@ -1043,12 +1046,20 @@ impl World {
     }
     fn complete_generation(&mut self, output: GenerationCompletion) -> Result<()> {
         let GenerationCompletion {
-            state,
-            result,
+            mut state,
+            mut result,
             request,
             cleanup,
         } = output;
         let pos = request.pos;
+        // An unrelated unload may have completed while the cache was owned by
+        // this worker. Apply it before the cache or its status snapshot returns.
+        for evicted in self.evictions.drain(..) {
+            state.forget(evicted);
+            if let Ok(output) = &mut result {
+                output.statuses.retain(|&(position, _)| position != evicted);
+            }
+        }
         self.generation_state = Some(state);
         self.running_generation = None;
         if self
@@ -1064,26 +1075,6 @@ impl World {
         if request.cancelled.load(Ordering::Relaxed) {
             return Ok(());
         }
-        if result.is_err() {
-            self.failed_generation.push((pos, request.id));
-        }
-        let result = result.and_then(|output| {
-            if output.initial_mob_spawning_pending {
-                self.pending_initial_spawns.insert(output.terrain.pos);
-            }
-            self.generation_skips.extend(output.skips);
-            self.generation_statuses.extend(output.statuses);
-            for (pos, structures) in output.full_structures {
-                if let Some(disk) = self.saved.get_mut(&pos.pack()) {
-                    disk.structures = Some(structures);
-                }
-            }
-            for (pos, disk) in output.neighbors {
-                self.proto_saves
-                    .push_back(self.io.store(pos, Some(disk.write()?)));
-            }
-            Ok(output.terrain)
-        });
         let _ = request.reply.send(result);
         Ok(())
     }
@@ -1210,10 +1201,30 @@ impl World {
         }
         let mut done = Vec::new();
         while let Some((&request, _)) = self.pending.first_key_value() {
-            match self.pending.get_mut(&request).unwrap().try_recv() {
+            let (position, answer) = self.pending.get_mut(&request).unwrap();
+            let position = *position;
+            match answer.try_recv() {
                 Ok(result) => {
                     self.pending.remove(&request);
-                    done.push((request, result?));
+                    if result.is_err() {
+                        self.failed_generation.push((position, request));
+                    }
+                    let output = result?;
+                    if output.initial_mob_spawning_pending {
+                        self.pending_initial_spawns.insert(output.terrain.pos);
+                    }
+                    self.generation_skips.extend(output.skips);
+                    self.generation_statuses.extend(output.statuses);
+                    for (pos, structures) in output.full_structures {
+                        if let Some(disk) = self.saved.get_mut(&pos.pack()) {
+                            disk.structures = Some(structures);
+                        }
+                    }
+                    for (pos, disk) in output.neighbors {
+                        self.proto_saves
+                            .push_back(self.io.store(pos, Some(disk.write()?)));
+                    }
+                    done.push((request, output.terrain));
                 }
                 Err(oneshot::error::TryRecvError::Empty) => break,
                 Err(error) => return Err(error.into()),
@@ -1743,5 +1754,63 @@ mod light_worker_tests {
         );
         drop(send);
         worker.join().unwrap();
+    }
+}
+
+#[cfg(test)]
+mod generation_order_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn priority_completion_keeps_statuses_skips_and_chunks_in_request_order() {
+        let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").expect("builder vanilla jar");
+        let resources = ResourceManager::new(vec![
+            ferraloom_data::datapack::Pack::vanilla_jar(Path::new(&jar)).unwrap(),
+        ]);
+        let registries = RegistrySet::load(&resources).unwrap();
+        let mut properties = ServerProperties::from_values(Default::default());
+        properties.set("level-type", "minecraft:debug_all_block_states");
+        let directory = tempfile::tempdir().unwrap();
+        let mut world = World::open(
+            directory.path(),
+            &properties,
+            &resources,
+            &registries,
+            ferraloom_game::block::UnportedBehavior::Strict,
+        )
+        .unwrap();
+        let output = |pos, unit: &str| GenerationOutput {
+            terrain: Terrain {
+                pos,
+                sections: Vec::new(),
+                surface: [0; 256],
+                disk: SerializableChunkData::default(),
+                light_neighbors: Vec::new(),
+            },
+            neighbors: Vec::new(),
+            skips: vec![(unit.into(), "pending callback".into())],
+            statuses: vec![(pos, ChunkStatus::Full)],
+            full_structures: Vec::new(),
+            initial_mob_spawning_pending: true,
+        };
+        let first = ChunkPos::new(0, 0);
+        let second = ChunkPos::new(1, 0);
+        let (first_reply, first_result) = oneshot::channel();
+        let (second_reply, second_result) = oneshot::channel();
+        world.pending.insert(0, (first, first_result));
+        world.pending.insert(1, (second, second_result));
+        assert!(second_reply.send(Ok(output(second, "second"))).is_ok());
+        assert!(world.poll_terrain().unwrap().is_empty());
+        assert!(world.generation_statuses.is_empty());
+        assert!(world.generation_skips.is_empty());
+        assert!(world.pending_initial_spawns.is_empty());
+        assert!(first_reply.send(Ok(output(first, "first"))).is_ok());
+        let chunks = world.poll_terrain().unwrap();
+        assert_eq!(chunks.iter().map(|(id, _)| *id).collect::<Vec<_>>(), [0, 1]);
+        assert_eq!(world.generation_skips[0].0, "first");
+        assert_eq!(world.generation_skips[1].0, "second");
+        assert_eq!(world.generation_statuses[&second], ChunkStatus::Full);
+        assert!(world.pending_initial_spawns.contains(&second));
+        world.close_chunk_storage().await.unwrap();
     }
 }
