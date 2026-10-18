@@ -25,7 +25,7 @@ use tokio::{
     task::JoinHandle,
 };
 
-/// Server tick budget, observed through SetTime. A separate wall-clock watchdog catches a hung server.
+/// Observed game-tick budget from SetTime; a separate wall-clock watchdog catches stopped clocks.
 #[derive(Clone, Copy, Debug)]
 pub struct Ticks(pub u32);
 impl Ticks {
@@ -469,7 +469,7 @@ impl Bot {
                     let initial = *baseline.get_or_insert(tick);
                     ensure!(
                         tick - initial < i64::from(budget.0),
-                        "{label}: exceeded {} server ticks ({} -> {tick})",
+                        "{label}: exceeded {} observed game ticks ({} -> {tick})",
                         budget.0,
                         initial
                     );
@@ -504,7 +504,7 @@ impl Bot {
             .unwrap()
             .game_time
             .context("no server clock")?;
-        self.wait_for("server tick wait", Ticks(ticks.0 + 40), |s, _| {
+        self.wait_for("observed game-tick wait", Ticks(ticks.0 + 40), |s, _| {
             s.game_time.is_some_and(|t| t - start >= i64::from(ticks.0))
         })
         .await?;

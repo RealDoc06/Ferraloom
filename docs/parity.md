@@ -56,8 +56,11 @@ relevant server update before a subsequent click.
 `wait_for(description, Ticks(n), predicate)` consumes received packets in order.
 The predicate sees both the packet and current `BotState`. Tick deadlines use
 `SetTime.game_time`, normally published every 20 ticks, so timeout resolution is
-20 ticks. A separate, generous wall-clock watchdog catches stopped clocks and
-hung servers. `wait_ticks` uses that same server clock. Packet queue overruns,
+20 ticks. These are observed game-tick budgets, not an exact server tick counter.
+With `/tick freeze`, game time stops advancing while the server still ticks;
+`wait_ticks` and packet deadlines then rely on the independent wall-clock
+watchdog. Frozen-clock scenarios must not claim an exact server-tick timeout.
+A separate, generous wall-clock watchdog catches stopped clocks and hung servers. `wait_ticks` uses that same server clock. Packet queue overruns,
 disconnects and decode errors fail explicitly. Keep predicates specific so an
 older queued response cannot satisfy the wrong step. `synchronize` is a packet
 ordering barrier, not a world-generation or save-completion barrier.
