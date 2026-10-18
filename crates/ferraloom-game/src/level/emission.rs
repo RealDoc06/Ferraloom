@@ -64,8 +64,29 @@ impl Level {
         volume: f32,
         pitch: f32,
     ) -> Result<(), LevelError> {
+        self.play_sound_holder(
+            except,
+            position,
+            SoundEventHolder(Holder::Reference(
+                sound.name().parse().expect("registered sound identifier"),
+            )),
+            source,
+            volume,
+            pitch,
+        )
+    }
+    /// Port of Level#playSound with a registered or inline SoundEvent holder.
+    pub fn play_sound_holder(
+        &mut self,
+        except: Option<EntityRef>,
+        position: Vec3,
+        sound: SoundEventHolder,
+        source: SoundSource,
+        volume: f32,
+        pitch: f32,
+    ) -> Result<(), LevelError> {
         let seed = self.region_mut().sound_seed_generator.next_long();
-        self.play_seeded_sound(except, position, sound, source, volume, pitch, seed)
+        self.play_seeded_sound_holder(except, position, sound, source, volume, pitch, seed)
     }
     #[allow(clippy::too_many_arguments)]
     pub fn play_seeded_sound(
@@ -78,14 +99,45 @@ impl Level {
         pitch: f32,
         seed: i64,
     ) -> Result<(), LevelError> {
-        let recipients =
-            self.broadcast_audience(except, position, f64::from(sound.range(volume)))?;
+        self.play_seeded_sound_holder(
+            except,
+            position,
+            SoundEventHolder(Holder::Reference(
+                sound.name().parse().expect("registered sound identifier"),
+            )),
+            source,
+            volume,
+            pitch,
+            seed,
+        )
+    }
+    /// Port of ServerLevel#playSeededSound. Inline fixed ranges use the same
+    /// audience selection and packet emission as registered sound holders.
+    #[allow(clippy::too_many_arguments)]
+    pub fn play_seeded_sound_holder(
+        &mut self,
+        except: Option<EntityRef>,
+        position: Vec3,
+        sound: SoundEventHolder,
+        source: SoundSource,
+        volume: f32,
+        pitch: f32,
+        seed: i64,
+    ) -> Result<(), LevelError> {
+        let range = match &sound.0 {
+            Holder::Reference(id) => SoundEvent::from_name(&id.to_string())
+                .ok_or_else(|| LevelError::MissingSoundEvent(id.clone()))?
+                .range(volume),
+            Holder::Direct(sound) => sound
+                .fixed_range
+                .map(|range| range.0)
+                .unwrap_or(if volume > 1.0 { 16.0 * volume } else { 16.0 }),
+        };
+        let recipients = self.broadcast_audience(except, position, f64::from(range))?;
         self.emit(LevelEffect::PlayerPacket {
             recipients,
             packet: Box::new(cb::Packet::Sound(cb::Sound {
-                sound: SoundEventHolder(Holder::Reference(
-                    sound.name().parse().expect("registered sound identifier"),
-                )),
+                sound,
                 source,
                 x: (position.x * 8.0) as i32,
                 y: (position.y * 8.0) as i32,
