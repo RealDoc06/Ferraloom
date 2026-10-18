@@ -19,6 +19,7 @@ mod ground;
 mod growing;
 mod hanging_moss;
 mod harvest;
+mod huge_mushroom;
 mod ice;
 mod leaves;
 mod lifecycle;
@@ -48,6 +49,14 @@ use ferraloom_data::{Block, BlockClass};
 pub fn ported_behavior(block: Block, method: BlockMethod) -> Option<&'static dyn BlockBehavior> {
     use BlockClass as C;
     use BlockMethod as M;
+    if block.class() == C::HugeMushroomBlock
+        && matches!(
+            method,
+            M::UpdateShape | M::UpdateFromNeighbourShapes | M::GetStateForPlacement
+        )
+    {
+        return Some(&huge_mushroom::HUGE_MUSHROOM);
+    }
     if block == Block::FROSTED_ICE
         && matches!(
             method,
