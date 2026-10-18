@@ -10,6 +10,7 @@ pub mod jigsaw_structure;
 pub mod placement;
 pub mod pool;
 pub mod processor;
+pub mod references;
 pub mod rule;
 pub mod template;
 

@@ -317,8 +317,16 @@ public final class StructureGolden {
         }
         write(directory.resolve("decoration.json.gz"),out);
     }
+    static void referenceSets(Path directory) throws Exception {
+        var out=new JsonArray();
+        for(boolean fromArray:new boolean[]{false,true})for(int size:new int[]{0,1,2,3,12,16,24,25,48,49,100,289}) {
+            var input=new ArrayList<Long>();for(int i=0;i<size;i++) {long value=ChunkPos.pack((i%17)-8,(i/17)-8);input.add(value);if(i%7==0)input.add(value);if(i%11==0)input.add(0L);}
+            var set=fromArray?new it.unimi.dsi.fastutil.longs.LongOpenHashSet(input.stream().mapToLong(Long::longValue).toArray()):new it.unimi.dsi.fastutil.longs.LongOpenHashSet();var added=new JsonArray();for(long value:input)added.add(set.add(value));var item=new JsonObject();item.addProperty("from_array",fromArray);var values=new JsonArray();input.forEach(values::add);item.add("input",values);item.add("added",added);var order=new JsonArray();for(long value:set.toLongArray())order.add(value);item.add("order",order);out.add(item);
+        }
+        write(directory.resolve("reference_sets.json.gz"),out);
+    }
     public static void main(String[] args) throws Exception {
         SharedConstants.tryDetectVersion(); Bootstrap.bootStrap();
-        var directory=Path.of(args[0]);Files.createDirectories(directory);var registries=load();beardifier(directory);placements(registries,directory);rules(registries,directory);templates(directory);processors(registries,directory);placedTemplates(directory);poolsAndAliases(registries,directory);jigsaw(registries,directory);replacements(registries,directory);decoration(registries,directory);StructureCheckGolden.capture(registries,directory);
+        var directory=Path.of(args[0]);Files.createDirectories(directory);var registries=load();beardifier(directory);placements(registries,directory);rules(registries,directory);templates(directory);processors(registries,directory);placedTemplates(directory);poolsAndAliases(registries,directory);jigsaw(registries,directory);replacements(registries,directory);decoration(registries,directory);StructureCheckGolden.capture(registries,directory);referenceSets(directory);
     }
 }
