@@ -70,6 +70,9 @@ pub(crate) fn ported_behavior(
     block: ferraloom_data::Block,
     method: super::BlockMethod,
 ) -> Option<&'static dyn super::BlockBehavior> {
+    if let Some(behavior) = super::families::ported_behavior(block, method) {
+        return Some(behavior);
+    }
     use super::BlockMethod as Method;
     use ferraloom_data::BlockClass;
     let supported = match block.class() {
