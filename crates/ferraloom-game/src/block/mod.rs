@@ -179,7 +179,7 @@ pub trait BlockBehavior: Sync {
         _state: BlockState,
         _pos: BlockPos,
         _level: &LevelReaderRef<'_, '_>,
-    ) -> Result<u8, LevelError> {
+    ) -> Result<i32, LevelError> {
         Ok(0)
     }
     /// Port of BlockBehaviour#getSignal. Re-dispatch ownSignal on the concrete
@@ -190,12 +190,10 @@ pub trait BlockBehavior: Sync {
         pos: BlockPos,
         _direction: Direction,
         level: &LevelReaderRef<'_, '_>,
-    ) -> Result<u8, LevelError> {
-        match level {
-            LevelReaderRef::Server(server) => server
-                .required_block_behavior(state.block(), BlockMethod::OwnSignal)?
-                .own_signal(state, pos, level),
-        }
+    ) -> Result<i32, LevelError> {
+        level
+            .required_behavior(state.block(), BlockMethod::OwnSignal)?
+            .own_signal(state, pos, level)
     }
     /// Port of BlockBehaviour#getDirectSignal.
     fn direct_signal(
@@ -204,7 +202,7 @@ pub trait BlockBehavior: Sync {
         _pos: BlockPos,
         _direction: Direction,
         _level: &LevelReaderRef<'_, '_>,
-    ) -> Result<u8, LevelError> {
+    ) -> Result<i32, LevelError> {
         Ok(0)
     }
     /// Port of BlockBehaviour#shouldRedstoneWireConnectTo.
@@ -227,7 +225,7 @@ pub trait BlockBehavior: Sync {
         _pos: BlockPos,
         _direction: Direction,
         _level: &Level,
-    ) -> Result<u8, LevelError> {
+    ) -> Result<i32, LevelError> {
         Ok(0)
     }
     /// Port of BlockBehaviour#canBeReplaced(BlockState, BlockPlaceContext).
