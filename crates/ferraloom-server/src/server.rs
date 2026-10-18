@@ -308,6 +308,7 @@ impl MinecraftServer {
             .collect();
 
         let game_time = world.level_data.data.get_long_or("Time", 0);
+        let (access, ops) = AccessLists::load(&options.root)?;
         let mut level = ServerLevel::new(
             Region::new(&BEHAVIORS),
             "minecraft:overworld",
@@ -315,7 +316,7 @@ impl MinecraftServer {
         );
         level
             .level
-            .install_shared(Box::new(ferraloom_game::ServerShared { scoreboard }));
+            .install_shared(Box::new(ferraloom_game::ServerShared { scoreboard, ops }));
         level.game_time = game_time;
         level.level.set_command_storage(command_storage.snapshot());
         initialize_live_level(
@@ -344,7 +345,6 @@ impl MinecraftServer {
             properties.int("simulation-distance").clamp(2, 32),
             &mut level.tickets,
         );
-        let access = AccessLists::load(&options.root)?;
         let favicon = std::fs::read(options.root.join("server-icon.png")).ok();
         if let Some(icon) = &favicon {
             ensure!(
@@ -650,6 +650,7 @@ impl MinecraftServer {
                         address.ip(),
                         self.properties.boolean("white-list"),
                         full,
+                        &self.shared().ops,
                     );
                     if reason.is_none() {
                         let duplicates = self
@@ -981,6 +982,7 @@ impl MinecraftServer {
                     c.address.ip(),
                     self.properties.boolean("white-list"),
                     self.players.len() >= self.properties.int("max-players").max(0) as usize,
+                    &self.shared().ops,
                 ) {
                     bail!("{reason}");
                 }
@@ -1512,7 +1514,7 @@ impl MinecraftServer {
         let center = player.chunk_position();
         let mode = protocol_game_type(player.game_mode);
         let entity_id = player.network_id;
-        let permission = self.access.permission(player.uuid);
+        let permission = self.shared().ops.permission_level(player.uuid).id();
         self.access.remember(&c.profile)?;
         c.phase = Phase::Play(entity);
         c.push(cb::Packet::Login(cb::Login {
@@ -1860,6 +1862,7 @@ impl MinecraftServer {
                         .any(|c| c < ' ' || c == '§' || c == '\u{7f}'),
                     "multiplayer.disconnect.illegal_characters"
                 );
+                let is_operator = self.shared().ops.contains(self.player(entity)?.uuid);
                 let c = self.connections.get_mut(&connection).unwrap();
                 let last_seen = c
                     .last_seen
@@ -1873,7 +1876,7 @@ impl MinecraftServer {
                             .properties
                             .int("chat-spam-threshold-seconds")
                             .saturating_mul(20)
-                        || self.access.permission(c.profile.id) > 0,
+                        || is_operator,
                     "disconnect.spam"
                 );
                 let message = if let Some(session) = &mut c.session {
@@ -1911,20 +1914,12 @@ impl MinecraftServer {
                 self.execute_command(Some(connection), &p.command).await?
             }
             sb::Packet::ChatCommandSigned(p) => {
+                let source = self.player_command_source(entity).map_err(game_error)?;
                 let c = self.connections.get_mut(&connection).unwrap();
                 let last_seen = c
                     .last_seen
                     .apply(&p.last_seen_messages)
                     .context("multiplayer.disconnect.chat_validation_failed")?;
-                let permission = self.access.permission(c.profile.id);
-                let source = CommandSourceStack::server(
-                    permission,
-                    self.level
-                        .level
-                        .entity::<ServerPlayer>(entity)
-                        .map_err(game_error)?
-                        .position,
-                );
                 let prepared = match self.commands.prepare(&p.command, source.clone()) {
                     Ok(prepared) => prepared,
                     Err(error) => {
@@ -3183,11 +3178,18 @@ impl MinecraftServer {
         source: Option<ConnectionId>,
         text: &str,
     ) -> Result<()> {
-        let (permission, position) = if let Some(id) = source {
-            let c = self
+        let mut stack = if let Some(id) = source {
+            let Phase::Play(entity) = self
                 .connections
-                .get_mut(&id)
-                .context("unknown command source")?;
+                .get(&id)
+                .context("unknown command source")?
+                .phase
+            else {
+                bail!("command source not playing");
+            };
+            let stack = self.player_command_source(entity).map_err(game_error)?;
+            let is_operator = self.shared().ops.contains(self.player(entity)?.uuid);
+            let c = self.connections.get_mut(&id).unwrap();
             c.command_spam += 20;
             c.last_action = Instant::now();
             ensure!(
@@ -3196,41 +3198,24 @@ impl MinecraftServer {
                         .properties
                         .int("command-spam-threshold-seconds")
                         .saturating_mul(20)
-                    || self.access.permission(c.profile.id) > 0,
+                    || is_operator,
                 "disconnect.spam"
             );
-            let Phase::Play(entity) = c.phase else {
-                bail!("command source not playing");
-            };
-            (
-                self.access.permission(c.profile.id),
-                self.player(entity)?.position,
-            )
+            stack
         } else {
             let spawn = self.world.spawn;
-            (
+            CommandSourceStack::server(
                 4,
                 Vec3::new(f64::from(spawn.x), f64::from(spawn.y), f64::from(spawn.z)),
             )
         };
-        let mut stack = CommandSourceStack::server(permission, position);
         if let Some(connection) = source {
-            let (phase, signed_argument) = {
-                let c = self.connections.get_mut(&connection).unwrap();
-                (c.phase, c.command_message.take())
-            };
-            if let Phase::Play(entity) = phase {
-                let player = self.player(entity)?;
-                stack = stack
-                    .with_entity(entity)
-                    .with_source(ferraloom_game::commands::source::CommandSource::Player(
-                        entity,
-                    ))
-                    .with_rotation(ferraloom_game::commands::source::Rotation {
-                        pitch: player.pitch,
-                        yaw: player.yaw,
-                    });
-            }
+            let signed_argument = self
+                .connections
+                .get_mut(&connection)
+                .unwrap()
+                .command_message
+                .take();
             if let Some((argument_name, message)) = signed_argument {
                 stack.signing_context.arguments = Arc::from([(
                     argument_name,

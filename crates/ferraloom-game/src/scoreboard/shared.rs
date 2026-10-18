@@ -6,6 +6,7 @@ use super::ServerScoreboard;
 #[derive(Debug, Default)]
 pub struct ServerShared {
     pub scoreboard: ServerScoreboard,
+    pub ops: crate::commands::permissions::ServerOpList,
 }
 
 #[cfg(test)]

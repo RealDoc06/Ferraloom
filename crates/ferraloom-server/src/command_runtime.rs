@@ -65,10 +65,6 @@ impl MinecraftServer {
                     .expect("validated shared spawn dimension"),
                 spawn.position,
                 self.properties.int("spawn-protection"),
-                self.access.ops.values().map(|op| {
-                    ferraloom_game::commands::arguments::selectors::parse_uuid(&op.uuid)
-                        .expect("validated operator UUID")
-                }),
             ),
         );
     }
@@ -233,7 +229,7 @@ impl MinecraftServer {
                 .copied()
                 .filter(|id| {
                     Some(*id) != source
-                        && self.access.ops.values().any(|op| {
+                        && self.shared().ops.values().any(|op| {
                             op.uuid
                                 .eq_ignore_ascii_case(&self.connections[id].profile.id.to_string())
                         })
@@ -601,6 +597,24 @@ impl EntityQuery for MinecraftServer {
 }
 
 impl MinecraftServer {
+    /// Port of ServerPlayer#createCommandSourceStack, including its live permissions().
+    pub(super) fn player_command_source(
+        &self,
+        entity: EntityRef,
+    ) -> std::result::Result<CommandSourceStack, ferraloom_game::level::LevelError> {
+        let player = self.level.level.entity::<ServerPlayer>(entity)?;
+        let permissions = self.level.level.player_permissions(entity)?;
+        Ok(CommandSourceStack::server(0, player.position)
+            .with_permission(permissions)
+            .with_entity(entity)
+            .with_source(ferraloom_game::commands::source::CommandSource::Player(
+                entity,
+            ))
+            .with_rotation(ferraloom_game::commands::source::Rotation {
+                pitch: player.pitch,
+                yaw: player.yaw,
+            }))
+    }
     /// Command failures produce feedback; only ingress violations propagate to disconnect logic.
     pub(super) async fn execute_command(
         &mut self,
@@ -614,14 +628,7 @@ impl MinecraftServer {
                 .get(&connection)
                 .context("unknown command source")?;
             if let Phase::Play(entity) = c.phase {
-                stack = CommandSourceStack::server(
-                    self.access.permission(c.profile.id),
-                    self.player(entity)?.position,
-                )
-                .with_entity(entity)
-                .with_source(
-                    ferraloom_game::commands::source::CommandSource::Player(entity),
-                );
+                stack = self.player_command_source(entity).map_err(game_error)?;
             }
         }
         let lent = self.lend_server_shared();
@@ -979,7 +986,7 @@ impl MinecraftServer {
     fn command_suggestion_data(&self) -> ferraloom_game::commands::suggestions::SuggestionData {
         let mut data = ferraloom_game::commands::suggestions::SuggestionData {
             operators: self
-                .access
+                .shared()
                 .ops
                 .values()
                 .map(|entry| entry.name.clone())
@@ -1026,7 +1033,7 @@ impl MinecraftServer {
             data.players.push(player.name.clone());
             let uuid = player.uuid.to_string();
             if !self
-                .access
+                .shared()
                 .ops
                 .values()
                 .any(|op| op.uuid.eq_ignore_ascii_case(&uuid))
@@ -1057,10 +1064,7 @@ impl MinecraftServer {
             let Phase::Play(entity) = self.connections[&connection].phase else {
                 continue;
             };
-            let player = self.player(entity)?;
-            let source =
-                CommandSourceStack::server(self.access.permission(player.uuid), player.position)
-                    .with_entity(entity);
+            let source = self.player_command_source(entity).map_err(game_error)?;
             let suggestions = self.commands.suggestions_with(
                 &request.command.0,
                 source,
@@ -1156,7 +1160,7 @@ impl MinecraftServer {
         Err(exceptions::error("argument.player.unknown", &[]))
     }
     fn update_command_permissions(&mut self, profile: Uuid) {
-        let level = self.access.permission(profile);
+        let level = self.shared().ops.permission_level(profile).id();
         let targets = self
             .players
             .iter()
@@ -1190,7 +1194,8 @@ impl MinecraftServer {
             .copied()
             .filter(|id| {
                 let uuid = self.connections[id].profile.id.to_string();
-                !self.access.ops.contains_key(&uuid) && !self.access.whitelist.contains_key(&uuid)
+                !self.shared().ops.contains(self.connections[id].profile.id)
+                    && !self.access.whitelist.contains_key(&uuid)
             })
             .collect::<Vec<_>>();
         for id in targets {
@@ -1212,11 +1217,16 @@ impl MinecraftServer {
         let grant = command.command == "op";
         let mut count = 0;
         for profile in profiles {
-            if self.access.ops.contains_key(&profile.id.to_string()) == grant {
+            if self.shared().ops.contains(profile.id) == grant {
                 continue;
             }
-            let level = grant.then(|| self.properties.int("op-permission-level"));
-            if let Err(error) = self.access.set_operator(&profile, level) {
+            let level = grant.then(|| {
+                ferraloom_game::commands::permissions::PermissionLevel::by_id(
+                    self.properties.int("op-permission-level"),
+                )
+            });
+            self.shared_mut().ops.set_operator(&profile, level);
+            if let Err(error) = self.access.save_operators(&self.shared().ops) {
                 eprintln!("Could not save operator list: {error:#}");
             }
             self.publish_spawn_protection();
