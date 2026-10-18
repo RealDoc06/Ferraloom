@@ -88,6 +88,7 @@ impl<T: PartialEq> ProtoChunkTicks<T> {
 pub struct RegionChunk {
     pub chunk: GeneratedChunk,
     pub status: ChunkStatus,
+    pub structures: crate::structure::pipeline::ChunkStructures,
     pub block_entities: BTreeMap<[i32; 3], CompoundTag>,
     pub entities: Vec<CompoundTag>,
     pub block_ticks: ProtoChunkTicks<Block>,
@@ -105,6 +106,7 @@ impl RegionChunk {
             .set(chunk.ocean_floor)
             .unwrap();
         Self {
+            structures: crate::structure::pipeline::ChunkStructures::new(chunk.position),
             chunk,
             status,
             block_entities: BTreeMap::new(),
@@ -377,6 +379,9 @@ pub use ferraloom_util::core::{Mirror, Rotation};
 
 pub struct WorldGenRegion<'a> {
     block_tags: Option<std::sync::Arc<ferraloom_data::datapack::TagSet<Block>>>,
+    fluid_tags: Option<
+        std::sync::Arc<ferraloom_data::datapack::TagSet<ferraloom_data::registries::fluid::Id>>,
+    >,
     chunks: &'a mut [RegionChunk],
     center: [i32; 2],
     dependencies: &'a [ChunkStatus],
@@ -436,6 +441,7 @@ impl<'a> WorldGenRegion<'a> {
         }
         Ok(Self {
             block_tags: None,
+            fluid_tags: None,
             chunks,
             center,
             dependencies,
@@ -525,6 +531,22 @@ impl<'a> WorldGenRegion<'a> {
             .as_deref()
             .ok_or_else(|| Error("Unsupported: block tag context unavailable".into()))
     }
+    pub fn set_fluid_tags(
+        &mut self,
+        tags: std::sync::Arc<
+            ferraloom_data::datapack::TagSet<ferraloom_data::registries::fluid::Id>,
+        >,
+    ) {
+        self.fluid_tags = Some(tags);
+    }
+    pub fn fluid_tags(
+        &self,
+    ) -> Result<&ferraloom_data::datapack::TagSet<ferraloom_data::registries::fluid::Id>, Error>
+    {
+        self.fluid_tags
+            .as_deref()
+            .ok_or_else(|| Error("Unsupported: fluid tag context unavailable".into()))
+    }
     fn distance(&self, p: [i32; 2]) -> usize {
         p[0].abs_diff(self.center[0])
             .max(p[1].abs_diff(self.center[1])) as usize
@@ -546,6 +568,30 @@ impl<'a> WorldGenRegion<'a> {
     }
     pub fn chunk(&self, p: [i32; 2], requested: ChunkStatus) -> Result<&RegionChunk, Error> {
         Ok(&self.chunks[self.index(p, requested)?])
+    }
+
+    /// Structure metadata belongs to the exclusively borrowed origin chunk,
+    /// independently of the radius in which this step may write blocks.
+    pub fn take_structure_start(
+        &mut self,
+        origin: [i32; 2],
+        structure: &crate::Identifier,
+    ) -> Result<Option<crate::structure::start::StructureStart>, Error> {
+        let index = self.index(origin, ChunkStatus::StructureStarts)?;
+        Ok(self.chunks[index].structures.starts.remove(structure))
+    }
+    pub fn restore_structure_start(
+        &mut self,
+        origin: [i32; 2],
+        structure: crate::Identifier,
+        start: crate::structure::start::StructureStart,
+    ) -> Result<(), Error> {
+        let index = self.index(origin, ChunkStatus::StructureStarts)?;
+        self.chunks[index]
+            .structures
+            .starts
+            .insert(structure, start);
+        Ok(())
     }
     pub fn min_y(&self) -> i32 {
         self.chunks

@@ -645,10 +645,15 @@ fn region_write_bounds_bulk_writes_and_tick_deduplication() {
     let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").unwrap();
     let resources = ResourceManager::new(vec![Pack::vanilla_jar(Path::new(&jar)).unwrap()]);
     let generator = fixture_generator(&resources);
-    let mut chunks = vec![RegionChunk::new(
-        generator.new_chunk([0, 0]),
-        ChunkStatus::Terrain,
-    )];
+    let mut chunks = vec![
+        RegionChunk::new(generator.new_chunk([0, 0]), ChunkStatus::Terrain),
+        RegionChunk::new(generator.new_chunk([1, 0]), ChunkStatus::Terrain),
+    ];
+    let structure = "ferraloom:test_start".parse().unwrap();
+    chunks[1].structures.starts.insert(
+        structure.clone(),
+        ferraloom_worldgen::structure::start::StructureStart::invalid(),
+    );
     let mut region = WorldGenRegion::new(
         &mut chunks,
         [0, 0],
@@ -660,7 +665,26 @@ fn region_write_bounds_bulk_writes_and_tick_deduplication() {
         63,
     )
     .unwrap();
-    assert!(region.block([16, 0, 0]).is_err());
+    assert!(region.block([32, 0, 0]).is_err());
+    let start = region
+        .take_structure_start([1, 0], &structure)
+        .unwrap()
+        .unwrap();
+    assert!(
+        region
+            .take_structure_start([1, 0], &structure)
+            .unwrap()
+            .is_none()
+    );
+    region
+        .restore_structure_start([1, 0], structure, start)
+        .unwrap();
+    assert!(region.fluid_tags().is_err());
+    region.set_fluid_tags(generator.data.fluid_tags.clone());
+    assert!(region.fluid_tags().unwrap().contains_key(
+        ferraloom_data::tags::FluidTags::WATER,
+        ferraloom_data::registries::fluid::Id::WATER,
+    ));
     assert!(region.block_tags().is_err());
     region.set_block_tags(generator.data.block_tags.clone());
     assert!(
