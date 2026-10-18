@@ -4,7 +4,10 @@ use ferraloom_data::{Block, BlockState};
 use ferraloom_util::random::{Algorithm, LegacyRandomSource, Random, RandomSource, WorldgenRandom};
 use ferraloom_worldgen::{
     Error,
-    feature::{Feature, FeatureContext, FeatureLoader, FeatureRegistry},
+    feature::{
+        Feature, FeatureContext, FeatureLoader, FeatureRandom, FeatureRandomSelector,
+        FeatureRegistry, WorldGenLevel,
+    },
     generator::NoiseBasedChunkGenerator,
     region::{ChunkStatus, RegionChunk, WorldGenRegion, WorldgenBlockBehavior},
     settings::DimensionType,
@@ -182,10 +185,8 @@ fn check(
     region.set_fluid_tags(generator.data.fluid_tags.clone());
     region.set_random(Random::Legacy(LegacyRandomSource::new(123)));
     let mut context = FeatureContext {
-        level: crate::feature::WorldGenLevel::Region(&mut region),
-        random: crate::feature::FeatureRandomSelector::External(
-            crate::feature::FeatureRandom::Region(&mut random),
-        ),
+        level: WorldGenLevel::Region(&mut region),
+        random: FeatureRandomSelector::External(FeatureRandom::Region(&mut random)),
         origin,
         generator,
         registry,
