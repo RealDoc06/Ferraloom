@@ -159,7 +159,10 @@ impl ferraloom_protocol::codec::RegistryContext for OracleContext {
     }
 }
 fn oracle() -> serde_json::Value {
-    serde_json::from_str(include_str!("vanilla.json")).unwrap()
+    serde_json::from_reader(flate2::read::GzDecoder::new(
+        &include_bytes!("vanilla.json.gz")[..],
+    ))
+    .unwrap()
 }
 fn builtins() -> RecipeManager {
     use ferraloom_data::datapack::{Pack, ResourceManager};
@@ -326,6 +329,31 @@ fn vanilla_all_recipe_display_bytes_and_update_packet() {
             assert_eq!(writer.as_slice(), unhex(expected.as_str().unwrap()), "{id}");
         }
     }
+    for test in oracle["displays"].as_array().unwrap() {
+        let id = test["id"].as_str().unwrap().parse().unwrap();
+        let recipe = &manager.by_key(&id).unwrap().value;
+        let slots: Vec<i32> = recipe
+            .placement_info()
+            .slots_to_ingredient_index
+            .iter()
+            .map(|slot| slot.map_or(-1, |index| index as i32))
+            .collect();
+        for size in 1..=3 {
+            let actual = place_recipe_slots(size, size, recipe, &slots);
+            let expected: Vec<_> = test["placements"][size - 1]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|pair| {
+                    (
+                        pair[0].as_u64().unwrap() as usize,
+                        pair[1].as_i64().unwrap() as i32,
+                    )
+                })
+                .collect();
+            assert_eq!(actual, expected, "{id}, {size}x{size}");
+        }
+    }
     let bytes = unhex(oracle["update_packet"].as_str().unwrap());
     let mut reader = Reader::with_context(&bytes, &context);
     let packet = UpdateRecipes::decode(&mut reader).unwrap();
@@ -460,4 +488,175 @@ fn cache_keys_ignore_counts_and_invalidate_on_manager_change() {
     assert!(cache.get(&manager, &input, &()).unwrap().is_some());
     let empty = RecipeManager::new(Vec::new()).unwrap();
     assert!(cache.get(&empty, &input, &()).unwrap().is_none());
+}
+
+#[test]
+fn placement_centers_only_one_wide_patterns_in_three_wide_grid() {
+    let narrow = decode(
+        json!({"type":"crafting_shaped","pattern":["S","S"],"key":{"S":"stick"},"result":"diamond"}),
+    );
+    assert_eq!(
+        place_recipe_slots(3, 3, &narrow, &[0, 1]),
+        vec![(1, 0), (4, 1)]
+    );
+    let square = decode(
+        json!({"type":"crafting_shaped","pattern":["SS","SS"],"key":{"S":"stick"},"result":"diamond"}),
+    );
+    assert_eq!(
+        place_recipe_slots(3, 3, &square, &[0, 1, 2, 3]),
+        vec![(0, 0), (1, 1), (3, 2), (4, 3)]
+    );
+}
+#[test]
+fn vanilla_recipe_codec_edges() {
+    let oracle = oracle();
+    for case in oracle["codec_cases"].as_array().unwrap() {
+        let decoded = Recipe::decode(&case["input"], &tags());
+        assert_eq!(
+            decoded.is_ok(),
+            case["accepted"].as_bool().unwrap(),
+            "{}: {decoded:?}",
+            case["input"]
+        );
+        if let Ok(recipe) = decoded
+            && case.get("cookingtime").is_some()
+        {
+            assert_eq!(
+                recipe.cooking_time(),
+                Some(case["cookingtime"].as_i64().unwrap() as i32),
+                "{}",
+                case["input"]
+            );
+            assert_eq!(
+                recipe.experience(),
+                Some(case["experience"].as_f64().unwrap() as f32)
+            );
+        }
+    }
+}
+
+struct PlacementState {
+    inventory: Vec<ItemStack>,
+    grid: Vec<ItemStack>,
+    width: usize,
+    height: usize,
+}
+impl RecipePlacementAccess for PlacementState {
+    fn inventory_items(&self) -> &[ItemStack] {
+        &self.inventory
+    }
+    fn input_grid(&self) -> &[ItemStack] {
+        &self.grid
+    }
+    fn fill_craft_slots(&self, contents: &mut StackedItemContents) -> Result<()> {
+        for stack in &self.grid {
+            contents.account_stack(stack, 64);
+        }
+        Ok(())
+    }
+    fn recipe_matches(&self, recipe: &RecipeHolder) -> Result<bool> {
+        if self.width == 1 {
+            recipe
+                .value
+                .matches(RecipeInput::Single(&self.grid[0]), &())
+        } else {
+            recipe.value.matches(
+                RecipeInput::Crafting(&CraftingInput::of(
+                    self.width,
+                    self.height,
+                    self.grid.clone(),
+                )?),
+                &(),
+            )
+        }
+    }
+    fn has_inventory_space_for(&self, stack: &ItemStack) -> Result<bool> {
+        for existing in &self.inventory {
+            if !existing.is_empty()
+                && existing.0.as_ref().unwrap().count < 64
+                && stack::same_item_components(existing, stack)?
+            {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+    fn clear_grid(&mut self) -> Result<()> {
+        for source in &mut self.grid {
+            if source.is_empty() {
+                continue;
+            }
+            let count = source.0.as_ref().unwrap().count;
+            if let Some(existing) = self.inventory.iter_mut().find(|existing| {
+                !existing.is_empty() && stack::item(existing) == stack::item(source)
+            }) {
+                let n = existing.0.as_ref().unwrap().count;
+                *existing = stack::copy_with_count(existing, n + count);
+            } else {
+                let index = self.inventory.iter().position(ItemStack::is_empty).unwrap();
+                self.inventory[index] = source.clone();
+            }
+            *source = ItemStack::default();
+        }
+        Ok(())
+    }
+    fn take_inventory_item(&mut self, index: usize, count: i32) -> Result<ItemStack> {
+        let stack = &mut self.inventory[index];
+        let n = stack.0.as_ref().unwrap().count.min(count);
+        let taken = stack::copy_with_count(stack, n);
+        *stack = stack::copy_with_count(stack, stack.0.as_ref().unwrap().count - n);
+        Ok(taken)
+    }
+    fn set_grid_item(&mut self, index: usize, stack: ItemStack) -> Result<()> {
+        self.grid[index] = stack;
+        Ok(())
+    }
+    fn grow_grid_item(&mut self, index: usize, count: i32) -> Result<()> {
+        self.grid[index].0.as_mut().unwrap().count += count;
+        Ok(())
+    }
+    fn inventory_changed(&mut self) {}
+}
+#[test]
+fn vanilla_recipe_book_placement_inventory_and_grid() {
+    let oracle = oracle();
+    let manager = builtins();
+    for case in oracle["placement_cases"].as_array().unwrap() {
+        let parse = |name| {
+            case[name]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(oracle_stack)
+                .collect()
+        };
+        let mut state = PlacementState {
+            inventory: parse("inventory"),
+            grid: parse("grid"),
+            width: case["width"].as_u64().unwrap() as usize,
+            height: case["height"].as_u64().unwrap() as usize,
+        };
+        let id = case["recipe"].as_str().unwrap().parse().unwrap();
+        let recipe = manager.by_key(&id).unwrap();
+        let (width, height) = (state.width, state.height);
+        let action = place_recipe(
+            &mut state,
+            width,
+            height,
+            recipe,
+            case["max"].as_bool().unwrap(),
+            false,
+        )
+        .unwrap();
+        assert_eq!(
+            action,
+            if case["action"] == "NOTHING" {
+                PostPlaceAction::Nothing
+            } else {
+                PostPlaceAction::PlaceGhostRecipe
+            }
+        );
+        assert_eq!(state.inventory, parse("after_inventory"), "{id} inventory");
+        assert_eq!(state.grid, parse("after_grid"), "{id} grid");
+    }
 }

@@ -11,7 +11,7 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | crafting-recipes.result.components | Produce result components and preserve or copy only those required by the recipe | `Recipe#assemble; TransmuteRecipe` | `crafting::tests::vanilla_all_recipes_and_random_grids` | pass | partial |
 | crafting-recipes.remainders | Return crafting remainders into input slots, inventory or world drops | `CraftingRecipe#getRemainingItems; ResultSlot` | | - | todo |
 | crafting-recipes.book.unlock | Unlock and remove recipes, track highlights and persist recipe-book state | `ServerRecipeBook` | `crafting::tests::book_add_remove_highlight_and_persistence_follow_displays` | pass | partial |
-| crafting-recipes.book.placement | Place recipe ingredients into crafting grids with stacked ingredient accounting | `ServerPlaceRecipe` | | - | todo |
+| crafting-recipes.book.placement | Place recipe ingredients into crafting grids with stacked ingredient accounting | `ServerPlaceRecipe` | `crafting::tests::vanilla_recipe_book_placement_inventory_and_grid` | pass | partial |
 | crafting-recipes.book.limited-crafting | Restrict crafting to known recipes when limited crafting is enabled | `RecipeCraftingHolder` | | - | todo |
 | crafting-recipes.furnace.types | Keep furnace, smoker, blast furnace and campfire recipe matching and timing separate | `AbstractCookingRecipe; AbstractFurnaceBlockEntity; CampfireBlockEntity` | `crafting::tests::vanilla_all_recipes_and_random_grids` | pass | partial |
 | crafting-recipes.special.transforms | Apply item-specific special recipe logic rather than generic shaped or shapeless matching | `RecipeSerializers` | `crafting::tests::vanilla_all_recipes_and_random_grids` | pass | partial |

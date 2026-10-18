@@ -173,20 +173,27 @@ impl ServerRecipeBook {
         let value = nbt
             .as_compound()
             .ok_or_else(|| Error::Invalid("recipeBook must be a compound".into()))?;
+        let mut settings = self.settings.clone();
         for (index, (open, filter)) in SETTING_KEYS.into_iter().enumerate() {
             let boolean = |key| -> Result<bool> {
-                match value.get(key) {
-                    None => Ok(false),
-                    Some(Tag::Byte(v)) => Ok(*v != 0),
-                    _ => Err(Error::Invalid("recipe book setting must be a byte".into())),
-                }
+                Ok(match value.get(key) {
+                    None => false,
+                    Some(Tag::Byte(value)) => *value != 0,
+                    Some(Tag::Short(value)) => *value as i8 != 0,
+                    Some(Tag::Int(value)) => *value as i8 != 0,
+                    Some(Tag::Long(value)) => *value as i8 != 0,
+                    Some(Tag::Float(value)) => *value as i32 as i8 != 0,
+                    Some(Tag::Double(value)) => *value as i32 as i8 != 0,
+                    _ => return Err(Error::Invalid("recipe book setting must be numeric".into())),
+                })
             };
-            self.settings.0[index] = RecipeBookTypeSettings {
+            settings.0[index] = RecipeBookTypeSettings {
                 open: boolean(open)?,
                 filtering: boolean(filter)?,
             };
         }
-        for (field, highlight) in [("recipes", false), ("toBeDisplayed", true)] {
+        let mut lists = [Vec::new(), Vec::new()];
+        for (index, field) in ["recipes", "toBeDisplayed"].into_iter().enumerate() {
             let Some(Tag::List(recipes)) = value.get(field) else {
                 return Err(Error::Invalid(format!("missing recipeBook list {field}")));
             };
@@ -196,17 +203,22 @@ impl ServerRecipeBook {
                 };
                 let id: Identifier = id.to_string_lossy().parse()?;
                 if manager.by_key(&id).is_some() {
-                    let target = if highlight {
-                        &mut self.highlight
-                    } else {
-                        &mut self.known
-                    };
-                    if !target.contains(&id) {
-                        target.push(id);
-                    }
+                    lists[index].push(id);
                 }
             }
         }
+        self.settings = settings;
+        for (target, values) in [&mut self.known, &mut self.highlight]
+            .into_iter()
+            .zip(lists)
+        {
+            for id in values {
+                if !target.contains(&id) {
+                    target.push(id);
+                }
+            }
+        }
+
         Ok(())
     }
 }

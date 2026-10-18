@@ -58,13 +58,8 @@ impl StackedItemContents {
         }
     }
     pub fn account_simple_stack(&mut self, input: &ItemStack) -> Result<()> {
-        let components = input.components()?;
-        let damaged = match components.get(ComponentTypeId::DAMAGE) {
-            Some(DataComponent::Damage(v)) => v.0 > 0,
-            _ => false,
-        };
-        let enchanted = matches!(components.get(ComponentTypeId::ENCHANTMENTS),Some(DataComponent::Enchantments(v)) if !v.0.is_empty());
-        if !damaged && !enchanted && components.get(ComponentTypeId::CUSTOM_NAME).is_none() {
+        if is_usable_for_crafting(input)? {
+            let components = input.components()?;
             let max = match components.get(ComponentTypeId::MAX_STACK_SIZE) {
                 Some(DataComponent::MaxStackSize(v)) => v.0,
                 _ => 1,
@@ -119,35 +114,34 @@ impl StackedItemContents {
             .map(|index| index.map(|index| items[index].0))
             .collect()
     }
+    /// Port of StackedContents.RecipePicker#tryPickAll, including Java's signed
+    /// overflow at the exclusive upper bound (observable for custom huge counts).
     pub fn biggest_craftable_stack(&self, ingredients: &[Ingredient], max_size: i32) -> i32 {
-        if ingredients.is_empty() {
-            return max_size.max(0);
-        }
         let upper = ingredients
             .iter()
             .map(|ingredient| {
                 self.amounts
                     .iter()
                     .filter(|(item, _)| ingredient.accepts_item(*item))
-                    .map(|(_, n)| *n)
+                    .map(|(_, count)| *count)
                     .max()
                     .unwrap_or(0)
             })
             .min()
-            .unwrap_or(0)
-            .min(max_size)
-            .max(0);
-        let mut low = 0i64;
-        let mut high = i64::from(upper) + 1;
-        while high - low > 1 {
-            let mid = (low + high) / 2;
-            if self.pick(ingredients, mid as i32).is_some() {
+            .unwrap_or(i32::MAX);
+        let mut low = 0i32;
+        let mut high = upper.min(max_size).wrapping_add(1);
+        loop {
+            let mid = low.wrapping_add(high) / 2;
+            if self.pick(ingredients, mid).is_some() {
+                if high.wrapping_sub(low) <= 1 {
+                    return mid;
+                }
                 low = mid;
             } else {
                 high = mid;
             }
         }
-        low as i32
     }
 }
 fn assign(
@@ -209,4 +203,11 @@ pub(super) fn crafting_remainder(item: Item) -> Result<ItemStack> {
         remainder.count,
         DataComponentPatch::from_json(&json)?,
     ))
+}
+
+pub(super) fn is_usable_for_crafting(input: &ItemStack) -> Result<bool> {
+    let components = input.components()?;
+    let damaged = matches!(components.get(ComponentTypeId::DAMAGE), Some(DataComponent::Damage(value)) if value.0 > 0);
+    let enchanted = matches!(components.get(ComponentTypeId::ENCHANTMENTS), Some(DataComponent::Enchantments(value)) if !value.0.is_empty());
+    Ok(!damaged && !enchanted && components.get(ComponentTypeId::CUSTOM_NAME).is_none())
 }

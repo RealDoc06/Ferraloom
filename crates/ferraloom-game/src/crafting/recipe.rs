@@ -29,6 +29,19 @@ pub trait CraftingContext {
     fn is_curse(&self, _enchantment: &ferraloom_protocol::Identifier) -> Result<bool> {
         Err(Error::ContextRequired("enchantment curse tag"))
     }
+    fn potion_in_tag(
+        &self,
+        _tag: &ferraloom_protocol::Identifier,
+        _potion: &ferraloom_protocol::Identifier,
+    ) -> Result<bool> {
+        Err(Error::ContextRequired("potion tags"))
+    }
+    fn potion_effects(
+        &self,
+        _potion: &ferraloom_protocol::Identifier,
+    ) -> Result<Vec<ferraloom_protocol::component::MobEffectInstance>> {
+        Err(Error::ContextRequired("potion effects registry"))
+    }
     fn test_potions(&self, predicate: &PotionsPredicate, stack: &ItemStack) -> Result<bool> {
         let Some(ferraloom_protocol::component::DataComponent::PotionContents(contents)) =
             stack::component(stack, ComponentTypeId::POTION_CONTENTS)?
@@ -45,13 +58,23 @@ pub trait CraftingContext {
                         return Ok(false);
                     }
                 }
-                ferraloom_protocol::codec::HolderSet::Named(_) => {
-                    return Err(Error::ContextRequired("potion tags"));
+                ferraloom_protocol::codec::HolderSet::Named(tag) => {
+                    if !self.potion_in_tag(tag, &potion.0)? {
+                        return Ok(false);
+                    }
                 }
             }
         }
-        if predicate.effects.is_some() {
-            return Err(Error::ContextRequired("potion effect predicates"));
+        if let Some(predicate) = &predicate.effects {
+            let mut effects = if let Some(potion) = &contents.potion {
+                self.potion_effects(&potion.0)?
+            } else {
+                Vec::new()
+            };
+            effects.extend(contents.custom_effects);
+            if !super::potion::test_effects(predicate, &effects) {
+                return Ok(false);
+            }
         }
         Ok(true)
     }
@@ -216,7 +239,9 @@ impl IntRange {
                 max: v.get("max").map(integer).transpose()?,
             }
         };
-        if result.min.is_some_and(|n| n < lower || n > upper)
+        if result.min.is_none()
+            || result.max.is_none()
+            || result.min.is_some_and(|n| n < lower || n > upper)
             || result.max.is_some_and(|n| n < lower || n > upper)
             || matches!((result.min, result.max), (Some(min), Some(max)) if min > max)
         {
@@ -394,11 +419,61 @@ pub(super) fn required<'a>(v: &'a Value, key: &str) -> Result<&'a Value> {
         .ok_or_else(|| Error::Invalid(format!("missing recipe field {key}")))
 }
 fn integer(v: &Value) -> Result<i32> {
-    v.as_f64()
-        .filter(|n| n.is_finite())
-        .map(|n| n as i32)
-        .ok_or_else(|| Error::Invalid("expected integer".into()))
+    if !v.is_number() {
+        return Err(Error::Invalid("expected integer".into()));
+    }
+    // StrictJsonParser leaves Gson numbers lazy. Number.intValue falls through
+    // to BigDecimal for decimals/large integers, truncating and keeping low bits.
+    let text = v.to_string();
+    let (mantissa, exponent) = text
+        .split_once(['e', 'E'])
+        .map_or((text.as_str(), 0), |(m, e)| {
+            (
+                m,
+                e.parse::<i64>().unwrap_or(if e.starts_with('-') {
+                    i64::MIN
+                } else {
+                    i64::MAX
+                }),
+            )
+        });
+    let negative = mantissa.starts_with('-');
+    let mantissa = mantissa.trim_start_matches('-');
+    let decimals = mantissa.split_once('.').map_or(0, |(_, tail)| tail.len()) as i64;
+    let mut digits: Vec<u8> = mantissa.bytes().filter(|byte| *byte != b'.').collect();
+    let scale = exponent.saturating_sub(decimals);
+    if scale < 0 {
+        digits.truncate(
+            digits
+                .len()
+                .saturating_sub(scale.unsigned_abs().min(usize::MAX as u64) as usize),
+        );
+    }
+    let mut number = digits.into_iter().fold(0u32, |number, byte| {
+        number.wrapping_mul(10).wrapping_add(u32::from(byte - b'0'))
+    });
+    if scale >= 32 {
+        number = 0;
+    } else {
+        for _ in 0..scale.max(0) {
+            number = number.wrapping_mul(10);
+        }
+    }
+    Ok(if negative {
+        number.wrapping_neg() as i32
+    } else {
+        number as i32
+    })
 }
+
+fn decode_template(v: &Value) -> Result<ItemStackTemplate> {
+    let mut value = v.clone();
+    if let Some(count) = v.get("count") {
+        value["count"] = Value::from(integer(count)?);
+    }
+    Ok(ItemStackTemplate::from_json(&value)?)
+}
+
 fn boolean(v: &Value, key: &str, default: bool) -> Result<bool> {
     v.get(key).map_or(Ok(default), |v| {
         v.as_bool()
@@ -431,7 +506,7 @@ impl Recipe {
                 .map(|v| Ingredient::decode(v, tags))
                 .transpose()
         };
-        let result = || ItemStackTemplate::from_json(required(v, "result")?).map_err(Error::from);
+        let result = || decode_template(required(v, "result")?);
         let kind = match name.path() {
             "crafting_shaped" => RecipeKind::Shaped {
                 pattern: ShapedRecipePattern::decode(v, tags)?,
@@ -577,7 +652,7 @@ impl Recipe {
             "brewing" => RecipeKind::Brewing {
                 input: PotionIngredient::decode(required(v, "input")?, tags)?,
                 reagent: PotionIngredient::decode(required(v, "reagent")?, tags)?,
-                output: ItemStackTemplate::from_json(required(v, "output")?)?,
+                output: decode_template(required(v, "output")?)?,
             },
             _ => return Err(Error::Invalid(format!("unknown recipe serializer {name}"))),
         };

@@ -84,11 +84,40 @@ public final class RecipeVectors {
     static String wireDisplay(RecipeDisplay display) {
         var buf=new RegistryFriendlyByteBuf(Unpooled.buffer(),registries);RecipeDisplay.STREAM_CODEC.encode(buf,display);var bytes=new byte[buf.readableBytes()];buf.readBytes(bytes);buf.release();return HexFormat.of().formatHex(bytes);
     }
+    @SuppressWarnings({"rawtypes","unchecked"})
+    static JsonArray placementVectors() throws Exception {
+        var tests=new JsonArray();
+        var selected=manager.getRecipes().stream().filter(h->List.of("crafting_table","stick","oak_planks","furnace").contains(h.id().identifier().getPath()) || h.value() instanceof SmeltingRecipe && h.id().identifier().getPath().contains("iron_ingot")).toList();
+        for(var holder:selected) {
+            var recipe=holder.value();int width=recipe instanceof CraftingRecipe?3:1;int height=width;
+            var grid=new net.minecraft.world.SimpleContainer(width*height);
+            var inventory=new net.minecraft.world.entity.player.Inventory(null,new net.minecraft.world.entity.EntityEquipment());
+            int next=0;for(var ingredient:recipe.placementInfo().ingredients()) {var stack=choose(ingredient,0);stack.setCount(12);inventory.setItem(next++,stack);}
+            var slots=new ArrayList<net.minecraft.world.inventory.Slot>();for(int i=0;i<width*height;i++)slots.add(new net.minecraft.world.inventory.Slot(grid,i,0,0));
+            var access=new net.minecraft.recipebook.ServerPlaceRecipe.CraftingMenuAccess() {
+                public void fillCraftSlotsStackedContents(net.minecraft.world.entity.player.StackedItemContents contents){grid.fillStackedContents(contents);}
+                public void clearCraftingContent(){grid.clearContent();}
+                public boolean recipeMatches(RecipeHolder candidate){return candidate.value().matches(width==1?new SingleRecipeInput(grid.getItem(0)):CraftingInput.of(width,height,IntStream.range(0,width*height).mapToObj(grid::getItem).toList()),null);}
+            };
+            for(int step=0;step<3;step++) {
+                var test=new JsonObject();test.addProperty("recipe",holder.id().identifier().toString());test.addProperty("width",width);test.addProperty("height",height);test.addProperty("max",step==2);
+                var before=new JsonArray();for(var stack:inventory.getNonEquipmentItems())before.add(encode(stack));test.add("inventory",before);
+                before=new JsonArray();for(int i=0;i<width*height;i++)before.add(encode(grid.getItem(i)));test.add("grid",before);
+                var action=net.minecraft.recipebook.ServerPlaceRecipe.placeRecipe(access,width,height,slots,slots,inventory,(RecipeHolder)holder,step==2,false);test.addProperty("action",action.name());
+                var after=new JsonArray();for(var stack:inventory.getNonEquipmentItems())after.add(encode(stack));test.add("after_inventory",after);
+                after=new JsonArray();for(int i=0;i<width*height;i++)after.add(encode(grid.getItem(i)));test.add("after_grid",after);tests.add(test);
+            }
+        }
+        return tests;
+    }
     static void generate() throws Exception {
         var ids=new JsonArray();var displays=new JsonArray();
         for(var holder:manager.getRecipes()) {
             ids.add(holder.id().identifier().toString());var recipe=holder.value();String id=holder.id().identifier().toString();
-            var displayCase=new JsonObject();displayCase.addProperty("id",id);var list=new JsonArray();for(var display:recipe.display())list.add(wireDisplay(display));displayCase.add("displays",list);displays.add(displayCase);
+            var displayCase=new JsonObject();displayCase.addProperty("id",id);var list=new JsonArray();for(var display:recipe.display())list.add(wireDisplay(display));displayCase.add("displays",list);
+            var placementCases=new JsonArray();
+            for(int size=1;size<=3;size++){var placed=new JsonArray();net.minecraft.recipebook.PlaceRecipeHelper.placeRecipe(size,size,recipe,recipe.placementInfo().slotsToIngredientIndex(),(ingredient,index,x,y)->{var pair=new JsonArray();pair.add(index);pair.add(ingredient);placed.add(pair);});placementCases.add(placed);}
+            displayCase.add("placements",placementCases);displays.add(displayCase);
             for(int variant=0;variant<3;variant++) {
                 if(recipe instanceof BrewingRecipe brewing) {var input=choose(brewing.getInput().ingredient(),variant);brewing.getInput().potions().flatMap(p->p.potions()).ifPresent(p->p.stream().findFirst().ifPresent(potion->input.set(DataComponents.POTION_CONTENTS,new net.minecraft.world.item.alchemy.PotionContents(potion))));record(id+"/"+variant,RecipeType.BREWING,new BrewingInput(input,choose(brewing.getReagent().ingredient(),variant)),2,1);continue;}
                 var items=seed(recipe,variant);
@@ -99,17 +128,40 @@ public final class RecipeVectors {
                     if(variant==1) {var mirrored=new ArrayList<ItemStack>();for(int y=0;y<height;y++)for(int x=0;x<width;x++)mirrored.add(grid.get(width-1-x+y*width));grid=mirrored;}
                     if(variant==2) {var padded=new ArrayList<ItemStack>(Collections.nCopies((width+2)*(height+2),ItemStack.EMPTY));for(int y=0;y<height;y++)for(int x=0;x<width;x++)padded.set(x+1+(y+1)*(width+2),grid.get(x+y*width));width+=2;height+=2;grid=padded;}
                     crafting(id+"/"+variant,width,height,grid);
+                    if(variant==0 && !grid.isEmpty()) {
+                        var missing=new ArrayList<>(grid);int removed=RNG.nextInt(missing.size());missing.set(removed,ItemStack.EMPTY);crafting(id+"/missing",width,height,missing);
+                        var changed=new ArrayList<>(grid);changed.set(RNG.nextInt(changed.size()),new ItemStack(Items.BARRIER));crafting(id+"/extra",width,height,changed);
+                    }
                 } else if(recipe instanceof SingleItemRecipe)record(id+"/"+variant,recipe.getType(),new SingleRecipeInput(items.getFirst()),1,1);
                 else if(recipe instanceof SmithingRecipe)record(id+"/"+variant,RecipeType.SMITHING,new SmithingRecipeInput(items.get(0),items.get(1),items.get(2)),3,1);
             }
         }
         for(int trial=0;trial<2000;trial++) {int width=1+RNG.nextInt(3),height=1+RNG.nextInt(3);var grid=new ArrayList<ItemStack>();for(int i=0;i<width*height;i++){int id=RNG.nextInt(BuiltInRegistries.ITEM.size());grid.add(RNG.nextInt(3)==0?ItemStack.EMPTY:new ItemStack(BuiltInRegistries.ITEM.byId(id)));}crafting("random/"+trial,width,height,grid);}
-        var output=new JsonObject();output.add("ids",ids);output.add("cases",cases);output.add("displays",displays);
+        var codecCases=new JsonArray();
+        for(String raw:List.of(
+            "{type:'minecraft:smelting',ingredient:'minecraft:stone',result:'minecraft:diamond',cookingtime:4294967296}",
+            "{type:'minecraft:smelting',ingredient:'minecraft:stone',result:'minecraft:diamond',cookingtime:true}",
+            "{type:'minecraft:smelting',ingredient:'minecraft:stone',result:'minecraft:diamond',cookingtime:3.9}",
+            "{type:'minecraft:smelting',ingredient:'minecraft:stone',result:{id:'minecraft:diamond',count:2.9},cookingtime:2}",
+            "{type:'minecraft:smelting',ingredient:'minecraft:stone',result:'minecraft:diamond',cookingtime:2,show_notification:1}",
+            "{type:'minecraft:smelting',ingredient:'minecraft:stone',result:'minecraft:diamond',cookingtime:2,experience:true}",
+            "{type:'minecraft:crafting_shaped',pattern:['  '],key:{},result:'minecraft:diamond'}",
+            "{type:'minecraft:crafting_shapeless',ingredients:[],result:'minecraft:diamond'}",
+            "{type:'minecraft:crafting_shapeless',ingredients:['minecraft:air'],result:'minecraft:diamond'}",
+            "{type:'minecraft:crafting_shapeless',ingredients:['minecraft:stone'],result:{id:'minecraft:diamond',count:0}}",
+            "{type:'minecraft:crafting_transmute',input:'minecraft:stone',material:'minecraft:dirt',material_count:{},result:{}}"
+        )) {
+            var recipeJson=JsonParser.parseString(raw);var test=new JsonObject();test.add("input",recipeJson);
+            try { var decoded=Recipe.DIRECT_CODEC.parse(ops,recipeJson);test.addProperty("accepted",decoded.isSuccess());if(decoded.isSuccess() && decoded.getOrThrow() instanceof AbstractCookingRecipe cooking) {test.addProperty("cookingtime",cooking.cookingTime());test.addProperty("experience",cooking.experience());test.add("assembled",encode(cooking.assemble(new SingleRecipeInput(new ItemStack(Items.STONE)))));} }
+            catch(RuntimeException failure){test.addProperty("accepted",false);}
+            codecCases.add(test);
+        }
+        var output=new JsonObject();output.add("placement_cases",placementVectors());output.add("codec_cases",codecCases);output.add("ids",ids);output.add("cases",cases);output.add("displays",displays);
         var packet=new ClientboundUpdateRecipesPacket(manager.getSynchronizedItemProperties(),manager.getSynchronizedStonecutterRecipes());
         var buffer=new RegistryFriendlyByteBuf(Unpooled.buffer(),registries);ClientboundUpdateRecipesPacket.STREAM_CODEC.encode(buffer,packet);var bytes=new byte[buffer.readableBytes()];buffer.readBytes(bytes);buffer.release();output.addProperty("update_packet",HexFormat.of().formatHex(bytes));
         // Numeric dynamic ids/tag membership are independently supplied for wire decoding.
         var network=new JsonObject();for(var entry:registries.registries().toList()){var names=new JsonArray();for(var value:entry.value().listElements().toList())names.add(value.key().identifier().toString());network.add(entry.key().identifier().toString(),names);}output.add("registries",network);
-        Files.writeString(Path.of(System.getProperty("vectors.output")),JSON.toJson(output)+"\n");System.out.println("Crafting reference: "+ids.size()+" recipes, "+cases.size()+" scenarios");
+        try(var out=new java.util.zip.GZIPOutputStream(Files.newOutputStream(Path.of(System.getProperty("vectors.output"))))) { out.write((JSON.toJson(output)+"\n").getBytes(java.nio.charset.StandardCharsets.UTF_8)); }System.out.println("Crafting reference: "+ids.size()+" recipes, "+cases.size()+" scenarios");
     }
     public static void main(String[] args) throws Exception {
         SharedConstants.tryDetectVersion();Bootstrap.bootStrap();

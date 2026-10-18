@@ -9,4 +9,4 @@ while IFS= read -r jar; do RECIPE_CP="$RECIPE_CP:$jar"; done < <(find "$RECIPE_V
 mkdir -p "$RECIPE_CLASSES"
 "$RECIPE_JDK/bin/javac" --release 25 -cp "$RECIPE_CP" -d "$RECIPE_CLASSES" "$RECIPE_ROOT/crates/ferraloom-game/tests/java/crafting/RecipeVectors.java"
 cd "$RECIPE_VANILLA"
-"$RECIPE_JDK/bin/java" -Xmx1G -Dvectors.output="$RECIPE_ROOT/crates/ferraloom-game/src/crafting/vanilla.json" -cp "$RECIPE_CLASSES:$RECIPE_CP" RecipeVectors
+"$RECIPE_JDK/bin/java" -Xmx1G -Dvectors.output="$RECIPE_ROOT/crates/ferraloom-game/src/crafting/vanilla.json.gz" -cp "$RECIPE_CLASSES:$RECIPE_CP" RecipeVectors
