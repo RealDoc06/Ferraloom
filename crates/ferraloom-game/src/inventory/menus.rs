@@ -701,6 +701,7 @@ pub struct MenuSession {
     pub inventory_menu: AbstractContainerMenu,
     pub container_menu: Option<AbstractContainerMenu>,
     pub container_counter: i32,
+    pub pending_packets: Vec<ferraloom_protocol::play::clientbound::Packet>,
     creative_drop_count: u64,
     creative_drop_tick: u64,
 }
@@ -711,6 +712,7 @@ impl Default for MenuSession {
                 .expect("player menu"),
             container_menu: None,
             container_counter: 0,
+            pending_packets: Vec::new(),
             creative_drop_count: 0,
             creative_drop_tick: 0,
         }
