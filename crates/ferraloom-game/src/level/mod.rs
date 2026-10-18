@@ -18,6 +18,7 @@ pub mod chunk_holder;
 pub mod chunk_map;
 pub mod distance_manager;
 pub mod effects;
+pub mod entity;
 pub mod events;
 pub mod heightmap;
 mod mutation;

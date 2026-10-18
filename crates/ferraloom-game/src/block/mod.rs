@@ -167,6 +167,17 @@ pub trait BlockBehavior: Sync {
     ) -> Result<(), LevelError> {
         Ok(())
     }
+    /// Port of BlockState#entityInside, called with the state captured by
+    /// Entity#checkInsideBlocks. Entity data stays canonical in the level.
+    fn entity_inside(
+        &self,
+        _state: BlockState,
+        _pos: BlockPos,
+        _entity: crate::entity::EntityRef,
+        _level: &mut Level,
+    ) -> Result<(), LevelError> {
+        Ok(())
+    }
     fn trigger_event(
         &self,
         _state: BlockState,

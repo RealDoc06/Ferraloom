@@ -15,6 +15,7 @@ pub enum BlockMethod {
     OnPlace,
     AffectNeighborsAfterRemoval,
     NeighborChanged,
+    EntityInside,
     UpdateShape,
     UpdateIndirectNeighborShapes,
     Tick,
@@ -39,6 +40,7 @@ impl BlockMethod {
             Self::OnPlace => "onPlace",
             Self::AffectNeighborsAfterRemoval => "affectNeighborsAfterRemoval",
             Self::NeighborChanged => "neighborChanged",
+            Self::EntityInside => "entityInside",
             Self::UpdateShape => "updateShape",
             Self::UpdateIndirectNeighborShapes => "updateIndirectNeighbourShapes",
             Self::Tick => "tick",
@@ -65,6 +67,21 @@ pub(crate) struct UnportedCalls {
     stats: UnportedBehaviorStats,
 }
 impl Level {
+    /// Dispatch the captured inside-block state with the configured unsupported
+    /// behavior policy. Movement must not call a silent superclass substitute.
+    pub fn call_entity_inside(
+        &mut self,
+        state: ferraloom_data::BlockState,
+        pos: ferraloom_util::BlockPos,
+        entity: crate::entity::EntityRef,
+    ) -> Result<(), LevelError> {
+        self.optional_block_call(
+            state.block(),
+            BlockMethod::EntityInside,
+            |behavior, level| behavior.entity_inside(state, pos, entity, level),
+        )?;
+        Ok(())
+    }
     pub fn set_unported_behavior(&mut self, policy: UnportedBehavior) {
         self.region_mut().unported.policy = policy;
     }
