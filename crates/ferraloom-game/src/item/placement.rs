@@ -168,7 +168,7 @@ impl ItemBehavior for Scaffolding {
         let pos = context.clicked_pos();
         let block = required_behavior(item, ItemMethod::GetBlock)?.get_block(item, operation)?;
         if operation.level.get_block_state(pos)?.block() != block {
-            return Ok((crate::block::redstone::scaffolding_distance(
+            return Ok((crate::block::building::scaffolding_distance(
                 &LevelReaderRef::Server(operation.level),
                 pos,
             )? != 7)
