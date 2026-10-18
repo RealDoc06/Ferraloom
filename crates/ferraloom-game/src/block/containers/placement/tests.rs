@@ -104,6 +104,10 @@ fn native_container_and_bed_placement_masks_match_vanilla() {
             data.pitch = pitch;
             data.set_shared_flag(1, f[5] == "true");
         }
+        level
+            .entity_mut::<crate::entity::living::LivingEntity>(player)
+            .unwrap()
+            .y_head_rot = f32::from_bits(u32::from_str_radix(f[13], 16).unwrap());
         level.set_block_state(POS, replaced).unwrap();
         for (side, state) in SIDES.into_iter().zip(f[10].split(',')) {
             level
@@ -171,7 +175,7 @@ fn native_container_and_bed_placement_masks_match_vanilla() {
         *groups.entry(f[1]).or_insert(0) += 1;
     }
     assert_eq!(blocks.len(), 49);
-    assert_eq!(groups.len(), 7);
+    assert_eq!(groups.len(), 8);
     for block in blocks {
         assert!(super::supports(block, BlockMethod::GetStateForPlacement));
     }

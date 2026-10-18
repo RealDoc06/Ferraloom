@@ -104,6 +104,10 @@ fn native_sign_skull_and_utility_placement_masks_match_vanilla() {
             data.pitch = pitch;
             data.set_shared_flag(1, f[5] == "true");
         }
+        level
+            .entity_mut::<crate::entity::living::LivingEntity>(player)
+            .unwrap()
+            .y_head_rot = f32::from_bits(u32::from_str_radix(f[14], 16).unwrap());
         level.entity_mut::<ServerPlayer>(player).unwrap().instabuild = matches!(capability, 1 | 2);
         level.shared_mut().unwrap().ops.set_operator(
             &profile,
@@ -167,7 +171,7 @@ fn native_sign_skull_and_utility_placement_masks_match_vanilla() {
         *groups.entry(f[1]).or_insert(0) += 1;
     }
     assert_eq!(blocks.len(), 135);
-    assert_eq!(groups.len(), 14);
+    assert_eq!(groups.len(), 15);
     for block in blocks {
         assert!(super::supports(block, BlockMethod::GetStateForPlacement));
     }

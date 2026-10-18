@@ -42,10 +42,15 @@ public final class ContainerPlacementVectors {
     static void capture(String group, Block block, float yaw, float pitch, boolean secondary, Direction face,
                         int directional, BlockState replaced, int borderMode, BlockState[] neighbors,
                         PlacementLevel level, PlacementPlayer player) {
+        capture(group, block, yaw, pitch, secondary, face, directional, replaced, borderMode, neighbors, level, player, yaw);
+    }
+    static void capture(String group, Block block, float yaw, float pitch, boolean secondary, Direction face,
+                        int directional, BlockState replaced, int borderMode, BlockState[] neighbors,
+                        PlacementLevel level, PlacementPlayer player, float headYaw) {
         level.blocks.clear();
         level.blocks.put(POS, replaced);
         for (int i = 0; i < 4; i++) level.blocks.put(POS.relative(SIDES[i]), neighbors[i]);
-        player.setYRot(yaw); player.setXRot(pitch); player.setShiftKeyDown(secondary);
+        player.setYRot(yaw); player.setXRot(pitch); player.setYHeadRot(headYaw); player.setShiftKeyDown(secondary);
         Direction forward = directional < 0 ? player.getDirection() : Direction.from3DDataValue(directional);
         if (forward.getAxis().isVertical()) forward = Direction.NORTH;
         BlockPos head = POS.relative(forward);
@@ -66,7 +71,8 @@ public final class ContainerPlacementVectors {
         System.out.println("placement\t" + group + "\t" + BuiltInRegistries.BLOCK.getId(block)
             + "\t" + yaw + "\t" + pitch + "\t" + secondary + "\t" + face.get3DDataValue()
             + "\t" + directional + "\t" + Block.getId(replaced) + "\t" + borderMode + "\t" + cells
-            + "\t" + (state == null ? -1 : Block.getId(state)) + "\t" + level.nextRandom());
+            + "\t" + (state == null ? -1 : Block.getId(state)) + "\t" + level.nextRandom()
+            + "\t" + Integer.toUnsignedString(Float.floatToRawIntBits(player.getYHeadRot()),16));
     }
     static BlockState[] empty() {
         BlockState[] cells = new BlockState[4]; Arrays.fill(cells, Blocks.AIR.defaultBlockState()); return cells;
@@ -131,5 +137,10 @@ public final class ContainerPlacementVectors {
         // Nearest-looking diagonal/axis ties, both ordinary and pitched barrel placement.
         for (float yaw : new float[]{45, 135, 225, 315, -45}) for (float pitch : new float[]{-45, -35.26439f, 0, 35.26439f, 45})
             capture("barrel-tie", Blocks.BARREL, yaw, pitch, false, Direction.UP, -1, FLUIDS[0], 0, empty(), level, player);
+        // Direction.orderedByNearest reads the independent head rotation;
+        // horizontal placement still reads body yaw through Entity#getDirection.
+        for (float yaw : new float[]{0,90,180,270}) for (float headYaw : new float[]{0,90,180,270})
+            for (float pitch : new float[]{-45,45})
+                capture("head-rotation", Blocks.BARREL, yaw, pitch, false, Direction.UP, -1, FLUIDS[0], 0, empty(), level, player, headYaw);
     }
 }

@@ -62,9 +62,14 @@ public final class FurniturePlacementVectors {
     static void capture(String group, Block block, float yaw, float pitch, boolean secondary, Direction face,
                         int directional, BlockState clicked, BlockState[] cells, int capability, String component,
                         ContainerPlacementVectors.PlacementLevel level, PlacementPlayer player) {
+        capture(group, block, yaw, pitch, secondary, face, directional, clicked, cells, capability, component, level, player, yaw);
+    }
+    static void capture(String group, Block block, float yaw, float pitch, boolean secondary, Direction face,
+                        int directional, BlockState clicked, BlockState[] cells, int capability, String component,
+                        ContainerPlacementVectors.PlacementLevel level, PlacementPlayer player, float headYaw) {
         level.blocks.clear(); level.blocks.put(POS, clicked);
         for (var side : Direction.values()) level.blocks.put(POS.relative(side), cells[side.get3DDataValue()]);
-        player.setYRot(yaw); player.setXRot(pitch); player.setShiftKeyDown(secondary);
+        player.setYRot(yaw); player.setXRot(pitch); player.setYHeadRot(headYaw); player.setShiftKeyDown(secondary);
         player.getAbilities().instabuild = capability == 1 || capability == 2;
         player.permission = capability >= 2 ? LevelBasedPermissionSet.GAMEMASTER : LevelBasedPermissionSet.ALL;
         var held = held(block, component);
@@ -79,7 +84,8 @@ public final class FurniturePlacementVectors {
             + "\t" + Integer.toUnsignedString(Float.floatToRawIntBits(player.getXRot()),16)
             + "\t" + secondary + "\t" + face.get3DDataValue() + "\t" + directional
             + "\t" + Block.getId(clicked) + "\t" + neighbors + "\t" + capability + "\t" + component
-            + "\t" + (result == null ? -1 : Block.getId(result)) + "\t" + level.nextRandom());
+            + "\t" + (result == null ? -1 : Block.getId(result)) + "\t" + level.nextRandom()
+            + "\t" + Integer.toUnsignedString(Float.floatToRawIntBits(player.getYHeadRot()),16));
     }
     public static void main(String[] args) {
         var out = System.out; SharedConstants.tryDetectVersion(); Bootstrap.bootStrap(); System.setOut(out);
@@ -156,5 +162,11 @@ public final class FurniturePlacementVectors {
         for(var mode:List.of("none","mode:start","mode:log","mode:fail","mode:accept","mode:invalid","mode:START","mode:"))
             for(float yaw:new float[]{0,90,180,270}) for(var face:Direction.values())
                 capture("test-mode",Blocks.TEST_BLOCK,yaw,0,false,face,-1,air,cells(air),0,mode,level,player);
+        // Cover independent body/head inputs for every nearest-looking family.
+        for(var block:List.of(block("white_wall_banner"),Blocks.OAK_WALL_SIGN,Blocks.OAK_WALL_HANGING_SIGN,
+                              Blocks.SKELETON_WALL_SKULL,Blocks.CRAFTER,Blocks.COMMAND_BLOCK))
+            for(float yaw:new float[]{0,90,180,270}) for(float headYaw:new float[]{0,90,180,270})
+                for(float pitch:new float[]{-45,45})
+                    capture("head-rotation",block,yaw,pitch,false,Direction.UP,-1,air,cells(stone),0,"none",level,player,headYaw);
     }
 }
