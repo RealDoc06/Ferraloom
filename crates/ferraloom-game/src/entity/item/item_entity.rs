@@ -59,6 +59,20 @@ impl ItemEntity {
         );
         entity
     }
+    /// Port of ItemEntity's explicit-velocity constructor. Unlike new_at, this
+    /// overload does not consume the entity RNG for a random launch velocity.
+    pub fn new_at_with_velocity(
+        level: &mut Level,
+        position: Vec3,
+        stack: ItemStack,
+        velocity: Vec3,
+    ) -> Self {
+        let mut entity = Self::with_parent(level.create_entity_data(EntityType::ITEM));
+        entity.parent.set_pos(position);
+        entity.set_item(stack);
+        entity.parent.velocity = velocity;
+        entity
+    }
     pub fn item(&self) -> &ItemStack {
         self.parent.entity_data.get(ITEM)
     }
