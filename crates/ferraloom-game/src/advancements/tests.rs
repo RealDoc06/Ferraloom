@@ -471,7 +471,7 @@ impl RewardHarness {
                     }
                 }
                 AdvancementEffect::Announcement(component) => {
-                    effects.push(json!(component.to_json().unwrap()))
+                    effects.push(json!(component.as_ref().to_json().unwrap()))
                 }
                 AdvancementEffect::MarkVisibility(id) => {
                     player.apply_mark_visibility(manager, &id);
