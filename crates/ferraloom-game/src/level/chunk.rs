@@ -18,6 +18,7 @@ pub struct LevelChunk {
     pub(super) fluid_ticks: LevelChunkTicks<ferraloom_data::registries::fluid::Id>,
     pub(super) requested_full_status: FullChunkStatus,
     pub(super) ticking_ready: bool,
+    pub(super) block_entities: super::block_entity::ChunkBlockEntities,
     inhabited_time: i64,
     pub(super) pending_generation: super::post_processing::PendingGenerationData,
     pub unsaved: bool,
@@ -49,6 +50,7 @@ impl LevelChunk {
             // supplier is attached. This alone never permits broadcasts.
             requested_full_status: FullChunkStatus::Full,
             ticking_ready: false,
+            block_entities: Default::default(),
             inhabited_time: 0,
             pending_generation: Default::default(),
             unsaved: false,
@@ -76,6 +78,7 @@ impl LevelChunk {
             fluid_ticks: LevelChunkTicks::default(),
             requested_full_status: FullChunkStatus::Full,
             ticking_ready: false,
+            block_entities: Default::default(),
             inhabited_time: 0,
             pending_generation: Default::default(),
             unsaved: false,
