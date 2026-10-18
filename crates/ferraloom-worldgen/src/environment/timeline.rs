@@ -278,6 +278,9 @@ impl Timeline {
     pub fn clock(&self) -> &Identifier {
         &self.clock
     }
+    pub fn track(&self, id: Id) -> Option<&AttributeTrack> {
+        self.tracks[id.protocol_id() as usize].as_ref()
+    }
     pub fn period(&self) -> Option<i32> {
         self.period
     }

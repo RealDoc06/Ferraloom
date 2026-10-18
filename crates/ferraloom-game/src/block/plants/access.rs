@@ -14,27 +14,31 @@ impl LevelReaderRef<'_, '_> {
     /// Port of BlockAndLightGetter#getRawBrightness and LevelLightEngine#getRawBrightness.
     /// The caller supplies sky darkening; this overload never substitutes the clock.
     pub fn get_raw_brightness(&self, pos: BlockPos, sky_darken: i32) -> Result<i32, LevelError> {
-        let (sky, block) = match self {
-            Self::Server(level) => (
-                level.brightness(ferraloom_light::LightLayer::Sky, pos)?,
-                level.brightness(ferraloom_light::LightLayer::Block, pos)?,
-            ),
-            Self::Worldgen(region) => (
-                region
-                    .brightness(
-                        ferraloom_worldgen::region::LightLayer::Sky,
-                        [pos.x, pos.y, pos.z],
+        match self {
+            Self::Server(level) => level.get_raw_brightness(pos, sky_darken),
+            Self::Worldgen(region) => {
+                let sky = if self.has_skylight()? {
+                    i32::from(
+                        region
+                            .brightness(
+                                ferraloom_worldgen::region::LightLayer::Sky,
+                                [pos.x, pos.y, pos.z],
+                            )
+                            .map_err(|_| LevelError::UnsupportedWorldgenEnvironment)?,
                     )
-                    .map_err(|_| LevelError::UnsupportedWorldgenEnvironment)?,
-                region
+                    .wrapping_sub(sky_darken)
+                } else {
+                    0
+                };
+                let block = region
                     .brightness(
                         ferraloom_worldgen::region::LightLayer::Block,
                         [pos.x, pos.y, pos.z],
                     )
-                    .map_err(|_| LevelError::UnsupportedWorldgenEnvironment)?,
-            ),
-        };
-        Ok(i32::from(block).max(i32::from(sky) - sky_darken))
+                    .map_err(|_| LevelError::UnsupportedWorldgenEnvironment)?;
+                Ok(i32::from(block).max(sky))
+            }
+        }
     }
     /// Port of BlockAndLightGetter#canSeeSky, independent of day time.
     pub fn can_see_sky(&self, pos: BlockPos) -> Result<bool, LevelError> {

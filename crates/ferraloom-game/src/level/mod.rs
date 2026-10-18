@@ -24,8 +24,11 @@ pub mod distance_manager;
 pub mod effects;
 pub mod emission;
 pub mod entity;
+pub mod environment;
 pub mod events;
 pub mod heightmap;
+mod lighting;
+pub mod loot_facts;
 mod mutation;
 mod post_processing;
 mod random;
@@ -64,9 +67,13 @@ pub enum LevelError {
     UnsupportedBlockMethod(Block, crate::block::BlockMethod),
     UnsupportedBlockEntity(Block),
     UnsupportedGameRule(&'static str),
+    UnsupportedLightQuery,
+    UnsupportedEnvironmentAttribute(ferraloom_data::registries::environment_attribute::Id),
+    MissingEnvironmentContext,
     MissingBlockTags,
     MissingFluidTags,
     MissingEntityTypeTags,
+    MissingItemTags,
     UnsupportedShape(BlockState),
     UnsupportedFluidRandomTick,
     UnsupportedWeatherQuery,
@@ -136,6 +143,8 @@ pub struct Region {
     min_y: i32,
     max_y: i32,
     rules: LevelRules,
+    has_skylight: Option<bool>,
+    environment: Option<environment::EnvironmentRuntime>,
     random: ferraloom_util::random::Random,
     sound_seed_generator: ferraloom_util::random::Random,
     rand_value: i32,
@@ -152,6 +161,7 @@ pub struct Region {
     fluid_tags:
         Option<Arc<ferraloom_data::datapack::TagSet<ferraloom_data::registries::fluid::Id>>>,
     entity_type_tags: Option<Arc<ferraloom_data::datapack::TagSet<EntityType>>>,
+    item_tags: Option<Arc<ferraloom_data::datapack::TagSet<ferraloom_data::Item>>>,
     pub(crate) unported: crate::block::UnportedCalls,
     behaviors: &'static Behaviors,
 }
@@ -174,6 +184,8 @@ impl Region {
             min_y: -64,
             max_y: 320,
             rules: LevelRules::default(),
+            has_skylight: None,
+            environment: None,
             random: random::new_level_random(),
             sound_seed_generator: random::new_sound_random(),
             rand_value: random::new_position_seed(),
@@ -187,6 +199,7 @@ impl Region {
             tags: None,
             fluid_tags: None,
             entity_type_tags: None,
+            item_tags: None,
             unported: crate::block::UnportedCalls::default(),
             behaviors,
         }

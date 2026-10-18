@@ -46,10 +46,53 @@ pub fn parse_prefix(input: &str) -> Result<(Tag, usize), ParseError> {
     Ok((tag, p.pos))
 }
 
+/// Expected tokens at the grammar's longest error position, measured in UTF-16.
+/// The command layer filters these values against the remaining input and sorts them.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ParseSuggestions {
+    pub cursor: usize,
+    pub suggestions: Vec<String>,
+}
+/// Port of SnbtGrammar/Grammar#parseForSuggestions. This runs the same parser and
+/// records speculative expectations without changing its result or diagnostics.
+pub fn parse_suggestions(input: &str) -> ParseSuggestions {
+    let mut parser = Parser::at(input, 0);
+    parser.expected = Some(ExpectedTokens::default());
+    let success = parser.literal().is_some();
+    let mut expected = parser.expected.take().unwrap();
+    if success {
+        expected.advance(parser.pos);
+    }
+    ParseSuggestions {
+        cursor: expected.cursor.unwrap_or(0),
+        suggestions: expected.values,
+    }
+}
+#[derive(Default)]
+struct ExpectedTokens {
+    cursor: Option<usize>,
+    values: Vec<String>,
+}
+impl ExpectedTokens {
+    fn advance(&mut self, cursor: usize) {
+        if self.cursor.is_none_or(|previous| cursor > previous) {
+            self.cursor = Some(cursor);
+            self.values.clear();
+        }
+    }
+    fn store(&mut self, cursor: usize, values: impl IntoIterator<Item = String>) {
+        self.advance(cursor);
+        if self.cursor == Some(cursor) {
+            self.values.extend(values);
+        }
+    }
+}
+
 pub(crate) struct Parser {
     text: Vec<u16>,
     pub(crate) pos: usize,
     best: Option<ParseError>,
+    expected: Option<ExpectedTokens>,
 }
 #[derive(Clone)]
 struct Integer {
@@ -65,6 +108,7 @@ impl Parser {
             text: input.encode_utf16().collect(),
             pos,
             best: None,
+            expected: None,
         }
     }
     fn error(&self, message: impl Into<String>) -> ParseError {
@@ -74,6 +118,7 @@ impl Parser {
         }
     }
     fn record<T>(&mut self, cursor: usize, message: impl Into<String>) -> Option<T> {
+        self.expect(cursor, []);
         if self.best.as_ref().is_none_or(|e| cursor > e.cursor) {
             self.best = Some(ParseError {
                 cursor,
@@ -81,6 +126,11 @@ impl Parser {
             });
         }
         None
+    }
+    fn expect(&mut self, cursor: usize, values: impl IntoIterator<Item = String>) {
+        if let Some(expected) = &mut self.expected {
+            expected.store(cursor, values);
+        }
     }
     fn fail<T>(&mut self, message: impl Into<String>) -> Option<T> {
         self.record(self.pos, message)
@@ -110,6 +160,7 @@ impl Parser {
                 return char::from_u32(u32::from(c));
             }
         }
+        self.expect(start, chars.chars().map(|c| c.to_string()));
         self.record(
             start,
             format!(
@@ -378,12 +429,20 @@ impl Parser {
                 return Some(NbtString::from_utf16(out));
             }
             if self.peek().is_none() {
+                self.expect(self.pos, ["\"", "'", "\\"].map(String::from));
                 return self.fail("Invalid string contents");
             }
             if self.peek() == Some(92) {
                 self.pos += 1;
                 self.ws();
                 let Some(escape) = self.peek() else {
+                    self.expect(
+                        self.pos,
+                        [
+                            "b", "s", "t", "n", "f", "r", "\\", "'", "\"", "x", "u", "U", "N",
+                        ]
+                        .map(String::from),
+                    );
                     return self.fail("Expected literal b");
                 };
                 self.pos += 1;
@@ -454,7 +513,16 @@ impl Parser {
                             out.push((0xdc00 + (c & 1023)) as u16);
                         }
                     }
-                    _ => return self.record(self.pos - 1, "Expected literal b"),
+                    _ => {
+                        self.expect(
+                            self.pos - 1,
+                            [
+                                "b", "s", "t", "n", "f", "r", "\\", "'", "\"", "x", "u", "U", "N",
+                            ]
+                            .map(String::from),
+                        );
+                        return self.record(self.pos - 1, "Expected literal b");
+                    }
                 }
             } else {
                 out.push(self.text[self.pos]);
@@ -569,6 +637,10 @@ impl Parser {
             args = Some(values)
         }
         if name.starts_with(|c: char| c.is_ascii_digit() || matches!(c, '+' | '-' | '.')) {
+            self.expect(
+                self.pos,
+                ["true", "false", "bool", "uuid"].map(String::from),
+            );
             return self.fail("Unquoted strings can't start with digits 0-9, + or -");
         }
         if let Some(values) = args {

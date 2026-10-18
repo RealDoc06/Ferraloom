@@ -696,7 +696,9 @@ impl World {
         })
     }
     pub fn configure_live_rules(&self, level: &mut Level) {
+        level.set_has_skylight(self.dimension.has_skylight);
         let data = self.generator.data();
+        level.set_item_tags(data.item_tags.clone());
         level.set_weather_environment(ferraloom_game::level::weather::WeatherEnvironment {
             temperatures: data.temperatures.clone(),
             biome_names: Arc::new(data.biome_names.clone()),
@@ -707,6 +709,24 @@ impl World {
         rules.debug = matches!(self.generator.as_ref(), ChunkGenerator::Debug(_));
         rules.fast_lava = self.dimension.fast_lava;
         rules.can_have_weather = self.dimension.has_skylight && !self.dimension.has_ceiling;
+    }
+    /// Attach immutable dimension layers after the sole server clock manager
+    /// loads. Callers publish its actual snapshot; no local day counter exists.
+    pub fn install_live_environment(
+        &self,
+        level: &mut Level,
+        clocks: ferraloom_worldgen::environment::ClockSnapshot,
+    ) -> Result<()> {
+        let stem = self.dimensions.overworld();
+        level
+            .set_environment_attributes(
+                self.dimensions.environment.clone(),
+                &stem.environment,
+                stem.name.clone(),
+                &self.generator.data().biome_names,
+                clocks,
+            )
+            .map_err(|error| anyhow::anyhow!("{error:?}"))
     }
     /// Capture level-owned inputs before constructing the IO future. Canonical
     /// simulation state is Send, and its single-owner lazy caches need not be Sync.
@@ -1001,14 +1021,25 @@ impl World {
                     .div_euclid(1_000_000) as i64,
             ),
         );
-        let mut spawn = CompoundTag::new();
-        spawn.insert("dimension", Tag::String("minecraft:overworld".into()));
+        let mut spawn = self
+            .level_data
+            .data
+            .get_compound("spawn")
+            .cloned()
+            .unwrap_or_default();
+        if !spawn.contains_key("dimension") {
+            spawn.insert("dimension", Tag::String("minecraft:overworld".into()));
+        }
         spawn.insert(
             "pos",
             Tag::IntArray(vec![self.spawn.x, self.spawn.y, self.spawn.z]),
         );
-        spawn.insert("yaw", Tag::Float(0.));
-        spawn.insert("pitch", Tag::Float(0.));
+        if !spawn.contains_key("yaw") {
+            spawn.insert("yaw", Tag::Float(0.));
+        }
+        if !spawn.contains_key("pitch") {
+            spawn.insert("pitch", Tag::Float(0.));
+        }
         self.level_data.data.insert("spawn", Tag::Compound(spawn));
         let access = self.access.clone();
         let level = self.level_data.clone();

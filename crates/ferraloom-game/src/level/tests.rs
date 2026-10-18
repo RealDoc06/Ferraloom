@@ -1335,6 +1335,7 @@ fn weather_test_temperatures() -> Arc<ferraloom_worldgen::biome_manager::BiomeTe
 fn install_weather_environment(level: &mut Level, biome: &str) {
     use weather::{ChunkLightSnapshot, WeatherEnvironment};
     let temperatures = weather_test_temperatures();
+    level.set_has_skylight(true);
     level.set_weather_environment(WeatherEnvironment {
         temperatures: temperatures.clone(),
         biome_names: Arc::new(vec![biome.parse().unwrap()]),
