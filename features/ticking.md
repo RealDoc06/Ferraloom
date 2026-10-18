@@ -180,3 +180,5 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | ticking.block-entity.menu-borrows | Borrow a canonical player and ordered distinct current block entities across chunks without taking state out | `AbstractContainerMenu; LevelChunk` | `level::block_entity::tests::menu_borrow_preserves_order_and_rejects_duplicate_or_stale_generations` | - | todo |
 
 | ticking.player.accepted-section-order | Capture each accepted player section before deferred effect drain, preserving A-to-B-to-A ticket transitions | `PersistentEntitySectionManager.Callback#onMove; ChunkMap#move` | `level::effects::tests::captured_player_sections_preserve_intermediate_transitions` | - | todo |
+
+| ticking.player.spawn-ticket | Prepare and refresh player-spawn loading tickets at radius three and timeout twenty, independently of simulation | `PrepareSpawnTask.Loading; PrepareSpawnTask.Ready#keepAlive` | `native tracker propagation vectors; runtime preparation integration pending` | - | todo |
