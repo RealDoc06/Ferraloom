@@ -3001,7 +3001,8 @@ mod generation_order_tests {
         )
         .unwrap_err();
         assert!(failure.to_string().contains("MissingBlockTags"));
-        assert_eq!(publishing.level.next_entity_id(), 2);
+        let allocated_probe = publishing.level.next_entity_id();
+        assert_eq!(allocated_probe, 2);
         let light = |revision| LitChunk {
             initialized: Some(GenerationLightInitialization {
                 request: publish_request,
@@ -3037,7 +3038,8 @@ mod generation_order_tests {
             publish_request,
         )
         .unwrap();
-        assert_eq!(publishing.level.next_entity_id(), 2);
+        // The earlier probe consumed an ID; resuming must allocate nothing else.
+        assert_eq!(publishing.level.next_entity_id(), allocated_probe + 1);
         assert_eq!(publishing.level.take_entity_management_events().len(), 1);
         assert!(world.light_ready.contains(&publish_pos));
         assert!(!world.ready.contains(&publish_pos));
