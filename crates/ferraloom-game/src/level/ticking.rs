@@ -35,6 +35,14 @@ impl Level {
         let value = region.rand_value >> 2;
         origin.offset(value & 15, (value >> 16) & y_mask, (value >> 8) & 15)
     }
+    /// Port of Util.shuffle at ServerChunkCache's spawning-chunk slot. This
+    /// consumes Level#random even when SPAWN_MOBS disables spawn attempts.
+    pub fn shuffle_spawning_chunks(&mut self, chunks: &mut [ChunkPos]) {
+        for size in (2..=chunks.len()).rev() {
+            let other = self.random().next_int_bound(size as i32) as usize;
+            chunks.swap(size - 1, other);
+        }
+    }
     pub fn schedule_block_tick_after(
         &mut self,
         pos: BlockPos,

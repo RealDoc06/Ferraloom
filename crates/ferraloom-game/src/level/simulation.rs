@@ -5,42 +5,122 @@ use ferraloom_util::{
     ChunkPos,
     collections::{Long2ByteOpenHashMap, LongLinkedOpenHashSet},
 };
-const MAX_LEVEL: i32 = 33;
 const INVALID_CHUNK: i64 = 1_875_066_i64 | (1_875_066_i64 << 32);
 
 pub struct SimulationChunkTracker {
-    chunks: Long2ByteOpenHashMap,
-    sources: Long2ByteOpenHashMap,
-    computed: Long2ByteOpenHashMap,
-    queues: [LongLinkedOpenHashSet; 34],
+    graph: ChunkTracker,
 }
 impl Default for SimulationChunkTracker {
     fn default() -> Self {
         Self {
-            chunks: Long2ByteOpenHashMap::new(),
-            sources: Long2ByteOpenHashMap::new(),
-            computed: Long2ByteOpenHashMap::with_capacity_and_load_factor(256, 0.5),
-            queues: std::array::from_fn(|_| {
-                LongLinkedOpenHashSet::with_capacity_and_load_factor(16, 0.5)
-            }),
+            graph: ChunkTracker::new(34, 33, 32, 33),
         }
     }
 }
 impl SimulationChunkTracker {
     pub fn level(&self, pos: ChunkPos) -> i32 {
-        self.get_level(pos.pack())
+        self.graph.get_level(pos.pack())
     }
-    /// Supply TicketStorage's minimum simulation ticket level at this position.
-    /// Multiple players in one chunk share one PLAYER_SIMULATION source ticket.
+    /// Supply TicketStorage's minimum simulation level. Players sharing one
+    /// chunk share one PLAYER_SIMULATION source ticket.
     pub fn set_source_level(&mut self, pos: ChunkPos, level: Option<i32>) {
+        self.graph.set_source_level(pos, level);
+    }
+    pub fn entity_ticking_chunks(&self) -> impl Iterator<Item = ChunkPos> + '_ {
+        self.graph
+            .chunks
+            .iter()
+            .filter(|(_, level)| **level <= 31)
+            .map(|(&pos, _)| ChunkPos::unpack(pos))
+    }
+    pub fn block_ticking_chunks(&self) -> impl Iterator<Item = ChunkPos> + '_ {
+        self.graph
+            .chunks
+            .iter()
+            .filter(|(_, level)| **level <= 32)
+            .map(|(&pos, _)| ChunkPos::unpack(pos))
+    }
+    pub fn run_all_updates(&mut self) {
+        self.graph.run_all_updates();
+    }
+}
+
+/// Port of DistanceManager.FixedPlayerDistanceChunkTracker. Its missing level
+/// is maxDistance+2, while the graph saturates at maxDistance+1. Preserving
+/// that distinction also preserves the primitive map's insertion/removal order.
+pub struct FixedPlayerDistanceChunkTracker {
+    graph: ChunkTracker,
+}
+impl Default for FixedPlayerDistanceChunkTracker {
+    fn default() -> Self {
+        Self::new(8)
+    }
+}
+impl FixedPlayerDistanceChunkTracker {
+    pub fn new(max_distance: i32) -> Self {
+        assert!((0..=125).contains(&max_distance));
+        Self {
+            graph: ChunkTracker::new(max_distance + 2, max_distance + 2, max_distance, i32::MAX),
+        }
+    }
+    /// Call on first-player entry and last-player exit, in vanilla transition
+    /// order. Duplicate presence changes do not enqueue redundant graph work.
+    pub fn update_player_chunk(&mut self, pos: ChunkPos, present: bool) {
+        self.graph.set_source_level(pos, present.then_some(0));
+    }
+    pub fn run_all_updates(&mut self) {
+        self.graph.run_all_updates();
+    }
+    pub fn level(&self, pos: ChunkPos) -> i32 {
+        self.graph.get_level(pos.pack())
+    }
+    pub fn chunks(&self) -> impl Iterator<Item = ChunkPos> + '_ {
+        self.graph
+            .chunks
+            .iter()
+            .map(|(&pos, _)| ChunkPos::unpack(pos))
+    }
+    pub fn count(&self) -> usize {
+        self.graph.chunks.len()
+    }
+}
+
+/// Concrete shared ChunkTracker/DynamicGraphMinFixedPoint queue. Maps are
+/// lookups plus the exact fastutil chunk iteration; queues retain FIFO order.
+struct ChunkTracker {
+    max_level: i32,
+    default_level: i32,
+    retained_level: i32,
+    source_default: i32,
+    chunks: Long2ByteOpenHashMap,
+    sources: Long2ByteOpenHashMap,
+    computed: Long2ByteOpenHashMap,
+    queues: Vec<LongLinkedOpenHashSet>,
+}
+impl ChunkTracker {
+    fn new(level_count: i32, default_level: i32, retained_level: i32, source_default: i32) -> Self {
+        Self {
+            max_level: level_count - 1,
+            default_level,
+            retained_level,
+            source_default,
+            chunks: Long2ByteOpenHashMap::new(),
+            sources: Long2ByteOpenHashMap::new(),
+            computed: Long2ByteOpenHashMap::with_capacity_and_load_factor(256, 0.5),
+            queues: (0..level_count)
+                .map(|_| LongLinkedOpenHashSet::with_capacity_and_load_factor(16, 0.5))
+                .collect(),
+        }
+    }
+    fn set_source_level(&mut self, pos: ChunkPos, level: Option<i32>) {
         let key = pos.pack();
         let old = self
             .sources
             .get(&key)
             .copied()
             .map(i32::from)
-            .unwrap_or(MAX_LEVEL);
-        let new = level.unwrap_or(MAX_LEVEL).clamp(0, MAX_LEVEL);
+            .unwrap_or(self.max_level);
+        let new = level.unwrap_or(self.max_level).clamp(0, self.max_level);
         if new == old {
             return;
         }
@@ -51,22 +131,10 @@ impl SimulationChunkTracker {
         }
         self.check_edge(INVALID_CHUNK, key, new, new < old);
     }
-    pub fn entity_ticking_chunks(&self) -> impl Iterator<Item = ChunkPos> + '_ {
-        self.chunks
-            .iter()
-            .filter(|(_, level)| **level <= 31)
-            .map(|(&pos, _)| ChunkPos::unpack(pos))
-    }
-    pub fn block_ticking_chunks(&self) -> impl Iterator<Item = ChunkPos> + '_ {
-        self.chunks
-            .iter()
-            .filter(|(_, level)| **level <= 32)
-            .map(|(&pos, _)| ChunkPos::unpack(pos))
-    }
-    pub fn run_all_updates(&mut self) {
+    fn run_all_updates(&mut self) {
         while let Some(priority) = self.queues.iter().position(|queue| !queue.is_empty()) {
             let node = self.queues[priority].pop_first().unwrap();
-            let level = self.get_level(node).clamp(0, MAX_LEVEL);
+            let level = self.get_level(node).clamp(0, self.max_level);
             let computed = i32::from(
                 self.computed
                     .remove(&node)
@@ -76,9 +144,9 @@ impl SimulationChunkTracker {
                 self.set_level(node, computed);
                 self.check_neighbors_after_update(node, computed, true);
             } else if computed > level {
-                self.set_level(node, MAX_LEVEL);
-                if computed != MAX_LEVEL {
-                    self.enqueue(node, MAX_LEVEL.min(computed));
+                self.set_level(node, self.max_level);
+                if computed != self.max_level {
+                    self.enqueue(node, self.max_level.min(computed));
                     self.computed.insert(node, computed as i8);
                 }
                 self.check_neighbors_after_update(node, level, false);
@@ -90,10 +158,10 @@ impl SimulationChunkTracker {
             .get(&node)
             .copied()
             .map(i32::from)
-            .unwrap_or(MAX_LEVEL)
+            .unwrap_or(self.default_level)
     }
     fn set_level(&mut self, node: i64, level: i32) {
-        if level >= MAX_LEVEL {
+        if level > self.retained_level {
             self.chunks.remove(&node);
         } else {
             self.chunks.insert(node, level as i8);
@@ -105,7 +173,7 @@ impl SimulationChunkTracker {
                 .get(&to)
                 .copied()
                 .map(i32::from)
-                .unwrap_or(MAX_LEVEL)
+                .unwrap_or(self.source_default)
         } else {
             level + 1
         }
@@ -157,17 +225,18 @@ impl SimulationChunkTracker {
         if to == INVALID_CHUNK {
             return;
         }
-        let new_from = new_from.clamp(0, MAX_LEVEL);
-        let level_to = level_to.clamp(0, MAX_LEVEL);
+        let new_from = new_from.clamp(0, self.max_level);
+        let level_to = level_to.clamp(0, self.max_level);
         let old_computed = stored.unwrap_or(level_to);
         let new_computed = if only_decreased {
             old_computed.min(new_from)
         } else {
-            self.computed_level(to, from, new_from).clamp(0, MAX_LEVEL)
+            self.computed_level(to, from, new_from)
+                .clamp(0, self.max_level)
         };
-        let old_priority = level_to.min(old_computed).min(MAX_LEVEL);
+        let old_priority = level_to.min(old_computed).min(self.max_level);
         if level_to != new_computed {
-            let priority = level_to.min(new_computed).min(MAX_LEVEL);
+            let priority = level_to.min(new_computed).min(self.max_level);
             if old_priority != priority && stored.is_some() {
                 self.dequeue(to, old_priority);
             }
@@ -182,23 +251,24 @@ impl SimulationChunkTracker {
         let stored = self.computed.get(&to).copied().map(i32::from);
         let level_from = self
             .level_from_neighbor(from, to, level)
-            .clamp(0, MAX_LEVEL);
+            .clamp(0, self.max_level);
         if only_decreased {
             self.check_edge_at_level(from, to, level_from, self.get_level(to), stored, true);
         } else {
-            let old_computed = stored.unwrap_or_else(|| self.get_level(to).clamp(0, MAX_LEVEL));
+            let old_computed =
+                stored.unwrap_or_else(|| self.get_level(to).clamp(0, self.max_level));
             if level_from == old_computed {
                 let level_to = if stored.is_none() {
                     old_computed
                 } else {
                     self.get_level(to)
                 };
-                self.check_edge_at_level(from, to, MAX_LEVEL, level_to, stored, false);
+                self.check_edge_at_level(from, to, self.max_level, level_to, stored, false);
             }
         }
     }
     fn check_neighbors_after_update(&mut self, node: i64, level: i32, only_decreased: bool) {
-        if only_decreased && level >= 32 {
+        if only_decreased && level >= self.max_level - 1 {
             return;
         }
         let pos = ChunkPos::unpack(node);
@@ -237,6 +307,7 @@ mod tests {
             }
             tracker.run_all_updates();
             let actual = tracker
+                .graph
                 .chunks
                 .iter()
                 .map(|(&key, &level)| {
@@ -250,6 +321,64 @@ mod tests {
                 .find_map(|line| line.strip_prefix(stage).and_then(|s| s.strip_prefix('\t')))
                 .unwrap();
             assert_eq!(actual, expected, "{stage}");
+        }
+    }
+
+    #[test]
+    fn natural_spawn_counter_order_and_shuffle_match_real_distance_manager() {
+        use crate::level::{Level, Region};
+        use ferraloom_util::random::{LegacyRandomSource, Random, RandomSource};
+        static BEHAVIORS: crate::Behaviors = crate::Behaviors::EMPTY;
+        let vector = |name: &str| {
+            include_str!("../../tests/java/level/spawn-chunks.tsv")
+                .lines()
+                .find_map(|line| {
+                    let (key, value) = line.split_once('\t')?;
+                    (key == name).then_some(value)
+                })
+                .unwrap()
+        };
+        let mut tracker = FixedPlayerDistanceChunkTracker::default();
+        for (stage, changes) in [
+            ("origin", vec![(ChunkPos::new(0, 0), true)]),
+            ("overlap", vec![(ChunkPos::new(2, -1), true)]),
+            ("remove-origin", vec![(ChunkPos::new(0, 0), false)]),
+            (
+                "move",
+                vec![(ChunkPos::new(2, -1), false), (ChunkPos::new(-2, 1), true)],
+            ),
+            ("empty", vec![(ChunkPos::new(-2, 1), false)]),
+        ] {
+            for (pos, present) in changes {
+                tracker.update_player_chunk(pos, present);
+            }
+            tracker.run_all_updates();
+            let actual = tracker
+                .chunks()
+                .map(|pos| format!("{},{},{}", pos.x, pos.z, tracker.level(pos)))
+                .collect::<Vec<_>>()
+                .join(";");
+            assert_eq!(actual, vector(stage), "{stage}");
+            if stage == "origin" {
+                assert_eq!(
+                    tracker.level(ChunkPos::new(100, 100)).to_string(),
+                    vector("missing-level")
+                );
+                assert_eq!(tracker.count(), 17 * 17);
+                let mut spawning = tracker.chunks().collect::<Vec<_>>();
+                let mut level = Level::new(Region::new(&BEHAVIORS));
+                level.set_random_streams(Random::Legacy(LegacyRandomSource::new(0)), 0);
+                level.shuffle_spawning_chunks(&mut spawning);
+                let actual = spawning
+                    .iter()
+                    .map(|pos| format!("{},{}", pos.x, pos.z))
+                    .collect::<Vec<_>>()
+                    .join(";");
+                assert_eq!(
+                    format!("{actual}|{}", level.random().next_int()),
+                    vector("shuffled-origin")
+                );
+            }
         }
     }
 }
