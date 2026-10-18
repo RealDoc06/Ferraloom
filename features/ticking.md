@@ -37,7 +37,7 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | ticking.level.debug-gc-phase | Tick debug synchronizers and collect unused random-state cache entries last | `ServerLevel#tick` | | - | todo |
 | ticking.chunk.ticket-phase | Purge stale tickets, then run distance-manager updates before chunk work | `ServerChunkCache#tick` | | - | todo |
 | ticking.chunk.spawn-state | Count natural spawning state and determine eligible categories before selecting chunks | `ServerChunkCache#tickChunks` | | - | todo |
-| ticking.chunk.spawn-shuffle | Collect and shuffle spawning chunks before inhabited-time, thunder and spawn processing | `ServerChunkCache#tickChunks; ServerChunkCache#tickSpawningChunk` | | - | todo |
+| ticking.chunk.spawn-shuffle | Collect and shuffle spawning chunks before incrementing canonical chunk inhabited time, thunder and spawn processing | `ServerChunkCache#tickChunks; ServerChunkCache#tickSpawningChunk` | | - | todo |
 | ticking.chunk.random-phase | Run random block and fluid ticks in block-ticking chunks after natural spawning | `ServerChunkCache#tickChunks; ServerLevel#tickChunk` | | - | todo |
 | ticking.chunk.custom-spawner-phase | Run custom spawners after random ticks when mob spawning is enabled | `ServerChunkCache#tickChunks; ServerLevel#tickCustomSpawners` | | - | todo |
 | ticking.chunk.broadcast-phase | Broadcast changed chunks after simulation, including when simulation is frozen | `ServerChunkCache#tickChunks; ServerChunkCache#broadcastChangedChunks` | | - | todo |

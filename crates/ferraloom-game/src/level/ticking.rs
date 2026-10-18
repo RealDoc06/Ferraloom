@@ -43,6 +43,14 @@ impl Level {
             chunks.swap(size - 1, other);
         }
     }
+    pub fn increment_chunk_inhabited_time(&mut self, pos: ChunkPos) -> Result<(), LevelError> {
+        self.region_mut()
+            .chunks
+            .get_mut(&pos)
+            .ok_or(LevelError::MissingChunk(pos))?
+            .increment_inhabited_time();
+        Ok(())
+    }
     pub fn schedule_block_tick_after(
         &mut self,
         pos: BlockPos,
