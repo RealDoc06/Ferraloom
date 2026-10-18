@@ -672,6 +672,14 @@ sign-facing	8341	3fe0000000000000	c004000000000000	true
 sign-facing	8341	c004000000000000	c004000000000000	false
 sign-facing	8341	c004000000000000	3fe0000000000000	false
 sign-facing	8341	c004000000000000	400c000000000000	false
+sign-editor-tick	false	0.5	false
+sign-editor-tick	false	8.4	false
+sign-editor-tick	false	9.4	false
+sign-editor-tick	false	10.0	false
+sign-editor-tick	true	0.5	true
+sign-editor-tick	true	8.4	true
+sign-editor-tick	true	9.4	true
+sign-editor-tick	true	10.0	false
 default-save	minecraft:chest	{Items:[],components:{}}
 filled-save	minecraft:chest	{Items:[{Slot:0b,count:31,id:"minecraft:stone"},{Slot:26b,count:3,id:"minecraft:diamond"}],components:{},id:"minecraft:chest",x:1,y:64,z:2}
 roundtrip	minecraft:chest	true

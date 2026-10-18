@@ -41,6 +41,9 @@ pub fn provider(
     if refs.is_empty() {
         return Ok(None);
     }
+    if level.block_entity_state(refs[0])?.container().is_none() {
+        return Ok(None);
+    }
     let kind = match state.block().block_entity_type().unwrap() {
         BlockEntityType::CHEST | BlockEntityType::TRAPPED_CHEST | BlockEntityType::BARREL => {
             MenuKind::Chest {
@@ -52,6 +55,8 @@ pub fn provider(
         BlockEntityType::BLAST_FURNACE => MenuKind::BlastFurnace,
         BlockEntityType::CRAFTER => MenuKind::Crafter,
         BlockEntityType::SHULKER_BOX => MenuKind::ShulkerBox,
+        BlockEntityType::DISPENSER | BlockEntityType::DROPPER => MenuKind::Dispenser,
+        BlockEntityType::HOPPER => MenuKind::Hopper,
         _ => return Err(LevelError::UnsupportedBlockEntity(state.block())),
     };
     let custom = refs.iter().find_map(|&handle| {
@@ -69,6 +74,9 @@ pub fn provider(
         MenuKind::BlastFurnace => "container.blast_furnace",
         MenuKind::Crafter => "container.crafter",
         MenuKind::ShulkerBox => "container.shulkerBox",
+        MenuKind::Dispenser if state.block() == Block::DROPPER => "container.dropper",
+        MenuKind::Dispenser => "container.dispenser",
+        MenuKind::Hopper => "container.hopper",
         _ => unreachable!(),
     };
     Ok(Some(ContainerMenuProvider {

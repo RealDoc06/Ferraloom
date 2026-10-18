@@ -36,6 +36,31 @@ pub(crate) fn ported_behavior(
     method: BlockMethod,
 ) -> Option<&'static dyn BlockBehavior> {
     use BlockMethod as M;
+    if matches!(
+        block.block_entity_type(),
+        Some(
+            crate::block::entity::BlockEntityType::SIGN
+                | crate::block::entity::BlockEntityType::HANGING_SIGN
+        )
+    ) && matches!(method, M::UseWithoutItem | M::UseItemOn)
+    {
+        return Some(&super::sign_block::SIGN_BLOCK);
+    }
+    if method == M::GetMenuProvider
+        && matches!(
+            block.block_entity_type(),
+            Some(
+                crate::block::entity::BlockEntityType::SIGN
+                    | crate::block::entity::BlockEntityType::HANGING_SIGN
+                    | crate::block::entity::BlockEntityType::END_PORTAL
+                    | crate::block::entity::BlockEntityType::DISPENSER
+                    | crate::block::entity::BlockEntityType::DROPPER
+                    | crate::block::entity::BlockEntityType::HOPPER
+            )
+        )
+    {
+        return Some(&CONTAINER_BLOCK);
+    }
     if block.class() == BlockClass::ShulkerBoxBlock
         && matches!(method, M::AnalogOutputSignal | M::GetMenuProvider)
     {

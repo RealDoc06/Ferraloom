@@ -65,6 +65,21 @@ class BlockEntityFixture extends MutationFixture {
       }
     }
   }
+  static void signEditorTick(RegistryAccess r){
+    class EditorLevel extends BlockEntityFixture {
+      final List<net.minecraft.world.entity.player.Player> editors=new ArrayList<>();
+      EditorLevel(){super(r);}
+      @Override public List<net.minecraft.world.entity.player.Player> players(){return editors;}
+    }
+    for(boolean present:new boolean[]{false,true})for(double x:new double[]{0.5,8.4,9.4,10.0}) {
+      var level=new EditorLevel();var player=new SignPlayer(level,false);player.setPos(x,0,0.5);
+      if(present)level.editors.add(player);
+      var sign=new SignBlockEntity(BlockPos.ZERO,net.minecraft.world.level.block.Blocks.OAK_SIGN.defaultBlockState());
+      sign.setLevel(level);sign.setAllowedPlayerEditor(player.getUUID());
+      SignBlockEntity.tick(level,BlockPos.ZERO,sign.getBlockState(),sign);
+      System.out.println("sign-editor-tick\t"+present+"\t"+x+"\t"+(sign.getPlayerWhoMayEdit()!=null));
+    }
+  }
   static void tickerPhases(RegistryAccess r){
     var level=new BlockEntityFixture(r);var events=new ArrayList<String>();
     class Ticker implements TickingBlockEntity {

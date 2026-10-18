@@ -10,5 +10,6 @@ pub mod loot;
 pub mod menu;
 pub mod runtime;
 pub mod sign;
+mod sign_block;
 pub mod storage;
 pub(crate) use behavior::ported_behavior;
