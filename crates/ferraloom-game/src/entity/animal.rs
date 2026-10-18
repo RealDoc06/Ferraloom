@@ -65,4 +65,8 @@ impl Cow {
 
 /// Shared Cow dispatcher for the foundation's Entity/LivingEntity primitives.
 pub struct CowBehavior;
-impl Entity for CowBehavior {}
+impl Entity for CowBehavior {
+    fn default_gravity(&self) -> f64 {
+        0.08
+    }
+}
