@@ -695,7 +695,7 @@ impl MinecraftServer {
             mode,
         );
         if let Some(saved) = saved {
-            player.load(saved);
+            player.try_load_with_recipes(saved, &self.recipe_manager)?;
         }
         if self.properties.boolean("force-gamemode") {
             player.game_mode = mode;
