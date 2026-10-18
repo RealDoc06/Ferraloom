@@ -219,13 +219,17 @@ fn native_glide_cadence_keeps_slot_order_rng_before_durability_and_event_after_i
                 }),
                 "strict {row:?}"
             );
-            assert!(!game_events::take(&mut strict).into_iter().any(|observation| matches!(
-                observation,
-                Observation::GameEvent {
-                    event: GameEvent::ELYTRA_GLIDE,
-                    ..
-                }
-            )));
+            assert!(
+                !game_events::take(&mut strict)
+                    .into_iter()
+                    .any(|observation| matches!(
+                        observation,
+                        Observation::GameEvent {
+                            event: GameEvent::ELYTRA_GLIDE,
+                            ..
+                        }
+                    ))
+            );
             assert_eq!(
                 strict
                     .entity_mut::<EntityData>(entity)
