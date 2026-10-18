@@ -30,7 +30,8 @@ pub fn supports(class: BlockClass) -> bool {
     use BlockClass as C;
     matches!(
         class,
-        C::FlowerBlock
+        C::ChorusPlantBlock
+            | C::FlowerBlock
             | C::FarmlandBlock
             | C::PathBlock
             | C::WitherRoseBlock

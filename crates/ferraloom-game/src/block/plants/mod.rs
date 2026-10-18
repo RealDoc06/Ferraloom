@@ -2,6 +2,7 @@
 mod access;
 mod bamboo;
 pub mod bonemeal;
+mod chorus;
 mod clone_item;
 mod column;
 mod coral;
@@ -106,6 +107,17 @@ pub fn ported_behavior(block: Block, method: BlockMethod) -> Option<&'static dyn
         return Some(&geometry::PLANT_SHAPES);
     }
     let behavior: &'static dyn BlockBehavior = match block.class() {
+        C::ChorusPlantBlock | C::ChorusFlowerBlock
+            if matches!(
+                method,
+                M::CanSurvive | M::UpdateShape | M::UpdateFromNeighbourShapes | M::Tick
+            ) || (block == Block::CHORUS_FLOWER
+                && matches!(method, M::RandomTick | M::IsFaceSturdy))
+                || (block == Block::CHORUS_PLANT && method == M::GetStateForPlacement) =>
+        {
+            &chorus::CHORUS
+        }
+
         C::EyeblossomBlock if matches!(method, M::Tick | M::RandomTick) => &eyeblossom::EYEBLOSSOM,
         C::HangingMossBlock
             if matches!(

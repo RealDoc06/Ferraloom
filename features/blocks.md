@@ -391,3 +391,5 @@ One class row per bootstrapped runtime Block class, listing every block id assig
 | blocks.plants.grass-bonemeal-walk | Grass bone meal preserves 128 walk attempts, captured short-grass state, zoomed biome flower lists and ordinary placed-feature calls with canonical RNG | `GrassBlock#performBonemeal/placeBonemealEffect` | Native biome/composite bone-meal metadata; dedicated live parity scenario | pass | todo |
 
 | blocks.plants.worldgen-bonemeal-targets | Worldgen sapling, azalea and mushroom targets retain the non-ServerLevel branch; propagule targets remain state-only and consume no random | Real native `BonemealableBlock#isValidBonemealTarget` on Level | `plants::worldgen_tests::worldgen_bonemeal_targets_follow_native_non_server_branch_without_rng` (62 vectors) | pass | todo |
+
+| blocks.plants.chorus-growth | Chorus support and connections, one-tick invalidation, flower pillar/branch/death RNG and events; projectile callback awaits framework | `ChorusPlantBlock`, `ChorusFlowerBlock` | Dedicated ServerLevel chorus oracle and support/shape fixtures (capture pending) | - | todo |
