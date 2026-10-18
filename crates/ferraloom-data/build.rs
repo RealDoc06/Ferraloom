@@ -699,6 +699,38 @@ fn tag_keys(root: &Path, registries: &Value) {
     .unwrap();
 }
 
+fn block_entity_types(out: &mut String, report: &Value, block_count: usize) {
+    let rows = report.as_array().expect("block entity type array");
+    let mut by_block = vec![None; block_count];
+    out.push_str("pub static BLOCK_ENTITY_TYPES: &[BlockEntityTypeData] = &[\n");
+    for (index, row) in rows.iter().enumerate() {
+        assert_eq!(number(&row["id"]) as usize, index);
+        write!(
+            out,
+            "BlockEntityTypeData {{ only_op_can_set_nbt: {}, valid_blocks: &[",
+            row["only_op_can_set_nbt"]
+        )
+        .unwrap();
+        for block in row["valid_blocks"].as_array().unwrap() {
+            let id = number(block) as usize;
+            assert!(
+                by_block[id].replace(index).is_none(),
+                "block in two block entity types"
+            );
+            write!(out, "registries::block::Id({id}),").unwrap();
+        }
+        out.push_str("] },\n");
+    }
+    out.push_str("];\npub static BLOCK_ENTITY_TYPE_BY_BLOCK: &[Option<registries::block_entity_type::Id>] = &[\n");
+    for kind in by_block {
+        match kind {
+            Some(id) => writeln!(out, "Some(registries::block_entity_type::Id({id})),").unwrap(),
+            None => out.push_str("None,\n"),
+        }
+    }
+    out.push_str("];\n");
+}
+
 fn main() {
     let root = Path::new("../../data/generated");
     let registries_report = load(root, "registries");
@@ -815,6 +847,14 @@ fn main() {
         &mut out,
         &load(root, "sound_events"),
         &registries_report["minecraft:sound_event"],
+    );
+    block_entity_types(
+        &mut out,
+        &load(root, "block_entity_types"),
+        registries_report["minecraft:block"]["entries"]
+            .as_object()
+            .unwrap()
+            .len(),
     );
     entities(&mut out, &entity_report, &registries_report);
     let path = Path::new(&std::env::var_os("OUT_DIR").unwrap()).join("data.rs");
