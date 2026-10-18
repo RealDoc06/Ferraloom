@@ -2,6 +2,7 @@
 #[cfg(test)]
 mod tool_tests;
 use super::equipment::EntityEquipment;
+use crate::inventory::{StackGenerations, StackReplacement};
 use ferraloom_data::registries::data_component_type::Id as ComponentType;
 use ferraloom_nbt::{ListTag, Tag};
 use ferraloom_protocol::{
@@ -116,6 +117,7 @@ pub fn equipment_slot(slot: usize) -> Option<EquipmentSlot> {
 #[derive(Clone, Debug)]
 pub struct Inventory {
     pub items: [ItemStack; 36],
+    stack_generations: StackGenerations,
     selected: usize,
     times_changed: i32,
     // ItemStack's client pop animation is transient, absent from its wire/NBT
@@ -126,6 +128,7 @@ impl Default for Inventory {
     fn default() -> Self {
         Self {
             items: std::array::from_fn(|_| ItemStack::default()),
+            stack_generations: StackGenerations::new(36),
             selected: 0,
             times_changed: 0,
             pop_times: [0; 43],
@@ -152,8 +155,31 @@ impl Inventory {
     pub fn selected_item_mut(&mut self) -> &mut ItemStack {
         &mut self.items[self.selected]
     }
-    pub fn set_selected_item(&mut self, stack: ItemStack) -> ItemStack {
-        std::mem::replace(&mut self.items[self.selected], stack)
+    pub fn set_selected_item(&mut self, stack: ItemStack) -> StackReplacement {
+        self.stack_generations
+            .replace(self.selected, &mut self.items[self.selected], stack)
+    }
+    pub fn stack_parts<'a>(
+        &'a self,
+        slot: usize,
+        equipment: &'a EntityEquipment,
+    ) -> Option<(&'a StackGenerations, &'a ItemStack, usize)> {
+        if slot < self.items.len() {
+            Some((&self.stack_generations, &self.items[slot], slot))
+        } else {
+            Some(equipment.stack_parts(equipment_slot(slot)?))
+        }
+    }
+    pub fn stack_parts_mut<'a>(
+        &'a mut self,
+        slot: usize,
+        equipment: &'a mut EntityEquipment,
+    ) -> Option<(&'a mut StackGenerations, &'a mut ItemStack, usize)> {
+        if slot < self.items.len() {
+            Some((&mut self.stack_generations, &mut self.items[slot], slot))
+        } else {
+            Some(equipment.stack_parts_mut(equipment_slot(slot)?))
+        }
     }
     pub fn get_item<'a>(&'a self, slot: usize, equipment: &'a EntityEquipment) -> &'a ItemStack {
         if slot < 36 {
@@ -182,13 +208,14 @@ impl Inventory {
         slot: usize,
         stack: ItemStack,
         equipment: &mut EntityEquipment,
-    ) -> ItemStack {
+    ) -> StackReplacement {
         if slot < 36 {
-            std::mem::replace(&mut self.items[slot], stack)
+            self.stack_generations
+                .replace(slot, &mut self.items[slot], stack)
         } else if let Some(slot) = equipment_slot(slot) {
             equipment.set(slot, stack)
         } else {
-            ItemStack::default()
+            StackReplacement::Owned(ItemStack::default())
         }
     }
     pub fn remove_item(
@@ -212,6 +239,8 @@ impl Inventory {
         equipment: &mut EntityEquipment,
     ) -> ItemStack {
         self.set_item(slot, ItemStack::default(), equipment)
+            .into_owned()
+            .expect("value-only removal requires an unrooted stack; live callers use StackRef")
     }
     pub fn get_free_slot(&self) -> Option<usize> {
         self.items.iter().position(ItemStack::is_empty)
@@ -259,16 +288,18 @@ impl Inventory {
     }
     pub fn pick_slot(&mut self, slot: usize) {
         self.selected = self.get_suitable_hotbar_slot();
-        self.items.swap(self.selected, slot);
+        self.stack_generations
+            .swap(&mut self.items, self.selected, slot);
     }
     pub fn add_and_pick_item(&mut self, stack: ItemStack) {
         self.selected = self.get_suitable_hotbar_slot();
         if !self.items[self.selected].is_empty()
             && let Some(free) = self.get_free_slot()
         {
-            self.items[free] = self.items[self.selected].clone();
+            self.stack_generations
+                .move_to(&mut self.items, self.selected, free);
         }
-        self.items[self.selected] = stack;
+        self.set_selected_item(stack);
     }
     fn add_resource(
         &mut self,
@@ -313,7 +344,8 @@ impl Inventory {
         }
         if is_damaged(stack) {
             if let Some(slot) = slot.or_else(|| self.get_free_slot()) {
-                self.items[slot] = stack.clone();
+                self.stack_generations
+                    .replace(slot, &mut self.items[slot], stack.clone());
                 set_count(stack, 0);
                 self.pop_times[slot] = 5;
                 return true;
@@ -378,7 +410,10 @@ impl Inventory {
         self.times_changed
     }
     pub fn clear_content(&mut self, equipment: &mut EntityEquipment) {
-        self.items.fill_with(ItemStack::default);
+        for slot in 0..self.items.len() {
+            self.stack_generations
+                .replace(slot, &mut self.items[slot], ItemStack::default());
+        }
         equipment.clear();
     }
     pub fn is_empty(&self, equipment: &EntityEquipment) -> bool {
@@ -399,7 +434,10 @@ impl Inventory {
         Ok(ListTag(entries))
     }
     pub fn load(&mut self, entries: &ListTag) {
-        self.items.fill_with(ItemStack::default);
+        for slot in 0..self.items.len() {
+            self.stack_generations
+                .replace(slot, &mut self.items[slot], ItemStack::default());
+        }
         for value in entries.iter() {
             let Some(tag) = value.as_compound() else {
                 continue;
@@ -408,7 +446,8 @@ impl Inventory {
             if slot < 36
                 && let Ok(stack) = ItemStack::from_nbt(value)
             {
-                self.items[slot] = stack;
+                self.stack_generations
+                    .replace(slot, &mut self.items[slot], stack);
             }
         }
     }

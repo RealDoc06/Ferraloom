@@ -1,4 +1,87 @@
 use super::*;
+use ferraloom_protocol::component::{EquipmentSlot, Persistent};
+
+#[test]
+fn menu_clone_and_binding_checks_use_independent_player_abilities() {
+    struct BindingArmor;
+    impl MenuHooks for BindingArmor {
+        fn may_pickup_armor(&self, _: &ItemStack) -> Result<bool> {
+            Ok(false)
+        }
+    }
+    let armor = ItemStack::new(
+        Item::DIAMOND_CHESTPLATE,
+        1,
+        DataComponentPatch::from_json(&serde_json::json!({
+            "minecraft:enchantments": { "minecraft:binding_curse": 1 }
+        }))
+        .unwrap(),
+    );
+    let mut checked = 0;
+    for line in include_str!("../../tests/java/blocks/entities/vectors.tsv")
+        .lines()
+        .filter(|line| line.starts_with("menu-abilities\t"))
+    {
+        let fields: Vec<_> = line.split('\t').collect();
+        let mut inventory = Inventory::default();
+        let mut equipment = EntityEquipment::default();
+        let mut context = MenuContext::player_with_abilities(
+            &mut inventory,
+            &mut equipment,
+            fields[1] == "CREATIVE",
+            fields[2] == "true",
+        );
+        let mut menu = AbstractContainerMenu::new(MenuKind::Chest { rows: 1 }, 1).unwrap();
+        menu.local[0].set_item(0, ItemStack::new(Item::STONE, 3, Default::default()));
+        menu.clicked(
+            &mut context,
+            0,
+            0,
+            ContainerInput::Clone,
+            &mut UnsupportedMenuHooks,
+        )
+        .unwrap();
+        assert_eq!(
+            count(&menu.carried),
+            fields[3].parse::<i32>().unwrap(),
+            "{line}"
+        );
+        let slot = Slot::new(ContainerId::Player, 38, 0, 0)
+            .with_kind(SlotKind::Armor(EquipmentSlot::Chest));
+        assert_eq!(
+            slot.may_pickup(&armor, context.is_creative, &BindingArmor)
+                .unwrap(),
+            fields[4] == "true",
+            "{line}"
+        );
+        checked += 1;
+    }
+    assert_eq!(checked, 4);
+}
+
+#[test]
+fn initializing_menu_is_canonical_before_it_becomes_the_current_menu() {
+    let mut menus = MenuSession::default();
+    let inventory = menus.current_ref();
+    let opening = menus.register_container_menu(
+        AbstractContainerMenu::new(MenuKind::Chest { rows: 3 }, 7).unwrap(),
+    );
+    assert_eq!(menus.current_ref(), inventory);
+    menus.menu_mut(opening).unwrap().carried = ItemStack::new(Item::STONE, 3, Default::default());
+    // initMenu may reenter openMenu; the outer Java frame still publishes its
+    // original receiver after that callback returns.
+    let nested = menus.install_container_menu(
+        AbstractContainerMenu::new(MenuKind::Chest { rows: 3 }, 7).unwrap(),
+    );
+    menus.retain_menu(nested).unwrap();
+    menus.publish_container_menu(opening).unwrap();
+    menus.release_menu(opening);
+    assert_eq!(menus.current_ref(), opening);
+    assert_eq!(count(&menus.current().carried), 3);
+    assert!(menus.menu(nested).unwrap().carried.is_empty());
+    menus.release_menu(nested);
+    assert!(matches!(menus.menu(nested), Err(MenuError::MissingMenu(_))));
+}
 
 #[test]
 fn retained_menu_receiver_survives_replacement_with_the_same_container_id() {
@@ -24,6 +107,62 @@ fn retained_menu_receiver_survives_replacement_with_the_same_container_id() {
         matches!(menus.menu(first), Err(MenuError::MissingMenu(reference)) if reference == first)
     );
     assert_eq!(menus.current_ref(), replacement);
+}
+#[test]
+fn broadcast_reads_each_native_slot_once_including_when_suppressed() {
+    struct CountingContainer {
+        reads: std::cell::Cell<usize>,
+    }
+    impl Container for CountingContainer {
+        fn size(&self) -> usize {
+            27
+        }
+        fn get_item(&self, _: usize) -> ItemStack {
+            self.reads.set(self.reads.get() + 1);
+            ItemStack::default()
+        }
+        fn set_item(&mut self, _: usize, _: ItemStack) {
+            unreachable!()
+        }
+        fn remove_item_no_update(&mut self, _: usize) -> ItemStack {
+            unreachable!()
+        }
+    }
+    let mut inventory = Inventory::default();
+    let mut equipment = EntityEquipment::default();
+    let mut container = CountingContainer {
+        reads: std::cell::Cell::new(0),
+    };
+    let mut menu = AbstractContainerMenu::new(MenuKind::Chest { rows: 3 }, 1).unwrap();
+    for slot in &mut menu.slots {
+        if slot.container == ContainerId::Local(0) {
+            slot.container = ContainerId::External(0);
+        }
+    }
+    let mut checked = 0;
+    for line in include_str!("../../tests/java/blocks/entities/vectors.tsv")
+        .lines()
+        .filter(|line| line.starts_with("menu-broadcast-reads\t"))
+    {
+        let fields: Vec<_> = line.split('\t').collect();
+        container.reads.set(0);
+        if fields[1] == "suppressed" {
+            menu.suppress_remote_updates();
+        }
+        {
+            let mut external: [&mut dyn Container; 1] = [&mut container];
+            let mut context = MenuContext::player(&mut inventory, &mut equipment, false);
+            context.external = &mut external;
+            menu.broadcast_changes(&context).unwrap();
+        }
+        assert_eq!(
+            container.reads.get(),
+            fields[2].parse::<usize>().unwrap(),
+            "{line}"
+        );
+        checked += 1;
+    }
+    assert_eq!(checked, 2);
 }
 use crate::entity::player::{
     equipment::EntityEquipment,

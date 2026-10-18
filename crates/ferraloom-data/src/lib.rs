@@ -9,7 +9,10 @@
 //! ```
 
 mod block_methods;
+pub mod dispenser_properties;
 mod environment_attributes;
+pub mod note_properties;
+pub mod redstone_properties;
 mod sound_events;
 pub use block_methods::BlockMethod;
 pub use environment_attributes::EnvironmentAttributeData;
@@ -500,6 +503,17 @@ impl BlockState {
             Some(bits & (1 << (3 + face as u8)) != 0)
         }
     }
+    /// Port of BlockStateBase.Cache#isFaceSturdy for SupportType.CENTER.
+    /// This reads only the native cache, initialized with EmptyBlockGetter at
+    /// ZERO; dynamic blocks retain None and require their contextual behavior.
+    pub const fn cached_center_support(self, face: ferraloom_util::Direction) -> Option<bool> {
+        let bits = CENTER_SUPPORT[self.0 as usize];
+        if bits & 64 == 0 {
+            None
+        } else {
+            Some(bits & (1 << face as u8) != 0)
+        }
+    }
     /// Port of BlockStateBase.Cache#isCollisionShapeFullBlock.
     pub const fn cached_collision_full_block(self) -> Option<bool> {
         let bits = BLOCK_STATE_FACTS[self.0 as usize];
@@ -590,6 +604,7 @@ impl Block {
 pub struct BlockEntityTypeData {
     pub valid_blocks: &'static [Block],
     pub only_op_can_set_nbt: bool,
+    pub is_nameable: bool,
 }
 impl registries::block_entity_type::Id {
     pub const fn valid_blocks(self) -> &'static [Block] {
@@ -597,6 +612,10 @@ impl registries::block_entity_type::Id {
     }
     pub const fn only_op_can_set_nbt(self) -> bool {
         BLOCK_ENTITY_TYPES[self.protocol_id() as usize].only_op_can_set_nbt
+    }
+    /// Whether the type's native receiver implements Nameable, independent of its components.
+    pub const fn is_nameable(self) -> bool {
+        BLOCK_ENTITY_TYPES[self.protocol_id() as usize].is_nameable
     }
     pub const fn is_valid(self, state: BlockState) -> bool {
         matches!(state.block().block_entity_type(),Some(kind) if kind.protocol_id() == self.protocol_id())

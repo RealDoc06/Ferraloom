@@ -9,6 +9,7 @@ pub struct LevelContext {
     pub sea_level: i32,
     pub generator: Arc<ChunkGenerator>,
     pub features: Arc<FeatureRegistry>,
+    pub structures: Arc<super::StructureServices>,
 }
 
 impl LevelContext {
@@ -17,12 +18,14 @@ impl LevelContext {
         sea_level: i32,
         generator: Arc<ChunkGenerator>,
         features: Arc<FeatureRegistry>,
+        structures: Arc<super::StructureServices>,
     ) -> Self {
         Self {
             seed,
             sea_level,
             generator,
             features,
+            structures,
         }
     }
 
@@ -36,24 +39,32 @@ impl LevelContext {
             flat::{FlatLevelGeneratorSettings, FlatLevelSource},
         };
         use std::{path::Path, sync::OnceLock};
-        static SERVICES: OnceLock<(Arc<ChunkGenerator>, Arc<FeatureRegistry>)> = OnceLock::new();
-        let (generator, features) = SERVICES.get_or_init(|| {
+        struct Services {
+            generator: Arc<ChunkGenerator>,
+            features: Arc<FeatureRegistry>,
+            structures: Arc<super::StructureServices>,
+        }
+        static SERVICES: OnceLock<Services> = OnceLock::new();
+        let services = SERVICES.get_or_init(|| {
             let jar = std::env::var_os("FERRALOOM_VANILLA_JAR")
                 .expect("builder supplies the vanilla datapack for level fixtures");
             let resources = ResourceManager::new(vec![Pack::vanilla_jar(Path::new(&jar)).unwrap()]);
             let data = Arc::new(GenerationData::load(&resources).unwrap());
+            let structures = Arc::new(super::StructureServices::load(&resources, &data).unwrap());
             let flat =
                 FlatLevelSource::new(data, FlatLevelGeneratorSettings::default_settings()).unwrap();
-            (
-                Arc::new(ChunkGenerator::Flat(Box::new(flat))),
-                Arc::new(FeatureRegistry::default()),
-            )
+            Services {
+                generator: Arc::new(ChunkGenerator::Flat(Box::new(flat))),
+                features: Arc::new(FeatureRegistry::default()),
+                structures,
+            }
         });
         Arc::new(Self::new(
             seed,
             sea_level,
-            generator.clone(),
-            features.clone(),
+            services.generator.clone(),
+            services.features.clone(),
+            services.structures.clone(),
         ))
     }
 }

@@ -27,6 +27,28 @@ pub struct ParticleEmission {
     pub randomization: ParticleRandomization,
 }
 impl Level {
+    /// Port of ServerLevel#levelEvent's dimension-local, non-global broadcast.
+    /// Its 64-block audience uses the integer position, excluding only source.
+    pub fn level_event(
+        &mut self,
+        source: Option<EntityRef>,
+        id: i32,
+        pos: ferraloom_util::BlockPos,
+        data: i32,
+    ) -> Result<(), LevelError> {
+        let position = Vec3::new(f64::from(pos.x), f64::from(pos.y), f64::from(pos.z));
+        let recipients = self.broadcast_audience(source, position, 64.0)?;
+        self.emit(LevelEffect::PlayerPacket {
+            recipients,
+            packet: Box::new(cb::Packet::LevelEvent(cb::LevelEvent {
+                event_type: id,
+                pos,
+                data,
+                global_event: false,
+            })),
+        });
+        Ok(())
+    }
     /// Controlled tests may seed the native sound stream independently.
     pub fn set_sound_seed(&mut self, seed: i64) {
         self.region_mut().sound_seed_generator = Random::Legacy(LegacyRandomSource::new(seed));

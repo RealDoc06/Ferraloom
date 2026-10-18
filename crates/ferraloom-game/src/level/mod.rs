@@ -1,7 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
+use std::{collections::HashSet, sync::Arc};
 
 use ferraloom_data::{Block, BlockState, EntityType};
 use ferraloom_util::{BlockPos, ChunkPos};
@@ -12,6 +9,7 @@ use crate::{
     ticks::{LevelTicks, ScheduledTick, TickPriority},
 };
 
+pub mod acquisition;
 mod block_entity;
 pub mod border;
 mod broadcast;
@@ -31,6 +29,7 @@ pub mod events;
 mod features;
 pub mod generation;
 pub mod heightmap;
+pub mod interaction;
 mod lighting;
 pub mod loot_facts;
 mod mutation;
@@ -40,6 +39,10 @@ pub mod redstone;
 mod saved_ticks;
 pub mod server_level;
 pub mod simulation;
+pub(crate) mod store;
+pub mod structure_manager;
+mod structure_services;
+pub use structure_services::StructureServices;
 pub mod tick_rate;
 pub mod tickets;
 mod ticking;
@@ -47,6 +50,8 @@ pub mod weather;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum LevelError {
+    UnsupportedItemUseOn(ferraloom_data::Item),
+    UnsupportedPortalUse(Block),
     UnsupportedEntityMethod(EntityType, crate::entity::EntityMethod),
     UnsupportedAdvancementCriterion(crate::advancements::criteria::Trigger),
     Inventory(&'static str),
@@ -54,6 +59,11 @@ pub enum LevelError {
     WrongBlockEntityType(crate::block::entity::BlockEntityRef),
     DuplicateBlockEntity(crate::block::entity::BlockEntityRef),
     MissingChunk(ChunkPos),
+    ChunkAcquisition(
+        ChunkPos,
+        chunk_holder::ChunkStatus,
+        acquisition::AcquireFailure,
+    ),
     WorldgenMutationFailed(BlockPos),
     UnsupportedWorldgenEnvironment,
     UnsupportedWorldgenBehavior,
@@ -72,6 +82,8 @@ pub enum LevelError {
     UnsupportedLightQuery,
     UnsupportedEnvironmentAttribute(ferraloom_data::registries::environment_attribute::Id),
     MissingEnvironmentContext,
+    MissingSpawnProtectionContext,
+    MissingServerShared,
     MissingBlockTags,
     MissingBlockTag,
     MissingFluidTags,
@@ -86,6 +98,8 @@ pub enum LevelError {
     InvalidPendingGenerationData,
     UnsupportedChunkUpgrade,
     WrongChunkHeight(ChunkPos),
+    InvalidChunkStructures(ChunkPos),
+    InvalidStructureHolderSet,
 }
 
 /// Dimension settings consumed by the live core. The server supplies the
@@ -131,7 +145,7 @@ impl Default for LevelRules {
 
 /// Owned portion of ServerLevel. The scheduler moves this value between workers.
 pub struct Region {
-    chunks: HashMap<ChunkPos, chunk::LevelChunk>,
+    chunks: store::InsertOnlyMap<ChunkPos, chunk::LevelChunk>,
     entities: entity::EntityStorage,
     entity_tick_list: entity::EntityTickList,
     block_ticks: LevelTicks,
@@ -146,6 +160,7 @@ pub struct Region {
     min_y: i32,
     max_y: i32,
     rules: LevelRules,
+    spawn_protection: Option<interaction::SpawnProtectionSnapshot>,
     has_skylight: Option<bool>,
     environment: Option<environment::EnvironmentRuntime>,
     random: ferraloom_util::random::Random,
@@ -172,7 +187,7 @@ pub struct Region {
 impl Region {
     pub fn new(behaviors: &'static Behaviors) -> Self {
         Self {
-            chunks: HashMap::new(),
+            chunks: store::InsertOnlyMap::default(),
             entities: entity::EntityStorage::default(),
             entity_tick_list: entity::EntityTickList::default(),
             block_ticks: LevelTicks::default(),
@@ -187,6 +202,7 @@ impl Region {
             min_y: -64,
             max_y: 320,
             rules: LevelRules::default(),
+            spawn_protection: None,
             has_skylight: None,
             environment: None,
             random: random::new_level_random(),
@@ -215,6 +231,7 @@ impl Region {
 /// lets the scheduler temporarily park ownership without moving this call facade.
 /// A parked facade must be reattached before resuming any game method.
 pub struct Level {
+    shared: Option<Box<crate::ServerShared>>,
     region: Option<Region>,
     context: Arc<LevelContext>,
 }
@@ -222,9 +239,33 @@ pub struct Level {
 impl Level {
     pub fn new(region: Region, context: Arc<LevelContext>) -> Self {
         Self {
+            shared: None,
             region: Some(region),
             context,
         }
+    }
+    /// The server installs this canonical owner before entering a gameplay phase.
+    pub fn shared(&self) -> Result<&crate::ServerShared, LevelError> {
+        self.shared
+            .as_deref()
+            .ok_or(LevelError::MissingServerShared)
+    }
+    pub fn shared_mut(&mut self) -> Result<&mut crate::ServerShared, LevelError> {
+        self.shared
+            .as_deref_mut()
+            .ok_or(LevelError::MissingServerShared)
+    }
+    /// Phase-boundary lending only. Replacing an active owner is a scheduler error.
+    pub fn install_shared(&mut self, shared: Box<crate::ServerShared>) {
+        assert!(
+            self.shared.is_none(),
+            "server shared owner already installed"
+        );
+        self.shared = Some(shared);
+    }
+    /// Return the same owner after the phase and all nested callbacks finish.
+    pub fn take_shared(&mut self) -> Result<Box<crate::ServerShared>, LevelError> {
+        self.shared.take().ok_or(LevelError::MissingServerShared)
     }
     pub fn context(&self) -> &Arc<LevelContext> {
         &self.context
@@ -272,8 +313,6 @@ impl Level {
         if region.min_y != chunk.min_y() || region.max_y != chunk.max_y() {
             return Err(LevelError::WrongChunkHeight(pos));
         }
-        chunk.block_ticks.unpack(region.game_time);
-        chunk.fluid_ticks.unpack(region.game_time);
         region
             .block_ticks
             .add_container(pos, std::mem::take(&mut chunk.block_ticks));
@@ -281,6 +320,17 @@ impl Level {
             .fluid_ticks
             .add_container(pos, std::mem::take(&mut chunk.fluid_ticks));
         region.chunks.insert(pos, chunk);
+        Ok(())
+    }
+    /// Port of ServerLevel#startTickingChunk, after generation post-processing.
+    /// FULL registration alone leaves saved delays relative until this point.
+    pub fn start_ticking_chunk(&mut self, pos: ChunkPos) -> Result<(), LevelError> {
+        let region = self.region_mut();
+        if !region.chunks.contains_key(&pos) {
+            return Err(LevelError::MissingChunk(pos));
+        }
+        region.block_ticks.unpack_container(pos, region.game_time);
+        region.fluid_ticks.unpack_container(pos, region.game_time);
         Ok(())
     }
     /// Compatibility entry for the scheduled block phase. It uses the same
@@ -392,3 +442,9 @@ impl Level {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+pub(crate) mod drop_fixtures;
+
+#[cfg(test)]
+mod destroy_tests;

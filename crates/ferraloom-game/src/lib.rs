@@ -10,10 +10,12 @@ pub mod inventory;
 pub mod level;
 pub mod loot;
 pub mod predicates;
+pub mod scoreboard;
 pub mod stats;
 pub mod ticks;
 
 pub use block::dispatch::Behaviors;
+pub use scoreboard::ServerShared;
 
 #[cfg(test)]
 mod tests;

@@ -275,6 +275,10 @@ pub(crate) fn finish_promotions(level: &mut ServerLevel, world: &mut World) -> R
             world.exclusive_ready_tasks.push_front(identity);
             return Err(game_error(error));
         }
+        if let Err(error) = level.level.start_ticking_chunk(identity.pos) {
+            world.exclusive_ready_tasks.push_front(identity);
+            return Err(game_error(error));
+        }
         world.ready.insert(identity.pos);
     }
     Ok(())
