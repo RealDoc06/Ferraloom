@@ -125,6 +125,7 @@ public final class NeighborVectors {
               @Override public void sendBlockUpdated(BlockPos p,BlockState a,BlockState b,int flags){trace.add("send");}
               @Override public void updatePOIOnBlockStateChange(BlockPos p,BlockState a,BlockState b){trace.add("poi");}
               @Override public void updateNeighborsAt(BlockPos p,Block b){trace.add("neighbors");neighborUpdater.updateNeighborsAtExceptFromFacing(p,b,null,null);}
+              @Override public void neighborChanged(BlockState state,BlockPos p,Block b,Orientation o,boolean moved){trace.add("analog:"+p.toShortString());}
               @Override public void scheduleTick(BlockPos p,Block b,int delay){trace.add("schedule:"+delay);}
               @Override public void scheduleTick(BlockPos p,net.minecraft.world.level.material.Fluid f,int delay){trace.add("fluid:"+delay);}
 
@@ -140,6 +141,10 @@ public final class NeighborVectors {
                   int distance=(Integer)slope.invoke(net.minecraft.world.level.material.Fluids.WATER,pool,origin.east(),1,Direction.WEST,Blocks.AIR.defaultBlockState(),context);
                   System.out.println("water-slope:"+holeDistance+"\\t"+distance);
                 }
+                var analog=new MutationFixture(r);var center=new BlockPos(8,0,8);
+                for(var entry:Map.of(center.north(),Blocks.COMPARATOR,center.east(),Blocks.STONE,center.east(2),Blocks.COMPARATOR,center.south(),Blocks.GLASS,center.south(2),Blocks.COMPARATOR,center.west(),Blocks.STONE_SLAB,center.west(2),Blocks.COMPARATOR).entrySet())analog.getChunkAt(entry.getKey()).setBlockState(entry.getKey(),entry.getValue().defaultBlockState(),816);
+                analog.trace.clear();analog.updateNeighbourForOutputSignal(center,Blocks.CAKE);
+                System.out.println("analog-neighbors\\t"+String.join(";",analog.trace));
                 var waterlogged=new MutationFixture(r);var pos=new BlockPos(8,0,8);
                 waterlogged.setBlock(pos,Blocks.IRON_CHAIN.defaultBlockState(),528,512);waterlogged.trace.clear();
                 var fluid=net.minecraft.world.level.material.Fluids.WATER.getSource(false);

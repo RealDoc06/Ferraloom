@@ -5,6 +5,7 @@ chain-limit	-1, 0, 0;10, 0, 0;1, 0, 0;0, -1, 0;0, 1, 0;0, 0, -1;0, 0, 1
 zero-limit	
 random-positions	-9, -53, 44;-1, -50, 35;-12, -56, 38;-10, -59, 33
 valid-chunk-bound	2097061
+analog-neighbors	analog:8, 0, 7;analog:10, 0, 8
 simple-waterlogged	true:true:minecraft:water_bucket:send,neighbors,poi,fluid:5,send,neighbors,poi
 setblock-0	true:section:false,schedule:2,poi:0,0,0,0
 setblock-1	true:section:false,schedule:2,neighbors,poi:0,0,0,0

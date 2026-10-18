@@ -408,6 +408,38 @@ impl Level {
             }
         }
     }
+    /// Port of Level#updateNeighbourForOutputSignal. The first hasChunkAt
+    /// guard is vanilla's explicit non-loading probe; the second read through
+    /// a conductor remains a synchronous required read (MissingChunk for now).
+    pub fn update_neighbour_for_output_signal(
+        &mut self,
+        pos: BlockPos,
+        changed_block: Block,
+    ) -> Result<(), LevelError> {
+        for direction in ferraloom_util::core::Plane::Horizontal {
+            let mut target = pos.relative(direction, 1);
+            if self
+                .chunk(ferraloom_util::ChunkPos::containing(target))
+                .is_none()
+            {
+                continue;
+            }
+            let mut state = self.get_block_state(target)?;
+            if state.block() == Block::COMPARATOR {
+                self.neighbor_changed_with_state(state, target, changed_block, None, false)?;
+            } else if state
+                .cached_redstone_conductor()
+                .ok_or(LevelError::UnsupportedShape(state))?
+            {
+                target = target.relative(direction, 1);
+                state = self.get_block_state(target)?;
+                if state.block() == Block::COMPARATOR {
+                    self.neighbor_changed_with_state(state, target, changed_block, None, false)?;
+                }
+            }
+        }
+        Ok(())
+    }
     pub fn update_neighbor_shapes(
         &mut self,
         state: BlockState,

@@ -178,8 +178,9 @@ impl Level {
             }
             if flags.contains(UpdateFlags::NEIGHBORS) {
                 self.update_neighbors_at(pos, old.block())?;
-                // Analog-output block families remain unsupported until their
-                // comparator notification virtual method is ported.
+                if state.has_analog_output_signal() {
+                    self.update_neighbour_for_output_signal(pos, old.block())?;
+                }
             }
             if !flags.contains(UpdateFlags::KNOWN_SHAPE) && limit > 0 {
                 let neighbor_flags =

@@ -43,3 +43,4 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | redstone.sculk.calibration | Filter calibrated sculk sensor vibrations using side-input frequency | `CalibratedSculkSensorBlock; CalibratedSculkSensorBlockEntity` | | - | todo |
 | redstone.trapdoor-door | Apply powered state and manual interaction behavior to doors, trapdoors and gates | `DoorBlock; TrapDoorBlock; FenceGateBlock` | | - | todo |
 | redstone.note.instrument | Resolve note-block instrument from neighboring blocks and emit powered notes | `NoteBlock` | | - | todo |
+| redstone.updates.analog-output-neighbors | Notify horizontal comparators directly or through one conductive block, preserving predicate overrides | `Level#updateNeighbourForOutputSignal` | `ferraloom-game: level::tests::comparator_notifications_match_vanilla_direct_and_through_conductors; ferraloom-data: tests::comparator_and_conductor_facts_preserve_property_overrides` | pass | todo |

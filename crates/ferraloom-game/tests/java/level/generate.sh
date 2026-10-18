@@ -16,7 +16,7 @@ cd "$classes"
 "$jdk/java" -Xmx512M -cp "$classes:$classpath" NeighborVectors generate "$classes/NeighborFixture.java"
 "$jdk/javac" -cp "$classes:$classpath" -d "$classes" "$classes/NeighborFixture.java"
 "$jdk/java" -Xmx512M -cp "$classes:$classpath" NeighborVectors > "$classes/neighbors.tsv"
-rg '^(direction-order|skip-west|nested-layer|chain-limit|zero-limit|random-positions|valid-chunk-bound|setblock-[0-9]+|simple-waterlogged)\t' "$classes/neighbors.tsv" > "$root/crates/ferraloom-game/tests/java/level/neighbors.tsv"
+rg '^(direction-order|skip-west|nested-layer|chain-limit|zero-limit|random-positions|valid-chunk-bound|setblock-[0-9]+|simple-waterlogged|analog-neighbors)\t' "$classes/neighbors.tsv" > "$root/crates/ferraloom-game/tests/java/level/neighbors.tsv"
 
 rg '^tag:' "$classes/neighbors.tsv" > "$root/crates/ferraloom-game/tests/java/level/tags.tsv"
 

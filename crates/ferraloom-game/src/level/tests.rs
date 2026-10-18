@@ -893,3 +893,26 @@ fn fluid_wall_occlusion_matches_vanilla_native_partial_faces_in_all_directions()
         );
     }
 }
+
+static ANALOG: Behaviors = Behaviors::EMPTY.with_block(Block::COMPARATOR, &Trace { nested: false });
+#[test]
+fn comparator_notifications_match_vanilla_direct_and_through_conductors() {
+    let mut level = empty_level(&ANALOG);
+    let center = BlockPos::new(8, 0, 8);
+    for (pos, block) in [
+        (center.north(1), Block::COMPARATOR),
+        (center.east(1), Block::STONE),
+        (center.east(2), Block::COMPARATOR),
+        (center.south(1), Block::GLASS),
+        (center.south(2), Block::COMPARATOR),
+        (center.west(1), Block::STONE_SLAB),
+        (center.west(2), Block::COMPARATOR),
+    ] {
+        level.set_block_state(pos, block.default_state()).unwrap();
+    }
+    level
+        .update_neighbour_for_output_signal(center, Block::CAKE)
+        .unwrap();
+    let expected = vector("analog-neighbors").replace("analog:", "");
+    assert_eq!(trace(&mut level), expected);
+}
