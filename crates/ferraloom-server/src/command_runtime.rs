@@ -166,6 +166,10 @@ impl MinecraftServer {
             "gamerule" => builtins::gamerule(&mut self.game_rules, &command)?,
             "op" | "deop" => self.operator_command(source, &command)?,
             "kick" => self.kick_command(source, &command)?,
+            "whitelist" => self.whitelist_command(source, &command)?,
+            "ban" | "pardon" => self.ban_player_command(source, &command)?,
+            "ban-ip" | "pardon-ip" => self.ban_ip_command(source, &command)?,
+            "banlist" => self.ban_list_command(&command),
             "gamemode" => self.game_mode_command(source, &command)?,
             "seed" => builtins::seed(self.world.seed),
             "help" => self.commands.help(&command)?,
@@ -1094,5 +1098,377 @@ impl MinecraftServer {
             feedback: Vec::new(),
             rule_change: None,
         })
+    }
+}
+
+impl MinecraftServer {
+    fn whitelist_command(
+        &mut self,
+        source: Option<ConnectionId>,
+        command: &PreparedCommand,
+    ) -> Result<CommandResult, ferraloom_brigadier::CommandSyntaxException> {
+        let action = command.literals[1].as_str();
+        match action {
+            "on" | "off" => {
+                let enabled = action == "on";
+                if self.properties.boolean("white-list") == enabled {
+                    return Err(exceptions::error(
+                        if enabled {
+                            "commands.whitelist.alreadyOn"
+                        } else {
+                            "commands.whitelist.alreadyOff"
+                        },
+                        &[],
+                    ));
+                }
+                let properties = Arc::make_mut(&mut self.properties);
+                properties.set("white-list", enabled);
+                if let Err(error) = properties.store(&self.root.join("server.properties")) {
+                    eprintln!("Could not save server properties: {error:#}");
+                }
+                self.command_success(
+                    source,
+                    &command.source,
+                    Component::translatable(
+                        if enabled {
+                            "commands.whitelist.enabled"
+                        } else {
+                            "commands.whitelist.disabled"
+                        },
+                        vec![],
+                    ),
+                    true,
+                );
+                if enabled {
+                    self.kick_unlisted_players();
+                }
+                Ok(CommandResult {
+                    value: 1,
+                    feedback: Vec::new(),
+                    rule_change: None,
+                })
+            }
+            "list" => {
+                let names = self
+                    .access
+                    .whitelist
+                    .values()
+                    .map(|entry| entry.name.as_str())
+                    .collect::<Vec<_>>();
+                let count = names.len() as i32;
+                Ok(CommandResult::success(
+                    count,
+                    if names.is_empty() {
+                        Component::translatable("commands.whitelist.none", vec![])
+                    } else {
+                        Component::translatable(
+                            "commands.whitelist.list",
+                            vec![builtins::integer(count), builtins::string(names.join(", "))],
+                        )
+                    },
+                    false,
+                ))
+            }
+            "reload" => {
+                if let Err(error) = self.access.reload_whitelist() {
+                    eprintln!("Failed to reload white-list: {error:#}");
+                }
+                self.command_success(
+                    source,
+                    &command.source,
+                    Component::translatable("commands.whitelist.reloaded", vec![]),
+                    true,
+                );
+                self.kick_unlisted_players();
+                Ok(CommandResult {
+                    value: 1,
+                    feedback: Vec::new(),
+                    rule_change: None,
+                })
+            }
+            "add" | "remove" => {
+                let profiles = self.command_profiles(command)?;
+                let add = action == "add";
+                let mut count = 0;
+                for profile in profiles {
+                    let key = profile.id.to_string();
+                    if self.access.whitelist.contains_key(&key) == add {
+                        continue;
+                    }
+                    if add {
+                        self.access.whitelist.insert(
+                            key.clone(),
+                            crate::access::WhiteListEntry {
+                                uuid: key,
+                                name: profile.name.clone(),
+                            },
+                        );
+                    } else {
+                        self.access.whitelist.remove(&key);
+                    }
+                    if let Err(error) = self.access.save_whitelist() {
+                        eprintln!("Could not save white-list: {error:#}");
+                    }
+                    self.command_success(
+                        source,
+                        &command.source,
+                        Component::translatable(
+                            format!("commands.whitelist.{action}.success"),
+                            vec![builtins::component(Component::literal(&profile.name))],
+                        ),
+                        true,
+                    );
+                    count += 1;
+                }
+                if count == 0 {
+                    return Err(exceptions::error(
+                        &format!("commands.whitelist.{action}.failed"),
+                        &[],
+                    ));
+                }
+                if !add {
+                    self.kick_unlisted_players();
+                }
+                Ok(CommandResult {
+                    value: count,
+                    feedback: Vec::new(),
+                    rule_change: None,
+                })
+            }
+            _ => unreachable!(),
+        }
+    }
+    fn command_reason(
+        &mut self,
+        command: &PreparedCommand,
+    ) -> Result<Option<String>, ferraloom_brigadier::CommandSyntaxException> {
+        match command.argument("reason") {
+            Some(ArgumentValue::Message(message)) => message
+                .to_component(&command.source, self)
+                .map(|component| Some(exceptions::plain_text(&component))),
+            _ => Ok(None),
+        }
+    }
+    fn command_text_name(&self, source: &CommandSourceStack) -> String {
+        exceptions::plain_text(&source.display_name(|entity| {
+            self.player(entity)
+                .map_or_else(|_| Component::literal(""), ServerPlayer::display_name)
+        }))
+    }
+    fn ban_player_command(
+        &mut self,
+        source: Option<ConnectionId>,
+        command: &PreparedCommand,
+    ) -> Result<CommandResult, ferraloom_brigadier::CommandSyntaxException> {
+        let profiles = self.command_profiles(command)?;
+        let reason = self.command_reason(command)?;
+        let ban = command.command == "ban";
+        let mut count = 0;
+        for profile in profiles {
+            let key = profile.id.to_string();
+            if self.access.banned_players.contains_key(&key) == ban {
+                continue;
+            }
+            let mut args = vec![builtins::component(Component::literal(&profile.name))];
+            if ban {
+                let entry = crate::access::Ban::permanent(
+                    Some(key.clone()),
+                    Some(profile.name.clone()),
+                    None,
+                    self.command_text_name(&command.source),
+                    reason.clone(),
+                );
+                args.push(builtins::component(entry.reason_message()));
+                self.access.banned_players.insert(key, entry);
+            } else {
+                self.access.banned_players.remove(&key);
+            }
+            if let Err(error) = self.access.save_bans(false) {
+                eprintln!("Could not save ban list: {error:#}");
+            }
+            self.command_success(
+                source,
+                &command.source,
+                Component::translatable(format!("commands.{}.success", command.command), args),
+                true,
+            );
+            if ban {
+                let online = self
+                    .players
+                    .iter()
+                    .copied()
+                    .find(|id| self.connections[id].profile.id == profile.id);
+                if let Some(id) = online {
+                    self.connections.get_mut(&id).unwrap().disconnect_component(
+                        Component::translatable("multiplayer.disconnect.banned", vec![]),
+                    );
+                }
+            }
+            count += 1;
+        }
+        if count == 0 {
+            return Err(exceptions::error(
+                &format!("commands.{}.failed", command.command),
+                &[],
+            ));
+        }
+        Ok(CommandResult {
+            value: count,
+            feedback: Vec::new(),
+            rule_change: None,
+        })
+    }
+    fn ban_ip_command(
+        &mut self,
+        source: Option<ConnectionId>,
+        command: &PreparedCommand,
+    ) -> Result<CommandResult, ferraloom_brigadier::CommandSyntaxException> {
+        let input = command.string("target").expect("IP target argument");
+        let ban = command.command == "ban-ip";
+        let ip = if input.parse::<IpAddr>().is_ok() {
+            input.to_owned()
+        } else if ban {
+            self.players
+                .iter()
+                .find_map(|id| {
+                    let connection = &self.connections[id];
+                    (connection.profile.name == input).then(|| connection.address.ip().to_string())
+                })
+                .ok_or_else(|| exceptions::error("commands.banip.invalid", &[]))?
+        } else {
+            return Err(exceptions::error("commands.pardonip.invalid", &[]));
+        };
+        if self.access.banned_ips.contains_key(&ip) == ban {
+            return Err(exceptions::error(
+                if ban {
+                    "commands.banip.failed"
+                } else {
+                    "commands.pardonip.failed"
+                },
+                &[],
+            ));
+        }
+        if !ban {
+            self.access.banned_ips.remove(&ip);
+            if let Err(error) = self.access.save_bans(true) {
+                eprintln!("Could not save IP ban list: {error:#}");
+            }
+            return Ok(CommandResult::success(
+                1,
+                Component::translatable("commands.pardonip.success", vec![builtins::string(ip)]),
+                true,
+            ));
+        }
+        let reason = self.command_reason(command)?;
+        let entry = crate::access::Ban::permanent(
+            None,
+            None,
+            Some(ip.clone()),
+            self.command_text_name(&command.source),
+            reason,
+        );
+        let message = Component::translatable(
+            "commands.banip.success",
+            vec![
+                builtins::string(&ip),
+                builtins::component(entry.reason_message()),
+            ],
+        );
+        self.access.banned_ips.insert(ip.clone(), entry);
+        if let Err(error) = self.access.save_bans(true) {
+            eprintln!("Could not save IP ban list: {error:#}");
+        }
+        let targets = self
+            .players
+            .iter()
+            .copied()
+            .filter(|id| self.connections[id].address.ip().to_string() == ip)
+            .collect::<Vec<_>>();
+        self.command_success(source, &command.source, message, true);
+        if !targets.is_empty() {
+            let names = targets
+                .iter()
+                .filter_map(|id| {
+                    let Phase::Play(entity) = self.connections[id].phase else {
+                        return None;
+                    };
+                    self.player(entity).ok().map(ServerPlayer::display_name)
+                })
+                .collect::<Vec<_>>();
+            self.command_success(
+                source,
+                &command.source,
+                Component::translatable(
+                    "commands.banip.info",
+                    vec![
+                        builtins::integer(targets.len() as i32),
+                        builtins::component(builtins::format_list(names)),
+                    ],
+                ),
+                true,
+            );
+        }
+        for id in &targets {
+            self.connections
+                .get_mut(id)
+                .unwrap()
+                .disconnect_component(Component::translatable(
+                    "multiplayer.disconnect.ip_banned",
+                    vec![],
+                ));
+        }
+        Ok(CommandResult {
+            value: targets.len() as i32,
+            feedback: Vec::new(),
+            rule_change: None,
+        })
+    }
+    fn ban_list_command(&self, command: &PreparedCommand) -> CommandResult {
+        let mut entries = Vec::new();
+        let kind = command.literals.get(1).map(String::as_str);
+        if kind != Some("ips") {
+            entries.extend(self.access.banned_players.values());
+        }
+        if kind != Some("players") {
+            entries.extend(self.access.banned_ips.values());
+        }
+        let count = entries.len() as i32;
+        let mut feedback = vec![builtins::Feedback {
+            broadcast: false,
+            message: Component::translatable(
+                if count == 0 {
+                    "commands.banlist.none"
+                } else {
+                    "commands.banlist.list"
+                },
+                if count == 0 {
+                    vec![]
+                } else {
+                    vec![builtins::integer(count)]
+                },
+            ),
+        }];
+        feedback.extend(entries.into_iter().map(|entry| builtins::Feedback {
+            broadcast: false,
+            message: Component::translatable(
+                "commands.banlist.entry",
+                vec![
+                        builtins::component(Component::literal(
+                            entry
+                                .name
+                                .as_deref()
+                                .or(entry.ip.as_deref())
+                                .unwrap_or("(Unknown)"),
+                        )),
+                        builtins::string(entry.source.as_deref().unwrap_or("(Unknown)")),
+                        builtins::component(entry.reason_message()),
+                    ],
+            ),
+        }));
+        CommandResult {
+            value: count,
+            feedback,
+            rule_change: None,
+        }
     }
 }

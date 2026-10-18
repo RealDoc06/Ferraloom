@@ -45,6 +45,35 @@ pub struct Ban {
     pub reason: Option<String>,
 }
 impl Ban {
+    pub fn permanent(
+        uuid: Option<String>,
+        name: Option<String>,
+        ip: Option<String>,
+        source: String,
+        reason: Option<String>,
+    ) -> Self {
+        let created = OffsetDateTime::now_utc().format(format_description!("[year]-[month]-[day] [hour]:[minute]:[second] [offset_hour sign:mandatory][offset_minute]")).expect("date formatter");
+        Self {
+            uuid,
+            name,
+            ip,
+            created: Some(created),
+            source: Some(source),
+            expires: Some("forever".into()),
+            reason,
+        }
+    }
+    pub fn reason_message(&self) -> ferraloom_protocol::chat::Component {
+        self.reason.as_ref().map_or_else(
+            || {
+                ferraloom_protocol::chat::Component::translatable(
+                    "multiplayer.disconnect.banned.reason.default",
+                    vec![],
+                )
+            },
+            ferraloom_protocol::chat::Component::literal,
+        )
+    }
     fn active(&self) -> bool {
         self.expires.as_deref().filter(|s| *s != "forever").and_then(|s| OffsetDateTime::parse(s, format_description!("[year]-[month]-[day] [hour]:[minute]:[second] [offset_hour sign:mandatory][offset_minute]" )).ok()).is_none_or(|expires| expires > OffsetDateTime::now_utc())
     }
@@ -81,6 +110,33 @@ impl AccessLists {
             banned_ips: read_map(root, "banned-ips.json", |entry: &Ban| entry.ip.clone())?,
             user_cache: read(root, "usercache.json")?,
         })
+    }
+    pub fn reload_whitelist(&mut self) -> Result<()> {
+        self.whitelist = read_map(&self.root, "whitelist.json", |entry: &WhiteListEntry| {
+            canonical_uuid(&entry.uuid)
+        })?;
+        Ok(())
+    }
+    pub fn save_whitelist(&self) -> Result<()> {
+        self.write_entries("whitelist.json", self.whitelist.values())
+    }
+    pub fn save_bans(&self, ips: bool) -> Result<()> {
+        if ips {
+            self.write_entries("banned-ips.json", self.banned_ips.values())
+        } else {
+            self.write_entries("banned-players.json", self.banned_players.values())
+        }
+    }
+    fn write_entries<'a, T: Serialize + 'a>(
+        &self,
+        name: &str,
+        entries: impl IntoIterator<Item = &'a T>,
+    ) -> Result<()> {
+        fs::write(
+            self.root.join(name),
+            serde_json::to_vec_pretty(&entries.into_iter().collect::<Vec<_>>())?,
+        )?;
+        Ok(())
     }
     pub fn cached_profile(&self, name: &str) -> Option<GameProfile> {
         let cached = self
