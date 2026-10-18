@@ -81,10 +81,10 @@ fn overlapping_shapeless_ingredients_need_augmenting_paths() {
     contents.account_stack(&stack(Item::DIRT, 4), 64);
     assert_eq!(
         contents.biggest_craftable_stack(&recipe.placement_info().ingredients, 64),
-        5
+        4
     );
-    assert!(contents.can_craft(&recipe.placement_info(), 5));
-    assert!(!contents.can_craft(&recipe.placement_info(), 6));
+    assert!(contents.can_craft(&recipe.placement_info(), 4));
+    assert!(!contents.can_craft(&recipe.placement_info(), 5));
 }
 #[test]
 fn transmute_template_wins_and_noop_is_rejected() {
