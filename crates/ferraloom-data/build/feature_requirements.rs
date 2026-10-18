@@ -25,4 +25,16 @@ pub fn generate(out: &mut String, report: &Value, blocks: usize, items: usize) {
     )
     .unwrap();
     writeln!(out, "impl Item {{ /// Item-class predicate from ServerGamePacketListenerImpl#wasBlockPlacementAttempt; the caller checks empty stacks and cooldowns.\npub const fn is_block_placement_attempt(self) -> bool {{ BLOCK_PLACEMENT_ATTEMPT_ITEMS[self.protocol_id() as usize] }} }}").unwrap();
+    for (key, method) in [
+        ("sign_applicator_items", "is_sign_applicator"),
+        ("hanging_sign_items", "is_hanging_sign_item"),
+    ] {
+        let mut values = vec![false; items];
+        for id in report[key].as_array().expect("item-class registry ids") {
+            values[id.as_u64().expect("registry id") as usize] = true;
+        }
+        let table = key.to_uppercase();
+        writeln!(out, "static {table}: [bool; {items}] = {values:?};").unwrap();
+        writeln!(out, "impl Item {{ /// Native item-class predicate used by SignBlock#useItemOn.\npub const fn {method}(self) -> bool {{ {table}[self.protocol_id() as usize] }} }}").unwrap();
+    }
 }

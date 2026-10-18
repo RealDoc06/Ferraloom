@@ -6,6 +6,8 @@ import net.minecraft.server.Bootstrap;
 import net.minecraft.world.flag.FeatureFlags;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.BucketItem;
+import net.minecraft.world.item.HangingSignItem;
+import net.minecraft.world.item.SignApplicator;
 import net.minecraft.world.level.material.Fluids;
 
 /** Pure FeatureElement#isEnabled facts for the server's advertised VANILLA_SET. */
@@ -21,6 +23,12 @@ public final class ExtractFeatureRequirements {
       if(item instanceof BlockItem || item instanceof BucketItem bucket && bucket.getContent()!=Fluids.EMPTY)
         placements.add(BuiltInRegistries.ITEM.getId(item));
     result.add("block_placement_attempt_items",placements);
+    var applicators=new JsonArray();var hangingSigns=new JsonArray();
+    for(var item:BuiltInRegistries.ITEM) {
+      if(item instanceof SignApplicator)applicators.add(BuiltInRegistries.ITEM.getId(item));
+      if(item instanceof HangingSignItem)hangingSigns.add(BuiltInRegistries.ITEM.getId(item));
+    }
+    result.add("sign_applicator_items",applicators);result.add("hanging_sign_items",hangingSigns);
     Files.writeString(Path.of(args[0]),new GsonBuilder().setPrettyPrinting().create().toJson(result)+"\n");
   }
 }
