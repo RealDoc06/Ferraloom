@@ -523,10 +523,13 @@ fn liquid_block_mixes_lava_into_obsidian_cobblestone_and_basalt() {
     assert_eq!(level.get_block_state(pos).unwrap().block(), Block::BASALT);
 }
 #[test]
-fn falling_sand_removes_its_block_before_the_entity_insertion_hook() {
+fn scheduled_falling_sand_creates_the_entity_and_replaces_its_source_synchronously() {
     use crate::block::{UPDATE_LIMIT, UpdateFlags};
     let mut level = empty_level(&EMPTY);
     install_tags(&mut level);
+    level
+        .update_entity_chunk_status(ChunkPos::new(0, 0), entity::Visibility::Ticking)
+        .unwrap();
     let pos = BlockPos::new(8, 0, 8);
     level
         .set_chunk_block_ticking(ChunkPos::new(0, 0), true)
@@ -544,11 +547,13 @@ fn falling_sand_removes_its_block_before_the_entity_insertion_hook() {
     assert_eq!(level.get_block_state(pos).unwrap().block(), Block::SAND);
     level.tick_block_phase(2, 65536).unwrap();
     assert!(level.get_block_state(pos).unwrap().is_air());
-    let effects = level.take_effects();
-    assert!(matches!(
-        effects.last(),
-        Some(LevelEffect::FallingBlock { .. })
-    ));
+    let entities = level.all_entities();
+    assert_eq!(entities.len(), 1);
+    let falling = level
+        .entity::<crate::entity::item::falling_block::FallingBlockEntity>(entities[0])
+        .unwrap();
+    assert_eq!(falling.block_state, Block::SAND.default_state());
+    assert_eq!(falling.start_pos(), pos);
 }
 #[test]
 fn block_and_fluid_ticks_survive_unload_nbt_and_reload_with_their_remaining_delay() {
@@ -1230,7 +1235,7 @@ fn slab_waterlogging_matches_vanilla_interface_overrides_and_source_identity() {
         let pos = BlockPos::new(8, 0, 8);
         let slab = Block::STONE_SLAB
             .default_state()
-            .with(properties::TYPE, slab_type)
+            .with(properties::TYPE_, slab_type)
             .unwrap();
         level.set_block_state(pos, slab).unwrap();
         let can = level

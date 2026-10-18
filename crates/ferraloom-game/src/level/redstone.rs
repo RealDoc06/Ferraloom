@@ -80,7 +80,7 @@ impl Orientation {
             self.front.axis() == Axis::Y
         };
         (((self.up as u8 * 4)
-            + (u8::from(front_axis_key) * 2
+            + ((u8::from(front_axis_key) * 2)
                 | u8::from(self.front.axis_direction() == AxisDirection::Negative)))
             * 2)
             + u8::from(self.bias == SideBias::Right)
