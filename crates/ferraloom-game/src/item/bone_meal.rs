@@ -8,7 +8,7 @@ use crate::{
     level::{Level, LevelError},
 };
 use ferraloom_data::{
-    Block, BlockClass, BlockState, Item, ItemMethod, properties as p,
+    Block, BlockClass, BlockState, properties as p,
     registries::game_event,
     tags::{BlockTags, TagKey},
 };
@@ -57,10 +57,7 @@ fn behavior(state: BlockState) -> Result<Option<&'static dyn BonemealableBlock>,
     }
     bonemealable_behavior(state.block())
         .map(Some)
-        .ok_or(LevelError::UnsupportedItemMethod(
-            Item::BONE_MEAL,
-            ItemMethod::UseOn,
-        ))
+        .ok_or(LevelError::UnsupportedBlock(state.block()))
 }
 
 /// Port of BoneMealItem#growCrop on the live ServerLevel. All callbacks draw

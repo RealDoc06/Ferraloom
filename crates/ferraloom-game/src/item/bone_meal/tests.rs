@@ -1,5 +1,6 @@
 use super::*;
 use crate::{entity::player::inventory, inventory::StackOperation, item::stack::tests::level};
+use ferraloom_data::Item;
 use ferraloom_protocol::component::ItemStack;
 use ferraloom_util::random::{LegacyRandomSource, Random, RandomSource};
 use std::io::Read;
