@@ -54,3 +54,5 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | player.avatar-parent | Embed Avatar between Player and LivingEntity and retain native hand, model, absorption, score and shoulder metadata defaults | `Avatar; Player#defineSynchedData` | `entity::synched_data::tests::real_player_metadata_follows_living_avatar_and_player_accessor_defaults; entity::player::tests::player_health_persistence_hydrates_attributes_before_clamping_health` | pass | partial |
 
 | player.movement.relative-teleport | Calculate all nine relative position, rotation and motion flags, apply state synchronously and enqueue the exact listener packet | `PositionMoveRotation#calculateAbsolute; Entity#teleportSetPosition; ServerGamePacketListenerImpl#teleport` | `entity::tests::relative_teleports_match_native_transform_state_and_packet_flags` (36 real Java vectors) | pass | partial |
+
+| player.attributes.luck | Read live canonical LUCK modifiers and narrow the result to float for loot context | `Player#getLuck` | `entity::ai::attributes::tests` (canonical map arithmetic; loot integration pending) | - | partial |
