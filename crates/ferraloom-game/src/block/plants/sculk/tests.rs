@@ -58,12 +58,13 @@ fn cursor_json(spreader: &SculkSpreader) -> Value {
     )
     .unwrap()
 }
-fn initial(origin: BlockPos, mode: i64, server: bool) -> BTreeMap<BlockPos, BlockState> {
+fn initial(origin: BlockPos, mode: i64, server: bool) -> BTreeMap<[i32; 3], BlockState> {
     let mut states = BTreeMap::new();
+    let position = |x, y, z| [origin.x + x, origin.y + y, origin.z + z];
     for x in -16..=16 {
         for z in -16..=16 {
             for y in -3..=-1 {
-                states.insert(origin.offset(x, y, z), Block::STONE.default_state());
+                states.insert(position(x, y, z), Block::STONE.default_state());
             }
         }
     }
@@ -71,7 +72,7 @@ fn initial(origin: BlockPos, mode: i64, server: bool) -> BTreeMap<BlockPos, Bloc
         for x in -16..=16 {
             for z in -16..=16 {
                 for y in 0..=1 {
-                    states.insert(origin.offset(x, y, z), Block::WATER.default_state());
+                    states.insert(position(x, y, z), Block::WATER.default_state());
                 }
             }
         }
@@ -79,28 +80,28 @@ fn initial(origin: BlockPos, mode: i64, server: bool) -> BTreeMap<BlockPos, Bloc
     if server || mode == 2 || mode == 3 {
         for x in -16..=16 {
             for z in -16..=16 {
-                states.insert(origin.offset(x, 1, z), Block::STONE.default_state());
+                states.insert(position(x, 1, z), Block::STONE.default_state());
             }
         }
     }
     if mode == 4 {
         for z in -2..=2 {
             for y in 0..=2 {
-                states.insert(origin.offset(-1, y, z), Block::STONE.default_state());
+                states.insert(position(-1, y, z), Block::STONE.default_state());
             }
         }
     }
     if matches!(mode, 2..=4) {
         for x in -2..=2 {
             for z in -2..=2 {
-                states.insert(origin.offset(x, 0, z), Block::SCULK.default_state());
+                states.insert(position(x, 0, z), Block::SCULK.default_state());
             }
         }
     }
     if mode == 7 {
         for x in 4..=8 {
             for z in -2..=2 {
-                states.insert(origin.offset(x, 0, z), Block::SCULK.default_state());
+                states.insert(position(x, 0, z), Block::SCULK.default_state());
             }
         }
     }
@@ -109,7 +110,7 @@ fn initial(origin: BlockPos, mode: i64, server: bool) -> BTreeMap<BlockPos, Bloc
 fn changed(
     level: &LevelReaderRef<'_, '_>,
     origin: BlockPos,
-    before: &BTreeMap<BlockPos, BlockState>,
+    before: &BTreeMap<[i32; 3], BlockState>,
 ) -> Value {
     let mut cells = Vec::new();
     for x in -16..=16 {
@@ -119,7 +120,7 @@ fn changed(
                 let state = level.get_block_state(pos).unwrap();
                 if state
                     != before
-                        .get(&pos)
+                        .get(&[pos.x, pos.y, pos.z])
                         .copied()
                         .unwrap_or(Block::AIR.default_state())
                 {
@@ -328,8 +329,8 @@ fn native_worldgen_and_server_cursors_blocks_events_and_rng_match() {
                         .unwrap();
                 }
             }
-            for (&pos, &state) in &before {
-                level.set_block_state(pos, state).unwrap();
+            for (&[x, y, z], &state) in &before {
+                level.set_block_state(BlockPos::new(x, y, z), state).unwrap();
             }
             level.set_random_streams(random(&case), 0);
             run(&case, &mut LevelAccessRef::Server(&mut level));
@@ -368,9 +369,9 @@ fn native_worldgen_and_server_cursors_blocks_events_and_rng_match() {
             for x in center.x - 1..=center.x + 1 {
                 for z in center.z - 1..=center.z + 1 {
                     let mut chunk = generator.new_chunk([x, z]);
-                    for (&pos, &state) in &before {
-                        if pos.x >> 4 == x && pos.z >> 4 == z {
-                            chunk.set_block((pos.x & 15) as u8, pos.y, (pos.z & 15) as u8, state);
+                    for (&[px, py, pz], &state) in &before {
+                        if px >> 4 == x && pz >> 4 == z {
+                            chunk.set_block((px & 15) as u8, py, (pz & 15) as u8, state);
                         }
                     }
                     chunks.push(RegionChunk::new(chunk, ChunkStatus::Terrain));
