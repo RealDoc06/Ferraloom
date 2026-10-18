@@ -1132,7 +1132,7 @@ impl MinecraftServer {
                 .level
                 .increment_chunk_inhabited_time(pos)
                 .map_err(game_error)?;
-            if self.level.distance_manager.simulation.level(pos) <= 31 {
+            if self.level.level.is_entity_ticking_chunk(pos) {
                 self.level.level.tick_thunder(pos).map_err(game_error)?;
             }
             // SPAWN_MOBS defaults true until the commands GameRules adapter lands.
@@ -1140,9 +1140,9 @@ impl MinecraftServer {
         }
         let ticking: Vec<_> = self
             .level
-            .distance_manager
-            .simulation
+            .level
             .entity_ticking_chunks()
+            .into_iter()
             .filter(|&pos| {
                 self.level
                     .level
@@ -1275,10 +1275,10 @@ impl MinecraftServer {
     }
     fn update_chunk_tickets(&mut self) -> Result<()> {
         loop {
-            let changes = self
-                .level
-                .distance_manager
-                .run_all_updates(&mut self.level.tickets);
+            let changes = self.level.level.run_distance_manager_updates(
+                &mut self.level.distance_manager,
+                &mut self.level.tickets,
+            );
             for change in changes {
                 let holder = self.level.chunks.ensure_holder(change.pos);
                 holder.ticket_level = change.level;
@@ -1332,20 +1332,6 @@ impl MinecraftServer {
                 self.level
                     .level
                     .set_chunk_loading_status(pos, requested, ticking)
-                    .map_err(game_error)?;
-                self.level
-                    .level
-                    .set_chunk_block_ticking(
-                        pos,
-                        self.level.distance_manager.simulation.level(pos) <= 32,
-                    )
-                    .map_err(game_error)?;
-                self.level
-                    .level
-                    .set_chunk_entity_ticking(
-                        pos,
-                        self.level.distance_manager.simulation.level(pos) <= 31,
-                    )
                     .map_err(game_error)?;
             }
         }

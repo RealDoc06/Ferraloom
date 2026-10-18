@@ -124,7 +124,7 @@ impl Level {
         region.game_time = game_time;
         region.block_ticks.collect(game_time, budget, |p| {
             region.entities.are_entities_loaded(p)
-                && region.block_ticking_chunks.contains(&p)
+                && region.simulation.borrow().level(p) <= 32
                 && region
                     .chunks
                     .get(&p)
@@ -139,7 +139,7 @@ impl Level {
         region.game_time = game_time;
         region.fluid_ticks.collect(game_time, budget, |p| {
             region.entities.are_entities_loaded(p)
-                && region.block_ticking_chunks.contains(&p)
+                && region.simulation.borrow().level(p) <= 32
                 && region
                     .chunks
                     .get(&p)

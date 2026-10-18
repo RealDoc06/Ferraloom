@@ -113,46 +113,6 @@ impl Level {
     pub fn take_effects(&mut self) -> Vec<LevelEffect> {
         std::mem::take(&mut self.region_mut().effects)
     }
-    pub fn set_chunk_block_ticking(
-        &mut self,
-        pos: ChunkPos,
-        ticking: bool,
-    ) -> Result<(), LevelError> {
-        if self.chunk(pos).is_none() {
-            return Err(LevelError::MissingChunk(pos));
-        }
-        if ticking {
-            self.region_mut().block_ticking_chunks.insert(pos);
-        } else {
-            self.region_mut().block_ticking_chunks.remove(&pos);
-        }
-        Ok(())
-    }
-    pub fn should_tick_blocks_at(&self, pos: BlockPos) -> bool {
-        self.region()
-            .block_ticking_chunks
-            .contains(&ChunkPos::containing(pos))
-    }
-    /// SimulationChunkTracker's entity-ticking range, distinct from the loading
-    /// holder's full status and the entity section manager's visibility.
-    pub fn is_entity_ticking_chunk(&self, pos: ChunkPos) -> bool {
-        self.region().entity_ticking_chunks.contains(&pos)
-    }
-    pub fn set_chunk_entity_ticking(
-        &mut self,
-        pos: ChunkPos,
-        ticking: bool,
-    ) -> Result<(), LevelError> {
-        if self.chunk(pos).is_none() {
-            return Err(LevelError::MissingChunk(pos));
-        }
-        if ticking {
-            self.region_mut().entity_ticking_chunks.insert(pos);
-        } else {
-            self.region_mut().entity_ticking_chunks.remove(&pos);
-        }
-        Ok(())
-    }
     /// Attach the holder's loading-ticket status and current ticking future.
     /// Neither is implied by simulation tickets or by owning a block chunk.
     pub fn set_chunk_loading_status(

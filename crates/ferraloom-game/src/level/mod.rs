@@ -1,4 +1,4 @@
-use std::{collections::HashSet, sync::Arc};
+use std::{cell::RefCell, sync::Arc};
 
 use ferraloom_data::{Block, BlockState, EntityType};
 use ferraloom_util::{BlockPos, ChunkPos};
@@ -39,6 +39,7 @@ pub mod redstone;
 mod saved_ticks;
 pub mod server_level;
 pub mod simulation;
+mod simulation_access;
 pub(crate) mod store;
 pub mod structure_manager;
 mod structure_services;
@@ -166,8 +167,7 @@ pub struct Region {
     random: ferraloom_util::random::Random,
     sound_seed_generator: ferraloom_util::random::Random,
     rand_value: i32,
-    block_ticking_chunks: HashSet<ChunkPos>,
-    entity_ticking_chunks: HashSet<ChunkPos>,
+    simulation: RefCell<simulation::SimulationChunkTracker>,
     neighbor_updater: redstone::CollectingNeighborUpdater,
     // The family owner replaces its pending state/registration stub together.
     #[allow(dead_code)]
@@ -208,8 +208,7 @@ impl Region {
             random: random::new_level_random(),
             sound_seed_generator: random::new_sound_random(),
             rand_value: random::new_position_seed(),
-            block_ticking_chunks: HashSet::new(),
-            entity_ticking_chunks: HashSet::new(),
+            simulation: RefCell::new(simulation::SimulationChunkTracker::default()),
             neighbor_updater: redstone::CollectingNeighborUpdater::default(),
             redstone: crate::block::redstone::RedstoneState::default(),
             block_events: events::BlockEvents::default(),
@@ -296,8 +295,6 @@ impl Level {
         let mut chunk = region.chunks.remove(&pos)?;
         chunk.block_ticks = region.block_ticks.remove_container(pos).unwrap_or_default();
         chunk.fluid_ticks = region.fluid_ticks.remove_container(pos).unwrap_or_default();
-        region.block_ticking_chunks.remove(&pos);
-        region.entity_ticking_chunks.remove(&pos);
         Some(chunk)
     }
     pub fn add_chunk(&mut self, mut chunk: chunk::LevelChunk) -> Result<(), LevelError> {
