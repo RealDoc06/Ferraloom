@@ -1369,8 +1369,10 @@ impl MinecraftServer {
                 context: &self.crafting_context,
                 synchronization: &self.recipe_synchronization,
                 book: &mut player.recipe_book,
-                // The canonical GameRules owner supplies this hook on integration.
-                limited_crafting: None,
+                limited_crafting: Some(
+                    self.game_rules
+                        .boolean(ferraloom_game::gamerules::GameRule::LimitedCrafting),
+                ),
                 callbacks: &mut callbacks,
             };
             let menu = player.menus.current_mut();
@@ -1544,7 +1546,10 @@ impl MinecraftServer {
                 context: &self.crafting_context,
                 synchronization: &self.recipe_synchronization,
                 book: &mut player.recipe_book,
-                limited_crafting: None,
+                limited_crafting: Some(
+                    self.game_rules
+                        .boolean(ferraloom_game::gamerules::GameRule::LimitedCrafting),
+                ),
                 callbacks: &mut callbacks,
             };
             hooks.prepare_recipe_click(menu.kind)?;
@@ -1631,7 +1636,10 @@ impl MinecraftServer {
                     context: &self.crafting_context,
                     synchronization: &self.recipe_synchronization,
                     book: &mut player.recipe_book,
-                    limited_crafting: None,
+                    limited_crafting: Some(
+                        self.game_rules
+                            .boolean(ferraloom_game::gamerules::GameRule::LimitedCrafting),
+                    ),
                     callbacks: &mut callbacks,
                 };
                 let mut context =
