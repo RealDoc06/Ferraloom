@@ -1183,3 +1183,64 @@ fn announcement_descriptor_reads_rule_and_team_at_application_time() {
     assert_eq!(content, expected);
     assert!(content.to_json().unwrap().contains("after "));
 }
+
+#[test]
+fn vanilla_rewards_change_announcement_rule_and_name_before_chat() {
+    let mut bytes = Vec::new();
+    flate2::read::GzDecoder::new(&include_bytes!("announcement.json.gz")[..])
+        .read_to_end(&mut bytes)
+        .unwrap();
+    let cases: Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(cases.as_array().unwrap().len(), 4);
+    for row in cases.as_array().unwrap() {
+        let manager = ServerAdvancementManager::new(vec![AdvancementHolder {
+            id: id("test:announcement"),
+            value: Advancement::decode(&row["input"]).unwrap(),
+        }]);
+        let mut player = PlayerAdvancements::new(&manager);
+        let effects = player
+            .award(
+                &manager,
+                &id("test:announcement"),
+                "a",
+                ObtainedTime::from_millis(1),
+            )
+            .effects;
+        let mut rule = row["before"].as_bool().unwrap();
+        let mut name = ferraloom_protocol::chat::Component::literal("Before");
+        let mut chats = Vec::new();
+        for effect in effects {
+            match effect {
+                AdvancementEffect::Rewards { .. } => {
+                    rule = row["after"].as_bool().unwrap();
+                    name = ferraloom_protocol::chat::Component::literal("After");
+                }
+                AdvancementEffect::AnnounceAdvancement(id) => {
+                    if let Some(component) = resolve_announcement(
+                        &manager,
+                        &id,
+                        AwardContext {
+                            now: ObtainedTime::from_millis(1),
+                            player_name: &name,
+                            announce_advancements: rule,
+                        },
+                    ) {
+                        chats.push(
+                            serde_json::from_str::<Value>(&component.to_json().unwrap()).unwrap(),
+                        );
+                    }
+                }
+                AdvancementEffect::MarkVisibility(id) => {
+                    player.apply_mark_visibility(&manager, &id)
+                }
+            }
+        }
+        assert_eq!(
+            json!(chats),
+            row["chats"],
+            "before={} after={}",
+            row["before"],
+            row["after"]
+        );
+    }
+}
