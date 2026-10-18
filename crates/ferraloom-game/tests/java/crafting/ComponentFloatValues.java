@@ -111,8 +111,18 @@ public final class ComponentFloatValues {
             for(long other:FloatValues.DOUBLES) equality.append(value.equals(net.minecraft.advancements.predicates.MinMaxBounds.Doubles.exactly(Double.longBitsToDouble(other))) ? '1':'0');
             row.addProperty("equal",equality.toString());bounds.add(row);
         }
-        var out=new JsonObject();out.add("groups",groups);out.add("bounds",bounds);
+        var chat=new ArrayList<TypedDataComponent<?>>();var chatBits=new ArrayList<String>();
+        for(int input:FloatValues.FLOATS) {
+            chat.add(new TypedDataComponent<>(DataComponents.CUSTOM_NAME,net.minecraft.network.chat.Component.translatable("probe.number",Float.intBitsToFloat(input))));
+            chatBits.add("float:"+Integer.toHexString(input));
+        }
+        for(long input:FloatValues.DOUBLES) {
+            chat.add(new TypedDataComponent<>(DataComponents.CUSTOM_NAME,net.minecraft.network.chat.Component.translatable("probe.number",Double.longBitsToDouble(input))));
+            chatBits.add("double:"+Long.toHexString(input));
+        }
+        var out=new JsonObject();out.add("groups",groups);out.add("bounds",bounds);out.add("chat",group("chat_translation",chat,chatBits));
         Files.writeString(Path.of(args[0]),JSON.toJson(out)+"\n");
         System.out.println("Component float vectors: 198 encodings, 54 record hashes, 3,564 component and 3,564 stack comparisons, 324 bounds comparisons");
+        System.out.println("Translation vectors: 36 encodings, 1,296 component and 1,296 stack comparisons");
     }
 }

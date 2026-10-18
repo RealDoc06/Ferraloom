@@ -1,4 +1,70 @@
 use super::*;
+
+/// Native translatable argument equality remains distinct from its NBT wire
+/// representation, which canonicalizes negative zero through NbtOps.
+#[test]
+fn native_translation_floating_equality() {
+    use crate::component::{DataComponent, DataComponentPatch, ItemStack};
+
+    let fixture: serde_json::Value =
+        serde_json::from_str(include_str!("../component/float-fixtures.json")).unwrap();
+    let rows = fixture["chat"]["rows"].as_array().unwrap();
+    let values: Vec<_> = rows
+        .iter()
+        .map(|row| {
+            let input = row["bits"].as_str().unwrap();
+            let (kind, bits) = input.split_once(':').unwrap();
+            let number = match kind {
+                "float" => {
+                    Numeric::Float(JavaF32::from_bits(u32::from_str_radix(bits, 16).unwrap()))
+                }
+                "double" => {
+                    Numeric::Double(JavaF64::from_bits(u64::from_str_radix(bits, 16).unwrap()))
+                }
+                _ => panic!("unknown numeric kind {kind}"),
+            };
+            let component = Component::translatable("probe.number", vec![Argument::Number(number)]);
+            let value = DataComponent::CustomName(Box::new(component.clone()));
+            let mut writer = Writer::new();
+            value.encode_value(&mut writer).unwrap();
+            assert_eq!(writer.as_slice(), hex(row["wire"].as_str().unwrap()), "{input}");
+            assert_eq!(
+                value.hash().ok().map(i64::from),
+                row["hash"].as_i64(),
+                "{input} HashOps"
+            );
+            let mut writer = Writer::new();
+            writer.nbt(&value.to_nbt().unwrap()).unwrap();
+            assert_eq!(writer.as_slice(), hex(row["nbt"].as_str().unwrap()), "{input} NBT");
+            let stack = |count| {
+                ItemStack::new(
+                    ferraloom_data::Item::STONE,
+                    count,
+                    DataComponentPatch {
+                        added: vec![value.clone()],
+                        removed: vec![],
+                    },
+                )
+            };
+            (component, stack(1), stack(7))
+        })
+        .collect();
+    for (i, row) in rows.iter().enumerate() {
+        let equality = row["equal"].as_str().unwrap().as_bytes();
+        let stacks = row["stacks"].as_str().unwrap().as_bytes();
+        assert_eq!(equality.len(), values.len());
+        assert_eq!(stacks.len(), values.len());
+        for (j, other) in values.iter().enumerate() {
+            assert_eq!(values[i].0 == other.0, equality[j] == b'1', "{i}/{j} component");
+            assert_eq!(
+                values[i].1.is_same_item_same_components(&other.2).unwrap(),
+                stacks[j] == b'1',
+                "{i}/{j} stack"
+            );
+        }
+    }
+}
+
 fn hex(text: &str) -> Vec<u8> {
     text.trim()
         .as_bytes()
