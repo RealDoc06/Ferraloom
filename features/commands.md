@@ -2569,3 +2569,4 @@ Every literal and argument node from `reports/commands.json` has a row, includin
 | `/op` and `/deop`: live permission event, filtered tree refresh and persisted operator list | pending command parity scenarios | todo | todo |
 | `/kick`: selector capture, decorated name and translated disconnect reason | pending command parity scenarios | todo | todo |
 | Objective criteria, scoreboard display slots and resource wildcard selectors | `commands::arguments::tests::argument_parser_vectors_match_java_errors_cursors_and_values` | pass | todo |
+| `/gamemode`: live target selection, unchanged-mode return zero and self/other feedback | pending command parity scenarios | todo | todo |

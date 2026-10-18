@@ -1891,38 +1891,6 @@ impl MinecraftServer {
                 }
                 self.feedback(source, "Teleported player");
             }
-            CommandAction::GameMode { targets, mode } => {
-                for id in self.targets(source, targets.as_deref())? {
-                    let Phase::Play(entity) = self.connections[&id].phase else {
-                        continue;
-                    };
-                    let player = self
-                        .level
-                        .level
-                        .entity_mut::<ServerPlayer>(entity)
-                        .map_err(game_error)?;
-                    player.game_mode = mode;
-                    player.flying = mode == GameType::Spectator;
-                    let packet = abilities(player);
-                    let profile_id = player.uuid;
-                    let c = self.connections.get_mut(&id).unwrap();
-                    c.push(cb::Packet::GameEvent(cb::GameEvent {
-                        event: 3,
-                        param: mode.id() as f32,
-                    }));
-                    c.push(packet);
-                    self.broadcast(cb::Packet::PlayerInfoUpdate(cb::PlayerInfoUpdate {
-                        actions: 4,
-                        entries: vec![PlayerInfoEntry {
-                            profile_id,
-                            actions: vec![PlayerInfoAction::UpdateGameMode {
-                                game_mode: protocol_game_type(mode),
-                            }],
-                        }],
-                    }));
-                }
-                self.feedback(source, "Set game mode");
-            }
         }
         Ok(())
     }

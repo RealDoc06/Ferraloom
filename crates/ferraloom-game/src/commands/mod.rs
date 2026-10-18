@@ -11,7 +11,6 @@ pub mod message;
 pub mod permissions;
 pub mod source;
 mod tree;
-use crate::entity::player::GameType;
 use arguments::{ArgumentValue, coordinates::Coordinates};
 use ferraloom_brigadier::{CommandDispatcher, CommandSyntaxException, NodeKind};
 use ferraloom_protocol::play;
@@ -28,10 +27,6 @@ pub enum CommandAction {
     Teleport {
         targets: Option<String>,
         position: Vec3,
-    },
-    GameMode {
-        targets: Option<String>,
-        mode: GameType,
     },
     Run(Box<PreparedCommand>),
 }
@@ -172,13 +167,6 @@ impl Commands {
                     .coordinates("location")
                     .unwrap()
                     .position(&prepared.source, None),
-            },
-            "gamemode" => CommandAction::GameMode {
-                targets: selector_text("target"),
-                mode: match prepared.argument("gamemode") {
-                    Some(ArgumentValue::GameMode(mode)) => *mode,
-                    _ => unreachable!(),
-                },
             },
             _ => CommandAction::Run(Box::new(prepared)),
         })

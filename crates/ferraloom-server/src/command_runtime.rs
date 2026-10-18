@@ -166,6 +166,7 @@ impl MinecraftServer {
             "gamerule" => builtins::gamerule(&mut self.game_rules, &command)?,
             "op" | "deop" => self.operator_command(source, &command)?,
             "kick" => self.kick_command(source, &command)?,
+            "gamemode" => self.game_mode_command(source, &command)?,
             "seed" => builtins::seed(self.world.seed),
             "help" => self.commands.help(&command)?,
             "say" | "me" | "msg" => self.message_command(source, &command)?,
@@ -999,6 +1000,97 @@ impl MinecraftServer {
         }
         Ok(CommandResult {
             value: targets.len() as i32,
+            feedback: Vec::new(),
+            rule_change: None,
+        })
+    }
+}
+
+impl MinecraftServer {
+    fn game_mode_command(
+        &mut self,
+        source: Option<ConnectionId>,
+        command: &PreparedCommand,
+    ) -> Result<CommandResult, ferraloom_brigadier::CommandSyntaxException> {
+        let Some(ArgumentValue::GameMode(mode)) = command.argument("gamemode") else {
+            unreachable!()
+        };
+        let mode = *mode;
+        let targets = if command.argument("target").is_some() {
+            self.selected_connections(command, "target")?
+        } else {
+            vec![source.ok_or_else(|| exceptions::error("permissions.requires.player", &[]))?]
+        };
+        let mode_name =
+            Component::translatable(format!("gameMode.{}", game_mode_name(mode)), vec![]);
+        let mut count = 0;
+        for id in targets {
+            let Phase::Play(entity) = self.connections[&id].phase else {
+                continue;
+            };
+            let Ok(player) = self.level.level.entity_mut::<ServerPlayer>(entity) else {
+                continue;
+            };
+            if player.game_mode == mode {
+                continue;
+            }
+            player.game_mode = mode;
+            if mode == GameType::Spectator {
+                player.flying = true;
+            } else if mode != GameType::Creative {
+                player.flying = false;
+            }
+            let packet = abilities(player);
+            let name = player.display_name();
+            let uuid = player.uuid;
+            let c = self.connections.get_mut(&id).unwrap();
+            c.push(cb::Packet::GameEvent(cb::GameEvent {
+                event: 3,
+                param: mode.id() as f32,
+            }));
+            c.push(packet);
+            self.broadcast(cb::Packet::PlayerInfoUpdate(cb::PlayerInfoUpdate {
+                actions: 4,
+                entries: vec![PlayerInfoEntry {
+                    profile_id: uuid,
+                    actions: vec![PlayerInfoAction::UpdateGameMode {
+                        game_mode: protocol_game_type(mode),
+                    }],
+                }],
+            }));
+            let own = command.source.entity == Some(entity);
+            if !own
+                && self
+                    .game_rules
+                    .boolean(ferraloom_game::gamerules::GameRule::SendCommandFeedback)
+            {
+                self.send_component(
+                    Some(id),
+                    Component::translatable(
+                        "gameMode.changed",
+                        vec![builtins::component(mode_name.clone())],
+                    ),
+                );
+            }
+            let message = if own {
+                Component::translatable(
+                    "commands.gamemode.success.self",
+                    vec![builtins::component(mode_name.clone())],
+                )
+            } else {
+                Component::translatable(
+                    "commands.gamemode.success.other",
+                    vec![
+                        builtins::component(name),
+                        builtins::component(mode_name.clone()),
+                    ],
+                )
+            };
+            self.command_success(source, &command.source, message, true);
+            count += 1;
+        }
+        Ok(CommandResult {
+            value: count,
             feedback: Vec::new(),
             rule_change: None,
         })
