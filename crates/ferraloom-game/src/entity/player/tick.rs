@@ -75,7 +75,8 @@ pub fn player_do_tick_with_tick_rate(
             award_stat(player, Stat::Custom(custom::Id::TIME_SINCE_DEATH), 1, level)?;
         }
         if level.entity::<EntityData>(player)?.shared_flag(1) {
-            award_stat(player, Stat::Custom(custom::Id::CROUCH_TIME), 1, level)?;
+            // Stats.CROUCH_TIME is registered as minecraft:sneak_time.
+            award_stat(player, Stat::Custom(custom::Id::SNEAK_TIME), 1, level)?;
         }
         if level
             .entity::<crate::entity::LivingEntity>(player)?
