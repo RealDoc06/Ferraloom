@@ -8,7 +8,7 @@ use crate::{
         BlockBehavior, BlockMethod, InteractionResult, LevelAccessRef, LevelReaderRef, UseContext,
         entity::BlockEntityType,
     },
-    inventory::{Container, MenuKind},
+    inventory::MenuKind,
     level::{Level, LevelError},
 };
 use ferraloom_data::{Block, BlockClass, BlockState, properties as p};
@@ -42,6 +42,9 @@ pub(crate) fn ported_behavior(
     method: BlockMethod,
 ) -> Option<&'static dyn BlockBehavior> {
     use BlockMethod as M;
+    if block.class() == BlockClass::ShulkerBoxBlock && method == M::AnalogOutputSignal {
+        return Some(&CONTAINER_BLOCK);
+    }
     if supported(block)
         && matches!(
             method,
@@ -156,7 +159,7 @@ impl BlockBehavior for ContainerBlock {
         state: BlockState,
         pos: BlockPos,
         _direction: Direction,
-        level: &Level,
+        level: &mut Level,
     ) -> Result<i32, LevelError> {
         let refs = if chest(state.block()) {
             menu::combine_chest(state, pos, false, level)?
@@ -171,32 +174,12 @@ impl BlockBehavior for ContainerBlock {
         {
             return Ok(entity.analog_output());
         }
-        let mut fill = 0.0f32;
-        let mut size = 0;
-        for handle in refs {
-            let state = level.block_entity_state(handle)?;
-            if state
-                .randomizable()
-                .is_some_and(|entity| entity.loot_table.is_some())
-            {
-                return Err(LevelError::Inventory("analog output requires loot unpack"));
-            }
-            let entity = state
-                .container()
-                .ok_or(LevelError::WrongBlockEntityType(handle))?;
-            size += entity.size();
-            for stack in &entity.items {
-                if !stack.is_empty() {
-                    fill += crate::entity::player::inventory::count(stack) as f32
-                        / entity
-                            .max_stack_size()
-                            .min(crate::entity::player::inventory::max_stack_size(stack))
-                            as f32;
-                }
-            }
-        }
-        fill /= size as f32;
-        Ok((fill * 14.0).floor() as i32 + i32::from(fill > 0.0))
+        let container = match refs.as_slice() {
+            &[single] => super::access::ContainerRef::Single(single),
+            &[first, second] => super::access::ContainerRef::Double([first, second]),
+            _ => unreachable!(),
+        };
+        super::access::analog_output(&container, level)
     }
     fn shape(
         &self,

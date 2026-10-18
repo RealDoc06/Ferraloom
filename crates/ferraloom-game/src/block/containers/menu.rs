@@ -50,9 +50,9 @@ impl MenuProvider for ContainerMenuProvider {
                 return Ok(None);
             }
             if !spectator && let Some(lock) = &state.container().expect("container provider").lock {
-                let facts = crate::loot::NoFacts;
+                let resources = level.container_resources()?;
                 if !crate::predicates::ItemPredicate(lock.clone())
-                    .matches(&hand, &facts)
+                    .matches(&hand, resources.facts.as_ref())
                     .map_err(|_| {
                         crate::inventory::MenuError::Unsupported("container lock predicate facts")
                     })?
@@ -60,14 +60,7 @@ impl MenuProvider for ContainerMenuProvider {
                     return Ok(None);
                 }
             }
-            if state
-                .randomizable()
-                .is_some_and(|container| container.loot_table.is_some())
-            {
-                return Err(crate::inventory::MenuError::Unsupported(
-                    "container loot runtime",
-                ));
-            }
+            super::loot::unpack_loot_table(handle, Some(player), level)?;
         }
         let mut menu = AbstractContainerMenu::new(self.kind, id)?;
         let actual = self
