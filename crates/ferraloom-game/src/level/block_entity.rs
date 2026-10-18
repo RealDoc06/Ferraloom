@@ -212,10 +212,88 @@ impl Level {
         region.block_entity_state.tickers.unbind(pos);
         Ok(())
     }
+    /// LevelChunk#setBlockState's post-onPlace receiver validation and binding.
+    pub(super) fn ensure_block_entity(
+        &mut self,
+        pos: BlockPos,
+        state: ferraloom_data::BlockState,
+    ) -> Result<(), LevelError> {
+        let mut current = self.get_or_promote_block_entity(pos)?;
+        if let Some(handle) = current
+            && !self.block_entity_state(handle)?.data().kind.is_valid(state)
+        {
+            self.remove_block_entity(pos)?;
+            current = None;
+        }
+        if let Some(handle) = current {
+            self.block_entity_state_mut(handle)?
+                .data_mut()
+                .set_block_state(state)?;
+            let entity = self.block_entity_state(handle)?;
+            let kind = entity.data().kind;
+            if entity.behavior().has_server_ticker() {
+                self.region_mut()
+                    .block_entity_state
+                    .tickers
+                    .bind(handle, kind);
+            } else {
+                self.region_mut().block_entity_state.tickers.unbind(pos);
+            }
+        } else if let Some(entity) = crate::block::entity::new_block_entity(pos, state)? {
+            self.set_block_entity(entity)?;
+        }
+        Ok(())
+    }
+    /// Port of Level#tickBlockEntities, including the frozen invalid-wrapper
+    /// drain and pending additions. Bound callbacks also check native holder,
+    /// entity-load, border and live state validity before invoking the ticker.
+    pub fn tick_block_entities(&mut self, runs_normally: bool) -> Result<(), LevelError> {
+        self.region_mut().block_entity_state.tickers.begin_phase();
+        let result = self.tick_bound_block_entities(runs_normally);
+        self.region_mut().block_entity_state.tickers.end_phase();
+        self.collect_detached_block_entities();
+        result
+    }
+    fn tick_bound_block_entities(&mut self, runs_normally: bool) -> Result<(), LevelError> {
+        while let Some(ticker) = self.region_mut().block_entity_state.tickers.next_ticker() {
+            let handle = ticker.entity;
+            let entity = self.block_entity_state(handle)?;
+            if entity.data().removed {
+                self.region_mut()
+                    .block_entity_state
+                    .tickers
+                    .unbind(handle.pos);
+                continue;
+            }
+            if !runs_normally || !self.should_tick_blocks_at(handle.pos) || !entity.data().has_level
+            {
+                continue;
+            }
+            let key = ChunkPos::containing(handle.pos);
+            let chunk = self.chunk(key).ok_or(LevelError::MissingChunk(key))?;
+            if chunk.requested_full_status < super::distance_manager::FullChunkStatus::BlockTicking
+                || !self.are_entities_loaded(key)
+                || !self.entity_world_border().is_within_block(handle.pos)
+            {
+                continue;
+            }
+            if !ticker.kind.is_valid(self.get_block_state(handle.pos)?) {
+                continue;
+            }
+            let behavior = entity.behavior();
+            self.with_block_entity_callback(handle, |level| behavior.tick(handle, level))?;
+        }
+        Ok(())
+    }
     /// BlockEntity#setChanged marks the current containing chunk, even when the
     /// receiver is an old detached generation still executing a callback.
     pub fn set_changed(&mut self, pos: BlockPos) -> Result<(), LevelError> {
-        self.mark_chunk_unsaved(ChunkPos::containing(pos))
+        self.mark_chunk_unsaved(ChunkPos::containing(pos))?;
+        let state = self.get_block_state(pos)?;
+        if !state.is_air() {
+            self.update_neighbour_for_output_signal(pos, state.block())?;
+        }
+        Ok(())
     }
     pub fn retain_block_entity(&mut self, handle: BlockEntityRef) -> Result<(), LevelError> {
         self.block_entity_state(handle)?;
@@ -247,6 +325,45 @@ impl Level {
         let result = callback(self);
         self.release_block_entity(handle);
         result
+    }
+    /// Capture native initial-chunk block-entity entries from live receivers.
+    /// Unactivated raw NBT stays pending and is never presented as a live entity.
+    pub fn block_entity_chunk_packet_info(
+        &self,
+        key: ChunkPos,
+    ) -> Result<Vec<ferraloom_protocol::play::BlockEntityInfo>, LevelError> {
+        let chunk = self.chunk(key).ok_or(LevelError::MissingChunk(key))?;
+        chunk
+            .block_entities
+            .iter()
+            .map(|entity| {
+                entity
+                    .chunk_packet_info()
+                    .map_err(|_| LevelError::Inventory("block entity chunk packet codec"))
+            })
+            .collect()
+    }
+    /// Before removing a successfully saved chunk, preserve removed receivers
+    /// held by menus/callback frames and its serialized data for later reattachment.
+    pub fn detach_block_entities_for_unload(&mut self, key: ChunkPos) -> Result<(), LevelError> {
+        let tags = self.block_entity_tags_for_saving(key)?;
+        let positions: Vec<_> = self
+            .chunk(key)
+            .unwrap()
+            .block_entities
+            .iter()
+            .map(|entity| entity.data().pos)
+            .collect();
+        for pos in positions {
+            self.remove_block_entity(pos)?;
+        }
+        self.region_mut()
+            .chunks
+            .get_mut(&key)
+            .unwrap()
+            .pending_generation
+            .block_entities = tags;
+        Ok(())
     }
     /// Serialize active receivers in vanilla's fastutil map order, retaining raw
     /// unactivated NBT exactly for factories which are still unported.
@@ -358,6 +475,102 @@ mod tests {
         level.set_block_state(pos, state).unwrap();
         level.set_block_entity(create(pos, state).unwrap()).unwrap();
         level.block_entity_ref(pos).unwrap().unwrap()
+    }
+    #[test]
+    fn placement_updates_receiver_before_broadcast_and_skip_side_effects_removes_it() {
+        use crate::block::{UPDATE_LIMIT, UpdateFlags};
+        let mut level = level();
+        level.set_block_tags(Arc::new(
+            ferraloom_data::datapack::TagSet::from_tags(
+                ferraloom_data::datapack::Tags {
+                    values: Default::default(),
+                    diagnostics: Vec::new(),
+                },
+                ferraloom_data::BLOCKS.len(),
+            )
+            .unwrap(),
+        ));
+        let pos = BlockPos::new(2, 2, 2);
+        let flags = UpdateFlags::SKIP_ALL_SIDEEFFECTS;
+        let state = Block::CHEST.default_state();
+        assert!(level.set_block(pos, state, flags, UPDATE_LIMIT).unwrap());
+        let handle = level.block_entity_ref(pos).unwrap().unwrap();
+        let changed = state
+            .with(ferraloom_data::properties::WATERLOGGED, true)
+            .unwrap();
+        assert!(level.set_block(pos, changed, flags, UPDATE_LIMIT).unwrap());
+        assert_eq!(level.block_entity_ref(pos), Ok(Some(handle)));
+        assert_eq!(
+            level
+                .block_entity::<BlockEntityData>(handle)
+                .unwrap()
+                .block_state,
+            changed
+        );
+        assert!(
+            level
+                .set_block(pos, Block::AIR.default_state(), flags, UPDATE_LIMIT)
+                .unwrap()
+        );
+        assert!(
+            level
+                .block_entity::<BlockEntityData>(handle)
+                .unwrap()
+                .removed
+        );
+        assert_eq!(level.block_entity_ref(pos), Ok(None));
+    }
+    #[test]
+    fn pending_supported_entity_activates_and_unload_retains_pinned_generation() {
+        use ferraloom_nbt::{CompoundTag, Tag};
+        let mut level = level();
+        let key = ChunkPos::new(0, 0);
+        let pos = BlockPos::new(3, 3, 3);
+        level
+            .set_block_state(pos, Block::END_PORTAL.default_state())
+            .unwrap();
+        let mut tag = CompoundTag::new();
+        tag.insert("id", Tag::String("minecraft:end_portal".into()));
+        for (key, value) in [("x", pos.x), ("y", pos.y), ("z", pos.z)] {
+            tag.insert(key, Tag::Int(value));
+        }
+        level
+            .region_mut()
+            .chunks
+            .get_mut(&key)
+            .unwrap()
+            .pending_generation
+            .block_entities
+            .push(tag);
+        assert!(matches!(
+            level.block_entity_ref(pos),
+            Err(LevelError::UnsupportedBlockEntity(_))
+        ));
+        level.post_process_generation(key).unwrap();
+        let handle = level.block_entity_ref(pos).unwrap().unwrap();
+        assert!(level.chunk(key).unwrap().post_processing_complete());
+        assert_eq!(level.block_entity_chunk_packet_info(key).unwrap().len(), 1);
+        level.retain_block_entity(handle).unwrap();
+        let saved = level.block_entity_tags_for_saving(key).unwrap();
+        level.detach_block_entities_for_unload(key).unwrap();
+        let chunk = level.remove_chunk(key).unwrap();
+        assert_eq!(chunk.pending_block_entity_nbt(), saved);
+        level.collect_detached_block_entities();
+        assert!(
+            level
+                .block_entity::<BlockEntityData>(handle)
+                .unwrap()
+                .removed
+        );
+        level.add_chunk(chunk).unwrap();
+        level.post_process_generation(key).unwrap();
+        assert_ne!(level.block_entity_ref(pos).unwrap(), Some(handle));
+        level.release_block_entity(handle);
+        level.collect_detached_block_entities();
+        assert!(matches!(
+            level.block_entity_state(handle),
+            Err(LevelError::MissingBlockEntity(_))
+        ));
     }
     #[test]
     fn reentrant_replacement_preserves_old_receiver_and_pinned_menu_roots() {

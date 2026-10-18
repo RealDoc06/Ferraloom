@@ -1906,7 +1906,7 @@ fn pending_block_entity_nbt_survives_full_without_claiming_live_factory_readines
     let chunk = ChunkPos::new(0, 0);
     let pos = BlockPos::new(8, 0, 8);
     let mut tag = CompoundTag::new();
-    tag.insert("id", Tag::String("minecraft:chest".into()));
+    tag.insert("id", Tag::String("minecraft:spawner".into()));
     for (key, value) in [("x", pos.x), ("y", pos.y), ("z", pos.z), ("future", 42)] {
         tag.insert(key, Tag::Int(value));
     }
@@ -1928,7 +1928,7 @@ fn pending_block_entity_nbt_survives_full_without_claiming_live_factory_readines
     };
     let mut block_chunk = empty_chunk(chunk);
     block_chunk
-        .set_block_state(pos, Block::CHEST.default_state())
+        .set_block_state(pos, Block::SPAWNER.default_state())
         .unwrap();
     block_chunk.load_pending_generation_data(&data).unwrap();
     assert_eq!(
@@ -1939,7 +1939,7 @@ fn pending_block_entity_nbt_survives_full_without_claiming_live_factory_readines
     level.add_chunk(block_chunk).unwrap();
     assert_eq!(
         level.post_process_generation(chunk),
-        Err(LevelError::UnsupportedBlockEntity(Block::CHEST))
+        Err(LevelError::UnsupportedBlockEntity(Block::SPAWNER))
     );
     assert_eq!(level.unported_behavior_stats().skipped_calls, 0);
     level.set_unported_behavior(UnportedBehavior::Warn);

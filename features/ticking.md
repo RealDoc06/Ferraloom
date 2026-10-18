@@ -180,3 +180,5 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | ticking.block-entity.menu-borrows | Borrow a canonical player and ordered distinct current block entities across chunks without taking state out | `AbstractContainerMenu; LevelChunk` | `level::block_entity::tests::menu_borrow_preserves_order_and_rejects_duplicate_or_stale_generations` | - | todo |
 
 | ticking.level.handling-tick | Expose the native handling-tick flag through weather, scheduled ticks and block events, clearing it before entity work | `ServerLevel#tick; ServerLevel#isHandlingTick` | `runtime source-order integration; piston short-pulse scenario pending` | - | todo |
+
+| ticking.block-entity.lifecycle | Run preRemove before removal, retain or replace canonical receivers after onPlace, promote supported pending NBT in Java map order and capture persistence/update packets | `LevelChunk#setBlockState; LevelChunk#postProcessGeneration; ChunkHolder#broadcastChanges` | `level::block_entity::tests::placement_updates_receiver_before_broadcast_and_skip_side_effects_removes_it; pending_supported_entity_activates_and_unload_retains_pinned_generation` | - | todo |
