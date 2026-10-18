@@ -2268,6 +2268,7 @@ mod generation_order_tests {
             biome,
         );
         let disk = SerializableChunkData {
+            data_version: Some(storage::DATA_VERSION),
             y_pos: Some(2),
             status: Some("minecraft:full".into()),
             sections: Some(vec![storage::ChunkSection {
@@ -2380,6 +2381,7 @@ mod generation_order_tests {
                 sections: empty_sections.clone(),
                 surface: [0; 256],
                 disk: SerializableChunkData {
+                    data_version: Some(storage::DATA_VERSION),
                     x_pos: Some(pos.x),
                     z_pos: Some(pos.z),
                     y_pos: Some(-4),
