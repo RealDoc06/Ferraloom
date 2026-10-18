@@ -1678,8 +1678,8 @@ impl MinecraftServer {
                 }),
                 cb::Packet::SetHealth(cb::SetHealth {
                     health: player.parent.health(),
-                    food: VarInt(20),
-                    saturation: 5.,
+                    food: VarInt(player.food_data.food_level()),
+                    saturation: player.food_data.saturation_level(),
                 }),
                 cb::Packet::SetExperience(cb::SetExperience {
                     experience_progress: 0.,
