@@ -199,7 +199,6 @@ impl AbstractContainerMenu {
                         .with_kind(SlotKind::Result(ResultKind::Stonecutter)),
                 );
                 menu.add_data(1);
-                menu.data[0] = -1;
             }
             MenuKind::Loom => {
                 menu.local = vec![MenuContainer::simple(3), MenuContainer::simple(4)];
