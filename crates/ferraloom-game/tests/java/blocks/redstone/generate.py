@@ -25,7 +25,7 @@ with tempfile.TemporaryDirectory() as temporary:
     result = subprocess.run([str(JAVA / 'java'), '-Xmx512M', '-cp', cp, 'RedstoneBootstrap'], cwd=classes, capture_output=True, text=True)
     if result.returncode:
         raise RuntimeError(result.stderr[-8000:])
-    lines = [line for line in result.stdout.splitlines() if line.startswith(('signal:', 'stored-signal:', 'relay:', 'piston-', 'wire:', 'moving:', 'push:', 'comparator:', 'placement:', 'hopper:', 'dispense-item:', 'projectile-config:', 'dispenser-trigger:', 'rail-', 'note-', 'tripwire-', 'placed-by:', 'use:'))]
+    lines = [line for line in result.stdout.splitlines() if line.startswith(('signal:', 'stored-signal:', 'relay:', 'piston-', 'wire:', 'moving:', 'push:', 'comparator:', 'placement:', 'hopper:', 'dispense-item:', 'projectile-config:', 'dispenser-trigger:', 'rail-', 'note-', 'tripwire-', 'placed-by:', 'use:', 'plate:'))]
     if not lines:
         raise RuntimeError('Vanilla emitted no redstone cases')
     (HERE / 'vectors.tsv').write_text('\n'.join(lines) + '\n')

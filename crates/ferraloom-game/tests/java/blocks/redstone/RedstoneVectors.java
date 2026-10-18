@@ -375,8 +375,41 @@ public final class RedstoneVectors extends MutationFixture {
         }
     }
     static final class RedstonePlayer extends net.minecraft.world.entity.player.Player {
+        net.minecraft.world.level.GameType mode=net.minecraft.world.level.GameType.SURVIVAL;
         RedstonePlayer(net.minecraft.world.level.Level level){super(level,new com.mojang.authlib.GameProfile(new java.util.UUID(1,2),"redstone"));}
-        @Override public net.minecraft.world.level.GameType gameMode(){return net.minecraft.world.level.GameType.SURVIVAL;}
+        @Override public net.minecraft.world.level.GameType gameMode(){return mode;}
+    }
+    static void plates(RegistryAccess r)throws Exception{
+        var check=BasePressurePlateBlock.class.getDeclaredMethod("checkPressed",net.minecraft.world.entity.Entity.class,net.minecraft.world.level.Level.class,BlockPos.class,BlockState.class,int.class);check.setAccessible(true);
+        for(var block:BuiltInRegistries.BLOCK)if(block instanceof BasePressurePlateBlock){
+            boolean weighted=block instanceof WeightedPressurePlateBlock;
+            for(int kind=0;kind<3;kind++)for(int count:weighted?new int[]{0,1,9,10,11,14,15,16,149,150,151}:new int[]{0,1}){
+                var level=new RedstoneVectors(r);level.raw(ORIGIN.below(),Blocks.STONE.defaultBlockState());
+                var state=weighted?block.defaultBlockState().setValue(WeightedPressurePlateBlock.POWER,count==0?15:0):block.defaultBlockState().setValue(PressurePlateBlock.POWERED,count==0);
+                level.raw(ORIGIN,state);var actors=new ArrayList<net.minecraft.world.entity.Entity>();
+                for(int i=0;i<count;i++){
+                    net.minecraft.world.entity.Entity actor;
+                    if(kind==0)actor=new net.minecraft.world.entity.item.PrimedTnt(net.minecraft.world.entity.EntityTypes.TNT,level);
+                    else{var player=new RedstonePlayer(level);if(kind==2)player.mode=net.minecraft.world.level.GameType.SPECTATOR;actor=player;}
+                    actor.setUUID(new java.util.UUID(1,i+2));actor.setPos(ORIGIN.getX()+0.5,ORIGIN.getY()+0.1,ORIGIN.getZ()+0.5);level.addFreshEntity(actor);actors.add(actor);
+                }
+                var samples=new ArrayList<String>();
+                for(int tick=0;tick<=24;tick++){
+                    level.time=tick;level.begin();level.gameplay.clear();
+                    if(tick==0){if(count==0)check.invoke(block,null,level,ORIGIN,state,15);else state.entityInside(level,ORIGIN,actors.getFirst(),net.minecraft.world.entity.InsideBlockEffectApplier.NOOP,true);}
+                    if(tick==7)for(var actor:actors){actor.discard();level.actors.remove(actor);level.sections.getOrCreateSection(SectionPos.asLong(actor.blockPosition())).remove(actor);}
+                    // The private Level callback is exactly the body selected by
+                    // BasePressurePlateBlock#tick after its positive-signal gate.
+                    level.blockTicks.tick(tick,65536,(pos,b)->{
+                        var current=level.getBlockState(pos);if(!current.is(b))return;
+                        int signal=weighted?current.getValue(WeightedPressurePlateBlock.POWER):(current.getValue(PressurePlateBlock.POWERED)?15:0);
+                        if(signal>0)try{check.invoke(b,null,level,pos,current,signal);}catch(Exception error){throw new RuntimeException(error);}
+                    });
+                    samples.add(Block.getId(level.getBlockState(ORIGIN))+"/"+level.blockTicks.hasScheduledTick(ORIGIN,block)+"/"+String.join(";",level.changes)+"/"+String.join(";",level.gameplay));
+                }
+                System.out.println("plate:"+BuiltInRegistries.BLOCK.getId(block)+":"+kind+":"+count+"\t"+String.join("|",samples));
+            }
+        }
     }
     static void interactions(RegistryAccess r){
         for(var block:BuiltInRegistries.BLOCK){
@@ -438,7 +471,7 @@ public final class RedstoneVectors extends MutationFixture {
         var builtin=RegistryAccess.fromRegistryOfRegistries(net.minecraft.core.registries.BuiltInRegistries.REGISTRY);
         var lookup=HolderLookup.Provider.create(java.util.stream.Stream.concat(builtin.listRegistries(),registries.listRegistries()));
         net.minecraft.core.registries.BuiltInRegistries.DATA_COMPONENT_INITIALIZERS.build(lookup).forEach(net.minecraft.core.component.DataComponentInitializers.PendingComponents::apply);
-        signals(registries);piston(registries);wires(registries);try{moving(registries);pushing(registries);comparators(registries);placements(registries);hoppers(registries);pistonTimelines(registries);dispensing(registries);dispenserTriggers(registries);rails(registries);notes(registries);tripwires(registries);placedBy(registries);interactions(registries);}catch(Exception error){throw new RuntimeException(error);}
+        signals(registries);piston(registries);wires(registries);try{moving(registries);pushing(registries);comparators(registries);placements(registries);hoppers(registries);pistonTimelines(registries);dispensing(registries);dispenserTriggers(registries);rails(registries);notes(registries);tripwires(registries);placedBy(registries);interactions(registries);plates(registries);}catch(Exception error){throw new RuntimeException(error);}
     }
 }
 

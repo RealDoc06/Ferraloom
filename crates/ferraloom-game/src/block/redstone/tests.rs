@@ -117,6 +117,130 @@ fn native_mutations(value: &str) -> String {
 }
 
 #[test]
+fn pressure_plate_sensitivity_weighted_rounding_and_release_ticks_match_vanilla() {
+    use crate::entity::{
+        EntityData, EntityRef, EntityState,
+        item::PrimedTnt,
+        player::{GameType, ServerPlayer},
+    };
+    use ferraloom_data::properties as p;
+    use ferraloom_util::{Uuid, Vec3};
+    for (name, expected) in cases("plate:") {
+        let mut args = name.split(':').skip(1);
+        let block = Block::from_protocol_id(args.next().unwrap().parse().unwrap()).unwrap();
+        let kind = args.next().unwrap().parse::<u8>().unwrap();
+        let count = args.next().unwrap().parse::<u64>().unwrap();
+        let mut level = level();
+        level
+            .set_block_state(ORIGIN.below(1), Block::STONE.default_state())
+            .unwrap();
+        let state = if block.class() == BlockClass::WeightedPressurePlateBlock {
+            block
+                .default_state()
+                .with(p::POWER, if count == 0 { 15 } else { 0 })
+                .unwrap()
+        } else {
+            block.default_state().with(p::POWERED, count == 0).unwrap()
+        };
+        level.set_block_state(ORIGIN, state).unwrap();
+        let mut actors = Vec::new();
+        for i in 0..count {
+            let position = Vec3::new(
+                f64::from(ORIGIN.x) + 0.5,
+                f64::from(ORIGIN.y) + 0.1,
+                f64::from(ORIGIN.z) + 0.5,
+            );
+            let id = EntityRef(i + 1);
+            let mut entity = if kind == 0 {
+                EntityState::PrimedTnt(Box::new(PrimedTnt::new(i as i32 + 1, 123 + i as i64)))
+            } else {
+                EntityState::Player(Box::new(ServerPlayer::new(
+                    Uuid::new(1, i + 2),
+                    format!("plate{i}"),
+                    i as i32 + 1,
+                    position,
+                    if kind == 2 {
+                        GameType::Spectator
+                    } else {
+                        GameType::Survival
+                    },
+                )))
+            };
+            entity.as_entity_mut().uuid = Uuid::new(1, i + 2);
+            entity.as_entity_mut().set_pos(position);
+            level.add_entity(id, entity).unwrap();
+            actors.push(id);
+        }
+        let mut samples = Vec::new();
+        for tick in 0..=24 {
+            level.set_game_time(tick);
+            level.take_effects();
+            if tick == 0 {
+                if count == 0 {
+                    switches::SWITCHES.tick(state, ORIGIN, &mut level).unwrap();
+                } else {
+                    switches::SWITCHES
+                        .entity_inside(state, ORIGIN, actors[0], &mut level)
+                        .unwrap();
+                }
+            }
+            if tick == 7 {
+                for &actor in &actors {
+                    level.remove_entity(actor).unwrap();
+                }
+            }
+            level.tick_scheduled_blocks(tick, 65536).unwrap();
+            let mut mutations = Vec::new();
+            let mut gameplay = Vec::new();
+            for effect in level.take_effects() {
+                match effect {
+                    LevelEffect::BlockUpdated { pos, new, .. } => {
+                        mutations.push(format!("{}, {}, {}={}", pos.x, pos.y, pos.z, new.id()));
+                    }
+                    LevelEffect::GameEvent {
+                        event,
+                        source,
+                        affected_state,
+                        ..
+                    } => {
+                        gameplay.push(format!(
+                            "G:{}:{}:{}",
+                            event.protocol_id(),
+                            source
+                                .map_or(0, |id| level.entity::<EntityData>(id).unwrap().network_id),
+                            affected_state.map_or(-1, |state| i32::from(state.id()))
+                        ));
+                    }
+                    _ => {}
+                }
+            }
+            samples.push(format!(
+                "{}/{}/{}/{}",
+                level.get_block_state(ORIGIN).unwrap().id(),
+                level.has_scheduled_block_tick(ORIGIN, block),
+                mutations.join(";"),
+                gameplay.join(";")
+            ));
+        }
+        let expected = expected
+            .split('|')
+            .map(|sample| {
+                let mut parts = sample.splitn(4, '/');
+                format!(
+                    "{}/{}/{}/{}",
+                    parts.next().unwrap(),
+                    parts.next().unwrap(),
+                    native_mutations(parts.next().unwrap()),
+                    parts.next().unwrap()
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("|");
+        assert_eq!(samples.join("|"), expected, "{name}");
+    }
+}
+
+#[test]
 fn switches_and_openings_keep_native_click_results_updates_and_event_sources() {
     use crate::{
         block::{InteractionResult, UseContext},
