@@ -8,7 +8,7 @@ use ferraloom_util::{BlockPos, ChunkPos};
 
 #[derive(Default)]
 pub(super) struct PendingGenerationData {
-    block_entities: Vec<CompoundTag>,
+    pub(super) block_entities: Vec<CompoundTag>,
     offsets: Vec<Vec<i16>>,
     upgrade: Option<UpgradeData>,
 }
@@ -49,6 +49,51 @@ impl LevelChunk {
     }
 }
 impl Level {
+    /// LevelChunk#getBlockEntity(CHECK): activate a pending receiver before
+    /// returning it. Unsupported factories retain the exact original raw NBT.
+    pub fn get_or_promote_block_entity(
+        &mut self,
+        pos: BlockPos,
+    ) -> Result<Option<crate::block::entity::BlockEntityRef>, LevelError> {
+        let key = ChunkPos::containing(pos);
+        let chunk = self.chunk(key).ok_or(LevelError::MissingChunk(key))?;
+        if let Some(state) = chunk.block_entities.get(pos) {
+            return Ok(Some(state.data().reference()));
+        }
+        let tag = chunk
+            .pending_block_entity_nbt()
+            .iter()
+            .rev()
+            .find(|tag| crate::block::entity::get_pos_from_tag(key, tag) == pos)
+            .cloned();
+        let Some(tag) = tag else {
+            return Ok(None);
+        };
+        let state = self.get_block_state(pos)?;
+        let entity = if tag
+            .get_string("id")
+            .is_some_and(|id| id.to_string_lossy() == "DUMMY")
+        {
+            if state.has_block_entity() {
+                crate::block::entity::new_block_entity(pos, state)?
+            } else {
+                None
+            }
+        } else {
+            crate::block::entity::load_static(pos, state, &tag)?
+        };
+        if let Some(entity) = entity {
+            self.set_block_entity(entity)?;
+        }
+        self.region_mut()
+            .chunks
+            .get_mut(&key)
+            .unwrap()
+            .pending_generation
+            .block_entities
+            .retain(|tag| crate::block::entity::get_pos_from_tag(key, tag) != pos);
+        self.block_entity_ref(pos)
+    }
     /// Port of ChunkAccess#markPosForPostProcessing and ProtoChunk's packing.
     /// A callback may append to the list currently being drained.
     pub fn mark_pos_for_post_processing(&mut self, pos: BlockPos) -> Result<(), LevelError> {
@@ -122,22 +167,30 @@ impl Level {
                 *list = skipped;
             }
         }
-        for index in 0..self.chunk(key).unwrap().pending_block_entity_nbt().len() {
-            let (pos, factory) = {
-                let tag = &self.chunk(key).unwrap().pending_block_entity_nbt()[index];
-                let position = || {
-                    Some(BlockPos::new(
-                        tag.get_int("x")?,
-                        tag.get_int("y")?,
-                        tag.get_int("z")?,
-                    ))
-                };
-                (
-                    position().ok_or(LevelError::InvalidPendingGenerationData)?,
-                    tag.get_string("id").cloned().unwrap_or_default(),
-                )
-            };
-            self.skip_block_entity_activation(self.get_block_state(pos)?.block(), factory)?;
+        let mut pending = ferraloom_util::collections::JavaHashMap::<BlockPos, ()>::new();
+        for tag in self.chunk(key).unwrap().pending_block_entity_nbt() {
+            pending.insert(crate::block::entity::get_pos_from_tag(key, tag), ());
+        }
+        let positions: Vec<_> = pending.keys().copied().collect();
+        for pos in positions {
+            if let Err(error) = self.get_or_promote_block_entity(pos) {
+                match error {
+                    LevelError::UnsupportedBlockEntity(block) => {
+                        let factory = self
+                            .chunk(key)
+                            .unwrap()
+                            .pending_block_entity_nbt()
+                            .iter()
+                            .rev()
+                            .find(|tag| crate::block::entity::get_pos_from_tag(key, tag) == pos)
+                            .and_then(|tag| tag.get_string("id"))
+                            .cloned()
+                            .unwrap_or_default();
+                        self.skip_block_entity_activation(block, factory)?;
+                    }
+                    _ => return Err(error),
+                }
+            }
         }
         if self
             .chunk(key)

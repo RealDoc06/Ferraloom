@@ -1,4 +1,5 @@
 use super::*;
+
 use crate::{Behaviors, block::BlockBehavior};
 use effects::LevelEffect;
 use ferraloom_util::Direction;
@@ -29,6 +30,25 @@ impl BlockBehavior for Trace {
     }
 }
 static EMPTY: Behaviors = Behaviors::EMPTY;
+#[test]
+fn block_drops_requires_the_published_rule_and_observes_each_change() {
+    let mut level = Level::new(Region::new(&EMPTY));
+    for policy in [
+        crate::block::UnportedBehavior::Strict,
+        crate::block::UnportedBehavior::Warn,
+    ] {
+        level.set_unported_behavior(policy);
+        assert_eq!(
+            level.block_drops_enabled(),
+            Err(LevelError::UnsupportedGameRule("minecraft:block_drops"))
+        );
+    }
+    for enabled in [true, false, true] {
+        level.rules_mut().block_drops = Some(enabled);
+        assert_eq!(level.block_drops_enabled(), Ok(enabled));
+    }
+    assert_eq!(level.unported_behavior_stats().skipped_calls, 0);
+}
 static PLAIN: Behaviors = Behaviors::EMPTY.with_block(Block::STONE, &Trace { nested: false });
 static NESTED: Behaviors = Behaviors::EMPTY.with_block(Block::STONE, &Trace { nested: true });
 #[test]
@@ -1923,7 +1943,7 @@ fn pending_block_entity_nbt_survives_full_without_claiming_live_factory_readines
     let chunk = ChunkPos::new(0, 0);
     let pos = BlockPos::new(8, 0, 8);
     let mut tag = CompoundTag::new();
-    tag.insert("id", Tag::String("minecraft:chest".into()));
+    tag.insert("id", Tag::String("minecraft:spawner".into()));
     for (key, value) in [("x", pos.x), ("y", pos.y), ("z", pos.z), ("future", 42)] {
         tag.insert(key, Tag::Int(value));
     }
@@ -1947,7 +1967,7 @@ fn pending_block_entity_nbt_survives_full_without_claiming_live_factory_readines
     };
     let mut block_chunk = empty_chunk(chunk);
     block_chunk
-        .set_block_state(pos, Block::CHEST.default_state())
+        .set_block_state(pos, Block::SPAWNER.default_state())
         .unwrap();
     block_chunk.load_pending_generation_data(&data).unwrap();
     assert_eq!(
@@ -1958,7 +1978,7 @@ fn pending_block_entity_nbt_survives_full_without_claiming_live_factory_readines
     level.add_chunk(block_chunk).unwrap();
     assert_eq!(
         level.post_process_generation(chunk),
-        Err(LevelError::UnsupportedBlockEntity(Block::CHEST))
+        Err(LevelError::UnsupportedBlockEntity(Block::SPAWNER))
     );
     assert_eq!(level.unported_behavior_stats().skipped_calls, 0);
     level.set_unported_behavior(UnportedBehavior::Warn);

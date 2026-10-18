@@ -20,6 +20,13 @@ impl Level {
     pub fn rules_mut(&mut self) -> &mut LevelRules {
         &mut self.region_mut().rules
     }
+    /// Port of the GameRules.BLOCK_DROPS query used by Block's drop helpers.
+    /// An unpublished rule is a required-query error under either policy.
+    pub fn block_drops_enabled(&self) -> Result<bool, LevelError> {
+        self.rules()
+            .block_drops
+            .ok_or(LevelError::UnsupportedGameRule("minecraft:block_drops"))
+    }
     /// Install LevelChunk's four live heightmaps when a full chunk enters the
     /// simulation. Raw section writes remain a storage-only operation.
     pub fn prime_chunk_heightmaps(&mut self, pos: ChunkPos) -> Result<(), LevelError> {
@@ -180,17 +187,6 @@ impl Level {
         if old == state {
             return Ok(false);
         }
-        // Block entity families must provide canonical entities and tickers before
-        // they can use this path. Never silently discard unported entity state.
-        if old.has_block_entity() || state.has_block_entity() {
-            return Err(LevelError::UnsupportedBlockEntity(
-                if old.has_block_entity() {
-                    old.block()
-                } else {
-                    state.block()
-                },
-            ));
-        }
         let tags = self
             .region()
             .tags
@@ -220,6 +216,23 @@ impl Level {
         {
             self.emit(LevelEffect::CheckLight(pos));
         }
+        let block_changed = old.block() != state.block();
+        if block_changed
+            && old.has_block_entity()
+            && !crate::block::entity::registry::should_changed_state_keep_block_entity(
+                state, old, &tags,
+            )
+        {
+            if !flags.contains(UpdateFlags::SKIP_BLOCK_ENTITY_SIDEEFFECTS)
+                && let Some(entity) = self.get_or_promote_block_entity(pos)?
+            {
+                let behavior = self.block_entity_state(entity)?.behavior();
+                self.with_block_entity_callback(entity, |level| {
+                    behavior.pre_remove_side_effects(entity, level)
+                })?;
+            }
+            self.remove_block_entity(pos)?;
+        }
         let moved = flags.contains(UpdateFlags::MOVE_BY_PISTON);
         if (old.block() != state.block()
             || state
@@ -240,6 +253,9 @@ impl Level {
             self.optional_block_call(state.block(), BlockMethod::OnPlace, |behavior, level| {
                 behavior.on_place(state, pos, old, moved, level)
             })?;
+        }
+        if state.has_block_entity() && self.get_block_state(pos)?.block() == state.block() {
+            self.ensure_block_entity(pos, state)?;
         }
         self.region_mut()
             .chunks

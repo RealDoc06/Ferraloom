@@ -262,7 +262,9 @@ impl Level {
     pub fn set_light_snapshot(&mut self, pos: ChunkPos, snapshot: ChunkLightSnapshot) {
         self.region_mut().weather.lights.insert(pos, snapshot);
     }
-    fn weather_environment(&self) -> std::result::Result<&WeatherEnvironment, LevelError> {
+    pub(super) fn weather_environment(
+        &self,
+    ) -> std::result::Result<&WeatherEnvironment, LevelError> {
         self.region()
             .weather
             .environment
@@ -286,19 +288,26 @@ impl Level {
     pub fn biome_at(&self, pos: BlockPos) -> std::result::Result<&Identifier, LevelError> {
         let environment = self.weather_environment()?;
         let quart = zoom_quart(environment.biome_zoom_seed, [pos.x, pos.y, pos.z]);
+        let biome = self.noise_biome_at_quart(quart)?;
+        environment
+            .biome_names
+            .get(biome.0 as usize)
+            .ok_or(LevelError::UnsupportedWeatherQuery)
+    }
+    /// Port of ChunkAccess#getNoiseBiome with height clamping to owned sections.
+    pub(super) fn noise_biome_at_quart(
+        &self,
+        quart: [i32; 3],
+    ) -> std::result::Result<ferraloom_chunk::BiomeId, LevelError> {
         let p = ChunkPos::new(quart[0] >> 2, quart[2] >> 2);
         let chunk = self.chunk(p).ok_or(LevelError::MissingChunk(p))?;
         let y = quart[1].clamp(chunk.min_y() >> 2, (chunk.max_y() - 1) >> 2);
         let section = chunk
             .section(y >> 2)
             .expect("biome Y clamped to owned chunk");
-        let biome = section
+        Ok(section
             .biomes()
-            .get((quart[0] & 3) as u8, (y & 3) as u8, (quart[2] & 3) as u8);
-        environment
-            .biome_names
-            .get(biome.0 as usize)
-            .ok_or(LevelError::UnsupportedWeatherQuery)
+            .get((quart[0] & 3) as u8, (y & 3) as u8, (quart[2] & 3) as u8))
     }
     pub fn heightmap_pos(
         &self,

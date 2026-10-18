@@ -205,7 +205,6 @@ struct PendingLevelHooks {
     natural_spawn_state: u64,
     natural_spawn_chunks: u64,
     custom_spawners: u64,
-    block_entities: u64,
     poi: u64,
     navigation: u64,
     drops: u64,
@@ -627,6 +626,7 @@ impl MinecraftServer {
                     }
                 }
             }
+            self.level.level.set_handling_tick(true);
             if self.tick_rate_manager.runs_normally() {
                 self.level.level.tick_world_border();
                 self.level.level.advance_weather_cycle(true);
@@ -658,6 +658,7 @@ impl MinecraftServer {
             if self.tick_rate_manager.runs_normally() {
                 self.level.level.run_block_events().map_err(game_error)?;
             }
+            self.level.level.set_handling_tick(false);
             let active = self.level.tickets.should_keep_dimension_active();
             if self
                 .level
@@ -669,11 +670,15 @@ impl MinecraftServer {
                     .tick_entities_with_tick_rate(&self.tick_rate_manager)
                     .map_err(game_error)?;
                 self.broadcast_container_changes()?;
-                self.pending_level_hooks.block_entities += 1;
+                self.level
+                    .level
+                    .tick_block_entities(self.tick_rate_manager.runs_normally())
+                    .map_err(game_error)?;
             }
             self.apply_level_effects()?;
             self.world
                 .tick_entity_management(&mut self.level.level, &self.properties)?;
+            self.level.level.collect_detached_block_entities();
             if self.tick.is_multiple_of(1200) {
                 eprintln!(
                     "Live level: unported={:?}, pending={:?}, precipitation={}",
@@ -1057,6 +1062,13 @@ impl MinecraftServer {
                     }
                 }
                 LevelEffect::GameEvent { .. } => self.pending_level_hooks.game_events += 1,
+                LevelEffect::PlayerSectionChange { player, section } => {
+                    self.level.distance_manager.update_player(
+                        player,
+                        Some(section),
+                        &mut self.level.tickets,
+                    );
+                }
             }
         }
         self.world
@@ -1067,6 +1079,13 @@ impl MinecraftServer {
     /// The commands branch supplies the current SpectatorsGenerateChunks rule
     /// when its canonical GameRules state lands (vanilla's default is true).
     pub(super) fn update_player_tickets(&mut self, entity: EntityRef) -> Result<()> {
+        for (player, section) in self.level.level.take_player_section_changes() {
+            self.level.distance_manager.update_player(
+                player,
+                Some(section),
+                &mut self.level.tickets,
+            );
+        }
         let section = ferraloom_util::SectionPos::from_position(self.player(entity)?.position);
         self.level
             .distance_manager
@@ -2608,7 +2627,11 @@ impl MinecraftServer {
                             },
                         ],
                         sections: chunk.sections().map(LevelChunkSectionData::from).collect(),
-                        block_entities: Vec::new(),
+                        block_entities: self
+                            .level
+                            .level
+                            .block_entity_chunk_packet_info(pos)
+                            .map_err(game_error)?,
                     },
                     light_data: light_packet(self.world.lights.get(&pos.pack())),
                 }));

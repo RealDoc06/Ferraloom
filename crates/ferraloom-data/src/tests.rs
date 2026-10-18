@@ -746,4 +746,5 @@ fn fluid_random_ticks_follow_the_fluid_type_and_preserve_waterlogged_states() {
             .fluid
             .is_randomly_ticking()
     );
+
 }

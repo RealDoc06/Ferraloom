@@ -128,3 +128,16 @@ In 26.3 `BlockStateBase#getRenderShape` delegates to
 The base returns `MODEL`; every override in the jar (air, barrier, liquids,
 bubble column, light, structure void, end portal/gateway and moving piston)
 returns constant `INVISIBLE`. This is independent of collision and block entities.
+
+`fluid_random_ticking` records `FluidState#isRandomlyTicking`, which delegates
+only to the fluid type's virtual `isRandomlyTicking`. It has no level, position
+or state-property inputs. Source and flowing variants retain their own registry
+entries; waterlogged states use the same fluid fact as ordinary water.
+
+`ExtractEnvironmentAttributes <output-dir>` independently extracts all native
+EnvironmentAttribute defaults through their real value codecs, attribute-type
+registry IDs, allowed modifier names, flags and float sanitization bounds. These
+are immutable registry facts: dimension, biome, clock and weather sampling does
+not participate. Float limits are measured with sanitizeValue at both infinities;
+unbounded ends remain null. The Rust build consumes this committed table without
+Java. No environment value is sampled from a fabricated live level.

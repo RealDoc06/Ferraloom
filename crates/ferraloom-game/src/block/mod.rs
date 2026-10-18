@@ -3,13 +3,16 @@ use crate::level::{Level, LevelError, redstone::Orientation};
 use ferraloom_data::{Block, BlockState, FluidState};
 use ferraloom_util::{BlockPos, Direction};
 mod clone_item;
+pub mod containers;
 pub mod dispatch;
+pub mod entity;
 mod families;
 pub mod flags;
 pub mod fluid;
 mod foundational;
 mod placement;
 pub mod plants;
+pub mod redstone;
 pub use placement::{BlockPlaceContext, DirectionalPlaceContext, PlacementHit, UseOnContext};
 pub use plants::multiface_spreader;
 mod shapes;
@@ -233,7 +236,7 @@ pub trait BlockBehavior: Sync {
         _state: BlockState,
         _pos: BlockPos,
         _direction: Direction,
-        _level: &Level,
+        _level: &mut Level,
     ) -> Result<i32, LevelError> {
         Ok(0)
     }

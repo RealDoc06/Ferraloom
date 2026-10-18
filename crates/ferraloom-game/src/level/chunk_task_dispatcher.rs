@@ -178,7 +178,7 @@ mod tests {
                     ),
                     PlayerLoadingTask::Add(pos) => dispatcher.release(pos, false, None),
                     PlayerLoadingTask::Remove(pos) => {
-                        tickets.remove(pos, TicketType::PlayerLoading, 31)
+                        tickets.remove(pos, TicketType::PlayerLoading, 31);
                     }
                 }
             }

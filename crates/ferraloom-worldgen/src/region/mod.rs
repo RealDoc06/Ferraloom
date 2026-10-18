@@ -481,7 +481,13 @@ pub trait WorldgenBlockBehavior: Sync {
 
 pub use ferraloom_util::core::{Mirror, Rotation};
 
+struct RegionEnvironment {
+    definitions: std::sync::Arc<crate::environment::EnvironmentDefinitions>,
+    system: crate::environment::EnvironmentAttributeSystem,
+    biome_indices: Vec<usize>,
+}
 pub struct WorldGenRegion<'a> {
+    environment: Option<RegionEnvironment>,
     random: Option<ferraloom_util::random::Random>,
     fast_lava: Option<bool>,
     block_tags: Option<std::sync::Arc<ferraloom_data::datapack::TagSet<Block>>>,
@@ -546,6 +552,7 @@ impl<'a> WorldGenRegion<'a> {
             return Err(Error("duplicate worldgen chunk".into()));
         }
         Ok(Self {
+            environment: None,
             random: None,
             fast_lava: None,
             block_tags: None,
@@ -1161,6 +1168,95 @@ impl WorldGenRegion<'_> {
     pub fn has_skylight(&self) -> Result<bool, Error> {
         self.has_skylight
             .ok_or_else(|| Error("Unsupported: worldgen skylight context".into()))
+    }
+    /// WorldGenRegion builds static dimension/biome layers only: server clocks
+    /// and weather never enter a generation environment sampler.
+    pub fn set_environment_attributes(
+        &mut self,
+        definitions: std::sync::Arc<crate::environment::EnvironmentDefinitions>,
+        dimension: &crate::environment::DimensionEnvironment,
+        biome_names: &[crate::Identifier],
+    ) -> Result<(), Error> {
+        let biome_indices = biome_names
+            .iter()
+            .map(|name| {
+                definitions
+                    .biome_index(name)
+                    .ok_or_else(|| Error(format!("unknown environment biome {name}")))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let system =
+            crate::environment::EnvironmentAttributeSystem::new_static(&definitions, dimension);
+        self.environment = Some(RegionEnvironment {
+            definitions,
+            system,
+            biome_indices,
+        });
+        Ok(())
+    }
+    pub fn get_dimension_value<T: crate::environment::AttributeValue>(
+        &self,
+        key: crate::environment::AttributeKey<T>,
+    ) -> Result<T, Error> {
+        self.environment
+            .as_ref()
+            .ok_or_else(|| Error("Unsupported: worldgen environment context".into()))?
+            .system
+            .get_dimension_value(key, crate::environment::WeatherSample::default())
+            .map_err(|error| {
+                Error(format!(
+                    "Unsupported: environment attribute {}",
+                    error.0.name()
+                ))
+            })
+    }
+    pub fn get_environment_value<T: crate::environment::AttributeValue>(
+        &self,
+        key: crate::environment::AttributeKey<T>,
+        position: [i32; 3],
+    ) -> Result<T, Error> {
+        let runtime = self
+            .environment
+            .as_ref()
+            .ok_or_else(|| Error("Unsupported: worldgen environment context".into()))?;
+        let id = key.id();
+        if !runtime.system.is_affected_by_position(id) {
+            return self.get_dimension_value(key);
+        }
+        let quart = if id.data().full_resolution_biomes {
+            crate::biome_manager::zoom_quart(
+                crate::biome_manager::obfuscate_seed(self.seed),
+                position,
+            )
+        } else {
+            position.map(|v| v >> 2)
+        };
+        let biome = self
+            .chunk([quart[0] >> 2, quart[2] >> 2], ChunkStatus::Biomes)?
+            .chunk
+            .biome(quart);
+        let index = runtime
+            .biome_indices
+            .get(biome.0 as usize)
+            .ok_or_else(|| Error("Unsupported: environment biome ID".into()))?;
+        let attributes = runtime
+            .definitions
+            .biome(*index)
+            .ok_or_else(|| Error("Unsupported: environment biome map".into()))?;
+        runtime
+            .system
+            .get_value(
+                key,
+                Some(attributes),
+                None,
+                crate::environment::WeatherSample::default(),
+            )
+            .map_err(|error| {
+                Error(format!(
+                    "Unsupported: environment attribute {}",
+                    error.0.name()
+                ))
+            })
     }
     pub fn vine_acceptable_neighbor(
         &self,
