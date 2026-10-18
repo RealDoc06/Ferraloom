@@ -115,6 +115,27 @@ impl std::ops::DerefMut for LivingEntity {
     }
 }
 
+/// Port of LivingEntity#getItemBySlot and PlayerEquipment's main-hand override.
+/// The selected inventory stack is canonical for players; no equipment copy is kept.
+pub fn item_by_slot(
+    entity: super::EntityRef,
+    slot: ferraloom_protocol::component::EquipmentSlot,
+    level: &crate::level::Level,
+) -> Result<ferraloom_protocol::component::ItemStack, crate::level::LevelError> {
+    let state = level.entity_state(entity)?;
+    if let super::EntityState::Player(player) = state
+        && slot == ferraloom_protocol::component::EquipmentSlot::Mainhand
+    {
+        return Ok(player.inventory.selected_item().clone());
+    }
+    Ok(state
+        .as_living()
+        .ok_or(crate::level::LevelError::WrongEntityType(entity))?
+        .equipment
+        .get(slot)
+        .clone())
+}
+
 /// Port of LivingEntity#getDimensions, retaining the subclass's default pose
 /// dimensions and applying the live SCALE attribute as a separate float step.
 pub fn dimensions<E: super::Entity + ?Sized>(

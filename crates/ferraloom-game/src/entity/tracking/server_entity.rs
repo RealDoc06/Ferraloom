@@ -1,4 +1,4 @@
-//! Port of ServerEntity for the implemented nonliving entity families.
+//! Port of ServerEntity for players and the implemented nonliving entity families.
 use super::codec::{UpdateInterval, VecDeltaCodec, encoding_precision_loss};
 use crate::{
     entity::{EntityData, EntityRef, EntityState},
@@ -17,8 +17,8 @@ use ferraloom_util::{Vec3, mth};
 #[derive(Debug)]
 pub enum TrackingError {
     Level(LevelError),
-    /// Living metadata, head rotation and AttributeMap must be ported before
-    /// enabling a living entity's pairing/update stream.
+    /// Cow's variant metadata and leash state remain separate subclass work.
+    /// Other living families must finish their metadata before enabling pairing.
     LivingSynchronizationPending(EntityRef),
 }
 impl From<LevelError> for TrackingError {
@@ -67,6 +67,7 @@ pub struct ServerEntity {
     position_codec: VecDeltaCodec,
     last_sent_y_rot: i8,
     last_sent_x_rot: i8,
+    last_sent_y_head_rot: i8,
     last_sent_movement: Vec3,
     tick_count: i32,
     teleport_delay: i32,
@@ -83,7 +84,7 @@ impl ServerEntity {
         track_delta: bool,
     ) -> Result<Self, TrackingError> {
         let state = level.entity_state(entity)?;
-        if state.as_living().is_some() {
+        if state.as_living().is_some() && !matches!(state, EntityState::Player(_)) {
             return Err(TrackingError::LivingSynchronizationPending(entity));
         }
         let base = state.as_entity();
@@ -96,6 +97,9 @@ impl ServerEntity {
             },
             last_sent_y_rot: mth::pack_degrees(base.yaw),
             last_sent_x_rot: mth::pack_degrees(base.pitch),
+            last_sent_y_head_rot: mth::pack_degrees(
+                level.entity_behavior(entity)?.y_head_rot(entity, level)?,
+            ),
             last_sent_movement: base.velocity,
             tick_count: 0,
             teleport_delay: 0,
@@ -111,8 +115,8 @@ impl ServerEntity {
     pub fn last_sent_movement(&self) -> Vec3 {
         self.last_sent_movement
     }
-    /// Native pairing order is spawn, cached non-default metadata, passengers,
-    /// then the mounted vehicle's passengers. The runtime wraps this in a bundle.
+    /// Native pairing order is spawn, cached non-default metadata, attributes,
+    /// equipment, passengers and the mounted vehicle's passengers.
     pub fn pairing_data(&self, level: &mut Level) -> Result<Vec<Packet>, TrackingError> {
         level
             .entity_behavior(self.entity)?
@@ -138,7 +142,7 @@ impl ServerEntity {
             }),
             x_rot: Angle(self.last_sent_x_rot as u8),
             y_rot: Angle(self.last_sent_y_rot as u8),
-            y_head_rot: Angle(0),
+            y_head_rot: Angle(self.last_sent_y_head_rot as u8),
             data: VarInt(data),
         })];
         if let Some(data) = &self.tracked_data_values {
@@ -146,6 +150,32 @@ impl ServerEntity {
                 id: VarInt(base.network_id),
                 packed_items: EntityDataItems(data.clone()),
             }));
+        }
+        if let Some(living) = state.as_living() {
+            let values: Vec<_> = living
+                .attributes
+                .syncable_attributes()
+                .map(|attribute| attribute.snapshot())
+                .collect();
+            if !values.is_empty() {
+                packets.push(Packet::UpdateAttributes(packet::UpdateAttributes {
+                    entity_id: VarInt(base.network_id),
+                    values,
+                }));
+            }
+            let mut slots = Vec::new();
+            for slot in crate::entity::player::equipment::SLOTS {
+                let item = crate::entity::living::item_by_slot(self.entity, slot, level)?;
+                if !item.is_empty() {
+                    slots.push(packet::EquipmentEntry { slot, item });
+                }
+            }
+            if !slots.is_empty() {
+                packets.push(Packet::SetEquipment(packet::SetEquipment {
+                    entity: VarInt(base.network_id),
+                    slots,
+                }));
+            }
         }
         if !base.passengers.is_empty() {
             packets.push(passengers_packet(self.entity, level)?);
@@ -174,6 +204,24 @@ impl ServerEntity {
                     packed_items: EntityDataItems(data),
                 },
             )));
+        }
+        let state = level.entity_state_mut(self.entity)?;
+        let network_id = state.as_entity().network_id;
+        if let Some(living) = state.as_living_mut() {
+            let values: Vec<_> = living
+                .attributes
+                .attributes_to_sync()
+                .map(|attribute| attribute.snapshot())
+                .collect();
+            if !values.is_empty() {
+                out.push(TrackingPacket::with_self(Packet::UpdateAttributes(
+                    packet::UpdateAttributes {
+                        entity_id: VarInt(network_id),
+                        values,
+                    },
+                )));
+            }
+            living.attributes.clear_attributes_to_sync();
         }
         Ok(())
     }
@@ -230,7 +278,9 @@ impl ServerEntity {
                 let (movement_packet, has_position, has_rotation) =
                     self.create_move_packet(level, send_position, rotation_changed, y_rot, x_rot)?;
                 let base = level.entity::<EntityData>(self.entity)?;
-                if base.needs_sync || self.track_delta {
+                let fall_flying =
+                    level.entity_state(self.entity)?.as_living().is_some() && base.shared_flag(7);
+                if base.needs_sync || self.track_delta || fall_flying {
                     let movement = base.velocity;
                     let diff = movement.distance_to_sqr(self.last_sent_movement);
                     if diff > 1.0E-7 || diff > 0.0 && movement.length_sqr() == 0.0 {
@@ -262,8 +312,20 @@ impl ServerEntity {
                 }
                 self.was_riding = false;
             }
-            // Entity#getYHeadRot is exactly zero for the supported nonliving
-            // families, so this base dispatcher has no head-rotation packet.
+            let y_head_rot = mth::pack_degrees(
+                level
+                    .entity_behavior(self.entity)?
+                    .y_head_rot(self.entity, level)?,
+            );
+            if (i32::from(y_head_rot) - i32::from(self.last_sent_y_head_rot)).abs() >= 1 {
+                out.push(TrackingPacket::players(Packet::RotateHead(
+                    packet::RotateHead {
+                        entity_id: VarInt(level.entity::<EntityData>(self.entity)?.network_id),
+                        y_head_rot: Angle(y_head_rot as u8),
+                    },
+                )));
+                self.last_sent_y_head_rot = y_head_rot;
+            }
             level.entity_mut::<EntityData>(self.entity)?.needs_sync = false;
         }
         self.tick_count = self.tick_count.wrapping_add(1);

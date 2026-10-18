@@ -22,6 +22,10 @@ public final class TrackingVectors {
     return "S:"+String.join(";",((PositionPath.Stepped)p).steps().stream().map(e->e.tickOffset()+":"+vec(e.position())).toList());
   }
   static String packet(Packet<?> packet) {
+    if(packet instanceof ClientboundAddEntityPacket p) return "spawn:"+net.minecraft.util.Mth.packDegrees(p.getYRot())+","+net.minecraft.util.Mth.packDegrees(p.getXRot())+","+net.minecraft.util.Mth.packDegrees(p.getYHeadRot());
+    if(packet instanceof ClientboundRotateHeadPacket p) return "head:"+net.minecraft.util.Mth.packDegrees(p.getYHeadRot());
+    if(packet instanceof ClientboundUpdateAttributesPacket p) return "attributes:"+String.join(",",p.getValues().stream().map(v->v.attribute().getRegisteredName()+"="+bits(v.base())+"["+String.join(";",v.modifiers().stream().map(m->m.id()+"="+bits(m.amount())+":"+m.operation().id()).toList())+"]").toList());
+    if(packet instanceof ClientboundSetEquipmentPacket p) return "equipment:"+String.join(",",p.getSlots().stream().map(v->v.getFirst().getSerializedName()+"="+net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(v.getSecond().getItem())+":"+v.getSecond().getCount()).toList());
     if(packet instanceof ClientboundMoveEntityPacket p) return "move:"+p.hasPosition()+":"+p.hasRotation()+":"+delta(p.getPositionDelta())+":"+net.minecraft.util.Mth.packDegrees(p.getYRot())+","+net.minecraft.util.Mth.packDegrees(p.getXRot())+":"+p.isOnGround();
     if(packet instanceof ClientboundEntityPositionSyncPacket p) return "sync:"+path(p.position())+":"+Integer.toHexString(Float.floatToRawIntBits(p.yRot()))+","+Integer.toHexString(Float.floatToRawIntBits(p.xRot()))+":"+p.onGround();
     if(packet instanceof ClientboundSetEntityMotionPacket p) return "motion:"+vec(p.movement());

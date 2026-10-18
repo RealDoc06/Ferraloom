@@ -31,14 +31,14 @@ pub struct TrackedEntity {
     seen_by: Vec<EntityRef>,
 }
 impl TrackedEntity {
-    pub fn new(entity: EntityRef, level: &Level, track_delta: bool) -> Result<Self, TrackingError> {
+    pub fn new(entity: EntityRef, level: &Level) -> Result<Self, TrackingError> {
         let state = level.entity_state(entity)?;
         Ok(Self {
             server_entity: ServerEntity::new(
                 entity,
                 level,
                 UpdateInterval::for_entity_type(state.entity_type()),
-                track_delta,
+                state.entity_type().data().track_deltas,
             )?,
             range: (state.entity_type().data().tracking_range as i32).wrapping_mul(16),
             last_section_pos: SectionPos::from_position(state.as_entity().position),

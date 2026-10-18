@@ -64,7 +64,7 @@ fn tracking_range_boundary_is_inclusive_ignores_height_and_requires_the_sent_chu
         .entity_mut::<ServerPlayer>(viewer)
         .unwrap()
         .view_distance = 2;
-    let mut tracked = TrackedEntity::new(item, &level, true).unwrap();
+    let mut tracked = TrackedEntity::new(item, &level).unwrap();
     let paired = tracked.update_player(&mut level, view(viewer)).unwrap();
     assert_eq!(paired.len(), 1);
     assert!(matches!(paired[0].message, ClientboundMessage::Bundle(_)));
@@ -124,7 +124,7 @@ fn tracking_range_includes_transitive_passengers_before_server_percentage_scalin
     level
         .add_entity(mount, EntityState::PrimedTnt(Box::new(tnt)))
         .unwrap();
-    let mut tracked = TrackedEntity::new(item, &level, true).unwrap();
+    let mut tracked = TrackedEntity::new(item, &level).unwrap();
     let mut settings = view(viewer);
     settings.broadcast_range_percentage = 50;
     assert!(
@@ -152,7 +152,7 @@ fn dirty_metadata_waits_for_the_chunk_map_gate_but_needs_sync_opens_it() {
     let mut level = level();
     let item = item(&mut level);
     let viewer = player(&mut level, Vec3::new(1.0, 64.0, 0.0));
-    let mut tracked = TrackedEntity::new(item, &level, true).unwrap();
+    let mut tracked = TrackedEntity::new(item, &level).unwrap();
     let settings = view(viewer);
     tracked.update_player(&mut level, settings).unwrap();
     assert!(tracked.tick(&mut level, &[settings]).unwrap().is_empty());

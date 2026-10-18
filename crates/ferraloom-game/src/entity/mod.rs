@@ -344,6 +344,10 @@ pub trait Entity: Sync {
     fn default_gravity(&self) -> f64 {
         0.0
     }
+    /// Port of Entity#getYHeadRot; LivingEntity overrides its stored head angle.
+    fn y_head_rot(&self, _entity: EntityRef, _level: &Level) -> Result<f32, LevelError> {
+        Ok(0.0)
+    }
     fn effective_gravity(&self, entity: EntityRef, level: &Level) -> Result<f64, LevelError> {
         Ok(
             if *level

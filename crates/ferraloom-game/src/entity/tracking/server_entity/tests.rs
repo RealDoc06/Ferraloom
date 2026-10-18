@@ -37,6 +37,51 @@ fn delta(value: &VecDelta) -> String {
 }
 fn packet_text(packet: &Packet) -> String {
     match packet {
+        Packet::AddEntity(p) => format!(
+            "spawn:{},{},{}",
+            p.y_rot.0 as i8, p.x_rot.0 as i8, p.y_head_rot.0 as i8
+        ),
+        Packet::RotateHead(p) => format!("head:{}", p.y_head_rot.0 as i8),
+        Packet::UpdateAttributes(p) => format!(
+            "attributes:{}",
+            p.values
+                .iter()
+                .map(|value| format!(
+                    "{}={:x}[{}]",
+                    ferraloom_data::registries::attribute::Id::from_protocol_id(
+                        value.attribute.0 as u16
+                    )
+                    .unwrap()
+                    .name(),
+                    value.base.to_bits(),
+                    value
+                        .modifiers
+                        .iter()
+                        .map(|modifier| format!(
+                            "{}={:x}:{}",
+                            modifier.id,
+                            modifier.amount.to_bits(),
+                            modifier.operation as i32
+                        ))
+                        .collect::<Vec<_>>()
+                        .join(";")
+                ))
+                .collect::<Vec<_>>()
+                .join(",")
+        ),
+        Packet::SetEquipment(p) => format!(
+            "equipment:{}",
+            p.slots
+                .iter()
+                .map(|entry| format!(
+                    "{}={}:{}",
+                    crate::entity::player::equipment::slot_name(entry.slot),
+                    entry.item.0.as_ref().unwrap().item.name(),
+                    inventory::count(&entry.item)
+                ))
+                .collect::<Vec<_>>()
+                .join(",")
+        ),
         Packet::MoveEntityPos(p) => format!(
             "move:true:false:{}:0,0:{}",
             delta(&p.delta.delta),
@@ -74,6 +119,9 @@ fn packet_text(packet: &Packet) -> String {
                         EntityDataValue::ItemStack(stack) => {
                             format!("item={}", inventory::count(stack))
                         }
+                        EntityDataValue::Float(value) => format!("{value:?}"),
+                        EntityDataValue::Byte(value) => value.to_string(),
+                        EntityDataValue::Int(value) => value.0.to_string(),
                         _ => panic!("unexpected metadata {:?}", value.value),
                     };
                     format!("{}:{contents}", value.id)
@@ -106,6 +154,104 @@ fn output_text(output: &[TrackingPacket]) -> String {
 }
 fn stack(count: i32) -> ItemStack {
     ItemStack::new(ferraloom_data::Item::STONE, count, Default::default())
+}
+
+#[test]
+fn real_player_pairing_and_updates_preserve_equipment_attributes_head_and_motion_order() {
+    use crate::entity::{
+        ai::attributes::{AttributeModifier, AttributeOperation},
+        player::{GameType, ServerPlayer},
+    };
+    use ferraloom_data::{Item, registries::attribute::Id as Attribute};
+    use ferraloom_protocol::component::EquipmentSlot;
+    use std::sync::Arc;
+    let mut level = level();
+    let id = EntityRef(1);
+    let mut player = ServerPlayer::new(
+        ferraloom_util::Uuid::new(1, 2),
+        "tracking".into(),
+        9,
+        Vec3::new(8.5, 64.0, 8.5),
+        GameType::Survival,
+    );
+    player.set_y_rot(0.0);
+    player.set_x_rot(0.0);
+    player.y_head_rot = 10.0;
+    player
+        .attributes
+        .get_instance(Attribute::MAX_HEALTH)
+        .unwrap()
+        .set_base_value(30.0);
+    player.inventory.set_selected_item(stack(3));
+    player.equipment.set(
+        EquipmentSlot::Offhand,
+        ItemStack::new(Item::SHIELD, 1, Default::default()),
+    );
+    player.equipment.set(
+        EquipmentSlot::Chest,
+        ItemStack::new(Item::IRON_CHESTPLATE, 1, Default::default()),
+    );
+    level
+        .add_entity(id, EntityState::Player(Box::new(player)))
+        .unwrap();
+    let mut tracker = ServerEntity::new(
+        id,
+        &level,
+        UpdateInterval::for_entity_type(ferraloom_data::EntityType::PLAYER),
+        ferraloom_data::EntityType::PLAYER.data().track_deltas,
+    )
+    .unwrap();
+    let pairing = tracker
+        .pairing_data(&mut level)
+        .unwrap()
+        .iter()
+        .map(packet_text)
+        .collect::<Vec<_>>()
+        .join("|");
+    assert_eq!(
+        pairing,
+        VECTORS
+            .lines()
+            .find_map(|line| line.strip_prefix("player-pairing\t"))
+            .unwrap()
+    );
+    let mut actual = Vec::new();
+    for tick in 0..=6 {
+        let player = level.entity_mut::<ServerPlayer>(id).unwrap();
+        match tick {
+            1 => player.y_head_rot = 23.9,
+            2 => player.set_health(7.5),
+            3 => {
+                player.y_head_rot = 90.0;
+                let mut health = player
+                    .attributes
+                    .get_instance(Attribute::MAX_HEALTH)
+                    .unwrap();
+                health.set_base_value(35.0);
+                health
+                    .add_transient_modifier(Arc::new(AttributeModifier {
+                        id: "minecraft:bonus".parse().unwrap(),
+                        amount: 3.0,
+                        operation: AttributeOperation::AddValue,
+                    }))
+                    .unwrap();
+            }
+            5 => {
+                player.set_shared_flag(7, true);
+                player.velocity = Vec3::new(0.125, 0.0, 0.0);
+            }
+            _ => {}
+        }
+        actual.push(format!(
+            "player-tracking\t{tick}\t{}",
+            output_text(&tracker.send_changes(&mut level).unwrap())
+        ));
+    }
+    let expected: Vec<_> = VECTORS
+        .lines()
+        .filter(|line| line.starts_with("player-tracking\t"))
+        .collect();
+    assert_eq!(actual, expected);
 }
 
 #[test]

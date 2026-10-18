@@ -69,6 +69,13 @@ impl Cow {
 /// Shared Cow dispatcher for the foundation's Entity/LivingEntity primitives.
 pub struct CowBehavior;
 impl Entity for CowBehavior {
+    fn y_head_rot(
+        &self,
+        entity: super::EntityRef,
+        level: &crate::level::Level,
+    ) -> Result<f32, crate::level::LevelError> {
+        Ok(level.entity::<Cow>(entity)?.as_living().y_head_rot)
+    }
     fn dimensions(
         &self,
         entity: super::EntityRef,

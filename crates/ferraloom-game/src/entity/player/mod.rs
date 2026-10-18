@@ -509,6 +509,13 @@ fn jump_from_ground(entity: crate::entity::EntityRef, level: &mut Level) -> Resu
 }
 pub struct PlayerBehavior;
 impl crate::entity::Entity for PlayerBehavior {
+    fn y_head_rot(
+        &self,
+        entity: crate::entity::EntityRef,
+        level: &Level,
+    ) -> Result<f32, LevelError> {
+        Ok(level.entity::<ServerPlayer>(entity)?.y_head_rot)
+    }
     fn dimensions(
         &self,
         entity: crate::entity::EntityRef,
