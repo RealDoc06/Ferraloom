@@ -384,6 +384,29 @@ fn vanilla_persistent_primitive_coercions() {
         };
         assert_eq!(nbt_values(&value), row["values"], "NBT {name}");
     }
+    for row in fixture["nested"].as_array().unwrap() {
+        let input = ferraloom_nbt::parse(row["nbt"].as_str().unwrap()).unwrap();
+        let actual = match row["codec"].as_str().unwrap() {
+            "fireworks" => Fireworks::from_nbt(&input).unwrap().to_nbt().unwrap(),
+            "details" => MobEffectDetails::from_nbt(&input)
+                .unwrap()
+                .to_nbt()
+                .unwrap(),
+            "teleport" => {
+                let mut input = input;
+                input
+                    .as_compound_mut()
+                    .unwrap()
+                    .insert("type", Tag::String("minecraft:teleport_randomly".into()));
+                let mut output = ConsumeEffect::from_nbt(&input).unwrap().to_nbt().unwrap();
+                output.as_compound_mut().unwrap().remove("type");
+                output
+            }
+            _ => panic!("unknown nested codec"),
+        };
+        let expected = ferraloom_nbt::parse(row["expected"].as_str().unwrap()).unwrap();
+        assert_eq!(actual, expected, "nested {}", row["codec"]);
+    }
     // A component nested in a recipe result must use the same primitive codec.
     assert_eq!(
         DataComponent::from_json(

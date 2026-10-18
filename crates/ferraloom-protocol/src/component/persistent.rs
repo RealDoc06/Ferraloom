@@ -1381,6 +1381,13 @@ impl Persistent for Fireworks {
             explosions: field(v, "explosions", Some(BoundedList(vec![])))?,
         })
     }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        let flight_duration = VarInt(field_nbt::<i32>(v, "flight_duration", Some(0))? as u8 as i32);
+        Ok(Self {
+            flight_duration,
+            explosions: field_nbt(v, "explosions", Some(BoundedList(vec![])))?,
+        })
+    }
     fn to_persistent(&self) -> Result<PersistentValue> {
         // ExtraCodecs.UNSIGNED_BYTE rejects values above 255 but narrows negative values.
         if self.flight_duration.0 > 255 {
@@ -1478,6 +1485,21 @@ impl Persistent for ItemEnchantments {
                         return Err(invalid("enchantment level"));
                     }
                     Ok((Enchantment(registry(k)), VarInt(level)))
+                })
+                .collect::<Result<_>>()?,
+        ))
+    }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        Ok(Self(
+            v.as_compound()
+                .ok_or_else(|| invalid("component object"))?
+                .iter()
+                .map(|(k, v)| {
+                    let level = i32::from_nbt(v)?;
+                    if !(1..=255).contains(&level) {
+                        return Err(invalid("enchantment level"));
+                    }
+                    Ok((Enchantment(registry(&k.to_string_lossy())), VarInt(level)))
                 })
                 .collect::<Result<_>>()?,
         ))
@@ -1658,6 +1680,20 @@ impl Persistent for GlobalPos {
             pos: BlockPos::new(p[0], p[1], p[2]),
         })
     }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        let p = Vec::<i32>::from_nbt(
+            v.as_compound()
+                .and_then(|v| v.get("pos"))
+                .ok_or_else(|| invalid("position"))?,
+        )?;
+        if p.len() != 3 {
+            return Err(invalid("position"));
+        }
+        Ok(Self {
+            dimension: field_nbt(v, "dimension", None)?,
+            pos: BlockPos::new(p[0], p[1], p[2]),
+        })
+    }
     fn to_persistent(&self) -> Result<PersistentValue> {
         Ok(PersistentValue::Map(vec![
             ("dimension".into(), self.dimension.to_persistent()?),
@@ -1707,6 +1743,16 @@ impl Persistent for Uuid {
             (i64::from(a[2]) << 32) | (a[3] as u32 as i64),
         ))
     }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        let a = Vec::<i32>::from_nbt(v)?;
+        if a.len() != 4 {
+            return Err(invalid("UUID"));
+        }
+        Ok(Self::new(
+            (i64::from(a[0]) << 32) | (a[1] as u32 as i64),
+            (i64::from(a[2]) << 32) | (a[3] as u32 as i64),
+        ))
+    }
     fn to_persistent(&self) -> Result<PersistentValue> {
         Ok(PersistentValue::Nbt(Tag::IntArray(vec![
             (self.most >> 32) as i32,
@@ -1746,6 +1792,35 @@ impl Persistent for ResolvableProfile {
             skin_patch: SkinPatch::from_json(v)?,
         })
     }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        if matches!(v, Tag::String(_)) {
+            return Ok(Self {
+                profile: Either::Right(PartialProfile {
+                    name: Some(BoundedString(String::from_nbt(v)?)),
+                    id: None,
+                    properties: BoundedList(vec![]),
+                }),
+                skin_patch: SkinPatch {
+                    body: None,
+                    cape: None,
+                    elytra: None,
+                    model: None,
+                },
+            });
+        }
+        let profile = if v
+            .as_compound()
+            .is_some_and(|v| v.get("id").is_some() && v.get("name").is_some())
+        {
+            Either::Left(GameProfile::from_nbt(v)?)
+        } else {
+            Either::Right(PartialProfile::from_nbt(v)?)
+        };
+        Ok(Self {
+            profile,
+            skin_patch: SkinPatch::from_nbt(v)?,
+        })
+    }
     fn to_persistent(&self) -> Result<PersistentValue> {
         let mut v = map_entries(self.profile.to_persistent()?)?;
         v.extend(map_entries(self.skin_patch.to_persistent()?)?);
@@ -1764,6 +1839,13 @@ impl Persistent for AttributeModifier {
             id: field(v, "id", None)?,
             amount: field(v, "amount", None)?,
             operation: field(v, "operation", None)?,
+        })
+    }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        Ok(Self {
+            id: field_nbt(v, "id", None)?,
+            amount: field_nbt(v, "amount", None)?,
+            operation: field_nbt(v, "operation", None)?,
         })
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
@@ -1852,6 +1934,17 @@ impl Persistent for MobEffectDetails {
             hidden_effect: field(v, "hidden_effect", Some(None))?,
         })
     }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        let show_particles = field_nbt(v, "show_particles", Some(true))?;
+        Ok(Self {
+            amplifier: VarInt(field_nbt::<i32>(v, "amplifier", Some(0))? as u8 as i32),
+            duration: field_nbt(v, "duration", Some(VarInt(0)))?,
+            ambient: field_nbt(v, "ambient", Some(false))?,
+            show_particles,
+            show_icon: field_nbt(v, "show_icon", Some(show_particles))?,
+            hidden_effect: field_nbt(v, "hidden_effect", Some(None))?,
+        })
+    }
     fn to_persistent(&self) -> Result<PersistentValue> {
         // ExtraCodecs.UNSIGNED_BYTE rejects values above 255 but narrows negative values.
         if self.amplifier.0 > 255 {
@@ -1879,6 +1972,12 @@ impl Persistent for MobEffectInstance {
             details: MobEffectDetails::from_json(v)?,
         })
     }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        Ok(Self {
+            effect: field_nbt(v, "id", None)?,
+            details: MobEffectDetails::from_nbt(v)?,
+        })
+    }
     fn to_persistent(&self) -> Result<PersistentValue> {
         let mut v = map_entries(self.details.to_persistent()?)?;
         v.push(("id".into(), self.effect.to_persistent()?));
@@ -1904,6 +2003,26 @@ impl Persistent for ConsumeEffect {
             }
             Some("minecraft:play_sound" | "play_sound") => {
                 Ok(Self::PlaySound(field(v, "sound", None)?))
+            }
+            _ => Err(invalid("consume effect")),
+        }
+    }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        match field_nbt::<String>(v, "type", None)?.as_str() {
+            "minecraft:apply_effects" | "apply_effects" => Ok(Self::ApplyEffects {
+                effects: field_nbt(v, "effects", None)?,
+                probability: field_nbt(v, "probability", Some(1.0))?,
+            }),
+            "minecraft:remove_effects" | "remove_effects" => {
+                Ok(Self::RemoveEffects(field_nbt(v, "effects", None)?))
+            }
+            "minecraft:clear_all_effects" | "clear_all_effects" => Ok(Self::ClearAllEffects),
+            "minecraft:teleport_randomly" | "teleport_randomly" => Ok(Self::TeleportRandomly {
+                diameter: field_nbt(v, "diameter", Some(16.0))?,
+                directional_particles: field_nbt(v, "directional_particles", Some(true))?,
+            }),
+            "minecraft:play_sound" | "play_sound" => {
+                Ok(Self::PlaySound(field_nbt(v, "sound", None)?))
             }
             _ => Err(invalid("consume effect")),
         }
@@ -2097,6 +2216,28 @@ impl Persistent for IntBounds {
             })
         }
     }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        if matches!(
+            v,
+            Tag::Byte(_)
+                | Tag::Short(_)
+                | Tag::Int(_)
+                | Tag::Long(_)
+                | Tag::Float(_)
+                | Tag::Double(_)
+        ) {
+            let n = i32::from_nbt(v)?;
+            Ok(Self {
+                min: Some(n),
+                max: Some(n),
+            })
+        } else {
+            Ok(Self {
+                min: field_nbt(v, "min", Some(None))?,
+                max: field_nbt(v, "max", Some(None))?,
+            })
+        }
+    }
     fn to_persistent(&self) -> Result<PersistentValue> {
         if let (Some(min), Some(max)) = (self.min, self.max)
             && min > max
@@ -2144,6 +2285,15 @@ impl Persistent for MapDecorations {
             object(v)?
                 .iter()
                 .map(|(k, v)| Ok((k.clone(), MapDecoration::from_json(v)?)))
+                .collect::<Result<_>>()?,
+        ))
+    }
+    fn from_nbt(v: &Tag) -> Result<Self> {
+        Ok(Self(
+            v.as_compound()
+                .ok_or_else(|| invalid("component object"))?
+                .iter()
+                .map(|(k, v)| Ok((k.to_string_lossy(), MapDecoration::from_nbt(v)?)))
                 .collect::<Result<_>>()?,
         ))
     }

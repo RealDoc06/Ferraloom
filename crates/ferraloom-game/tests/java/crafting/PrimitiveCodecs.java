@@ -35,6 +35,10 @@ public final class PrimitiveCodecs {
         try { return TypedEntityData.codec(Identifier.CODEC).parse(ops,input).getOrThrow().type().toString(); }
         catch (Exception e) { return null; }
     }
+    static <T,V> String normalized(Codec<V> codec, DynamicOps<T> ops, T input) {
+        try { return codec.encodeStart(NbtOps.INSTANCE,codec.parse(ops,input).getOrThrow()).getOrThrow().toString(); }
+        catch (Exception e) { return null; }
+    }
     public static void main(String[] args) throws Exception {
         var root = new JsonObject(); var json = new JsonArray(); var nbt = new JsonArray(); var compounds = new JsonArray();
         var inputs = new ArrayList<>(List.of("null","true","false","\"1\"","\"hello\"","[]","{}","0","-0.0","2.9","-2.9",
@@ -66,6 +70,24 @@ public final class PrimitiveCodecs {
             row.addProperty("nbt_compound",compound(NbtOps.INSTANCE,JsonOps.INSTANCE.convertTo(NbtOps.INSTANCE,parsed)));
             compounds.add(row);
         }
+        var nested = new JsonArray();
+        var detailsClass = Class.forName("net.minecraft.world.effect.MobEffectInstance$Details");
+        var detailsField = detailsClass.getDeclaredField("MAP_CODEC"); detailsField.setAccessible(true);
+        var nestedCodecs = new LinkedHashMap<String,Codec<?>>();
+        nestedCodecs.put("fireworks",Fireworks.CODEC);
+        nestedCodecs.put("details",((MapCodec<?>)detailsField.get(null)).codec());
+        nestedCodecs.put("teleport",net.minecraft.world.item.consume_effects.TeleportRandomlyConsumeEffect.CODEC.codec());
+        for (var entry : nestedCodecs.entrySet()) {
+            String nbtText = switch(entry.getKey()) {
+                case "fireworks" -> "{flight_duration:257L,explosions:[{shape:'small_ball',has_trail:0.5d,has_twinkle:0b}]}";
+                case "details" -> "{amplifier:257L,duration:4294967297L,ambient:0.5d,show_particles:0b,hidden_effect:{amplifier:2b,ambient:1b}}";
+                default -> "{diameter:2.9d,directional_particles:0b}";
+            };
+            var row=new JsonObject(); row.addProperty("codec",entry.getKey());row.addProperty("nbt",nbtText);
+            row.addProperty("expected",normalized(entry.getValue(),NbtOps.INSTANCE,TagParser.parseCompoundFully(nbtText)));
+            nested.add(row);
+        }
+        root.add("nested",nested);
         root.add("json",json);root.add("nbt",nbt);root.add("compounds",compounds);
         Files.writeString(Path.of(args[0]),JSON.toJson(root)+"\n");
         System.out.println("Primitive vectors: "+json.size()+" JSON, "+nbt.size()+" NBT, "+compounds.size()+" compound alternatives");
