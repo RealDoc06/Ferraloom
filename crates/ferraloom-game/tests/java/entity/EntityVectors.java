@@ -78,6 +78,18 @@ public final class EntityVectors {
         System.out.println("move\\t"+name+"\\t"+(player?"player":"cow")+"\\t"+(obstacle==null?-1:Block.getId(obstacle))+"\\t"+vec(from)+"\\t"+vec(delta)+"\\t"+ground+"\\t"+sneak+"\\t"+bits(fall)+"\\t"+vec(e.position())+"\\t"+flags(e)+"\\t"+bits(e.fallDistance)+"\\t"+vec(e.getDeltaMovement()));
       }
       public static void run(RegistryAccess r)throws Exception {
+        for(int test=0;test<6;test++){
+          var player=new TestPlayer(new EntityFixture(r));var inventory=player.getInventory();
+          var stack=new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.STONE,test==0?70:8);
+          if(test==1 || test==5){for(int slot=0;slot<36;slot++)inventory.setItem(slot,new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.STONE,64));inventory.setItem(0,new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.STONE,test==1?63:64));stack.setCount(2);}
+          if(test==2){inventory.setItem(0,new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.DIRT,64));inventory.setItem(40,new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.STONE,60));}
+          if(test==3){inventory.setSelectedSlot(5);inventory.setItem(5,new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.STONE,60));inventory.setItem(40,new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.STONE,60));}
+          if(test==4){stack=new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.DIAMOND_PICKAXE);stack.setDamageValue(9);}
+          if(test==5)player.getAbilities().instabuild=true;
+          boolean added=inventory.add(stack);var slots=new ArrayList<String>();
+          for(int slot=0;slot<43;slot++){var item=inventory.getItem(slot);if(!item.isEmpty())slots.add(slot+":"+BuiltInRegistries.ITEM.getKey(item.getItem())+":"+item.getCount()+":"+item.getDamageValue());}
+          System.out.println("inventory\\t"+test+"\\t"+added+"\\t"+stack.getCount()+"\\t"+String.join(";",slots));
+        }
         int traceIndex=0;
         for(var start:List.of(new Vec3(0.5,64,0.5),new Vec3(-0.3,64.00001,15.8)))for(var delta:List.of(Vec3.ZERO,new Vec3(0.000001,0,0),new Vec3(3.2,-0.7,1.1),new Vec3(-4.5,2.3,-2.3),new Vec3(1,1,1),new Vec3(0,-8,0),new Vec3(0,0,20))){
           var end=start.add(delta);var radius=(double)(EntityTypes.COW.getDimensions().width()/2f);var box=new AABB(end.x-radius,end.y,end.z-radius,end.x+radius,end.y+EntityTypes.COW.getDimensions().height(),end.z+radius).deflate(9.999999747378752E-6);

@@ -1,4 +1,6 @@
 //! ServerPlayer gameplay state. Connections retain handles, never another player copy.
+pub mod equipment;
+pub mod inventory;
 use crate::{
     entity::{EntityData, EntityDataView, EntityState, LivingEntity},
     level::{Level, LevelError},
@@ -35,6 +37,7 @@ impl GameType {
 #[derive(Debug)]
 pub struct ServerPlayer {
     pub parent: LivingEntity,
+    pub inventory: inventory::Inventory,
     pub name: String,
     pub known_movement: Vec3,
     pub game_mode: GameType,
@@ -73,6 +76,7 @@ impl ServerPlayer {
     ) -> Self {
         Self {
             parent: LivingEntity {
+                equipment: Default::default(),
                 parent: {
                     let mut base =
                         EntityData::new(ferraloom_data::EntityType::PLAYER, network_id, 0);
@@ -87,6 +91,7 @@ impl ServerPlayer {
                 hurt_duration: 0,
             },
             name,
+            inventory: Default::default(),
             known_movement: Vec3::ZERO,
             game_mode,
             flying: game_mode == GameType::Spectator,
@@ -124,6 +129,19 @@ impl ServerPlayer {
         self.game_mode =
             GameType::from_id(self.saved.get_int_or("playerGameType", self.game_mode.id()));
         self.parent.health = self.saved.get_float_or("Health", 20.0);
+        let inventory = self
+            .saved
+            .get_list("Inventory")
+            .cloned()
+            .unwrap_or_default();
+        let selected = self.saved.get_int_or("SelectedItemSlot", 0);
+        self.inventory.load(&inventory);
+        self.inventory.set_selected_slot(selected as usize);
+        self.parent.equipment = self
+            .saved
+            .get("equipment")
+            .and_then(|v| equipment::EntityEquipment::from_tag(v).ok())
+            .unwrap_or_default();
         self.first_good = self.position;
         self.last_good = self.position;
         Ok(())
@@ -157,8 +175,25 @@ impl ServerPlayer {
         tag.insert("playerGameType", Tag::Int(self.game_mode.id()));
         tag.insert("Health", Tag::Float(self.parent.health));
         tag.insert("OnGround", Tag::Byte(i8::from(self.on_ground)));
-        if !tag.contains_key("Inventory") {
-            tag.insert("Inventory", Tag::List(ListTag::default()));
+        tag.insert(
+            "Inventory",
+            Tag::List(self.inventory.save().expect("canonical inventory stacks")),
+        );
+        tag.insert(
+            "SelectedItemSlot",
+            Tag::Int(self.inventory.selected_slot() as i32),
+        );
+        tag.remove("equipment");
+        if !self.parent.equipment.is_empty() {
+            tag.insert(
+                "equipment",
+                Tag::Compound(
+                    self.parent
+                        .equipment
+                        .save()
+                        .expect("canonical equipment stacks"),
+                ),
+            );
         }
         tag.insert("foodLevel", Tag::Int(20));
         tag.insert("foodSaturationLevel", Tag::Float(5.));

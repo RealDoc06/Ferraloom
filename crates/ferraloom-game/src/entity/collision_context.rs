@@ -57,12 +57,23 @@ impl EntityCollisionView {
         always_collide_with_fluid: bool,
     ) -> Result<EntityCollisionContext<Self>, LevelError> {
         let base = level.entity::<EntityData>(entity)?;
+        let held_item = match level.entity_state(entity)? {
+            super::EntityState::Player(player) => Some(player.inventory.selected_item()),
+            state => state.as_living().map(|living| {
+                living
+                    .equipment
+                    .get(ferraloom_protocol::component::EquipmentSlot::Mainhand)
+            }),
+        };
         Ok(EntityCollisionContext {
             descending: base.shared_flag(1),
             placement: false,
             entity_bottom: base.bounding_box.min_y,
             always_collide_with_fluid,
-            held_item: None,
+            held_item: held_item
+                .filter(|stack| !stack.is_empty())
+                .and_then(|stack| stack.0.as_ref())
+                .map(|stack| stack.item),
             entity: Self { entity },
         })
     }
