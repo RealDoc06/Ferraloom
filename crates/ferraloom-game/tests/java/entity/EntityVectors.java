@@ -111,6 +111,7 @@ public final class EntityVectors {
         GlidingVectors.run(new EntityFixture(r));
         FoodVectors.run(new EntityFixture(r));
         ShoulderVectors.run(new EntityFixture(r));
+        AiStepVectors.run(new EntityFixture(r));
         TravelDispatchVectors.run(new EntityFixture(r));
         JumpVectors.run(new EntityFixture(r));
         ItemTickVectors.run();

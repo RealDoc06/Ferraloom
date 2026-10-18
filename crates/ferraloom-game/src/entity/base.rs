@@ -268,6 +268,12 @@ impl EntityData {
     pub fn move_relative(&mut self, speed: f32, input: Vec3) {
         self.velocity = self.velocity + super::movement::input_vector(input, speed, self.yaw);
     }
+    /// Port of Entity#setDeltaMovement; reject the entire non-finite vector.
+    pub fn set_delta_movement(&mut self, movement: Vec3) {
+        if movement.is_finite() {
+            self.velocity = movement;
+        }
+    }
     /// Port of Entity#push(double,double,double), including finite checks and
     /// needsSync even when the accepted impulse is zero.
     pub fn push_impulse(&mut self, impulse: Vec3) {

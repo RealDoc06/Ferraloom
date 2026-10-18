@@ -225,6 +225,7 @@ pub enum EntityMethod {
     SwingAndResetAttackStrength,
     PlayShoulderEntityAmbientSound,
     RespawnEntityOnShoulder,
+    CheckAutoSpinAttack,
 }
 impl EntityMethod {
     pub const fn name(self) -> &'static str {
@@ -233,6 +234,7 @@ impl EntityMethod {
             Self::SwingAndResetAttackStrength => "swingAndResetAttackStrength",
             Self::PlayShoulderEntityAmbientSound => "playShoulderEntityAmbientSound",
             Self::RespawnEntityOnShoulder => "respawnEntityOnShoulder",
+            Self::CheckAutoSpinAttack => "checkAutoSpinAttack",
         }
     }
 }

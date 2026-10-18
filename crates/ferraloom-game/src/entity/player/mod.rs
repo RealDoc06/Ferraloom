@@ -1,6 +1,7 @@
 //! ServerPlayer gameplay state. Connections retain handles, never another player copy.
 mod drop_item;
 pub use drop_item::{drop_item, drop_item_stack};
+mod ai_step;
 mod contact;
 pub mod cooldowns;
 pub mod equipment;
@@ -59,6 +60,7 @@ pub struct ServerPlayer {
     pub advancements: crate::advancements::PlayerAdvancements,
     pub stats: crate::stats::ServerStatsCounter,
     pub food_data: food::FoodData,
+    pub jump_trigger_time: i32,
     shoulder_entity_left: CompoundTag,
     shoulder_entity_right: CompoundTag,
     time_entity_sat_on_shoulder: i64,
@@ -218,6 +220,7 @@ impl ServerPlayer {
             advancements: Default::default(),
             stats: Default::default(),
             food_data: Default::default(),
+            jump_trigger_time: 0,
             shoulder_entity_left: CompoundTag::new(),
             shoulder_entity_right: CompoundTag::new(),
             time_entity_sat_on_shoulder: 0,

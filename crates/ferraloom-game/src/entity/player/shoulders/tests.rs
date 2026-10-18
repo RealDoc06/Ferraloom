@@ -29,6 +29,7 @@ fn player() -> ServerPlayer {
 }
 fn fixture() -> (Level, EntityRef) {
     let mut level = crate::entity::tests::level(false);
+    level.set_unported_behavior(UnportedBehavior::Strict);
     let id = level.next_entity_ref();
     level
         .add_entity(id, EntityState::Player(Box::new(player())))

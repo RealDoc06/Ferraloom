@@ -71,6 +71,7 @@ fn slot(name: &str) -> EquipmentSlot {
 fn fixture(row: &[&str]) -> (Level, EntityRef) {
     let kind: usize = row[2].parse().unwrap();
     let mut level = crate::entity::tests::level(false);
+    level.set_unported_behavior(UnportedBehavior::Strict);
     let entity = level.next_entity_ref();
     let mut player = ServerPlayer::new(
         Uuid::new(3, 4),
