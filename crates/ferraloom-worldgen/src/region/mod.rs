@@ -135,6 +135,19 @@ pub struct StructureEntitySpawnFlags {
 /// extracted collision shapes cannot answer survival or neighbor shape queries.
 pub trait WorldgenBlockBehavior: Sync {
     // --- structures family ---
+    /// Set an explicit loot seed. Absent or non-loot-capable block entities are
+    /// a silent no-op once the game adapter implements this operation.
+    fn set_loot_table_seed(
+        &self,
+        _region: &mut WorldGenRegion<'_>,
+        _position: [i32; 3],
+        _table: &crate::Identifier,
+        _seed: i64,
+    ) -> Result<(), Error> {
+        Err(Error(
+            "Unsupported: structure loot table with explicit seed".into(),
+        ))
+    }
     /// False means EntityType#create returned null. None yaw preserves the
     /// constructor's rotation and uses setPos, as end-city shulkers do.
     fn spawn_structure_entity(
@@ -555,6 +568,15 @@ impl<'a> WorldGenRegion<'a> {
         self.center
     }
     // --- structures family ---
+    pub fn set_loot_table_seed(
+        &mut self,
+        position: [i32; 3],
+        table: &crate::Identifier,
+        seed: i64,
+    ) -> Result<(), Error> {
+        self.behavior
+            .set_loot_table_seed(self, position, table, seed)
+    }
     pub fn spawn_structure_entity(
         &mut self,
         entity_type: ferraloom_data::EntityType,
