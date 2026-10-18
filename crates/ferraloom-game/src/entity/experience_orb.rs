@@ -353,7 +353,7 @@ impl Entity for ExperienceOrbBehavior {
         if orb.parent.permanently_invulnerable || orb.parent.removed {
             return Ok(false);
         }
-        orb.parent.needs_sync = true;
+        orb.parent.mark_hurt();
         orb.health = (orb.health as f32 - damage) as i32;
         if orb.health <= 0 {
             level.remove_entity(entity)?;

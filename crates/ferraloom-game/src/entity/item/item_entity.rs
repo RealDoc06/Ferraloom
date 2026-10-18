@@ -401,7 +401,7 @@ impl Entity for ItemEntityBehavior {
         if item.parent.permanently_invulnerable || item.parent.removed {
             return Ok(false);
         }
-        item.parent.needs_sync = true;
+        item.parent.mark_hurt();
         item.health = (item.health as f32 - damage) as i32;
         if item.health <= 0 {
             level.remove_entity(entity)?;

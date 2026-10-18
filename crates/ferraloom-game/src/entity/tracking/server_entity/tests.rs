@@ -109,6 +109,52 @@ fn stack(count: i32) -> ItemStack {
 }
 
 #[test]
+fn nonliving_damage_forces_native_velocity_sync_even_without_an_update_interval() {
+    use crate::entity::{DamageSource, experience_orb::ExperienceOrb};
+    let mut rows = 0;
+    for row in VECTORS.lines().filter(|row| row.starts_with("hurt-sync\t")) {
+        let fields: Vec<_> = row.split('\t').collect();
+        let mut level = level();
+        let id = level.next_entity_ref();
+        let network = level.next_entity_id();
+        let state = if fields[1] == "item" {
+            let mut item = ItemEntity::new(network, 123);
+            item.set_item(stack(1));
+            EntityState::Item(Box::new(item))
+        } else {
+            EntityState::ExperienceOrb(Box::new(ExperienceOrb::new(network, 123)))
+        };
+        level.add_entity(id, state).unwrap();
+        let mut tracker = ServerEntity::new(id, &level, UpdateInterval::Never, true).unwrap();
+        tracker.send_changes(&mut level).unwrap();
+        level.entity_mut::<EntityData>(id).unwrap().velocity = Vec3::new(0.125, 0.25, 0.375);
+        assert!(
+            level
+                .entity_behavior(id)
+                .unwrap()
+                .hurt_server(id, &mut level, DamageSource::default(), 1.0)
+                .unwrap()
+        );
+        let base = level.entity::<EntityData>(id).unwrap();
+        assert_eq!(
+            format!("{},{}", base.needs_sync, base.sync_velocity),
+            fields[2],
+            "{row}"
+        );
+        let output = tracker.send_changes(&mut level).unwrap();
+        assert_eq!(output_text(&output), fields[3], "{row}");
+        let base = level.entity::<EntityData>(id).unwrap();
+        assert_eq!(
+            format!("{},{}", base.needs_sync, base.sync_velocity),
+            fields[4],
+            "{row}"
+        );
+        rows += 1;
+    }
+    assert_eq!(rows, 2);
+}
+
+#[test]
 fn vanilla_server_entity_packet_order_velocity_precision_mount_and_sync_flags() {
     let mut level = level();
     let id = EntityRef(1);

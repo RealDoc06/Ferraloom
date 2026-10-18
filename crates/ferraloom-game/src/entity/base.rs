@@ -301,6 +301,11 @@ impl EntityData {
     pub fn clear_fire(&mut self) {
         self.remaining_fire_ticks = self.remaining_fire_ticks.min(0);
     }
+    /// Port of Entity#markHurt. This requests the forced velocity packet sent to
+    /// tracking players and self, independently of the normal interval gate.
+    pub fn mark_hurt(&mut self) {
+        self.sync_velocity = true;
+    }
     pub fn ignite_for_ticks(&mut self, ticks: i32) {
         self.remaining_fire_ticks = self.remaining_fire_ticks.max(ticks);
         self.clear_freeze();

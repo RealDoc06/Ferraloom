@@ -63,6 +63,16 @@ public final class TrackingVectors {
   }
   public static void run(Level level) {
     serverEntity(level);
+    for(String kind:List.of("item","orb")) {
+      Entity entity=kind.equals("item")?new net.minecraft.world.entity.item.ItemEntity(EntityTypes.ITEM,level):new ExperienceOrb(EntityTypes.EXPERIENCE_ORB,level);
+      entity.setId(7);
+      if(entity instanceof net.minecraft.world.entity.item.ItemEntity item)item.setItem(new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.STONE));
+      var output=new ArrayList<String>();var tracker=new ServerEntity(null,entity,UpdateInterval.NEVER,true,synchronizer(output));tracker.sendChanges();output.clear();
+      entity.setDeltaMovement(0.125,0.25,0.375);
+      try {var mark=Entity.class.getDeclaredMethod("markHurt");mark.setAccessible(true);mark.invoke(entity);}catch(ReflectiveOperationException error){throw new AssertionError(error);}
+      String before=entity.needsSync+","+entity.syncVelocity;tracker.sendChanges();
+      System.out.println("hurt-sync\t"+kind+"\t"+before+"\t"+String.join("|",output)+"\t"+entity.needsSync+","+entity.syncVelocity);
+    }
     for(Vec3 base:List.of(Vec3.ZERO,new Vec3(1.0/8192,-1.0/8192,4.00001),new Vec3(-30000000.125,0,29999999.9))) {
       var codec=new VecDeltaCodec();codec.setBase(base);
       for(Vec3 offset:List.of(Vec3.ZERO,new Vec3(1.0/8192,-1.0/8192,0),new Vec3(7.999755859375,-8,0),new Vec3(8,-8.000244140625,0),new Vec3(0.00000001,1,-0.0001))) {
