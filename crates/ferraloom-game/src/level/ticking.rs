@@ -127,7 +127,7 @@ impl Level {
             .ok_or(LevelError::MissingChunk(chunk_pos))?;
         if self.is_raining() && self.is_thundering() && self.random().next_int_bound(100_000) == 0 {
             self.get_block_random_pos(BlockPos::new(chunk_pos.x * 16, 0, chunk_pos.z * 16), 15);
-            self.unported_weather_strike()?;
+            self.unported_operation(crate::block::UnportedOperation::WeatherStrike)?;
         }
         Ok(())
     }

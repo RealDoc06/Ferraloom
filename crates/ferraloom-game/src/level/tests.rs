@@ -1162,3 +1162,39 @@ fn thunder_gate_and_position_draw_match_vanilla_before_the_pending_required_quer
         }
     }
 }
+
+#[test]
+fn whole_effect_skips_share_the_block_policy_and_counters() {
+    use crate::block::{BlockMethod, UnportedBehavior, UnportedBehaviorStats, UnportedOperation};
+    let mut level = empty_level(&EMPTY);
+    assert_eq!(
+        level.unported_operation(UnportedOperation::PackReload),
+        Err(LevelError::UnsupportedPackReload)
+    );
+    assert_eq!(
+        level.unported_behavior_stats(),
+        UnportedBehaviorStats::default()
+    );
+    level.set_unported_behavior(UnportedBehavior::Warn);
+    level
+        .unported_operation(UnportedOperation::PackReload)
+        .unwrap();
+    level
+        .unported_operation(UnportedOperation::PackReload)
+        .unwrap();
+    level
+        .unported_operation(UnportedOperation::WeatherStrike)
+        .unwrap();
+    level
+        .optional_call(Block::OAK_LEAVES, BlockMethod::RandomTick, |_| {
+            Err::<(), _>(LevelError::UnsupportedBlock(Block::OAK_LEAVES))
+        })
+        .unwrap();
+    assert_eq!(
+        level.unported_behavior_stats(),
+        UnportedBehaviorStats {
+            skipped_calls: 4,
+            distinct_calls: 3
+        }
+    );
+}
