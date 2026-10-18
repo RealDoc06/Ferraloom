@@ -7,6 +7,7 @@ pub mod signal;
 pub mod piston;
 mod state;
 pub mod comparator;
+pub mod moving_piston;
 pub mod storage;
 
 /// Region-local counterpart of mutable redstone block state in the Java
