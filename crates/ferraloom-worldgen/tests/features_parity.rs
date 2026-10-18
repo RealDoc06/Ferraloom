@@ -668,6 +668,13 @@ fn region_write_bounds_bulk_writes_and_tick_deduplication() {
     assert!(region.block([32, 0, 0]).is_err());
     assert!(
         region
+            .random_mut()
+            .unwrap_err()
+            .0
+            .starts_with("Unsupported:")
+    );
+    assert!(
+        region
             .update_from_neighbor_shapes([0, 0, 0], Block::STONE.default_state())
             .is_err()
     );

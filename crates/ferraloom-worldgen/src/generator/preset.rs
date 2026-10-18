@@ -5,6 +5,7 @@ use crate::{
     region::{Heightmap, WorldGenRegion},
 };
 use ferraloom_data::datapack::ResourceManager;
+use ferraloom_util::random::{Algorithm, Random, RandomSource};
 use serde_json::Value;
 
 #[derive(Debug)]
@@ -56,6 +57,24 @@ impl ChunkGenerator {
             Self::Flat(g) => g.as_ref(),
             Self::Debug(g) => g,
         }
+    }
+    /// WorldGenRegion's positional RNG. ChunkMap uses a non-legacy RandomState
+    /// with an empty router for generators other than NoiseBasedChunkGenerator.
+    pub fn region_random(&self, position: [i32; 2], seed: i64) -> Random {
+        let name: Identifier = "worldgen_region_random".parse().unwrap();
+        let positional = match self {
+            Self::Noise(generator) => generator.random.compiler.positional_random(&name),
+            Self::Flat(_) | Self::Debug(_) => Algorithm::Xoroshiro
+                .new_instance(seed)
+                .fork_positional()
+                .from_hash_of(&name.to_string())
+                .fork_positional(),
+        };
+        positional.at(
+            position[0].wrapping_mul(16),
+            0,
+            position[1].wrapping_mul(16),
+        )
     }
     pub fn build_terrain(
         &self,

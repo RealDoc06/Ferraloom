@@ -941,6 +941,7 @@ fn generate_terrain(
             generator.sea_level(),
         )?;
         region.set_has_skylight(dimension.has_skylight);
+        region.set_random(generator.region_random([pos.x, pos.z], seed));
         match generator {
             ChunkGenerator::Debug(debug) => debug.apply_biome_decoration(&mut region)?,
             ChunkGenerator::Flat(_) => {
