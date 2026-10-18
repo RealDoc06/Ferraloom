@@ -45,4 +45,16 @@ pub enum LevelEffect {
         param: f32,
     },
     PendingPrecipitation(BlockPos),
+    /// Audience is captured at the call site, before subsequent movement or
+    /// removal; the runtime appends to each connection's ordinary outbound stream.
+    PlayerPacket {
+        recipients: Vec<crate::entity::EntityRef>,
+        packet: Box<ferraloom_protocol::play::clientbound::Packet>,
+    },
+    GameEvent {
+        event: ferraloom_data::registries::game_event::Id,
+        position: ferraloom_util::Vec3,
+        source: Option<crate::entity::EntityRef>,
+        affected_state: Option<BlockState>,
+    },
 }

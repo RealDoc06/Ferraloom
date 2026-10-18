@@ -31,6 +31,8 @@ that context is absent.
 Level's canonical random source follows vanilla's nondeterministic unique-seed
 construction, independently of the world seed. Controlled tests install a fixed
 stream and block-position seed.
+Sound seeds use vanilla's distinct nondeterministically seeded Legacy stream;
+playing sounds never advances the simulation random stream.
 
 Live block and fluid reads currently require an owned chunk. A query that reaches
 an absent chunk returns `MissingChunk`; it never substitutes air or silently
