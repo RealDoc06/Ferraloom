@@ -165,3 +165,31 @@ fn live_start_is_restored_with_piece_mutations_when_game_bridge_is_unsupported()
     assert_eq!(start.pieces[0].bounds(), BoundingBox::point([9, 23, 9]));
     assert_eq!(region.block([9, 23, 9]).unwrap().block(), Block::CHEST);
 }
+
+#[test]
+fn worldgen_region_stream_matches_vanilla_factory_and_cellar_draws() {
+    let mut text = String::new();
+    flate2::read::GzDecoder::new(&include_bytes!("testdata/region_random.json.gz")[..])
+        .read_to_string(&mut text)
+        .unwrap();
+    let cases: Value = serde_json::from_str(&text).unwrap();
+    for case in cases.as_array().unwrap() {
+        let compiler = crate::density::DensityFunctionCompiler::new(
+            std::sync::Arc::new(crate::density::DensityRegistry::default()),
+            case["seed"].as_i64().unwrap(),
+            case["legacy"].as_bool().unwrap(),
+        );
+        let chunk = std::array::from_fn(|i| case["chunk"][i].as_i64().unwrap() as i32);
+        let mut random = region_random(&compiler, chunk);
+        for sample in case["values"].as_array().unwrap() {
+            assert_eq!(random.next_boolean(), sample["variant"].as_bool().unwrap());
+            for expected in sample["roof"].as_array().unwrap() {
+                assert_eq!(
+                    u64::from(random.next_float().to_bits()),
+                    expected.as_u64().unwrap()
+                );
+            }
+        }
+        assert_eq!(random.next_int(), case["next"].as_i64().unwrap() as i32);
+    }
+}
