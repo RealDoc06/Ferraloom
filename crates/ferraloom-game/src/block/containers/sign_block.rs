@@ -141,9 +141,9 @@ impl BlockBehavior for SignBlock {
                     if state.block().block_entity_type()
                         == Some(crate::block::entity::BlockEntityType::HANGING_SIGN)
                     {
-                        SoundEvent::WAXED_HANGING_SIGN_INTERACT_FAIL
+                        SoundEvent::BLOCK_HANGING_SIGN_WAXED_INTERACT_FAIL
                     } else {
-                        SoundEvent::WAXED_SIGN_INTERACT_FAIL
+                        SoundEvent::BLOCK_SIGN_WAXED_INTERACT_FAIL
                     },
                     SoundSource::Blocks,
                     1.0,

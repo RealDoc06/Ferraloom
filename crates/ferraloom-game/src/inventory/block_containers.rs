@@ -3,7 +3,10 @@
 use super::*;
 use crate::{
     block::entity::{BlockEntityRef, BlockEntityState},
-    entity::{EntityRef, player::ServerPlayer},
+    entity::{
+        EntityRef,
+        player::{GameType, ServerPlayer},
+    },
     level::Level,
 };
 #[cfg(test)]
