@@ -13,7 +13,14 @@ pub(crate) use tree::load_entity_tree;
 pub enum EntityLoadError {
     InvalidPosition,
     InvalidRotation,
+    RecipeManagerRequired,
 }
+impl std::fmt::Display for EntityLoadError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
+impl std::error::Error for EntityLoadError {}
 
 /// The supported constructor set is shared by persistent and proto-chunk loads.
 pub(crate) fn has_entity_factory(kind: ferraloom_data::EntityType) -> bool {

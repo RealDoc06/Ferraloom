@@ -3,12 +3,18 @@ use crate::level::{Level, LevelError, redstone::Orientation};
 use ferraloom_data::{Block, BlockState, FluidState};
 use ferraloom_util::{BlockPos, Direction};
 mod clone_item;
+pub mod containers;
 pub mod dispatch;
+pub mod entity;
+mod families;
 pub mod flags;
 pub mod fluid;
 mod foundational;
 mod placement;
+pub mod plants;
+pub mod redstone;
 pub use placement::DirectionalPlaceContext;
+pub use plants::multiface_spreader;
 mod shapes;
 pub use shapes::BlockCollisionContext;
 mod unsupported;
@@ -162,6 +168,69 @@ impl<'chunks> LevelAccessRef<'_, 'chunks> {
 /// Port of BlockBehaviour's virtual methods. Defaults are vanilla base behavior;
 /// only classes explicitly registered by dispatch may inherit these defaults.
 pub trait BlockBehavior: Sync {
+    /// Port of BlockBehaviour#isSignalSource.
+    fn is_signal_source(&self, _state: BlockState) -> bool {
+        false
+    }
+    /// Port of BlockBehaviour#hasAnalogOutputSignal.
+    fn has_analog_output_signal(&self, _state: BlockState) -> bool {
+        false
+    }
+    /// Port of BlockBehaviour#ownSignal.
+    fn own_signal(
+        &self,
+        _state: BlockState,
+        _pos: BlockPos,
+        _level: &LevelReaderRef<'_, '_>,
+    ) -> Result<i32, LevelError> {
+        Ok(0)
+    }
+    /// Port of BlockBehaviour#getSignal. Re-dispatch ownSignal on the concrete
+    /// block: inherited getSignal still observes a subclass's ownSignal.
+    fn signal(
+        &self,
+        state: BlockState,
+        pos: BlockPos,
+        _direction: Direction,
+        level: &LevelReaderRef<'_, '_>,
+    ) -> Result<i32, LevelError> {
+        level
+            .required_behavior(state.block(), BlockMethod::OwnSignal)?
+            .own_signal(state, pos, level)
+    }
+    /// Port of BlockBehaviour#getDirectSignal.
+    fn direct_signal(
+        &self,
+        _state: BlockState,
+        _pos: BlockPos,
+        _direction: Direction,
+        _level: &LevelReaderRef<'_, '_>,
+    ) -> Result<i32, LevelError> {
+        Ok(0)
+    }
+    /// Port of BlockBehaviour#shouldRedstoneWireConnectTo.
+    fn should_redstone_wire_connect_to(
+        &self,
+        state: BlockState,
+        _pos: BlockPos,
+        direction: Option<Direction>,
+        level: &LevelReaderRef<'_, '_>,
+    ) -> Result<bool, LevelError> {
+        let source = level
+            .required_behavior(state.block(), BlockMethod::IsSignalSource)?
+            .is_signal_source(state);
+        Ok(source && direction.is_some())
+    }
+    /// Port of BlockBehaviour#getAnalogOutputSignal.
+    fn analog_output_signal(
+        &self,
+        _state: BlockState,
+        _pos: BlockPos,
+        _direction: Direction,
+        _level: &Level,
+    ) -> Result<i32, LevelError> {
+        Ok(0)
+    }
     /// Port of BlockBehaviour#canBeReplaced(BlockState, BlockPlaceContext).
     fn can_be_replaced(
         &self,

@@ -28,6 +28,15 @@ impl BlockEvents {
     }
 }
 impl Level {
+    /// ServerLevel#isHandlingTick is true through block events, including frozen
+    /// ticks, and false for the subsequent entity/block-entity phases.
+    pub fn is_handling_tick(&self) -> bool {
+        self.region().handling_tick
+    }
+    pub fn set_handling_tick(&mut self, handling: bool) {
+        self.region_mut().handling_tick = handling;
+    }
+
     pub fn block_event(&mut self, event: BlockEvent) {
         self.region_mut().block_events.insert(event);
     }

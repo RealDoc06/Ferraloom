@@ -314,6 +314,7 @@ dependencies = [
  "ferraloom-storage",
  "ferraloom-util",
  "ferraloom-worldgen",
+ "flate2",
  "serde",
  "serde_json",
 ]
@@ -386,7 +387,6 @@ dependencies = [
  "ferraloom-storage",
  "ferraloom-util",
  "ferraloom-worldgen",
- "flate2",
  "rand 0.8.8",
  "reqwest",
  "rsa",

@@ -162,6 +162,28 @@ fn packets(out: &mut String, reports: &Value) {
     out.push_str("}\n");
 }
 
+fn sound_events(out: &mut String, entries: &Value, report: &Value) {
+    let entries = entries.as_array().expect("sound event facts");
+    let registry = ordered_entries(&report["entries"]);
+    assert_eq!(entries.len(), registry.len());
+    writeln!(
+        out,
+        "static SOUND_FIXED_RANGES: [Option<f32>; {}] = [",
+        entries.len()
+    )
+    .unwrap();
+    for (entry, (name, id)) in entries.iter().zip(registry) {
+        assert_eq!(entry["id"].as_u64(), Some(id));
+        assert_eq!(entry["name"].as_str(), Some(name));
+        if entry["fixed_range"].is_null() {
+            out.push_str("None,");
+        } else {
+            write!(out, "Some({}),", float(&entry["fixed_range"])).unwrap();
+        }
+    }
+    out.push_str("];\n");
+}
+
 struct Property {
     id: usize,
     values: Vec<String>,
@@ -480,14 +502,24 @@ fn voxel_shapes(data: &Value, block_properties: &Value) -> String {
     out
 }
 
-fn items(out: &mut String, items: &Value) {
+fn items(out: &mut String, items: &Value, crafting: &Value) {
     out.push_str("pub const ITEMS: &[ItemData] = &[\n");
     for (id, item) in items.as_array().unwrap().iter().enumerate() {
         assert_eq!(number(&item["id"]), id as u64);
         let block = item["block"]
             .as_u64()
             .map_or_else(|| "None".into(), |id| format!("Some(Block({id}))"));
-        writeln!(out, "ItemData {{ max_stack_size: {}, max_damage: {}, rarity: Rarity::{}, block: {block}, default_components_json: {:?} }},", item["max_stack_size"], item["max_damage"], pascal(string(&item["rarity"])), serde_json::to_string(&item["components"]).unwrap()).unwrap();
+        let facts = &crafting[id];
+        let remainder = facts["remainder"].as_object().map_or_else(|| "None".to_owned(), |r| {
+            let item_id = items.as_array().unwrap().iter().position(|item| item["name"] == r["id"]).expect("crafting remainder item");
+            let count = r.get("count").and_then(Value::as_i64).unwrap_or(1);
+            let components = r.get("components").cloned().unwrap_or_else(|| serde_json::json!({}));
+            format!("Some(CraftingRemainder {{ item: Item({item_id}), count: {count}, components_json: {:?} }})", serde_json::to_string(&components).unwrap())
+        });
+        let banner_color = facts["banner_color"]
+            .as_str()
+            .map_or_else(|| "None".to_owned(), |name| format!("Some({name:?})"));
+        writeln!(out, "ItemData {{ crafting_remainder: {remainder}, banner_color: {banner_color}, max_stack_size: {}, max_damage: {}, rarity: Rarity::{}, block: {block}, default_components_json: {:?} }},", item["max_stack_size"], item["max_damage"], pascal(string(&item["rarity"])), serde_json::to_string(&item["components"]).unwrap()).unwrap();
     }
     out.push_str("];\n");
 }
@@ -677,6 +709,38 @@ fn tag_keys(root: &Path, registries: &Value) {
     .unwrap();
 }
 
+fn block_entity_types(out: &mut String, report: &Value, block_count: usize) {
+    let rows = report.as_array().expect("block entity type array");
+    let mut by_block = vec![None; block_count];
+    out.push_str("pub static BLOCK_ENTITY_TYPES: &[BlockEntityTypeData] = &[\n");
+    for (index, row) in rows.iter().enumerate() {
+        assert_eq!(number(&row["id"]) as usize, index);
+        write!(
+            out,
+            "BlockEntityTypeData {{ only_op_can_set_nbt: {}, valid_blocks: &[",
+            row["only_op_can_set_nbt"]
+        )
+        .unwrap();
+        for block in row["valid_blocks"].as_array().unwrap() {
+            let id = number(block) as usize;
+            assert!(
+                by_block[id].replace(index).is_none(),
+                "block in two block entity types"
+            );
+            write!(out, "registries::block::Id({id}),").unwrap();
+        }
+        out.push_str("] },\n");
+    }
+    out.push_str("];\npub static BLOCK_ENTITY_TYPE_BY_BLOCK: &[Option<registries::block_entity_type::Id>] = &[\n");
+    for kind in by_block {
+        match kind {
+            Some(id) => writeln!(out, "Some(registries::block_entity_type::Id({id})),").unwrap(),
+            None => out.push_str("None,\n"),
+        }
+    }
+    out.push_str("];\n");
+}
+
 fn main() {
     let root = Path::new("../../data/generated");
     let registries_report = load(root, "registries");
@@ -788,7 +852,20 @@ fn main() {
         redstone.iter().map(|v| number(v) as u8).collect::<Vec<_>>()
     )
     .unwrap();
-    items(&mut out, &item_report);
+    items(&mut out, &item_report, &load(root, "item_crafting"));
+    sound_events(
+        &mut out,
+        &load(root, "sound_events"),
+        &registries_report["minecraft:sound_event"],
+    );
+    block_entity_types(
+        &mut out,
+        &load(root, "block_entity_types"),
+        registries_report["minecraft:block"]["entries"]
+            .as_object()
+            .unwrap()
+            .len(),
+    );
     entities(&mut out, &entity_report, &registries_report);
     let path = Path::new(&std::env::var_os("OUT_DIR").unwrap()).join("data.rs");
     std::fs::write(path, out).unwrap();

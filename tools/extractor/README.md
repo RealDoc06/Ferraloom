@@ -50,6 +50,13 @@ up/down, and `East` covers boolean connections, redstone sides and wall heights.
 unsupported values. Numeric property values are `u8`, boolean values are `bool`.
 Other values are generated enums; none require string lookup during simulation.
 
+`ExtractData <output-dir> --sound-events-only` records each registered
+`SoundEvent.fixedRange` in protocol order. This is pure immutable registry data;
+`SoundEvent#getRange` uses the fixed value when present, otherwise 16 or
+`16 * volume` with native float arithmetic. All 1,991 registered 26.3 events
+currently use variable range. Direct unregistered sound records can still have
+fixed ranges and are represented separately by the protocol codec.
+
 `ExtractTagKeys` separately records tag key names and their registry identities,
 including vanilla datapack tags without a Java constant, in `tag_keys.json`.
 `tools/extract-data.sh` regenerates it. Typed keys have per-registry ordinals;
@@ -88,6 +95,15 @@ from that default even when the slab is currently a single half.
 Reversing the item's single block field loses those aliases. The clone-stack
 method's reflected base is `BlockBehaviour`; it creates one item and ignores
 the include-data flag. Overriding block families still require their own port.
+
+`ExtractData <output-dir> --item-crafting-only` regenerates `item_crafting.json`.
+`Item#getCraftingRemainder` is final, returns the `craftingRemainingItem` field
+copied from `Item.Properties` by the constructor, and takes no stack or level.
+It is a per-item template, independent of the `USE_REMAINDER` data component.
+The generated `CraftingRemainder` holds a typed item id/count and persistent
+component patch JSON; the game resolves the patch through protocol codecs.
+`BannerItem#getColor` is recorded alongside it for component-independent banner
+crafting checks.
 
 `fluid_random_ticking` records `FluidState#isRandomlyTicking`, which delegates
 only to the fluid type's virtual `isRandomlyTicking`. It has no level, position

@@ -1389,6 +1389,11 @@ impl World {
             .map_err(|error| anyhow::anyhow!("{error:?}"))?;
         chunk.save_pending_generation_data(&mut disk);
         disk.inhabited_time = Some(chunk.inhabited_time());
+        disk.block_entities = Some(
+            level
+                .block_entity_tags_for_saving(pos)
+                .map_err(|error| anyhow::anyhow!("{error:?}"))?,
+        );
         write_runtime_heightmaps(chunk, &mut disk)?;
         Ok(ChunkSaveSnapshot {
             pos,
