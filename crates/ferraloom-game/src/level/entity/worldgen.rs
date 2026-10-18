@@ -36,16 +36,21 @@ fn entity_type(tag: &CompoundTag) -> Option<ferraloom_data::EntityType> {
     let name = ferraloom_protocol::Identifier::parse(&name).ok()?;
     ferraloom_data::EntityType::from_name(name.as_str())
 }
-fn check_factories(tag: &CompoundTag) -> Result<(), EntityPersistenceError> {
+fn check_factories(tag: &CompoundTag, level: &Level) -> Result<(), EntityPersistenceError> {
     let Some(kind) = entity_type(tag) else {
         return Ok(());
     };
     if !persistence::has_entity_factory(kind) {
         return Err(EntityPersistenceError::UnsupportedType(kind.name().into()));
     }
+    // This constructor's NBT default reads the live ANVIL tag. Validate the
+    // required context before allocating or publishing any part of the stream.
+    if kind == ferraloom_data::EntityType::FALLING_BLOCK {
+        level.block_tags()?;
+    }
     if let Some(passengers) = tag.get_list("Passengers") {
         for passenger in passengers.iter().filter_map(Tag::as_compound) {
-            check_factories(passenger)?;
+            check_factories(passenger, level)?;
         }
     }
     Ok(())
@@ -61,7 +66,23 @@ impl Level {
         pos: ChunkPos,
         entities: Vec<CompoundTag>,
     ) -> Result<(), WorldgenEntityLoadError> {
-        if let Some(source) = entities.iter().find_map(|tag| check_factories(tag).err()) {
+        self.add_worldgen_chunk_entities_shared(pos, entities)
+    }
+
+    /// The same native postLoad stream during a suspended shared chunk read.
+    /// Each owned constructor is registered before its children are created;
+    /// state and captured passenger views remain stable during nested loads.
+    /// The chunk publisher calls this once, before BE/tick publication and FULL
+    /// completion; it must not replay a completed postLoad on a nested poll.
+    pub fn add_worldgen_chunk_entities_shared(
+        &self,
+        pos: ChunkPos,
+        entities: Vec<CompoundTag>,
+    ) -> Result<(), WorldgenEntityLoadError> {
+        if let Some(source) = entities
+            .iter()
+            .find_map(|tag| check_factories(tag, self).err())
+        {
             return Err(WorldgenEntityLoadError {
                 pos,
                 entities,
@@ -81,7 +102,7 @@ impl Level {
     }
 
     fn load_worldgen_entity_tree(
-        &mut self,
+        &self,
         tag: CompoundTag,
     ) -> Result<Option<EntityRef>, EntityPersistenceError> {
         if entity_type(&tag).is_none() {
@@ -111,7 +132,7 @@ impl Level {
         }
         for passenger in passengers.iter().filter_map(Tag::as_compound) {
             if let Some(passenger) = self.load_worldgen_entity_tree(passenger.clone())? {
-                crate::entity::start_riding(passenger, entity, true, self)?;
+                crate::entity::start_riding_loaded_shared(passenger, entity, self)?;
             }
         }
         Ok(Some(entity))
@@ -182,6 +203,186 @@ mod tests {
             .split(',')
             .map(|event| event.split(':').next().unwrap().to_owned())
             .collect()
+    }
+    fn shared_oracle(case: &str) -> Vec<&'static str> {
+        include_str!("../../../tests/java/entity/vectors.tsv")
+            .lines()
+            .find(|line| line.starts_with(&format!("worldgen-shared\t{case}\t")))
+            .unwrap()
+            .split('\t')
+            .collect()
+    }
+    fn links(level: &Level) -> String {
+        let mut states: Vec<_> = level
+            .region()
+            .entities
+            .states
+            .values()
+            .map(|state| state.as_entity())
+            .collect();
+        states.sort_by_key(|base| base.network_id);
+        states
+            .into_iter()
+            .map(|base| {
+                let vehicle = base.vehicle.get().map_or_else(
+                    || "none".to_owned(),
+                    |entity| {
+                        level
+                            .entity::<EntityData>(entity)
+                            .unwrap()
+                            .network_id
+                            .to_string()
+                    },
+                );
+                let passengers = base
+                    .passengers
+                    .iter()
+                    .map(|&entity| {
+                        level
+                            .entity::<EntityData>(entity)
+                            .unwrap()
+                            .network_id
+                            .to_string()
+                    })
+                    .collect::<Vec<_>>()
+                    .join("/");
+                format!(
+                    "{}:{}:{vehicle}:{passengers}:{}",
+                    base.network_id, base.uuid.least, base.removed
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",")
+    }
+    #[test]
+    fn shared_worldgen_load_keeps_canonical_borrows_and_native_nested_duplicate_links() {
+        let mut level = level();
+        let pos = ChunkPos::new(0, 0);
+        level
+            .add_worldgen_chunk_entities_shared(pos, vec![tag("minecraft:tnt", Uuid::new(0, 99))])
+            .unwrap();
+        let anchor = level.entity::<EntityData>(EntityRef(1)).unwrap();
+        let captured = anchor.passengers.as_slice();
+        let mut first = tag("minecraft:tnt", Uuid::new(0, 2));
+        first.insert(
+            "Passengers",
+            Tag::List(ListTag(vec![
+                Tag::Compound(tag("minecraft:tnt", Uuid::new(0, 3))),
+                Tag::Compound(tag("minecraft:tnt", Uuid::new(0, 4))),
+            ])),
+        );
+        let mut duplicate = tag("minecraft:tnt", Uuid::new(0, 1));
+        duplicate.insert(
+            "Passengers",
+            Tag::List(ListTag(vec![Tag::Compound(tag(
+                "minecraft:tnt",
+                Uuid::new(0, 5),
+            ))])),
+        );
+        let mut root = tag("minecraft:tnt", Uuid::new(0, 1));
+        root.insert(
+            "Passengers",
+            Tag::List(ListTag(vec![
+                Tag::Compound(first),
+                Tag::Compound(duplicate),
+                Tag::Compound(tag("missing:unknown", Uuid::new(0, 7))),
+            ])),
+        );
+        level
+            .add_worldgen_chunk_entities_shared(
+                pos,
+                vec![root, tag("minecraft:tnt", Uuid::new(0, 6))],
+            )
+            .unwrap();
+        let native = shared_oracle("nested");
+        assert_eq!(links(&level), native[3]);
+        assert_eq!(captured.len().to_string(), native[4]);
+        assert!(std::ptr::eq(
+            anchor,
+            level.entity::<EntityData>(EntityRef(1)).unwrap()
+        ));
+        let events = level.take_entity_management_events();
+        assert_eq!(created_ids(&level, &events), expected_created(&native));
+        level.finish_entity_management();
+        assert!(level.entity::<EntityData>(EntityRef(6)).is_ok());
+    }
+    #[test]
+    fn shared_worldgen_removed_item_mount_keeps_native_riding_links() {
+        let mut level = level();
+        let mut root = tag("minecraft:item", Uuid::new(0, 1));
+        root.insert(
+            "Passengers",
+            Tag::List(ListTag(vec![Tag::Compound(tag(
+                "minecraft:tnt",
+                Uuid::new(0, 2),
+            ))])),
+        );
+        level
+            .add_worldgen_chunk_entities_shared(ChunkPos::new(0, 0), vec![root])
+            .unwrap();
+        let native = shared_oracle("removed-vehicle");
+        assert_eq!(links(&level), native[3]);
+        let events = level.take_entity_management_events();
+        assert_eq!(created_ids(&level, &events), expected_created(&native));
+    }
+    #[test]
+    fn shared_worldgen_registration_publishes_tick_and_visible_indexes_immediately() {
+        let mut level = level();
+        let pos = ChunkPos::new(0, 0);
+        level
+            .update_entity_chunk_status(pos, Visibility::Ticking)
+            .unwrap();
+        let mut root = tag("minecraft:tnt", Uuid::new(1, 1));
+        root.insert(
+            "Passengers",
+            Tag::List(ListTag(vec![Tag::Compound(tag(
+                "minecraft:tnt",
+                Uuid::new(1, 2),
+            ))])),
+        );
+        level
+            .add_worldgen_chunk_entities_shared(pos, vec![root])
+            .unwrap();
+        assert_eq!(level.all_entities(), [EntityRef(1), EntityRef(2)]);
+        assert_eq!(
+            level.region().entity_tick_list.snapshot(),
+            [EntityRef(1), EntityRef(2)]
+        );
+        assert_eq!(
+            level.take_entity_management_events(),
+            [
+                EntityManagementEvent::Created(EntityRef(1)),
+                EntityManagementEvent::TrackingStart(EntityRef(1)),
+                EntityManagementEvent::TickingStart(EntityRef(1)),
+                EntityManagementEvent::Created(EntityRef(2)),
+                EntityManagementEvent::TrackingStart(EntityRef(2)),
+                EntityManagementEvent::TickingStart(EntityRef(2)),
+            ]
+        );
+        assert_eq!(
+            level.entity_chunk_load_status(pos),
+            ChunkLoadStatus::Pending
+        );
+    }
+    #[test]
+    fn shared_worldgen_required_context_fails_before_any_constructor() {
+        let level = level();
+        let pos = ChunkPos::new(0, 0);
+        let entities = vec![
+            tag("minecraft:tnt", Uuid::new(1, 1)),
+            tag("minecraft:falling_block", Uuid::new(1, 2)),
+        ];
+        let error = level
+            .add_worldgen_chunk_entities_shared(pos, entities.clone())
+            .unwrap_err();
+        assert!(matches!(
+            error.source,
+            EntityPersistenceError::Level(crate::level::LevelError::MissingBlockTags)
+        ));
+        assert_eq!(error.entities, entities);
+        assert_eq!(level.next_entity_id(), 1);
+        assert_eq!(level.next_entity_ref(), EntityRef(1));
+        assert!(level.region().entities.states.is_empty());
     }
     #[test]
     fn worldgen_registers_preorder_as_created_and_does_not_complete_entity_io() {

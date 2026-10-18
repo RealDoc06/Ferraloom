@@ -68,6 +68,7 @@ pub mod dimensions;
 pub mod fluid;
 pub mod inside_block;
 mod lifecycle;
+pub(crate) use lifecycle::start_riding_loaded_shared;
 pub mod movement;
 pub mod sounds;
 pub mod teleport;
@@ -243,6 +244,15 @@ pub fn trace_base_entity_refs(base: &EntityData, references: &mut Vec<EntityRef>
 ///
 /// Dispatch objects are stateless. Never hold a state borrow across a world call.
 pub trait Entity: Sync {
+    /// Port of Entity#couldAcceptPassenger. Marker and OminousItemSpawner
+    /// override this independently of removal state.
+    fn could_accept_passenger(
+        &self,
+        _entity: EntityRef,
+        _level: &Level,
+    ) -> Result<bool, LevelError> {
+        Ok(true)
+    }
     /// Port of Entity#playerTouch; concrete pickup entities override this hook.
     fn player_touch(
         &self,

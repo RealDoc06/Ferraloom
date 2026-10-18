@@ -29,7 +29,11 @@ pub fn start_riding(
         return Ok(false);
     }
     let mount = level.entity::<EntityData>(vehicle)?;
-    if mount.removed || !force && !mount.passengers.is_empty() {
+    if !level
+        .entity_behavior(vehicle)?
+        .could_accept_passenger(vehicle, level)?
+        || !force && !mount.passengers.is_empty()
+    {
         return Ok(false);
     }
     // Server-side Entity#startRiding refuses nonserializable mounts (players).
@@ -65,6 +69,48 @@ pub fn start_riding(
     }
     Ok(true)
 }
+
+/// EntityType#loadPassengersRecursive calls startRiding(force=true,
+/// sendEventAndTriggers=false) on a newly constructed root after loading all
+/// its descendants. Current factories leave the root unmounted and standing;
+/// setPose is therefore a no-op, with no dimensions/world callback to suspend.
+pub(crate) fn start_riding_loaded_shared(
+    entity: EntityRef,
+    vehicle: EntityRef,
+    level: &Level,
+) -> Result<bool, LevelError> {
+    let rider = level.entity::<EntityData>(entity)?;
+    assert!(
+        rider.vehicle.get().is_none(),
+        "fresh loaded root is unmounted"
+    );
+    assert_eq!(
+        *rider.entity_data.get(super::synched_data::POSE),
+        Pose::Standing,
+        "a factory producing another pose needs shared setPose support"
+    );
+    if !level
+        .entity_behavior(vehicle)?
+        .could_accept_passenger(vehicle, level)?
+        || matches!(level.entity_state(vehicle)?, EntityState::Player(_))
+    {
+        return Ok(false);
+    }
+    // Fresh handles cannot form the ancestor cycle checked by ordinary riding,
+    // even when a rejected duplicate UUID names an existing managed entity.
+    assert_ne!(entity, vehicle, "new child has a distinct handle");
+    assert!(
+        !matches!(level.entity_state(entity)?, EntityState::Player(_)),
+        "players have no entity NBT factory"
+    );
+    rider.vehicle.set(Some(vehicle));
+    let mount = level.entity::<EntityData>(vehicle)?;
+    let mut passengers = mount.passengers.clone();
+    passengers.push(entity);
+    mount.passengers.replace_shared(passengers);
+    Ok(true)
+}
+
 pub fn stop_riding(entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
     let Some(vehicle) = level.entity_mut::<EntityData>(entity)?.vehicle.take() else {
         return Ok(());

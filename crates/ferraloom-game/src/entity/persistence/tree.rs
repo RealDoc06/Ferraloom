@@ -91,12 +91,11 @@ pub(crate) fn load_entity_tree(
     loaded.push((entity, state));
     for tag in passengers.iter().filter_map(Tag::as_compound) {
         let passenger = load_entity_tree(level, tag.clone(), loaded)?;
-        // Entity#startRiding(force=true) still refuses a removed vehicle.
-        if !loaded[index].1.as_entity().removed {
-            let passenger_state = loaded.iter_mut().find(|(id, _)| *id == passenger).unwrap();
-            passenger_state.1.as_entity_mut().vehicle.set(Some(entity));
-            loaded[index].1.as_entity_mut().passengers.push(passenger);
-        }
+        // Every currently loaded factory inherits couldAcceptPassenger=true;
+        // Entity#startRiding does not reject a removed mount.
+        let passenger_state = loaded.iter_mut().find(|(id, _)| *id == passenger).unwrap();
+        passenger_state.1.as_entity_mut().vehicle.set(Some(entity));
+        loaded[index].1.as_entity_mut().passengers.push(passenger);
     }
     Ok(entity)
 }

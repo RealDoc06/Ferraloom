@@ -43,8 +43,39 @@ public final class WorldgenVectors {
       flag.setBoolean(level,false);
     } catch(ReflectiveOperationException error) {throw new AssertionError(error);}
   }
+  static String links(List<Entity> roots) {
+    var all=new TreeMap<Integer,Entity>();
+    var todo=new ArrayDeque<Entity>(roots);
+    while(!todo.isEmpty()) {
+      var entity=todo.removeFirst();
+      if(all.putIfAbsent(entity.getId(),entity)==null)todo.addAll(entity.getPassengers());
+    }
+    return String.join(",",all.values().stream().map(entity->entity.getId()+":"+entity.getUUID().getLeastSignificantBits()+":"+
+      (entity.getVehicle()==null?"none":entity.getVehicle().getId())+":"+
+      String.join("/",entity.getPassengers().stream().map(passenger->Integer.toString(passenger.getId())).toList())+":"+entity.isRemoved()).toList());
+  }
+  static void sharedPublication(Level level) {
+    try {
+      var flag=level.getClass().getDeclaredField("captureCreationIds");flag.setAccessible(true);flag.setBoolean(level,true);
+      var counter=level.getClass().getDeclaredField("creationCounter");counter.setAccessible(true);counter.setInt(level,0);
+      var callbacks=new Callbacks();var manager=new PersistentEntitySectionManager<>(Entity.class,callbacks,null);
+      load(manager,level,tag("minecraft:tnt",99));
+      var anchor=callbacks.created.getFirst();var captured=anchor.getPassengers();
+      var first=tag("minecraft:tnt",2);first.put("Passengers",list(tag("minecraft:tnt",3),tag("minecraft:tnt",4)));
+      var duplicate=tag("minecraft:tnt",1);duplicate.put("Passengers",list(tag("minecraft:tnt",5)));
+      var root=tag("minecraft:tnt",1);root.put("Passengers",list(first,duplicate,tag("missing:unknown",7)));
+      load(manager,level,root,tag("minecraft:tnt",6));
+      System.out.println("worldgen-shared\tnested\t"+String.join(",",callbacks.events)+"\t"+links(callbacks.created)+"\t"+captured.size());
+      counter.setInt(level,0);callbacks=new Callbacks();manager=new PersistentEntitySectionManager<>(Entity.class,callbacks,null);
+      root=tag("minecraft:item",1);root.put("Passengers",list(tag("minecraft:tnt",2)));
+      load(manager,level,root);
+      System.out.println("worldgen-shared\tremoved-vehicle\t"+String.join(",",callbacks.events)+"\t"+links(callbacks.created));
+      flag.setBoolean(level,false);
+    } catch(ReflectiveOperationException error) {throw new AssertionError(error);}
+  }
   public static void run(Level level) {
     creationOrder(level);
+    sharedPublication(level);
     var callbacks=new Callbacks();var manager=new PersistentEntitySectionManager<>(Entity.class,callbacks,null);
     var root=tag("minecraft:tnt",1);root.put("Passengers",list(tag(":tnt",2),tag("missing:unknown",3)));
     load(manager,level,root,tag("minecraft:tnt",4));
