@@ -6,11 +6,11 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 |---|---:|---:|---:|---:|---:|
 | [Advancements](features/advancements.md) | 1954 | 3 | 1940 | 11 | 0 |
 | [Block entities](features/block-entities.md) | 114 | 72 | 40 | 2 | 0 |
-| [Blocks](features/blocks.md) | 396 | 310 | 50 | 36 | 0 |
+| [Blocks](features/blocks.md) | 397 | 306 | 53 | 38 | 0 |
 | [Chat and text components](features/chat.md) | 23 | 21 | 2 | 0 | 0 |
 | [Chunks and tickets](features/chunks.md) | 52 | 21 | 31 | 0 | 0 |
 | [Combat and damage](features/combat-damage.md) | 204 | 204 | 0 | 0 | 0 |
-| [Commands and argument types](features/commands.md) | 2664 | 2509 | 35 | 120 | 0 |
+| [Commands and argument types](features/commands.md) | 2668 | 2506 | 35 | 127 | 0 |
 | [Crafting and recipes](features/crafting-recipes.md) | 2137 | 2 | 29 | 2106 | 0 |
 | [Datapacks and resource reload](features/datapacks-reload.md) | 57 | 57 | 0 | 0 | 0 |
 | [Enchantments](features/enchantments.md) | 136 | 136 | 0 | 0 | 0 |
@@ -36,7 +36,7 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Predicates](features/predicates.md) | 101 | 79 | 22 | 0 | 0 |
 | [Protocol packets](features/protocol.md) | 270 | 47 | 0 | 223 | 0 |
 | [Raids](features/raids.md) | 8 | 8 | 0 | 0 | 0 |
-| [Redstone mechanics](features/redstone.md) | 61 | 12 | 49 | 0 | 0 |
+| [Redstone mechanics](features/redstone.md) | 61 | 12 | 48 | 1 | 0 |
 | [Scoreboard, teams and bossbars](features/scoreboard-teams-bossbars.md) | 75 | 49 | 26 | 0 | 0 |
 | [Server operations](features/server-operations.md) | 111 | 96 | 15 | 0 | 0 |
 | [Sounds and particles](features/sounds-particles.md) | 2146 | 2146 | 0 | 0 | 0 |
@@ -49,4 +49,4 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Weather, time and environment](features/weather-time.md) | 85 | 85 | 0 | 0 | 0 |
 | [World storage and data fixing](features/world-storage.md) | 307 | 306 | 1 | 0 | 0 |
 | [World generation](features/worldgen.md) | 3113 | 2640 | 173 | 300 | 0 |
-| **Total** | **19377** | **12099** | **4364** | **2914** | **0** |
+| **Total** | **19382** | **12092** | **4366** | **2924** | **0** |
