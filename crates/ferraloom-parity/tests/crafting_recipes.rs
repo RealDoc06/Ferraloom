@@ -102,6 +102,10 @@ async fn recipe_book(session: &mut Session) -> Result<ObservationLog> {
     let bot = session.bot(id)?;
     creative(bot).await?;
     set_item(bot, 36, Item::OAK_PLANKS, 8).await?;
+    // Inventory advancement criteria may already have unlocked this recipe.
+    bot.command("recipe take @s minecraft:crafting_table")
+        .await?;
+    bot.synchronize().await?;
     bot.command("recipe give @s minecraft:crafting_table")
         .await?;
     let packet=bot.wait_for("crafting table book unlock",Ticks::DEFAULT,|_,packet|matches!(packet,cb::Packet::RecipeBookAdd(packet) if packet.entries.iter().any(|entry|matches!(&entry.contents.display,play::RecipeDisplay::CraftingShaped{result,..} if matches!(result.as_ref(),play::SlotDisplay::ItemStack{stack} if stack.item==Item::CRAFTING_TABLE))))).await?;

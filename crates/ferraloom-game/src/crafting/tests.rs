@@ -186,6 +186,14 @@ fn oracle_stack(value: &serde_json::Value) -> ItemStack {
 }
 struct GameplayOracle<'a>(&'a serde_json::Value);
 impl CraftingContext for GameplayOracle<'_> {
+    fn map_scale(&self, id: i32) -> Result<Option<u8>> {
+        Ok(match id {
+            0 => Some(0),
+            3 => Some(3),
+            4 => Some(4),
+            _ => None,
+        })
+    }
     fn is_curse(&self, enchantment: &ferraloom_protocol::Identifier) -> Result<bool> {
         Ok(self.0["curses"]
             .as_array()
@@ -263,7 +271,15 @@ fn check_case(manager: &RecipeManager, test: &serde_json::Value, context: &impl 
             .value
             .assemble(input, context)
             .unwrap_or_else(|error| panic!("{}: {error}", test["label"]));
-        let expected = oracle_stack(&test["result"]);
+        let mut expected = oracle_stack(&test["result"]);
+        if test["map_post_processing"].as_str() == Some("SCALE") {
+            stack::set(
+                &mut expected,
+                DataComponent::MapPostProcessing(
+                    ferraloom_protocol::component::MapPostProcessing::Scale,
+                ),
+            );
+        }
         assert!(
             stack::same_item_components(&assembled, &expected).unwrap(),
             "{} result: {assembled:?} expected {expected:?}",

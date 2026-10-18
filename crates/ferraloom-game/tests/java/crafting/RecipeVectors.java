@@ -39,14 +39,16 @@ public final class RecipeVectors {
     }
     static JsonElement encode(ItemStack stack) {return ItemStack.OPTIONAL_CODEC.encodeStart(ops,stack).getOrThrow();}
     @SuppressWarnings({"rawtypes","unchecked"})
-    static void record(String label,RecipeType type,RecipeInput input,int width,int height) {
+    static void record(String label,RecipeType type,RecipeInput input,int width,int height) { record(label,type,input,width,height,null); }
+    @SuppressWarnings({"rawtypes","unchecked"})
+    static void record(String label,RecipeType type,RecipeInput input,int width,int height,net.minecraft.world.level.Level level) {
         var test=new JsonObject();test.addProperty("label",label);test.addProperty("type",type.toString());test.addProperty("width",width);test.addProperty("height",height);
         var items=new JsonArray();for(int i=0;i<input.size();i++)items.add(encode(input.getItem(i)));test.add("items",items);
         // CraftingInput is intentionally trimmed by the same public constructor menus use.
-        var found=manager.getRecipeFor(type,input,null);
+        var found=manager.getRecipeFor(type,input,level);
         if(found.isPresent()) {
             RecipeHolder holder=(RecipeHolder)found.get();test.addProperty("recipe",holder.id().identifier().toString());
-            test.add("result",encode(holder.value().assemble(input)));
+            var assembled=holder.value().assemble(input);test.add("result",encode(assembled));var mapProcessing=assembled.get(DataComponents.MAP_POST_PROCESSING);if(mapProcessing!=null)test.addProperty("map_post_processing",mapProcessing.name());
             if(holder.value() instanceof CraftingRecipe crafting) {var remaining=new JsonArray();for(var stack:crafting.getRemainingItems((CraftingInput)input))remaining.add(encode(stack));test.add("remaining",remaining);}
         } else test.add("recipe",JsonNull.INSTANCE);
         cases.add(test);
@@ -109,6 +111,17 @@ public final class RecipeVectors {
             }
         }
         return tests;
+    }
+    static void mapEdges() throws Exception {
+        var level=org.mockito.Mockito.mock(net.minecraft.world.level.Level.class);
+        for(int scale:new int[]{0,3,4})org.mockito.Mockito.when(level.getMapData(new net.minecraft.world.level.saveddata.maps.MapId(scale))).thenReturn(net.minecraft.world.level.saveddata.maps.MapItemSavedData.createFresh(0,0,(byte)scale,false,false,net.minecraft.world.level.Level.OVERWORLD));
+        for(var holder:manager.getRecipes())if(holder.value() instanceof MapExtendingRecipe recipe){
+            for(int id:new int[]{0,3,4,99}){
+                var material=ingredient(recipe,"material");var map=choose(ingredient(recipe,"map"),0);map.set(DataComponents.MAP_ID,new net.minecraft.world.level.saveddata.maps.MapId(id));
+                var grid=new ArrayList<ItemStack>();for(int i=0;i<9;i++)grid.add(i==4?map:choose(material,0));
+                int index=cases.size();record(holder.id().identifier()+"/saved-map-"+id,RecipeType.CRAFTING,CraftingInput.of(3,3,grid),3,3,level);var test=cases.get(index).getAsJsonObject();test.addProperty("left",0);test.addProperty("top",0);
+            }
+        }
     }
     static void specialEdges() throws Exception {
         for(var holder:manager.getRecipes()) {
@@ -176,7 +189,7 @@ public final class RecipeVectors {
             }
         }
         for(int trial=0;trial<2000;trial++) {int width=1+RNG.nextInt(3),height=1+RNG.nextInt(3);var grid=new ArrayList<ItemStack>();for(int i=0;i<width*height;i++){int id=RNG.nextInt(BuiltInRegistries.ITEM.size());grid.add(RNG.nextInt(3)==0?ItemStack.EMPTY:new ItemStack(BuiltInRegistries.ITEM.byId(id)));}crafting("random/"+trial,width,height,grid);}
-        specialEdges();
+        specialEdges();mapEdges();
         var codecCases=new JsonArray();
         for(String raw:List.of(
             "{type:'minecraft:smelting',ingredient:'minecraft:stone',result:'minecraft:diamond',cookingtime:4294967296}",
