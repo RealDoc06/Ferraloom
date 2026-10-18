@@ -2,6 +2,8 @@
 
 Includes each built-in loot table, condition, function, entry type, context parameter set, integer and float context provider type and named provider. Generic integer and float provider registries are in foundations.md.
 
+Environment checks defer five shared value families to the environment-attributes model owned by worldgen or level settings: particles, ambient particle lists, background music, ambient sounds and mob-spawn settings. Their decoders return `Unsupported(environment_attribute.value_codec.<attribute>)`; no built-in loot table uses these value families.
+
 | ID | Feature | Vanilla source | Test | Vanilla | Ferraloom |
 |---|---|---|---|---|---|
 | loot.context.parameters | Validate required and optional context parameters and reject unavailable context values | `LootParams; LootContext; LootContextParamSets` | `loot::tests::synthetic_tables_and_providers_match_real_java` | - | todo |

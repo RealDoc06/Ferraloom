@@ -338,11 +338,14 @@ fn all_available_builtin_tables_match_real_java() {
     let vectors: serde_json::Value =
         serde_json::from_str(include_str!("../../tests/java/loot/vectors.json")).unwrap();
     let mut matched = 0;
+    let mut matched_tables = std::collections::BTreeSet::new();
+    let mut pending_tables = std::collections::BTreeMap::<String, usize>::new();
     let mut pending_counts = std::collections::BTreeMap::<String, usize>::new();
     for record in vectors["vectors"].as_array().unwrap() {
         let id = Identifier::parse(record["table"].as_str().unwrap()).unwrap();
         let seed = record["seed"].as_i64().unwrap();
         let Some(table) = data.tables.get(&id) else {
+            *pending_tables.entry(id.to_string()).or_default() += 1;
             *pending_counts
                 .entry(pending[&("loot_table", id.clone())].clone())
                 .or_default() += 1;
@@ -386,6 +389,7 @@ fn all_available_builtin_tables_match_real_java() {
         let items = match data.get_random_items(&id, &params, &mut random, &facts) {
             Ok(items) => items,
             Err(LootError::Unsupported(fact)) => {
+                *pending_tables.entry(id.to_string()).or_default() += 1;
                 *pending_counts.entry(fact).or_default() += 1;
                 continue;
             }
@@ -393,6 +397,7 @@ fn all_available_builtin_tables_match_real_java() {
                 registry,
                 id: missing,
             }) if pending.contains_key(&(registry, missing.clone())) => {
+                *pending_tables.entry(id.to_string()).or_default() += 1;
                 *pending_counts
                     .entry(pending[&(registry, missing)].clone())
                     .or_default() += 1;
@@ -420,9 +425,15 @@ fn all_available_builtin_tables_match_real_java() {
             record["fill_next"].as_i64().unwrap(),
             "{id} seed {seed} fill RNG"
         );
+        matched_tables.insert(id);
         matched += 1;
     }
     assert!(matched > 0);
+    eprintln!(
+        "Built-in tables with matched seed cases: {}; pending seed counts by table: {}",
+        matched_tables.len(),
+        serde_json::to_string(&pending_tables).unwrap()
+    );
     eprintln!(
         "Built-in vanilla loot vectors matched: {matched}; pending by missing fact: {pending_counts:?}"
     );
