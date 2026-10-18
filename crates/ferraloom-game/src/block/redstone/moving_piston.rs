@@ -159,7 +159,7 @@ fn collision_related_state(e: &PistonMovingBlockEntity) -> BlockState {
                 .with(p::SHORT, e.progress > 0.25)
                 .unwrap()
                 .with(
-                    p::TYPE,
+                    p::TYPE_,
                     if e.moved_state.block() == Block::STICKY_PISTON {
                         p::Type::Sticky
                     } else {

@@ -434,14 +434,14 @@ fn move_blocks(
         let head = with_facing(
             Block::PISTON_HEAD
                 .default_state()
-                .with(properties::TYPE, kind)
+                .with(properties::TYPE_, kind)
                 .unwrap(),
             direction,
         );
         let actual = with_facing(
             Block::MOVING_PISTON
                 .default_state()
-                .with(properties::TYPE, kind)
+                .with(properties::TYPE_, kind)
                 .unwrap(),
             direction,
         );
@@ -578,7 +578,7 @@ impl BlockBehavior for PistonBaseBlock {
             let actual = with_facing(
                 Block::MOVING_PISTON
                     .default_state()
-                    .with(properties::TYPE, kind)
+                    .with(properties::TYPE_, kind)
                     .unwrap(),
                 direction,
             );
@@ -650,7 +650,7 @@ use crate::block::{LevelAccessRef, LevelReaderRef};
 pub struct PistonHeadBlock;
 pub static PISTON_HEAD: PistonHeadBlock = PistonHeadBlock;
 fn fitting_base(head: BlockState, base: BlockState) -> bool {
-    let block = if head.get(properties::TYPE).unwrap() == properties::Type::Normal {
+    let block = if head.get(properties::TYPE_).unwrap() == properties::Type::Normal {
         Block::PISTON
     } else {
         Block::STICKY_PISTON
@@ -727,7 +727,7 @@ impl BlockBehavior for PistonHeadBlock {
         _reader: &LevelReaderRef<'_, '_>,
     ) -> Result<ferraloom_protocol::component::ItemStack, LevelError> {
         Ok(ferraloom_protocol::component::ItemStack::new(
-            if state.get(properties::TYPE).unwrap() == properties::Type::Sticky {
+            if state.get(properties::TYPE_).unwrap() == properties::Type::Sticky {
                 Block::STICKY_PISTON
             } else {
                 Block::PISTON
