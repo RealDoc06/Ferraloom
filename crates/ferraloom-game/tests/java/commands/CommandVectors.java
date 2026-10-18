@@ -213,6 +213,27 @@ public final class CommandVectors {
             var bytes = new byte[buf.readableBytes()]; buf.readBytes(bytes); buf.release();
             Files.write(out.resolve("tree-level-" + level + ".bin"), bytes);
         }
+        var ruleParsing = new JsonArray();
+        for (var rule : BuiltInRegistries.GAME_RULE) {
+            var values = new LinkedHashSet<>(List.of("", " ", "true", "false", "TRUE", "true false", "0", "-1", "1", "1.5", "0001", "2147483647", "2147483648"));
+            if (rule.argument() instanceof IntegerArgumentType integer) {
+                values.add(Integer.toString(integer.getMinimum()));
+                values.add(Long.toString((long)integer.getMinimum()-1));
+                values.add(Integer.toString(integer.getMaximum()));
+                values.add(Long.toString((long)integer.getMaximum()+1));
+            }
+            for (var input : values) {
+                var result = rule.deserialize(input);
+                var vector = new JsonObject(); vector.addProperty("rule", rule.getIdentifier().toString()); vector.addProperty("input", input);
+                result.result().ifPresent(value -> vector.add("value", JSON.toJsonTree(value)));
+                result.error().ifPresent(failure -> {
+                    vector.addProperty("error", failure.message());
+                    failure.partialValue().ifPresent(value -> vector.add("partial", JSON.toJsonTree(value)));
+                });
+                ruleParsing.add(vector);
+            }
+        }
+        write(out, "rule-parsing.json", ruleParsing);
         var rules = new JsonArray();
         for (var rule : BuiltInRegistries.GAME_RULE) {
             var entry = new JsonObject();

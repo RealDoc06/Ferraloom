@@ -68,3 +68,4 @@ Every report rule has its type and bootstrapped default. Feature-gated entries a
 | game-rules.game-rule.water-source-conversion | `minecraft:water_source_conversion` (game rule); type `Boolean`, default `true` | `net.minecraft.world.level.gamerules.GameRules; GameRule#deserialize` | `gamerules::tests::all_definitions_match_bootstrapped_java_registry` | pass | todo |
 
 | game-rules.values.native-saved-data | Persist typed game-rule values at data/minecraft/game_rules.dat in 26.3 | `GameRuleMap#TYPE` | `gamerules::tests::native_saved_data_round_trip_and_feature_filtering` | pass | todo |
+| All rule value parsers: bounds, leading zeros, malformed input and trailing partial values | `gamerules::tests::every_rule_value_parser_matches_java_including_partial_values` | pass | todo |

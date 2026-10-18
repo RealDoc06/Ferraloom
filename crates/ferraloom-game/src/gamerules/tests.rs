@@ -120,3 +120,44 @@ fn callbacks_fire_for_unchanged_values_and_have_vanilla_event_ids() {
         );
     }
 }
+
+#[test]
+fn every_rule_value_parser_matches_java_including_partial_values() {
+    #[derive(serde::Deserialize)]
+    struct Vector {
+        rule: String,
+        input: String,
+        value: Option<serde_json::Value>,
+        partial: Option<serde_json::Value>,
+        error: Option<String>,
+    }
+    let vectors: Vec<Vector> =
+        serde_json::from_str(include_str!("../commands/vanilla/rule-parsing.json")).unwrap();
+    let value = |json: &serde_json::Value| match json {
+        serde_json::Value::Bool(value) => GameRuleValue::Boolean(*value),
+        _ => GameRuleValue::Integer(json.as_i64().unwrap() as i32),
+    };
+    for vector in vectors {
+        let rule = GameRule::by_id(&vector.rule).unwrap();
+        let expected = if let Some(result) = &vector.value {
+            assert!(vector.error.is_none());
+            Ok(value(result))
+        } else if let Some(partial) = &vector.partial {
+            assert_eq!(
+                vector.error.as_deref(),
+                Some("Failed to deserialize; trailing characters")
+            );
+            Err(DeserializeError::TrailingCharacters(value(partial)))
+        } else {
+            assert_eq!(vector.error.as_deref(), Some("Failed to deserialize"));
+            Err(DeserializeError::Invalid)
+        };
+        assert_eq!(
+            rule.deserialize(&vector.input),
+            expected,
+            "{} {:?}",
+            vector.rule,
+            vector.input
+        );
+    }
+}
