@@ -154,4 +154,90 @@ mod tests {
         assert!(result.rule_change.is_some());
         assert!(result.feedback[0].broadcast);
     }
+    #[test]
+    fn rule_seed_and_player_list_feedback_match_registered_java_commands() {
+        use crate::entity::player::{GameType, ServerPlayer};
+        use ferraloom_protocol::Uuid;
+        #[derive(serde::Deserialize)]
+        struct Vector {
+            command: String,
+            seed: i64,
+            players: Vec<String>,
+            value: Option<i32>,
+            error: Option<serde_json::Value>,
+            feedback: serde_json::Value,
+        }
+        let vectors: Vec<Vector> =
+            serde_json::from_str(include_str!("vanilla/builtin-vectors.json")).unwrap();
+        let commands = Commands::default();
+        let mut rules = GameRules::default();
+        for vector in vectors {
+            let result = commands
+                .prepare(&vector.command, CommandSourceStack::server(4, Vec3::ZERO))
+                .and_then(|command| match command.command.as_str() {
+                    "gamerule" => gamerule(&mut rules, &command),
+                    "seed" => Ok(seed(vector.seed)),
+                    "list" => {
+                        let names = vector
+                            .players
+                            .iter()
+                            .map(|name| {
+                                let uuid = Uuid::offline_player(name);
+                                if command.literals.iter().any(|literal| literal == "uuids") {
+                                    Component::translatable(
+                                        "commands.list.nameAndId",
+                                        vec![
+                                            component(Component::literal(name)),
+                                            string(uuid.to_string()),
+                                        ],
+                                    )
+                                } else {
+                                    ServerPlayer::new(
+                                        uuid,
+                                        name.clone(),
+                                        1,
+                                        Vec3::ZERO,
+                                        GameType::Survival,
+                                    )
+                                    .display_name()
+                                }
+                            })
+                            .collect();
+                        Ok(list_players(names, 20))
+                    }
+                    _ => unreachable!(),
+                });
+            match result {
+                Ok(result) => {
+                    assert!(vector.error.is_none(), "{}", vector.command);
+                    assert_eq!(Some(result.value), vector.value, "{}", vector.command);
+                    let feedback = result.feedback.into_iter().map(|feedback| serde_json::json!({
+                        "message": serde_json::from_str::<serde_json::Value>(&feedback.message.to_json().unwrap()).unwrap(),
+                        "broadcast":feedback.broadcast,
+                    })).collect::<Vec<_>>();
+                    assert_eq!(
+                        serde_json::json!(feedback),
+                        vector.feedback,
+                        "{}",
+                        vector.command
+                    );
+                }
+                Err(error) => {
+                    let component = crate::commands::exceptions::error_component(&error);
+                    assert_eq!(
+                        Some(
+                            serde_json::from_str::<serde_json::Value>(
+                                &component.to_json().unwrap()
+                            )
+                            .unwrap()
+                        ),
+                        vector.error,
+                        "{}",
+                        vector.command
+                    );
+                    assert_eq!(vector.feedback, serde_json::json!([]));
+                }
+            }
+        }
+    }
 }
