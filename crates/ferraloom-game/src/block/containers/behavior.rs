@@ -187,7 +187,7 @@ impl BlockBehavior for ContainerBlock {
         _pos: BlockPos,
         _level: &LevelReaderRef<'_, '_>,
     ) -> Result<VoxelShape, LevelError> {
-        if state.get(p::TYPE) == Some(p::Type::Single) {
+        if state.get(p::TYPE_) == Some(p::Type::Single) {
             return Ok(shapes::create(
                 1.0 / 16.0,
                 0.0,
@@ -226,15 +226,15 @@ impl BlockBehavior for ContainerBlock {
             level.schedule_fluid_tick(_pos, ferraloom_data::registries::fluid::Id::WATER, 5)?;
         }
         if neighbor.block() == state.block() && direction.axis().is_horizontal() {
-            let neighbor_type = neighbor.get(p::TYPE).unwrap();
-            if state.get(p::TYPE) == Some(p::Type::Single)
+            let neighbor_type = neighbor.get(p::TYPE_).unwrap();
+            if state.get(p::TYPE_) == Some(p::Type::Single)
                 && neighbor_type != p::Type::Single
                 && state.get(p::FACING) == neighbor.get(p::FACING)
                 && menu::connected_direction(neighbor) == direction.opposite()
             {
                 state = state
                     .with(
-                        p::TYPE,
+                        p::TYPE_,
                         if neighbor_type == p::Type::Left {
                             p::Type::Right
                         } else {
@@ -244,7 +244,7 @@ impl BlockBehavior for ContainerBlock {
                     .unwrap();
             }
         } else if menu::connected_direction(state) == direction {
-            state = state.with(p::TYPE, p::Type::Single).unwrap();
+            state = state.with(p::TYPE_, p::Type::Single).unwrap();
         }
         Ok(state)
     }

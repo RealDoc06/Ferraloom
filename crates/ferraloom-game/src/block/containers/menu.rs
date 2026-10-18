@@ -101,7 +101,7 @@ pub fn facing(state: BlockState) -> Direction {
     }
 }
 pub fn connected_direction(state: BlockState) -> Direction {
-    if state.get(p::TYPE) == Some(p::Type::Left) {
+    if state.get(p::TYPE_) == Some(p::Type::Left) {
         facing(state).clockwise()
     } else {
         facing(state).counter_clockwise()
@@ -148,15 +148,15 @@ pub fn combine_chest(
     if !ignore_blocked && chest_blocked(pos, level)? {
         return Ok(Vec::new());
     }
-    let kind = state.get(p::TYPE).expect("chest type");
+    let kind = state.get(p::TYPE_).expect("chest type");
     if kind == p::Type::Single {
         return Ok(vec![entity]);
     }
     let neighbor_pos = pos.relative(connected_direction(state), 1);
     let neighbor_state = level.get_block_state(neighbor_pos)?;
     if neighbor_state.block() == state.block()
-        && neighbor_state.get(p::TYPE) != Some(p::Type::Single)
-        && neighbor_state.get(p::TYPE) != Some(kind)
+        && neighbor_state.get(p::TYPE_) != Some(p::Type::Single)
+        && neighbor_state.get(p::TYPE_) != Some(kind)
         && neighbor_state.get(p::FACING) == state.get(p::FACING)
     {
         if !ignore_blocked && chest_blocked(neighbor_pos, level)? {
@@ -234,7 +234,7 @@ fn change_openers(
             );
             let (sound, play) = match kind {
                 BlockEntityType::CHEST | BlockEntityType::TRAPPED_CHEST => {
-                    let half = state.get(p::TYPE).unwrap();
+                    let half = state.get(p::TYPE_).unwrap();
                     if half == p::Type::Right {
                         position = position + connected_direction(state).unit_vec3().scale(0.5);
                     }
