@@ -188,6 +188,11 @@ impl BlockBehavior for ContainerPlacement {
                 LevelReaderRef::Worldgen(_) => {
                     return Err(LevelError::UnsupportedWorldgenEnvironment);
                 }
+                LevelReaderRef::PathNavigation(_) => {
+                    return Err(LevelError::UnsupportedPathNavigationQuery(
+                        crate::level::path_navigation_region::PathNavigationQuery::Environment,
+                    ));
+                }
             };
             return Ok(within_border.then(|| state.with(p::FACING, facing(forward)).unwrap()));
         }

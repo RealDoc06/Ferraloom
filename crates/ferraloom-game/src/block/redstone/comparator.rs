@@ -46,10 +46,16 @@ use ferraloom_util::{Aabb, BlockPos, Direction};
 pub struct ComparatorBlock;
 pub static COMPARATOR: ComparatorBlock = ComparatorBlock;
 fn output_signal(level: &Level, pos: BlockPos) -> Result<i32, LevelError> {
-    let Some(handle) = level.block_entity_ref(pos)? else {
+    output_signal_from_reader(&LevelReaderRef::Server(level), pos)
+}
+fn output_signal_from_reader(
+    reader: &LevelReaderRef<'_, '_>,
+    pos: BlockPos,
+) -> Result<i32, LevelError> {
+    let Some(handle) = reader.block_entity_ref(pos)? else {
         return Ok(0);
     };
-    Ok(match level.block_entity_state(handle)? {
+    Ok(match reader.block_entity_state(handle)? {
         BlockEntityState::Comparator(entity) => entity.output,
         _ => 0,
     })
@@ -216,6 +222,7 @@ impl BlockBehavior for ComparatorBlock {
         }
         match reader {
             LevelReaderRef::Server(level) => output_signal(level, pos),
+            LevelReaderRef::PathNavigation(_) => output_signal_from_reader(reader, pos),
             LevelReaderRef::Worldgen(_) => {
                 Err(LevelError::UnsupportedBlockEntity(Block::COMPARATOR))
             }

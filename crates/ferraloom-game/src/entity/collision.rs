@@ -48,17 +48,22 @@ pub fn block_collisions_from_context(
     bb: Aabb,
 ) -> Result<Vec<(BlockPos, VoxelShape)>, LevelError> {
     let mut result = Vec::new();
-    let _ = visit_block_collisions(level, context, bb, |pos, shape| {
-        result.push((pos, shape));
-        std::ops::ControlFlow::Continue(())
-    })?;
+    let _ = visit_block_collisions(
+        &crate::block::LevelReaderRef::Server(level),
+        context,
+        bb,
+        |pos, shape| {
+            result.push((pos, shape));
+            std::ops::ControlFlow::Continue(())
+        },
+    )?;
     Ok(result)
 }
 
 /// Keep BlockCollisions lazy: noCollision stops at the first occupied shape,
 /// before any later block or ownership query can have an observable result.
-fn visit_block_collisions(
-    level: &Level,
+pub(crate) fn visit_block_collisions(
+    reader: &crate::block::LevelReaderRef<'_, '_>,
     context: &crate::block::BlockCollisionContext<'_>,
     bb: Aabb,
     mut visitor: impl FnMut(BlockPos, VoxelShape) -> std::ops::ControlFlow<()>,
@@ -84,13 +89,13 @@ fn visit_block_collisions(
                     continue;
                 }
                 let pos = BlockPos::new(x, y, z);
-                let state = level.get_block_state(pos)?;
+                let state = reader.block_state_for_collisions(pos)?;
                 if (faces == 1 && !has_large_collision_shape(state))
                     || (faces == 2 && state.block() != Block::MOVING_PISTON)
                 {
                     continue;
                 }
-                let shape = level.collision_shape(state, pos, context)?.move_by(
+                let shape = reader.collision_shape(state, pos, context)?.move_by(
                     f64::from(x),
                     f64::from(y),
                     f64::from(z),
@@ -309,8 +314,13 @@ impl Level {
         include_liquids: bool,
     ) -> Result<bool, LevelError> {
         let context = collision_context(source, self, include_liquids)?;
-        if visit_block_collisions(self, &context, bb, |_, _| std::ops::ControlFlow::Break(()))?
-            .is_break()
+        if visit_block_collisions(
+            &crate::block::LevelReaderRef::Server(self),
+            &context,
+            bb,
+            |_, _| std::ops::ControlFlow::Break(()),
+        )?
+        .is_break()
             || !entity_collisions(self, source, bb)?.is_empty()
         {
             return Ok(false);

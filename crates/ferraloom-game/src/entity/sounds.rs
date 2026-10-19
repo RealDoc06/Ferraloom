@@ -246,7 +246,7 @@ pub fn water_splash_effect<E: Entity + ?Sized>(
         level.entity::<EntityData>(entity)?.position,
         Some(entity),
         None,
-    );
+    )?;
     Ok(())
 }
 

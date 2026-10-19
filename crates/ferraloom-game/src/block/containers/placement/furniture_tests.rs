@@ -108,7 +108,11 @@ fn native_sign_skull_and_utility_placement_masks_match_vanilla() {
             .entity_mut::<crate::entity::living::LivingEntity>(player)
             .unwrap()
             .y_head_rot = f32::from_bits(u32::from_str_radix(f[14], 16).unwrap());
-        level.entity_mut::<ServerPlayer>(player).unwrap().instabuild = matches!(capability, 1 | 2);
+        level
+            .entity_mut::<ServerPlayer>(player)
+            .unwrap()
+            .abilities
+            .instabuild = matches!(capability, 1 | 2);
         level.shared_mut().unwrap().ops.set_operator(
             &profile,
             Some(PermissionLevel::by_id(if capability >= 2 { 2 } else { 0 })),

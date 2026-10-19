@@ -1,8 +1,7 @@
 //! LivingEntity#drop and #createItemStackToDrop, using canonical entity storage.
 use crate::{
     entity::{
-        EntityData, EntityRef, EntityReference, EntityState, effects::EntityEffect,
-        item::ItemEntity, player::inventory,
+        EntityData, EntityRef, EntityReference, EntityState, item::ItemEntity, player::inventory,
     },
     inventory::{ContainerHandle, ContainerSlot, MenuError, StackValue},
     level::{Level, LevelError},
@@ -11,7 +10,7 @@ use ferraloom_protocol::component::ItemStack;
 use ferraloom_util::{Vec3, mth, random::RandomSource};
 
 /// Port of LivingEntity#drop's server data mutation. Swing, dropped-item
-/// statistics and prediction-aware animation delivery are ordered output hooks.
+/// animation delivery remains an ordered hook; statistics run synchronously.
 pub fn drop_item(
     player: EntityRef,
     stack: ItemStack,
@@ -89,13 +88,15 @@ pub fn drop_item_stack(
         Some(original) => level.stack(original).map_err(stack_error)?,
         None => dropped,
     });
-    level.emit_entity_effect(EntityEffect::ItemDrop {
-        player,
-        entity,
-        item: kind,
-        count,
-        thrown_from_hand,
-    });
+    if thrown_from_hand && !level.entity::<ItemEntity>(entity)?.item().is_empty() {
+        super::award_stat(player, crate::stats::Stat::Dropped(kind), count, level)?;
+        super::award_stat(
+            player,
+            crate::stats::Stat::Custom(crate::stats::custom::Id::DROP),
+            1,
+            level,
+        )?;
+    }
     Ok(Some(entity))
 }
 
@@ -123,6 +124,7 @@ mod tests {
         let mut actual = Vec::new();
         for scenario in ["carried", "empty", "not-thrown"] {
             let mut level = crate::entity::tests::level(false);
+            level.install_shared(Box::default());
             let player = level.next_entity_ref();
             let state = ServerPlayer::new(
                 Uuid::new(1, 2),
@@ -180,31 +182,21 @@ mod tests {
                     ]
                 );
                 calls.push(format!("add:{dropped_count}"));
-                let effects = operation.level.take_entity_effects();
-                let [
-                    EntityEffect::ItemDrop {
-                        player: effect_player,
-                        entity: effect_entity,
-                        item,
-                        count,
-                        thrown_from_hand,
-                    },
-                ] = effects.as_slice()
-                else {
-                    panic!("drop must emit its stat payload after registration: {effects:?}");
-                };
-                assert_eq!(
-                    (*effect_player, *effect_entity, *item),
-                    (player, entity, Item::STONE)
-                );
-                assert_eq!(
-                    *count,
-                    inventory::count(operation.level.stack(carried).unwrap())
-                );
-                assert_eq!(*thrown_from_hand, thrown);
+                let stats = &operation
+                    .level
+                    .entity::<ServerPlayer>(player)
+                    .unwrap()
+                    .stats;
+                let item_dropped = stats.get_value(crate::stats::Stat::Dropped(Item::STONE));
+                let drops =
+                    stats.get_value(crate::stats::Stat::Custom(crate::stats::custom::Id::DROP));
+                assert_eq!(item_dropped, if thrown { 7 } else { 0 });
+                assert_eq!(drops, i32::from(thrown));
+                assert_eq!(inventory::count(operation.level.stack(carried).unwrap()), 7);
+                assert!(operation.level.take_entity_effects().is_empty());
                 if thrown {
-                    calls.push(format!("item_dropped:{count}"));
-                    calls.push("drop:1".into());
+                    calls.push(format!("item_dropped:{item_dropped}"));
+                    calls.push(format!("drop:{drops}"));
                 }
             } else {
                 assert!(operation.level.take_entity_management_events().is_empty());

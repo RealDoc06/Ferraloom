@@ -16,6 +16,9 @@ impl LevelReaderRef<'_, '_> {
     pub fn get_raw_brightness(&self, pos: BlockPos, sky_darken: i32) -> Result<i32, LevelError> {
         match self {
             Self::Server(level) => level.get_raw_brightness(pos, sky_darken),
+            Self::PathNavigation(_) => Err(LevelError::UnsupportedPathNavigationQuery(
+                crate::level::path_navigation_region::PathNavigationQuery::Light,
+            )),
             Self::Worldgen(region) => {
                 let sky = if self.has_skylight()? {
                     i32::from(
@@ -46,6 +49,9 @@ impl LevelReaderRef<'_, '_> {
             Self::Server(level) => {
                 Ok(level.brightness(ferraloom_light::LightLayer::Sky, pos)? >= 15)
             }
+            Self::PathNavigation(_) => Err(LevelError::UnsupportedPathNavigationQuery(
+                crate::level::path_navigation_region::PathNavigationQuery::Light,
+            )),
             Self::Worldgen(region) => region
                 .brightness(
                     ferraloom_worldgen::region::LightLayer::Sky,

@@ -1,11 +1,12 @@
 use super::*;
+#[cfg(test)]
+use crate::level::game_event::test_support::{self as game_events, Observation};
 use crate::{
     block::UnportedBehavior,
     entity::{
         EntityRef, EntityState,
         player::{GameType, ServerPlayer},
     },
-    level::effects::LevelEffect,
 };
 use ferraloom_data::Item;
 use ferraloom_protocol::component::{DataComponent, DataComponentPatch, UseEffects};
@@ -36,6 +37,7 @@ fn native_stop_using_item_preserves_flags_metadata_and_use_vibration_conditions(
         "signed_inactive",
     ] {
         let mut level = crate::entity::tests::level(false);
+        game_events::observe(&mut level);
         level.set_unported_behavior(UnportedBehavior::Strict);
         let entity = EntityRef(1);
         let player = ServerPlayer::new(
@@ -94,16 +96,15 @@ fn native_stop_using_item_preserves_flags_metadata_and_use_vibration_conditions(
         living.entity_data.set(data::LIVING_ENTITY_FLAGS, flags);
         let before = state(living);
         living.entity_data.pack_dirty();
-        level.take_effects();
+        game_events::take(&mut level);
         stop_using_item(entity, &mut level).unwrap();
         let living = level.entity_mut::<LivingEntity>(entity).unwrap();
         let after = state(living);
         let dirty = living.entity_data.pack_dirty().is_some();
-        let events: Vec<_> = level
-            .take_effects()
+        let events: Vec<_> = game_events::take(&mut level)
             .into_iter()
             .map(|effect| {
-                let LevelEffect::GameEvent {
+                let Observation::GameEvent {
                     event,
                     position,
                     source,
@@ -141,7 +142,7 @@ fn native_stop_using_item_preserves_flags_metadata_and_use_vibration_conditions(
                 .pack_dirty()
                 .is_none()
         );
-        assert!(level.take_effects().is_empty());
+        assert!(game_events::take(&mut level).is_empty());
     }
     let expected: Vec<_> = include_str!("../../../tests/java/entity/vectors.tsv")
         .lines()

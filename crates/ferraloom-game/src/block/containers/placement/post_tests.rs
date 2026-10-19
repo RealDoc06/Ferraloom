@@ -173,7 +173,7 @@ fn native_bed_and_sign_placement_callbacks() {
                 sign.front_text.filtered_messages = Some(filtered);
                 let player_state = level.entity_mut::<ServerPlayer>(player).unwrap();
                 player_state.text_filtering_enabled = f[3] == "true";
-                player_state.may_build = false;
+                player_state.abilities.may_build = false;
                 level.take_effects();
                 level
                     .set_placed_by(block.default_state(), POS, Some(player), unread(player))

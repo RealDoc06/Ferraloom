@@ -3,6 +3,8 @@
 mod block_drop_tables;
 #[path = "build/block_methods.rs"]
 mod block_methods;
+#[path = "build/building_properties.rs"]
+mod building_properties;
 #[path = "build/center_support.rs"]
 mod center_support;
 #[path = "build/command_block_properties.rs"]
@@ -13,6 +15,8 @@ mod copper_chest_properties;
 mod environment_attributes;
 #[path = "build/feature_requirements.rs"]
 mod feature_requirements;
+#[path = "build/game_events.rs"]
+mod game_events;
 
 #[path = "build/dispenser_properties.rs"]
 mod dispenser_properties;
@@ -887,6 +891,7 @@ fn main() {
     block_methods::generate(root, &block_properties);
     redstone_properties::generate(root);
     dispenser_properties::generate(root);
+    building_properties::generate(root);
     note_properties::generate(root);
     let item_report = load(root, "items");
     let entity_report = load(root, "entity_types");
@@ -1054,6 +1059,11 @@ fn main() {
         &load(root, "feature_requirements"),
         block_count,
         item_report.as_array().expect("item report").len(),
+    );
+    game_events::generate(
+        &mut out,
+        &load(root, "game_events"),
+        &registries_report["minecraft:game_event"],
     );
     sound_events(
         &mut out,

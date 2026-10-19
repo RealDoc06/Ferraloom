@@ -304,7 +304,8 @@ impl PredicateContext for Level {
                 .map_err(required)?
                 .is_swimming(entity, self)
                 .map_err(required)?,
-            flying: fall_flying || matches!(state, EntityState::Player(player) if player.flying),
+            flying: fall_flying
+                || matches!(state, EntityState::Player(player) if player.abilities.flying),
             baby: self
                 .entity_behavior(entity)
                 .map_err(required)?

@@ -154,6 +154,11 @@ fn lectern(
         match reader {
             LevelReaderRef::Server(level) => level.can_use_game_master_blocks(player)?,
             LevelReaderRef::Worldgen(_) => return Err(LevelError::UnsupportedWorldgenEnvironment),
+            LevelReaderRef::PathNavigation(_) => {
+                return Err(LevelError::UnsupportedPathNavigationQuery(
+                    crate::level::path_navigation_region::PathNavigationQuery::Environment,
+                ));
+            }
         }
     } else {
         false
