@@ -124,7 +124,7 @@ pub fn place(
         center,
         player,
         Some(placed_state),
-    );
+    )?;
     super::stack::consume(retained(stack)?, 1, player, operation)?;
     Ok(InteractionResult::SUCCESS)
 }

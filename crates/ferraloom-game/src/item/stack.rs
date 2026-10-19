@@ -110,7 +110,7 @@ pub fn cause_use_vibration(
             .position;
         operation
             .level
-            .game_event(event, position, Some(causer), None);
+            .game_event(event, position, Some(causer), None)?;
     }
     Ok(())
 }

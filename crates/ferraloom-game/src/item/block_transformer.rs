@@ -395,7 +395,7 @@ pub(super) fn transform_block(
         }
         operation
             .level
-            .game_event(game_event::Id::BLOCK_CHANGE, center, player, Some(updated));
+            .game_event(game_event::Id::BLOCK_CHANGE, center, player, Some(updated))?;
         if transform.transform_type == TransformType::CopperChest
             && old.block().is_instance_of(BlockClass::CopperChestBlock)
             && old.get(p::TYPE_).is_some_and(|v| v.as_str() != "single")
@@ -415,7 +415,7 @@ pub(super) fn transform_block(
             );
             operation
                 .level
-                .game_event(game_event::Id::BLOCK_CHANGE, at, player, Some(state));
+                .game_event(game_event::Id::BLOCK_CHANGE, at, player, Some(state))?;
             if let Some(event) = transform.particle.event() {
                 operation.level.level_event(player, event, neighbor, 0)?;
             }
