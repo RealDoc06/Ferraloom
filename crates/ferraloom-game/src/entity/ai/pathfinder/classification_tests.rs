@@ -219,3 +219,33 @@ fn native_floor_types_and_first_neighbor_hazard_in_iteration_order() {
     }
     assert_eq!(cases.len(), 35);
 }
+
+#[test]
+fn captured_region_classifies_cache_misses_without_escaping_its_bounds() {
+    use crate::level::path_navigation_region::{PathNavigationError, PathNavigationRegion};
+    let mut level = level();
+    let outside = BlockPos::new(16, 5, 8);
+    ensure_chunk(&mut level, outside);
+    level
+        .set_block_state(outside, Block::STONE.default_state())
+        .unwrap();
+    let region =
+        PathNavigationRegion::capture(&level, BlockPos::new(0, 0, 0), BlockPos::new(15, 15, 15))
+            .unwrap();
+    assert_eq!(
+        level.get_block_state(outside).unwrap(),
+        Block::STONE.default_state()
+    );
+    assert_eq!(
+        super::pathfinding_context::get_path_type_from_state(&region, &mut level, outside).unwrap(),
+        PathType::Open
+    );
+    assert_eq!(level.path_type_cache().get(outside), Some(PathType::Open));
+    let mut other = self::level();
+    assert!(matches!(
+        super::pathfinding_context::get_path_type_from_state(&region, &mut other, outside),
+        Err(LevelError::PathNavigation(
+            PathNavigationError::WrongOwner { .. }
+        ))
+    ));
+}

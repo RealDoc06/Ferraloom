@@ -8,6 +8,7 @@ mod path_computation_type;
 mod path_finder;
 mod path_type;
 mod path_type_cache;
+pub mod pathfinding_context;
 mod target;
 pub mod walk_node_evaluator;
 pub use binary_heap::{BinaryHeap, HeapError};
