@@ -43,6 +43,9 @@ impl LevelReaderRef<'_, '_> {
     pub fn has_skylight(&self) -> Result<bool, LevelError> {
         match self {
             Self::Server(level) => level.has_skylight(),
+            Self::PathNavigation(_) => Err(LevelError::UnsupportedPathNavigationQuery(
+                super::path_navigation_region::PathNavigationQuery::Light,
+            )),
             Self::Worldgen(region) => region
                 .has_skylight()
                 .map_err(|_| LevelError::UnsupportedWorldgenEnvironment),
@@ -68,6 +71,11 @@ impl LevelReaderRef<'_, '_> {
         let sky = if self.has_skylight()? {
             match self {
                 Self::Server(level) => i32::from(level.brightness(LightLayer::Sky, pos)?),
+                Self::PathNavigation(_) => {
+                    return Err(LevelError::UnsupportedPathNavigationQuery(
+                        super::path_navigation_region::PathNavigationQuery::Light,
+                    ));
+                }
                 Self::Worldgen(region) => i32::from(
                     region
                         .brightness(

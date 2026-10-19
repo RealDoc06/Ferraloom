@@ -13,6 +13,7 @@ ferraloom-nbt.workspace = true
 ferraloom-data.workspace = true
 ferraloom-brigadier = { path = "../ferraloom-brigadier" }
 ferraloom-chunk = { path = "../ferraloom-chunk" }
+ferraloom-light = { path = "../ferraloom-light" }
 serde_json = "1"
 flate2 = "1"
 sha2 = "0.10"

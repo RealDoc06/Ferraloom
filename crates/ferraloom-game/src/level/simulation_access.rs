@@ -37,7 +37,13 @@ impl Level {
     }
 
     pub fn should_tick_blocks_at(&self, pos: BlockPos) -> bool {
-        self.simulation_level(ChunkPos::containing(pos)) <= 32
+        self.should_tick_blocks_at_chunk(ChunkPos::containing(pos))
+    }
+
+    /// Port of Level#shouldTickBlocksAt(long chunkPos), using the same graph as
+    /// the BlockPos overload without checking or loading the chunk itself.
+    pub fn should_tick_blocks_at_chunk(&self, pos: ChunkPos) -> bool {
+        self.simulation_level(pos) <= 32
     }
 
     /// Simulation eligibility is independent of attached chunks, holder loading
@@ -167,6 +173,10 @@ mod tests {
                 assert_eq!(reader.simulation_level(pos), expected_level, "{stage}");
                 assert_eq!(
                     reader.should_tick_blocks_at(BlockPos::new(pos.x * 16, 0, pos.z * 16)),
+                    expected_level <= 32
+                );
+                assert_eq!(
+                    reader.should_tick_blocks_at_chunk(pos),
                     expected_level <= 32
                 );
                 assert_eq!(reader.is_entity_ticking_chunk(pos), expected_level <= 31);

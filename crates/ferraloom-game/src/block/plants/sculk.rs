@@ -488,6 +488,9 @@ fn can_place_growth(level: &LevelReaderRef<'_, '_>, pos: BlockPos) -> Result<boo
     }
     let (min_y, max_y) = match level {
         LevelReaderRef::Server(live) => (live.min_build_height(), live.max_build_height()),
+        LevelReaderRef::PathNavigation(reader) => {
+            (reader.min_build_height(), reader.max_build_height())
+        }
         LevelReaderRef::Worldgen(region) => (region.min_y(), region.min_y() + region.height() - 1),
     };
     let from = pos.offset(-4, 0, -4);
@@ -501,6 +504,7 @@ fn can_place_growth(level: &LevelReaderRef<'_, '_>, pos: BlockPos) -> Result<boo
                     live.chunk(chunk_pos)
                         .ok_or(LevelError::MissingChunk(chunk_pos))?;
                 }
+                LevelReaderRef::PathNavigation(reader) => reader.validate_chunk(chunk_pos)?,
                 LevelReaderRef::Worldgen(region) => {
                     region
                         .chunk([cx, cz], ferraloom_worldgen::region::ChunkStatus::Empty)

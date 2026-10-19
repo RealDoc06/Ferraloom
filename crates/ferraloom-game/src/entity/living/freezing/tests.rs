@@ -71,6 +71,101 @@ fn frozen_counters_and_armor_eligibility_match_native_float_bits_and_slot_scope(
     }
     assert_eq!((counters, armor), (10, 48));
 }
+
+struct FreezeReceiver(bool);
+impl Entity for FreezeReceiver {
+    fn trace_entity_refs(
+        &self,
+        state: &crate::entity::EntityState,
+        references: &mut Vec<EntityRef>,
+    ) {
+        crate::entity::trace_base_entity_refs(state.as_entity(), references);
+    }
+
+    fn can_freeze(&self, _entity: EntityRef, _level: &Level) -> Result<bool, LevelError> {
+        Ok(self.0)
+    }
+    fn hurt_server(
+        &self,
+        entity: EntityRef,
+        level: &mut Level,
+        source: crate::entity::damage::DamageSource,
+        damage: f32,
+    ) -> Result<bool, LevelError> {
+        let living = level.entity::<LivingEntity>(entity)?;
+        let value = format!(
+            "{}:{:x}:{}:{:x}",
+            source.damage_type().message_id,
+            damage.to_bits(),
+            living.ticks_frozen(),
+            living
+                .attributes
+                .value(Attribute::MOVEMENT_SPEED)
+                .unwrap()
+                .to_bits()
+        );
+        level
+            .entity_mut::<EntityData>(entity)?
+            .saved
+            .insert("freeze_hurt", ferraloom_nbt::Tag::String(value.into()));
+        Ok(false)
+    }
+}
+
+#[test]
+fn native_freezing_phase_decays_before_frost_and_dispatches_periodic_damage_after_it() {
+    let mut checked = 0;
+    for row in VECTORS
+        .lines()
+        .filter(|line| line.starts_with("freeze-phase\t"))
+    {
+        let f: Vec<_> = row.split('\t').collect();
+        let mut level = crate::entity::tests::level(true);
+        let entity = add_player(&mut level, GameType::Survival);
+        let base = level.entity_mut::<EntityData>(entity).unwrap();
+        base.set_ticks_frozen(f[1].parse().unwrap());
+        base.is_in_powder_snow = f[2].parse().unwrap();
+        base.tick_count = f[4].parse().unwrap();
+        tick_freezing(&FreezeReceiver(f[3].parse().unwrap()), entity, &mut level).unwrap();
+        let living = level.entity_mut::<LivingEntity>(entity).unwrap();
+        assert_eq!(
+            living.ticks_frozen(),
+            f[5].parse::<i32>().unwrap(),
+            "counter {row}"
+        );
+        let modifier = living
+            .attributes
+            .get_instance(Attribute::MOVEMENT_SPEED)
+            .unwrap()
+            .modifier(&modifier_id())
+            .map(|value| format!("{:x}", value.amount.0.to_bits()))
+            .unwrap_or_else(|| "none".into());
+        assert_eq!(modifier, f[6], "frost {row}");
+        assert_eq!(
+            format!(
+                "{:x}",
+                living
+                    .attributes
+                    .value(Attribute::MOVEMENT_SPEED)
+                    .unwrap()
+                    .to_bits()
+            ),
+            f[7],
+            "speed {row}"
+        );
+        assert_eq!(
+            living
+                .saved
+                .get_string("freeze_hurt")
+                .map(|v| v.to_string_lossy())
+                .unwrap_or_else(|| "-".to_owned()),
+            f[8],
+            "damage {row}"
+        );
+        checked += 1;
+    }
+    assert_eq!(checked, 64);
+}
 #[test]
 fn powder_snow_modifiers_match_native_float_promotion_and_support_conditions() {
     let mut count = 0;
