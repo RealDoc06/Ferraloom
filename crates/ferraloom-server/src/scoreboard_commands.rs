@@ -18,6 +18,16 @@ impl MinecraftServer {
         &mut self,
         command: &PreparedCommand,
     ) -> Result<CommandResult, ferraloom_brigadier::CommandSyntaxException> {
+        // ScoreboardCommand#addNumberFormats resolves fixed contents before invoking
+        // its callback, which then reads the objective and holder arguments.
+        let fixed = command.argument("contents").is_some();
+        let resolved_fixed;
+        let command = if fixed {
+            resolved_fixed = self.resolve_scoreboard_components(command)?;
+            &resolved_fixed
+        } else {
+            command
+        };
         match command.command.as_str() {
             "scoreboard" => {
                 let targets = if command.argument("targets").is_some() {
@@ -44,16 +54,33 @@ impl MinecraftServer {
                 } else {
                     Vec::new()
                 };
+                // Native getObjective precedes these ComponentArgument getters.
+                if (command.literals[1] == "objectives"
+                    && command.literals[2] == "modify"
+                    && command.argument("displayName").is_some())
+                    || command.argument("name").is_some()
+                {
+                    scoreboard::objective(
+                        self.shared().scoreboard.scoreboard(),
+                        command.string("objective").unwrap(),
+                        false,
+                    )?;
+                }
+                let resolved = if fixed {
+                    command.clone()
+                } else {
+                    self.resolve_scoreboard_components(command)?
+                };
                 scoreboard::execute(
                     &mut self.shared_mut().scoreboard,
-                    command,
+                    &resolved,
                     &targets,
                     &sources,
                 )
             }
             "team" => {
                 // TeamArgument#getTeam precedes either the member selector or getEntityOrException.
-                if command.literals[1] == "join" {
+                if matches!(command.literals[1].as_str(), "join" | "modify") {
                     let name = command.string("team").unwrap();
                     if self
                         .shared()
@@ -75,7 +102,27 @@ impl MinecraftServer {
                     } else {
                         Vec::new()
                     };
-                team::execute(&mut self.shared_mut().scoreboard, command, &members)
+                let resolved = self.resolve_scoreboard_components(command)?;
+                let pending = team::execute_with_feedback(
+                    &mut self.shared_mut().scoreboard,
+                    &resolved,
+                    &members,
+                )?;
+                // The mutable owner borrow ends before the native sendSuccess supplier reads names.
+                pending.resolve_feedback(|holder| match holder.entity {
+                    Some(entity) => {
+                        let display = self
+                            .level
+                            .level
+                            .entity_display_name_with_scoreboard(
+                                entity,
+                                self.shared().scoreboard.scoreboard(),
+                            )
+                            .map_err(scoreboard_entity_error)?;
+                        Ok(holder.feedback_with_display(display))
+                    }
+                    None => Ok(holder.feedback()),
+                })
             }
             "trigger" => {
                 let entity = command
@@ -94,18 +141,52 @@ impl MinecraftServer {
         &self,
         entity: EntityRef,
     ) -> Result<Holder, ferraloom_brigadier::CommandSyntaxException> {
-        let info = self
-            .info(entity)
-            .ok_or_else(|| exceptions::error("argument.entity.notfound.entity", &[]))?;
         Ok(Holder {
-            name: if info.player {
-                info.name.to_string()
-            } else {
-                info.uuid.to_string()
-            },
-            display: Some(self.display_name(entity)?),
+            entity: Some(entity),
+            name: self
+                .level
+                .level
+                .entity_scoreboard_name(entity)
+                .map_err(scoreboard_entity_error)?
+                .into_owned(),
+            display: Some(
+                self.level
+                    .level
+                    .entity_display_name_with_scoreboard(
+                        entity,
+                        self.shared().scoreboard.scoreboard(),
+                    )
+                    .map_err(scoreboard_entity_error)?,
+            ),
         })
     }
+    /// Port of ComponentArgument#getResolvedComponent for these command roots.
+    fn resolve_scoreboard_components(
+        &mut self,
+        command: &PreparedCommand,
+    ) -> Result<PreparedCommand, ferraloom_brigadier::CommandSyntaxException> {
+        use ferraloom_game::commands::components::ResolutionError;
+        scoreboard::resolve_components(command, self).map_err(|error| match error {
+            ResolutionError::Syntax(error) => error,
+            ResolutionError::EntityData(error) => scoreboard_entity_error(error),
+            ResolutionError::BlockData(error) => {
+                exceptions::error("ferraloom.scoreboard.block_read", &[format!("{error:?}")])
+            }
+            ResolutionError::Serialization(error) => {
+                exceptions::error("ferraloom.component.serialization", &[error.to_string()])
+            }
+            ResolutionError::Unsupported(kind) => {
+                exceptions::error("ferraloom.component.unsupported", &[format!("{kind:?}")])
+            }
+            ResolutionError::Storage(error) => {
+                exceptions::error("ferraloom.command_storage.invalid", &[error.to_string()])
+            }
+            ResolutionError::InvalidContent(message) => {
+                exceptions::error("argument.component.invalid", &[message])
+            }
+        })
+    }
+
     fn score_holders(
         &mut self,
         command: &PreparedCommand,
@@ -167,4 +248,10 @@ impl MinecraftServer {
             _ => unreachable!("score holder argument type"),
         }
     }
+}
+
+fn scoreboard_entity_error(
+    error: ferraloom_game::level::LevelError,
+) -> ferraloom_brigadier::CommandSyntaxException {
+    exceptions::error("ferraloom.scoreboard.entity_read", &[format!("{error:?}")])
 }

@@ -8,7 +8,12 @@ use crate::{
     },
     entity::{EntityState, item::item_entity::ItemEntity, player::GameType},
     inventory::{ContainerHandle, ContainerSlot, StackOperation},
-    level::{LevelContext, Region, chunk::LevelChunk, effects::LevelEffect},
+    level::{
+        LevelContext, Region,
+        chunk::LevelChunk,
+        effects::LevelEffect,
+        game_event::test_support::{self as game_events, Observation},
+    },
     stats::Stat,
 };
 use ferraloom_chunk::{BiomeId, IdMap, LevelChunkSection, Strategy};
@@ -71,6 +76,7 @@ fn fixture(behaviors: &'static Behaviors) -> (Level, EntityRef) {
         .add_entity(player, EntityState::Player(Box::new(miner)))
         .unwrap();
     level.take_effects();
+    game_events::observe(&mut level);
     (level, player)
 }
 fn seed(level: &mut Level, seed: &str) {
@@ -79,7 +85,7 @@ fn seed(level: &mut Level, seed: &str) {
         0,
     );
     level.set_sound_seed(0);
-    level.take_effects();
+    game_events::take(level);
 }
 fn rows(kind: &str) -> impl Iterator<Item = Vec<&'static str>> + '_ {
     VECTORS
@@ -173,38 +179,39 @@ fn assert_output(level: &mut Level, player: EntityRef, fields: &[&str], start: u
     );
 }
 fn effects(level: &mut Level, player: EntityRef) -> Vec<String> {
-    level
-        .take_effects()
+    game_events::take(level)
         .into_iter()
         .filter_map(|effect| match effect {
-            LevelEffect::PlayerPacket { recipients, packet } => match *packet {
-                cb::Packet::LevelEvent(event) => Some(format!(
-                    "event:{}:{}:{}",
-                    event.event_type,
-                    // playerWillDestroy excludes the player; later egg events do not.
-                    if event.event_type == 2001 && !recipients.contains(&player) {
-                        assert!(recipients.is_empty());
-                        "breaker"
-                    } else {
+            Observation::Effect(LevelEffect::PlayerPacket { recipients, packet }) => {
+                match *packet {
+                    cb::Packet::LevelEvent(event) => Some(format!(
+                        "event:{}:{}:{}",
+                        event.event_type,
+                        // playerWillDestroy excludes the player; later egg events do not.
+                        if event.event_type == 2001 && !recipients.contains(&player) {
+                            assert!(recipients.is_empty());
+                            "breaker"
+                        } else {
+                            assert_eq!(recipients, [player]);
+                            "none"
+                        },
+                        event.data
+                    )),
+                    cb::Packet::Sound(sound) => {
                         assert_eq!(recipients, [player]);
-                        "none"
-                    },
-                    event.data
-                )),
-                cb::Packet::Sound(sound) => {
-                    assert_eq!(recipients, [player]);
-                    let Holder::Reference(id) = sound.sound.0 else {
-                        panic!("registered sound")
-                    };
-                    Some(format!(
-                        "sound:{id}:{:x}:{:x}",
-                        sound.volume.to_bits(),
-                        sound.pitch.to_bits()
-                    ))
+                        let Holder::Reference(id) = sound.sound.0 else {
+                            panic!("registered sound")
+                        };
+                        Some(format!(
+                            "sound:{id}:{:x}:{:x}",
+                            sound.volume.to_bits(),
+                            sound.pitch.to_bits()
+                        ))
+                    }
+                    _ => None,
                 }
-                _ => None,
-            },
-            LevelEffect::GameEvent {
+            }
+            Observation::GameEvent {
                 event,
                 source,
                 affected_state,

@@ -29,7 +29,7 @@ pub(super) fn turn_to_base_block(
         Vec3::at_center_of(pos.into()),
         source,
         Some(new_state),
-    );
+    )?;
     Ok(())
 }
 

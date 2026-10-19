@@ -268,6 +268,12 @@ impl EntityData {
     pub fn move_relative(&mut self, speed: f32, input: Vec3) {
         self.velocity = self.velocity + super::movement::input_vector(input, speed, self.yaw);
     }
+    /// Port of Entity#setDeltaMovement; reject the entire non-finite vector.
+    pub fn set_delta_movement(&mut self, movement: Vec3) {
+        if movement.is_finite() {
+            self.velocity = movement;
+        }
+    }
     /// Port of Entity#push(double,double,double), including finite checks and
     /// needsSync even when the accepted impulse is zero.
     pub fn push_impulse(&mut self, impulse: Vec3) {
@@ -354,6 +360,15 @@ impl EntityData {
                 .fluid_interaction
                 .height(ferraloom_data::tags::FluidTags::LAVA, level)?
                 > 0.0)
+    }
+    /// Port of Entity#getFluidJumpThreshold; the eye-height float is widened
+    /// before comparing it with the native double literal.
+    pub fn fluid_jump_threshold(&self) -> f64 {
+        if f64::from(self.eye_height) < 0.4 {
+            0.0
+        } else {
+            0.4
+        }
     }
     pub fn clear_freeze(&mut self) {
         self.entity_data.set(synched_data::TICKS_FROZEN, VarInt(0));

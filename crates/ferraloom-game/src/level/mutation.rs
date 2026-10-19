@@ -355,7 +355,7 @@ impl Level {
                 ),
                 breaker,
                 Some(state),
-            );
+            )?;
         }
         Ok(destroyed)
     }

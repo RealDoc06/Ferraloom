@@ -65,31 +65,28 @@ impl MinecraftServer {
                     .expect("validated shared spawn dimension"),
                 spawn.position,
                 self.properties.int("spawn-protection"),
-                self.access.ops.values().map(|op| {
-                    ferraloom_game::commands::arguments::selectors::parse_uuid(&op.uuid)
-                        .expect("validated operator UUID")
-                }),
             ),
         );
     }
 
     /// Port of MinecraftServer#sendDifficultyUpdate; also used when a new player joins.
     pub(super) fn difficulty_packet(&self) -> cb::Packet {
-        let settings = self
-            .world
-            .level_data
-            .data
-            .get_compound("difficulty_settings");
-        let current = settings
-            .and_then(|tag| tag.get_string("difficulty"))
-            .map(|s| s.to_string_lossy());
+        let (current, locked) = self.level.generation().with_world(|world| {
+            let settings = world.level_data.data.get_compound("difficulty_settings");
+            (
+                settings
+                    .and_then(|tag| tag.get_string("difficulty"))
+                    .map(|value| value.to_string_lossy()),
+                settings.is_some_and(|tag| tag.get_boolean_or("locked", false)),
+            )
+        });
         cb::Packet::ChangeDifficulty(cb::ChangeDifficulty {
             difficulty: difficulty(
                 current
                     .as_deref()
                     .unwrap_or_else(|| self.properties.get("difficulty")),
             ),
-            locked: settings.is_some_and(|tag| tag.get_boolean_or("locked", false)),
+            locked,
         })
     }
     /// Capture owned save data before constructing IO, keeping the live level's
@@ -97,7 +94,11 @@ impl MinecraftServer {
     pub(super) fn save_game_rules(
         &self,
     ) -> impl std::future::Future<Output = Result<()>> + Send + 'static {
-        let storage = SavedDataStorage::new(self.world.access.path().join("data"));
+        let storage = SavedDataStorage::new(
+            self.level
+                .generation()
+                .with_world(|world| world.access.path().join("data")),
+        );
         let mut data = SavedData::new(self.game_rules.map().clone());
         let mut clocks = SavedData::new(self.clocks.states.clone());
         let mut scoreboard = SavedData::new(ferraloom_game::scoreboard::ScoreboardSaveData(
@@ -120,7 +121,11 @@ impl MinecraftServer {
     pub(super) fn save_command_storage(
         &mut self,
     ) -> impl std::future::Future<Output = Result<()>> + Send + 'static {
-        let storage = SavedDataStorage::new(self.world.access.path().join("data"));
+        let storage = SavedDataStorage::new(
+            self.level
+                .generation()
+                .with_world(|world| world.access.path().join("data")),
+        );
         let dirty = self.command_storage.take_dirty();
         async move {
             tokio::task::spawn_blocking(move || {
@@ -233,7 +238,7 @@ impl MinecraftServer {
                 .copied()
                 .filter(|id| {
                     Some(*id) != source
-                        && self.access.ops.values().any(|op| {
+                        && self.shared().ops.values().any(|op| {
                             op.uuid
                                 .eq_ignore_ascii_case(&self.connections[id].profile.id.to_string())
                         })
@@ -279,7 +284,7 @@ impl MinecraftServer {
             "banlist" => self.ban_list_command(&command),
             "gamemode" => self.game_mode_command(source, &command)?,
             "setworldspawn" | "spawnpoint" => self.spawn_command(source, &command)?,
-            "seed" => builtins::seed(self.world.seed),
+            "seed" => builtins::seed(self.level.generation().with_world(|world| world.seed)),
             "help" => self.commands.help(&command)?,
             "say" | "me" | "msg" => self.message_command(source, &command)?,
             "teammsg" => self.message_command(source, &command)?,
@@ -310,12 +315,16 @@ impl MinecraftServer {
             }
             "difficulty" => {
                 let current = self
-                    .world
-                    .level_data
-                    .data
-                    .get_compound("difficulty_settings")
-                    .and_then(|tag| tag.get_string("difficulty"))
-                    .map(|s| s.to_string_lossy())
+                    .level
+                    .generation()
+                    .with_world(|world| {
+                        world
+                            .level_data
+                            .data
+                            .get_compound("difficulty_settings")
+                            .and_then(|tag| tag.get_string("difficulty"))
+                            .map(|value| value.to_string_lossy())
+                    })
                     .unwrap_or_else(|| self.properties.get("difficulty").to_owned());
                 if let Some(requested) = command.literals.get(1) {
                     if *requested == current {
@@ -327,13 +336,14 @@ impl MinecraftServer {
                             ))],
                         ));
                     }
-                    let mut settings = self
-                        .world
-                        .level_data
-                        .data
-                        .get_compound("difficulty_settings")
-                        .cloned()
-                        .unwrap_or_default();
+                    let mut settings = self.level.generation().with_world(|world| {
+                        world
+                            .level_data
+                            .data
+                            .get_compound("difficulty_settings")
+                            .cloned()
+                            .unwrap_or_default()
+                    });
                     let changed = if settings
                         .get_boolean_or("hardcore", self.properties.boolean("hardcore"))
                     {
@@ -343,10 +353,12 @@ impl MinecraftServer {
                     };
                     let locked = settings.get_boolean_or("locked", false);
                     settings.insert("difficulty", Tag::String(changed.into()));
-                    self.world
-                        .level_data
-                        .data
-                        .insert("difficulty_settings", Tag::Compound(settings));
+                    self.level.generation().with_world_mut(|world| {
+                        world
+                            .level_data
+                            .data
+                            .insert("difficulty_settings", Tag::Compound(settings))
+                    });
                     self.level.level.set_difficulty(difficulty(changed));
                     self.broadcast(cb::Packet::ChangeDifficulty(cb::ChangeDifficulty {
                         difficulty: difficulty(changed),
@@ -424,10 +436,12 @@ impl MinecraftServer {
                     unreachable!()
                 };
                 self.default_game_mode = *mode;
-                self.world
-                    .level_data
-                    .data
-                    .insert("GameType", Tag::Int(mode.id()));
+                self.level.generation().with_world_mut(|world| {
+                    world
+                        .level_data
+                        .data
+                        .insert("GameType", Tag::Int(mode.id()))
+                });
                 let mut count = 0;
                 if self.properties.boolean("force-gamemode") {
                     for player in self.players.clone() {
@@ -601,6 +615,24 @@ impl EntityQuery for MinecraftServer {
 }
 
 impl MinecraftServer {
+    /// Port of ServerPlayer#createCommandSourceStack, including its live permissions().
+    pub(super) fn player_command_source(
+        &self,
+        entity: EntityRef,
+    ) -> std::result::Result<CommandSourceStack, ferraloom_game::level::LevelError> {
+        let player = self.level.level.entity::<ServerPlayer>(entity)?;
+        let permissions = self.level.level.player_permissions(entity)?;
+        Ok(CommandSourceStack::server(0, player.position)
+            .with_permission(permissions)
+            .with_entity(entity)
+            .with_source(ferraloom_game::commands::source::CommandSource::Player(
+                entity,
+            ))
+            .with_rotation(ferraloom_game::commands::source::Rotation {
+                pitch: player.pitch,
+                yaw: player.yaw,
+            }))
+    }
     /// Command failures produce feedback; only ingress violations propagate to disconnect logic.
     pub(super) async fn execute_command(
         &mut self,
@@ -614,14 +646,7 @@ impl MinecraftServer {
                 .get(&connection)
                 .context("unknown command source")?;
             if let Phase::Play(entity) = c.phase {
-                stack = CommandSourceStack::server(
-                    self.access.permission(c.profile.id),
-                    self.player(entity)?.position,
-                )
-                .with_entity(entity)
-                .with_source(
-                    ferraloom_game::commands::source::CommandSource::Player(entity),
-                );
+                stack = self.player_command_source(entity).map_err(game_error)?;
             }
         }
         let lent = self.lend_server_shared();
@@ -979,7 +1004,7 @@ impl MinecraftServer {
     fn command_suggestion_data(&self) -> ferraloom_game::commands::suggestions::SuggestionData {
         let mut data = ferraloom_game::commands::suggestions::SuggestionData {
             operators: self
-                .access
+                .shared()
                 .ops
                 .values()
                 .map(|entry| entry.name.clone())
@@ -1026,7 +1051,7 @@ impl MinecraftServer {
             data.players.push(player.name.clone());
             let uuid = player.uuid.to_string();
             if !self
-                .access
+                .shared()
                 .ops
                 .values()
                 .any(|op| op.uuid.eq_ignore_ascii_case(&uuid))
@@ -1057,10 +1082,7 @@ impl MinecraftServer {
             let Phase::Play(entity) = self.connections[&connection].phase else {
                 continue;
             };
-            let player = self.player(entity)?;
-            let source =
-                CommandSourceStack::server(self.access.permission(player.uuid), player.position)
-                    .with_entity(entity);
+            let source = self.player_command_source(entity).map_err(game_error)?;
             let suggestions = self.commands.suggestions_with(
                 &request.command.0,
                 source,
@@ -1156,7 +1178,7 @@ impl MinecraftServer {
         Err(exceptions::error("argument.player.unknown", &[]))
     }
     fn update_command_permissions(&mut self, profile: Uuid) {
-        let level = self.access.permission(profile);
+        let level = self.shared().ops.permission_level(profile).id();
         let targets = self
             .players
             .iter()
@@ -1190,7 +1212,8 @@ impl MinecraftServer {
             .copied()
             .filter(|id| {
                 let uuid = self.connections[id].profile.id.to_string();
-                !self.access.ops.contains_key(&uuid) && !self.access.whitelist.contains_key(&uuid)
+                !self.shared().ops.contains(self.connections[id].profile.id)
+                    && !self.access.whitelist.contains_key(&uuid)
             })
             .collect::<Vec<_>>();
         for id in targets {
@@ -1212,11 +1235,16 @@ impl MinecraftServer {
         let grant = command.command == "op";
         let mut count = 0;
         for profile in profiles {
-            if self.access.ops.contains_key(&profile.id.to_string()) == grant {
+            if self.shared().ops.contains(profile.id) == grant {
                 continue;
             }
-            let level = grant.then(|| self.properties.int("op-permission-level"));
-            if let Err(error) = self.access.set_operator(&profile, level) {
+            let level = grant.then(|| {
+                ferraloom_game::commands::permissions::PermissionLevel::by_id(
+                    self.properties.int("op-permission-level"),
+                )
+            });
+            self.shared_mut().ops.set_operator(&profile, level);
+            if let Err(error) = self.access.save_operators(&self.shared().ops) {
                 eprintln!("Could not save operator list: {error:#}");
             }
             self.publish_spawn_protection();
@@ -1968,17 +1996,19 @@ impl MinecraftServer {
 
 impl MinecraftServer {
     pub(super) fn default_spawn_data(&self) -> ferraloom_game::commands::spawn::SpawnData {
-        let data = self.world.level_data.data.get_compound("spawn");
-        ferraloom_game::commands::spawn::SpawnData {
-            dimension: data
-                .and_then(|data| data.get_string("dimension"))
-                .map_or_else(|| "minecraft:overworld".into(), |id| id.to_string_lossy()),
-            position: self.world.spawn,
-            rotation: ferraloom_game::commands::source::Rotation {
-                yaw: data.map_or(0., |data| data.get_float_or("yaw", 0.)),
-                pitch: data.map_or(0., |data| data.get_float_or("pitch", 0.)),
-            },
-        }
+        self.level.generation().with_world(|world| {
+            let data = world.level_data.data.get_compound("spawn");
+            ferraloom_game::commands::spawn::SpawnData {
+                dimension: data
+                    .and_then(|data| data.get_string("dimension"))
+                    .map_or_else(|| "minecraft:overworld".into(), |id| id.to_string_lossy()),
+                position: world.spawn,
+                rotation: ferraloom_game::commands::source::Rotation {
+                    yaw: data.map_or(0., |data| data.get_float_or("yaw", 0.)),
+                    pitch: data.map_or(0., |data| data.get_float_or("pitch", 0.)),
+                },
+            }
+        })
     }
     fn spawn_command(
         &mut self,
@@ -1999,11 +2029,13 @@ impl MinecraftServer {
         let spawn = SpawnData::command(command)?;
         if command.command == "setworldspawn" {
             if self.default_spawn_data() != spawn {
-                self.world.spawn = spawn.position;
-                self.world
-                    .level_data
-                    .data
-                    .insert("spawn", Tag::Compound(spawn.to_nbt()));
+                self.level.generation().with_world_mut(|world| {
+                    world.spawn = spawn.position;
+                    world
+                        .level_data
+                        .data
+                        .insert("spawn", Tag::Compound(spawn.to_nbt()));
+                });
                 self.publish_spawn_protection();
                 self.broadcast(cb::Packet::SetDefaultSpawnPosition(
                     cb::SetDefaultSpawnPosition {
@@ -2097,7 +2129,13 @@ impl ferraloom_game::commands::components::ComponentResolver for MinecraftServer
                     .ok_or(ResolutionError::Unsupported(UnsupportedContent::NbtData))?;
                 Ok(vec![storage.get(id)?])
             }
-            _ => Err(ResolutionError::Unsupported(UnsupportedContent::NbtData)),
+            protocol::chat::DataSource::Block(coordinates) => {
+                ferraloom_game::commands::components::block_data(
+                    &self.level.level,
+                    source,
+                    coordinates,
+                )
+            }
         }
     }
 }

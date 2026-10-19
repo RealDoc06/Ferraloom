@@ -90,6 +90,12 @@ impl BlockEntityData {
 
 /// Port of BlockEntity's virtual methods. Implementations are immutable dispatchers.
 pub trait BlockEntity: Sync {
+    /// Port of EntityBlock#getListener for a GameEventListener.Provider receiver.
+    fn game_event_listener(
+        &self,
+    ) -> Option<&'static dyn crate::level::game_event::GameEventListener> {
+        None
+    }
     fn load_additional(&self, _state: &mut BlockEntityState, _tag: &CompoundTag) {}
     fn save_additional(
         &self,

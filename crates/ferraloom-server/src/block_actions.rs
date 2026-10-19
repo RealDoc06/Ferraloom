@@ -1,5 +1,5 @@
 //! ServerGamePacketListenerImpl's four mining actions. The canonical player's
-//! mining-state field and production routing attach after the entity landing.
+//! mining-state field and production routing attach in slice D.
 use super::*;
 use ferraloom_game::entity::player::game_mode::{
     BlockBreakAction, BlockBreakingState, DestroyAction,

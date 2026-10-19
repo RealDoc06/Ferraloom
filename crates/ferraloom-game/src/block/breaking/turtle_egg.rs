@@ -73,7 +73,7 @@ fn decrease_eggs(state: BlockState, pos: BlockPos, level: &mut Level) -> Result<
             UpdateFlags::CLIENTS,
             UPDATE_LIMIT,
         )?;
-        level.game_event(GameEvent::BLOCK_DESTROY, position, None, Some(state));
+        level.game_event(GameEvent::BLOCK_DESTROY, position, None, Some(state))?;
         level.level_event(None, 2001, pos, i32::from(state.id()))?;
     }
     Ok(())

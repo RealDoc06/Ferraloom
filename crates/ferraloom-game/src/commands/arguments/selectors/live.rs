@@ -15,12 +15,10 @@ impl ferraloom_brigadier::Message for EntityReadError {
     }
 }
 pub fn selector_read_error(error: crate::level::LevelError) -> CommandSyntaxException {
+    let text = format!("Required entity read failed: {error:?}");
     CommandSyntaxException::new(
         ferraloom_brigadier::ExceptionKind::Custom("ferraloom.entity.read".into()),
-        std::sync::Arc::new(EntityReadError {
-            error,
-            text: format!("Required entity read failed: {error:?}"),
-        }),
+        std::sync::Arc::new(EntityReadError { error, text }),
     )
 }
 /// Canonical live selector reads; the caller supplies the same-phase scoreboard.

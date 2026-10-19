@@ -1,4 +1,6 @@
 use super::*;
+#[cfg(test)]
+use crate::level::game_event::test_support::{self as game_events, Observation};
 use crate::{
     Behaviors,
     block::{LevelReaderRef, UPDATE_LIMIT, UpdateFlags},
@@ -21,8 +23,11 @@ fn level() -> Level {
     level_in_radius(1)
 }
 fn level_in_radius(radius: i32) -> Level {
+    level_with_behaviors(radius, &EMPTY)
+}
+pub(super) fn level_with_behaviors(radius: i32, behaviors: &'static Behaviors) -> Level {
     let mut level = Level::new(
-        Region::new(&EMPTY),
+        Region::new(behaviors),
         crate::level::LevelContext::fixture(0, 63),
     );
     for x in -radius..=radius {
@@ -334,6 +339,7 @@ fn pressure_plate_sensitivity_weighted_rounding_and_release_ticks_match_vanilla(
         let kind = args.next().unwrap().parse::<u8>().unwrap();
         let count = args.next().unwrap().parse::<u64>().unwrap();
         let mut level = level();
+        game_events::observe(&mut level);
         level
             .set_block_state(ORIGIN.below(1), Block::STONE.default_state())
             .unwrap();
@@ -377,7 +383,7 @@ fn pressure_plate_sensitivity_weighted_rounding_and_release_ticks_match_vanilla(
         let mut samples = Vec::new();
         for tick in 0..=24 {
             level.set_game_time(tick);
-            level.take_effects();
+            game_events::take(&mut level);
             if tick == 0 {
                 if count == 0 {
                     switches::SWITCHES.tick(state, ORIGIN, &mut level).unwrap();
@@ -395,12 +401,12 @@ fn pressure_plate_sensitivity_weighted_rounding_and_release_ticks_match_vanilla(
             level.tick_scheduled_blocks(tick, 65536).unwrap();
             let mut mutations = Vec::new();
             let mut gameplay = Vec::new();
-            for effect in level.take_effects() {
+            for effect in game_events::take(&mut level) {
                 match effect {
-                    LevelEffect::BlockUpdated { pos, new, .. } => {
+                    Observation::Effect(LevelEffect::BlockUpdated { pos, new, .. }) => {
                         mutations.push(format!("{}, {}, {}={}", pos.x, pos.y, pos.z, new.id()));
                     }
-                    LevelEffect::GameEvent {
+                    Observation::GameEvent {
                         event,
                         source,
                         affected_state,
@@ -468,6 +474,7 @@ fn switches_and_openings_keep_native_click_results_updates_and_event_sources() {
         let state = BlockState::from_id(args.next().unwrap().parse().unwrap()).unwrap();
         let yaw = args.next().unwrap().parse().unwrap();
         let mut level = level();
+        game_events::observe(&mut level);
         level
             .set_block_state(ORIGIN.below(1), Block::STONE.default_state())
             .unwrap();
@@ -523,7 +530,7 @@ fn switches_and_openings_keep_native_click_results_updates_and_event_sources() {
             },
         };
         for (click, expected) in expected.split('#').enumerate() {
-            level.take_effects();
+            game_events::take(&mut level);
             let current = level.get_block_state(ORIGIN).unwrap();
             let result = level
                 .required_block_behavior(block, BlockMethod::UseWithoutItem)
@@ -542,12 +549,12 @@ fn switches_and_openings_keep_native_click_results_updates_and_event_sources() {
             let mut mutations = Vec::new();
             let mut gameplay = Vec::new();
             let mut sounds = Vec::new();
-            for effect in level.take_effects() {
+            for effect in game_events::take(&mut level) {
                 match effect {
-                    LevelEffect::BlockUpdated { pos, new, .. } => {
+                    Observation::Effect(LevelEffect::BlockUpdated { pos, new, .. }) => {
                         mutations.push(format!("{}, {}, {}={}", pos.x, pos.y, pos.z, new.id()));
                     }
-                    LevelEffect::GameEvent {
+                    Observation::GameEvent {
                         event,
                         source,
                         affected_state,
@@ -561,7 +568,7 @@ fn switches_and_openings_keep_native_click_results_updates_and_event_sources() {
                             affected_state.map_or(-1, |state| i32::from(state.id()))
                         ));
                     }
-                    LevelEffect::PlayerPacket { packet, recipients } => {
+                    Observation::Effect(LevelEffect::PlayerPacket { packet, recipients }) => {
                         if let Packet::Sound(sound) = *packet {
                             let Holder::Reference(id) = sound.sound.0 else {
                                 panic!("registered block sound");
@@ -599,11 +606,10 @@ fn switches_and_openings_keep_native_click_results_updates_and_event_sources() {
 fn note_sounds(level: &mut Level) -> String {
     use ferraloom_data::registries::sound_event::Id as SoundEvent;
     use ferraloom_protocol::{codec::Holder, play::clientbound::Packet};
-    level
-        .take_effects()
+    game_events::take(level)
         .into_iter()
         .filter_map(|effect| {
-            if let LevelEffect::PlayerPacket { packet, .. } = effect
+            if let Observation::Effect(LevelEffect::PlayerPacket { packet, .. }) = effect
                 && let Packet::Sound(sound) = *packet
             {
                 let Holder::Reference(id) = sound.sound.0 else {
@@ -700,7 +706,12 @@ fn redstone_post_placement_updates_match_vanilla() {
         level.set_block_state(ORIGIN, state).unwrap();
         level.take_effects();
         level
-            .set_placed_by(state, ORIGIN, None, &Default::default())
+            .set_placed_by(
+                state,
+                ORIGIN,
+                None,
+                crate::block::StackView::Borrowed(&Default::default()),
+            )
             .unwrap();
         let mut targets = vec![ORIGIN, ORIGIN.above(1)];
         targets.extend((1..=4).map(|i| ORIGIN.relative(direction, i)));
@@ -736,6 +747,7 @@ fn tripwire_shears_disarm_and_base_destroy_event_order_match_vanilla() {
         let state = BlockState::from_id(args.next().unwrap().parse().unwrap()).unwrap();
         let tool = args.next().unwrap().parse::<u8>().unwrap();
         let mut level = level();
+        game_events::observe(&mut level);
         level.set_block_state(ORIGIN, state).unwrap();
         let actor = EntityRef(1);
         let mut player = ServerPlayer::new(
@@ -755,13 +767,12 @@ fn tripwire_shears_disarm_and_base_destroy_event_order_match_vanilla() {
         level
             .add_entity(actor, EntityState::Player(Box::new(player)))
             .unwrap();
-        level.take_effects();
+        game_events::take(&mut level);
         let returned = level.player_will_destroy(state, ORIGIN, actor).unwrap();
-        let effects = level
-            .take_effects()
+        let effects = game_events::take(&mut level)
             .into_iter()
             .filter_map(|effect| match effect {
-                LevelEffect::PlayerPacket { packet, recipients } => {
+                Observation::Effect(LevelEffect::PlayerPacket { packet, recipients }) => {
                     if let Packet::LevelEvent(event) = *packet {
                         assert_eq!(event.pos, ORIGIN);
                         assert!(recipients.is_empty());
@@ -770,7 +781,7 @@ fn tripwire_shears_disarm_and_base_destroy_event_order_match_vanilla() {
                         None
                     }
                 }
-                LevelEffect::GameEvent {
+                Observation::GameEvent {
                     event,
                     source,
                     affected_state,

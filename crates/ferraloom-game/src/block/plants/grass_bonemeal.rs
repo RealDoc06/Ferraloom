@@ -61,7 +61,7 @@ fn place_effect(
                 .bone_meal_features(biome)
                 .map_err(|error| {
                     eprintln!("grass bonemeal at {pos:?}: {error}");
-                    LevelError::WorldgenMutationFailed(pos)
+                    LevelError::WorldgenMutationFailed { pos, source: error }
                 })?;
             if features.is_empty() {
                 return Ok(());
@@ -86,7 +86,7 @@ fn place_effect(
         };
         result.map_err(|error| {
             eprintln!("grass bonemeal feature at {pos:?}: {error}");
-            LevelError::WorldgenMutationFailed(pos)
+            LevelError::WorldgenMutationFailed { pos, source: error }
         })?;
     }
     Ok(())

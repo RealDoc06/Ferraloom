@@ -89,7 +89,7 @@ impl BlockBehavior for Harvest {
             Vec3::at_center_of(pos.into()),
             Some(context.player),
             Some(next),
-        );
+        )?;
         Ok(InteractionResult::SUCCESS)
     }
 }

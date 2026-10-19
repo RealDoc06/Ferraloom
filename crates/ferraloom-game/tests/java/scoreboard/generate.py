@@ -17,7 +17,7 @@ with tempfile.TemporaryDirectory(prefix='scoreboard-vectors-') as temp:
         if result.returncode:
             print(result.stdout[-2000:]); print(result.stderr); raise SystemExit(result.returncode)
         return result.stdout
-    run([str(java/'javac'),'-cp',cp,'-d',str(classes),str(source/'ScoreboardVectors.java'),str(source/'CommandVectors.java'),str(source/'TeamFeedbackVectors.java')])
+    run([str(java/'javac'),'-cp',cp,'-d',str(classes),str(source/'ScoreboardVectors.java'),str(source/'CommandVectors.java'),str(source/'TeamFeedbackVectors.java'),str(source/'TeamSingleFeedbackVectors.java'),str(source/'DynamicCommandVectors.java')])
     output = run([str(java/'java'),'-Xmx512m','-XX:+EnableDynamicAgentLoading','-Dnet.bytebuddy.experimental=true','-cp',f'{classes}:{cp}','ScoreboardVectors',str(classes/'scoreboard.dat')])
     rows = [line for line in output.splitlines() if line.split('\t')[0] in {'membership','allied','collision','saved','codec','criterion','criterion-alias','ordering'}]
     (source/'vectors.tsv').write_text('\n'.join(rows)+'\n')
@@ -29,3 +29,9 @@ with tempfile.TemporaryDirectory(prefix='scoreboard-vectors-') as temp:
 
     run([str(java/'java'),'-Xmx512m','-XX:+EnableDynamicAgentLoading','-Dnet.bytebuddy.experimental=true','-cp',f'{classes}:{cp}','TeamFeedbackVectors',str(source/'team-feedback.json')])
     print(f"{len(json.loads((source/'team-feedback.json').read_text()))} vanilla team feedback cases")
+
+    run([str(java/'java'),'-Xmx512m','-XX:+EnableDynamicAgentLoading','-Dnet.bytebuddy.experimental=true','-cp',f'{classes}:{cp}','TeamSingleFeedbackVectors',str(source/'team-single-feedback.json')])
+    print(f"{len(json.loads((source/'team-single-feedback.json').read_text()))} vanilla single-entity team feedback cases")
+
+    run([str(java/'java'),'-Xmx512m','-XX:+EnableDynamicAgentLoading','-Dnet.bytebuddy.experimental=true','-cp',f'{classes}:{cp}','DynamicCommandVectors',str(source/'dynamic-commands.json')])
+    print(f"{len(json.loads((source/'dynamic-commands.json').read_text()))} vanilla dynamic-command getter-order cases")

@@ -14,6 +14,8 @@ use ferraloom_util::{BlockPos, ChunkPos};
 /// empty-section template, including the dimension's default biome registry.
 pub struct LevelChunk {
     pub(super) publication_generation: u64,
+    pub(super) staged_publication: Option<super::publication::StagedPublication>,
+    pub(super) loaded: Cell<bool>,
     pos: ChunkPos,
     min_section: i32,
     sections: Vec<Option<LevelChunkSection>>,
@@ -25,6 +27,7 @@ pub struct LevelChunk {
     requested_full_status: Cell<FullChunkStatus>,
     ticking_ready: Cell<bool>,
     pub(super) block_entities: super::block_entity::ChunkBlockEntities,
+    pub(super) game_event_listener_owner: Option<super::game_event::ChunkListenerOwner>,
     inhabited_time: i64,
     pub(super) pending_generation: super::post_processing::PendingGenerationData,
     pub(super) structures: super::structure_manager::StructureVersions,
@@ -48,6 +51,8 @@ impl LevelChunk {
         assert!(empty_section.has_only_air());
         Self {
             publication_generation: 0,
+            staged_publication: None,
+            loaded: Cell::new(false),
             pos,
             min_section: sections.start,
             sections: sections.map(|_| None).collect(),
@@ -61,6 +66,7 @@ impl LevelChunk {
             requested_full_status: Cell::new(FullChunkStatus::Full),
             ticking_ready: Cell::new(false),
             block_entities: Default::default(),
+            game_event_listener_owner: None,
             inhabited_time: 0,
             pending_generation: Default::default(),
             structures: super::structure_manager::StructureVersions::new(pos),
@@ -83,6 +89,8 @@ impl LevelChunk {
             pos,
             min_section,
             publication_generation: 0,
+            staged_publication: None,
+            loaded: Cell::new(false),
             sections: sections.into_iter().map(Some).collect(),
             empty_section,
             heightmaps: None,
@@ -92,6 +100,7 @@ impl LevelChunk {
             requested_full_status: Cell::new(FullChunkStatus::Full),
             ticking_ready: Cell::new(false),
             block_entities: Default::default(),
+            game_event_listener_owner: None,
             inhabited_time: 0,
             pending_generation: Default::default(),
             structures: super::structure_manager::StructureVersions::new(pos),
@@ -100,6 +109,16 @@ impl LevelChunk {
     }
     pub fn min_y(&self) -> i32 {
         self.min_section * 16
+    }
+    /// Port of LevelChunk#isLoaded; remains false throughout entity postLoad.
+    pub fn is_loaded(&self) -> bool {
+        self.loaded.get()
+    }
+    pub(crate) fn full_publication_complete(&self) -> bool {
+        self.loaded.get()
+            && self.staged_publication.as_ref().is_none_or(|stage| {
+                stage.step.get() == super::publication::FullChunkFinalizationStep::Finalized
+            })
     }
     /// Port of ChunkAccess#getInhabitedTime, saved as InhabitedTime.
     pub fn inhabited_time(&self) -> i64 {

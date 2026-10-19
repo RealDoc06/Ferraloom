@@ -249,6 +249,6 @@ pub(super) fn place_feature(
         )
         .map_err(|error| {
             eprintln!("plant feature {id} at {pos:?}: {error}");
-            LevelError::WorldgenMutationFailed(pos)
+            LevelError::WorldgenMutationFailed { pos, source: error }
         })
 }

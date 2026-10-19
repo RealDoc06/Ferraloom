@@ -1,10 +1,13 @@
 use super::chunk_holder::ChunkHolder;
+use super::generation::{
+    ChunkPyramid, ChunkStatus, GenerationSchedule, GenerationTaskChange, GenerationTaskToken,
+};
 use ferraloom_util::ChunkPos;
 use std::collections::{BTreeMap, HashSet};
 #[derive(Default)]
 pub struct ChunkMap {
     pub holders: BTreeMap<i64, ChunkHolder>,
-    next_request: u64,
+    next_task: u64,
     next_holder_epoch: u64,
     holder_order: ferraloom_util::collections::LongLinkedOpenHashSet,
 }
@@ -22,7 +25,7 @@ impl ChunkMap {
                 .checked_add(1)
                 .expect("chunk holder incarnations exhausted");
             self.holder_order.insert(pos.pack());
-            let mut holder = ChunkHolder::new(pos, 0);
+            let mut holder = ChunkHolder::new(pos);
             holder.epoch = self.next_holder_epoch;
             holder
         })
@@ -37,6 +40,8 @@ impl ChunkMap {
             || holder.confirmed_full_status()
                 != super::distance_manager::FullChunkStatus::Inaccessible
             || holder.pending_full_status().is_some()
+            || !holder.generation.generation_references_released()
+            || holder.generation.current_task().is_some()
         {
             return None;
         }
@@ -44,33 +49,51 @@ impl ChunkMap {
         self.holder_order.remove(&key);
         Some(holder)
     }
-    pub fn request(&mut self, pos: ChunkPos) -> Option<u64> {
+    /// Port of GenerationChunkHolder#scheduleChunkGenerationTask. Task IDs
+    /// model native task-object identity; per-status future identity stays on
+    /// the holder when an increased target cancels and replaces its task.
+    pub fn schedule_generation_task(
+        &mut self,
+        pos: ChunkPos,
+        status: ChunkStatus,
+    ) -> GenerationSchedule {
+        self.ensure_holder(pos);
+        let next_task = &mut self.next_task;
+        self.holders
+            .get_mut(&pos.pack())
+            .unwrap()
+            .generation
+            .schedule(status, &mut |target| allocate_task(next_task, target))
+    }
+
+    /// Port of updateHighestAllowedStatus at updateFutures' native slot, after
+    /// all ordered ticket-level changes have been applied to their holders.
+    pub fn update_highest_allowed_status(&mut self, pos: ChunkPos) -> GenerationTaskChange {
         let holder = self.ensure_holder(pos);
-        if holder.generation_requested {
-            return None;
-        }
-        let request = self.next_request;
-        self.next_request = self.next_request.wrapping_add(1);
-        let holder = self.holders.get_mut(&pos.pack()).unwrap();
-        holder.request_id = request;
-        holder.generation_requested = true;
-        Some(request)
-    }
-    /// Cancel only the runtime's current unfinished FULL request. A stale
-    /// worker cannot reset a newer request, and completed FULL data is cached.
-    pub fn cancel_generation_request(&mut self, pos: ChunkPos, request_id: u64) -> bool {
-        let Some(holder) = self.holders.get_mut(&pos.pack()) else {
-            return false;
+        let level = holder.ticket_level;
+        let allowed = if level <= 33 {
+            Some(ChunkStatus::Full)
+        } else {
+            ChunkPyramid::generation()
+                .step_to(ChunkStatus::Full)
+                .accumulated
+                .get((level - 33) as usize)
         };
-        if holder.request_id != request_id
-            || !holder.generation_requested
-            || holder.status == super::chunk_holder::ChunkStatus::Full
-        {
-            return false;
-        }
-        holder.generation_requested = false;
-        true
+        let next_task = &mut self.next_task;
+        self.holders
+            .get_mut(&pos.pack())
+            .unwrap()
+            .generation
+            .update_highest_allowed_status(allowed, &mut |target| allocate_task(next_task, target))
     }
+}
+
+fn allocate_task(next: &mut u64, target: ChunkStatus) -> GenerationTaskToken {
+    let id = *next;
+    *next = next
+        .checked_add(1)
+        .expect("generation task identities exhausted");
+    GenerationTaskToken { id, target }
 }
 /// Port of PlayerChunkSender: quota, one initial unacknowledged batch, then ten.
 #[derive(Debug)]
@@ -160,81 +183,117 @@ mod tests {
         sender.acknowledge(f32::NAN);
         assert_eq!(sender.next_batch(ChunkPos::new(0, 0), |_| true).len(), 1);
     }
+    fn allow(chunks: &mut ChunkMap, pos: ChunkPos, level: i32) -> GenerationTaskChange {
+        chunks.ensure_holder(pos).ticket_level = level;
+        chunks.update_highest_allowed_status(pos)
+    }
+
     #[test]
-    fn holder_incarnation_survives_requests_and_status_changes_until_final_removal() {
+    fn holder_incarnation_survives_replaced_tasks_and_recreation_changes_it() {
         let mut chunks = ChunkMap::default();
-        let pos = ChunkPos::new(0, 0);
+        let pos = ChunkPos::ZERO;
         let other = ChunkPos::new(1, 0);
+        allow(&mut chunks, pos, 33);
         let epoch = chunks.ensure_holder(pos).epoch;
-        assert_ne!(epoch, 0);
         let other_epoch = chunks.ensure_holder(other).epoch;
+        assert_ne!(epoch, 0);
         assert!(other_epoch > epoch);
+        let first = chunks.schedule_generation_task(pos, ChunkStatus::Biomes);
+        let upgraded = chunks.schedule_generation_task(pos, ChunkStatus::Full);
+        assert_eq!(upgraded.task.cancel, first.task.schedule);
         assert_eq!(chunks.ensure_holder(pos).epoch, epoch);
-
-        let request = chunks.request(pos).unwrap();
-        assert_eq!(chunks.ensure_holder(pos).epoch, epoch);
-        assert!(chunks.cancel_generation_request(pos, request));
-        assert_ne!(chunks.request(pos).unwrap(), request);
-        assert_eq!(chunks.ensure_holder(pos).epoch, epoch);
-
         let holder = chunks.ensure_holder(pos);
-        holder.status = super::super::chunk_holder::ChunkStatus::Terrain;
         holder.ticket_level = 31;
         holder.update_full_status();
         let promotion = holder.pending_full_status().unwrap();
         assert!(holder.confirm_full_status(promotion).is_some());
         assert_eq!(holder.epoch, epoch);
-        holder.ticket_level = 45;
-        holder.update_full_status();
+        let cancelled = allow(&mut chunks, pos, 45);
+        assert_eq!(cancelled.cancel, upgraded.task.schedule);
+        chunks.ensure_holder(pos).update_full_status();
         assert_eq!(chunks.remove_unloaded_holder(pos).unwrap().epoch, epoch);
-
         let recreated = chunks.ensure_holder(pos).epoch;
         assert!(recreated > other_epoch);
         assert_eq!(chunks.ensure_holder(other).epoch, other_epoch);
-        chunks.request(pos).unwrap();
-        assert_eq!(chunks.ensure_holder(pos).epoch, recreated);
     }
+
     #[test]
-    fn cancelled_generation_retries_with_fresh_identity_and_keeps_completed_full_data() {
+    fn partial_ticket_schedules_its_status_and_upgrade_keeps_that_future() {
         let mut chunks = ChunkMap::default();
-        let pos = ChunkPos::new(0, 0);
-        let first = chunks.request(pos).unwrap();
-        assert!(!chunks.cancel_generation_request(pos, first + 1));
-        assert!(chunks.cancel_generation_request(pos, first));
-        let second = chunks.request(pos).unwrap();
-        assert_ne!(first, second);
-        assert!(!chunks.cancel_generation_request(pos, first));
-        assert_eq!(chunks.request(pos), None);
-        chunks.holders.get_mut(&pos.pack()).unwrap().status =
-            super::super::chunk_holder::ChunkStatus::Full;
-        assert!(!chunks.cancel_generation_request(pos, second));
-        assert_eq!(chunks.request(pos), None);
-        assert_eq!(chunks.holder_positions().collect::<Vec<_>>(), vec![pos]);
+        let pos = ChunkPos::ZERO;
+        allow(&mut chunks, pos, 36);
+        assert_eq!(
+            chunks
+                .ensure_holder(pos)
+                .generation
+                .highest_allowed_status(),
+            Some(ChunkStatus::Biomes)
+        );
+        let biomes = chunks.schedule_generation_task(pos, ChunkStatus::Biomes);
+        assert!(biomes.task.schedule.is_some());
+        let disallowed = chunks.schedule_generation_task(pos, ChunkStatus::Full);
+        assert_eq!(
+            disallowed.future,
+            super::super::generation::GenerationFutureId::UNLOADED
+        );
+        assert_eq!(disallowed.task, GenerationTaskChange::default());
+        allow(&mut chunks, pos, 33);
+        let full = chunks.schedule_generation_task(pos, ChunkStatus::Full);
+        assert_eq!(full.task.cancel, biomes.task.schedule);
+        assert_eq!(
+            chunks
+                .ensure_holder(pos)
+                .generation
+                .future_id(ChunkStatus::Biomes),
+            Some(biomes.future)
+        );
+        let downgraded = allow(&mut chunks, pos, 35);
+        assert_eq!(downgraded.cancel, full.task.schedule);
+        assert_eq!(downgraded.schedule.unwrap().target, ChunkStatus::Biomes);
+        assert!(
+            !chunks
+                .ensure_holder(pos)
+                .generation
+                .remove_task(full.task.schedule.unwrap())
+        );
+        assert_eq!(
+            chunks.ensure_holder(pos).generation.current_task(),
+            downgraded.schedule
+        );
     }
+
     #[test]
-    fn unloading_waits_for_ticket_demotion_and_reloading_gets_a_new_request_in_order() {
+    fn unloading_waits_for_claims_and_recreation_appends_in_native_holder_order() {
         let mut chunks = ChunkMap::default();
-        let a = ChunkPos::new(0, 0);
+        let a = ChunkPos::ZERO;
         let b = ChunkPos::new(1, 0);
-        let first = chunks.request(a).unwrap();
-        chunks.request(b).unwrap();
-        let holder = chunks.holders.get_mut(&a.pack()).unwrap();
-        holder.ticket_level = 31;
-        holder.update_full_status();
-        holder.confirm_full_status(holder.pending_full_status().unwrap());
-        holder.ticket_level = 45;
+        allow(&mut chunks, a, 33);
+        let first = chunks
+            .schedule_generation_task(a, ChunkStatus::Full)
+            .task
+            .schedule
+            .unwrap();
+        chunks.ensure_holder(b);
+        chunks
+            .ensure_holder(a)
+            .generation
+            .increase_generation_ref_count();
+        let cancelled = allow(&mut chunks, a, 45);
+        assert_eq!(cancelled.cancel, Some(first));
         assert!(chunks.remove_unloaded_holder(a).is_none());
-        let holder = chunks.holders.get_mut(&a.pack()).unwrap();
-        holder.update_full_status();
-        holder.ticket_level = 44;
-        assert!(chunks.remove_unloaded_holder(a).is_none());
-        chunks.holders.get_mut(&a.pack()).unwrap().ticket_level = 45;
-        assert_eq!(chunks.remove_unloaded_holder(a).unwrap().request_id, first);
+        chunks
+            .ensure_holder(a)
+            .generation
+            .decrease_generation_ref_count();
+        assert!(chunks.remove_unloaded_holder(a).is_some());
         assert_eq!(chunks.holder_positions().collect::<Vec<_>>(), vec![b]);
-        assert!(chunks.remove_unloaded_holder(a).is_none());
-        let second = chunks.request(a).unwrap();
-        assert_ne!(first, second);
-        assert_eq!(chunks.request(a), None);
+        allow(&mut chunks, a, 33);
+        let second = chunks
+            .schedule_generation_task(a, ChunkStatus::Full)
+            .task
+            .schedule
+            .unwrap();
+        assert!(second.id > first.id);
         assert_eq!(chunks.holder_positions().collect::<Vec<_>>(), vec![b, a]);
     }
 }

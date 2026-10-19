@@ -63,6 +63,7 @@ pub(super) fn fixture(water: bool, ground: bool) -> (Level, EntityRef) {
             .unwrap(),
         water
     );
+    crate::level::game_event::test_support::observe(&mut level);
     (level, player)
 }
 fn double(bits: &str) -> f64 {

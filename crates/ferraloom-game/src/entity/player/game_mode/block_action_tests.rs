@@ -2,7 +2,11 @@ use super::*;
 use crate::{
     block::{UnportedBehavior, UpdateFlags},
     entity::{EntityData, EntityState, player::GameType},
-    level::{effects::LevelEffect, interaction::SpawnProtectionSnapshot},
+    level::{
+        effects::LevelEffect,
+        game_event::test_support::{self as game_events, Observation},
+        interaction::SpawnProtectionSnapshot,
+    },
 };
 use ferraloom_data::{Block, Item};
 use ferraloom_protocol::{
@@ -60,7 +64,7 @@ fn replace(level: &mut Level, pos: BlockPos, state: ferraloom_data::BlockState) 
     level
         .set_block(pos, state, UpdateFlags::KNOWN_SHAPE, 512)
         .unwrap();
-    level.take_effects();
+    game_events::take(level);
 }
 fn setup(fields: &[&str]) -> (Level, EntityRef, EntityRef) {
     let (mut level, player) = super::tests::fixture(false, true);
@@ -115,60 +119,63 @@ fn setup(fields: &[&str]) -> (Level, EntityRef, EntityRef) {
     for pos in [POS, POS.relative(Direction::East, 1)] {
         replace(&mut level, pos, Block::STONE.default_state());
     }
-    level.take_effects();
+    game_events::take(&mut level);
     (level, player, observer)
 }
 fn trace(level: &mut Level, player: EntityRef, observer: EntityRef) -> String {
     let mut result = Vec::new();
-    for effect in level.take_effects() {
+    for effect in game_events::take(level) {
         match effect {
-            LevelEffect::PlayerPacket { recipients, packet } => match *packet {
-                cb::Packet::BlockDestruction(packet) => {
-                    if recipients.is_empty() {
-                        continue;
+            Observation::Effect(LevelEffect::PlayerPacket { recipients, packet }) => {
+                match *packet {
+                    cb::Packet::BlockDestruction(packet) => {
+                        if recipients.is_empty() {
+                            continue;
+                        }
+                        assert_eq!(recipients, [observer]);
+                        // Native keeps int progress until its byte encoder. Sequence
+                        // stages here are [-1,10]; independent audience rows cover wrap.
+                        result.push(format!(
+                            "C:1:{}:{}",
+                            position(packet.pos),
+                            i32::from(packet.progress as i8)
+                        ));
                     }
-                    assert_eq!(recipients, [observer]);
-                    // Native keeps int progress until its byte encoder. Sequence
-                    // stages here are [-1,10]; independent audience rows cover wrap.
-                    result.push(format!(
-                        "C:1:{}:{}",
-                        position(packet.pos),
-                        i32::from(packet.progress as i8)
-                    ));
+                    cb::Packet::BlockUpdate(packet) => {
+                        assert_eq!(recipients, [player]);
+                        result.push(format!(
+                            "U:0:{}:{}",
+                            position(packet.pos),
+                            packet.block_state.0
+                        ));
+                    }
+                    cb::Packet::LevelEvent(packet) => {
+                        result.push(format!(
+                            "L:{}:{}:{}",
+                            packet.event_type,
+                            position(packet.pos),
+                            packet.data
+                        ));
+                    }
+                    cb::Packet::SystemChat(packet) => {
+                        assert_eq!(recipients, [player]);
+                        let Contents::Translatable { key, args, .. } = &packet.content.contents
+                        else {
+                            panic!("overlay contents")
+                        };
+                        let Argument::String(argument) = &args[0] else {
+                            panic!("overlay argument")
+                        };
+                        assert_eq!(
+                            packet.content.style.color.as_ref().unwrap().serialize(),
+                            "red"
+                        );
+                        result.push(format!("S:0:{}:{key}:{argument}:red", packet.overlay));
+                    }
+                    _ => {}
                 }
-                cb::Packet::BlockUpdate(packet) => {
-                    assert_eq!(recipients, [player]);
-                    result.push(format!(
-                        "U:0:{}:{}",
-                        position(packet.pos),
-                        packet.block_state.0
-                    ));
-                }
-                cb::Packet::LevelEvent(packet) => {
-                    result.push(format!(
-                        "L:{}:{}:{}",
-                        packet.event_type,
-                        position(packet.pos),
-                        packet.data
-                    ));
-                }
-                cb::Packet::SystemChat(packet) => {
-                    assert_eq!(recipients, [player]);
-                    let Contents::Translatable { key, args, .. } = &packet.content.contents else {
-                        panic!("overlay contents")
-                    };
-                    let Argument::String(argument) = &args[0] else {
-                        panic!("overlay argument")
-                    };
-                    assert_eq!(
-                        packet.content.style.color.as_ref().unwrap().serialize(),
-                        "red"
-                    );
-                    result.push(format!("S:0:{}:{key}:{argument}:red", packet.overlay));
-                }
-                _ => {}
-            },
-            LevelEffect::GameEvent {
+            }
+            Observation::GameEvent {
                 event,
                 source,
                 affected_state,
@@ -216,7 +223,7 @@ fn break_actions_match_real_native_sequences_and_packet_order() {
                     }
                     "move" => {
                         level.set_entity_pos(*player, vector(input[1])).unwrap();
-                        level.take_effects();
+                        game_events::take(level);
                     }
                     "replace" => replace(
                         level,
@@ -369,10 +376,9 @@ fn pending_item_and_missing_stat_context_preserve_source_side_effects() {
         );
         assert!(level.get_block_state(POS).unwrap().is_air());
         assert!(
-            level
-                .take_effects()
+            game_events::take(&mut level)
                 .iter()
-                .any(|effect| matches!(effect, LevelEffect::GameEvent { .. }))
+                .any(|event| matches!(event, Observation::GameEvent { .. }))
         );
         replace(&mut level, POS, Block::STONE.default_state());
         level

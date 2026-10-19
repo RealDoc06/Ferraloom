@@ -15,7 +15,24 @@ public final class TravelVectors extends Player {
   float flyingSpeed() {return getFlyingSpeed();}
   static String f(float value) {return Integer.toHexString(Float.floatToRawIntBits(value));}
   static String d(double value) {return Long.toHexString(Double.doubleToRawLongBits(value));}
+  static void climbing(Level level)throws Exception {
+    var method=LivingEntity.class.getDeclaredMethod("handleOnClimbable",Vec3.class);method.setAccessible(true);
+    var pos=new net.minecraft.core.BlockPos(8,64,8);
+    var blocks=new net.minecraft.world.level.block.Block[]{net.minecraft.world.level.block.Blocks.AIR,net.minecraft.world.level.block.Blocks.LADDER,net.minecraft.world.level.block.Blocks.SCAFFOLDING};
+    Vec3[] deltas={new Vec3(0.6,-0.3,-0.7),new Vec3(-0.0,-0.0,Double.NaN),new Vec3(Math.nextUp((double)0.15f),Double.NaN,Math.nextDown((double)-0.15f)),new Vec3(Double.POSITIVE_INFINITY,Double.POSITIVE_INFINITY,Double.NEGATIVE_INFINITY)};
+    for(String kind:java.util.List.of("player","cow","spectator"))for(var block:blocks)for(int i=0;i<deltas.length;i++){
+      ClimbVectors.put(level,pos,block.defaultBlockState());
+      LivingEntity entity;
+      if(kind.equals("cow"))entity=new net.minecraft.world.entity.animal.cow.Cow(net.minecraft.world.entity.EntityTypes.COW,level);
+      else {var player=new ClimbVectors(level);if(kind.equals("spectator"))player.mode=GameType.SPECTATOR;entity=player;}
+      entity.setPos(8.5,64,8.5);entity.setShiftKeyDown(i!=0);entity.fallDistance=10.5;
+      var movement=(Vec3)method.invoke(entity,deltas[i]);
+      System.out.println("travel-climb	"+kind+"	"+net.minecraft.world.level.block.Block.getId(block.defaultBlockState())+"	"+(i!=0)+"	"+TrackingVectors.vec(deltas[i])+"	"+TrackingVectors.vec(movement)+"	"+d(entity.fallDistance));
+    }
+    ClimbVectors.put(level,pos,net.minecraft.world.level.block.Blocks.AIR.defaultBlockState());
+  }
   public static void run(Level level) throws Exception {
+    climbing(level);
     var player=new TravelVectors(level);
     double threshold=Math.sqrt(1.0e-7);
     Vec3[] inputs={Vec3.ZERO,new Vec3(0.0001,0,0),new Vec3(Math.nextDown(threshold),0,0),

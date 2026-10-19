@@ -21,7 +21,7 @@ impl Level {
         state: BlockState,
         pos: ferraloom_util::BlockPos,
         by: Option<crate::entity::EntityRef>,
-        stack: &ferraloom_protocol::component::ItemStack,
+        stack: crate::block::StackView<'_>,
     ) -> Result<(), LevelError> {
         self.required_block_behavior(state.block(), crate::block::BlockMethod::SetPlacedBy)?
             .set_placed_by(state, pos, by, stack, self)
@@ -256,6 +256,7 @@ impl BlockBehavior for RedstonePlacement {
             _ if block.is_instance_of(BlockClass::DoorBlock) => {
                 let max_y = match reader {
                     LevelReaderRef::Server(level) => level.max_build_height(),
+                    LevelReaderRef::PathNavigation(reader) => reader.max_build_height(),
                     LevelReaderRef::Worldgen(region) => region.min_y() + region.height() - 1,
                 };
                 if pos.y >= max_y

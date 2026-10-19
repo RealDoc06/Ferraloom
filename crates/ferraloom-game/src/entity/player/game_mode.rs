@@ -18,7 +18,7 @@ pub use block_actions::{BlockBreakAction, BlockBreakError, DestroyAction, destro
 pub use mining_item::mine_block;
 
 /// Port of ServerPlayerGameMode's destruction fields. Attachment to ServerPlayer
-/// and the native pre-menu tick slot wait for the entity landing.
+/// and the native pre-menu tick slot are the separate slice-D integration.
 #[derive(Debug)]
 pub struct BlockBreakingState {
     pub is_destroying_block: bool,

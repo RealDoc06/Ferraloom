@@ -22,6 +22,7 @@ pub mod chunk;
 pub mod chunk_holder;
 pub mod chunk_map;
 pub mod chunk_task_dispatcher;
+pub mod clip;
 mod container_runtime;
 mod context;
 pub use context::LevelContext;
@@ -32,12 +33,14 @@ pub mod entity;
 pub mod environment;
 pub mod events;
 mod features;
+pub mod game_event;
 pub mod generation;
 pub mod heightmap;
 pub mod interaction;
 mod lighting;
 pub mod loot_facts;
 mod mutation;
+pub mod path_navigation_region;
 mod post_processing;
 pub mod publication;
 mod random;
@@ -55,10 +58,18 @@ pub mod tickets;
 mod ticking;
 pub mod weather;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum LevelError {
+    /// Native ArrayList iterator ConcurrentModificationException during listener visitation.
+    ConcurrentGameEventListenerModification,
     UnsupportedItemUseOn(ferraloom_data::Item),
     UnsupportedItemCraftedPostProcess(ferraloom_data::Item),
+    UnsupportedItemInventoryTick(ferraloom_data::Item),
+    UnsupportedItemHurtAndBreak {
+        item: ferraloom_data::Item,
+        amount: i32,
+        slot: ferraloom_protocol::component::EquipmentSlot,
+    },
     UnsupportedPortalUse(Block),
     UnsupportedEntityMethod(EntityType, crate::entity::EntityMethod),
     UnsupportedAdvancementCriterion(crate::advancements::criteria::Trigger),
@@ -73,7 +84,10 @@ pub enum LevelError {
         acquisition::AcquireFailure,
     ),
     UnsupportedChunkEntityPublication(ChunkPos),
-    WorldgenMutationFailed(BlockPos),
+    WorldgenMutationFailed {
+        pos: BlockPos,
+        source: ferraloom_worldgen::Error,
+    },
     UnsupportedWorldgenEnvironment,
     UnsupportedWorldgenBehavior,
     OutsideBuildHeight,
@@ -110,6 +124,27 @@ pub enum LevelError {
     WrongChunkHeight(ChunkPos),
     InvalidChunkStructures(ChunkPos),
     InvalidStructureHolderSet,
+    PathNavigation(path_navigation_region::PathNavigationError),
+    UnsupportedPathNavigationQuery(path_navigation_region::PathNavigationQuery),
+}
+
+impl std::fmt::Display for LevelError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::WorldgenMutationFailed { pos, source } => {
+                write!(formatter, "worldgen mutation at {pos:?}: {source}")
+            }
+            error => std::fmt::Debug::fmt(error, formatter),
+        }
+    }
+}
+impl std::error::Error for LevelError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::WorldgenMutationFailed { source, .. } => Some(source),
+            _ => None,
+        }
+    }
 }
 
 /// Dimension settings consumed by the live core. The server supplies the
@@ -122,10 +157,12 @@ pub struct LevelRules {
     pub tnt_explodes: bool,
     pub entity_drops: bool,
     pub max_entity_cramming: i32,
+    pub players_nether_portal_default_delay: i32,
     pub drowning_damage: bool,
     pub fall_damage: bool,
     pub fire_damage: bool,
     pub freeze_damage: bool,
+    pub natural_health_regeneration: bool,
     pub debug: bool,
     pub can_have_weather: bool,
     pub random_tick_speed: u32,
@@ -153,10 +190,18 @@ impl Default for LevelRules {
             tnt_explodes: true,
             entity_drops: true,
             max_entity_cramming: 24,
+            players_nether_portal_default_delay: match GameRule::PlayersNetherPortalDefaultDelay
+                .definition()
+                .kind
+            {
+                RuleType::Integer { default, .. } => default,
+                _ => unreachable!("portal delay is an integer game rule"),
+            },
             drowning_damage: damage_default(GameRule::DrowningDamage),
             fall_damage: damage_default(GameRule::FallDamage),
             fire_damage: damage_default(GameRule::FireDamage),
             freeze_damage: damage_default(GameRule::FreezeDamage),
+            natural_health_regeneration: damage_default(GameRule::NaturalHealthRegeneration),
             debug: false,
             can_have_weather: true,
             random_tick_speed: 3,
@@ -172,8 +217,26 @@ impl Default for LevelRules {
     }
 }
 
+/// Identity of the owner of canonical chunk/entity stores. Reads compare only
+/// the copied integer; the monotonic counter runs once during construction.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct RegionId(u64);
+impl RegionId {
+    fn new() -> Self {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static NEXT: AtomicU64 = AtomicU64::new(1);
+        Self(
+            NEXT.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |next| {
+                next.checked_add(1)
+            })
+            .expect("region identities exhausted"),
+        )
+    }
+}
+
 /// Owned portion of ServerLevel. The scheduler moves this value between workers.
 pub struct Region {
+    id: RegionId,
     chunks: store::InsertOnlyMap<ChunkPos, chunk::LevelChunk>,
     next_chunk_generation: Cell<u64>,
     entities: entity::EntityStorage,
@@ -181,6 +244,7 @@ pub struct Region {
     block_ticks: LevelTicks,
     fluid_ticks: LevelTicks<ferraloom_data::registries::fluid::Id>,
     block_entity_state: block_entity::BlockEntityRuntime,
+    game_event_listeners: game_event::GameEventListenerRegistries,
     container_runtime: crate::block::containers::runtime::ContainerRuntime,
     next_sub_tick_order: i64,
     game_time: i64,
@@ -216,6 +280,7 @@ pub struct Region {
 impl Region {
     pub fn new(behaviors: &'static Behaviors) -> Self {
         Self {
+            id: RegionId::new(),
             chunks: store::InsertOnlyMap::default(),
             next_chunk_generation: Cell::new(0),
             entities: entity::EntityStorage::default(),
@@ -223,6 +288,7 @@ impl Region {
             block_ticks: LevelTicks::default(),
             fluid_ticks: LevelTicks::default(),
             block_entity_state: block_entity::BlockEntityRuntime::default(),
+            game_event_listeners: Default::default(),
             container_runtime: crate::block::containers::runtime::ContainerRuntime::default(),
             next_sub_tick_order: 0,
             game_time: 0,
@@ -267,6 +333,7 @@ pub struct Level {
     difficulty: ferraloom_protocol::play::Difficulty,
     acquisition: acquisition::ChunkAcquisition,
     acquire_driver: Option<Box<dyn acquisition::AcquireDriver>>,
+    fluid_shapes: clip::FluidShapeCache,
 }
 
 impl Level {
@@ -279,6 +346,7 @@ impl Level {
             context,
             acquisition: Default::default(),
             acquire_driver: None,
+            fluid_shapes: Default::default(),
         }
     }
     /// Required server-owned storage view, absent until startup installs it.
@@ -348,9 +416,43 @@ impl Level {
     pub fn remove_chunk(&mut self, pos: ChunkPos) -> Option<chunk::LevelChunk> {
         self.acquisition.clear_cache();
         let region = self.region_mut();
+        // An unrelated competing registration cannot replace the stage's owned
+        // saved queue. Keep both records until its failed continuation resolves.
+        if region
+            .chunks
+            .get(&pos)
+            .and_then(|chunk| chunk.staged_publication.as_ref())
+            .is_some_and(|stage| {
+                (stage.block_ticks.borrow().is_some()
+                    && region.block_ticks.container(pos).is_some())
+                    || (stage.fluid_ticks.borrow().is_some()
+                        && region.fluid_ticks.container(pos).is_some())
+            })
+        {
+            return None;
+        }
         let mut chunk = region.chunks.remove(&pos)?;
-        chunk.block_ticks = region.block_ticks.remove_container(pos).unwrap_or_default();
-        chunk.fluid_ticks = region.fluid_ticks.remove_container(pos).unwrap_or_default();
+        chunk.block_ticks = region
+            .block_ticks
+            .remove_container(pos)
+            .or_else(|| {
+                chunk
+                    .staged_publication
+                    .as_mut()
+                    .and_then(|stage| stage.block_ticks.get_mut().take())
+            })
+            .unwrap_or_default();
+        chunk.fluid_ticks = region
+            .fluid_ticks
+            .remove_container(pos)
+            .or_else(|| {
+                chunk
+                    .staged_publication
+                    .as_mut()
+                    .and_then(|stage| stage.fluid_ticks.get_mut().take())
+            })
+            .unwrap_or_default();
+        chunk.loaded.set(false);
         self.remove_light_snapshot(pos);
         Some(chunk)
     }
@@ -368,6 +470,11 @@ impl Level {
         if region.min_y != chunk.min_y() || region.max_y != chunk.max_y() {
             return Err(LevelError::WrongChunkHeight(pos));
         }
+        if chunk.staged_publication.as_ref().is_some_and(|stage| {
+            stage.block_ticks.borrow().is_some() || stage.fluid_ticks.borrow().is_some()
+        }) {
+            return Err(LevelError::InvalidPendingGenerationData);
+        }
         chunk.publication_generation = region
             .next_chunk_generation
             .get()
@@ -376,9 +483,12 @@ impl Level {
         region
             .next_chunk_generation
             .set(chunk.publication_generation);
+        chunk.staged_publication = None;
+        chunk.loaded.set(true);
         region
             .block_entity_state
-            .register_published_chunk(&mut chunk);
+            .prepare_published_chunk(&mut chunk);
+        region.block_entity_state.register_published_chunk(&chunk);
         region
             .block_ticks
             .add_container(pos, std::mem::take(&mut chunk.block_ticks));
@@ -392,8 +502,16 @@ impl Level {
     /// FULL registration alone leaves saved delays relative until this point.
     pub fn start_ticking_chunk(&mut self, pos: ChunkPos) -> Result<(), LevelError> {
         let region = self.region_mut();
-        if !region.chunks.contains_key(&pos) {
-            return Err(LevelError::MissingChunk(pos));
+        let chunk = region
+            .chunks
+            .get(&pos)
+            .ok_or(LevelError::MissingChunk(pos))?;
+        if !chunk.full_publication_complete() {
+            return Err(LevelError::ChunkAcquisition(
+                pos,
+                chunk_holder::ChunkStatus::Full,
+                acquisition::AcquireFailure::ReentrantFull,
+            ));
         }
         region.block_ticks.unpack_container(pos, region.game_time);
         region.fluid_ticks.unpack_container(pos, region.game_time);

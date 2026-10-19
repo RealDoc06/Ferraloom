@@ -258,12 +258,20 @@ impl InventoryAddContext for LiveInventoryAdd<'_> {
 /// Port of Player#addItem for a held stack. Replaced source slots stay detached;
 /// input and destination count edits never take an inventory out of the level.
 pub fn add_item_stack(player: EntityRef, input: StackRef, level: &mut Level) -> Result<bool> {
+    add_item_stack_at(player, input, None, level)
+}
+pub(super) fn add_item_stack_at(
+    player: EntityRef,
+    input: StackRef,
+    slot: Option<usize>,
+    level: &mut Level,
+) -> Result<bool> {
     let mut context = LiveInventoryAdd {
         operation: StackOperation::new(level),
         player,
     };
     context.operation.pin_existing(input)?;
-    add_inventory_stack(&mut context, input, None)
+    add_inventory_stack(&mut context, input, slot)
 }
 
 #[cfg(test)]

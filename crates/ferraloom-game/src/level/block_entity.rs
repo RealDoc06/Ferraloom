@@ -104,10 +104,9 @@ impl super::chunk::LevelChunk {
     }
 }
 impl BlockEntityRuntime {
-    pub(super) fn register_published_chunk(&self, chunk: &mut super::chunk::LevelChunk) {
-        // Primitive map traversal and stateless has_server_ticker queries invoke
-        // no world callbacks. The cold metadata borrow ends before publication.
-        let mut tickers = self.tickers.borrow_mut();
+    pub(super) fn prepare_published_chunk(&self, chunk: &mut super::chunk::LevelChunk) {
+        // LevelChunk's proto constructor calls setBlockEntity, which sets the
+        // level and clears removed before postLoad, without binding tickers.
         for &index in chunk.block_entities.positions.values() {
             let state = chunk.block_entities.slots[index].as_mut().unwrap();
             let data = state.data_mut();
@@ -122,10 +121,16 @@ impl BlockEntityRuntime {
             }
             data.has_level = true;
             data.removed = false;
-            let handle = data.reference();
-            let kind = data.kind;
+        }
+    }
+    pub(super) fn register_published_chunk(&self, chunk: &super::chunk::LevelChunk) {
+        // Stateless ticker selection invokes no world callback. The metadata
+        // guard is released before returning to the promotion continuation.
+        let mut tickers = self.tickers.borrow_mut();
+        for state in chunk.block_entities.iter() {
+            let data = state.data();
             if state.behavior().has_server_ticker() {
-                tickers.bind(handle, kind);
+                tickers.bind(data.reference(), data.kind);
             }
         }
     }

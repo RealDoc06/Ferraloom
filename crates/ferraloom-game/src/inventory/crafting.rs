@@ -301,12 +301,11 @@ impl AbstractContainerMenu {
     }
 }
 
-struct CraftingPlacement<'a, 'p> {
-    menu: &'a mut AbstractContainerMenu,
-    ctx: &'a mut MenuContext<'p>,
-    hooks: &'a mut dyn MenuHooks,
+struct CraftingPlacement<'a, 'b, 'p> {
+    operation: super::in_memory::InMemoryMenuOperation<'a, 'b, 'p>,
+    hooks: &'b mut dyn MenuHooks,
 }
-fn placement_error(error: MenuError) -> crate::crafting::Error {
+pub(super) fn placement_error(error: MenuError) -> crate::crafting::Error {
     match error {
         MenuError::Crafting(error) => error,
         MenuError::Protocol(error) => crate::crafting::Error::Protocol(error),
@@ -314,24 +313,38 @@ fn placement_error(error: MenuError) -> crate::crafting::Error {
         error => crate::crafting::Error::Invalid(error.to_string()),
     }
 }
-impl crate::crafting::RecipePlacementAccess for CraftingPlacement<'_, '_> {
-    fn inventory_items(&self) -> &[ItemStack] {
-        &self.ctx.player.inventory.items
+impl crate::crafting::RecipePlacementAccess for CraftingPlacement<'_, '_, '_> {
+    type Stack = super::in_memory::MemoryStackRef;
+    fn inventory_items(&self) -> crate::crafting::Result<&[ItemStack]> {
+        Ok(&self.operation.context.player.inventory.items)
     }
-    fn input_grid(&self) -> &[ItemStack] {
-        self.menu.crafting_grid()
+    fn input_grid(&self) -> crate::crafting::Result<&[ItemStack]> {
+        Ok(self.operation.menu.crafting_grid())
+    }
+    fn capture_grid_item(&mut self, index: usize) -> crate::crafting::Result<Self::Stack> {
+        self.operation
+            .slot_stack(index + 1)
+            .map_err(placement_error)
+    }
+    fn stack<'a>(&'a self, receiver: &'a Self::Stack) -> crate::crafting::Result<&'a ItemStack> {
+        self.operation.read(*receiver).map_err(placement_error)
     }
     fn fill_craft_slots(
         &self,
         contents: &mut crate::crafting::StackedItemContents,
     ) -> crate::crafting::Result<()> {
-        for stack in self.menu.crafting_grid() {
+        for stack in self.operation.menu.crafting_grid() {
             contents.account_simple_stack(stack)?;
         }
         Ok(())
     }
     fn recipe_matches(&self, recipe: &RecipeHolder) -> crate::crafting::Result<bool> {
-        let input = self.menu.crafting_input().map_err(placement_error)?.input;
+        let input = self
+            .operation
+            .menu
+            .crafting_input()
+            .map_err(placement_error)?
+            .input;
         self.hooks
             .crafting_ref()
             .expect("crafting hook")
@@ -340,78 +353,60 @@ impl crate::crafting::RecipePlacementAccess for CraftingPlacement<'_, '_> {
     }
     fn has_inventory_space_for(&self, stack: &ItemStack) -> crate::crafting::Result<bool> {
         Ok(self
-            .ctx
+            .operation
+            .context
             .player
             .inventory
-            .get_slot_with_remaining_space(stack, self.ctx.player.equipment)
+            .get_slot_with_remaining_space(stack, self.operation.context.player.equipment)
             .is_some())
     }
     fn clear_grid(&mut self) -> crate::crafting::Result<()> {
-        for index in 0..self.menu.crafting_grid().len() {
-            let mut stack = self.menu.get_item(self.ctx, index + 1);
-            for effect in self.ctx.player.inventory.place_item_back_in_inventory(
-                &mut stack,
-                false,
-                self.ctx.player.equipment,
-                self.ctx.infinite_materials,
-            ) {
-                if let crate::entity::player::inventory::InventoryEffect::Drop(stack) = effect {
-                    self.ctx.drops.push(DroppedStack {
-                        stack,
-                        thrown_from_hand: false,
-                    });
-                }
-            }
-            self.menu
-                .set_item_live(self.ctx, index + 1, stack, self.hooks)
-                .map_err(placement_error)?;
-        }
-        self.menu.local[1].clear_content();
-        self.menu.local[0].clear_content();
-        Ok(())
+        super::clear_grid::clear_grid(&mut self.operation, self.hooks).map_err(placement_error)
     }
     fn take_inventory_item(
         &mut self,
         index: usize,
         amount: i32,
-    ) -> crate::crafting::Result<ItemStack> {
-        Ok(
-            if amount
-                < count(
-                    self.ctx
-                        .player
-                        .inventory
-                        .get_item(index, self.ctx.player.equipment),
+    ) -> crate::crafting::Result<Self::Stack> {
+        let source = MenuClickContext::inventory_stack(&mut self.operation, index)
+            .map_err(placement_error)?;
+        if amount < count(self.operation.read(source).map_err(placement_error)?) {
+            let taken = self
+                .operation
+                .split_stack(source, amount)
+                .map_err(placement_error)?;
+            Ok(self.operation.own(taken))
+        } else {
+            self.operation
+                .detach(
+                    super::in_memory::MemoryContainer::Container(ContainerId::Player),
+                    index,
                 )
-            {
-                self.ctx
-                    .player
-                    .inventory
-                    .remove_item(index, amount, self.ctx.player.equipment)
-            } else {
-                self.ctx
-                    .player
-                    .inventory
-                    .remove_item_no_update(index, self.ctx.player.equipment)
-            },
-        )
+                .map_err(placement_error)
+        }
     }
-    fn set_grid_item(&mut self, index: usize, stack: ItemStack) -> crate::crafting::Result<()> {
-        self.menu
-            .set_item_live(self.ctx, index + 1, stack, self.hooks)
+    fn set_grid_item(&mut self, index: usize, stack: Self::Stack) -> crate::crafting::Result<()> {
+        self.operation
+            .set_slot_stack(index + 1, stack, None, self.hooks)
             .map_err(placement_error)
     }
-    fn grow_grid_item(&mut self, index: usize, amount: i32) -> crate::crafting::Result<()> {
-        let MenuContainer::Crafting(grid) = &mut self.menu.local[0] else {
-            unreachable!("crafting grid");
-        };
-        grid.grow_item(index, amount);
+    fn grow_grid_item(
+        &mut self,
+        _index: usize,
+        receiver: &Self::Stack,
+        amount: i32,
+    ) -> crate::crafting::Result<()> {
+        let amount =
+            count(self.operation.read(*receiver).map_err(placement_error)?).wrapping_add(amount);
+        MenuTransferContext::set_stack_count(&mut self.operation, *receiver, amount)
+            .map_err(placement_error)
+    }
+    fn inventory_changed(&mut self) -> crate::crafting::Result<()> {
+        self.operation.context.player.inventory.set_changed();
         Ok(())
     }
-    fn inventory_changed(&mut self) {
-        self.ctx.player.inventory.set_changed();
-    }
 }
+
 impl AbstractContainerMenu {
     /// Port of AbstractCraftingMenu#handlePlacement. Only CraftingMenu overrides
     /// the placement bracket; InventoryMenu's inherited begin/finish are no-ops.
@@ -434,8 +429,7 @@ impl AbstractContainerMenu {
         self.placing_recipe = bracket;
         let placed = crate::crafting::place_recipe(
             &mut CraftingPlacement {
-                menu: self,
-                ctx,
+                operation: super::in_memory::InMemoryMenuOperation::new(self, ctx),
                 hooks,
             },
             width,
