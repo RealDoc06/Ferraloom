@@ -1062,7 +1062,7 @@ fn native_location_tick_tail_checks_interval_after_experience_packet() {
 fn live_location_awards_native_leather_boots_predicate_from_canonical_facts() {
     use crate::{
         entity::{EntityData, player::ServerPlayer},
-        level::LevelChunk,
+        level::chunk::LevelChunk,
     };
     use ferraloom_chunk::{BiomeId, IdMap, LevelChunkSection, Strategy};
     use ferraloom_protocol::component::EquipmentSlot;
@@ -1254,7 +1254,7 @@ fn vanilla_live_item_triggers_preserve_receivers_and_pre_damage_values() {
     use crate::{
         entity::player::{ServerPlayer, inventory},
         inventory::{ContainerHandle, ContainerSlot, StackValue},
-        level::LevelChunk,
+        level::chunk::LevelChunk,
     };
     use ferraloom_chunk::{BiomeId, IdMap, LevelChunkSection, Strategy};
     use ferraloom_protocol::component::{ComponentTypeId, DataComponent};
