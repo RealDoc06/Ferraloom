@@ -229,6 +229,7 @@ pub enum EntityMethod {
     RespawnEntityOnShoulder,
     CheckAutoSpinAttack,
     RunLocationChangedEffects,
+    BroadcastEntityEvent,
     JumpInLiquid,
 }
 impl EntityMethod {
@@ -240,6 +241,7 @@ impl EntityMethod {
             Self::RespawnEntityOnShoulder => "respawnEntityOnShoulder",
             Self::CheckAutoSpinAttack => "checkAutoSpinAttack",
             Self::RunLocationChangedEffects => "EnchantmentHelper#runLocationChangedEffects",
+            Self::BroadcastEntityEvent => "ServerLevel#broadcastEntityEvent",
             Self::JumpInLiquid => "jumpInLiquid",
         }
     }
