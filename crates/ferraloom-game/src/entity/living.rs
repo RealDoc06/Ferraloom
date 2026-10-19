@@ -8,6 +8,9 @@ use ferraloom_protocol::{codec::VarInt, component::ItemStack};
 use ferraloom_util::random::RandomSource;
 
 pub mod climbable;
+mod equipment;
+pub use equipment::on_equipped_item_broken;
+pub(crate) use equipment::on_equipped_item_broken_parent;
 pub mod fall_damage;
 pub mod freezing;
 pub mod gliding;

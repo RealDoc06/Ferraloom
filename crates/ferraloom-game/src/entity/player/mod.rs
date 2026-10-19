@@ -729,6 +729,16 @@ impl crate::entity::Entity for PlayerBehavior {
         }
         Ok(())
     }
+    fn on_equipped_item_broken(
+        &self,
+        entity: EntityRef,
+        broken: ferraloom_protocol::component::ItemStack,
+        slot: ferraloom_protocol::component::EquipmentSlot,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        super::living::on_equipped_item_broken_parent(entity, &broken, slot, level)?;
+        award_stat(entity, crate::stats::Stat::Broken(broken.item()), 1, level)
+    }
     /// Port of PlayerEquipment#get's selected main-hand projection.
     fn item_by_slot<'level>(
         &self,
