@@ -1,5 +1,5 @@
 //! HopperBlockEntity transfer order, cooldowns and HopperBlock's power lock.
-use super::{state::facing, storage::HopperBlockEntity};
+use super::{stack_error, state::facing, storage::HopperBlockEntity};
 use crate::{
     block::{
         BlockBehavior, LevelReaderRef, UPDATE_LIMIT, UpdateFlags,
@@ -13,9 +13,11 @@ use crate::{
     entity::{
         EntityRef, EntityState, RemovalReason,
         item::ItemEntity,
-        player::inventory::{count, is_same_item_same_components, max_stack_size, set_count},
+        player::inventory::{
+            copy_with_count, count, is_same_item_same_components, max_stack_size, set_count,
+        },
     },
-    inventory::Container,
+    inventory::{Container, ContainerHandle, ContainerSlot, StackOperation, StackRef, StackValue},
     level::{Level, LevelError, redstone::Orientation},
 };
 use ferraloom_data::{Block, BlockState, properties as p, tags::BlockTags};
@@ -77,9 +79,11 @@ fn slots(
 fn is_empty(container: &ContainerRef, level: &mut Level) -> Result<bool, LevelError> {
     for &handle in container.handles() {
         unpack_loot_table(handle, None, level)?;
-        if !level
+        if level
             .block_entity::<BaseContainerBlockEntity>(handle)?
-            .is_empty()
+            .items
+            .iter()
+            .any(|item| !item.is_empty())
         {
             return Ok(false);
         }
@@ -100,9 +104,17 @@ fn is_full(
     face: Direction,
     level: &mut Level,
 ) -> Result<bool, LevelError> {
-    for slot in slots(container, Some(face), level)? {
-        let item = container.get_item(slot, level)?;
-        if count(&item) < max_stack_size(&item) {
+    let mut operation = StackOperation::new(level);
+    for slot in slots(container, Some(face), operation.level)? {
+        let (handle, local) = container.slot(slot, operation.level)?;
+        let item = operation
+            .pin(ContainerSlot {
+                container: ContainerHandle::BlockEntity(handle),
+                slot: local,
+            })
+            .map_err(stack_error)?;
+        let stack = operation.level.stack(item).map_err(stack_error)?;
+        if count(stack) < max_stack_size(stack) {
             return Ok(false);
         }
     }
@@ -110,8 +122,6 @@ fn is_full(
 }
 /// Port of HopperBlockEntity#addItem. The destination generation(s) stay rooted
 /// through synchronous setItem and comparator callbacks, including double chests.
-/// Original ItemStack identity across reentrant slot replacement remains pending
-/// the canonical StackRef pin/read/mutate API; block-entity roots do not pin stacks.
 pub fn add_item(
     from: Option<&ContainerRef>,
     into: &ContainerRef,
@@ -125,56 +135,7 @@ pub fn add_item(
                 if item.is_empty() {
                     break;
                 }
-                let current = into.get_item(slot, level)?;
-                let (handle, local) = into.slot(slot, level)?;
-                let state = level.block_entity_state(handle)?;
-                if !access::can_place_item(state, local, &item)
-                    || !access::can_place_item_through_face(state, local, &item, direction)
-                {
-                    continue;
-                }
-                let was_empty = is_empty(into, level)?;
-                let mut success = false;
-                if current.is_empty() {
-                    access::set_item(handle, local, std::mem::take(&mut item), level)?;
-                    success = true;
-                } else if count(&current) <= max_stack_size(&current)
-                    && is_same_item_same_components(&current, &item)
-                {
-                    let amount = count(&item).min(max_stack_size(&item) - count(&current));
-                    let remaining = count(&item).wrapping_sub(amount);
-                    set_count(&mut item, remaining);
-                    let current = &mut level
-                        .block_entity_mut::<BaseContainerBlockEntity>(handle)?
-                        .items[local];
-                    let total = count(current).wrapping_add(amount);
-                    set_count(current, total);
-                    success = amount > 0;
-                }
-                if success {
-                    if was_empty {
-                        let source_time = match from {
-                            Some(ContainerRef::Single(source)) => match level
-                                .block_entity_state(*source)?
-                            {
-                                BlockEntityState::Hopper(hopper) => Some(hopper.ticked_game_time),
-                                _ => None,
-                            },
-                            _ => None,
-                        };
-                        if let ContainerRef::Single(destination) = into
-                            && let BlockEntityState::Hopper(hopper) =
-                                level.block_entity_state_mut(*destination)?
-                            && !hopper.is_on_custom_cooldown()
-                        {
-                            let skip = i32::from(
-                                source_time.is_some_and(|time| hopper.ticked_game_time >= time),
-                            );
-                            hopper.cooldown_time = 8 - skip;
-                        }
-                    }
-                    set_changed(into, level)?;
-                }
+                item = try_move_in_item(from, into, item, slot, direction, level)?;
             }
             Ok(item)
         };
@@ -184,23 +145,89 @@ pub fn add_item(
         }
     })
 }
-fn restore_failed_take(
-    source: &ContainerRef,
+/// Port of HopperBlockEntity#tryMoveInItem. getItem's receiver remains rooted
+/// across isEmpty, lazy loot, setItem and comparator callbacks.
+pub(super) fn try_move_in_item(
+    from: Option<&ContainerRef>,
+    into: &ContainerRef,
+    mut item: ItemStack,
     slot: usize,
-    original: ItemStack,
+    direction: Option<Direction>,
+    level: &mut Level,
+) -> Result<ItemStack, LevelError> {
+    let mut operation = StackOperation::new(level);
+    let (handle, local) = into.slot(slot, operation.level)?;
+    let current = operation
+        .pin(ContainerSlot {
+            container: ContainerHandle::BlockEntity(handle),
+            slot: local,
+        })
+        .map_err(stack_error)?;
+    let state = operation.level.block_entity_state(handle)?;
+    if !access::can_place_item(state, local, &item)
+        || !access::can_place_item_through_face(state, local, &item, direction)
+    {
+        return Ok(item);
+    }
+    let was_empty = is_empty(into, operation.level)?;
+    let held = operation.level.stack(current).map_err(stack_error)?;
+    let mut success = false;
+    if held.is_empty() {
+        access::set_item_value(
+            handle,
+            local,
+            StackValue::New(std::mem::take(&mut item)),
+            operation.level,
+        )?;
+        success = true;
+    } else if count(held) <= max_stack_size(held) && is_same_item_same_components(held, &item) {
+        let amount = count(&item).min(max_stack_size(&item) - count(held));
+        let remaining = count(&item).wrapping_sub(amount);
+        set_count(&mut item, remaining);
+        let current = operation.level.stack_mut(current).map_err(stack_error)?;
+        let total = count(current).wrapping_add(amount);
+        set_count(current, total);
+        success = amount > 0;
+    }
+    if success {
+        if was_empty {
+            let source_time = match from {
+                Some(ContainerRef::Single(source)) => {
+                    match operation.level.block_entity_state(*source)? {
+                        BlockEntityState::Hopper(hopper) => Some(hopper.ticked_game_time),
+                        _ => None,
+                    }
+                }
+                _ => None,
+            };
+            if let ContainerRef::Single(destination) = into
+                && let BlockEntityState::Hopper(hopper) =
+                    operation.level.block_entity_state_mut(*destination)?
+                && !hopper.is_on_custom_cooldown()
+            {
+                let skip =
+                    i32::from(source_time.is_some_and(|time| hopper.ticked_game_time >= time));
+                hopper.cooldown_time = 8 - skip;
+            }
+        }
+        set_changed(into, operation.level)?;
+    }
+    Ok(item)
+}
+
+fn restore_failed_take(
+    handle: BlockEntityRef,
+    slot: usize,
+    original: StackRef,
+    original_count: i32,
     level: &mut Level,
 ) -> Result<(), LevelError> {
-    // Pending StackRef: native restores the original getItem receiver even if a
-    // transfer callback replaced this slot. A fresh slot read loses that identity.
-    let (handle, local) = source.slot(slot, level)?;
-    if count(&original) == 1 {
-        access::set_item(handle, local, original, level)?;
-    } else {
-        let current = &mut level
-            .block_entity_mut::<BaseContainerBlockEntity>(handle)?
-            .items[local];
-        let size = count(&original);
-        set_count(current, size);
+    set_count(
+        level.stack_mut(original).map_err(stack_error)?,
+        original_count,
+    );
+    if original_count == 1 {
+        access::set_item_value(handle, slot, StackValue::Existing(original), level)?;
     }
     Ok(())
 }
@@ -221,29 +248,38 @@ fn eject_items(level: &mut Level, hopper: BlockEntityRef) -> Result<bool, LevelE
         if is_full(&into, direction.opposite(), level)? {
             return Ok(false);
         }
-        for slot in 0..source.size(level)? {
-            let original = source.get_item(slot, level)?;
-            if original.is_empty() {
+        let mut operation = StackOperation::new(level);
+        for slot in 0..source.size(operation.level)? {
+            let original = operation
+                .pin(ContainerSlot {
+                    container: ContainerHandle::BlockEntity(hopper),
+                    slot,
+                })
+                .map_err(stack_error)?;
+            let stack = operation.level.stack(original).map_err(stack_error)?;
+            if stack.is_empty() {
                 continue;
             }
-            let removed = access::remove_item(hopper, slot, 1, level)?;
+            let original_count = count(stack);
+            let removed = access::remove_item(hopper, slot, 1, operation.level)?;
             if add_item(
                 Some(&source),
                 &into,
                 removed,
                 Some(direction.opposite()),
-                level,
+                operation.level,
             )?
             .is_empty()
             {
-                set_changed(&into, level)?;
+                set_changed(&into, operation.level)?;
                 return Ok(true);
             }
-            restore_failed_take(&source, slot, original, level)?;
+            restore_failed_take(hopper, slot, original, original_count, operation.level)?;
         }
         Ok(false)
     })
 }
+
 fn can_take(
     source: &ContainerRef,
     slot: usize,
@@ -261,51 +297,85 @@ fn can_take(
     }
     Ok(true)
 }
-fn take_item_entity(
+pub(super) fn take_item_entity(
     level: &mut Level,
     hopper: BlockEntityRef,
     entity: EntityRef,
 ) -> Result<bool, LevelError> {
-    let item = level.entity::<ItemEntity>(entity)?.item().clone();
-    let remaining = add_item(None, &ContainerRef::Single(hopper), item, None, level)?;
+    let mut operation = StackOperation::new(level);
+    let original = operation
+        .pin(ContainerSlot {
+            container: ContainerHandle::Entity(entity),
+            slot: 0,
+        })
+        .map_err(stack_error)?;
+    // Native makes a new object before invoking destination container callbacks.
+    let stack = operation.level.stack(original).map_err(stack_error)?;
+    let item = copy_with_count(stack, count(stack));
+    let remaining = add_item(
+        None,
+        &ContainerRef::Single(hopper),
+        item,
+        None,
+        operation.level,
+    )?;
     let complete = remaining.is_empty();
-    level.entity_mut::<ItemEntity>(entity)?.set_item(remaining);
+    operation
+        .level
+        .entity_mut::<ItemEntity>(entity)?
+        .set_item(if complete {
+            ItemStack::default()
+        } else {
+            remaining
+        });
     if complete {
-        level.remove_entity_with_reason(entity, RemovalReason::Discarded)?;
+        operation
+            .level
+            .remove_entity_with_reason(entity, RemovalReason::Discarded)?;
     }
     Ok(complete)
 }
-fn suck_in_items(level: &mut Level, hopper: BlockEntityRef) -> Result<bool, LevelError> {
+
+pub(super) fn suck_in_items(level: &mut Level, hopper: BlockEntityRef) -> Result<bool, LevelError> {
     let above = hopper.pos.above(1);
     let state = level.get_block_state(above)?;
     if let Some(source) = container_at(level, above)? {
         return source.with_callback(level, |level| {
-            for slot in slots(&source, Some(Direction::Down), level)? {
-                let original = source.get_item(slot, level)?;
-                if original.is_empty()
-                    || !can_take(&source, slot, &original, Direction::Down, level)?
+            let mut operation = StackOperation::new(level);
+            for slot in slots(&source, Some(Direction::Down), operation.level)? {
+                let (handle, local) = source.slot(slot, operation.level)?;
+                let original = operation
+                    .pin(ContainerSlot {
+                        container: ContainerHandle::BlockEntity(handle),
+                        slot: local,
+                    })
+                    .map_err(stack_error)?;
+                let stack = operation.level.stack(original).map_err(stack_error)?;
+                if stack.is_empty()
+                    || !can_take(&source, slot, stack, Direction::Down, operation.level)?
                 {
                     continue;
                 }
-                let (handle, local) = source.slot(slot, level)?;
-                let removed = access::remove_item(handle, local, 1, level)?;
+                let original_count = count(stack);
+                let removed = access::remove_item(handle, local, 1, operation.level)?;
                 if add_item(
                     Some(&source),
                     &ContainerRef::Single(hopper),
                     removed,
                     None,
-                    level,
+                    operation.level,
                 )?
                 .is_empty()
                 {
-                    set_changed(&source, level)?;
+                    set_changed(&source, operation.level)?;
                     return Ok(true);
                 }
-                restore_failed_take(&source, slot, original, level)?;
+                restore_failed_take(handle, local, original, original_count, operation.level)?;
             }
             Ok(false)
         });
     }
+
     if LevelReaderRef::Server(level).is_collision_shape_full_block(state, above)?
         && !level
             .block_tags()?

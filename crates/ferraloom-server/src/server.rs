@@ -45,8 +45,7 @@ use ferraloom_game::{
         LevelError, Region,
         chunk_holder::ChunkStatus,
         chunk_map::PlayerChunkSender,
-        distance_manager::{FullChunkStatus, tracking_view},
-        entity::Visibility,
+        distance_manager::tracking_view,
         server_level::ServerLevel,
         tick_rate::{ServerTickRateManager, TickRateEvent},
     },
@@ -194,8 +193,7 @@ pub struct MinecraftServer {
     recipe_synchronization: Arc<RecipeSynchronization>,
     crafting_context: Arc<RuntimeCraftingContext>,
     access: AccessLists,
-    level: ServerLevel,
-    world: World,
+    level: crate::generation::runtime::LiveLevel,
     commands: Commands,
     game_rules: ferraloom_game::gamerules::GameRules,
     shared: Option<Box<ferraloom_game::ServerShared>>,
@@ -225,7 +223,6 @@ pub struct MinecraftServer {
     enforces_secure_chat: bool,
     listener_task: Option<JoinHandle<Result<()>>>,
     pending_level_hooks: PendingLevelHooks,
-    player_loading_futures: Vec<(ChunkPos, u64)>,
 }
 /// Subsystems with explicit pending effects retain visible counters. Their
 /// eventual ports consume the ordered effects at these same native slots.
@@ -309,6 +306,7 @@ impl MinecraftServer {
             .collect();
 
         let game_time = world.level_data.data.get_long_or("Time", 0);
+        let (access, ops) = AccessLists::load(&options.root)?;
         let mut level = ServerLevel::new(
             Region::new(&BEHAVIORS),
             "minecraft:overworld",
@@ -316,7 +314,7 @@ impl MinecraftServer {
         );
         level
             .level
-            .install_shared(Box::new(ferraloom_game::ServerShared { scoreboard }));
+            .install_shared(Box::new(ferraloom_game::ServerShared { scoreboard, ops }));
         level.game_time = game_time;
         level.level.set_command_storage(command_storage.snapshot());
         initialize_live_level(
@@ -390,7 +388,6 @@ impl MinecraftServer {
             properties.int("simulation-distance").clamp(2, 32),
             &mut level.tickets,
         );
-        let access = AccessLists::load(&options.root)?;
         let favicon = std::fs::read(options.root.join("server-icon.png")).ok();
         if let Some(icon) = &favicon {
             ensure!(
@@ -467,6 +464,8 @@ impl MinecraftServer {
                     }
                 })?;
         }
+        let mut level =
+            crate::generation::runtime::LiveLevel::install(world, level, properties.clone())?;
         let shared = Some(level.level.take_shared().map_err(game_error)?);
         let mut server = Self {
             properties: properties.clone(),
@@ -477,7 +476,6 @@ impl MinecraftServer {
             crafting_context,
             access,
             level,
-            world,
             game_rules,
             shared,
             clocks,
@@ -507,7 +505,6 @@ impl MinecraftServer {
             enforces_secure_chat,
             listener_task: Some(listener_task),
             pending_level_hooks: PendingLevelHooks::default(),
-            player_loading_futures: Vec::new(),
         };
         server.publish_spawn_protection();
         let task = tokio::spawn(server.run());
@@ -584,6 +581,7 @@ impl MinecraftServer {
     }
     /// Only outer phase boundaries move ownership. Nested commands keep the installed owner.
     fn lend_server_shared(&mut self) -> bool {
+        self.level.generation().enter_owner_thread();
         match self.shared.take() {
             Some(shared) => {
                 self.level.level.install_shared(shared);
@@ -696,6 +694,7 @@ impl MinecraftServer {
                         address.ip(),
                         self.properties.boolean("white-list"),
                         full,
+                        &self.shared().ops,
                     );
                     if reason.is_none() {
                         let duplicates = self
@@ -881,15 +880,7 @@ impl MinecraftServer {
                             .tick_fluid_phase(self.level.game_time, 65536)
                             .map_err(game_error)?;
                     }
-                    let holders = &self.level.chunks.holders;
-                    let world = &self.world;
-                    self.level
-                        .tickets
-                        .purge_stale_with_readiness(self.tick, |pos| {
-                            holders
-                                .get(&pos.pack())
-                                .is_none_or(|holder| world.chunk_ready_for_saving(holder))
-                        });
+                    self.level.generation().purge_stale_tickets(self.tick);
                 }
                 self.integrate_jobs()?;
                 self.update_chunk_tickets()?;
@@ -905,7 +896,10 @@ impl MinecraftServer {
                     self.level.level.run_block_events().map_err(game_error)?;
                 }
                 self.level.level.set_handling_tick(false);
-                let active = self.level.tickets.should_keep_dimension_active();
+                let active = self
+                    .level
+                    .generation()
+                    .with_tickets(|tickets| tickets.should_keep_dimension_active());
                 if self
                     .level
                     .level
@@ -922,8 +916,14 @@ impl MinecraftServer {
                         .map_err(game_error)?;
                 }
                 self.apply_level_effects()?;
-                self.world
-                    .tick_entity_management(&mut self.level.level, &self.properties)?;
+                self.level
+                    .generation()
+                    .poll_entity_progress(&self.level.level)?;
+                self.level.level.tick_entity_management()?;
+                let requests = self.level.level.take_entity_storage_requests();
+                self.level.generation().with_world_mut(|world| {
+                    world.submit_entity_requests(requests, &self.properties)
+                })?;
                 self.level.level.collect_detached_block_entities();
                 if self.tick.is_multiple_of(1200) {
                     eprintln!(
@@ -1027,6 +1027,7 @@ impl MinecraftServer {
                     c.address.ip(),
                     self.properties.boolean("white-list"),
                     self.players.len() >= self.properties.int("max-players").max(0) as usize,
+                    &self.shared().ops,
                 ) {
                     bail!("{reason}");
                 }
@@ -1092,7 +1093,10 @@ impl MinecraftServer {
     }
     async fn prepare_player(&mut self, connection: ConnectionId) -> Result<()> {
         let profile = self.connections[&connection].profile.clone();
-        let access = self.world.access.clone();
+        let access = self
+            .level
+            .generation()
+            .with_world(|world| world.access.clone());
         let uuid = profile.id.to_string();
         let saved = tokio::task::spawn_blocking(move || access.player_data().load(&uuid)).await??;
         let respawn = self.default_spawn_data();
@@ -1104,9 +1108,9 @@ impl MinecraftServer {
             profile.name,
             self.level.level.next_entity_id(),
             Vec3::new(
-                f64::from(self.world.spawn.x) + 0.5,
-                f64::from(self.world.spawn.y),
-                f64::from(self.world.spawn.z) + 0.5,
+                f64::from(self.level.generation().with_world(|world| world.spawn.x)) + 0.5,
+                f64::from(self.level.generation().with_world(|world| world.spawn.y)),
+                f64::from(self.level.generation().with_world(|world| world.spawn.z)) + 0.5,
             ),
             mode,
         );
@@ -1120,7 +1124,10 @@ impl MinecraftServer {
             .map_err(game_error)?
             .advancements
             .clone();
-        let progress_path = self.world.access.path().to_path_buf();
+        let progress_path = self
+            .level
+            .generation()
+            .with_world(|world| world.access.path().to_path_buf());
         let progress_uuid = profile.id;
         let progress = tokio::task::spawn_blocking(move || {
             ferraloom_game::advancements::load_player_progress(
@@ -1146,7 +1153,9 @@ impl MinecraftServer {
             .information
             .text_filtering_enabled;
         let center = player.chunk_position();
-        self.level.tickets.add_player_spawn(center, self.tick);
+        self.level
+            .generation()
+            .with_tickets_mut(|tickets| tickets.add_player_spawn(center, self.tick));
         self.update_chunk_tickets()?;
         self.request_area(center, 3)?;
         let c = self.connections.get_mut(&connection).unwrap();
@@ -1167,9 +1176,10 @@ impl MinecraftServer {
         }
         chunks.sort_by_key(|(distance, pos)| (*distance, pos.pack()));
         for (_, pos) in chunks {
-            if let Some(request) = self.level.chunks.request(pos) {
-                self.world.request(request, pos);
-            }
+            self.level
+                .generation()
+                .request_full(&self.level.level, pos)
+                .map_err(game_error)?;
         }
         Ok(())
     }
@@ -1178,7 +1188,7 @@ impl MinecraftServer {
     fn tick_live_chunks(&mut self) -> Result<()> {
         self.pending_level_hooks.natural_spawn_state += 1;
         let mut spawning = Vec::new();
-        for pos in self.level.distance_manager.natural_spawn.chunks() {
+        for pos in self.level.generation().natural_spawn_chunks() {
             if !self
                 .level
                 .level
@@ -1244,7 +1254,11 @@ impl MinecraftServer {
     fn broadcast_block_changes(&mut self) -> Result<()> {
         let mut positions = self.level.level.take_block_update_chunks();
         let mut seen: HashSet<_> = positions.iter().copied().collect();
-        while let Some(key) = self.world.light_chunks_to_broadcast.pop_first() {
+        while let Some(key) = self
+            .level
+            .generation()
+            .with_world_mut(|world| world.light_chunks_to_broadcast.pop_first())
+        {
             let pos = ChunkPos::unpack(key);
             if seen.insert(pos) {
                 positions.push(pos);
@@ -1264,15 +1278,17 @@ impl MinecraftServer {
                 .level
                 .take_block_updates(pos)
                 .map_err(game_error)?;
-            let light = self.world.pending_light_updates.remove(&pos).map(|mask| {
-                cb::Packet::LightUpdate(cb::LightUpdate {
-                    x: VarInt(pos.x),
-                    z: VarInt(pos.z),
-                    light_data: light_packet_with_masks(
-                        self.world.lights.get(&pos.pack()),
-                        mask.sky,
-                        mask.block,
-                    ),
+            let light = self.level.generation().with_world_mut(|world| {
+                world.pending_light_updates.remove(&pos).map(|mask| {
+                    cb::Packet::LightUpdate(cb::LightUpdate {
+                        x: VarInt(pos.x),
+                        z: VarInt(pos.z),
+                        light_data: light_packet_with_masks(
+                            world.lights.get(&pos.pack()),
+                            mask.sky,
+                            mask.block,
+                        ),
+                    })
                 })
             });
             for c in self.connections.values_mut() {
@@ -1312,6 +1328,7 @@ impl MinecraftServer {
                 LevelEffect::DestroyParticles { .. } => self.pending_level_hooks.particles += 1,
                 LevelEffect::BlockDestroyed { .. } => self.pending_level_hooks.game_events += 1,
                 LevelEffect::PendingPrecipitation(_) => {}
+                LevelEffect::BroadcastAll(packet) => self.broadcast(*packet),
                 LevelEffect::PlayerPacket { recipients, packet } => {
                     for entity in recipients {
                         for &connection in &self.players {
@@ -1323,18 +1340,16 @@ impl MinecraftServer {
                         }
                     }
                 }
-                LevelEffect::GameEvent { .. } => self.pending_level_hooks.game_events += 1,
                 LevelEffect::PlayerSectionChange { player, section } => {
-                    self.level.distance_manager.update_player(
-                        player,
-                        Some(section),
-                        &mut self.level.tickets,
-                    );
+                    self.level.generation().update_player(player, Some(section));
                 }
             }
         }
-        self.world
-            .queue_block_light_changes(&self.level.level, lighting)?;
+        if let Some(changes) = World::capture_block_light_changes(&self.level.level, lighting)? {
+            self.level
+                .generation()
+                .with_world(|world| world.submit_block_light_changes(changes))?;
+        }
         Ok(())
     }
     /// Apply accepted section transitions immediately, including Y-only moves.
@@ -1342,220 +1357,30 @@ impl MinecraftServer {
     /// when its canonical GameRules state lands (vanilla's default is true).
     pub(super) fn update_player_tickets(&mut self, entity: EntityRef) -> Result<()> {
         for (player, section) in self.level.level.take_player_section_changes() {
-            self.level.distance_manager.update_player(
-                player,
-                Some(section),
-                &mut self.level.tickets,
-            );
+            self.level.generation().update_player(player, Some(section));
         }
         let section = ferraloom_util::SectionPos::from_position(self.player(entity)?.position);
-        self.level
-            .distance_manager
-            .update_player(entity, Some(section), &mut self.level.tickets);
+        self.level.generation().update_player(entity, Some(section));
         Ok(())
     }
     fn update_chunk_tickets(&mut self) -> Result<()> {
-        loop {
-            let changes = self.level.level.run_distance_manager_updates(
-                &mut self.level.distance_manager,
-                &mut self.level.tickets,
-            );
-            for change in changes {
-                let holder = self.level.chunks.ensure_holder(change.pos);
-                holder.ticket_level = change.level;
-                self.world
-                    .update_generation_priority(change.pos, change.level);
-                if change.level > 33
-                    && let Some(request) = self.world.cancel_generation(change.pos)
-                {
-                    self.level
-                        .chunks
-                        .cancel_generation_request(change.pos, request);
-                }
-                if change.level <= 33
-                    && let Some(request) = self.level.chunks.request(change.pos)
-                {
-                    self.world.request(request, change.pos);
-                }
-            }
-            self.update_holder_full_statuses()?;
-            self.level
-                .distance_manager
-                .poll_player_loading_tasks(&mut self.level.tickets);
-            if !self.level.tickets.has_pending_source_updates() {
-                break;
-            }
-        }
-        self.world.submit_entity_requests(
-            self.level.level.take_entity_storage_requests(),
-            &self.properties,
-        )?;
-        Ok(())
-    }
-    /// Promotions wait for successful range futures; demotions notify entity
-    /// sections immediately. Ticking readiness is independent of simulation.
-    fn update_holder_full_statuses(&mut self) -> Result<()> {
-        let positions: Vec<_> = self.level.chunks.holder_positions().collect();
-        for pos in positions {
-            let holder = self.level.chunks.holders.get_mut(&pos.pack()).unwrap();
-            update_holder_full_status(
-                holder,
-                &self.world.light_ready,
-                &self.world.generation_statuses,
-                &self.world.ready,
-                &mut self.level.level,
-            )?;
-            if self.level.level.chunk(pos).is_some() {
-                let requested = holder.requested_full_status();
-                let ticking = requested >= FullChunkStatus::BlockTicking
-                    && self.world.ready.contains(&pos)
-                    && full_chunk_range_ready(&self.world.light_ready, pos, 1);
-                self.level
-                    .level
-                    .set_chunk_loading_status(pos, requested, ticking)
-                    .map_err(game_error)?;
-            }
-        }
-        let waiters = self
-            .level
-            .distance_manager
-            .take_player_loading_waiters(&self.level.tickets);
-        for pos in waiters {
-            if let Some(holder) = self.level.chunks.holders.get(&pos.pack()) {
-                self.player_loading_futures.push((pos, holder.request_id));
-            }
-        }
-        let mut index = 0;
-        while index < self.player_loading_futures.len() {
-            let (pos, request_id) = self.player_loading_futures[index];
-            let current = self
-                .level
-                .chunks
-                .holders
-                .get(&pos.pack())
-                .is_some_and(|holder| holder.request_id == request_id);
-            let future = ferraloom_game::level::generation::ChunkRangeFuture::for_full_status(
-                pos,
-                FullChunkStatus::EntityTicking,
-            );
-            if !current
-                || future.is_ready(|p| {
-                    self.world
-                        .light_ready
-                        .contains(&p)
-                        .then_some(ChunkStatus::Full)
-                })
-                || self.world.failed_generation.contains(&(pos, request_id))
-            {
-                self.level.distance_manager.complete_player_loading(pos);
-                self.player_loading_futures.remove(index);
-            } else {
-                index += 1;
-            }
-        }
+        use ferraloom_game::level::acquisition::AcquireDriver;
+        self.level
+            .generation()
+            .run_distance_manager_updates(&self.level.level)
+            .map_err(game_error)?;
         Ok(())
     }
     fn integrate_jobs(&mut self) -> Result<()> {
         self.progress_chunk_jobs()?;
-        generation_completion::finish_promotions(&mut self.level, &mut self.world)?;
-        self.evict_unloaded_chunks()?;
+        self.level.finish_promotions()?;
+        self.level.evict_unloaded_chunks()?;
         self.level.level.collect_chunk_structure_versions();
+        self.level.level.finish_chunk_source_tick();
         Ok(())
     }
-    /// Progress without eviction. The shared-publication driver uses this split
-    /// after its Level-facing publication seam has landed.
     fn progress_chunk_jobs(&mut self) -> Result<()> {
-        self.world.refresh_generation_snapshots(&self.level.level);
-        let completed = (|| -> Result<()> {
-            self.world.poll_generation_progress()?;
-            while let Some((request, terrain)) = self.world.take_generation_completion()? {
-                generation_completion::integrate_metadata(&mut self.level, &mut self.world)?;
-                self.integrate_command_terrain(request, terrain)?;
-            }
-            Ok(())
-        })();
-        for &(pos, request_id) in &self.world.failed_generation {
-            if self.player_loading_futures.contains(&(pos, request_id)) {
-                self.level.distance_manager.complete_player_loading(pos);
-            }
-            self.player_loading_futures
-                .retain(|&waiting| waiting != (pos, request_id));
-        }
-        self.world.failed_generation.clear();
-        completed?;
-        generation_completion::integrate_metadata(&mut self.level, &mut self.world)?;
-        while let Ok(light) = self.world.light_rx.try_recv() {
-            self.integrate_command_light(light)?;
-        }
-        generation_completion::queue_ready_promotions(&self.level, &mut self.world);
-        Ok(())
-    }
-    fn evict_unloaded_chunks(&mut self) -> Result<()> {
-        for (pos, request_id, result) in self.world.poll_unloads()? {
-            if let Err(error) = result {
-                self.level
-                    .level
-                    .mark_chunk_unsaved(pos)
-                    .map_err(game_error)?;
-                return Err(error);
-            }
-            let eligible = self
-                .level
-                .chunks
-                .holders
-                .get(&pos.pack())
-                .is_some_and(|holder| {
-                    holder.ticket_level > 44
-                        && holder.request_id == request_id
-                        && holder.pending_full_status().is_none()
-                        && holder.confirmed_full_status() == FullChunkStatus::Inaccessible
-                });
-            if eligible
-                && self
-                    .level
-                    .level
-                    .chunk(pos)
-                    .is_some_and(|chunk| !chunk.is_unsaved())
-                && !self.world.generation_pins(pos)
-            {
-                self.level
-                    .level
-                    .detach_block_entities_for_unload(pos)
-                    .map_err(game_error)?;
-                ensure!(
-                    self.level.chunks.remove_unloaded_holder(pos).is_some(),
-                    "holder changed during block entity unload"
-                );
-                self.level.level.remove_chunk(pos);
-                self.world.finish_unload(pos)?;
-            }
-        }
-        for pos in self.level.chunks.holder_positions().collect::<Vec<_>>() {
-            let holder = &self.level.chunks.holders[&pos.pack()];
-            if holder.ticket_level > 44
-                && self.level.level.chunk(pos).is_none()
-                && !self.world.generation_pins(pos)
-                && self.world.proto_saves_complete()
-            {
-                if self.level.chunks.remove_unloaded_holder(pos).is_some() {
-                    self.world.forget_proto_holder(pos);
-                }
-                continue;
-            }
-            let holder = &self.level.chunks.holders[&pos.pack()];
-            if holder.ticket_level > 44
-                && self.world.light_ready.contains(&pos)
-                && self.level.level.chunk(pos).is_some()
-            {
-                self.world.schedule_unload(
-                    &mut self.level.level,
-                    pos,
-                    holder.request_id,
-                    self.level.game_time,
-                )?;
-            }
-        }
-        Ok(())
+        self.level.generation().progress_jobs(&self.level.level)
     }
     fn place_player(&mut self, connection: ConnectionId) -> Result<()> {
         let mut c = self
@@ -1566,7 +1391,7 @@ impl MinecraftServer {
         if player.saved.is_empty() {
             let position = Vec3::new(
                 player.position.x,
-                f64::from(self.world.spawn.y),
+                f64::from(self.level.generation().with_world(|world| world.spawn.y)),
                 player.position.z,
             );
             player.set_pos(position);
@@ -1580,7 +1405,7 @@ impl MinecraftServer {
         let center = player.chunk_position();
         let mode = protocol_game_type(player.game_mode);
         let entity_id = player.network_id;
-        let permission = self.access.permission(player.uuid);
+        let permission = self.shared().ops.permission_level(player.uuid).id();
         self.access.remember(&c.profile)?;
         c.phase = Phase::Play(entity);
         c.push(cb::Packet::Login(cb::Login {
@@ -1604,7 +1429,9 @@ impl MinecraftServer {
                     self.registries.numeric("dimension_type", "overworld"),
                 ),
                 dimension: id("overworld"),
-                seed: ferraloom_worldgen::biome_manager::obfuscate_seed(self.world.seed),
+                seed: ferraloom_worldgen::biome_manager::obfuscate_seed(
+                    self.level.generation().with_world(|world| world.seed),
+                ),
                 game_type: mode,
                 previous_game_type: OptionalGameType(None),
                 is_debug: false,
@@ -1740,8 +1567,8 @@ impl MinecraftServer {
                 }),
                 cb::Packet::SetHealth(cb::SetHealth {
                     health: player.parent.health(),
-                    food: VarInt(20),
-                    saturation: 5.,
+                    food: VarInt(player.food_data.food_level()),
+                    saturation: player.food_data.saturation_level(),
                 }),
                 cb::Packet::SetExperience(cb::SetExperience {
                     experience_progress: 0.,
@@ -1922,6 +1749,7 @@ impl MinecraftServer {
                         .any(|c| c < ' ' || c == '§' || c == '\u{7f}'),
                     "multiplayer.disconnect.illegal_characters"
                 );
+                let is_operator = self.shared().ops.contains(self.player(entity)?.uuid);
                 let c = self.connections.get_mut(&connection).unwrap();
                 let last_seen = c
                     .last_seen
@@ -1935,7 +1763,7 @@ impl MinecraftServer {
                             .properties
                             .int("chat-spam-threshold-seconds")
                             .saturating_mul(20)
-                        || self.access.permission(c.profile.id) > 0,
+                        || is_operator,
                     "disconnect.spam"
                 );
                 let message = if let Some(session) = &mut c.session {
@@ -1973,20 +1801,12 @@ impl MinecraftServer {
                 self.execute_command(Some(connection), &p.command).await?
             }
             sb::Packet::ChatCommandSigned(p) => {
+                let source = self.player_command_source(entity).map_err(game_error)?;
                 let c = self.connections.get_mut(&connection).unwrap();
                 let last_seen = c
                     .last_seen
                     .apply(&p.last_seen_messages)
                     .context("multiplayer.disconnect.chat_validation_failed")?;
-                let permission = self.access.permission(c.profile.id);
-                let source = CommandSourceStack::server(
-                    permission,
-                    self.level
-                        .level
-                        .entity::<ServerPlayer>(entity)
-                        .map_err(game_error)?
-                        .position,
-                );
                 let prepared = match self.commands.prepare(&p.command, source.clone()) {
                     Ok(prepared) => prepared,
                     Err(error) => {
@@ -2095,8 +1915,8 @@ impl MinecraftServer {
                     .level
                     .entity_mut::<ServerPlayer>(entity)
                     .map_err(game_error)?;
-                if matches!(player.game_mode, GameType::Creative | GameType::Spectator) {
-                    player.flying = p.is_flying;
+                if player.abilities.mayfly {
+                    player.abilities.flying = p.is_flying;
                 }
             }
             sb::Packet::PingRequest(p) => {
@@ -2998,9 +2818,11 @@ impl MinecraftServer {
                     let center = player.chunk_position();
                     if (-3..=3).all(|x| {
                         (-3..=3).all(|z| {
-                            self.world
-                                .light_ready
-                                .contains(&ChunkPos::new(center.x + x, center.z + z))
+                            self.level.generation().with_world(|world| {
+                                world
+                                    .light_ready
+                                    .contains(&ChunkPos::new(center.x + x, center.z + z))
+                            })
                         })
                     }) {
                         joining.push(id);
@@ -3008,15 +2830,45 @@ impl MinecraftServer {
                 }
                 Phase::Configuration(ConfigTask::Finishing) => {
                     let center = c.player.as_ref().unwrap().chunk_position();
-                    self.level.tickets.add_player_spawn(center, self.tick);
+                    self.level
+                        .generation()
+                        .with_tickets_mut(|tickets| tickets.add_player_spawn(center, self.tick));
                 }
                 Phase::Play(entity) => {
-                    let player = self
-                        .level
-                        .level
-                        .entity_mut::<ServerPlayer>(entity)
+                    if !self.was_paused {
+                        let player = self
+                            .level
+                            .level
+                            .entity_mut::<ServerPlayer>(entity)
+                            .map_err(game_error)?;
+                        player.reset_position();
+                        player.old_position = player.position;
+                        ferraloom_game::entity::player::player_do_tick_with_tick_rate(
+                            entity,
+                            &mut self.level.level,
+                            &self.tick_rate_manager,
+                        )
                         .map_err(game_error)?;
-                    player.do_tick();
+                        let player = self
+                            .level
+                            .level
+                            .entity::<ServerPlayer>(entity)
+                            .map_err(game_error)?;
+                        let (position, yaw, pitch) = (player.first_good, player.yaw, player.pitch);
+                        ferraloom_game::entity::teleport::abs_snap_to(
+                            entity,
+                            position,
+                            yaw,
+                            pitch,
+                            &mut self.level.level,
+                        )
+                        .map_err(game_error)?;
+                        self.level
+                            .level
+                            .entity_mut::<ServerPlayer>(entity)
+                            .map_err(game_error)?
+                            .finish_connection_tick();
+                    }
                     let idle = self.idle_timeout;
                     if idle > 0
                         && now.duration_since(c.last_action) > Duration::from_secs(idle as u64 * 60)
@@ -3029,14 +2881,16 @@ impl MinecraftServer {
         }
         for id in joining {
             let c = self.connections.get_mut(&id).unwrap();
-            self.level
-                .tickets
-                .add_player_spawn(c.player.as_ref().unwrap().chunk_position(), self.tick);
+            self.level.generation().with_tickets_mut(|tickets| {
+                tickets.add_player_spawn(c.player.as_ref().unwrap().chunk_position(), self.tick)
+            });
             c.phase = Phase::Configuration(ConfigTask::Finishing);
             c.push(cfg::ClientboundPacket::FinishConfiguration(
                 cfg::FinishConfiguration {},
             ));
         }
+        self.broadcast_container_changes()?;
+        self.apply_level_effects()?;
         Ok(())
     }
     fn keepalive_reply(&mut self, connection: ConnectionId, key: i64) -> Result<()> {
@@ -3046,8 +2900,13 @@ impl MinecraftServer {
         Ok(())
     }
     fn send_chunks(&mut self) -> Result<()> {
-        let ready = &self.world.ready;
-        let light_ready = &self.world.light_ready;
+        let ready = self.level.generation().with_world(|world| {
+            world
+                .ready
+                .intersection(&world.light_ready)
+                .copied()
+                .collect::<HashSet<_>>()
+        });
         let mut batches = Vec::new();
         for (&connection, c) in &mut self.connections {
             if c.close {
@@ -3058,7 +2917,7 @@ impl MinecraftServer {
                     // prepareTickingChunk already awaited the FULL neighborhood
                     // and post-processing; sending does not await its neighbors'
                     // own ticking futures. Retain the center light dependency.
-                    ready.contains(&pos) && light_ready.contains(&pos)
+                    ready.contains(&pos)
                 });
                 if !positions.is_empty() {
                     batches.push((connection, positions));
@@ -3103,7 +2962,10 @@ impl MinecraftServer {
                             .block_entity_chunk_packet_info(pos)
                             .map_err(game_error)?,
                     },
-                    light_data: light_packet(self.world.lights.get(&pos.pack())),
+                    light_data: self
+                        .level
+                        .generation()
+                        .with_world(|world| light_packet(world.lights.get(&pos.pack()))),
                 }));
             }
             packets.push(cb::Packet::ChunkBatchFinished(cb::ChunkBatchFinished {
@@ -3246,23 +3108,26 @@ impl MinecraftServer {
             && let Phase::Play(entity) = c.phase
         {
             let player = self.player(entity)?;
-            let progress = ferraloom_game::advancements::PlayerProgressSave::capture(
-                player,
-                self.world.access.path(),
-            )?;
+            let progress_path = self
+                .level
+                .generation()
+                .with_world(|world| world.access.path().to_path_buf());
+            let progress =
+                ferraloom_game::advancements::PlayerProgressSave::capture(player, &progress_path)?;
             let tag = player.save();
             let uuid = player.uuid.to_string();
             let name = player.display_name();
-            let access = self.world.access.clone();
+            let access = self
+                .level
+                .generation()
+                .with_world(|world| world.access.clone());
             tokio::task::spawn_blocking(move || -> Result<()> {
                 access.player_data().save(&uuid, &tag)?;
                 progress.write()?;
                 Ok(())
             })
             .await??;
-            self.level
-                .distance_manager
-                .update_player(entity, None, &mut self.level.tickets);
+            self.level.generation().update_player(entity, None);
             self.level.level.remove_entity(entity).map_err(game_error)?;
             self.players.retain(|&id| id != connection);
             self.broadcast(cb::Packet::PlayerInfoRemove(cb::PlayerInfoRemove {
@@ -3283,11 +3148,18 @@ impl MinecraftServer {
         source: Option<ConnectionId>,
         text: &str,
     ) -> Result<()> {
-        let (permission, position) = if let Some(id) = source {
-            let c = self
+        let mut stack = if let Some(id) = source {
+            let Phase::Play(entity) = self
                 .connections
-                .get_mut(&id)
-                .context("unknown command source")?;
+                .get(&id)
+                .context("unknown command source")?
+                .phase
+            else {
+                bail!("command source not playing");
+            };
+            let stack = self.player_command_source(entity).map_err(game_error)?;
+            let is_operator = self.shared().ops.contains(self.player(entity)?.uuid);
+            let c = self.connections.get_mut(&id).unwrap();
             c.command_spam += 20;
             c.last_action = Instant::now();
             ensure!(
@@ -3296,41 +3168,24 @@ impl MinecraftServer {
                         .properties
                         .int("command-spam-threshold-seconds")
                         .saturating_mul(20)
-                    || self.access.permission(c.profile.id) > 0,
+                    || is_operator,
                 "disconnect.spam"
             );
-            let Phase::Play(entity) = c.phase else {
-                bail!("command source not playing");
-            };
-            (
-                self.access.permission(c.profile.id),
-                self.player(entity)?.position,
-            )
+            stack
         } else {
-            let spawn = self.world.spawn;
-            (
+            let spawn = self.level.generation().with_world(|world| world.spawn);
+            CommandSourceStack::server(
                 4,
                 Vec3::new(f64::from(spawn.x), f64::from(spawn.y), f64::from(spawn.z)),
             )
         };
-        let mut stack = CommandSourceStack::server(permission, position);
         if let Some(connection) = source {
-            let (phase, signed_argument) = {
-                let c = self.connections.get_mut(&connection).unwrap();
-                (c.phase, c.command_message.take())
-            };
-            if let Phase::Play(entity) = phase {
-                let player = self.player(entity)?;
-                stack = stack
-                    .with_entity(entity)
-                    .with_source(ferraloom_game::commands::source::CommandSource::Player(
-                        entity,
-                    ))
-                    .with_rotation(ferraloom_game::commands::source::Rotation {
-                        pitch: player.pitch,
-                        yaw: player.yaw,
-                    });
-            }
+            let signed_argument = self
+                .connections
+                .get_mut(&connection)
+                .unwrap()
+                .command_message
+                .take();
             if let Some((argument_name, message)) = signed_argument {
                 stack.signing_context.arguments = Arc::from([(
                     argument_name,
@@ -3466,37 +3321,50 @@ impl MinecraftServer {
         result
     }
     async fn save_all_inner(&mut self, flush: bool, force: bool) -> Result<()> {
-        self.world.finish_generation().await?;
+        self.finish_generation_layer().await?;
         self.integrate_jobs()?;
-
-        self.world
-            .save_live_level_context(&self.level.level)
-            .await?;
-        self.world
-            .save_entities(&mut self.level.level, &self.properties, flush)
-            .await?;
+        let context = crate::world::LiveLevelSaveContext::capture(&self.level.level)?;
+        let save_context = self
+            .level
+            .generation()
+            .with_world_mut(|world| world.begin_save_live_level_context(context))?;
+        save_context.await??;
+        self.save_live_entities(flush).await?;
 
         self.save_game_rules().await?;
         self.save_command_storage().await?;
         self.save_command_tickets().await?;
         let positions = self
             .level
-            .chunks
+            .generation()
             .holder_positions()
+            .into_iter()
             .filter(|_| self.saving_enabled || force)
             .filter(|&pos| self.level.level.chunk(pos).is_some())
             .collect::<Vec<_>>();
-        let snapshots = positions
-            .into_iter()
-            .map(|pos| {
-                self.world
-                    .capture_chunk_for_save(&mut self.level.level, pos, self.level.game_time)
-            })
-            .collect::<Result<Vec<_>>>()?;
-        let encoded = self.world.encode_saves(snapshots).await?;
-        for (pos, tag) in encoded {
-            self.world.io.store(pos, Some(tag)).await?;
+        let mut snapshots = Vec::new();
+        for pos in positions {
+            snapshots.push(
+                self.level
+                    .capture_chunk_for_save(pos, self.level.game_time)?,
+            );
         }
+        let encode = self
+            .level
+            .generation()
+            .with_world(|world| world.begin_encode_saves(snapshots));
+        let encoded = encode.await??;
+        for (pos, tag) in encoded {
+            let save = self
+                .level
+                .generation()
+                .with_world(|world| world.io.store(pos, Some(tag)));
+            save.await?;
+        }
+        let progress_path = self
+            .level
+            .generation()
+            .with_world(|world| world.access.path().to_path_buf());
         let progress = self
             .players
             .iter()
@@ -3508,7 +3376,7 @@ impl MinecraftServer {
             .map(|entity| {
                 Ok(ferraloom_game::advancements::PlayerProgressSave::capture(
                     self.player(entity)?,
-                    self.world.access.path(),
+                    &progress_path,
                 )?)
             })
             .collect::<Result<Vec<_>>>()?;
@@ -3528,13 +3396,88 @@ impl MinecraftServer {
                 Ok((player.uuid.to_string(), player.save()))
             })
             .collect::<Result<Vec<_>>>()?;
-        self.world
-            .save_level_and_players(self.level.game_time, players)
-            .await?;
+        let bootstrap = self
+            .level
+            .generation()
+            .with_world_mut(|world| world.take_bootstrap_save_snapshots(self.level.game_time));
+        let encode = self
+            .level
+            .generation()
+            .with_world(|world| world.begin_encode_saves(bootstrap));
+        for (pos, tag) in encode.await?? {
+            let save = self
+                .level
+                .generation()
+                .with_world(|world| world.io.store(pos, Some(tag)));
+            save.await?;
+        }
+        let save = self.level.generation().with_world_mut(|world| {
+            world.begin_save_level_and_players(self.level.game_time, players)
+        });
+        save.await??;
         tokio::task::spawn_blocking(move || progress.into_iter().try_for_each(|save| save.write()))
             .await??;
-        self.world.io.synchronize(flush).await?;
+        let synchronize = self
+            .level
+            .generation()
+            .with_world(|world| world.io.synchronize(flush));
+        synchronize.await?;
         Ok(())
+    }
+    async fn finish_generation_layer(&mut self) -> Result<()> {
+        while self
+            .level
+            .generation()
+            .with_world(World::generation_running)
+        {
+            self.level
+                .generation()
+                .with_world_mut(World::poll_running_generation)?;
+            if self
+                .level
+                .generation()
+                .with_world(World::generation_running)
+            {
+                tokio::time::sleep(Duration::from_millis(1)).await;
+            }
+        }
+        Ok(())
+    }
+    async fn save_live_entities(&mut self, flush: bool) -> Result<()> {
+        if !flush {
+            self.level.level.auto_save_entities()?;
+            let requests = self.level.level.take_entity_storage_requests();
+            self.level
+                .generation()
+                .with_world_mut(|world| world.submit_entity_requests(requests, &self.properties))?;
+            return Ok(());
+        }
+        self.level.level.begin_entity_save_all()?;
+        loop {
+            let requests = self.level.level.take_entity_storage_requests();
+            self.level
+                .generation()
+                .with_world_mut(|world| world.submit_entity_requests(requests, &self.properties))?;
+            let sync = self.level.generation().synchronize_entities(false)?;
+            sync.await?;
+            self.level
+                .generation()
+                .poll_entity_progress(&self.level.level)?;
+            if self.level.level.poll_entity_save_all()? {
+                let requests = self.level.level.take_entity_storage_requests();
+                self.level.generation().with_world_mut(|world| {
+                    world.submit_entity_requests(requests, &self.properties)
+                })?;
+                let sync = self.level.generation().synchronize_entities(true)?;
+                sync.await?;
+                while self
+                    .level
+                    .generation()
+                    .poll_entity_progress(&self.level.level)?
+                {}
+                return Ok(());
+            }
+        }
     }
     async fn stop_server(&mut self) -> Result<()> {
         for c in self.connections.values_mut() {
@@ -3548,8 +3491,29 @@ impl MinecraftServer {
         if let Some(listener) = self.listener_task.take() {
             listener.await??;
         }
-        self.world.close_entity_storage().await?;
-        self.world.close_chunk_storage().await?;
+        let close_entities = self
+            .level
+            .generation()
+            .with_world_mut(World::begin_close_entity_storage);
+        if let Some(close) = close_entities {
+            close.await?;
+        }
+        self.finish_generation_layer().await?;
+        let drain = self
+            .level
+            .generation()
+            .with_world_mut(World::prepare_close_chunk_storage)?;
+        for save in drain.proto {
+            save.await?;
+        }
+        for save in drain.chunks {
+            save.await??;
+        }
+        let close_chunks = self
+            .level
+            .generation()
+            .with_world_mut(World::begin_close_chunk_storage)?;
+        close_chunks.await?;
         println!(
             "Server stopped; world and players saved to {}",
             self.root.display()
@@ -3602,53 +3566,6 @@ fn initialize_live_level(
     command_level::load_command_tickets(level, world)?;
     Ok(())
 }
-fn update_holder_full_status(
-    holder: &mut ferraloom_game::level::chunk_holder::ChunkHolder,
-    ready: &HashSet<ChunkPos>,
-    completed: &BTreeMap<i64, ChunkStatus>,
-    post_processed: &HashSet<ChunkPos>,
-    level: &mut ferraloom_game::level::Level,
-) -> Result<bool> {
-    let mut status = holder.update_full_status();
-    if let Some(promotion) = holder.pending_full_status() {
-        let future = ferraloom_game::level::generation::ChunkRangeFuture::for_full_status(
-            holder.position,
-            promotion.status,
-        );
-        if (promotion.status != FullChunkStatus::BlockTicking
-            || post_processed.contains(&holder.position))
-            && future.is_ready(|pos| {
-                if ready.contains(&pos) {
-                    Some(ChunkStatus::Full)
-                } else {
-                    completed
-                        .get(&pos.pack())
-                        .copied()
-                        .filter(|status| *status < ChunkStatus::Full)
-                }
-            })
-        {
-            status = holder.confirm_full_status(promotion);
-        }
-    }
-    if let Some(status) = status {
-        level
-            .update_entity_chunk_status(holder.position, full_status_visibility(status))
-            .map_err(game_error)?;
-    }
-    Ok(status == Some(FullChunkStatus::EntityTicking))
-}
-fn full_chunk_range_ready(ready: &HashSet<ChunkPos>, pos: ChunkPos, radius: i32) -> bool {
-    (-radius..=radius)
-        .all(|x| (-radius..=radius).all(|z| ready.contains(&ChunkPos::new(pos.x + x, pos.z + z))))
-}
-fn full_status_visibility(status: FullChunkStatus) -> Visibility {
-    match status {
-        FullChunkStatus::Inaccessible => Visibility::Hidden,
-        FullChunkStatus::Full | FullChunkStatus::BlockTicking => Visibility::Tracked,
-        FullChunkStatus::EntityTicking => Visibility::Ticking,
-    }
-}
 fn game_error(error: LevelError) -> anyhow::Error {
     anyhow::anyhow!("{error:?}")
 }
@@ -3669,14 +3586,13 @@ fn protocol_game_type(mode: GameType) -> play::GameType {
     }
 }
 fn abilities(player: &ServerPlayer) -> cb::Packet {
-    let privileged = matches!(player.game_mode, GameType::Creative | GameType::Spectator);
     cb::Packet::PlayerAbilities(cb::PlayerAbilities {
-        invulnerable: privileged,
-        is_flying: player.flying,
-        can_fly: privileged,
+        invulnerable: player.abilities.invulnerable,
+        is_flying: player.abilities.flying,
+        can_fly: player.abilities.mayfly,
         instabuild: player.instabuild(),
-        flying_speed: 0.05,
-        walking_speed: 0.1,
+        flying_speed: player.ability_flying_speed(),
+        walking_speed: player.ability_walking_speed(),
     })
 }
 fn player_info(profile: &GameProfile, player: &ServerPlayer) -> PlayerInfoEntry {
@@ -3833,7 +3749,6 @@ fn load_conduct(root: &Path, properties: &ServerProperties) -> Result<BTreeMap<S
 #[cfg(test)]
 mod live_level_tests {
     use super::*;
-    use ferraloom_game::level::{Level, chunk_holder::ChunkHolder};
 
     #[test]
     fn abilities_packet_reads_mutable_instabuild_instead_of_mode() {
@@ -3846,80 +3761,22 @@ mod live_level_tests {
             let mut player =
                 ServerPlayer::new(Uuid::new(1, 2), "abilities".into(), 1, Vec3::ZERO, mode);
             for value in [false, true] {
-                player.instabuild = value;
+                player.abilities.instabuild = value;
+                player.abilities.invulnerable = value;
+                player.abilities.mayfly = !value;
+                player.abilities.flying = value;
+                player.abilities.set_flying_speed(0.125);
+                player.abilities.set_walking_speed(-0.25);
                 let cb::Packet::PlayerAbilities(packet) = abilities(&player) else {
                     unreachable!()
                 };
                 assert_eq!(packet.instabuild, value);
+                assert_eq!(packet.invulnerable, value);
+                assert_eq!(packet.can_fly, !value);
+                assert_eq!(packet.is_flying, value);
+                assert_eq!(packet.flying_speed, 0.125);
+                assert_eq!(packet.walking_speed, -0.25);
             }
         }
-    }
-
-    #[test]
-    fn entity_visibility_follows_confirmed_holder_ranges_and_immediate_demotions() {
-        let pos = ChunkPos::new(0, 0);
-        let mut holder = ChunkHolder::new(pos, 0);
-        let mut ready = HashSet::new();
-
-        let mut completed = BTreeMap::new();
-        let mut level = Level::new(
-            Region::new(&BEHAVIORS),
-            ferraloom_game::level::LevelContext::fixture(0, 63),
-        );
-
-        holder.ticket_level = 33;
-        assert!(
-            !update_holder_full_status(&mut holder, &ready, &completed, &ready, &mut level)
-                .unwrap()
-        );
-        assert_eq!(level.entity_chunk_visibility(pos), Visibility::Hidden);
-        ready.insert(pos);
-        for x in -1..=1 {
-            for z in -1..=1 {
-                completed.insert(ChunkPos::new(x, z).pack(), ChunkStatus::InitializeLight);
-            }
-        }
-        update_holder_full_status(&mut holder, &ready, &completed, &ready, &mut level).unwrap();
-        assert_eq!(level.entity_chunk_visibility(pos), Visibility::Tracked);
-        holder.ticket_level = 32;
-        for x in -1..=1 {
-            for z in -1..=1 {
-                ready.insert(ChunkPos::new(x, z));
-            }
-        }
-        update_holder_full_status(&mut holder, &ready, &completed, &HashSet::new(), &mut level)
-            .unwrap();
-        assert_eq!(holder.confirmed_full_status(), FullChunkStatus::Full);
-        update_holder_full_status(&mut holder, &ready, &completed, &ready, &mut level).unwrap();
-        assert_eq!(
-            holder.confirmed_full_status(),
-            FullChunkStatus::BlockTicking
-        );
-        holder.ticket_level = 31;
-        for x in -1..=1 {
-            for z in -1..=1 {
-                ready.insert(ChunkPos::new(x, z));
-            }
-        }
-        assert!(
-            !update_holder_full_status(&mut holder, &ready, &completed, &ready, &mut level)
-                .unwrap()
-        );
-        assert_eq!(level.entity_chunk_visibility(pos), Visibility::Tracked);
-        for x in -2..=2 {
-            for z in -2..=2 {
-                ready.insert(ChunkPos::new(x, z));
-            }
-        }
-        assert!(
-            update_holder_full_status(&mut holder, &ready, &completed, &ready, &mut level).unwrap()
-        );
-        assert_eq!(level.entity_chunk_visibility(pos), Visibility::Ticking);
-        holder.ticket_level = 32;
-        update_holder_full_status(&mut holder, &ready, &completed, &ready, &mut level).unwrap();
-        assert_eq!(level.entity_chunk_visibility(pos), Visibility::Tracked);
-        holder.ticket_level = 45;
-        update_holder_full_status(&mut holder, &ready, &completed, &ready, &mut level).unwrap();
-        assert_eq!(level.entity_chunk_visibility(pos), Visibility::Hidden);
     }
 }

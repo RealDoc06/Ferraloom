@@ -32,6 +32,11 @@ impl StackView<'_> {
                     })
                 }
                 LevelReaderRef::Worldgen(_) => Err(LevelError::UnsupportedWorldgenEnvironment),
+                LevelReaderRef::PathNavigation(_) => {
+                    Err(LevelError::UnsupportedPathNavigationQuery(
+                        crate::level::path_navigation_region::PathNavigationQuery::RetainedStack,
+                    ))
+                }
             },
         }
     }
@@ -117,7 +122,19 @@ impl<'stack> UseOnContext<'stack> {
         match reader {
             LevelReaderRef::Server(level) => level.entity::<EntityData>(player),
             LevelReaderRef::Worldgen(_) => Err(LevelError::UnsupportedWorldgenEnvironment),
+            LevelReaderRef::PathNavigation(reader) => Ok(reader.entity_state(player)?.as_entity()),
         }
+    }
+    /// Entity#getViewXRot(1) reads pitch. Entity#getViewYRot(1) reads yaw,
+    /// while LivingEntity's override reads its canonical head yaw.
+    fn view_rotation(&self, reader: &LevelReaderRef<'_, '_>) -> Result<(f32, f32), LevelError> {
+        let player = self.player.ok_or(LevelError::MissingPlacementPlayer)?;
+        let state = reader.entity_state(player)?;
+        let entity = state.as_entity();
+        let yaw = state
+            .as_living()
+            .map_or(entity.yaw, |living| living.y_head_rot);
+        Ok((entity.pitch, yaw))
     }
     pub fn horizontal_direction(
         &self,
@@ -269,8 +286,8 @@ impl<'stack> BlockPlaceContext<'stack> {
         match self.kind {
             PlacementKind::Directional(_) => Ok(Direction::Down),
             PlacementKind::Player => {
-                let player = self.use_on.player_data(reader)?;
-                Ok(Direction::ordered_by_nearest(player.pitch, player.yaw)[0])
+                let (pitch, yaw) = self.use_on.view_rotation(reader)?;
+                Ok(Direction::ordered_by_nearest(pitch, yaw)[0])
             }
         }
     }
@@ -301,8 +318,8 @@ impl<'stack> BlockPlaceContext<'stack> {
                 },
             );
         }
-        let player = self.use_on.player_data(reader)?;
-        let mut directions = Direction::ordered_by_nearest(player.pitch, player.yaw);
+        let (pitch, yaw) = self.use_on.view_rotation(reader)?;
+        let mut directions = Direction::ordered_by_nearest(pitch, yaw);
         if !self.replace_clicked {
             let face = self.clicked_face().opposite();
             let index = directions
@@ -519,13 +536,11 @@ mod tests {
                     level.get_state_for_placement(Block::STONE, &context),
                     Ok(Some(Block::STONE.default_state()))
                 );
-                assert!(matches!(
+                // RotatedPillarBlock takes the clicked face's axis; UP is the default Y axis.
+                assert_eq!(
                     level.get_state_for_placement(Block::OAK_LOG, &context),
-                    Err(LevelError::UnsupportedBlockMethod(
-                        _,
-                        BlockMethod::GetStateForPlacement
-                    ))
-                ));
+                    Ok(Some(Block::OAK_LOG.default_state()))
+                );
                 actual
             } else {
                 level

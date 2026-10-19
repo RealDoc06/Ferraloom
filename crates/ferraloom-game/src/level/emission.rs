@@ -1,6 +1,8 @@
 //! Server sound and particle audiences are selected at the originating call.
 use super::{Level, LevelError, effects::LevelEffect};
 use crate::entity::{EntityData, EntityRef, EntityState};
+#[cfg(test)]
+use crate::level::game_event::test_support::{self as game_events, Observation};
 use ferraloom_data::{
     BlockState,
     registries::{game_event::Id as GameEvent, sound_event::Id as SoundEvent},
@@ -285,21 +287,24 @@ impl Level {
         });
         Ok(count)
     }
-    /// Ordered pending GameEventDispatcher#post hook until vibration dispatch
-    /// is implemented. Context is captured, never inferred during later drain.
+    /// Port of ServerLevel#gameEvent. Listener callbacks and failures are
+    /// synchronous at the emission call, before the producer resumes.
     pub fn game_event(
         &mut self,
         event: GameEvent,
         position: Vec3,
         source: Option<EntityRef>,
         affected_state: Option<BlockState>,
-    ) {
-        self.emit(LevelEffect::GameEvent {
+    ) -> Result<(), LevelError> {
+        super::game_event::GameEventDispatcher::post(
+            self,
             event,
             position,
-            source,
-            affected_state,
-        });
+            super::game_event::GameEventContext {
+                source_entity: source,
+                affected_state,
+            },
+        )
     }
 }
 
@@ -422,7 +427,21 @@ mod tests {
     }
     #[test]
     fn emission_captures_audience_before_movement_and_keeps_server_noops_distinct() {
+        use crate::level::chunk::LevelChunk;
+        use ferraloom_chunk::{BiomeId, IdMap, LevelChunkSection, Strategy};
+        use ferraloom_util::ChunkPos;
+        use std::sync::Arc;
+
         let mut level = level();
+        let template = LevelChunkSection::new(
+            Strategy::block_states(),
+            Strategy::biomes(Arc::new(IdMap::new(vec![BiomeId(0)]).unwrap())),
+            BiomeId(0),
+        );
+        level
+            .add_chunk(LevelChunk::new(ChunkPos::ZERO, -1..1, template))
+            .unwrap();
+        game_events::observe(&mut level);
         let a = player(&mut level, 1, Vec3::new(15.999, 0.0, 0.0));
         let b = player(&mut level, 2, Vec3::new(16.0, 0.0, 0.0));
         let except = player(&mut level, 3, Vec3::new(2.0, 0.0, 0.0));
@@ -452,11 +471,13 @@ mod tests {
         assert_eq!(audience, vec![b, except]);
         assert_eq!(packet.seed, 7);
         level.add_particle(Particle::Bubble, Vec3::ZERO, Vec3::ZERO);
-        assert!(level.take_effects().is_empty());
+        assert!(game_events::take(&mut level).is_empty());
         let state = Some(ferraloom_data::Block::STONE.default_state());
-        level.game_event(GameEvent::STEP, Vec3::ZERO, Some(except), state);
+        level
+            .game_event(GameEvent::STEP, Vec3::ZERO, Some(except), state)
+            .unwrap();
         assert!(
-            matches!(level.take_effects().as_slice(),[LevelEffect::GameEvent {event:GameEvent::STEP,source:Some(id),affected_state,..}] if *id==except && *affected_state==state)
+            matches!(game_events::take(&mut level).as_slice(),[Observation::GameEvent {event:GameEvent::STEP,source:Some(id),affected_state,..}] if *id==except && *affected_state==state)
         );
     }
 }

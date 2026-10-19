@@ -243,11 +243,17 @@ pub fn spread_to_face(
                     *level,
                     [spread.pos.x, spread.pos.y, spread.pos.z],
                 )
-                .map_err(|_| LevelError::WorldgenMutationFailed(spread.pos))?
+                .map_err(|source| LevelError::WorldgenMutationFailed {
+                    pos: spread.pos,
+                    source,
+                })?
             }
             LevelAccessRef::Worldgen(region) => region
                 .mark_post_processing([spread.pos.x, spread.pos.y, spread.pos.z])
-                .map_err(|_| LevelError::WorldgenMutationFailed(spread.pos))?,
+                .map_err(|source| LevelError::WorldgenMutationFailed {
+                    pos: spread.pos,
+                    source,
+                })?,
         }
     }
     level.set_block(spread.pos, next, UpdateFlags::CLIENTS)

@@ -1,4 +1,6 @@
 //! Port of net.minecraft.server.permissions.
+mod operators;
+pub use operators::{ServerOpList, ServerOpListEntry};
 use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -40,6 +42,7 @@ pub enum Permission {
     Atom(String),
 }
 impl Permission {
+    pub const COMMANDS_GAMEMASTER: Self = Self::HasCommandLevel(PermissionLevel::Gamemasters);
     pub const ENTITY_SELECTORS: &'static str = "minecraft:commands/entity_selectors";
 }
 /// Port of PermissionSet, LevelBasedPermissionSet and PermissionSetUnion.

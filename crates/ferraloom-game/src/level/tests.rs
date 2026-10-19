@@ -1230,12 +1230,16 @@ fn strict_is_default_and_warn_records_each_skipped_call_without_query_fallbacks(
     ));
     let missing = LevelError::MissingChunk(ChunkPos::new(20, 20));
     assert_eq!(
-        level.optional_call(state.block(), BlockMethod::Tick, |_| Err::<(), _>(missing)),
+        level.optional_call(state.block(), BlockMethod::Tick, |_| Err::<(), _>(
+            missing.clone()
+        )),
         Err(missing)
     );
     let required = LevelError::UnsupportedBlockMethod(state.block(), BlockMethod::CanSurvive);
     assert_eq!(
-        level.optional_call(state.block(), BlockMethod::Tick, |_| Err::<(), _>(required)),
+        level.optional_call(state.block(), BlockMethod::Tick, |_| Err::<(), _>(
+            required.clone()
+        )),
         Err(required)
     );
     assert_eq!(level.unported_behavior_stats().skipped_calls, 3);
@@ -2124,8 +2128,8 @@ fn snow_accumulation_wraps_unsupported_survival_without_inventing_a_query_result
         Block::SNOW,
         BlockMethod::CanSurvive,
     ));
-    assert_eq!(level.should_snow(&biome, p), unsupported);
-    assert_eq!(level.tick_precipitation(p), unsupported.map(|_| ()));
+    assert_eq!(level.should_snow(&biome, p), unsupported.clone());
+    assert_eq!(level.tick_precipitation(p), unsupported.clone().map(|_| ()));
     level.set_unported_behavior(UnportedBehavior::Warn);
     assert_eq!(level.should_snow(&biome, p), unsupported);
     level.tick_precipitation(p).unwrap();

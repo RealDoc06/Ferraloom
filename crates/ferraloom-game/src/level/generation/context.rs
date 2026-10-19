@@ -11,7 +11,7 @@ use ferraloom_worldgen::{
     environment::{DimensionEnvironment, EnvironmentDefinitions},
     feature::{FeatureLoader, FeatureRegistry},
     generator::{ChunkGenerator, ChunkGeneratorAccess},
-    region::{RegionChunk, WorldGenRegion},
+    region::{ProtoChunkLightEngine, RegionChunk, WorldGenRegion},
     settings::DimensionType,
     structure::{
         Beardifier,
@@ -208,6 +208,27 @@ impl WorldGenContext {
         center: [i32; 2],
         step: &ChunkStep,
     ) -> Result<Vec<(String, String)>, Error> {
+        self.apply_step(chunks, center, step, None)
+    }
+    /// Port of WorldGenContext's shared ThreadedLevelLightEngine for proto
+    /// writes. The caller lends its existing engine and flushes it before any
+    /// affected proto save/FULL transport, including after a partial-write error.
+    pub fn apply_with_light(
+        &self,
+        chunks: &mut [RegionChunk],
+        center: [i32; 2],
+        step: &ChunkStep,
+        engine: &mut dyn ProtoChunkLightEngine,
+    ) -> Result<Vec<(String, String)>, Error> {
+        self.apply_step(chunks, center, step, Some(engine))
+    }
+    fn apply_step(
+        &self,
+        chunks: &mut [RegionChunk],
+        center: [i32; 2],
+        step: &ChunkStep,
+        engine: Option<&mut dyn ProtoChunkLightEngine>,
+    ) -> Result<Vec<(String, String)>, Error> {
         let index = chunks
             .iter()
             .position(|c| c.chunk.position == center)
@@ -318,6 +339,9 @@ impl WorldGenContext {
             }
             ChunkStatusTask::GenerateFeatures => {
                 let mut region = self.region(chunks, center, step)?;
+                if let Some(engine) = engine {
+                    region.set_light_engine(engine);
+                }
                 match self.generator.as_ref() {
                     ChunkGenerator::Debug(debug) => debug.apply_biome_decoration(&mut region)?,
                     _ => self.decoration.apply_biome_decoration(
