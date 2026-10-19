@@ -304,7 +304,7 @@ async fn leather_boots_location(session: &mut Session) -> Result<ObservationLog>
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-#[ignore = "launches disposable servers; requires the native LOCATION tick tail"]
+#[ignore = "launches disposable vanilla/Ferraloom servers"]
 async fn location_awards_leather_boots_on_powder_snow() -> Result<()> {
     ferraloom_parity::run(options(), RunMode::from_env()?, leather_boots_location).await
 }

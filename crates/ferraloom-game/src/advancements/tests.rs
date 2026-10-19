@@ -989,6 +989,76 @@ fn live_fixture(manager: ServerAdvancementManager) -> (crate::level::Level, Enti
 }
 
 #[test]
+fn native_location_tick_tail_checks_interval_after_experience_packet() {
+    use crate::{
+        entity::player::{GameType, ServerPlayer, player_do_tick_with_tick_rate},
+        level::{effects::LevelEffect, tick_rate::TickRateManager},
+    };
+    use ferraloom_protocol::play::clientbound as cb;
+
+    let manager = ServerAdvancementManager::new(holders(&json!([{
+        "id":"test:location_tick", "value":{
+            "criteria":{"location":{"trigger":"location"}},
+            "display":{"icon":{"id":"stone"},"title":"Tail","description":"Native interval"},
+            "rewards":{"experience":1}
+        }
+    }])));
+    let (mut level, player) = live_fixture(manager);
+    // An unloaded spectator skips the parent Player tick, leaving the native
+    // tickCount fixed so the doTick tail can be checked at exact boundaries.
+    let owner = level.entity_mut::<ServerPlayer>(player).unwrap();
+    owner.game_mode = GameType::Spectator;
+    owner.tick_count = 19;
+    player_do_tick_with_tick_rate(player, &mut level, &TickRateManager::default()).unwrap();
+    assert_eq!(
+        level
+            .entity::<ServerPlayer>(player)
+            .unwrap()
+            .total_experience,
+        0
+    );
+    level.take_effects();
+
+    level.entity_mut::<ServerPlayer>(player).unwrap().tick_count = 20;
+    crate::entity::player::give_experience_points(player, 1, &mut level).unwrap();
+    player_do_tick_with_tick_rate(player, &mut level, &TickRateManager::default()).unwrap();
+    let packets: Vec<_> = level
+        .take_effects()
+        .into_iter()
+        .filter_map(|effect| match effect {
+            LevelEffect::PlayerPacket { packet, .. } => Some(*packet),
+            _ => None,
+        })
+        .collect();
+    assert!(
+        matches!(packets.as_slice(), [cb::Packet::SetExperience(experience), cb::Packet::SystemChat(_)] if experience.total_experience.0 == 1)
+    );
+    let owner = level.entity::<ServerPlayer>(player).unwrap();
+    assert_eq!(owner.total_experience, 2);
+    assert!(
+        owner
+            .advancements
+            .get_progress(&id("test:location_tick"))
+            .unwrap()
+            .is_done()
+    );
+
+    // The reward's XP is sent at the next native XP slot, without re-awarding
+    // the completed advancement at the same interval boundary.
+    player_do_tick_with_tick_rate(player, &mut level, &TickRateManager::default()).unwrap();
+    assert_eq!(
+        level
+            .entity::<ServerPlayer>(player)
+            .unwrap()
+            .total_experience,
+        2
+    );
+    assert!(
+        matches!(level.take_effects().as_slice(), [LevelEffect::PlayerPacket { packet, .. }] if matches!(packet.as_ref(), cb::Packet::SetExperience(experience) if experience.total_experience.0 == 2))
+    );
+}
+
+#[test]
 fn live_location_awards_native_leather_boots_predicate_from_canonical_facts() {
     use crate::{
         entity::{EntityData, player::ServerPlayer},

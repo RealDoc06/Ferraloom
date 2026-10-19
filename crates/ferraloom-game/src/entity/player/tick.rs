@@ -91,8 +91,9 @@ pub fn player_do_tick_with_tick_rate(
     sync_health(player, level)?;
     sync_scores(player, level)?;
     super::experience::send_experience_update(player, level)?;
-    // Pending LOCATION here when tickCount % 20 == 0, after the XP packet.
-    // Enable once canonical equipment/stepping and required structure facts land.
+    if level.entity::<EntityData>(player)?.tick_count % 20 == 0 {
+        crate::advancements::criteria::location(level, player)?;
+    }
     Ok(())
 }
 
