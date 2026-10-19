@@ -3,7 +3,10 @@ use crate::{
     block::{PlacementHit, UnportedBehavior},
     entity::player::{GameType, ServerPlayer},
     inventory::StackOperation,
-    level::effects::LevelEffect,
+    level::{
+        effects::LevelEffect,
+        game_event::test_support::{self as game_events, Observation},
+    },
 };
 use ferraloom_data::{Block, BlockState};
 use ferraloom_protocol::{
@@ -69,6 +72,7 @@ fn native_vectors() -> String {
 fn native_block_item_placement_matches_states_context_consumption_effects_and_rng() {
     let text = native_vectors();
     let (mut level, player) = level();
+    game_events::observe(&mut level);
     let pos = BlockPos::new(8, 5, 8);
     let mut calls = [0; 2];
     for line in text
@@ -107,7 +111,7 @@ fn native_block_item_placement_matches_states_context_consumption_effects_and_rn
             .unwrap();
         if plant {
             let support = BlockState::from_id(f[5].parse().unwrap()).unwrap();
-            level.set_block_state(pos.below(), support).unwrap();
+            level.set_block_state(pos.below(1), support).unwrap();
             if occupied != 0 {
                 level.set_block_state(pos, support).unwrap();
             }
@@ -138,7 +142,7 @@ fn native_block_item_placement_matches_states_context_consumption_effects_and_rn
                     if f[5] == "1" { "false" } else { "invalid" }.into(),
                 )])));
         }
-        operation.level.take_effects();
+        game_events::take(operation.level);
         *operation.level.random() = Random::Legacy(LegacyRandomSource::new(1234));
         let result = use_on(receiver, &context(held, face), &mut operation)
             .unwrap()
@@ -174,9 +178,9 @@ fn native_block_item_placement_matches_states_context_consumption_effects_and_rn
             );
         }
         let mut actions = Vec::new();
-        for effect in operation.level.take_effects() {
+        for effect in game_events::take(operation.level) {
             match effect {
-                LevelEffect::PlayerPacket { packet, .. } => {
+                Observation::Effect(LevelEffect::PlayerPacket { packet, .. }) => {
                     if let cb::Packet::Sound(sound) = packet.as_ref() {
                         let Holder::Reference(name) = &sound.sound.0 else {
                             panic!("expected registered sound")
@@ -188,7 +192,7 @@ fn native_block_item_placement_matches_states_context_consumption_effects_and_rn
                         ));
                     }
                 }
-                LevelEffect::GameEvent {
+                Observation::GameEvent {
                     event,
                     affected_state,
                     ..

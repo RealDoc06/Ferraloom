@@ -1,4 +1,5 @@
 use super::*;
+use crate::level::game_event::test_support::{self as game_events, Observation};
 use crate::{item::stack::tests::level, level::effects::LevelEffect};
 use ferraloom_data::{Block, BlockState};
 use ferraloom_protocol::{component::ItemStack, play::clientbound as cb};
@@ -88,6 +89,7 @@ fn native_transformer_providers_preserve_properties_effect_order_and_rng() {
     .read_to_string(&mut vectors)
     .unwrap();
     let (mut level, player) = level();
+    game_events::observe(&mut level);
     let pos = BlockPos::new(8, 5, 8);
     let mut cases = 0;
     for line in vectors.lines() {
@@ -123,7 +125,7 @@ fn native_transformer_providers_preserve_properties_effect_order_and_rng() {
                 inside: false,
             },
         );
-        operation.level.take_effects();
+        game_events::take(operation.level);
         *operation.level.random() = Random::Legacy(LegacyRandomSource::new(1234));
         let result = crate::item::stack::use_on(receiver, &context, &mut operation)
             .unwrap()
@@ -147,28 +149,28 @@ fn native_transformer_providers_preserve_properties_effect_order_and_rng() {
             fields[7].parse::<i32>().unwrap(),
             "{line}"
         );
-        let actions: Vec<_> = operation
-            .level
-            .take_effects()
+        let actions: Vec<_> = game_events::take(operation.level)
             .into_iter()
             .filter_map(|effect| match effect {
-                LevelEffect::PlayerPacket { packet, .. } => match packet.as_ref() {
-                    cb::Packet::Sound(sound) => {
-                        let Holder::Reference(name) = &sound.sound.0 else {
-                            panic!("builtin sound");
-                        };
-                        Some(format!(
-                            "sound:{name}:{}:{}",
-                            sound.volume.to_bits() as i32,
-                            sound.pitch.to_bits() as i32
-                        ))
+                Observation::Effect(LevelEffect::PlayerPacket { packet, .. }) => {
+                    match packet.as_ref() {
+                        cb::Packet::Sound(sound) => {
+                            let Holder::Reference(name) = &sound.sound.0 else {
+                                panic!("builtin sound");
+                            };
+                            Some(format!(
+                                "sound:{name}:{}:{}",
+                                sound.volume.to_bits() as i32,
+                                sound.pitch.to_bits() as i32
+                            ))
+                        }
+                        cb::Packet::LevelEvent(event) => {
+                            Some(format!("level-event:{}:{}", event.event_type, event.data))
+                        }
+                        _ => None,
                     }
-                    cb::Packet::LevelEvent(event) => {
-                        Some(format!("level-event:{}:{}", event.event_type, event.data))
-                    }
-                    _ => None,
-                },
-                LevelEffect::GameEvent {
+                }
+                Observation::GameEvent {
                     event,
                     affected_state,
                     ..
