@@ -5,7 +5,10 @@ use ferraloom_nbt::{CompoundTag, Tag};
 use ferraloom_protocol::component::{ComponentTypeId, DataComponentMap, DataComponentPatch};
 use ferraloom_util::{BlockPos, ChunkPos};
 
+pub mod beehive;
 mod components;
+pub mod spawner;
+mod worldgen;
 use super::containers::{
     chest::{BarrelBlockEntity, ChestBlockEntity, ShulkerBoxBlockEntity},
     crafter::CrafterBlockEntity,
@@ -150,6 +153,8 @@ static THE_END_PORTAL: TheEndPortal = TheEndPortal;
 /// Canonical concrete states. Extend this enum when porting a subclass, never Any.
 #[derive(Clone, Debug)]
 pub enum BlockEntityState {
+    Spawner(Box<spawner::SpawnerBlockEntity>),
+    Beehive(Box<beehive::BeehiveBlockEntity>),
     Sign(Box<super::containers::sign::SignBlockEntity>),
     Furnace(Box<super::containers::furnace::AbstractFurnaceBlockEntity>),
     Dispenser(Box<super::redstone::storage::DispenserBlockEntity>),
@@ -165,6 +170,8 @@ pub enum BlockEntityState {
 impl BlockEntityState {
     pub fn data(&self) -> &BlockEntityData {
         match self {
+            Self::Spawner(entity) => &entity.parent,
+            Self::Beehive(entity) => &entity.parent,
             Self::Sign(entity) => &entity.parent,
             Self::Furnace(entity) => &entity.parent.parent,
             Self::Dispenser(entity) => &entity.parent.parent.parent,
@@ -180,6 +187,8 @@ impl BlockEntityState {
     }
     pub fn data_mut(&mut self) -> &mut BlockEntityData {
         match self {
+            Self::Spawner(entity) => &mut entity.parent,
+            Self::Beehive(entity) => &mut entity.parent,
             Self::Sign(entity) => &mut entity.parent,
             Self::Furnace(entity) => &mut entity.parent.parent,
             Self::Dispenser(entity) => &mut entity.parent.parent.parent,
@@ -195,6 +204,8 @@ impl BlockEntityState {
     }
     pub fn behavior(&self) -> &'static dyn BlockEntity {
         match self {
+            Self::Spawner(_) => &spawner::SPAWNER_ENTITY,
+            Self::Beehive(_) => &beehive::BEEHIVE_ENTITY,
             Self::Sign(_) => &super::containers::sign::SIGN_ENTITY,
             Self::Furnace(_) => &super::containers::furnace::FURNACE_ENTITY,
             Self::Dispenser(_) => &super::redstone::storage::DISPENSER_ENTITY,
@@ -366,6 +377,12 @@ pub fn create(pos: BlockPos, state: BlockState) -> Result<BlockEntityState, Leve
         .ok_or(LevelError::UnsupportedBlockEntity(state.block()))?;
     let data = BlockEntityData::new(kind, pos, state)?;
     match kind {
+        BlockEntityType::MOB_SPAWNER => Ok(BlockEntityState::Spawner(Box::new(
+            spawner::SpawnerBlockEntity::new(data),
+        ))),
+        BlockEntityType::BEEHIVE => Ok(BlockEntityState::Beehive(Box::new(
+            beehive::BeehiveBlockEntity::new(data),
+        ))),
         BlockEntityType::END_PORTAL => Ok(BlockEntityState::EndPortal(data)),
         BlockEntityType::PISTON => Ok(BlockEntityState::MovingPiston(Box::new(
             super::redstone::moving_piston::PistonMovingBlockEntity::new(data),
@@ -438,7 +455,9 @@ pub fn supports(block: Block) -> bool {
     matches!(
         registry::for_block(block),
         Some(
-            BlockEntityType::END_PORTAL
+            BlockEntityType::MOB_SPAWNER
+                | BlockEntityType::BEEHIVE
+                | BlockEntityType::END_PORTAL
                 | BlockEntityType::PISTON
                 | BlockEntityType::DISPENSER
                 | BlockEntityType::DROPPER
@@ -480,6 +499,8 @@ macro_rules! projection {
     };
 }
 projection!(ChestBlockEntity, Chest);
+projection!(spawner::SpawnerBlockEntity, Spawner);
+projection!(beehive::BeehiveBlockEntity, Beehive);
 projection!(BarrelBlockEntity, Barrel);
 projection!(ShulkerBoxBlockEntity, ShulkerBox);
 projection!(CrafterBlockEntity, Crafter);
