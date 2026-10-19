@@ -129,7 +129,7 @@ impl BlockBehavior for Devices {
                 center(pos),
                 Some(context.player),
                 Some(changed),
-            );
+            )?;
             update_daylight_signal(changed, pos, level)?;
             return Ok(InteractionResult::SUCCESS);
         }

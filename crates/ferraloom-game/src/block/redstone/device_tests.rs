@@ -5,7 +5,11 @@ use crate::{
         EntityData, EntityRef, EntityState,
         player::{GameType, ServerPlayer},
     },
-    level::{Level, effects::LevelEffect},
+    level::{
+        Level,
+        effects::LevelEffect,
+        game_event::test_support::{self as game_events, Observation},
+    },
 };
 use ferraloom_data::{BlockState, Item, properties as p};
 use ferraloom_protocol::{
@@ -41,7 +45,8 @@ pub(super) fn level(state: BlockState) -> Level {
         .unwrap();
     level.set_block_state(POS, state).unwrap();
     level.set_random_streams(Random::Legacy(LegacyRandomSource::new(42)), 0);
-    level.take_effects();
+    game_events::observe(&mut level);
+    game_events::take(&mut level);
     level
 }
 fn player(level: &mut Level) {
@@ -56,7 +61,7 @@ fn player(level: &mut Level) {
     level
         .add_entity(PLAYER, EntityState::Player(Box::new(actor)))
         .unwrap();
-    level.take_effects();
+    game_events::take(level);
 }
 fn context(face: Direction) -> UseContext {
     UseContext {
@@ -76,20 +81,22 @@ fn context(face: Direction) -> UseContext {
 fn state(value: &str) -> BlockState {
     BlockState::from_id(value.parse().unwrap()).unwrap()
 }
-fn events(level: &Level, effects: &[LevelEffect]) -> String {
+fn events(level: &Level, effects: &[Observation]) -> String {
     effects
         .iter()
         .filter_map(|effect| match effect {
-            LevelEffect::PlayerPacket { packet, recipients } => match packet.as_ref() {
-                Packet::LevelEvent(event) => Some(format!(
-                    "L:{}:{}:{}",
-                    event.event_type,
-                    event.data,
-                    i32::from(event.event_type == 2001 && recipients.is_empty())
-                )),
-                _ => None,
-            },
-            LevelEffect::GameEvent {
+            Observation::Effect(LevelEffect::PlayerPacket { packet, recipients }) => {
+                match packet.as_ref() {
+                    Packet::LevelEvent(event) => Some(format!(
+                        "L:{}:{}:{}",
+                        event.event_type,
+                        event.data,
+                        i32::from(event.event_type == 2001 && recipients.is_empty())
+                    )),
+                    _ => None,
+                }
+            }
+            Observation::GameEvent {
                 event,
                 source,
                 affected_state,
@@ -140,7 +147,7 @@ fn note_tuning_and_top_instrument_use_match_native() {
         let result = note::NOTE
             .use_without_item(original, POS, &context(Direction::Up), &mut level)
             .unwrap();
-        let effects = level.take_effects();
+        let effects = game_events::take(&mut level);
         let expected: Vec<_> = expected.split('|').collect();
         assert_eq!(result, InteractionResult::SUCCESS, "{name}");
         assert_eq!(
@@ -230,11 +237,11 @@ fn lightning_rod_activation_eight_tick_release_and_removal_match_native() {
                 parts[0],
                 "{name} tick{tick}"
             );
-            let effects = level.take_effects();
+            let effects = game_events::take(&mut level);
             let mutations = effects
                 .iter()
                 .filter_map(|effect| match effect {
-                    LevelEffect::BlockUpdated { pos, new, .. } => {
+                    Observation::Effect(LevelEffect::BlockUpdated { pos, new, .. }) => {
                         Some(format!("{}, {}, {}={}", pos.x, pos.y, pos.z, new.id()))
                     }
                     _ => None,
@@ -281,9 +288,9 @@ fn door_and_head_destroy_follow_native_player_abilities_and_tool_order() {
                 )
                 .unwrap();
         }
-        level.take_effects();
+        game_events::take(&mut level);
         let returned = level.player_will_destroy(original, POS, PLAYER).unwrap();
-        let effects = level.take_effects();
+        let effects = game_events::take(&mut level);
         assert_eq!(
             format!(
                 "{}|{}|{}",
@@ -319,9 +326,9 @@ fn door_and_head_destroy_follow_native_player_abilities_and_tool_order() {
             .unwrap()
         };
         level.set_block_state(pos, base).unwrap();
-        level.take_effects();
+        game_events::take(&mut level);
         let returned = level.player_will_destroy(original, POS, PLAYER).unwrap();
-        let effects = level.take_effects();
+        let effects = game_events::take(&mut level);
         let event_string = events(&level, &effects);
         assert_eq!(
             format!(
@@ -425,7 +432,7 @@ fn detector_rail_native_lifecycle_ignores_non_minecarts_and_clears_stale_power()
                 .set_block_state(POS.relative(direction, 1), Block::STONE.default_state())
                 .unwrap();
         }
-        level.take_effects();
+        game_events::take(&mut level);
         match args[1] {
             "0" => rail::DETECTOR
                 .on_place(original, POS, Block::AIR.default_state(), false, &mut level)
@@ -446,7 +453,7 @@ fn detector_rail_native_lifecycle_ignores_non_minecarts_and_clears_stale_power()
                     .unwrap();
             }
         }
-        let effects = level.take_effects();
+        let effects = game_events::take(&mut level);
         let parts: Vec<_> = expected.split('|').collect();
         assert_eq!(
             level.get_block_state(POS).unwrap().id().to_string(),
@@ -456,7 +463,7 @@ fn detector_rail_native_lifecycle_ignores_non_minecarts_and_clears_stale_power()
         let mutations = effects
             .iter()
             .filter_map(|effect| match effect {
-                LevelEffect::BlockUpdated { pos, new, .. } => {
+                Observation::Effect(LevelEffect::BlockUpdated { pos, new, .. }) => {
                     Some(format!("{}, {}, {}={}", pos.x, pos.y, pos.z, new.id()))
                 }
                 _ => None,
@@ -527,7 +534,7 @@ fn dispenser_dropper_hopper_menus_keep_native_open_before_inspection_stat_and_de
                 .unwrap()
                 .loot_table = Some("minecraft:chests/simple_dungeon".parse().unwrap());
         }
-        level.take_effects();
+        game_events::take(&mut level);
         let result = device::DEVICES
             .use_without_item(state, POS, &context(Direction::Up), &mut level)
             .unwrap();
@@ -554,7 +561,7 @@ fn dispenser_dropper_hopper_menus_keep_native_open_before_inspection_stat_and_de
         if let Some(menu) = actor.menus.container_menu {
             assert_eq!(actor.menus.menu(menu).unwrap().kind, kind, "{name}");
         }
-        let opened=level.take_effects().into_iter().filter(|effect|matches!(effect,LevelEffect::PlayerPacket{packet,..} if matches!(packet.as_ref(),Packet::OpenScreen(_)))).count();
+        let opened=game_events::take(&mut level).into_iter().filter(|effect|matches!(effect,Observation::Effect(LevelEffect::PlayerPacket{packet,..}) if matches!(packet.as_ref(),Packet::OpenScreen(_)))).count();
         assert_eq!(opened, usize::from(accept), "{name}");
     }
 }

@@ -578,7 +578,10 @@ mod tests {
     }
     #[test]
     fn crafter_recipe_assembly_transfer_consumption_and_item_spawn_match_native() {
-        use crate::level::effects::LevelEffect;
+        use crate::level::{
+            effects::LevelEffect,
+            game_event::test_support::{self as game_events, Observation},
+        };
         use ferraloom_protocol::play::clientbound::Packet;
         use ferraloom_util::random::{LegacyRandomSource, Random, RandomSource};
         for (name, expected) in super::super::device_tests::cases("crafter-execute:") {
@@ -633,9 +636,9 @@ mod tests {
                 }
             }
             level.set_random_streams(Random::Legacy(LegacyRandomSource::new(42)), 0);
-            level.take_effects();
+            game_events::take(&mut level);
             CRAFTER.tick(state, POS, &mut level).unwrap();
-            let effects = level.take_effects();
+            let effects = game_events::take(&mut level);
             let stored = if target == 0 {
                 "-".into()
             } else {
@@ -664,12 +667,14 @@ mod tests {
             let gameplay = effects
                 .iter()
                 .filter_map(|effect| match effect {
-                    LevelEffect::PlayerPacket { packet, .. } => match packet.as_ref() {
-                        Packet::LevelEvent(event) => {
-                            Some(format!("L:{}:{}:0", event.event_type, event.data))
+                    Observation::Effect(LevelEffect::PlayerPacket { packet, .. }) => {
+                        match packet.as_ref() {
+                            Packet::LevelEvent(event) => {
+                                Some(format!("L:{}:{}:0", event.event_type, event.data))
+                            }
+                            _ => None,
                         }
-                        _ => None,
-                    },
+                    }
                     _ => None,
                 })
                 .collect::<Vec<_>>()
