@@ -198,7 +198,7 @@ mod tests {
                     player,
                     ItemStack::new(Item::STONE, count, Default::default()),
                     scenario >= 2,
-                    scenario % 2 != 0,
+                    !scenario.is_multiple_of(2),
                     &mut level,
                 )
             })
