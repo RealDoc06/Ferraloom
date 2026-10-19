@@ -306,6 +306,7 @@ impl MinecraftServer {
             .collect();
 
         let game_time = world.level_data.data.get_long_or("Time", 0);
+        let (access, ops) = AccessLists::load(&options.root)?;
         let mut level = ServerLevel::new(
             Region::new(&BEHAVIORS),
             "minecraft:overworld",
@@ -313,7 +314,7 @@ impl MinecraftServer {
         );
         level
             .level
-            .install_shared(Box::new(ferraloom_game::ServerShared { scoreboard }));
+            .install_shared(Box::new(ferraloom_game::ServerShared { scoreboard, ops }));
         level.game_time = game_time;
         level.level.set_command_storage(command_storage.snapshot());
         initialize_live_level(
@@ -387,7 +388,6 @@ impl MinecraftServer {
             properties.int("simulation-distance").clamp(2, 32),
             &mut level.tickets,
         );
-        let access = AccessLists::load(&options.root)?;
         let favicon = std::fs::read(options.root.join("server-icon.png")).ok();
         if let Some(icon) = &favicon {
             ensure!(
@@ -694,6 +694,7 @@ impl MinecraftServer {
                         address.ip(),
                         self.properties.boolean("white-list"),
                         full,
+                        &self.shared().ops,
                     );
                     if reason.is_none() {
                         let duplicates = self
@@ -1026,6 +1027,7 @@ impl MinecraftServer {
                     c.address.ip(),
                     self.properties.boolean("white-list"),
                     self.players.len() >= self.properties.int("max-players").max(0) as usize,
+                    &self.shared().ops,
                 ) {
                     bail!("{reason}");
                 }
@@ -1326,6 +1328,7 @@ impl MinecraftServer {
                 LevelEffect::DestroyParticles { .. } => self.pending_level_hooks.particles += 1,
                 LevelEffect::BlockDestroyed { .. } => self.pending_level_hooks.game_events += 1,
                 LevelEffect::PendingPrecipitation(_) => {}
+                LevelEffect::BroadcastAll(packet) => self.broadcast(*packet),
                 LevelEffect::PlayerPacket { recipients, packet } => {
                     for entity in recipients {
                         for &connection in &self.players {
@@ -1337,7 +1340,6 @@ impl MinecraftServer {
                         }
                     }
                 }
-                LevelEffect::GameEvent { .. } => self.pending_level_hooks.game_events += 1,
                 LevelEffect::PlayerSectionChange { player, section } => {
                     self.level.generation().update_player(player, Some(section));
                 }
@@ -1403,7 +1405,7 @@ impl MinecraftServer {
         let center = player.chunk_position();
         let mode = protocol_game_type(player.game_mode);
         let entity_id = player.network_id;
-        let permission = self.access.permission(player.uuid);
+        let permission = self.shared().ops.permission_level(player.uuid).id();
         self.access.remember(&c.profile)?;
         c.phase = Phase::Play(entity);
         c.push(cb::Packet::Login(cb::Login {
@@ -1565,8 +1567,8 @@ impl MinecraftServer {
                 }),
                 cb::Packet::SetHealth(cb::SetHealth {
                     health: player.parent.health(),
-                    food: VarInt(20),
-                    saturation: 5.,
+                    food: VarInt(player.food_data.food_level()),
+                    saturation: player.food_data.saturation_level(),
                 }),
                 cb::Packet::SetExperience(cb::SetExperience {
                     experience_progress: 0.,
@@ -1747,6 +1749,7 @@ impl MinecraftServer {
                         .any(|c| c < ' ' || c == '§' || c == '\u{7f}'),
                     "multiplayer.disconnect.illegal_characters"
                 );
+                let is_operator = self.shared().ops.contains(self.player(entity)?.uuid);
                 let c = self.connections.get_mut(&connection).unwrap();
                 let last_seen = c
                     .last_seen
@@ -1760,7 +1763,7 @@ impl MinecraftServer {
                             .properties
                             .int("chat-spam-threshold-seconds")
                             .saturating_mul(20)
-                        || self.access.permission(c.profile.id) > 0,
+                        || is_operator,
                     "disconnect.spam"
                 );
                 let message = if let Some(session) = &mut c.session {
@@ -1798,20 +1801,12 @@ impl MinecraftServer {
                 self.execute_command(Some(connection), &p.command).await?
             }
             sb::Packet::ChatCommandSigned(p) => {
+                let source = self.player_command_source(entity).map_err(game_error)?;
                 let c = self.connections.get_mut(&connection).unwrap();
                 let last_seen = c
                     .last_seen
                     .apply(&p.last_seen_messages)
                     .context("multiplayer.disconnect.chat_validation_failed")?;
-                let permission = self.access.permission(c.profile.id);
-                let source = CommandSourceStack::server(
-                    permission,
-                    self.level
-                        .level
-                        .entity::<ServerPlayer>(entity)
-                        .map_err(game_error)?
-                        .position,
-                );
                 let prepared = match self.commands.prepare(&p.command, source.clone()) {
                     Ok(prepared) => prepared,
                     Err(error) => {
@@ -1920,8 +1915,8 @@ impl MinecraftServer {
                     .level
                     .entity_mut::<ServerPlayer>(entity)
                     .map_err(game_error)?;
-                if matches!(player.game_mode, GameType::Creative | GameType::Spectator) {
-                    player.flying = p.is_flying;
+                if player.abilities.mayfly {
+                    player.abilities.flying = p.is_flying;
                 }
             }
             sb::Packet::PingRequest(p) => {
@@ -2840,12 +2835,40 @@ impl MinecraftServer {
                         .with_tickets_mut(|tickets| tickets.add_player_spawn(center, self.tick));
                 }
                 Phase::Play(entity) => {
-                    let player = self
-                        .level
-                        .level
-                        .entity_mut::<ServerPlayer>(entity)
+                    if !self.was_paused {
+                        let player = self
+                            .level
+                            .level
+                            .entity_mut::<ServerPlayer>(entity)
+                            .map_err(game_error)?;
+                        player.reset_position();
+                        player.old_position = player.position;
+                        ferraloom_game::entity::player::player_do_tick_with_tick_rate(
+                            entity,
+                            &mut self.level.level,
+                            &self.tick_rate_manager,
+                        )
                         .map_err(game_error)?;
-                    player.do_tick();
+                        let player = self
+                            .level
+                            .level
+                            .entity::<ServerPlayer>(entity)
+                            .map_err(game_error)?;
+                        let (position, yaw, pitch) = (player.first_good, player.yaw, player.pitch);
+                        ferraloom_game::entity::teleport::abs_snap_to(
+                            entity,
+                            position,
+                            yaw,
+                            pitch,
+                            &mut self.level.level,
+                        )
+                        .map_err(game_error)?;
+                        self.level
+                            .level
+                            .entity_mut::<ServerPlayer>(entity)
+                            .map_err(game_error)?
+                            .finish_connection_tick();
+                    }
                     let idle = self.idle_timeout;
                     if idle > 0
                         && now.duration_since(c.last_action) > Duration::from_secs(idle as u64 * 60)
@@ -2866,6 +2889,8 @@ impl MinecraftServer {
                 cfg::FinishConfiguration {},
             ));
         }
+        self.broadcast_container_changes()?;
+        self.apply_level_effects()?;
         Ok(())
     }
     fn keepalive_reply(&mut self, connection: ConnectionId, key: i64) -> Result<()> {
@@ -3123,11 +3148,18 @@ impl MinecraftServer {
         source: Option<ConnectionId>,
         text: &str,
     ) -> Result<()> {
-        let (permission, position) = if let Some(id) = source {
-            let c = self
+        let mut stack = if let Some(id) = source {
+            let Phase::Play(entity) = self
                 .connections
-                .get_mut(&id)
-                .context("unknown command source")?;
+                .get(&id)
+                .context("unknown command source")?
+                .phase
+            else {
+                bail!("command source not playing");
+            };
+            let stack = self.player_command_source(entity).map_err(game_error)?;
+            let is_operator = self.shared().ops.contains(self.player(entity)?.uuid);
+            let c = self.connections.get_mut(&id).unwrap();
             c.command_spam += 20;
             c.last_action = Instant::now();
             ensure!(
@@ -3136,41 +3168,24 @@ impl MinecraftServer {
                         .properties
                         .int("command-spam-threshold-seconds")
                         .saturating_mul(20)
-                    || self.access.permission(c.profile.id) > 0,
+                    || is_operator,
                 "disconnect.spam"
             );
-            let Phase::Play(entity) = c.phase else {
-                bail!("command source not playing");
-            };
-            (
-                self.access.permission(c.profile.id),
-                self.player(entity)?.position,
-            )
+            stack
         } else {
             let spawn = self.level.generation().with_world(|world| world.spawn);
-            (
+            CommandSourceStack::server(
                 4,
                 Vec3::new(f64::from(spawn.x), f64::from(spawn.y), f64::from(spawn.z)),
             )
         };
-        let mut stack = CommandSourceStack::server(permission, position);
         if let Some(connection) = source {
-            let (phase, signed_argument) = {
-                let c = self.connections.get_mut(&connection).unwrap();
-                (c.phase, c.command_message.take())
-            };
-            if let Phase::Play(entity) = phase {
-                let player = self.player(entity)?;
-                stack = stack
-                    .with_entity(entity)
-                    .with_source(ferraloom_game::commands::source::CommandSource::Player(
-                        entity,
-                    ))
-                    .with_rotation(ferraloom_game::commands::source::Rotation {
-                        pitch: player.pitch,
-                        yaw: player.yaw,
-                    });
-            }
+            let signed_argument = self
+                .connections
+                .get_mut(&connection)
+                .unwrap()
+                .command_message
+                .take();
             if let Some((argument_name, message)) = signed_argument {
                 stack.signing_context.arguments = Arc::from([(
                     argument_name,
@@ -3571,14 +3586,13 @@ fn protocol_game_type(mode: GameType) -> play::GameType {
     }
 }
 fn abilities(player: &ServerPlayer) -> cb::Packet {
-    let privileged = matches!(player.game_mode, GameType::Creative | GameType::Spectator);
     cb::Packet::PlayerAbilities(cb::PlayerAbilities {
-        invulnerable: privileged,
-        is_flying: player.flying,
-        can_fly: privileged,
+        invulnerable: player.abilities.invulnerable,
+        is_flying: player.abilities.flying,
+        can_fly: player.abilities.mayfly,
         instabuild: player.instabuild(),
-        flying_speed: 0.05,
-        walking_speed: 0.1,
+        flying_speed: player.ability_flying_speed(),
+        walking_speed: player.ability_walking_speed(),
     })
 }
 fn player_info(profile: &GameProfile, player: &ServerPlayer) -> PlayerInfoEntry {
@@ -3747,11 +3761,21 @@ mod live_level_tests {
             let mut player =
                 ServerPlayer::new(Uuid::new(1, 2), "abilities".into(), 1, Vec3::ZERO, mode);
             for value in [false, true] {
-                player.instabuild = value;
+                player.abilities.instabuild = value;
+                player.abilities.invulnerable = value;
+                player.abilities.mayfly = !value;
+                player.abilities.flying = value;
+                player.abilities.set_flying_speed(0.125);
+                player.abilities.set_walking_speed(-0.25);
                 let cb::Packet::PlayerAbilities(packet) = abilities(&player) else {
                     unreachable!()
                 };
                 assert_eq!(packet.instabuild, value);
+                assert_eq!(packet.invulnerable, value);
+                assert_eq!(packet.can_fly, !value);
+                assert_eq!(packet.is_flying, value);
+                assert_eq!(packet.flying_speed, 0.125);
+                assert_eq!(packet.walking_speed, -0.25);
             }
         }
     }

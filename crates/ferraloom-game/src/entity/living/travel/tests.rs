@@ -2,13 +2,13 @@ use super::*;
 use crate::entity::{EntityData, player::ServerPlayer};
 use ferraloom_util::Uuid;
 
-fn float(bits: &str) -> f32 {
+pub(super) fn float(bits: &str) -> f32 {
     f32::from_bits(u32::from_str_radix(bits, 16).unwrap())
 }
-fn double(bits: &str) -> f64 {
+pub(super) fn double(bits: &str) -> f64 {
     f64::from_bits(u64::from_str_radix(bits, 16).unwrap())
 }
-fn vector(value: &str) -> Vec3 {
+pub(super) fn vector(value: &str) -> Vec3 {
     let mut parts = value.split(',').map(double);
     Vec3::new(
         parts.next().unwrap(),
@@ -16,7 +16,7 @@ fn vector(value: &str) -> Vec3 {
         parts.next().unwrap(),
     )
 }
-fn bits(value: Vec3) -> String {
+pub(super) fn bits(value: Vec3) -> String {
     format!(
         "{:x},{:x},{:x}",
         value.x.to_bits(),
@@ -24,7 +24,7 @@ fn bits(value: Vec3) -> String {
         value.z.to_bits()
     )
 }
-fn rows(prefix: &str) -> impl Iterator<Item = Vec<&'static str>> {
+pub(super) fn rows(prefix: &str) -> impl Iterator<Item = Vec<&'static str>> {
     include_str!("../../../../tests/java/entity/vectors.tsv")
         .lines()
         .filter(move |line| line.starts_with(prefix))
@@ -98,4 +98,171 @@ fn fluid_falling_adjustment_uses_captured_falling_state_and_live_sprint_flag() {
         count += 1;
     }
     assert_eq!(count, 9);
+}
+
+#[test]
+fn native_climb_movement_clamps_axes_resets_fall_and_only_players_suppress_sliding() {
+    use crate::entity::{EntityState, player::GameType};
+    use ferraloom_data::BlockState;
+    use ferraloom_util::BlockPos;
+
+    let mut checked = 0;
+    for row in rows("travel-climb\t") {
+        let mut level = crate::entity::tests::level(false);
+        level
+            .set_block_state(
+                BlockPos::new(8, 64, 8),
+                BlockState::from_id(row[2].parse().unwrap()).unwrap(),
+            )
+            .unwrap();
+        let id = level.next_entity_ref();
+        let state = if row[1] == "cow" {
+            EntityState::Cow(Box::default())
+        } else {
+            EntityState::Player(Box::new(ServerPlayer::new(
+                Uuid::new(5, 6),
+                "climb".into(),
+                level.next_entity_id(),
+                Vec3::new(8.5, 64.0, 8.5),
+                if row[1] == "spectator" {
+                    GameType::Spectator
+                } else {
+                    GameType::Survival
+                },
+            )))
+        };
+        level.add_entity(id, state).unwrap();
+        level.set_entity_pos(id, Vec3::new(8.5, 64.0, 8.5)).unwrap();
+        let base = level.entity_mut::<EntityData>(id).unwrap();
+        base.set_shared_flag(1, row[3].parse().unwrap());
+        base.fall_distance = 10.5;
+        let behavior = level.entity_behavior(id).unwrap();
+        let actual = handle_on_climbable(behavior, id, vector(row[4]), &mut level).unwrap();
+        assert_eq!(bits(actual), row[5], "{row:?}");
+        assert_eq!(
+            format!(
+                "{:x}",
+                level
+                    .entity::<EntityData>(id)
+                    .unwrap()
+                    .fall_distance
+                    .to_bits()
+            ),
+            row[6],
+            "{row:?}"
+        );
+        checked += 1;
+    }
+    assert_eq!(checked, 36);
+}
+
+#[test]
+fn native_air_travel_matches_collision_positions_flags_effects_and_drag_bits() {
+    use crate::entity::{EntityState, effect::MobEffectInstance, player::GameType, synched_data};
+    use ferraloom_data::BlockState;
+    use ferraloom_nbt::{ListTag, Tag};
+    use ferraloom_protocol::component::{EquipmentSlot, ItemStack, Persistent};
+    use ferraloom_util::BlockPos;
+
+    let mut checked = 0;
+    for row in rows("travel-air\t") {
+        let mut level = crate::entity::tests::level(true);
+        let pos = BlockPos::new(8, 64, 8);
+        level
+            .set_block_state(
+                pos.below(1),
+                BlockState::from_id(row[3].parse().unwrap()).unwrap(),
+            )
+            .unwrap();
+        if row[2] == "11" || row[2] == "12" {
+            level
+                .set_block_state(pos, Block::LADDER.default_state())
+                .unwrap();
+        }
+        let entity = level.next_entity_ref();
+        let mut state = if row[1] == "cow" {
+            EntityState::Cow(Box::default())
+        } else {
+            let mut player = ServerPlayer::new(
+                Uuid::new(3, 4),
+                "air".into(),
+                level.next_entity_id(),
+                vector(row[5]),
+                GameType::Survival,
+            );
+            player.abilities.flying = row[15].parse().unwrap();
+            player.set_ability_flying_speed(float(row[16]));
+            EntityState::Player(Box::new(player))
+        };
+        let living = state.as_living_mut().unwrap();
+        living.set_pos(vector(row[5]));
+        living.velocity = vector(row[6]);
+        living.yaw = float(row[8]);
+        living.on_ground = row[4].parse().unwrap();
+        living
+            .entity_data
+            .set(synched_data::NO_GRAVITY, row[9].parse().unwrap());
+        living.discard_friction = row[10].parse().unwrap();
+        living.speed = float(row[14]);
+        living.set_shared_flag(3, row[17].parse().unwrap());
+        living.jumping = row[18].parse().unwrap();
+        living.was_in_powder_snow = row[19].parse().unwrap();
+        for (attribute, value) in [
+            (Attribute::FRICTION_MODIFIER, double(row[11])),
+            (Attribute::AIR_DRAG_MODIFIER, double(row[12])),
+            (Attribute::GRAVITY, double(row[13])),
+            (Attribute::MOVEMENT_SPEED, 0.17),
+        ] {
+            living
+                .attributes
+                .get_instance(attribute)
+                .unwrap()
+                .set_base_value(value);
+        }
+        if row[20] == "true" {
+            living.equipment.set(
+                EquipmentSlot::Feet,
+                ItemStack::new(ferraloom_data::Item::LEATHER_BOOTS, 1, Default::default()),
+            );
+        }
+        if let Ok(effect) = row[21].parse::<u16>() {
+            // Neither fixture effect has attribute modifiers; load its canonical
+            // state without substituting any part of the travel method.
+            let effect = MobEffectInstance::new(
+                MobEffect::from_protocol_id(effect).unwrap(),
+                100,
+                row[22].parse().unwrap(),
+                false,
+                true,
+                true,
+                None,
+            );
+            let tag = Tag::List(ListTag(vec![effect.to_component().to_nbt().unwrap()]));
+            assert!(living.active_effects.load(Some(&tag)).is_empty());
+        }
+        level.add_entity(entity, state).unwrap();
+        let behavior = level.entity_behavior(entity).unwrap();
+        travel_in_air(behavior, entity, vector(row[7]), &mut level).unwrap();
+        let base = level.entity::<EntityData>(entity).unwrap();
+        assert_eq!(bits(base.position), row[23], "position {row:?}");
+        assert_eq!(bits(base.velocity), row[24], "velocity {row:?}");
+        let flags: String = [
+            base.on_ground,
+            base.horizontal_collision,
+            base.vertical_collision,
+            base.vertical_collision_below,
+            base.minor_horizontal_collision,
+        ]
+        .map(|flag| if flag { '1' } else { '0' })
+        .into_iter()
+        .collect();
+        assert_eq!(flags, row[25], "{row:?}");
+        assert_eq!(
+            format!("{:x}", base.fall_distance.to_bits()),
+            row[26],
+            "{row:?}"
+        );
+        checked += 1;
+    }
+    assert_eq!(checked, 42);
 }

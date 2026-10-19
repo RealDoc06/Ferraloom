@@ -35,6 +35,13 @@ pub struct RedstoneState {
     pub(crate) torch_toggles: std::collections::VecDeque<(ferraloom_util::BlockPos, i64)>,
 }
 
+fn stack_error(error: crate::inventory::MenuError) -> crate::level::LevelError {
+    match error {
+        crate::inventory::MenuError::Level(error) => error,
+        _ => crate::level::LevelError::Inventory("redstone stack receiver"),
+    }
+}
+
 pub(crate) fn ported_behavior(
     block: Block,
     method: BlockMethod,
@@ -357,3 +364,6 @@ pub(super) fn initial_orientation(
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod identity_tests;

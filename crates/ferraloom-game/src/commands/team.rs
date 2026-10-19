@@ -2,21 +2,55 @@
 use super::{
     PreparedCommand,
     exceptions::error,
-    scoreboard::{
-        self, Holder, Result, boolean, c, checked, component, enum_value, list, n, s, success,
-    },
+    scoreboard::{Holder, Result, boolean, c, checked, component, enum_value, list, n, s, success},
 };
 use crate::scoreboard::{CollisionRule, PlayerTeam, ServerScoreboard, TeamColor, Visibility};
 use ferraloom_protocol::chat::{Component, TextColor};
 
+/// Port of TeamCommand's sendSuccess Supplier: membership changes are complete
+/// before a single holder's feedback display name is read.
+pub enum TeamCommandResult {
+    Complete(super::builtins::CommandResult),
+    Join {
+        holder: Box<Holder>,
+        team: Box<Component>,
+    },
+    Leave {
+        holder: Box<Holder>,
+    },
+}
+impl TeamCommandResult {
+    /// Port of CommandResponseTracker#sendFeedback. This phase only reads;
+    /// the adapter has ended its mutable scoreboard borrow before calling it.
+    pub fn resolve_feedback(
+        self,
+        feedback: impl FnOnce(&Holder) -> Result<Component>,
+    ) -> Result<super::builtins::CommandResult> {
+        Ok(match self {
+            Self::Complete(result) => result,
+            Self::Join { holder, team } => success(
+                1,
+                "commands.team.join.success.single",
+                vec![c(feedback(&holder)?), c(*team)],
+                true,
+            ),
+            Self::Leave { holder } => success(
+                1,
+                "commands.team.leave.success.single",
+                vec![c(feedback(&holder)?)],
+                true,
+            ),
+        })
+    }
+}
+/// Fake-holder callers need no entity lookup. Live entity callers use the
+/// two-phase API so feedback observes the completed membership changes.
 pub fn execute(
     board: &mut ServerScoreboard,
     command: &PreparedCommand,
     members: &[Holder],
 ) -> Result<super::builtins::CommandResult> {
-    scoreboard::validate_components(command)?;
     let verb = command.literals[1].as_str();
-    // CommandResponseTracker uses successful operations, not input count, for leave feedback.
     let single = match verb {
         "join" if members.len() == 1 => members.first(),
         "leave" => {
@@ -34,10 +68,20 @@ pub fn execute(
         }
         _ => None,
     };
-    // Only single-entity feedback needs the pending post-mutation entity naming API.
-    if single.is_some_and(|holder| holder.display.is_some()) {
+    if single.is_some_and(|holder| holder.entity.is_some() || holder.display.is_some()) {
         return Err(error("ferraloom.team.entity_feedback.unsupported", &[]));
     }
+    execute_with_feedback(board, command, members)?.resolve_feedback(|holder| Ok(holder.feedback()))
+}
+/// Port of TeamCommand#joinTeam/#leaveTeam: all mutations happen here,
+/// synchronously, before the returned feedback supplier is evaluated. Component
+/// arguments have already passed ComponentArgument resolution in the adapter.
+pub fn execute_with_feedback(
+    board: &mut ServerScoreboard,
+    command: &PreparedCommand,
+    members: &[Holder],
+) -> Result<TeamCommandResult> {
+    let verb = command.literals[1].as_str();
     let name = command.string("team");
     if verb == "list" && name.is_none() {
         let teams: Vec<_> = board
@@ -46,7 +90,7 @@ pub fn execute(
             .map(PlayerTeam::formatted_display_name)
             .collect();
         let count = teams.len();
-        return Ok(if count == 0 {
+        return Ok(TeamCommandResult::Complete(if count == 0 {
             success(0, "commands.team.list.teams.empty", vec![], false)
         } else {
             success(
@@ -55,7 +99,7 @@ pub fn execute(
                 vec![n(count), c(list(teams))],
                 false,
             )
-        });
+        }));
     }
     if verb == "leave" {
         let changed: Vec<_> = members
@@ -63,21 +107,19 @@ pub fn execute(
             .filter(|holder| board.remove_player_from_team(&holder.name))
             .collect();
         return Ok(if changed.len() == 1 {
-            success(
-                1,
-                "commands.team.leave.success.single",
-                vec![c(changed[0].feedback())],
-                true,
-            )
+            TeamCommandResult::Leave {
+                holder: Box::new(changed[0].clone()),
+            }
         } else {
-            success(
+            TeamCommandResult::Complete(success(
                 changed.len() as i32,
                 "commands.team.leave.success.multiple",
                 vec![n(changed.len())],
                 true,
-            )
+            ))
         });
     }
+
     let name = name.unwrap();
     if verb == "add" {
         if board.scoreboard().get_player_team(name).is_some() {
@@ -86,7 +128,7 @@ pub fn execute(
         board.add_player_team(name);
         let display = component(command, "displayName").unwrap_or_else(|| Component::literal(name));
         checked(board.update_team(name, |team| team.display_name = display))?;
-        return Ok(success(
+        return Ok(TeamCommandResult::Complete(success(
             board.scoreboard().teams().count() as i32,
             "commands.team.add.success",
             vec![c(board
@@ -95,7 +137,7 @@ pub fn execute(
                 .unwrap()
                 .formatted_display_name())],
             true,
-        ));
+        )));
     }
     let team = board
         .scoreboard()
@@ -112,7 +154,7 @@ pub fn execute(
                 component.style.color = Some(TextColor::parse("green").unwrap());
                 component
             });
-            Ok(if count == 0 {
+            Ok(TeamCommandResult::Complete(if count == 0 {
                 success(
                     0,
                     "commands.team.list.members.empty",
@@ -126,16 +168,16 @@ pub fn execute(
                     vec![c(formatted), n(count), c(list(members))],
                     false,
                 )
-            })
+            }))
         }
         "remove" => {
             checked(board.remove_player_team(name))?;
-            Ok(success(
+            Ok(TeamCommandResult::Complete(success(
                 board.scoreboard().teams().count() as i32,
                 "commands.team.remove.success",
                 vec![c(formatted)],
                 true,
-            ))
+            )))
         }
         "empty" => {
             let members: Vec<_> = team.members().cloned().collect();
@@ -146,34 +188,32 @@ pub fn execute(
             for member in members {
                 board.remove_player_from_team(&member);
             }
-            Ok(success(
+            Ok(TeamCommandResult::Complete(success(
                 count as i32,
                 "commands.team.empty.success",
                 vec![n(count), c(formatted)],
                 true,
-            ))
+            )))
         }
         "join" => {
             for holder in members {
                 checked(board.add_player_to_team(&holder.name, name))?;
             }
             Ok(if members.len() == 1 {
-                success(
-                    1,
-                    "commands.team.join.success.single",
-                    vec![c(members[0].feedback()), c(formatted)],
-                    true,
-                )
+                TeamCommandResult::Join {
+                    holder: Box::new(members[0].clone()),
+                    team: Box::new(formatted),
+                }
             } else {
-                success(
+                TeamCommandResult::Complete(success(
                     members.len() as i32,
                     "commands.team.join.success.multiple",
                     vec![n(members.len()), c(formatted)],
                     true,
-                )
+                ))
             })
         }
-        "modify" => modify(board, command, name),
+        "modify" => modify(board, command, name).map(TeamCommandResult::Complete),
         _ => unreachable!("native team verb"),
     }
 }
@@ -321,5 +361,5 @@ fn modify(
     if let Some(extra) = extra {
         args.push(extra);
     }
-    Ok(scoreboard::success(0, &key, args, true))
+    Ok(success(0, &key, args, true))
 }

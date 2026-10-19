@@ -133,6 +133,9 @@ pub(super) fn inside_height(level: &LevelReaderRef<'_, '_>, pos: BlockPos) -> bo
         LevelReaderRef::Server(level) => {
             pos.y >= level.min_build_height() && pos.y <= level.max_build_height()
         }
+        LevelReaderRef::PathNavigation(reader) => {
+            pos.y >= reader.min_build_height() && pos.y <= reader.max_build_height()
+        }
         LevelReaderRef::Worldgen(region) => {
             pos.y >= region.min_y() && pos.y < region.min_y() + region.height()
         }
