@@ -93,12 +93,28 @@ fn open_menu_inner(
         menu_type,
         title: provider.display_name(),
     }));
-    emit_menu_packet(player, packet, level);
+    let crafter = menu.kind == MenuKind::Crafter;
+    let bound_crafter = crafter && !refs.is_empty();
     let reference = {
         let menus = &mut level.entity_mut::<ServerPlayer>(player)?.menus;
         menus.register_container_menu(menu)
     };
-    let initial = synchronize_menu(player, reference, MenuSynchronization::Initialize, level);
+    let initial = (|| {
+        // Crafter's constructor refresh/addSlotListener precede OpenScreen and
+        // the later ServerPlayer listener. No synchronizer is installed yet.
+        if crafter {
+            with_menu_callback(player, reference, level, |context| {
+                super::operation::refresh_crafter_result(player, reference, context.level)?;
+                if bound_crafter {
+                    context.menu_mut()?.crafter_listener = true;
+                    broadcast_menu_changes(context)?;
+                }
+                Ok(())
+            })?;
+        }
+        emit_menu_packet(player, packet, level);
+        synchronize_menu(player, reference, MenuSynchronization::Initialize, level)
+    })();
     if let Err(error) = initial {
         level
             .entity_mut::<ServerPlayer>(player)?
@@ -388,12 +404,8 @@ pub fn check_container_menu_still_valid(
 fn check_container_menu_still_valid_inner(player: EntityRef, level: &mut Level) -> Result<()> {
     // Java reads containerMenu again after broadcasting: a synchronous slot
     // callback may have closed or replaced the menu just broadcast.
-    let bound = &level
-        .entity::<ServerPlayer>(player)?
-        .menus
-        .current()
-        .block_entities;
-    let valid = block_menu_still_valid(player, bound, level)?;
+    let menu = level.entity::<ServerPlayer>(player)?.menus.current_ref();
+    let valid = live_menu_still_valid(player, menu, level)?;
     if !valid {
         close_container_live(player, level, true, false)?;
     }

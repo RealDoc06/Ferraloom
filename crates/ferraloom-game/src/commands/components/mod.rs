@@ -1,4 +1,6 @@
 //! Port of ComponentUtils#resolve and ResolutionContext (26.3's updateForEntity).
+mod block_data;
+pub use block_data::block_data;
 mod nbt_text;
 use super::{
     CommandSourceStack,
@@ -24,6 +26,9 @@ pub enum ResolutionError {
     Syntax(CommandSyntaxException),
     Unsupported(UnsupportedContent),
     Storage(super::storage::StorageReadError),
+    EntityData(crate::level::LevelError),
+    BlockData(crate::level::LevelError),
+    Serialization(ferraloom_protocol::Error),
     InvalidContent(String),
 }
 impl fmt::Display for ResolutionError {
@@ -34,6 +39,9 @@ impl fmt::Display for ResolutionError {
                 write!(f, "Component {content:?} resolution is not yet supported")
             }
             Self::Storage(error) => write!(f, "{error}"),
+            Self::EntityData(error) => write!(f, "Required entity read failed: {error:?}"),
+            Self::BlockData(error) => write!(f, "Required block entity read failed: {error:?}"),
+            Self::Serialization(error) => write!(f, "Required NBT serialization failed: {error}"),
             Self::InvalidContent(message) => f.write_str(message),
         }
     }
@@ -43,6 +51,8 @@ impl std::error::Error for ResolutionError {
         match self {
             Self::Syntax(error) => Some(error),
             Self::Storage(error) => Some(error),
+            Self::EntityData(error) | Self::BlockData(error) => Some(error),
+            Self::Serialization(error) => Some(error),
             _ => None,
         }
     }
@@ -54,7 +64,12 @@ impl From<super::storage::StorageReadError> for ResolutionError {
 }
 impl From<CommandSyntaxException> for ResolutionError {
     fn from(error: CommandSyntaxException) -> Self {
-        Self::Syntax(error)
+        let raw = error.raw_message.as_ref() as &dyn std::any::Any;
+        if let Some(required) = raw.downcast_ref::<super::arguments::selectors::EntityReadError>() {
+            Self::EntityData(required.error.clone())
+        } else {
+            Self::Syntax(error)
+        }
     }
 }
 /// Reads occur synchronously at the component's native resolution point.
@@ -214,7 +229,7 @@ fn resolve_contents<R: ComponentResolver>(
             let names = entities
                 .into_iter()
                 .map(|entity| resolver.display_name(entity))
-                .collect::<Vec<_>>();
+                .collect::<Result<Vec<_>, _>>()?;
             format_list(names, &separator)
         }
         Contents::Score { name, objective } => {
@@ -275,7 +290,10 @@ fn resolve_contents<R: ComponentResolver>(
                                     Ok(component) => values.push(component),
                                     Err(
                                         error @ (ResolutionError::Unsupported(_)
-                                        | ResolutionError::Storage(_)),
+                                        | ResolutionError::Storage(_)
+                                        | ResolutionError::EntityData(_)
+                                        | ResolutionError::BlockData(_)
+                                        | ResolutionError::Serialization(_)),
                                     ) => {
                                         return Err(error);
                                     }

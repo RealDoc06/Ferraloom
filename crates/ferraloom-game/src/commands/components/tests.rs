@@ -23,8 +23,8 @@ impl EntityQuery for Backend {
             height: 1.8,
         })
     }
-    fn display_name(&self, _: EntityRef) -> Component {
-        Component::literal("Display Alice")
+    fn display_name(&self, _: EntityRef) -> Result<Component, CommandSyntaxException> {
+        Ok(Component::literal("Display Alice"))
     }
     fn matches(
         &mut self,
@@ -163,4 +163,38 @@ fn missing_live_score_service_remains_explicitly_unsupported() {
         resolve(&mut context, &component, &mut backend),
         Err(ResolutionError::Unsupported(UnsupportedContent::Score))
     ));
+}
+
+#[test]
+fn required_selector_name_failure_retains_the_level_error() {
+    let failure = crate::level::LevelError::MissingEntity(EntityRef(99));
+    let syntax = crate::commands::arguments::selectors::selector_read_error(failure.clone());
+    assert!(
+        matches!(ResolutionError::from(syntax), ResolutionError::EntityData(error) if error == failure)
+    );
+}
+
+#[test]
+fn required_component_reads_retain_owned_level_error_causes() {
+    use std::error::Error;
+
+    let failure = crate::level::LevelError::WorldgenMutationFailed {
+        pos: ferraloom_util::BlockPos::new(1, 2, 3),
+        source: ferraloom_worldgen::Error("required worldgen receiver".into()),
+    };
+    let syntax = crate::commands::arguments::selectors::selector_read_error(failure.clone());
+    for resolution in [
+        ResolutionError::from(syntax),
+        ResolutionError::BlockData(failure.clone()),
+    ] {
+        let source = resolution.source().expect("required Level failure");
+        assert_eq!(
+            source.downcast_ref::<crate::level::LevelError>(),
+            Some(&failure)
+        );
+        assert_eq!(
+            source.source().expect("owned worldgen cause").to_string(),
+            "required worldgen receiver"
+        );
+    }
 }

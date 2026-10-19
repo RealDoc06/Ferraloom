@@ -3,6 +3,13 @@ use super::*;
 use ferraloom_protocol::play::ContainerInput;
 
 pub trait MenuClickContext: MenuTransferContext {
+    fn quick_craft_slot(
+        &mut self,
+        index: usize,
+        picked: Self::Stack,
+        original: Self::Stack,
+        hooks: &mut dyn MenuHooks,
+    ) -> Result<()>;
     fn menu(&self) -> Result<&AbstractContainerMenu>;
     fn menu_mut(&mut self) -> Result<&mut AbstractContainerMenu>;
     fn infinite_materials(&self) -> Result<bool>;
@@ -155,7 +162,7 @@ pub fn quick_move_container_menu_item<C: MenuClickContext>(
         MenuKind::Chest { rows } => usize::from(rows) * 9,
         MenuKind::Hopper => 5,
         MenuKind::ShulkerBox => 27,
-        MenuKind::Dispenser => 9,
+        MenuKind::Dispenser | MenuKind::Crafter => 9,
         _ => return Err(MenuError::Unsupported("retained quick-move menu family")),
     };
     let source = context.slot_stack(index)?;
@@ -165,7 +172,15 @@ pub fn quick_move_container_menu_item<C: MenuClickContext>(
     let source = context.slot_stack(index)?;
     let original = context.stack(source)?;
     let (start, end, backwards) = if index < boundary {
-        (boundary, context.slot_count()?, true)
+        (
+            boundary,
+            if kind == MenuKind::Crafter {
+                45
+            } else {
+                context.slot_count()?
+            },
+            true,
+        )
     } else {
         (0, boundary, false)
     };
@@ -178,7 +193,7 @@ pub fn quick_move_container_menu_item<C: MenuClickContext>(
     } else {
         context.slot_changed(index)?;
     }
-    if kind == MenuKind::Dispenser {
+    if matches!(kind, MenuKind::Dispenser | MenuKind::Crafter) {
         if count(&context.stack(source)?) == count(&original) {
             return Ok(ItemStack::default());
         }
@@ -652,6 +667,27 @@ pub fn pickup_menu_item<C: MenuClickContext>(
 }
 
 impl MenuClickContext for super::transfer::LiveMenuTransfer<'_> {
+    fn quick_craft_slot(
+        &mut self,
+        index: usize,
+        picked: StackRef,
+        original: StackRef,
+        hooks: &mut dyn MenuHooks,
+    ) -> Result<()> {
+        let amount = count(&self.stack(original)?) - count(&self.stack(picked)?);
+        if amount > 0 {
+            if self.slot(index)?.kind == SlotKind::Result(ResultKind::Crafting) {
+                let total = self.menu()?.crafting_remove_count.wrapping_add(amount);
+                self.menu_mut()?.crafting_remove_count = total;
+                check_crafting_take_achievements(self, original, hooks)?;
+            } else if self.slot(index)?.kind == SlotKind::Result(ResultKind::Furnace) {
+                let total = self.menu()?.furnace_remove_count.wrapping_add(amount);
+                self.menu_mut()?.furnace_remove_count = total;
+                self.check_furnace_achievements(index, original, hooks)?;
+            }
+        }
+        Ok(())
+    }
     fn menu(&self) -> Result<&AbstractContainerMenu> {
         self.operation
             .level
@@ -724,15 +760,21 @@ impl MenuClickContext for super::transfer::LiveMenuTransfer<'_> {
         )?;
         Ok(())
     }
-    fn swap_craft(&mut self, index: usize, _: i32) -> Result<()> {
-        if matches!(self.slot(index)?.kind, SlotKind::Result(_)) {
-            return Err(MenuError::Unsupported("live result-slot achievements"));
+    fn swap_craft(&mut self, index: usize, amount: i32) -> Result<()> {
+        if self.slot(index)?.kind == SlotKind::Result(ResultKind::Crafting) {
+            let count = self.menu()?.crafting_remove_count.wrapping_add(amount);
+            self.menu_mut()?.crafting_remove_count = count;
+        } else if matches!(self.slot(index)?.kind, SlotKind::Result(kind) if kind != ResultKind::Furnace)
+        {
+            return Err(MenuError::Unsupported(
+                "live non-crafting result-slot achievements",
+            ));
         }
         Ok(())
     }
-    fn prepare_swap_craft(&self, index: usize, _: &dyn MenuHooks) -> Result<()> {
-        if matches!(self.slot(index)?.kind, SlotKind::Result(_)) {
-            return Err(MenuError::Unsupported("live result-slot achievements"));
+    fn prepare_swap_craft(&self, index: usize, hooks: &dyn MenuHooks) -> Result<()> {
+        if let SlotKind::Result(kind) = self.slot(index)?.kind {
+            hooks.validate_live_result(kind)?;
         }
         Ok(())
     }
@@ -772,6 +814,15 @@ impl MenuClickContext for super::transfer::LiveMenuTransfer<'_> {
         Ok(copy)
     }
     fn quick_move_stack(&mut self, index: usize, hooks: &mut dyn MenuHooks) -> Result<StackRef> {
+        if matches!(self.menu()?.kind, MenuKind::Inventory | MenuKind::Crafting) {
+            return super::quick_move_crafting::quick_move_crafting_menu_item(self, index, hooks);
+        }
+        if matches!(
+            self.menu()?.kind,
+            MenuKind::Furnace | MenuKind::Smoker | MenuKind::BlastFurnace
+        ) {
+            return super::quick_move_furnace::quick_move_furnace_menu_item(self, index, hooks);
+        }
         let copy = quick_move_container_menu_item(self, index, hooks)?;
         self.operation.own(self.player, copy)
     }
@@ -780,9 +831,9 @@ impl MenuClickContext for super::transfer::LiveMenuTransfer<'_> {
         index: usize,
         stack: StackRef,
         previous: Option<StackRef>,
-        _: &mut dyn MenuHooks,
+        hooks: &mut dyn MenuHooks,
     ) -> Result<()> {
-        self.set_by_player_value(index, StackValue::Existing(stack), previous)
+        self.set_by_player_value(index, StackValue::Existing(stack), previous, hooks)
     }
     fn may_pickup(&mut self, index: usize, hooks: &dyn MenuHooks) -> Result<bool> {
         let slot = self.slot(index)?;
@@ -803,23 +854,65 @@ impl MenuClickContext for super::transfer::LiveMenuTransfer<'_> {
         &mut self,
         index: usize,
         amount: i32,
-        _: &mut dyn MenuHooks,
+        hooks: &mut dyn MenuHooks,
     ) -> Result<StackRef> {
         let (slot, address) = self.validate_storage_mutation(index)?;
-        if matches!(slot.kind, SlotKind::Result(_)) {
-            return Err(MenuError::Unsupported("live result-slot achievements"));
+        if let SlotKind::Result(kind) = slot.kind {
+            hooks.validate_live_result(kind)?;
+            if !matches!(kind, ResultKind::Crafting | ResultKind::Furnace) {
+                return Err(MenuError::Unsupported(
+                    "live non-crafting result-slot achievements",
+                ));
+            }
+            let current = self.slot_stack(index)?;
+            if !self.operation.level.stack(current)?.is_empty() {
+                let current = self.slot_stack(index)?;
+                let taken = amount.min(count(self.operation.level.stack(current)?));
+                if kind == ResultKind::Crafting {
+                    let total = self.menu()?.crafting_remove_count.wrapping_add(taken);
+                    self.menu_mut()?.crafting_remove_count = total;
+                } else {
+                    let total = self.menu()?.furnace_remove_count.wrapping_add(taken);
+                    self.menu_mut()?.furnace_remove_count = total;
+                }
+            }
+            if kind == ResultKind::Crafting {
+                let result = self.operation.pin(address)?;
+                self.operation
+                    .level
+                    .replace_stack_object(address, StackValue::New(ItemStack::default()))?;
+                return Ok(result);
+            }
         }
         let removed = self.context().remove_item(address, amount)?;
-        self.operation.own(self.player, removed)
+        let changed = !removed.is_empty();
+        let removed = self.operation.own(self.player, removed)?;
+        if changed
+            && slot.container == ContainerId::Local(0)
+            && self.menu()?.crafting_grid_size().is_some()
+        {
+            hooks.live_grid_changed(self.player, self.menu, self.operation.level)?;
+        }
+        Ok(removed)
     }
-    fn take_slot_stack(&mut self, index: usize, _: StackRef, _: &mut dyn MenuHooks) -> Result<()> {
+    fn take_slot_stack(
+        &mut self,
+        index: usize,
+        stack: StackRef,
+        hooks: &mut dyn MenuHooks,
+    ) -> Result<()> {
         let slot = self.slot(index)?;
+        if slot.kind == SlotKind::Result(ResultKind::Crafting) {
+            return take_crafting_result_stack(self, stack, hooks);
+        }
+        if slot.kind == SlotKind::Result(ResultKind::Furnace) {
+            self.check_furnace_achievements(index, stack, hooks)?;
+            return self.slot_changed(index);
+        }
         if matches!(slot.kind, SlotKind::Result(_)) {
             return Err(MenuError::Unsupported("live result-slot achievements"));
         }
-        let mut context = self.context();
-        let address = context.slot_address(index)?;
-        context.set_changed(address.container)
+        self.slot_changed(index)
     }
 }
 

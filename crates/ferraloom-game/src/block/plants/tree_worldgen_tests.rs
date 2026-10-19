@@ -264,32 +264,30 @@ fn tree_fixtures_use_real_leaf_and_plant_bridge() {
                     expected_entities.keys().collect::<Vec<_>>(),
                     "block entity positions {label}"
                 );
-                let mut materialization_pending = false;
+                let mut materialization_pending = None;
                 for (pos, native) in &expected_entities {
                     let actual = actual_entities[pos];
                     if actual
                         .get_string("id")
                         .is_some_and(|id| id.to_string_lossy() == "DUMMY")
                     {
-                        // Protochunks retain this placeholder until the canonical
-                        // block-entity factory loads it. The ServerLevel oracle
-                        // serializes a real receiver, so this is a prefix match.
-                        assert_eq!(
-                            native.get_string("id").unwrap().to_string_lossy(),
-                            "minecraft:creaking_heart",
-                            "unclassified block-entity dependency {label}"
-                        );
+                        // WorldGenRegion#setBlock leaves this placeholder for every
+                        // block entity until the canonical factory loads it. The
+                        // ServerLevel oracle serializes a real receiver, so this
+                        // is a prefix match.
+                        let id = native.get_string("id").unwrap().to_string_lossy();
+                        assert_ne!(id, "DUMMY", "{label}");
                         for (axis, value) in ["x", "y", "z"].into_iter().zip(pos) {
                             assert_eq!(actual.get_int(axis), Some(*value), "{label}");
                         }
-                        materialization_pending = true;
+                        materialization_pending = Some(id);
                     } else {
                         assert_eq!(actual, native, "block entity NBT {label}");
                     }
                 }
-                if materialization_pending {
+                if let Some(id) = materialization_pending {
                     *pending
-                        .entry("creaking-heart block-entity materialization".into())
+                        .entry(format!("{id} block-entity materialization"))
                         .or_default() += 1;
                     block_entity_prefixes += 1;
                     continue;

@@ -6,10 +6,7 @@ pub use ferraloom_worldgen::region::ChunkStatus;
 #[derive(Debug)]
 pub struct ChunkHolder {
     pub position: ChunkPos,
-    pub status: ChunkStatus,
-    pub request_id: u64,
-    /// A holder may exist for a proto dependency before runtime requests FULL.
-    pub generation_requested: bool,
+    pub generation: super::generation::HolderGeneration,
     /// ChunkMap-assigned incarnation, stable across requests and status changes.
     /// Zero is reserved for standalone holders outside a canonical ChunkMap.
     pub epoch: u64,
@@ -27,12 +24,10 @@ pub struct FullStatusPromotion {
     generation: u64,
 }
 impl ChunkHolder {
-    pub fn new(position: ChunkPos, request_id: u64) -> Self {
+    pub fn new(position: ChunkPos) -> Self {
         Self {
             position,
-            status: ChunkStatus::Empty,
-            request_id,
-            generation_requested: false,
+            generation: Default::default(),
             epoch: 0,
             ticket_level: MAX_LOADED_LEVEL + 1,
             old_ticket_level: MAX_LOADED_LEVEL + 1,
@@ -96,7 +91,7 @@ mod tests {
     use super::*;
     #[test]
     fn full_status_promotion_waits_for_its_current_range_future_and_demotes_immediately() {
-        let mut holder = ChunkHolder::new(ChunkPos::new(0, 0), 0);
+        let mut holder = ChunkHolder::new(ChunkPos::new(0, 0));
         holder.ticket_level = 31;
         assert_eq!(holder.update_full_status(), None);
         let first = holder.pending_full_status().unwrap();

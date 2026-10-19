@@ -19,26 +19,32 @@ pub type Result<T> = std::result::Result<T, CommandSyntaxException>;
 /// Port of ScoreHolder's command-facing name and optional entity display name.
 #[derive(Clone, Debug)]
 pub struct Holder {
+    /// The exact entity captured by ScoreHolderArgument, never reselected for feedback.
+    pub entity: Option<crate::entity::EntityRef>,
     pub name: String,
     pub display: Option<Component>,
 }
 impl Holder {
     pub fn for_name(name: impl Into<String>) -> Self {
         Self {
+            entity: None,
             name: name.into(),
             display: None,
         }
     }
+    /// Port of ScoreHolder#getFeedbackDisplayName for a captured display name.
     pub fn feedback(&self) -> Component {
         self.display.clone().map_or_else(
             || Component::literal(&self.name),
-            |mut display| {
-                display.style.hover_event = Some(HoverEvent::ShowText(Box::new(
-                    Component::literal(&self.name),
-                )));
-                display
-            },
+            |display| self.feedback_with_display(display),
         )
+    }
+    /// Port of ScoreHolder#getFeedbackDisplayName after a live entity-name read.
+    pub fn feedback_with_display(&self, mut display: Component) -> Component {
+        display.style.hover_event = Some(HoverEvent::ShowText(Box::new(Component::literal(
+            &self.name,
+        ))));
+        display
     }
 }
 pub(super) fn success(
@@ -137,55 +143,29 @@ fn number_format(command: &PreparedCommand) -> Option<NumberFormat> {
         None
     }
 }
-/// Explicit Unsupported boundary until the shared ComponentUtils resolver reaches restart.
-/// Hover text and translatable component arguments are resolved by vanilla too.
-pub fn validate_components(command: &PreparedCommand) -> Result<()> {
-    fn validate(component: &Component) -> Result<()> {
-        use ferraloom_protocol::chat::Contents;
-        let kind = match &component.contents {
-            Contents::Score { .. } => Some("score"),
-            Contents::Selector { .. } => Some("selector"),
-            Contents::Nbt { .. } => Some("nbt"),
-            Contents::Object { .. } => Some("object"),
-            Contents::Translatable { args, .. } => {
-                for argument in args {
-                    if let Argument::Component(component) = argument {
-                        validate(component)?;
-                    }
-                }
-                None
-            }
-            _ => None,
-        };
-        if let Some(kind) = kind {
-            return Err(error(
-                "ferraloom.component.unsupported",
-                &[format!("ComponentUtils.updateForEntity: {kind}")],
-            ));
-        }
-        for sibling in &component.extra {
-            validate(sibling)?;
-        }
-        if let Some(HoverEvent::ShowText(hover)) = &component.style.hover_event {
-            validate(hover)?;
-        }
-        Ok(())
-    }
-    for argument in command.arguments.values() {
+/// Port of ComponentArgument#getResolvedComponent. Each argument has its own
+/// ResolutionContext; the source entity supplies vanilla's default score holder.
+pub fn resolve_components(
+    command: &PreparedCommand,
+    resolver: &mut impl super::components::ComponentResolver,
+) -> std::result::Result<PreparedCommand, super::components::ResolutionError> {
+    let mut resolved = command.clone();
+    for argument in resolved.arguments.values_mut() {
         if let ArgumentValue::Component(component) = argument {
-            validate(component)?;
+            let mut context = super::components::ResolutionContext::new(Some(&command.source));
+            *component = super::components::resolve(&mut context, component, resolver)?;
         }
     }
-    Ok(())
+    Ok(resolved)
 }
 /// Port of ScoreboardCommand. targets/sources retain selector/wildcard order and display information.
+/// Component arguments have already passed ComponentArgument resolution in the adapter.
 pub fn execute(
     board: &mut ServerScoreboard,
     command: &PreparedCommand,
     targets: &[Holder],
     sources: &[Holder],
 ) -> Result<CommandResult> {
-    validate_components(command)?;
     if command.literals[1] == "objectives" {
         objectives(board, command)
     } else {

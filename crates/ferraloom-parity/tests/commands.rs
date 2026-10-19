@@ -398,6 +398,33 @@ async fn message_arguments(session: &mut Session) -> Result<ObservationLog> {
         "team message reached a nonmember"
     );
     log.record("team.outsider_messages", 0)?;
+    for (label, text, key) in [
+        (
+            "leave",
+            "team leave @s",
+            "commands.team.leave.success.single",
+        ),
+        (
+            "join",
+            "team join parity @s",
+            "commands.team.join.success.single",
+        ),
+        (
+            "rejoin",
+            "team join parity @s",
+            "commands.team.join.success.single",
+        ),
+        (
+            "leave_again",
+            "team leave @s",
+            "commands.team.leave.success.single",
+        ),
+    ] {
+        log.record(
+            format!("team.single.{label}"),
+            command(session.bot(sender)?, text, key).await?,
+        )?;
+    }
     Ok(log)
 }
 
@@ -459,11 +486,7 @@ async fn spawn_and_return(session: &mut Session) -> Result<ObservationLog> {
 
 command_test!(parity_command_game_rules, game_rules);
 command_test!(parity_command_clocks_and_admin, clocks_and_admin);
-command_test!(
-    parity_command_message_arguments,
-    message_arguments,
-    "pending scoreboard multi-member team join/leave guard fix on restart"
-);
+command_test!(parity_command_message_arguments, message_arguments);
 command_test!(parity_command_spawn_and_return, spawn_and_return);
 
 async fn access_commands(session: &mut Session) -> Result<ObservationLog> {

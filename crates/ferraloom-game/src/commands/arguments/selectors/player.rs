@@ -1,23 +1,11 @@
-use crate::entity::player::ServerPlayer;
-use ferraloom_nbt::CompoundTag;
-use ferraloom_protocol::component::Persistent;
-
-/// Port of EntitySelectorOptions' NBT snapshot of a ServerPlayer. Storage's
-/// DataVersion envelope is absent, while a nonempty selected stack is included.
-pub fn player_nbt(player: &ServerPlayer) -> ferraloom_protocol::Result<CompoundTag> {
-    let mut tag = player.save();
-    tag.remove("DataVersion");
-    let selected = player.inventory.selected_item();
-    if !selected.is_empty() {
-        tag.insert("SelectedItem", selected.to_nbt()?);
-    }
-    Ok(tag)
-}
-
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::entity::player::GameType;
+    use crate::{
+        Behaviors,
+        entity::{EntityRef, EntityState, player::ServerPlayer},
+        level::{Level, LevelContext, Region},
+    };
     use ferraloom_data::Item;
     use ferraloom_nbt::{Tag, compare_nbt};
     use ferraloom_protocol::component::ItemStack;
@@ -30,7 +18,7 @@ mod tests {
         matches: bool,
     }
     #[test]
-    fn selected_stack_and_absent_storage_envelope_match_java_selectors() {
+    fn selected_stack_and_player_metadata_match_java_selectors() {
         let vectors: Vec<Vector> =
             serde_json::from_str(include_str!("../../vanilla/player-nbt-vectors.json")).unwrap();
         for vector in vectors {
@@ -48,7 +36,28 @@ mod tests {
                     Default::default(),
                 ));
             }
-            let actual = Tag::Compound(player_nbt(&player).unwrap());
+            static BEHAVIORS: Behaviors = Behaviors::EMPTY;
+            let mut level = Level::new(Region::new(&BEHAVIORS), LevelContext::fixture(0, 63));
+            let entity = EntityRef(1);
+            level
+                .add_entity(entity, EntityState::Player(Box::new(player)))
+                .unwrap();
+            let actual = Tag::Compound(level.entity_nbt_to_compare(entity).unwrap());
+            let predicate = super::super::SelectorPredicate::Nbt {
+                value: ferraloom_nbt::parse(&vector.pattern).unwrap(),
+                inverted: vector.inverted,
+            };
+            assert_eq!(
+                super::super::live_entity_matches(
+                    &level,
+                    &crate::scoreboard::Scoreboard::default(),
+                    &Default::default(),
+                    entity,
+                    &predicate
+                )
+                .unwrap(),
+                vector.matches
+            );
             let pattern = ferraloom_nbt::parse(&vector.pattern).unwrap();
             assert_eq!(
                 compare_nbt(Some(&pattern), Some(&actual), true) != vector.inverted,

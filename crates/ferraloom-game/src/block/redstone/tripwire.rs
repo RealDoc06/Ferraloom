@@ -73,7 +73,7 @@ fn emit_state(
             f64::from(pos.z) + 0.5,
         );
         level.play_sound(None, center, sound, SoundSource::Blocks, 0.4, pitch)?;
-        level.game_event(event, center, None, None);
+        level.game_event(event, center, None, None)?;
     }
     Ok(())
 }
@@ -277,7 +277,7 @@ impl BlockBehavior for TripWireBlock {
                 ),
                 Some(player),
                 None,
-            );
+            )?;
         }
         crate::block::BASE_BLOCK.player_will_destroy(state, pos, player, level)
     }
@@ -362,7 +362,7 @@ impl BlockBehavior for TripWireHookBlock {
         state: BlockState,
         pos: BlockPos,
         _by: Option<EntityRef>,
-        _stack: &ferraloom_protocol::component::ItemStack,
+        _stack: crate::block::StackView<'_>,
         level: &mut Level,
     ) -> Result<(), LevelError> {
         calculate_state(level, pos, state, false, false, None)

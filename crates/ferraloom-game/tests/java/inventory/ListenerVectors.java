@@ -273,5 +273,6 @@ public final class ListenerVectors {
     quickcraft(registries);
     resultAchievements(registries, 0);
     resultAchievements(registries, 4);
+    CrafterVectors.run(registries);
   }
 }
