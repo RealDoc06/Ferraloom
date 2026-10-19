@@ -1,4 +1,6 @@
 use super::*;
+#[cfg(test)]
+use crate::level::game_event::test_support::{self as game_events, Observation};
 use crate::{
     Behaviors,
     block::{BlockBehavior, BlockMethod, drops::BlockLootContext, entity::create},
@@ -108,6 +110,7 @@ fn destroy_block_drops_removal_contents_and_level_rng_match_real_server_level() 
             _ => unreachable!(),
         };
         let mut level = level(&EMPTY);
+        game_events::observe(&mut level);
         let state = if block == Block::IRON_CHAIN {
             block
                 .default_state()
@@ -140,7 +143,7 @@ fn destroy_block_drops_removal_contents_and_level_rng_match_real_server_level() 
             Random::Legacy(LegacyRandomSource::new(fields[3].parse().unwrap())),
             0,
         );
-        level.take_effects();
+        game_events::take(&mut level);
         let actual = level
             .destroy_block(POS, fields[1].parse().unwrap(), 7)
             .unwrap_or_else(|error| panic!("{name}: {error:?}"));
@@ -174,17 +177,18 @@ fn destroy_block_drops_removal_contents_and_level_rng_match_real_server_level() 
             .filter(|item| item.starts_with("item:"))
             .collect::<Vec<_>>();
         assert_eq!(items, expected_items, "{name}");
-        let effects = level
-            .take_effects()
+        let effects = game_events::take(&mut level)
             .into_iter()
             .filter_map(|effect| match effect {
-                effects::LevelEffect::PlayerPacket { packet, .. } => match *packet {
-                    cb::Packet::LevelEvent(event) => {
-                        Some(format!("event:{}:none:{}", event.event_type, event.data))
+                Observation::Effect(effects::LevelEffect::PlayerPacket { packet, .. }) => {
+                    match *packet {
+                        cb::Packet::LevelEvent(event) => {
+                            Some(format!("event:{}:none:{}", event.event_type, event.data))
+                        }
+                        _ => None,
                     }
-                    _ => None,
-                },
-                effects::LevelEffect::GameEvent {
+                }
+                Observation::GameEvent {
                     event,
                     source,
                     affected_state,
@@ -217,6 +221,7 @@ fn destroy_block_drops_removal_contents_and_level_rng_match_real_server_level() 
 fn destroy_particles_audience_matches_vanilla_and_breaker_is_only_game_event_context() {
     for (name, expected) in vectors().filter(|(name, _)| name.starts_with("audience:")) {
         let mut level = level(&EMPTY);
+        game_events::observe(&mut level);
         let mut players = Vec::new();
         for (index, offset) in [0.0, 63.999, 64.0, -64.0].into_iter().enumerate() {
             let handle = level.next_entity_ref();
@@ -237,7 +242,7 @@ fn destroy_particles_audience_matches_vanilla_and_breaker_is_only_game_event_con
         level
             .set_block_state(POS, Block::STONE.default_state())
             .unwrap();
-        level.take_effects();
+        game_events::take(&mut level);
         match name {
             "audience:destroy" => {
                 level
@@ -268,9 +273,9 @@ fn destroy_particles_audience_matches_vanilla_and_breaker_is_only_game_event_con
             }
         }
         let mut actual = Vec::new();
-        for effect in level.take_effects() {
+        for effect in game_events::take(&mut level) {
             match effect {
-                effects::LevelEffect::PlayerPacket { recipients, packet } => {
+                Observation::Effect(effects::LevelEffect::PlayerPacket { recipients, packet }) => {
                     if let cb::Packet::LevelEvent(event) = *packet {
                         assert!(!event.global_event);
                         for player in recipients {
@@ -282,7 +287,7 @@ fn destroy_particles_audience_matches_vanilla_and_breaker_is_only_game_event_con
                         }
                     }
                 }
-                effects::LevelEffect::GameEvent {
+                Observation::GameEvent {
                     source,
                     affected_state,
                     ..
@@ -321,6 +326,7 @@ fn destroy_block_keeps_original_receiver_and_reads_fluid_after_reentrant_drops()
     static REPLACE: ReplaceDuringDrops = ReplaceDuringDrops;
     static BEHAVIORS: Behaviors = Behaviors::EMPTY.with_block(Block::CHEST, &REPLACE);
     let mut level = level(&BEHAVIORS);
+    game_events::observe(&mut level);
     level
         .set_block_state(POS, Block::CHEST.default_state())
         .unwrap();
@@ -334,10 +340,9 @@ fn destroy_block_keeps_original_receiver_and_reads_fluid_after_reentrant_drops()
     );
     assert_eq!(level.get_block_state(POS).unwrap().block(), Block::WATER);
     assert!(
-        !level
-            .take_effects()
+        !game_events::take(&mut level)
             .iter()
-            .any(|effect| matches!(effect, effects::LevelEffect::GameEvent { .. }))
+            .any(|effect| matches!(effect, Observation::GameEvent { .. }))
     );
 }
 
@@ -366,15 +371,17 @@ fn destroy_block_forwards_update_limit_and_required_drop_errors_in_both_policies
     static BEHAVIORS: Behaviors = Behaviors::EMPTY.with_block(Block::AIR, &SHAPES);
     for limit in [0, 1, 7] {
         let mut level = level(&BEHAVIORS);
+        game_events::observe(&mut level);
         level
             .set_block_state(POS, Block::OAK_PLANKS.default_state())
             .unwrap();
         assert!(level.destroy_block(POS, false, limit).unwrap());
-        let budgets = level
-            .take_effects()
+        let budgets = game_events::take(&mut level)
             .into_iter()
             .filter_map(|effect| match effect {
-                effects::LevelEffect::LevelEvent { id: 999, data, .. } => Some(data),
+                Observation::Effect(effects::LevelEffect::LevelEvent { id: 999, data, .. }) => {
+                    Some(data)
+                }
                 _ => None,
             })
             .collect::<Vec<_>>();
@@ -385,6 +392,7 @@ fn destroy_block_forwards_update_limit_and_required_drop_errors_in_both_policies
         crate::block::UnportedBehavior::Warn,
     ] {
         let mut level = level(&EMPTY);
+        game_events::observe(&mut level);
         level.set_unported_behavior(policy);
         level.rules_mut().block_drops = None;
         level
@@ -399,16 +407,15 @@ fn destroy_block_forwards_update_limit_and_required_drop_errors_in_both_policies
             Block::OAK_PLANKS
         );
         assert_eq!(level.unported_behavior_stats().skipped_calls, 0);
-        let effects = level.take_effects();
-        assert!(
-            effects
-                .iter()
-                .any(|effect| matches!(effect, effects::LevelEffect::PlayerPacket { .. }))
-        );
+        let effects = game_events::take(&mut level);
+        assert!(effects.iter().any(|effect| matches!(
+            effect,
+            Observation::Effect(effects::LevelEffect::PlayerPacket { .. })
+        )));
         assert!(
             !effects
                 .iter()
-                .any(|effect| matches!(effect, effects::LevelEffect::GameEvent { .. }))
+                .any(|effect| matches!(effect, Observation::GameEvent { .. }))
         );
     }
 }

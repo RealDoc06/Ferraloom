@@ -1,6 +1,8 @@
 //! The external-container resolver borrows canonical block entities only for the
 //! pure menu operation. World callbacks run after all these borrows have ended.
 use super::*;
+#[cfg(test)]
+use crate::level::game_event::test_support::{self as game_events, Observation};
 use crate::{
     block::entity::{BlockEntityRef, BlockEntityState},
     entity::{
@@ -323,18 +325,19 @@ mod tests {
         use crate::level::effects::LevelEffect;
         use ferraloom_protocol::play::clientbound as cb;
         let (mut level, player, handle) = setup();
+        game_events::observe(&mut level);
         open(&mut level, player, handle);
-        level.take_effects();
+        game_events::take(&mut level);
         super::super::close_container_live(player, &mut level, true, false).unwrap();
-        let effects = level.take_effects();
+        let effects = game_events::take(&mut level);
         let close = effects.iter().position(|effect| {
-            matches!(effect, LevelEffect::PlayerPacket { recipients, packet }
+            matches!(effect, Observation::Effect(LevelEffect::PlayerPacket { recipients, packet })
                 if recipients == &[player] && matches!(packet.as_ref(), cb::Packet::ContainerClose(_)))
         }).unwrap();
         let callback = effects
             .iter()
             .position(|effect| {
-                matches!(effect, LevelEffect::GameEvent { event, .. }
+                matches!(effect, Observation::GameEvent { event, .. }
                 if *event == ferraloom_data::registries::game_event::Id::CONTAINER_CLOSE)
             })
             .unwrap();

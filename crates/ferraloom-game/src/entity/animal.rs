@@ -69,6 +69,38 @@ impl Cow {
 /// Shared Cow dispatcher for the foundation's Entity/LivingEntity primitives.
 pub struct CowBehavior;
 impl Entity for CowBehavior {
+    fn check_fall_damage(
+        &self,
+        entity: super::EntityRef,
+        dy: f64,
+        on_ground: bool,
+        state: ferraloom_data::BlockState,
+        pos: ferraloom_util::BlockPos,
+        level: &mut crate::level::Level,
+    ) -> Result<(), crate::level::LevelError> {
+        super::living::fall_damage::check_fall_damage(
+            self, entity, dy, on_ground, state, pos, level,
+        )
+    }
+    fn on_changed_block(
+        &self,
+        entity: super::EntityRef,
+        _pos: ferraloom_util::BlockPos,
+        level: &mut crate::level::Level,
+    ) -> Result<(), crate::level::LevelError> {
+        super::living::fall_damage::on_changed_block(entity, level)
+    }
+    fn jump_in_liquid(
+        &self,
+        _entity: super::EntityRef,
+        _level: &mut crate::level::Level,
+    ) -> Result<(), crate::level::LevelError> {
+        // Mob#getNavigation().canFloat() needs the canonical navigation state.
+        Err(crate::level::LevelError::UnsupportedEntityMethod(
+            ferraloom_data::EntityType::COW,
+            super::EntityMethod::JumpInLiquid,
+        ))
+    }
     /// Port of AgeableMob#isBaby; AbstractCow permits baby ages.
     fn is_baby(
         &self,
@@ -223,6 +255,13 @@ impl Entity for CowBehavior {
             ferraloom_data::registries::attribute::Id::GRAVITY,
             level,
         )
+    }
+    fn effective_gravity(
+        &self,
+        entity: super::EntityRef,
+        level: &crate::level::Level,
+    ) -> Result<f64, crate::level::LevelError> {
+        super::living::travel::effective_gravity(self, entity, level)
     }
     fn max_up_step(
         &self,

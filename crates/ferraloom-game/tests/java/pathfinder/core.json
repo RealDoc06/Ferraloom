@@ -454,6 +454,7 @@
     "steps": [
       {
         "op": "peek",
+        "peek": null,
         "state": {
           "heap": [],
           "indices": [
@@ -740,6 +741,7 @@
       },
       {
         "op": "peek",
+        "peek": null,
         "state": {
           "heap": [],
           "indices": [
@@ -1822,6 +1824,7 @@
       },
       {
         "op": "peek",
+        "peek": null,
         "state": {
           "heap": [],
           "indices": [
@@ -2096,7 +2099,8 @@
               "walked": 0,
               "malus": 0,
               "closed": false,
-              "type": 0
+              "type": 0,
+              "from": null
             },
             {
               "pos": [
@@ -2112,7 +2116,8 @@
               "walked": 0,
               "malus": 0,
               "closed": false,
-              "type": 0
+              "type": 0,
+              "from": null
             },
             {
               "pos": [
@@ -2128,7 +2133,8 @@
               "walked": 0,
               "malus": 0,
               "closed": false,
-              "type": 0
+              "type": 0,
+              "from": null
             }
           ],
           "cursor": 0,
@@ -2153,7 +2159,8 @@
               "walked": 0,
               "malus": 0,
               "closed": false,
-              "type": 0
+              "type": 0,
+              "from": null
             },
             {
               "pos": [
@@ -2169,7 +2176,8 @@
               "walked": 0,
               "malus": 0,
               "closed": false,
-              "type": 0
+              "type": 0,
+              "from": null
             },
             {
               "pos": [
@@ -2185,7 +2193,8 @@
               "walked": 0,
               "malus": 0,
               "closed": false,
-              "type": 0
+              "type": 0,
+              "from": null
             }
           ],
           "cursor": 0,
@@ -2214,7 +2223,8 @@
               "walked": 0,
               "malus": 0,
               "closed": false,
-              "type": 0
+              "type": 0,
+              "from": null
             },
             {
               "pos": [
@@ -2230,7 +2240,8 @@
               "walked": 0,
               "malus": 0,
               "closed": false,
-              "type": 0
+              "type": 0,
+              "from": null
             },
             {
               "pos": [
@@ -2246,7 +2257,8 @@
               "walked": 0,
               "malus": 0,
               "closed": false,
-              "type": 0
+              "type": 0,
+              "from": null
             }
           ],
           "cursor": 1,
@@ -2271,7 +2283,8 @@
               "walked": 0,
               "malus": 0,
               "closed": false,
-              "type": 0
+              "type": 0,
+              "from": null
             },
             {
               "pos": [
@@ -2287,7 +2300,8 @@
               "walked": 0,
               "malus": 0,
               "closed": false,
-              "type": 0
+              "type": 0,
+              "from": null
             },
             {
               "pos": [
@@ -2303,7 +2317,8 @@
               "walked": 0,
               "malus": 0,
               "closed": false,
-              "type": 0
+              "type": 0,
+              "from": null
             }
           ],
           "cursor": 0,
@@ -2332,7 +2347,8 @@
               "walked": 0,
               "malus": 0,
               "closed": false,
-              "type": 0
+              "type": 0,
+              "from": null
             },
             {
               "pos": [
@@ -2348,7 +2364,8 @@
               "walked": 0,
               "malus": 0,
               "closed": false,
-              "type": 0
+              "type": 0,
+              "from": null
             },
             {
               "pos": [
@@ -2364,7 +2381,8 @@
               "walked": 0,
               "malus": 0,
               "closed": false,
-              "type": 0
+              "type": 0,
+              "from": null
             }
           ],
           "cursor": 1,
@@ -2389,7 +2407,8 @@
               "walked": 0,
               "malus": 0,
               "closed": false,
-              "type": 0
+              "type": 0,
+              "from": null
             },
             {
               "pos": [
@@ -2405,7 +2424,8 @@
               "walked": 0,
               "malus": 0,
               "closed": false,
-              "type": 0
+              "type": 0,
+              "from": null
             },
             {
               "pos": [
@@ -2421,7 +2441,8 @@
               "walked": 0,
               "malus": 0,
               "closed": false,
-              "type": 0
+              "type": 0,
+              "from": null
             }
           ],
           "cursor": 0,
@@ -2450,7 +2471,8 @@
               "walked": 0,
               "malus": 0,
               "closed": false,
-              "type": 0
+              "type": 0,
+              "from": null
             },
             {
               "pos": [
@@ -2466,7 +2488,8 @@
               "walked": 0,
               "malus": 0,
               "closed": false,
-              "type": 0
+              "type": 0,
+              "from": null
             },
             {
               "pos": [
@@ -2482,7 +2505,8 @@
               "walked": 0,
               "malus": 0,
               "closed": false,
-              "type": 0
+              "type": 0,
+              "from": null
             }
           ],
           "cursor": 1,
@@ -2507,7 +2531,8 @@
               "walked": 0,
               "malus": 0,
               "closed": false,
-              "type": 0
+              "type": 0,
+              "from": null
             },
             {
               "pos": [
@@ -2523,7 +2548,8 @@
               "walked": 0,
               "malus": 0,
               "closed": false,
-              "type": 0
+              "type": 0,
+              "from": null
             },
             {
               "pos": [
@@ -2539,7 +2565,8 @@
               "walked": 0,
               "malus": 0,
               "closed": false,
-              "type": 0
+              "type": 0,
+              "from": null
             }
           ],
           "cursor": 0,
@@ -2568,7 +2595,8 @@
               "walked": 0,
               "malus": 0,
               "closed": false,
-              "type": 0
+              "type": 0,
+              "from": null
             },
             {
               "pos": [
@@ -2584,7 +2612,8 @@
               "walked": 0,
               "malus": 0,
               "closed": false,
-              "type": 0
+              "type": 0,
+              "from": null
             }
           ],
           "cursor": 1,
@@ -2609,7 +2638,8 @@
               "walked": 0,
               "malus": 0,
               "closed": false,
-              "type": 0
+              "type": 0,
+              "from": null
             },
             {
               "pos": [
@@ -2625,7 +2655,8 @@
               "walked": 0,
               "malus": 0,
               "closed": false,
-              "type": 0
+              "type": 0,
+              "from": null
             }
           ],
           "cursor": 0,
@@ -2654,7 +2685,8 @@
               "walked": 0,
               "malus": 0,
               "closed": false,
-              "type": 0
+              "type": 0,
+              "from": null
             },
             {
               "pos": [
@@ -2670,7 +2702,8 @@
               "walked": 0,
               "malus": 0,
               "closed": false,
-              "type": 0
+              "type": 0,
+              "from": null
             }
           ],
           "cursor": 1,
@@ -2695,7 +2728,8 @@
               "walked": 0,
               "malus": 0,
               "closed": false,
-              "type": 0
+              "type": 0,
+              "from": null
             },
             {
               "pos": [
@@ -2711,7 +2745,8 @@
               "walked": 0,
               "malus": 0,
               "closed": false,
-              "type": 0
+              "type": 0,
+              "from": null
             }
           ],
           "cursor": -2,
@@ -2740,7 +2775,8 @@
               "walked": 0,
               "malus": 0,
               "closed": false,
-              "type": 0
+              "type": 0,
+              "from": null
             },
             {
               "pos": [
@@ -2756,7 +2792,8 @@
               "walked": 0,
               "malus": 0,
               "closed": false,
-              "type": 0
+              "type": 0,
+              "from": null
             }
           ],
           "cursor": -2147483648,
@@ -2781,7 +2818,8 @@
               "walked": 0,
               "malus": 0,
               "closed": false,
-              "type": 0
+              "type": 0,
+              "from": null
             },
             {
               "pos": [
@@ -2797,7 +2835,8 @@
               "walked": 0,
               "malus": 0,
               "closed": false,
-              "type": 0
+              "type": 0,
+              "from": null
             }
           ],
           "cursor": -2,
@@ -2894,7 +2933,8 @@
             "walked": 0,
             "malus": 0,
             "closed": false,
-            "type": 0
+            "type": 0,
+            "from": null
           }
         ],
         "cursor": 0,
@@ -2925,7 +2965,8 @@
             "walked": 0,
             "malus": 0,
             "closed": false,
-            "type": 0
+            "type": 0,
+            "from": null
           },
           "best": [
             0,
@@ -2951,7 +2992,8 @@
           "walked": 0,
           "malus": 0,
           "closed": false,
-          "type": 0
+          "type": 0,
+          "from": null
         },
         {
           "pos": [
@@ -2967,7 +3009,8 @@
           "walked": 0,
           "malus": 0,
           "closed": false,
-          "type": 0
+          "type": 0,
+          "from": null
         },
         {
           "pos": [
@@ -2983,7 +3026,8 @@
           "walked": 0,
           "malus": 0,
           "closed": false,
-          "type": 0
+          "type": 0,
+          "from": null
         },
         {
           "pos": [
@@ -2999,7 +3043,8 @@
           "walked": 0,
           "malus": 0,
           "closed": false,
-          "type": 0
+          "type": 0,
+          "from": null
         }
       ]
     }
@@ -3087,7 +3132,8 @@
             "walked": 0,
             "malus": 0,
             "closed": false,
-            "type": 0
+            "type": 0,
+            "from": null
           }
         ],
         "cursor": 0,
@@ -3118,7 +3164,8 @@
             "walked": 0,
             "malus": 0,
             "closed": false,
-            "type": 0
+            "type": 0,
+            "from": null
           },
           "best": [
             0,
@@ -3144,7 +3191,8 @@
           "walked": 0,
           "malus": 0,
           "closed": false,
-          "type": 0
+          "type": 0,
+          "from": null
         },
         {
           "pos": [
@@ -3160,7 +3208,8 @@
           "walked": 0,
           "malus": 0,
           "closed": false,
-          "type": 0
+          "type": 0,
+          "from": null
         },
         {
           "pos": [
@@ -3176,7 +3225,8 @@
           "walked": 0,
           "malus": 0,
           "closed": false,
-          "type": 0
+          "type": 0,
+          "from": null
         },
         {
           "pos": [
@@ -3192,7 +3242,8 @@
           "walked": 0,
           "malus": 0,
           "closed": false,
-          "type": 0
+          "type": 0,
+          "from": null
         }
       ]
     }
@@ -3281,7 +3332,8 @@
             "walked": 0,
             "malus": 0,
             "closed": true,
-            "type": 0
+            "type": 0,
+            "from": null
           },
           {
             "pos": [
@@ -3333,7 +3385,8 @@
             "walked": 0,
             "malus": 0,
             "closed": false,
-            "type": 0
+            "type": 0,
+            "from": null
           },
           "best": [
             1,
@@ -3359,7 +3412,8 @@
           "walked": 0,
           "malus": 0,
           "closed": true,
-          "type": 0
+          "type": 0,
+          "from": null
         },
         {
           "pos": [
@@ -3396,7 +3450,8 @@
           "walked": 0,
           "malus": 0,
           "closed": false,
-          "type": 0
+          "type": 0,
+          "from": null
         },
         {
           "pos": [
@@ -3412,7 +3467,8 @@
           "walked": 0,
           "malus": 0,
           "closed": false,
-          "type": 0
+          "type": 0,
+          "from": null
         }
       ]
     }
@@ -3502,7 +3558,8 @@
             "walked": 0,
             "malus": 0,
             "closed": true,
-            "type": 0
+            "type": 0,
+            "from": null
           },
           {
             "pos": [
@@ -3575,7 +3632,8 @@
             "walked": 0,
             "malus": 0,
             "closed": false,
-            "type": 0
+            "type": 0,
+            "from": null
           },
           "best": [
             2,
@@ -3601,7 +3659,8 @@
           "walked": 0,
           "malus": 0,
           "closed": true,
-          "type": 0
+          "type": 0,
+          "from": null
         },
         {
           "pos": [
@@ -3659,7 +3718,8 @@
           "walked": 0,
           "malus": 0,
           "closed": false,
-          "type": 0
+          "type": 0,
+          "from": null
         }
       ]
     }
@@ -3750,7 +3810,8 @@
             "walked": 0,
             "malus": 0,
             "closed": true,
-            "type": 0
+            "type": 0,
+            "from": null
           },
           {
             "pos": [
@@ -3844,7 +3905,8 @@
             "walked": 0,
             "malus": 0,
             "closed": false,
-            "type": 0
+            "type": 0,
+            "from": null
           },
           "best": [
             3,
@@ -3870,7 +3932,8 @@
           "walked": 0,
           "malus": 0,
           "closed": true,
-          "type": 0
+          "type": 0,
+          "from": null
         },
         {
           "pos": [
@@ -4024,7 +4087,8 @@
             "walked": 0,
             "malus": 0,
             "closed": true,
-            "type": 0
+            "type": 0,
+            "from": null
           },
           {
             "pos": [
@@ -4118,7 +4182,8 @@
             "walked": 0,
             "malus": 0,
             "closed": false,
-            "type": 0
+            "type": 0,
+            "from": null
           },
           "best": [
             3,
@@ -4144,7 +4209,8 @@
           "walked": 0,
           "malus": 0,
           "closed": true,
-          "type": 0
+          "type": 0,
+          "from": null
         },
         {
           "pos": [
@@ -4298,7 +4364,8 @@
             "walked": 0,
             "malus": 0,
             "closed": true,
-            "type": 0
+            "type": 0,
+            "from": null
           },
           {
             "pos": [
@@ -4392,7 +4459,8 @@
             "walked": 0,
             "malus": 0,
             "closed": false,
-            "type": 0
+            "type": 0,
+            "from": null
           },
           "best": [
             3,
@@ -4418,7 +4486,8 @@
           "walked": 0,
           "malus": 0,
           "closed": true,
-          "type": 0
+          "type": 0,
+          "from": null
         },
         {
           "pos": [
@@ -4569,7 +4638,8 @@
             "walked": 0,
             "malus": 0,
             "closed": true,
-            "type": 0
+            "type": 0,
+            "from": null
           }
         ],
         "cursor": 0,
@@ -4600,7 +4670,8 @@
             "walked": 0,
             "malus": 0,
             "closed": false,
-            "type": 0
+            "type": 0,
+            "from": null
           },
           "best": [
             0,
@@ -4626,7 +4697,8 @@
           "walked": 0,
           "malus": 0,
           "closed": true,
-          "type": 0
+          "type": 0,
+          "from": null
         },
         {
           "pos": [
@@ -4642,7 +4714,8 @@
           "walked": 0,
           "malus": 0,
           "closed": false,
-          "type": 0
+          "type": 0,
+          "from": null
         },
         {
           "pos": [
@@ -4658,7 +4731,8 @@
           "walked": 0,
           "malus": 0,
           "closed": false,
-          "type": 0
+          "type": 0,
+          "from": null
         },
         {
           "pos": [
@@ -4674,7 +4748,8 @@
           "walked": 0,
           "malus": 0,
           "closed": false,
-          "type": 0
+          "type": 0,
+          "from": null
         }
       ]
     }
@@ -4763,7 +4838,8 @@
             "walked": 0,
             "malus": 0,
             "closed": true,
-            "type": 0
+            "type": 0,
+            "from": null
           }
         ],
         "cursor": 0,
@@ -4794,7 +4870,8 @@
             "walked": 0,
             "malus": 0,
             "closed": false,
-            "type": 0
+            "type": 0,
+            "from": null
           },
           "best": [
             0,
@@ -4820,7 +4897,8 @@
           "walked": 0,
           "malus": 0,
           "closed": true,
-          "type": 0
+          "type": 0,
+          "from": null
         },
         {
           "pos": [
@@ -4836,7 +4914,8 @@
           "walked": 1065353216,
           "malus": 0,
           "closed": false,
-          "type": 0
+          "type": 0,
+          "from": null
         },
         {
           "pos": [
@@ -4852,7 +4931,8 @@
           "walked": 0,
           "malus": 0,
           "closed": false,
-          "type": 0
+          "type": 0,
+          "from": null
         },
         {
           "pos": [
@@ -4868,7 +4948,8 @@
           "walked": 0,
           "malus": 0,
           "closed": false,
-          "type": 0
+          "type": 0,
+          "from": null
         }
       ]
     }
@@ -4958,7 +5039,8 @@
             "walked": 0,
             "malus": 0,
             "closed": true,
-            "type": 0
+            "type": 0,
+            "from": null
           },
           {
             "pos": [
@@ -5010,7 +5092,8 @@
             "walked": 0,
             "malus": 0,
             "closed": false,
-            "type": 0
+            "type": 0,
+            "from": null
           },
           "best": [
             1,
@@ -5036,7 +5119,8 @@
           "walked": 0,
           "malus": 0,
           "closed": true,
-          "type": 0
+          "type": 0,
+          "from": null
         },
         {
           "pos": [
@@ -5073,7 +5157,8 @@
           "walked": 1073741824,
           "malus": 0,
           "closed": false,
-          "type": 0
+          "type": 0,
+          "from": null
         },
         {
           "pos": [
@@ -5089,7 +5174,8 @@
           "walked": 0,
           "malus": 0,
           "closed": false,
-          "type": 0
+          "type": 0,
+          "from": null
         }
       ]
     }
@@ -5180,7 +5266,8 @@
             "walked": 0,
             "malus": 0,
             "closed": true,
-            "type": 0
+            "type": 0,
+            "from": null
           },
           {
             "pos": [
@@ -5253,7 +5340,8 @@
             "walked": 0,
             "malus": 0,
             "closed": false,
-            "type": 0
+            "type": 0,
+            "from": null
           },
           "best": [
             2,
@@ -5279,7 +5367,8 @@
           "walked": 0,
           "malus": 0,
           "closed": true,
-          "type": 0
+          "type": 0,
+          "from": null
         },
         {
           "pos": [
@@ -5337,7 +5426,8 @@
           "walked": 1077936128,
           "malus": 0,
           "closed": false,
-          "type": 0
+          "type": 0,
+          "from": null
         }
       ]
     }
@@ -5428,7 +5518,8 @@
             "walked": 0,
             "malus": 0,
             "closed": true,
-            "type": 0
+            "type": 0,
+            "from": null
           },
           {
             "pos": [
@@ -5522,7 +5613,8 @@
             "walked": 0,
             "malus": 0,
             "closed": false,
-            "type": 0
+            "type": 0,
+            "from": null
           },
           "best": [
             3,
@@ -5548,7 +5640,8 @@
           "walked": 0,
           "malus": 0,
           "closed": true,
-          "type": 0
+          "type": 0,
+          "from": null
         },
         {
           "pos": [
@@ -5703,7 +5796,8 @@
             "walked": 0,
             "malus": 0,
             "closed": true,
-            "type": 0
+            "type": 0,
+            "from": null
           },
           {
             "pos": [
@@ -5797,7 +5891,8 @@
             "walked": 0,
             "malus": 0,
             "closed": false,
-            "type": 0
+            "type": 0,
+            "from": null
           },
           "best": [
             3,
@@ -5823,7 +5918,8 @@
           "walked": 0,
           "malus": 0,
           "closed": true,
-          "type": 0
+          "type": 0,
+          "from": null
         },
         {
           "pos": [
@@ -5976,7 +6072,8 @@
             "walked": 0,
             "malus": 0,
             "closed": true,
-            "type": 0
+            "type": 0,
+            "from": null
           },
           {
             "pos": [
@@ -6049,7 +6146,8 @@
             "walked": 0,
             "malus": 0,
             "closed": false,
-            "type": 0
+            "type": 0,
+            "from": null
           },
           "best": [
             2,
@@ -6075,7 +6173,8 @@
           "walked": 0,
           "malus": 0,
           "closed": true,
-          "type": 0
+          "type": 0,
+          "from": null
         },
         {
           "pos": [
@@ -6133,7 +6232,8 @@
           "walked": 0,
           "malus": 0,
           "closed": false,
-          "type": 0
+          "type": 0,
+          "from": null
         }
       ]
     }
@@ -6222,7 +6322,8 @@
             "walked": 0,
             "malus": 0,
             "closed": true,
-            "type": 0
+            "type": 0,
+            "from": null
           },
           {
             "pos": [
@@ -6274,7 +6375,8 @@
             "walked": 0,
             "malus": 0,
             "closed": false,
-            "type": 0
+            "type": 0,
+            "from": null
           },
           "best": [
             1,
@@ -6300,7 +6402,8 @@
           "walked": 0,
           "malus": 0,
           "closed": true,
-          "type": 0
+          "type": 0,
+          "from": null
         },
         {
           "pos": [
@@ -6337,7 +6440,8 @@
           "walked": 0,
           "malus": 0,
           "closed": false,
-          "type": 0
+          "type": 0,
+          "from": null
         },
         {
           "pos": [
@@ -6353,7 +6457,8 @@
           "walked": 0,
           "malus": 0,
           "closed": false,
-          "type": 0
+          "type": 0,
+          "from": null
         }
       ]
     }
@@ -6441,7 +6546,8 @@
             "walked": 0,
             "malus": 0,
             "closed": true,
-            "type": 0
+            "type": 0,
+            "from": null
           }
         ],
         "cursor": 0,
@@ -6472,7 +6578,8 @@
             "walked": 0,
             "malus": 0,
             "closed": false,
-            "type": 0
+            "type": 0,
+            "from": null
           },
           "best": [
             0,
@@ -6498,7 +6605,8 @@
           "walked": 0,
           "malus": 0,
           "closed": true,
-          "type": 0
+          "type": 0,
+          "from": null
         },
         {
           "pos": [
@@ -6514,7 +6622,8 @@
           "walked": 0,
           "malus": 0,
           "closed": false,
-          "type": 0
+          "type": 0,
+          "from": null
         },
         {
           "pos": [
@@ -6530,7 +6639,8 @@
           "walked": 0,
           "malus": 0,
           "closed": false,
-          "type": 0
+          "type": 0,
+          "from": null
         },
         {
           "pos": [
@@ -6546,7 +6656,8 @@
           "walked": 0,
           "malus": 0,
           "closed": false,
-          "type": 0
+          "type": 0,
+          "from": null
         }
       ]
     }
@@ -6636,7 +6747,8 @@
             "walked": 0,
             "malus": 0,
             "closed": true,
-            "type": 0
+            "type": 0,
+            "from": null
           },
           {
             "pos": [
@@ -6709,7 +6821,8 @@
             "walked": 0,
             "malus": 0,
             "closed": false,
-            "type": 0
+            "type": 0,
+            "from": null
           },
           "best": [
             2,
@@ -6735,7 +6848,8 @@
           "walked": 0,
           "malus": 0,
           "closed": true,
-          "type": 0
+          "type": 0,
+          "from": null
         },
         {
           "pos": [
@@ -6793,7 +6907,8 @@
           "walked": 0,
           "malus": 0,
           "closed": false,
-          "type": 0
+          "type": 0,
+          "from": null
         }
       ]
     }
@@ -6863,6 +6978,7 @@
         "prepare",
         "start"
       ],
+      "path": null,
       "nodes": [
         {
           "pos": [
@@ -6878,7 +6994,8 @@
           "walked": 0,
           "malus": 0,
           "closed": false,
-          "type": 0
+          "type": 0,
+          "from": null
         },
         {
           "pos": [
@@ -6894,7 +7011,8 @@
           "walked": 0,
           "malus": 0,
           "closed": false,
-          "type": 0
+          "type": 0,
+          "from": null
         },
         {
           "pos": [
@@ -6910,7 +7028,8 @@
           "walked": 0,
           "malus": 0,
           "closed": false,
-          "type": 0
+          "type": 0,
+          "from": null
         },
         {
           "pos": [
@@ -6926,7 +7045,8 @@
           "walked": 0,
           "malus": 0,
           "closed": false,
-          "type": 0
+          "type": 0,
+          "from": null
         }
       ]
     }
@@ -6995,6 +7115,7 @@
         "neighbors:3,0,0",
         "done"
       ],
+      "path": null,
       "nodes": [
         {
           "pos": [
@@ -7010,7 +7131,8 @@
           "walked": 0,
           "malus": 0,
           "closed": true,
-          "type": 0
+          "type": 0,
+          "from": null
         },
         {
           "pos": [
@@ -7161,7 +7283,8 @@
             "walked": 0,
             "malus": 0,
             "closed": true,
-            "type": 0
+            "type": 0,
+            "from": null
           }
         ],
         "cursor": 0,
@@ -7192,7 +7315,8 @@
             "walked": 0,
             "malus": 0,
             "closed": false,
-            "type": 0
+            "type": 0,
+            "from": null
           },
           "best": [
             0,
@@ -7218,7 +7342,8 @@
           "walked": 0,
           "malus": 0,
           "closed": true,
-          "type": 0
+          "type": 0,
+          "from": null
         },
         {
           "pos": [
@@ -7234,7 +7359,8 @@
           "walked": 0,
           "malus": 0,
           "closed": false,
-          "type": 0
+          "type": 0,
+          "from": null
         },
         {
           "pos": [
@@ -7250,7 +7376,8 @@
           "walked": 0,
           "malus": 0,
           "closed": false,
-          "type": 0
+          "type": 0,
+          "from": null
         },
         {
           "pos": [
@@ -7266,7 +7393,8 @@
           "walked": 0,
           "malus": 0,
           "closed": false,
-          "type": 0
+          "type": 0,
+          "from": null
         }
       ]
     }
@@ -7354,7 +7482,8 @@
             "walked": 0,
             "malus": 0,
             "closed": true,
-            "type": 0
+            "type": 0,
+            "from": null
           },
           {
             "pos": [
@@ -7406,7 +7535,8 @@
             "walked": 0,
             "malus": 0,
             "closed": false,
-            "type": 0
+            "type": 0,
+            "from": null
           },
           "best": [
             1,
@@ -7432,7 +7562,8 @@
           "walked": 0,
           "malus": 0,
           "closed": true,
-          "type": 0
+          "type": 0,
+          "from": null
         },
         {
           "pos": [
@@ -7469,7 +7600,8 @@
           "walked": 0,
           "malus": 0,
           "closed": false,
-          "type": 0
+          "type": 0,
+          "from": null
         },
         {
           "pos": [
@@ -7485,7 +7617,8 @@
           "walked": 0,
           "malus": 0,
           "closed": false,
-          "type": 0
+          "type": 0,
+          "from": null
         }
       ]
     }
@@ -7587,7 +7720,8 @@
             "walked": 0,
             "malus": 0,
             "closed": true,
-            "type": 0
+            "type": 0,
+            "from": null
           },
           {
             "pos": [
@@ -7660,7 +7794,8 @@
             "walked": 0,
             "malus": 0,
             "closed": false,
-            "type": 0
+            "type": 0,
+            "from": null
           },
           "best": [
             2,
@@ -7684,7 +7819,8 @@
             "walked": 0,
             "malus": 0,
             "closed": false,
-            "type": 0
+            "type": 0,
+            "from": null
           },
           "best": [
             0,
@@ -7708,7 +7844,8 @@
             "walked": 0,
             "malus": 0,
             "closed": false,
-            "type": 0
+            "type": 0,
+            "from": null
           },
           "best": [
             0,
@@ -7734,7 +7871,8 @@
           "walked": 0,
           "malus": 0,
           "closed": true,
-          "type": 0
+          "type": 0,
+          "from": null
         },
         {
           "pos": [
@@ -7792,7 +7930,8 @@
           "walked": 0,
           "malus": 0,
           "closed": false,
-          "type": 0
+          "type": 0,
+          "from": null
         }
       ]
     }
@@ -7972,7 +8111,8 @@
             "walked": 0,
             "malus": 0,
             "closed": true,
-            "type": 0
+            "type": 0,
+            "from": null
           },
           {
             "pos": [
@@ -8066,7 +8206,8 @@
             "walked": 0,
             "malus": 0,
             "closed": false,
-            "type": 0
+            "type": 0,
+            "from": null
           },
           "best": [
             2,
@@ -8092,7 +8233,8 @@
           "walked": 0,
           "malus": 0,
           "closed": true,
-          "type": 0
+          "type": 0,
+          "from": null
         },
         {
           "pos": [
@@ -8150,7 +8292,8 @@
           "walked": 0,
           "malus": 0,
           "closed": false,
-          "type": 0
+          "type": 0,
+          "from": null
         },
         {
           "pos": [
@@ -8299,7 +8442,8 @@
             "walked": 0,
             "malus": 0,
             "closed": true,
-            "type": 0
+            "type": 0,
+            "from": null
           },
           {
             "pos": [
@@ -8393,7 +8537,8 @@
             "walked": 0,
             "malus": 0,
             "closed": false,
-            "type": 0
+            "type": 0,
+            "from": null
           },
           "best": [
             2,
@@ -8419,7 +8564,8 @@
           "walked": 0,
           "malus": 0,
           "closed": true,
-          "type": 0
+          "type": 0,
+          "from": null
         },
         {
           "pos": [
@@ -8477,7 +8623,8 @@
           "walked": 0,
           "malus": 0,
           "closed": false,
-          "type": 0
+          "type": 0,
+          "from": null
         },
         {
           "pos": [
@@ -8626,7 +8773,8 @@
             "walked": 0,
             "malus": 0,
             "closed": true,
-            "type": 0
+            "type": 0,
+            "from": null
           },
           {
             "pos": [
@@ -8720,7 +8868,8 @@
             "walked": 0,
             "malus": 0,
             "closed": false,
-            "type": 0
+            "type": 0,
+            "from": null
           },
           "best": [
             2,
@@ -8746,7 +8895,8 @@
           "walked": 0,
           "malus": 0,
           "closed": true,
-          "type": 0
+          "type": 0,
+          "from": null
         },
         {
           "pos": [
@@ -8938,7 +9088,8 @@
             "walked": 0,
             "malus": 0,
             "closed": true,
-            "type": 0
+            "type": 0,
+            "from": null
           },
           {
             "pos": [
@@ -9011,7 +9162,8 @@
             "walked": 0,
             "malus": 0,
             "closed": false,
-            "type": 0
+            "type": 0,
+            "from": null
           },
           "best": [
             2,
@@ -9037,7 +9189,8 @@
           "walked": 0,
           "malus": 0,
           "closed": true,
-          "type": 0
+          "type": 0,
+          "from": null
         },
         {
           "pos": [
@@ -9187,7 +9340,8 @@
             "walked": 0,
             "malus": 0,
             "closed": true,
-            "type": 0
+            "type": 0,
+            "from": null
           },
           {
             "pos": [
@@ -9260,7 +9414,8 @@
             "walked": 0,
             "malus": 0,
             "closed": false,
-            "type": 0
+            "type": 0,
+            "from": null
           },
           "best": [
             2,
@@ -9286,7 +9441,8 @@
           "walked": 0,
           "malus": 0,
           "closed": true,
-          "type": 0
+          "type": 0,
+          "from": null
         },
         {
           "pos": [

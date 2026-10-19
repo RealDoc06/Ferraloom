@@ -319,7 +319,7 @@ impl BlockBehavior for DispenserBlock {
                 effect(level, pos, 1001, 0);
                 if !dropper {
                     let state = level.block_entity_state(handle)?.data().block_state;
-                    level.game_event(GameEvent::BLOCK_ACTIVATE, center(pos), None, Some(state));
+                    level.game_event(GameEvent::BLOCK_ACTIVATE, center(pos), None, Some(state))?;
                 }
                 return Ok(());
             };

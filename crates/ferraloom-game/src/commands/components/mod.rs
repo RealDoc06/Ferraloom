@@ -51,6 +51,7 @@ impl std::error::Error for ResolutionError {
         match self {
             Self::Syntax(error) => Some(error),
             Self::Storage(error) => Some(error),
+            Self::EntityData(error) | Self::BlockData(error) => Some(error),
             Self::Serialization(error) => Some(error),
             _ => None,
         }

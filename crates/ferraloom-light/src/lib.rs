@@ -5,6 +5,9 @@
 //! Before a changed snapshot is submitted, update section emptiness and call
 //! `check_block` for each changed block. Integrate returned arrays in request
 //! order, validating the job's owner epoch and input versions in the caller.
+//! Supply `LightWorld::sky_light_sources` for known canonical chunk buffers;
+//! raw bulk writes intentionally leave those buffers stale. The section-derived
+//! source cache remains only for existing live callers without that snapshot.
 //! The crate never owns live chunks, threads, IO, or scheduler state.
 
 mod data_layer;

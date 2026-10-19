@@ -9,6 +9,7 @@ CLASSES="$CACHE/tools/extractor-classes"
 mkdir -p "$CLASSES" "$ROOT/data/generated"
 "$JAVAC" --release 25 -cp "$CP" -d "$CLASSES" "$ROOT/tools/extractor/ExtractData.java" "$ROOT/tools/extractor/ExtractTagKeys.java" "$ROOT/tools/extractor/ExtractBlockMethods.java" "$ROOT/tools/extractor/ExtractBlockEntityTypes.java" "$ROOT/tools/extractor/ExtractRedstoneProperties.java" "$ROOT/tools/extractor/ExtractDispenserProperties.java" "$ROOT/tools/extractor/ExtractNoteProperties.java"
 "$JAVAC" --release 25 -cp "$CP" -d "$CLASSES" "$ROOT/tools/extractor/ExtractFeatureRequirements.java"
+"$JAVAC" --release 25 -cp "$CP" -d "$CLASSES" "$ROOT/tools/extractor/ExtractBuildingProperties.java"
 # Keep bootstrap logs and incidental files in the shared cache.
 cd "$VANILLA"
 "$JAVA" -Xmx2G -cp "$CLASSES:$CP" ExtractData "$ROOT/data/generated"
@@ -23,3 +24,4 @@ done
 "$JAVA" -Xmx512M -cp "$CLASSES:$CP" ExtractDispenserProperties "$ROOT/data/generated/dispenser_properties.json"
 "$JAVA" -Xmx512M -cp "$CLASSES:$CP" ExtractNoteProperties "$ROOT/data/generated/note_properties.json"
 "$JAVA" -Xmx512M -cp "$CLASSES:$CP" ExtractFeatureRequirements "$ROOT/data/generated/feature_requirements.json"
+"$JAVA" -Xmx512M -cp "$CLASSES:$CP" ExtractBuildingProperties "$ROOT/data/generated/building_properties.json"

@@ -143,6 +143,7 @@ impl LevelReaderRef<'_, '_> {
     pub(super) fn wire_signals_enabled(&self) -> bool {
         match self {
             Self::Server(level) => !level.region().redstone.wire_signals_suppressed,
+            Self::PathNavigation(reader) => reader.wire_signals_enabled(),
             Self::Worldgen(_) => true,
         }
     }

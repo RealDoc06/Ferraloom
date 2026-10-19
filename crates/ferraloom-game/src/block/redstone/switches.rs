@@ -57,7 +57,12 @@ fn sound(
         pitch,
     )
 }
-fn event(level: &mut Level, pos: BlockPos, on: bool, source: Option<EntityRef>) {
+fn event(
+    level: &mut Level,
+    pos: BlockPos,
+    on: bool,
+    source: Option<EntityRef>,
+) -> Result<(), LevelError> {
     level.game_event(
         if on {
             GameEvent::BLOCK_ACTIVATE
@@ -67,7 +72,7 @@ fn event(level: &mut Level, pos: BlockPos, on: bool, source: Option<EntityRef>) 
         center(pos),
         source,
         None,
-    );
+    )
 }
 fn button_pressed(level: &mut Level, pos: BlockPos, state: BlockState) -> Result<(), LevelError> {
     let facts = state.block().redstone_properties();
@@ -111,7 +116,7 @@ fn button_pressed(level: &mut Level, pos: BlockPos, state: BlockState) -> Result
             1.0,
             1.0,
         )?;
-        event(level, pos, pressed, arrow);
+        event(level, pos, pressed, arrow)?;
     }
     if pressed {
         level.schedule_block_tick_after(pos, state.block(), facts.button_ticks)?;
@@ -187,7 +192,7 @@ fn check_plate(
             1.0,
             1.0,
         )?;
-        event(level, pos, pressed, source);
+        event(level, pos, pressed, source)?;
     }
     if pressed {
         level.schedule_block_tick_after(pos, state.block(), if weighted { 10 } else { 20 })?;
@@ -216,7 +221,7 @@ impl BlockBehavior for Switches {
                 0.3,
                 if on { 0.6 } else { 0.5 },
             )?;
-            event(level, pos, on, None);
+            event(level, pos, on, None)?;
             Ok(InteractionResult::SUCCESS)
         } else {
             if state.get(p::POWERED).unwrap() {
@@ -239,7 +244,7 @@ impl BlockBehavior for Switches {
                 1.0,
                 1.0,
             )?;
-            event(level, pos, true, Some(context.player));
+            event(level, pos, true, Some(context.player))?;
             Ok(InteractionResult::SUCCESS)
         }
     }

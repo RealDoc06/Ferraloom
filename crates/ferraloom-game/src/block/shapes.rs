@@ -28,6 +28,13 @@ impl BlockCollisionContext<'_> {
     pub const fn empty_with_fluid_collisions(always_collide: bool) -> Self {
         Self::Empty(EmptyCollisionContext::new(always_collide))
     }
+    /// Port of CollisionContext#placementContext, including a nullable player.
+    pub fn placement_context(
+        player: Option<crate::entity::EntityRef>,
+        level: &Level,
+    ) -> Result<Self, LevelError> {
+        EntityCollisionView::placement_context(player, level).map(Self::Entity)
+    }
 }
 impl CollisionContext for BlockCollisionContext<'_> {
     type Item = Item;
@@ -123,6 +130,36 @@ impl LevelReaderRef<'_, '_> {
         }
         self.shape_behavior(state, BlockMethod::OutlineShape)?
             .shape(state, pos, self)
+    }
+    /// Port of BlockStateBase#getShape with an explicit CollisionContext.
+    pub fn shape_with_context(
+        &self,
+        state: BlockState,
+        pos: BlockPos,
+        context: &BlockCollisionContext<'_>,
+    ) -> Result<VoxelShape, LevelError> {
+        if let Some(shape) = state.shape() {
+            return Ok(shape.clone());
+        }
+        self.shape_behavior(state, BlockMethod::OutlineShape)?
+            .shape_with_context(state, pos, context, self)
+    }
+    pub fn visual_shape(
+        &self,
+        state: BlockState,
+        pos: BlockPos,
+        context: &BlockCollisionContext<'_>,
+    ) -> Result<VoxelShape, LevelError> {
+        self.shape_behavior(state, BlockMethod::VisualShape)?
+            .visual_shape(state, pos, context, self)
+    }
+    pub fn interaction_shape(
+        &self,
+        state: BlockState,
+        pos: BlockPos,
+    ) -> Result<VoxelShape, LevelError> {
+        self.shape_behavior(state, BlockMethod::InteractionShape)?
+            .interaction_shape(state, pos, self)
     }
     pub fn is_face_sturdy(
         &self,

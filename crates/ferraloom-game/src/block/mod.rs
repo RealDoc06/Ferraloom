@@ -2,6 +2,7 @@
 use crate::level::{Level, LevelError, redstone::Orientation};
 use ferraloom_data::{Block, BlockState, FluidState};
 use ferraloom_util::{BlockPos, Direction};
+pub mod building;
 mod clone_item;
 pub mod containers;
 pub mod dispatch;
@@ -40,6 +41,7 @@ pub enum LevelAccessRef<'call, 'chunks> {
 pub enum LevelReaderRef<'call, 'chunks> {
     Server(&'call Level),
     Worldgen(&'call ferraloom_worldgen::region::WorldGenRegion<'chunks>),
+    PathNavigation(crate::level::path_navigation_region::PathNavigationReader<'call>),
 }
 impl LevelReaderRef<'_, '_> {
     /// Port of BlockStateBase#isPathfindable. Queries remain required even under Warn.
@@ -54,6 +56,7 @@ impl LevelReaderRef<'_, '_> {
     pub fn get_block_state(&self, pos: BlockPos) -> Result<BlockState, LevelError> {
         match self {
             Self::Server(level) => level.get_block_state(pos),
+            Self::PathNavigation(reader) => reader.get_block_state(pos),
             Self::Worldgen(region) => region
                 .block([pos.x, pos.y, pos.z])
                 .map_err(|_| LevelError::MissingChunk(ferraloom_util::ChunkPos::containing(pos))),
@@ -65,6 +68,7 @@ impl LevelReaderRef<'_, '_> {
     {
         match self {
             Self::Server(level) => level.fluid_tags(),
+            Self::PathNavigation(reader) => reader.fluid_tags(),
             Self::Worldgen(region) => region
                 .fluid_tags()
                 .map_err(|_| LevelError::MissingFluidTags),
@@ -73,6 +77,7 @@ impl LevelReaderRef<'_, '_> {
     pub fn block_tags(&self) -> Result<&ferraloom_data::datapack::TagSet<Block>, LevelError> {
         match self {
             Self::Server(level) => level.block_tags(),
+            Self::PathNavigation(reader) => reader.block_tags(),
             Self::Worldgen(region) => region
                 .block_tags()
                 .map_err(|_| LevelError::MissingBlockTags),
@@ -85,8 +90,126 @@ impl LevelReaderRef<'_, '_> {
     ) -> Result<&'static dyn BlockBehavior, LevelError> {
         match self {
             Self::Server(level) => level.required_block_behavior(block, method),
+            Self::PathNavigation(reader) => reader.required_behavior(block, method),
             Self::Worldgen(_) => dispatch::registered_behavior(block, method)
                 .ok_or(LevelError::UnsupportedBlockMethod(block, method)),
+        }
+    }
+
+    pub(crate) fn block_state_for_collisions(
+        &self,
+        pos: BlockPos,
+    ) -> Result<BlockState, LevelError> {
+        match self {
+            Self::PathNavigation(reader) => reader.block_state_for_collisions(pos),
+            _ => self.get_block_state(pos),
+        }
+    }
+    pub fn min_build_height(&self) -> i32 {
+        match self {
+            Self::Server(level) => level.min_build_height(),
+            Self::Worldgen(region) => region.min_y(),
+            Self::PathNavigation(reader) => reader.min_build_height(),
+        }
+    }
+    pub fn height(&self) -> i32 {
+        match self {
+            Self::Server(level) => level.max_build_height() - level.min_build_height() + 1,
+            Self::Worldgen(region) => region.height(),
+            Self::PathNavigation(reader) => reader.height(),
+        }
+    }
+    pub fn block_entity_ref(
+        &self,
+        pos: BlockPos,
+    ) -> Result<Option<entity::BlockEntityRef>, LevelError> {
+        match self {
+            Self::Server(level) => level.block_entity_ref(pos),
+            Self::Worldgen(_) => Err(LevelError::UnsupportedWorldgenEnvironment),
+            Self::PathNavigation(reader) => reader.block_entity_ref(pos),
+        }
+    }
+    pub fn block_entity_state(
+        &self,
+        reference: entity::BlockEntityRef,
+    ) -> Result<&entity::BlockEntityState, LevelError> {
+        match self {
+            Self::Server(level) => level.block_entity_state(reference),
+            Self::Worldgen(_) => Err(LevelError::UnsupportedWorldgenEnvironment),
+            Self::PathNavigation(reader) => reader.block_entity_state(reference),
+        }
+    }
+    pub fn block_entity<T: entity::BlockEntityDataView>(
+        &self,
+        reference: entity::BlockEntityRef,
+    ) -> Result<&T, LevelError> {
+        T::view(self.block_entity_state(reference)?)
+            .ok_or(LevelError::WrongBlockEntityType(reference))
+    }
+    pub(crate) fn entity_state(
+        &self,
+        entity: crate::entity::EntityRef,
+    ) -> Result<&crate::entity::EntityState, LevelError> {
+        match self {
+            Self::Server(level) => level.entity_state(entity),
+            Self::Worldgen(_) => Err(LevelError::UnsupportedWorldgenEnvironment),
+            Self::PathNavigation(reader) => reader.entity_state(entity),
+        }
+    }
+    pub(crate) fn entity_type_tags(
+        &self,
+    ) -> Result<&ferraloom_data::datapack::TagSet<ferraloom_data::EntityType>, LevelError> {
+        match self {
+            Self::Server(level) => level.entity_type_tags(),
+            Self::Worldgen(_) => Err(LevelError::UnsupportedWorldgenEnvironment),
+            Self::PathNavigation(reader) => reader.entity_type_tags(),
+        }
+    }
+    pub(crate) fn collision_context(
+        &self,
+        entity: Option<crate::entity::EntityRef>,
+        liquids: bool,
+    ) -> Result<BlockCollisionContext<'static>, LevelError> {
+        match self {
+            Self::Server(level) => Ok(match entity {
+                Some(entity) => BlockCollisionContext::Entity(
+                    crate::entity::collision_context::EntityCollisionView::capture(
+                        entity, level, liquids,
+                    )?,
+                ),
+                None => BlockCollisionContext::empty_with_fluid_collisions(liquids),
+            }),
+            Self::Worldgen(_) => Err(LevelError::UnsupportedWorldgenEnvironment),
+            Self::PathNavigation(reader) => reader.collision_context(entity, liquids),
+        }
+    }
+    pub(crate) fn piston_noclip(&self) -> Result<Option<Direction>, LevelError> {
+        match self {
+            Self::Server(level) => Ok(level.region().redstone.piston_noclip),
+            Self::Worldgen(_) => Err(LevelError::UnsupportedWorldgenEnvironment),
+            Self::PathNavigation(reader) => reader.piston_noclip(),
+        }
+    }
+    pub fn get_entity_collisions(
+        &self,
+        source: Option<crate::entity::EntityRef>,
+        area: ferraloom_util::Aabb,
+    ) -> Result<Vec<ferraloom_util::VoxelShape>, LevelError> {
+        match self {
+            Self::Server(level) => crate::entity::collision::entity_collisions(level, source, area),
+            Self::Worldgen(_) => Err(LevelError::UnsupportedWorldgenEnvironment),
+            Self::PathNavigation(reader) => reader.get_entity_collisions(source, area),
+        }
+    }
+    pub fn no_collision(
+        &self,
+        source: Option<crate::entity::EntityRef>,
+        area: ferraloom_util::Aabb,
+    ) -> Result<bool, LevelError> {
+        match self {
+            Self::Server(level) => level.no_collision(source, area, false),
+            Self::Worldgen(_) => Err(LevelError::UnsupportedWorldgenEnvironment),
+            Self::PathNavigation(reader) => reader.no_collision(source, area),
         }
     }
 }
@@ -306,7 +429,7 @@ pub trait BlockBehavior: Sync {
             ),
             Some(player),
             Some(state),
-        );
+        )?;
         Ok(state)
     }
     /// Port of Block#getStateForPlacement's inherited implementation.
@@ -466,6 +589,36 @@ pub trait BlockBehavior: Sync {
         _level: &LevelReaderRef<'_, '_>,
     ) -> Result<ferraloom_util::VoxelShape, LevelError> {
         Ok(ferraloom_util::shapes::block())
+    }
+    /// Contextual BlockBehaviour#getShape overload. Existing context-independent
+    /// family implementations share their no-context query.
+    fn shape_with_context(
+        &self,
+        state: BlockState,
+        pos: BlockPos,
+        _context: &BlockCollisionContext<'_>,
+        level: &LevelReaderRef<'_, '_>,
+    ) -> Result<ferraloom_util::VoxelShape, LevelError> {
+        self.shape(state, pos, level)
+    }
+    /// Port of BlockBehaviour#getVisualShape: redispatch the collision virtual.
+    fn visual_shape(
+        &self,
+        state: BlockState,
+        pos: BlockPos,
+        context: &BlockCollisionContext<'_>,
+        level: &LevelReaderRef<'_, '_>,
+    ) -> Result<ferraloom_util::VoxelShape, LevelError> {
+        level.collision_shape(state, pos, context)
+    }
+    /// Port of BlockBehaviour#getInteractionShape's empty base shape.
+    fn interaction_shape(
+        &self,
+        _state: BlockState,
+        _pos: BlockPos,
+        _level: &LevelReaderRef<'_, '_>,
+    ) -> Result<ferraloom_util::VoxelShape, LevelError> {
+        Ok(ferraloom_util::shapes::empty())
     }
     fn is_collision_shape_full_block(
         &self,

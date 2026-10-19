@@ -9,7 +9,7 @@ import net.minecraft.world.level.pathfinder.*;
 
 /** Calls the real 26.3 search/heap/path classes; only neighbor generation is synthetic. */
 public class CoreVectors {
-  static final Gson G = new GsonBuilder().setPrettyPrinting().create();
+  static final Gson G = new GsonBuilder().serializeNulls().setPrettyPrinting().create();
   static JsonArray rows = new JsonArray();
   static JsonArray arr(int... values) {JsonArray a=new JsonArray();for(int v:values)a.add(v);return a;}
   static JsonArray pos(Node n) {return arr(n.x,n.y,n.z);}

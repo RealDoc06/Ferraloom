@@ -6,24 +6,25 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 |---|---:|---:|---:|---:|---:|
 | [Advancements](features/advancements.md) | 1954 | 3 | 1940 | 11 | 0 |
 | [Block entities](features/block-entities.md) | 114 | 72 | 40 | 2 | 0 |
-| [Blocks](features/blocks.md) | 397 | 306 | 53 | 38 | 0 |
+| [Blocks](features/blocks.md) | 410 | 264 | 101 | 45 | 0 |
 | [Chat and text components](features/chat.md) | 23 | 21 | 2 | 0 | 0 |
-| [Chunks and tickets](features/chunks.md) | 52 | 21 | 31 | 0 | 0 |
+| [Chunks and tickets](features/chunks.md) | 54 | 20 | 33 | 1 | 0 |
 | [Combat and damage](features/combat-damage.md) | 204 | 204 | 0 | 0 | 0 |
-| [Commands and argument types](features/commands.md) | 2668 | 2506 | 35 | 127 | 0 |
+| [Commands and argument types](features/commands.md) | 2670 | 2506 | 35 | 129 | 0 |
 | [Crafting and recipes](features/crafting-recipes.md) | 2137 | 2 | 29 | 2106 | 0 |
 | [Datapacks and resource reload](features/datapacks-reload.md) | 57 | 57 | 0 | 0 | 0 |
 | [Enchantments](features/enchantments.md) | 136 | 136 | 0 | 0 | 0 |
-| [Entities and AI](features/entities.md) | 739 | 670 | 69 | 0 | 0 |
-| [Fluids](features/fluids.md) | 26 | 25 | 1 | 0 | 0 |
-| [Binary data, geometry and randomness](features/foundations.md) | 63 | 18 | 17 | 28 | 0 |
+| [Entities and AI](features/entities.md) | 755 | 670 | 79 | 6 | 0 |
+| [Fluids](features/fluids.md) | 27 | 25 | 2 | 0 | 0 |
+| [Binary data, geometry and randomness](features/foundations.md) | 64 | 18 | 18 | 28 | 0 |
 | [Functions and macros](features/functions-macros.md) | 10 | 10 | 0 | 0 | 0 |
-| [Game rules](features/game-rules.md) | 74 | 1 | 4 | 69 | 0 |
+| [Game events and vibrations](features/game-events.md) | 7 | 2 | 0 | 5 | 0 |
+| [Game rules](features/game-rules.md) | 75 | 1 | 5 | 69 | 0 |
 | [GameTest](features/gametest.md) | 23 | 23 | 0 | 0 | 0 |
 | [Inventory and menus](features/inventory-menus.md) | 63 | 12 | 51 | 0 | 0 |
 | [Item modifiers](features/item-modifiers.md) | 4 | 1 | 3 | 0 | 0 |
 | [Items and data components](features/items.md) | 242 | 116 | 123 | 3 | 0 |
-| [Lighting](features/lighting.md) | 13 | 2 | 0 | 11 | 0 |
+| [Lighting](features/lighting.md) | 15 | 2 | 2 | 11 | 0 |
 | [Loot](features/loot.md) | 1671 | 158 | 1513 | 0 | 0 |
 | [Management JSON-RPC](features/management.md) | 101 | 101 | 0 | 0 | 0 |
 | [Maps, decoration and variants](features/maps-decoration.md) | 255 | 255 | 0 | 0 | 0 |
@@ -31,10 +32,10 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Patrols](features/patrols.md) | 4 | 4 | 0 | 0 | 0 |
 | [Permissions](features/permissions.md) | 7 | 7 | 0 | 0 | 0 |
 | [Phantoms](features/phantoms.md) | 3 | 3 | 0 | 0 | 0 |
-| [Player mechanics](features/player.md) | 62 | 32 | 30 | 0 | 0 |
+| [Player mechanics](features/player.md) | 73 | 28 | 45 | 0 | 0 |
 | [Portals and dimension travel](features/portals-travel.md) | 13 | 13 | 0 | 0 | 0 |
 | [Predicates](features/predicates.md) | 101 | 79 | 22 | 0 | 0 |
-| [Protocol packets](features/protocol.md) | 270 | 47 | 0 | 223 | 0 |
+| [Protocol packets](features/protocol.md) | 271 | 47 | 1 | 223 | 0 |
 | [Raids](features/raids.md) | 8 | 8 | 0 | 0 | 0 |
 | [Redstone mechanics](features/redstone.md) | 61 | 12 | 48 | 1 | 0 |
 | [Scoreboard, teams and bossbars](features/scoreboard-teams-bossbars.md) | 77 | 46 | 27 | 4 | 0 |
@@ -48,5 +49,5 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Wandering traders](features/wandering-traders.md) | 5 | 5 | 0 | 0 | 0 |
 | [Weather, time and environment](features/weather-time.md) | 85 | 85 | 0 | 0 | 0 |
 | [World storage and data fixing](features/world-storage.md) | 307 | 306 | 1 | 0 | 0 |
-| [World generation](features/worldgen.md) | 3113 | 2640 | 173 | 300 | 0 |
-| **Total** | **19384** | **12089** | **4367** | **2928** | **0** |
+| [World generation](features/worldgen.md) | 3114 | 2640 | 174 | 300 | 0 |
+| **Total** | **19442** | **12044** | **4449** | **2949** | **0** |
