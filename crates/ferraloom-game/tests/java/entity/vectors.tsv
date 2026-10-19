@@ -150,6 +150,13 @@ attribute-map	fresh	0	0	0
 attribute-map	created	1	1	1
 attribute-map	unchanged	0	0	1
 attribute-map	modified	1	1	1
+attribute-removal	absent	[]	0	0
+attribute-removal	created	[{base:0.2d,id:"minecraft:submerged_mining_speed"}]	0	0
+attribute-removal	transient	[{base:0.2d,id:"minecraft:submerged_mining_speed"}]	1	1
+attribute-removal	permanent	[{base:0.2d,id:"minecraft:submerged_mining_speed"}]	1	1
+attribute-removal	different-id	[{base:0.2d,id:"minecraft:submerged_mining_speed",modifiers:[{amount:0.25d,id:"minecraft:keep",operation:"add_value"}]}]	0	0
+attribute-removal	mixed	[{base:0.2d,id:"minecraft:submerged_mining_speed",modifiers:[{amount:0.25d,id:"minecraft:keep",operation:"add_value"}]}]	1	1
+attribute-removal	unsupported	[]	0	0
 attribute-nbt	0	true	0:
 attribute-nbt	1	false	0:
 attribute-nbt	2	false	403e000000000000:yes
