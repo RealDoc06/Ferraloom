@@ -773,3 +773,171 @@ mod placement_tests {
         }
     }
 }
+
+#[cfg(test)]
+mod pulse_tests {
+    use super::*;
+    use crate::{
+        block::{
+            containers::{access, storage::BaseContainerBlockEntity},
+            entity::create,
+        },
+        entity::{EntityState, player::inventory::count},
+        level::{
+            effects::LevelEffect,
+            game_event::test_support::{self as game_events, Observation},
+        },
+    };
+    use ferraloom_data::Item;
+    use ferraloom_protocol::play::clientbound::Packet;
+    use ferraloom_util::random::{LegacyRandomSource, Random, RandomSource};
+    const POS: BlockPos = BlockPos::new(8, 64, 8);
+    fn describe(item: &ItemStack) -> String {
+        format!("{},{}", item.item().protocol_id(), count(item))
+    }
+    #[test]
+    fn crafter_held_short_and_repeated_pulses_match_native_tick_and_mutation_timelines() {
+        for (name, expected) in super::super::device_tests::cases("crafter-pulse:") {
+            let args: Vec<_> = name.split(':').skip(1).collect();
+            let pulse = args[0].parse::<u8>().unwrap();
+            let container = args[1] == "true";
+            let state = Block::CRAFTER
+                .default_state()
+                .with(p::ORIENTATION, p::Orientation::EastUp)
+                .unwrap();
+            let mut level = super::super::device_tests::level(state);
+            level.set_block_entity(create(POS, state).unwrap()).unwrap();
+            let receiver = level.block_entity_ref(POS).unwrap().unwrap();
+            access::set_item(
+                receiver,
+                4,
+                ItemStack::new(Item::OAK_LOG, 2, Default::default()),
+                &mut level,
+            )
+            .unwrap();
+            let destination = if container {
+                let state = Block::BARREL.default_state();
+                level.set_block_state(POS.east(1), state).unwrap();
+                level
+                    .set_block_entity(create(POS.east(1), state).unwrap())
+                    .unwrap();
+                level.block_entity_ref(POS.east(1)).unwrap()
+            } else {
+                None
+            };
+            level.set_random_streams(Random::Legacy(LegacyRandomSource::new(42)), 0);
+            game_events::take(&mut level);
+            let (timeline, random) = expected.rsplit_once('|').unwrap();
+            for (tick, sample) in timeline.split('#').enumerate() {
+                level.set_game_time(tick as i64);
+                if tick == 0 || (pulse == 2 && tick == 2) || (pulse == 3 && tick == 6) {
+                    level
+                        .set_block_and_update(POS.west(1), Block::REDSTONE_BLOCK.default_state())
+                        .unwrap();
+                }
+                if (pulse != 0 && tick == 1)
+                    || (pulse == 2 && tick == 3)
+                    || (pulse == 3 && tick == 7)
+                {
+                    level
+                        .set_block_and_update(POS.west(1), Block::AIR.default_state())
+                        .unwrap();
+                }
+                level.tick_block_phase(tick as i64, 65536).unwrap();
+                server_tick(receiver, &mut level).unwrap();
+                let entity = level.block_entity::<CrafterBlockEntity>(receiver).unwrap();
+                let parts: Vec<_> = sample.split('|').collect();
+                assert_eq!(
+                    format!(
+                        "{},{},{},{},{}",
+                        level.get_block_state(POS).unwrap().id(),
+                        entity.triggered == 1,
+                        entity.crafting_ticks_remaining,
+                        describe(&entity.parent.parent.items[4]),
+                        level.has_scheduled_block_tick(POS, Block::CRAFTER)
+                    ),
+                    parts[0],
+                    "{name} tick{tick}"
+                );
+                let effects = game_events::take(&mut level);
+                let mutations = effects
+                    .iter()
+                    .filter_map(|effect| match effect {
+                        Observation::Effect(LevelEffect::BlockUpdated { pos, new, .. }) => {
+                            Some(format!("{}, {}, {}={}", pos.x, pos.y, pos.z, new.id()))
+                        }
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>()
+                    .join(";");
+                assert_eq!(
+                    mutations,
+                    parts[1]
+                        .split(';')
+                        .filter(|change| !change.is_empty())
+                        .map(|change| change.split_once('/').unwrap().0)
+                        .collect::<Vec<_>>()
+                        .join(";"),
+                    "{name} tick{tick} mutations"
+                );
+                let gameplay = effects
+                    .iter()
+                    .filter_map(|effect| match effect {
+                        Observation::Effect(LevelEffect::PlayerPacket { packet, .. }) => {
+                            match packet.as_ref() {
+                                Packet::LevelEvent(event) => {
+                                    Some(format!("L:{}:{}:0", event.event_type, event.data))
+                                }
+                                _ => None,
+                            }
+                        }
+                        Observation::GameEvent {
+                            event,
+                            source,
+                            affected_state,
+                            ..
+                        } => Some(format!(
+                            "{}:{}:{}",
+                            event.protocol_id(),
+                            source.map_or(0, |entity| level
+                                .entity_state(entity)
+                                .unwrap()
+                                .as_entity()
+                                .network_id),
+                            affected_state.map_or(-1, |state| i32::from(state.id()))
+                        )),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>()
+                    .join(";");
+                assert_eq!(gameplay, parts[2], "{name} tick{tick} events");
+                let contents = if let Some(destination) = destination {
+                    describe(
+                        &level
+                            .block_entity::<BaseContainerBlockEntity>(destination)
+                            .unwrap()
+                            .items[0],
+                    )
+                } else {
+                    level
+                        .entities_in(
+                            Aabb::new(-32.0, -32.0, -32.0, 64.0, 128.0, 64.0),
+                            |_, entity| matches!(entity, EntityState::Item(_)),
+                        )
+                        .into_iter()
+                        .map(|entity| {
+                            let EntityState::Item(entity) = level.entity_state(entity).unwrap()
+                            else {
+                                unreachable!()
+                            };
+                            describe(entity.item())
+                        })
+                        .collect::<Vec<_>>()
+                        .join(";")
+                };
+                assert_eq!(contents, parts[3], "{name} tick{tick} outputs");
+            }
+            assert_eq!(level.random().next_long().to_string(), random, "{name} RNG");
+        }
+    }
+}

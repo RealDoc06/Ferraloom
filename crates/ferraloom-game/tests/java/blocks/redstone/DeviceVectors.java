@@ -214,13 +214,34 @@ public final class DeviceVectors extends RedstoneIdentityVectors {
             callbackSpawn=null;
         }
     }
+    void crafterPulses()throws Exception{
+        var remainingField=CrafterBlockEntity.class.getDeclaredField("craftingTicksRemaining");remainingField.setAccessible(true);
+        for(int pulse=0;pulse<4;pulse++)for(boolean container:new boolean[]{false,true}){
+            var state=Blocks.CRAFTER.defaultBlockState().setValue(BlockStateProperties.ORIENTATION,FrontAndTop.EAST_UP);
+            prepare(state);var receiver=(CrafterBlockEntity)getBlockEntity(POS);receiver.setItem(4,new ItemStack(Items.OAK_LOG,2));
+            if(container)raw(POS.east(),Blocks.BARREL.defaultBlockState());
+            var spawned=new ArrayList<String>();callbackSpawn=entity->{if(entity instanceof net.minecraft.world.entity.item.ItemEntity item)spawned.add(stack(item.getItem()));};
+            var samples=new ArrayList<String>();random.setSeed(42);clear();
+            for(int tick=0;tick<=18;tick++){
+                time=tick;
+                if(tick==0||(pulse==2&&tick==2)||(pulse==3&&tick==6))setBlock(POS.west(),Blocks.REDSTONE_BLOCK.defaultBlockState(),3);
+                if((pulse!=0&&tick==1)||(pulse==2&&tick==3)||(pulse==3&&tick==7))setBlock(POS.west(),Blocks.AIR.defaultBlockState(),3);
+                ticks.tick(tick,65536,(pos,block)->{var current=getBlockState(pos);if(current.is(block))current.tick(this,pos,random);});
+                CrafterBlockEntity.serverTick(this,POS,getBlockState(POS),receiver);
+                var into=container?(BarrelBlockEntity)getBlockEntity(POS.east()):null;
+                samples.add(Block.getId(getBlockState(POS))+","+receiver.isTriggered()+","+remainingField.getInt(receiver)+","+stack(receiver.getItem(4))+","+ticks.hasScheduledTick(POS,Blocks.CRAFTER)+"|"+String.join(";",updates)+"|"+String.join(";",gameplay)+"|"+(into==null?String.join(";",spawned):stack(into.getItem(0))));
+                clear();
+            }
+            out("crafter-pulse:"+pulse+":"+container,String.join("#",samples)+"|"+random.nextLong());callbackSpawn=null;
+        }
+    }
     java.util.function.Consumer<Entity> callbackSpawn;
     @Override public boolean addFreshEntity(Entity entity){if(callbackSpawn!=null)callbackSpawn.accept(entity);return super.addFreshEntity(entity);}
     static void runDevices()throws Exception{
         var storage=LevelStorageSource.createDefault(Files.createTempDirectory(Path.of("."),"redstone-devices")).createAccess("world");
         var server=GameTestServer.create(Thread.currentThread(),storage,ServerPacksSource.createVanillaTrustedRepository(),Optional.empty(),false,1);
         server.setPlayerList(new PlayerList(server,server.registries(),storage.createPlayerStorage(),new EmptyNotificationService()){});
-        var level=new DeviceVectors(server,storage);level.daylight();level.rods();level.notes();level.containers();level.destruction();level.ore();level.movingDrops();level.detectors();level.crafterPlacement();level.crafterAliases();level.crafters();System.out.flush();System.exit(0);
+        var level=new DeviceVectors(server,storage);level.daylight();level.rods();level.notes();level.containers();level.destruction();level.ore();level.movingDrops();level.detectors();level.crafterPlacement();level.crafterAliases();level.crafters();level.crafterPulses();System.out.flush();System.exit(0);
     }
 }
 final class DeviceCapture{
