@@ -33,7 +33,7 @@ fn player_level(instabuild: bool, creative: bool) -> (Level, EntityRef) {
             GameType::Survival
         },
     );
-    player.instabuild = instabuild;
+    player.abilities.instabuild = instabuild;
     level
         .add_entity(entity, EntityState::Player(Box::new(player)))
         .unwrap();

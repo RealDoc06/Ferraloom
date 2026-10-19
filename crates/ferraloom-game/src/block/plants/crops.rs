@@ -155,7 +155,7 @@ impl BlockBehavior for SweetBerry {
                 ferraloom_util::Vec3::at_center_of(pos.into()),
                 None,
                 Some(next),
-            );
+            )?;
         }
         Ok(())
     }

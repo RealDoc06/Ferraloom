@@ -73,7 +73,7 @@ fn emit_state(
             f64::from(pos.z) + 0.5,
         );
         level.play_sound(None, center, sound, SoundSource::Blocks, 0.4, pitch)?;
-        level.game_event(event, center, None, None);
+        level.game_event(event, center, None, None)?;
     }
     Ok(())
 }
@@ -277,7 +277,7 @@ impl BlockBehavior for TripWireBlock {
                 ),
                 Some(player),
                 None,
-            );
+            )?;
         }
         crate::block::BASE_BLOCK.player_will_destroy(state, pos, player, level)
     }

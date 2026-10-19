@@ -122,7 +122,7 @@ pub fn update_fall_flying<E: Entity + ?Sized>(
             })?;
         }
         let position = level.entity::<EntityData>(entity)?.position;
-        level.game_event(GameEvent::ELYTRA_GLIDE, position, Some(entity), None);
+        level.game_event(GameEvent::ELYTRA_GLIDE, position, Some(entity), None)?;
     }
     Ok(())
 }

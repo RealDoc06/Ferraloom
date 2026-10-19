@@ -48,10 +48,13 @@ impl LayerEngine {
     }
     fn lowest<W: LightWorld + ?Sized>(&mut self, world: &W, x: i32, z: i32, default: i32) -> i32 {
         let chunk = ChunkPos::new(x >> 4, z >> 4);
-        self.ensure_sources(world, chunk);
         if !world.has_chunk(chunk) {
             return default;
         }
+        if let Some(sources) = world.sky_light_sources(chunk) {
+            return sources.lowest_source_y((x & 15) as u8, (z & 15) as u8);
+        }
+        self.ensure_sources(world, chunk);
         self.sources[&chunk.pack()].lowest_source_y((x & 15) as u8, (z & 15) as u8)
     }
     fn set_enabled<W: LightWorld + ?Sized>(&mut self, world: &W, chunk: ChunkPos, enable: bool) {
@@ -59,11 +62,14 @@ impl LayerEngine {
         if !enable || !self.is_sky() {
             return;
         }
-        self.ensure_sources(world, chunk);
-        let highest = self
-            .sources
-            .get(&chunk.pack())
-            .map_or(i32::MIN, ChunkSkyLightSources::highest_lowest_source_y);
+        let highest = if let Some(sources) = world.sky_light_sources(chunk) {
+            sources.highest_lowest_source_y()
+        } else {
+            self.ensure_sources(world, chunk);
+            self.sources
+                .get(&chunk.pack())
+                .map_or(i32::MIN, ChunkSkyLightSources::highest_lowest_source_y)
+        };
         let lowest_fully_source_section = (highest.wrapping_sub(1) >> 4) + 1;
         let bottom = self.storage.bottom.max(lowest_fully_source_section);
         for y in (bottom..self.storage.top(chunk)).rev() {
@@ -82,12 +88,16 @@ impl LayerEngine {
     }
     fn run<W: LightWorld + ?Sized>(&mut self, world: &W) -> usize {
         let nodes = self.checks.clear_and_trim(512);
-        // ChunkAccess maintains source heights before vanilla drains checkBlock.
-        // Refresh the affected columns against this job's final snapshot first.
+        // ChunkAccess's canonical buffer already reflects checked writes and
+        // deliberately excludes raw bulk writes. Only legacy live snapshots
+        // without that buffer still maintain a section-derived cache here.
         if self.is_sky() {
             for node in &nodes {
                 let pos = BlockPos::of(*node);
                 let chunk = ChunkPos::containing(pos);
+                if world.sky_light_sources(chunk).is_some() {
+                    continue;
+                }
                 self.ensure_sources(world, chunk);
                 if let Some(sources) = self.sources.get_mut(&chunk.pack()) {
                     sources.update(world, pos);

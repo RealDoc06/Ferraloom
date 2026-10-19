@@ -189,6 +189,9 @@ impl LevelReaderRef<'_, '_> {
     ) -> Result<T, LevelError> {
         match self {
             Self::Server(level) => level.get_dimension_value(key),
+            Self::PathNavigation(_) => Err(LevelError::UnsupportedPathNavigationQuery(
+                super::path_navigation_region::PathNavigationQuery::Environment,
+            )),
             Self::Worldgen(region) => region
                 .get_dimension_value(key)
                 .map_err(|_| LevelError::UnsupportedWorldgenEnvironment),
@@ -201,6 +204,9 @@ impl LevelReaderRef<'_, '_> {
     ) -> Result<T, LevelError> {
         match self {
             Self::Server(level) => level.get_value(key, pos),
+            Self::PathNavigation(_) => Err(LevelError::UnsupportedPathNavigationQuery(
+                super::path_navigation_region::PathNavigationQuery::Environment,
+            )),
             Self::Worldgen(region) => region
                 .get_environment_value(key, [pos.x, pos.y, pos.z])
                 .map_err(|_| LevelError::UnsupportedWorldgenEnvironment),
@@ -209,6 +215,9 @@ impl LevelReaderRef<'_, '_> {
     pub fn sky_darken(&self) -> Result<i32, LevelError> {
         match self {
             Self::Server(level) => level.sky_darken(),
+            Self::PathNavigation(_) => Err(LevelError::UnsupportedPathNavigationQuery(
+                super::path_navigation_region::PathNavigationQuery::Environment,
+            )),
             Self::Worldgen(_) => Ok(0),
         }
     }

@@ -25,7 +25,7 @@ fn melt(state: BlockState, pos: BlockPos, level: &mut Level) -> Result<(), Level
             Vec3::at_center_of(pos.into()),
             None,
             Some(state),
-        );
+        )?;
     }
     Ok(())
 }

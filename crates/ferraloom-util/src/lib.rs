@@ -17,7 +17,7 @@ pub use core::{
     Axis, AxisDirection, BlockPos, ChunkPos, Direction, Mirror, MutableBlockPos, Plane, QuartPos,
     Rotation, SectionPos, Vec3i,
 };
-pub use phys::{Aabb, Vec3};
+pub use phys::{Aabb, BlockHitResult, Vec3};
 pub use random::{
     LegacyRandomSource, RandomSource, SingleThreadedRandomSource, WorldgenRandom,
     XoroshiroRandomSource,

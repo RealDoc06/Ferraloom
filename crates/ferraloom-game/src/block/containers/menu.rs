@@ -370,7 +370,7 @@ fn change_openers(
                 ),
                 player,
                 None,
-            );
+            )?;
             if open && kind != BlockEntityType::SHULKER_BOX {
                 level.schedule_block_tick_after(entity.pos, state.block(), 5)?;
             }
