@@ -19,4 +19,18 @@ impl crate::level::Level {
             crate::entity::EntityMethod::BroadcastEntityEvent,
         ))
     }
+
+    /// Port of ServerLevel#broadcastDamageEvent. The tracker runtime replaces
+    /// this pending body with the full damage packet, preserving the source payload.
+    pub fn broadcast_damage_event(
+        &mut self,
+        entity: crate::entity::EntityRef,
+        _source: &crate::entity::DamageSource,
+    ) -> Result<(), crate::level::LevelError> {
+        let kind = self.entity_state(entity)?.entity_type();
+        self.unported_operation(crate::block::UnportedOperation::EntityMethod(
+            kind,
+            crate::entity::EntityMethod::BroadcastDamageEvent,
+        ))
+    }
 }
