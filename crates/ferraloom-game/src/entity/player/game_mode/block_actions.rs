@@ -95,6 +95,7 @@ impl std::fmt::Display for BlockBreakError {
 impl std::error::Error for BlockBreakError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
+            Self::Level(error) => Some(error.as_ref()),
             Self::Predicate(error) => Some(error.as_ref()),
             Self::BlockEntityData(error) => Some(error),
             Self::Inventory(error) => Some(error.as_ref()),
