@@ -65,31 +65,28 @@ impl MinecraftServer {
                     .expect("validated shared spawn dimension"),
                 spawn.position,
                 self.properties.int("spawn-protection"),
-                self.access.ops.values().map(|op| {
-                    ferraloom_game::commands::arguments::selectors::parse_uuid(&op.uuid)
-                        .expect("validated operator UUID")
-                }),
             ),
         );
     }
 
     /// Port of MinecraftServer#sendDifficultyUpdate; also used when a new player joins.
     pub(super) fn difficulty_packet(&self) -> cb::Packet {
-        let settings = self
-            .world
-            .level_data
-            .data
-            .get_compound("difficulty_settings");
-        let current = settings
-            .and_then(|tag| tag.get_string("difficulty"))
-            .map(|s| s.to_string_lossy());
+        let (current, locked) = self.level.generation().with_world(|world| {
+            let settings = world.level_data.data.get_compound("difficulty_settings");
+            (
+                settings
+                    .and_then(|tag| tag.get_string("difficulty"))
+                    .map(|value| value.to_string_lossy()),
+                settings.is_some_and(|tag| tag.get_boolean_or("locked", false)),
+            )
+        });
         cb::Packet::ChangeDifficulty(cb::ChangeDifficulty {
             difficulty: difficulty(
                 current
                     .as_deref()
                     .unwrap_or_else(|| self.properties.get("difficulty")),
             ),
-            locked: settings.is_some_and(|tag| tag.get_boolean_or("locked", false)),
+            locked,
         })
     }
     /// Capture owned save data before constructing IO, keeping the live level's
@@ -97,7 +94,11 @@ impl MinecraftServer {
     pub(super) fn save_game_rules(
         &self,
     ) -> impl std::future::Future<Output = Result<()>> + Send + 'static {
-        let storage = SavedDataStorage::new(self.world.access.path().join("data"));
+        let storage = SavedDataStorage::new(
+            self.level
+                .generation()
+                .with_world(|world| world.access.path().join("data")),
+        );
         let mut data = SavedData::new(self.game_rules.map().clone());
         let mut clocks = SavedData::new(self.clocks.states.clone());
         let mut scoreboard = SavedData::new(ferraloom_game::scoreboard::ScoreboardSaveData(
@@ -120,7 +121,11 @@ impl MinecraftServer {
     pub(super) fn save_command_storage(
         &mut self,
     ) -> impl std::future::Future<Output = Result<()>> + Send + 'static {
-        let storage = SavedDataStorage::new(self.world.access.path().join("data"));
+        let storage = SavedDataStorage::new(
+            self.level
+                .generation()
+                .with_world(|world| world.access.path().join("data")),
+        );
         let dirty = self.command_storage.take_dirty();
         async move {
             tokio::task::spawn_blocking(move || {
@@ -233,7 +238,7 @@ impl MinecraftServer {
                 .copied()
                 .filter(|id| {
                     Some(*id) != source
-                        && self.access.ops.values().any(|op| {
+                        && self.shared().ops.values().any(|op| {
                             op.uuid
                                 .eq_ignore_ascii_case(&self.connections[id].profile.id.to_string())
                         })
@@ -279,7 +284,7 @@ impl MinecraftServer {
             "banlist" => self.ban_list_command(&command),
             "gamemode" => self.game_mode_command(source, &command)?,
             "setworldspawn" | "spawnpoint" => self.spawn_command(source, &command)?,
-            "seed" => builtins::seed(self.world.seed),
+            "seed" => builtins::seed(self.level.generation().with_world(|world| world.seed)),
             "help" => self.commands.help(&command)?,
             "say" | "me" | "msg" => self.message_command(source, &command)?,
             "teammsg" => self.message_command(source, &command)?,
@@ -310,12 +315,16 @@ impl MinecraftServer {
             }
             "difficulty" => {
                 let current = self
-                    .world
-                    .level_data
-                    .data
-                    .get_compound("difficulty_settings")
-                    .and_then(|tag| tag.get_string("difficulty"))
-                    .map(|s| s.to_string_lossy())
+                    .level
+                    .generation()
+                    .with_world(|world| {
+                        world
+                            .level_data
+                            .data
+                            .get_compound("difficulty_settings")
+                            .and_then(|tag| tag.get_string("difficulty"))
+                            .map(|value| value.to_string_lossy())
+                    })
                     .unwrap_or_else(|| self.properties.get("difficulty").to_owned());
                 if let Some(requested) = command.literals.get(1) {
                     if *requested == current {
@@ -327,13 +336,14 @@ impl MinecraftServer {
                             ))],
                         ));
                     }
-                    let mut settings = self
-                        .world
-                        .level_data
-                        .data
-                        .get_compound("difficulty_settings")
-                        .cloned()
-                        .unwrap_or_default();
+                    let mut settings = self.level.generation().with_world(|world| {
+                        world
+                            .level_data
+                            .data
+                            .get_compound("difficulty_settings")
+                            .cloned()
+                            .unwrap_or_default()
+                    });
                     let changed = if settings
                         .get_boolean_or("hardcore", self.properties.boolean("hardcore"))
                     {
@@ -343,10 +353,13 @@ impl MinecraftServer {
                     };
                     let locked = settings.get_boolean_or("locked", false);
                     settings.insert("difficulty", Tag::String(changed.into()));
-                    self.world
-                        .level_data
-                        .data
-                        .insert("difficulty_settings", Tag::Compound(settings));
+                    self.level.generation().with_world_mut(|world| {
+                        world
+                            .level_data
+                            .data
+                            .insert("difficulty_settings", Tag::Compound(settings))
+                    });
+                    self.level.level.set_difficulty(difficulty(changed));
                     self.broadcast(cb::Packet::ChangeDifficulty(cb::ChangeDifficulty {
                         difficulty: difficulty(changed),
                         locked,
@@ -423,10 +436,12 @@ impl MinecraftServer {
                     unreachable!()
                 };
                 self.default_game_mode = *mode;
-                self.world
-                    .level_data
-                    .data
-                    .insert("GameType", Tag::Int(mode.id()));
+                self.level.generation().with_world_mut(|world| {
+                    world
+                        .level_data
+                        .data
+                        .insert("GameType", Tag::Int(mode.id()))
+                });
                 let mut count = 0;
                 if self.properties.boolean("force-gamemode") {
                     for player in self.players.clone() {
@@ -483,7 +498,7 @@ fn game_mode_name(mode: GameType) -> &'static str {
 }
 
 use ferraloom_game::commands::arguments::selectors::{
-    EntityQuery, SelectorEntity, SelectorPredicate, rotation_matches,
+    EntityQuery, SelectorEntity, SelectorPredicate, selector_read_error,
 };
 impl EntityQuery for MinecraftServer {
     fn candidates(&self, players_only: bool) -> Vec<EntityRef> {
@@ -543,110 +558,52 @@ impl EntityQuery for MinecraftServer {
         &self,
         entity: EntityRef,
     ) -> std::result::Result<(), ferraloom_brigadier::CommandSyntaxException> {
-        if self
+        self.level
             .level
-            .level
-            .entity_state(entity)
-            .is_ok_and(|state| !matches!(state, ferraloom_game::entity::EntityState::Player(_)))
-        {
-            // The later entity naming/NBT read API has not landed in this base.
-            return Err(exceptions::error("ferraloom.selector.pending", &[]));
-        }
-        Ok(())
+            .entity_plain_text_name(entity)
+            .map(|_| ())
+            .map_err(selector_read_error)
     }
     fn info(&self, entity: EntityRef) -> Option<SelectorEntity<'_>> {
-        let player = self.player(entity).ok()?;
+        let state = self.level.level.entity_state(entity).ok()?;
+        let base = state.as_entity();
+        let player = matches!(state, ferraloom_game::entity::EntityState::Player(_));
+        let name = if let ferraloom_game::entity::EntityState::Player(player) = state {
+            std::borrow::Cow::Borrowed(player.name.as_str())
+        } else {
+            std::borrow::Cow::Owned(self.level.level.entity_plain_text_name(entity).ok()?)
+        };
         Some(SelectorEntity {
-            name: player.name.as_str().into(),
-            uuid: player.uuid,
-            player: true,
-            dimension: "minecraft:overworld",
-            position: player.position,
-            width: f64::from(player.dimensions.width),
-            height: f64::from(player.dimensions.height),
+            name,
+            uuid: base.uuid,
+            player,
+            dimension: &self.level.dimension,
+            position: base.position,
+            width: f64::from(base.dimensions.width),
+            height: f64::from(base.dimensions.height),
         })
     }
-    fn display_name(&self, entity: EntityRef) -> Component {
-        let Ok(player) = self.player(entity) else {
-            return Component::literal("");
-        };
-        let plain = Component::literal(&player.name);
-        let name = self
-            .shared()
-            .scoreboard
-            .scoreboard()
-            .get_players_team(&player.name)
-            .map_or_else(|| plain.clone(), |team| team.formatted_name(plain.clone()));
-        player.decorate_display_name_component(name)
+    fn display_name(
+        &self,
+        entity: EntityRef,
+    ) -> std::result::Result<Component, ferraloom_brigadier::CommandSyntaxException> {
+        self.level
+            .level
+            .entity_display_name_with_scoreboard(entity, self.shared().scoreboard.scoreboard())
+            .map_err(selector_read_error)
     }
     fn matches(
         &mut self,
         entity: EntityRef,
         predicate: &SelectorPredicate,
     ) -> Result<bool, ferraloom_brigadier::CommandSyntaxException> {
-        let player = self
-            .player(entity)
-            .map_err(|_| exceptions::error("argument.entity.notfound.entity", &[]))?;
-        Ok(match predicate {
-            SelectorPredicate::Alive => player.parent.health() > 0.,
-            SelectorPredicate::Name { value, inverted } => (player.name == *value) != *inverted,
-            SelectorPredicate::GameMode { value, inverted } => {
-                (player.game_mode == *value) != *inverted
-            }
-            SelectorPredicate::Team { value, inverted } => {
-                let team = self
-                    .shared()
-                    .scoreboard
-                    .scoreboard()
-                    .get_players_team(&player.name);
-                (team.map_or("", |team| team.name()) == value) != *inverted
-            }
-            SelectorPredicate::Type {
-                value,
-                tag,
-                inverted,
-            } => {
-                let matched = if *tag {
-                    self.command_entity_tags
-                        .get(value)
-                        .is_some_and(|types| types.contains(&EntityType::PLAYER))
-                } else {
-                    value == "minecraft:player"
-                };
-                matched != *inverted
-            }
-            SelectorPredicate::Tag { value, inverted } => {
-                let matched = if value.is_empty() {
-                    player.tags.is_empty()
-                } else {
-                    player.tags.contains(value)
-                };
-                matched != *inverted
-            }
-            SelectorPredicate::Nbt { value, inverted } => {
-                let tag = ferraloom_game::commands::arguments::selectors::player_nbt(player)
-                    .map_err(|_| exceptions::error("ferraloom.selector.pending", &[]))?;
-                ferraloom_nbt::compare_nbt(Some(value), Some(&Tag::Compound(tag)), true)
-                    != *inverted
-            }
-            SelectorPredicate::Level(range) => {
-                range.contains(f64::from(player.saved.get_int_or("XpLevel", 0)))
-            }
-            SelectorPredicate::Pitch(range) => rotation_matches(*range, player.pitch),
-            SelectorPredicate::Yaw(range) => rotation_matches(*range, player.yaw),
-            SelectorPredicate::Scores(scores) => {
-                let scoreboard = self.shared().scoreboard.scoreboard();
-                scores.iter().all(|(objective, range)| {
-                    scoreboard.get_objective(objective).is_some()
-                        && scoreboard
-                            .get_player_score(&player.name, objective)
-                            .is_some_and(|score| range.contains(f64::from(score.value)))
-                })
-            }
-            SelectorPredicate::Advancements(_) | SelectorPredicate::Predicate { .. } => {
-                return Err(exceptions::error("ferraloom.selector.pending", &[]));
-            }
-        })
+        ferraloom_game::commands::arguments::selectors::live_entity_matches(
+            &self.level.level,
+            self.shared().scoreboard.scoreboard(),
+            &self.command_entity_tags,
+            entity,
+            predicate,
+        )
     }
     fn shuffle(&mut self, entities: &mut [(EntityRef, f64)]) {
         // Collections.shuffle retains one java.util.Random; it does not consume Level#random.
@@ -658,6 +615,24 @@ impl EntityQuery for MinecraftServer {
 }
 
 impl MinecraftServer {
+    /// Port of ServerPlayer#createCommandSourceStack, including its live permissions().
+    pub(super) fn player_command_source(
+        &self,
+        entity: EntityRef,
+    ) -> std::result::Result<CommandSourceStack, ferraloom_game::level::LevelError> {
+        let player = self.level.level.entity::<ServerPlayer>(entity)?;
+        let permissions = self.level.level.player_permissions(entity)?;
+        Ok(CommandSourceStack::server(0, player.position)
+            .with_permission(permissions)
+            .with_entity(entity)
+            .with_source(ferraloom_game::commands::source::CommandSource::Player(
+                entity,
+            ))
+            .with_rotation(ferraloom_game::commands::source::Rotation {
+                pitch: player.pitch,
+                yaw: player.yaw,
+            }))
+    }
     /// Command failures produce feedback; only ingress violations propagate to disconnect logic.
     pub(super) async fn execute_command(
         &mut self,
@@ -671,14 +646,7 @@ impl MinecraftServer {
                 .get(&connection)
                 .context("unknown command source")?;
             if let Phase::Play(entity) = c.phase {
-                stack = CommandSourceStack::server(
-                    self.access.permission(c.profile.id),
-                    self.player(entity)?.position,
-                )
-                .with_entity(entity)
-                .with_source(
-                    ferraloom_game::commands::source::CommandSource::Player(entity),
-                );
+                stack = self.player_command_source(entity).map_err(game_error)?;
             }
         }
         let lent = self.lend_server_shared();
@@ -880,9 +848,16 @@ impl MinecraftServer {
                 salt: message.salt,
                 last_seen: message.last_seen.to_vec(),
             });
-        let name = command
-            .source
-            .display_name(|entity| self.display_name(entity));
+        let name = &command.source;
+        let name = match &name.names {
+            ferraloom_game::commands::source::NamesProvider::Constant(name) => {
+                name.as_ref().clone()
+            }
+            ferraloom_game::commands::source::NamesProvider::Entity => match name.entity {
+                Some(entity) => self.display_name(entity)?,
+                None => Component::default(),
+            },
+        };
         let count = if let Some((entity, receivers, target)) = team_receivers {
             for receiver in &receivers {
                 let outgoing = matches!(self.connections[receiver].phase, Phase::Play(handle) if handle == entity);
@@ -904,7 +879,7 @@ impl MinecraftServer {
             receivers.len() as i32
         } else if let Some(targets) = targets {
             for entity in &targets {
-                let target_name = self.display_name(*entity);
+                let target_name = self.display_name(*entity)?;
                 let target=self.players.iter().copied().find(|id|matches!(self.connections[id].phase,Phase::Play(handle) if handle==*entity)).unwrap();
                 let outgoing = ChatTypeBound {
                     chat_type: ChatTypeHolder(Holder::Reference(id("msg_command_outgoing"))),
@@ -1029,7 +1004,7 @@ impl MinecraftServer {
     fn command_suggestion_data(&self) -> ferraloom_game::commands::suggestions::SuggestionData {
         let mut data = ferraloom_game::commands::suggestions::SuggestionData {
             operators: self
-                .access
+                .shared()
                 .ops
                 .values()
                 .map(|entry| entry.name.clone())
@@ -1076,7 +1051,7 @@ impl MinecraftServer {
             data.players.push(player.name.clone());
             let uuid = player.uuid.to_string();
             if !self
-                .access
+                .shared()
                 .ops
                 .values()
                 .any(|op| op.uuid.eq_ignore_ascii_case(&uuid))
@@ -1107,10 +1082,7 @@ impl MinecraftServer {
             let Phase::Play(entity) = self.connections[&connection].phase else {
                 continue;
             };
-            let player = self.player(entity)?;
-            let source =
-                CommandSourceStack::server(self.access.permission(player.uuid), player.position)
-                    .with_entity(entity);
+            let source = self.player_command_source(entity).map_err(game_error)?;
             let suggestions = self.commands.suggestions_with(
                 &request.command.0,
                 source,
@@ -1206,7 +1178,7 @@ impl MinecraftServer {
         Err(exceptions::error("argument.player.unknown", &[]))
     }
     fn update_command_permissions(&mut self, profile: Uuid) {
-        let level = self.access.permission(profile);
+        let level = self.shared().ops.permission_level(profile).id();
         let targets = self
             .players
             .iter()
@@ -1240,7 +1212,8 @@ impl MinecraftServer {
             .copied()
             .filter(|id| {
                 let uuid = self.connections[id].profile.id.to_string();
-                !self.access.ops.contains_key(&uuid) && !self.access.whitelist.contains_key(&uuid)
+                !self.shared().ops.contains(self.connections[id].profile.id)
+                    && !self.access.whitelist.contains_key(&uuid)
             })
             .collect::<Vec<_>>();
         for id in targets {
@@ -1262,11 +1235,16 @@ impl MinecraftServer {
         let grant = command.command == "op";
         let mut count = 0;
         for profile in profiles {
-            if self.access.ops.contains_key(&profile.id.to_string()) == grant {
+            if self.shared().ops.contains(profile.id) == grant {
                 continue;
             }
-            let level = grant.then(|| self.properties.int("op-permission-level"));
-            if let Err(error) = self.access.set_operator(&profile, level) {
+            let level = grant.then(|| {
+                ferraloom_game::commands::permissions::PermissionLevel::by_id(
+                    self.properties.int("op-permission-level"),
+                )
+            });
+            self.shared_mut().ops.set_operator(&profile, level);
+            if let Err(error) = self.access.save_operators(&self.shared().ops) {
                 eprintln!("Could not save operator list: {error:#}");
             }
             self.publish_spawn_protection();
@@ -2018,17 +1996,19 @@ impl MinecraftServer {
 
 impl MinecraftServer {
     pub(super) fn default_spawn_data(&self) -> ferraloom_game::commands::spawn::SpawnData {
-        let data = self.world.level_data.data.get_compound("spawn");
-        ferraloom_game::commands::spawn::SpawnData {
-            dimension: data
-                .and_then(|data| data.get_string("dimension"))
-                .map_or_else(|| "minecraft:overworld".into(), |id| id.to_string_lossy()),
-            position: self.world.spawn,
-            rotation: ferraloom_game::commands::source::Rotation {
-                yaw: data.map_or(0., |data| data.get_float_or("yaw", 0.)),
-                pitch: data.map_or(0., |data| data.get_float_or("pitch", 0.)),
-            },
-        }
+        self.level.generation().with_world(|world| {
+            let data = world.level_data.data.get_compound("spawn");
+            ferraloom_game::commands::spawn::SpawnData {
+                dimension: data
+                    .and_then(|data| data.get_string("dimension"))
+                    .map_or_else(|| "minecraft:overworld".into(), |id| id.to_string_lossy()),
+                position: world.spawn,
+                rotation: ferraloom_game::commands::source::Rotation {
+                    yaw: data.map_or(0., |data| data.get_float_or("yaw", 0.)),
+                    pitch: data.map_or(0., |data| data.get_float_or("pitch", 0.)),
+                },
+            }
+        })
     }
     fn spawn_command(
         &mut self,
@@ -2049,11 +2029,13 @@ impl MinecraftServer {
         let spawn = SpawnData::command(command)?;
         if command.command == "setworldspawn" {
             if self.default_spawn_data() != spawn {
-                self.world.spawn = spawn.position;
-                self.world
-                    .level_data
-                    .data
-                    .insert("spawn", Tag::Compound(spawn.to_nbt()));
+                self.level.generation().with_world_mut(|world| {
+                    world.spawn = spawn.position;
+                    world
+                        .level_data
+                        .data
+                        .insert("spawn", Tag::Compound(spawn.to_nbt()));
+                });
                 self.publish_spawn_protection();
                 self.broadcast(cb::Packet::SetDefaultSpawnPosition(
                     cb::SetDefaultSpawnPosition {
@@ -2114,7 +2096,7 @@ impl ferraloom_game::commands::components::ComponentResolver for MinecraftServer
 
     fn nbt_data(
         &mut self,
-        _source: &CommandSourceStack,
+        source: &CommandSourceStack,
         data: &protocol::chat::DataSource,
     ) -> std::result::Result<
         Vec<ferraloom_nbt::CompoundTag>,
@@ -2122,6 +2104,23 @@ impl ferraloom_game::commands::components::ComponentResolver for MinecraftServer
     > {
         use ferraloom_game::commands::components::{ResolutionError, UnsupportedContent};
         match data {
+            protocol::chat::DataSource::Entity(pattern) => {
+                let selector =
+                    ferraloom_game::commands::arguments::selectors::EntitySelector::parse(
+                        &mut ferraloom_brigadier::StringReader::new(pattern),
+                        true,
+                    )?;
+                let entities = selector.find(source, self, false)?;
+                entities
+                    .into_iter()
+                    .map(|entity| {
+                        self.level
+                            .level
+                            .entity_nbt_to_compare(entity)
+                            .map_err(ResolutionError::EntityData)
+                    })
+                    .collect()
+            }
             protocol::chat::DataSource::Storage(id) => {
                 let storage = self
                     .level
@@ -2130,7 +2129,13 @@ impl ferraloom_game::commands::components::ComponentResolver for MinecraftServer
                     .ok_or(ResolutionError::Unsupported(UnsupportedContent::NbtData))?;
                 Ok(vec![storage.get(id)?])
             }
-            _ => Err(ResolutionError::Unsupported(UnsupportedContent::NbtData)),
+            protocol::chat::DataSource::Block(coordinates) => {
+                ferraloom_game::commands::components::block_data(
+                    &self.level.level,
+                    source,
+                    coordinates,
+                )
+            }
         }
     }
 }

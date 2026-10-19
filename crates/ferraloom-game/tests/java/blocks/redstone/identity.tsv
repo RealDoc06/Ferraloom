@@ -1,0 +1,18 @@
+merge:false	1,7|1,1|1,64|1,64|true
+merge:true	1,7|1,1|1,64|55,5|false
+place:false	1,7|0,0|1,8|1,8:true
+place:true	1,7|0,0|55,5|1,8:false
+restore:1:false	false|1,1|1,1|true
+restore:1:true	false|1,1|1,1|true
+restore:5:false	false|1,5|1,5|true
+restore:5:true	false|1,5|1012,7|false
+dispenser:false	1,6|1,6|true|[1000, 2000]
+dispenser:true	1,6|1,6|true|[1000, 2000]
+projectile:false	1009,6|1009,6|true|[1002, 2000]
+projectile:true	1009,6|1009,6|true|[1002, 2000]
+dropper:false:false	1,7|1,7|false
+dropper:false:true	1,7|1,7|false
+dropper:true:false	1,7|1,6|false
+dropper:true:true	1,7|1,6|false
+pickup:false	true|1,7|0,0|true|1,4
+pickup:true	true|1,7|0,0|true|1,4

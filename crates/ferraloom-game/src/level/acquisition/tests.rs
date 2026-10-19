@@ -27,7 +27,7 @@ struct Driver {
     remaining: Cell<usize>,
     steps: RefCell<VecDeque<AcquireProgress>>,
     result: Cell<bool>,
-    failure: Cell<Option<LevelError>>,
+    failure: RefCell<Option<LevelError>>,
     kind: Cell<ChunkKind>,
     present: Cell<Option<ChunkReference>>,
     status_allowed: Cell<bool>,
@@ -47,7 +47,7 @@ impl Driver {
             remaining: Cell::new(0),
             steps: RefCell::new(VecDeque::new()),
             result: Cell::new(true),
-            failure: Cell::new(None),
+            failure: RefCell::new(None),
             kind: Cell::new(ChunkKind::Full),
             present: Cell::new(None),
             status_allowed: Cell::new(true),
@@ -109,7 +109,7 @@ impl AcquireDriver for Driver {
         })
     }
     fn acquisition_result(&self, handle: AcquireHandle) -> Result<AcquireResult, LevelError> {
-        if let Some(error) = self.failure.get() {
+        if let Some(error) = self.failure.borrow().clone() {
             return Err(error);
         }
         Ok(if self.remaining.get() == 0 {
@@ -407,12 +407,12 @@ fn required_absence_and_terminal_failure_do_not_become_cached_success() {
         );
         let failure =
             LevelError::ChunkAcquisition(POS, ChunkStatus::Full, AcquireFailure::Cancelled);
-        driver.failure.set(Some(failure));
+        *driver.failure.borrow_mut() = Some(failure.clone());
         assert_eq!(
             cache.get_chunk(&driver, &level, POS, ChunkStatus::Full, false),
             Err(failure)
         );
-        driver.failure.set(None);
+        *driver.failure.borrow_mut() = None;
         driver.result.set(true);
         assert!(
             cache

@@ -1,0 +1,862 @@
+[
+  {
+    "entry": null,
+    "creative": false,
+    "instabuild": false,
+    "is_op": false,
+    "levels": [
+      true,
+      false,
+      false,
+      false,
+      false
+    ],
+    "selectors": false,
+    "can_use_game_master_blocks": false,
+    "saved": null
+  },
+  {
+    "entry": null,
+    "creative": false,
+    "instabuild": true,
+    "is_op": false,
+    "levels": [
+      true,
+      false,
+      false,
+      false,
+      false
+    ],
+    "selectors": false,
+    "can_use_game_master_blocks": false,
+    "saved": null
+  },
+  {
+    "entry": null,
+    "creative": true,
+    "instabuild": false,
+    "is_op": false,
+    "levels": [
+      true,
+      false,
+      false,
+      false,
+      false
+    ],
+    "selectors": false,
+    "can_use_game_master_blocks": false,
+    "saved": null
+  },
+  {
+    "entry": null,
+    "creative": true,
+    "instabuild": true,
+    "is_op": false,
+    "levels": [
+      true,
+      false,
+      false,
+      false,
+      false
+    ],
+    "selectors": false,
+    "can_use_game_master_blocks": false,
+    "saved": null
+  },
+  {
+    "entry": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata"
+    },
+    "creative": false,
+    "instabuild": false,
+    "is_op": true,
+    "levels": [
+      true,
+      false,
+      false,
+      false,
+      false
+    ],
+    "selectors": false,
+    "can_use_game_master_blocks": false,
+    "saved": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": 0,
+      "bypassesPlayerLimit": false
+    }
+  },
+  {
+    "entry": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata"
+    },
+    "creative": false,
+    "instabuild": true,
+    "is_op": true,
+    "levels": [
+      true,
+      false,
+      false,
+      false,
+      false
+    ],
+    "selectors": false,
+    "can_use_game_master_blocks": false,
+    "saved": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": 0,
+      "bypassesPlayerLimit": false
+    }
+  },
+  {
+    "entry": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata"
+    },
+    "creative": true,
+    "instabuild": false,
+    "is_op": true,
+    "levels": [
+      true,
+      false,
+      false,
+      false,
+      false
+    ],
+    "selectors": false,
+    "can_use_game_master_blocks": false,
+    "saved": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": 0,
+      "bypassesPlayerLimit": false
+    }
+  },
+  {
+    "entry": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata"
+    },
+    "creative": true,
+    "instabuild": true,
+    "is_op": true,
+    "levels": [
+      true,
+      false,
+      false,
+      false,
+      false
+    ],
+    "selectors": false,
+    "can_use_game_master_blocks": false,
+    "saved": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": 0,
+      "bypassesPlayerLimit": false
+    }
+  },
+  {
+    "entry": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": -2
+    },
+    "creative": false,
+    "instabuild": false,
+    "is_op": true,
+    "levels": [
+      true,
+      false,
+      false,
+      false,
+      false
+    ],
+    "selectors": false,
+    "can_use_game_master_blocks": false,
+    "saved": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": 0,
+      "bypassesPlayerLimit": false
+    }
+  },
+  {
+    "entry": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": -2
+    },
+    "creative": false,
+    "instabuild": true,
+    "is_op": true,
+    "levels": [
+      true,
+      false,
+      false,
+      false,
+      false
+    ],
+    "selectors": false,
+    "can_use_game_master_blocks": false,
+    "saved": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": 0,
+      "bypassesPlayerLimit": false
+    }
+  },
+  {
+    "entry": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": -2
+    },
+    "creative": true,
+    "instabuild": false,
+    "is_op": true,
+    "levels": [
+      true,
+      false,
+      false,
+      false,
+      false
+    ],
+    "selectors": false,
+    "can_use_game_master_blocks": false,
+    "saved": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": 0,
+      "bypassesPlayerLimit": false
+    }
+  },
+  {
+    "entry": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": -2
+    },
+    "creative": true,
+    "instabuild": true,
+    "is_op": true,
+    "levels": [
+      true,
+      false,
+      false,
+      false,
+      false
+    ],
+    "selectors": false,
+    "can_use_game_master_blocks": false,
+    "saved": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": 0,
+      "bypassesPlayerLimit": false
+    }
+  },
+  {
+    "entry": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": 0
+    },
+    "creative": false,
+    "instabuild": false,
+    "is_op": true,
+    "levels": [
+      true,
+      false,
+      false,
+      false,
+      false
+    ],
+    "selectors": false,
+    "can_use_game_master_blocks": false,
+    "saved": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": 0,
+      "bypassesPlayerLimit": false
+    }
+  },
+  {
+    "entry": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": 0
+    },
+    "creative": false,
+    "instabuild": true,
+    "is_op": true,
+    "levels": [
+      true,
+      false,
+      false,
+      false,
+      false
+    ],
+    "selectors": false,
+    "can_use_game_master_blocks": false,
+    "saved": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": 0,
+      "bypassesPlayerLimit": false
+    }
+  },
+  {
+    "entry": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": 0
+    },
+    "creative": true,
+    "instabuild": false,
+    "is_op": true,
+    "levels": [
+      true,
+      false,
+      false,
+      false,
+      false
+    ],
+    "selectors": false,
+    "can_use_game_master_blocks": false,
+    "saved": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": 0,
+      "bypassesPlayerLimit": false
+    }
+  },
+  {
+    "entry": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": 0
+    },
+    "creative": true,
+    "instabuild": true,
+    "is_op": true,
+    "levels": [
+      true,
+      false,
+      false,
+      false,
+      false
+    ],
+    "selectors": false,
+    "can_use_game_master_blocks": false,
+    "saved": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": 0,
+      "bypassesPlayerLimit": false
+    }
+  },
+  {
+    "entry": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": 1
+    },
+    "creative": false,
+    "instabuild": false,
+    "is_op": true,
+    "levels": [
+      true,
+      true,
+      false,
+      false,
+      false
+    ],
+    "selectors": false,
+    "can_use_game_master_blocks": false,
+    "saved": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": 1,
+      "bypassesPlayerLimit": false
+    }
+  },
+  {
+    "entry": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": 1
+    },
+    "creative": false,
+    "instabuild": true,
+    "is_op": true,
+    "levels": [
+      true,
+      true,
+      false,
+      false,
+      false
+    ],
+    "selectors": false,
+    "can_use_game_master_blocks": false,
+    "saved": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": 1,
+      "bypassesPlayerLimit": false
+    }
+  },
+  {
+    "entry": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": 1
+    },
+    "creative": true,
+    "instabuild": false,
+    "is_op": true,
+    "levels": [
+      true,
+      true,
+      false,
+      false,
+      false
+    ],
+    "selectors": false,
+    "can_use_game_master_blocks": false,
+    "saved": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": 1,
+      "bypassesPlayerLimit": false
+    }
+  },
+  {
+    "entry": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": 1
+    },
+    "creative": true,
+    "instabuild": true,
+    "is_op": true,
+    "levels": [
+      true,
+      true,
+      false,
+      false,
+      false
+    ],
+    "selectors": false,
+    "can_use_game_master_blocks": false,
+    "saved": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": 1,
+      "bypassesPlayerLimit": false
+    }
+  },
+  {
+    "entry": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": 2
+    },
+    "creative": false,
+    "instabuild": false,
+    "is_op": true,
+    "levels": [
+      true,
+      true,
+      true,
+      false,
+      false
+    ],
+    "selectors": true,
+    "can_use_game_master_blocks": false,
+    "saved": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": 2,
+      "bypassesPlayerLimit": false
+    }
+  },
+  {
+    "entry": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": 2
+    },
+    "creative": false,
+    "instabuild": true,
+    "is_op": true,
+    "levels": [
+      true,
+      true,
+      true,
+      false,
+      false
+    ],
+    "selectors": true,
+    "can_use_game_master_blocks": true,
+    "saved": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": 2,
+      "bypassesPlayerLimit": false
+    }
+  },
+  {
+    "entry": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": 2
+    },
+    "creative": true,
+    "instabuild": false,
+    "is_op": true,
+    "levels": [
+      true,
+      true,
+      true,
+      false,
+      false
+    ],
+    "selectors": true,
+    "can_use_game_master_blocks": false,
+    "saved": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": 2,
+      "bypassesPlayerLimit": false
+    }
+  },
+  {
+    "entry": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": 2
+    },
+    "creative": true,
+    "instabuild": true,
+    "is_op": true,
+    "levels": [
+      true,
+      true,
+      true,
+      false,
+      false
+    ],
+    "selectors": true,
+    "can_use_game_master_blocks": true,
+    "saved": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": 2,
+      "bypassesPlayerLimit": false
+    }
+  },
+  {
+    "entry": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": 3
+    },
+    "creative": false,
+    "instabuild": false,
+    "is_op": true,
+    "levels": [
+      true,
+      true,
+      true,
+      true,
+      false
+    ],
+    "selectors": true,
+    "can_use_game_master_blocks": false,
+    "saved": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": 3,
+      "bypassesPlayerLimit": false
+    }
+  },
+  {
+    "entry": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": 3
+    },
+    "creative": false,
+    "instabuild": true,
+    "is_op": true,
+    "levels": [
+      true,
+      true,
+      true,
+      true,
+      false
+    ],
+    "selectors": true,
+    "can_use_game_master_blocks": true,
+    "saved": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": 3,
+      "bypassesPlayerLimit": false
+    }
+  },
+  {
+    "entry": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": 3
+    },
+    "creative": true,
+    "instabuild": false,
+    "is_op": true,
+    "levels": [
+      true,
+      true,
+      true,
+      true,
+      false
+    ],
+    "selectors": true,
+    "can_use_game_master_blocks": false,
+    "saved": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": 3,
+      "bypassesPlayerLimit": false
+    }
+  },
+  {
+    "entry": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": 3
+    },
+    "creative": true,
+    "instabuild": true,
+    "is_op": true,
+    "levels": [
+      true,
+      true,
+      true,
+      true,
+      false
+    ],
+    "selectors": true,
+    "can_use_game_master_blocks": true,
+    "saved": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": 3,
+      "bypassesPlayerLimit": false
+    }
+  },
+  {
+    "entry": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": 4
+    },
+    "creative": false,
+    "instabuild": false,
+    "is_op": true,
+    "levels": [
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "selectors": true,
+    "can_use_game_master_blocks": false,
+    "saved": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": 4,
+      "bypassesPlayerLimit": false
+    }
+  },
+  {
+    "entry": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": 4
+    },
+    "creative": false,
+    "instabuild": true,
+    "is_op": true,
+    "levels": [
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "selectors": true,
+    "can_use_game_master_blocks": true,
+    "saved": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": 4,
+      "bypassesPlayerLimit": false
+    }
+  },
+  {
+    "entry": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": 4
+    },
+    "creative": true,
+    "instabuild": false,
+    "is_op": true,
+    "levels": [
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "selectors": true,
+    "can_use_game_master_blocks": false,
+    "saved": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": 4,
+      "bypassesPlayerLimit": false
+    }
+  },
+  {
+    "entry": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": 4
+    },
+    "creative": true,
+    "instabuild": true,
+    "is_op": true,
+    "levels": [
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "selectors": true,
+    "can_use_game_master_blocks": true,
+    "saved": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": 4,
+      "bypassesPlayerLimit": false
+    }
+  },
+  {
+    "entry": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": 9
+    },
+    "creative": false,
+    "instabuild": false,
+    "is_op": true,
+    "levels": [
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "selectors": true,
+    "can_use_game_master_blocks": false,
+    "saved": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": 4,
+      "bypassesPlayerLimit": false
+    }
+  },
+  {
+    "entry": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": 9
+    },
+    "creative": false,
+    "instabuild": true,
+    "is_op": true,
+    "levels": [
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "selectors": true,
+    "can_use_game_master_blocks": true,
+    "saved": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": 4,
+      "bypassesPlayerLimit": false
+    }
+  },
+  {
+    "entry": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": 9
+    },
+    "creative": true,
+    "instabuild": false,
+    "is_op": true,
+    "levels": [
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "selectors": true,
+    "can_use_game_master_blocks": false,
+    "saved": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": 4,
+      "bypassesPlayerLimit": false
+    }
+  },
+  {
+    "entry": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": 9
+    },
+    "creative": true,
+    "instabuild": true,
+    "is_op": true,
+    "levels": [
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "selectors": true,
+    "can_use_game_master_blocks": true,
+    "saved": {
+      "uuid": "00000000-0000-0001-0000-000000000002",
+      "name": "metadata",
+      "level": 4,
+      "bypassesPlayerLimit": false
+    }
+  }
+]

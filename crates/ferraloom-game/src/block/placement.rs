@@ -3,11 +3,44 @@
 use super::{BlockMethod, LevelAccessRef, LevelReaderRef};
 use crate::{
     entity::{EntityData, EntityRef},
+    inventory::{MenuError, StackRef},
     level::{Level, LevelError},
 };
 use ferraloom_data::{Block, BlockState};
 use ferraloom_protocol::{component::ItemStack, play::InteractionHand};
 use ferraloom_util::{BlockPos, Direction, Vec3};
+
+/// Captured ItemStack receiver. StackOperation owns retained roots; copying a
+/// view neither acquires a root nor resolves the player's current hand again.
+#[derive(Clone, Copy)]
+pub enum StackView<'stack> {
+    Borrowed(&'stack ItemStack),
+    Retained(StackRef),
+}
+impl StackView<'_> {
+    pub fn read<'call>(
+        &'call self,
+        reader: &'call LevelReaderRef<'_, '_>,
+    ) -> Result<&'call ItemStack, LevelError> {
+        match self {
+            Self::Borrowed(stack) => Ok(stack),
+            Self::Retained(reference) => match reader {
+                LevelReaderRef::Server(level) => {
+                    level.stack(*reference).map_err(|error| match error {
+                        MenuError::Level(error) => error,
+                        _ => LevelError::Inventory("retained item receiver"),
+                    })
+                }
+                LevelReaderRef::Worldgen(_) => Err(LevelError::UnsupportedWorldgenEnvironment),
+                LevelReaderRef::PathNavigation(_) => {
+                    Err(LevelError::UnsupportedPathNavigationQuery(
+                        crate::level::path_navigation_region::PathNavigationQuery::RetainedStack,
+                    ))
+                }
+            },
+        }
+    }
+}
 
 /// The double-precision BlockHitResult captured by vanilla placement code.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -24,7 +57,7 @@ pub struct UseOnContext<'stack> {
     pub player: Option<EntityRef>,
     pub hand: InteractionHand,
     pub hit: PlacementHit,
-    held_item: &'stack ItemStack,
+    held_item: StackView<'stack>,
 }
 impl<'stack> UseOnContext<'stack> {
     pub fn new(
@@ -36,12 +69,28 @@ impl<'stack> UseOnContext<'stack> {
         Self {
             player,
             hand,
-            held_item,
+            held_item: StackView::Borrowed(held_item),
             hit,
         }
     }
-    pub fn item_in_hand(&self) -> &ItemStack {
-        self.held_item
+    pub fn new_retained(
+        player: Option<EntityRef>,
+        hand: InteractionHand,
+        held_item: StackRef,
+        hit: PlacementHit,
+    ) -> Self {
+        Self {
+            player,
+            hand,
+            held_item: StackView::Retained(held_item),
+            hit,
+        }
+    }
+    pub fn item_in_hand<'call>(
+        &'call self,
+        reader: &'call LevelReaderRef<'_, '_>,
+    ) -> Result<&'call ItemStack, LevelError> {
+        self.held_item.read(reader)
     }
     pub fn clicked_pos(&self) -> BlockPos {
         self.hit.pos
@@ -69,7 +118,19 @@ impl<'stack> UseOnContext<'stack> {
         match reader {
             LevelReaderRef::Server(level) => level.entity::<EntityData>(player),
             LevelReaderRef::Worldgen(_) => Err(LevelError::UnsupportedWorldgenEnvironment),
+            LevelReaderRef::PathNavigation(reader) => Ok(reader.entity_state(player)?.as_entity()),
         }
+    }
+    /// Entity#getViewXRot(1) reads pitch. Entity#getViewYRot(1) reads yaw,
+    /// while LivingEntity's override reads its canonical head yaw.
+    fn view_rotation(&self, reader: &LevelReaderRef<'_, '_>) -> Result<(f32, f32), LevelError> {
+        let player = self.player.ok_or(LevelError::MissingPlacementPlayer)?;
+        let state = reader.entity_state(player)?;
+        let entity = state.as_entity();
+        let yaw = state
+            .as_living()
+            .map_or(entity.yaw, |living| living.y_head_rot);
+        Ok((entity.pitch, yaw))
     }
     pub fn horizontal_direction(
         &self,
@@ -143,11 +204,12 @@ impl<'stack> BlockPlaceContext<'stack> {
         let step = face.step();
         Self::new(
             reader,
-            UseOnContext::new(
-                context.use_on.player,
-                context.use_on.hand,
-                context.use_on.held_item,
-                PlacementHit {
+            // Keep the original borrowed or retained receiver; never re-wrap it.
+            UseOnContext {
+                player: context.use_on.player,
+                hand: context.use_on.hand,
+                held_item: context.use_on.held_item,
+                hit: PlacementHit {
                     pos,
                     face,
                     inside: false,
@@ -157,7 +219,7 @@ impl<'stack> BlockPlaceContext<'stack> {
                         f64::from(pos.z) + 0.5 + f64::from(step.z) * 0.5,
                     ),
                 },
-            ),
+            },
         )
     }
     pub fn clicked_pos(&self) -> BlockPos {
@@ -176,8 +238,11 @@ impl<'stack> BlockPlaceContext<'stack> {
     pub fn is_inside(&self) -> bool {
         self.use_on.hit.inside
     }
-    pub fn item_in_hand(&self) -> &ItemStack {
-        self.use_on.item_in_hand()
+    pub fn item_in_hand<'call>(
+        &'call self,
+        reader: &'call LevelReaderRef<'_, '_>,
+    ) -> Result<&'call ItemStack, LevelError> {
+        self.use_on.item_in_hand(reader)
     }
     pub fn player(&self) -> Option<EntityRef> {
         self.use_on.player
@@ -213,8 +278,8 @@ impl<'stack> BlockPlaceContext<'stack> {
         match self.kind {
             PlacementKind::Directional(_) => Ok(Direction::Down),
             PlacementKind::Player => {
-                let player = self.use_on.player_data(reader)?;
-                Ok(Direction::ordered_by_nearest(player.pitch, player.yaw)[0])
+                let (pitch, yaw) = self.use_on.view_rotation(reader)?;
+                Ok(Direction::ordered_by_nearest(pitch, yaw)[0])
             }
         }
     }
@@ -245,8 +310,8 @@ impl<'stack> BlockPlaceContext<'stack> {
                 },
             );
         }
-        let player = self.use_on.player_data(reader)?;
-        let mut directions = Direction::ordered_by_nearest(player.pitch, player.yaw);
+        let (pitch, yaw) = self.use_on.view_rotation(reader)?;
+        let mut directions = Direction::ordered_by_nearest(pitch, yaw);
         if !self.replace_clicked {
             let face = self.clicked_face().opposite();
             let index = directions
@@ -463,13 +528,11 @@ mod tests {
                     level.get_state_for_placement(Block::STONE, &context),
                     Ok(Some(Block::STONE.default_state()))
                 );
-                assert!(matches!(
+                // RotatedPillarBlock takes the clicked face's axis; UP is the default Y axis.
+                assert_eq!(
                     level.get_state_for_placement(Block::OAK_LOG, &context),
-                    Err(LevelError::UnsupportedBlockMethod(
-                        _,
-                        BlockMethod::GetStateForPlacement
-                    ))
-                ));
+                    Ok(Some(Block::OAK_LOG.default_state()))
+                );
                 actual
             } else {
                 level

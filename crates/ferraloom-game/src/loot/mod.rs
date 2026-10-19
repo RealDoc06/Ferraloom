@@ -71,6 +71,7 @@ pub enum LootError {
         extra: Vec<ContextParam>,
     },
     Unsupported(String),
+    CommandStorage(crate::commands::storage::StorageReadError),
     Arithmetic,
     Validation(Vec<ValidationProblem>),
 }
@@ -85,6 +86,7 @@ impl fmt::Display for LootError {
                 "invalid loot parameters: missing {missing:?}, extra {extra:?}"
             ),
             Self::Unsupported(fact) => write!(f, "unsupported loot fact: {fact}"),
+            Self::CommandStorage(error) => fmt::Display::fmt(error, f),
             Self::Arithmetic => f.write_str("invalid number provider arithmetic"),
             Self::Validation(problems) => {
                 write!(f, "{} fatal loot validation problem(s)", problems.len())
@@ -92,7 +94,14 @@ impl fmt::Display for LootError {
         }
     }
 }
-impl std::error::Error for LootError {}
+impl std::error::Error for LootError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::CommandStorage(error) => Some(error),
+            _ => None,
+        }
+    }
+}
 impl From<ferraloom_protocol::Error> for LootError {
     fn from(value: ferraloom_protocol::Error) -> Self {
         Self::Decode(value.to_string())

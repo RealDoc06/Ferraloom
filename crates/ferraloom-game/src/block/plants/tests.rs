@@ -1,4 +1,6 @@
 use super::*;
+#[cfg(test)]
+use crate::level::game_event::test_support::{self as game_events, Observation};
 use crate::{
     Behaviors,
     block::{BlockBehavior, LevelAccessRef, LevelReaderRef},
@@ -334,6 +336,7 @@ fn snow_melts_only_above_eleven_block_light_and_emits_destroy_context() {
     let (blocks, fluids) = tags();
     for light in [0, 11, 12, 15] {
         let mut level = level();
+        game_events::observe(&mut level);
         super::fixtures::install_loot(&mut level);
         level.rules_mut().block_drops = Some(false);
         level.set_block_tags(blocks.clone());
@@ -360,12 +363,12 @@ fn snow_melts_only_above_eleven_block_light_and_emits_destroy_context() {
                 state
             }
         );
-        let effects = level.take_effects();
-        assert_eq!(effects.iter().filter(|e|matches!(e,LevelEffect::GameEvent{event:ferraloom_data::registries::game_event::Id::BLOCK_DESTROY,affected_state:Some(affected),..} if *affected==state)).count(),usize::from(light>11));
+        let effects = game_events::take(&mut level);
+        assert_eq!(effects.iter().filter(|e|matches!(e,Observation::GameEvent{event:ferraloom_data::registries::game_event::Id::BLOCK_DESTROY,affected_state:Some(affected),..} if *affected==state)).count(),usize::from(light>11));
         assert!(
             !effects
                 .iter()
-                .any(|e| matches!(e, LevelEffect::DestroyParticles { .. }))
+                .any(|e| matches!(e, Observation::Effect(LevelEffect::DestroyParticles { .. })))
         );
     }
 }
@@ -490,6 +493,7 @@ fn farmland_water_boundary_and_crop_protection_preserve_random_stream() {
         (None, false, 0, None),
     ] {
         let mut level = level();
+        game_events::observe(&mut level);
         level.set_block_tags(blocks.clone());
         level.set_fluid_tags(fluids.clone());
         let state = Block::FARMLAND
@@ -520,8 +524,8 @@ fn farmland_water_boundary_and_crop_protection_preserve_random_stream() {
             level.random().next_long(),
             LegacyRandomSource::new(7331).next_long()
         );
-        let effects = level.take_effects();
-        assert_eq!(effects.iter().filter(|effect| matches!(effect, LevelEffect::GameEvent { event: ferraloom_data::registries::game_event::Id::BLOCK_CHANGE, affected_state: Some(state), .. } if *state == Block::DIRT.default_state())).count(), usize::from(expected.is_none()));
+        let effects = game_events::take(&mut level);
+        assert_eq!(effects.iter().filter(|effect| matches!(effect, Observation::GameEvent { event: ferraloom_data::registries::game_event::Id::BLOCK_CHANGE, affected_state: Some(state), .. } if *state == Block::DIRT.default_state())).count(), usize::from(expected.is_none()));
     }
 }
 
@@ -1068,6 +1072,7 @@ fn farmland_trampling_preserves_draw_order_permission_size_and_actor() {
         (3, true, false, 0.0, false),
     ] {
         let mut level = level();
+        game_events::observe(&mut level);
         level.set_block_tags(blocks.clone());
         level.set_fluid_tags(fluids.clone());
         level.rules_mut().mob_griefing = mob_griefing;
@@ -1100,12 +1105,21 @@ fn farmland_trampling_preserves_draw_order_permission_size_and_actor() {
             .update_entity_chunk_status(ChunkPos::ZERO, crate::level::entity::Visibility::Ticking)
             .unwrap();
         level.add_entity(actor, entity).unwrap();
+        let mut shared = crate::ServerShared::default();
+        shared.ops.set_operator(
+            &ferraloom_protocol::login::GameProfile {
+                id: Uuid::new(3, 4),
+                name: "Other".into(),
+                properties: vec![],
+            },
+            Some(crate::commands::permissions::PermissionLevel::Owners),
+        );
+        level.install_shared(Box::new(shared));
         level.set_spawn_protection(SpawnProtectionSnapshot::new(
             "minecraft:overworld".parse().unwrap(),
             "minecraft:overworld".parse().unwrap(),
             pos,
             if protected { 10 } else { 0 },
-            [Uuid::new(3, 4)],
         ));
         level.set_random_streams(Random::Legacy(LegacyRandomSource::new(42)), 0);
         let mut expected_random = LegacyRandomSource::new(42);
@@ -1122,10 +1136,10 @@ fn farmland_trampling_preserves_draw_order_permission_size_and_actor() {
             }
         );
         assert_eq!(level.random().next_long(), expected_random.next_long());
-        let effects = level.take_effects();
+        let effects = game_events::take(&mut level);
         assert_eq!(
             effects.iter().any(|effect| matches!(effect,
-            LevelEffect::GameEvent { event: GameEvent::BLOCK_CHANGE, source: Some(source),
+            Observation::GameEvent { event: GameEvent::BLOCK_CHANGE, source: Some(source),
                 affected_state: Some(new_state), .. }
                 if *source == actor && new_state.block() == Block::DIRT)),
             tramples
@@ -1796,7 +1810,12 @@ fn double_plant_and_moss_post_placement_match_native_updates_and_rng() {
             0,
         );
         level
-            .set_placed_by(state, pos, None, &ItemStack::default())
+            .set_placed_by(
+                state,
+                pos,
+                None,
+                crate::block::StackView::Borrowed(&ItemStack::default()),
+            )
             .unwrap();
         assert_eq!(
             level.get_block_state(pos).unwrap().id(),
@@ -1843,6 +1862,7 @@ fn creative_double_plant_destruction_matches_native_states_and_rng() {
         let f: Vec<_> = line.split('\t').collect();
         let state = BlockState::from_id(f[1].parse().unwrap()).unwrap();
         let mut level = level();
+        game_events::observe(&mut level);
         super::fixtures::install_loot(&mut level);
         level.set_block_tags(blocks.clone());
         level.set_fluid_tags(fluids.clone());
@@ -1889,7 +1909,7 @@ fn creative_double_plant_destruction_matches_native_states_and_rng() {
             f[7].parse::<i64>().unwrap(),
             "RNG {line}"
         );
-        assert!(level.take_effects().iter().any(|effect|matches!(effect,LevelEffect::GameEvent{source:Some(source),affected_state:Some(affected),..} if *source==actor && *affected==state)),"actor {line}");
+        assert!(game_events::take(&mut level).iter().any(|effect|matches!(effect,Observation::GameEvent{source:Some(source),affected_state:Some(affected),..} if *source==actor && *affected==state)),"actor {line}");
         count += 1;
     }
     assert_eq!(count, 512);

@@ -9,8 +9,10 @@
 //! ```
 
 mod block_methods;
+mod building_properties;
 pub mod dispenser_properties;
 mod environment_attributes;
+mod game_events;
 mod item_names;
 pub mod note_properties;
 pub mod redstone_properties;

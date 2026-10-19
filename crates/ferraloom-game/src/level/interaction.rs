@@ -1,6 +1,4 @@
 //! DedicatedServer spawn protection published at the exclusive server call site.
-use std::collections::HashSet;
-
 use ferraloom_data::datapack::Identifier;
 use ferraloom_util::{BlockPos, Uuid};
 
@@ -15,7 +13,6 @@ pub struct SpawnProtectionSnapshot {
     spawn_dimension: Identifier,
     spawn: BlockPos,
     radius: i32,
-    operators: HashSet<Uuid>,
 }
 impl SpawnProtectionSnapshot {
     pub fn new(
@@ -23,22 +20,25 @@ impl SpawnProtectionSnapshot {
         spawn_dimension: Identifier,
         spawn: BlockPos,
         radius: i32,
-        operators: impl IntoIterator<Item = Uuid>,
     ) -> Self {
         Self {
             dimension,
             spawn_dimension,
             spawn,
             radius,
-            operators: operators.into_iter().collect(),
         }
     }
 
     /// Port of DedicatedServer#isUnderSpawnProtection's dedicated-server cases.
-    fn protects(&self, player: Uuid, pos: BlockPos) -> bool {
+    fn protects(
+        &self,
+        player: Uuid,
+        pos: BlockPos,
+        operators: &crate::commands::permissions::ServerOpList,
+    ) -> bool {
         if self.dimension != self.spawn_dimension
-            || self.operators.is_empty()
-            || self.operators.contains(&player)
+            || operators.is_empty()
+            || operators.contains(player)
             || self.radius <= 0
         {
             return false;
@@ -51,7 +51,7 @@ impl SpawnProtectionSnapshot {
 }
 
 impl Level {
-    /// Publish after loading properties/operators and after each op or shared-spawn change.
+    /// Publish shared spawn/property changes; operators stay in the live shared owner.
     pub fn set_spawn_protection(&mut self, snapshot: SpawnProtectionSnapshot) {
         self.region_mut().spawn_protection = Some(snapshot);
     }
@@ -68,7 +68,7 @@ impl Level {
             .spawn_protection
             .as_ref()
             .ok_or(LevelError::MissingSpawnProtectionContext)?;
-        Ok(snapshot.protects(player.uuid, pos))
+        Ok(snapshot.protects(player.uuid, pos, &self.shared()?.ops))
     }
 
     /// Port of ServerLevel#mayInteract (the base Level implementation permits all).
@@ -112,6 +112,14 @@ mod tests {
     const OTHER: EntityRef = EntityRef(2);
     const UUID: Uuid = Uuid::new(1, 2);
 
+    fn profile(id: Uuid) -> ferraloom_protocol::login::GameProfile {
+        ferraloom_protocol::login::GameProfile {
+            id,
+            name: "Player".into(),
+            properties: vec![],
+        }
+    }
+
     fn level() -> Level {
         static BEHAVIORS: Behaviors = Behaviors::EMPTY;
         let mut level = Level::new(
@@ -136,6 +144,7 @@ mod tests {
                 EntityState::ExperienceOrb(Box::new(ExperienceOrb::new(2, 0))),
             )
             .unwrap();
+        level.install_shared(Box::default());
         level
     }
 
@@ -145,13 +154,22 @@ mod tests {
             serde_json::from_str(include_str!("vanilla/spawn-protection-vectors.json")).unwrap();
         let mut level = level();
         for vector in vectors {
-            let mut operators = Vec::new();
+            let mut shared = crate::ServerShared::default();
             if vector.has_ops {
-                operators.push(Uuid::new(3, 4));
+                shared.ops.set_operator(
+                    &profile(Uuid::new(3, 4)),
+                    Some(crate::commands::permissions::PermissionLevel::Owners),
+                );
             }
             if vector.player_op_level >= 0 {
-                operators.push(UUID);
+                shared.ops.set_operator(
+                    &profile(UUID),
+                    Some(crate::commands::permissions::PermissionLevel::by_id(
+                        vector.player_op_level,
+                    )),
+                );
             }
+            level.shared_mut().unwrap().ops = shared.ops;
             level.set_spawn_protection(SpawnProtectionSnapshot::new(
                 format!("minecraft:{}", vector.dimension).parse().unwrap(),
                 format!("minecraft:{}", vector.spawn_dimension)
@@ -159,7 +177,6 @@ mod tests {
                     .unwrap(),
                 BlockPos::new(vector.spawn[0], vector.spawn[1], vector.spawn[2]),
                 vector.radius,
-                operators,
             ));
             let mut border = WorldBorder::default();
             border.set_size(vector.border_size);
@@ -193,22 +210,37 @@ mod tests {
         );
         for operators in [vec![Uuid::new(3, 4)], vec![UUID], vec![]] {
             let protected = operators == [Uuid::new(3, 4)];
+            let mut shared = crate::ServerShared::default();
+            for operator in operators {
+                shared.ops.set_operator(
+                    &profile(operator),
+                    Some(crate::commands::permissions::PermissionLevel::Owners),
+                );
+            }
+            level.shared_mut().unwrap().ops = shared.ops;
             level.set_spawn_protection(SpawnProtectionSnapshot::new(
                 "minecraft:overworld".parse().unwrap(),
                 "minecraft:overworld".parse().unwrap(),
                 pos,
                 16,
-                operators,
             ));
             assert_eq!(level.may_interact(PLAYER, pos), Ok(!protected));
         }
+        level.shared_mut().unwrap().ops.set_operator(
+            &profile(Uuid::new(3, 4)),
+            Some(crate::commands::permissions::PermissionLevel::Owners),
+        );
+        assert_eq!(
+            level.may_interact(PLAYER, pos),
+            Ok(false),
+            "ops mutation is visible without republishing spawn"
+        );
         // A shared spawn change is observed by the next game query, without a tick.
         level.set_spawn_protection(SpawnProtectionSnapshot::new(
             "minecraft:overworld".parse().unwrap(),
             "minecraft:overworld".parse().unwrap(),
             BlockPos::new(100, 64, 100),
             16,
-            [Uuid::new(3, 4)],
         ));
         assert_eq!(level.may_interact(PLAYER, pos), Ok(true));
     }

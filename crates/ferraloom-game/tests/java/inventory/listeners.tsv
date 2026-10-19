@@ -16,3 +16,5 @@ listener	swap	self:-:1,64,64:1,6,64;detached:1,2,64:1,64,64;alias:true:true;curr
 listener	quickcraft	copy:false:1,10,64:-;held:1,12,64:1,2,64;targets:1,5,64:1,5,64
 listener	result-achievements-0	award:0:4:1,5,64;captured:1,5,64;after:0:1012,7,64
 listener	result-achievements-4	crafted:4;award:19:4:55,3,64;captured:55,3,64;after:0:1012,7,64
+listener	crafter-internal	0:163,1,64:63,4,64;45:63,4,64:63,4,64;set:63,4,64;36:55,1,64:63,4,64;refresh:false:63,4,64
+listener	crafter-slot	empty:-
