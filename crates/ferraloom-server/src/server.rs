@@ -1475,8 +1475,12 @@ impl MinecraftServer {
                     {
                         bail!("multiplayer.disconnect.invalid_player_movement");
                     }
-                    entity_teleport::accept_teleport(entity, p.id.0, &mut self.level.level)
-                        .map_err(game_error)?;
+                    entity_teleport::accept_teleport(
+                        entity,
+                        p.id.0,
+                        self.level_for_entity_mut(entity).map_err(game_error)?,
+                    )
+                    .map_err(game_error)?;
                     self.update_player_tickets(entity)?;
                     self.movement(
                         connection,
@@ -1526,8 +1530,8 @@ impl MinecraftServer {
                 .await?;
             }
             sb::Packet::MovePlayerStatusOnly(p) => {
-                self.level
-                    .level
+                self.level_for_entity_mut(entity)
+                    .map_err(game_error)?
                     .entity_mut::<ServerPlayer>(entity)
                     .map_err(game_error)?
                     .on_ground = p.flags.on_ground
@@ -1540,8 +1544,8 @@ impl MinecraftServer {
                 .acknowledge(p.desired_chunks_per_tick),
             sb::Packet::KeepAlive(p) => self.keepalive_reply(connection, p.id)?,
             sb::Packet::PlayerLoaded(_) => {
-                self.level
-                    .level
+                self.level_for_entity_mut(entity)
+                    .map_err(game_error)?
                     .entity_mut::<ServerPlayer>(entity)
                     .map_err(game_error)?
                     .loaded = true
@@ -1554,8 +1558,8 @@ impl MinecraftServer {
             }
             sb::Packet::ClientInformation(p) => {
                 let player = self
-                    .level
-                    .level
+                    .level_for_entity_mut(entity)
+                    .map_err(game_error)?
                     .entity_mut::<ServerPlayer>(entity)
                     .map_err(game_error)?;
                 player.view_distance = i32::from(p.view_distance);
@@ -1732,8 +1736,8 @@ impl MinecraftServer {
                 .offset(p.offset.0)?,
             sb::Packet::PlayerAbilities(p) => {
                 let player = self
-                    .level
-                    .level
+                    .level_for_entity_mut(entity)
+                    .map_err(game_error)?
                     .entity_mut::<ServerPlayer>(entity)
                     .map_err(game_error)?;
                 if player.abilities.mayfly {
@@ -1752,32 +1756,39 @@ impl MinecraftServer {
                 bail!("multiplayer.disconnect.unexpected_query_response")
             }
             sb::Packet::ClientTickEnd(_) => {
-                let c = self.connections.get_mut(&connection).unwrap();
-                if !c.received_movement_this_tick {
-                    self.level
-                        .level
+                if !self.connections[&connection].received_movement_this_tick {
+                    self.level_for_entity_mut(entity)
+                        .map_err(game_error)?
                         .entity_mut::<ServerPlayer>(entity)
                         .map_err(game_error)?
                         .known_movement = Vec3::ZERO;
                 }
+                let c = self.connections.get_mut(&connection).unwrap();
                 c.received_position_this_tick = false;
                 c.received_movement_this_tick = false;
             }
             sb::Packet::PlayerInput(p) => {
-                let player = self
-                    .level
-                    .level
-                    .entity_mut::<ServerPlayer>(entity)
-                    .map_err(game_error)?;
-                player.last_client_input = p.input;
-                if player.has_client_loaded() {
+                let loaded = {
+                    let player = self
+                        .level_for_entity_mut(entity)
+                        .map_err(game_error)?
+                        .entity_mut::<ServerPlayer>(entity)
+                        .map_err(game_error)?;
+                    player.last_client_input = p.input;
+                    player.has_client_loaded()
+                };
+                if loaded {
                     self.connections.get_mut(&connection).unwrap().last_action = Instant::now();
-                    player.set_shared_flag(1, p.input.shift);
+                    self.level_for_entity_mut(entity)
+                        .map_err(game_error)?
+                        .entity_mut::<ServerPlayer>(entity)
+                        .map_err(game_error)?
+                        .set_shared_flag(1, p.input.shift);
                 }
             }
             sb::Packet::SeenAdvancements(packet) => {
                 ferraloom_game::advancements::seen_advancements(
-                    &mut self.level.level,
+                    self.level_for_entity_mut(entity).map_err(game_error)?,
                     entity,
                     &packet,
                 )
@@ -1786,8 +1797,11 @@ impl MinecraftServer {
             sb::Packet::ClientCommand(packet)
                 if packet.action == play::ClientCommandAction::RequestStats =>
             {
-                ferraloom_game::stats::request_stats(&mut self.level.level, entity)
-                    .map_err(game_error)?;
+                ferraloom_game::stats::request_stats(
+                    self.level_for_entity_mut(entity).map_err(game_error)?,
+                    entity,
+                )
+                .map_err(game_error)?;
             }
             sb::Packet::CustomPayload(_) | sb::Packet::Pong(_) | sb::Packet::PlayerCommand(_) => {}
             // These gameplay ports are outside the terrain/join milestone.
@@ -1806,8 +1820,8 @@ impl MinecraftServer {
         self.connections.get_mut(&connection).unwrap().last_action = Instant::now();
         let (menu, spectator, valid_slot) = {
             let player = self
-                .level
-                .level
+                .level_for_entity(entity)
+                .map_err(game_error)?
                 .entity::<ServerPlayer>(entity)
                 .map_err(game_error)?;
             let menu = player.menus.current();
@@ -1825,16 +1839,21 @@ impl MinecraftServer {
                 entity,
                 menu,
                 MenuSynchronization::Contents,
-                &mut self.level.level,
+                self.level_for_entity_mut(entity).map_err(game_error)?,
             )?;
         } else {
-            if !inventory::live_menu_still_valid(entity, menu, &self.level.level)? || !valid_slot {
+            if !inventory::live_menu_still_valid(
+                entity,
+                menu,
+                self.level_for_entity(entity).map_err(game_error)?,
+            )? || !valid_slot
+            {
                 return Ok(());
             }
             let mismatch = {
                 let receiver = self
-                    .level
-                    .level
+                    .level_for_entity_mut(entity)
+                    .map_err(game_error)?
                     .entity_mut::<ServerPlayer>(entity)
                     .map_err(game_error)?
                     .menus
@@ -1843,10 +1862,14 @@ impl MinecraftServer {
                 receiver.suppress_remote_updates();
                 mismatch
             };
-            let resources = self.level.level.container_resources().map_err(game_error)?;
+            let resources = self
+                .level_for_entity(entity)
+                .map_err(game_error)?
+                .container_resources()
+                .map_err(game_error)?;
             let kind = self
-                .level
-                .level
+                .level_for_entity(entity)
+                .map_err(game_error)?
                 .entity::<ServerPlayer>(entity)
                 .map_err(game_error)?
                 .menus
@@ -1866,15 +1889,15 @@ impl MinecraftServer {
                 i32::from(packet.button_num),
                 packet.container_input,
                 &mut hooks,
-                &mut self.level.level,
+                self.level_for_entity_mut(entity).map_err(game_error)?,
             )?;
             // Java re-reads player.containerMenu after clicked: a callback may
             // have replaced it. The captured old receiver was rooted only for
             // clicked itself, and must never receive the new remote state.
             let current = {
                 let menus = &mut self
-                    .level
-                    .level
+                    .level_for_entity_mut(entity)
+                    .map_err(game_error)?
                     .entity_mut::<ServerPlayer>(entity)
                     .map_err(game_error)?
                     .menus;
@@ -1895,7 +1918,7 @@ impl MinecraftServer {
                 } else {
                     MenuSynchronization::Changes
                 },
-                &mut self.level.level,
+                self.level_for_entity_mut(entity).map_err(game_error)?,
             )?;
         }
         self.apply_level_effects()
@@ -1908,7 +1931,7 @@ impl MinecraftServer {
     ) -> Result<()> {
         ferraloom_game::inventory::close_container_live(
             entity,
-            &mut self.level.level,
+            self.level_for_entity_mut(entity).map_err(game_error)?,
             false,
             false,
         )?;
@@ -1924,8 +1947,8 @@ impl MinecraftServer {
         self.connections.get_mut(&connection).unwrap().last_action = Instant::now();
         let may_build = {
             let player = self
-                .level
-                .level
+                .level_for_entity(entity)
+                .map_err(game_error)?
                 .entity::<ServerPlayer>(entity)
                 .map_err(game_error)?;
             if player.game_mode == GameType::Spectator
@@ -1937,7 +1960,7 @@ impl MinecraftServer {
         };
         let (accepted, packets, drops) = ferraloom_game::inventory::with_block_menu_context(
             entity,
-            &mut self.level.level,
+            self.level_for_entity_mut(entity).map_err(game_error)?,
             |menus, _book, context| {
                 let menu = menus.current_mut();
                 if !menu.still_valid(context) {
@@ -1956,13 +1979,20 @@ impl MinecraftServer {
                 ))
             },
         )?;
-        ferraloom_game::inventory::send_container_packets(entity, packets, &mut self.level.level)?;
+        ferraloom_game::inventory::send_container_packets(
+            entity,
+            packets,
+            self.level_for_entity_mut(entity).map_err(game_error)?,
+        )?;
         for drop in drops {
             self.drop_inventory_stack(entity, drop.stack, drop.thrown_from_hand)?;
         }
         if accepted {
-            ferraloom_game::inventory::broadcast_container_menu(entity, &mut self.level.level)
-                .map_err(game_error)?;
+            ferraloom_game::inventory::broadcast_container_menu(
+                entity,
+                self.level_for_entity_mut(entity).map_err(game_error)?,
+            )
+            .map_err(game_error)?;
         }
         self.apply_level_effects()
     }
@@ -1975,11 +2005,13 @@ impl MinecraftServer {
         packet: sb::PlaceRecipe,
     ) -> Result<()> {
         use ferraloom_game::inventory::{self, LiveRecipeMenuHooks, MenuKind};
+        let recipe_manager = Arc::clone(&self.recipe_manager);
+        let recipe_synchronization = Arc::clone(&self.recipe_synchronization);
         self.connections.get_mut(&connection).unwrap().last_action = Instant::now();
         let (menu, allow_dropping) = {
             let player = self
-                .level
-                .level
+                .level_for_entity(entity)
+                .map_err(game_error)?
                 .entity::<ServerPlayer>(entity)
                 .map_err(game_error)?;
             if player.game_mode == GameType::Spectator
@@ -1992,23 +2024,23 @@ impl MinecraftServer {
                 player.game_mode == GameType::Creative,
             )
         };
-        if !inventory::live_menu_still_valid(entity, menu, &self.level.level)? {
+        if !inventory::live_menu_still_valid(
+            entity,
+            menu,
+            self.level_for_entity(entity).map_err(game_error)?,
+        )? {
             return Ok(());
         }
-        let Some(display) = self
-            .recipe_synchronization
-            .get_recipe_from_display(packet.recipe)
-        else {
+        let Some(display) = recipe_synchronization.get_recipe_from_display(packet.recipe) else {
             return Ok(());
         };
-        let recipe = self
-            .recipe_manager
+        let recipe = recipe_manager
             .by_key(&display.parent)
             .context("recipe display without parent")?;
         let kind = {
             let player = self
-                .level
-                .level
+                .level_for_entity(entity)
+                .map_err(game_error)?
                 .entity::<ServerPlayer>(entity)
                 .map_err(game_error)?;
             if !player.recipe_book.contains(&recipe.id) {
@@ -2028,7 +2060,11 @@ impl MinecraftServer {
             return Ok(());
         }
         let mut hooks = LiveRecipeMenuHooks {
-            resources: self.level.level.container_resources().map_err(game_error)?,
+            resources: self
+                .level_for_entity(entity)
+                .map_err(game_error)?
+                .container_resources()
+                .map_err(game_error)?,
             kind,
             limited_crafting: self
                 .game_rules
@@ -2041,12 +2077,12 @@ impl MinecraftServer {
             packet.use_max_items,
             allow_dropping,
             &mut hooks,
-            &mut self.level.level,
+            self.level_for_entity_mut(entity).map_err(game_error)?,
         )?;
         if action == ferraloom_game::crafting::PostPlaceAction::PlaceGhostRecipe {
             let container_id = self
-                .level
-                .level
+                .level_for_entity(entity)
+                .map_err(game_error)?
                 .entity::<ServerPlayer>(entity)
                 .map_err(game_error)?
                 .menus
@@ -2058,7 +2094,7 @@ impl MinecraftServer {
                     container_id: VarInt(container_id),
                     recipe_display: display.display.display.clone(),
                 })],
-                &mut self.level.level,
+                self.level_for_entity_mut(entity).map_err(game_error)?,
             )?;
         }
         self.apply_level_effects()
@@ -2069,8 +2105,8 @@ impl MinecraftServer {
         entity: EntityRef,
         packet: sb::RecipeBookChangeSettings,
     ) -> Result<()> {
-        self.level
-            .level
+        self.level_for_entity_mut(entity)
+            .map_err(game_error)?
             .entity_mut::<ServerPlayer>(entity)
             .map_err(game_error)?
             .recipe_book
@@ -2083,8 +2119,8 @@ impl MinecraftServer {
         entity: EntityRef,
         packet: sb::RecipeBookSeenRecipe,
     ) -> Result<()> {
-        self.level
-            .level
+        self.level_for_entity_mut(entity)
+            .map_err(game_error)?
             .entity_mut::<ServerPlayer>(entity)
             .map_err(game_error)?
             .recipe_book
@@ -2107,8 +2143,8 @@ impl MinecraftServer {
         let mut drop = None;
         let (synchronize, packets) = {
             let player = self
-                .level
-                .level
+                .level_for_entity_mut(entity)
+                .map_err(game_error)?
                 .entity_mut::<ServerPlayer>(entity)
                 .map_err(game_error)?;
             if player.game_mode != GameType::Creative || !valid_data {
@@ -2150,14 +2186,18 @@ impl MinecraftServer {
                 (false, Vec::new())
             }
         };
-        ferraloom_game::inventory::send_container_packets(entity, packets, &mut self.level.level)?;
+        ferraloom_game::inventory::send_container_packets(
+            entity,
+            packets,
+            self.level_for_entity_mut(entity).map_err(game_error)?,
+        )?;
         if let Some(stack) = drop {
             self.drop_inventory_stack(entity, stack, true)?;
         }
         if synchronize {
             let menu = self
-                .level
-                .level
+                .level_for_entity(entity)
+                .map_err(game_error)?
                 .entity::<ServerPlayer>(entity)
                 .map_err(game_error)?
                 .menus
@@ -2167,7 +2207,7 @@ impl MinecraftServer {
                 entity,
                 menu,
                 ferraloom_game::inventory::MenuSynchronization::Changes,
-                &mut self.level.level,
+                self.level_for_entity_mut(entity).map_err(game_error)?,
             )?;
         }
         self.apply_level_effects()
@@ -2180,8 +2220,8 @@ impl MinecraftServer {
         packet: sb::SetCarriedItem,
     ) -> Result<()> {
         if (0..9).contains(&packet.slot) {
-            self.level
-                .level
+            self.level_for_entity_mut(entity)
+                .map_err(game_error)?
                 .entity_mut::<ServerPlayer>(entity)
                 .map_err(game_error)?
                 .inventory
@@ -2201,8 +2241,8 @@ impl MinecraftServer {
         self.connections.get_mut(&connection).unwrap().last_action = Instant::now();
         let (drop, packets) = {
             let player = self
-                .level
-                .level
+                .level_for_entity_mut(entity)
+                .map_err(game_error)?
                 .entity_mut::<ServerPlayer>(entity)
                 .map_err(game_error)?;
             if !player.loaded || player.game_mode == GameType::Spectator {
@@ -2210,10 +2250,13 @@ impl MinecraftServer {
             }
             let inventory = &mut player.inventory;
             let drop = if action == PlayerAction::SwapItemWithOffhand {
-                ferraloom_game::inventory::swap_player_hands(entity, &mut self.level.level)?;
+                ferraloom_game::inventory::swap_player_hands(
+                    entity,
+                    self.level_for_entity_mut(entity).map_err(game_error)?,
+                )?;
                 return ferraloom_game::entity::living::stop_using_item(
                     entity,
-                    &mut self.level.level,
+                    self.level_for_entity_mut(entity).map_err(game_error)?,
                 )
                 .map_err(game_error);
             } else {
@@ -2235,12 +2278,19 @@ impl MinecraftServer {
             let menu = player.menus.current_mut();
             (drop, menu.drain_packets())
         };
-        ferraloom_game::inventory::send_container_packets(entity, packets, &mut self.level.level)?;
+        ferraloom_game::inventory::send_container_packets(
+            entity,
+            packets,
+            self.level_for_entity_mut(entity).map_err(game_error)?,
+        )?;
         if let Some(stack) = drop {
             self.drop_inventory_stack(entity, stack, true)?;
         }
-        ferraloom_game::inventory::broadcast_container_menu(entity, &mut self.level.level)
-            .map_err(game_error)?;
+        ferraloom_game::inventory::broadcast_container_menu(
+            entity,
+            self.level_for_entity_mut(entity).map_err(game_error)?,
+        )
+        .map_err(game_error)?;
         self.apply_level_effects()
     }
     fn drop_inventory_stack(
@@ -2254,7 +2304,7 @@ impl MinecraftServer {
                 entity,
                 stack,
                 throw_randomly,
-                &mut self.level.level,
+                self.level_for_entity_mut(entity).map_err(game_error)?,
             )
             .map_err(game_error)?;
         }
@@ -2276,22 +2326,22 @@ impl MinecraftServer {
         );
         if ferraloom_util::Aabb::from_block(packet.pos).distance_to_sqr(eye) >= reach * reach
             || self
-                .level
-                .level
+                .level_for_entity(entity)
+                .map_err(game_error)?
                 .chunk(ChunkPos::containing(packet.pos))
                 .is_none()
         {
             return Ok(());
         }
         let state = self
-            .level
-            .level
+            .level_for_entity(entity)
+            .map_err(game_error)?
             .get_block_state(packet.pos)
             .map_err(game_error)?;
         let include_data = player.game_mode == GameType::Creative && packet.include_data;
         let stack = self
-            .level
-            .level
+            .level_for_entity(entity)
+            .map_err(game_error)?
             .get_clone_item_stack(state, packet.pos, include_data)
             .map_err(game_error)?;
         if stack.is_empty() {
@@ -2310,13 +2360,17 @@ impl MinecraftServer {
         player: EntityRef,
         packet: sb::PickItemFromEntity,
     ) -> Result<()> {
-        let Some(entity) = self.level.level.entity_by_network_id(packet.id.0) else {
+        let Some(entity) = self
+            .level_for_entity(player)
+            .map_err(game_error)?
+            .entity_by_network_id(packet.id.0)
+        else {
             return Ok(());
         };
         let source = self.player(player)?;
         let target = self
-            .level
-            .level
+            .level_for_entity(player)
+            .map_err(game_error)?
             .entity::<ferraloom_game::entity::EntityData>(entity)
             .map_err(game_error)?;
         let reach = self.pick_interaction_range(player, false)? + 3.;
@@ -2329,11 +2383,11 @@ impl MinecraftServer {
             return Ok(());
         }
         let stack = self
-            .level
-            .level
+            .level_for_entity(player)
+            .map_err(game_error)?
             .entity_behavior(entity)
             .map_err(game_error)?
-            .get_pick_result(entity, &self.level.level)
+            .get_pick_result(entity, self.level_for_entity(player).map_err(game_error)?)
             .map_err(game_error)?;
         if let Some(stack) = stack
             && !stack.is_empty()
@@ -2385,7 +2439,11 @@ impl MinecraftServer {
         entity: EntityRef,
         stack: protocol::component::ItemStack,
     ) -> Result<()> {
-        ferraloom_game::inventory::try_pick_item_live(entity, stack, &mut self.level.level)?;
+        ferraloom_game::inventory::try_pick_item_live(
+            entity,
+            stack,
+            self.level_for_entity_mut(entity).map_err(game_error)?,
+        )?;
         self.apply_level_effects()
     }
     fn player(&self, entity: EntityRef) -> Result<&ServerPlayer> {
@@ -2402,8 +2460,13 @@ impl MinecraftServer {
         destination: PositionMoveRotation,
         relatives: i32,
     ) -> Result<()> {
-        entity_teleport::teleport_player(entity, destination, relatives, &mut self.level.level)
-            .map_err(game_error)?;
+        entity_teleport::teleport_player(
+            entity,
+            destination,
+            relatives,
+            self.level_for_entity_mut(entity).map_err(game_error)?,
+        )
+        .map_err(game_error)?;
         self.update_player_tickets(entity)?;
         self.apply_level_effects()
     }
@@ -2416,6 +2479,12 @@ impl MinecraftServer {
         on_ground: bool,
         horizontal_collision: bool,
     ) -> Result<()> {
+        let dimension = self
+            .level_for_entity(entity)
+            .map_err(game_error)?
+            .dimension_key()
+            .map_err(game_error)?
+            .clone();
         let (yaw, pitch) = rotation;
         if [target.x, target.y, target.z].iter().any(|v| v.is_nan())
             || !yaw.is_finite()
@@ -2430,8 +2499,8 @@ impl MinecraftServer {
                     position_move_rotation(position, Vec3::ZERO, player.yaw, player.pitch);
                 self.teleport_player(entity, destination, 0)?;
             }
-            self.level
-                .level
+            self.level_for_entity_mut(entity)
+                .map_err(game_error)?
                 .entity_mut::<ServerPlayer>(entity)
                 .map_err(game_error)?
                 .abs_snap_rotation_to(
@@ -2441,8 +2510,8 @@ impl MinecraftServer {
             return Ok(());
         }
         let player = self
-            .level
-            .level
+            .level_for_entity_mut(entity)
+            .map_err(game_error)?
             .entity_mut::<ServerPlayer>(entity)
             .map_err(game_error)?;
         player.teleport.awaiting_teleport_time = player.connection_ticks as i32;
@@ -2462,22 +2531,28 @@ impl MinecraftServer {
             target.y.floor() as i32,
             target.z.floor() as i32,
         ));
-        self.request_area(center, 1)?;
-        // getChunk(..., true) waits at this visibility point, never treats missing ownership as air.
-        while (-1..=1).any(|x| {
-            (-1..=1).any(|z| {
-                self.level
-                    .level
-                    .chunk(ChunkPos::new(center.x + x, center.z + z))
-                    .is_none()
-            })
-        }) {
-            self.integrate_jobs()?;
+        self.request_area_in(&dimension, center, 1)?;
+        // A required chunk read retains its selected dimension across the IO wait.
+        loop {
+            let missing = {
+                let level = self.level_for_entity(entity).map_err(game_error)?;
+                (-1..=1).any(|x| {
+                    (-1..=1).any(|z| {
+                        level
+                            .chunk(ChunkPos::new(center.x + x, center.z + z))
+                            .is_none()
+                    })
+                })
+            };
+            if !missing {
+                break;
+            }
+            self.integrate_jobs_in(&dimension)?;
             tokio::time::sleep(Duration::from_millis(1)).await;
         }
         let checks = MovementChecks::dedicated(&self.tick_rate_manager);
         let result = move_player_with_checks(
-            &mut self.level.level,
+            self.level_for_entity_mut(entity).map_err(game_error)?,
             entity,
             PlayerMovement {
                 position: target,
@@ -2502,8 +2577,8 @@ impl MinecraftServer {
             }
             MovementResult::Accepted => {
                 let player = self
-                    .level
-                    .level
+                    .level_for_entity_mut(entity)
+                    .map_err(game_error)?
                     .entity_mut::<ServerPlayer>(entity)
                     .map_err(game_error)?;
                 player.known_movement = player.position - origin;
