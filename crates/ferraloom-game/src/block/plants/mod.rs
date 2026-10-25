@@ -62,6 +62,13 @@ pub fn ported_behavior(block: Block, method: BlockMethod) -> Option<&'static dyn
     if method == M::IsPathfindable {
         return pathfinding::behavior(block);
     }
+    if matches!(
+        block.class(),
+        C::SculkSensorBlock | C::CalibratedSculkSensorBlock | C::SculkShriekerBlock
+    ) && matches!(method, M::UpdateShape | M::UpdateFromNeighbourShapes)
+    {
+        return Some(&sculk::WATERLOGGED_SCULK);
+    }
     if block.class() == C::HugeMushroomBlock
         && matches!(
             method,
