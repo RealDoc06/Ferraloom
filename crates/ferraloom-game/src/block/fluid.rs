@@ -853,20 +853,15 @@ impl BlockBehavior for LiquidBlock {
         ) && state.data().fluid.source
             && state.data().fluid.amount == 8
         {
-            use ferraloom_data::tags::BlockTags;
             let below = level.get_block_state(pos.below(1))?;
-            if level
-                .block_tags()?
-                .contains_key(BlockTags::ENABLES_BUBBLE_COLUMN_DRAG_DOWN, below.block())
-                || level
-                    .block_tags()?
-                    .contains_key(BlockTags::ENABLES_BUBBLE_COLUMN_PUSH_UP, below.block())
-            {
-                return Err(LevelError::UnsupportedBlockMethod(
-                    Block::BUBBLE_COLUMN,
-                    super::BlockMethod::BubbleColumnUpdate,
-                ));
-            }
+            let occupy = level.get_block_state(pos)?;
+            super::bubble_column::update_column(
+                Block::BUBBLE_COLUMN,
+                &mut LevelAccessRef::Server(level),
+                pos,
+                occupy,
+                below,
+            )?;
         }
         Ok(())
     }

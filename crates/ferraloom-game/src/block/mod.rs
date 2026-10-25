@@ -2,6 +2,7 @@
 use crate::level::{Level, LevelError, redstone::Orientation};
 use ferraloom_data::{Block, BlockState, FluidState};
 use ferraloom_util::{BlockPos, Direction};
+mod bubble_column;
 pub mod building;
 mod clone_item;
 pub mod containers;

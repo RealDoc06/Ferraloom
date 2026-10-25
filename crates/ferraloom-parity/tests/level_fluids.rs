@@ -108,3 +108,84 @@ async fn parity_lava_meets_water() -> Result<()> {
 async fn parity_falling_sand_column() -> Result<()> {
     run(options(), RunMode::from_env()?, falling_sand_column).await
 }
+
+/// Real water block ticks create the columns; support changes take the native
+/// five-tick updateShape path and leave source water after support is removed.
+async fn bubble_columns(session: &mut Session) -> Result<ObservationLog> {
+    let id = session.join("ParityBot").await?;
+    let bot = session.bot(id)?;
+    freeze(bot).await?;
+    let columns = [8, 16];
+    for (index, x) in columns.into_iter().enumerate() {
+        command(
+            bot,
+            &format!("fill {} -60 7 {} -56 9 minecraft:glass", x - 1, x + 1),
+            "commands.fill.success",
+        )
+        .await?;
+        set(
+            bot,
+            BlockPos::new(x, -60, 8),
+            if index == 0 {
+                Block::SOUL_SAND
+            } else {
+                Block::MAGMA_BLOCK
+            },
+        )
+        .await?;
+        command(
+            bot,
+            &format!("fill {x} -59 8 {x} -57 8 minecraft:water"),
+            "commands.fill.success",
+        )
+        .await?;
+    }
+    step(bot, 20).await?;
+    let mut log = ObservationLog::default();
+    for phase in 0..3 {
+        let mut observed = Vec::new();
+        let mut expected = Vec::new();
+        for (index, x) in columns.into_iter().enumerate() {
+            let state = if phase == 2 {
+                Block::WATER.default_state()
+            } else {
+                Block::BUBBLE_COLUMN
+                    .default_state()
+                    .with(properties::DRAG, (index == 1) != (phase == 1))
+                    .unwrap()
+            };
+            for y in -59..=-57 {
+                expected.push((BlockPos::new(x, y, 8), state));
+            }
+        }
+        expect_blocks(bot, &expected).await?;
+        for (pos, _) in expected {
+            observed.push((pos.x, pos.y, block(bot, pos)?.id()));
+        }
+        log.record(format!("columns.phase_{phase}"), observed)?;
+        if phase < 2 {
+            for (index, x) in columns.into_iter().enumerate() {
+                set(
+                    bot,
+                    BlockPos::new(x, -60, 8),
+                    if phase == 1 {
+                        Block::STONE
+                    } else if index == 0 {
+                        Block::MAGMA_BLOCK
+                    } else {
+                        Block::SOUL_SAND
+                    },
+                )
+                .await?;
+            }
+            step(bot, 5).await?;
+        }
+    }
+    Ok(log)
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "requires real 26.3 Java server and integrated Strict bubble-column ticks"]
+async fn parity_bubble_columns_propagate_reverse_and_restore_water() -> Result<()> {
+    run(options(), RunMode::from_env()?, bubble_columns).await
+}
