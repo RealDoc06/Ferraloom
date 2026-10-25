@@ -784,8 +784,7 @@ pub trait Entity: Sync {
     fn default_gravity(&self, _entity: EntityRef, _level: &Level) -> Result<f64, LevelError> {
         Ok(0.0)
     }
-    /// Port of Entity#getYHeadRot; LivingEntity overrides its stored head angle.
-    /// Full native subclass chain on the same canonical receiver.
+    /// Full native readAdditionalSaveData chain on the same canonical receiver.
     fn read_additional_save_data(
         &self,
         entity: EntityRef,

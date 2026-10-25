@@ -14,6 +14,9 @@ use crate::{
 use ferraloom_data::tags::BlockTags;
 use ferraloom_nbt::CompoundTag;
 
+#[cfg(test)]
+mod tests;
+
 /// Port of Entity#load, preserving the full subclass receiver. This does not
 /// create passengers or invoke postDataManipulated: EntityDataAccessor restores
 /// the old UUID between this call and that virtual, exactly as vanilla does.

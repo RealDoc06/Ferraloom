@@ -168,7 +168,7 @@ impl ItemEntity {
         self.thrower = crate::entity::living::damage_state::read_reference(tag, "Thrower");
         self.set_item(
             tag.get("Item")
-                .and_then(|v| ItemStack::from_nbt(v).ok())
+                .and_then(|v| ItemStack::from_nbt_with_partial(v).ok())
                 .unwrap_or_default(),
         );
         self.item().is_empty()

@@ -9,10 +9,33 @@ import net.minecraft.world.entity.item.*;
 import net.minecraft.world.item.*;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.storage.TagValueInput;
+import net.minecraft.world.level.storage.ValueInput;
+import net.minecraft.server.commands.data.EntityDataAccessor;
 
 /** Actual live Entity.load on all non-player ported families. The projection
  * keeps only implemented fields; every input remains attached for exact replay. */
 public final class LiveLoadVectors {
+  static final String INNER="{marker:2,Pos:[-8.0d,72.0d,9.0d],UUID:[I;0,0,0,3],Item:{id:'minecraft:dirt',count:2}}";
+  static final String OUTER="{marker:1,reenter:1b,Pos:[40.0d,65.0d,2.0d],UUID:[I;0,0,0,2],Item:{id:'minecraft:stone',count:7}}";
+  static final List<String> calls=new ArrayList<>();
+  static String callbackState(String stage,int marker,Entity entity) {
+    var stack=((ItemEntity)entity).getItem();
+    return stage+":"+marker+":"+BuiltInRegistries.ITEM.getKey(stack.getItem())+":"+stack.getCount()+":"+TrackingVectors.vec(entity.position())+":"+entity.getUUID();
+  }
+  static final class ReentrantItem extends ItemEntity {
+    ReentrantItem(Level level){super(EntityTypes.ITEM,level);}
+    @Override protected void readAdditionalSaveData(ValueInput input) {
+      int marker=input.getIntOr("marker",0);
+      calls.add(callbackState("before",marker,this));
+      if(input.getBooleanOr("reenter",false)) {
+        try {load(TagValueInput.create(ProblemReporter.DISCARDING,registryAccess(),TagParser.parseCompoundFully(INNER)));}
+        catch(Exception error){throw new RuntimeException(error);}
+      }
+      super.readAdditionalSaveData(input);
+      calls.add(callbackState("after",marker,this));
+    }
+    @Override public void postDataManipulated(){calls.add(callbackState("post",0,this));}
+  }
   static Entity create(String kind,Level level) {
     return switch(kind){case "cow"->new Cow(EntityTypes.COW,level);case "item"->new ItemEntity(EntityTypes.ITEM,level);case "tnt"->new PrimedTnt(EntityTypes.TNT,level);case "falling_block"->new FallingBlockEntity(EntityTypes.FALLING_BLOCK,level);default->new ExperienceOrb(EntityTypes.EXPERIENCE_ORB,level);};
   }
@@ -57,5 +80,9 @@ public final class LiveLoadVectors {
     }
     var lock=(net.minecraft.network.syncher.EntityDataAccessor<?>)ExperienceVectors.field(AgeableMob.class,"AGE_LOCKED").get(null);
     System.out.println("entity-cow-accessor\tAGE_LOCKED\t"+lock.id()+"\t"+net.minecraft.network.syncher.EntityDataSerializers.getSerializedId(lock.serializer()));
+    calls.clear();
+    var reentrant=new ReentrantItem(level);reentrant.setUUID(new UUID(0,1));reentrant.setItem(new ItemStack(Items.DIAMOND,3));
+    new EntityDataAccessor(reentrant).setData(TagParser.parseCompoundFully(OUTER));
+    System.out.println("entity-live-load-reentrant\t"+OUTER+"\t"+INNER+"\t"+String.join(";",calls));
   }
 }

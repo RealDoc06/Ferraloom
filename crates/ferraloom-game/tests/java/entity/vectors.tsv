@@ -2814,6 +2814,7 @@ entity-live-load	experience_orb	5	{CustomNameVisible:1b,Glowing:1b,HasVisualFire
 entity-cow-accessor	DATA_VARIANT_ID	18	23
 entity-cow-accessor	DATA_SOUND_VARIANT_ID	19	24
 entity-cow-accessor	AGE_LOCKED	17	8
+entity-live-load-reentrant	{marker:1,reenter:1b,Pos:[40.0d,65.0d,2.0d],UUID:[I;0,0,0,2],Item:{id:'minecraft:stone',count:7}}	{marker:2,Pos:[-8.0d,72.0d,9.0d],UUID:[I;0,0,0,3],Item:{id:'minecraft:dirt',count:2}}	before:1:minecraft:diamond:3:4044000000000000,4050400000000000,4000000000000000:00000000-0000-0000-0000-000000000002;before:2:minecraft:diamond:3:c020000000000000,4052000000000000,4022000000000000:00000000-0000-0000-0000-000000000003;after:2:minecraft:dirt:2:c020000000000000,4052000000000000,4022000000000000:00000000-0000-0000-0000-000000000003;after:1:minecraft:stone:7:c020000000000000,4052000000000000,4022000000000000:00000000-0000-0000-0000-000000000003;post:0:minecraft:stone:7:c020000000000000,4052000000000000,4022000000000000:00000000-0000-0000-0000-000000000001
 entity-sound	base-step	none:minecraft:block.stone.step:6:68,512,68:3e19999a:3f800000:bf82071f723fe4e0	b921f1dd	-
 entity-sound	base-silent-step		b921f1dd	-
 entity-sound	player-silent-step	1:minecraft:block.stone.step:7:68,512,68:3e19999a:3f800000:bf82071f723fe4e0	b921f1dd	-
