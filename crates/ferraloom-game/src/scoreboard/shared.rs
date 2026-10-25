@@ -6,6 +6,7 @@ use super::ServerScoreboard;
 #[derive(Debug, Default)]
 pub struct ServerShared {
     pub scoreboard: ServerScoreboard,
+    pub custom_boss_events: crate::bossbar::CustomBossEvents,
     pub ops: crate::commands::permissions::ServerOpList,
 }
 
