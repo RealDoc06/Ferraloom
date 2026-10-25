@@ -477,7 +477,7 @@ fn native_knockback_resistance_ground_cap_and_zero_direction_consume_the_same_ra
 }
 #[test]
 fn native_hurt_sound_selection_baby_pitch_silence_and_separate_sound_rng_match() {
-    use ferraloom_protocol::component::Holder;
+    use ferraloom_protocol::codec::Holder;
     let mut checked = 0;
     for row in VECTORS
         .lines()

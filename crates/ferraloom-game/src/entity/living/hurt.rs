@@ -734,28 +734,16 @@ fn with_damage_refs<T>(
     for (retained, &root) in roots.iter().enumerate() {
         if let Err(error) = level.retain_entity(root) {
             for &prior in roots[..retained].iter().rev() {
-                level.release_entity(prior)?;
+                level.release_entity(prior);
             }
             return Err(error);
         }
     }
     let result = body(level);
-    let mut release_error = None;
     for &root in roots.iter().rev() {
-        if let Err(error) = level.release_entity(root) {
-            release_error.get_or_insert(error);
-        }
+        level.release_entity(root);
     }
-    match result {
-        Err(error) => Err(error),
-        Ok(value) => {
-            if let Some(error) = release_error {
-                Err(error)
-            } else {
-                Ok(value)
-            }
-        }
-    }
+    result
 }
 /// Port of LivingEntity#hurtServer's entry, retaining the derived dispatcher.
 pub fn hurt_server<E: Entity + ?Sized>(
