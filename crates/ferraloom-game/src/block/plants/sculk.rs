@@ -1,5 +1,8 @@
 //! Ports of SculkSpreader, ChargeCursor and the participating SculkBehaviour methods.
 //! Both level arms use the same cursor algorithm and native caller random stream.
+mod shapes;
+pub(super) use shapes::WATERLOGGED_SCULK;
+
 use super::{multiface, multiface_spreader::SpreaderConfig};
 use crate::{
     block::{LevelAccessRef, LevelReaderRef, UpdateFlags},
