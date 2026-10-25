@@ -3297,7 +3297,7 @@ impl MinecraftServer {
                 .with_world(|world| world.access.path().to_path_buf());
             let progress =
                 ferraloom_game::advancements::PlayerProgressSave::capture(player, &progress_path)?;
-            let tag = player.save();
+            let tag = player.save(&self.level.level).map_err(game_error)?;
             let uuid = player.uuid.to_string();
             let name = self
                 .level
@@ -3592,7 +3592,10 @@ impl MinecraftServer {
             })
             .map(|entity| {
                 let player = self.player(entity)?;
-                Ok((player.uuid.to_string(), player.save()))
+                Ok((
+                    player.uuid.to_string(),
+                    player.save(&self.level.level).map_err(game_error)?,
+                ))
             })
             .collect::<Result<Vec<_>>>()?;
         let bootstrap = self

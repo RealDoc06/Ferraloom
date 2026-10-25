@@ -801,7 +801,16 @@ pub(super) fn tags(level: &mut Level) {
 pub(crate) fn level(floor: bool) -> Level {
     level_with_behaviors(floor, &BEHAVIORS)
 }
-fn install_test_environment(level: &mut Level, fast_lava: bool) {
+/// Cold entity-NBT tests use explicit world services without loaded terrain.
+pub(crate) fn persistence_level() -> Level {
+    let mut level = Level::new(
+        Region::new(&BEHAVIORS),
+        crate::level::LevelContext::fixture(0, 63),
+    );
+    install_test_environment(&mut level, false, "minecraft:overworld");
+    level
+}
+pub(crate) fn install_test_environment(level: &mut Level, fast_lava: bool, dimension_key: &str) {
     use crate::level::environment::{ClockSnapshot, EnvironmentDefinitions};
     let resources = ferraloom_data::datapack::ResourceManager::new(Vec::new());
     let definitions = Arc::new(EnvironmentDefinitions::load(&resources).unwrap());
@@ -814,7 +823,7 @@ fn install_test_environment(level: &mut Level, fast_lava: bool) {
         .set_environment_attributes(
             definitions,
             &dimension,
-            "test".parse().unwrap(),
+            dimension_key.parse().unwrap(),
             &[],
             ClockSnapshot::default(),
         )
@@ -833,7 +842,7 @@ fn level_with_behaviors(floor: bool, behaviors: &'static Behaviors) -> Level {
         crate::level::LevelContext::fixture(0, 63),
     );
     // Explicit controlled dimension with native constants and no timelines.
-    install_test_environment(&mut level, false);
+    install_test_environment(&mut level, false, "test");
     for x in -2..=2 {
         for z in -2..=2 {
             level
@@ -2257,7 +2266,9 @@ fn may_build_is_independent_and_game_mode_updates_match_native_abilities() {
             let may_build = player.may_build();
             let result_flying = player.abilities.flying;
             player.abilities.may_build = !may_build;
-            let saved = player.save();
+            let saved = player
+                .save(&crate::entity::tests::persistence_level())
+                .unwrap();
             let saved_may_build = saved
                 .get_compound("abilities")
                 .unwrap()
@@ -2299,7 +2310,7 @@ fn lava_entity_force_reads_the_live_dimension_instead_of_the_legacy_rule_input()
         .add_entity(id, EntityState::PrimedTnt(Box::new(entity)))
         .unwrap();
     for fast in [false, true, false] {
-        install_test_environment(&mut level, fast);
+        install_test_environment(&mut level, fast, "test");
         level.rules_mut().fast_lava = !fast;
         level.entity_mut::<EntityData>(id).unwrap().velocity = Vec3::new(0.1, 0.0, 0.0);
         fluid::update_fluid_interaction(&item::PrimedTntBehavior, id, &mut level).unwrap();
