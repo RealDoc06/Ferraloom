@@ -17,7 +17,7 @@ use serde_json::{Value, json};
 use std::sync::Arc;
 
 async fn interact(bot: &mut Bot, pos: BlockPos) -> Result<()> {
-    bot.use_item_on(
+    bot.use_item_on_and_await_ack(
         play::InteractionHand::MainHand,
         play::BlockHitResult {
             block_pos: pos,
