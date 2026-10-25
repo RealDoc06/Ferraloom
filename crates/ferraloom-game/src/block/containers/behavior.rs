@@ -11,6 +11,9 @@ use ferraloom_util::{BlockPos, Direction, VoxelShape, shapes};
 
 pub struct ContainerBlock;
 static CONTAINER_BLOCK: ContainerBlock = ContainerBlock;
+#[cfg(test)]
+mod chest_tests;
+
 fn chest(block: Block) -> bool {
     matches!(
         block.class(),
@@ -93,11 +96,7 @@ pub(crate) fn ported_behavior(
     if chest(block) && method == M::OutlineShape {
         return Some(&CONTAINER_BLOCK);
     }
-    if matches!(
-        block.class(),
-        BlockClass::ChestBlock | BlockClass::TrappedChestBlock
-    ) && method == M::UpdateShape
-    {
+    if chest(block) && matches!(method, M::UpdateShape | M::UpdateFromNeighbourShapes) {
         return Some(&CONTAINER_BLOCK);
     }
     None
@@ -244,19 +243,24 @@ impl BlockBehavior for ContainerBlock {
             z1 / 16.0,
         ))
     }
+    /// Port of ChestBlock#updateShape and CopperChestBlock#updateShape. Water
+    /// schedules before partner checks; copper then adopts a connected variant.
     fn update_shape(
         &self,
         mut state: BlockState,
-        _pos: BlockPos,
+        pos: BlockPos,
         direction: Direction,
         _neighbor_pos: BlockPos,
         neighbor: BlockState,
         level: &mut LevelAccessRef<'_, '_>,
     ) -> Result<BlockState, LevelError> {
         if state.get(p::WATERLOGGED) == Some(true) {
-            level.schedule_fluid_tick(_pos, ferraloom_data::registries::fluid::Id::WATER, 5)?;
+            // WaterFluid#getTickDelay is five in every dimension.
+            level.schedule_fluid_tick(pos, ferraloom_data::registries::fluid::Id::WATER, 5)?;
         }
-        if neighbor.block() == state.block() && direction.axis().is_horizontal() {
+        let connects =
+            super::placement::chest_can_connect_to(state.block(), neighbor, &level.as_reader())?;
+        if connects && direction.axis().is_horizontal() {
             let neighbor_type = neighbor.get(p::TYPE_).unwrap();
             if state.get(p::TYPE_) == Some(p::Type::Single)
                 && neighbor_type != p::Type::Single
@@ -276,6 +280,13 @@ impl BlockBehavior for ContainerBlock {
             }
         } else if menu::connected_direction(state) == direction {
             state = state.with(p::TYPE_, p::Type::Single).unwrap();
+        }
+        if state.block().is_instance_of(BlockClass::CopperChestBlock)
+            && connects
+            && state.get(p::TYPE_) != Some(p::Type::Single)
+            && menu::connected_direction(state) == direction
+        {
+            state = neighbor.block().default_state().with_properties_of(state);
         }
         Ok(state)
     }
