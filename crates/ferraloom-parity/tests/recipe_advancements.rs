@@ -84,7 +84,7 @@ fn groups() -> Result<Groups> {
             .iter()
             .filter(|(_, criterion)| criterion["trigger"] == "minecraft:inventory_changed")
             .collect();
-        inventory.sort_by(|(a, _), (b, _)| a.cmp(b));
+        inventory.sort_by_key(|(name, _)| *name);
         let Some((name, criterion)) = inventory.first() else {
             for criterion in criteria.values() {
                 if criterion["trigger"] != "minecraft:recipe_unlocked" {
