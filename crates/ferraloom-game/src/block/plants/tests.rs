@@ -1059,6 +1059,12 @@ fn farmland_trampling_preserves_draw_order_permission_size_and_actor() {
         random::{LegacyRandomSource, Random, RandomSource},
     };
     let (blocks, fluids) = tags();
+    let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").expect("builder supplies vanilla jar");
+    let resources = ferraloom_data::datapack::ResourceManager::new(vec![
+        ferraloom_data::datapack::Pack::vanilla_jar(std::path::Path::new(&jar)).unwrap(),
+    ]);
+    let entity_tags =
+        Arc::new(ferraloom_data::datapack::TagSet::<EntityType>::load(&resources).unwrap());
     let pos = BlockPos::new(8, 5, 8);
     let actor = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
     // kind: 0 nonliving, 1 cow, 2 small cow, 3 player.
@@ -1075,6 +1081,7 @@ fn farmland_trampling_preserves_draw_order_permission_size_and_actor() {
         game_events::observe(&mut level);
         level.set_block_tags(blocks.clone());
         level.set_fluid_tags(fluids.clone());
+        level.set_entity_type_tags(entity_tags.clone());
         level.rules_mut().mob_griefing = mob_griefing;
         let state = Block::FARMLAND.default_state();
         level.set_block_state(pos, state).unwrap();

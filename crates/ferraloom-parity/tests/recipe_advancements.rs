@@ -198,7 +198,7 @@ impl Rewards {
                     .added
                     .sort_by_key(|entry| entry.advancement.id.to_string());
                 // TreeNodePosition#firstWalk traverses ReferenceOpenHashSet children, so
-                // incidental display advancements also have identity-dependent y coordinates.
+                // non-recipe display advancements also have identity-dependent y coordinates.
                 // Preserve every x and the display-less recipe nodes' zero x and y.
                 for entry in &mut packet.added {
                     if entry.advancement.value.display.is_some()
@@ -392,3 +392,6 @@ async fn parity_recipe_inventory_advancements() -> Result<()> {
     )
     .await
 }
+
+#[path = "advancement_sweeps/mod.rs"]
+mod non_recipe;
