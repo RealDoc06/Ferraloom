@@ -453,12 +453,33 @@ impl Level {
         Ok(())
     }
     pub fn set_entity_pos(&mut self, entity: EntityRef, pos: Vec3) -> Result<(), LevelError> {
+        self.set_entity_position(entity, pos, false)
+    }
+    /// Entity#setPosRaw publishes its section transition before reapplyPosition
+    /// rebuilds the bounds, including during a live Entity#load.
+    pub(crate) fn set_entity_pos_raw(
+        &mut self,
+        entity: EntityRef,
+        pos: Vec3,
+    ) -> Result<(), LevelError> {
+        self.set_entity_position(entity, pos, true)
+    }
+    fn set_entity_position(
+        &mut self,
+        entity: EntityRef,
+        pos: Vec3,
+        raw: bool,
+    ) -> Result<(), LevelError> {
         let sections = &self.region().entities.sections;
         let old_key = sections.member_section(entity);
         let previous_status = old_key
             .and_then(|key| sections.section_visibility(key))
             .unwrap_or(Visibility::Hidden);
-        self.entity_mut::<EntityData>(entity)?.set_pos(pos);
+        if raw {
+            self.entity_mut::<EntityData>(entity)?.set_pos_raw(pos);
+        } else {
+            self.entity_mut::<EntityData>(entity)?.set_pos(pos);
+        }
         if !self.entity::<EntityData>(entity)?.removed
             && !self.region().entities.registration.is_unmanaged(entity)
         {

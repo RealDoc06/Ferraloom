@@ -64,10 +64,9 @@ pub(crate) fn load_entity_tree(
     }
     let parent = level.create_entity_data(kind);
     let state = if kind == EntityType::COW {
-        let mut cow = Cow::with_parent(parent);
-        cow.parent.parent.parent.age = tag.get_int_or("Age", 0);
-        cow.parent.parent.in_love = tag.get_int_or("InLove", 0);
-        cow.as_living_mut().load_nbt(tag)?;
+        let mut cow = Cow::with_level(parent, level)?;
+        cow.as_living_mut().load_nbt(tag.clone())?;
+        cow.read_cold_data(&tag, level)?;
         EntityState::Cow(Box::new(cow))
     } else if kind == EntityType::ITEM {
         let mut item = ItemEntity::with_parent(parent);
@@ -190,8 +189,7 @@ impl Level {
                     self,
                     crate::entity::LivingEntity::absorption_amount,
                 )?;
-                tag.insert("Age", Tag::Int(cow.parent.parent.parent.age));
-                tag.insert("InLove", Tag::Int(cow.parent.parent.in_love));
+                cow.add_cow_save_data(&mut tag, self)?;
 
                 tag
             }

@@ -830,7 +830,7 @@ pub(crate) fn install_test_environment(level: &mut Level, fast_lava: bool, dimen
         .unwrap();
 }
 
-fn level_with_behaviors(floor: bool, behaviors: &'static Behaviors) -> Level {
+pub(crate) fn level_with_behaviors(floor: bool, behaviors: &'static Behaviors) -> Level {
     use ferraloom_chunk::{BiomeId, IdMap, LevelChunkSection, Strategy};
     let template = LevelChunkSection::new(
         Strategy::block_states(),

@@ -355,10 +355,27 @@ async fn collision_and_drop_order(bot: &mut Bot, log: &mut ObservationLog) -> Re
         .collect::<Vec<_>>();
     log.record("collision.popped-creation-order", drops)?;
     ensure!(game_time(bot).await? == initial + 1);
+    // ServerChunkCache broadcasts before ServerLevel runs piston block events.
+    // Item pairing can arrive first; wait for the next frozen-frame broadcast
+    // without advancing the world tick or changing this order witness.
+    if block(bot, junction)?.get(p::SHAPE) != Some(p::Shape::NorthEast) {
+        bot.wait_for(
+            "collision junction neighbor notification",
+            ferraloom_parity::Ticks::DEFAULT,
+            |snapshot, _| {
+                snapshot
+                    .block(junction)
+                    .is_some_and(|state| state.get(p::SHAPE) == Some(p::Shape::NorthEast))
+            },
+        )
+        .await?;
+    }
     ensure!(
         block(bot, junction)?.get(p::SHAPE) == Some(p::Shape::NorthEast),
         "collision did not notify the old redstone receiver"
     );
+    ensure!(game_time(bot).await? == initial + 1);
+    log.record("collision.junction.after", block(bot, junction)?.id())?;
     timeline(bot, log, "collision.extend", &positions, 6).await?;
     ensure!(
         block(bot, pos)?.get(p::EXTENDED) == Some(true),

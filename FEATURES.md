@@ -4,17 +4,17 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 
 | Area | Rows | Ferraloom todo | Ferraloom partial | Ferraloom pass | Ferraloom fail |
 |---|---:|---:|---:|---:|---:|
-| [Advancements](features/advancements.md) | 1957 | 4 | 215 | 1738 | 0 |
-| [Block entities](features/block-entities.md) | 134 | 42 | 41 | 51 | 0 |
+| [Advancements](features/advancements.md) | 1958 | 4 | 195 | 1759 | 0 |
+| [Block entities](features/block-entities.md) | 135 | 42 | 39 | 54 | 0 |
 | [Blocks](features/blocks.md) | 434 | 269 | 120 | 45 | 0 |
 | [Chat and text components](features/chat.md) | 23 | 21 | 2 | 0 | 0 |
-| [Chunks and tickets](features/chunks.md) | 58 | 20 | 37 | 1 | 0 |
+| [Chunks and tickets](features/chunks.md) | 59 | 20 | 38 | 1 | 0 |
 | [Combat and damage](features/combat-damage.md) | 204 | 204 | 0 | 0 | 0 |
-| [Commands and argument types](features/commands.md) | 2683 | 1858 | 39 | 786 | 0 |
+| [Commands and argument types](features/commands.md) | 2684 | 1858 | 40 | 786 | 0 |
 | [Crafting and recipes](features/crafting-recipes.md) | 2137 | 2 | 29 | 2106 | 0 |
 | [Datapacks and resource reload](features/datapacks-reload.md) | 57 | 57 | 0 | 0 | 0 |
 | [Enchantments](features/enchantments.md) | 137 | 108 | 29 | 0 | 0 |
-| [Entities and AI](features/entities.md) | 788 | 672 | 100 | 16 | 0 |
+| [Entities and AI](features/entities.md) | 790 | 672 | 102 | 16 | 0 |
 | [Fluids](features/fluids.md) | 32 | 25 | 6 | 1 | 0 |
 | [Binary data, geometry and randomness](features/foundations.md) | 64 | 18 | 18 | 28 | 0 |
 | [Functions and macros](features/functions-macros.md) | 10 | 10 | 0 | 0 | 0 |
@@ -37,7 +37,7 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Predicates](features/predicates.md) | 101 | 79 | 22 | 0 | 0 |
 | [Protocol packets](features/protocol.md) | 271 | 47 | 1 | 223 | 0 |
 | [Raids](features/raids.md) | 8 | 8 | 0 | 0 | 0 |
-| [Redstone mechanics](features/redstone.md) | 68 | 11 | 51 | 6 | 0 |
+| [Redstone mechanics](features/redstone.md) | 68 | 11 | 36 | 21 | 0 |
 | [Scoreboard, teams and bossbars](features/scoreboard-teams-bossbars.md) | 79 | 2 | 18 | 59 | 0 |
 | [Server operations](features/server-operations.md) | 112 | 96 | 16 | 0 | 0 |
 | [Sounds and particles](features/sounds-particles.md) | 2146 | 5 | 0 | 2141 | 0 |
@@ -50,4 +50,4 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Weather, time and environment](features/weather-time.md) | 85 | 85 | 0 | 0 | 0 |
 | [World storage and data fixing](features/world-storage.md) | 308 | 305 | 3 | 0 | 0 |
 | [World generation](features/worldgen.md) | 3114 | 2640 | 174 | 300 | 0 |
-| **Total** | **19576** | **8246** | **2835** | **8495** | **0** |
+| **Total** | **19582** | **8246** | **2802** | **8534** | **0** |

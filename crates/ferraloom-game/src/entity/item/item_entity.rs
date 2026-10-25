@@ -154,26 +154,24 @@ impl ItemEntity {
         Ok(tag)
     }
     pub fn load_nbt(&mut self, tag: CompoundTag) -> Result<(), persistence::EntityLoadError> {
-        self.health = i32::from(tag.get_short_or("Health", 5));
-        self.age = i32::from(tag.get_short_or("Age", 0));
-        self.pickup_delay = i32::from(tag.get_short_or("PickupDelay", 0));
-        let uuid = |name| {
-            tag.get_int_array(name)
-                .and_then(|v| <[i32; 4]>::try_from(v).ok())
-                .map(Uuid::from_int_array)
-        };
-        self.thrower = uuid("Thrower").map(EntityReference::unresolved);
-        self.target = uuid("Owner");
-        self.set_item(
-            tag.get("Item")
-                .and_then(|v| ItemStack::from_nbt(v).ok())
-                .unwrap_or_default(),
-        );
-        self.parent.load_nbt(tag)?;
-        if self.item().is_empty() {
+        self.parent.load_nbt(tag.clone())?;
+        if self.read_additional_save_data(&tag) {
             self.parent.set_removed(RemovalReason::Discarded);
         }
         Ok(())
+    }
+    pub(crate) fn read_additional_save_data(&mut self, tag: &CompoundTag) -> bool {
+        self.health = i32::from(tag.get_short_or("Health", 5));
+        self.age = i32::from(tag.get_short_or("Age", 0));
+        self.pickup_delay = i32::from(tag.get_short_or("PickupDelay", 0));
+        self.target = tag.get("Owner").and_then(|tag| Uuid::from_nbt(tag).ok());
+        self.thrower = crate::entity::living::damage_state::read_reference(tag, "Thrower");
+        self.set_item(
+            tag.get("Item")
+                .and_then(|v| ItemStack::from_nbt_with_partial(v).ok())
+                .unwrap_or_default(),
+        );
+        self.item().is_empty()
     }
 }
 /// Port of ItemEntity#getOwner, including EntityReference's cache mutation.
