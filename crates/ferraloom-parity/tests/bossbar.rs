@@ -112,7 +112,7 @@ async fn sweep(session: &mut Session) -> Result<ObservationLog> {
             "commands.scoreboard.objectives.add.success",
         ),
         (
-            "scoreboard players set #boss_capture boss_capture 0",
+            "scoreboard players set #boss_capture boss_capture 1",
             "commands.scoreboard.players.set.success.single",
         ),
     ] {
