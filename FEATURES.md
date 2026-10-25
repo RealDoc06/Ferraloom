@@ -8,13 +8,13 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Block entities](features/block-entities.md) | 132 | 89 | 41 | 2 | 0 |
 | [Blocks](features/blocks.md) | 434 | 269 | 120 | 45 | 0 |
 | [Chat and text components](features/chat.md) | 23 | 21 | 2 | 0 | 0 |
-| [Chunks and tickets](features/chunks.md) | 54 | 20 | 33 | 1 | 0 |
+| [Chunks and tickets](features/chunks.md) | 55 | 20 | 34 | 1 | 0 |
 | [Combat and damage](features/combat-damage.md) | 204 | 204 | 0 | 0 | 0 |
 | [Commands and argument types](features/commands.md) | 2682 | 2009 | 41 | 632 | 0 |
 | [Crafting and recipes](features/crafting-recipes.md) | 2137 | 2 | 29 | 2106 | 0 |
 | [Datapacks and resource reload](features/datapacks-reload.md) | 57 | 57 | 0 | 0 | 0 |
 | [Enchantments](features/enchantments.md) | 137 | 108 | 29 | 0 | 0 |
-| [Entities and AI](features/entities.md) | 770 | 670 | 88 | 12 | 0 |
+| [Entities and AI](features/entities.md) | 777 | 671 | 90 | 16 | 0 |
 | [Fluids](features/fluids.md) | 32 | 25 | 6 | 1 | 0 |
 | [Binary data, geometry and randomness](features/foundations.md) | 64 | 18 | 18 | 28 | 0 |
 | [Functions and macros](features/functions-macros.md) | 10 | 10 | 0 | 0 | 0 |
@@ -50,4 +50,4 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Weather, time and environment](features/weather-time.md) | 85 | 85 | 0 | 0 | 0 |
 | [World storage and data fixing](features/world-storage.md) | 307 | 306 | 1 | 0 | 0 |
 | [World generation](features/worldgen.md) | 3114 | 2640 | 174 | 300 | 0 |
-| **Total** | **19545** | **8446** | **4543** | **6556** | **0** |
+| **Total** | **19553** | **8447** | **4546** | **6560** | **0** |
