@@ -1,5 +1,7 @@
 //! Wire discriminator for PistonPhaseVectors' ordinary/sticky, off=0/1/2/4 cases.
 //! Receive-order observations never consult the asynchronously advanced BotState.
+//! Clock brackets are offsets from the logged initial server query; adding that
+//! origin recovers each confirmed absolute endpoint without inventing send times.
 #[allow(dead_code)]
 mod level_support;
 #[allow(dead_code)]
@@ -239,6 +241,7 @@ async fn record(session: &mut Session) -> Result<Vec<Delivery>> {
     bot.teleport([4.5, -59.0, 4.5]).await?;
     redstone_support::loaded(bot, &[POS, POS.east(2)]).await?;
     let mut trace = Trace::new(redstone_support::game_time(bot).await?);
+    eprintln!("PISTON_DELIVERY_CLOCK_ORIGIN {}", trace.baseline);
     for sticky in [false, true] {
         for off in [0, 1, 2, 4] {
             let case = format!("sticky={sticky},off={off}");
