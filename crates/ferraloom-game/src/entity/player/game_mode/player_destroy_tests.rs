@@ -59,6 +59,10 @@ fn fixture(behaviors: &'static Behaviors) -> (Level, EntityRef) {
                 )
                 .unwrap();
             level.start_ticking_chunk(pos).unwrap();
+            // Native BLOCK_TICKING chunks expose their tracked entities.
+            level
+                .update_entity_chunk_status(pos, crate::level::entity::Visibility::Tracked)
+                .unwrap();
         }
     }
     level.install_shared(Box::new(ServerShared::default()));
