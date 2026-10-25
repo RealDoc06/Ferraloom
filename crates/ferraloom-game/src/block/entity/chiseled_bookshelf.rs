@@ -6,12 +6,64 @@ use crate::{
     inventory::StackGenerations,
     level::{Level, LevelError},
 };
+use ferraloom_data::properties as p;
 use ferraloom_nbt::{CompoundTag, Tag};
 use ferraloom_protocol::component::{
     BoundedList, ComponentTypeId, DataComponent, DataComponentMap, ItemStack, ItemStackTemplate,
 };
 
 pub const MAX_BOOKS_IN_STORAGE: usize = 6;
+
+/// Port of ChiseledBookShelfBlockEntity#updateState. Its overrides do not call
+/// setChanged: setBlockAndUpdate precedes BLOCK_CHANGE even for an identical
+/// resulting state. Slot#setChanged remains its caller's separate operation.
+pub(crate) fn update_state(
+    handle: BlockEntityRef,
+    slot: usize,
+    level: &mut Level,
+) -> Result<(), LevelError> {
+    if slot >= MAX_BOOKS_IN_STORAGE {
+        eprintln!("Expected slot 0-5, got {slot}");
+        return Ok(());
+    }
+    let entity = level.block_entity_mut::<ChiseledBookShelfBlockEntity>(handle)?;
+    entity.last_interacted_slot = slot as i32;
+    let mut state = entity.parent.block_state;
+    for (slot, property) in [
+        p::SLOT_0_OCCUPIED,
+        p::SLOT_1_OCCUPIED,
+        p::SLOT_2_OCCUPIED,
+        p::SLOT_3_OCCUPIED,
+        p::SLOT_4_OCCUPIED,
+        p::SLOT_5_OCCUPIED,
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        state = state
+            .with(property, !entity.items[slot].is_empty())
+            .expect("bookshelf occupied property");
+    }
+    if !entity.parent.has_level {
+        return Err(LevelError::Inventory("bookshelf updateState has no level"));
+    }
+    level.set_block(
+        handle.pos,
+        state,
+        crate::block::UpdateFlags::ALL,
+        crate::block::UPDATE_LIMIT,
+    )?;
+    level.game_event(
+        ferraloom_data::registries::game_event::Id::BLOCK_CHANGE,
+        ferraloom_util::Vec3::new(
+            f64::from(handle.pos.x) + 0.5,
+            f64::from(handle.pos.y) + 0.5,
+            f64::from(handle.pos.z) + 0.5,
+        ),
+        None,
+        Some(state),
+    )
+}
 
 /// Port of ChiseledBookShelfBlockEntity's fixed, final six-slot list and scalar.
 #[derive(Clone, Debug)]
@@ -33,6 +85,15 @@ impl ChiseledBookShelfBlockEntity {
     /// Port of ChiseledBookShelfBlockEntity#getLastInteractedSlot.
     pub const fn last_interacted_slot(&self) -> i32 {
         self.last_interacted_slot
+    }
+    pub fn stack_parts(&self, slot: usize) -> Option<(&StackGenerations, &ItemStack, usize)> {
+        Some((&self.stack_generations, self.items.get(slot)?, slot))
+    }
+    pub fn stack_parts_mut(
+        &mut self,
+        slot: usize,
+    ) -> Option<(&mut StackGenerations, &mut ItemStack, usize)> {
+        Some((&mut self.stack_generations, self.items.get_mut(slot)?, slot))
     }
     fn replace_item(&mut self, slot: usize, item: ItemStack) {
         self.stack_generations
@@ -83,16 +144,17 @@ impl BlockEntity for ChiseledBookShelfBehavior {
         let BlockEntityState::ChiseledBookShelf(entity) = state else {
             unreachable!()
         };
-        entity.clear_items();
-        if let Some(DataComponent::Container(contents)) = map.get(ComponentTypeId::CONTAINER) {
-            for (slot, item) in contents.0.iter().take(MAX_BOOKS_IN_STORAGE).enumerate() {
-                if let Some(item) = item {
-                    entity.replace_item(
-                        slot,
-                        ItemStack::new(item.item, item.count, item.components.clone()),
-                    );
-                }
-            }
+        let contents = match map.get(ComponentTypeId::CONTAINER) {
+            Some(DataComponent::Container(contents)) => Some(contents),
+            _ => None,
+        };
+        for slot in 0..MAX_BOOKS_IN_STORAGE {
+            let item = contents
+                .and_then(|contents| contents.0.get(slot))
+                .and_then(Option::as_ref)
+                .map(|item| ItemStack::new(item.item, item.count, item.components.clone()))
+                .unwrap_or_default();
+            entity.replace_item(slot, item);
         }
         &[ComponentTypeId::CONTAINER]
     }
@@ -129,9 +191,10 @@ impl BlockEntity for ChiseledBookShelfBehavior {
         handle: BlockEntityRef,
         level: &mut Level,
     ) -> Result<(), LevelError> {
-        Err(LevelError::UnsupportedBlockEntity(
-            level.block_entity_state(handle)?.data().block_state.block(),
-        ))
+        if level.block_entity_state(handle)?.data().has_level {
+            crate::block::containers::drops::drop_contents(handle, level)?;
+        }
+        Ok(())
     }
 }
 

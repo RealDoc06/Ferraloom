@@ -13,7 +13,14 @@ impl Level {
         self.retain_stack_owner(slot.container)?;
         let result = (|| {
             if let ContainerHandle::BlockEntity(handle) = slot.container {
-                crate::block::containers::access::get_item(handle, slot.slot, self)?;
+                // ListBackedContainer#getItem is the direct stack_parts read
+                // below; avoid allocating its legacy owned-value adapter.
+                if !matches!(
+                    self.block_entity_state(handle)?,
+                    crate::block::entity::BlockEntityState::ChiseledBookShelf(_)
+                ) {
+                    crate::block::containers::access::get_item(handle, slot.slot, self)?;
+                }
             }
             let reference = self.stack_ref(slot)?;
             self.retain_stack(reference)?;
@@ -31,12 +38,17 @@ impl Level {
                     .stack_parts(slot.slot, &player.parent.equipment)
                     .ok_or(MenuError::InvalidSlot(slot.slot as i32))
             }
-            ContainerHandle::BlockEntity(handle) => self
-                .block_entity::<crate::block::containers::storage::BaseContainerBlockEntity>(
-                    handle,
-                )?
-                .stack_parts(slot.slot)
-                .ok_or(MenuError::InvalidSlot(slot.slot as i32)),
+            ContainerHandle::BlockEntity(handle) => match self.block_entity_state(handle)? {
+                crate::block::entity::BlockEntityState::ChiseledBookShelf(entity) => {
+                    entity.stack_parts(slot.slot)
+                }
+                _ => self
+                    .block_entity::<crate::block::containers::storage::BaseContainerBlockEntity>(
+                        handle,
+                    )?
+                    .stack_parts(slot.slot),
+            }
+            .ok_or(MenuError::InvalidSlot(slot.slot as i32)),
             ContainerHandle::MenuLocal {
                 player,
                 menu,
@@ -81,12 +93,13 @@ impl Level {
                     .stack_parts_mut(slot.slot, &mut player.parent.equipment)
                     .ok_or(MenuError::InvalidSlot(slot.slot as i32))
             }
-            ContainerHandle::BlockEntity(handle) => self
-                .block_entity_mut::<crate::block::containers::storage::BaseContainerBlockEntity>(
-                    handle,
-                )?
-                .stack_parts_mut(slot.slot)
-                .ok_or(MenuError::InvalidSlot(slot.slot as i32)),
+            ContainerHandle::BlockEntity(handle) => {
+                if matches!(self.block_entity_state(handle)?, crate::block::entity::BlockEntityState::ChiseledBookShelf(_)) {
+                    self.block_entity_mut::<crate::block::entity::chiseled_bookshelf::ChiseledBookShelfBlockEntity>(handle)?.stack_parts_mut(slot.slot)
+                } else {
+                    self.block_entity_mut::<crate::block::containers::storage::BaseContainerBlockEntity>(handle)?.stack_parts_mut(slot.slot)
+                }.ok_or(MenuError::InvalidSlot(slot.slot as i32))
+            }
             ContainerHandle::MenuLocal {
                 player,
                 menu,
