@@ -158,7 +158,10 @@ impl DataAccess for DataHost<'_> {
     }
 }
 impl MinecraftServer {
-    pub(super) fn data_command(&mut self, command: &PreparedCommand) -> Result<CommandResult> {
+    pub(in crate::server) fn data_command(
+        &mut self,
+        command: &PreparedCommand,
+    ) -> Result<CommandResult> {
         let result = data::execute(
             command,
             &mut DataHost {
