@@ -68,10 +68,10 @@ impl MinecraftServer {
             Vec::new()
         };
         let uuid = if verb == "add" {
-            if command.source.dimension != self.level.dimension {
+            if command.source.level.dimension != self.level.dimension {
                 return Err(exceptions::error(
                     "ferraloom.bossbar.source_level.unsupported",
-                    &[command.source.dimension.clone()],
+                    &[command.source.level.dimension.clone()],
                 ));
             }
             Some(Uuid::insecure(self.level.level.random()))
