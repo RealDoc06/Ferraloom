@@ -93,7 +93,7 @@ impl MinecraftServer {
     }
     /// The existing TeamCommand argument order, now using Level's synchronous
     /// per-member waypoint callbacks and preserving required world failures.
-    pub(super) fn execute_team_command_live(
+    pub(in crate::server) fn execute_team_command_live(
         &mut self,
         command: &PreparedCommand,
     ) -> Result<CommandResult> {
