@@ -930,7 +930,7 @@ mod capture_tests {
                 .collect()
         }
         fn info(&self, entity: EntityRef) -> Option<SelectorEntity<'_>> {
-            let index = entity.0 as usize;
+            let index = entity.serial() as usize;
             Some(SelectorEntity {
                 name: self.names[index].as_str().into(),
                 uuid: Uuid::NIL,
@@ -957,7 +957,7 @@ mod capture_tests {
             let SelectorPredicate::Name { value, inverted } = predicate else {
                 panic!("unexpected predicate: {predicate:?}")
             };
-            let name = self.names[entity.0 as usize].clone();
+            let name = self.names[entity.serial() as usize].clone();
             self.examined.push(name.clone());
             Ok((name == *value) != *inverted)
         }
@@ -994,7 +994,7 @@ mod capture_tests {
                 assert_eq!(
                     selected
                         .iter()
-                        .map(|id| query.names[id.0 as usize].clone())
+                        .map(|id| query.names[id.serial() as usize].clone())
                         .collect::<Vec<_>>(),
                     names,
                     "{}",

@@ -206,7 +206,7 @@ fn mixed_native_selectors_use_player_lookup_and_section_iteration() {
         assert_eq!(
             selected
                 .into_iter()
-                .map(|entity| entity.0)
+                .map(|entity| entity.serial())
                 .collect::<Vec<_>>(),
             vector.selected,
             "{} (players_only={}, source={})",

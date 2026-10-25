@@ -318,7 +318,7 @@ fn native_cramming_preserves_rng_gates_passenger_count_and_damage_before_capture
                 .entity_mut::<EntityData>(entity)
                 .unwrap()
                 .custom_data
-                .insert("last-target", Tag::Long(target.0 as i64));
+                .insert("last-target", Tag::Long(target.serial() as i64));
         }
         level.rules_mut().max_entity_cramming = fields[2].parse().unwrap();
         level
