@@ -1,4 +1,5 @@
 import java.util.*;
+import com.google.common.collect.ArrayListMultimap;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
@@ -50,6 +51,22 @@ public final class AttributeVectors {
     System.out.println("attribute-map\tunchanged\t"+map.getAttributesToSync().size()+"\t"+map.getAttributesToUpdate().size()+"\t"+map.getSyncableAttributes().size());
     health.setBaseValue(30);
     System.out.println("attribute-map\tmodified\t"+map.getAttributesToSync().size()+"\t"+map.getAttributesToUpdate().size()+"\t"+map.getSyncableAttributes().size());
+    for(String scenario:List.of("absent","created","transient","permanent","different-id","mixed","unsupported")) {
+      var removal=new AttributeMap(DefaultAttributes.getSupplier(EntityTypes.PLAYER));
+      var attribute=scenario.equals("unsupported")?Attributes.FOLLOW_RANGE:Attributes.SUBMERGED_MINING_SPEED;
+      if(!scenario.equals("absent")&&!scenario.equals("unsupported")) {
+        var current=removal.getInstance(attribute);
+        if(scenario.equals("transient")||scenario.equals("mixed"))current.addTransientModifier(modifier("remove",0.5,AttributeModifier.Operation.ADD_VALUE));
+        if(scenario.equals("permanent"))current.addPermanentModifier(modifier("remove",0.5,AttributeModifier.Operation.ADD_VALUE));
+        if(scenario.equals("different-id")||scenario.equals("mixed"))current.addPermanentModifier(modifier("keep",0.25,AttributeModifier.Operation.ADD_VALUE));
+      }
+      removal.getAttributesToSync().clear();removal.getAttributesToUpdate().clear();
+      var modifiers=ArrayListMultimap.<Holder<Attribute>,AttributeModifier>create();
+      modifiers.put(attribute,modifier("remove",0.5,AttributeModifier.Operation.ADD_VALUE));
+      removal.removeAttributeModifiers(modifiers);
+      var saved=AttributeInstance.Packed.CODEC.listOf().encodeStart(NbtOps.INSTANCE,removal.pack()).getOrThrow();
+      System.out.println("attribute-removal\t"+scenario+"\t"+saved+"\t"+removal.getAttributesToSync().size()+"\t"+removal.getAttributesToUpdate().size());
+    }
     String[] tags={"{id:'minecraft:max_health'}","{id:'minecraft:max_health',base:'bad'}","{id:'minecraft:max_health',base:30.0,modifiers:[{id:'minecraft:yes',amount:2.0,operation:'add_value'},{id:'minecraft:no',operation:'add_value'}]}","{id:'minecraft:max_health',modifiers:'bad'}","{id:'minecraft:unknown',base:30.0}"};
     for(int i=0;i<tags.length;i++) try {
       var result=AttributeInstance.Packed.CODEC.parse(NbtOps.INSTANCE,TagParser.parseCompoundFully(tags[i]));
