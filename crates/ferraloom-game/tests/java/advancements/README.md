@@ -28,3 +28,28 @@ lists, including a repeated reference to the same stack. The retained live event
 and pure event use these cases to check greedy ingredient matching and receiver
 multiplicity. Rust tests also check retention cleanup after capture or predicate
 errors.
+
+`ItemTriggerVectors` calls the actual PLACED_BLOCK, ITEM_DURABILITY_CHANGED and
+CONSUME_ITEM triggers. It checks a component-bearing TOOL, reads the original
+damage/count synchronously inside rewards, and records that triggering does not
+apply the caller's later damage or consumption mutation. Rust replays these
+observations through the shared pure matcher and live entries, including a
+retained receiver whose original inventory slot has already been replaced.
+
+`SculkTriggerVectors` calls AVOID_VIBRATION and KILL_MOB_NEAR_SCULK_CATALYST with
+actual player, victim and damage-source objects. It observes player predicates,
+the displaced victim's distance from the player, direct/causing source identity,
+and synchronous XP rewards. Eligibility and fallback selection remain producer
+responsibilities; the Rust replay passes the canonical DamageSource through its
+existing immutable predicate DTO boundary.
+
+`FallHeightVectors` invokes FALL_FROM_HEIGHT with explicit starts and current
+player positions. It checks start-location constraints separately from the end,
+vertical/horizontal/absolute distance, negative bounds, the native float rounding
+of coordinate differences, player predicates and XP rewards.
+
+`HurtTriggerVectors` calls ENTITY_HURT_PLAYER and PLAYER_HURT_ENTITY through the
+real player advancement listener path. It distinguishes original/actual damage,
+blocking, direct/causing entities, absent environmental actors, victim/player
+contexts and float damage widened into double bounds. The live replay awards
+the observed progress/rewards without applying health damage a second time.

@@ -136,6 +136,30 @@ impl BlockBehavior for ContainerBlock {
                 _ => LevelError::Inventory("container menu runtime"),
             }
         })?;
+        let stat = match state.block().class() {
+            BlockClass::TrappedChestBlock => Some(crate::stats::custom::Id::TRIGGER_TRAPPED_CHEST),
+            BlockClass::ChestBlock
+            | BlockClass::CopperChestBlock
+            | BlockClass::WeatheringCopperChestBlock => Some(crate::stats::custom::Id::OPEN_CHEST),
+            BlockClass::BarrelBlock => Some(crate::stats::custom::Id::OPEN_BARREL),
+            BlockClass::FurnaceBlock => Some(crate::stats::custom::Id::INTERACT_WITH_FURNACE),
+            BlockClass::SmokerBlock => Some(crate::stats::custom::Id::INTERACT_WITH_SMOKER),
+            BlockClass::BlastFurnaceBlock => {
+                Some(crate::stats::custom::Id::INTERACT_WITH_BLAST_FURNACE)
+            }
+            _ => None,
+        };
+        if let Some(stat) = stat {
+            crate::entity::player::award_stat(
+                context.player,
+                crate::stats::Stat::Custom(stat),
+                1,
+                level,
+            )?;
+        }
+        if chest(state.block()) || state.block().class() == BlockClass::BarrelBlock {
+            crate::entity::monster::piglin::ai::anger_nearby_piglins(level, context.player, true)?;
+        }
         Ok(InteractionResult::SUCCESS)
     }
     fn trigger_event(

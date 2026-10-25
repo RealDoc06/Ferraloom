@@ -10,13 +10,77 @@ use crate::{
 use std::sync::Arc;
 
 /// Immutable recipe services and the actual rule captured by the packet owner.
-/// Achievement producers remain explicit until the advancements slice lands.
+/// Recipe criteria complete synchronously before the next menu callback.
 pub struct LiveRecipeMenuHooks {
     pub resources: Arc<ContainerResources>,
     pub kind: MenuKind,
     pub limited_crafting: bool,
 }
 impl MenuHooks for LiveRecipeMenuHooks {
+    fn validate_live_result(&self, kind: ResultKind) -> Result<()> {
+        if matches!(kind, ResultKind::Crafting | ResultKind::Furnace) {
+            Ok(())
+        } else {
+            Err(MenuError::Unsupported(
+                "non-crafting result-slot achievements",
+            ))
+        }
+    }
+    fn live_item_crafted(
+        &mut self,
+        player: EntityRef,
+        _menu: MenuRef,
+        stack: StackRef,
+        amount: i32,
+        level: &mut Level,
+    ) -> Result<()> {
+        // ItemStack#onCraftedBy reads its item before awardStat, then invokes
+        // the item callback on the same receiver after scoreboard callbacks.
+        let item = level.stack(stack)?.item();
+        crate::entity::player::award_stat(
+            player,
+            crate::stats::Stat::Crafted(item),
+            amount,
+            level,
+        )?;
+        crafted_item_post_process(level, stack)
+    }
+    fn live_award_recipe(
+        &mut self,
+        player: EntityRef,
+        _menu: MenuRef,
+        id: &ferraloom_data::datapack::Identifier,
+        input: &[StackRef],
+        level: &mut Level,
+    ) -> Result<bool> {
+        let recipe = self
+            .resources
+            .recipes
+            .by_key(id)
+            .ok_or(MenuError::Unsupported(
+                "recipe used from a retired recipe snapshot",
+            ))?;
+        crate::advancements::criteria::recipe_crafted(level, player, recipe, input)?;
+        if recipe.value.is_special() {
+            return Ok(false);
+        }
+        // award_recipes invokes recipe_unlocked after each successful unlock,
+        // before the aggregate book packet. Never trigger it a second time.
+        crate::advancements::award_recipes(level, player, std::iter::once(recipe))?;
+        Ok(true)
+    }
+    fn live_award_furnace(
+        &mut self,
+        player: EntityRef,
+        furnace: crate::block::entity::BlockEntityRef,
+        level: &mut Level,
+    ) -> Result<()> {
+        Ok(
+            crate::block::containers::furnace::award_used_recipes_and_pop_experience(
+                furnace, player, level,
+            )?,
+        )
+    }
     fn has_crafting(&self) -> bool {
         matches!(self.kind, MenuKind::Inventory | MenuKind::Crafting)
     }

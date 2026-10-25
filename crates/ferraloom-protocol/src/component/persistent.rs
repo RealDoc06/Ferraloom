@@ -3399,16 +3399,7 @@ impl Persistent for ItemStack {
         ))
     }
     fn from_nbt(value: &Tag) -> Result<Self> {
-        let item = field_nbt(value, "id", None)?;
-        let count = field_nbt::<i32>(value, "count", Some(1))?;
-        if !(1..=99).contains(&count) || item == ferraloom_data::Item::AIR {
-            return Err(invalid("item stack"));
-        }
-        Ok(Self::new(
-            item,
-            count,
-            field_nbt(value, "components", Some(DataComponentPatch::default()))?,
-        ))
+        Self::decode_nbt_count(value, false)
     }
     fn to_persistent(&self) -> Result<PersistentValue> {
         let value = self
@@ -3430,5 +3421,69 @@ impl Persistent for ItemStack {
             Some(DataComponentPatch::default()),
         )?;
         Ok(PersistentValue::Map(entries))
+    }
+}
+
+impl ItemStack {
+    /// Port of TagValueInput#read(ItemStack.CODEC)'s count partial recovery.
+    /// An invalid optional count has the MAP_CODEC partial value 1; strict
+    /// Persistent decoding still rejects it. Item/components errors stay errors.
+    pub fn from_nbt_with_partial(value: &Tag) -> Result<Self> {
+        Self::decode_nbt_count(value, true)
+    }
+
+    fn decode_nbt_count(value: &Tag, recover_count: bool) -> Result<Self> {
+        let item = field_nbt(value, "id", None)?;
+        let count = match field_nbt::<i32>(value, "count", Some(1)) {
+            Ok(count) if (1..=99).contains(&count) => count,
+            _ if recover_count => 1,
+            Err(error) => return Err(error),
+            Ok(_) => return Err(invalid("item stack")),
+        };
+        if item == ferraloom_data::Item::AIR {
+            return Err(invalid("item stack"));
+        }
+        Ok(Self::new(
+            item,
+            count,
+            field_nbt(value, "components", Some(DataComponentPatch::default()))?,
+        ))
+    }
+}
+
+#[cfg(test)]
+mod item_stack_partial_tests {
+    use super::*;
+
+    #[test]
+    fn storage_count_partials_do_not_relax_strict_item_codecs() {
+        for count in ["0", "100"] {
+            let json: Json =
+                serde_json::from_str(&format!("{{\"id\":\"stone\",\"count\":{count}}}")).unwrap();
+            let tag = Tag::Compound(
+                ferraloom_nbt::parse_compound(&format!("{{id:'stone',count:{count}}}")).unwrap(),
+            );
+            assert!(ItemStack::from_json(&json).is_err());
+            assert!(ItemStack::from_nbt(&tag).is_err());
+            assert_eq!(
+                ItemStack::from_nbt_with_partial(&tag).unwrap(),
+                ItemStack::new(
+                    ferraloom_data::Item::STONE,
+                    1,
+                    DataComponentPatch::default()
+                )
+            );
+        }
+        for raw in [
+            "{id:'missing_item',count:0}",
+            "{id:'stone',count:0,components:{'minecraft:missing_component':1}}",
+        ] {
+            assert!(
+                ItemStack::from_nbt_with_partial(&Tag::Compound(
+                    ferraloom_nbt::parse_compound(raw).unwrap()
+                ))
+                .is_err()
+            );
+        }
     }
 }

@@ -9,7 +9,7 @@ java = cache / 'toolchains/jdk-25.0.4.1+1/bin'
 vanilla = cache / 'vanilla/26.3'
 classes = cache / 'tools/inventory-vectors'
 classes.mkdir(parents=True, exist_ok=True)
-cp = ':'.join(map(str, [vanilla / 'versions/26.3/server-26.3.jar', *sorted((vanilla / 'libraries').rglob('*.jar'))]))
+cp = ':'.join(map(str, [vanilla / 'versions/26.3/server-26.3.jar', *sorted((vanilla / 'libraries').rglob('*.jar')), *sorted((vanilla / 'tree-harness').rglob('*.jar'))]))
 
 def run(args):
     result = subprocess.run(args, cwd=classes, text=True, capture_output=True)

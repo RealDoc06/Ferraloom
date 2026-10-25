@@ -1,0 +1,57 @@
+base	minecraft:oak_planks	false	0	0	-1930858313	3ba3d70a	stat:minecraft:stone:1;food:3ba3d70a
+base	minecraft:chest	false	0	24100	-1930858313	3ba3d70a	stat:minecraft:stone:1;food:3ba3d70a
+base	minecraft:air	false	0	0	-1155484576	3ba3d70a	stat:minecraft:stone:1;food:3ba3d70a
+base	minecraft:oak_planks	true	0	0	-1930858313	3ba3d70a	stat:minecraft:stone:1;food:3ba3d70a;item:minecraft:oak_planks:1:40213b20b4753654,40500fb2796cd9cc,4021232dc9d3c77c:private-rng
+base	minecraft:chest	true	0	24100	-1930858313	3ba3d70a	stat:minecraft:stone:1;food:3ba3d70a;item:minecraft:chest:1:40213b20b4753654,40500fb2796cd9cc,4021232dc9d3c77c:private-rng;name:original
+base	minecraft:air	true	0	0	-1155484576	3ba3d70a	stat:minecraft:stone:1;food:3ba3d70a
+base	minecraft:oak_planks	false	1	0	1429008869	3ba3d70a	stat:minecraft:stone:1;food:3ba3d70a
+base	minecraft:chest	false	1	24100	1429008869	3ba3d70a	stat:minecraft:stone:1;food:3ba3d70a
+base	minecraft:air	false	1	0	-1155869325	3ba3d70a	stat:minecraft:stone:1;food:3ba3d70a
+base	minecraft:oak_planks	true	1	0	1429008869	3ba3d70a	stat:minecraft:stone:1;food:3ba3d70a;item:minecraft:oak_planks:1:40213b1ad5466e27,4050151f61cb4270,4020b52cccc251ae:private-rng
+base	minecraft:chest	true	1	24100	1429008869	3ba3d70a	stat:minecraft:stone:1;food:3ba3d70a;item:minecraft:chest:1:40213b1ad5466e27,4050151f61cb4270,4020b52cccc251ae:private-rng;name:original
+base	minecraft:air	true	1	0	-1155869325	3ba3d70a	stat:minecraft:stone:1;food:3ba3d70a
+base	minecraft:oak_planks	false	9123456	0	1426726698	3ba3d70a	stat:minecraft:stone:1;food:3ba3d70a
+base	minecraft:chest	false	9123456	24100	1426726698	3ba3d70a	stat:minecraft:stone:1;food:3ba3d70a
+base	minecraft:air	false	9123456	0	1809061988	3ba3d70a	stat:minecraft:stone:1;food:3ba3d70a
+base	minecraft:oak_planks	true	9123456	0	1426726698	3ba3d70a	stat:minecraft:stone:1;food:3ba3d70a;item:minecraft:oak_planks:1:4020ebd41877f376,40500e63663f554f,4020a02df080ad3f:private-rng
+base	minecraft:chest	true	9123456	24100	1426726698	3ba3d70a	stat:minecraft:stone:1;food:3ba3d70a;item:minecraft:chest:1:4020ebd41877f376,40500e63663f554f,4020a02df080ad3f:private-rng;name:original
+base	minecraft:air	true	9123456	0	1809061988	3ba3d70a	stat:minecraft:stone:1;food:3ba3d70a
+mine	minecraft:stick	minecraft:stone	0	0	-1155484576	0	stat:minecraft:stick:1
+mine	minecraft:stick	minecraft:short_grass	0	0	-1155484576	0	stat:minecraft:stick:1
+mine	minecraft:stick	minecraft:fire	0	0	-1155484576	0	stat:minecraft:stick:1
+mine	minecraft:shears	minecraft:stone	0	0	-1155484576	0	stat:minecraft:shears:1
+mine	minecraft:shears	minecraft:short_grass	0	0	-1155484576	0	stat:minecraft:shears:1
+mine	minecraft:shears	minecraft:fire	0	0	-1155484576	0	stat:minecraft:shears:1
+mine	minecraft:stick	minecraft:stone	-	0	-1155484576	0	-
+callback	false	0	1519786882	3ba3d70a	event:2001:breaker:5544;game:minecraft:block_destroy:breaker:5544;callback;set:0:3:512;stat:minecraft:blaze_rod:1;stat:minecraft:chest:1;food:3ba3d70a;item:minecraft:chest:1:40215928e92e8115,405009aaad3182b4,4020829adbcc747d:private-rng;name:original
+callback	true	0	315210081	3ba3d70a	event:2001:breaker:5544;game:minecraft:block_destroy:breaker:5544;callback;set:0:3:512;stat:minecraft:blaze_rod:1;stat:minecraft:chest:1;food:3ba3d70a;item:minecraft:chest:1:402108de15fc3b29,40500abd94f5e349,40210806b86e67bb:private-rng;name:original
+egg	1	false	0	0	-723955400	3ba3d70a	event:2001:breaker:18447;game:minecraft:block_destroy:breaker:18447;set:0:3:512;stat:minecraft:turtle_egg:1;food:3ba3d70a;sound:minecraft:entity.turtle.egg_break:3f333333:3f85e9ab
+egg	1	true	0	0	-723955400	3ba3d70a	event:2001:breaker:18447;game:minecraft:block_destroy:breaker:18447;set:0:3:512;stat:minecraft:turtle_egg:1;food:3ba3d70a;sound:minecraft:entity.turtle.egg_break:3f333333:3f85e9ab
+egg	2	false	0	18447	-723955400	3ba3d70a	event:2001:breaker:18450;game:minecraft:block_destroy:breaker:18450;set:0:3:512;stat:minecraft:turtle_egg:1;food:3ba3d70a;sound:minecraft:entity.turtle.egg_break:3f333333:3f85e9ab;set:18447:2:512;game:minecraft:block_destroy:none:18450;event:2001:none:18450
+egg	2	true	0	18447	-723955400	3ba3d70a	event:2001:breaker:18450;game:minecraft:block_destroy:breaker:18450;set:0:3:512;stat:minecraft:turtle_egg:1;food:3ba3d70a;sound:minecraft:entity.turtle.egg_break:3f333333:3f85e9ab;set:18447:2:512;event:2012:none:15;game:minecraft:block_destroy:none:18450;event:2001:none:18450
+egg	4	false	0	18453	-723955400	3ba3d70a	event:2001:breaker:18456;game:minecraft:block_destroy:breaker:18456;set:0:3:512;stat:minecraft:turtle_egg:1;food:3ba3d70a;sound:minecraft:entity.turtle.egg_break:3f333333:3f85e9ab;set:18453:2:512;game:minecraft:block_destroy:none:18456;event:2001:none:18456
+egg	4	true	0	18453	-723955400	3ba3d70a	event:2001:breaker:18456;game:minecraft:block_destroy:breaker:18456;set:0:3:512;stat:minecraft:turtle_egg:1;food:3ba3d70a;sound:minecraft:entity.turtle.egg_break:3f333333:3f85e9ab;set:18453:2:512;event:2012:none:15;game:minecraft:block_destroy:none:18456;event:2001:none:18456
+egg	1	false	1	0	431529176	3ba3d70a	event:2001:breaker:18447;game:minecraft:block_destroy:breaker:18447;set:0:3:512;stat:minecraft:turtle_egg:1;food:3ba3d70a;sound:minecraft:entity.turtle.egg_break:3f333333:3f85e915
+egg	1	true	1	0	431529176	3ba3d70a	event:2001:breaker:18447;game:minecraft:block_destroy:breaker:18447;set:0:3:512;stat:minecraft:turtle_egg:1;food:3ba3d70a;sound:minecraft:entity.turtle.egg_break:3f333333:3f85e915
+egg	2	false	1	18447	431529176	3ba3d70a	event:2001:breaker:18450;game:minecraft:block_destroy:breaker:18450;set:0:3:512;stat:minecraft:turtle_egg:1;food:3ba3d70a;sound:minecraft:entity.turtle.egg_break:3f333333:3f85e915;set:18447:2:512;game:minecraft:block_destroy:none:18450;event:2001:none:18450
+egg	2	true	1	18447	431529176	3ba3d70a	event:2001:breaker:18450;game:minecraft:block_destroy:breaker:18450;set:0:3:512;stat:minecraft:turtle_egg:1;food:3ba3d70a;sound:minecraft:entity.turtle.egg_break:3f333333:3f85e915;set:18447:2:512;event:2012:none:15;game:minecraft:block_destroy:none:18450;event:2001:none:18450
+egg	4	false	1	18453	431529176	3ba3d70a	event:2001:breaker:18456;game:minecraft:block_destroy:breaker:18456;set:0:3:512;stat:minecraft:turtle_egg:1;food:3ba3d70a;sound:minecraft:entity.turtle.egg_break:3f333333:3f85e915;set:18453:2:512;game:minecraft:block_destroy:none:18456;event:2001:none:18456
+egg	4	true	1	18453	431529176	3ba3d70a	event:2001:breaker:18456;game:minecraft:block_destroy:breaker:18456;set:0:3:512;stat:minecraft:turtle_egg:1;food:3ba3d70a;sound:minecraft:entity.turtle.egg_break:3f333333:3f85e915;set:18453:2:512;event:2012:none:15;game:minecraft:block_destroy:none:18456;event:2001:none:18456
+dragon	air	0	11212	-1733672051	0	-
+dragon-position	air	0	8,64,8
+dragon	floor	0	0	-252332814	0	event:2015:none:854046;set:0:3:512
+dragon-position	floor	0	5,64,22
+dragon	border	0	11212	-1733672051	0	-
+dragon-position	border	0	8,64,8
+dragon	air	1	11212	714141319	0	-
+dragon-position	air	1	8,64,8
+dragon	floor	1	0	1429008869	0	event:2015:none:1706003;set:0:3:512
+dragon-position	floor	1	18,64,11
+dragon	border	1	11212	714141319	0	-
+dragon-position	border	1	8,64,8
+dragon	air	9123456	11212	1271632778	0	-
+dragon-position	air	9123456	8,64,8
+dragon	floor	9123456	0	1529095191	0	event:2015:none:657416;set:0:3:512
+dragon-position	floor	9123456	2,64,0
+dragon	border	9123456	11212	1271632778	0	-
+dragon-position	border	9123456	8,64,8

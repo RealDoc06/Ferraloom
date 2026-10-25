@@ -2,13 +2,13 @@
 //! synchronously; missing runtime facts remain policy-routed Unsupported.
 use super::{
     live,
-    triggers::{TriggerEvent, TriggerType},
+    triggers::{TriggerEvent, TriggerType, create_context},
 };
 use crate::{
     block::UnportedOperation,
     crafting::RecipeHolder,
     entity::{
-        EntityRef,
+        EntityData, EntityRef,
         player::{ServerPlayer, inventory},
     },
     inventory::StackRef,
@@ -76,6 +76,64 @@ pub fn item_used_on_block(
         TriggerType::ItemUsedOnBlock,
     )
 }
+/// Port of BlockItem#place's PLACED_BLOCK call after setPlacedBy. The caller
+/// supplies the original operation-rooted receiver, before sound and consume.
+pub fn placed_block(
+    level: &mut Level,
+    player: EntityRef,
+    pos: BlockPos,
+    stack: StackRef,
+) -> Result<(), LevelError> {
+    level.retain_stack(stack).map_err(live::menu_error)?;
+    let result = (|| {
+        // ItemUsedOnLocationTrigger's predicates read TOOL synchronously and
+        // cannot mutate it or observe identity. Resolving its value here is
+        // equivalent to vanilla's reference; awards run after every match.
+        // ITEM_USED_ON_BLOCK separately receives vanilla's pre-use copy.
+        let tool = level.stack(stack).map_err(live::menu_error)?.clone();
+        location_event(level, player, pos, Some(&tool), TriggerType::PlacedBlock)
+    })();
+    level.release_stack(stack);
+    result
+}
+
+/// Port of ItemDurabilityTrigger#trigger, before the caller changes damage.
+pub fn item_durability_changed(
+    level: &mut Level,
+    player: EntityRef,
+    stack: StackRef,
+    new_damage: i32,
+) -> Result<(), LevelError> {
+    level.retain_stack(stack).map_err(live::menu_error)?;
+    let result = live::trigger(
+        level,
+        player,
+        TriggerType::ItemDurabilityChanged,
+        TriggerEvent::DurabilityLive { stack, new_damage },
+        None,
+    );
+    level.release_stack(stack);
+    result
+}
+
+/// Port of ConsumeItemTrigger#trigger with the caller's retained receiver.
+pub fn consume_item(
+    level: &mut Level,
+    player: EntityRef,
+    stack: StackRef,
+) -> Result<(), LevelError> {
+    level.retain_stack(stack).map_err(live::menu_error)?;
+    let result = live::trigger(
+        level,
+        player,
+        TriggerType::ConsumeItem,
+        TriggerEvent::ItemLive(stack),
+        None,
+    );
+    level.release_stack(stack);
+    result
+}
+
 /// Port of CriteriaTriggers.DEFAULT_BLOCK_USE.trigger (BLOCK_USE parameters).
 pub fn default_block_use(
     level: &mut Level,
@@ -207,14 +265,45 @@ pub fn recipe_unlocked(
         None,
     )
 }
-/// Port of ServerPlayer#triggerRecipeCrafted and RecipeCraftedTrigger#trigger.
-/// The captured list contains native grid receiver identities, including empty
-/// stacks and repeated refs. Retain it across nested award effects, never copy it.
+/// Port of CriteriaTriggers.RECIPE_CRAFTED at ServerPlayer#triggerRecipeCrafted.
 pub fn recipe_crafted(
     level: &mut Level,
     player: EntityRef,
     recipe: &RecipeHolder,
     ingredients: &[StackRef],
+) -> Result<(), LevelError> {
+    recipe_crafted_event(
+        level,
+        player,
+        recipe,
+        ingredients,
+        TriggerType::RecipeCrafted,
+    )
+}
+/// Port of CriteriaTriggers.CRAFTER_RECIPE_CRAFTED at CrafterBlock#dispenseItem.
+/// The producer captures the eligible nearby players at the native call point.
+pub fn crafter_recipe_crafted(
+    level: &mut Level,
+    player: EntityRef,
+    recipe: &RecipeHolder,
+    ingredients: &[StackRef],
+) -> Result<(), LevelError> {
+    recipe_crafted_event(
+        level,
+        player,
+        recipe,
+        ingredients,
+        TriggerType::CrafterRecipeCrafted,
+    )
+}
+/// Keep ordered native receiver identities, including empty stacks and repeated
+/// refs, retained across all synchronous award effects without copying inputs.
+fn recipe_crafted_event(
+    level: &mut Level,
+    player: EntityRef,
+    recipe: &RecipeHolder,
+    ingredients: &[StackRef],
+    trigger: TriggerType,
 ) -> Result<(), LevelError> {
     for (index, &stack) in ingredients.iter().enumerate() {
         if let Err(error) = level.retain_stack(stack) {
@@ -230,7 +319,7 @@ pub fn recipe_crafted(
         live::trigger(
             level,
             player,
-            TriggerType::RecipeCrafted,
+            trigger,
             TriggerEvent::RecipeLive {
                 id: &id,
                 ingredients,
@@ -247,6 +336,92 @@ pub fn recipe_crafted(
 pub fn tick(level: &mut Level, player: EntityRef) -> Result<(), LevelError> {
     live::trigger(level, player, TriggerType::Tick, TriggerEvent::Player, None)
 }
+/// Port of VibrationSystem.User#isValidVibration's AVOID_VIBRATION call.
+/// The producer owns the careful-stepping and vibration-tag eligibility gates.
+pub fn avoid_vibration(level: &mut Level, player: EntityRef) -> Result<(), LevelError> {
+    live::trigger(
+        level,
+        player,
+        TriggerType::AvoidVibration,
+        TriggerEvent::Player,
+        None,
+    )
+}
+/// Port of SculkCatalystBlockEntity.CatalystListener#tryAwardItSpreadsAdvancement.
+/// The producer supplies the actual last source or native playerAttack fallback.
+pub fn kill_mob_near_sculk_catalyst(
+    level: &mut Level,
+    player: EntityRef,
+    victim: EntityRef,
+    source: &crate::entity::damage::DamageSource,
+) -> Result<(), LevelError> {
+    let origin = level.entity::<EntityData>(player)?.position;
+    let entity = create_context(origin, victim);
+    let source = source.to_loot_source();
+    live::trigger(
+        level,
+        player,
+        TriggerType::KillMobNearSculkCatalyst,
+        TriggerEvent::Killed {
+            entity: &entity,
+            source: &source,
+        },
+        None,
+    )
+}
+/// Port of CriteriaTriggers.ENTITY_HURT_PLAYER, preserving original and actual
+/// damage and the native blocked flag before synchronous advancement rewards.
+pub fn entity_hurt_player(
+    level: &mut Level,
+    player: EntityRef,
+    source: &crate::entity::damage::DamageSource,
+    original_damage: f32,
+    damage: f32,
+    blocked: bool,
+) -> Result<(), LevelError> {
+    let source = source.to_loot_source();
+    live::trigger(
+        level,
+        player,
+        TriggerType::EntityHurtPlayer,
+        TriggerEvent::Hurt {
+            entity: None,
+            source: &source,
+            original: original_damage,
+            actual: damage,
+            blocked,
+        },
+        None,
+    )
+}
+/// Port of CriteriaTriggers.PLAYER_HURT_ENTITY with the victim context rooted
+/// at the attacker's captured position, as EntityPredicate#createContext does.
+pub fn player_hurt_entity(
+    level: &mut Level,
+    attacker: EntityRef,
+    victim: EntityRef,
+    source: &crate::entity::damage::DamageSource,
+    original_damage: f32,
+    damage: f32,
+    blocked: bool,
+) -> Result<(), LevelError> {
+    let origin = level.entity::<EntityData>(attacker)?.position;
+    let entity = create_context(origin, victim);
+    let source = source.to_loot_source();
+    live::trigger(
+        level,
+        attacker,
+        TriggerType::PlayerHurtEntity,
+        TriggerEvent::Hurt {
+            entity: Some(&entity),
+            source: &source,
+            original: original_damage,
+            actual: damage,
+            blocked,
+        },
+        None,
+    )
+}
 /// Port of CriteriaTriggers.LOCATION at ServerPlayer#doTick's 20-tick tail.
 pub fn location(level: &mut Level, player: EntityRef) -> Result<(), LevelError> {
     live::trigger(
@@ -254,6 +429,26 @@ pub fn location(level: &mut Level, player: EntityRef) -> Result<(), LevelError> 
         player,
         TriggerType::Location,
         TriggerEvent::Player,
+        None,
+    )
+}
+/// Port of DistanceTrigger#trigger for CriteriaTriggers.FALL_FROM_HEIGHT.
+/// Capture the current endpoint once, before matching any listener or reward.
+pub fn fall_from_height(
+    level: &mut Level,
+    player: EntityRef,
+    start: Vec3,
+) -> Result<(), LevelError> {
+    let end = level.entity::<EntityData>(player)?.position;
+    live::trigger(
+        level,
+        player,
+        TriggerType::FallFromHeight,
+        TriggerEvent::Distance {
+            start,
+            end,
+            cause: None,
+        },
         None,
     )
 }

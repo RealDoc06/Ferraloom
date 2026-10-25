@@ -1,0 +1,87 @@
+setup	replacement	survival	-	false	100000.0	8.5,64.0,8.5	-64	319
+step	replacement	START_DESTROY_BLOCK:8,64,8:NORTH	true/0/8,64,8/north/0/false/0,0,0/0/0	1,1	C:1:8,64,8:0
+step	replacement	tick	true/0/8,64,8/north/1/false/0,0,0/0/0	1,1	L:2019:8,64,8:2
+step	replacement	START_DESTROY_BLOCK:9,64,8:EAST	true/1/9,64,8/east/1/false/0,0,0/0/0	1,1	U:0:8,64,8:1;C:1:9,64,8:0
+step	replacement	ABORT_DESTROY_BLOCK:8,64,8:UP	false/1/9,64,8/east/1/false/0,0,0/0/0	1,1	C:1:9,64,8:-1;C:1:8,64,8:-1
+setup	early-stop	survival	-	false	100000.0	8.5,64.0,8.5	-64	319
+step	early-stop	field:gameTicks:2	false/0/0,0,0/down/2/false/0,0,0/0/-1	1,1	-
+step	early-stop	START_DESTROY_BLOCK:8,64,8:NORTH	true/2/8,64,8/north/2/false/0,0,0/0/0	1,1	C:1:8,64,8:0
+step	early-stop	STOP_DESTROY_BLOCK:8,64,8:UP	false/2/8,64,8/north/2/true/8,64,8/2/0	1,1	-
+step	early-stop	tick	false/2/8,64,8/north/3/true/8,64,8/2/0	1,1	-
+step	early-stop	tick	false/2/8,64,8/north/4/true/8,64,8/2/0	1,1	-
+step	early-stop	ABORT_DESTROY_BLOCK:9,64,8:DOWN	false/2/8,64,8/north/4/true/8,64,8/2/0	1,1	C:1:8,64,8:-1;C:1:9,64,8:-1
+step	early-stop	tick	false/2/8,64,8/north/5/true/8,64,8/2/0	1,1	-
+step	early-stop	replace:8,64,8:minecraft:air	false/2/8,64,8/north/5/true/8,64,8/2/0	0,1	-
+step	early-stop	tick	false/2/8,64,8/north/6/false/8,64,8/2/0	0,1	-
+setup	active	survival	-	false	100000.0	8.5,64.0,8.5	-64	319
+step	active	START_DESTROY_BLOCK:8,64,8:SOUTH	true/0/8,64,8/south/0/false/0,0,0/0/0	1,1	C:1:8,64,8:0
+step	active	CHANGE_DESTROY_DIRECTION:8,64,8:WEST	true/0/8,64,8/west/0/false/0,0,0/0/0	1,1	-
+step	active	tick	true/0/8,64,8/west/1/false/0,0,0/0/0	1,1	L:2019:8,64,8:4
+step	active	tick	true/0/8,64,8/west/2/false/0,0,0/0/0	1,1	L:2019:8,64,8:4
+step	active	tick	true/0/8,64,8/west/3/false/0,0,0/0/0	1,1	L:2019:8,64,8:4
+step	active	tick	true/0/8,64,8/west/4/false/0,0,0/0/0	1,1	L:2020:8,64,8:4
+step	active	replace:8,64,8:minecraft:air	true/0/8,64,8/west/4/false/0,0,0/0/0	0,1	-
+step	active	tick	false/0/8,64,8/west/5/false/0,0,0/0/-1	0,1	C:1:8,64,8:-1
+setup	active-over-threshold	survival	-	false	100000.0	8.5,64.0,8.5	-64	319
+step	active-over-threshold	START_DESTROY_BLOCK:8,64,8:UP	true/0/8,64,8/up/0/false/0,0,0/0/0	1,1	C:1:8,64,8:0
+step	active-over-threshold	field:gameTicks:150	true/0/8,64,8/up/150/false/0,0,0/0/0	1,1	-
+step	active-over-threshold	tick	true/0/8,64,8/up/151/false/0,0,0/0/10	1,1	C:1:8,64,8:10;L:2019:8,64,8:1
+setup	out-of-range	survival	-	false	100000.0	8.5,64.0,8.5	-64	319
+step	out-of-range	START_DESTROY_BLOCK:8,64,8:UP	true/0/8,64,8/up/0/false/0,0,0/0/0	1,1	C:1:8,64,8:0
+step	out-of-range	ABORT_DESTROY_BLOCK:100,64,8:DOWN	false/0/8,64,8/up/0/false/0,0,0/0/0	1,1	C:1:8,64,8:-1
+step	out-of-range	START_DESTROY_BLOCK:100,64,8:DOWN	false/0/8,64,8/up/0/false/0,0,0/0/0	1,1	-
+step	out-of-range	CHANGE_DESTROY_DIRECTION:100,64,8:EAST	false/0/8,64,8/up/0/false/0,0,0/0/0	1,1	-
+setup	upper-bound	survival	-	false	100000.0	8.5,320.0,8.5	-64	319
+step	upper-bound	START_DESTROY_BLOCK:8,320,8:UP	false/0/0,0,0/down/0/false/0,0,0/0/-1	1,1	U:0:8,320,8:18649
+step	upper-bound	ABORT_DESTROY_BLOCK:8,320,8:DOWN	false/0/0,0,0/down/0/false/0,0,0/0/-1	1,1	U:0:8,320,8:18649
+setup	upper-inclusive	survival	-	false	100000.0	8.5,319.0,8.5	-64	319
+step	upper-inclusive	START_DESTROY_BLOCK:8,319,8:UP	true/0/8,319,8/up/0/false/0,0,0/0/10	1,1	-
+step	upper-inclusive	tick	false/0/8,319,8/up/1/false/0,0,0/0/-1	1,1	-
+setup	protection	survival	-	true	100000.0	8.5,64.0,8.5	-64	319
+step	protection	START_DESTROY_BLOCK:8,64,8:UP	false/0/0,0,0/down/0/false/0,0,0/0/-1	1,1	S:0:true:build.spawn_protection:8, 64, 8:red
+setup	border	survival	-	false	10.0	8.5,64.0,8.5	-64	319
+step	border	START_DESTROY_BLOCK:8,64,8:UP	false/0/0,0,0/down/0/false/0,0,0/0/-1	1,1	U:0:8,64,8:1
+setup	adventure-deny	adventure	{count:1,id:"minecraft:stick"}	false	100000.0	8.5,64.0,8.5	-64	319
+step	adventure-deny	START_DESTROY_BLOCK:8,64,8:UP	false/0/0,0,0/down/0/false/0,0,0/0/-1	1,1	U:0:8,64,8:1
+setup	adventure-allow	adventure	{components:{"minecraft:can_break":{blocks:"minecraft:stone"}},count:1,id:"minecraft:stick"}	false	100000.0	8.5,64.0,8.5	-64	319
+step	adventure-allow	START_DESTROY_BLOCK:8,64,8:UP	true/0/8,64,8/up/0/false/0,0,0/0/0	1,1	C:1:8,64,8:0
+setup	adventure-wrong	adventure	{components:{"minecraft:can_break":{blocks:"minecraft:dirt"}},count:1,id:"minecraft:stick"}	false	100000.0	8.5,64.0,8.5	-64	319
+step	adventure-wrong	START_DESTROY_BLOCK:8,64,8:UP	false/0/0,0,0/down/0/false/0,0,0/0/-1	1,1	U:0:8,64,8:1
+setup	adventure-components	adventure	{components:{"minecraft:can_break":{blocks:"minecraft:stone",components:{"minecraft:custom_name":"absent"}}},count:1,id:"minecraft:stick"}	false	100000.0	8.5,64.0,8.5	-64	319
+step	adventure-components	START_DESTROY_BLOCK:8,64,8:UP	true/0/8,64,8/up/0/false/0,0,0/0/0	1,1	C:1:8,64,8:0
+setup	adventure-nbt	adventure	{components:{"minecraft:can_break":{blocks:"minecraft:stone",nbt:'{id:"minecraft:chest"}'}},count:1,id:"minecraft:stick"}	false	100000.0	8.5,64.0,8.5	-64	319
+step	adventure-nbt	START_DESTROY_BLOCK:8,64,8:UP	false/0/0,0,0/down/0/false/0,0,0/0/-1	1,1	U:0:8,64,8:1
+setup	adventure-chest-nbt	adventure	{components:{"minecraft:can_break":{blocks:"minecraft:chest",nbt:'{id:"minecraft:chest"}'}},count:1,id:"minecraft:stick"}	false	100000.0	8.5,64.0,8.5	-64	319
+step	adventure-chest-nbt	replace:8,64,8:minecraft:chest	false/0/0,0,0/down/0/false/0,0,0/0/-1	5544,1	-
+step	adventure-chest-nbt	START_DESTROY_BLOCK:8,64,8:UP	true/0/8,64,8/up/0/false/0,0,0/0/0	5544,1	C:1:8,64,8:0
+setup	spectator	spectator	-	false	100000.0	8.5,64.0,8.5	-64	319
+step	spectator	START_DESTROY_BLOCK:8,64,8:UP	false/0/0,0,0/down/0/false/0,0,0/0/-1	1,1	U:0:8,64,8:1
+setup	creative	creative	-	false	100000.0	8.5,64.0,8.5	-64	319
+step	creative	START_DESTROY_BLOCK:8,64,8:UP	false/0/0,0,0/down/0/false/0,0,0/0/-1	0,1	L:2001:8,64,8:1;G:minecraft:block_destroy:1:miner
+setup	creative-refusal	creative	{components:{"minecraft:tool":{can_destroy_blocks_in_creative:0b,damage_per_block:0,rules:[]}},count:1,id:"minecraft:stick"}	false	100000.0	8.5,64.0,8.5	-64	319
+step	creative-refusal	START_DESTROY_BLOCK:8,64,8:UP	false/0/0,0,0/down/0/false/0,0,0/0/-1	1,1	U:0:8,64,8:1
+setup	unarmed-stop	survival	-	false	100000.0	8.5,64.0,8.5	-64	319
+step	unarmed-stop	START_DESTROY_BLOCK:8,64,8:UP	true/0/8,64,8/up/0/false/0,0,0/0/0	1,1	C:1:8,64,8:0
+step	unarmed-stop	field:gameTicks:104	true/0/8,64,8/up/104/false/0,0,0/0/0	1,1	-
+step	unarmed-stop	STOP_DESTROY_BLOCK:8,64,8:UP	false/0/8,64,8/up/104/false/0,0,0/0/0	0,1	C:1:8,64,8:-1;L:2001:8,64,8:1;G:minecraft:block_destroy:1:miner
+setup	delayed-complete	survival	-	false	100000.0	8.5,64.0,8.5	-64	319
+step	delayed-complete	field:gameTicks:150	false/0/0,0,0/down/150/false/0,0,0/0/-1	1,1	-
+step	delayed-complete	START_DESTROY_BLOCK:8,64,8:UP	true/150/8,64,8/up/150/false/0,0,0/0/0	1,1	C:1:8,64,8:0
+step	delayed-complete	STOP_DESTROY_BLOCK:8,64,8:UP	false/150/8,64,8/up/150/true/8,64,8/150/0	1,1	-
+step	delayed-complete	tick	false/150/8,64,8/up/151/false/8,64,8/150/10	0,1	C:1:8,64,8:10;L:2001:8,64,8:1;G:minecraft:block_destroy:1:miner
+audience	-1	C:1:8,64,8:-1
+audience	0	C:1:8,64,8:0
+audience	9	C:1:8,64,8:9
+audience	10	C:1:8,64,8:10
+audience	255	C:1:8,64,8:255
+audience	256	C:1:8,64,8:256
+setup	listener	survival	-	false	100000.0	8.5,64.0,8.5	-64	319
+listener	false	START_DESTROY_BLOCK	1	-1	ok	-
+listener	true	START_DESTROY_BLOCK	3	3	ok	C:1:8,64,8:0
+listener	true	CHANGE_DESTROY_DIRECTION	1	3	ok	-
+listener	true	ABORT_DESTROY_BLOCK	9	9	ok	C:1:8,64,8:-1
+listener	true	ABORT_DESTROY_BLOCK	-1	9	IllegalArgumentException	C:1:8,64,8:-1
+setup	unloaded-adventure	adventure	-	false	100000.0	8.5,64.0,8.5	-64	319
+adventure-unloaded	-	true	0
+adventure-unloaded	{}	false	0
+adventure-unloaded	{"blocks":"minecraft:stone"}	NullPointerException	0
