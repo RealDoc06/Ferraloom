@@ -1,0 +1,67 @@
+[
+  {
+    "command": "scoreboard objectives modify missing displayname {score:{name:\u0027@a\u0027,objective:\u0027points\u0027}}",
+    "error": {
+      "translate": "arguments.objective.notFound",
+      "with": [
+        "missing"
+      ]
+    },
+    "feedback": [],
+    "packets": []
+  },
+  {
+    "command": "team modify missing prefix {score:{name:\u0027@a\u0027,objective:\u0027points\u0027}}",
+    "error": {
+      "translate": "team.notFound",
+      "with": [
+        "missing"
+      ]
+    },
+    "feedback": [],
+    "packets": []
+  },
+  {
+    "command": "scoreboard objectives modify missing numberformat fixed {score:{name:\u0027@a\u0027,objective:\u0027points\u0027}}",
+    "error": {
+      "translate": "argument.entity.toomany"
+    },
+    "feedback": [],
+    "packets": []
+  },
+  {
+    "command": "scoreboard players display numberformat #target missing fixed {score:{name:\u0027@a\u0027,objective:\u0027points\u0027}}",
+    "error": {
+      "translate": "argument.entity.toomany"
+    },
+    "feedback": [],
+    "packets": []
+  },
+  {
+    "command": "scoreboard players display name #target missing {score:{name:\u0027@a\u0027,objective:\u0027points\u0027}}",
+    "error": {
+      "translate": "arguments.objective.notFound",
+      "with": [
+        "missing"
+      ]
+    },
+    "feedback": [],
+    "packets": []
+  },
+  {
+    "command": "team add existing {score:{name:\u0027@a\u0027,objective:\u0027points\u0027}}",
+    "error": {
+      "translate": "argument.entity.toomany"
+    },
+    "feedback": [],
+    "packets": []
+  },
+  {
+    "command": "scoreboard objectives add points dummy {score:{name:\u0027@a\u0027,objective:\u0027points\u0027}}",
+    "error": {
+      "translate": "argument.entity.toomany"
+    },
+    "feedback": [],
+    "packets": []
+  }
+]

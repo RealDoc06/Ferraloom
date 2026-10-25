@@ -1,0 +1,9 @@
+order	A,B,D,E,C
+block-distance	A
+section-bound	A,B,C
+deferred-duplicates-1	A,B,C
+deferred-duplicates-2	A,B,C,D
+later-section	A,B
+exception	java.util.ConcurrentModificationException
+nested-cme	A,A,B
+after-cme	A,B,C

@@ -12,6 +12,7 @@ pub mod moving_piston;
 pub mod note;
 pub mod observer;
 pub mod opening;
+mod pathfinding;
 pub mod piston;
 mod placement;
 pub mod rail;
@@ -35,11 +36,21 @@ pub struct RedstoneState {
     pub(crate) torch_toggles: std::collections::VecDeque<(ferraloom_util::BlockPos, i64)>,
 }
 
+fn stack_error(error: crate::inventory::MenuError) -> crate::level::LevelError {
+    match error {
+        crate::inventory::MenuError::Level(error) => error,
+        _ => crate::level::LevelError::Inventory("redstone stack receiver"),
+    }
+}
+
 pub(crate) fn ported_behavior(
     block: Block,
     method: BlockMethod,
 ) -> Option<&'static dyn BlockBehavior> {
     use BlockMethod as M;
+    if method == M::IsPathfindable {
+        return pathfinding::behavior(block);
+    }
     if method == M::SetPlacedBy {
         return match block.class() {
             BlockClass::RepeaterBlock => Some(&diode::REPEATER),
@@ -357,3 +368,6 @@ pub(super) fn initial_orientation(
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod identity_tests;

@@ -6,6 +6,7 @@ use ferraloom_protocol::component::{ComponentTypeId, DataComponentMap, DataCompo
 use ferraloom_util::{BlockPos, ChunkPos};
 
 mod components;
+pub mod potent_sulfur;
 use super::containers::{
     chest::{BarrelBlockEntity, ChestBlockEntity, ShulkerBoxBlockEntity},
     crafter::CrafterBlockEntity,
@@ -23,6 +24,29 @@ pub struct BlockEntityRef {
 }
 
 impl BlockEntityRef {
+    /// Live loadCustomOnly, used by TypedEntityData#loadInto. Class callbacks run
+    /// on this generation; the existing extra component map stays untouched.
+    pub fn load_custom_only(self, tag: &CompoundTag, level: &mut Level) -> Result<(), LevelError> {
+        level.with_block_entity_callback(self, |level| {
+            let behavior = level.block_entity_state(self)?.behavior();
+            behavior.load_additional_live(self, tag, level)
+        })
+    }
+    /// Live loadWithComponents: class callbacks complete on the retained receiver
+    /// before the component map is replaced, matching BlockEntity's native order.
+    pub fn load_with_components(
+        self,
+        tag: &CompoundTag,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        level.with_block_entity_callback(self, |level| {
+            let behavior = level.block_entity_state(self)?.behavior();
+            behavior.load_additional_live(self, tag, level)?;
+            level.block_entity_mut::<BlockEntityData>(self)?.components =
+                components::load(tag.get_compound("components"));
+            Ok(())
+        })
+    }
     /// Port of BlockEntity#setChanged, including comparator-neighbor updates.
     pub fn set_changed(self, level: &mut Level) -> Result<(), LevelError> {
         let data = level.block_entity::<BlockEntityData>(self)?;
@@ -90,7 +114,22 @@ impl BlockEntityData {
 
 /// Port of BlockEntity's virtual methods. Implementations are immutable dispatchers.
 pub trait BlockEntity: Sync {
+    /// Port of EntityBlock#getListener for a GameEventListener.Provider receiver.
+    fn game_event_listener(
+        &self,
+    ) -> Option<&'static dyn crate::level::game_event::GameEventListener> {
+        None
+    }
     fn load_additional(&self, _state: &mut BlockEntityState, _tag: &CompoundTag) {}
+    fn load_additional_live(
+        &self,
+        handle: BlockEntityRef,
+        tag: &CompoundTag,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        self.load_additional(level.block_entity_state_mut(handle)?, tag);
+        Ok(())
+    }
     fn save_additional(
         &self,
         _state: &BlockEntityState,
@@ -144,6 +183,10 @@ static THE_END_PORTAL: TheEndPortal = TheEndPortal;
 /// Canonical concrete states. Extend this enum when porting a subclass, never Any.
 #[derive(Clone, Debug)]
 pub enum BlockEntityState {
+    PotentSulfur(Box<potent_sulfur::PotentSulfurBlockEntity>),
+    Command(Box<super::containers::command::CommandBlockEntity>),
+    Structure(Box<super::containers::structure::StructureBlockEntity>),
+    Skull(Box<super::containers::skull::SkullBlockEntity>),
     Sign(Box<super::containers::sign::SignBlockEntity>),
     Furnace(Box<super::containers::furnace::AbstractFurnaceBlockEntity>),
     Dispenser(Box<super::redstone::storage::DispenserBlockEntity>),
@@ -159,6 +202,10 @@ pub enum BlockEntityState {
 impl BlockEntityState {
     pub fn data(&self) -> &BlockEntityData {
         match self {
+            Self::PotentSulfur(entity) => &entity.parent,
+            Self::Command(entity) => &entity.parent,
+            Self::Structure(entity) => &entity.parent,
+            Self::Skull(entity) => &entity.parent,
             Self::Sign(entity) => &entity.parent,
             Self::Furnace(entity) => &entity.parent.parent,
             Self::Dispenser(entity) => &entity.parent.parent.parent,
@@ -174,6 +221,10 @@ impl BlockEntityState {
     }
     pub fn data_mut(&mut self) -> &mut BlockEntityData {
         match self {
+            Self::PotentSulfur(entity) => &mut entity.parent,
+            Self::Command(entity) => &mut entity.parent,
+            Self::Structure(entity) => &mut entity.parent,
+            Self::Skull(entity) => &mut entity.parent,
             Self::Sign(entity) => &mut entity.parent,
             Self::Furnace(entity) => &mut entity.parent.parent,
             Self::Dispenser(entity) => &mut entity.parent.parent.parent,
@@ -189,6 +240,10 @@ impl BlockEntityState {
     }
     pub fn behavior(&self) -> &'static dyn BlockEntity {
         match self {
+            Self::PotentSulfur(_) => &potent_sulfur::POTENT_SULFUR_ENTITY,
+            Self::Command(_) => &super::containers::command::COMMAND_ENTITY,
+            Self::Structure(_) => &super::containers::structure::STRUCTURE_ENTITY,
+            Self::Skull(_) => &super::containers::skull::SKULL_ENTITY,
             Self::Sign(_) => &super::containers::sign::SIGN_ENTITY,
             Self::Furnace(_) => &super::containers::furnace::FURNACE_ENTITY,
             Self::Dispenser(_) => &super::redstone::storage::DISPENSER_ENTITY,
@@ -198,6 +253,21 @@ impl BlockEntityState {
             Self::Comparator(_) => &super::redstone::comparator::COMPARATOR_ENTITY,
             Self::Crafter(_) => &super::containers::crafter::CRAFTER_ENTITY,
             _ => &super::containers::chest::STORAGE_ENTITY,
+        }
+    }
+    /// Port of BlockEntity#setLevel and the supported subclass initialization.
+    /// These assignments use the current clock without invoking world callbacks.
+    pub fn set_level(&mut self, game_time: i64) {
+        match self {
+            Self::PotentSulfur(entity) => entity.set_level(game_time),
+            _ => self.data_mut().has_level = true,
+        }
+    }
+    /// Native ticker eligibility can depend on the current cached block state.
+    pub fn has_server_ticker(&self) -> bool {
+        match self {
+            Self::PotentSulfur(entity) => entity.has_server_ticker(),
+            _ => self.behavior().has_server_ticker(),
         }
     }
     pub fn randomizable(&self) -> Option<&RandomizableContainerBlockEntity> {
@@ -360,6 +430,18 @@ pub fn create(pos: BlockPos, state: BlockState) -> Result<BlockEntityState, Leve
         .ok_or(LevelError::UnsupportedBlockEntity(state.block()))?;
     let data = BlockEntityData::new(kind, pos, state)?;
     match kind {
+        BlockEntityType::POTENT_SULFUR => Ok(BlockEntityState::PotentSulfur(Box::new(
+            potent_sulfur::PotentSulfurBlockEntity::new(data),
+        ))),
+        BlockEntityType::COMMAND_BLOCK => Ok(BlockEntityState::Command(Box::new(
+            super::containers::command::CommandBlockEntity::new(data),
+        ))),
+        BlockEntityType::STRUCTURE_BLOCK => Ok(BlockEntityState::Structure(Box::new(
+            super::containers::structure::StructureBlockEntity::new(data),
+        ))),
+        BlockEntityType::SKULL => Ok(BlockEntityState::Skull(Box::new(
+            super::containers::skull::SkullBlockEntity::new(data),
+        ))),
         BlockEntityType::END_PORTAL => Ok(BlockEntityState::EndPortal(data)),
         BlockEntityType::PISTON => Ok(BlockEntityState::MovingPiston(Box::new(
             super::redstone::moving_piston::PistonMovingBlockEntity::new(data),
@@ -432,7 +514,11 @@ pub fn supports(block: Block) -> bool {
     matches!(
         registry::for_block(block),
         Some(
-            BlockEntityType::END_PORTAL
+            BlockEntityType::POTENT_SULFUR
+                | BlockEntityType::COMMAND_BLOCK
+                | BlockEntityType::STRUCTURE_BLOCK
+                | BlockEntityType::SKULL
+                | BlockEntityType::END_PORTAL
                 | BlockEntityType::PISTON
                 | BlockEntityType::DISPENSER
                 | BlockEntityType::DROPPER
@@ -473,6 +559,12 @@ macro_rules! projection {
         }
     };
 }
+projection!(super::containers::command::CommandBlockEntity, Command);
+projection!(
+    super::containers::structure::StructureBlockEntity,
+    Structure
+);
+projection!(super::containers::skull::SkullBlockEntity, Skull);
 projection!(ChestBlockEntity, Chest);
 projection!(BarrelBlockEntity, Barrel);
 projection!(ShulkerBoxBlockEntity, ShulkerBox);
@@ -528,3 +620,8 @@ projection!(
     super::redstone::moving_piston::PistonMovingBlockEntity,
     MovingPiston
 );
+
+#[cfg(test)]
+mod placement_tests;
+
+projection!(potent_sulfur::PotentSulfurBlockEntity, PotentSulfur);

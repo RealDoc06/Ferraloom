@@ -6,6 +6,60 @@ use crate::{
 };
 use std::ops::{Add, Mul, Neg, Sub};
 
+/// Port of BlockHitResult. Geometry retains double precision independently of
+/// the packet codec's relative float offsets; misses are explicit results.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct BlockHitResult {
+    pub location: Vec3,
+    pub direction: Direction,
+    pub block_pos: BlockPos,
+    pub miss: bool,
+    pub inside: bool,
+    pub world_border_hit: bool,
+}
+impl BlockHitResult {
+    pub const fn new(
+        location: Vec3,
+        direction: Direction,
+        block_pos: BlockPos,
+        inside: bool,
+    ) -> Self {
+        Self {
+            location,
+            direction,
+            block_pos,
+            miss: false,
+            inside,
+            world_border_hit: false,
+        }
+    }
+    /// Port of BlockHitResult#miss.
+    pub const fn miss(location: Vec3, direction: Direction, block_pos: BlockPos) -> Self {
+        Self {
+            miss: true,
+            ..Self::new(location, direction, block_pos, false)
+        }
+    }
+    /// Port of BlockHitResult#withPosition. The hit location stays unchanged.
+    pub const fn with_position(self, block_pos: BlockPos) -> Self {
+        Self { block_pos, ..self }
+    }
+    pub const fn with_direction(self, direction: Direction) -> Self {
+        Self { direction, ..self }
+    }
+    pub const fn hit_border(self) -> Self {
+        Self {
+            world_border_hit: true,
+            ..self
+        }
+    }
+}
+impl From<crate::shapes::ShapeHit> for BlockHitResult {
+    fn from(hit: crate::shapes::ShapeHit) -> Self {
+        Self::new(hit.location, hit.direction, hit.block_pos, hit.inside)
+    }
+}
+
 /// Port of Vec3. Equality follows Double.compare, including NaN and signed zero.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Vec3 {

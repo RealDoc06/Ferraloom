@@ -304,7 +304,8 @@ impl PredicateContext for Level {
                 .map_err(required)?
                 .is_swimming(entity, self)
                 .map_err(required)?,
-            flying: fall_flying || matches!(state, EntityState::Player(player) if player.flying),
+            flying: fall_flying
+                || matches!(state, EntityState::Player(player) if player.abilities.flying),
             baby: self
                 .entity_behavior(entity)
                 .map_err(required)?
@@ -346,6 +347,15 @@ impl PredicateContext for Level {
     }
 }
 impl LootFacts for Level {
+    /// Port of StorageNbtProvider#get on the server's canonical CommandStorage.
+    /// Missing services and deferred namespace load failures remain required.
+    fn storage(&self, id: &Identifier) -> Result<Tag> {
+        self.command_storage()
+            .ok_or_else(|| LootError::Unsupported("command_storage".into()))?
+            .get(id)
+            .map(Tag::Compound)
+            .map_err(LootError::CommandStorage)
+    }
     fn item_enabled(&self, stack: &ItemStack) -> Result<bool> {
         Ok(stack.is_empty()
             || stack
@@ -399,6 +409,40 @@ mod tests {
     use ferraloom_util::ChunkPos;
     use std::sync::Arc;
     static EMPTY: Behaviors = Behaviors::EMPTY;
+
+    #[test]
+    fn missing_command_storage_snapshot_is_a_required_loot_fact() {
+        let level = Level::new(
+            Region::new(&EMPTY),
+            crate::level::LevelContext::fixture(0, 63),
+        );
+        let id = "test:read".parse().unwrap();
+        let error = LootFacts::storage(&level, &id).unwrap_err();
+        assert!(matches!(error, LootError::Unsupported(ref fact) if fact == "command_storage"));
+        assert!(std::error::Error::source(&error).is_none());
+    }
+
+    #[test]
+    fn command_storage_loot_read_preserves_the_actual_error_source() {
+        use crate::commands::storage::{CommandStorage, StorageReadError};
+        let mut level = Level::new(
+            Region::new(&EMPTY),
+            crate::level::LevelContext::fixture(0, 63),
+        );
+        // The test executable is a file, not a directory. Preload retains that
+        // real IO failure until the namespace's first required read.
+        let storage = CommandStorage::preload(&std::env::current_exe().unwrap());
+        let id = "test:read".parse().unwrap();
+        let original = storage.get(&id).unwrap_err();
+        level.set_command_storage(storage.snapshot());
+        let error = LootFacts::storage(&level, &id).unwrap_err();
+        let source = std::error::Error::source(&error).unwrap();
+        let source = source.downcast_ref::<StorageReadError>().unwrap();
+        assert_eq!(source.namespace, "test");
+        assert!(Arc::ptr_eq(&source.source, &original.source));
+        assert!(std::error::Error::source(source).is_some());
+        assert_eq!(error.to_string(), original.to_string());
+    }
 
     #[test]
     fn canonical_facts_observe_mutations_and_keep_missing_context_explicit() {

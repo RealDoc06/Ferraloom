@@ -104,10 +104,13 @@ impl super::chunk::LevelChunk {
     }
 }
 impl BlockEntityRuntime {
-    pub(super) fn register_published_chunk(&self, chunk: &mut super::chunk::LevelChunk) {
-        // Primitive map traversal and stateless has_server_ticker queries invoke
-        // no world callbacks. The cold metadata borrow ends before publication.
-        let mut tickers = self.tickers.borrow_mut();
+    pub(super) fn prepare_published_chunk(
+        &self,
+        chunk: &mut super::chunk::LevelChunk,
+        game_time: i64,
+    ) {
+        // LevelChunk's proto constructor calls setBlockEntity, which sets the
+        // level and clears removed before postLoad, without binding tickers.
         for &index in chunk.block_entities.positions.values() {
             let state = chunk.block_entities.slots[index].as_mut().unwrap();
             let data = state.data_mut();
@@ -120,12 +123,18 @@ impl BlockEntityRuntime {
                 self.next_generation.set(generation);
                 data.generation = generation;
             }
-            data.has_level = true;
             data.removed = false;
-            let handle = data.reference();
-            let kind = data.kind;
-            if state.behavior().has_server_ticker() {
-                tickers.bind(handle, kind);
+            state.set_level(game_time);
+        }
+    }
+    pub(super) fn register_published_chunk(&self, chunk: &super::chunk::LevelChunk) {
+        // Stateless ticker selection invokes no world callback. The metadata
+        // guard is released before returning to the promotion continuation.
+        let mut tickers = self.tickers.borrow_mut();
+        for state in chunk.block_entities.iter() {
+            let data = state.data();
+            if state.has_server_ticker() {
+                tickers.bind(data.reference(), data.kind);
             }
         }
     }
@@ -233,10 +242,10 @@ impl Level {
         data.generation = generation;
         data.block_state = block;
         data.removed = false;
-        data.has_level = true;
         let reference = data.reference();
         let kind = data.kind;
-        if state.behavior().has_server_ticker() {
+        state.set_level(region.game_time);
+        if state.has_server_ticker() {
             runtime.tickers.get_mut().bind(reference, kind);
         } else {
             runtime.tickers.get_mut().unbind(pos);
@@ -287,7 +296,7 @@ impl Level {
                 .set_block_state(state)?;
             let entity = self.block_entity_state(handle)?;
             let kind = entity.data().kind;
-            if entity.behavior().has_server_ticker() {
+            if entity.has_server_ticker() {
                 self.region_mut()
                     .block_entity_state
                     .tickers

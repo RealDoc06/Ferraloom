@@ -1957,14 +1957,36 @@ impl Persistent for MobEffectDetails {
         })
     }
     fn from_nbt(v: &Tag) -> Result<Self> {
-        let show_particles = field_nbt(v, "show_particles", Some(true))?;
+        let fields = v
+            .as_compound()
+            .ok_or_else(|| invalid("mob effect details map"))?;
+        // Details.MAP_CODEC's optional fields retain defaults on malformed
+        // values; show_icon falls back to the decoded show_particles value.
+        let boolean = |name: &str, default| {
+            fields
+                .get(name)
+                .and_then(|value| bool::from_nbt(value).ok())
+                .unwrap_or(default)
+        };
+        let show_particles = boolean("show_particles", true);
         Ok(Self {
-            amplifier: VarInt(field_nbt::<i32>(v, "amplifier", Some(0))? as u8 as i32),
-            duration: field_nbt(v, "duration", Some(VarInt(0)))?,
-            ambient: field_nbt(v, "ambient", Some(false))?,
+            amplifier: VarInt(
+                fields
+                    .get("amplifier")
+                    .and_then(|value| i32::from_nbt(value).ok())
+                    .unwrap_or(0) as u8 as i32,
+            ),
+            duration: fields
+                .get("duration")
+                .and_then(|value| VarInt::from_nbt(value).ok())
+                .unwrap_or(VarInt(0)),
+            ambient: boolean("ambient", false),
             show_particles,
-            show_icon: field_nbt(v, "show_icon", Some(show_particles))?,
-            hidden_effect: field_nbt(v, "hidden_effect", Some(None))?,
+            show_icon: boolean("show_icon", show_particles),
+            hidden_effect: fields
+                .get("hidden_effect")
+                .and_then(|value| Self::from_nbt(value).ok())
+                .map(Box::new),
         })
     }
     fn to_persistent(&self) -> Result<PersistentValue> {

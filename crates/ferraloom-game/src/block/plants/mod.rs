@@ -19,6 +19,7 @@ mod ground;
 mod growing;
 mod hanging_moss;
 mod harvest;
+mod huge_mushroom;
 mod ice;
 mod leaves;
 mod lifecycle;
@@ -26,6 +27,7 @@ mod moss;
 pub mod multiface;
 pub mod multiface_spreader;
 mod nylium;
+mod pathfinding;
 mod pitcher;
 mod placement;
 mod powder_snow;
@@ -48,6 +50,17 @@ use ferraloom_data::{Block, BlockClass};
 pub fn ported_behavior(block: Block, method: BlockMethod) -> Option<&'static dyn BlockBehavior> {
     use BlockClass as C;
     use BlockMethod as M;
+    if method == M::IsPathfindable {
+        return pathfinding::behavior(block);
+    }
+    if block.class() == C::HugeMushroomBlock
+        && matches!(
+            method,
+            M::UpdateShape | M::UpdateFromNeighbourShapes | M::GetStateForPlacement
+        )
+    {
+        return Some(&huge_mushroom::HUGE_MUSHROOM);
+    }
     if block == Block::FROSTED_ICE
         && matches!(
             method,

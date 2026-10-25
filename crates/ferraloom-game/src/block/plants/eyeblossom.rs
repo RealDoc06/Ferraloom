@@ -80,7 +80,7 @@ fn change_state(
     };
     LevelAccessRef::Server(level).set_block(pos, transformed.default_state(), UpdateFlags::ALL)?;
     let start = Vec3::at_center_of(pos.into());
-    level.game_event(GameEvent::BLOCK_CHANGE, start, None, Some(state));
+    level.game_event(GameEvent::BLOCK_CHANGE, start, None, Some(state))?;
     let lifetime = 0.5 + level.random().next_double();
     let velocity = Vec3::new(
         level.random().next_double() - 0.5,

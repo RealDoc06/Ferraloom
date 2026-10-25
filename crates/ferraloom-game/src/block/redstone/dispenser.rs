@@ -1,13 +1,12 @@
 //! DispenserBlock, DropperBlock and common dispense behaviors. Unported native
 //! registry classes remain explicit errors until their concrete hooks are installed.
-use super::{hopper, state::facing, storage::DispenserBlockEntity};
+use super::{hopper, stack_error, state::facing, storage::DispenserBlockEntity};
 use crate::{
     block::{
         BlockBehavior, UPDATE_LIMIT, UpdateFlags,
         containers::{
             access::{self, ContainerRef},
             loot::unpack_loot_table,
-            storage::BaseContainerBlockEntity,
         },
         entity::{BlockEntityRef, BlockEntityType},
     },
@@ -16,6 +15,7 @@ use crate::{
         item::ItemEntity,
         player::inventory::{component, copy_with_count, count, set_count, split},
     },
+    inventory::{ContainerHandle, ContainerSlot, StackOperation, StackRef, StackValue},
     level::{Level, LevelError, effects::LevelEffect, redstone::Orientation},
 };
 use ferraloom_data::{
@@ -37,15 +37,19 @@ pub struct DispenseSource {
     pub state: BlockState,
     pub entity: BlockEntityRef,
     pub slot: usize,
+    /// The getItem receiver pinned by the enclosing dispense operation.
+    pub stack: StackRef,
 }
 /// A native behavior owns its sound/animation and operates on the canonical
-/// receiver before each world callback. The result is delivered by setItem.
-pub type DispenseHook = fn(DispenseSource, &mut Level) -> Result<ItemStack, LevelError>;
+/// receiver before each world callback. Existing results preserve that receiver
+/// through native setItem callbacks; New is reserved for native fresh objects.
+pub type DispenseHook = fn(DispenseSource, &mut Level) -> Result<StackValue, LevelError>;
 #[derive(Clone, Debug)]
 pub struct ProjectileDispense {
     pub position: Vec3,
     pub direction: Direction,
-    pub stack: ItemStack,
+    /// Rooted by the enclosing dispense operation through factory and shoot calls.
+    pub stack: StackRef,
     pub config: ProjectileDispenseConfig,
 }
 /// Entity implementations perform ProjectileItem#asProjectile and
@@ -125,20 +129,20 @@ pub fn spawn_item(
     Ok(handle)
 }
 /// Port of DefaultDispenseItemBehavior#dispense/execute. Splitting changes the
-/// live inventory before addFreshEntity, so reentrant comparator reads see it.
-/// Keeping that original ItemStack receiver through callbacks remains pending
-/// the canonical StackRef pin/read/mutate API.
+/// original input receiver before addFreshEntity, including after slot replacement.
 pub fn default_dispense(
     source: DispenseSource,
     level: &mut Level,
-) -> Result<ItemStack, LevelError> {
-    let (piece, remaining) = {
-        let item = &mut level
-            .block_entity_mut::<BaseContainerBlockEntity>(source.entity)?
-            .items[source.slot];
-        let piece = split(item, 1);
-        (piece, item.clone())
-    };
+) -> Result<StackValue, LevelError> {
+    let mut operation = StackOperation::new(level);
+    operation.pin_existing(source.stack).map_err(stack_error)?;
+    let piece = split(
+        operation
+            .level
+            .stack_mut(source.stack)
+            .map_err(stack_error)?,
+        1,
+    );
     let direction = facing(source.state);
     let step = direction.step();
     let c = center(source.pos);
@@ -147,22 +151,28 @@ pub fn default_dispense(
         c.y + 0.7 * f64::from(step.y),
         c.z + 0.7 * f64::from(step.z),
     );
-    spawn_item(level, piece, 6, direction, position)?;
-    effect(level, source.pos, 1000, 0);
-    effect(level, source.pos, 2000, direction as i32);
-    Ok(remaining)
+    spawn_item(operation.level, piece, 6, direction, position)?;
+    effect(operation.level, source.pos, 1000, 0);
+    effect(operation.level, source.pos, 2000, direction as i32);
+    Ok(StackValue::Existing(source.stack))
 }
-fn projectile_dispense(source: DispenseSource, level: &mut Level) -> Result<ItemStack, LevelError> {
-    let stack = level
-        .block_entity::<BaseContainerBlockEntity>(source.entity)?
-        .items[source.slot]
-        .clone();
-    let item = stack.item();
+fn projectile_dispense(
+    source: DispenseSource,
+    level: &mut Level,
+) -> Result<StackValue, LevelError> {
+    let mut operation = StackOperation::new(level);
+    operation.pin_existing(source.stack).map_err(stack_error)?;
+    let item = operation
+        .level
+        .stack(source.stack)
+        .map_err(stack_error)?
+        .item();
     let config = item
         .dispenser_properties()
         .projectile
         .expect("registered projectile behavior");
-    let hook = level
+    let hook = operation
+        .level
         .region()
         .redstone
         .dispense
@@ -173,30 +183,43 @@ fn projectile_dispense(source: DispenseSource, level: &mut Level) -> Result<Item
         ProjectileDispense {
             position: projectile_position(source.pos, direction, config.position),
             direction,
-            stack,
+            stack: source.stack,
             config,
         },
-        level,
+        operation.level,
     )?;
-    // Pending StackRef: shrink the original input receiver after the projectile
-    // callback, including when that callback replaced the inventory slot.
-    let remaining = {
-        let stack = &mut level
-            .block_entity_mut::<BaseContainerBlockEntity>(source.entity)?
-            .items[source.slot];
-        let n = count(stack).wrapping_sub(1);
-        set_count(stack, n);
-        stack.clone()
-    };
+    let stack = operation
+        .level
+        .stack_mut(source.stack)
+        .map_err(stack_error)?;
+    let remaining = count(stack).wrapping_sub(1);
+    set_count(stack, remaining);
     effect(
-        level,
+        operation.level,
         source.pos,
         config.override_dispense_event.unwrap_or(1002),
         0,
     );
-    effect(level, source.pos, 2000, direction as i32);
-    Ok(remaining)
+    effect(operation.level, source.pos, 2000, direction as i32);
+    Ok(StackValue::Existing(source.stack))
 }
+
+/// Port of DropperBlock#dispenseFrom's post-transfer copy. The argument is the
+/// original getItem receiver, read after every destination callback finishes.
+pub(super) fn copy_after_transfer(
+    original: StackRef,
+    transferred: bool,
+    level: &Level,
+) -> Result<ItemStack, LevelError> {
+    let stack = level.stack(original).map_err(stack_error)?;
+    let mut result = copy_with_count(stack, count(stack));
+    if transferred {
+        let remaining = count(&result).wrapping_sub(1);
+        set_count(&mut result, remaining);
+    }
+    Ok(result)
+}
+
 fn method(level: &Level, stack: &ItemStack) -> Result<Option<DispenseHook>, LevelError> {
     let item = stack.item();
     if !crate::loot::LootFacts::item_enabled(level, stack)
@@ -296,50 +319,63 @@ impl BlockBehavior for DispenserBlock {
                 effect(level, pos, 1001, 0);
                 if !dropper {
                     let state = level.block_entity_state(handle)?.data().block_state;
-                    level.game_event(GameEvent::BLOCK_ACTIVATE, center(pos), None, Some(state));
+                    level.game_event(GameEvent::BLOCK_ACTIVATE, center(pos), None, Some(state))?;
                 }
                 return Ok(());
             };
-            let stack = access::get_item(handle, slot, level)?;
+            let mut operation = StackOperation::new(level);
+            let stack = operation
+                .pin(ContainerSlot {
+                    container: ContainerHandle::BlockEntity(handle),
+                    slot,
+                })
+                .map_err(stack_error)?;
             let source = DispenseSource {
                 pos,
                 state,
                 entity: handle,
                 slot,
+                stack,
             };
             let result = if dropper {
-                if stack.is_empty() {
+                if operation
+                    .level
+                    .stack(stack)
+                    .map_err(stack_error)?
+                    .is_empty()
+                {
                     return Ok(());
                 }
-                let direction = facing(level.get_block_state(pos)?);
-                if let Some(into) = hopper::container_at(level, pos.relative(direction, 1))? {
+                let direction = facing(operation.level.get_block_state(pos)?);
+                if let Some(into) =
+                    hopper::container_at(operation.level, pos.relative(direction, 1))?
+                {
+                    let piece =
+                        copy_with_count(operation.level.stack(stack).map_err(stack_error)?, 1);
                     let remaining = hopper::add_item(
                         Some(&ContainerRef::Single(handle)),
                         &into,
-                        copy_with_count(&stack, 1),
+                        piece,
                         Some(direction.opposite()),
-                        level,
+                        operation.level,
                     )?;
-                    // Pending StackRef: native copies the original getItem
-                    // receiver here, even after reentrant destination callbacks.
-                    let mut result = level
-                        .block_entity::<BaseContainerBlockEntity>(handle)?
-                        .items[slot]
-                        .clone();
-                    if remaining.is_empty() {
-                        let size = count(&result).wrapping_sub(1);
-                        set_count(&mut result, size);
-                    }
-                    result
+                    StackValue::New(copy_after_transfer(
+                        stack,
+                        remaining.is_empty(),
+                        operation.level,
+                    )?)
                 } else {
-                    default_dispense(source, level)?
+                    default_dispense(source, operation.level)?
                 }
-            } else if let Some(hook) = method(level, &stack)? {
-                hook(source, level)?
+            } else if let Some(hook) = method(
+                operation.level,
+                operation.level.stack(stack).map_err(stack_error)?,
+            )? {
+                hook(source, operation.level)?
             } else {
                 return Ok(());
             };
-            access::set_item(handle, slot, result, level)
+            access::set_item_value(handle, slot, result, operation.level)
         })
     }
     fn analog_output_signal(

@@ -237,6 +237,27 @@ pub fn teleport_player(
     Ok(())
 }
 
+/// Port of Entity#absSnapTo, including coordinate clamps and old rotation.
+pub fn abs_snap_to(
+    entity: EntityRef,
+    position: Vec3,
+    yaw: f32,
+    pitch: f32,
+    level: &mut Level,
+) -> Result<(), LevelError> {
+    let position = Vec3::new(
+        position.x.clamp(-3.0e7, 3.0e7),
+        position.y,
+        position.z.clamp(-3.0e7, 3.0e7),
+    );
+    level.entity_mut::<EntityData>(entity)?.old_position = position;
+    level.set_entity_pos(entity, position)?;
+    level
+        .entity_mut::<EntityData>(entity)?
+        .abs_snap_rotation_to(yaw, pitch);
+    Ok(())
+}
+
 /// Port of Entity#snapTo. Passenger teleportation preserves velocity and head yaw.
 pub fn snap_to(entity: EntityRef, position: Vec3, level: &mut Level) -> Result<(), LevelError> {
     level.set_entity_pos(entity, position)?;
