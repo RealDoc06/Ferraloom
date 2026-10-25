@@ -5,7 +5,9 @@ use ferraloom_util::{Uuid, Vec3};
 
 use super::{EntityData, synched_data as data};
 
+pub(crate) mod live;
 mod tree;
+pub use live::load_in_place;
 pub use tree::EntityPersistenceError;
 pub(crate) use tree::load_entity_tree;
 
@@ -63,8 +65,17 @@ impl EntityData {
         &mut self,
         tag: CompoundTag,
     ) -> Result<f32, EntityLoadError> {
-        let position = vector(&tag, "Pos");
-        let motion = vector(&tag, "Motion");
+        self.load_motion(&tag);
+        self.set_pos_raw(loaded_position(&tag));
+        let head_rotation = self.load_rotation(&tag);
+        self.load_scalar_fields(&tag);
+        self.validate_loaded_state()?;
+        self.set_pos(self.position);
+        self.load_metadata(tag);
+        Ok(head_rotation)
+    }
+    pub(crate) fn load_motion(&mut self, tag: &CompoundTag) {
+        let motion = vector(tag, "Motion");
         let velocity = Vec3::new(
             safe_motion(motion.x),
             safe_motion(motion.y),
@@ -74,16 +85,15 @@ impl EntityData {
             self.velocity = velocity;
         }
         self.needs_sync = true;
-        self.set_pos_raw(Vec3::new(
-            position.x.clamp(-30_000_512.0, 30_000_512.0),
-            position.y.clamp(-20_000_000.0, 20_000_000.0),
-            position.z.clamp(-30_000_512.0, 30_000_512.0),
-        ));
+    }
+    pub(crate) fn load_rotation(&mut self, tag: &CompoundTag) -> f32 {
         let rotation = tag.get_list("Rotation").filter(|v| v.len() == 2);
         self.set_y_rot(rotation.and_then(|v| v[0].as_float()).unwrap_or(0.0));
         self.set_x_rot(rotation.and_then(|v| v[1].as_float()).unwrap_or(0.0));
         self.set_old_pos_and_rot();
-        let head_rotation = self.yaw;
+        self.yaw
+    }
+    pub(crate) fn load_scalar_fields(&mut self, tag: &CompoundTag) {
         self.fall_distance = tag.get_double_or("fall_distance", 0.0);
         self.remaining_fire_ticks = i32::from(tag.get_short_or("Fire", 0));
         self.entity_data
@@ -97,13 +107,17 @@ impl EntityData {
         {
             self.uuid = Uuid::from_int_array(words);
         }
+    }
+    pub(crate) fn validate_loaded_state(&self) -> Result<(), EntityLoadError> {
         if !self.position.is_finite() {
             return Err(EntityLoadError::InvalidPosition);
         }
         if !self.yaw.is_finite() || !self.pitch.is_finite() {
             return Err(EntityLoadError::InvalidRotation);
         }
-        self.set_pos(self.position);
+        Ok(())
+    }
+    pub(crate) fn load_metadata(&mut self, tag: CompoundTag) {
         self.set_y_rot(self.yaw % 360.0);
         self.set_x_rot(self.pitch % 360.0);
         let name = tag
@@ -136,7 +150,6 @@ impl EntityData {
             }
         }
         self.saved = tag;
-        Ok(head_rotation)
     }
     /// Port of Entity#saveWithoutId. The Level facade supplies vehicle X/Z and riders.
     pub fn save_without_id(&self) -> CompoundTag {
@@ -215,6 +228,14 @@ impl EntityData {
         }
         tag
     }
+}
+pub(crate) fn loaded_position(tag: &CompoundTag) -> Vec3 {
+    let position = vector(tag, "Pos");
+    Vec3::new(
+        position.x.clamp(-30_000_512.0, 30_000_512.0),
+        position.y.clamp(-20_000_000.0, 20_000_000.0),
+        position.z.clamp(-30_000_512.0, 30_000_512.0),
+    )
 }
 fn safe_motion(value: f64) -> f64 {
     if value.abs() > 10.0 { 0.0 } else { value }

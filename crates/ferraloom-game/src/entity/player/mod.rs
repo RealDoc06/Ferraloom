@@ -361,29 +361,33 @@ impl ServerPlayer {
         tag: CompoundTag,
     ) -> Result<(), super::persistence::EntityLoadError> {
         self.parent.parent.load_nbt_with_absorption_setter(
-            tag,
+            tag.clone(),
             super::living::damage_state::player_internal_set_absorption_amount,
         )?;
+        self.read_player_additional_save_data(&tag)
+    }
+    pub(crate) fn read_player_additional_save_data(
+        &mut self,
+        tag: &CompoundTag,
+    ) -> Result<(), super::persistence::EntityLoadError> {
         // Player#readAdditionalSaveData restores the profile UUID after super.
         self.uuid = self.profile_id;
-        self.food_data.load(&self.parent.parent.parent.saved);
+        self.food_data.load(tag);
         self.set_shoulder_entity_left(
-            self.saved
-                .get_compound("ShoulderEntityLeft")
+            tag.get_compound("ShoulderEntityLeft")
                 .cloned()
                 .unwrap_or_default(),
         );
         self.set_shoulder_entity_right(
-            self.saved
-                .get_compound("ShoulderEntityRight")
+            tag.get_compound("ShoulderEntityRight")
                 .cloned()
                 .unwrap_or_default(),
         );
-        self.experience_progress = self.saved.get_float_or("XpP", 0.0);
-        self.experience_level = self.saved.get_int_or("XpLevel", 0);
-        self.total_experience = self.saved.get_int_or("XpTotal", 0);
-        self.set_score(self.saved.get_int_or("Score", 0));
-        if let Some(tag) = self.saved.get("abilities") {
+        self.experience_progress = tag.get_float_or("XpP", 0.0);
+        self.experience_level = tag.get_int_or("XpLevel", 0);
+        self.total_experience = tag.get_int_or("XpTotal", 0);
+        self.set_score(tag.get_int_or("Score", 0));
+        if let Some(tag) = tag.get("abilities") {
             match abilities::PackedAbilities::from_nbt(tag) {
                 Ok(packed) => self.abilities.apply(packed),
                 Err(error) => {
@@ -396,16 +400,11 @@ impl ServerPlayer {
             .get_instance(ferraloom_data::registries::attribute::Id::MOVEMENT_SPEED)
             .expect("player supplier defines MOVEMENT_SPEED")
             .set_base_value(f64::from(walking_speed));
-        self.game_mode =
-            GameType::from_id(self.saved.get_int_or("playerGameType", self.game_mode.id()));
+        self.game_mode = GameType::from_id(tag.get_int_or("playerGameType", self.game_mode.id()));
         // ServerPlayer reads saved abilities before applying its loaded game mode.
         self.update_game_mode_abilities();
-        let inventory = self
-            .saved
-            .get_list("Inventory")
-            .cloned()
-            .unwrap_or_default();
-        let selected = self.saved.get_int_or("SelectedItemSlot", 0);
+        let inventory = tag.get_list("Inventory").cloned().unwrap_or_default();
+        let selected = tag.get_int_or("SelectedItemSlot", 0);
         self.inventory.load(&inventory);
         self.inventory.set_selected_slot(selected as usize);
         self.first_good = self.position;
@@ -984,6 +983,24 @@ impl crate::entity::Entity for PlayerBehavior {
         scoreboard: &crate::scoreboard::Scoreboard,
     ) -> Result<ferraloom_protocol::chat::Component, LevelError> {
         super::names::player_display_name(self, entity, level, scoreboard)
+    }
+    fn set_y_head_rot(
+        &self,
+        entity: EntityRef,
+        value: f32,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        level.entity_mut::<super::LivingEntity>(entity)?.y_head_rot = value;
+        Ok(())
+    }
+    fn set_y_body_rot(
+        &self,
+        entity: EntityRef,
+        value: f32,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        level.entity_mut::<super::LivingEntity>(entity)?.y_body_rot = value;
+        Ok(())
     }
     fn y_head_rot(
         &self,

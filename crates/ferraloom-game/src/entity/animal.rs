@@ -1,10 +1,12 @@
 use super::{AgeableMob, Entity, EntityData, LivingEntity, Mob, PathfinderMob};
+pub(crate) mod persistence;
 
 /// Port of Animal's embedded AgeableMob parent.
 #[derive(Debug)]
 pub struct Animal {
     pub parent: AgeableMob,
     pub in_love: i32,
+    pub love_cause: Option<super::EntityReference<super::player::ServerPlayer>>,
 }
 
 /// Port of AbstractCow, the immediate parent of Cow in vanilla 26.3.
@@ -13,12 +15,13 @@ pub struct AbstractCow {
     pub parent: Animal,
 }
 
-/// Port of Cow's parent chain. Variants/synched data arrive with the cow port.
+/// Cow's canonical parent chain and bound variant metadata.
 #[derive(Debug)]
 pub struct Cow {
     pub parent: AbstractCow,
 }
 
+#[cfg(any(test, feature = "test-fixtures"))]
 impl Default for Cow {
     fn default() -> Self {
         Self::with_parent(EntityData::default())
@@ -26,8 +29,30 @@ impl Default for Cow {
 }
 
 impl Cow {
+    #[cfg(any(test, feature = "test-fixtures"))]
     pub(crate) fn with_parent(parent: EntityData) -> Self {
-        Self {
+        Self::with_context(parent, &crate::level::LevelContext::fixture(0, 63))
+            .expect("vanilla cow fixture registries")
+    }
+    pub(crate) fn with_level(
+        parent: EntityData,
+        level: &crate::level::Level,
+    ) -> Result<Self, crate::level::LevelError> {
+        Self::with_context(parent, level.context())
+    }
+    fn with_context(
+        parent: EntityData,
+        context: &crate::level::LevelContext,
+    ) -> Result<Self, crate::level::LevelError> {
+        use ferraloom_protocol::component::{CowSoundVariant, CowVariant};
+        let variant =
+            super::mob::default_variant(context, "minecraft:cow_variant", "minecraft:temperate")?;
+        let sound = super::mob::default_variant(
+            context,
+            "minecraft:cow_sound_variant",
+            "minecraft:classic",
+        )?;
+        let mut cow = Self {
             parent: AbstractCow {
                 parent: Animal {
                     parent: AgeableMob {
@@ -38,16 +63,37 @@ impl Cow {
                                     living.entity_data.define(super::synched_data::MOB_FLAGS, 0);
                                     living.entity_data.define(super::synched_data::BABY, false);
                                     living
+                                        .entity_data
+                                        .define(super::synched_data::AGE_LOCKED, false);
+                                    living
                                 },
                                 target: None,
+                                can_pick_up_loot: false,
+                                persistence_required: false,
+                                drop_chances: Default::default(),
+                                leash_data: None,
+                                home_radius: -1,
+                                home_position: ferraloom_util::BlockPos::ZERO,
+                                loot_table: None,
+                                loot_table_seed: 0,
                             },
                         },
                         age: 0,
+                        forced_age: 0,
                     },
                     in_love: 0,
+                    love_cause: None,
                 },
             },
-        }
+        };
+        cow.as_living_mut()
+            .entity_data
+            .define(super::synched_data::COW_VARIANT, CowVariant(variant));
+        cow.as_living_mut().entity_data.define(
+            super::synched_data::COW_SOUND_VARIANT,
+            CowSoundVariant(sound),
+        );
+        Ok(cow)
     }
 }
 
@@ -94,19 +140,21 @@ impl Entity for CowBehavior {
     }
     fn hurt_sound(
         &self,
-        _entity: super::EntityRef,
+        entity: super::EntityRef,
         _source: &super::DamageSource,
-        _level: &crate::level::Level,
+        level: &crate::level::Level,
     ) -> Result<Option<ferraloom_data::registries::sound_event::Id>, crate::level::LevelError> {
+        persistence::require_classic_sound(entity, level)?;
         Ok(Some(
             ferraloom_data::registries::sound_event::Id::ENTITY_COW_HURT,
         ))
     }
     fn death_sound(
         &self,
-        _entity: super::EntityRef,
-        _level: &crate::level::Level,
+        entity: super::EntityRef,
+        level: &crate::level::Level,
     ) -> Result<Option<ferraloom_data::registries::sound_event::Id>, crate::level::LevelError> {
+        persistence::require_classic_sound(entity, level)?;
         Ok(Some(
             ferraloom_data::registries::sound_event::Id::ENTITY_COW_DEATH,
         ))
@@ -232,6 +280,24 @@ impl Entity for CowBehavior {
         .then_some(rider))
     }
 
+    fn set_y_head_rot(
+        &self,
+        entity: super::EntityRef,
+        value: f32,
+        level: &mut crate::level::Level,
+    ) -> Result<(), crate::level::LevelError> {
+        level.entity_mut::<LivingEntity>(entity)?.y_head_rot = value;
+        Ok(())
+    }
+    fn set_y_body_rot(
+        &self,
+        entity: super::EntityRef,
+        value: f32,
+        level: &mut crate::level::Level,
+    ) -> Result<(), crate::level::LevelError> {
+        level.entity_mut::<LivingEntity>(entity)?.y_body_rot = value;
+        Ok(())
+    }
     fn y_head_rot(
         &self,
         entity: super::EntityRef,
@@ -256,7 +322,7 @@ impl Entity for CowBehavior {
         let dimensions = super::EntityDimensions::for_type(ferraloom_data::EntityType::COW);
         Ok(
             if level.entity::<Cow>(entity)?.parent.parent.parent.age < 0 {
-                dimensions.scale(0.5, 0.5).with_eye_height(0.665)
+                persistence::baby_dimensions()
             } else {
                 dimensions
             },
@@ -296,6 +362,21 @@ impl Entity for CowBehavior {
             .as_living()
             .expect("Cow inherits LivingEntity")
             .trace_damage_entity_refs(references);
+        if let Some(cow) = state.as_mob() {
+            if let Some(holder) = cow.leash_data.as_ref().and_then(|data| data.holder) {
+                references.push(holder);
+            }
+        }
+        if let super::EntityState::Cow(cow) = state {
+            if let Some(cause) = cow
+                .parent
+                .parent
+                .love_cause
+                .and_then(|cause| cause.cached_entity())
+            {
+                references.push(cause);
+            }
+        }
         if let Some(target) = state.as_mob().and_then(|mob| mob.target) {
             references.push(target);
         }

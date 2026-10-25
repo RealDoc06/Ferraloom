@@ -18,6 +18,7 @@ pub mod monster;
 pub mod player;
 pub mod pushing;
 mod stuck;
+pub use persistence::{EntityPersistenceError, load_in_place};
 pub use stuck::{make_stuck_in_block, reset_fall_distance};
 mod relationships;
 pub use relationships::PassengerList;
@@ -135,6 +136,14 @@ pub use base::{EntityData, EntityDimensions, Movement, RemovalReason};
 pub struct Mob {
     pub parent: LivingEntity,
     pub target: Option<EntityRef>,
+    pub can_pick_up_loot: bool,
+    pub persistence_required: bool,
+    pub drop_chances: mob::DropChances,
+    pub leash_data: Option<mob::LeashData>,
+    pub home_radius: i32,
+    pub home_position: ferraloom_util::BlockPos,
+    pub loot_table: Option<ferraloom_protocol::Identifier>,
+    pub loot_table_seed: i64,
 }
 
 /// Port of PathfinderMob. Navigation belongs to Mob in vanilla.
@@ -148,6 +157,7 @@ pub struct PathfinderMob {
 pub struct AgeableMob {
     pub parent: PathfinderMob,
     pub age: i32,
+    pub forced_age: i32,
 }
 
 /// Concrete stored subclasses. Parent accessors never copy canonical state.
@@ -278,6 +288,9 @@ pub enum EntityMethod {
     StopSleeping,
     CheckTotemDeathProtection,
     Die,
+    LoadSleepingPosition,
+    LoadBrain,
+    CowVariantBehavior,
 }
 impl EntityMethod {
     pub const fn name(self) -> &'static str {
@@ -298,6 +311,9 @@ impl EntityMethod {
             Self::ApplyItemBlocking => "LivingEntity#applyItemBlocking",
             Self::StopSleeping => "LivingEntity#stopSleeping",
             Self::CheckTotemDeathProtection => "LivingEntity#checkTotemDeathProtection",
+            Self::LoadSleepingPosition => "LivingEntity#readAdditionalSaveData(sleeping_pos)",
+            Self::LoadBrain => "LivingEntity#makeBrain",
+            Self::CowVariantBehavior => "Cow#getSoundSet",
             Self::Die => "LivingEntity#die",
         }
     }
@@ -769,6 +785,53 @@ pub trait Entity: Sync {
         Ok(0.0)
     }
     /// Port of Entity#getYHeadRot; LivingEntity overrides its stored head angle.
+    /// Full native subclass chain on the same canonical receiver.
+    fn read_additional_save_data(
+        &self,
+        entity: EntityRef,
+        tag: &ferraloom_nbt::CompoundTag,
+        level: &mut Level,
+    ) -> Result<(), EntityPersistenceError> {
+        persistence::live::read_additional_save_data(self, entity, tag, level)
+    }
+    /// Port of Entity#notifyLeasheeRemoved's inherited empty body.
+    fn notify_leashee_removed(
+        &self,
+        _entity: EntityRef,
+        _leashee: EntityRef,
+        _level: &mut Level,
+    ) -> Result<(), LevelError> {
+        Ok(())
+    }
+    /// Port of Entity#postDataManipulated. All currently ported families inherit
+    /// this empty body; Villager's future override must run after UUID restore.
+    fn post_data_manipulated(
+        &self,
+        _entity: EntityRef,
+        _level: &mut Level,
+    ) -> Result<(), LevelError> {
+        Ok(())
+    }
+    fn set_y_head_rot(
+        &self,
+        _entity: EntityRef,
+        _value: f32,
+        _level: &mut Level,
+    ) -> Result<(), LevelError> {
+        Ok(())
+    }
+    fn set_y_body_rot(
+        &self,
+        _entity: EntityRef,
+        _value: f32,
+        _level: &mut Level,
+    ) -> Result<(), LevelError> {
+        Ok(())
+    }
+    /// Port of Entity#repositionEntityAfterLoad's inherited true result.
+    fn reposition_entity_after_load(&self) -> bool {
+        true
+    }
     fn y_head_rot(&self, _entity: EntityRef, _level: &Level) -> Result<f32, LevelError> {
         Ok(0.0)
     }

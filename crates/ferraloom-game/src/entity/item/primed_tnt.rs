@@ -99,6 +99,11 @@ impl PrimedTnt {
         Ok(tag)
     }
     pub fn load_nbt(&mut self, tag: CompoundTag) -> Result<(), persistence::EntityLoadError> {
+        self.parent.load_nbt(tag.clone())?;
+        self.read_additional_save_data(&tag);
+        Ok(())
+    }
+    pub(crate) fn read_additional_save_data(&mut self, tag: &CompoundTag) {
         self.set_fuse(i32::from(tag.get_short_or("fuse", 80)));
         self.set_block_state(
             tag.get("block_state")
@@ -110,7 +115,6 @@ impl PrimedTnt {
             .get_int_array("owner")
             .and_then(|v| <[i32; 4]>::try_from(v).ok())
             .map(|uuid| EntityReference::unresolved(Uuid::from_int_array(uuid)));
-        self.parent.load_nbt(tag)
     }
 }
 /// Port of PrimedTnt#getOwner, retaining the LivingEntity type restriction.
