@@ -9,7 +9,7 @@ use ferraloom_game::{
 };
 use ferraloom_util::Direction;
 use protocol::{
-    chat::{Argument, Numeric, TextColor},
+    chat::{Argument, TextColor},
     component::{DataComponent, SwingAnimation, SwingAnimationType},
 };
 

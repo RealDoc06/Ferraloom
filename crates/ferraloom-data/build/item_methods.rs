@@ -122,7 +122,7 @@ pub fn generate(root: &Path, item_report: &Value) {
     out.push_str("];\n");
     writeln!(
         out,
-        "const ITEM_METHOD_OWNERS: [[Option<ItemClass>; {}]; {}] = [",
+        "static ITEM_METHOD_OWNERS: [[Option<ItemClass>; {}]; {}] = [",
         methods.len(),
         items.len()
     )
