@@ -2,6 +2,7 @@ use ferraloom_data::Block;
 use ferraloom_parity::{
     BotId, LaunchOptions, ObservationLog, Result, RunMode, Session, Ticks, WorldPreset, ensure,
     protocol::{
+        VarInt,
         chat::Component,
         play::{self, clientbound as cb, serverbound as sb},
     },
@@ -49,6 +50,7 @@ pub enum Check {
         value: String,
     },
     Position {
+        #[serde(deserialize_with = "position")]
         value: [f64; 3],
     },
     Difficulty {
@@ -62,6 +64,7 @@ pub enum Check {
         interior: Option<String>,
     },
     TickState {
+        #[serde(deserialize_with = "tick_rate")]
         rate: f32,
         frozen: bool,
     },
@@ -78,7 +81,47 @@ pub enum Check {
         thunder: bool,
     },
 }
+// Internally tagged serde enums buffer numbers through Content. Preserve
+// serde_json's arbitrary-precision number representation when reading decimals.
+fn position<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<[f64; 3], D::Error> {
+    let values = <[serde_json::Number; 3]>::deserialize(d)?;
+    let mut result = [0.; 3];
+    for (slot, value) in result.iter_mut().zip(values) {
+        *slot = value
+            .as_f64()
+            .filter(|v| v.is_finite())
+            .ok_or_else(|| serde::de::Error::custom("position must be finite"))?;
+    }
+    Ok(result)
+}
+fn tick_rate<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<f32, D::Error> {
+    serde_json::Number::deserialize(d)?
+        .as_f64()
+        .map(|v| v as f32)
+        .filter(|v| v.is_finite())
+        .ok_or_else(|| serde::de::Error::custom("tick rate must be finite"))
+}
 impl Step {
+    fn observed(&self, events: &[Value]) -> bool {
+        self.keys
+            .iter()
+            .all(|key| events.iter().any(|v| translation(v, key).is_some()))
+            && (!self.chat
+                || events.iter().any(|v| {
+                    matches!(
+                        v.get("kind").and_then(Value::as_str),
+                        Some("disguised_chat" | "player_chat")
+                    )
+                }))
+            && self.literal_prefix.as_ref().is_none_or(|prefix| {
+                events.iter().any(|v| {
+                    v.get("kind").and_then(Value::as_str) == Some("feedback")
+                        && v.get("content")
+                            .and_then(|v| v.as_str().or_else(|| v.get("text")?.as_str()))
+                            .is_some_and(|text| text.starts_with(prefix))
+                })
+            })
+    }
     pub fn feedback(command: impl Into<String>, key: impl Into<String>) -> Self {
         Self {
             command: command.into(),
@@ -117,7 +160,7 @@ struct Weather {
 struct Driver<'a> {
     session: &'a mut Session,
     bots: BTreeMap<String, BotId>,
-    barrier: i64,
+    barrier: i32,
     weather: Weather,
 }
 fn component(value: &Component) -> Result<Value> {
@@ -266,13 +309,7 @@ fn event(
     Ok(Some(value))
 }
 impl Driver<'_> {
-    async fn exchange(
-        &mut self,
-        actor: BotId,
-        command: Option<&str>,
-        signed: bool,
-        stop: bool,
-    ) -> Result<Vec<Value>> {
+    async fn exchange(&mut self, actor: BotId, step: Option<&Step>) -> Result<Vec<Value>> {
         let names = self
             .bots
             .iter()
@@ -287,54 +324,70 @@ impl Driver<'_> {
             .collect();
         let bot = self.session.bot(actor)?;
         let own_id = bot.snapshot().entity_id;
-        if let Some(command) = command {
-            if signed {
-                bot.signed_command(command).await?;
+        if let Some(step) = step {
+            if step.signed {
+                bot.signed_command(&step.command).await?;
             } else {
-                bot.command(command).await?;
+                bot.command(&step.command).await?;
             }
         }
         self.barrier += 1;
-        let time = self.barrier;
+        let id = self.barrier;
+        let stop = step.is_some_and(|s| s.stop);
         if !stop {
-            bot.send(sb::Packet::PingRequest(sb::PingRequest { time }))
-                .await?;
+            // handlePingRequest replies on the network thread and can overtake
+            // commands. Suggestions run on the server thread after this command;
+            // the response also fences commands whose feedback is suppressed.
+            bot.send(sb::Packet::CommandSuggestion(sb::CommandSuggestion {
+                id: VarInt(id),
+                command: "/ferraloom_paths_barrier_".into(),
+            }))
+            .await?;
         }
         let mut events = Vec::new();
         let mut failure = None;
+        let mut barrier_seen = stop;
         let weather = &mut self.weather;
-        bot.wait_for(command.unwrap_or("command barrier"), Ticks::DEFAULT, |_, packet| {
-            if let cb::Packet::GameEvent(p) = packet {
-                match p.event {
-                    1 => weather.raining = true,
-                    2 => weather.raining = false,
-                    7 => weather.rain_level = p.param,
-                    8 => weather.thunder_level = p.param,
-                    _ => {}
+        bot.wait_for(
+            step.map_or("command barrier", |s| s.command.as_str()),
+            Ticks::DEFAULT,
+            |_, packet| {
+                if let cb::Packet::GameEvent(p) = packet {
+                    match p.event {
+                        1 => weather.raining = true,
+                        2 => weather.raining = false,
+                        7 => weather.rain_level = p.param,
+                        8 => weather.thunder_level = p.param,
+                        _ => {}
+                    }
                 }
-            }
-            match event(packet, own_id, &names) { Ok(Some(value)) => events.push(value), Ok(None) => {}, Err(error) => failure = Some(error) }
-            if stop { matches!(packet,cb::Packet::SystemChat(p) if component(&p.content).is_ok_and(|v|translation(&v,"commands.stop.stopping").is_some())) }
-            else { matches!(packet,cb::Packet::PongResponse(p) if p.time == time) }
-        }).await?;
+                match event(packet, own_id, &names) {
+                    Ok(Some(value)) => events.push(value),
+                    Ok(None) => {}
+                    Err(error) => failure = Some(error),
+                }
+                if matches!(packet,cb::Packet::CommandSuggestions(p) if p.id.0 == id) {
+                    barrier_seen = true;
+                }
+                barrier_seen && step.is_none_or(|s| s.observed(&events))
+            },
+        )
+        .await?;
         if let Some(failure) = failure {
             return Err(failure);
         }
         Ok(events)
     }
-    async fn capture(
-        &mut self,
-        actor: BotId,
-        command: &str,
-        signed: bool,
-        stop: bool,
-    ) -> Result<Vec<Value>> {
-        self.exchange(actor, None, false, false).await?;
-        self.exchange(actor, Some(command), signed, stop).await
+    async fn capture(&mut self, actor: BotId, step: &Step) -> Result<Vec<Value>> {
+        self.exchange(actor, None).await?;
+        self.exchange(actor, Some(step)).await
     }
     async fn game_time(&mut self, actor: BotId) -> Result<i64> {
         let events = self
-            .capture(actor, "time query gametime", false, false)
+            .capture(
+                actor,
+                &Step::feedback("time query gametime", "commands.time.query.gametime"),
+            )
             .await?;
         events
             .iter()
@@ -348,8 +401,11 @@ impl Driver<'_> {
     }
     async fn advance(&mut self, actor: BotId, ticks: i64) -> Result<i64> {
         let start = self.game_time(actor).await?;
-        self.capture(actor, &format!("tick step {ticks}t"), false, false)
-            .await?;
+        self.capture(
+            actor,
+            &Step::feedback(format!("tick step {ticks}t"), "commands.tick.step.success"),
+        )
+        .await?;
         self.wait_advance(actor, start, ticks).await
     }
     async fn wait_advance(&mut self, actor: BotId, start: i64, ticks: i64) -> Result<i64> {
@@ -377,9 +433,7 @@ impl Driver<'_> {
         } else {
             None
         };
-        let mut events = self
-            .capture(actor, &step.command, step.signed, step.stop)
-            .await?;
+        let mut events = self.capture(actor, step).await?;
         let mut checks = Vec::new();
         for check in &step.checks {
             match check {
@@ -551,21 +605,20 @@ impl Driver<'_> {
         // numeric type and validate it against this live phase, then compare zero offset.
         if step.command == "time query gametime" {
             for value in &mut events {
-                if let Some(content) = value.get_mut("content") {
-                    if content.get("translate").and_then(Value::as_str)
+                if let Some(content) = value.get_mut("content")
+                    && content.get("translate").and_then(Value::as_str)
                         == Some("commands.time.query.gametime")
-                    {
-                        ensure!(
-                            content["with"][0].as_i64().is_some(),
-                            "game time must be a long"
-                        );
-                        ensure!(
-                            content["with"][0].as_i64()
-                                == self.session.bot(actor)?.snapshot().game_time,
-                            "query game time disagrees with the authoritative frozen SetTime clock"
-                        );
-                        content["with"][0] = json!(0);
-                    }
+                {
+                    ensure!(
+                        content["with"][0].as_i64().is_some(),
+                        "game time must be a long"
+                    );
+                    ensure!(
+                        content["with"][0].as_i64()
+                            == self.session.bot(actor)?.snapshot().game_time,
+                        "query game time disagrees with the authoritative frozen SetTime clock"
+                    );
+                    content["with"][0] = json!(0);
                 }
             }
         }
@@ -603,6 +656,14 @@ pub async fn run_family(family: &'static str) -> Result<()> {
             Step::feedback("tick freeze", "commands.tick.status.frozen"),
             Step::feedback("gamemode spectator", "commands.gamemode.success.self"),
             Step::feedback("time set 1234", "commands.time.set.absolute"),
+            Step::feedback(
+                "teleport @s 0.5 -63.0 0.5",
+                "commands.teleport.success.location.single",
+            ),
+            Step::feedback(
+                "teleport PathGuest 0.5 -63.0 0.5",
+                "commands.teleport.success.location.single",
+            ),
         ] {
             driver.step(&step).await?;
         }
