@@ -911,7 +911,8 @@ impl MinecraftServer {
                                 .map_err(game_error)?
                                 .dimension_key()
                                 .map_err(game_error)?
-                                .clone(),
+                                .to_string()
+                                .parse::<protocol::Identifier>()?,
                         ),
                         Phase::Configuration(_) => preparing_dimension,
                     };
@@ -938,7 +939,8 @@ impl MinecraftServer {
                             .map_err(game_error)?
                             .dimension_key()
                             .map_err(game_error)?
-                            .clone(),
+                            .to_string()
+                            .parse::<protocol::Identifier>()?,
                         _ => crate::registries::id("overworld"),
                     };
                     let lent = self.lend_server_shared_to(&dimension)?;
@@ -1276,7 +1278,8 @@ impl MinecraftServer {
             .map_err(game_error)?
             .dimension_key()
             .map_err(game_error)?
-            .clone();
+            .to_string()
+            .parse::<protocol::Identifier>()?;
         self.live_level_in_mut(&dimension)?
             .level
             .move_tracked_player(entity)
@@ -2274,8 +2277,17 @@ impl MinecraftServer {
         entity: EntityRef,
         packet: sb::RecipeBookSeenRecipe,
     ) -> Result<()> {
-        self.level_for_entity_mut(entity)
+        let dimension = self
+            .level_for_entity(entity)
             .map_err(game_error)?
+            .dimension_key()
+            .map_err(game_error)?
+            .to_string();
+        let live = std::iter::once(&mut self.level)
+            .chain(self.additional_levels.iter_mut())
+            .find(|live| live.dimension == dimension)
+            .expect("selected player dimension");
+        live.level
             .entity_mut::<ServerPlayer>(entity)
             .map_err(game_error)?
             .recipe_book
@@ -2296,10 +2308,19 @@ impl MinecraftServer {
                 <= ferraloom_game::entity::player::inventory::max_stack_size(&stack);
         let tick = self.connections[&connection].network_ticks;
         let mut drop = None;
+        let dimension = self
+            .level_for_entity(entity)
+            .map_err(game_error)?
+            .dimension_key()
+            .map_err(game_error)?
+            .to_string();
         let (synchronize, packets) = {
-            let player = self
-                .level_for_entity_mut(entity)
-                .map_err(game_error)?
+            let live = std::iter::once(&mut self.level)
+                .chain(self.additional_levels.iter_mut())
+                .find(|live| live.dimension == dimension)
+                .expect("selected player dimension");
+            let player = live
+                .level
                 .entity_mut::<ServerPlayer>(entity)
                 .map_err(game_error)?;
             if player.game_mode != GameType::Creative || !valid_data {
@@ -2639,7 +2660,8 @@ impl MinecraftServer {
             .map_err(game_error)?
             .dimension_key()
             .map_err(game_error)?
-            .clone();
+            .to_string()
+            .parse::<protocol::Identifier>()?;
         let (yaw, pitch) = rotation;
         if [target.x, target.y, target.z].iter().any(|v| v.is_nan())
             || !yaw.is_finite()
@@ -2849,7 +2871,8 @@ impl MinecraftServer {
                             .map_err(game_error)?
                             .dimension_key()
                             .map_err(game_error)?
-                            .clone();
+                            .to_string()
+                            .parse::<protocol::Identifier>()?;
                         let lent = self.lend_server_shared_to(&dimension)?;
                         let result = {
                             let live = std::iter::once(&mut self.level)
@@ -2915,7 +2938,8 @@ impl MinecraftServer {
                 .map_err(game_error)?
                 .dimension_key()
                 .map_err(game_error)?
-                .clone();
+                .to_string()
+                .parse::<protocol::Identifier>()?;
             let ready = self
                 .live_level_in(&dimension)?
                 .generation()
@@ -3159,7 +3183,8 @@ impl MinecraftServer {
                 .map_err(game_error)?
                 .dimension_key()
                 .map_err(game_error)?
-                .clone();
+                .to_string()
+                .parse::<protocol::Identifier>()?;
             self.level_for_entity_mut(entity)
                 .map_err(game_error)?
                 .remove_entity(entity)

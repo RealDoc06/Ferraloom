@@ -59,7 +59,7 @@ impl MinecraftServer {
         let spawn = self.default_spawn_data();
         let spawn_dimension = spawn
             .dimension
-            .parse::<protocol::Identifier>()
+            .parse::<ferraloom_data::datapack::Identifier>()
             .expect("validated shared spawn dimension");
         let radius = self.properties.int("spawn-protection");
         for live in self.live_levels_mut() {

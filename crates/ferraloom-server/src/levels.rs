@@ -58,12 +58,13 @@ impl MinecraftServer {
             let Phase::Play(entity) = connection.phase else {
                 continue;
             };
-            if self
+            let current_dimension = self
                 .level_for_entity(entity)
                 .map_err(game_error)?
                 .dimension_key()
-                .map_err(game_error)?
-                == dimension
+                .map_err(game_error)?;
+            if current_dimension.namespace() == dimension.namespace()
+                && current_dimension.path() == dimension.path()
             {
                 connections.push(id);
             }

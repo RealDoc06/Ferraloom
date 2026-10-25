@@ -31,7 +31,8 @@ impl MinecraftServer {
             .map_err(game_error)?
             .dimension_key()
             .map_err(game_error)?
-            .clone();
+            .to_string()
+            .parse::<protocol::Identifier>()?;
         let input = BlockBreakAction {
             action,
             pos: packet.pos,

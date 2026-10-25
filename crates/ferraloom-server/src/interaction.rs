@@ -110,10 +110,10 @@ impl MinecraftServer {
                     .map_err(game_error)?
                     .dimension_key()
                     .map_err(game_error)?
-                    .clone();
+                    .to_string();
                 let live = std::iter::once(&mut self.level)
                     .chain(self.additional_levels.iter_mut())
-                    .find(|live| live.dimension == dimension.as_str())
+                    .find(|live| live.dimension == dimension)
                     .expect("selected player dimension");
                 let mut operation = StackOperation::new(&mut live.level);
                 if let Some(result) =
