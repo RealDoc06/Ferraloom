@@ -92,6 +92,10 @@ impl<'stack> UseOnContext<'stack> {
     ) -> Result<&'call ItemStack, LevelError> {
         self.held_item.read(reader)
     }
+    /// context.getItemInHand's receiver, which can differ from ItemStack#useOn's.
+    pub fn stack_view(&self) -> StackView<'stack> {
+        self.held_item
+    }
     pub fn clicked_pos(&self) -> BlockPos {
         self.hit.pos
     }
@@ -243,6 +247,10 @@ impl<'stack> BlockPlaceContext<'stack> {
         reader: &'call LevelReaderRef<'_, '_>,
     ) -> Result<&'call ItemStack, LevelError> {
         self.use_on.item_in_hand(reader)
+    }
+    /// context.getItemInHand's receiver, which can differ from ItemStack#useOn's.
+    pub fn stack_view(&self) -> StackView<'stack> {
+        self.use_on.stack_view()
     }
     pub fn player(&self) -> Option<EntityRef> {
         self.use_on.player

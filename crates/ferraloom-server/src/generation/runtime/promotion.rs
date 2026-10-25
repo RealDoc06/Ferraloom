@@ -353,17 +353,13 @@ impl GenerationRuntime {
             reference.kind == ChunkKind::Full && reference == token.reference(),
             "FULL finalization changed its staged identity"
         );
+        // World::open installs the spawn tag before returning, so absent-spawn
+        // refinement is already resolved before any FULL promotion.
         {
             let mut world = self.world.borrow_mut();
             let continuation = world.full_promotions.get_mut(&task).unwrap();
             continuation.finalized = true;
             continuation.finalization_failure = None;
-            if identity.pos == ChunkPos::containing(world.spawn)
-                && !world.level_data.data.contains_key("spawn")
-            {
-                world.spawn.y = world.full_promotions[&task].input.as_ref().unwrap().surface
-                    [((world.spawn.z & 15) * 16 + (world.spawn.x & 15)) as usize];
-            }
         }
         {
             let mut chunks = self.chunks.borrow_mut();

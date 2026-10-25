@@ -14,6 +14,7 @@ pub(super) struct BlockChanges {
     pending: ferraloom_util::collections::LongLinkedOpenHashSet,
 }
 impl Level {
+    /// Port of Level#sendBlockUpdated, retaining the caller-captured old/new states.
     pub fn send_block_updated(&mut self, pos: BlockPos, old: BlockState, new: BlockState) {
         let chunk_pos = ChunkPos::containing(pos);
         if self

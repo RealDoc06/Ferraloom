@@ -1,4 +1,4 @@
-//! Wall torches, ladders, lanterns, clusters, end rods and grindstones.
+//! Standing/wall torches, ladders, lanterns, clusters, end rods and grindstones.
 use super::{facing, schedule_water, with_facing};
 use crate::{
     block::{BlockBehavior, BlockMethod, BlockPlaceContext, LevelAccessRef, LevelReaderRef},
@@ -24,7 +24,7 @@ pub(super) fn supports(block: Block, method: BlockMethod) -> bool {
         BlockMethod::GetStateForPlacement => attached || block.class() == C::EndRodBlock,
         BlockMethod::CanSurvive
         | BlockMethod::UpdateShape
-        | BlockMethod::UpdateFromNeighbourShapes => attached,
+        | BlockMethod::UpdateFromNeighbourShapes => attached || block.class() == C::TorchBlock,
         _ => false,
     }
 }
@@ -133,6 +133,10 @@ impl BlockBehavior for Attachments {
         pos: BlockPos,
         level: &LevelReaderRef<'_, '_>,
     ) -> Result<bool, LevelError> {
+        // Port of BaseTorchBlock#canSurvive, inherited by both standing torches.
+        if state.block().class() == C::TorchBlock {
+            return level.can_support_center(pos.below(1), Direction::Up);
+        }
         if state.block().class() == C::GrindstoneBlock {
             return Ok(true);
         }
@@ -156,6 +160,21 @@ impl BlockBehavior for Attachments {
         _neighbor: BlockState,
         level: &mut LevelAccessRef<'_, '_>,
     ) -> Result<BlockState, LevelError> {
+        // BaseTorchBlock#updateShape invalidates only the lower support and
+        // otherwise invokes Block's base body, without a fluid tick.
+        if state.block().class() == C::TorchBlock {
+            if direction == Direction::Down && !self.can_survive(state, pos, &level.as_reader())? {
+                return Ok(Block::AIR.default_state());
+            }
+            return crate::block::BASE_BLOCK.update_shape(
+                state,
+                pos,
+                direction,
+                _neighbor_pos,
+                _neighbor,
+                level,
+            );
+        }
         if state.block().class() == C::GrindstoneBlock {
             return Ok(state);
         }
@@ -173,5 +192,58 @@ impl BlockBehavior for Attachments {
                 state
             },
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ferraloom_util::random::{LegacyRandomSource, Random, RandomSource};
+
+    #[test]
+    fn standing_torches_match_native_center_support_and_downward_invalidation() {
+        let mut level = super::super::tests::level();
+        let pos = super::super::tests::POS;
+        let mut count = 0;
+        for line in include_str!("../../../tests/java/items/standing-torches.tsv").lines() {
+            let fields: Vec<_> = line.split('\t').collect();
+            let state = BlockState::from_id(fields[1].parse().unwrap()).unwrap();
+            let support = BlockState::from_id(fields[2].parse().unwrap()).unwrap();
+            level.set_block_state(pos.below(1), support).unwrap();
+            let reader = LevelReaderRef::Server(&level);
+            let survival = reader
+                .required_behavior(state.block(), BlockMethod::CanSurvive)
+                .unwrap();
+            assert_eq!(
+                survival.can_survive(state, pos, &reader).unwrap(),
+                fields[3].parse::<bool>().unwrap(),
+                "{line}"
+            );
+            *level.random() = Random::Legacy(LegacyRandomSource::new(1234));
+            for (index, direction) in Direction::VALUES.into_iter().enumerate() {
+                let neighbor_pos = pos.relative(direction, 1);
+                let neighbor = level.get_block_state(neighbor_pos).unwrap();
+                let mut access = LevelAccessRef::Server(&mut level);
+                let behavior = access
+                    .as_reader()
+                    .required_behavior(state.block(), BlockMethod::UpdateShape)
+                    .unwrap();
+                assert_eq!(
+                    behavior
+                        .update_shape(state, pos, direction, neighbor_pos, neighbor, &mut access)
+                        .unwrap()
+                        .id(),
+                    fields[4 + index].parse::<u16>().unwrap(),
+                    "{line}"
+                );
+            }
+            assert_eq!(
+                level.random().next_long(),
+                fields[10].parse::<i64>().unwrap(),
+                "{line}"
+            );
+            count += 1;
+        }
+        assert_eq!(count, 34);
     }
 }

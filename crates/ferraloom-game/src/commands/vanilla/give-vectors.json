@@ -1,0 +1,3719 @@
+[
+  {
+    "item": "stone",
+    "count": 1,
+    "targets": 1,
+    "fill": "empty",
+    "creative": false,
+    "value": 1,
+    "inventory": [
+      [
+        [
+          0,
+          {
+            "id": "minecraft:stone",
+            "count": 1
+          }
+        ]
+      ]
+    ],
+    "random": [
+      5111195811822994797
+    ],
+    "drops": [
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 1
+        },
+        "age": 5999,
+        "delay": 32767
+      }
+    ],
+    "sounds": [
+      {
+        "pitch": "3f8e80c1"
+      }
+    ],
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.give.success.single",
+          "with": [
+            1,
+            {
+              "translate": "chat.square_brackets",
+              "with": [
+                {
+                  "text": "",
+                  "extra": [
+                    {
+                      "translate": "block.minecraft.stone"
+                    }
+                  ]
+                }
+              ],
+              "color": "white",
+              "hover_event": {
+                "id": "minecraft:stone",
+                "action": "show_item"
+              }
+            },
+            {
+              "text": "Player0",
+              "click_event": {
+                "command": "/tell Player0 ",
+                "action": "suggest_command"
+              },
+              "hover_event": {
+                "id": "minecraft:player",
+                "uuid": [
+                  0,
+                  0,
+                  0,
+                  1
+                ],
+                "name": "Player0",
+                "action": "show_entity"
+              },
+              "insertion": "Player0"
+            }
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "calls": [
+      "create",
+      "add",
+      "sound",
+      "menu",
+      "feedback"
+    ]
+  },
+  {
+    "item": "stone",
+    "count": 3,
+    "targets": 1,
+    "fill": "empty",
+    "creative": false,
+    "value": 1,
+    "inventory": [
+      [
+        [
+          0,
+          {
+            "id": "minecraft:stone",
+            "count": 3
+          }
+        ]
+      ]
+    ],
+    "random": [
+      5111195811822994797
+    ],
+    "drops": [
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 1
+        },
+        "age": 5999,
+        "delay": 32767
+      }
+    ],
+    "sounds": [
+      {
+        "pitch": "3f8e80c1"
+      }
+    ],
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.give.success.single",
+          "with": [
+            3,
+            {
+              "translate": "chat.square_brackets",
+              "with": [
+                {
+                  "text": "",
+                  "extra": [
+                    {
+                      "translate": "block.minecraft.stone"
+                    }
+                  ]
+                }
+              ],
+              "color": "white",
+              "hover_event": {
+                "id": "minecraft:stone",
+                "action": "show_item"
+              }
+            },
+            {
+              "text": "Player0",
+              "click_event": {
+                "command": "/tell Player0 ",
+                "action": "suggest_command"
+              },
+              "hover_event": {
+                "id": "minecraft:player",
+                "uuid": [
+                  0,
+                  0,
+                  0,
+                  1
+                ],
+                "name": "Player0",
+                "action": "show_entity"
+              },
+              "insertion": "Player0"
+            }
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "calls": [
+      "create",
+      "add",
+      "sound",
+      "menu",
+      "feedback"
+    ]
+  },
+  {
+    "item": "stone",
+    "count": 65,
+    "targets": 1,
+    "fill": "empty",
+    "creative": false,
+    "value": 1,
+    "inventory": [
+      [
+        [
+          0,
+          {
+            "id": "minecraft:stone",
+            "count": 64
+          }
+        ],
+        [
+          1,
+          {
+            "id": "minecraft:stone",
+            "count": 1
+          }
+        ]
+      ]
+    ],
+    "random": [
+      6802844026563419272
+    ],
+    "drops": [
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 1
+        },
+        "age": 5999,
+        "delay": 32767
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 1
+        },
+        "age": 5999,
+        "delay": 32767
+      }
+    ],
+    "sounds": [
+      {
+        "pitch": "3f8e80c1"
+      },
+      {
+        "pitch": "4028826f"
+      }
+    ],
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.give.success.single",
+          "with": [
+            65,
+            {
+              "translate": "chat.square_brackets",
+              "with": [
+                {
+                  "text": "",
+                  "extra": [
+                    {
+                      "translate": "block.minecraft.stone"
+                    }
+                  ]
+                }
+              ],
+              "color": "white",
+              "hover_event": {
+                "id": "minecraft:stone",
+                "action": "show_item"
+              }
+            },
+            {
+              "text": "Player0",
+              "click_event": {
+                "command": "/tell Player0 ",
+                "action": "suggest_command"
+              },
+              "hover_event": {
+                "id": "minecraft:player",
+                "uuid": [
+                  0,
+                  0,
+                  0,
+                  1
+                ],
+                "name": "Player0",
+                "action": "show_entity"
+              },
+              "insertion": "Player0"
+            }
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "calls": [
+      "create",
+      "add",
+      "sound",
+      "menu",
+      "create",
+      "add",
+      "sound",
+      "menu",
+      "feedback"
+    ]
+  },
+  {
+    "item": "stone",
+    "count": 128,
+    "targets": 2,
+    "fill": "empty",
+    "creative": false,
+    "value": 2,
+    "inventory": [
+      [
+        [
+          0,
+          {
+            "id": "minecraft:stone",
+            "count": 64
+          }
+        ],
+        [
+          1,
+          {
+            "id": "minecraft:stone",
+            "count": 64
+          }
+        ]
+      ],
+      [
+        [
+          0,
+          {
+            "id": "minecraft:stone",
+            "count": 64
+          }
+        ],
+        [
+          1,
+          {
+            "id": "minecraft:stone",
+            "count": 64
+          }
+        ]
+      ]
+    ],
+    "random": [
+      6802844026563419272,
+      6802844026563419272
+    ],
+    "drops": [
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 1
+        },
+        "age": 5999,
+        "delay": 32767
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 1
+        },
+        "age": 5999,
+        "delay": 32767
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 1
+        },
+        "age": 5999,
+        "delay": 32767
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 1
+        },
+        "age": 5999,
+        "delay": 32767
+      }
+    ],
+    "sounds": [
+      {
+        "pitch": "3f8e80c1"
+      },
+      {
+        "pitch": "4028826f"
+      },
+      {
+        "pitch": "3f8e80c1"
+      },
+      {
+        "pitch": "4028826f"
+      }
+    ],
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.give.success.multiple",
+          "with": [
+            128,
+            {
+              "translate": "chat.square_brackets",
+              "with": [
+                {
+                  "text": "",
+                  "extra": [
+                    {
+                      "translate": "block.minecraft.stone"
+                    }
+                  ]
+                }
+              ],
+              "color": "white",
+              "hover_event": {
+                "id": "minecraft:stone",
+                "action": "show_item"
+              }
+            },
+            2
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "calls": [
+      "create",
+      "add",
+      "sound",
+      "menu",
+      "create",
+      "add",
+      "sound",
+      "menu",
+      "create",
+      "add",
+      "sound",
+      "menu",
+      "create",
+      "add",
+      "sound",
+      "menu",
+      "feedback"
+    ]
+  },
+  {
+    "item": "stone",
+    "count": 6400,
+    "targets": 1,
+    "fill": "empty",
+    "creative": false,
+    "value": 1,
+    "inventory": [
+      [
+        [
+          0,
+          {
+            "id": "minecraft:stone",
+            "count": 64
+          }
+        ],
+        [
+          1,
+          {
+            "id": "minecraft:stone",
+            "count": 64
+          }
+        ],
+        [
+          2,
+          {
+            "id": "minecraft:stone",
+            "count": 64
+          }
+        ],
+        [
+          3,
+          {
+            "id": "minecraft:stone",
+            "count": 64
+          }
+        ],
+        [
+          4,
+          {
+            "id": "minecraft:stone",
+            "count": 64
+          }
+        ],
+        [
+          5,
+          {
+            "id": "minecraft:stone",
+            "count": 64
+          }
+        ],
+        [
+          6,
+          {
+            "id": "minecraft:stone",
+            "count": 64
+          }
+        ],
+        [
+          7,
+          {
+            "id": "minecraft:stone",
+            "count": 64
+          }
+        ],
+        [
+          8,
+          {
+            "id": "minecraft:stone",
+            "count": 64
+          }
+        ],
+        [
+          9,
+          {
+            "id": "minecraft:stone",
+            "count": 64
+          }
+        ],
+        [
+          10,
+          {
+            "id": "minecraft:stone",
+            "count": 64
+          }
+        ],
+        [
+          11,
+          {
+            "id": "minecraft:stone",
+            "count": 64
+          }
+        ],
+        [
+          12,
+          {
+            "id": "minecraft:stone",
+            "count": 64
+          }
+        ],
+        [
+          13,
+          {
+            "id": "minecraft:stone",
+            "count": 64
+          }
+        ],
+        [
+          14,
+          {
+            "id": "minecraft:stone",
+            "count": 64
+          }
+        ],
+        [
+          15,
+          {
+            "id": "minecraft:stone",
+            "count": 64
+          }
+        ],
+        [
+          16,
+          {
+            "id": "minecraft:stone",
+            "count": 64
+          }
+        ],
+        [
+          17,
+          {
+            "id": "minecraft:stone",
+            "count": 64
+          }
+        ],
+        [
+          18,
+          {
+            "id": "minecraft:stone",
+            "count": 64
+          }
+        ],
+        [
+          19,
+          {
+            "id": "minecraft:stone",
+            "count": 64
+          }
+        ],
+        [
+          20,
+          {
+            "id": "minecraft:stone",
+            "count": 64
+          }
+        ],
+        [
+          21,
+          {
+            "id": "minecraft:stone",
+            "count": 64
+          }
+        ],
+        [
+          22,
+          {
+            "id": "minecraft:stone",
+            "count": 64
+          }
+        ],
+        [
+          23,
+          {
+            "id": "minecraft:stone",
+            "count": 64
+          }
+        ],
+        [
+          24,
+          {
+            "id": "minecraft:stone",
+            "count": 64
+          }
+        ],
+        [
+          25,
+          {
+            "id": "minecraft:stone",
+            "count": 64
+          }
+        ],
+        [
+          26,
+          {
+            "id": "minecraft:stone",
+            "count": 64
+          }
+        ],
+        [
+          27,
+          {
+            "id": "minecraft:stone",
+            "count": 64
+          }
+        ],
+        [
+          28,
+          {
+            "id": "minecraft:stone",
+            "count": 64
+          }
+        ],
+        [
+          29,
+          {
+            "id": "minecraft:stone",
+            "count": 64
+          }
+        ],
+        [
+          30,
+          {
+            "id": "minecraft:stone",
+            "count": 64
+          }
+        ],
+        [
+          31,
+          {
+            "id": "minecraft:stone",
+            "count": 64
+          }
+        ],
+        [
+          32,
+          {
+            "id": "minecraft:stone",
+            "count": 64
+          }
+        ],
+        [
+          33,
+          {
+            "id": "minecraft:stone",
+            "count": 64
+          }
+        ],
+        [
+          34,
+          {
+            "id": "minecraft:stone",
+            "count": 64
+          }
+        ],
+        [
+          35,
+          {
+            "id": "minecraft:stone",
+            "count": 64
+          }
+        ]
+      ]
+    ],
+    "random": [
+      6267702098333603681
+    ],
+    "drops": [
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 1
+        },
+        "age": 5999,
+        "delay": 32767
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 1
+        },
+        "age": 5999,
+        "delay": 32767
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 1
+        },
+        "age": 5999,
+        "delay": 32767
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 1
+        },
+        "age": 5999,
+        "delay": 32767
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 1
+        },
+        "age": 5999,
+        "delay": 32767
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 1
+        },
+        "age": 5999,
+        "delay": 32767
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 1
+        },
+        "age": 5999,
+        "delay": 32767
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 1
+        },
+        "age": 5999,
+        "delay": 32767
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 1
+        },
+        "age": 5999,
+        "delay": 32767
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 1
+        },
+        "age": 5999,
+        "delay": 32767
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 1
+        },
+        "age": 5999,
+        "delay": 32767
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 1
+        },
+        "age": 5999,
+        "delay": 32767
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 1
+        },
+        "age": 5999,
+        "delay": 32767
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 1
+        },
+        "age": 5999,
+        "delay": 32767
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 1
+        },
+        "age": 5999,
+        "delay": 32767
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 1
+        },
+        "age": 5999,
+        "delay": 32767
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 1
+        },
+        "age": 5999,
+        "delay": 32767
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 1
+        },
+        "age": 5999,
+        "delay": 32767
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 1
+        },
+        "age": 5999,
+        "delay": 32767
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 1
+        },
+        "age": 5999,
+        "delay": 32767
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 1
+        },
+        "age": 5999,
+        "delay": 32767
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 1
+        },
+        "age": 5999,
+        "delay": 32767
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 1
+        },
+        "age": 5999,
+        "delay": 32767
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 1
+        },
+        "age": 5999,
+        "delay": 32767
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 1
+        },
+        "age": 5999,
+        "delay": 32767
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 1
+        },
+        "age": 5999,
+        "delay": 32767
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 1
+        },
+        "age": 5999,
+        "delay": 32767
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 1
+        },
+        "age": 5999,
+        "delay": 32767
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 1
+        },
+        "age": 5999,
+        "delay": 32767
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 1
+        },
+        "age": 5999,
+        "delay": 32767
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 1
+        },
+        "age": 5999,
+        "delay": 32767
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 1
+        },
+        "age": 5999,
+        "delay": 32767
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 1
+        },
+        "age": 5999,
+        "delay": 32767
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 1
+        },
+        "age": 5999,
+        "delay": 32767
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 1
+        },
+        "age": 5999,
+        "delay": 32767
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 1
+        },
+        "age": 5999,
+        "delay": 32767
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 64
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      }
+    ],
+    "sounds": [
+      {
+        "pitch": "3f8e80c1"
+      },
+      {
+        "pitch": "4028826f"
+      },
+      {
+        "pitch": "3fca852a"
+      },
+      {
+        "pitch": "3fff6835"
+      },
+      {
+        "pitch": "40026770"
+      },
+      {
+        "pitch": "402949c0"
+      },
+      {
+        "pitch": "4009a56c"
+      },
+      {
+        "pitch": "3ff7bcd4"
+      },
+      {
+        "pitch": "40484876"
+      },
+      {
+        "pitch": "401029e7"
+      },
+      {
+        "pitch": "401fb75e"
+      },
+      {
+        "pitch": "4014d988"
+      },
+      {
+        "pitch": "3fd53bca"
+      },
+      {
+        "pitch": "4046c78e"
+      },
+      {
+        "pitch": "3fca1219"
+      },
+      {
+        "pitch": "3f674bda"
+      },
+      {
+        "pitch": "4024fd26"
+      },
+      {
+        "pitch": "4015f57c"
+      },
+      {
+        "pitch": "40405516"
+      },
+      {
+        "pitch": "40173f45"
+      },
+      {
+        "pitch": "400242b5"
+      },
+      {
+        "pitch": "3fdd4817"
+      },
+      {
+        "pitch": "3ff56fe6"
+      },
+      {
+        "pitch": "3f8cbb0c"
+      },
+      {
+        "pitch": "4022e43a"
+      },
+      {
+        "pitch": "3fb2730e"
+      },
+      {
+        "pitch": "402cbc69"
+      },
+      {
+        "pitch": "3fcd3b09"
+      },
+      {
+        "pitch": "40405c4a"
+      },
+      {
+        "pitch": "3fabd49b"
+      },
+      {
+        "pitch": "3fca3a32"
+      },
+      {
+        "pitch": "402e2c4f"
+      },
+      {
+        "pitch": "3f8e7a00"
+      },
+      {
+        "pitch": "3ffccef5"
+      },
+      {
+        "pitch": "4000750b"
+      },
+      {
+        "pitch": "4018aab4"
+      }
+    ],
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.give.success.single",
+          "with": [
+            6400,
+            {
+              "translate": "chat.square_brackets",
+              "with": [
+                {
+                  "text": "",
+                  "extra": [
+                    {
+                      "translate": "block.minecraft.stone"
+                    }
+                  ]
+                }
+              ],
+              "color": "white",
+              "hover_event": {
+                "id": "minecraft:stone",
+                "action": "show_item"
+              }
+            },
+            {
+              "text": "Player0",
+              "click_event": {
+                "command": "/tell Player0 ",
+                "action": "suggest_command"
+              },
+              "hover_event": {
+                "id": "minecraft:player",
+                "uuid": [
+                  0,
+                  0,
+                  0,
+                  1
+                ],
+                "name": "Player0",
+                "action": "show_entity"
+              },
+              "insertion": "Player0"
+            }
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "calls": [
+      "create",
+      "add",
+      "sound",
+      "menu",
+      "create",
+      "add",
+      "sound",
+      "menu",
+      "create",
+      "add",
+      "sound",
+      "menu",
+      "create",
+      "add",
+      "sound",
+      "menu",
+      "create",
+      "add",
+      "sound",
+      "menu",
+      "create",
+      "add",
+      "sound",
+      "menu",
+      "create",
+      "add",
+      "sound",
+      "menu",
+      "create",
+      "add",
+      "sound",
+      "menu",
+      "create",
+      "add",
+      "sound",
+      "menu",
+      "create",
+      "add",
+      "sound",
+      "menu",
+      "create",
+      "add",
+      "sound",
+      "menu",
+      "create",
+      "add",
+      "sound",
+      "menu",
+      "create",
+      "add",
+      "sound",
+      "menu",
+      "create",
+      "add",
+      "sound",
+      "menu",
+      "create",
+      "add",
+      "sound",
+      "menu",
+      "create",
+      "add",
+      "sound",
+      "menu",
+      "create",
+      "add",
+      "sound",
+      "menu",
+      "create",
+      "add",
+      "sound",
+      "menu",
+      "create",
+      "add",
+      "sound",
+      "menu",
+      "create",
+      "add",
+      "sound",
+      "menu",
+      "create",
+      "add",
+      "sound",
+      "menu",
+      "create",
+      "add",
+      "sound",
+      "menu",
+      "create",
+      "add",
+      "sound",
+      "menu",
+      "create",
+      "add",
+      "sound",
+      "menu",
+      "create",
+      "add",
+      "sound",
+      "menu",
+      "create",
+      "add",
+      "sound",
+      "menu",
+      "create",
+      "add",
+      "sound",
+      "menu",
+      "create",
+      "add",
+      "sound",
+      "menu",
+      "create",
+      "add",
+      "sound",
+      "menu",
+      "create",
+      "add",
+      "sound",
+      "menu",
+      "create",
+      "add",
+      "sound",
+      "menu",
+      "create",
+      "add",
+      "sound",
+      "menu",
+      "create",
+      "add",
+      "sound",
+      "menu",
+      "create",
+      "add",
+      "sound",
+      "menu",
+      "create",
+      "add",
+      "sound",
+      "menu",
+      "create",
+      "add",
+      "sound",
+      "menu",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "create",
+      "add",
+      "feedback"
+    ]
+  },
+  {
+    "item": "stone",
+    "count": 6401,
+    "targets": 1,
+    "fill": "empty",
+    "creative": false,
+    "error": {
+      "translate": "commands.give.failed.toomanyitems",
+      "with": [
+        6400,
+        {
+          "translate": "chat.square_brackets",
+          "with": [
+            {
+              "text": "",
+              "extra": [
+                {
+                  "translate": "block.minecraft.stone"
+                }
+              ]
+            }
+          ],
+          "color": "white",
+          "hover_event": {
+            "id": "minecraft:stone",
+            "action": "show_item"
+          }
+        }
+      ]
+    },
+    "inventory": [
+      []
+    ],
+    "random": [
+      -5025562857975149833
+    ],
+    "drops": [],
+    "sounds": [],
+    "feedback": [],
+    "calls": []
+  },
+  {
+    "item": "stone",
+    "count": 3,
+    "targets": 1,
+    "fill": "full",
+    "creative": false,
+    "value": 1,
+    "inventory": [
+      [
+        [
+          0,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          1,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          2,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          3,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          4,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          5,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          6,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          7,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          8,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          9,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          10,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          11,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          12,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          13,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          14,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          15,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          16,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          17,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          18,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          19,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          20,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          21,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          22,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          23,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          24,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          25,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          26,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          27,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          28,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          29,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          30,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          31,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          32,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          33,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          34,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          35,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ]
+      ]
+    ],
+    "random": [
+      5694868678511409995
+    ],
+    "drops": [
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 3
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      }
+    ],
+    "sounds": [],
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.give.success.single",
+          "with": [
+            3,
+            {
+              "translate": "chat.square_brackets",
+              "with": [
+                {
+                  "text": "",
+                  "extra": [
+                    {
+                      "translate": "block.minecraft.stone"
+                    }
+                  ]
+                }
+              ],
+              "color": "white",
+              "hover_event": {
+                "id": "minecraft:stone",
+                "action": "show_item"
+              }
+            },
+            {
+              "text": "Player0",
+              "click_event": {
+                "command": "/tell Player0 ",
+                "action": "suggest_command"
+              },
+              "hover_event": {
+                "id": "minecraft:player",
+                "uuid": [
+                  0,
+                  0,
+                  0,
+                  1
+                ],
+                "name": "Player0",
+                "action": "show_entity"
+              },
+              "insertion": "Player0"
+            }
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "calls": [
+      "create",
+      "add",
+      "feedback"
+    ]
+  },
+  {
+    "item": "stone",
+    "count": 3,
+    "targets": 1,
+    "fill": "partial",
+    "creative": false,
+    "value": 1,
+    "inventory": [
+      [
+        [
+          0,
+          {
+            "id": "minecraft:stone",
+            "count": 64
+          }
+        ],
+        [
+          1,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          2,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          3,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          4,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          5,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          6,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          7,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          8,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          9,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          10,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          11,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          12,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          13,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          14,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          15,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          16,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          17,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          18,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          19,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          20,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          21,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          22,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          23,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          24,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          25,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          26,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          27,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          28,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          29,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          30,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          31,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          32,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          33,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          34,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          35,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ]
+      ]
+    ],
+    "random": [
+      5694868678511409995
+    ],
+    "drops": [
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 2
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      }
+    ],
+    "sounds": [],
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.give.success.single",
+          "with": [
+            3,
+            {
+              "translate": "chat.square_brackets",
+              "with": [
+                {
+                  "text": "",
+                  "extra": [
+                    {
+                      "translate": "block.minecraft.stone"
+                    }
+                  ]
+                }
+              ],
+              "color": "white",
+              "hover_event": {
+                "id": "minecraft:stone",
+                "action": "show_item"
+              }
+            },
+            {
+              "text": "Player0",
+              "click_event": {
+                "command": "/tell Player0 ",
+                "action": "suggest_command"
+              },
+              "hover_event": {
+                "id": "minecraft:player",
+                "uuid": [
+                  0,
+                  0,
+                  0,
+                  1
+                ],
+                "name": "Player0",
+                "action": "show_entity"
+              },
+              "insertion": "Player0"
+            }
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "calls": [
+      "create",
+      "add",
+      "feedback"
+    ]
+  },
+  {
+    "item": "stone",
+    "count": 65,
+    "targets": 1,
+    "fill": "one-slot",
+    "creative": false,
+    "value": 1,
+    "inventory": [
+      [
+        [
+          0,
+          {
+            "id": "minecraft:stone",
+            "count": 64
+          }
+        ],
+        [
+          1,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          2,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          3,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          4,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          5,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          6,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          7,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          8,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          9,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          10,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          11,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          12,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          13,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          14,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          15,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          16,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          17,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          18,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          19,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          20,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          21,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          22,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          23,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          24,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          25,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          26,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          27,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          28,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          29,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          30,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          31,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          32,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          33,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          34,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          35,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ]
+      ]
+    ],
+    "random": [
+      -1782466964123969572
+    ],
+    "drops": [
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 1
+        },
+        "age": 5999,
+        "delay": 32767
+      },
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 1
+        },
+        "age": 0,
+        "delay": 0,
+        "target": "00000000-0000-0000-0000-000000000001"
+      }
+    ],
+    "sounds": [
+      {
+        "pitch": "3f8e80c1"
+      }
+    ],
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.give.success.single",
+          "with": [
+            65,
+            {
+              "translate": "chat.square_brackets",
+              "with": [
+                {
+                  "text": "",
+                  "extra": [
+                    {
+                      "translate": "block.minecraft.stone"
+                    }
+                  ]
+                }
+              ],
+              "color": "white",
+              "hover_event": {
+                "id": "minecraft:stone",
+                "action": "show_item"
+              }
+            },
+            {
+              "text": "Player0",
+              "click_event": {
+                "command": "/tell Player0 ",
+                "action": "suggest_command"
+              },
+              "hover_event": {
+                "id": "minecraft:player",
+                "uuid": [
+                  0,
+                  0,
+                  0,
+                  1
+                ],
+                "name": "Player0",
+                "action": "show_entity"
+              },
+              "insertion": "Player0"
+            }
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "calls": [
+      "create",
+      "add",
+      "sound",
+      "menu",
+      "create",
+      "add",
+      "feedback"
+    ]
+  },
+  {
+    "item": "stone",
+    "count": 3,
+    "targets": 1,
+    "fill": "full",
+    "creative": true,
+    "value": 1,
+    "inventory": [
+      [
+        [
+          0,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          1,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          2,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          3,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          4,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          5,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          6,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          7,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          8,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          9,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          10,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          11,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          12,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          13,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          14,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          15,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          16,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          17,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          18,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          19,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          20,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          21,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          22,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          23,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          24,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          25,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          26,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          27,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          28,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          29,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          30,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          31,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          32,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          33,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          34,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ],
+        [
+          35,
+          {
+            "id": "minecraft:cobblestone",
+            "count": 64
+          }
+        ]
+      ]
+    ],
+    "random": [
+      5111195811822994797
+    ],
+    "drops": [
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 1
+        },
+        "age": 5999,
+        "delay": 32767
+      }
+    ],
+    "sounds": [
+      {
+        "pitch": "3f8e80c1"
+      }
+    ],
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.give.success.single",
+          "with": [
+            3,
+            {
+              "translate": "chat.square_brackets",
+              "with": [
+                {
+                  "text": "",
+                  "extra": [
+                    {
+                      "translate": "block.minecraft.stone"
+                    }
+                  ]
+                }
+              ],
+              "color": "white",
+              "hover_event": {
+                "id": "minecraft:stone",
+                "action": "show_item"
+              }
+            },
+            {
+              "text": "Player0",
+              "click_event": {
+                "command": "/tell Player0 ",
+                "action": "suggest_command"
+              },
+              "hover_event": {
+                "id": "minecraft:player",
+                "uuid": [
+                  0,
+                  0,
+                  0,
+                  1
+                ],
+                "name": "Player0",
+                "action": "show_entity"
+              },
+              "insertion": "Player0"
+            }
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "calls": [
+      "create",
+      "add",
+      "sound",
+      "menu",
+      "feedback"
+    ]
+  },
+  {
+    "item": "diamond_sword",
+    "count": 2,
+    "targets": 1,
+    "fill": "empty",
+    "creative": false,
+    "value": 1,
+    "inventory": [
+      [
+        [
+          0,
+          {
+            "id": "minecraft:diamond_sword",
+            "count": 1
+          }
+        ],
+        [
+          1,
+          {
+            "id": "minecraft:diamond_sword",
+            "count": 1
+          }
+        ]
+      ]
+    ],
+    "random": [
+      6802844026563419272
+    ],
+    "drops": [
+      {
+        "stack": {
+          "id": "minecraft:diamond_sword",
+          "count": 1
+        },
+        "age": 5999,
+        "delay": 32767
+      },
+      {
+        "stack": {
+          "id": "minecraft:diamond_sword",
+          "count": 1
+        },
+        "age": 5999,
+        "delay": 32767
+      }
+    ],
+    "sounds": [
+      {
+        "pitch": "3f8e80c1"
+      },
+      {
+        "pitch": "4028826f"
+      }
+    ],
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.give.success.single",
+          "with": [
+            2,
+            {
+              "translate": "chat.square_brackets",
+              "with": [
+                {
+                  "text": "",
+                  "extra": [
+                    {
+                      "translate": "item.minecraft.diamond_sword"
+                    }
+                  ]
+                }
+              ],
+              "color": "white",
+              "hover_event": {
+                "id": "minecraft:diamond_sword",
+                "action": "show_item"
+              }
+            },
+            {
+              "text": "Player0",
+              "click_event": {
+                "command": "/tell Player0 ",
+                "action": "suggest_command"
+              },
+              "hover_event": {
+                "id": "minecraft:player",
+                "uuid": [
+                  0,
+                  0,
+                  0,
+                  1
+                ],
+                "name": "Player0",
+                "action": "show_entity"
+              },
+              "insertion": "Player0"
+            }
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "calls": [
+      "create",
+      "add",
+      "sound",
+      "menu",
+      "create",
+      "add",
+      "sound",
+      "menu",
+      "feedback"
+    ]
+  },
+  {
+    "item": "diamond_sword",
+    "count": 101,
+    "targets": 1,
+    "fill": "empty",
+    "creative": false,
+    "error": {
+      "translate": "commands.give.failed.toomanyitems",
+      "with": [
+        100,
+        {
+          "translate": "chat.square_brackets",
+          "with": [
+            {
+              "text": "",
+              "extra": [
+                {
+                  "translate": "item.minecraft.diamond_sword"
+                }
+              ]
+            }
+          ],
+          "color": "white",
+          "hover_event": {
+            "id": "minecraft:diamond_sword",
+            "action": "show_item"
+          }
+        }
+      ]
+    },
+    "inventory": [
+      []
+    ],
+    "random": [
+      -5025562857975149833
+    ],
+    "drops": [],
+    "sounds": [],
+    "feedback": [],
+    "calls": []
+  },
+  {
+    "item": "air",
+    "count": 3,
+    "targets": 1,
+    "fill": "empty",
+    "creative": false,
+    "value": 1,
+    "inventory": [
+      []
+    ],
+    "random": [
+      -5025562857975149833
+    ],
+    "drops": [],
+    "sounds": [],
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.give.success.single",
+          "with": [
+            3,
+            {
+              "translate": "chat.square_brackets",
+              "with": [
+                {
+                  "text": "",
+                  "extra": [
+                    {
+                      "translate": "block.minecraft.air"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "Player0",
+              "click_event": {
+                "command": "/tell Player0 ",
+                "action": "suggest_command"
+              },
+              "hover_event": {
+                "id": "minecraft:player",
+                "uuid": [
+                  0,
+                  0,
+                  0,
+                  1
+                ],
+                "name": "Player0",
+                "action": "show_entity"
+              },
+              "insertion": "Player0"
+            }
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "calls": [
+      "create",
+      "create",
+      "create",
+      "feedback"
+    ]
+  },
+  {
+    "item": "stone[minecraft:custom_name='Named']",
+    "count": 3,
+    "targets": 1,
+    "fill": "empty",
+    "creative": false,
+    "value": 1,
+    "inventory": [
+      [
+        [
+          0,
+          {
+            "id": "minecraft:stone",
+            "count": 3,
+            "components": {
+              "minecraft:custom_name": "Named"
+            }
+          }
+        ]
+      ]
+    ],
+    "random": [
+      5111195811822994797
+    ],
+    "drops": [
+      {
+        "stack": {
+          "id": "minecraft:stone",
+          "count": 1,
+          "components": {
+            "minecraft:custom_name": "Named"
+          }
+        },
+        "age": 5999,
+        "delay": 32767
+      }
+    ],
+    "sounds": [
+      {
+        "pitch": "3f8e80c1"
+      }
+    ],
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.give.success.single",
+          "with": [
+            3,
+            {
+              "translate": "chat.square_brackets",
+              "with": [
+                {
+                  "text": "",
+                  "extra": [
+                    "Named"
+                  ],
+                  "italic": true
+                }
+              ],
+              "color": "white",
+              "hover_event": {
+                "id": "minecraft:stone",
+                "components": {
+                  "minecraft:custom_name": "Named"
+                },
+                "action": "show_item"
+              }
+            },
+            {
+              "text": "Player0",
+              "click_event": {
+                "command": "/tell Player0 ",
+                "action": "suggest_command"
+              },
+              "hover_event": {
+                "id": "minecraft:player",
+                "uuid": [
+                  0,
+                  0,
+                  0,
+                  1
+                ],
+                "name": "Player0",
+                "action": "show_entity"
+              },
+              "insertion": "Player0"
+            }
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "calls": [
+      "create",
+      "add",
+      "sound",
+      "menu",
+      "feedback"
+    ]
+  }
+]

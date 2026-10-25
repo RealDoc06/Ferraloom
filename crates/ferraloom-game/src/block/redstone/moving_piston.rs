@@ -559,6 +559,29 @@ fn collision_shape_from_reader(
 pub struct MovingPistonBlock;
 pub static MOVING_PISTON: MovingPistonBlock = MovingPistonBlock;
 impl BlockBehavior for MovingPistonBlock {
+    /// Port of MovingPistonBlock#getDrops. Resolve the moving receiver at the
+    /// captured loot origin, then dispatch the moved state's native loot method.
+    fn get_drops(
+        &self,
+        _state: BlockState,
+        context: crate::block::drops::BlockLootContext,
+        level: &mut Level,
+    ) -> Result<Vec<ferraloom_protocol::component::ItemStack>, LevelError> {
+        let origin = context
+            .params
+            .origin
+            .ok_or(LevelError::Inventory("moving piston loot origin"))?;
+        let pos = BlockPos::containing(origin.x, origin.y, origin.z);
+        let Some(handle) = level.block_entity_ref(pos)? else {
+            return Ok(Vec::new());
+        };
+        let BlockEntityState::MovingPiston(entity) = level.block_entity_state(handle)? else {
+            return Ok(Vec::new());
+        };
+        let moved = entity.moved_state;
+        crate::block::drops::get_drops_from_context(moved, context, level)
+    }
+
     fn shape(
         &self,
         _state: BlockState,

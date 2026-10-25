@@ -17,6 +17,8 @@ mod environment_attributes;
 mod feature_requirements;
 #[path = "build/game_events.rs"]
 mod game_events;
+#[path = "build/item_methods.rs"]
+mod item_methods;
 
 #[path = "build/dispenser_properties.rs"]
 mod dispenser_properties;
@@ -894,6 +896,7 @@ fn main() {
     building_properties::generate(root);
     note_properties::generate(root);
     let item_report = load(root, "items");
+    item_methods::generate(root, &item_report);
     let entity_report = load(root, "entity_types");
     let attribute_report = load(root, "attributes");
     for (name, count) in [

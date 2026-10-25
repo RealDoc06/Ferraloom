@@ -9,22 +9,8 @@ use ferraloom_protocol::{
     component::{DataComponent, ItemStack},
 };
 
-/// Port of ItemStack#isDamageableItem. Effective component reads hide retained
-/// zero/negative-count payloads, while an ordinary undamaged tool has DAMAGE=0.
-pub fn is_damageable_item(stack: &ItemStack) -> bool {
-    stack
-        .component(ComponentType::MAX_DAMAGE)
-        .expect("canonical item components")
-        .is_some()
-        && stack
-            .component(ComponentType::UNBREAKABLE)
-            .expect("canonical item components")
-            .is_none()
-        && stack
-            .component(ComponentType::DAMAGE)
-            .expect("canonical item components")
-            .is_some()
-}
+pub use super::durability::is_damageable_item;
+
 /// Port of ItemStack#canBeHurtBy and DamageResistant#isResistantTo. Empty stacks
 /// have no effective DAMAGE_RESISTANT component, so this query returns true.
 pub fn can_be_hurt_by(

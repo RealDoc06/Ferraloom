@@ -24,7 +24,10 @@ use ferraloom_protocol::{
     play::{Difficulty, SignTextSlot, clientbound as cb},
 };
 use ferraloom_util::{BlockPos, ChunkPos, Direction, Uuid};
-use std::{io::Read, sync::Arc};
+use std::{
+    io::Read,
+    sync::{Arc, OnceLock},
+};
 
 const POS: BlockPos = BlockPos::new(8, 5, 8);
 static BEHAVIORS: Behaviors = Behaviors::EMPTY;
@@ -55,13 +58,15 @@ fn bare_level() -> Level {
             ),
         ))
         .unwrap();
-    let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").expect("builder supplies vanilla jar");
-    let resources = ferraloom_data::datapack::ResourceManager::new(vec![
-        ferraloom_data::datapack::Pack::vanilla_jar(std::path::Path::new(&jar)).unwrap(),
-    ]);
-    level.set_block_tags(Arc::new(
-        ferraloom_data::datapack::TagSet::<Block>::load(&resources).unwrap(),
-    ));
+    static TAGS: OnceLock<Arc<ferraloom_data::datapack::TagSet<Block>>> = OnceLock::new();
+    let tags = TAGS.get_or_init(|| {
+        let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").expect("builder supplies vanilla jar");
+        let resources = ferraloom_data::datapack::ResourceManager::new(vec![
+            ferraloom_data::datapack::Pack::vanilla_jar(std::path::Path::new(&jar)).unwrap(),
+        ]);
+        Arc::new(ferraloom_data::datapack::TagSet::<Block>::load(&resources).unwrap())
+    });
+    level.set_block_tags(Arc::clone(tags));
     level
 }
 fn install(level: &mut Level, state: BlockState) -> entity::BlockEntityRef {

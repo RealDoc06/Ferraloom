@@ -146,6 +146,34 @@ fn packing_compacts_but_mutation_and_copy_preserve_palette_state() {
 }
 
 #[test]
+fn uniform_section_counts_and_packing_match_real_jar() {
+    let biomes = Strategy::biomes(Arc::new(IdMap::new(vec![BiomeId(0)]).unwrap()));
+    for &(id, expected_counts, bits, has_storage) in vanilla::UNIFORM_SECTIONS {
+        let state = BlockState::from_id(id).unwrap();
+        let states = PalettedContainer::new(Strategy::block_states(), state);
+        assert_eq!(states.counts(), [(state, 4096)]);
+        let packed = states.pack();
+        assert_eq!(packed.palette_entries, [state]);
+        assert_eq!(packed.bits_per_entry, Some(bits));
+        assert_eq!(packed.storage.is_some(), has_storage);
+        let mut section = LevelChunkSection::from_containers(
+            states,
+            PalettedContainer::new(biomes.clone(), BiomeId(0)),
+        );
+        let [non_empty_blocks, fluids, ticking_blocks, ticking_fluids] = expected_counts;
+        let expected = SectionCounts {
+            non_empty_blocks,
+            fluids,
+            ticking_blocks,
+            ticking_fluids,
+        };
+        assert_eq!(section.counts(), expected, "state={id}");
+        section.recalc_block_counts();
+        assert_eq!(section.counts(), expected, "recount state={id}");
+    }
+}
+
+#[test]
 fn section_incremental_and_recalculated_counts_match_real_jar() {
     let biomes = Strategy::biomes(Arc::new(IdMap::new(vec![BiomeId(0)]).unwrap()));
     let mut section = LevelChunkSection::new(Strategy::block_states(), biomes, BiomeId(0));

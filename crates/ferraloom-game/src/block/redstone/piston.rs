@@ -674,6 +674,27 @@ fn fitting_base(head: BlockState, base: BlockState) -> bool {
     base.block() == block && base.get(properties::EXTENDED).unwrap() && facing(base) == facing(head)
 }
 impl BlockBehavior for PistonHeadBlock {
+    /// Port of PistonHeadBlock#playerWillDestroy. Creative removal destroys a
+    /// fitting base before the head's inherited particles and game event.
+    fn player_will_destroy(
+        &self,
+        state: BlockState,
+        pos: BlockPos,
+        player: crate::entity::EntityRef,
+        level: &mut Level,
+    ) -> Result<BlockState, LevelError> {
+        if level
+            .entity::<crate::entity::player::ServerPlayer>(player)?
+            .prevents_block_drops()
+        {
+            let base = pos.relative(facing(state).opposite(), 1);
+            if fitting_base(state, level.get_block_state(base)?) {
+                level.destroy_block(base, false, UPDATE_LIMIT)?;
+            }
+        }
+        crate::block::BASE_BLOCK.player_will_destroy(state, pos, player, level)
+    }
+
     fn can_survive(
         &self,
         state: BlockState,
