@@ -990,6 +990,9 @@ impl World {
             )
             .with_block_transformers(Arc::new(
                 ferraloom_game::item::block_transformer::BlockTransformerRegistry::load(resources)?,
+            ))
+            .with_enchantments(Arc::new(
+                ferraloom_game::item::enchantment::EnchantmentRegistry::load(resources)?,
             )),
         ))
     }

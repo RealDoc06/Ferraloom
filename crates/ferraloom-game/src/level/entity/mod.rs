@@ -268,6 +268,10 @@ impl Level {
         loaded: bool,
     ) -> Result<(), LevelError> {
         let status = self.publish_entity_data(entity, state, loaded)?;
+        // ServerLevel.EntityCallbacks#onCreated precedes tracking start.
+        if !loaded && self.is_transmitting_waypoint(entity)? {
+            self.track_waypoint(entity)?;
+        }
         if status.is_accessible() {
             self.region()
                 .entities
@@ -275,6 +279,7 @@ impl Level {
                 .push_event(EntityManagementEvent::TrackingStart(entity));
             self.add_tracked_entity(entity)
                 .map_err(|error| error.into_level(self))?;
+            self.start_entity_waypoints(entity)?;
         }
         if status.is_ticking() {
             self.start_entity_ticking(entity);
@@ -340,11 +345,20 @@ impl Level {
             .registration
             .push_event(EntityManagementEvent::TrackingStart(entity));
         self.add_tracked_entity(entity)
-            .map_err(|error| error.into_level(self))
+            .map_err(|error| error.into_level(self))?;
+        self.start_entity_waypoints(entity)
     }
     fn stop_entity_tracking(&mut self, entity: EntityRef) -> Result<(), LevelError> {
         self.remove_tracked_entity(entity)
             .map_err(|error| error.into_level(self))?;
+        // ServerLevel.EntityCallbacks#onTrackingEnd removes the receiver only
+        // after ChunkMap has completed removal and its audience packets.
+        if self
+            .entity::<crate::entity::player::ServerPlayer>(entity)
+            .is_ok()
+        {
+            self.remove_waypoint_player(entity)?;
+        }
         let storage = &self.region().entities;
         storage
             .registration
@@ -440,6 +454,11 @@ impl Level {
                 self.stop_entity_tracking(entity)?;
             }
             if reason.should_destroy() {
+                // ServerLevel.EntityCallbacks#onDestroyed untracks every living
+                // transmitter, even if its current transmit attribute is zero.
+                if self.entity_state(entity)?.as_living().is_some() {
+                    self.untrack_waypoint(entity)?;
+                }
                 self.region_mut()
                     .entities
                     .registration
@@ -475,6 +494,7 @@ impl Level {
         let previous_status = old_key
             .and_then(|key| sections.section_visibility(key))
             .unwrap_or(Visibility::Hidden);
+        let moved = self.entity::<EntityData>(entity)?.position != pos;
         if raw {
             self.entity_mut::<EntityData>(entity)?.set_pos_raw(pos);
         } else {
@@ -524,6 +544,10 @@ impl Level {
                     });
                 }
             }
+        }
+        // Entity#setPosRaw updates waypoint connections after levelCallback.onMove.
+        if moved {
+            self.update_waypoints_after_position_change(entity)?;
         }
         Ok(())
     }

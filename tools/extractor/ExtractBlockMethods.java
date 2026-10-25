@@ -28,12 +28,13 @@ public final class ExtractBlockMethods {
         "getSignal", "getDirectSignal", "isSignalSource", "ownSignal", "shouldRedstoneWireConnectTo",
         "getDrops", "spawnAfterBreak", "getMenuProvider",
         "setPlacedBy", "playerWillDestroy", "spawnDestroyByEntityParticles", "spawnDestroyParticles",
-        "getDestroyProgress", "destroy", "playerDestroy"
+        "getDestroyProgress", "destroy", "playerDestroy",
+        "onLand", "onBrokenAfterFall", "getFallDamageSource"
     );
 
     private static Method baseMethod(String name) {
         var candidates = new ArrayList<Method>();
-        for (Class<?> type : List.of(BlockBehaviour.class, Block.class, SimpleWaterloggedBlock.class)) {
+        for (Class<?> type : List.of(BlockBehaviour.class, Block.class, SimpleWaterloggedBlock.class, Fallable.class)) {
             for (Method method : type.getDeclaredMethods()) {
                 int modifiers = method.getModifiers();
                 if (method.getName().equals(name) && !method.isSynthetic()
@@ -93,6 +94,12 @@ public final class ExtractBlockMethods {
         }
         var blocks = new JsonArray();
         var classes = new LinkedHashMap<String, Integer>();
+        // Method additions append owner IDs instead of renumbering existing facts.
+        var output = Path.of(args[0]);
+        if (Files.exists(output)) {
+            for (var owner : JsonParser.parseString(Files.readString(output)).getAsJsonObject().getAsJsonArray("declaring_classes"))
+                classes.put(owner.getAsString(), classes.size());
+        }
         long survivalChecks = 0, shapeChecks = 0;
         for (Block block : BuiltInRegistries.BLOCK) {
             if (BuiltInRegistries.BLOCK.getId(block) != blocks.size()) throw new AssertionError("Block registry order");
@@ -130,7 +137,7 @@ public final class ExtractBlockMethods {
         var classNames = new JsonArray();
         classes.keySet().forEach(classNames::add);
         result.add("declaring_classes", classNames);
-        Files.writeString(Path.of(args[0]), new GsonBuilder().setPrettyPrinting().create().toJson(result) + "\n");
+        Files.writeString(output, new GsonBuilder().setPrettyPrinting().create().toJson(result) + "\n");
         System.out.println("Extracted " + blocks.size() + " blocks x " + methods.size()
             + " method owners; checked " + survivalChecks + " base survival and " + shapeChecks + " base shape calls");
     }

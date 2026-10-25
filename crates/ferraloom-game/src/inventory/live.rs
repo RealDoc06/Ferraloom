@@ -30,6 +30,8 @@ pub enum ContainerHandle {
         player: EntityRef,
     },
     Entity(EntityRef),
+    /// EntityEquipment's native SLOTS order, independently of packet slot IDs.
+    LivingEquipment(EntityRef),
 }
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ContainerSlot {
@@ -177,7 +179,9 @@ impl MenuContainerAccess for LiveMenuContext<'_> {
             | ContainerHandle::MenuOperationStacks { .. } => Err(MenuError::Unsupported(
                 "operation objects are not inventory containers",
             )),
-            ContainerHandle::Entity(_) => Err(MenuError::Unsupported("entity container resolver")),
+            ContainerHandle::Entity(_) | ContainerHandle::LivingEquipment(_) => {
+                Err(MenuError::Unsupported("entity container resolver"))
+            }
         }
     }
     fn get_item(&mut self, slot: ContainerSlot) -> Result<ItemStack> {
@@ -202,7 +206,9 @@ impl MenuContainerAccess for LiveMenuContext<'_> {
             | ContainerHandle::MenuOperationStacks { .. } => Err(MenuError::Unsupported(
                 "operation objects are not inventory containers",
             )),
-            ContainerHandle::Entity(_) => Err(MenuError::Unsupported("entity container resolver")),
+            ContainerHandle::Entity(_) | ContainerHandle::LivingEquipment(_) => {
+                Err(MenuError::Unsupported("entity container resolver"))
+            }
         }
     }
     fn set_item(&mut self, slot: ContainerSlot, stack: ItemStack) -> Result<()> {
@@ -227,7 +233,9 @@ impl MenuContainerAccess for LiveMenuContext<'_> {
             | ContainerHandle::MenuOperationStacks { .. } => Err(MenuError::Unsupported(
                 "operation objects are not inventory containers",
             )),
-            ContainerHandle::Entity(_) => Err(MenuError::Unsupported("entity container resolver")),
+            ContainerHandle::Entity(_) | ContainerHandle::LivingEquipment(_) => {
+                Err(MenuError::Unsupported("entity container resolver"))
+            }
         }
     }
     fn remove_item(&mut self, slot: ContainerSlot, amount: i32) -> Result<ItemStack> {
@@ -252,7 +260,9 @@ impl MenuContainerAccess for LiveMenuContext<'_> {
             | ContainerHandle::MenuOperationStacks { .. } => Err(MenuError::Unsupported(
                 "operation objects are not inventory containers",
             )),
-            ContainerHandle::Entity(_) => Err(MenuError::Unsupported("entity container resolver")),
+            ContainerHandle::Entity(_) | ContainerHandle::LivingEquipment(_) => {
+                Err(MenuError::Unsupported("entity container resolver"))
+            }
         }
     }
     fn remove_item_no_update(&mut self, slot: ContainerSlot) -> Result<ItemStack> {
@@ -282,7 +292,9 @@ impl MenuContainerAccess for LiveMenuContext<'_> {
             | ContainerHandle::MenuOperationStacks { .. } => Err(MenuError::Unsupported(
                 "operation objects are not inventory containers",
             )),
-            ContainerHandle::Entity(_) => Err(MenuError::Unsupported("entity container resolver")),
+            ContainerHandle::Entity(_) | ContainerHandle::LivingEquipment(_) => {
+                Err(MenuError::Unsupported("entity container resolver"))
+            }
         }
     }
     fn set_changed(&mut self, container: ContainerHandle) -> Result<()> {
@@ -308,7 +320,9 @@ impl MenuContainerAccess for LiveMenuContext<'_> {
             | ContainerHandle::MenuOperationStacks { .. } => Err(MenuError::Unsupported(
                 "operation objects are not inventory containers",
             )),
-            ContainerHandle::Entity(_) => Err(MenuError::Unsupported("entity container resolver")),
+            ContainerHandle::Entity(_) | ContainerHandle::LivingEquipment(_) => {
+                Err(MenuError::Unsupported("entity container resolver"))
+            }
         }
     }
     fn size(&mut self, container: ContainerHandle) -> Result<usize> {
@@ -332,7 +346,9 @@ impl MenuContainerAccess for LiveMenuContext<'_> {
             | ContainerHandle::MenuOperationStacks { .. } => Err(MenuError::Unsupported(
                 "operation objects are not inventory containers",
             )),
-            ContainerHandle::Entity(_) => Err(MenuError::Unsupported("entity container resolver")),
+            ContainerHandle::Entity(_) | ContainerHandle::LivingEquipment(_) => {
+                Err(MenuError::Unsupported("entity container resolver"))
+            }
         }
     }
     fn max_stack_size(&mut self, container: ContainerHandle) -> Result<i32> {
@@ -358,7 +374,9 @@ impl MenuContainerAccess for LiveMenuContext<'_> {
             | ContainerHandle::MenuOperationStacks { .. } => Err(MenuError::Unsupported(
                 "operation objects are not inventory containers",
             )),
-            ContainerHandle::Entity(_) => Err(MenuError::Unsupported("entity container resolver")),
+            ContainerHandle::Entity(_) | ContainerHandle::LivingEquipment(_) => {
+                Err(MenuError::Unsupported("entity container resolver"))
+            }
         }
     }
     fn can_place_item(&mut self, slot: ContainerSlot, stack: &ItemStack) -> Result<bool> {
@@ -385,7 +403,9 @@ impl MenuContainerAccess for LiveMenuContext<'_> {
             | ContainerHandle::MenuOperationStacks { .. } => Err(MenuError::Unsupported(
                 "operation objects are not inventory containers",
             )),
-            ContainerHandle::Entity(_) => Err(MenuError::Unsupported("entity container resolver")),
+            ContainerHandle::Entity(_) | ContainerHandle::LivingEquipment(_) => {
+                Err(MenuError::Unsupported("entity container resolver"))
+            }
         }
     }
     fn still_valid(&mut self, container: ContainerHandle) -> Result<bool> {
@@ -411,7 +431,9 @@ impl MenuContainerAccess for LiveMenuContext<'_> {
             | ContainerHandle::MenuOperationStacks { .. } => Err(MenuError::Unsupported(
                 "operation objects are not inventory containers",
             )),
-            ContainerHandle::Entity(_) => Err(MenuError::Unsupported("entity container resolver")),
+            ContainerHandle::Entity(_) | ContainerHandle::LivingEquipment(_) => {
+                Err(MenuError::Unsupported("entity container resolver"))
+            }
         }
     }
 }

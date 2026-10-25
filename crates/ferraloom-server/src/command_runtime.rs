@@ -176,7 +176,8 @@ impl MinecraftServer {
                 }))
             }
             Some(GameRuleEffect::SynchronizeClocks) => self.broadcast(self.clock_packet(None)),
-            // Waypoint connections and mob spawning have no live content in this foundation.
+            // LocatorBar's fallible live callback runs in run_level_command
+            // before feedback. Mob-spawning flags still await their producer.
             Some(GameRuleEffect::LocatorBar { .. } | GameRuleEffect::UpdateMobSpawningFlags)
             | None => {}
         }
@@ -282,8 +283,7 @@ impl MinecraftServer {
     ) -> Result<(), ferraloom_brigadier::CommandSyntaxException> {
         let stack = &command.source;
         let result = match command.command.as_str() {
-            "gamerule" => builtins::gamerule(&mut self.game_rules, &command)?,
-            "scoreboard" | "team" | "trigger" => self.scoreboard_command(&command)?,
+            "scoreboard" | "trigger" => self.scoreboard_command(&command)?,
             "bossbar" => self.bossbar_command(&command)?,
             "op" | "deop" => self.operator_command(source, &command)?,
             "kick" => self.kick_command(source, &command)?,
