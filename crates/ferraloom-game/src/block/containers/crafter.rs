@@ -56,6 +56,20 @@ impl CrafterBlockEntity {
 pub struct CrafterBehavior;
 pub static CRAFTER_ENTITY: CrafterBehavior = CrafterBehavior;
 impl BlockEntity for CrafterBehavior {
+    fn has_server_ticker(&self) -> bool {
+        true
+    }
+    fn tick(
+        &self,
+        _receiver: crate::block::entity::BlockEntityRef,
+        _level: &mut crate::level::Level,
+    ) -> Result<(), crate::level::LevelError> {
+        // Redstone's server_tick hook is not released on this base yet.
+        Err(crate::level::LevelError::UnsupportedBlockEntity(
+            ferraloom_data::Block::CRAFTER,
+        ))
+    }
+
     fn pre_remove_side_effects(
         &self,
         entity: crate::block::entity::BlockEntityRef,

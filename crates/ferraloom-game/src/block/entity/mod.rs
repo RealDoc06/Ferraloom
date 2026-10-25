@@ -6,6 +6,7 @@ use ferraloom_protocol::component::{ComponentTypeId, DataComponentMap, DataCompo
 use ferraloom_util::{BlockPos, ChunkPos};
 
 mod components;
+pub mod daylight_detector;
 pub mod potent_sulfur;
 use super::containers::{
     chest::{BarrelBlockEntity, ChestBlockEntity, ShulkerBoxBlockEntity},
@@ -183,6 +184,7 @@ static THE_END_PORTAL: TheEndPortal = TheEndPortal;
 /// Canonical concrete states. Extend this enum when porting a subclass, never Any.
 #[derive(Clone, Debug)]
 pub enum BlockEntityState {
+    DaylightDetector(Box<daylight_detector::DaylightDetectorBlockEntity>),
     PotentSulfur(Box<potent_sulfur::PotentSulfurBlockEntity>),
     Command(Box<super::containers::command::CommandBlockEntity>),
     Structure(Box<super::containers::structure::StructureBlockEntity>),
@@ -202,6 +204,7 @@ pub enum BlockEntityState {
 impl BlockEntityState {
     pub fn data(&self) -> &BlockEntityData {
         match self {
+            Self::DaylightDetector(entity) => &entity.parent,
             Self::PotentSulfur(entity) => &entity.parent,
             Self::Command(entity) => &entity.parent,
             Self::Structure(entity) => &entity.parent,
@@ -221,6 +224,7 @@ impl BlockEntityState {
     }
     pub fn data_mut(&mut self) -> &mut BlockEntityData {
         match self {
+            Self::DaylightDetector(entity) => &mut entity.parent,
             Self::PotentSulfur(entity) => &mut entity.parent,
             Self::Command(entity) => &mut entity.parent,
             Self::Structure(entity) => &mut entity.parent,
@@ -240,6 +244,7 @@ impl BlockEntityState {
     }
     pub fn behavior(&self) -> &'static dyn BlockEntity {
         match self {
+            Self::DaylightDetector(_) => &daylight_detector::DAYLIGHT_DETECTOR_ENTITY,
             Self::PotentSulfur(_) => &potent_sulfur::POTENT_SULFUR_ENTITY,
             Self::Command(_) => &super::containers::command::COMMAND_ENTITY,
             Self::Structure(_) => &super::containers::structure::STRUCTURE_ENTITY,
@@ -263,11 +268,13 @@ impl BlockEntityState {
             _ => self.data_mut().has_level = true,
         }
     }
-    /// Native ticker eligibility can depend on the current cached block state.
-    pub fn has_server_ticker(&self) -> bool {
+    /// Port of EntityBlock#getTicker selection from cached state and the owning
+    /// dimension's static fact. Types that do not use sky never require it.
+    pub fn has_server_ticker(&self, has_skylight: Option<bool>) -> Result<bool, LevelError> {
         match self {
-            Self::PotentSulfur(entity) => entity.has_server_ticker(),
-            _ => self.behavior().has_server_ticker(),
+            Self::DaylightDetector(_) => has_skylight.ok_or(LevelError::UnsupportedLightQuery),
+            Self::PotentSulfur(entity) => Ok(entity.has_server_ticker()),
+            _ => Ok(self.behavior().has_server_ticker()),
         }
     }
     pub fn randomizable(&self) -> Option<&RandomizableContainerBlockEntity> {
@@ -430,6 +437,9 @@ pub fn create(pos: BlockPos, state: BlockState) -> Result<BlockEntityState, Leve
         .ok_or(LevelError::UnsupportedBlockEntity(state.block()))?;
     let data = BlockEntityData::new(kind, pos, state)?;
     match kind {
+        BlockEntityType::DAYLIGHT_DETECTOR => Ok(BlockEntityState::DaylightDetector(Box::new(
+            daylight_detector::DaylightDetectorBlockEntity::new(data),
+        ))),
         BlockEntityType::POTENT_SULFUR => Ok(BlockEntityState::PotentSulfur(Box::new(
             potent_sulfur::PotentSulfurBlockEntity::new(data),
         ))),
@@ -514,7 +524,8 @@ pub fn supports(block: Block) -> bool {
     matches!(
         registry::for_block(block),
         Some(
-            BlockEntityType::POTENT_SULFUR
+            BlockEntityType::DAYLIGHT_DETECTOR
+                | BlockEntityType::POTENT_SULFUR
                 | BlockEntityType::COMMAND_BLOCK
                 | BlockEntityType::STRUCTURE_BLOCK
                 | BlockEntityType::SKULL
@@ -565,6 +576,10 @@ projection!(
     Structure
 );
 projection!(super::containers::skull::SkullBlockEntity, Skull);
+projection!(
+    daylight_detector::DaylightDetectorBlockEntity,
+    DaylightDetector
+);
 projection!(ChestBlockEntity, Chest);
 projection!(BarrelBlockEntity, Barrel);
 projection!(ShulkerBoxBlockEntity, ShulkerBox);
@@ -607,7 +622,14 @@ pub fn new_block_entity(
     if state.block() == Block::MOVING_PISTON {
         return Ok(None);
     }
-    create(pos, state).map(Some)
+    let mut entity = create(pos, state)?;
+    // CrafterBlock#newBlockEntity initializes this scalar after the typed ctor;
+    // BlockEntityType#create/loadStatic retain the constructor's zero default.
+    if let BlockEntityState::Crafter(crafter) = &mut entity {
+        crafter.triggered =
+            i32::from(state.get(ferraloom_data::properties::TRIGGERED) == Some(true));
+    }
+    Ok(Some(entity))
 }
 pub fn supports_creation(block: Block) -> bool {
     block == Block::MOVING_PISTON || supports(block)

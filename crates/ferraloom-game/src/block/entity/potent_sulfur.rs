@@ -224,7 +224,8 @@ mod tests {
             !level
                 .block_entity_state(replacement)
                 .unwrap()
-                .has_server_ticker()
+                .has_server_ticker(None)
+                .unwrap()
         );
         let wet = state
             .with(p::POTENT_SULFUR_STATE, p::PotentSulfurState::Wet)
@@ -235,7 +236,7 @@ mod tests {
             .set_block_state(wet)
             .unwrap();
         let current = level.block_entity_state(replacement).unwrap();
-        assert!(current.has_server_ticker());
+        assert!(current.has_server_ticker(None).unwrap());
         assert!(matches!(
             current.behavior().tick(replacement, &mut level),
             Err(LevelError::UnsupportedBlockEntity(Block::POTENT_SULFUR))
