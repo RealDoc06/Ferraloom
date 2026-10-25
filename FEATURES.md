@@ -6,16 +6,16 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 |---|---:|---:|---:|---:|---:|
 | [Advancements](features/advancements.md) | 1957 | 4 | 1942 | 11 | 0 |
 | [Block entities](features/block-entities.md) | 127 | 84 | 41 | 2 | 0 |
-| [Blocks](features/blocks.md) | 431 | 279 | 107 | 45 | 0 |
+| [Blocks](features/blocks.md) | 432 | 274 | 113 | 45 | 0 |
 | [Chat and text components](features/chat.md) | 23 | 21 | 2 | 0 | 0 |
 | [Chunks and tickets](features/chunks.md) | 54 | 20 | 33 | 1 | 0 |
 | [Combat and damage](features/combat-damage.md) | 204 | 204 | 0 | 0 | 0 |
 | [Commands and argument types](features/commands.md) | 2671 | 2385 | 35 | 251 | 0 |
 | [Crafting and recipes](features/crafting-recipes.md) | 2137 | 2 | 29 | 2106 | 0 |
 | [Datapacks and resource reload](features/datapacks-reload.md) | 57 | 57 | 0 | 0 | 0 |
-| [Enchantments](features/enchantments.md) | 136 | 136 | 0 | 0 | 0 |
+| [Enchantments](features/enchantments.md) | 137 | 108 | 29 | 0 | 0 |
 | [Entities and AI](features/entities.md) | 770 | 670 | 88 | 12 | 0 |
-| [Fluids](features/fluids.md) | 27 | 25 | 2 | 0 | 0 |
+| [Fluids](features/fluids.md) | 32 | 25 | 6 | 1 | 0 |
 | [Binary data, geometry and randomness](features/foundations.md) | 64 | 18 | 18 | 28 | 0 |
 | [Functions and macros](features/functions-macros.md) | 10 | 10 | 0 | 0 | 0 |
 | [Game events and vibrations](features/game-events.md) | 7 | 2 | 0 | 5 | 0 |
@@ -23,7 +23,7 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [GameTest](features/gametest.md) | 23 | 23 | 0 | 0 | 0 |
 | [Inventory and menus](features/inventory-menus.md) | 63 | 12 | 51 | 0 | 0 |
 | [Item modifiers](features/item-modifiers.md) | 4 | 1 | 3 | 0 | 0 |
-| [Items and data components](features/items.md) | 243 | 116 | 124 | 3 | 0 |
+| [Items and data components](features/items.md) | 254 | 105 | 146 | 3 | 0 |
 | [Lighting](features/lighting.md) | 15 | 2 | 2 | 11 | 0 |
 | [Loot](features/loot.md) | 1671 | 158 | 1513 | 0 | 0 |
 | [Management JSON-RPC](features/management.md) | 101 | 101 | 0 | 0 | 0 |
@@ -50,4 +50,4 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Weather, time and environment](features/weather-time.md) | 85 | 85 | 0 | 0 | 0 |
 | [World storage and data fixing](features/world-storage.md) | 307 | 306 | 1 | 0 | 0 |
 | [World generation](features/worldgen.md) | 3114 | 2640 | 174 | 300 | 0 |
-| **Total** | **19504** | **8866** | **4466** | **6172** | **0** |
+| **Total** | **19522** | **8822** | **4527** | **6173** | **0** |
