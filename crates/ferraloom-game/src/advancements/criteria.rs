@@ -369,6 +369,59 @@ pub fn kill_mob_near_sculk_catalyst(
         None,
     )
 }
+/// Port of CriteriaTriggers.ENTITY_HURT_PLAYER, preserving original and actual
+/// damage and the native blocked flag before synchronous advancement rewards.
+pub fn entity_hurt_player(
+    level: &mut Level,
+    player: EntityRef,
+    source: &crate::entity::damage::DamageSource,
+    original_damage: f32,
+    damage: f32,
+    blocked: bool,
+) -> Result<(), LevelError> {
+    let source = source.to_loot_source();
+    live::trigger(
+        level,
+        player,
+        TriggerType::EntityHurtPlayer,
+        TriggerEvent::Hurt {
+            entity: None,
+            source: &source,
+            original: original_damage,
+            actual: damage,
+            blocked,
+        },
+        None,
+    )
+}
+/// Port of CriteriaTriggers.PLAYER_HURT_ENTITY with the victim context rooted
+/// at the attacker's captured position, as EntityPredicate#createContext does.
+pub fn player_hurt_entity(
+    level: &mut Level,
+    attacker: EntityRef,
+    victim: EntityRef,
+    source: &crate::entity::damage::DamageSource,
+    original_damage: f32,
+    damage: f32,
+    blocked: bool,
+) -> Result<(), LevelError> {
+    let origin = level.entity::<EntityData>(attacker)?.position;
+    let entity = create_context(origin, victim);
+    let source = source.to_loot_source();
+    live::trigger(
+        level,
+        attacker,
+        TriggerType::PlayerHurtEntity,
+        TriggerEvent::Hurt {
+            entity: Some(&entity),
+            source: &source,
+            original: original_damage,
+            actual: damage,
+            blocked,
+        },
+        None,
+    )
+}
 /// Port of CriteriaTriggers.LOCATION at ServerPlayer#doTick's 20-tick tail.
 pub fn location(level: &mut Level, player: EntityRef) -> Result<(), LevelError> {
     live::trigger(

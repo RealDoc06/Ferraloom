@@ -47,3 +47,9 @@ existing immutable predicate DTO boundary.
 player positions. It checks start-location constraints separately from the end,
 vertical/horizontal/absolute distance, negative bounds, the native float rounding
 of coordinate differences, player predicates and XP rewards.
+
+`HurtTriggerVectors` calls ENTITY_HURT_PLAYER and PLAYER_HURT_ENTITY through the
+real player advancement listener path. It distinguishes original/actual damage,
+blocking, direct/causing entities, absent environmental actors, victim/player
+contexts and float damage widened into double bounds. The live replay awards
+the observed progress/rewards without applying health damage a second time.
