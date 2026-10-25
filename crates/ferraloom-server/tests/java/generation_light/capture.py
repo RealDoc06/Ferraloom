@@ -25,7 +25,7 @@ with tempfile.TemporaryDirectory(prefix='ferraloom-published-light-java-') as te
     agent = root / 'trace-agent.jar'
     with zipfile.ZipFile(agent, 'w') as archive:
         archive.writestr('META-INF/MANIFEST.MF',
-                        'Manifest-Version: 1.0\nPremain-Class: PublishedLightTrace\n\n')
+                        'Manifest-Version: 1.0\nPremain-Class: PublishedLightTrace\nCan-Retransform-Classes: true\n\n')
         for file in root.glob('*.class'):
             archive.write(file, file.name)
     for name, delay in [('fresh', 0), ('delayed', 25)]:
@@ -39,5 +39,7 @@ with tempfile.TemporaryDirectory(prefix='ferraloom-published-light-java-') as te
                            stdout=stream, stderr=subprocess.STDOUT, timeout=240)
         reads = [json.loads(line) for line in trace.read_text().splitlines()
                  if json.loads(line)['kind'] == 'raw_read']
+        if not reads:
+            raise RuntimeError(f'no native light reads observed: {log}')
         print(json.dumps({'variant': name, 'light_delay_ms': delay, 'reads': reads,
                           'trace': str(trace), 'log': str(log)}), flush=True)

@@ -82,6 +82,7 @@ public final class PublishedLightTrace {
     }
     public static void premain(String ignored,Instrumentation instrumentation) {
         new AgentBuilder.Default().disableClassFormatChanges()
+            .with(AgentBuilder.RedefinitionStrategy.RETRANSFORMATION)
             .with(AgentBuilder.Listener.StreamWriting.toSystemError().withErrorsOnly())
             .type(named("net.minecraft.world.level.block.MushroomBlock"))
             .transform((b,t,l,m,d)->b.visit(Advice.to(Mushroom.class).on(named("canSurvive"))))
@@ -177,8 +178,18 @@ public final class PublishedLightTrace {
         probe("feature-entry"); return true;
     }
     public static void probe(String role) {
-        PROBE.set(role); try { Blocks.BROWN_MUSHROOM.defaultBlockState().canSurvive(targetRegion,point()); }
-        finally { PROBE.remove(); }
+        PROBE.set(role);
+        try {
+            boolean survives=Blocks.BROWN_MUSHROOM.defaultBlockState().canSurvive(targetRegion,point());
+            var row=event("predicate_probe"); row.addProperty("role",role);
+            row.addProperty("below",targetRegion.getBlockState(point().below()).toString());
+            row.addProperty("survives",survives); EVENTS.add(row);
+            // Probe the exact native getter even when the mushroom's substrate
+            // tag short-circuits before the light query in this schedule.
+            var before=READ.get(); READ.set(new Read(targetRegion,role+"-direct-light"));
+            try { targetRegion.getRawBrightness(point(),0); }
+            finally { end(before); }
+        } finally { PROBE.remove(); }
     }
     static final class Server extends MinecraftServer {
         private final LocalSampleLogger logger=new LocalSampleLogger(4);
