@@ -4384,5 +4384,97 @@
       "test:root",
       "test:source"
     ]
+  },
+  {
+    "command": "data modify storage test:root result set string storage test:source text 1 2",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.set.string.storage.arg-source.arg-source-path.arg-start.arg-end",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],result:\"\\ud83d\",text:\"A😀BC\"}",
+    "absent": "{}",
+    "unpaired": true,
+    "utf16": [
+      55357
+    ],
+    "pretty_nbt": "0a09000565787472610a0000000308000000012200080005636f6c6f720005677265656e080004746578740003eda0bd000800000001220008000474657874000000",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root result set string storage test:source text 2 3",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.set.string.storage.arg-source.arg-source-path.arg-start.arg-end",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],result:\"\\ude00\",text:\"A😀BC\"}",
+    "absent": "{}",
+    "unpaired": true,
+    "utf16": [
+      56832
+    ],
+    "pretty_nbt": "0a09000565787472610a0000000308000000012200080005636f6c6f720005677265656e080004746578740003edb880000800000001220008000474657874000000",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root result set string storage test:source text -4 -1",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.set.string.storage.arg-source.arg-source-path.arg-start.arg-end",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],result:\"\\ude00XY\",text:\"A😀BC\"}",
+    "absent": "{}",
+    "unpaired": true,
+    "utf16": [
+      56832,
+      88,
+      89
+    ],
+    "pretty_nbt": "0a09000565787472610a0000000308000000012200080005636f6c6f720005677265656e080004746578740005edb8805859000800000001220008000474657874000000",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
   }
 ]

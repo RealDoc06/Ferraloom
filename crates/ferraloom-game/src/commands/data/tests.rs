@@ -56,6 +56,7 @@ struct Vector {
     absent: String,
     dirty: bool,
     keys: Vec<String>,
+    utf16: Option<Vec<u16>>,
 }
 #[test]
 fn native_storage_data_commands_preserve_results_feedback_partial_changes_and_dirty_flags() {
@@ -101,6 +102,17 @@ fn native_storage_data_commands_preserve_results_feedback_partial_changes_and_di
             }
             Err(error) => panic!("{}: {error:?}", vector.command),
         }
+        if let Some(units) = &vector.utf16 {
+            assert_eq!(
+                host.0
+                    .get(&root)
+                    .unwrap()
+                    .get_string("result")
+                    .unwrap()
+                    .as_utf16(),
+                units
+            );
+        }
         assert_eq!(
             host.0.get(&root).unwrap(),
             ferraloom_nbt::parse_compound(&vector.root).unwrap(),
@@ -132,5 +144,5 @@ fn native_storage_data_commands_preserve_results_feedback_partial_changes_and_di
             vector.command
         );
     }
-    assert_eq!(vectors.len(), 166);
+    assert_eq!(vectors.len(), 169);
 }

@@ -21,6 +21,17 @@ import static org.mockito.Mockito.*;
 public final class DataCommandVector {
     static final String INITIAL="{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}";
     static final String SOURCE="{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}";
+    static String safeSnbt(String text) {
+        var result=new StringBuilder();
+        for(int i=0;i<text.length();i++) {
+            char value=text.charAt(i);
+            if(Character.isHighSurrogate(value)&&i+1<text.length()&&Character.isLowSurrogate(text.charAt(i+1))) {
+                result.append(value).append(text.charAt(++i));
+            } else if(Character.isSurrogate(value)) result.append(String.format(Locale.ROOT,"\\u%04x",(int)value));
+            else result.append(value);
+        }
+        return result.toString();
+    }
     public static void main(String[] args) throws Exception {
         SharedConstants.tryDetectVersion();Bootstrap.bootStrap();
         com.mojang.brigadier.exceptions.CommandSyntaxException.BUILT_IN_EXCEPTIONS=new BrigadierExceptions();
@@ -56,6 +67,7 @@ public final class DataCommandVector {
             commands.add("data get storage test:root i "+java.math.BigDecimal.valueOf(scale).toPlainString());
         }
         commands.add("data get storage test:root i -0.0");
+        for(String range:List.of("1 2","2 3","-4 -1"))commands.add("data modify storage test:root result set string storage test:source text "+range);
         var rows=new JsonArray();
         for(String command:commands) {
             var containers=new HashMap<Identifier,SavedData>();
@@ -80,7 +92,20 @@ public final class DataCommandVector {
             row.addProperty("path","commands.path."+String.join(".",commandPath));
             try {row.addProperty("value",dispatcher.execute(command,source));}
             catch(com.mojang.brigadier.exceptions.CommandSyntaxException error) {row.add("error",ComponentSerialization.CODEC.encodeStart(JsonOps.INSTANCE,(Component)error.getRawMessage()).getOrThrow());}
-            row.add("feedback",feedback);row.addProperty("root",storage.get(id).toString());row.addProperty("absent",storage.get(Identifier.parse("test:absent")).toString());
+            row.add("feedback",feedback);row.addProperty("root",safeSnbt(storage.get(id).toString()));row.addProperty("absent",safeSnbt(storage.get(Identifier.parse("test:absent")).toString()));
+            if(storage.get(id).get("result") instanceof StringTag result && result.value().chars().anyMatch(value->Character.isSurrogate((char)value))) {
+                boolean unpaired=false;String value=result.value();
+                for(int i=0;i<value.length();i++)if(Character.isSurrogate(value.charAt(i))) {
+                    if(Character.isHighSurrogate(value.charAt(i))&&i+1<value.length()&&Character.isLowSurrogate(value.charAt(i+1)))i++;
+                    else unpaired=true;
+                }
+                if(unpaired) {
+                    row.addProperty("unpaired",true);var units=new JsonArray();value.chars().forEach(unit->units.add(unit));row.add("utf16",units);
+                    var componentTag=ComponentSerialization.CODEC.encodeStart(NbtOps.INSTANCE,NbtUtils.toPrettyComponent(result)).getOrThrow();
+                    var bytes=new java.io.ByteArrayOutputStream();NbtIo.writeAnyTag(componentTag,new java.io.DataOutputStream(bytes));
+                    row.addProperty("pretty_nbt",HexFormat.of().formatHex(bytes.toByteArray()));
+                }
+            }
             row.addProperty("dirty",containers.get(Identifier.parse("test:command_storage")).isDirty());
             var keys=new JsonArray();storage.keys().forEach(key->keys.add(key.toString()));row.add("keys",keys);rows.add(row);
         }
