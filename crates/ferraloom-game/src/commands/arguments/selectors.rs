@@ -926,11 +926,11 @@ mod capture_tests {
     impl EntityQuery for Query {
         fn candidates(&self, _: bool) -> Vec<EntityRef> {
             (0..self.names.len())
-                .map(|id| EntityRef(id as u64))
+                .map(|id| EntityRef::fixture(crate::level::RegionId::FIXTURE, id as u64))
                 .collect()
         }
         fn info(&self, entity: EntityRef) -> Option<SelectorEntity<'_>> {
-            let index = entity.0 as usize;
+            let index = entity.serial() as usize;
             Some(SelectorEntity {
                 name: self.names[index].as_str().into(),
                 uuid: Uuid::NIL,
@@ -957,7 +957,7 @@ mod capture_tests {
             let SelectorPredicate::Name { value, inverted } = predicate else {
                 panic!("unexpected predicate: {predicate:?}")
             };
-            let name = self.names[entity.0 as usize].clone();
+            let name = self.names[entity.serial() as usize].clone();
             self.examined.push(name.clone());
             Ok((name == *value) != *inverted)
         }
@@ -980,12 +980,12 @@ mod capture_tests {
             };
             let mut source = CommandSourceStack::server(4, Vec3::ZERO);
             if vector.current_entity {
-                source = source.with_entity(EntityRef(0)).with_level(
-                    crate::commands::source::CommandLevel {
+                source = source
+                    .with_entity(EntityRef::fixture(crate::level::RegionId::FIXTURE, 0))
+                    .with_level(crate::commands::source::CommandLevel {
                         dimension: "minecraft:the_nether".into(),
                         coordinate_scale: 8.,
-                    },
-                );
+                    });
             }
             let selected = selector.find(&source, &mut query, true).unwrap();
             assert_eq!(query.examined, vector.examined, "{}", vector.selector);
@@ -994,7 +994,7 @@ mod capture_tests {
                 assert_eq!(
                     selected
                         .iter()
-                        .map(|id| query.names[id.0 as usize].clone())
+                        .map(|id| query.names[id.serial() as usize].clone())
                         .collect::<Vec<_>>(),
                     names,
                     "{}",

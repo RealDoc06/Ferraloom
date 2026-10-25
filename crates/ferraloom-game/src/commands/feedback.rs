@@ -57,8 +57,9 @@ mod tests {
     #[test]
     fn changing_feedback_rule_takes_effect_before_feedback_is_sent() {
         let mut rules = GameRules::default();
-        let source = CommandSourceStack::server(4, Vec3::ZERO)
-            .with_source(CommandSource::Player(EntityRef(1)));
+        let source = CommandSourceStack::server(4, Vec3::ZERO).with_source(CommandSource::Player(
+            EntityRef::fixture(crate::level::RegionId::FIXTURE, 1),
+        ));
         assert_eq!(
             success_plan(&source, &rules, true),
             FeedbackPlan {
@@ -112,7 +113,10 @@ mod tests {
             let mut source =
                 CommandSourceStack::server(4, Vec3::ZERO).with_source(match vector.kind.as_str() {
                     "server" => CommandSource::Server,
-                    "player" => CommandSource::Player(EntityRef(1)),
+                    "player" => CommandSource::Player(EntityRef::fixture(
+                        crate::level::RegionId::FIXTURE,
+                        1,
+                    )),
                     _ => CommandSource::Other(1),
                 });
             let name = Component::literal(if vector.kind == "server" {

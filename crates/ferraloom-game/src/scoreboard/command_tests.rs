@@ -69,6 +69,52 @@ fn comparable_feedback(command: &str, mut feedback: Vec<Value>) -> Vec<Value> {
     feedback
 }
 #[test]
+fn vanilla_zero_score_feedback_and_displayed_packets() {
+    let cases: Vec<Case> =
+        serde_json::from_str(include_str!("../../tests/java/scoreboard/zero.json")).unwrap();
+    assert_eq!(cases.len(), 8);
+    let commands = commands::Commands::default();
+    let mut board = ServerScoreboard::default();
+    board
+        .add_objective(
+            "points".into(),
+            Objective::new(
+                ObjectiveCriteria::by_name("dummy").unwrap(),
+                Component::literal("Points"),
+            ),
+        )
+        .unwrap();
+    board.set_score("#one", "points", 4, None, false).unwrap();
+    board.set_score("#two", "points", 0, None, false).unwrap();
+    board
+        .set_display_objective(DisplaySlot::Sidebar, Some("points".into()))
+        .unwrap();
+    board.drain_packets();
+    for case in cases {
+        let command = commands
+            .prepare(
+                &case.command,
+                CommandSourceStack::server(4, ferraloom_util::Vec3::ZERO),
+            )
+            .unwrap();
+        let targets = if command.string("targets") == Some("*") {
+            board
+                .scoreboard()
+                .tracked_players()
+                .map(Holder::for_name)
+                .collect()
+        } else {
+            holder(&command, "targets")
+        };
+        let result = commands::scoreboard::execute(&mut board, &command, &targets, &[]).unwrap();
+        let feedback: Vec<_> = result.feedback.iter().map(|feedback|json!({"message":serde_json::from_str::<Value>(&feedback.message.to_json().unwrap()).unwrap(),"broadcast":feedback.broadcast})).collect();
+        let packets: Vec<_> = board.drain_packets().iter().map(packet_json).collect();
+        assert_eq!(Some(result.value), case.value, "{} result", case.command);
+        assert_eq!(feedback, case.feedback, "{} feedback", case.command);
+        assert_eq!(packets, case.packets, "{} packets", case.command);
+    }
+}
+#[test]
 fn vanilla_registered_commands_feedback_and_packet_bytes() {
     let cases: Vec<Case> =
         serde_json::from_str(include_str!("../../tests/java/scoreboard/commands.json")).unwrap();
@@ -424,7 +470,7 @@ fn vanilla_single_entity_team_feedback_reads_completed_membership() {
     let commands = commands::Commands::default();
     for kind in ["player", "cow"] {
         let mut level = Level::new(Region::new(&BEHAVIORS), LevelContext::fixture(0, 63));
-        let entity = EntityRef(1);
+        let entity = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
         let uuid = Uuid::new(0, 1);
         let mut state = if kind == "player" {
             EntityState::Player(Box::new(ServerPlayer::new(

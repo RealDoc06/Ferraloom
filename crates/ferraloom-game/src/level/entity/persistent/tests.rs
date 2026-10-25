@@ -67,7 +67,9 @@ fn shared_status_and_io_queues_preserve_native_events_and_borrowed_state() {
         .add_entity(player, EntityState::Player(Box::new(state)))
         .unwrap();
     let shared = &level;
-    let captured = shared.entity::<EntityData>(EntityRef(1)).unwrap();
+    let captured = shared
+        .entity::<EntityData>(EntityRef::fixture(shared.region_id(), 1))
+        .unwrap();
     shared.take_entity_management_events();
     let mut count = 0;
     for row in include_str!("../../../../tests/java/entity/vectors.tsv")
@@ -86,10 +88,12 @@ fn shared_status_and_io_queues_preserve_native_events_and_borrowed_state() {
             .take_entity_management_events()
             .into_iter()
             .map(|event| match event {
-                EntityManagementEvent::TrackingStart(id) => format!("TrackingStart:{}", id.0),
-                EntityManagementEvent::TrackingEnd(id) => format!("TrackingEnd:{}", id.0),
-                EntityManagementEvent::TickingStart(id) => format!("TickingStart:{}", id.0),
-                EntityManagementEvent::TickingEnd(id) => format!("TickingEnd:{}", id.0),
+                EntityManagementEvent::TrackingStart(id) => {
+                    format!("TrackingStart:{}", id.serial())
+                }
+                EntityManagementEvent::TrackingEnd(id) => format!("TrackingEnd:{}", id.serial()),
+                EntityManagementEvent::TickingStart(id) => format!("TickingStart:{}", id.serial()),
+                EntityManagementEvent::TickingEnd(id) => format!("TickingEnd:{}", id.serial()),
                 _ => panic!("unexpected status event {event:?}"),
             })
             .collect();
@@ -98,7 +102,7 @@ fn shared_status_and_io_queues_preserve_native_events_and_borrowed_state() {
             shared
                 .all_entities()
                 .iter()
-                .map(|id| id.0.to_string())
+                .map(|id| id.serial().to_string())
                 .collect::<Vec<_>>()
                 .join(","),
             values[3]
@@ -415,7 +419,10 @@ fn shared_entity_io_preflight_keeps_owned_nbt_and_never_replays_it() {
         ChunkLoadStatus::Pending
     );
     assert_eq!(shared.next_entity_id(), 1);
-    assert_eq!(shared.next_entity_ref(), EntityRef(1));
+    assert_eq!(
+        shared.next_entity_ref(),
+        EntityRef::fixture(shared.region_id(), 1)
+    );
     assert!(shared.all_entities().is_empty());
 }
 
@@ -449,24 +456,35 @@ fn shared_legacy_load_skips_unknown_trees_and_keeps_registered_passenger_order()
         .complete_entity_chunk_load(id, Ok(Some(chunk(pos, vec![unknown, root]))))
         .unwrap();
     shared.process_pending_entity_loads_shared().unwrap();
-    assert_eq!(shared.all_entities(), [EntityRef(1), EntityRef(2)]);
-    let parent = shared.entity::<EntityData>(EntityRef(1)).unwrap();
-    assert_eq!(parent.passengers.as_slice(), &[EntityRef(2)]);
+    assert_eq!(
+        shared.all_entities(),
+        [
+            EntityRef::fixture(shared.region_id(), 1),
+            EntityRef::fixture(shared.region_id(), 2)
+        ]
+    );
+    let parent = shared
+        .entity::<EntityData>(EntityRef::fixture(shared.region_id(), 1))
+        .unwrap();
+    assert_eq!(
+        parent.passengers.as_slice(),
+        &[EntityRef::fixture(shared.region_id(), 2)]
+    );
     assert_eq!(
         shared
-            .entity::<EntityData>(EntityRef(2))
+            .entity::<EntityData>(EntityRef::fixture(shared.region_id(), 2))
             .unwrap()
             .vehicle
             .get(),
-        Some(EntityRef(1))
+        Some(EntityRef::fixture(shared.region_id(), 1))
     );
     assert_eq!(
         shared.take_entity_management_events(),
         [
-            EntityManagementEvent::TrackingStart(EntityRef(1)),
-            EntityManagementEvent::TickingStart(EntityRef(1)),
-            EntityManagementEvent::TrackingStart(EntityRef(2)),
-            EntityManagementEvent::TickingStart(EntityRef(2))
+            EntityManagementEvent::TrackingStart(EntityRef::fixture(shared.region_id(), 1)),
+            EntityManagementEvent::TickingStart(EntityRef::fixture(shared.region_id(), 1)),
+            EntityManagementEvent::TrackingStart(EntityRef::fixture(shared.region_id(), 2)),
+            EntityManagementEvent::TickingStart(EntityRef::fixture(shared.region_id(), 2))
         ]
     );
     assert!(shared.are_entities_loaded(pos));

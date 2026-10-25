@@ -1,4 +1,6 @@
 //! Single-region MinecraftServer phase driver. Game state has one mutable owner.
+#[path = "block_actions.rs"]
+mod block_actions;
 #[path = "command_level.rs"]
 mod command_level;
 #[path = "command_runtime.rs"]
@@ -1713,6 +1715,17 @@ impl MinecraftServer {
             }
             sb::Packet::SetCarriedItem(packet) => {
                 self.handle_set_carried_item(connection, entity, packet)?
+            }
+            sb::Packet::PlayerAction(packet)
+                if matches!(
+                    packet.action,
+                    PlayerAction::StartDestroyBlock
+                        | PlayerAction::ChangeDestroyDirection
+                        | PlayerAction::AbortDestroyBlock
+                        | PlayerAction::StopDestroyBlock
+                ) =>
+            {
+                self.handle_player_block_action(connection, entity, packet)?;
             }
             sb::Packet::PlayerAction(packet)
                 if matches!(

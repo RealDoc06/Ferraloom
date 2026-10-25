@@ -21,7 +21,7 @@ struct Vector {
 fn player_level(instabuild: bool, creative: bool) -> (Level, EntityRef) {
     static BEHAVIORS: Behaviors = Behaviors::EMPTY;
     let mut level = Level::new(Region::new(&BEHAVIORS), LevelContext::fixture(0, 63));
-    let entity = EntityRef(1);
+    let entity = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
     let mut player = ServerPlayer::new(
         Uuid::new(1, 2),
         "metadata".into(),

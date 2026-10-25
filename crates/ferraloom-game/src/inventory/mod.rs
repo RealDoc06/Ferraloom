@@ -136,6 +136,8 @@ impl From<crate::level::LevelError> for MenuError {
 }
 
 #[cfg(test)]
+mod producer_tests;
+#[cfg(test)]
 mod tests;
 
 impl From<crate::crafting::Error> for MenuError {

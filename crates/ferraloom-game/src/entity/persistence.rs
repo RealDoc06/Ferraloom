@@ -232,6 +232,42 @@ fn vector(tag: &CompoundTag, key: &str) -> Vec3 {
         _ => Vec3::ZERO,
     }
 }
+/// Vec3.CODEC's optional three-number list, including NBT primitive arrays.
+pub(super) fn optional_vector(tag: &Tag) -> Option<Vec3> {
+    let values = match tag {
+        Tag::List(values) if values.0.len() == 3 => [
+            values.0[0].as_double()?,
+            values.0[1].as_double()?,
+            values.0[2].as_double()?,
+        ],
+        Tag::ByteArray(values) if values.len() == 3 => [
+            f64::from(values[0]),
+            f64::from(values[1]),
+            f64::from(values[2]),
+        ],
+        Tag::IntArray(values) if values.len() == 3 => [
+            f64::from(values[0]),
+            f64::from(values[1]),
+            f64::from(values[2]),
+        ],
+        Tag::LongArray(values) if values.len() == 3 => {
+            [values[0] as f64, values[1] as f64, values[2] as f64]
+        }
+        _ => return None,
+    };
+    Some(Vec3::new(values[0], values[1], values[2]))
+}
+
+/// Vec3.CODEC through NbtOps#createDouble, whose DoubleTag.valueOf folds -0.
+pub(super) fn codec_vector_tag(value: Vec3) -> Tag {
+    Tag::List(ListTag(
+        [value.x, value.y, value.z]
+            .into_iter()
+            .map(|value| Tag::Double(if value == 0.0 { 0.0 } else { value }))
+            .collect(),
+    ))
+}
+
 pub(super) fn vector_tag(value: Vec3) -> Tag {
     Tag::List(ListTag(vec![
         Tag::Double(value.x),

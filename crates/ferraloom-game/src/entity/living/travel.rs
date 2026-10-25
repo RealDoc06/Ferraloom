@@ -152,7 +152,7 @@ pub fn handle_on_climbable<E: Entity + ?Sized>(
     if !super::climbable::on_climbable(behavior, entity, level)? {
         return Ok(delta);
     }
-    level.entity_mut::<EntityData>(entity)?.fall_distance = 0.0;
+    behavior.reset_fall_distance(entity, level)?;
     let x = mth::clamp(delta.x, -0.15000000596046448, 0.15000000596046448);
     let z = mth::clamp(delta.z, -0.15000000596046448, 0.15000000596046448);
     let mut y = java::max(delta.y, -0.15000000596046448);

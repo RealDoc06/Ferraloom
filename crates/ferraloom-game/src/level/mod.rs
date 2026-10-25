@@ -13,6 +13,7 @@ use crate::{
 };
 
 pub mod acquisition;
+mod block_actions;
 mod block_entity;
 pub mod blockscan;
 pub mod border;
@@ -59,6 +60,7 @@ pub mod weather;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum LevelError {
+    BlockBreak(crate::entity::player::game_mode::BlockBreakFailure),
     /// Native ArrayList iterator ConcurrentModificationException during listener visitation.
     ConcurrentGameEventListenerModification,
     UnsupportedItemUseOn(ferraloom_data::Item),
@@ -130,6 +132,7 @@ pub enum LevelError {
 impl std::fmt::Display for LevelError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::BlockBreak(error) => std::fmt::Display::fmt(error.error(), formatter),
             Self::WorldgenMutationFailed { pos, source } => {
                 write!(formatter, "worldgen mutation at {pos:?}: {source}")
             }
@@ -140,6 +143,7 @@ impl std::fmt::Display for LevelError {
 impl std::error::Error for LevelError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
+            Self::BlockBreak(error) => Some(error.error()),
             Self::WorldgenMutationFailed { source, .. } => Some(source),
             _ => None,
         }
@@ -223,6 +227,10 @@ impl Default for LevelRules {
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct RegionId(u64);
 impl RegionId {
+    /// Reserved namespace for model fixtures. The monotonic allocator never
+    /// returns u64::MAX, because its checked increment fails before that point.
+    #[cfg(test)]
+    pub(crate) const FIXTURE: Self = Self(u64::MAX);
     fn new() -> Self {
         use std::sync::atomic::{AtomicU64, Ordering};
         static NEXT: AtomicU64 = AtomicU64::new(1);
@@ -410,6 +418,10 @@ impl Level {
     }
     pub fn sea_level(&self) -> i32 {
         self.context.sea_level
+    }
+    /// Stable identity of this Region's canonical stores and birth allocator.
+    pub fn region_id(&self) -> RegionId {
+        self.region().id
     }
     pub fn into_region(self) -> Region {
         self.region.expect("level is parked")
