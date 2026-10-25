@@ -91,6 +91,11 @@ pub struct ServerPlayer {
     pub cooldowns: cooldowns::ServerItemCooldowns,
     interaction_range_modifiers: [std::sync::Arc<super::ai::attributes::AttributeModifier>; 2],
     pub view_distance: i32,
+    /// Port of ServerPlayer#chunkTrackingView: the canonical desired chunk set.
+    pub chunk_tracking_view: std::collections::HashSet<ChunkPos>,
+    /// Port of ServerGamePacketListenerImpl#chunkSender: canonical pending/sent
+    /// chunks, quotas and acknowledgments, owned with the gameplay player.
+    pub chunk_sender: crate::level::chunk_map::PlayerChunkSender,
     pub loaded: bool,
     pub connection_ticks: u64,
     pub teleport: super::teleport::TeleportState,
@@ -268,6 +273,8 @@ impl ServerPlayer {
             cooldowns: Default::default(),
             interaction_range_modifiers: interaction::range_modifiers(),
             view_distance: 10,
+            chunk_tracking_view: Default::default(),
+            chunk_sender: Default::default(),
             loaded: false,
             connection_ticks: 0,
             teleport: Default::default(),

@@ -44,7 +44,6 @@ use ferraloom_game::{
     level::{
         LevelError, Region,
         chunk_holder::ChunkStatus,
-        chunk_map::PlayerChunkSender,
         distance_manager::tracking_view,
         server_level::ServerLevel,
         tick_rate::{ServerTickRateManager, TickRateEvent},
@@ -137,8 +136,6 @@ struct Connection {
     close: bool,
     information: common::serverbound::ClientInformation,
     player: Option<ServerPlayer>,
-    chunks: PlayerChunkSender,
-    view: HashSet<ChunkPos>,
     center: Option<ChunkPos>,
     last_keepalive: Instant,
     keepalive: Option<i64>,
@@ -729,8 +726,6 @@ impl MinecraftServer {
                         close: false,
                         information: client_information(),
                         player: None,
-                        chunks: PlayerChunkSender::default(),
-                        view: HashSet::new(),
                         center: None,
                         last_keepalive: Instant::now(),
                         keepalive: None,
@@ -1292,7 +1287,19 @@ impl MinecraftServer {
                 })
             });
             for c in self.connections.values_mut() {
-                if matches!(c.phase, Phase::Play(_)) && !c.close && c.chunks.sent.contains(&pos) {
+                let Phase::Play(entity) = c.phase else {
+                    continue;
+                };
+                if !c.close
+                    && self
+                        .level
+                        .level
+                        .entity::<ServerPlayer>(entity)
+                        .map_err(game_error)?
+                        .chunk_sender
+                        .sent
+                        .contains(&pos)
+                {
                     if let Some(light) = &light {
                         c.push(light.clone());
                     }
@@ -1712,10 +1719,11 @@ impl MinecraftServer {
                     .on_ground = p.flags.on_ground
             }
             sb::Packet::ChunkBatchReceived(p) => self
-                .connections
-                .get_mut(&connection)
-                .unwrap()
-                .chunks
+                .level
+                .level
+                .entity_mut::<ServerPlayer>(entity)
+                .map_err(game_error)?
+                .chunk_sender
                 .acknowledge(p.desired_chunks_per_tick),
             sb::Packet::KeepAlive(p) => self.keepalive_reply(connection, p.id)?,
             sb::Packet::PlayerLoaded(_) => {
@@ -2748,19 +2756,28 @@ impl MinecraftServer {
                 }));
                 c.center = Some(center);
             }
-            let mut leaving = c.view.difference(&desired).copied().collect::<Vec<_>>();
+            let player = self
+                .level
+                .level
+                .entity_mut::<ServerPlayer>(entity)
+                .map_err(game_error)?;
+            let mut leaving = player
+                .chunk_tracking_view
+                .difference(&desired)
+                .copied()
+                .collect::<Vec<_>>();
             leaving.sort_by_key(|p| p.pack());
             for pos in leaving {
-                if c.chunks.drop_chunk(pos) {
+                if player.chunk_sender.drop_chunk(pos) {
                     c.push(cb::Packet::ForgetLevelChunk(cb::ForgetLevelChunk {
                         pos: play::ChunkPos { x: pos.x, z: pos.z },
                     }));
                 }
             }
-            for &pos in desired.difference(&c.view) {
-                c.chunks.pending.insert(pos);
+            for &pos in desired.difference(&player.chunk_tracking_view) {
+                player.chunk_sender.pending.insert(pos);
             }
-            c.view = desired;
+            player.chunk_tracking_view = desired;
         }
         Ok(())
     }
@@ -2912,13 +2929,19 @@ impl MinecraftServer {
             if c.close {
                 continue;
             }
-            if let Phase::Play(_) = c.phase {
-                let positions = c.chunks.next_batch(c.center.unwrap(), |pos| {
-                    // prepareTickingChunk already awaited the FULL neighborhood
-                    // and post-processing; sending does not await its neighbors'
-                    // own ticking futures. Retain the center light dependency.
-                    ready.contains(&pos)
-                });
+            if let Phase::Play(entity) = c.phase {
+                let positions = self
+                    .level
+                    .level
+                    .entity_mut::<ServerPlayer>(entity)
+                    .map_err(game_error)?
+                    .chunk_sender
+                    .next_batch(c.center.unwrap(), |pos| {
+                        // prepareTickingChunk already awaited the FULL neighborhood
+                        // and post-processing; sending does not await its neighbors'
+                        // own ticking futures. Retain the center light dependency.
+                        ready.contains(&pos)
+                    });
                 if !positions.is_empty() {
                     batches.push((connection, positions));
                 }
