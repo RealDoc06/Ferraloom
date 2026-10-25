@@ -136,7 +136,7 @@ impl Level {
         prepared.chunk.loaded.set(false);
         region
             .block_entity_state
-            .prepare_published_chunk(&mut prepared.chunk);
+            .prepare_published_chunk(&mut prepared.chunk, region.game_time);
         let reference = ChunkReference {
             pos,
             generation,

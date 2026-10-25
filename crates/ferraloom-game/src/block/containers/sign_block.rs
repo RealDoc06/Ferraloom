@@ -1,11 +1,14 @@
 //! SignBlock's editing interaction; sign applicator effects remain explicit.
 use super::sign::SignBlockEntity;
+use crate::block::entity::BlockEntityRef;
+use crate::entity::EntityRef;
 use crate::{
     block::{BlockBehavior, BlockMethod, InteractionResult, UseContext},
     entity::player::ServerPlayer,
     level::{Level, LevelError, effects::LevelEffect},
 };
 use ferraloom_data::{BlockClass, BlockState, registries::sound_event::Id as SoundEvent};
+use ferraloom_protocol::component::SignText;
 use ferraloom_protocol::{
     chat::{ClickEvent, Component, Contents, TextColor},
     play::{BlockStateId, SignTextSlot, SoundSource, clientbound as cb},
@@ -19,6 +22,48 @@ fn command(event: &Option<ClickEvent>) -> bool {
         event,
         Some(ClickEvent::RunCommand(_) | ClickEvent::ShowDialog(_) | ClickEvent::Custom { .. })
     )
+}
+/// Port of SignText#hasEditableText. Native empty equality and literal contents
+/// remain distinct from display text or command-action eligibility.
+pub(super) fn has_editable_text(text: &SignText, filtered: bool) -> bool {
+    let lines = if filtered {
+        text.filtered_messages.as_ref().unwrap_or(&text.messages)
+    } else {
+        &text.messages
+    };
+    lines
+        .iter()
+        .all(|line| matches!(line.contents, Contents::Text(_)) || *line == Component::default())
+}
+/// Port of SignBlock#openTextEdit followed by ServerPlayer#openTextEdit: editor
+/// identity, the live BlockUpdate, then OpenSignEditor in the same output stream.
+pub(super) fn open_text_edit(
+    handle: BlockEntityRef,
+    player: EntityRef,
+    slot: SignTextSlot,
+    level: &mut Level,
+) -> Result<(), LevelError> {
+    let editor = level.entity::<ServerPlayer>(player)?.uuid;
+    level
+        .block_entity_mut::<SignBlockEntity>(handle)?
+        .allowed_player_editor = Some(editor);
+    let state = level.get_block_state(handle.pos)?;
+    for packet in [
+        cb::Packet::BlockUpdate(cb::BlockUpdate {
+            pos: handle.pos,
+            block_state: BlockStateId(i32::from(state.id())),
+        }),
+        cb::Packet::OpenSignEditor(cb::OpenSignEditor {
+            pos: handle.pos,
+            slot,
+        }),
+    ] {
+        level.emit(LevelEffect::PlayerPacket {
+            recipients: vec![player],
+            packet: Box::new(packet),
+        });
+    }
+    Ok(())
 }
 impl BlockBehavior for SignBlock {
     fn use_item_on(
@@ -114,10 +159,7 @@ impl BlockBehavior for SignBlock {
                 .allowed_player_editor
                 .is_none_or(|editor| editor == player.uuid)
                 && player.may_build()
-                && lines.iter().all(|line| {
-                    matches!(line.contents, Contents::Text(_)) || *line == Component::default()
-                });
-            let editor = player.uuid;
+                && has_editable_text(text, player.is_text_filtering_enabled());
             if has_commands {
                 let mut content =
                     Component::translatable("sign.click_actions_disabled", Vec::new());
@@ -153,29 +195,16 @@ impl BlockBehavior for SignBlock {
             } else if has_commands {
                 Ok(InteractionResult::SUCCESS_SERVER)
             } else if can_edit {
-                level
-                    .block_entity_mut::<SignBlockEntity>(handle)?
-                    .allowed_player_editor = Some(editor);
-                let current_state = level.get_block_state(pos)?;
-                for packet in [
-                    cb::Packet::BlockUpdate(cb::BlockUpdate {
-                        pos,
-                        block_state: BlockStateId(i32::from(current_state.id())),
-                    }),
-                    cb::Packet::OpenSignEditor(cb::OpenSignEditor {
-                        pos,
-                        slot: if front {
-                            SignTextSlot::Front
-                        } else {
-                            SignTextSlot::Back
-                        },
-                    }),
-                ] {
-                    level.emit(LevelEffect::PlayerPacket {
-                        recipients: vec![context.player],
-                        packet: Box::new(packet),
-                    });
-                }
+                open_text_edit(
+                    handle,
+                    context.player,
+                    if front {
+                        SignTextSlot::Front
+                    } else {
+                        SignTextSlot::Back
+                    },
+                    level,
+                )?;
                 Ok(InteractionResult::SUCCESS_SERVER)
             } else {
                 Ok(InteractionResult::Pass)

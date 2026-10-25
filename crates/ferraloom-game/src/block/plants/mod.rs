@@ -27,6 +27,7 @@ mod moss;
 pub mod multiface;
 pub mod multiface_spreader;
 mod nylium;
+mod pathfinding;
 mod pitcher;
 mod placement;
 #[cfg(test)]
@@ -56,6 +57,9 @@ pub fn ported_behavior(block: Block, method: BlockMethod) -> Option<&'static dyn
         && matches!(method, M::CanSurvive | M::GetStateForPlacement)
     {
         return Some(&wall_plants::WALL_PLANTS);
+    }
+    if method == M::IsPathfindable {
+        return pathfinding::behavior(block);
     }
     if block.class() == C::HugeMushroomBlock
         && matches!(
