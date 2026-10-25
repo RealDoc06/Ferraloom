@@ -41,6 +41,9 @@ fn record(stage: &str, marker: i32, entity: EntityRef, level: &Level) {
 }
 struct ReentrantItem;
 impl Entity for ReentrantItem {
+    fn trace_entity_refs(&self, state: &EntityState, references: &mut Vec<EntityRef>) {
+        ItemEntityBehavior.trace_entity_refs(state, references);
+    }
     fn read_additional_save_data(
         &self,
         entity: EntityRef,
