@@ -133,6 +133,23 @@ async fn sweep(session: &mut Session, cases: &[Case]) -> Result<ObservationLog> 
             carried_item: HashedStack::default(),
         }))
         .await?;
+        // loot_bastion completes on opening, before QuickMove. Its advancement
+        // flush cannot fence the click's menu synchronization; state_id -1
+        // requests the authoritative full contents after the actual transfer.
+        let context = bot.registry_context()?;
+        bot.wait_for(
+            "authoritative loot transfer",
+            Ticks::DEFAULT,
+            |_, packet| {
+                capture.observe(packet, context.as_ref());
+                matches!(packet, cb::Packet::ContainerSetContent(packet)
+                if packet.container_id.0 == menu
+                    && packet.items.len() == 63
+                    && packet.items[slot].is_empty()
+                    && packet.items[27..].iter().any(|stack| stack.item() == before[slot].item()))
+            },
+        )
+        .await?;
         flush(bot, &mut capture, true).await?;
         let after = contents(bot, menu)?;
         ensure!(
