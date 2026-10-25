@@ -2,8 +2,9 @@ use ferraloom_data::Block;
 use ferraloom_parity::{
     BotId, LaunchOptions, ObservationLog, Result, RunMode, Session, Ticks, WorldPreset, ensure,
     protocol::{
-        VarInt,
         chat::Component,
+        codec::VarInt,
+        common::Utf8,
         play::{self, clientbound as cb, serverbound as sb},
     },
 };
@@ -340,7 +341,7 @@ impl Driver<'_> {
             // the response also fences commands whose feedback is suppressed.
             bot.send(sb::Packet::CommandSuggestion(sb::CommandSuggestion {
                 id: VarInt(id),
-                command: "/ferraloom_paths_barrier_".into(),
+                command: Utf8("/ferraloom_paths_barrier_".into()),
             }))
             .await?;
         }
