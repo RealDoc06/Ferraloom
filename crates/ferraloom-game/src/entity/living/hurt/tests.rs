@@ -176,7 +176,6 @@ impl Entity for Probe {
 fn fixture(is_player: bool) -> (Level, EntityRef, EntityRef) {
     let mut level = crate::entity::tests::level(false);
     level.set_unported_behavior(UnportedBehavior::Strict);
-    level.install_shared(Box::default());
     let entity = level.next_entity_ref();
     let state = if is_player {
         let mut player = ServerPlayer::new(

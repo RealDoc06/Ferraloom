@@ -32,7 +32,6 @@ fn fixture(kind: u8, permissions: bool) -> (Level, EntityRef) {
     let mut level = crate::entity::tests::level(false);
     level.set_unported_behavior(UnportedBehavior::Strict);
     if permissions {
-        level.install_shared(Box::default());
         level.set_spawn_protection(SpawnProtectionSnapshot::new(
             "minecraft:overworld".parse().unwrap(),
             "minecraft:overworld".parse().unwrap(),

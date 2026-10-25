@@ -37,7 +37,6 @@ fn item(stack: &ItemStack) -> String {
 fn fixture(kind: MenuKind, bound: bool, mode: &str) -> (Level, EntityRef, MenuRef) {
     let mut level = crate::entity::tests::level(false);
     level.set_unported_behavior(crate::block::UnportedBehavior::Strict);
-    level.install_shared(Box::default());
     let player = level.next_entity_ref();
     let mut owner = ServerPlayer::new(
         Uuid::new(1, 2),

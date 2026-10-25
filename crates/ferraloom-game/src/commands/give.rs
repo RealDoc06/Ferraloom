@@ -186,7 +186,6 @@ mod tests {
             let mut level = crate::entity::tests::level(false);
             level.set_unported_behavior(crate::block::UnportedBehavior::Strict);
             crate::level::drop_fixtures::install(&mut level);
-            level.install_shared(Box::default());
             let mut players = Vec::new();
             for index in 0..row["targets"].as_i64().unwrap() {
                 let entity = level.next_entity_ref();

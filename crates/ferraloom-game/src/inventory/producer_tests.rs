@@ -62,7 +62,6 @@ fn fixture(name: &str) -> (Level, EntityRef, MenuRef, LiveRecipeMenuHooks) {
     let furnace = name.starts_with("furnace");
     let mut level = crate::entity::tests::level(false);
     level.set_unported_behavior(UnportedBehavior::Strict);
-    level.install_shared(Box::default());
     crate::level::drop_fixtures::install(&mut level);
     let previous = level.container_resources().unwrap();
     let definitions = if name == "inventory" {

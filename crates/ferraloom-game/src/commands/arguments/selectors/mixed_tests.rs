@@ -185,11 +185,7 @@ fn mixed_native_selectors_use_player_lookup_and_section_iteration() {
         }
         level.add_entity(handle, state).unwrap();
     }
-    let shared = crate::ServerShared {
-        scoreboard: crate::scoreboard::ServerScoreboard::new(scoreboard),
-        ..Default::default()
-    };
-    level.install_shared(Box::new(shared));
+    level.shared_mut().unwrap().scoreboard = crate::scoreboard::ServerScoreboard::new(scoreboard);
     let mut query = Query {
         level,
         players: vec![

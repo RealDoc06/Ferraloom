@@ -1116,8 +1116,7 @@ fn farmland_trampling_preserves_draw_order_permission_size_and_actor() {
             .update_entity_chunk_status(ChunkPos::ZERO, crate::level::entity::Visibility::Ticking)
             .unwrap();
         level.add_entity(actor, entity).unwrap();
-        let mut shared = crate::ServerShared::default();
-        shared.ops.set_operator(
+        level.shared_mut().unwrap().ops.set_operator(
             &ferraloom_protocol::login::GameProfile {
                 id: Uuid::new(3, 4),
                 name: "Other".into(),
@@ -1125,7 +1124,6 @@ fn farmland_trampling_preserves_draw_order_permission_size_and_actor() {
             },
             Some(crate::commands::permissions::PermissionLevel::Owners),
         );
-        level.install_shared(Box::new(shared));
         level.set_spawn_protection(SpawnProtectionSnapshot::new(
             "minecraft:overworld".parse().unwrap(),
             "minecraft:overworld".parse().unwrap(),

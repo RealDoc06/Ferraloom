@@ -34,7 +34,6 @@ fn modifier() -> AttributeModifier {
 
 fn receiver(installed: bool) -> (Level, EntityRef) {
     let mut level = crate::entity::tests::level(false);
-    level.install_shared(Box::default());
     let owner = level.next_entity_ref();
     let mut player = ServerPlayer::new(
         Uuid::new(1, 2),
