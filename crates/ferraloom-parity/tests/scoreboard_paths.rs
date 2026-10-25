@@ -1,10 +1,7 @@
 //! Live Strict command-tree paths and scoreboard/team state changes, batched per server.
 use ferraloom_parity::{
     Bot, LaunchOptions, ObservationLog, Result, RunMode, Session, Ticks, WorldPreset, ensure,
-    protocol::{
-        Wire,
-        play::{clientbound as cb, serverbound as sb},
-    },
+    protocol::{Wire, play::clientbound as cb},
 };
 use serde_json::{Value, json};
 
@@ -26,16 +23,16 @@ fn options() -> LaunchOptions {
 }
 
 /// Capture only this command's feedback and scoreboard packets, in emission order.
-/// The explicit same-connection ping ends the capture after command execution.
+/// A second command ends the capture on the server thread. Vanilla answers
+/// PingRequest on the network thread, so a pong cannot fence command execution.
 async fn command(bot: &mut Bot, text: &str) -> Result<Vec<Value>> {
-    bot.synchronize().await?;
     bot.command(text).await?;
-    let barrier = -771_001;
-    bot.send(sb::Packet::PingRequest(sb::PingRequest { time: barrier }))
+    bot.command("scoreboard players get #capture_barrier capture_barrier")
         .await?;
     let mut packets = Vec::new();
     bot.wait_for(text, Ticks::DEFAULT, |_, packet| {
-        if matches!(packet, cb::Packet::PongResponse(p) if p.time == barrier) {
+        if matches!(packet, cb::Packet::SystemChat(p) if p.content.to_json().is_ok_and(|text|
+            text.contains("commands.scoreboard.players.get.success") && text.contains("#capture_barrier"))) {
             return true;
         }
         if matches!(
@@ -141,6 +138,23 @@ async fn sweep(session: &mut Session) -> Result<ObservationLog> {
     let player = session.join("ParityBot").await?;
     let bot = session.bot(player)?;
     let mut log = ObservationLog::default();
+    for (text, key) in [
+        (
+            "scoreboard objectives add capture_barrier dummy",
+            "commands.scoreboard.objectives.add.success",
+        ),
+        (
+            "scoreboard players set #capture_barrier capture_barrier 0",
+            "commands.scoreboard.players.set.success.single",
+        ),
+    ] {
+        bot.command(text).await?;
+        bot.wait_for(text, Ticks::DEFAULT, |_, packet| {
+            matches!(packet,
+            cb::Packet::SystemChat(p) if p.content.to_json().is_ok_and(|text| text.contains(key)))
+        })
+        .await?;
+    }
     for setup in [
         "scoreboard objectives add points dummy",
         "scoreboard objectives add source dummy",
