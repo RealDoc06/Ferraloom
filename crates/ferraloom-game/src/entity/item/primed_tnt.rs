@@ -12,7 +12,7 @@ use crate::{
 use ferraloom_data::{Block, BlockState, EntityType};
 use ferraloom_nbt::{CompoundTag, Tag};
 use ferraloom_protocol::codec::VarInt;
-use ferraloom_util::{Uuid, Vec3, mth, random::RandomSource};
+use ferraloom_util::{Vec3, mth, random::RandomSource};
 
 pub const FUSE: EntityDataAccessor<VarInt> = EntityDataAccessor::new(8);
 pub const BLOCK_STATE: EntityDataAccessor<BlockState> = EntityDataAccessor::new(9);
@@ -111,10 +111,7 @@ impl PrimedTnt {
                 .unwrap_or(Block::TNT.default_state()),
         );
         self.explosion_power = mth::clamp_f32(tag.get_float_or("explosion_power", 4.0), 0.0, 128.0);
-        self.owner = tag
-            .get_int_array("owner")
-            .and_then(|v| <[i32; 4]>::try_from(v).ok())
-            .map(|uuid| EntityReference::unresolved(Uuid::from_int_array(uuid)));
+        self.owner = crate::entity::living::damage_state::read_reference(tag, "owner");
     }
 }
 /// Port of PrimedTnt#getOwner, retaining the LivingEntity type restriction.
@@ -225,6 +222,7 @@ impl Entity for PrimedTntBehavior {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ferraloom_util::Uuid;
     #[test]
     fn vanilla_tnt_launch_uses_level_random_after_canonical_construction() {
         let mut rows = 0;

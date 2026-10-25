@@ -8,7 +8,10 @@ use crate::{
     level::{LevelContext, LevelError},
 };
 use ferraloom_nbt::{CompoundTag, Tag};
-use ferraloom_protocol::{Identifier, component::EquipmentSlot};
+use ferraloom_protocol::{
+    Identifier,
+    component::{EquipmentSlot, Persistent},
+};
 use ferraloom_util::{BlockPos, Uuid};
 
 /// Port of DropChances' complete EnumMap, including default entries.
@@ -68,10 +71,10 @@ impl LeashData {
         let tag = tag?;
         let delayed = if let Some(uuid) = tag
             .as_compound()
-            .and_then(|tag| tag.get_int_array("UUID"))
-            .and_then(|a| <[i32; 4]>::try_from(a).ok())
+            .and_then(|tag| tag.get("UUID"))
+            .and_then(|tag| Uuid::from_nbt(tag).ok())
         {
-            LeashAttachment::Entity(Uuid::from_int_array(uuid))
+            LeashAttachment::Entity(uuid)
         } else {
             LeashAttachment::Fence(block_pos(tag)?)
         };
@@ -86,6 +89,8 @@ impl LeashData {
 pub(crate) fn block_pos(tag: &Tag) -> Option<BlockPos> {
     let values = match tag {
         Tag::IntArray(a) if a.len() == 3 => [a[0], a[1], a[2]],
+        Tag::ByteArray(a) if a.len() == 3 => [i32::from(a[0]), i32::from(a[1]), i32::from(a[2])],
+        Tag::LongArray(a) if a.len() == 3 => [a[0] as i32, a[1] as i32, a[2] as i32],
         Tag::List(a) if a.len() == 3 => [a[0].as_int()?, a[1].as_int()?, a[2].as_int()?],
         _ => return None,
     };

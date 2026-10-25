@@ -1,6 +1,6 @@
 //! Entity's base NBT codec; subclass data and unrecognized fields remain intact.
 use ferraloom_nbt::{CompoundTag, ListTag, Tag};
-use ferraloom_protocol::{chat::Component, codec::VarInt};
+use ferraloom_protocol::{chat::Component, codec::VarInt, component::Persistent};
 use ferraloom_util::{Uuid, Vec3};
 
 use super::{EntityData, synched_data as data};
@@ -87,9 +87,9 @@ impl EntityData {
         self.needs_sync = true;
     }
     pub(crate) fn load_rotation(&mut self, tag: &CompoundTag) -> f32 {
-        let rotation = tag.get_list("Rotation").filter(|v| v.len() == 2);
-        self.set_y_rot(rotation.and_then(|v| v[0].as_float()).unwrap_or(0.0));
-        self.set_x_rot(rotation.and_then(|v| v[1].as_float()).unwrap_or(0.0));
+        let [yaw, pitch] = tag.get("Rotation").and_then(rotation).unwrap_or([0.0, 0.0]);
+        self.set_y_rot(yaw);
+        self.set_x_rot(pitch);
         self.set_old_pos_and_rot();
         self.yaw
     }
@@ -102,10 +102,8 @@ impl EntityData {
         self.permanently_invulnerable = tag.get_boolean_or("Invulnerable", false);
         self.invulnerable_time = tag.get_int_or("invulnerable_time", 0);
         self.portal_cooldown = tag.get_int_or("PortalCooldown", 0);
-        if let Some(words) = tag.get_int_array("UUID")
-            && let Ok(words) = <[i32; 4]>::try_from(words)
-        {
-            self.uuid = Uuid::from_int_array(words);
+        if let Some(uuid) = tag.get("UUID").and_then(|tag| Uuid::from_nbt(tag).ok()) {
+            self.uuid = uuid;
         }
     }
     pub(crate) fn validate_loaded_state(&self) -> Result<(), EntityLoadError> {
@@ -241,17 +239,17 @@ fn safe_motion(value: f64) -> f64 {
     if value.abs() > 10.0 { 0.0 } else { value }
 }
 fn vector(tag: &CompoundTag, key: &str) -> Vec3 {
-    let Some(list) = tag.get_list(key).filter(|v| v.len() == 3) else {
-        return Vec3::ZERO;
-    };
-    match (
-        list[0].as_double(),
-        list[1].as_double(),
-        list[2].as_double(),
-    ) {
-        (Some(x), Some(y), Some(z)) => Vec3::new(x, y, z),
-        _ => Vec3::ZERO,
-    }
+    tag.get(key).and_then(optional_vector).unwrap_or(Vec3::ZERO)
+}
+/// Vec2.CODEC reads both components atomically, including primitive NBT arrays.
+fn rotation(tag: &Tag) -> Option<[f32; 2]> {
+    Some(match tag {
+        Tag::List(values) if values.len() == 2 => [values[0].as_float()?, values[1].as_float()?],
+        Tag::ByteArray(values) if values.len() == 2 => [f32::from(values[0]), f32::from(values[1])],
+        Tag::IntArray(values) if values.len() == 2 => [values[0] as f32, values[1] as f32],
+        Tag::LongArray(values) if values.len() == 2 => [values[0] as f32, values[1] as f32],
+        _ => return None,
+    })
 }
 /// Vec3.CODEC's optional three-number list, including NBT primitive arrays.
 pub(super) fn optional_vector(tag: &Tag) -> Option<Vec3> {
