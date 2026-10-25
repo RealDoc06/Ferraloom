@@ -45,22 +45,35 @@ fn anvil_ticks_falling_configuration_and_damage_transform_match_native() {
                 let tick = f[4].parse::<i64>().unwrap();
                 if tick == 0 {
                     let mut level = super::fire_powder_tests::level();
+                    let chunk = ChunkPos::containing(POS);
                     level
                         .set_chunk_loading_status(
-                            ChunkPos::containing(POS),
+                            chunk,
                             crate::level::distance_manager::FullChunkStatus::BlockTicking,
                             true,
                         )
                         .unwrap();
                     level
                         .update_entity_chunk_status(
-                            ChunkPos::containing(POS),
+                            chunk,
                             crate::level::entity::Visibility::Ticking,
                         )
                         .unwrap();
-                    level
-                        .set_chunk_block_ticking(ChunkPos::containing(POS), true)
-                        .unwrap();
+                    level.set_chunk_block_ticking(chunk, true).unwrap();
+                    // Visibility queues entity IO; native block ticks require
+                    // the empty chunk load to have completed and been published.
+                    for request in level.take_entity_storage_requests() {
+                        let crate::level::entity::EntityStorageRequest::Load { id, .. } = request
+                        else {
+                            unreachable!("a fresh empty fixture only queues entity loads")
+                        };
+                        level.complete_entity_chunk_load(id, Ok(None)).unwrap();
+                    }
+                    level.process_pending_entity_loads().unwrap();
+                    assert!(level.are_entities_loaded(chunk));
+                    assert!(level.simulation_level(chunk) <= 32);
+                    assert!(level.chunk(chunk).unwrap().ticking_ready());
+                    assert_eq!(level.game_time(), 0);
                     level.set_block_state(POS.below(1), state(f[2])).unwrap();
                     level.set_block_state(POS, original).unwrap();
                     level
