@@ -500,6 +500,7 @@ async fn structure_status_reads_settle_before_a_queued_full_tracking_failure() {
         "minecraft:overworld",
         world.level_context(&resources).unwrap(),
     );
+    bootstrap.level.install_shared(Box::default());
     bootstrap
         .level
         .set_block_tags(world.generator().access().data().block_tags.clone());
