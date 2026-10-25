@@ -96,16 +96,18 @@ pub(crate) struct GenerationRuntime {
 
 impl GenerationRuntime {
     pub(crate) fn new(
+        dimension: ferraloom_protocol::Identifier,
         mut world: World,
         chunks: ChunkMap,
         tickets: TicketStorage,
         distance_manager: DistanceManager,
         properties: Arc<ServerProperties>,
-    ) -> Self {
+    ) -> Result<Self> {
+        world.validate_dimension_binding(&dimension)?;
         let (notify, progress) = mpsc::channel();
         let (send_owner_request, owner_requests) = mpsc::channel();
         world.set_progress_waker(Waker::from(Arc::new(ProgressWake(notify.clone()))));
-        Self {
+        Ok(Self {
             world: RefCell::new(world),
             chunks: RefCell::new(chunks),
             tickets: RefCell::new(tickets),
@@ -120,7 +122,7 @@ impl GenerationRuntime {
             notify_progress: notify,
             owner_requests,
             send_owner_request,
-        }
+        })
     }
 
     /// Tokio may move the exclusive server continuation after an await. Bind
