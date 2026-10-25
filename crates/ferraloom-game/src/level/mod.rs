@@ -161,6 +161,7 @@ pub struct LevelRules {
     pub fall_damage: bool,
     pub fire_damage: bool,
     pub freeze_damage: bool,
+    pub send_command_feedback: bool,
     pub natural_health_regeneration: bool,
     pub debug: bool,
     pub can_have_weather: bool,
@@ -200,6 +201,7 @@ impl Default for LevelRules {
             fall_damage: damage_default(GameRule::FallDamage),
             fire_damage: damage_default(GameRule::FireDamage),
             freeze_damage: damage_default(GameRule::FreezeDamage),
+            send_command_feedback: damage_default(GameRule::SendCommandFeedback),
             natural_health_regeneration: damage_default(GameRule::NaturalHealthRegeneration),
             debug: false,
             can_have_weather: true,
@@ -236,6 +238,9 @@ impl RegionId {
 /// Owned portion of ServerLevel. The scheduler moves this value between workers.
 pub struct Region {
     id: RegionId,
+    /// Port of ServerLevel#pathTypesByPosCache. One region per level currently
+    /// matches vanilla exactly; a future region split must preserve per-level semantics.
+    path_types_by_pos_cache: crate::entity::ai::pathfinder::PathTypeCache,
     chunks: store::InsertOnlyMap<ChunkPos, chunk::LevelChunk>,
     next_chunk_generation: Cell<u64>,
     entities: entity::EntityStorage,
@@ -309,6 +314,7 @@ impl Region {
             block_events: events::BlockEvents::default(),
             effects: Vec::new(),
             block_changes: broadcast::BlockChanges::default(),
+            path_types_by_pos_cache: Default::default(),
             tags: None,
             fluid_tags: None,
             entity_type_tags: None,
@@ -336,6 +342,14 @@ pub struct Level {
 }
 
 impl Level {
+    pub(crate) fn path_type_cache(&self) -> &crate::entity::ai::pathfinder::PathTypeCache {
+        &self.region().path_types_by_pos_cache
+    }
+    pub(crate) fn path_type_cache_mut(
+        &mut self,
+    ) -> &mut crate::entity::ai::pathfinder::PathTypeCache {
+        &mut self.region_mut().path_types_by_pos_cache
+    }
     pub fn new(region: Region, context: Arc<LevelContext>) -> Self {
         Self {
             command_storage: None,
@@ -486,7 +500,7 @@ impl Level {
         chunk.loaded.set(true);
         region
             .block_entity_state
-            .prepare_published_chunk(&mut chunk);
+            .prepare_published_chunk(&mut chunk, region.game_time);
         region.block_entity_state.register_published_chunk(&chunk);
         region
             .block_ticks

@@ -120,7 +120,8 @@ pub(crate) fn ported_behavior(
         ),
         BlockClass::LiquidBlock => matches!(
             method,
-            Method::GetDrops
+            Method::IsPathfindable
+                | Method::GetDrops
                 | Method::OnPlace
                 | Method::NeighborChanged
                 | Method::UpdateShape

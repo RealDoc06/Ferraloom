@@ -14,6 +14,7 @@ pub mod effects;
 pub mod experience_orb;
 pub mod item;
 pub mod mob;
+pub mod monster;
 pub mod player;
 pub mod pushing;
 mod relationships;
@@ -368,6 +369,10 @@ pub trait Entity: Sync {
     }
     fn is_spectator(&self, _entity: EntityRef, _level: &Level) -> Result<bool, LevelError> {
         Ok(false)
+    }
+    /// Port of Entity#isSteppingCarefully; Cat and Ocelot override this read.
+    fn is_stepping_carefully(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
+        Ok(level.entity::<EntityData>(entity)?.shared_flag(1))
     }
     /// Port of Entity#isSwimming, dispatched through Player's override.
     fn is_swimming(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
