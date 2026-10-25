@@ -105,7 +105,7 @@ impl MinecraftServer {
         }
         self.apply_level_effects_in(dimension)?;
         let live = self.live_level_in(dimension)?;
-        live.generation().poll_entity_progress(&live.level)?;
+        live.generation().poll_entity_io(&live.level)?;
         self.live_level_in_mut(dimension)?
             .level
             .tick_entity_management()?;
@@ -149,9 +149,8 @@ impl MinecraftServer {
         }
         chunks.sort_by_key(|(distance, pos)| (*distance, pos.pack()));
         for (_, pos) in chunks {
-            self.live_level_in(dimension)?
-                .generation()
-                .request_full(&self.live_level_in(dimension)?.level, pos)
+            self.live_level_in_mut(dimension)?
+                .request_full(pos)
                 .map_err(game_error)?;
         }
         Ok(())
@@ -364,16 +363,13 @@ impl MinecraftServer {
         &mut self,
         dimension: &protocol::Identifier,
     ) -> Result<()> {
-        use ferraloom_game::level::acquisition::AcquireDriver;
-        self.live_level_in(dimension)?
-            .generation()
-            .run_distance_manager_updates(&self.live_level_in(dimension)?.level)
+        self.live_level_in_mut(dimension)?
+            .update_chunk_tickets()
             .map_err(game_error)?;
         Ok(())
     }
     pub(super) fn integrate_jobs_in(&mut self, dimension: &protocol::Identifier) -> Result<()> {
-        let live = self.live_level_in(dimension)?;
-        live.generation().progress_jobs(&live.level)?;
+        self.live_level_in_mut(dimension)?.progress_jobs()?;
         self.live_level_in_mut(dimension)?.finish_promotions()?;
         self.live_level_in_mut(dimension)?.evict_unloaded_chunks()?;
         self.live_level_in_mut(dimension)?

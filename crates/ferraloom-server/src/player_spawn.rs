@@ -257,9 +257,7 @@ fn request_ticketed_full(
             },
         )
     });
-    live.level
-        .poll_chunk_acquisition_mut()
-        .map_err(game_error)?;
+    live.update_chunk_tickets().map_err(game_error)?;
     let mut futures = Vec::new();
     for z in -radius..=radius {
         for x in -radius..=radius {

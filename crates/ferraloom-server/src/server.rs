@@ -1210,7 +1210,7 @@ impl MinecraftServer {
         loop {
             let ready = {
                 let live = self.live_level_in_mut(&spawn.dimension)?;
-                live.level.process_pending_entity_loads()?;
+                live.poll_entity_loads_for_wait()?;
                 (-3..=3).all(|z| {
                     (-3..=3).all(|x| {
                         live.level
@@ -3403,9 +3403,7 @@ impl MinecraftServer {
                 .with_world_mut(|world| world.submit_entity_requests(requests, &self.properties))?;
             let sync = self.level.generation().synchronize_entities(false)?;
             sync.await?;
-            self.level
-                .generation()
-                .poll_entity_progress(&self.level.level)?;
+            self.level.poll_entity_loads_for_wait()?;
             if self.level.level.poll_entity_save_all()? {
                 let requests = self.level.level.take_entity_storage_requests();
                 self.level.generation().with_world_mut(|world| {
@@ -3413,11 +3411,7 @@ impl MinecraftServer {
                 })?;
                 let sync = self.level.generation().synchronize_entities(true)?;
                 sync.await?;
-                while self
-                    .level
-                    .generation()
-                    .poll_entity_progress(&self.level.level)?
-                {}
+                while self.level.poll_entity_loads_for_wait()? {}
                 return Ok(());
             }
         }
