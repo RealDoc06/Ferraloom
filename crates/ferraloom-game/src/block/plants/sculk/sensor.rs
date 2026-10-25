@@ -15,8 +15,8 @@ use ferraloom_data::{
 use ferraloom_protocol::play::SoundSource;
 use ferraloom_util::{BlockPos, Direction, Vec3, random::RandomSource};
 
-pub(super) struct Sensor;
-pub(super) static SENSOR: Sensor = Sensor;
+pub(in crate::block::plants) struct Sensor;
+pub(in crate::block::plants) static SENSOR: Sensor = Sensor;
 pub(super) fn can_activate(state: BlockState) -> bool {
     state.get(p::SCULK_SENSOR_PHASE) == Some(p::SculkSensorPhase::Inactive)
 }

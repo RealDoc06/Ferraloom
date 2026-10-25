@@ -566,16 +566,20 @@ impl Level {
         region
             .block_entity_state
             .prepare_published_chunk(&mut chunk, region.game_time);
-        region
-            .block_entity_state
-            .register_published_chunk(&chunk, region.has_skylight)?;
-        region
-            .block_ticks
-            .add_container(pos, std::mem::take(&mut chunk.block_ticks));
-        region
-            .fluid_ticks
-            .add_container(pos, std::mem::take(&mut chunk.fluid_ticks));
+        let block_ticks = std::mem::take(&mut chunk.block_ticks);
+        let fluid_ticks = std::mem::take(&mut chunk.fluid_ticks);
+        // Listener roots must resolve the canonical receiver before native
+        // listener-before-ticker registration, including the attached fixture path.
         region.chunks.insert(pos, chunk);
+        let region = self.region();
+        region.block_entity_state.register_published_chunk(
+            region.chunks.get(&pos).expect("just attached"),
+            region.has_skylight,
+            self,
+        )?;
+        let region = self.region_mut();
+        region.block_ticks.add_container(pos, block_ticks);
+        region.fluid_ticks.add_container(pos, fluid_ticks);
         Ok(())
     }
     /// Port of ServerLevel#startTickingChunk, after generation post-processing.

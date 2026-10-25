@@ -273,7 +273,8 @@ pub(crate) fn add_candidate(data: &mut VibrationData, info: VibrationInfo, time:
         .is_none_or(|previous| {
             previous.tick == time
                 && (info.distance < previous.event.distance
-                    || !(info.distance > previous.event.distance)
+                    || info.distance.partial_cmp(&previous.event.distance)
+                        != Some(std::cmp::Ordering::Greater)
                         && frequency(info.game_event) > frequency(previous.event.game_event))
         });
     if replace {
@@ -347,9 +348,13 @@ fn is_occluded(origin: Vec3, destination: Vec3, level: &Level) -> Result<bool, L
             from.z + f64::from(z) * 9.999999747378752e-6,
         );
         let tags = level.block_tags()?;
-        let result = level.is_block_in_line(&ClipBlockStateContext::new(from, to, |state| {
-            tags.contains_key(BlockTags::OCCLUDES_VIBRATION_SIGNALS, state.block())
-        }))?;
+        let result = level.is_block_in_line(&ClipBlockStateContext::new(
+            from,
+            to,
+            |state: ferraloom_data::BlockState| {
+                tags.contains_key(BlockTags::OCCLUDES_VIBRATION_SIGNALS, state.block())
+            },
+        ))?;
         if result.miss {
             return Ok(false);
         }
