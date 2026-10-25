@@ -16,7 +16,7 @@ use std::cell::Cell;
 
 /// Observe only the synchronous ticket receiver; unrelated acquisition is forbidden.
 #[derive(Default)]
-struct TrackingDriver(Cell<Option<SectionPos>>);
+struct TrackingDriver(Cell<Option<SectionPos>>, bool);
 impl AcquireDriver for TrackingDriver {
     fn update_player_tracking_status(
         &self,
@@ -36,7 +36,8 @@ impl AcquireDriver for TrackingDriver {
         true
     }
     fn visible_ticket_level(&self, _: ChunkPos) -> Option<i32> {
-        unreachable!()
+        assert!(self.1, "fixture did not permit an acquisition query");
+        Some(33)
     }
     fn add_unknown_ticket(&self, _: ChunkPos, _: ChunkStatus) -> Result<(), LevelError> {
         unreachable!()
@@ -228,4 +229,79 @@ fn spectator_movement_skips_fall_reads_only_when_touching_unloaded_chunks() {
         assert_eq!(state.position, target);
         assert_eq!(state.fall_distance, if loaded { 4.25 } else { 3.25 });
     }
+}
+
+/// An eligible FULL ticket is not a published FULL chunk. The built-in predicate
+/// must synchronously obtain STRUCTURE_REFERENCES through the proto access path.
+#[test]
+#[ignore = "awaiting structure-data bridge"]
+fn location_structure_predicate_acquires_ticket_eligible_proto_references() {
+    use crate::{
+        advancements::{
+            Advancement, AdvancementHolder, PlayerAdvancements, ServerAdvancementManager, criteria,
+        },
+        block::containers::runtime::ContainerResources,
+        crafting::{RecipeManager, RecipeSynchronization},
+    };
+    use ferraloom_data::datapack::{Pack, ResourceManager};
+    use std::{path::Path, sync::Arc};
+
+    let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").unwrap();
+    let resources = ResourceManager::new(vec![Pack::vanilla_jar(Path::new(&jar)).unwrap()]);
+    let holders = ["adventure/root", "adventure/minecraft_trials_edition"].map(|name| {
+        let resource = format!("minecraft:advancement/{name}.json")
+            .parse()
+            .unwrap();
+        AdvancementHolder {
+            id: format!("minecraft:{name}").parse().unwrap(),
+            value: Advancement::decode(&resources.require(&resource).unwrap().json().unwrap())
+                .unwrap(),
+        }
+    });
+    let advancements = Arc::new(ServerAdvancementManager::new(holders.to_vec()));
+    let recipes = Arc::new(RecipeManager::new(Vec::new()).unwrap());
+    let recipe_synchronization = Arc::new(RecipeSynchronization::new(&recipes, |_| true));
+    let mut level = Level::new(Region::new(&Behaviors::EMPTY), LevelContext::fixture(0, 63));
+    level.set_container_resources(
+        Arc::new(ContainerResources {
+            crafting: crate::inventory::RuntimeCraftingContext::fixture(),
+            recipes,
+            loot: Arc::default(),
+            advancements: Arc::clone(&advancements),
+            recipe_tags: Default::default(),
+            recipe_synchronization,
+        }),
+        0,
+    );
+    level
+        .install_acquire_driver(Box::new(TrackingDriver(Cell::new(None), true)), 0..256)
+        .unwrap();
+    let player = level.next_entity_ref();
+    let mut state = ServerPlayer::new(
+        Uuid::new(1, 2),
+        "spectator".into(),
+        7,
+        Vec3::new(264.5, 80.0, 10.5),
+        GameType::Spectator,
+    );
+    state.advancements = PlayerAdvancements::new(&advancements);
+    level
+        .add_entity(player, EntityState::Player(Box::new(state)))
+        .unwrap();
+    assert!(level.is_loaded(ferraloom_util::BlockPos::new(264, 80, 10)));
+    assert!(level.chunk(ChunkPos::new(16, 0)).is_none());
+    criteria::location(&mut level, player).unwrap_or_else(|error| panic!("{error}"));
+    assert!(
+        !level
+            .entity::<ServerPlayer>(player)
+            .unwrap()
+            .advancements
+            .get_progress(
+                &"minecraft:adventure/minecraft_trials_edition"
+                    .parse()
+                    .unwrap()
+            )
+            .unwrap()
+            .is_done()
+    );
 }

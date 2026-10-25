@@ -305,10 +305,13 @@ impl PlayerAdvancements {
     ) -> Result<Vec<TriggerInstanceKey>> {
         let mut matched = Vec::new();
         for (key, instance) in listeners {
-            if matches(instance, context)?
+            if matches(instance, context)
+                .map_err(|error| predicate_error(key, "conditions", &instance.conditions, error))?
                 && match &instance.player {
                     None => true,
-                    Some(predicate) => context.predicate(predicate, player_context)?,
+                    Some(predicate) => context
+                        .predicate(predicate, player_context)
+                        .map_err(|error| predicate_error(key, "player", predicate, error))?,
                 }
             {
                 matched.push(key.clone());
@@ -501,6 +504,22 @@ impl PlayerAdvancements {
     }
     pub fn save_path(world: &Path, uuid: ferraloom_protocol::Uuid) -> PathBuf {
         super::player_progress_path(world, uuid, super::PlayerProgressDirectory::Advancements)
+    }
+}
+
+/// Preserve the failing captured listener without changing match or award order.
+fn predicate_error(
+    key: &TriggerInstanceKey,
+    part: &str,
+    predicate: &impl std::fmt::Debug,
+    error: LootError,
+) -> LootError {
+    match error {
+        LootError::Unsupported(source) => LootError::Unsupported(format!(
+            "advancement {} criterion {} {part} predicate {predicate:?}: {source}",
+            key.advancement, key.criterion
+        )),
+        error => error,
     }
 }
 /// Port of Advancement#decorateName and AdvancementType#createAnnouncement.

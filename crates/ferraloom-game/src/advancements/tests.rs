@@ -2000,9 +2000,10 @@ fn recipe_crafted_releases_roots_on_capture_and_predicate_errors() {
     assert!(!level.stack_is_retained(address).unwrap());
     assert!(matches!(
         criteria::recipe_crafted(&mut level, player, recipe, &[input]),
-        Err(crate::level::LevelError::UnsupportedAdvancementCriterion(
-            criteria::Trigger::Native(TriggerType::RecipeCrafted)
-        ))
+        Err(crate::level::LevelError::UnsupportedAdvancementPredicate {
+            trigger: criteria::Trigger::Native(TriggerType::RecipeCrafted),
+            ..
+        })
     ));
     assert!(!level.stack_is_retained(address).unwrap());
     assert!(
