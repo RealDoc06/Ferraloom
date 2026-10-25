@@ -7,6 +7,8 @@ mod command_runtime;
 pub(crate) mod generation_completion;
 #[path = "interaction.rs"]
 mod interaction;
+#[path = "level_tick.rs"]
+mod level_tick;
 #[path = "levels.rs"]
 mod levels;
 use crate::{
@@ -629,39 +631,42 @@ impl MinecraftServer {
         self.stop_server().await
     }
     fn shared(&self) -> &ferraloom_game::ServerShared {
-        self.shared.as_deref().unwrap_or_else(|| {
-            self.level
-                .level
-                .shared()
-                .expect("server shared owner is installed for the phase")
-        })
+        self.shared
+            .as_deref()
+            .or_else(|| self.get_all_levels().find_map(|level| level.shared().ok()))
+            .expect("server shared owner is installed for the phase")
     }
     fn shared_mut(&mut self) -> &mut ferraloom_game::ServerShared {
-        match self.shared.as_deref_mut() {
-            Some(shared) => shared,
-            None => self
-                .level
-                .level
-                .shared_mut()
-                .expect("server shared owner is installed for the phase"),
+        if let Some(shared) = self.shared.as_deref_mut() {
+            return shared;
         }
+        std::iter::once(&mut self.level)
+            .chain(self.additional_levels.iter_mut())
+            .find_map(|level| level.level.shared_mut().ok())
+            .expect("server shared owner is installed for the phase")
     }
-    /// Only outer phase boundaries move ownership. Nested commands keep the installed owner.
-    fn lend_server_shared(&mut self) -> bool {
-        self.level.generation().enter_owner_thread();
-        match self.shared.take() {
-            Some(shared) => {
-                self.level.level.install_shared(shared);
-                true
-            }
-            None => {
-                self.level
-                    .level
-                    .shared()
-                    .expect("nested phase requires the installed owner");
-                false
-            }
+    /// Only outer phase boundaries move the single owner. Nested operations
+    /// require it to remain installed on the selected level.
+    fn lend_server_shared_to(&mut self, dimension: &protocol::Identifier) -> Result<bool> {
+        self.live_level_in(dimension)?
+            .generation()
+            .enter_owner_thread();
+        if self.shared.is_none() {
+            self.live_level_in(dimension)?
+                .level
+                .shared()
+                .map_err(game_error)?;
+            return Ok(false);
         }
+        let shared = self.shared.take().expect("checked shared owner");
+        self.live_level_in_mut(dimension)?
+            .level
+            .install_shared(shared);
+        Ok(true)
+    }
+    fn lend_server_shared(&mut self) -> bool {
+        self.lend_server_shared_to(&id("overworld"))
+            .expect("overworld phase shared owner")
     }
     fn drain_scoreboard_packets(&mut self) {
         for packet in self.shared_mut().scoreboard.drain_packets() {
@@ -671,12 +676,14 @@ impl MinecraftServer {
     fn return_server_shared(&mut self, lent: bool) {
         self.drain_scoreboard_packets();
         if lent {
-            self.shared = Some(
-                self.level
-                    .level
-                    .take_shared()
-                    .expect("phase must return its shared owner"),
-            );
+            let mut owner = None;
+            for live in self.live_levels_mut() {
+                if live.level.shared().is_ok() {
+                    assert!(owner.is_none(), "one canonical server shared owner");
+                    owner = Some(live.level.take_shared().expect("installed shared owner"));
+                }
+            }
+            self.shared = Some(owner.expect("phase must return its shared owner"));
         }
     }
     pub fn average_tick_time_nanos(&self) -> i64 {
@@ -897,119 +904,29 @@ impl MinecraftServer {
             self.save_all(false, false).await?;
         }
         self.was_paused = paused;
-        let lent = self.lend_server_shared();
-        let level_result = (|| -> Result<()> {
-            if !paused {
-                self.tick = self.tick.wrapping_add(1);
-                self.tick_rate_manager.tick();
-                // Functions precede the canonical server clocks in this serial slot.
-                if self.tick_rate_manager.runs_normally() {
-                    self.clocks.tick(
-                        self.game_rules
-                            .boolean(ferraloom_game::gamerules::GameRule::AdvanceTime),
-                    );
-                }
-                if self.tick.is_multiple_of(20) {
-                    let packet = self.time_packet();
-                    for c in self.connections.values_mut() {
-                        if matches!(c.phase, Phase::Play(_)) {
-                            c.push(packet.clone());
-                        }
-                    }
-                }
-                self.level.level.set_handling_tick(true);
-                self.level
-                    .level
-                    .refresh_environment_attributes(command_runtime::environment_clock_snapshot(
-                        &self.clocks,
-                    ))
-                    .map_err(game_error)?;
-                if self.tick_rate_manager.runs_normally() {
-                    self.level.level.tick_world_border();
-                    self.level
-                        .level
-                        .advance_weather_cycle(true)
-                        .map_err(game_error)?;
-                    self.apply_level_effects()?;
-                }
-                // Native sky brightness updates even on frozen ticks, after weather.
-                self.level
-                    .level
-                    .update_sky_brightness()
-                    .map_err(game_error)?;
-                if self.tick_rate_manager.runs_normally() {
-                    self.level.game_time = self.level.game_time.wrapping_add(1);
-                    self.level.level.set_game_time(self.level.game_time);
-                    if !self.level.level.rules().debug {
-                        self.level
-                            .level
-                            .tick_block_phase(self.level.game_time, 65536)
-                            .map_err(game_error)?;
-                        self.level
-                            .level
-                            .tick_fluid_phase(self.level.game_time, 65536)
-                            .map_err(game_error)?;
-                    }
-                    self.level.generation().purge_stale_tickets(self.tick);
-                }
-                self.integrate_jobs()?;
-                self.update_chunk_tickets()?;
-                if !self.level.level.rules().debug {
-                    if self.tick_rate_manager.runs_normally() {
-                        self.tick_live_chunks()?;
-                    }
-                    self.broadcast_block_changes()?;
-                }
-                // ChunkMap tracking precedes block events and entities.
-                self.track_players()?;
-                if self.tick_rate_manager.runs_normally() {
-                    self.level.level.run_block_events().map_err(game_error)?;
-                }
-                self.level.level.set_handling_tick(false);
-                let active = self
-                    .level
-                    .generation()
-                    .with_tickets(|tickets| tickets.should_keep_dimension_active());
-                if self
-                    .level
-                    .level
-                    .update_empty_time(active, self.tick_rate_manager.runs_normally())
-                {
-                    self.level
-                        .level
-                        .tick_entities_with_tick_rate(&self.tick_rate_manager)
-                        .map_err(game_error)?;
-                    self.broadcast_container_changes()?;
-                    self.level
-                        .level
-                        .tick_block_entities(self.tick_rate_manager.runs_normally())
-                        .map_err(game_error)?;
-                }
-                self.apply_level_effects()?;
-                self.level
-                    .generation()
-                    .poll_entity_progress(&self.level.level)?;
-                self.level.level.tick_entity_management()?;
-                let requests = self.level.level.take_entity_storage_requests();
-                self.level.generation().with_world_mut(|world| {
-                    world.submit_entity_requests(requests, &self.properties)
-                })?;
-                self.level.level.collect_detached_block_entities();
-                if self.tick.is_multiple_of(1200) {
-                    eprintln!(
-                        "Live level: unported={:?}, pending={:?}, precipitation={}",
-                        self.level.level.unported_behavior_stats(),
-                        self.pending_level_hooks,
-                        self.level.level.pending_precipitation_calls()
-                    );
-                }
-            } else {
-                self.integrate_jobs()?;
+        if !paused {
+            self.tick = self.tick.wrapping_add(1);
+            self.tick_rate_manager.tick();
+            // Functions precede the canonical server clocks in this serial slot.
+            if self.tick_rate_manager.runs_normally() {
+                self.clocks.tick(
+                    self.game_rules
+                        .boolean(ferraloom_game::gamerules::GameRule::AdvanceTime),
+                );
             }
-            Ok(())
-        })();
-        self.return_server_shared(lent);
-        level_result?;
+            if self.tick.is_multiple_of(20) {
+                let packet = self.time_packet();
+                for c in self.connections.values_mut() {
+                    if matches!(c.phase, Phase::Play(_)) {
+                        c.push(packet.clone());
+                    }
+                }
+            }
+        }
+        // Complete each level before entering the next, in createLevels order.
+        for dimension in self.level_keys() {
+            self.tick_level(&dimension, paused)?;
+        }
         let lent = self.lend_server_shared();
         let connection_result = async {
             self.tick_connections().await?;
@@ -1233,224 +1150,53 @@ impl MinecraftServer {
         c.phase = Phase::Configuration(ConfigTask::Preparing);
         Ok(())
     }
-    fn request_area(&mut self, center: ChunkPos, radius: i32) -> Result<()> {
-        ensure!(radius <= 34, "chunk request radius too large");
-        let mut chunks = Vec::new();
-        for x in center.x - radius..=center.x + radius {
-            for z in center.z - radius..=center.z + radius {
-                let pos = ChunkPos::new(x, z);
-                let dx = x - center.x;
-                let dz = z - center.z;
-                chunks.push((dx * dx + dz * dz, pos));
-            }
-        }
-        chunks.sort_by_key(|(distance, pos)| (*distance, pos.pack()));
-        for (_, pos) in chunks {
-            self.level
-                .generation()
-                .request_full(&self.level.level, pos)
-                .map_err(game_error)?;
-        }
-        Ok(())
-    }
-    /// ServerChunkCache's spawning shuffle and random-tick slots. The two
-    /// primitive trackers, rather than holder iteration, select traversal order.
-    fn tick_live_chunks(&mut self) -> Result<()> {
-        self.pending_level_hooks.natural_spawn_state += 1;
-        let mut spawning = Vec::new();
-        for pos in self.level.generation().natural_spawn_chunks() {
-            if !self
-                .level
-                .level
-                .chunk(pos)
-                .is_some_and(|chunk| chunk.ticking_ready())
-            {
-                continue;
-            }
-            let mut close = false;
-            for &connection in &self.players {
-                let c = &self.connections[&connection];
-                let Phase::Play(entity) = c.phase else {
-                    continue;
-                };
-                let player = self.player(entity)?;
-                if player.game_mode != GameType::Spectator {
-                    let dx = f64::from(pos.x * 16 + 8) - player.position.x;
-                    let dz = f64::from(pos.z * 16 + 8) - player.position.z;
-                    if dx * dx + dz * dz < 16384.0 {
-                        close = true;
-                        break;
-                    }
-                }
-            }
-            if close {
-                spawning.push(pos);
-            }
-        }
-        self.level.level.shuffle_spawning_chunks(&mut spawning);
-        for pos in spawning {
-            self.level
-                .level
-                .increment_chunk_inhabited_time(pos)
-                .map_err(game_error)?;
-            if self.level.level.is_entity_ticking_chunk(pos) {
-                self.level.level.tick_thunder(pos).map_err(game_error)?;
-            }
-            // SPAWN_MOBS defaults true until the commands GameRules adapter lands.
-            self.pending_level_hooks.natural_spawn_chunks += 1;
-        }
-        let ticking: Vec<_> = self
-            .level
-            .level
-            .entity_ticking_chunks()
-            .into_iter()
-            .filter(|&pos| {
-                self.level
-                    .level
-                    .chunk(pos)
-                    .is_some_and(|chunk| chunk.ticking_ready())
-            })
-            .collect();
-        for pos in ticking {
-            self.level
-                .level
-                .tick_random_chunk(pos)
-                .map_err(game_error)?;
-        }
-        self.pending_level_hooks.custom_spawners += 1;
-        Ok(())
-    }
-    /// Broadcast precedes block events; event-induced changes wait one tick.
-    fn broadcast_block_changes(&mut self) -> Result<()> {
-        let mut positions = self.level.level.take_block_update_chunks();
-        let mut seen: HashSet<_> = positions.iter().copied().collect();
-        while let Some(key) = self
-            .level
-            .generation()
-            .with_world_mut(|world| world.light_chunks_to_broadcast.pop_first())
-        {
-            let pos = ChunkPos::unpack(key);
-            if seen.insert(pos) {
-                positions.push(pos);
-            }
-        }
-        for pos in positions {
-            if !self
-                .level
-                .level
-                .chunk(pos)
-                .is_some_and(|chunk| chunk.ticking_ready())
-            {
-                continue;
-            }
-            let packets = self
-                .level
-                .level
-                .take_block_updates(pos)
-                .map_err(game_error)?;
-            let light = self.level.generation().with_world_mut(|world| {
-                world.pending_light_updates.remove(&pos).map(|mask| {
-                    cb::Packet::LightUpdate(cb::LightUpdate {
-                        x: VarInt(pos.x),
-                        z: VarInt(pos.z),
-                        light_data: light_packet_with_masks(
-                            world.lights.get(&pos.pack()),
-                            mask.sky,
-                            mask.block,
-                        ),
-                    })
-                })
-            });
-            for c in self.connections.values_mut() {
-                if matches!(c.phase, Phase::Play(_)) && !c.close && c.chunks.sent.contains(&pos) {
-                    if let Some(light) = &light {
-                        c.push(light.clone());
-                    }
-                    for packet in &packets {
-                        c.push(packet.clone());
-                    }
-                }
-            }
-        }
-        Ok(())
-    }
-    fn apply_level_effects(&mut self) -> Result<()> {
-        use ferraloom_game::level::effects::LevelEffect;
-        let mut lighting = Vec::new();
-        for effect in self.level.level.take_effects() {
-            match effect {
-                effect @ (LevelEffect::CheckLight(_) | LevelEffect::SectionEmptiness { .. }) => {
-                    lighting.push(effect)
-                }
-                LevelEffect::WeatherEvent { event, param } => {
-                    self.broadcast(cb::Packet::GameEvent(cb::GameEvent { event, param }))
-                }
-                LevelEffect::LevelEvent { pos, id, data } => {
-                    self.broadcast(cb::Packet::LevelEvent(cb::LevelEvent {
-                        event_type: id,
-                        pos,
-                        data,
-                        global_event: false,
-                    }))
-                }
-                LevelEffect::PoiChanged { .. } => self.pending_level_hooks.poi += 1,
-                LevelEffect::BlockUpdated { .. } => self.pending_level_hooks.navigation += 1,
-                LevelEffect::DestroyParticles { .. } => self.pending_level_hooks.particles += 1,
-                LevelEffect::BlockDestroyed { .. } => self.pending_level_hooks.game_events += 1,
-                LevelEffect::PendingPrecipitation(_) => {}
-                LevelEffect::BroadcastAll(packet) => self.broadcast(*packet),
-                LevelEffect::PlayerPacket { recipients, packet } => {
-                    for entity in recipients {
-                        for &connection in &self.players {
-                            let c = self.connections.get_mut(&connection).unwrap();
-                            if matches!(c.phase, Phase::Play(id) if id == entity) && !c.close {
-                                c.push(*packet.clone());
-                                break;
-                            }
-                        }
-                    }
-                }
-                LevelEffect::PlayerSectionChange { player, section } => {
-                    self.level.generation().update_player(player, Some(section));
-                }
-            }
-        }
-        if let Some(changes) = World::capture_block_light_changes(&self.level.level, lighting)? {
-            self.level
-                .generation()
-                .with_world(|world| world.submit_block_light_changes(changes))?;
-        }
-        Ok(())
-    }
+
     /// Apply accepted section transitions immediately, including Y-only moves.
     /// The commands branch supplies the current SpectatorsGenerateChunks rule
     /// when its canonical GameRules state lands (vanilla's default is true).
     pub(super) fn update_player_tickets(&mut self, entity: EntityRef) -> Result<()> {
-        for (player, section) in self.level.level.take_player_section_changes() {
-            self.level.generation().update_player(player, Some(section));
+        let dimension = self
+            .level_for_entity(entity)
+            .map_err(game_error)?
+            .dimension_key()
+            .map_err(game_error)?
+            .clone();
+        let changes = self
+            .live_level_in_mut(&dimension)?
+            .level
+            .take_player_section_changes();
+        for (player, section) in changes {
+            self.live_level_in(&dimension)?
+                .generation()
+                .update_player(player, Some(section));
         }
         let section = ferraloom_util::SectionPos::from_position(self.player(entity)?.position);
-        self.level.generation().update_player(entity, Some(section));
+        self.live_level_in(&dimension)?
+            .generation()
+            .update_player(entity, Some(section));
         Ok(())
+    }
+
+    fn request_area(&mut self, center: ChunkPos, radius: i32) -> Result<()> {
+        self.request_area_in(&id("overworld"), center, radius)
     }
     fn update_chunk_tickets(&mut self) -> Result<()> {
-        use ferraloom_game::level::acquisition::AcquireDriver;
-        self.level
-            .generation()
-            .run_distance_manager_updates(&self.level.level)
-            .map_err(game_error)?;
-        Ok(())
+        self.update_chunk_tickets_in(&id("overworld"))
     }
     fn integrate_jobs(&mut self) -> Result<()> {
-        self.progress_chunk_jobs()?;
-        self.level.finish_promotions()?;
-        self.level.evict_unloaded_chunks()?;
-        self.level.level.collect_chunk_structure_versions();
-        self.level.level.finish_chunk_source_tick();
+        self.integrate_jobs_in(&id("overworld"))
+    }
+    fn apply_level_effects(&mut self) -> Result<()> {
+        for dimension in self.level_keys() {
+            self.apply_level_effects_in(&dimension)?;
+        }
         Ok(())
     }
-    fn progress_chunk_jobs(&mut self) -> Result<()> {
-        self.level.generation().progress_jobs(&self.level.level)
+    fn broadcast_container_changes(&mut self) -> Result<()> {
+        for dimension in self.level_keys() {
+            self.broadcast_container_changes_in(&dimension)?;
+        }
+        Ok(())
     }
     fn place_player(&mut self, connection: ConnectionId) -> Result<()> {
         let mut c = self
@@ -2046,28 +1792,6 @@ impl MinecraftServer {
             sb::Packet::CustomPayload(_) | sb::Packet::Pong(_) | sb::Packet::PlayerCommand(_) => {}
             // These gameplay ports are outside the terrain/join milestone.
             _ => {}
-        }
-        Ok(())
-    }
-    /// Drain ServerPlayer#tick container output at the entity phase. The game
-    /// callback already broadcast changes; this only routes its ordered packets.
-    fn broadcast_container_changes(&mut self) -> Result<()> {
-        for connection in self.players.clone() {
-            let Some(c) = self.connections.get(&connection) else {
-                continue;
-            };
-            let Phase::Play(entity) = c.phase else {
-                continue;
-            };
-            let player = self
-                .level
-                .level
-                .entity_mut::<ServerPlayer>(entity)
-                .map_err(game_error)?;
-            let packets = std::mem::take(&mut player.menus.pending_packets);
-            for packet in packets {
-                self.connections.get_mut(&connection).unwrap().push(packet);
-            }
         }
         Ok(())
     }
@@ -2794,50 +2518,7 @@ impl MinecraftServer {
         }
         Ok(())
     }
-    fn track_players(&mut self) -> Result<()> {
-        let players = self.players.clone();
-        for connection in players {
-            let Some(c) = self.connections.get(&connection) else {
-                continue;
-            };
-            if c.close {
-                continue;
-            }
-            let Phase::Play(entity) = c.phase else {
-                continue;
-            };
-            self.update_player_tickets(entity)?;
-            let player = self.player(entity)?;
-            let center = player.chunk_position();
-            let distance = player
-                .view_distance
-                .clamp(2, self.properties.int("view-distance").clamp(2, 32));
-            let desired: HashSet<_> = tracking_view(center, distance).into_iter().collect();
-            self.request_area(center, distance + 2)?;
-            let c = self.connections.get_mut(&connection).unwrap();
-            if c.center != Some(center) {
-                c.push(cb::Packet::SetChunkCacheCenter(cb::SetChunkCacheCenter {
-                    x: VarInt(center.x),
-                    z: VarInt(center.z),
-                }));
-                c.center = Some(center);
-            }
-            let mut leaving = c.view.difference(&desired).copied().collect::<Vec<_>>();
-            leaving.sort_by_key(|p| p.pack());
-            for pos in leaving {
-                if c.chunks.drop_chunk(pos) {
-                    c.push(cb::Packet::ForgetLevelChunk(cb::ForgetLevelChunk {
-                        pos: play::ChunkPos { x: pos.x, z: pos.z },
-                    }));
-                }
-            }
-            for &pos in desired.difference(&c.view) {
-                c.chunks.pending.insert(pos);
-            }
-            c.view = desired;
-        }
-        Ok(())
-    }
+
     async fn tick_connections(&mut self) -> Result<()> {
         self.process_command_suggestions()?;
         let now = Instant::now();

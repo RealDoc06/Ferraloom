@@ -25,6 +25,64 @@ impl MinecraftServer {
     pub(super) fn live_levels_mut(&mut self) -> impl Iterator<Item = &mut LiveLevel> {
         std::iter::once(&mut self.level).chain(self.additional_levels.iter_mut())
     }
+    pub(super) fn live_level_in(&self, dimension: &protocol::Identifier) -> Result<&LiveLevel> {
+        self.live_levels()
+            .find(|level| level.dimension == dimension.as_str())
+            .with_context(|| format!("Unknown dimension {dimension}"))
+    }
+    pub(super) fn live_level_in_mut(
+        &mut self,
+        dimension: &protocol::Identifier,
+    ) -> Result<&mut LiveLevel> {
+        self.live_levels_mut()
+            .find(|level| level.dimension == dimension.as_str())
+            .with_context(|| format!("Unknown dimension {dimension}"))
+    }
+    pub(super) fn level_keys(&self) -> Vec<protocol::Identifier> {
+        self.live_levels()
+            .map(|level| level.dimension.parse().expect("registered dimension key"))
+            .collect()
+    }
+    pub(super) fn player_connections_in(
+        &self,
+        dimension: &protocol::Identifier,
+    ) -> Result<Vec<ConnectionId>> {
+        let mut connections = Vec::new();
+        for &id in &self.players {
+            let Some(connection) = self.connections.get(&id) else {
+                continue;
+            };
+            if connection.close {
+                continue;
+            }
+            let Phase::Play(entity) = connection.phase else {
+                continue;
+            };
+            if self
+                .level_for_entity(entity)
+                .map_err(game_error)?
+                .dimension_key()
+                .map_err(game_error)?
+                == dimension
+            {
+                connections.push(id);
+            }
+        }
+        Ok(connections)
+    }
+    pub(super) fn broadcast_in_level(
+        &mut self,
+        dimension: &protocol::Identifier,
+        packet: cb::Packet,
+    ) -> Result<()> {
+        for id in self.player_connections_in(dimension)? {
+            self.connections
+                .get_mut(&id)
+                .expect("selected connection")
+                .push(packet.clone());
+        }
+        Ok(())
+    }
     /// The reference records its birth allocator, not its current dimension.
     /// Resolve the canonical store, including retained removed receivers. A
     /// missing or multiply owned handle is an error, never an overworld fallback.
