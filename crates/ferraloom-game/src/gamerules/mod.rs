@@ -367,6 +367,7 @@ impl GameRules {
         rules.mob_griefing = self.boolean(GameRule::MobGriefing);
         rules.max_snow_accumulation_height = self.integer(GameRule::MaxSnowAccumulationHeight);
         rules.show_advancement_messages = self.boolean(GameRule::ShowAdvancementMessages);
+        rules.natural_health_regeneration = self.boolean(GameRule::NaturalHealthRegeneration);
         rules.tnt_explodes = self.boolean(GameRule::TntExplodes);
         rules.entity_drops = self.boolean(GameRule::EntityDrops);
         rules.max_entity_cramming = self.integer(GameRule::MaxEntityCramming);
@@ -377,6 +378,9 @@ impl GameRules {
         rules.random_tick_speed = self.integer(GameRule::RandomTickSpeed).max(0) as u32;
         rules.water_source_conversion = self.boolean(GameRule::WaterSourceConversion);
         rules.lava_source_conversion = self.boolean(GameRule::LavaSourceConversion);
+        rules.send_command_feedback = self.boolean(GameRule::SendCommandFeedback);
+        rules.players_nether_portal_default_delay =
+            self.integer(GameRule::PlayersNetherPortalDefaultDelay);
     }
     pub fn copy(&self, features: RuleFeatures) -> Self {
         Self::new(features, self.map.clone())

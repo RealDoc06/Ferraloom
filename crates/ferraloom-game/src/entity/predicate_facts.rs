@@ -67,6 +67,40 @@ fn stack(item: Item, count: i32) -> ItemStack {
     stack.0.as_mut().unwrap().count = count;
     stack
 }
+
+#[test]
+fn native_careful_stepping_reads_shift_independently_of_crouching_pose() {
+    let mut cases = 0;
+    for fields in rows("entity-careful-stepping\t") {
+        let mut level = super::tests::level(false);
+        let entity = spawn(&mut level, fields[1]);
+        level
+            .entity_mut::<EntityData>(entity)
+            .unwrap()
+            .set_shared_flag(1, fields[2].parse().unwrap());
+        super::dimensions::set_pose(
+            entity,
+            if fields[3] == "true" {
+                Pose::Crouching
+            } else {
+                Pose::Standing
+            },
+            &mut level,
+        )
+        .unwrap();
+        assert_eq!(
+            level
+                .entity_behavior(entity)
+                .unwrap()
+                .is_stepping_carefully(entity, &level)
+                .unwrap(),
+            fields[4].parse::<bool>().unwrap(),
+            "{fields:?}",
+        );
+        cases += 1;
+    }
+    assert_eq!(cases, 12);
+}
 fn equip(level: &mut Level, id: EntityRef, slot: EquipmentSlot, stack: ItemStack) {
     if slot == EquipmentSlot::Mainhand
         && let Ok(player) = level.entity_mut::<ServerPlayer>(id)
@@ -91,6 +125,97 @@ fn equipment_test(slots: &[EquipmentSlot]) -> EntityPredicate {
         })
         .collect();
     EntityPredicate::decode(&serde_json::json!({"minecraft:equipment":equipment})).unwrap()
+}
+
+#[test]
+fn native_builtin_leather_boots_location_predicate_uses_live_equipment_and_support() {
+    use ferraloom_data::datapack::{Pack, ResourceManager};
+    use std::path::Path;
+    let jar =
+        std::env::var_os("FERRALOOM_VANILLA_JAR").expect("builder supplies vanilla resources");
+    let resources = ResourceManager::new(vec![Pack::vanilla_jar(Path::new(&jar)).unwrap()]);
+    let advancement = resources
+        .require(
+            &"minecraft:advancement/adventure/walk_on_powder_snow_with_leather_boots.json"
+                .parse()
+                .unwrap(),
+        )
+        .unwrap()
+        .json()
+        .unwrap();
+    let predicate = EntityPredicate::decode(
+        &advancement["criteria"]["walk_on_powder_snow_with_leather_boots"]["conditions"]["player"]
+            ["predicate"],
+    )
+    .unwrap();
+    let mut level = super::tests::level(false);
+    let mut checked = 0;
+    for row in rows("entity-leather-boots-location\t") {
+        let test: i32 = row[1].parse().unwrap();
+        let entity = spawn(&mut level, "player");
+        equip(
+            &mut level,
+            entity,
+            if test == 4 {
+                EquipmentSlot::Offhand
+            } else {
+                EquipmentSlot::Feet
+            },
+            stack(
+                if test == 1 {
+                    Item::DIAMOND_BOOTS
+                } else {
+                    Item::LEATHER_BOOTS
+                },
+                if test == 2 {
+                    0
+                } else if test == 3 {
+                    -1
+                } else {
+                    1
+                },
+            ),
+        );
+        let support = BlockPos::new(7, 63, 9);
+        level
+            .set_block_state(
+                support,
+                if test == 6 {
+                    ferraloom_data::Block::STONE
+                } else {
+                    ferraloom_data::Block::POWDER_SNOW
+                }
+                .default_state(),
+            )
+            .unwrap();
+        level
+            .set_block_state(
+                BlockPos::new(8, 63, 8),
+                if test == 7 {
+                    ferraloom_data::Block::POWDER_SNOW
+                } else {
+                    ferraloom_data::Block::STONE
+                }
+                .default_state(),
+            )
+            .unwrap();
+        let base = level.entity_mut::<EntityData>(entity).unwrap();
+        base.set_pos(Vec3::new(8.5, 64.0, 8.5));
+        base.on_ground = test != 5;
+        base.supporting_block_pos = (test != 7).then_some(support);
+        assert_eq!(
+            position(level.entity_on_pos(entity).unwrap()),
+            row[2],
+            "{row:?}"
+        );
+        assert_eq!(
+            predicate.matches(Some(entity), None, &level).unwrap(),
+            row[3] == "true",
+            "{row:?}"
+        );
+        checked += 1;
+    }
+    assert_eq!(checked, 8);
 }
 
 #[test]
@@ -326,7 +451,11 @@ fn native_flags_use_living_virtuals_player_abilities_and_effective_fire_resistan
             level.entity_mut::<ItemEntity>(id).unwrap().set_item(stack);
         }
         if scenario == "player-flying" {
-            level.entity_mut::<ServerPlayer>(id).unwrap().flying = true;
+            level
+                .entity_mut::<ServerPlayer>(id)
+                .unwrap()
+                .abilities
+                .flying = true;
         }
         if scenario == "player-spectator" {
             level.entity_mut::<ServerPlayer>(id).unwrap().game_mode = GameType::Spectator;

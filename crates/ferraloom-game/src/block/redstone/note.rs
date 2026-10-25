@@ -70,7 +70,7 @@ fn play_note(
             ),
             source,
             None,
-        );
+        )?;
     }
     Ok(())
 }

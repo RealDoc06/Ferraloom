@@ -37,7 +37,7 @@ impl BlockBehavior for Snow {
                 Vec3::at_center_of(pos.into()),
                 None,
                 Some(state),
-            );
+            )?;
         }
         Ok(())
     }

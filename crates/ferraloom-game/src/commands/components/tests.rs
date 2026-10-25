@@ -168,8 +168,33 @@ fn missing_live_score_service_remains_explicitly_unsupported() {
 #[test]
 fn required_selector_name_failure_retains_the_level_error() {
     let failure = crate::level::LevelError::MissingEntity(EntityRef(99));
-    let syntax = crate::commands::arguments::selectors::selector_read_error(failure);
+    let syntax = crate::commands::arguments::selectors::selector_read_error(failure.clone());
     assert!(
         matches!(ResolutionError::from(syntax), ResolutionError::EntityData(error) if error == failure)
     );
+}
+
+#[test]
+fn required_component_reads_retain_owned_level_error_causes() {
+    use std::error::Error;
+
+    let failure = crate::level::LevelError::WorldgenMutationFailed {
+        pos: ferraloom_util::BlockPos::new(1, 2, 3),
+        source: ferraloom_worldgen::Error("required worldgen receiver".into()),
+    };
+    let syntax = crate::commands::arguments::selectors::selector_read_error(failure.clone());
+    for resolution in [
+        ResolutionError::from(syntax),
+        ResolutionError::BlockData(failure.clone()),
+    ] {
+        let source = resolution.source().expect("required Level failure");
+        assert_eq!(
+            source.downcast_ref::<crate::level::LevelError>(),
+            Some(&failure)
+        );
+        assert_eq!(
+            source.source().expect("owned worldgen cause").to_string(),
+            "required worldgen receiver"
+        );
+    }
 }

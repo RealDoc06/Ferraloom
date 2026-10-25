@@ -26,9 +26,11 @@ public final class EntityFactsVectors {
     @Override public ItemStack getItemBySlot(EquipmentSlot slot){reads.add(slot.getSerializedName());return super.getItemBySlot(slot);}
   }
   static final class World extends ServerLevel {
+    Level blocks;
     World(){super(null,null,null,null,null,null,false,0,List.of(),false);}
     @Override public boolean hasChunk(int x,int z){return true;}
     @Override public boolean isLoaded(BlockPos pos){return true;}
+    @Override public net.minecraft.world.level.block.state.BlockState getBlockState(BlockPos pos){return blocks.getBlockState(pos);}
   }
   static EntityEquipmentPredicate equipment(ItemPredicate[] tests) {
     return new EntityEquipmentPredicate(Optional.ofNullable(tests[0]),Optional.ofNullable(tests[1]),Optional.ofNullable(tests[2]),Optional.ofNullable(tests[3]),Optional.ofNullable(tests[4]),Optional.ofNullable(tests[5]),Optional.ofNullable(tests[6]));
@@ -54,6 +56,24 @@ public final class EntityFactsVectors {
     }
     var allocatorField=sun.misc.Unsafe.class.getDeclaredField("theUnsafe");allocatorField.setAccessible(true);var allocator=(sun.misc.Unsafe)allocatorField.get(null);
     var world=(World)allocator.allocateInstance(World.class);
+    world.blocks=level;
+    try(var input=EntityFactsVectors.class.getResourceAsStream("/data/minecraft/advancement/adventure/walk_on_powder_snow_with_leather_boots.json")) {
+      var json=com.google.gson.JsonParser.parseReader(new java.io.InputStreamReader(Objects.requireNonNull(input),java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject();
+      var predicateJson=json.getAsJsonObject("criteria").getAsJsonObject("walk_on_powder_snow_with_leather_boots").getAsJsonObject("conditions").getAsJsonObject("player").get("predicate");
+      var builtins=RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
+      var lookup=HolderLookup.Provider.create(java.util.stream.Stream.concat(builtins.listRegistries(),level.registryAccess().listRegistries()));
+      var predicate=EntityPredicate.CODEC.parse(net.minecraft.resources.RegistryOps.create(com.mojang.serialization.JsonOps.INSTANCE,lookup),predicateJson).getOrThrow();
+      var supporting=new BlockPos(7,63,9);
+      for(int test=0;test<8;test++) {
+        var player=new LivingVectors(level);var item=new ItemStack(test==1?Items.DIAMOND_BOOTS:Items.LEATHER_BOOTS);item.setCount(test==2?0:test==3?-1:1);
+        player.setItemSlot(test==4?EquipmentSlot.OFFHAND:EquipmentSlot.FEET,item);
+        player.setPos(8.5,64,8.5);player.setOnGround(test!=5);
+        ClimbVectors.put(level,supporting,(test==6?Blocks.STONE:Blocks.POWDER_SNOW).defaultBlockState());
+        ClimbVectors.put(level,new BlockPos(8,63,8),(test==7?Blocks.POWDER_SNOW:Blocks.STONE).defaultBlockState());
+        player.mainSupportingBlockPos=test==7?Optional.empty():Optional.of(supporting);
+        System.out.println("entity-leather-boots-location\t"+test+"\t"+pos(player.getOnPos())+"\t"+predicate.matches(world,null,player));
+      }
+    }
     var location=LocationPredicate.Builder.location().setX(MinMaxBounds.Doubles.exactly(7.5)).setY(MinMaxBounds.Doubles.exactly(63.5)).setZ(MinMaxBounds.Doubles.exactly(9.5)).build();
     var on=new SteppingOnPredicate(location);var affected=new MovementAffectedByPredicate(location);
     var offset=Entity.class.getDeclaredMethod("getOnPos",float.class);offset.setAccessible(true);
@@ -67,6 +87,11 @@ public final class EntityFactsVectors {
         pos(entity.getOnPos())+"\t"+pos(entity.getOnPosLegacy())+"\t"+pos(entity.getBlockPosBelowThatAffectsMyMovement())+"\t"+pos((BlockPos)offset.invoke(entity,Float.NaN))+"\t"+on.matches(entity,world,null)+"\t"+affected.matches(entity,world,null));
     }
     var shared=Entity.class.getDeclaredMethod("setSharedFlag",int.class,boolean.class);shared.setAccessible(true);
+    for(String kind:List.of("player","cow","item"))for(boolean shift:List.of(false,true))for(boolean crouch:List.of(false,true)) {
+      Entity entity=switch(kind){case "player"->new LivingVectors(level);case "cow"->new Cow(EntityTypes.COW,level);default->new ItemEntity(EntityTypes.ITEM,level);};
+      shared.invoke(entity,1,shift);entity.setPose(crouch?Pose.CROUCHING:Pose.STANDING);
+      System.out.println("entity-careful-stepping\t"+kind+"\t"+shift+"\t"+crouch+"\t"+entity.isSteppingCarefully());
+    }
     for(String scenario:List.of("base","player-base","player-flying","player-glide","player-spectator","cow-baby","cow-glide","tnt-glide","item-stone","item-netherite","item-zero","item-negative","item-direct","item-other")) {
       Entity entity;
       if(scenario.startsWith("item")) {

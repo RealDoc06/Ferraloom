@@ -245,6 +245,70 @@ async fn loaded_stats_and_tab(session: &mut Session) -> Result<ObservationLog> {
     Ok(log)
 }
 
+async fn location_interval(bot: &mut Bot) -> Result<()> {
+    command(bot, "tick unfreeze", "commands.tick.status.running").await?;
+    // Observe more than one native 20-tick interval without assuming the
+    // player's tickCount was aligned to a boundary when the scenario joined.
+    bot.wait_ticks(Ticks(40)).await?;
+    command(bot, "tick freeze", "commands.tick.status.frozen").await
+}
+
+async fn leather_boots_location(session: &mut Session) -> Result<ObservationLog> {
+    let player = setup(session).await?;
+    let bot = session.bot(player)?;
+    let target = Identifier::parse("minecraft:adventure/walk_on_powder_snow_with_leather_boots")?;
+    let mut log = ObservationLog::default();
+    for (label, block, boots, expected) in [
+        ("wrong_boots", "powder_snow", Item::IRON_BOOTS, false),
+        ("wrong_block", "stone", Item::LEATHER_BOOTS, false),
+        (
+            "leather_on_powder_snow",
+            "powder_snow",
+            Item::LEATHER_BOOTS,
+            true,
+        ),
+    ] {
+        // Replace the block before equipping the next boots, so no intermediate
+        // state can satisfy the built-in predicate during connection ticks.
+        command(
+            bot,
+            &format!("setblock 8 79 10 minecraft:{block}"),
+            "commands.setblock.success",
+        )
+        .await?;
+        bot.send(sb::Packet::SetCreativeModeSlot(sb::SetCreativeModeSlot {
+            slot_num: 8,
+            item_stack: play::UntrustedItemStack(ItemStack::new(
+                boots,
+                1,
+                DataComponentPatch::default(),
+            )),
+        }))
+        .await?;
+        bot.move_to([8.5, 80.0, 10.5], true).await?;
+        location_interval(bot).await?;
+        let state = bot.snapshot();
+        let obtained = state
+            .advancement_progress
+            .get(&target)
+            .is_some_and(|progress| {
+                progress.criteria.iter().any(|criterion| {
+                    criterion.name == "walk_on_powder_snow_with_leather_boots"
+                        && criterion.obtained.is_some()
+                })
+            });
+        ensure!(obtained == expected, "wrong LOCATION result for {label}");
+        log.record(label, obtained)?;
+    }
+    Ok(log)
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "launches disposable vanilla/Ferraloom servers"]
+async fn location_awards_leather_boots_on_powder_snow() -> Result<()> {
+    ferraloom_parity::run(options(), RunMode::from_env()?, leather_boots_location).await
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[ignore = "launches disposable vanilla/Ferraloom servers"]
 async fn loaded_statistics_and_advancement_tab_survive_save() -> Result<()> {

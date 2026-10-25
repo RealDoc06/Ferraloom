@@ -79,7 +79,7 @@ macro_rules! registry_set {
 macro_rules! wire_enum {
     ($name:ident { $first:ident = $first_id:literal $(, $variant:ident = $id:literal)* $(,)? }) => {
         #[doc = concat!("Port of ", stringify!($name), "#STREAM_CODEC (ByIdMap ZERO fallback).")]
-        #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+        #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
         pub enum $name { $first = $first_id, $($variant = $id),* }
         impl Wire for $name {
             fn decode(r: &mut Reader<'_>) -> Result<Self> {
@@ -189,6 +189,32 @@ wire_enum!(Rarity { Common = 0, Uncommon = 1, Rare = 2, Epic = 3 });
 wire_enum!(DyeColor { White = 0, Orange = 1, Magenta = 2, LightBlue = 3, Yellow = 4, Lime = 5, Pink = 6, Gray = 7, LightGray = 8, Cyan = 9, Purple = 10, Blue = 11, Brown = 12, Green = 13, Red = 14, Black = 15 });
 wire_enum!(EquipmentSlot { Mainhand = 0, Feet = 1, Legs = 2, Chest = 3, Head = 4, Offhand = 5, Body = 6, Saddle = 7 });
 wire_enum!(EquipmentSlotGroup { Any = 0, Mainhand = 1, Offhand = 2, Hand = 3, Feet = 4, Legs = 5, Chest = 6, Head = 7, Armor = 8, Body = 9, Saddle = 10 });
+impl EquipmentSlotGroup {
+    /// Port of EquipmentSlotGroup#test, including animal armor but not saddles.
+    pub fn test(self, slot: EquipmentSlot) -> bool {
+        match self {
+            Self::Any => true,
+            Self::Mainhand => slot == EquipmentSlot::Mainhand,
+            Self::Offhand => slot == EquipmentSlot::Offhand,
+            Self::Hand => matches!(slot, EquipmentSlot::Mainhand | EquipmentSlot::Offhand),
+            Self::Feet => slot == EquipmentSlot::Feet,
+            Self::Legs => slot == EquipmentSlot::Legs,
+            Self::Chest => slot == EquipmentSlot::Chest,
+            Self::Head => slot == EquipmentSlot::Head,
+            Self::Armor => matches!(
+                slot,
+                EquipmentSlot::Feet
+                    | EquipmentSlot::Legs
+                    | EquipmentSlot::Chest
+                    | EquipmentSlot::Head
+                    | EquipmentSlot::Body
+            ),
+            Self::Body => slot == EquipmentSlot::Body,
+            Self::Saddle => slot == EquipmentSlot::Saddle,
+        }
+    }
+}
+
 wire_enum!(AttributeOperation { AddValue = 0, AddMultipliedBase = 1, AddMultipliedTotal = 2 });
 wire_enum!(FireworkShape { SmallBall = 0, LargeBall = 1, Star = 2, Creeper = 3, Burst = 4 });
 wire_enum!(ItemUseAnimation { None = 0, Eat = 1, Drink = 2, Block = 3, Bow = 4, Trident = 5, Crossbow = 6, Spyglass = 7, TootHorn = 8, Brush = 9, Bundle = 10, Spear = 11 });
@@ -810,5 +836,29 @@ impl Wire for super::ComponentTypeId {
     fn encode(&self, w: &mut Writer<'_>) -> Result<()> {
         w.var_int(self.protocol_id().into());
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod equipment_slot_group_tests {
+    use super::*;
+
+    #[test]
+    fn native_slot_groups_match_all_equipment_slots() {
+        let mut cases = 0;
+        for row in include_str!("../../tests/java/equipment/vectors.tsv").lines() {
+            let fields: Vec<_> = row.split('\t').collect();
+            let group = [fields[0].parse::<u8>().unwrap()];
+            let slot = [fields[1].parse::<u8>().unwrap()];
+            let group = EquipmentSlotGroup::decode(&mut Reader::new(&group)).unwrap();
+            let slot = EquipmentSlot::decode(&mut Reader::new(&slot)).unwrap();
+            assert_eq!(
+                group.test(slot),
+                fields[2].parse::<bool>().unwrap(),
+                "{row}"
+            );
+            cases += 1;
+        }
+        assert_eq!(cases, 88);
     }
 }

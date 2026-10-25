@@ -23,9 +23,13 @@ fn describe(stack: &ItemStack) -> String {
 
 #[test]
 fn outside_primary_click_moves_the_original_cursor_into_the_item_entity() {
-    use crate::entity::{effects::EntityEffect, item::ItemEntity};
+    use crate::{
+        entity::item::ItemEntity,
+        stats::{Stat, custom},
+    };
     for amount in [0, 7] {
         let mut level = crate::entity::tests::level(false);
+        level.install_shared(Box::default());
         let player = level.next_entity_ref();
         let mut state = ServerPlayer::new(
             Uuid::new(1, 2),
@@ -71,23 +75,29 @@ fn outside_primary_click_moves_the_original_cursor_into_the_item_entity() {
                 .carried
                 .is_empty()
         );
-        let effects = outer.level.take_entity_effects();
+        let items: Vec<_> = outer
+            .level
+            .all_entities()
+            .into_iter()
+            .filter(|entity| outer.level.entity::<ItemEntity>(*entity).is_ok())
+            .collect();
+        let stats = &outer.level.entity::<ServerPlayer>(player).unwrap().stats;
+        assert_eq!(stats.get_value(Stat::Dropped(Item::STONE)), amount);
+        assert_eq!(
+            stats.get_value(Stat::Custom(custom::Id::DROP)),
+            i32::from(amount > 0)
+        );
         if amount == 0 {
-            assert!(effects.is_empty());
+            assert!(items.is_empty());
             continue;
         }
-        let [
-            EntityEffect::ItemDrop {
-                entity,
-                count: dropped,
-                thrown_from_hand: true,
-                ..
-            },
-        ] = effects.as_slice()
-        else {
-            panic!("missing canonical drop effect: {effects:?}")
+        let [entity] = items.as_slice() else {
+            panic!("expected one canonical dropped item: {items:?}")
         };
-        assert_eq!(*dropped, amount);
+        assert_eq!(
+            count(outer.level.entity::<ItemEntity>(*entity).unwrap().item()),
+            amount
+        );
         assert!(std::ptr::eq(
             outer.level.stack(held).unwrap(),
             outer.level.entity::<ItemEntity>(*entity).unwrap().item()

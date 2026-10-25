@@ -104,21 +104,43 @@ public final class EntityVectors {
         AttributeVectors.run();
         LivingVectors.run(new EntityFixture(r));
         TravelVectors.run(new EntityFixture(r));
+        AbilityVectors.run(new EntityFixture(r));
+        AbilitiesVectors.run();
+        AirTravelVectors.run(new EntityFixture(r));
+        FluidTravelVectors.run(new EntityFixture(r));
+        FallFlyingVectors.run(new EntityFixture(r));
+        GlidingVectors.run(new EntityFixture(r));
+        FoodVectors.run(new EntityFixture(r));
+        ShoulderVectors.run(new EntityFixture(r));
+        AiStepVectors.run(new EntityFixture(r));
+        TravelDispatchVectors.run(new EntityFixture(r));
+        JumpVectors.run(new EntityFixture(r));
+        ServerJumpVectors.run(new EntityFixture(r));
+        ItemTickVectors.run();
+        EffectVectors.run();
+        EffectReadVectors.run(new EntityFixture(r));
         DamageVectors.run(new EntityFixture(r));
         DifficultyVectors.run();
         ExperienceVectors.run(new EntityFixture(r));
         DropVectors.run(new EntityFixture(r));
+        StuckVectors.run(new EntityFixture(r));
+        EquipmentBreakVectors.run(new EntityFixture(r));
         EntityFactsVectors.run(new EntityFixture(r));
         NbtVectors.run(new EntityFixture(r));
         NameVectors.run(new EntityFixture(r));
         FreezingVectors.run(new EntityFixture(r));
+        FreezePhaseVectors.run(new EntityFixture(r));
         ClimbVectors.run(new EntityFixture(r));
         PushingVectors.run(new EntityFixture(r));
         CrammingVectors.run(new EntityFixture(r));
         DimensionVectors.run(new EntityFixture(r));
         PlayerTrackingVectors.run(new EntityFixture(r));
+        PlayerTickVectors.run(new EntityFixture(r));
+        PlayerSyncVectors.run(new EntityFixture(r));
         WorldgenVectors.run(new EntityFixture(r));
         CollisionVectors.run();
+        PlacementContextVectors.run(new EntityFixture(r));
+        LandingVectors.run(new EntityFixture(r));
         SoundVectors.run(new EntityFixture(r));
         TeleportVectors.run(new EntityFixture(r));
         PushVectors.run(new EntityFixture(r));
@@ -171,12 +193,12 @@ public final class EntityVectors {
           var names=new ArrayList<String>();for(var block:BuiltInRegistries.BLOCK)if(block.defaultBlockState().is(tag))names.add(BuiltInRegistries.BLOCK.getKey(block).toString());
           System.out.println("block-tag\\t"+tag.location()+"\\t"+String.join(",",names));
         }
-        for(var entityTag:List.of(net.minecraft.tags.EntityTypeTags.NON_CONTROLLING_RIDER,net.minecraft.tags.EntityTypeTags.FREEZE_IMMUNE_ENTITY_TYPES)){
+        for(var entityTag:List.of(net.minecraft.tags.EntityTypeTags.NON_CONTROLLING_RIDER,net.minecraft.tags.EntityTypeTags.FREEZE_IMMUNE_ENTITY_TYPES,net.minecraft.tags.EntityTypeTags.POWDER_SNOW_WALKABLE_MOBS,net.minecraft.tags.EntityTypeTags.CAN_FLOAT_WHILE_RIDDEN)){
           var entityNames=new ArrayList<String>();
           for(var type:BuiltInRegistries.ENTITY_TYPE)if(BuiltInRegistries.ENTITY_TYPE.wrapAsHolder(type).is(entityTag))entityNames.add(BuiltInRegistries.ENTITY_TYPE.getKey(type).toString());
           System.out.println("entity-tag\\t"+entityTag.location()+"\\t"+String.join(",",entityNames));
         }
-        for(var tag:List.of(net.minecraft.tags.FluidTags.WATER,net.minecraft.tags.FluidTags.LAVA)){
+        for(var tag:List.of(net.minecraft.tags.FluidTags.WATER,net.minecraft.tags.FluidTags.LAVA,net.minecraft.tags.FluidTags.ENTITY_FLOATABLE)){
           var names=new ArrayList<String>();for(var fluid:BuiltInRegistries.FLUID)if(fluid.is(tag))names.add(BuiltInRegistries.FLUID.getKey(fluid).toString());
           System.out.println("fluid-tag\\t"+tag.location()+"\\t"+String.join(",",names));
         }

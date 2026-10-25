@@ -261,7 +261,7 @@ pub fn move_entity<E: Entity + ?Sized>(
             && length >= 1.0
             && super::trace::fall_distance_resetting_hit(entity, movement, level)?
         {
-            level.entity_mut::<EntityData>(entity)?.fall_distance = 0.0;
+            behavior.reset_fall_distance(entity, level)?;
         }
         let position = level.entity::<EntityData>(entity)?.position;
         level
@@ -300,7 +300,7 @@ pub fn move_entity<E: Entity + ?Sized>(
     let effect_pos = get_on_pos(entity, 0.2_f32, level)?;
     let effect_state = level.get_block_state(effect_pos)?;
     if authoritative {
-        check_fall_damage(
+        behavior.check_fall_damage(
             entity,
             movement.y,
             level.entity::<EntityData>(entity)?.on_ground,
@@ -353,6 +353,20 @@ pub fn check_fall_damage(
     level: &mut Level,
 ) -> Result<(), LevelError> {
     level
+        .entity_behavior(entity)?
+        .check_fall_damage(entity, dy, on_ground, state, pos, level)
+}
+/// Port of Entity#checkFallDamage, selected explicitly by living super calls.
+pub fn base_check_fall_damage<E: Entity + ?Sized>(
+    behavior: &E,
+    entity: EntityRef,
+    dy: f64,
+    on_ground: bool,
+    state: BlockState,
+    pos: BlockPos,
+    level: &mut Level,
+) -> Result<(), LevelError> {
+    level
         .entity_mut::<EntityData>(entity)?
         .accumulate_fall_distance(dy);
     let base = level.entity::<EntityData>(entity)?;
@@ -375,10 +389,9 @@ pub fn check_fall_damage(
             position,
             Some(entity),
             Some(support_state),
-        );
+        )?;
     }
-    level.entity_mut::<EntityData>(entity)?.fall_distance = 0.0;
-    Ok(())
+    behavior.reset_fall_distance(entity, level)
 }
 fn restitute<E: Entity + ?Sized>(
     behavior: &E,
@@ -505,7 +518,7 @@ fn apply_movement_emission<E: Entity + ?Sized>(
                     level.entity::<EntityData>(entity)?.position,
                     Some(entity),
                     None,
-                );
+                )?;
             }
         }
         let base = level.entity_mut::<EntityData>(entity)?;
@@ -541,7 +554,7 @@ fn emit_step<E: Entity + ?Sized>(
                 level.entity::<EntityData>(entity)?.position,
                 Some(entity),
                 Some(state),
-            );
+            )?;
         }
         Ok(true)
     } else {

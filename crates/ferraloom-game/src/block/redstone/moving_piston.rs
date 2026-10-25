@@ -509,8 +509,13 @@ pub(super) fn collision_shape(
     level: &Level,
     handle: BlockEntityRef,
 ) -> Result<VoxelShape, LevelError> {
-    let e = level.block_entity::<PistonMovingBlockEntity>(handle)?;
-    let reader = LevelReaderRef::Server(level);
+    collision_shape_from_reader(&LevelReaderRef::Server(level), handle)
+}
+fn collision_shape_from_reader(
+    reader: &LevelReaderRef<'_, '_>,
+    handle: BlockEntityRef,
+) -> Result<VoxelShape, LevelError> {
+    let e = reader.block_entity::<PistonMovingBlockEntity>(handle)?;
     let base = if !e.extending
         && e.is_source_piston
         && e.moved_state
@@ -524,7 +529,7 @@ pub(super) fn collision_shape(
     } else {
         shapes::empty()
     };
-    if e.progress < 1.0 && level.region().redstone.piston_noclip == Some(e.movement_direction()) {
+    if e.progress < 1.0 && reader.piston_noclip()? == Some(e.movement_direction()) {
         return Ok(base);
     }
     let state = if e.is_source_piston {
@@ -599,6 +604,16 @@ impl BlockBehavior for MovingPistonBlock {
                 };
                 if PistonMovingBlockEntity::view(level.block_entity_state(handle)?).is_some() {
                     collision_shape(level, handle)
+                } else {
+                    Ok(shapes::empty())
+                }
+            }
+            LevelReaderRef::PathNavigation(_) => {
+                let Some(handle) = reader.block_entity_ref(pos)? else {
+                    return Ok(shapes::empty());
+                };
+                if PistonMovingBlockEntity::view(reader.block_entity_state(handle)?).is_some() {
+                    collision_shape_from_reader(reader, handle)
                 } else {
                     Ok(shapes::empty())
                 }

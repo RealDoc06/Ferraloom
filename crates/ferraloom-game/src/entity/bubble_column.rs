@@ -44,8 +44,7 @@ pub fn on_inside_bubble_column<E: Entity + ?Sized>(
             (base.velocity.y + 0.06).min(0.7)
         };
     }
-    level.entity_mut::<EntityData>(entity)?.fall_distance = 0.0;
-    Ok(())
+    behavior.reset_fall_distance(entity, level)
 }
 
 fn send_particles(
@@ -110,7 +109,11 @@ mod tests {
             };
             level.add_entity(id, state).unwrap();
             if fields[1] == "flying" {
-                level.entity_mut::<ServerPlayer>(id).unwrap().flying = true;
+                level
+                    .entity_mut::<ServerPlayer>(id)
+                    .unwrap()
+                    .abilities
+                    .flying = true;
             }
             level.random().set_seed(123);
             let base = level.entity_mut::<EntityData>(id).unwrap();

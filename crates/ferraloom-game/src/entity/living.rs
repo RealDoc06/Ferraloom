@@ -8,8 +8,21 @@ use ferraloom_protocol::{codec::VarInt, component::ItemStack};
 use ferraloom_util::random::RandomSource;
 
 pub mod climbable;
+mod equipment;
+pub use equipment::on_equipped_item_broken;
+pub(crate) use equipment::on_equipped_item_broken_parent;
+pub mod fall_damage;
 pub mod freezing;
+pub mod gliding;
+pub mod jump;
 pub mod travel;
+
+/// Port of LivingEntity.Fallsounds, selected virtually by the entity family.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct FallSounds {
+    pub small: ferraloom_data::registries::sound_event::Id,
+    pub big: ferraloom_data::registries::sound_event::Id,
+}
 
 /// Port of LivingEntity's canonical attributes, metadata, equipment and current
 /// unarmored damage primitive. Every concrete subclass embeds this state once.
@@ -18,6 +31,8 @@ pub struct LivingEntity {
     pub parent: EntityData,
     pub attributes: AttributeMap,
     pub equipment: EntityEquipment,
+    pub(crate) active_effects: super::effect::ActiveEffects,
+    pub effects_dirty: bool,
     pub use_item: ItemStack,
     pub use_item_remaining: i32,
     pub jumping: bool,
@@ -25,7 +40,11 @@ pub struct LivingEntity {
     pub yya: f32,
     pub zza: f32,
     pub no_jump_delay: i32,
+    pub fall_fly_ticks: i32,
+    /// Only startAutoSpinAttack (unported riptide) can make this positive.
+    pub auto_spin_attack_ticks: i32,
     pub speed: f32,
+    pub discard_friction: bool,
     pub last_climbable_pos: std::cell::Cell<Option<ferraloom_util::BlockPos>>,
     pub y_head_rot: f32,
     pub old_y_head_rot: f32,
@@ -35,6 +54,8 @@ pub struct LivingEntity {
     pub damage_cooldown_time: i32,
     pub hurt_time: i32,
     pub hurt_duration: i32,
+    current_impulse_context_reset_grace_time: i32,
+    current_impulse_impact_pos: Option<ferraloom_util::Vec3>,
 }
 impl LivingEntity {
     /// Port of LivingEntity's constructor after Entity's derived metadata build.
@@ -52,6 +73,8 @@ impl LivingEntity {
             parent,
             attributes,
             equipment: EntityEquipment::default(),
+            active_effects: super::effect::ActiveEffects::default(),
+            effects_dirty: true,
             use_item: ItemStack::default(),
             use_item_remaining: 0,
             jumping: false,
@@ -59,7 +82,10 @@ impl LivingEntity {
             yya: 0.0,
             zza: 0.0,
             no_jump_delay: 0,
+            fall_fly_ticks: 0,
+            auto_spin_attack_ticks: 0,
             speed: 0.0,
+            discard_friction: false,
             last_climbable_pos: std::cell::Cell::new(None),
             y_head_rot: 0.0,
             old_y_head_rot: 0.0,
@@ -69,6 +95,8 @@ impl LivingEntity {
             damage_cooldown_time: 0,
             hurt_time: 0,
             hurt_duration: 0,
+            current_impulse_context_reset_grace_time: 0,
+            current_impulse_impact_pos: None,
         };
         living.set_health(living.max_health());
         living.parent.blocks_building = true;
@@ -81,6 +109,53 @@ impl LivingEntity {
     /// Port of LivingEntity#isUsingItem (mask 1, not a bit index).
     pub fn is_using_item(&self) -> bool {
         self.parent.entity_data.get(data::LIVING_ENTITY_FLAGS) & 1 > 0
+    }
+    /// Port of LivingEntity#applyPostImpulseGraceTime.
+    pub fn apply_post_impulse_grace_time(&mut self, ticks: i32) {
+        self.current_impulse_context_reset_grace_time =
+            self.current_impulse_context_reset_grace_time.max(ticks);
+    }
+    /// Port of LivingEntity#setIgnoreFallDamageFromCurrentImpulse. Turning it
+    /// off clears grace only; the captured position is cleared by resetContext.
+    pub fn set_ignore_fall_damage_from_current_impulse(
+        &mut self,
+        ignore: bool,
+        position: ferraloom_util::Vec3,
+    ) {
+        if ignore {
+            self.apply_post_impulse_grace_time(40);
+            self.current_impulse_impact_pos = Some(position);
+        } else {
+            self.current_impulse_context_reset_grace_time = 0;
+        }
+    }
+    pub fn current_impulse_impact_pos(&self) -> Option<ferraloom_util::Vec3> {
+        self.current_impulse_impact_pos
+    }
+    /// Port of LivingEntity#isIgnoringFallDamageFromCurrentImpulse.
+    pub fn is_ignoring_fall_damage_from_current_impulse(&self) -> bool {
+        self.current_impulse_impact_pos.is_some()
+    }
+    /// Port of LivingEntity#isInPostImpulseGraceTime.
+    pub fn is_in_post_impulse_grace_time(&self) -> bool {
+        self.current_impulse_context_reset_grace_time > 0
+    }
+    /// Port of LivingEntity#resetCurrentImpulseContext.
+    pub fn reset_current_impulse_context(&mut self) {
+        self.current_impulse_context_reset_grace_time = 0;
+        self.current_impulse_impact_pos = None;
+    }
+    /// Port of LivingEntity#tryResetCurrentImpulseContext; negative loaded grace
+    /// is intentionally distinct from zero, even though it is not active grace.
+    pub fn try_reset_current_impulse_context(&mut self) {
+        if self.current_impulse_context_reset_grace_time == 0 {
+            self.reset_current_impulse_context();
+        }
+    }
+    pub(crate) fn tick_current_impulse_grace_time(&mut self) {
+        if self.current_impulse_context_reset_grace_time > 0 {
+            self.current_impulse_context_reset_grace_time -= 1;
+        }
     }
     /// Port of LivingEntity#getUseItem.
     pub fn get_use_item(&self) -> &ItemStack {
@@ -104,6 +179,16 @@ impl LivingEntity {
     }
     pub fn health(&self) -> f32 {
         *self.parent.entity_data.get(data::HEALTH)
+    }
+    /// Port of LivingEntity#getEffect over the canonical holder-keyed map.
+    pub fn get_effect(
+        &self,
+        effect: ferraloom_data::registries::mob_effect::Id,
+    ) -> Option<&super::effect::MobEffectInstance> {
+        self.active_effects.get(effect)
+    }
+    pub fn has_effect(&self, effect: ferraloom_data::registries::mob_effect::Id) -> bool {
+        self.active_effects.contains(effect)
     }
     pub fn max_health(&self) -> f32 {
         self.attributes
@@ -137,8 +222,29 @@ impl LivingEntity {
                 );
             }
         }
+        for error in self
+            .active_effects
+            .load(self.parent.saved.get("active_effects"))
+        {
+            eprintln!(
+                "Failed to load active effects for entity {}: {error}",
+                self.parent.uuid
+            );
+        }
+        if !self.active_effects.is_empty() {
+            self.effects_dirty = true;
+        }
         self.set_health(self.parent.saved.get_float_or("Health", self.max_health()));
         self.hurt_time = i32::from(self.parent.saved.get_short_or("HurtTime", 0));
+        self.current_impulse_context_reset_grace_time = self
+            .parent
+            .saved
+            .get_int_or("current_impulse_context_reset_grace_time", 0);
+        self.current_impulse_impact_pos = self
+            .parent
+            .saved
+            .get("current_explosion_impact_pos")
+            .and_then(super::persistence::optional_vector);
         self.equipment = self
             .parent
             .saved
@@ -149,7 +255,23 @@ impl LivingEntity {
     pub(crate) fn add_additional_save_data(&self, tag: &mut CompoundTag) {
         tag.insert("Health", Tag::Float(self.health()));
         tag.insert("HurtTime", Tag::Short(self.hurt_time as i16));
+        tag.insert(
+            "current_impulse_context_reset_grace_time",
+            Tag::Int(self.current_impulse_context_reset_grace_time),
+        );
+        tag.remove("current_explosion_impact_pos");
+        if let Some(position) = self.current_impulse_impact_pos {
+            tag.insert(
+                "current_explosion_impact_pos",
+                super::persistence::codec_vector_tag(position),
+            );
+        }
         tag.insert("attributes", self.attributes.save_nbt());
+        tag.remove("active_effects");
+        if !self.active_effects.is_empty() {
+            // Deterministic identity-map order, not native holder hash iteration.
+            tag.insert("active_effects", self.active_effects.save());
+        }
         tag.remove("equipment");
         if !self.equipment.is_empty() {
             tag.insert(
@@ -186,7 +308,7 @@ pub fn stop_using_item(
             position,
             Some(entity),
             None,
-        );
+        )?;
     }
     let state = level.entity_mut::<LivingEntity>(entity)?;
     state.use_item = ItemStack::default();

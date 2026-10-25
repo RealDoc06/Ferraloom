@@ -2,6 +2,7 @@
 use super::{BlockMethod, LevelAccessRef, LevelReaderRef};
 use crate::level::LevelError;
 use ferraloom_data::{BlockState, FluidState};
+use ferraloom_util::random::RandomSource;
 use ferraloom_util::{BlockPos, Direction, shapes};
 use ferraloom_worldgen::{
     Error,
@@ -19,6 +20,98 @@ fn result<T>(value: Result<T, LevelError>) -> Result<T, Error> {
     value.map_err(|error| Error(format!("game block behavior: {error:?}")))
 }
 impl WorldgenBlockBehavior for GameWorldgenBlockBehavior {
+    fn materialize_block_entity(
+        &self,
+        p: [i32; 3],
+        state: BlockState,
+        tag: &ferraloom_nbt::CompoundTag,
+    ) -> Result<Option<Box<dyn ferraloom_worldgen::region::WorldgenBlockEntity>>, Error> {
+        let entity = if tag
+            .get_string("id")
+            .is_some_and(|id| id.to_string_lossy() == "DUMMY")
+        {
+            if !state.has_block_entity() {
+                return Ok(None);
+            }
+            result(super::entity::new_block_entity(pos(p), state))?
+        } else {
+            result(super::entity::load_static(pos(p), state, tag))?
+        };
+        Ok(entity.map(|entity| {
+            Box::new(entity) as Box<dyn ferraloom_worldgen::region::WorldgenBlockEntity>
+        }))
+    }
+    /// Port of RandomizableContainer#setBlockEntityLootTable. Materialization
+    /// and the actual class check finish before the one conditional RNG draw.
+    fn set_loot_table(
+        &self,
+        region: &mut WorldGenRegion<'_>,
+        p: [i32; 3],
+        table: &ferraloom_worldgen::Identifier,
+        random: &mut ferraloom_util::random::WorldgenRandom,
+    ) -> Result<(), Error> {
+        if let Some(entity) = region.get_or_create_block_entity(p)?
+            && entity.is_randomizable()
+        {
+            entity.set_loot_table(table, random.next_long())?;
+        }
+        Ok(())
+    }
+    fn set_loot_table_seed(
+        &self,
+        region: &mut WorldGenRegion<'_>,
+        p: [i32; 3],
+        table: &ferraloom_worldgen::Identifier,
+        seed: i64,
+    ) -> Result<(), Error> {
+        if let Some(entity) = region.get_or_create_block_entity(p)? {
+            entity.set_loot_table(table, seed)?;
+        }
+        Ok(())
+    }
+    fn set_spawner_entity(
+        &self,
+        region: &mut WorldGenRegion<'_>,
+        p: [i32; 3],
+        kind: ferraloom_data::EntityType,
+        random: &mut ferraloom_util::random::WorldgenRandom,
+    ) -> Result<(), Error> {
+        if let Some(entity) = region.get_or_create_block_entity(p)? {
+            entity.set_entity_id(kind, random)?;
+        }
+        Ok(())
+    }
+    fn populate_worldgen_beehive(
+        &self,
+        region: &mut WorldGenRegion<'_>,
+        p: [i32; 3],
+        random: &mut ferraloom_util::random::WorldgenRandom,
+    ) -> Result<(), Error> {
+        if let Some(entity) = region.get_or_create_block_entity(p)? {
+            entity.populate_beehive(random)?;
+        }
+        Ok(())
+    }
+    /// Port of StructureTemplate#placeInWorld's loadWithComponents stage. The
+    /// template seed draw depends on the existing receiver, not its incoming NBT.
+    fn load_block_entity(
+        &self,
+        region: &mut WorldGenRegion<'_>,
+        p: [i32; 3],
+        mut tag: ferraloom_nbt::CompoundTag,
+        random: &mut ferraloom_util::random::WorldgenRandom,
+    ) -> Result<(), Error> {
+        if let Some(entity) = region.get_or_create_block_entity(p)? {
+            if entity.is_randomizable() {
+                tag.insert(
+                    "LootTableSeed",
+                    ferraloom_nbt::Tag::Long(random.next_long()),
+                );
+            }
+            entity.load_with_components(&tag)?;
+        }
+        Ok(())
+    }
     fn vine_acceptable_neighbor(
         &self,
         region: &WorldGenRegion<'_>,

@@ -197,7 +197,11 @@ impl ProtoChunk {
             )
             .map_err(|e| e.to_string())?,
         );
-        disk.block_entities = Some(self.region.block_entities.values().cloned().collect());
+        disk.block_entities = Some(
+            self.region
+                .saved_block_entities()
+                .map_err(|e| e.to_string())?,
+        );
         disk.entities = Some(self.region.entities.clone());
         // Full chunks keep trigger delays from LevelChunkTicks. ProtoChunkTicks
         // discards time, preserving only insertion order, kind and priority.

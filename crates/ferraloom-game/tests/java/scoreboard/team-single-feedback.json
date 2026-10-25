@@ -1,0 +1,679 @@
+[
+  {
+    "kind": "player",
+    "command": "team join red @a",
+    "members": [
+      "Doc"
+    ],
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.team.join.success.single",
+          "with": [
+            {
+              "text": "",
+              "extra": [
+                "\u003cred\u003e",
+                "Doc",
+                "\u003c/red\u003e"
+              ],
+              "color": "red",
+              "click_event": {
+                "command": "/tell Doc ",
+                "action": "suggest_command"
+              },
+              "hover_event": {
+                "value": "Doc",
+                "action": "show_text"
+              },
+              "insertion": "Doc"
+            },
+            {
+              "translate": "chat.square_brackets",
+              "with": [
+                {
+                  "text": "red",
+                  "hover_event": {
+                    "value": "red",
+                    "action": "show_text"
+                  },
+                  "insertion": "red"
+                }
+              ],
+              "color": "red"
+            }
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "packets": [
+      {
+        "type": "ClientboundSetPlayerTeamPacket",
+        "hex": "03726564030103446f63"
+      }
+    ],
+    "display_changed": true
+  },
+  {
+    "kind": "player",
+    "command": "team join red @a",
+    "members": [
+      "Doc"
+    ],
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.team.join.success.single",
+          "with": [
+            {
+              "text": "",
+              "extra": [
+                "\u003cred\u003e",
+                "Doc",
+                "\u003c/red\u003e"
+              ],
+              "color": "red",
+              "click_event": {
+                "command": "/tell Doc ",
+                "action": "suggest_command"
+              },
+              "hover_event": {
+                "value": "Doc",
+                "action": "show_text"
+              },
+              "insertion": "Doc"
+            },
+            {
+              "translate": "chat.square_brackets",
+              "with": [
+                {
+                  "text": "red",
+                  "hover_event": {
+                    "value": "red",
+                    "action": "show_text"
+                  },
+                  "insertion": "red"
+                }
+              ],
+              "color": "red"
+            }
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "packets": [
+      {
+        "type": "ClientboundSetPlayerTeamPacket",
+        "hex": "03726564040103446f63"
+      },
+      {
+        "type": "ClientboundSetPlayerTeamPacket",
+        "hex": "03726564030103446f63"
+      }
+    ],
+    "display_changed": false
+  },
+  {
+    "kind": "player",
+    "command": "team join blue @a",
+    "members": [
+      "Doc"
+    ],
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.team.join.success.single",
+          "with": [
+            {
+              "text": "",
+              "extra": [
+                "\u003cblue\u003e",
+                "Doc",
+                "\u003c/blue\u003e"
+              ],
+              "color": "blue",
+              "click_event": {
+                "command": "/tell Doc ",
+                "action": "suggest_command"
+              },
+              "hover_event": {
+                "value": "Doc",
+                "action": "show_text"
+              },
+              "insertion": "Doc"
+            },
+            {
+              "translate": "chat.square_brackets",
+              "with": [
+                {
+                  "text": "blue",
+                  "hover_event": {
+                    "value": "blue",
+                    "action": "show_text"
+                  },
+                  "insertion": "blue"
+                }
+              ],
+              "color": "blue"
+            }
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "packets": [
+      {
+        "type": "ClientboundSetPlayerTeamPacket",
+        "hex": "03726564040103446f63"
+      },
+      {
+        "type": "ClientboundSetPlayerTeamPacket",
+        "hex": "04626c7565030103446f63"
+      }
+    ],
+    "display_changed": true
+  },
+  {
+    "kind": "player",
+    "command": "team leave @a",
+    "members": [
+      "#absent",
+      "Doc"
+    ],
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.team.leave.success.single",
+          "with": [
+            {
+              "text": "Doc",
+              "click_event": {
+                "command": "/tell Doc ",
+                "action": "suggest_command"
+              },
+              "hover_event": {
+                "value": "Doc",
+                "action": "show_text"
+              },
+              "insertion": "Doc"
+            }
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "packets": [
+      {
+        "type": "ClientboundSetPlayerTeamPacket",
+        "hex": "04626c7565040103446f63"
+      }
+    ],
+    "display_changed": true
+  },
+  {
+    "kind": "player",
+    "command": "team leave @a",
+    "members": [
+      "Doc"
+    ],
+    "value": 0,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.team.leave.success.multiple",
+          "with": [
+            0
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "packets": []
+  },
+  {
+    "kind": "player",
+    "command": "team join red @a",
+    "members": [
+      "Doc",
+      "Doc"
+    ],
+    "value": 2,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.team.join.success.multiple",
+          "with": [
+            2,
+            {
+              "translate": "chat.square_brackets",
+              "with": [
+                {
+                  "text": "red",
+                  "hover_event": {
+                    "value": "red",
+                    "action": "show_text"
+                  },
+                  "insertion": "red"
+                }
+              ],
+              "color": "red"
+            }
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "packets": [
+      {
+        "type": "ClientboundSetPlayerTeamPacket",
+        "hex": "03726564030103446f63"
+      },
+      {
+        "type": "ClientboundSetPlayerTeamPacket",
+        "hex": "03726564040103446f63"
+      },
+      {
+        "type": "ClientboundSetPlayerTeamPacket",
+        "hex": "03726564030103446f63"
+      }
+    ]
+  },
+  {
+    "kind": "player",
+    "command": "team leave @a",
+    "members": [
+      "Doc",
+      "Doc"
+    ],
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.team.leave.success.single",
+          "with": [
+            {
+              "text": "Doc",
+              "click_event": {
+                "command": "/tell Doc ",
+                "action": "suggest_command"
+              },
+              "hover_event": {
+                "value": "Doc",
+                "action": "show_text"
+              },
+              "insertion": "Doc"
+            }
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "packets": [
+      {
+        "type": "ClientboundSetPlayerTeamPacket",
+        "hex": "03726564040103446f63"
+      }
+    ],
+    "display_changed": true
+  },
+  {
+    "kind": "player",
+    "command": "team leave @a",
+    "members": [
+      "Doc"
+    ],
+    "value": 0,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.team.leave.success.multiple",
+          "with": [
+            0
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "packets": []
+  },
+  {
+    "kind": "cow",
+    "command": "team join red @a",
+    "members": [
+      "00000000-0000-0000-0000-000000000001"
+    ],
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.team.join.success.single",
+          "with": [
+            {
+              "text": "",
+              "extra": [
+                "\u003cred\u003e",
+                {
+                  "text": "Named Cow",
+                  "bold": true
+                },
+                "\u003c/red\u003e"
+              ],
+              "color": "red",
+              "hover_event": {
+                "value": "00000000-0000-0000-0000-000000000001",
+                "action": "show_text"
+              },
+              "insertion": "00000000-0000-0000-0000-000000000001"
+            },
+            {
+              "translate": "chat.square_brackets",
+              "with": [
+                {
+                  "text": "red",
+                  "hover_event": {
+                    "value": "red",
+                    "action": "show_text"
+                  },
+                  "insertion": "red"
+                }
+              ],
+              "color": "red"
+            }
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "packets": [
+      {
+        "type": "ClientboundSetPlayerTeamPacket",
+        "hex": "0372656403012430303030303030302d303030302d303030302d303030302d303030303030303030303031"
+      }
+    ],
+    "display_changed": true
+  },
+  {
+    "kind": "cow",
+    "command": "team join red @a",
+    "members": [
+      "00000000-0000-0000-0000-000000000001"
+    ],
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.team.join.success.single",
+          "with": [
+            {
+              "text": "",
+              "extra": [
+                "\u003cred\u003e",
+                {
+                  "text": "Named Cow",
+                  "bold": true
+                },
+                "\u003c/red\u003e"
+              ],
+              "color": "red",
+              "hover_event": {
+                "value": "00000000-0000-0000-0000-000000000001",
+                "action": "show_text"
+              },
+              "insertion": "00000000-0000-0000-0000-000000000001"
+            },
+            {
+              "translate": "chat.square_brackets",
+              "with": [
+                {
+                  "text": "red",
+                  "hover_event": {
+                    "value": "red",
+                    "action": "show_text"
+                  },
+                  "insertion": "red"
+                }
+              ],
+              "color": "red"
+            }
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "packets": [
+      {
+        "type": "ClientboundSetPlayerTeamPacket",
+        "hex": "0372656404012430303030303030302d303030302d303030302d303030302d303030303030303030303031"
+      },
+      {
+        "type": "ClientboundSetPlayerTeamPacket",
+        "hex": "0372656403012430303030303030302d303030302d303030302d303030302d303030303030303030303031"
+      }
+    ],
+    "display_changed": false
+  },
+  {
+    "kind": "cow",
+    "command": "team join blue @a",
+    "members": [
+      "00000000-0000-0000-0000-000000000001"
+    ],
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.team.join.success.single",
+          "with": [
+            {
+              "text": "",
+              "extra": [
+                "\u003cblue\u003e",
+                {
+                  "text": "Named Cow",
+                  "bold": true
+                },
+                "\u003c/blue\u003e"
+              ],
+              "color": "blue",
+              "hover_event": {
+                "value": "00000000-0000-0000-0000-000000000001",
+                "action": "show_text"
+              },
+              "insertion": "00000000-0000-0000-0000-000000000001"
+            },
+            {
+              "translate": "chat.square_brackets",
+              "with": [
+                {
+                  "text": "blue",
+                  "hover_event": {
+                    "value": "blue",
+                    "action": "show_text"
+                  },
+                  "insertion": "blue"
+                }
+              ],
+              "color": "blue"
+            }
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "packets": [
+      {
+        "type": "ClientboundSetPlayerTeamPacket",
+        "hex": "0372656404012430303030303030302d303030302d303030302d303030302d303030303030303030303031"
+      },
+      {
+        "type": "ClientboundSetPlayerTeamPacket",
+        "hex": "04626c756503012430303030303030302d303030302d303030302d303030302d303030303030303030303031"
+      }
+    ],
+    "display_changed": true
+  },
+  {
+    "kind": "cow",
+    "command": "team leave @a",
+    "members": [
+      "#absent",
+      "00000000-0000-0000-0000-000000000001"
+    ],
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.team.leave.success.single",
+          "with": [
+            {
+              "text": "Named Cow",
+              "bold": true,
+              "hover_event": {
+                "value": "00000000-0000-0000-0000-000000000001",
+                "action": "show_text"
+              },
+              "insertion": "00000000-0000-0000-0000-000000000001"
+            }
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "packets": [
+      {
+        "type": "ClientboundSetPlayerTeamPacket",
+        "hex": "04626c756504012430303030303030302d303030302d303030302d303030302d303030303030303030303031"
+      }
+    ],
+    "display_changed": true
+  },
+  {
+    "kind": "cow",
+    "command": "team leave @a",
+    "members": [
+      "00000000-0000-0000-0000-000000000001"
+    ],
+    "value": 0,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.team.leave.success.multiple",
+          "with": [
+            0
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "packets": []
+  },
+  {
+    "kind": "cow",
+    "command": "team join red @a",
+    "members": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000001"
+    ],
+    "value": 2,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.team.join.success.multiple",
+          "with": [
+            2,
+            {
+              "translate": "chat.square_brackets",
+              "with": [
+                {
+                  "text": "red",
+                  "hover_event": {
+                    "value": "red",
+                    "action": "show_text"
+                  },
+                  "insertion": "red"
+                }
+              ],
+              "color": "red"
+            }
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "packets": [
+      {
+        "type": "ClientboundSetPlayerTeamPacket",
+        "hex": "0372656403012430303030303030302d303030302d303030302d303030302d303030303030303030303031"
+      },
+      {
+        "type": "ClientboundSetPlayerTeamPacket",
+        "hex": "0372656404012430303030303030302d303030302d303030302d303030302d303030303030303030303031"
+      },
+      {
+        "type": "ClientboundSetPlayerTeamPacket",
+        "hex": "0372656403012430303030303030302d303030302d303030302d303030302d303030303030303030303031"
+      }
+    ]
+  },
+  {
+    "kind": "cow",
+    "command": "team leave @a",
+    "members": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000001"
+    ],
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.team.leave.success.single",
+          "with": [
+            {
+              "text": "Named Cow",
+              "bold": true,
+              "hover_event": {
+                "value": "00000000-0000-0000-0000-000000000001",
+                "action": "show_text"
+              },
+              "insertion": "00000000-0000-0000-0000-000000000001"
+            }
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "packets": [
+      {
+        "type": "ClientboundSetPlayerTeamPacket",
+        "hex": "0372656404012430303030303030302d303030302d303030302d303030302d303030303030303030303031"
+      }
+    ],
+    "display_changed": true
+  },
+  {
+    "kind": "cow",
+    "command": "team leave @a",
+    "members": [
+      "00000000-0000-0000-0000-000000000001"
+    ],
+    "value": 0,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.team.leave.success.multiple",
+          "with": [
+            0
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "packets": []
+  }
+]

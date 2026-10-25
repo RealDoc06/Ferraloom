@@ -411,7 +411,7 @@ fn move_blocks(
             ),
             None,
             Some(state),
-        );
+        )?;
         to_update.push(state);
     }
     for (i, &old_pos) in resolver.to_push.iter().enumerate().rev() {
@@ -581,7 +581,7 @@ impl BlockBehavior for PistonBaseBlock {
                 ),
                 None,
                 Some(extended),
-            );
+            )?;
         } else if matches!(event, 1 | 2) {
             if let Some(handle) = moving_entity_at(level, pos.relative(direction, 1))? {
                 moving_piston::final_tick(level, handle)?;
@@ -656,7 +656,7 @@ impl BlockBehavior for PistonBaseBlock {
                 ),
                 None,
                 Some(actual),
-            );
+            )?;
         }
         Ok(true)
     }

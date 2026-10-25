@@ -14,11 +14,18 @@ statistic aliases (`mined:stone` becomes `minecraft.mined:minecraft.stone`).
 `CommandVectors` adds 120 real dispatcher cases. Each case compares exact
 feedback components, return values/errors and the ordered bytes emitted by real
 ServerScoreboard hooks through all five native scoreboard packet codecs.
+
+`python3 generate-zero.py` captures eight displayed-score cases: zero and repeated
+zero sets filter feedback with NON_ZERO, while zero add/remove retain ANY targets,
+including wildcard cardinality. The live command sweep checks the same zero cases.
 Capture includes both PlayerList broadcasts and direct player-connection sends
 for objective tracking start/stop packets.
 Only `/scoreboard players list <holder>` entry lines compare without ordering:
 vanilla keys those entries by Objective identity hash, which varies with JVM
 allocation. Their full components and header remain checked; packet order is exact.
+The live sweep applies that comparison only to the independent entry suffix of
+`commands.path.scoreboard.players.list.arg-target`, after checking every entry's
+message type. It preserves the header and all other command/packet order.
 
 Separate fixtures invoke real PlayerList join synchronization (one ordered
 packet sequence), ReadOnlyScoreInfo formatting (four cases), and actual
@@ -32,3 +39,15 @@ same-team rejoining, duplicate holders, transfers, and mixed fake/entity holders
 Entity feedback-name access throws in the harness, proving that count-only
 feedback does not read it. Leave feedback counts successful removals rather than
 inputs, including a single fake-holder removal among unchanged entities.
+
+`TeamSingleFeedbackVectors` adds 16 real TeamCommand cases with the real Player
+and Entity display/feedback implementations. Player and named-cow joins, same-team
+rejoins, transfers, and duplicate/unchanged leaves compare exact feedback and
+packet bytes. The harness asserts the single feedback sees the new team's
+prefix, suffix and color; Rust reads the canonical Level only after mutation.
+
+`DynamicCommandVectors` captures seven competing-failure cases from the real
+registered commands. The scoreboard parity scenario consumes these vectors:
+objective/team lookup precedes display-name resolution, while fixed number-format
+contents resolve before the callback's objective/holder lookups and duplicate
+creation checks. Both parity scenarios also cover successful live components.

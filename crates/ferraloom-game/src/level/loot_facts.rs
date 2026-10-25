@@ -239,6 +239,12 @@ impl PredicateContext for Level {
             .map_err(required)?
             .position)
     }
+    /// Port of NbtPredicate#getEntityTagToCompare through the canonical serializer.
+    fn entity_nbt(&self, entity: EntityRef) -> Result<Tag> {
+        self.entity_nbt_to_compare(entity)
+            .map(Tag::Compound)
+            .map_err(required)
+    }
     fn entity_has_equipment(&self, entity: EntityRef) -> Result<bool> {
         Ok(self
             .entity_state(entity)
@@ -304,7 +310,8 @@ impl PredicateContext for Level {
                 .map_err(required)?
                 .is_swimming(entity, self)
                 .map_err(required)?,
-            flying: fall_flying || matches!(state, EntityState::Player(player) if player.flying),
+            flying: fall_flying
+                || matches!(state, EntityState::Player(player) if player.abilities.flying),
             baby: self
                 .entity_behavior(entity)
                 .map_err(required)?

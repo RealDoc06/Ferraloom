@@ -1,6 +1,7 @@
 //! Port of StoredUserList, ServerOpList, UserWhiteList and ban-list admission.
 use anyhow::{Context, Result};
-use ferraloom_protocol::{Uuid, login::GameProfile};
+use ferraloom_game::commands::permissions::{ServerOpList, ServerOpListEntry};
+use ferraloom_protocol::login::GameProfile;
 use ferraloom_util::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -10,18 +11,6 @@ use std::{
 };
 use time::{OffsetDateTime, macros::format_description};
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Operator {
-    pub uuid: String,
-    pub name: String,
-    #[serde(default = "default_level")]
-    pub level: i32,
-    #[serde(default, rename = "bypassesPlayerLimit")]
-    pub bypasses_player_limit: bool,
-}
-fn default_level() -> i32 {
-    4
-}
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WhiteListEntry {
     pub uuid: String,
@@ -88,28 +77,28 @@ struct CachedUser {
 
 pub struct AccessLists {
     root: PathBuf,
-    pub ops: HashMap<String, Operator>,
     pub whitelist: HashMap<String, WhiteListEntry>,
     pub banned_players: HashMap<String, Ban>,
     pub banned_ips: HashMap<String, Ban>,
     user_cache: Vec<CachedUser>,
 }
 impl AccessLists {
-    pub fn load(root: &Path) -> Result<Self> {
-        Ok(Self {
-            root: root.into(),
-            ops: read_map(root, "ops.json", |entry: &Operator| {
-                canonical_uuid(&entry.uuid)
-            })?,
-            whitelist: read_map(root, "whitelist.json", |entry: &WhiteListEntry| {
-                canonical_uuid(&entry.uuid)
-            })?,
-            banned_players: read_map(root, "banned-players.json", |entry: &Ban| {
-                entry.uuid.as_deref().and_then(canonical_uuid)
-            })?,
-            banned_ips: read_map(root, "banned-ips.json", |entry: &Ban| entry.ip.clone())?,
-            user_cache: read(root, "usercache.json")?,
-        })
+    pub fn load(root: &Path) -> Result<(Self, ServerOpList)> {
+        let ops = ServerOpList::from_entries(read::<ServerOpListEntry>(root, "ops.json")?);
+        Ok((
+            Self {
+                root: root.into(),
+                whitelist: read_map(root, "whitelist.json", |entry: &WhiteListEntry| {
+                    canonical_uuid(&entry.uuid)
+                })?,
+                banned_players: read_map(root, "banned-players.json", |entry: &Ban| {
+                    entry.uuid.as_deref().and_then(canonical_uuid)
+                })?,
+                banned_ips: read_map(root, "banned-ips.json", |entry: &Ban| entry.ip.clone())?,
+                user_cache: read(root, "usercache.json")?,
+            },
+            ops,
+        ))
     }
     pub fn reload_whitelist(&mut self) -> Result<()> {
         self.whitelist = read_map(&self.root, "whitelist.json", |entry: &WhiteListEntry| {
@@ -149,29 +138,13 @@ impl AccessLists {
             properties: Vec::new(),
         })
     }
-    /// Port of PlayerList#op/#deop; persistence failures are logged by the caller.
-    pub fn set_operator(&mut self, profile: &GameProfile, level: Option<i32>) -> Result<()> {
-        if let Some(level) = level {
-            self.ops.insert(
-                profile.id.to_string(),
-                Operator {
-                    uuid: profile.id.to_string(),
-                    name: profile.name.clone(),
-                    level,
-                    bypasses_player_limit: false,
-                },
-            );
-        } else {
-            self.ops.remove(&profile.id.to_string());
-        }
-        fs::write(
-            self.root.join("ops.json"),
-            serde_json::to_vec_pretty(&self.ops.values().collect::<Vec<_>>())?,
-        )?;
-        Ok(())
+    pub fn save_operators(&self, ops: &ServerOpList) -> Result<()> {
+        self.write_entries("ops.json", ops.values())
     }
-    pub fn permission(&self, id: Uuid) -> i32 {
-        self.ops.peek(&id.to_string()).map_or(0, |op| op.level)
+    /// Reload directly into the same phase-lent owner used by game queries.
+    pub fn reload_operators(&self, ops: &mut ServerOpList) -> Result<()> {
+        ops.replace_entries(read::<ServerOpListEntry>(&self.root, "ops.json")?);
+        Ok(())
     }
     pub fn can_join(
         &self,
@@ -179,6 +152,7 @@ impl AccessLists {
         ip: IpAddr,
         whitelist: bool,
         full: bool,
+        ops: &ServerOpList,
     ) -> Option<String> {
         let id = profile.id.to_string();
         if let Some(ban) = self
@@ -191,7 +165,7 @@ impl AccessLists {
                 ban.reason.as_deref().unwrap_or("Banned by an operator.")
             ));
         }
-        let op = self.ops.peek(&id);
+        let op = ops.get(profile.id);
         if whitelist
             && op.is_none()
             && !self
@@ -278,9 +252,44 @@ mod tests {
         ]"#,
         )
         .unwrap();
-        let lists = AccessLists::load(root.path()).unwrap();
-        assert_eq!(lists.ops.len(), 1);
-        let op = lists.ops.values().next().unwrap();
-        assert_eq!((&*op.name, op.level), ("New", 3));
+        let (_lists, ops) = AccessLists::load(root.path()).unwrap();
+        assert_eq!(ops.len(), 1);
+        let op = ops.values().next().unwrap();
+        assert_eq!((&*op.name, op.level().id()), ("New", 3));
+    }
+    #[test]
+    fn file_reload_updates_the_same_ops_owner_and_missing_level_is_zero() {
+        let root = tempfile::tempdir().unwrap();
+        let profile = GameProfile {
+            id: ferraloom_protocol::Uuid::new(1, 2),
+            name: "metadata".into(),
+            properties: vec![],
+        };
+        fs::write(
+            root.path().join("ops.json"),
+            format!(r#"[{{"uuid":"{}","name":"metadata"}}]"#, profile.id),
+        )
+        .unwrap();
+        let (access, ops) = AccessLists::load(root.path()).unwrap();
+        let mut shared = ferraloom_game::ServerShared {
+            ops,
+            ..Default::default()
+        };
+        assert!(shared.ops.contains(profile.id));
+        assert_eq!(shared.ops.permission_level(profile.id).id(), 0);
+        fs::write(
+            root.path().join("ops.json"),
+            format!(
+                r#"[{{"uuid":"{}","name":"metadata","level":2}}]"#,
+                profile.id
+            ),
+        )
+        .unwrap();
+        access.reload_operators(&mut shared.ops).unwrap();
+        assert!(shared.ops.get_profile_permissions(profile.id).has_level(2));
+        access.save_operators(&shared.ops).unwrap();
+        let saved: serde_json::Value =
+            serde_json::from_slice(&fs::read(root.path().join("ops.json")).unwrap()).unwrap();
+        assert_eq!(saved[0]["level"], 2);
     }
 }

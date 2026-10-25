@@ -7,6 +7,13 @@ use ferraloom_data::{Block, BlockState, FluidState};
 use ferraloom_nbt::{CompoundTag, Tag};
 use std::{cell::OnceCell, collections::BTreeMap};
 
+mod block_entity;
+mod lighting;
+pub use block_entity::WorldgenBlockEntity;
+pub use lighting::ProtoChunkLightEngine;
+#[cfg(test)]
+mod lighting_tests;
+
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum ChunkStatus {
     Empty,
@@ -82,22 +89,68 @@ impl<T: PartialEq> ProtoChunkTicks<T> {
     }
 }
 
-/// Owned inputs and outputs of an off-tick worldgen job. Block entities remain
-/// NBT until the game layer converts the protochunk to a LevelChunk.
+/// Owned inputs and outputs of an off-tick worldgen job. Pending NBT and actual
+/// instantiated receivers follow ProtoChunk's separate maps. The current FULL
+/// handoff serializes receivers: saved data/first spawn selection survive, but
+/// later external mutation can observe a lost SpawnData alias across promotion.
 #[derive(Clone, Debug)]
 pub struct RegionChunk {
     pub chunk: GeneratedChunk,
     pub status: ChunkStatus,
     pub structures: crate::structure::pipeline::ChunkStructures,
     pub block_entities: BTreeMap<[i32; 3], CompoundTag>,
+    pub instantiated_block_entities: BTreeMap<[i32; 3], Box<dyn WorldgenBlockEntity>>,
     pub entities: Vec<CompoundTag>,
     pub block_ticks: ProtoChunkTicks<Block>,
     pub fluid_ticks: ProtoChunkTicks<ferraloom_data::registries::fluid::Id>,
     pub poi_changes: Vec<([i32; 3], BlockState, BlockState)>,
+    sky_light_sources: ferraloom_light::ChunkSkyLightSources,
     heightmaps: [OnceCell<[i32; 256]>; 6],
 }
 impl RegionChunk {
+    /// ChunkAccess#getBlockEntityNbtForSaving prefers the actual receiver to a
+    /// later pending tag at the same cell. Serialization occurs at IO/promotion.
+    pub fn saved_block_entities(&self) -> Result<Vec<CompoundTag>, Error> {
+        let mut tags = self.block_entities.clone();
+        for (&position, entity) in &self.instantiated_block_entities {
+            tags.insert(position, entity.save()?);
+        }
+        Ok(tags.into_values().collect())
+    }
     pub fn new(chunk: GeneratedChunk, status: ChunkStatus) -> Self {
+        let heightmaps = Self::heightmap_caches(&chunk);
+        Self {
+            sky_light_sources: ferraloom_light::ChunkSkyLightSources::new(chunk.min_y),
+            structures: crate::structure::pipeline::ChunkStructures::new(chunk.position),
+            chunk,
+            status,
+            block_entities: BTreeMap::new(),
+            instantiated_block_entities: BTreeMap::new(),
+            entities: Vec::new(),
+            block_ticks: ProtoChunkTicks::default(),
+            fluid_ticks: ProtoChunkTicks::default(),
+            poi_changes: Vec::new(),
+            heightmaps,
+        }
+    }
+
+    /// Refresh the copied ImposterProtoChunk view of its live LevelChunk. Only
+    /// sections and heightmaps change: the canonical sky sources and pending
+    /// generation payload must survive, including intentionally stale sources.
+    pub fn refresh_full_snapshot(&mut self, chunk: GeneratedChunk) {
+        assert_eq!(self.status, ChunkStatus::Full);
+        assert_eq!(self.chunk.position, chunk.position);
+        assert_eq!(
+            (self.chunk.min_y, self.chunk.height),
+            (chunk.min_y, chunk.height)
+        );
+        self.heightmaps = Self::heightmap_caches(&chunk);
+        self.chunk.sections = chunk.sections;
+        self.chunk.world_surface = chunk.world_surface;
+        self.chunk.ocean_floor = chunk.ocean_floor;
+    }
+
+    fn heightmap_caches(chunk: &GeneratedChunk) -> [OnceCell<[i32; 256]>; 6] {
         let heightmaps: [OnceCell<[i32; 256]>; 6] = std::array::from_fn(|_| OnceCell::new());
         heightmaps[Heightmap::WorldSurfaceWg as usize]
             .set(chunk.world_surface)
@@ -105,17 +158,7 @@ impl RegionChunk {
         heightmaps[Heightmap::OceanFloorWg as usize]
             .set(chunk.ocean_floor)
             .unwrap();
-        Self {
-            structures: crate::structure::pipeline::ChunkStructures::new(chunk.position),
-            chunk,
-            status,
-            block_entities: BTreeMap::new(),
-            entities: Vec::new(),
-            block_ticks: ProtoChunkTicks::default(),
-            fluid_ticks: ProtoChunkTicks::default(),
-            poi_changes: Vec::new(),
-            heightmaps,
-        }
+        heightmaps
     }
 }
 
@@ -134,6 +177,16 @@ pub struct StructureEntitySpawnFlags {
 /// Context-dependent block behavior is supplied by the game adapter. Baseline
 /// extracted collision shapes cannot answer survival or neighbor shape queries.
 pub trait WorldgenBlockBehavior: Sync {
+    /// Port of WorldGenRegion#getBlockEntity's lazy DUMMY/newBlockEntity or
+    /// loadStatic path. The returned state becomes canonical in the protochunk.
+    fn materialize_block_entity(
+        &self,
+        _position: [i32; 3],
+        _state: BlockState,
+        _tag: &CompoundTag,
+    ) -> Result<Option<Box<dyn WorldgenBlockEntity>>, Error> {
+        Err(Error("Unsupported: worldgen block entity factory".into()))
+    }
     // --- structures family ---
     /// Create an elder guardian with STRUCTURE reason; heal it to max health,
     /// snap to the supplied position with zero yaw/pitch, finalizeSpawn, and add
@@ -487,6 +540,7 @@ struct RegionEnvironment {
     biome_indices: Vec<usize>,
 }
 pub struct WorldGenRegion<'a> {
+    light_engine: Option<&'a mut dyn ProtoChunkLightEngine>,
     environment: Option<RegionEnvironment>,
     random: Option<ferraloom_util::random::Random>,
     fast_lava: Option<bool>,
@@ -580,6 +634,7 @@ impl<'a> WorldGenRegion<'a> {
             return Err(Error("duplicate worldgen chunk".into()));
         }
         Ok(Self {
+            light_engine: None,
             environment: None,
             random: None,
             skip_unsupported: false,
@@ -597,6 +652,11 @@ impl<'a> WorldGenRegion<'a> {
             seed,
             sea_level,
         })
+    }
+    /// Lend the executor's canonical proto light engine for this region call.
+    /// The executor drains its checks before any changed proto save/transport.
+    pub fn set_light_engine(&mut self, engine: &'a mut dyn ProtoChunkLightEngine) {
+        self.light_engine = Some(engine);
     }
     // --- ore and cave family ---
     pub fn multiface_state_for_placement(
@@ -879,26 +939,54 @@ impl<'a> WorldGenRegion<'a> {
             // still reports true once its write bounds accepted the position.
             return Ok(true);
         }
-        if self.chunks[index].status >= ChunkStatus::InitializeLight {
+        if self.chunks[index].status >= ChunkStatus::InitializeLight && self.light_engine.is_none()
+        {
             return Err(Error(
                 "Unsupported: lit ProtoChunk mutation needs the relight adapter".into(),
             ));
         }
-        let old = self.block(p)?;
         let in_height = p[1] >= self.chunks[index].chunk.min_y
             && p[1] < self.chunks[index].chunk.min_y + self.chunks[index].chunk.height;
         let section_y = in_height.then(|| ((p[1] - self.chunks[index].chunk.min_y) >> 4) as usize);
         let skip_heightmaps = section_y.is_some_and(|section| {
             self.chunks[index].chunk.sections[section].has_only_air() && state.block() == Block::AIR
         });
+        // ProtoChunk returns AIR without touching even a stored cave-air cell
+        // when this section is entirely air. WorldGenRegion still runs its own
+        // POI/BE/post-processing tail with that returned state.
+        let old = if skip_heightmaps {
+            state
+        } else {
+            self.block(p)?
+        };
+        let was_empty =
+            section_y.map(|section| self.chunks[index].chunk.sections[section].has_only_air());
         if self.chunks[index].status >= ChunkStatus::Terrain {
-            if in_height {
+            if in_height && !skip_heightmaps {
                 self.set_block_in_section(p, state)?;
             }
-        } else {
+        } else if !skip_heightmaps {
             self.chunks[index]
                 .chunk
                 .set_block((p[0] & 15) as u8, p[1], (p[2] & 15) as u8, state);
+        }
+        if self.chunks[index].status >= ChunkStatus::InitializeLight
+            && !skip_heightmaps
+            && let Some(section) = section_y
+        {
+            let pos = ferraloom_util::BlockPos::new(p[0], p[1], p[2]);
+            let empty = self.chunks[index].chunk.sections[section].has_only_air();
+            let engine = self
+                .light_engine
+                .as_mut()
+                .expect("lit proto adapter checked");
+            if was_empty != Some(empty) {
+                engine.update_section_status(ferraloom_util::SectionPos::from_block(pos), empty);
+            }
+            if ferraloom_light::has_different_light_properties(old, state) {
+                self.chunks[index].update_sky_light_sources(pos);
+                engine.check_block(pos);
+            }
         }
         if in_height && !skip_heightmaps {
             let region_chunk = &mut self.chunks[index];
@@ -945,6 +1033,7 @@ impl<'a> WorldGenRegion<'a> {
             self.chunks[index].block_entities.insert(p, tag);
         } else if in_height && old.has_block_entity() {
             self.chunks[index].block_entities.remove(&p);
+            self.chunks[index].instantiated_block_entities.remove(&p);
         }
         if flags & 16 == 0 {
             let post = state
@@ -964,7 +1053,8 @@ impl<'a> WorldGenRegion<'a> {
         if self.chunks[index].status == ChunkStatus::Full {
             return Ok(());
         }
-        if self.chunks[index].status >= ChunkStatus::InitializeLight {
+        if self.chunks[index].status >= ChunkStatus::InitializeLight && self.light_engine.is_none()
+        {
             return Err(Error(
                 "Unsupported: lit ProtoChunk mutation needs the relight adapter".into(),
             ));
@@ -1005,6 +1095,40 @@ impl<'a> WorldGenRegion<'a> {
             .chunk([p[0] >> 4, p[2] >> 4], ChunkStatus::Empty)?
             .block_entities
             .get(&p))
+    }
+    /// Port of WorldGenRegion#getBlockEntity. No pending tag means no factory,
+    /// and an existing receiver is returned before querying the current state.
+    pub fn get_or_create_block_entity(
+        &mut self,
+        p: [i32; 3],
+    ) -> Result<Option<&mut (dyn WorldgenBlockEntity + 'static)>, Error> {
+        let index = self.index([p[0] >> 4, p[2] >> 4], ChunkStatus::Empty)?;
+        if !self.chunks[index]
+            .instantiated_block_entities
+            .contains_key(&p)
+        {
+            let state = self.block(p)?;
+            let Some(tag) = self.chunks[index].block_entities.get(&p) else {
+                return Ok(None);
+            };
+            if self.chunks[index].status == ChunkStatus::Full {
+                return Err(Error(
+                    "Unsupported: live full-chunk worldgen block entity".into(),
+                ));
+            }
+            if let Some(entity) = self.behavior.materialize_block_entity(p, state, tag)? {
+                // ProtoChunk#setBlockEntity removes pending NBT, unlike the
+                // direct setBlockEntityNbt carrier operation above.
+                self.chunks[index].block_entities.remove(&p);
+                self.chunks[index]
+                    .instantiated_block_entities
+                    .insert(p, entity);
+            }
+        }
+        Ok(self.chunks[index]
+            .instantiated_block_entities
+            .get_mut(&p)
+            .map(Box::as_mut))
     }
     pub fn add_entity(&mut self, chunk: [i32; 2], tag: CompoundTag) -> Result<(), Error> {
         let index = self.index(chunk, ChunkStatus::Empty)?;

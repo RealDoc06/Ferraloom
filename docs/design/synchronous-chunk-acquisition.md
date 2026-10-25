@@ -44,16 +44,18 @@ attached-FULL protection and initialization versus delta-light semantics.
 
 ## Blocking without starving the pipeline
 
-Extract a concrete, reentrant driver separate from gameplay borrows. Proposed
-chunk-pipeline-owner seam:
-`request_status(pos,status,load) -> AcquireHandle` and
-`poll_acquisition_step() -> Progress/Idle/Error`, plus a wakeable completion
-test. Handles retain request identity/ordinal. Apply tickets before dispatch;
-`ChunkMap::request` returning `None` means reuse. Reuse
-`World::request`/`poll_terrain` and
-`generation_completion::{integrate_terrain,integrate_light}` behind that seam;
-extend their FULL-only runtime boundary to requested statuses.
-`await_generation_chunk`'s whole-server borrow/`world.ready` wait cannot serve it.
+The installed `AcquireDriver` exposes
+`request_status(&Level,pos,status) -> Result<AcquireHandle,LevelError>` and
+`poll_acquisition_step(&Level) -> Result<AcquireProgress,LevelError>`, plus a
+wakeable completion test. The caller applies tickets before dispatch. Each
+handle identifies a holder incarnation and its per-status future, independently
+of a replaceable generation task. `ChunkMap::schedule_generation_task` reuses
+that future; upgrading the target cancels the old task without replacing the
+future. Downgrades clear only pending disallowed futures. Each holder owns this
+state and retains generation claims until its submitted work settles.
+`GenerationRuntime` keeps ordered owned generation, light and entity completions
+reachable during callbacks. `await_generation_chunk` delegates to the same
+synchronous FULL acquisition and does not wait on `world.ready`.
 
 At the read, pump distance/visible-holder updates and dispatch, then lighting
 scheduling and source main-thread tasks, following `MainThreadExecutor#pollTask`.
@@ -99,14 +101,26 @@ counters and deduplication before the runtime reports completion.
 ## Ownership in each mode
 
 Single-region runtime ownership: Level owns one `Box<dyn AcquireDriver + Send>`.
-Cold `as_any` access exposes the concrete backend without moving it out; callers
-return owned work and end the backend borrow before callbacks. Installation is
-one-time. `Level::run_distance_manager_updates` runs only the pure graph slots
-against the sole Region simulation tracker and returns owned holder changes.
-The driver publishes requested status/readiness and entity status after all
-backend/graph guards end, invalidating the source cache before nested work.
-Shared light imports use `publish_light_snapshot`; exclusive imports and the
-end-of-chunk-source boundary reclaim superseded immutable versions.
+Cold `as_any` access exposes its concrete `GenerationRuntime`, which owns the
+canonical `World`, `ChunkMap`, `TicketStorage` and `DistanceManager` in private,
+short-lived `RefCell`s. Callers return owned work and end every backend guard
+before callbacks, publication, reentry or an await. Installation is one-time;
+there is no take/restore or mirrored tracker. The server-private `LiveLevel`
+retains only Level, game time and dimension metadata after destructuring the
+bootstrap ServerLevel.
+
+One typed `PhaseOwner::{Task(tokio::task::Id),Thread(ThreadId)}` token binds at
+outer phase entry and has one owner comparison path. The canonical server Tokio
+task remains the owner across executor-thread migration. Non-Tokio synchronous
+fixtures use the thread variant; other callers forward owned requests through
+the mailbox.
+
+`Level::run_distance_manager_updates` runs only the pure graph slots against
+the sole Region simulation tracker and returns owned holder changes. The driver
+publishes requested status/readiness and entity status after all backend/graph
+guards end, invalidating the source cache before nested work. Shared light
+imports use `publish_light_snapshot`; exclusive imports and the end-of-chunk-source
+boundary reclaim superseded immutable versions.
 
 Single-region: a safe insert-only store gives stable chunk references and
 publication through `&self`; reads stay `&Level`, mutation requires `&mut Level`,
