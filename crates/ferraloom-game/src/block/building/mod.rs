@@ -5,6 +5,9 @@ use crate::level::LevelError;
 use ferraloom_data::{Block, BlockState, properties as p, registries::fluid::Id as Fluid};
 use ferraloom_util::{BlockPos, Direction};
 
+pub mod anvil;
+#[cfg(test)]
+mod anvil_tests;
 #[cfg(test)]
 mod attachment_tests;
 mod attachments;
@@ -32,11 +35,20 @@ mod stair_slab_tests;
 mod stairs;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod workstation_tests;
+mod workstations;
 
 pub(crate) fn ported_behavior(
     block: Block,
     method: BlockMethod,
 ) -> Option<&'static dyn BlockBehavior> {
+    if let Some(behavior) = workstations::ported_behavior(block, method) {
+        return Some(behavior);
+    }
+    if anvil::supports(block, method) {
+        return Some(&anvil::ANVIL);
+    }
     if attachments::supports(block, method) {
         return Some(&attachments::ATTACHMENTS);
     }

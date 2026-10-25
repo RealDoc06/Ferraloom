@@ -2,7 +2,7 @@
 //! progress; it must publish canonical state before completing an acquisition.
 use super::{Level, LevelError, chunk_holder::ChunkStatus};
 use ferraloom_util::ChunkPos;
-use std::{any::Any, cell::Cell};
+use std::{any::Any, cell::Cell, sync::Arc};
 
 /// Port of ChunkLevel#byStatus for the native 26.3 generation pyramid.
 pub const fn ticket_level(status: ChunkStatus) -> i32 {
@@ -154,6 +154,18 @@ pub trait AcquireDriver: Send + Any {
         status: ChunkStatus,
         load_or_generate: bool,
     ) -> Result<Option<ChunkReference>, LevelError>;
+    /// Read the acquired proto's retained typed structure version. The Arc
+    /// outlives backend guards and later nested publications.
+    fn proto_chunk_structures(
+        &self,
+        chunk: ChunkReference,
+    ) -> Result<Arc<ferraloom_worldgen::structure::pipeline::ChunkStructures>, LevelError> {
+        Err(LevelError::ChunkAcquisition(
+            chunk.pos,
+            ChunkStatus::StructureStarts,
+            AcquireFailure::MissingResult,
+        ))
+    }
     /// Read an acquired proto's biome data. FULL reads stay concrete on Level.
     fn proto_noise_biome(
         &self,

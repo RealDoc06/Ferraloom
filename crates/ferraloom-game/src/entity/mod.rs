@@ -415,6 +415,16 @@ pub trait Entity: Sync {
         Ok(true)
     }
     /// Port of Entity#playerTouch; concrete pickup entities override this hook.
+    /// Port of LivingEntity#take, overridden by ServerPlayer for menu sync.
+    fn take(
+        &self,
+        collector: EntityRef,
+        entity: EntityRef,
+        count: i32,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        living::take(collector, entity, count, level)
+    }
     fn player_touch(
         &self,
         _entity: EntityRef,
@@ -971,6 +981,15 @@ pub trait Entity: Sync {
         movement::base_cause_fall_damage(entity, level, fall_distance, damage_modifier, source)
     }
 
+    /// Port of LivingEntity#onAttributeUpdated with the derived dispatcher.
+    fn on_attribute_updated(
+        &self,
+        entity: EntityRef,
+        attribute: ferraloom_data::registries::attribute::Id,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        living::on_attribute_updated_parent(self, entity, attribute, level)
+    }
     /// Port of LivingEntity#onEquippedItemBroken, overridden by ServerPlayer.
     fn on_equipped_item_broken(
         &self,

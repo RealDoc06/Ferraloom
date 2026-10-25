@@ -148,7 +148,7 @@ impl Mob {
         );
         self.loot_table = tag
             .get_string("DeathLootTable")
-            .and_then(|key| key.as_str().ok()?.parse().ok());
+            .and_then(|key| key.to_string_checked().ok()?.parse().ok());
         self.loot_table_seed = tag.get_long_or("DeathLootTableSeed", 0);
         let flags = *self.parent.entity_data.get(synched_data::MOB_FLAGS);
         self.parent.entity_data.set(

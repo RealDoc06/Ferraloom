@@ -55,7 +55,11 @@ pub fn generate(root: &Path, block_properties: &Value) {
         let mut mask = 0u64;
         for (i, (owner, method)) in owners.iter().zip(methods).enumerate() {
             let declaring_class = &data["declaring_classes"][owner.as_u64().unwrap() as usize];
-            if declaring_class != &method["base"] {
+            // Non-Fallable blocks take the same no-op/source defaults as
+            // Fallable itself. Liquid interfaces keep their existing policy.
+            let absent_fallable = method["base"] == "net.minecraft.world.level.block.Fallable"
+                && declaring_class == "<not implemented>";
+            if declaring_class != &method["base"] && !absent_fallable {
                 mask |= 1 << i;
             }
         }

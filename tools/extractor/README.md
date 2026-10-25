@@ -101,6 +101,12 @@ already has its original signature/index. Existing method and declaring-class
 indices are preserved. Every registered 26.3 block inherits the base progress
 algorithm; lifecycle and attack overrides still require their family ports.
 
+`Fallable` appends `onLand`, `onBrokenAfterFall` and `getFallDamageSource`.
+Non-implementing blocks retain their reflected absent owner and use the same
+runtime defaults as `Fallable`. Concrete overrides on anvils, concrete powder,
+brushable blocks and speleothems remain independently required. Regeneration
+preserves existing declaring-class IDs and appends newly encountered owners.
+
 Liquid-container and bucket interfaces use `SimpleWaterloggedBlock` as the
 default owner. Reflection resolves inherited interface defaults after concrete
 class overrides. A non-implementing block records `<not implemented>`, so it

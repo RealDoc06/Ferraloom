@@ -459,3 +459,188 @@ fn assert_entity_visibility_follows_holder_ranges(level: &mut Level, pos: ChunkP
         1
     );
 }
+
+#[tokio::test]
+async fn structure_status_reads_settle_before_a_queued_full_tracking_failure() {
+    use crate::registries::RegistrySet;
+    use ferraloom_data::datapack::{Pack, ResourceManager};
+    use ferraloom_game::level::{
+        entity::{Visibility, WorldgenEntityLoadStage},
+        server_level::ServerLevel,
+    };
+    use ferraloom_storage::SerializableChunkData;
+    use std::path::Path;
+
+    let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").expect("builder vanilla jar");
+    let resources = ResourceManager::new(vec![Pack::vanilla_jar(Path::new(&jar)).unwrap()]);
+    let registries = RegistrySet::load(&resources).unwrap();
+    let mut properties = ServerProperties::from_values(Default::default());
+    properties.set("level-seed", "0");
+    properties.set("level-type", "minecraft:debug_all_block_states");
+    let directory = tempfile::tempdir().unwrap();
+    let mut root = WorldRoot::open(
+        directory.path(),
+        &properties,
+        &resources,
+        &registries,
+        ferraloom_game::block::UnportedBehavior::Strict,
+    )
+    .unwrap();
+    let world = root
+        .open_dimension("minecraft:overworld".parse().unwrap(), &properties)
+        .unwrap();
+    static BEHAVIORS: Behaviors = Behaviors::EMPTY;
+    let mut bootstrap = ServerLevel::new(
+        Region::new(&BEHAVIORS),
+        "minecraft:overworld",
+        world.level_context(&resources).unwrap(),
+    );
+    bootstrap
+        .level
+        .set_block_tags(world.generator().access().data().block_tags.clone());
+    let mut live = LiveLevel::install(world, bootstrap, Arc::new(properties)).unwrap();
+
+    // Fresh terrain is acquired at references, without ever asking for FULL.
+    let fresh = ChunkPos::new(64, 0);
+    let empty = live
+        .level
+        .chunk_structures(fresh, ChunkStatus::StructureReferences)
+        .unwrap();
+    assert_eq!(empty.position, [64, 0]);
+    assert!(empty.references.is_empty());
+    assert!(live.level.chunk(fresh).is_none());
+    let reference = live
+        .level
+        .get_chunk(fresh, ChunkStatus::StructureReferences, false)
+        .unwrap()
+        .unwrap();
+    assert_eq!(reference.kind, ChunkKind::Proto);
+    assert!(
+        live.generation()
+            .chunk_if_present_unchecked(fresh, ChunkStatus::Full)
+            .is_none()
+    );
+    // A removed/recreated holder cannot read its predecessor's retained data.
+    let mut stale = reference;
+    stale.generation += 1;
+    assert!(matches!(
+        live.generation().proto_chunk_structures(stale),
+        Err(LevelError::ChunkAcquisition(
+            _,
+            _,
+            AcquireFailure::InvalidHandle
+        ))
+    ));
+
+    let pos = ChunkPos::new(96, 0);
+    let entity = ferraloom_nbt::parse_compound(
+        "{id:\"minecraft:tnt\",UUID:[I;1,2,3,4],Pos:[1536.5d,80.0d,0.5d],Motion:[0d,0d,0d],Rotation:[0f,0f]}"
+    ).unwrap();
+    let disk = SerializableChunkData {
+        data_version: Some(ferraloom_storage::DATA_VERSION),
+        x_pos: Some(pos.x),
+        z_pos: Some(pos.z),
+        y_pos: Some(-4),
+        status: Some("minecraft:full".into()),
+        entities: Some(vec![entity]),
+        ..Default::default()
+    };
+    let saved = live
+        .generation()
+        .with_world(|world| world.io.store(pos, Some(disk.write().unwrap())));
+    saved.await.unwrap();
+    live.generation()
+        .with_tickets_mut(|tickets| tickets.add_unknown(pos, ChunkStatus::Full));
+    live.update_chunk_tickets().unwrap();
+    // No entity exists yet, so changing visibility itself requires no callback.
+    live.level
+        .update_entity_chunk_status(pos, Visibility::Tracked)
+        .unwrap();
+    let full = live
+        .generation()
+        .request_status(&live.level, pos, ChunkStatus::Full)
+        .unwrap();
+    let structures = live
+        .level
+        .chunk_structures(pos, ChunkStatus::StructureReferences)
+        .unwrap();
+    assert_eq!(structures.position, [96, 0]);
+    assert!(live.level.chunk(pos).is_none());
+    assert_eq!(
+        live.generation().acquisition_result(full).unwrap(),
+        AcquireResult::Pending
+    );
+    let task = live.generation().with_chunks(|chunks| {
+        chunks.holders[&pos.pack()]
+            .generation
+            .current_task()
+            .unwrap()
+            .id
+    });
+    assert!(
+        !live
+            .generation()
+            .with_world(|world| world.full_promotions[&task].entities_registered)
+    );
+    tokio::time::timeout(Duration::from_secs(30), async {
+        loop {
+            if let Some(light) = live.generation().take_light_completion().unwrap() {
+                live.generation().import_light(&live.level, light).unwrap();
+            }
+            if live
+                .generation()
+                .with_world(|world| world.full_promotions[&task].center_light_installed)
+            {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(1)).await;
+        }
+    })
+    .await
+    .unwrap();
+    assert!(
+        GenerationRuntime::resume_full_promotion_with_access(
+            &mut GenerationAccess::Shared {
+                runtime: live.generation(),
+                level: &live.level
+            },
+            task
+        )
+        .is_err()
+    );
+    live.generation().with_world(|world| {
+        let error = world.full_promotions[&task]
+            .entity_failure
+            .as_ref()
+            .unwrap();
+        assert_eq!(error.stage, WorldgenEntityLoadStage::Publishing);
+        assert!(matches!(
+            error.source,
+            ferraloom_game::entity::persistence::EntityPersistenceError::Level(
+                LevelError::UnsupportedSharedEntityTracking(_)
+            )
+        ));
+    });
+    // The lower future and its source remain usable after that separate error.
+    let retained = live
+        .level
+        .chunk_structures(pos, ChunkStatus::StructureReferences)
+        .unwrap();
+    assert!(Arc::ptr_eq(&structures, &retained));
+    assert_eq!(empty.position, [64, 0]);
+    let drain = live
+        .generation()
+        .with_world_mut(World::prepare_close_chunk_storage)
+        .unwrap();
+    for saving in drain.proto {
+        saving.await.unwrap();
+    }
+    for saving in drain.chunks {
+        saving.await.unwrap().unwrap();
+    }
+    let closing = live
+        .generation()
+        .with_world_mut(World::begin_close_chunk_storage)
+        .unwrap();
+    closing.await.unwrap();
+}

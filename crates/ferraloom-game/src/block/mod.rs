@@ -5,6 +5,7 @@ use ferraloom_util::{BlockPos, Direction};
 pub mod breaking;
 mod bubble_column;
 pub mod building;
+pub mod campfire;
 mod clone_item;
 pub mod containers;
 pub mod dispatch;
@@ -787,6 +788,35 @@ pub trait BlockBehavior: Sync {
         let source = level.damage_sources().fall();
         behavior.cause_fall_damage(entity, level, reduced, 1.0, &source)?;
         Ok(())
+    }
+    /// Port of Fallable#onLand's no-op, also used by non-Fallable blocks.
+    fn on_land(
+        &self,
+        _state: BlockState,
+        _pos: BlockPos,
+        _replaced: BlockState,
+        _entity: crate::entity::EntityRef,
+        _level: &mut Level,
+    ) -> Result<(), LevelError> {
+        Ok(())
+    }
+    /// Port of Fallable#onBrokenAfterFall's no-op.
+    fn on_broken_after_fall(
+        &self,
+        _pos: BlockPos,
+        _entity: crate::entity::EntityRef,
+        _level: &mut Level,
+    ) -> Result<(), LevelError> {
+        Ok(())
+    }
+    /// Port of Fallable#getFallDamageSource and the identical non-Fallable
+    /// branch in FallingBlockEntity#causeFallDamage.
+    fn get_fall_damage_source(
+        &self,
+        entity: crate::entity::EntityRef,
+        level: &Level,
+    ) -> Result<crate::entity::DamageSource, LevelError> {
+        Ok(level.damage_sources().falling_block(entity))
     }
     /// Port of Block#stepOn's base no-op.
     fn step_on(

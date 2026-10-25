@@ -147,4 +147,6 @@ pub fn send_experience_update(player: EntityRef, level: &mut Level) -> Result<()
 }
 
 #[cfg(test)]
+mod orb_tests;
+#[cfg(test)]
 mod tests;

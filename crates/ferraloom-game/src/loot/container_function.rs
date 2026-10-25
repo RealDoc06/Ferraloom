@@ -2,8 +2,8 @@ use super::function::{max_stack_size, stack_count};
 use super::{
     EvalContext, Holder, LootData, LootItemFunction, LootPoolEntryContainer, Result, codec,
 };
+use crate::loot::codec::DecodeInput;
 use ferraloom_protocol::component::*;
-use serde_json::Value;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ContainerComponent {
@@ -12,7 +12,7 @@ pub enum ContainerComponent {
     ChargedProjectiles,
 }
 impl ContainerComponent {
-    pub fn decode(v: &Value) -> Result<Self> {
+    pub fn decode<I: DecodeInput>(v: &I) -> Result<Self> {
         Ok(match codec::id(v)?.as_str() {
             "minecraft:container" => Self::Container,
             "minecraft:bundle_contents" => Self::BundleContents,
@@ -42,7 +42,7 @@ pub enum ContainerFunction {
     },
 }
 impl ContainerFunction {
-    pub(crate) fn decode(kind: &str, v: &Value) -> Result<Option<Self>> {
+    pub(crate) fn decode<I: DecodeInput>(kind: &str, v: &I) -> Result<Option<Self>> {
         Ok(Some(match kind {
             "minecraft:set_contents" => Self::Set {
                 component: ContainerComponent::decode(codec::field(v, "component")?)?,

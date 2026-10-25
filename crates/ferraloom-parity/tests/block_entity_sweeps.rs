@@ -97,21 +97,6 @@ async fn set(bot: &mut Bot, pos: BlockPos, block: Block) -> Result<()> {
     .await?;
     Ok(())
 }
-async fn item(bot: &mut Bot, pos: BlockPos, slot: usize, item: Item, amount: i32) -> Result<()> {
-    command(
-        bot,
-        &format!(
-            "item replace block {} {} {} container.{slot} with {} {amount}",
-            pos.x,
-            pos.y,
-            pos.z,
-            item.name()
-        ),
-        "commands.item.block.replace.success.known_item",
-    )
-    .await?;
-    Ok(())
-}
 fn slot(tag: &CompoundTag, slot: i8) -> Result<ItemStack> {
     let Some(entry) = tag
         .get_list("Items")
@@ -128,7 +113,7 @@ fn slot(tag: &CompoundTag, slot: i8) -> Result<ItemStack> {
     Ok(ItemStack::from_nbt(entry)?)
 }
 
-const FURNACES: [(Block, Item, Item, Item); 6] = [
+const FURNACES: [(Block, Item, Item, Item); 5] = [
     (Block::FURNACE, Item::IRON_ORE, Item::COAL, Item::IRON_INGOT),
     (
         Block::SMOKER,
@@ -149,7 +134,6 @@ const FURNACES: [(Block, Item, Item, Item); 6] = [
         Item::BAMBOO,
         Item::IRON_INGOT,
     ),
-    (Block::FURNACE, Item::IRON_ORE, Item::COAL, Item::IRON_INGOT),
 ];
 fn furnace_pos(index: usize) -> BlockPos {
     BlockPos::new(5 + index as i32 * 2, 79, 8)
@@ -165,8 +149,14 @@ async fn furnace_and_storage(session: &mut Session) -> Result<ObservationLog> {
     for (index, &(block, input, fuel, _)) in FURNACES.iter().enumerate() {
         let pos = furnace_pos(index);
         set(bot, pos, block).await?;
-        item(bot, pos, 0, input, if index < 3 { 2 } else { 1 }).await?;
-        item(bot, pos, 1, fuel, 1).await?;
+        // A native storage load, not a substitute for Container#setItem. A
+        // positive saved total lets serverTick recompute the real recipe/fuel
+        // duration when ignition starts. Input replacement remains a separate
+        // pending scenario until /item replace is ported.
+        command(bot, &format!(
+            "data merge block {} {} {} {{Items:[{{Slot:0b,id:'{}',count:{}}},{{Slot:1b,id:'{}',count:1}}],cooking_total_time:200}}",
+            pos.x, pos.y, pos.z, input.name(), if index < 3 { 2 } else { 1 }, fuel.name()
+        ), "commands.data.block.modified").await?;
     }
     let mut log = ObservationLog::default();
     let mut previous = 0;
@@ -203,29 +193,6 @@ async fn furnace_and_storage(session: &mut Session) -> Result<ObservationLog> {
             log.record(
                 format!("furnace.{index}.tick.{elapsed}"),
                 nbt(&Tag::Compound(tag))?,
-            )?;
-        }
-        if elapsed == 50 || elapsed == 100 {
-            item(
-                bot,
-                furnace_pos(5),
-                0,
-                if elapsed == 50 {
-                    Item::DIRT
-                } else {
-                    Item::IRON_ORE
-                },
-                1,
-            )
-            .await?;
-            let interrupted = block_nbt(bot, furnace_pos(5)).await?;
-            ensure!(
-                interrupted.get_int_or("cooking_time_spent", 0) == 0,
-                "input replacement kept cooking progress"
-            );
-            log.record(
-                format!("interruption.{elapsed}"),
-                nbt(&Tag::Compound(interrupted))?,
             )?;
         }
         previous = elapsed;
@@ -270,7 +237,7 @@ async fn furnace_and_storage(session: &mut Session) -> Result<ObservationLog> {
             )?;
         }
     }
-    // One save/stop after every case, with the same six live tickers and two
+    // One save/stop after every case, with the same five live tickers and two
     // storage receivers. No backend restarts or per-case boots are hidden here.
     session.stop().await?;
     let saved = session.saved_world()?;

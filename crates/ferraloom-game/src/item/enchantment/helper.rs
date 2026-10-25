@@ -2,13 +2,137 @@
 use super::{ConditionalEffect, EnchantmentValueEffect};
 use crate::{
     block::containers::loot_runtime::LiveLootRuntime,
-    entity::player::inventory,
-    inventory::{StackOperation, StackRef},
+    entity::{
+        EntityRef, LivingEntity,
+        player::{ServerPlayer, equipment::SLOTS, inventory},
+    },
+    inventory::{ContainerHandle, ContainerSlot, StackOperation, StackRef},
     item::stack::receiver_error,
     level::LevelError,
     loot::{Identifier, LootData, LootParams, LootRandomSelection, LootRuntime},
 };
+use ferraloom_data::registries::enchantment_effect_component_type::Id as EffectComponent;
 use ferraloom_protocol::component::{ComponentTypeId, DataComponent};
+use ferraloom_protocol::component::{EquipmentSlot, ItemStack};
+use ferraloom_util::random::RandomSource;
+
+/// Port of EnchantedItemInUse's borrowed equipment receiver. The operation roots
+/// the selected object, so effect callbacks cannot redirect it to another item.
+#[derive(Clone, Copy, Debug)]
+pub struct EnchantedItemInUse {
+    pub item: StackRef,
+    pub slot: EquipmentSlot,
+    pub owner: EntityRef,
+}
+
+/// Port of EnchantmentHelper#getRandomItemWith. Each matching enchantment entry
+/// adds a candidate, rather than deduplicating stacks or equipment slots.
+pub fn get_random_item_with(
+    component: EffectComponent,
+    source: EntityRef,
+    predicate: impl Fn(&ItemStack) -> bool,
+    operation: &mut StackOperation<'_>,
+) -> Result<Option<EnchantedItemInUse>, LevelError> {
+    operation.level.entity::<LivingEntity>(source)?;
+    let behavior = operation.level.entity_behavior(source)?;
+    let mut candidates = Vec::new();
+    for (index, slot) in SLOTS.into_iter().enumerate() {
+        let stack = behavior
+            .item_by_slot(source, slot, operation.level)?
+            .expect("living equipment getter");
+        if !predicate(stack) {
+            continue;
+        }
+        let Some(DataComponent::Enchantments(enchantments)) =
+            inventory::component(stack, ComponentTypeId::ENCHANTMENTS)
+        else {
+            continue;
+        };
+        if enchantments.0.is_empty() {
+            continue;
+        }
+        let registry = operation.level.context().enchantments()?;
+        // Native holder identity-map order is intentionally represented by the
+        // component's stored order, as in run_iteration_on_item below.
+        for (enchantment, _) in &enchantments.0 {
+            let value = registry
+                .get(&enchantment.0)
+                .ok_or_else(|| missing_enchantment(&enchantment.0))?;
+            if value.has_effect(component) && value.definition.matching_slot(slot) {
+                let address = if slot == EquipmentSlot::Mainhand
+                    && let Ok(player) = operation.level.entity::<ServerPlayer>(source)
+                {
+                    ContainerSlot {
+                        container: ContainerHandle::PlayerInventory(source),
+                        slot: player.inventory.selected_slot(),
+                    }
+                } else {
+                    ContainerSlot {
+                        container: ContainerHandle::LivingEquipment(source),
+                        slot: index,
+                    }
+                };
+                candidates.push(EnchantedItemInUse {
+                    item: operation.level.stack_ref(address).map_err(receiver_error)?,
+                    slot,
+                    owner: source,
+                });
+            }
+        }
+    }
+    if candidates.is_empty() {
+        return Ok(None);
+    }
+    let index = operation
+        .level
+        .entity_mut::<LivingEntity>(source)?
+        .random
+        .next_int_bound(candidates.len() as i32) as usize;
+    let mut selected = candidates[index];
+    // The scan and nextInt have no mutable world callback; pin the chosen
+    // object before returning to the caller that can execute effect callbacks.
+    selected.item = operation
+        .pin_existing(selected.item)
+        .map_err(receiver_error)?;
+    Ok(Some(selected))
+}
+
+fn missing_enchantment(id: &Identifier) -> LevelError {
+    // TODO(5a): registry-aware component decoding rejects an unknown holder.
+    LevelError::EnchantmentEffect {
+        enchantment: id.clone(),
+        source: "unknown enchantment registry holder".into(),
+    }
+}
+
+/// Port of EnchantmentHelper#modifyDurabilityToRepairFromXp, preserving all
+/// per-enchantment f32 updates before MutableFloat.intValue's saturated cast.
+pub fn modify_durability_to_repair_from_xp(
+    receiver: StackRef,
+    amount: i32,
+    operation: &mut StackOperation<'_>,
+) -> Result<i32, LevelError> {
+    let mut value = amount as f32;
+    run_iteration_on_item(receiver, operation, |id, level, operation| {
+        let registry = operation.level.context().enchantments()?.clone();
+        let enchantment = registry.get(id).ok_or_else(|| missing_enchantment(id))?;
+        let effects = match enchantment
+            .value_effect(EffectComponent::REPAIR_WITH_XP)
+            .map_err(|error| LevelError::EnchantmentEffect {
+                enchantment: id.clone(),
+                source: error.to_string(),
+            })? {
+            Some(super::EnchantmentValueEffectComponent::RepairWithXp(effects)) => {
+                effects.as_slice()
+            }
+            Some(_) => unreachable!("typed enchantment component key"),
+            None => &[],
+        };
+        value = modify_item_filtered_count(id, effects, level, receiver, value, operation)?;
+        Ok(())
+    })?;
+    Ok((value as i32).max(0))
+}
 
 /// Port of EnchantmentHelper#runIterationOnItem without equipment-slot filtering.
 pub fn run_iteration_on_item(

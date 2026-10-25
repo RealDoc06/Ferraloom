@@ -18,7 +18,7 @@ use ferraloom_protocol::{
 use ferraloom_util::Vec3;
 
 pub(crate) fn baby_dimensions() -> crate::entity::EntityDimensions {
-    use crate::entity::{EntityAttachments, EntityDimensions};
+    use crate::entity::dimensions::{EntityAttachments, EntityDimensions};
     EntityDimensions::scalable(0.45, 0.7)
         .with_eye_height(0.69)
         .with_attachments(EntityAttachments::create_default(0.45, 0.7).with_points(
@@ -34,7 +34,7 @@ fn variant(
 ) -> Result<Option<Identifier>, LevelError> {
     let Some(id) = tag
         .get_string(field)
-        .and_then(|id| id.as_str().ok()?.parse::<Identifier>().ok())
+        .and_then(|id| id.to_string_checked().ok()?.parse::<Identifier>().ok())
     else {
         return Ok(None);
     };
