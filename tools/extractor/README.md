@@ -21,6 +21,11 @@ Each type also retains all four `EntityDimensions.attachments` lists. Extraction
 reads the immutable native map directly, preserving unrotated double coordinates
 and registered offsets independently of bounding-box dimensions.
 
+`allowed_in_peaceful` is `EntityType#isAllowedInPeaceful`: a read of the final
+constructor field copied from Builder, whose `notInPeaceful` method clears it.
+It is an immutable type fact independent of a world's current difficulty and
+the entity's MobCategory.
+
 `ExtractData <output-dir> --attributes-only` writes `attributes.json`: each
 registered Attribute's default, optional RangedAttribute bounds and syncable
 flag. These registry defaults remain separate from entity-type base overrides.

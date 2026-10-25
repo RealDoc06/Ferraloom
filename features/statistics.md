@@ -96,18 +96,13 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | statistics.stat-type.mined | `minecraft:mined` (stat type) | `net.minecraft.stats.Stats#register` | `stats::tests::vanilla_stat_registries_json_and_dirty_packets` | pass | partial |
 | statistics.stat-type.picked-up | `minecraft:picked_up` (stat type) | `net.minecraft.stats.Stats#register` | `stats::tests::vanilla_stat_registries_json_and_dirty_packets` | pass | partial |
 | statistics.stat-type.used | `minecraft:used` (stat type) | `net.minecraft.stats.Stats#register` | `stats::tests::vanilla_stat_registries_json_and_dirty_packets` | pass | partial |
-
 | statistics.counter.request-dirty | REQUEST_STATS drains only dirty values, including unchanged writes, and still sends an empty packet | `ServerStatsCounter#sendStats; ServerGamePacketListenerImpl#handleClientCommand` | `stats::tests::vanilla_counter_arithmetic_same_value_writes_and_requests` | pass | partial |
 | statistics.counter.partial-json | Keep valid siblings when statistic names or values fail codec parsing | `ServerStatsCounter.STATS_CODEC` | `stats::tests::vanilla_stat_registries_json_and_dirty_packets` | pass | pass |
 | statistics.counter.jdk25-copy-order | Preserve JDK 25 HashSet copy capacities when draining 12, 24 or all custom dirty statistics into the packet map | `ServerStatsCounter#getDirty; HashSet(Collection)` | `stats::tests::vanilla_dirty_packets_follow_jdk25_copy_capacity_boundaries` | pass | pass |
 | statistics.counter.loaded-map-order | Preserve JDK 25 per-group putAll and fastutil destination sizing when loading saved statistics | `ServerStatsCounter.STATS_CODEC; ServerStatsCounter#parse` | `stats::tests::vanilla_dirty_packets_follow_jdk25_copy_capacity_boundaries` | pass | pass |
-
 | statistics.request-stats.live | REQUEST_STATS sends and clears the canonical player dirty set through ordered player output | `ServerGamePacketListenerImpl#handleClientCommand` | `stats::tests` | pass | partial |
-
 | statistics.live-counter-scoreboard-order | Player award/reset updates the canonical counter before matching objectives synchronously; counter saturation and score wrapping retain native delta semantics | `ServerPlayer#awardStat; ServerPlayer#resetStat` | `stats::tests::live_stat_counter_and_scoreboard_update_in_native_order` | pass | partial |
-
 | statistics.parity.consumed-chest-open | Bedrock flat Strict chest interaction awards OPEN_CHEST and REQUEST_STATS clears its dirty entry | `ChestBlock#useWithoutItem; ServerPlayer#awardStat` | `ferraloom-parity::opening_chest_awards_and_flushes_statistics` | pass | todo |
-
 | statistics.join-dirty-loaded | Joining marks all loaded statistics dirty before initial recipe packets, for the first REQUEST_STATS response | `PlayerList#placeNewPlayer` | `stats::tests::vanilla_stat_registries_json_and_dirty_packets` | pass | partial |
 | statistics.persistence.legacy-name-file | Native locateStatsFile renames valid name-based statistics files to UUID paths and retains the source path if moving fails; deferred with pre-UUID save/datafix compatibility | `PlayerList#locateStatsFile` | | - | todo |
 | statistics.parity.loaded-save-request | Bedrock flat Strict scenario sends a loaded statistic once per join and retains its exact value through save/restart | `PlayerList#getPlayerStats; PlayerList#save; ServerGamePacketListenerImpl#handleClientCommand` | `ferraloom-parity::loaded_statistics_and_advancement_tab_survive_save` | pass | pass |

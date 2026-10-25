@@ -6,8 +6,10 @@ use ferraloom_util::{Uuid, Vec3};
 use super::{EntityData, synched_data as data};
 
 pub(crate) mod live;
+mod recursive;
 mod tree;
 pub use live::load_in_place;
+pub use recursive::load_entity_recursive;
 pub use tree::EntityPersistenceError;
 pub(crate) use tree::load_entity_tree;
 
@@ -35,6 +37,37 @@ pub(crate) fn has_entity_factory(kind: ferraloom_data::EntityType) -> bool {
             | EntityType::FALLING_BLOCK
             | EntityType::EXPERIENCE_ORB
     )
+}
+
+/// One EntityType factory dispatcher serves cold storage and recursive live
+/// loading. Constructors retain their native network-ID/UUID/RNG draw order.
+pub(crate) fn create_entity_state(
+    level: &crate::level::Level,
+    kind: ferraloom_data::EntityType,
+) -> Result<super::EntityState, EntityPersistenceError> {
+    use super::{
+        EntityState,
+        animal::Cow,
+        experience_orb::ExperienceOrb,
+        item::{FallingBlockEntity, ItemEntity, PrimedTnt},
+    };
+    use ferraloom_data::EntityType;
+    if !has_entity_factory(kind) {
+        return Err(EntityPersistenceError::UnsupportedType(kind.name().into()));
+    }
+    let parent = level.create_entity_data(kind);
+    Ok(match kind {
+        EntityType::COW => EntityState::Cow(Box::new(Cow::with_level(parent, level)?)),
+        EntityType::ITEM => EntityState::Item(Box::new(ItemEntity::with_parent(parent))),
+        EntityType::TNT => EntityState::PrimedTnt(Box::new(PrimedTnt::with_parent(parent))),
+        EntityType::FALLING_BLOCK => {
+            EntityState::FallingBlock(Box::new(FallingBlockEntity::with_parent(parent)))
+        }
+        EntityType::EXPERIENCE_ORB => {
+            EntityState::ExperienceOrb(Box::new(ExperienceOrb::with_parent(parent)))
+        }
+        _ => unreachable!("checked entity factory"),
+    })
 }
 
 /// Reuse the canonical loader for one constructor, allowing the stream consumer

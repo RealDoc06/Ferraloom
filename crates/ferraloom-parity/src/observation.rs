@@ -56,18 +56,40 @@ impl ObservationLog {
                     *entry = Value::from(*entities.entry(raw).or_insert(next));
                 }
                 Normalization::RandomUuid(_) => {
-                    let raw = entry.as_str().context("UUID is not a string")?.to_owned();
-                    ensure!(
-                        raw.len() == 36
-                            && raw.bytes().enumerate().all(|(i, b)| {
-                                if [8, 13, 18, 23].contains(&i) {
-                                    b == b'-'
-                                } else {
-                                    b.is_ascii_hexdigit()
-                                }
-                            }),
-                        "invalid UUID at {pointer}"
-                    );
+                    let raw = match entry {
+                        Value::String(raw) => {
+                            // Preserve the existing string validation and identity keys.
+                            ensure!(
+                                raw.len() == 36
+                                    && raw.bytes().enumerate().all(|(i, b)| {
+                                        if [8, 13, 18, 23].contains(&i) {
+                                            b == b'-'
+                                        } else {
+                                            b.is_ascii_hexdigit()
+                                        }
+                                    }),
+                                "invalid UUID at {pointer}"
+                            );
+                            raw.clone()
+                        }
+                        Value::Array(words) => {
+                            ensure!(
+                                words.len() == 4,
+                                "UUID must have four integers at {pointer}"
+                            );
+                            let mut decoded = [0; 4];
+                            for (target, word) in decoded.iter_mut().zip(words) {
+                                *target = word
+                                    .as_i64()
+                                    .and_then(|word| i32::try_from(word).ok())
+                                    .with_context(|| {
+                                    format!("UUID word is not a signed integer at {pointer}")
+                                })?;
+                            }
+                            ferraloom_util::Uuid::from_int_array(decoded).to_string()
+                        }
+                        _ => bail!("UUID is not a string or four integers at {pointer}"),
+                    };
                     let next = uuids.len();
                     *entry = Value::from(format!("uuid-{}", uuids.entry(raw).or_insert(next)));
                 }
@@ -142,6 +164,44 @@ mod tests {
         );
         Ok(())
     }
+    #[test]
+    fn uuid_normalization_shares_string_and_native_int_array_identity_only_at_selected_fields()
+    -> Result<()> {
+        let words = [i32::MIN, 0, 0, 1];
+        let uuid = ferraloom_util::Uuid::from_int_array(words).to_string();
+        let mut log = ObservationLog::default();
+        log.record(
+            "entity",
+            serde_json::json!({
+                "packet_uuid":uuid, "hover_uuid":words, "insertion":uuid,
+                "unrelated_array":words, "other_uuid":"ffffffff-ffff-ffff-ffff-ffffffffffff",
+            }),
+        )?;
+        let rules = ["packet_uuid", "hover_uuid", "insertion", "other_uuid"]
+            .map(|field| Normalization::RandomUuid(format!("/entity/{field}")));
+        let normalized = log.normalized(&rules)?;
+        ensure!(
+            normalized.0["entity"]
+                == serde_json::json!({
+                    "packet_uuid":"uuid-0", "hover_uuid":"uuid-0", "insertion":"uuid-0",
+                    "unrelated_array":words, "other_uuid":"uuid-1",
+                })
+        );
+        for invalid in [
+            serde_json::json!([1, 2, 3]),
+            serde_json::json!([0, 0, 0, 2147483648_i64]),
+            serde_json::json!([0, 0, 0, 0.5]),
+        ] {
+            log.record("invalid", invalid)?;
+            ensure!(
+                log.normalized(&[Normalization::RandomUuid("/invalid".into())])
+                    .is_err()
+            );
+            log.0.remove("invalid");
+        }
+        Ok(())
+    }
+
     #[test]
     fn diff_names_the_changed_field() -> Result<()> {
         let mut a = ObservationLog::default();

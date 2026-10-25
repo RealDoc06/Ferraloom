@@ -22,6 +22,7 @@ pub mod source;
 pub mod spawn;
 pub mod storage;
 pub mod suggestions;
+pub mod summon;
 pub mod team;
 pub mod teleport;
 pub mod tick;

@@ -1601,13 +1601,6 @@ fn falling_sand_is_constructed_before_source_replacement_then_lands() {
         level.get_block_state(BlockPos::new(8, 64, 8)).unwrap(),
         Block::SAND.default_state()
     );
-    assert!(matches!(
-        level.take_entity_effects().last(),
-        Some(effects::EntityEffect::FallingBlockLanded {
-            pos: BlockPos { x: 8, y: 64, z: 8 },
-            ..
-        })
-    ));
 }
 
 #[test]

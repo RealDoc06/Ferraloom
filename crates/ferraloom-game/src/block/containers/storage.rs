@@ -260,7 +260,10 @@ pub fn set(map: &mut DataComponentMap, component: DataComponent) {
 }
 /// Port of ContainerHelper#loadAllItems: TagValueInput's typed-list iterator
 /// retains ItemStackWithSlot codec partials, including an invalid count's 1.
-fn item_entries(tag: &CompoundTag, size: usize) -> impl Iterator<Item = (usize, ItemStack)> + '_ {
+pub(crate) fn item_entries(
+    tag: &CompoundTag,
+    size: usize,
+) -> impl Iterator<Item = (usize, ItemStack)> + '_ {
     tag.get_list("Items")
         .into_iter()
         .flat_map(|list| list.iter())

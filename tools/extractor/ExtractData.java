@@ -342,6 +342,7 @@ public final class ExtractData {
             out.addProperty("track_deltas", type.trackDeltas());
             out.addProperty("fire_immune", type.fireImmune());
             out.addProperty("summonable", type.canSummon());
+            out.addProperty("allowed_in_peaceful", type.isAllowedInPeaceful());
             var attachments = new JsonObject();
             var points = (Map<?, ?>) attachmentField.get(dimensions.attachments());
             for (var attachment : EntityAttachment.values()) {
