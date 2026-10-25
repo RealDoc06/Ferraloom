@@ -10,7 +10,10 @@ use crate::{
         weather::ChunkLightSnapshot,
     },
 };
-use ferraloom_data::BlockState;
+use ferraloom_data::{
+    Block, BlockState,
+    datapack::{Pack, ResourceManager, TagSet},
+};
 use ferraloom_util::{BlockPos, ChunkPos};
 use std::{collections::BTreeMap, sync::Arc};
 
@@ -21,6 +24,10 @@ fn level(has_skylight: bool) -> Level {
     let mut level = Level::new(Region::new(&BEHAVIORS), LevelContext::fixture(0, 63));
     level.set_unported_behavior(UnportedBehavior::Strict);
     level.set_has_skylight(has_skylight);
+    let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").expect("builder supplies vanilla jar");
+    let resources =
+        ResourceManager::new(vec![Pack::vanilla_jar(std::path::Path::new(&jar)).unwrap()]);
+    level.set_block_tags(Arc::new(TagSet::<Block>::load(&resources).unwrap()));
     let definitions = Arc::new(
         EnvironmentDefinitions::load(&ferraloom_data::datapack::ResourceManager::new(Vec::new()))
             .unwrap(),
