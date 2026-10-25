@@ -228,6 +228,11 @@ fn run_light_worker(
     let mut full_chunks = std::collections::HashSet::new();
     let mut imported = BTreeMap::<i64, ImportedGenerationLight>::new();
     while let Ok(job) = light_in.recv() {
+        let context = match &job {
+            LightJob::Initialize { request, pos, .. } => Some((*request, *pos)),
+            _ => None,
+        };
+        let _timing = crate::generation::profile::Span::new("live_light", context);
         let (initialized, changes) = match job {
             LightJob::Initialize {
                 request,
@@ -1291,6 +1296,11 @@ impl World {
         }
         self.running_generation = Some((request.id, request.pos));
         self.generation_work = Some(self.generation.submit(move || {
+            let _timing = crate::generation::profile::Span::new(
+                "generation_job",
+                Some((request.id, request.pos)),
+            )
+            .status(request.status);
             let mut result = state.generate(
                 request.id,
                 request.pos,
@@ -1635,6 +1645,8 @@ impl World {
             pos,
             result,
         } = completion;
+        let _timing =
+            crate::generation::profile::Span::new("integrate_output", Some((request, pos)));
         if self
             .active_generation
             .get(&pos.pack())
@@ -1887,6 +1899,8 @@ impl World {
         light_revision: GenerationRevision,
         terrain: &mut Terrain,
     ) -> Result<LevelChunk> {
+        let _timing =
+            crate::generation::profile::Span::new("prepare_full", Some((request, terrain.pos)));
         ensure!(
             terrain.structures.position == [terrain.pos.x, terrain.pos.z],
             "promotion structures belong to another chunk"

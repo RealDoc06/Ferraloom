@@ -12,7 +12,7 @@ pub use live_holder::{
     GenerationFutureId, GenerationFutureResult, GenerationSchedule, GenerationTaskChange,
     GenerationTaskToken, HolderGeneration,
 };
-pub use proto::{ProtoChunk, promote};
+pub use proto::{CapturedChunkTerrain, ProtoChunk, promote};
 pub use pyramid::{
     ChunkDependencies, ChunkPyramid, ChunkStatusTask, ChunkStep, STATUSES, parse_status,
     status_name,

@@ -350,9 +350,15 @@ impl FlatLevelSource {
             .insert(self.settings.biome.clone(), steps);
         Ok(adjusted)
     }
-    pub fn build_terrain(&self, position: [i32; 2], dimension: DimensionType) -> GeneratedChunk {
+    /// Allocate ChunkMap's empty proto without running FlatLevelSource#buildTerrain.
+    /// Layer placement belongs to TERRAIN; the configured biome is already known.
+    pub fn new_chunk_in_dimension(
+        &self,
+        position: [i32; 2],
+        dimension: DimensionType,
+    ) -> GeneratedChunk {
         let biome = self.data.biome_ids[&self.settings.biome];
-        let mut chunk = GeneratedChunk::new(
+        GeneratedChunk::new(
             position,
             NoiseSettings {
                 min_y: dimension.min_y,
@@ -362,7 +368,10 @@ impl FlatLevelSource {
             self.data.biome_strategy.clone(),
             self.data.motion_blocking.clone(),
             self.data.motion_blocking_no_leaves.clone(),
-        );
+        )
+    }
+    pub fn build_terrain(&self, position: [i32; 2], dimension: DimensionType) -> GeneratedChunk {
+        let mut chunk = self.new_chunk_in_dimension(position, dimension);
         for (i, state) in self
             .layers
             .iter()
