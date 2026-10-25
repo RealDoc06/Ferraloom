@@ -39,18 +39,22 @@ async fn put(bot: &mut Bot, pos: BlockPos, state: BlockState) -> Result<()> {
     if block(bot, pos)? == state {
         return Ok(());
     }
-    command(
-        bot,
-        &format!(
-            "setblock {} {} {} {}",
-            pos.x,
-            pos.y,
-            pos.z,
-            block_argument(state)
-        ),
-        "commands.setblock.success",
-    )
-    .await?;
+    if state == state.block().default_state() {
+        level_support::set(bot, pos, state.block()).await?;
+    } else {
+        command(
+            bot,
+            &format!(
+                "setblock {} {} {} {}",
+                pos.x,
+                pos.y,
+                pos.z,
+                block_argument(state)
+            ),
+            "commands.setblock.success",
+        )
+        .await?;
+    }
     expect_blocks(bot, &[(pos, state)]).await
 }
 async fn fill(bot: &mut Bot, from: BlockPos, to: BlockPos, state: BlockState) -> Result<()> {
