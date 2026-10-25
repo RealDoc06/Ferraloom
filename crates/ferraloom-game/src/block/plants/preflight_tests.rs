@@ -200,7 +200,7 @@ fn native_light_block_updates_preserve_state_water_ticks_and_rng_on_both_arms() 
         ChunkStatus::Features,
     )];
     let mut calls = 0;
-    for line in text.lines() {
+    for line in text.lines().filter(|line| line.starts_with("light\t")) {
         let fields: Vec<_> = line.split('\t').collect();
         let state = BlockState::from_id(fields[1].parse().unwrap()).unwrap();
         let neighbor = BlockState::from_id(fields[2].parse().unwrap()).unwrap();
@@ -326,4 +326,99 @@ fn native_light_block_updates_preserve_state_water_ticks_and_rng_on_both_arms() 
         calls += 1;
     }
     assert_eq!(calls, 448);
+}
+
+#[test]
+fn native_light_contexts_keep_outline_and_inherited_collision_distinct() {
+    use crate::block::{BlockCollisionContext, LevelReaderRef};
+    use crate::entity::collision_context::EntityCollisionView;
+    use ferraloom_util::shapes::{self, BooleanOp, PositionCollisionContext};
+
+    let mut text = String::new();
+    flate2::read::GzDecoder::new(
+        include_bytes!("../../../tests/java/items/light-updates.tsv.gz").as_slice(),
+    )
+    .read_to_string(&mut text)
+    .unwrap();
+    let (_, generator) = super::worldgen_tests::setup();
+    let mut chunks = [RegionChunk::new(
+        generator.new_chunk([0, 0]),
+        ChunkStatus::Features,
+    )];
+    let mut live = super::tests::level_with_height(2);
+    let mut calls = 0;
+    for line in text
+        .lines()
+        .filter(|line| line.starts_with("light-shape\t"))
+    {
+        let fields: Vec<_> = line.split('\t').collect();
+        let state = BlockState::from_id(fields[1].parse().unwrap()).unwrap();
+        live.set_block_state(POS, state).unwrap();
+        *live.random() = Random::Legacy(LegacyRandomSource::new(1234));
+        let position = PositionCollisionContext::<Item, ferraloom_data::FluidState>::new(2.0);
+        let context = match fields[2].parse::<u8>().unwrap() {
+            0 => BlockCollisionContext::empty(),
+            index @ 1..=4 => {
+                // Same scalar arguments as the native protected constructor;
+                // holding-item queries do not resolve the nullable entity.
+                let mut captured = EntityCollisionView::placement_context(None, &live).unwrap();
+                captured.placement = false;
+                captured.entity_bottom = 0.0;
+                captured.held_item = Some(
+                    [Item::AIR, Item::LIGHT, Item::STONE, Item::BONE_MEAL][usize::from(index - 1)],
+                );
+                BlockCollisionContext::Entity(captured)
+            }
+            5 => BlockCollisionContext::Position(&position),
+            6 => BlockCollisionContext::placement_context(None, &live).unwrap(),
+            _ => panic!("unknown native collision context"),
+        };
+        let mut region = WorldGenRegion::new(
+            &mut chunks,
+            [0, 0],
+            &[ChunkStatus::Features],
+            0,
+            None,
+            &GameWorldgenBlockBehavior,
+            0,
+            63,
+        )
+        .unwrap();
+        region.set_block_in_section(point(POS), state).unwrap();
+        region.set_random(Random::Legacy(LegacyRandomSource::new(1234)));
+        for reader in [
+            LevelReaderRef::Server(&live),
+            LevelReaderRef::Worldgen(&region),
+        ] {
+            let shapes = [
+                reader.shape_with_context(state, POS, &context).unwrap(),
+                reader.collision_shape(state, POS, &context).unwrap(),
+                reader.shape(state, POS).unwrap(),
+                reader.collision_shape_without_context(state, POS).unwrap(),
+            ];
+            for (index, actual) in shapes.into_iter().enumerate() {
+                let expected = if fields[3 + index].parse::<bool>().unwrap() {
+                    shapes::block()
+                } else {
+                    shapes::empty()
+                };
+                assert!(
+                    !shapes::join_is_not_empty(&actual, &expected, BooleanOp::NotSame),
+                    "shape{index}: {line}"
+                );
+            }
+        }
+        assert_eq!(
+            live.random().next_long(),
+            fields[7].parse::<i64>().unwrap(),
+            "{line}"
+        );
+        assert_eq!(
+            region.random_mut().unwrap().next_long(),
+            fields[7].parse::<i64>().unwrap(),
+            "{line}"
+        );
+        calls += 1;
+    }
+    assert_eq!(calls, 224);
 }

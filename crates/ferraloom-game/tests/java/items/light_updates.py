@@ -28,11 +28,11 @@ with tempfile.TemporaryDirectory(prefix='ferraloom-light-updates-') as directory
     if native.returncode:
         print(native.stdout.decode(), file=sys.stderr)
         native.check_returncode()
-    vectors = b'\n'.join(line for line in native.stdout.splitlines() if line.startswith(b'light\t')) + b'\n'
+    vectors = b'\n'.join(line for line in native.stdout.splitlines() if line.startswith((b'light\t', b'light-shape\t'))) + b'\n'
     fixture = HERE / 'light-updates.tsv.gz'
     if '--check' in sys.argv:
         if gzip.decompress(fixture.read_bytes()) != vectors:
             raise SystemExit('native light update vectors differ')
     else:
         fixture.write_bytes(gzip.compress(vectors, mtime=0))
-    print(f'{len(vectors.splitlines())} native light update state/ticks/RNG vectors PASS')
+    print(f'{len(vectors.splitlines())} native light state/ticks/context-shape/RNG vectors PASS')
