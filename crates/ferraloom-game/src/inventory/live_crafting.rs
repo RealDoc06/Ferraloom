@@ -149,6 +149,20 @@ pub fn refresh_live_crafting_result(
     limited_crafting: bool,
     level: &mut Level,
 ) -> Result<()> {
+    let receiver = level.entity::<ServerPlayer>(player)?.menus.menu(menu)?;
+    if receiver.placing_recipe {
+        return Ok(());
+    }
+    if receiver.kind == MenuKind::Crafting {
+        let Some(access) = receiver.level_access.clone() else {
+            return Ok(());
+        };
+        // CraftingMenu#slotsChanged executes through its captured world. The
+        // finishPlacingRecipe path below uses the explicitly supplied level.
+        return access.execute(level, |level, _| {
+            refresh_live_crafting_result_with_hint(player, menu, limited_crafting, None, level)
+        });
+    }
     refresh_live_crafting_result_with_hint(player, menu, limited_crafting, None, level)
 }
 pub(super) fn refresh_live_crafting_result_with_hint(

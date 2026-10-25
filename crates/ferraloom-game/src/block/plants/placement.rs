@@ -52,10 +52,14 @@ pub(super) fn supports(block: Block, method: BlockMethod) -> bool {
                 | C::FlowerBedBlock
                 | C::LeafLitterBlock
                 | C::SnowLayerBlock
+                | C::MangroveRootsBlock
+                | C::SculkSensorBlock
+                | C::CalibratedSculkSensorBlock
+                | C::SculkShriekerBlock
         )
 }
 
-fn facing(direction: Direction) -> p::Facing {
+pub(super) fn facing(direction: Direction) -> p::Facing {
     match direction {
         Direction::North => p::Facing::North,
         Direction::East => p::Facing::East,
@@ -224,6 +228,22 @@ impl BlockBehavior for PlantPlacement {
         }
         match block.class() {
             C::PitcherCropBlock => {}
+            C::MangroveRootsBlock
+            | C::SculkSensorBlock
+            | C::CalibratedSculkSensorBlock
+            | C::SculkShriekerBlock => {
+                state = state
+                    .with(
+                        p::WATERLOGGED,
+                        super::source_water(reader.get_fluid_state(pos)?),
+                    )
+                    .unwrap();
+                if block.class() == C::CalibratedSculkSensorBlock {
+                    state = state
+                        .with(p::FACING, facing(context.horizontal_direction(&reader)?))
+                        .unwrap();
+                }
+            }
             C::HangingRootsBlock => {
                 state = state
                     .with(

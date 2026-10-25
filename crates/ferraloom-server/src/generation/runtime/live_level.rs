@@ -32,7 +32,14 @@ impl LiveLevel {
             game_time,
             dimension,
         } = bootstrap;
-        let runtime = GenerationRuntime::new(world, chunks, tickets, distance_manager, properties);
+        let runtime = GenerationRuntime::new(
+            dimension.parse()?,
+            world,
+            chunks,
+            tickets,
+            distance_manager,
+            properties,
+        )?;
         level
             .install_acquire_driver(Box::new(runtime), height)
             .map_err(|error| anyhow::anyhow!("{error:?}"))?;

@@ -1370,7 +1370,7 @@ fn item_merge_equal_counts_choose_other_and_partial_pickup_preserves_native_retu
     assert_eq!(count(item.item()), 1);
     assert!(matches!(
         level.take_entity_effects().first(),
-        Some(effects::EntityEffect::TakeItem { count: 1, .. })
+        Some(effects::EntityEffect::ItemPickup { count: 1, .. })
     ));
 }
 
@@ -1774,6 +1774,7 @@ fn relative_teleports_match_native_transform_state_and_packet_flags() {
         level
             .add_entity(id, EntityState::Player(Box::new(player)))
             .unwrap();
+        level.take_effects(); // Initial join packets precede the teleport under test.
         teleport_player(id, change.clone(), flags, &mut level).unwrap();
         let player = level.entity::<player::ServerPlayer>(id).unwrap();
         let state =
@@ -1940,6 +1941,7 @@ fn push_entities_up_matches_native_shape_difference_query_order_and_spectators()
                 EntityState::Player(Box::new(spectator)),
             )
             .unwrap();
+        game_events::take(&mut level); // Initial join packets precede the push under test.
         let state = level
             .push_entities_up(
                 old.default_state(),

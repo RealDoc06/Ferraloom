@@ -350,6 +350,11 @@ impl<T: Copy + Eq + Hash> PalettedContainer<T> {
     }
     /// Counts used values; ordering is not a palette compaction operation.
     pub fn counts(&self) -> Vec<(T, usize)> {
+        // PalettedContainer#count reports a size-one palette without walking
+        // its storage, including a freshly allocated uniform section.
+        if let [value] = self.palette.entries() {
+            return vec![(*value, self.strategy.entry_count())];
+        }
         let mut counts = HashMap::new();
         for index in 0..self.strategy.entry_count() {
             *counts.entry(self.storage.get(index)).or_insert(0) += 1;
@@ -364,6 +369,15 @@ impl<T: Copy + Eq + Hash> PalettedContainer<T> {
     /// Port of pack: discard unused entries, assign IDs in first cell-use order,
     /// then use disk width even for a currently global in-memory palette.
     pub fn pack(&self) -> PackedData<T> {
+        // Reencoding a size-one palette always yields ID 0 with zero disk
+        // bits. Avoid allocating and hashing an identical ID for every cell.
+        if let [value] = self.palette.entries() {
+            return PackedData {
+                palette_entries: vec![*value],
+                storage: None,
+                bits_per_entry: Some(0),
+            };
+        }
         let mut entries = Vec::new();
         let mut ids = HashMap::new();
         let contents: Vec<_> = (0..self.strategy.entry_count())

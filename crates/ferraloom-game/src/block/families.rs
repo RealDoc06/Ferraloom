@@ -12,4 +12,5 @@ pub(super) fn ported_behavior(
         .or_else(|| super::containers::ported_behavior(block, method))
         .or_else(|| super::breaking::ported_behavior(block, method))
         .or_else(|| super::building::ported_behavior(block, method))
+        .or_else(|| super::bubble_column::ported_behavior(block, method))
 }

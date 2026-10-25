@@ -3,6 +3,9 @@
 //! itself permits order-dependent feature writes; worker completion order never
 //! chooses which write wins here. Disjoint dimensions can use separate workers.
 #[cfg(test)]
+mod capture_tests;
+pub(crate) mod profile;
+#[cfg(test)]
 mod relight_tests;
 pub(crate) mod runtime;
 
@@ -12,8 +15,8 @@ use crate::world::{
 };
 use anyhow::{Context, Result, ensure};
 use ferraloom_game::level::generation::{
-    ChunkGenerationTask, ChunkStatus, ChunkStatusTask, GenerationChunkHolder, ProtoChunk,
-    WorldGenContext,
+    CapturedChunkTerrain, ChunkGenerationTask, ChunkStatus, ChunkStatusTask, ChunkStep,
+    GenerationChunkHolder, ProtoChunk, WorldGenContext,
 };
 use ferraloom_light::{LevelLightEngine, LightLayer, LightUpdates, SectionSnapshots};
 use ferraloom_storage::{self as storage, IoWorker, SerializableChunkData};
@@ -127,6 +130,7 @@ pub struct GenerationState {
     pub context: Arc<WorldGenContext>,
     holders: BTreeMap<i64, GenerationChunkHolder<ProtoChunk>>,
     failed_loads: BTreeMap<i64, ferraloom_game::level::generation::GenerationError>,
+    captured_terrain: BTreeMap<i64, Option<CapturedChunkTerrain>>,
     light: LevelLightEngine,
     light_pool: Arc<JobPool>,
     snapshots: SectionSnapshots<'static>,
@@ -153,6 +157,7 @@ impl GenerationState {
             context,
             holders: BTreeMap::new(),
             failed_loads: BTreeMap::new(),
+            captured_terrain: BTreeMap::new(),
             light_changed: BTreeSet::new(),
             structure_check: StructureCheck::default(),
             revision: GenerationRevision::default(),
@@ -187,18 +192,21 @@ impl GenerationState {
                 .heightmap(ferraloom_game::level::heightmap::Heightmap::OceanFloor)
                 .expect("attached full heightmap");
             holder.chunk.region.refresh_full_snapshot(generated);
+            self.captured_terrain.remove(&key);
         }
     }
     pub fn save_proto_chunks(&mut self, registry: &RegistryAdapter, io: &IoWorker) -> Result<()> {
+        let mut timing = profile::Span::new("save_proto_chunks", None);
         self.flush_light()?;
-        for (&key, holder) in &self.holders {
-            let proto = &holder.chunk;
-            if proto.region.status > ChunkStatus::Empty && proto.region.status < ChunkStatus::Full {
-                let disk = proto
-                    .capture(&self.context, registry)
-                    .map_err(anyhow::Error::msg)?;
-                io.store(ChunkPos::unpack(key), Some(disk.write()?))
-                    .wait()?;
+        let positions = self.holders.keys().copied().collect::<Vec<_>>();
+        for key in positions {
+            let status = self.holders[&key].chunk.region.status;
+            if status > ChunkStatus::Empty && status < ChunkStatus::Full {
+                let disk = timing.measure("capture", || self.capture_proto(key, registry))?;
+                let tag = timing.measure("encode", || disk.write())?;
+                timing.measure("write_wait", || {
+                    io.store(ChunkPos::unpack(key), Some(tag)).wait()
+                })?;
             }
         }
         Ok(())
@@ -209,6 +217,7 @@ impl GenerationState {
         registry: &RegistryAdapter,
         io: &IoWorker,
     ) -> Result<()> {
+        let mut timing = profile::Span::new("save_unclaimed_protos", None);
         self.flush_light()?;
         let drop = self
             .holders
@@ -219,13 +228,13 @@ impl GenerationState {
                     .then_some(pos)
             })
             .collect::<Vec<_>>();
+        timing.items(drop.len());
         for pos in drop {
-            let proto = &self.holders[&pos.pack()].chunk;
-            if proto.region.status > ChunkStatus::Empty {
-                let disk = proto
-                    .capture(&self.context, registry)
-                    .map_err(anyhow::Error::msg)?;
-                io.store(pos, Some(disk.write()?)).wait()?;
+            if self.holders[&pos.pack()].chunk.region.status > ChunkStatus::Empty {
+                let disk =
+                    timing.measure("capture", || self.capture_proto(pos.pack(), registry))?;
+                let tag = timing.measure("encode", || disk.write())?;
+                timing.measure("write_wait", || io.store(pos, Some(tag)).wait())?;
             }
             self.forget(pos);
         }
@@ -234,10 +243,51 @@ impl GenerationState {
     pub fn forget(&mut self, pos: ChunkPos) {
         self.holders.remove(&pos.pack());
         self.failed_loads.remove(&pos.pack());
+        self.captured_terrain.remove(&pos.pack());
         self.snapshots.remove_chunk(pos);
         self.light_changed.remove(&pos.pack());
         self.light.forget_chunk_sources(pos);
     }
+    fn capture_proto(
+        &mut self,
+        key: i64,
+        registry: &RegistryAdapter,
+    ) -> Result<SerializableChunkData> {
+        self.holders[&key]
+            .chunk
+            .capture_with_cached_terrain(
+                &self.context,
+                registry,
+                self.captured_terrain.entry(key).or_default(),
+            )
+            .map_err(anyhow::Error::msg)
+    }
+
+    /// A status dependency is read-only outside the native write radius. Shared
+    /// structure starts can still change there, so only terrain is cached.
+    /// Invalidate before execution so partial writes survive errors/cancellation.
+    fn invalidate_step_terrain(&mut self, pos: ChunkPos, step: &ChunkStep) {
+        let radius = match step.task {
+            ChunkStatusTask::GenerateBiomes => 0,
+            ChunkStatusTask::BuildTerrain | ChunkStatusTask::GenerateFeatures => {
+                step.block_state_write_radius.max(0)
+            }
+            _ => return,
+        };
+        for x in pos.x - radius..=pos.x + radius {
+            for z in pos.z - radius..=pos.z + radius {
+                let key = ChunkPos::new(x, z).pack();
+                if self
+                    .holders
+                    .get(&key)
+                    .is_some_and(|holder| holder.chunk.region.status < ChunkStatus::Full)
+                {
+                    self.captured_terrain.remove(&key);
+                }
+            }
+        }
+    }
+
     /// Runtime may request any saved status. A missing chunk is never fabricated
     /// at FULL, and every per-step result is retained even when a later step fails.
     pub fn generate(
@@ -249,6 +299,7 @@ impl GenerationState {
         io: &IoWorker,
         cancelled: Option<&AtomicBool>,
     ) -> Result<GenerationOutput> {
+        let _timing = profile::Span::new("generate", Some((request, pos))).status(target);
         let result = self.generate_statuses(request, pos, target, registry, io, cancelled);
         self.finish_light(result)
     }
@@ -281,6 +332,9 @@ impl GenerationState {
             else {
                 break;
             };
+            let mut timing =
+                profile::Span::new("status_layer", Some((request, pos))).status(layer.status);
+            timing.items(layer.positions.len());
             for position in layer.positions {
                 let key = position.pack();
                 if layer.status == ChunkStatus::Empty {
@@ -291,16 +345,22 @@ impl GenerationState {
                         self.holders.entry(key)
                     {
                         let loaded = (|| -> Result<ProtoChunk> {
-                            if let Some(tag) = io.load(position).wait()? {
-                                ProtoChunk::load(
-                                    &self.context,
-                                    registry,
-                                    position,
-                                    SerializableChunkData::parse(tag)?,
-                                )
-                                .map_err(anyhow::Error::msg)
+                            if let Some(tag) =
+                                timing.measure("read_wait", || io.load(position).wait())?
+                            {
+                                timing.measure("decode", || {
+                                    ProtoChunk::load(
+                                        &self.context,
+                                        registry,
+                                        position,
+                                        SerializableChunkData::parse(tag)?,
+                                    )
+                                    .map_err(anyhow::Error::msg)
+                                })
                             } else {
-                                Ok(ProtoChunk::empty(&self.context, position)?)
+                                timing.measure("empty_chunk", || {
+                                    Ok(ProtoChunk::empty(&self.context, position)?)
+                                })
                             }
                         })();
                         let proto = match loaded {
@@ -333,6 +393,7 @@ impl GenerationState {
                 if let Some(error) = &holder.failure {
                     anyhow::bail!("generation dependency failed: {error:?}");
                 }
+                self.invalidate_step_terrain(position, &step);
                 let result = (|| -> Result<()> {
                     match step.task {
                         ChunkStatusTask::InitializeLight | ChunkStatusTask::Light => {
@@ -340,10 +401,9 @@ impl GenerationState {
                         }
                         ChunkStatusTask::Full => {
                             self.flush_light()?;
+                            let disk = self.capture_proto(key, registry)?;
                             let proto = &mut self.holders.get_mut(&key).unwrap().chunk;
-                            proto.disk = proto
-                                .capture(&self.context, registry)
-                                .map_err(anyhow::Error::msg)?;
+                            proto.disk = disk;
                             proto.region.status = ChunkStatus::Full;
                         }
                         ChunkStatusTask::GenerateSpawn => {
@@ -391,12 +451,14 @@ impl GenerationState {
                                     std::mem::replace(&mut h.chunk.region, self.placeholder.clone())
                                 })
                                 .collect::<Vec<_>>();
-                            let result = self.context.apply_with_light(
-                                &mut regions,
-                                [position.x, position.z],
-                                &step,
-                                &mut self.light,
-                            );
+                            let result = timing.measure("apply", || {
+                                self.context.apply_with_light(
+                                    &mut regions,
+                                    [position.x, position.z],
+                                    &step,
+                                    &mut self.light,
+                                )
+                            });
                             for ((neighbor, mut holder), region) in
                                 neighborhood.into_iter().zip(owned.drain(..)).zip(regions)
                             {
@@ -441,42 +503,47 @@ impl GenerationState {
             }
         }
         self.flush_light()?;
+        let mut timing = profile::Span::new("capture_output", Some((request, pos))).status(target);
         touched.extend(self.light_changed.iter().copied());
+        timing.items(touched.len());
         let mut neighbors = Vec::new();
         let mut full_structures = Vec::new();
         for key in touched {
             let proto = &self.holders[&key].chunk;
-            if key != pos.pack() && proto.region.status == ChunkStatus::Full {
-                full_structures.push(StructureSnapshot {
+            let status = proto.region.status;
+            if key != pos.pack() && status == ChunkStatus::Full {
+                let mut snapshot = StructureSnapshot {
                     pos: ChunkPos::unpack(key),
                     revision: self.revision,
                     data: storage::StructureData::from_nbt(proto.region.structures.to_nbt()?)?,
                     structures: proto.region.structures.clone(),
-                    unattached_disk: Some(
-                        proto
-                            .capture(&self.context, registry)
-                            .map_err(anyhow::Error::msg)?,
-                    ),
-                });
+                    unattached_disk: None,
+                };
+                let phase = if self.captured_terrain.get(&key).is_some_and(Option::is_some) {
+                    "reuse_terrain"
+                } else {
+                    "pack_terrain"
+                };
+                snapshot.unattached_disk =
+                    Some(timing.measure(phase, || self.capture_proto(key, registry))?);
+                full_structures.push(snapshot);
             }
-            if key != pos.pack()
-                && proto.region.status < ChunkStatus::Full
-                && proto.region.status > ChunkStatus::Empty
-            {
-                let disk = proto
-                    .capture(&self.context, registry)
-                    .map_err(anyhow::Error::msg)?;
+            if key != pos.pack() && status < ChunkStatus::Full && status > ChunkStatus::Empty {
+                let phase = if self.captured_terrain.get(&key).is_some_and(Option::is_some) {
+                    "reuse_terrain"
+                } else {
+                    "pack_terrain"
+                };
+                let disk = timing.measure(phase, || self.capture_proto(key, registry))?;
                 neighbors.push((ChunkPos::unpack(key), disk));
             }
         }
-        let proto = &self
-            .holders
-            .get(&pos.pack())
-            .context("generation cancelled before its center loaded")?
-            .chunk;
-        let disk = proto
-            .capture(&self.context, registry)
-            .map_err(anyhow::Error::msg)?;
+        ensure!(
+            self.holders.contains_key(&pos.pack()),
+            "generation cancelled before its center loaded"
+        );
+        let disk = timing.measure("center", || self.capture_proto(pos.pack(), registry))?;
+        let proto = &self.holders[&pos.pack()].chunk;
         let sections = proto.region.chunk.sections.clone();
         let light_neighbors = self
             .holders
@@ -626,23 +693,27 @@ impl GenerationState {
         + Send
         + 'static,
     ) -> Result<()> {
-        for (&key, holder) in &self.holders {
-            if holder.chunk.region.status >= ChunkStatus::Terrain {
-                self.snapshots.insert_chunk_with_sky_light_sources(
-                    ChunkPos::unpack(key),
-                    holder
-                        .chunk
-                        .region
-                        .chunk
-                        .sections
-                        .iter()
-                        .cloned()
-                        .map(|section| Some(Cow::Owned(section)))
-                        .collect(),
-                    Some(holder.chunk.region.sky_light_sources().clone()),
-                );
+        let mut timing = profile::Span::new("proto_light", None);
+        timing.items(self.holders.len());
+        timing.measure("snapshots", || {
+            for (&key, holder) in &self.holders {
+                if holder.chunk.region.status >= ChunkStatus::Terrain {
+                    self.snapshots.insert_chunk_with_sky_light_sources(
+                        ChunkPos::unpack(key),
+                        holder
+                            .chunk
+                            .region
+                            .chunk
+                            .sections
+                            .iter()
+                            .cloned()
+                            .map(|section| Some(Cow::Owned(section)))
+                            .collect(),
+                        Some(holder.chunk.region.sky_light_sources().clone()),
+                    );
+                }
             }
-        }
+        });
         let mut engine = std::mem::replace(
             &mut self.light,
             LevelLightEngine::new(true, self.context.dimension.has_skylight),
@@ -654,18 +725,21 @@ impl GenerationState {
                 (self.context.dimension.min_y + self.context.dimension.height) >> 4,
             ),
         );
+        let parent = timing.id();
         let result = self.light_pool.submit(move || {
+            let _timing = profile::Span::new("proto_light_compute", None).parent(parent);
             let updates = work(&mut engine, &snapshots);
             // Return canonical ownership even when an operation fails after
             // enqueueing part of its work. A Result must not drop the engine.
             (engine, snapshots, updates)
         });
-        let (engine, snapshots, updates) = result
-            .blocking_recv()
+        let (engine, snapshots, updates) = timing
+            .measure("queue_and_compute_wait", || result.blocking_recv())
             .context("generation light worker terminated")?;
         self.light = engine;
         self.snapshots = snapshots;
-        self.apply_light_updates(updates?);
+        let updates = updates?;
+        timing.measure("apply_updates", || self.apply_light_updates(updates));
         Ok(())
     }
 
@@ -682,6 +756,7 @@ impl GenerationState {
                 continue;
             };
             self.light_changed.insert(key);
+            self.captured_terrain.remove(&key);
             let sections = holder.chunk.disk.sections.get_or_insert_default();
             let y = update.section.y as i8;
             let index =

@@ -107,7 +107,7 @@ mod tests {
                             .to_string(),
                         f[3]
                     );
-                    assert_eq!(entity.has_server_ticker(), f[4] == "true");
+                    assert_eq!(entity.has_server_ticker(None).unwrap(), f[4] == "true");
                     assert_eq!(
                         entity.get_update_tag().unwrap(),
                         ferraloom_nbt::parse_compound(f[5]).unwrap()
@@ -224,7 +224,8 @@ mod tests {
             !level
                 .block_entity_state(replacement)
                 .unwrap()
-                .has_server_ticker()
+                .has_server_ticker(None)
+                .unwrap()
         );
         let wet = state
             .with(p::POTENT_SULFUR_STATE, p::PotentSulfurState::Wet)
@@ -235,7 +236,7 @@ mod tests {
             .set_block_state(wet)
             .unwrap();
         let current = level.block_entity_state(replacement).unwrap();
-        assert!(current.has_server_ticker());
+        assert!(current.has_server_ticker(None).unwrap());
         assert!(matches!(
             current.behavior().tick(replacement, &mut level),
             Err(LevelError::UnsupportedBlockEntity(Block::POTENT_SULFUR))

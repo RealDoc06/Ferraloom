@@ -26,7 +26,7 @@ pub struct CraftingInputIter<'a> {
     back: usize,
 }
 impl<'a> CraftingInputIter<'a> {
-    fn new(input: &'a dyn CraftingInputAccess) -> Self {
+    pub(crate) fn new(input: &'a dyn CraftingInputAccess) -> Self {
         Self {
             input,
             front: 0,
