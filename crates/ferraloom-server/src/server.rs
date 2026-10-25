@@ -7,6 +7,8 @@ mod command_runtime;
 pub(crate) mod generation_completion;
 #[path = "interaction.rs"]
 mod interaction;
+#[path = "levels.rs"]
+mod levels;
 use crate::{
     access::AccessLists,
     assets,
@@ -676,37 +678,6 @@ impl MinecraftServer {
                     .expect("phase must return its shared owner"),
             );
         }
-    }
-    /// Port of MinecraftServer#getLevel. An unknown key is nullable, never an
-    /// overworld fallback; callers retain short concrete Level borrows.
-    pub fn get_level(
-        &self,
-        dimension: &protocol::Identifier,
-    ) -> Option<&ferraloom_game::level::Level> {
-        if dimension.as_str() == "minecraft:overworld" {
-            return Some(&self.level.level);
-        }
-        self.additional_levels
-            .iter()
-            .find(|level| level.dimension == dimension.as_str())
-            .map(|level| &level.level)
-    }
-    pub fn get_level_mut(
-        &mut self,
-        dimension: &protocol::Identifier,
-    ) -> Option<&mut ferraloom_game::level::Level> {
-        if dimension.as_str() == "minecraft:overworld" {
-            return Some(&mut self.level.level);
-        }
-        self.additional_levels
-            .iter_mut()
-            .find(|level| level.dimension == dimension.as_str())
-            .map(|level| &mut level.level)
-    }
-    /// Port of MinecraftServer#getAllLevels in insertion order.
-    pub fn get_all_levels(&self) -> impl Iterator<Item = &ferraloom_game::level::Level> {
-        std::iter::once(&self.level.level)
-            .chain(self.additional_levels.iter().map(|level| &level.level))
     }
     pub fn average_tick_time_nanos(&self) -> i64 {
         self.aggregated_tick_times_nanos / self.tick.clamp(1, 100) as i64
@@ -2694,9 +2665,8 @@ impl MinecraftServer {
         self.apply_level_effects()
     }
     fn player(&self, entity: EntityRef) -> Result<&ServerPlayer> {
-        self.level
-            .level
-            .entity::<ServerPlayer>(entity)
+        self.level_for_entity(entity)
+            .and_then(|level| level.entity::<ServerPlayer>(entity))
             .map_err(game_error)
     }
     /// Port of ServerGamePacketListenerImpl#teleport. Gameplay owns the single
