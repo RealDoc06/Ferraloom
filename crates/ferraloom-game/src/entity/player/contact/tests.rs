@@ -10,6 +10,27 @@ use ferraloom_data::Item;
 use ferraloom_protocol::component::ItemStack;
 use ferraloom_util::{Uuid, Vec3};
 
+/// Match ContactVectors.TouchedOrb's controlled callback: this fixture measures
+/// contact ordering and selection, while the real pickup has separate replays.
+struct ContactOrb;
+impl crate::entity::Entity for ContactOrb {
+    fn trace_entity_refs(&self, state: &EntityState, references: &mut Vec<EntityRef>) {
+        crate::entity::Entity::trace_entity_refs(
+            &crate::entity::experience_orb::ExperienceOrbBehavior,
+            state,
+            references,
+        );
+    }
+    fn player_touch(
+        &self,
+        _entity: EntityRef,
+        _player: EntityRef,
+        _level: &mut Level,
+    ) -> Result<(), LevelError> {
+        Ok(())
+    }
+}
+
 fn vector(value: Vec3) -> String {
     format!(
         "{:x},{:x},{:x}",
@@ -20,9 +41,11 @@ fn vector(value: Vec3) -> String {
 }
 #[test]
 fn native_contact_bounds_section_order_health_guards_and_orb_rng() {
+    static BEHAVIORS: crate::Behaviors = crate::Behaviors::EMPTY
+        .with_entity(ferraloom_data::EntityType::EXPERIENCE_ORB, &ContactOrb);
     let mut actual = Vec::new();
     for scenario in 0..6 {
-        let mut level = crate::entity::tests::level(false);
+        let mut level = crate::entity::tests::level_with_behaviors(false, &BEHAVIORS);
         let player = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
         level
             .add_entity(
@@ -118,10 +141,7 @@ fn native_contact_bounds_section_order_health_guards_and_orb_rng() {
             .unwrap()
             .random
             .next_long();
-        assert_eq!(
-            level.unported_behavior_stats().skipped_calls,
-            u64::from(scenario < 3)
-        );
+        assert_eq!(level.unported_behavior_stats().skipped_calls, 0);
         actual.push(format!(
             "player-contact\t{scenario}\t{}\t{bounds}\t{:x}",
             if calls.is_empty() {

@@ -47,6 +47,7 @@ async fn collect(
     let mut removed = false;
     let mut experience = None;
     let mut summoned = false;
+    let mut command_error = None;
     let mut order = Vec::new();
     bot.wait_for(
         "plain or Mending orb pickup",
@@ -81,14 +82,21 @@ async fn collect(
                         event.experience_progress.to_bits(),
                     ));
                 }
-                cb::Packet::SystemChat(message)
-                    if message
-                        .content
-                        .to_json()
-                        .is_ok_and(|json| json.contains("commands.summon.success")) =>
-                {
-                    summoned = true
-                }
+                cb::Packet::SystemChat(message) => match message.content.to_json() {
+                    Ok(json)
+                        if json.contains("ferraloom.")
+                            || json.contains("commands.generic.")
+                            || json.contains("commands.summon.failed") =>
+                    {
+                        command_error = Some(json);
+                        return true;
+                    }
+                    Ok(json) => summoned |= json.contains("commands.summon.success"),
+                    Err(error) => {
+                        command_error = Some(error.to_string());
+                        return true;
+                    }
+                },
                 _ => {}
             }
             summoned
@@ -99,6 +107,10 @@ async fn collect(
         },
     )
     .await?;
+    ensure!(
+        command_error.is_none(),
+        "{label} orb summon: {command_error:?}"
+    );
     ensure!(
         takes == count,
         "{label}: picked up {takes} of {count} merged orbs"
