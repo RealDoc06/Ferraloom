@@ -9,15 +9,15 @@ use ferraloom_data::{Block, BlockState, Item, ItemClass, ItemMethod, registries:
 /// Stateless Item/BlockItem virtuals. Every callback shares the caller's complete
 /// use operation; transformed receiver handles must remain rooted in that frame.
 pub trait ItemBehavior: Sync {
-    /// Port of Item#useOn. BlockItem's explicit super call selects this body.
+    /// Required Item#useOn body, pending the transformer/placement integration.
     fn use_on(
         &self,
         item: Item,
         _receiver: StackRef,
-        context: &UseOnContext<'_>,
-        operation: &mut StackOperation<'_>,
+        _context: &UseOnContext<'_>,
+        _operation: &mut StackOperation<'_>,
     ) -> Result<Option<InteractionResult>, LevelError> {
-        base_use_on(item, context, operation)
+        Err(LevelError::UnsupportedItemMethod(item, ItemMethod::UseOn))
     }
 
     /// Item#use's air-use virtual. Unported derived bodies are required errors;
@@ -32,14 +32,14 @@ pub trait ItemBehavior: Sync {
         Err(LevelError::UnsupportedItemMethod(item, ItemMethod::Use))
     }
 
-    /// Port of BlockItem#place.
+    /// Required BlockItem#place body, pending the placed-block criteria entry.
     fn place(
         &self,
         item: Item,
-        context: BlockPlaceContext<'_>,
-        operation: &mut StackOperation<'_>,
+        _context: BlockPlaceContext<'_>,
+        _operation: &mut StackOperation<'_>,
     ) -> Result<InteractionResult, LevelError> {
-        super::block_item::place(item, context, operation)
+        Err(LevelError::UnsupportedItemMethod(item, ItemMethod::Place))
     }
 
     /// Port of BlockItem#updatePlacementContext's identity default.
@@ -143,10 +143,6 @@ pub trait ItemBehavior: Sync {
     }
 }
 
-struct ItemBase;
-impl ItemBehavior for ItemBase {}
-static ITEM: ItemBase = ItemBase;
-
 struct BoneMeal;
 impl ItemBehavior for BoneMeal {
     fn use_on(
@@ -162,17 +158,7 @@ impl ItemBehavior for BoneMeal {
 static BONE_MEAL: BoneMeal = BoneMeal;
 
 struct BlockItem;
-impl ItemBehavior for BlockItem {
-    fn use_on(
-        &self,
-        item: Item,
-        _receiver: StackRef,
-        context: &UseOnContext<'_>,
-        operation: &mut StackOperation<'_>,
-    ) -> Result<Option<InteractionResult>, LevelError> {
-        super::block_item::use_on(item, context, operation)
-    }
-}
+impl ItemBehavior for BlockItem {}
 static BLOCK_ITEM: BlockItem = BlockItem;
 
 /// A real reflected override never falls through to an inherited base.
@@ -182,12 +168,9 @@ pub fn ported_behavior(item: Item, method: ItemMethod) -> Option<&'static dyn It
         return Some(behavior);
     }
     match (method, owner) {
-        (ItemMethod::UseOn, ItemClass::Item) => Some(&ITEM),
         (ItemMethod::UseOn, ItemClass::BoneMealItem) => Some(&BONE_MEAL),
         (
-            ItemMethod::UseOn
-            | ItemMethod::Place
-            | ItemMethod::UpdatePlacementContext
+            ItemMethod::UpdatePlacementContext
             | ItemMethod::GetPlacementState
             | ItemMethod::CanPlace
             | ItemMethod::MustSurvive
@@ -206,34 +189,6 @@ pub fn required_behavior(
     method: ItemMethod,
 ) -> Result<&'static dyn ItemBehavior, LevelError> {
     ported_behavior(item, method).ok_or(LevelError::UnsupportedItemMethod(item, method))
-}
-
-pub(super) fn base_use_on(
-    item: Item,
-    context: &UseOnContext<'_>,
-    operation: &mut StackOperation<'_>,
-) -> Result<Option<InteractionResult>, LevelError> {
-    use ferraloom_protocol::component::ComponentTypeId;
-    let reader = LevelReaderRef::Server(operation.level);
-    let stack = context.item_in_hand(&reader)?;
-    let transformer = match stack
-        .component(ComponentTypeId::BLOCK_TRANSFORMER)
-        .map_err(|error| super::stack::item_data_error(item, error))?
-    {
-        Some(ferraloom_protocol::component::DataComponent::BlockTransformer(holder)) => Some(
-            holder
-                .0
-                .to_string()
-                .parse()
-                .expect("validated transformer identifier"),
-        ),
-        _ => None,
-    };
-    if let Some(transformer) = transformer {
-        super::block_transformer::transform_block(item, &transformer, context, operation)
-    } else {
-        Ok(Some(InteractionResult::Pass))
-    }
 }
 
 /// BlockItem's explicit base body still invokes its actual derived virtuals.

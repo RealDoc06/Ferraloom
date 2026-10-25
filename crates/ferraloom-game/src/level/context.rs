@@ -14,7 +14,6 @@ pub struct LevelContext {
     pub structures: Arc<super::StructureServices>,
     pub initial_difficulty: Difficulty,
     damage_types: Arc<DamageTypeRegistry>,
-    block_transformers: Option<Arc<crate::item::block_transformer::BlockTransformerRegistry>>,
 }
 
 impl LevelContext {
@@ -35,27 +34,7 @@ impl LevelContext {
             structures,
             damage_types,
             initial_difficulty,
-            block_transformers: None,
         }
-    }
-
-    /// Install the actual merged BlockTransformer registry without changing
-    /// existing LevelContext constructor call sites.
-    pub fn with_block_transformers(
-        mut self,
-        registry: Arc<crate::item::block_transformer::BlockTransformerRegistry>,
-    ) -> Self {
-        self.block_transformers = Some(registry);
-        self
-    }
-
-    pub fn block_transformers(
-        &self,
-    ) -> Result<&Arc<crate::item::block_transformer::BlockTransformerRegistry>, super::LevelError>
-    {
-        self.block_transformers
-            .as_ref()
-            .ok_or(super::LevelError::MissingBlockTransformers)
     }
 
     pub fn damage_types(&self) -> &Arc<DamageTypeRegistry> {
@@ -82,7 +61,6 @@ impl LevelContext {
             features: Arc<FeatureRegistry>,
             structures: Arc<super::StructureServices>,
             damage_types: Arc<DamageTypeRegistry>,
-            block_transformers: Arc<crate::item::block_transformer::BlockTransformerRegistry>,
         }
         static SERVICES: OnceLock<Services> = OnceLock::new();
         let services = SERVICES.get_or_init(|| {
@@ -98,23 +76,16 @@ impl LevelContext {
                 features: Arc::new(FeatureRegistry::default()),
                 structures,
                 damage_types: Arc::new(DamageTypeRegistry::load(&resources).unwrap()),
-                block_transformers: Arc::new(
-                    crate::item::block_transformer::BlockTransformerRegistry::load(&resources)
-                        .unwrap(),
-                ),
             }
         });
-        Arc::new(
-            Self::new(
-                seed,
-                sea_level,
-                services.generator.clone(),
-                services.features.clone(),
-                services.structures.clone(),
-                services.damage_types.clone(),
-                Difficulty::Normal,
-            )
-            .with_block_transformers(services.block_transformers.clone()),
-        )
+        Arc::new(Self::new(
+            seed,
+            sea_level,
+            services.generator.clone(),
+            services.features.clone(),
+            services.structures.clone(),
+            services.damage_types.clone(),
+            Difficulty::Normal,
+        ))
     }
 }

@@ -5,16 +5,14 @@ use crate::{
         BlockCollisionContext, BlockPlaceContext, InteractionResult, LevelReaderRef, UPDATE_LIMIT,
         UpdateFlags, UseOnContext,
     },
-    entity::player::{ServerPlayer, send_build_limit_message},
-    inventory::{StackOperation, StackValue},
+    entity::player::send_build_limit_message,
+    inventory::StackOperation,
     level::LevelError,
 };
 use ferraloom_data::{
-    Block, BlockClass, BlockState, Item, ItemClass, ItemMethod, registries::sound_event,
-    tags::FluidTags,
+    Block, BlockState, Item, ItemClass, ItemMethod, registries::sound_event, tags::FluidTags,
 };
-use ferraloom_protocol::component::ItemStack;
-use ferraloom_util::{BlockPos, Direction};
+use ferraloom_util::Direction;
 
 struct DoubleHigh;
 impl ItemBehavior for DoubleHigh {
@@ -106,28 +104,6 @@ fn standing_or_wall_state(
     }
     Ok(None)
 }
-
-struct HangingSign;
-impl ItemBehavior for HangingSign {
-    /// Port of HangingSignItem#canPlace's extra wall-hanging support test.
-    fn can_place_standing_or_wall(
-        &self,
-        _item: Item,
-        state: BlockState,
-        pos: BlockPos,
-        level: &LevelReaderRef<'_, '_>,
-    ) -> Result<bool, LevelError> {
-        if state
-            .block()
-            .is_instance_of(BlockClass::WallHangingSignBlock)
-            && !crate::block::containers::wall_hanging_sign_can_place(state, level, pos)?
-        {
-            return Ok(false);
-        }
-        level.can_survive(state, pos)
-    }
-}
-static HANGING_SIGN: HangingSign = HangingSign;
 
 struct GameMaster;
 impl ItemBehavior for GameMaster {
@@ -233,40 +209,6 @@ static SCAFFOLDING: Scaffolding = Scaffolding;
 
 struct SolidBucket;
 impl ItemBehavior for SolidBucket {
-    fn use_on(
-        &self,
-        item: Item,
-        _receiver: crate::inventory::StackRef,
-        context: &UseOnContext<'_>,
-        operation: &mut StackOperation<'_>,
-    ) -> Result<Option<InteractionResult>, LevelError> {
-        let result = super::block_item::use_on(item, context, operation)?;
-        if result
-            .as_ref()
-            .is_some_and(InteractionResult::consumes_action)
-            && let Some(player) = context.player()
-        {
-            let receiver = if operation.level.entity::<ServerPlayer>(player)?.instabuild() {
-                let receiver = super::block_item::retained(context.stack_view())?;
-                operation
-                    .pin_existing(receiver)
-                    .map_err(super::stack::receiver_error)?;
-                receiver
-            } else {
-                operation
-                    .own(player, ItemStack::new(Item::BUCKET, 1, Default::default()))
-                    .map_err(super::stack::receiver_error)?
-            };
-            operation
-                .level
-                .replace_stack_object(
-                    crate::block::interaction::hand_slot(operation.level, player, context.hand())?,
-                    StackValue::Existing(receiver),
-                )
-                .map_err(super::stack::receiver_error)?;
-        }
-        Ok(result)
-    }
     fn get_place_sound(
         &self,
         item: Item,
@@ -280,42 +222,6 @@ static SOLID_BUCKET: SolidBucket = SolidBucket;
 
 struct PlaceOnWater;
 impl ItemBehavior for PlaceOnWater {
-    /// Port of PlaceOnWaterBlockItem#use's source-fluid ray and explicit base
-    /// BlockItem#useOn call. withPosition changes only the hit block position.
-    fn use_item(
-        &self,
-        item: Item,
-        player: crate::entity::EntityRef,
-        hand: ferraloom_protocol::play::InteractionHand,
-        operation: &mut StackOperation<'_>,
-    ) -> Result<Option<InteractionResult>, LevelError> {
-        let hit = super::get_player_pov_hit_result(
-            operation.level,
-            player,
-            crate::level::clip::ClipFluid::SourceOnly,
-        )?;
-        let above = hit.block_pos.above(1);
-        let hit = hit.with_position(above);
-        let held = operation
-            .pin(crate::block::interaction::hand_slot(
-                operation.level,
-                player,
-                hand,
-            )?)
-            .map_err(super::stack::receiver_error)?;
-        let context = UseOnContext::new_retained(
-            Some(player),
-            hand,
-            held,
-            crate::block::PlacementHit {
-                pos: hit.block_pos,
-                face: hit.direction,
-                location: hit.location,
-                inside: hit.inside,
-            },
-        );
-        super::block_item::use_on(item, &context, operation)
-    }
     /// Port of PlaceOnWaterBlockItem#useOn. Its air-use raycast is separate.
     fn use_on(
         &self,
@@ -339,18 +245,13 @@ pub(super) fn ported_behavior(
             ItemMethod::GetPlacementState | ItemMethod::CanPlaceStandingOrWall,
             ItemClass::StandingAndWallBlockItem,
         ) => Some(&STANDING_AND_WALL),
-        (ItemMethod::CanPlaceStandingOrWall, ItemClass::HangingSignItem) => Some(&HANGING_SIGN),
         (ItemMethod::GetPlacementState, ItemClass::GameMasterBlockItem) => Some(&GAME_MASTER),
         (
             ItemMethod::UpdatePlacementContext | ItemMethod::MustSurvive,
             ItemClass::ScaffoldingBlockItem,
         ) => Some(&SCAFFOLDING),
-        (ItemMethod::UseOn | ItemMethod::GetPlaceSound, ItemClass::SolidBucketItem) => {
-            Some(&SOLID_BUCKET)
-        }
-        (ItemMethod::UseOn | ItemMethod::Use, ItemClass::PlaceOnWaterBlockItem) => {
-            Some(&PLACE_ON_WATER)
-        }
+        (ItemMethod::GetPlaceSound, ItemClass::SolidBucketItem) => Some(&SOLID_BUCKET),
+        (ItemMethod::UseOn, ItemClass::PlaceOnWaterBlockItem) => Some(&PLACE_ON_WATER),
         _ => None,
     }
 }

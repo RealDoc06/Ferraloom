@@ -25,65 +25,6 @@ fn vectors() -> String {
 }
 
 #[test]
-fn native_standing_and_wall_item_stage_keeps_native_direction_order_and_supports() {
-    let (mut level, _) = level();
-    let pos = BlockPos::new(8, 5, 8);
-    let mut calls = 0;
-    for line in vectors()
-        .lines()
-        .filter(|line| line.starts_with("standing\t"))
-    {
-        let fields: Vec<_> = line.split('\t').collect();
-        let item = Item::from_protocol_id(fields[1].parse().unwrap()).unwrap();
-        let mask = fields[2].parse::<u32>().unwrap();
-        for (index, direction) in Direction::VALUES.into_iter().enumerate() {
-            level
-                .set_block_state(
-                    pos.relative(direction, 1),
-                    if mask & (1 << index) == 0 {
-                        Block::AIR
-                    } else {
-                        Block::STONE
-                    }
-                    .default_state(),
-                )
-                .unwrap();
-        }
-        level
-            .set_block_state(pos, Block::AIR.default_state())
-            .unwrap();
-        let stack = ItemStack::new(item, 1, Default::default());
-        let context = DirectionalPlaceContext::new(
-            &LevelReaderRef::Server(&level),
-            pos,
-            Direction::VALUES[fields[3].parse::<usize>().unwrap()],
-            &stack,
-            Direction::VALUES[fields[4].parse::<usize>().unwrap()],
-        )
-        .unwrap();
-        *level.random() = Random::Legacy(LegacyRandomSource::new(1234));
-        let mut operation = StackOperation::new(&mut level);
-        let state = required_behavior(item, ItemMethod::GetPlacementState)
-            .unwrap()
-            .get_placement_state(item, &context, &mut operation)
-            .unwrap();
-        assert_eq!(
-            state.map_or(-1, |s| i32::from(s.id())),
-            fields[5].parse::<i32>().unwrap(),
-            "{line}"
-        );
-        assert_eq!(
-            operation.level.random().next_long(),
-            fields[6].parse::<i64>().unwrap(),
-            "{line}"
-        );
-        assert_eq!(operation.level.unported_behavior_stats().skipped_calls, 0);
-        calls += 1;
-    }
-    assert_eq!(calls, 13_824);
-}
-
-#[test]
 fn native_double_high_item_clears_upper_water_before_base_placement() {
     let (mut level, _) = level();
     let pos = BlockPos::new(8, 5, 8);
