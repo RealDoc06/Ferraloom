@@ -103,10 +103,7 @@ impl GenerationRuntime {
         distance_manager: DistanceManager,
         properties: Arc<ServerProperties>,
     ) -> Result<Self> {
-        anyhow::ensure!(
-            dimension == world.dimension_key,
-            "generation runtime dimension differs from its World services"
-        );
+        world.validate_dimension_binding(&dimension)?;
         let (notify, progress) = mpsc::channel();
         let (send_owner_request, owner_requests) = mpsc::channel();
         world.set_progress_waker(Waker::from(Arc::new(ProgressWake(notify.clone()))));

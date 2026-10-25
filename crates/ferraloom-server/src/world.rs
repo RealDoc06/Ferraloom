@@ -737,6 +737,43 @@ impl EntityIo {
     }
 }
 impl World {
+    /// Validate createLevels' dimension/service binding before a runtime
+    /// installs callbacks or attaches any progress queues.
+    pub(crate) fn validate_dimension_binding(
+        &self,
+        dimension: &ferraloom_protocol::Identifier,
+    ) -> Result<()> {
+        ensure!(
+            dimension == &self.dimension_key,
+            "generation runtime dimension differs from its World"
+        );
+        let stem = self.services.stem(dimension)?;
+        ensure!(
+            Arc::ptr_eq(&self.generator, &stem.generator),
+            "World generator differs from its registered stem"
+        );
+        let properties = |value: DimensionType| {
+            (
+                value.min_y,
+                value.height,
+                value.logical_height,
+                value.has_ceiling,
+                value.has_skylight,
+                value.fast_lava,
+                value.coordinate_scale.to_bits(),
+            )
+        };
+        ensure!(
+            properties(self.dimension) == properties(stem.dimension),
+            "World dimension properties differ from its registered stem"
+        );
+        ensure!(
+            Arc::ptr_eq(&self.generation, &self.services.generation)
+                && Arc::ptr_eq(&self.saving, &self.services.saving),
+            "World worker services differ from its root services"
+        );
+        Ok(())
+    }
     /// Construct one dimension's owned runtime, returning bootstrap spawn data
     /// for the sole PrimaryLevelData owner before the live level is published.
     fn open_dimension(

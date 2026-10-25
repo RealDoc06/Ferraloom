@@ -244,12 +244,53 @@ mod tests {
             "minecraft:the_end",
         ] {
             let before = root.level_data.clone();
-            let world = root
+            let mut world = root
                 .open_dimension(key.parse().unwrap(), &properties)
                 .unwrap();
             if key != "minecraft:overworld" {
                 assert_eq!(root.level_data, before);
             }
+            world
+                .validate_dimension_binding(&key.parse().unwrap())
+                .unwrap();
+            assert!(
+                world
+                    .validate_dimension_binding(&"fixture:absent".parse().unwrap())
+                    .is_err()
+            );
+            let generator = world.generator.clone();
+            let wrong_stem = root
+                .dimensions
+                .dimensions
+                .iter()
+                .find(|stem| stem.name.as_str() != key)
+                .unwrap();
+            world.generator = wrong_stem.generator.clone();
+            assert!(
+                world
+                    .validate_dimension_binding(&key.parse().unwrap())
+                    .is_err()
+            );
+            world.generator = generator;
+            let height = world.dimension.height;
+            world.dimension.height += 16;
+            assert!(
+                world
+                    .validate_dimension_binding(&key.parse().unwrap())
+                    .is_err()
+            );
+            world.dimension.height = height;
+            let saving = world.saving.clone();
+            world.saving = Arc::new(JobPool::new("fixture-wrong-save-service", 1).unwrap());
+            assert!(
+                world
+                    .validate_dimension_binding(&key.parse().unwrap())
+                    .is_err()
+            );
+            world.saving = saving;
+            world
+                .validate_dimension_binding(&key.parse().unwrap())
+                .unwrap();
             assert!(Arc::ptr_eq(&root.services, &world.services));
             assert!(Arc::ptr_eq(&root.access, &world.access));
             let stem = root.stem(&key.parse().unwrap()).unwrap();
