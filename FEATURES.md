@@ -5,12 +5,12 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | Area | Rows | Ferraloom todo | Ferraloom partial | Ferraloom pass | Ferraloom fail |
 |---|---:|---:|---:|---:|---:|
 | [Advancements](features/advancements.md) | 1957 | 4 | 194 | 1759 | 0 |
-| [Block entities](features/block-entities.md) | 134 | 42 | 41 | 51 | 0 |
+| [Block entities](features/block-entities.md) | 135 | 43 | 41 | 51 | 0 |
 | [Blocks](features/blocks.md) | 434 | 269 | 120 | 45 | 0 |
 | [Chat and text components](features/chat.md) | 23 | 21 | 2 | 0 | 0 |
 | [Chunks and tickets](features/chunks.md) | 59 | 20 | 38 | 1 | 0 |
 | [Combat and damage](features/combat-damage.md) | 204 | 204 | 0 | 0 | 0 |
-| [Commands and argument types](features/commands.md) | 2683 | 1858 | 39 | 786 | 0 |
+| [Commands and argument types](features/commands.md) | 2684 | 1858 | 40 | 786 | 0 |
 | [Crafting and recipes](features/crafting-recipes.md) | 2137 | 2 | 29 | 2106 | 0 |
 | [Datapacks and resource reload](features/datapacks-reload.md) | 57 | 57 | 0 | 0 | 0 |
 | [Enchantments](features/enchantments.md) | 137 | 108 | 29 | 0 | 0 |
@@ -50,4 +50,4 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Weather, time and environment](features/weather-time.md) | 85 | 85 | 0 | 0 | 0 |
 | [World storage and data fixing](features/world-storage.md) | 308 | 305 | 3 | 0 | 0 |
 | [World generation](features/worldgen.md) | 3114 | 2640 | 174 | 300 | 0 |
-| **Total** | **19577** | **8246** | **2800** | **8531** | **0** |
+| **Total** | **19579** | **8247** | **2801** | **8531** | **0** |
