@@ -310,6 +310,10 @@ impl MinecraftServer {
 
         let game_time = world_root.level_data.data.get_long_or("Time", 0);
         let (access, ops) = AccessLists::load(&options.root)?;
+        let weather =
+            ferraloom_storage::SavedDataStorage::new(world_root.access.path().join("data"))
+                .load::<ferraloom_game::level::weather::WeatherData>("minecraft:weather")?
+                .map_or_else(Default::default, |data| *data.value());
         let mut level = ServerLevel::new(
             Region::new(&BEHAVIORS),
             "minecraft:overworld",
@@ -317,7 +321,11 @@ impl MinecraftServer {
         );
         level
             .level
-            .install_shared(Box::new(ferraloom_game::ServerShared { scoreboard, ops }));
+            .install_shared(Box::new(ferraloom_game::ServerShared {
+                scoreboard,
+                ops,
+                weather,
+            }));
         level.game_time = game_time;
         level.level.set_command_storage(command_storage.snapshot());
         initialize_live_level(
@@ -326,6 +334,7 @@ impl MinecraftServer {
             &resources,
             &properties,
             options.unported_behavior,
+            &weather,
         )?;
         let loaded_recipe_tags =
             ferraloom_data::datapack::load_tags(&resources, "recipe", |id, _| {
@@ -493,6 +502,7 @@ impl MinecraftServer {
                 &resources,
                 &properties,
                 options.unported_behavior,
+                &weather,
             )?;
             bootstrap
                 .level
@@ -944,7 +954,10 @@ impl MinecraftServer {
                     .map_err(game_error)?;
                 if self.tick_rate_manager.runs_normally() {
                     self.level.level.tick_world_border();
-                    self.level.level.advance_weather_cycle(true);
+                    self.level
+                        .level
+                        .advance_weather_cycle(true)
+                        .map_err(game_error)?;
                     self.apply_level_effects()?;
                 }
                 // Native sky brightness updates even on frozen ticks, after weather.
@@ -3415,7 +3428,7 @@ impl MinecraftServer {
             .with_world_mut(|world| world.begin_save_live_level_context(context))?;
         save_context.await??;
         self.world_root
-            .begin_save_weather(*self.level.level.weather())
+            .begin_save_weather(self.shared().weather)
             .await??;
         self.save_live_entities(flush).await?;
 
@@ -3617,11 +3630,9 @@ fn initialize_live_level(
     resources: &ResourceManager,
     properties: &ServerProperties,
     unported_behavior: UnportedBehavior,
+    weather: &ferraloom_game::level::weather::WeatherData,
 ) -> Result<()> {
-    use ferraloom_game::level::{
-        border::{self, WorldBorder},
-        weather::WeatherData,
-    };
+    use ferraloom_game::level::border::{self, WorldBorder};
     use ferraloom_storage::SavedDataStorage;
     level
         .level
@@ -3647,10 +3658,9 @@ fn initialize_live_level(
     let _ = border.apply_initial_settings(level.game_time);
     border.set_absolute_max_size(properties.int("max-world-size"));
     level.level.set_entity_world_border(border);
-    let weather = SavedDataStorage::new(world.access.path().join("data"))
-        .load::<WeatherData>("minecraft:weather")?
-        .map_or_else(WeatherData::default, |data| *data.value());
-    level.level.load_weather(weather);
+    if level.level.rules().can_have_weather {
+        level.level.prepare_weather(weather);
+    }
     command_level::load_command_tickets(level, world)?;
     Ok(())
 }

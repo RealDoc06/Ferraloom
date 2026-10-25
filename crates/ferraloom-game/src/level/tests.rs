@@ -1734,11 +1734,14 @@ fn thunder_gate_and_position_draw_match_vanilla_before_the_pending_required_quer
                 0,
             );
             level.set_unported_behavior(policy);
-            level.load_weather(weather::WeatherData {
-                raining: weather != "0",
-                thundering: weather == "2",
-                ..weather::WeatherData::default()
-            });
+            level.install_shared(Box::default());
+            level
+                .load_weather(weather::WeatherData {
+                    raining: weather != "0",
+                    thundering: weather == "2",
+                    ..weather::WeatherData::default()
+                })
+                .unwrap();
             let strike = expected.starts_with("true|");
             assert_eq!(
                 level.tick_thunder(ChunkPos::new(0, 0)),
@@ -2119,10 +2122,13 @@ fn snow_accumulation_wraps_unsupported_survival_without_inventing_a_query_result
         .set_block_state(p.below(1), Block::STONE.default_state())
         .unwrap();
     install_weather_environment(&mut level, "snowy_plains");
-    level.load_weather(weather::WeatherData {
-        raining: true,
-        ..Default::default()
-    });
+    level.install_shared(Box::default());
+    level
+        .load_weather(weather::WeatherData {
+            raining: true,
+            ..Default::default()
+        })
+        .unwrap();
     let biome = "snowy_plains".parse().unwrap();
     let unsupported = Err(LevelError::UnsupportedBlockMethod(
         Block::SNOW,
@@ -2144,10 +2150,13 @@ fn rain_queries_use_visible_sky_heightmap_and_zoomed_biome() {
     let mut level = empty_level(&EMPTY);
     let p = BlockPos::new(8, 0, 8);
     assert!(!level.is_raining_at(p).unwrap());
-    level.load_weather(weather::WeatherData {
-        raining: true,
-        ..Default::default()
-    });
+    level.install_shared(Box::default());
+    level
+        .load_weather(weather::WeatherData {
+            raining: true,
+            ..Default::default()
+        })
+        .unwrap();
     assert_eq!(
         level.is_raining_at(p),
         Err(LevelError::UnsupportedLightQuery)

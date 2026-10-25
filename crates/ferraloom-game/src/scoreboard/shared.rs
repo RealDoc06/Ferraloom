@@ -7,6 +7,7 @@ use super::ServerScoreboard;
 pub struct ServerShared {
     pub scoreboard: ServerScoreboard,
     pub ops: crate::commands::permissions::ServerOpList,
+    pub weather: crate::level::weather::WeatherData,
 }
 
 #[cfg(test)]
