@@ -23,7 +23,7 @@ fn native_contact_bounds_section_order_health_guards_and_orb_rng() {
     let mut actual = Vec::new();
     for scenario in 0..6 {
         let mut level = crate::entity::tests::level(false);
-        let player = EntityRef(1);
+        let player = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
         level
             .add_entity(
                 player,
@@ -36,7 +36,7 @@ fn native_contact_bounds_section_order_health_guards_and_orb_rng() {
                 ))),
             )
             .unwrap();
-        let vehicle = EntityRef(9);
+        let vehicle = EntityRef::fixture(crate::level::RegionId::FIXTURE, 9);
         let mut vehicle_data = PrimedTnt::new(9, 9);
         vehicle_data.parent.set_pos(Vec3::new(18.5, 64.0, 0.5));
         level
@@ -66,7 +66,10 @@ fn native_contact_bounds_section_order_health_guards_and_orb_rng() {
             item.parent.set_pos(position);
             item.set_item(ItemStack::new(Item::STONE, 1, Default::default()));
             level
-                .add_entity(EntityRef(id as u64), EntityState::Item(Box::new(item)))
+                .add_entity(
+                    EntityRef::fixture(crate::level::RegionId::FIXTURE, id as u64),
+                    EntityState::Item(Box::new(item)),
+                )
                 .unwrap();
         }
         for index in 0..3 {
@@ -75,7 +78,7 @@ fn native_contact_bounds_section_order_health_guards_and_orb_rng() {
                 .set_pos(Vec3::new(15.5 + f64::from(index) * 0.25, 64.0, 0.0));
             level
                 .add_entity(
-                    EntityRef((10 + index) as u64),
+                    EntityRef::fixture(crate::level::RegionId::FIXTURE, (10 + index) as u64),
                     EntityState::ExperienceOrb(Box::new(orb)),
                 )
                 .unwrap();
@@ -95,7 +98,7 @@ fn native_contact_bounds_section_order_health_guards_and_orb_rng() {
             .into_iter()
             .filter_map(|effect| {
                 if let EntityEffect::ItemPickup { entity, .. } = effect {
-                    Some(entity.0.to_string())
+                    Some(entity.serial().to_string())
                 } else {
                     None
                 }
@@ -138,7 +141,7 @@ fn native_contact_bounds_section_order_health_guards_and_orb_rng() {
 #[test]
 fn orb_contact_is_explicit_until_xp_and_mending_are_ported() {
     let mut level = crate::entity::tests::level(false);
-    let player = EntityRef(1);
+    let player = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
     level
         .add_entity(
             player,
@@ -154,7 +157,10 @@ fn orb_contact_is_explicit_until_xp_and_mending_are_ported() {
     let mut orb = ExperienceOrb::new(2, 2);
     orb.parent.set_pos(Vec3::new(8.5, 64.0, 8.5));
     level
-        .add_entity(EntityRef(2), EntityState::ExperienceOrb(Box::new(orb)))
+        .add_entity(
+            EntityRef::fixture(crate::level::RegionId::FIXTURE, 2),
+            EntityState::ExperienceOrb(Box::new(orb)),
+        )
         .unwrap();
     level.set_unported_behavior(crate::block::UnportedBehavior::Strict);
     assert_eq!(

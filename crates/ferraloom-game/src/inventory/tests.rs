@@ -850,7 +850,7 @@ fn player_tick_broadcasts_external_inventory_mutation_in_entity_phase() {
         Region::new(&BEHAVIORS),
         crate::level::LevelContext::fixture(0, 63),
     );
-    let handle = EntityRef(1);
+    let handle = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
     let player = ServerPlayer::new(
         ferraloom_util::Uuid::from_int_array([0, 0, 0, 1]),
         "menus".into(),

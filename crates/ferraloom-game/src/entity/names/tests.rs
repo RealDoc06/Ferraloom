@@ -70,7 +70,7 @@ fn virtual_names_team_formatting_and_hover_decorations_match_native_components()
                 .entity_data
                 .set(synched_data::CUSTOM_NAME, Some(Box::new(action_name())));
         }
-        let entity = EntityRef(1);
+        let entity = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
         level.add_entity(entity, state).unwrap();
         assert_eq!(
             level.entity_display_name(entity),

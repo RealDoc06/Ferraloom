@@ -279,7 +279,9 @@ mod tests {
         level
             .add_worldgen_chunk_entities_shared(pos, vec![tag("minecraft:tnt", Uuid::new(0, 99))])
             .unwrap();
-        let anchor = level.entity::<EntityData>(EntityRef(1)).unwrap();
+        let anchor = level
+            .entity::<EntityData>(EntityRef::fixture(level.region_id(), 1))
+            .unwrap();
         let captured = anchor.passengers.as_slice();
         let mut first = tag("minecraft:tnt", Uuid::new(0, 2));
         first.insert(
@@ -317,12 +319,18 @@ mod tests {
         assert_eq!(captured.len().to_string(), native[4]);
         assert!(std::ptr::eq(
             anchor,
-            level.entity::<EntityData>(EntityRef(1)).unwrap()
+            level
+                .entity::<EntityData>(EntityRef::fixture(level.region_id(), 1))
+                .unwrap()
         ));
         let events = level.take_entity_management_events();
         assert_eq!(created_ids(&level, &events), expected_created(&native));
         level.finish_entity_management();
-        assert!(level.entity::<EntityData>(EntityRef(6)).is_ok());
+        assert!(
+            level
+                .entity::<EntityData>(EntityRef::fixture(level.region_id(), 6))
+                .is_ok()
+        );
     }
     #[test]
     fn shared_worldgen_removed_item_mount_keeps_native_riding_links() {
@@ -359,20 +367,29 @@ mod tests {
             ))])),
         );
         level.add_worldgen_chunk_entities(pos, vec![root]).unwrap();
-        assert_eq!(level.all_entities(), [EntityRef(1), EntityRef(2)]);
+        assert_eq!(
+            level.all_entities(),
+            [
+                EntityRef::fixture(level.region_id(), 1),
+                EntityRef::fixture(level.region_id(), 2)
+            ]
+        );
         assert_eq!(
             level.region().entity_tick_list.snapshot(),
-            [EntityRef(1), EntityRef(2)]
+            [
+                EntityRef::fixture(level.region_id(), 1),
+                EntityRef::fixture(level.region_id(), 2)
+            ]
         );
         assert_eq!(
             level.take_entity_management_events(),
             [
-                EntityManagementEvent::Created(EntityRef(1)),
-                EntityManagementEvent::TrackingStart(EntityRef(1)),
-                EntityManagementEvent::TickingStart(EntityRef(1)),
-                EntityManagementEvent::Created(EntityRef(2)),
-                EntityManagementEvent::TrackingStart(EntityRef(2)),
-                EntityManagementEvent::TickingStart(EntityRef(2)),
+                EntityManagementEvent::Created(EntityRef::fixture(level.region_id(), 1)),
+                EntityManagementEvent::TrackingStart(EntityRef::fixture(level.region_id(), 1)),
+                EntityManagementEvent::TickingStart(EntityRef::fixture(level.region_id(), 1)),
+                EntityManagementEvent::Created(EntityRef::fixture(level.region_id(), 2)),
+                EntityManagementEvent::TrackingStart(EntityRef::fixture(level.region_id(), 2)),
+                EntityManagementEvent::TickingStart(EntityRef::fixture(level.region_id(), 2)),
             ]
         );
         assert_eq!(
@@ -421,7 +438,10 @@ mod tests {
         assert_eq!(error.entities, entities);
         assert_eq!(error.stage, WorldgenEntityLoadStage::Preflight);
         assert_eq!(level.next_entity_id(), 1);
-        assert_eq!(level.next_entity_ref(), EntityRef(1));
+        assert_eq!(
+            level.next_entity_ref(),
+            EntityRef::fixture(level.region_id(), 1)
+        );
         assert!(level.region().entities.states.is_empty());
     }
     #[test]
@@ -443,44 +463,54 @@ mod tests {
         let events = level.take_entity_management_events();
         let native = oracle("preorder");
         assert_eq!(created_ids(&level, &events), expected_created(&native));
-        let links = [EntityRef(1), EntityRef(2), EntityRef(3)]
-            .map(|id| {
-                let base = level.entity::<EntityData>(id).unwrap();
-                let vehicle = base.vehicle.get().map_or_else(
-                    || "none".to_owned(),
-                    |vehicle| {
-                        level
-                            .entity::<EntityData>(vehicle)
-                            .unwrap()
-                            .uuid
-                            .least
-                            .to_string()
-                    },
-                );
-                format!("{}:{}:{vehicle}", base.uuid.least, base.passengers.len())
-            })
-            .join(",");
+        let links = [
+            EntityRef::fixture(level.region_id(), 1),
+            EntityRef::fixture(level.region_id(), 2),
+            EntityRef::fixture(level.region_id(), 3),
+        ]
+        .map(|id| {
+            let base = level.entity::<EntityData>(id).unwrap();
+            let vehicle = base.vehicle.get().map_or_else(
+                || "none".to_owned(),
+                |vehicle| {
+                    level
+                        .entity::<EntityData>(vehicle)
+                        .unwrap()
+                        .uuid
+                        .least
+                        .to_string()
+                },
+            );
+            format!("{}:{}:{vehicle}", base.uuid.least, base.passengers.len())
+        })
+        .join(",");
         assert_eq!(links, native[3]);
         assert_eq!(level.are_entities_loaded(pos).to_string(), native[4]);
         assert_eq!(
-            level.entity::<EntityData>(EntityRef(1)).unwrap().passengers,
-            [EntityRef(2)]
+            level
+                .entity::<EntityData>(EntityRef::fixture(level.region_id(), 1))
+                .unwrap()
+                .passengers,
+            [EntityRef::fixture(level.region_id(), 2)]
         );
         assert_eq!(
             level
-                .entity::<EntityData>(EntityRef(2))
+                .entity::<EntityData>(EntityRef::fixture(level.region_id(), 2))
                 .unwrap()
                 .vehicle
                 .get(),
-            Some(EntityRef(1))
+            Some(EntityRef::fixture(level.region_id(), 1))
         );
         assert_eq!(
-            level.entity::<EntityData>(EntityRef(3)).unwrap().network_id,
+            level
+                .entity::<EntityData>(EntityRef::fixture(level.region_id(), 3))
+                .unwrap()
+                .network_id,
             3
         );
         assert_eq!(
             level
-                .entity::<PrimedTnt>(EntityRef(1))
+                .entity::<PrimedTnt>(EntityRef::fixture(level.region_id(), 1))
                 .unwrap()
                 .parent
                 .saved
@@ -510,7 +540,10 @@ mod tests {
             oracle("unknown-root")[2]
         );
         assert_eq!(level.next_entity_id(), 1);
-        assert_eq!(level.next_entity_ref(), EntityRef(1));
+        assert_eq!(
+            level.next_entity_ref(),
+            EntityRef::fixture(level.region_id(), 1)
+        );
     }
     #[test]
     fn unported_worldgen_factories_retain_owned_nbt_before_allocating() {
@@ -536,7 +569,10 @@ mod tests {
         );
         assert!(level.take_entity_management_events().is_empty());
         assert_eq!(level.next_entity_id(), 1);
-        assert_eq!(level.next_entity_ref(), EntityRef(1));
+        assert_eq!(
+            level.next_entity_ref(),
+            EntityRef::fixture(level.region_id(), 1)
+        );
     }
     #[test]
     fn duplicate_worldgen_vehicle_retains_the_object_held_by_registered_passengers() {
@@ -559,27 +595,32 @@ mod tests {
             .unwrap();
         assert_eq!(
             level
-                .entity::<EntityData>(EntityRef(3))
+                .entity::<EntityData>(EntityRef::fixture(level.region_id(), 3))
                 .unwrap()
                 .vehicle
                 .get(),
-            Some(EntityRef(2))
+            Some(EntityRef::fixture(level.region_id(), 2))
         );
         assert_eq!(
-            level.entity::<EntityData>(EntityRef(2)).unwrap().position,
+            level
+                .entity::<EntityData>(EntityRef::fixture(level.region_id(), 2))
+                .unwrap()
+                .position,
             Vec3::new(1.5, 64.0, 1.5)
         );
         assert_eq!(level.region().entities.registration.uuid_count(), 2);
         let events = level.take_entity_management_events();
         let native = oracle("duplicate");
         assert_eq!(created_ids(&level, &events), expected_created(&native));
-        let child = level.entity::<EntityData>(EntityRef(3)).unwrap();
+        let child = level
+            .entity::<EntityData>(EntityRef::fixture(level.region_id(), 3))
+            .unwrap();
         let vehicle = child.vehicle.get().unwrap();
         assert_eq!(
             format!(
                 "{}:{}",
                 level.entity::<EntityData>(vehicle).unwrap().uuid.least,
-                vehicle != EntityRef(1)
+                vehicle != EntityRef::fixture(level.region_id(), 1)
             ),
             native[3]
         );
