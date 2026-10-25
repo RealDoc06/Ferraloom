@@ -174,6 +174,20 @@ async fn sweep(session: &mut Session) -> Result<ObservationLog> {
         let events = command(session.bot(player)?, text).await?;
         record(&mut log, session, label, events)?;
     }
+    // Sixteen colliding Identifier hashes exercise native HashMap tree-bin list order.
+    for index in 0..16 {
+        let path: String = (0..4)
+            .map(|bit| if index & (1 << bit) == 0 { "an" } else { "c0" })
+            .collect();
+        let events = command(
+            session.bot(player)?,
+            &format!("bossbar add test:{path} \"{path}\""),
+        )
+        .await?;
+        record(&mut log, session, &format!("collision.add.{index}"), events)?;
+    }
+    let events = command(session.bot(player)?, "bossbar list").await?;
+    record(&mut log, session, "collision.list", events)?;
     let guest = session.join("ScoreGuest").await?;
     let initial = snapshot(session, guest)?;
     ensure!(

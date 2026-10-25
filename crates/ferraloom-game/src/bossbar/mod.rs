@@ -19,6 +19,15 @@ impl JavaHash for Key {
     fn java_hash_code(&self) -> i32 {
         identifier_hash_code(self.0.namespace(), self.0.path())
     }
+    fn java_compare(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        // Identifier#compareTo orders path before namespace, including HashMap tree bins.
+        Some(
+            self.0
+                .path()
+                .cmp(other.0.path())
+                .then_with(|| self.0.namespace().cmp(other.0.namespace())),
+        )
+    }
 }
 
 /// Port of CustomBossEvent. Persistent UUID membership is separate from online ServerPlayers.
@@ -180,10 +189,10 @@ impl CustomBossEvents {
     }
     /// The UUID is drawn by the caller from the live level RNG at native createBar's call site.
     pub fn create(&mut self, id: Uuid, custom_id: Identifier, name: Component) {
-        self.events.insert(
-            Key(custom_id.clone()),
-            CustomBossEvent::new(id, custom_id, name),
-        );
+        let mut event = CustomBossEvent::new(id, custom_id.clone(), name);
+        // The constructor's dirty callback is delivered to the owner immediately.
+        event.dirty = false;
+        self.events.insert(Key(custom_id), event);
         self.dirty = true;
     }
     pub fn remove(&mut self, id: &Identifier) {

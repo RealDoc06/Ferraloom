@@ -157,3 +157,39 @@ fn vanilla_boss_event_saved_data_codec() {
         }
     }
 }
+
+#[test]
+fn vanilla_boss_event_identifier_tree_bin_order() {
+    let case: Value =
+        serde_json::from_str(include_str!("../../tests/java/bossbar/ordering.json")).unwrap();
+    let mut events = CustomBossEvents::default();
+    for (index, id) in case["input"].as_array().unwrap().iter().enumerate() {
+        let id = Identifier::parse(id.as_str().unwrap()).unwrap();
+        events.create(
+            Uuid::new(0, index as i64),
+            id.clone(),
+            Component::literal(id.path()),
+        );
+    }
+    let actual: Vec<_> = events
+        .events()
+        .map(|event| event.custom_id().to_string())
+        .collect();
+    assert_eq!(serde_json::to_value(actual).unwrap(), case["ordered"]);
+    events.set_dirty(false);
+    let player = BossPlayer {
+        entity: EntityRef(1),
+        uuid: Uuid::new(0, 1),
+        network_id: 1,
+    };
+    events.on_player_connect(player);
+    assert_eq!(
+        events.is_dirty(),
+        case["dirtyAfterUnrelatedConnect"].as_bool().unwrap()
+    );
+    events.on_player_disconnect(player);
+    assert_eq!(
+        events.is_dirty(),
+        case["dirtyAfterUnrelatedDisconnect"].as_bool().unwrap()
+    );
+}

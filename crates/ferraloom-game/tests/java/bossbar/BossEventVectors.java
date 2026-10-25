@@ -101,5 +101,16 @@ public class BossEventVectors {
       codecRows.add(row);
     }
     Files.writeString(Path.of(args[1]),new GsonBuilder().setPrettyPrinting().create().toJson(codecRows)+"\n");
+    var owner=new CustomBossEvents();var random=net.minecraft.util.RandomSource.create(1);
+    var inputIds=new JsonArray();
+    // "an" and "c0" have the same String hash; sixteen concatenations force tree bins.
+    for(int i=0;i<16;i++) {
+      String path="";for(int bit=0;bit<4;bit++)path+=((i>>bit)&1)==0?"an":"c0";
+      var id=Identifier.parse("test:"+path);inputIds.add(id.toString());owner.create(random,id,Component.literal(path));
+    }
+    var order=new JsonObject();order.add("input",inputIds);var ordered=new JsonArray();owner.getIds().forEach(id->ordered.add(id.toString()));order.add("ordered",ordered);
+    owner.setDirty(false);owner.onPlayerConnect(players.getFirst());order.addProperty("dirtyAfterUnrelatedConnect",owner.isDirty());
+    owner.onPlayerDisconnect(players.getFirst());order.addProperty("dirtyAfterUnrelatedDisconnect",owner.isDirty());
+    Files.writeString(Path.of(args[2]),new GsonBuilder().setPrettyPrinting().create().toJson(order)+"\n");
   }
 }

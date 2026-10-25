@@ -1,0 +1,40 @@
+{
+  "input": [
+    "test:anananan",
+    "test:c0ananan",
+    "test:anc0anan",
+    "test:c0c0anan",
+    "test:ananc0an",
+    "test:c0anc0an",
+    "test:anc0c0an",
+    "test:c0c0c0an",
+    "test:anananc0",
+    "test:c0ananc0",
+    "test:anc0anc0",
+    "test:c0c0anc0",
+    "test:ananc0c0",
+    "test:c0anc0c0",
+    "test:anc0c0c0",
+    "test:c0c0c0c0"
+  ],
+  "ordered": [
+    "test:c0ananan",
+    "test:anananan",
+    "test:anc0anan",
+    "test:c0c0anan",
+    "test:c0anc0c0",
+    "test:ananc0an",
+    "test:ananc0c0",
+    "test:c0anc0an",
+    "test:anc0c0an",
+    "test:anc0c0c0",
+    "test:c0c0c0an",
+    "test:c0c0c0c0",
+    "test:c0c0anc0",
+    "test:anananc0",
+    "test:c0ananc0",
+    "test:anc0anc0"
+  ],
+  "dirtyAfterUnrelatedConnect": false,
+  "dirtyAfterUnrelatedDisconnect": false
+}
