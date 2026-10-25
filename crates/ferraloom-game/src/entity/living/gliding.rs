@@ -3,10 +3,7 @@ use super::super::{
     Entity, EntityData, EntityRef, LivingEntity,
     player::{equipment::SLOTS, inventory::component},
 };
-use crate::{
-    block::UnportedOperation,
-    level::{Level, LevelError},
-};
+use crate::level::{Level, LevelError};
 use ferraloom_data::registries::{
     data_component_type::Id as ComponentType, game_event::Id as GameEvent,
     mob_effect::Id as MobEffect,
@@ -72,8 +69,8 @@ pub fn can_glide<E: Entity + ?Sized>(
 }
 
 /// Port of server-side LivingEntity#updateFallFlying. The selected slot consumes
-/// the canonical entity RNG before the shared durability effect seam. Warn may
-/// skip that effect, but still emits the following native glide game event.
+/// the canonical entity RNG before synchronous durability, then emits the
+/// following native glide game event.
 pub fn update_fall_flying<E: Entity + ?Sized>(
     behavior: &E,
     entity: EntityRef,
@@ -111,15 +108,10 @@ pub fn update_fall_flying<E: Entity + ?Sized>(
                 .random
                 .next_int_bound(slots.len() as i32) as usize;
             let slot = slots[index];
-            let item = behavior
+            behavior
                 .item_by_slot(entity, slot, level)?
-                .expect("canGlideUsing selected a living equipment slot")
-                .item();
-            level.unported_operation(UnportedOperation::ItemHurtAndBreak {
-                item,
-                amount: 1,
-                slot,
-            })?;
+                .expect("canGlideUsing selected a living equipment slot");
+            crate::item::stack::hurt_equipped_item(entity, 1, slot, level)?;
         }
         let position = level.entity::<EntityData>(entity)?.position;
         level.game_event(GameEvent::ELYTRA_GLIDE, position, Some(entity), None)?;
