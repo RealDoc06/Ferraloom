@@ -1325,15 +1325,18 @@ pub enum LightLayer {
 
 impl WorldGenRegion<'_> {
     // --- vegetation family ---
-    /// Port of BlockAndLightGetter#getBrightness before INITIALIZE_LIGHT.
-    /// No section light exists yet: block light is zero and sky storage returns 15.
-    /// A feature placing an emitter does not initialize or propagate lighting.
+    /// Port of WorldGenRegion#getLightEngine / BlockAndLightGetter#getBrightness.
+    /// Initialized neighbors read the borrowed engine's published layer map.
+    /// Before initialization, no section light exists; placing an emitter alone
+    /// does not initialize or propagate lighting.
     pub fn brightness(&self, layer: LightLayer, p: [i32; 3]) -> Result<u8, Error> {
         let chunk = self.chunk([p[0] >> 4, p[2] >> 4], ChunkStatus::Empty)?;
         if chunk.status >= ChunkStatus::InitializeLight {
-            return Err(Error(
-                "Unsupported: initialized worldgen light storage".into(),
-            ));
+            return self
+                .light_engine
+                .as_deref()
+                .ok_or_else(|| Error("Unsupported: initialized worldgen light storage".into()))?
+                .light_value(layer, ferraloom_util::BlockPos::new(p[0], p[1], p[2]));
         }
         Ok(match layer {
             LightLayer::Block => 0,
