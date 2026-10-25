@@ -335,9 +335,6 @@ impl Level {
                 self.update_tracked_player(id, player)?;
             }
         }
-        let section = SectionPos::from_position(self.entity::<EntityData>(player)?.position);
-        self.update_player_tracking_section(player, section)?;
-        self.update_player_chunk_tracking(player)?;
         Ok(())
     }
     /// Port of ChunkMap#tick, after updateChunkTracking and before entity ticks.

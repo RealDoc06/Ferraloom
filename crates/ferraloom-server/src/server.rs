@@ -44,7 +44,6 @@ use ferraloom_game::{
     level::{
         LevelError, Region,
         chunk_holder::ChunkStatus,
-        distance_manager::tracking_view,
         server_level::ServerLevel,
         tick_rate::{ServerTickRateManager, TickRateEvent},
     },
@@ -136,7 +135,6 @@ struct Connection {
     close: bool,
     information: common::serverbound::ClientInformation,
     player: Option<ServerPlayer>,
-    center: Option<ChunkPos>,
     last_keepalive: Instant,
     keepalive: Option<i64>,
     last_action: Instant,
@@ -730,7 +728,6 @@ impl MinecraftServer {
                         close: false,
                         information: client_information(),
                         player: None,
-                        center: None,
                         last_keepalive: Instant::now(),
                         keepalive: None,
                         last_action: Instant::now(),
@@ -1357,7 +1354,10 @@ impl MinecraftServer {
                     }
                 }
                 LevelEffect::PlayerSectionChange { player, section } => {
-                    self.level.generation().update_player(player, Some(section));
+                    self.level
+                        .level
+                        .update_player_tracking_section(player, section)
+                        .map_err(game_error)?;
                 }
             }
         }
@@ -1372,11 +1372,26 @@ impl MinecraftServer {
     /// The commands branch supplies the current SpectatorsGenerateChunks rule
     /// when its canonical GameRules state lands (vanilla's default is true).
     pub(super) fn update_player_tickets(&mut self, entity: EntityRef) -> Result<()> {
+        // ChunkMap#move updates audiences before any distance-manager changes.
+        self.level
+            .level
+            .move_tracked_player(entity)
+            .map_err(anyhow::Error::new)?;
         for (player, section) in self.level.level.take_player_section_changes() {
-            self.level.generation().update_player(player, Some(section));
+            self.level
+                .level
+                .update_player_tracking_section(player, section)
+                .map_err(game_error)?;
         }
         let section = ferraloom_util::SectionPos::from_position(self.player(entity)?.position);
-        self.level.generation().update_player(entity, Some(section));
+        self.level
+            .level
+            .update_player_tracking_section(entity, section)
+            .map_err(game_error)?;
+        self.level
+            .level
+            .update_player_chunk_tracking(entity)
+            .map_err(game_error)?;
         Ok(())
     }
     fn update_chunk_tickets(&mut self) -> Result<()> {
@@ -1418,7 +1433,6 @@ impl MinecraftServer {
         let pos = player.position;
         let yaw = player.yaw;
         let pitch = player.pitch;
-        let center = player.chunk_position();
         let mode = protocol_game_type(player.game_mode);
         let entity_id = player.network_id;
         let permission = self.shared().ops.permission_level(player.uuid).id();
@@ -1547,18 +1561,17 @@ impl MinecraftServer {
         c.push(cb::Packet::TickingStep(cb::TickingStep {
             tick_steps: VarInt(self.tick_rate_manager.frozen_ticks_to_run()),
         }));
-        c.push(cb::Packet::SetChunkCacheCenter(cb::SetChunkCacheCenter {
-            x: VarInt(center.x),
-            z: VarInt(center.z),
-        }));
-        c.center = Some(center);
-        c.push(cb::Packet::PostEffects(common_cb::PostEffects {
-            post_effects: Vec::new(),
-        }));
         self.level
             .level
             .add_entity(entity, EntityState::Player(Box::new(player)))
             .map_err(game_error)?;
+        ferraloom_game::inventory::send_container_packets(
+            entity,
+            [cb::Packet::PostEffects(common_cb::PostEffects {
+                post_effects: Vec::new(),
+            })],
+            &mut self.level.level,
+        )?;
         ferraloom_game::inventory::initialize_inventory_menu(entity, &mut self.level.level)?;
         use protocol::entity_data::{DataValue, EntityDataItems, EntityDataValue};
         let post_initialization = {
@@ -1602,7 +1615,6 @@ impl MinecraftServer {
             "{} joined at {}, {}, {}",
             c.profile.name, pos.x, pos.y, pos.z
         );
-        self.update_player_tickets(entity)?;
         self.players.push(connection);
         self.connections.insert(connection, c);
         self.apply_level_effects()
@@ -2749,44 +2761,16 @@ impl MinecraftServer {
             let Phase::Play(entity) = c.phase else {
                 continue;
             };
-            self.update_player_tickets(entity)?;
             let player = self.player(entity)?;
             let center = player.chunk_position();
             let distance = player
                 .view_distance
                 .clamp(2, self.properties.int("view-distance").clamp(2, 32));
-            let desired: HashSet<_> = tracking_view(center, distance).into_iter().collect();
-            self.request_area(center, distance + 2)?;
-            let c = self.connections.get_mut(&connection).unwrap();
-            if c.center != Some(center) {
-                c.push(cb::Packet::SetChunkCacheCenter(cb::SetChunkCacheCenter {
-                    x: VarInt(center.x),
-                    z: VarInt(center.z),
-                }));
-                c.center = Some(center);
-            }
-            let player = self
+            self.level
                 .level
-                .level
-                .entity_mut::<ServerPlayer>(entity)
+                .update_player_chunk_tracking(entity)
                 .map_err(game_error)?;
-            let mut leaving = player
-                .chunk_tracking_view
-                .difference(&desired)
-                .copied()
-                .collect::<Vec<_>>();
-            leaving.sort_by_key(|p| p.pack());
-            for pos in leaving {
-                if player.chunk_sender.drop_chunk(pos) {
-                    c.push(cb::Packet::ForgetLevelChunk(cb::ForgetLevelChunk {
-                        pos: play::ChunkPos { x: pos.x, z: pos.z },
-                    }));
-                }
-            }
-            for &pos in desired.difference(&player.chunk_tracking_view) {
-                player.chunk_sender.pending.insert(pos);
-            }
-            player.chunk_tracking_view = desired;
+            self.request_area(center, distance + 2)?;
         }
         Ok(())
     }
@@ -2939,13 +2923,19 @@ impl MinecraftServer {
                 continue;
             }
             if let Phase::Play(entity) = c.phase {
+                let center = self
+                    .level
+                    .level
+                    .entity::<ServerPlayer>(entity)
+                    .map_err(game_error)?
+                    .chunk_position();
                 let positions = self
                     .level
                     .level
                     .entity_mut::<ServerPlayer>(entity)
                     .map_err(game_error)?
                     .chunk_sender
-                    .next_batch(c.center.unwrap(), |pos| {
+                    .next_batch(center, |pos| {
                         // prepareTickingChunk already awaited the FULL neighborhood
                         // and post-processing; sending does not await its neighbors'
                         // own ticking futures. Retain the center light dependency.
@@ -3159,8 +3149,8 @@ impl MinecraftServer {
                 Ok(())
             })
             .await??;
-            self.level.generation().update_player(entity, None);
             self.level.level.remove_entity(entity).map_err(game_error)?;
+            self.apply_level_effects()?;
             self.players.retain(|&id| id != connection);
             self.broadcast(cb::Packet::PlayerInfoRemove(cb::PlayerInfoRemove {
                 profile_ids: vec![c.profile.id],
