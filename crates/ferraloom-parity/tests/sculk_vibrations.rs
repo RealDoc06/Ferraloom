@@ -1,8 +1,9 @@
 //! Real BlockItem placement -> synchronous section listener -> vibration ticker.
 mod level_support;
+use anyhow::Context;
 use ferraloom_data::{Block, properties as p};
 use ferraloom_parity::{
-    Bot, ObservationLog, Result, RunMode, Session, ensure,
+    Bot, ObservationLog, Result, RunMode, Session,
     protocol::play::{BlockHitResult, InteractionHand},
 };
 use ferraloom_util::{BlockPos, Direction};
@@ -27,14 +28,33 @@ async fn place(bot: &mut Bot) -> Result<()> {
     .await?;
     expect_blocks(bot, &[(PLACEMENT, Block::STONE.default_state())]).await
 }
-fn assert_phase(bot: &Bot, pos: BlockPos, phase: p::SculkSensorPhase, power: u8) -> Result<()> {
-    let actual = block(bot, pos)?;
-    ensure!(
-        actual.get(p::SCULK_SENSOR_PHASE) == Some(phase) && actual.get(p::POWER) == Some(power),
-        "sensor {pos:?}: {actual:?}"
-    );
+async fn assert_phase(
+    bot: &mut Bot,
+    pos: BlockPos,
+    phase: p::SculkSensorPhase,
+    power: u8,
+) -> Result<()> {
+    let expected = block(bot, pos)?
+        .with(p::SCULK_SENSOR_PHASE, phase)
+        .expect("sensor phase")
+        .with(p::POWER, power)
+        .expect("sensor power");
+    // The last BE tick can run after the chunk broadcast slot. Await that
+    // state's packet while time remains frozen; do not add another game tick.
+    if let Err(error) = expect_blocks(bot, &[(pos, expected)]).await {
+        let query = command(
+            bot,
+            &format!("data get block {} {} {}", pos.x, pos.y, pos.z),
+            "commands.data.block.query",
+        )
+        .await;
+        return Err(error).with_context(|| {
+            format!("sensor {pos:?} expected {expected:?}; native receiver data: {query:?}")
+        });
+    }
     Ok(())
 }
+
 async fn vibrations(session: &mut Session) -> Result<ObservationLog> {
     let id = session.join("ParityBot").await?;
     let bot = session.bot(id)?;
@@ -59,8 +79,8 @@ async fn vibrations(session: &mut Session) -> Result<ObservationLog> {
     .await?;
     place(bot).await?;
     step(bot, 4).await?;
-    assert_phase(bot, SENSOR, p::SculkSensorPhase::Active, 12)?;
-    assert_phase(bot, CALIBRATED, p::SculkSensorPhase::Active, 12)?;
+    assert_phase(bot, SENSOR, p::SculkSensorPhase::Active, 12).await?;
+    assert_phase(bot, CALIBRATED, p::SculkSensorPhase::Active, 12).await?;
     let mut log = ObservationLog::default();
     log.record(
         "real_block_place_activates_sensor",
@@ -68,23 +88,23 @@ async fn vibrations(session: &mut Session) -> Result<ObservationLog> {
     )?;
     log.record("calibrated_sensor_radius", block(bot, CALIBRATED)?.id())?;
     step(bot, 10).await?;
-    assert_phase(bot, CALIBRATED, p::SculkSensorPhase::Cooldown, 0)?;
-    assert_phase(bot, SENSOR, p::SculkSensorPhase::Active, 12)?;
+    assert_phase(bot, CALIBRATED, p::SculkSensorPhase::Cooldown, 0).await?;
+    assert_phase(bot, SENSOR, p::SculkSensorPhase::Active, 12).await?;
     log.record("calibrated_active_duration", block(bot, CALIBRATED)?.id())?;
     step(bot, 10).await?;
-    assert_phase(bot, CALIBRATED, p::SculkSensorPhase::Inactive, 0)?;
+    assert_phase(bot, CALIBRATED, p::SculkSensorPhase::Inactive, 0).await?;
     step(bot, 8).await?;
-    assert_phase(bot, SENSOR, p::SculkSensorPhase::Cooldown, 0)?;
+    assert_phase(bot, SENSOR, p::SculkSensorPhase::Cooldown, 0).await?;
     log.record("ordinary_active_duration", block(bot, SENSOR)?.id())?;
     step(bot, 10).await?;
-    assert_phase(bot, SENSOR, p::SculkSensorPhase::Inactive, 0)?;
+    assert_phase(bot, SENSOR, p::SculkSensorPhase::Inactive, 0).await?;
     log.record("cooldown_returns_inactive", block(bot, SENSOR)?.id())?;
     set(bot, CALIBRATED, Block::AIR).await?;
     set(bot, SENSOR.relative(Direction::East, 1), Block::WHITE_WOOL).await?;
     set(bot, PLACEMENT, Block::AIR).await?;
     place(bot).await?;
     step(bot, 8).await?;
-    assert_phase(bot, SENSOR, p::SculkSensorPhase::Inactive, 0)?;
+    assert_phase(bot, SENSOR, p::SculkSensorPhase::Inactive, 0).await?;
     log.record("wool_occludes_real_block_place", block(bot, SENSOR)?.id())?;
     command(bot, "save-all flush", "commands.save.success").await?;
     Ok(log)
