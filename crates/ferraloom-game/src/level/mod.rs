@@ -304,7 +304,7 @@ pub struct Region {
     block_ticks: LevelTicks,
     fluid_ticks: LevelTicks<ferraloom_data::registries::fluid::Id>,
     block_entity_state: block_entity::BlockEntityRuntime,
-    game_event_listeners: game_event::GameEventListenerRegistries,
+    game_event_listeners: std::cell::RefCell<game_event::GameEventListenerRegistries>,
     container_runtime: crate::block::containers::runtime::ContainerRuntime,
     next_sub_tick_order: i64,
     game_time: i64,

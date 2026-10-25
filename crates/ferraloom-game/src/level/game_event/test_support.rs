@@ -47,7 +47,7 @@ impl GameEventListener for Recorder {
             unreachable!()
         };
         Ok(PositionSource::Block(
-            level.region().game_event_listeners.tests.listeners[id].pos,
+            level.region().game_event_listeners.borrow().tests.listeners[id].pos,
         ))
     }
     fn get_listener_radius(
@@ -58,7 +58,7 @@ impl GameEventListener for Recorder {
         let GameEventListenerRef::Test(id) = listener else {
             unreachable!()
         };
-        Ok(level.region().game_event_listeners.tests.listeners[id].radius)
+        Ok(level.region().game_event_listeners.borrow().tests.listeners[id].radius)
     }
     fn get_delivery_mode(&self) -> DeliveryMode {
         self.0
@@ -75,7 +75,7 @@ impl GameEventListener for Recorder {
             unreachable!()
         };
         let effect_count = level.region().effects.len();
-        let tests = &mut level.region_mut().game_event_listeners.tests;
+        let tests = &mut level.region_mut().game_event_listeners.get_mut().tests;
         let data = &mut tests.listeners[id];
         if data.recorder {
             let source = BlockPos::containing(position.x, position.y, position.z);
@@ -101,11 +101,13 @@ impl GameEventListener for Recorder {
         for action in actions {
             match action {
                 Action::Register(other) => {
-                    let pos = level.region().game_event_listeners.tests.listeners[other].pos;
+                    let pos =
+                        level.region().game_event_listeners.borrow().tests.listeners[other].pos;
                     level.register_listener(GameEventListenerRef::Test(other), pos)?;
                 }
                 Action::Unregister(other) => {
-                    let pos = level.region().game_event_listeners.tests.listeners[other].pos;
+                    let pos =
+                        level.region().game_event_listeners.borrow().tests.listeners[other].pos;
                     level.unregister_listener(GameEventListenerRef::Test(other), pos)?;
                 }
                 Action::Reenter(source) => level.game_event(
@@ -128,7 +130,7 @@ pub(super) fn add(
     mode: DeliveryMode,
     label: &str,
 ) -> usize {
-    let tests = &mut level.region_mut().game_event_listeners.tests;
+    let tests = &mut level.region_mut().game_event_listeners.get_mut().tests;
     let id = tests.listeners.len();
     tests.listeners.push(TestListenerState {
         behavior: if mode == DeliveryMode::ByDistance {
@@ -158,14 +160,27 @@ pub(crate) fn observe(level: &mut Level) {
     }
     for pos in positions {
         let id = add(level, pos, 32, DeliveryMode::Unspecified, "recorder");
-        level.region_mut().game_event_listeners.tests.listeners[id].recorder = true;
+        level
+            .region_mut()
+            .game_event_listeners
+            .get_mut()
+            .tests
+            .listeners[id]
+            .recorder = true;
         level
             .register_listener(GameEventListenerRef::Test(id), pos)
             .unwrap();
     }
 }
 pub(crate) fn take(level: &mut Level) -> Vec<Observation> {
-    let records = std::mem::take(&mut level.region_mut().game_event_listeners.tests.events);
+    let records = std::mem::take(
+        &mut level
+            .region_mut()
+            .game_event_listeners
+            .get_mut()
+            .tests
+            .events,
+    );
     let effects = level.take_effects();
     let mut records = records.into_iter().peekable();
     let mut observed = Vec::new();

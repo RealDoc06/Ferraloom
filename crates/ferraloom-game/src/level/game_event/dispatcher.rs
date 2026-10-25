@@ -83,6 +83,7 @@ fn visit(
     let state = level
         .region_mut()
         .game_event_listeners
+        .get_mut()
         .registries
         .get_mut(&registry.0)
         .unwrap();
@@ -92,19 +93,22 @@ fn visit(
     let mut index = 0;
     let result: Result<(), LevelError> = (|| {
         loop {
-            let state = &level.region().game_event_listeners.registries[&registry.0];
-            // ArrayList.Itr#hasNext checks cursor != size before next checks
-            // modCount. Preserve the no-next case even after nested mutation.
-            if index == state.listeners.len() {
-                break;
-            }
-            if state.modification_count != expected_modification {
-                return Err(LevelError::ConcurrentGameEventListenerModification);
-            }
-            let listener = state.listeners[index];
+            let listener = {
+                let store = level.region().game_event_listeners.borrow();
+                let state = &store.registries[&registry.0];
+                // ArrayList.Itr#hasNext precedes its modification check.
+                if index == state.listeners.len() {
+                    break;
+                }
+                if state.modification_count != expected_modification {
+                    return Err(LevelError::ConcurrentGameEventListenerModification);
+                }
+                state.listeners[index]
+            };
             let state = level
                 .region_mut()
                 .game_event_listeners
+                .get_mut()
                 .registries
                 .get_mut(&registry.0)
                 .unwrap();
@@ -152,6 +156,7 @@ fn visit(
     level
         .region_mut()
         .game_event_listeners
+        .get_mut()
         .registries
         .get_mut(&registry.0)
         .unwrap()
@@ -162,6 +167,7 @@ fn visit(
     level
         .region_mut()
         .game_event_listeners
+        .get_mut()
         .registries
         .get_mut(&registry.0)
         .unwrap()
@@ -173,6 +179,7 @@ fn flush(level: &mut Level, registry: ListenerRegistryRef) {
     let state = level
         .region_mut()
         .game_event_listeners
+        .get_mut()
         .registries
         .get_mut(&registry.0)
         .unwrap();
