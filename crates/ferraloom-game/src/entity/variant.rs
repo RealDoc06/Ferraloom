@@ -188,7 +188,8 @@ impl SpawnCondition {
                 entry.namespace() == biome.namespace() && entry.path() == biome.path()
             })),
             Self::Biome(HolderSet::Named(tag)) => {
-                let tag = tag.as_str().parse().expect("validated biome tag");
+                let tag: ferraloom_worldgen::Identifier =
+                    tag.as_str().parse().expect("validated biome tag");
                 let values = level
                     .context()
                     .generator

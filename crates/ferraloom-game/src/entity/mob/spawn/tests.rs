@@ -12,7 +12,7 @@ fn fixture(biome: &str) -> (Level, EntityRef) {
     static BEHAVIORS: Behaviors = Behaviors::EMPTY;
     let context = LevelContext::fixture(0, 63);
     let data = context.generator.data();
-    let biome = data.biome_ids[&biome.parse().unwrap()];
+    let biome = data.biome_ids[&biome.parse::<ferraloom_worldgen::Identifier>().unwrap()];
     let section = LevelChunkSection::new(
         Strategy::block_states(),
         Strategy::biomes(Arc::new(IdMap::new(vec![biome]).unwrap())),
