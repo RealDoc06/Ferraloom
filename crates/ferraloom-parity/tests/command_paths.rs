@@ -21,3 +21,4 @@ family!(parity_paths_admin, "admin");
 family!(parity_paths_placement, "placement");
 
 family!(parity_paths_give, "give");
+family!(parity_paths_data_storage, "data_storage");

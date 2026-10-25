@@ -123,7 +123,73 @@ fn gamerules() -> Result<Vec<Case>> {
     }
     Ok(cases)
 }
+
+#[derive(Deserialize)]
+struct DataVector {
+    command: String,
+    path: String,
+    initial: String,
+    source: String,
+    value: Option<i32>,
+    error: Option<Value>,
+    feedback: Vec<Value>,
+}
+fn data_storage() -> Result<Vec<Case>> {
+    let vectors: Vec<DataVector> = serde_json::from_str(include_str!(
+        "../../../ferraloom-game/src/commands/vanilla/data-command-vectors.json"
+    ))?;
+    let mut cases = Vec::new();
+    for (index, vector) in vectors.into_iter().enumerate() {
+        // Unique keys let every case begin with the native fixture's complete
+        // state in one shared boot, without relying on a non-native reset API.
+        let root = format!("paths:case/{index}/root");
+        let source = format!("paths:case/{index}/source");
+        let absent = format!("paths:case/{index}/absent");
+        let command = vector
+            .command
+            .replace("test:root", &root)
+            .replace("test:source", &source)
+            .replace("test:absent", &absent);
+        let key = vector
+            .error
+            .as_ref()
+            .and_then(|error| error.get("translate"))
+            .or_else(|| vector.feedback.first()?.get("message")?.get("translate"))
+            .and_then(Value::as_str)
+            .expect("native data feedback key");
+        cases.push(Case {
+            name: format!("data.storage.{index}"),
+            // Errors remain checked, but only successful native executions can
+            // grant path coverage. Readbacks observe actual post-command NBT.
+            path: vector.value.map(|_| vector.path),
+            pending: None,
+            steps: vec![
+                Step::feedback(
+                    format!("data merge storage {root} {}", vector.initial),
+                    "commands.data.storage.modified",
+                ),
+                Step::feedback(
+                    format!("data merge storage {source} {}", vector.source),
+                    "commands.data.storage.modified",
+                ),
+                Step::feedback(command, key),
+                Step::feedback(
+                    format!("data get storage {root}"),
+                    "commands.data.storage.query",
+                ),
+                Step::feedback(
+                    format!("data get storage {absent}"),
+                    "commands.data.storage.query",
+                ),
+            ],
+        });
+    }
+    Ok(cases)
+}
 pub fn family(name: &str) -> Result<Vec<Case>> {
+    if name == "data_storage" {
+        return data_storage();
+    }
     if name == "gamerule" {
         return gamerules();
     }
@@ -149,6 +215,7 @@ fn every_sweep_path_has_an_inventory_row_and_an_observable_command() -> Result<(
         "players",
         "admin",
         "placement",
+        "data_storage",
     ] {
         let mut labels = std::collections::BTreeSet::new();
         for case in family(name)? {
@@ -179,5 +246,17 @@ fn every_sweep_path_has_an_inventory_row_and_an_observable_command() -> Result<(
             );
         }
     }
+    Ok(())
+}
+
+#[test]
+fn native_successful_substrings_do_not_cover_the_always_failing_string_root() -> Result<()> {
+    let covered = data_storage()?
+        .iter()
+        .flat_map(Case::paths)
+        .collect::<std::collections::BTreeSet<_>>();
+    let root = "commands.path.data.modify.storage.arg-target.arg-target-path.set.string.storage.arg-source";
+    assert!(!covered.contains(root));
+    assert!(covered.contains(&format!("{root}.arg-source-path")));
     Ok(())
 }

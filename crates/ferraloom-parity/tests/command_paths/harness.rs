@@ -161,7 +161,22 @@ impl Case {
         };
         let mut result = Vec::new();
         while path.starts_with("commands.path.") {
-            result.push(path.clone());
+            // An executable parent is a separate callback. In particular,
+            // `data ... string storage <source>` always rejects its compound,
+            // even when the descendant with a sourcePath succeeds.
+            let executable = include_str!("../../../../features/commands.md")
+                .lines()
+                .any(|row| {
+                    let mut fields = row.split('|');
+                    fields.next();
+                    fields.next().is_some_and(|id| id.trim() == path)
+                        && fields
+                            .next()
+                            .is_some_and(|description| description.contains("; executable"))
+                });
+            if self.path.as_deref() == Some(path.as_str()) || !executable {
+                result.push(path.clone());
+            }
             path.truncate(path.rfind('.').unwrap());
         }
         result
