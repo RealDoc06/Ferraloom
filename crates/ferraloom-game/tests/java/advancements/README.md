@@ -42,3 +42,8 @@ the displaced victim's distance from the player, direct/causing source identity,
 and synchronous XP rewards. Eligibility and fallback selection remain producer
 responsibilities; the Rust replay passes the canonical DamageSource through its
 existing immutable predicate DTO boundary.
+
+`FallHeightVectors` invokes FALL_FROM_HEIGHT with explicit starts and current
+player positions. It checks start-location constraints separately from the end,
+vertical/horizontal/absolute distance, negative bounds, the native float rounding
+of coordinate differences, player predicates and XP rewards.

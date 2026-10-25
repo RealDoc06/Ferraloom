@@ -379,6 +379,26 @@ pub fn location(level: &mut Level, player: EntityRef) -> Result<(), LevelError> 
         None,
     )
 }
+/// Port of DistanceTrigger#trigger for CriteriaTriggers.FALL_FROM_HEIGHT.
+/// Capture the current endpoint once, before matching any listener or reward.
+pub fn fall_from_height(
+    level: &mut Level,
+    player: EntityRef,
+    start: Vec3,
+) -> Result<(), LevelError> {
+    let end = level.entity::<EntityData>(player)?.position;
+    live::trigger(
+        level,
+        player,
+        TriggerType::FallFromHeight,
+        TriggerEvent::Distance {
+            start,
+            end,
+            cause: None,
+        },
+        None,
+    )
+}
 /// Explicit boundary for trigger families without a producing live subsystem.
 pub fn unsupported(level: &mut Level, trigger: TriggerType) -> Result<(), LevelError> {
     level.unported_operation(UnportedOperation::AdvancementCriterion(Trigger::from_type(

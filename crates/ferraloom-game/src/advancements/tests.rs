@@ -1454,6 +1454,52 @@ fn vanilla_sculk_triggers_use_canonical_player_victim_and_damage_source() {
 }
 
 #[test]
+fn vanilla_fall_from_height_uses_start_and_captured_current_position() {
+    use crate::entity::{EntityData, player::ServerPlayer};
+
+    let mut bytes = Vec::new();
+    flate2::read::GzDecoder::new(&include_bytes!("fall-height.json.gz")[..])
+        .read_to_end(&mut bytes)
+        .unwrap();
+    let rows: Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(rows.as_array().unwrap().len(), 9);
+    for row in rows.as_array().unwrap() {
+        let vector = |value: &Value| {
+            let values = value.as_array().unwrap();
+            Vec3::new(
+                values[0].as_f64().unwrap(),
+                values[1].as_f64().unwrap(),
+                values[2].as_f64().unwrap(),
+            )
+        };
+        let manager = ServerAdvancementManager::new(vec![AdvancementHolder {
+            id: id("test:fall"),
+            value: Advancement::decode(&row["input"]).unwrap(),
+        }]);
+        let (mut level, player) = live_fixture(manager);
+        level
+            .entity_mut::<EntityData>(player)
+            .unwrap()
+            .set_pos(vector(&row["end"]));
+        criteria::fall_from_height(&mut level, player, vector(&row["start"])).unwrap();
+        let owner = level.entity::<ServerPlayer>(player).unwrap();
+        assert_eq!(
+            owner
+                .advancements
+                .get_progress(&id("test:fall"))
+                .unwrap()
+                .is_done(),
+            row["done"].as_bool().unwrap(),
+            "{row}"
+        );
+        assert_eq!(
+            owner.total_experience,
+            row["experience"].as_i64().unwrap() as i32
+        );
+    }
+}
+
+#[test]
 fn retained_inventory_trigger_and_stats_request_read_canonical_player() {
     use crate::{
         entity::player::{ServerPlayer, inventory},
