@@ -5,6 +5,7 @@ One class row per bootstrapped runtime Block class, listing every block id assig
 
 | ID | Feature | Vanilla source | Test | Vanilla | Ferraloom |
 |---|---|---|---|---|---|
+| blocks.fallable.dispatch | Dispatch landing, broken-after-fall and damage-source virtuals with canonical entity handles; retain native defaults and required errors for unported overrides | `Fallable; FallingBlockEntity` | [reflected Fallable ownership](../crates/ferraloom-data/src/block_methods.rs) (runtime comparisons and live caller integration pending) | - | partial |
 | blocks.state.properties | Enumerate valid state properties and transitions and preserve global block-state ids | `StateDefinition; StateHolder; Block#BLOCK_STATE_REGISTRY` | | - | todo |
 | blocks.state.rotation-mirror | Rotate and mirror directional and multipart states with structure placement | `BlockBehaviour#rotate; BlockBehaviour#mirror` | | - | todo |
 | blocks.placement.replaceability | Apply placement context, replaceability, support and collision checks | `BlockItem#place; BlockPlaceContext` | | - | todo |
