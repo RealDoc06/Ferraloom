@@ -126,6 +126,8 @@ pub enum LevelError {
     UnsupportedBlock(Block),
     UnsupportedBlockMethod(Block, crate::block::BlockMethod),
     UnsupportedBlockEntity(Block),
+    /// A live catalyst cursor list was replaced during a retained update frame.
+    UnsupportedSculkCursorReentrancy(crate::block::entity::BlockEntityRef),
     UnsupportedGameRule(&'static str),
     UnsupportedLightQuery,
     UnsupportedEnvironmentAttribute(ferraloom_data::registries::environment_attribute::Id),

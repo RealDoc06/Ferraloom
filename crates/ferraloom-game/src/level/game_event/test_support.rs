@@ -203,3 +203,24 @@ pub(crate) fn take(level: &mut Level) -> Vec<Observation> {
     );
     observed
 }
+
+/// Native VibrationSystem.User#onDataChanged observation, before setChanged.
+pub(crate) fn record_vibration_change(level: &mut Level, entry: String) {
+    level
+        .region_mut()
+        .game_event_listeners
+        .get_mut()
+        .tests
+        .trace
+        .push(entry);
+}
+pub(crate) fn take_vibration_changes(level: &mut Level) -> Vec<String> {
+    std::mem::take(
+        &mut level
+            .region_mut()
+            .game_event_listeners
+            .get_mut()
+            .tests
+            .trace,
+    )
+}
