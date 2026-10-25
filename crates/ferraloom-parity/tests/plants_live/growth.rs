@@ -164,6 +164,21 @@ pub(super) async fn columns(bot: &mut Bot, log: &mut ObservationLog) -> Result<(
     )?;
     random_ticks(bot, 0).await?;
     put(bot, cane.east(1).below(1), Block::AIR.default_state()).await?;
+    // Water is diagonal from the cane. SugarCaneBlock only schedules its
+    // survival tick when its own updateShape runs; changing the sand's neighbor
+    // does not propagate an unchanged sand state into another shape update.
+    step(bot, 2).await?;
+    ensure!(
+        (0..3).all(|dy| block(bot, cane.above(dy)).is_ok_and(|s| s.block() == Block::SUGAR_CANE)),
+        "diagonal water removal unexpectedly updated cane"
+    );
+    record(
+        log,
+        bot,
+        "columns.cane_water_loss_waits_for_shape_update",
+        &[cane, cane.above(1), cane.above(2)],
+    )?;
+    put(bot, cane.east(1), Block::AIR.default_state()).await?;
     step(bot, 4).await?;
     expect_blocks(
         bot,
@@ -175,7 +190,7 @@ pub(super) async fn columns(bot: &mut Bot, log: &mut ObservationLog) -> Result<(
     record(
         log,
         bot,
-        "columns.cane_requires_water",
+        "columns.cane_requires_water_after_shape_update",
         &[cane, cane.above(1), cane.above(2)],
     )
 }

@@ -18,7 +18,7 @@ use ferraloom_parity::{
     protocol::play::{BlockHitResult, InteractionHand},
 };
 use ferraloom_util::{BlockPos, Direction};
-use level_support::{block, command, expect_blocks, freeze, options, step};
+use level_support::{block, command, expect_blocks as wait_for_blocks, freeze, options, step};
 
 const Y: i32 = -60;
 fn at(x: i32, z: i32) -> BlockPos {
@@ -34,6 +34,16 @@ fn block_argument(state: BlockState) -> String {
         .collect::<Vec<_>>()
         .join(",");
     format!("{}[{properties}]", state.block().name())
+}
+async fn expect_blocks(bot: &mut Bot, expected: &[(BlockPos, BlockState)]) -> Result<()> {
+    wait_for_blocks(bot, expected).await.with_context(|| {
+        let snapshot = bot.snapshot();
+        let observed: Vec<_> = expected
+            .iter()
+            .map(|(pos, _)| (*pos, snapshot.block(*pos)))
+            .collect();
+        format!("expected {expected:?}; observed {observed:?}")
+    })
 }
 async fn put(bot: &mut Bot, pos: BlockPos, state: BlockState) -> Result<()> {
     if block(bot, pos)? == state {
@@ -158,43 +168,41 @@ async fn plants(session: &mut Session) -> Result<ObservationLog> {
     command(bot, "time set noon", "commands.time.set").await?;
     command(bot, "weather clear 100000", "commands.weather.set.clear").await?;
     let mut log = ObservationLog::default();
-    support::survival(bot, &mut log)
-        .await
-        .context("support updates")?;
-    support::leaves(bot, &mut log)
-        .await
-        .context("leaf distance and decay")?;
-    growth::crops(bot, &mut log)
-        .await
-        .context("crop growth and light")?;
-    soil::spreading(bot, &mut log)
-        .await
-        .context("grass and mycelium")?;
-    growth::columns(bot, &mut log)
-        .await
-        .context("bamboo, cactus and cane")?;
-    soil::farmland(bot, &mut log)
-        .await
-        .context("farmland hydration and trampling")?;
-    uses::bonemeal(bot, &mut log)
-        .await
-        .context("bone meal and saplings")?;
-    uses::dripleaf(bot, &mut log)
-        .await
-        .context("dripleaf contact and power")?;
-    growth::vines_and_kelp(bot, &mut log)
-        .await
-        .context("vines and kelp")?;
-    weather::melting(bot, &mut log)
-        .await
-        .context("snow and ice melting")?;
-    weather::precipitation(bot, &mut log)
-        .await
-        .context("snow and ice formation")?;
+    // Every group resets its arena. Collect independent failures so a native
+    // preflight reports all fixture errors in this one server lifetime.
+    let mut failures = Vec::new();
+    macro_rules! group {
+        ($label:literal, $run:path) => {
+            if let Err(error) = $run(bot, &mut log).await {
+                failures.push(format!("{}: {error:#}", $label));
+                if bot.snapshot().error.is_some() {
+                    anyhow::bail!("plant connection failed: {}", failures.join("\n"));
+                }
+            }
+        };
+    }
+    group!("support updates", support::survival);
+    group!("leaf distance and decay", support::leaves);
+    group!("crop growth and light", growth::crops);
+    group!("grass and mycelium", soil::spreading);
+    group!("bamboo, cactus and cane", growth::columns);
+    group!("farmland hydration and trampling", soil::farmland);
+    group!("bone meal and saplings", uses::bonemeal);
+    group!("dripleaf contact and power", uses::dripleaf);
+    group!("vines and kelp", growth::vines_and_kelp);
+    group!("snow and ice melting", weather::melting);
+    group!("snow and ice formation", weather::precipitation);
     command(bot, "save-all flush", "commands.save.success").await?;
+    ensure!(
+        failures.is_empty(),
+        "plant groups failed:\n{}",
+        failures.join("\n")
+    );
     Ok(log)
 }
 
+// Native preflight: FERRALOOM_PARITY_SIDE=vanilla cargo test -p ferraloom-parity
+// --test plants_live --locked -- --ignored --nocapture. Use both for Strict parity.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[ignore = "requires builder vanilla/JDK and released live item/block integration"]
 async fn parity_live_plant_mechanics() -> Result<()> {
