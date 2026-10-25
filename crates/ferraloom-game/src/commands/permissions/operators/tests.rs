@@ -58,11 +58,7 @@ fn dedicated_permissions_entry_defaults_and_independent_abilities_match_java() {
             assert_eq!(serde_json::to_value(&entry).unwrap(), vector.saved.unwrap());
             entries.push(entry);
         }
-        let shared = crate::ServerShared {
-            ops: ServerOpList::from_entries(entries),
-            ..Default::default()
-        };
-        level.install_shared(Box::new(shared));
+        level.shared_mut().unwrap().ops = ServerOpList::from_entries(entries);
         let permissions = level.player_permissions(entity).unwrap();
         assert_eq!(
             (0..5)

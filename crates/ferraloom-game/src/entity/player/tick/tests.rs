@@ -10,9 +10,7 @@ use ferraloom_util::{Uuid, Vec3};
 const VECTORS: &str = include_str!("../../../../tests/java/entity/vectors.tsv");
 fn add_player(level: &mut Level, position: Vec3, mode: GameType) -> EntityRef {
     if level.shared().is_err() {
-        if level.shared().is_err() {
-            level.install_shared(Box::default());
-        }
+        level.install_shared(Box::default());
     }
     let entity = level.next_entity_ref();
     let player = ServerPlayer::new(
