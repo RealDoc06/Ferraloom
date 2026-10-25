@@ -54,6 +54,20 @@ pub enum AcquireProgress {
     Idle,
 }
 
+/// Native main-owner operation. Distance propagation is separate from polling
+/// so a loading request applies tickets before looking up its status future.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AcquireTaskKind {
+    DistanceUpdates,
+    Poll,
+}
+
+/// Owned main-executor task. The driver's borrow ends before this receives
+/// mutable Level; callbacks can still reach the installed driver and queues.
+pub trait MainThreadAcquireTask: Send {
+    fn run(self: Box<Self>, level: &mut Level) -> Result<AcquireProgress, LevelError>;
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AcquireFailure {
     DriverUnavailable,
@@ -67,12 +81,13 @@ pub enum AcquireFailure {
     Lighting,
     Publication,
     ReentrantFull,
+    NotOwner,
 }
 
 /// Cold runtime seam for ServerChunkCache#getChunk/getChunkFutureMainThread.
 ///
-/// Methods receive no mutable Level. Publication uses disjoint shared stores;
-/// no method may cast a suspended Level read into a mutable borrow. Polling must
+/// Driver methods receive shared Level and may return owned mutable tasks.
+/// No method may cast a suspended Level read into a mutable borrow. Polling must
 /// keep reentrant completions reachable, never evict, and never advance a tick.
 /// Worker failure/cancellation returns an error instead of an endless Pending.
 pub trait AcquireDriver: Send + Any {
@@ -111,6 +126,15 @@ pub trait AcquireDriver: Send + Any {
     /// when DistanceUpdates is returned. Mutating ready tasks stay queued for
     /// the next exclusive slot and are never run through this shared borrow.
     fn poll_acquisition_step(&self, level: &Level) -> Result<AcquireProgress, LevelError>;
+    /// Select mutable publication before executing a stream. A driver with no
+    /// mutable callbacks may use the shared implementation by returning None.
+    fn main_thread_acquisition_task(
+        &self,
+        _level: &Level,
+        _kind: AcquireTaskKind,
+    ) -> Result<Option<Box<dyn MainThreadAcquireTask>>, LevelError> {
+        Ok(None)
+    }
     /// Wakeable wait, only after an idle poll and a second completion check.
     fn wait_for_progress(&self) -> Result<(), LevelError>;
     /// GenerationChunkHolder#getChunkIfPresent checks highestAllowedStatus,
@@ -201,17 +225,7 @@ impl Level {
         status: ChunkStatus,
         load_or_generate: bool,
     ) -> Result<Option<ChunkReference>, LevelError> {
-        if status == ChunkStatus::Full
-            && self
-                .chunk(pos)
-                .is_some_and(|chunk| !chunk.full_publication_complete())
-        {
-            return Err(LevelError::ChunkAcquisition(
-                pos,
-                status,
-                AcquireFailure::ReentrantFull,
-            ));
-        }
+        self.check_reentrant_full(pos, status)?;
         let result = if let Some(driver) = &self.acquire_driver {
             self.acquisition
                 .get_chunk(driver.as_ref(), self, pos, status, load_or_generate)
@@ -228,6 +242,35 @@ impl Level {
         } else {
             Ok(None)
         }?;
+        self.check_reentrant_full(pos, status)?;
+        Ok(result)
+    }
+
+    /// ServerChunkCache#getChunk when its owner has exclusive Level access.
+    /// Uses the same caller policy as shared reads; main tasks retain the
+    /// mutable capability instead of erasing it before entity publication.
+    pub fn get_chunk_mut(
+        &mut self,
+        pos: ChunkPos,
+        status: ChunkStatus,
+        load_or_generate: bool,
+    ) -> Result<Option<ChunkReference>, LevelError> {
+        if self.acquire_driver.is_none() {
+            return self.get_chunk(pos, status, load_or_generate);
+        }
+        self.check_reentrant_full(pos, status)?;
+        let result = AcquisitionAccess::Mutable(self).get_chunk(pos, status, load_or_generate)?;
+        self.check_reentrant_full(pos, status)?;
+        Ok(result)
+    }
+
+    /// One managed poll of already requested work. SPAWN_SEARCH uses this after
+    /// installing its own ticket/future: no cache lookup, UNKNOWN or new request.
+    pub fn poll_chunk_acquisition_mut(&mut self) -> Result<AcquireProgress, LevelError> {
+        self.run_chunk_acquisition_task(AcquireTaskKind::Poll)
+    }
+
+    fn check_reentrant_full(&self, pos: ChunkPos, status: ChunkStatus) -> Result<(), LevelError> {
         if status == ChunkStatus::Full
             && self
                 .chunk(pos)
@@ -239,7 +282,39 @@ impl Level {
                 AcquireFailure::ReentrantFull,
             ));
         }
-        Ok(result)
+        Ok(())
+    }
+
+    fn run_chunk_acquisition_task(
+        &mut self,
+        kind: AcquireTaskKind,
+    ) -> Result<AcquireProgress, LevelError> {
+        let driver = self
+            .acquire_driver
+            .as_deref()
+            .ok_or(LevelError::ChunkAcquisition(
+                ChunkPos::ZERO,
+                ChunkStatus::Full,
+                AcquireFailure::DriverUnavailable,
+            ))?;
+        if !driver.is_owner_thread() {
+            return Err(LevelError::ChunkAcquisition(
+                ChunkPos::ZERO,
+                ChunkStatus::Full,
+                AcquireFailure::NotOwner,
+            ));
+        }
+        let task = driver.main_thread_acquisition_task(self, kind)?;
+        let progress = if let Some(task) = task {
+            task.run(self)?
+        } else {
+            let driver = self.acquire_driver.as_deref().unwrap();
+            shared_acquisition_step(driver, self, kind)?
+        };
+        if progress == AcquireProgress::DistanceUpdates {
+            self.clear_chunk_source_cache();
+        }
+        Ok(progress)
     }
 
     pub fn get_full_chunk(&self, pos: ChunkPos) -> Result<&super::chunk::LevelChunk, LevelError> {
@@ -359,6 +434,169 @@ impl Level {
     }
 }
 
+fn shared_acquisition_step(
+    driver: &dyn AcquireDriver,
+    level: &Level,
+    kind: AcquireTaskKind,
+) -> Result<AcquireProgress, LevelError> {
+    match kind {
+        AcquireTaskKind::DistanceUpdates => {
+            driver.run_distance_manager_updates(level).map(|changed| {
+                if changed {
+                    AcquireProgress::DistanceUpdates
+                } else {
+                    AcquireProgress::Idle
+                }
+            })
+        }
+        AcquireTaskKind::Poll => driver.poll_acquisition_step(level),
+    }
+}
+
+/// Capability differs only at task execution. Each read returns owned state,
+/// ending cache/driver borrows before a mutable task or nested callback runs.
+enum AcquisitionAccess<'a> {
+    Shared {
+        acquisition: &'a ChunkAcquisition,
+        driver: &'a dyn AcquireDriver,
+        level: &'a Level,
+    },
+    Mutable(&'a mut Level),
+}
+impl AcquisitionAccess<'_> {
+    fn read<T>(&self, read: impl FnOnce(&ChunkAcquisition, &dyn AcquireDriver, &Level) -> T) -> T {
+        match self {
+            Self::Shared {
+                acquisition,
+                driver,
+                level,
+            } => read(acquisition, *driver, level),
+            Self::Mutable(level) => read(
+                &level.acquisition,
+                level.acquire_driver.as_deref().unwrap(),
+                level,
+            ),
+        }
+    }
+    fn poll(&mut self, kind: AcquireTaskKind) -> Result<AcquireProgress, LevelError> {
+        match self {
+            Self::Shared { driver, level, .. } => shared_acquisition_step(*driver, level, kind),
+            Self::Mutable(level) => level.run_chunk_acquisition_task(kind),
+        }
+    }
+    fn get_chunk(
+        &mut self,
+        pos: ChunkPos,
+        status: ChunkStatus,
+        load_or_generate: bool,
+    ) -> Result<Option<ChunkReference>, LevelError> {
+        if !self.read(|_, driver, _| driver.is_owner_thread()) {
+            let chunk =
+                self.read(|_, driver, _| driver.acquire_on_owner(pos, status, load_or_generate))?;
+            if load_or_generate && chunk.is_none() {
+                return Err(LevelError::ChunkAcquisition(
+                    pos,
+                    status,
+                    AcquireFailure::MissingResult,
+                ));
+            }
+            return Ok(chunk);
+        }
+        let cached = self.read(|acquisition, _, _| {
+            acquisition
+                .cache
+                .get()
+                .into_iter()
+                .flatten()
+                .find(|entry| {
+                    entry.pos == pos
+                        && entry.status == status
+                        && (entry.chunk.is_some() || !load_or_generate)
+                })
+                .map(|entry| entry.chunk)
+        });
+        if let Some(chunk) = cached {
+            return Ok(chunk);
+        }
+        if load_or_generate {
+            self.read(|_, driver, _| driver.add_unknown_ticket(pos, status))?;
+            if !self.read(|_, driver, _| ChunkAcquisition::eligible(driver, pos, status)) {
+                if self.poll(AcquireTaskKind::DistanceUpdates)? == AcquireProgress::DistanceUpdates
+                {
+                    self.read(|acquisition, _, _| acquisition.clear_cache());
+                }
+                if !self.read(|_, driver, _| ChunkAcquisition::eligible(driver, pos, status)) {
+                    return Err(LevelError::ChunkAcquisition(
+                        pos,
+                        status,
+                        AcquireFailure::MissingHolder,
+                    ));
+                }
+            }
+        }
+        if !self.read(|_, driver, _| ChunkAcquisition::eligible(driver, pos, status)) {
+            return self.finish(pos, status, load_or_generate, None, true);
+        }
+        let handle = self.read(|_, driver, level| driver.request_status(level, pos, status))?;
+        if handle.pos != pos || handle.status != status {
+            return Err(LevelError::ChunkAcquisition(
+                pos,
+                status,
+                AcquireFailure::InvalidHandle,
+            ));
+        }
+        let chunk = loop {
+            if let AcquireResult::Complete(chunk) =
+                self.read(|_, driver, _| driver.acquisition_result(handle))?
+            {
+                break chunk;
+            }
+            match self.poll(AcquireTaskKind::Poll)? {
+                AcquireProgress::DistanceUpdates => {
+                    self.read(|acquisition, _, _| acquisition.clear_cache())
+                }
+                AcquireProgress::Task => (),
+                AcquireProgress::Idle => {
+                    if let AcquireResult::Complete(chunk) =
+                        self.read(|_, driver, _| driver.acquisition_result(handle))?
+                    {
+                        break chunk;
+                    }
+                    self.read(|_, driver, _| driver.wait_for_progress())?;
+                }
+            }
+        };
+        self.finish(pos, status, load_or_generate, chunk, true)
+    }
+    fn finish(
+        &self,
+        pos: ChunkPos,
+        status: ChunkStatus,
+        load_or_generate: bool,
+        chunk: Option<ChunkReference>,
+        cache: bool,
+    ) -> Result<Option<ChunkReference>, LevelError> {
+        if chunk.is_some_and(|chunk| chunk.pos != pos) {
+            return Err(LevelError::ChunkAcquisition(
+                pos,
+                status,
+                AcquireFailure::InvalidHandle,
+            ));
+        }
+        if chunk.is_none() && load_or_generate {
+            return Err(LevelError::ChunkAcquisition(
+                pos,
+                status,
+                AcquireFailure::MissingResult,
+            ));
+        }
+        if cache {
+            self.read(|acquisition, _, _| acquisition.cache(pos, status, chunk));
+        }
+        Ok(chunk)
+    }
+}
+
 #[derive(Clone, Copy)]
 struct CacheEntry {
     pos: ChunkPos,
@@ -403,83 +641,12 @@ impl ChunkAcquisition {
         status: ChunkStatus,
         load_or_generate: bool,
     ) -> Result<Option<ChunkReference>, LevelError> {
-        if !driver.is_owner_thread() {
-            let chunk = driver.acquire_on_owner(pos, status, load_or_generate)?;
-            if load_or_generate && chunk.is_none() {
-                return Err(LevelError::ChunkAcquisition(
-                    pos,
-                    status,
-                    AcquireFailure::MissingResult,
-                ));
-            }
-            return Ok(chunk);
+        AcquisitionAccess::Shared {
+            acquisition: self,
+            driver,
+            level,
         }
-        for entry in self.cache.get().into_iter().flatten() {
-            if entry.pos == pos
-                && entry.status == status
-                && (entry.chunk.is_some() || !load_or_generate)
-            {
-                return Ok(entry.chunk);
-            }
-        }
-        if load_or_generate {
-            driver.add_unknown_ticket(pos, status)?;
-            if !Self::eligible(driver, pos, status) {
-                if driver.run_distance_manager_updates(level)? {
-                    self.clear_cache();
-                }
-                if !Self::eligible(driver, pos, status) {
-                    return Err(LevelError::ChunkAcquisition(
-                        pos,
-                        status,
-                        AcquireFailure::MissingHolder,
-                    ));
-                }
-            }
-        }
-        if !Self::eligible(driver, pos, status) {
-            self.cache(pos, status, None);
-            return Ok(None);
-        }
-        let handle = driver.request_status(level, pos, status)?;
-        if handle.pos != pos || handle.status != status {
-            return Err(LevelError::ChunkAcquisition(
-                pos,
-                status,
-                AcquireFailure::InvalidHandle,
-            ));
-        }
-        let chunk = loop {
-            if let AcquireResult::Complete(chunk) = driver.acquisition_result(handle)? {
-                break chunk;
-            }
-            match driver.poll_acquisition_step(level)? {
-                AcquireProgress::DistanceUpdates => self.clear_cache(),
-                AcquireProgress::Task => {}
-                AcquireProgress::Idle => {
-                    if let AcquireResult::Complete(chunk) = driver.acquisition_result(handle)? {
-                        break chunk;
-                    }
-                    driver.wait_for_progress()?;
-                }
-            }
-        };
-        if chunk.is_some_and(|chunk| chunk.pos != pos) {
-            return Err(LevelError::ChunkAcquisition(
-                pos,
-                status,
-                AcquireFailure::InvalidHandle,
-            ));
-        }
-        if chunk.is_none() && load_or_generate {
-            return Err(LevelError::ChunkAcquisition(
-                pos,
-                status,
-                AcquireFailure::MissingResult,
-            ));
-        }
-        self.cache(pos, status, chunk);
-        Ok(chunk)
+        .get_chunk(pos, status, load_or_generate)
     }
 
     /// Port of ServerChunkCache#getChunkNow: no ticket, generation or wait.
