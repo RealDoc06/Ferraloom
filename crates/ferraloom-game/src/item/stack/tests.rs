@@ -297,11 +297,16 @@ fn native_block_item_custom_data_merges_and_retains_the_block_entity_receiver() 
                     3,
                     DataComponentPatch {
                         added: vec![DataComponent::BlockEntityData(TypedBlockEntityData {
-                            entity_type: if f[2] == "2" {
-                                BlockEntityType::SIGN
-                            } else {
-                                entity_type
-                            },
+                            entity_type: ferraloom_protocol::component::BlockEntityType(
+                                if f[2] == "2" {
+                                    BlockEntityType::SIGN
+                                } else {
+                                    entity_type
+                                }
+                                .name()
+                                .parse()
+                                .unwrap(),
+                            ),
                             tag: CustomData(Tag::Compound(tag)),
                         })],
                         removed: Vec::new(),

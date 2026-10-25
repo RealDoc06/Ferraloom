@@ -154,7 +154,7 @@ pub fn grow_water_plant(
                 grow = random_tag_state(level, BlockTags::WALL_CORALS)?.unwrap_or(grow);
                 if grow.get(p::FACING).is_some() {
                     grow = grow
-                        .with(p::FACING, clicked_face.unwrap())
+                        .with(p::FACING, horizontal_facing(clicked_face.unwrap()))
                         .expect("horizontal coral face");
                 }
             } else if level.random().next_int_bound(4) == 0 {
@@ -171,7 +171,9 @@ pub fn grow_water_plant(
             while !level.can_survive(grow, test)? && retries < 4 {
                 let direction =
                     Plane::Horizontal.faces()[level.random().next_int_bound(4) as usize];
-                grow = grow.with(p::FACING, direction).expect("wall coral face");
+                grow = grow
+                    .with(p::FACING, horizontal_facing(direction))
+                    .expect("wall coral face");
                 retries += 1;
             }
         }
@@ -207,3 +209,13 @@ pub fn grow_water_plant(
 
 #[cfg(test)]
 mod tests;
+
+fn horizontal_facing(direction: Direction) -> p::Facing {
+    match direction {
+        Direction::North => p::Facing::North,
+        Direction::South => p::Facing::South,
+        Direction::West => p::Facing::West,
+        Direction::East => p::Facing::East,
+        _ => unreachable!("wall coral placement selects horizontal directions"),
+    }
+}

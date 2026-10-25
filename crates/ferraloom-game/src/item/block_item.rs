@@ -142,17 +142,27 @@ pub fn apply_block_state(
             continue;
         }
         if state.has_integer_property(name) {
-            if let Some(value) = crate::predicates::block::java_integer(value)
+            if let Some(value) = crate::predicates::java_integer(value)
                 && let Ok(modified) = state.with_integer_property(name, value)
             {
                 state = modified;
             }
         } else {
+            let Some((property, _)) = state.properties().find(|(property, _)| *property == name)
+            else {
+                continue;
+            };
+            let Some(value) = state.property_values(property).and_then(|values| {
+                values
+                    .iter()
+                    .copied()
+                    .find(|candidate| *candidate == value.as_str())
+            }) else {
+                continue;
+            };
             state = BlockState::from_properties(
                 state.block(),
-                state
-                    .properties()
-                    .chain(std::iter::once((name.as_str(), value.as_str()))),
+                state.properties().chain(std::iter::once((property, value))),
             )
             .expect("registered block state");
         }
@@ -202,7 +212,7 @@ pub fn update_custom_block_entity_tag(
         return Ok(false);
     };
     let kind = level.block_entity_state(entity)?.data().kind;
-    if kind != custom.entity_type {
+    if kind.name() != custom.entity_type.0.as_str() {
         return Ok(false);
     }
     if kind.only_op_can_set_nbt()

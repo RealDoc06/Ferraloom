@@ -400,7 +400,9 @@ pub(super) fn transform_block(
             && old.block().is_instance_of(BlockClass::CopperChestBlock)
             && old.get(p::TYPE_).is_some_and(|v| v.as_str() != "single")
         {
-            let facing = old.get(p::FACING).expect("copper chest facing");
+            let facing =
+                Direction::by_name(old.get(p::FACING).expect("copper chest facing").as_str())
+                    .expect("registered copper chest direction");
             let direction = if old.get(p::TYPE_).unwrap().as_str() == "left" {
                 facing.clockwise()
             } else {
