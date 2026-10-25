@@ -17,6 +17,7 @@ pub(crate) struct PromotionContinuation {
     pub(crate) stage: Option<ferraloom_game::level::publication::FullChunkStage>,
     pub(crate) finalized: bool,
     pub(crate) post_load_active: bool,
+    pub(crate) promotion_active: bool,
     pub(crate) publication_failure:
         Option<Box<ferraloom_game::level::publication::ChunkPublicationError>>,
     pub(crate) finalization_failure:
@@ -30,7 +31,7 @@ impl MinecraftServer {
         self.update_chunk_tickets()?;
         self.level
             .level
-            .get_chunk(position, ChunkStatus::Full, true)
+            .get_chunk_mut(position, ChunkStatus::Full, true)
             .map_err(game_error)?
             .context("required FULL acquisition returned unloaded")?;
         Ok(())

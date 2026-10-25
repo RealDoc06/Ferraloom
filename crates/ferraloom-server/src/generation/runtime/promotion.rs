@@ -1,6 +1,6 @@
 //! ChunkStatusTasks#full's main-owner continuation. No backend guard crosses a
 //! Level callback; nested polls can execute later, still-reachable work.
-use super::GenerationRuntime;
+use super::{GenerationAccess, GenerationRuntime};
 use crate::{
     generation::GenerationIdentity,
     server::generation_completion::PromotionContinuation,
@@ -50,6 +50,7 @@ impl GenerationRuntime {
                 stage: None,
                 finalized: false,
                 post_load_active: false,
+                promotion_active: false,
                 publication_failure: None,
                 finalization_failure: None,
             },
@@ -143,6 +144,7 @@ impl GenerationRuntime {
             .iter()
             .find_map(|(&task, continuation)| {
                 (!continuation.complete
+                    && !continuation.promotion_active
                     && !continuation.post_load_active
                     && continuation.center_light_installed
                     && continuation.entity_failure.is_none()
@@ -152,12 +154,32 @@ impl GenerationRuntime {
             })
     }
 
-    pub(super) fn resume_full_promotion(&self, level: &Level, task: u64) -> Result<()> {
-        self.jobs.borrow_mut().begin_integration(task);
-        let result = self.run_full_promotion(level, task);
+    pub(super) fn resume_full_promotion_with_access(
+        access: &mut GenerationAccess<'_>,
+        task: u64,
+    ) -> Result<()> {
+        access.read(|runtime, _| -> Result<()> {
+            let mut world = runtime.world.borrow_mut();
+            let continuation = world.full_promotions.get_mut(&task).unwrap();
+            ensure!(!continuation.promotion_active, "recursive FULL task");
+            continuation.promotion_active = true;
+            runtime.jobs.borrow_mut().begin_integration(task);
+            Ok(())
+        })?;
+        let result = Self::run_full_promotion_with_access(access, task);
+        access.read(|runtime, _| runtime.finish_full_promotion_step(task, result.is_err()));
+        result
+    }
+    fn finish_full_promotion_step(&self, task: u64, failed: bool) {
+        self.world
+            .borrow_mut()
+            .full_promotions
+            .get_mut(&task)
+            .unwrap()
+            .promotion_active = false;
         if self.world.borrow().full_promotions[&task].complete {
             self.jobs.borrow_mut().complete_integration(task);
-        } else if result.is_err() {
+        } else if failed {
             let identity = self.world.borrow().full_promotions[&task].identity;
             if let Some(holder) = self
                 .chunks
@@ -173,7 +195,6 @@ impl GenerationRuntime {
             self.jobs.borrow_mut().suspend_integration(task);
         }
         self.release_finished_jobs();
-        result
     }
 
     pub(super) fn stage_full_promotion(
@@ -264,7 +285,10 @@ impl GenerationRuntime {
         Ok(identity)
     }
 
-    pub(super) fn run_post_load(&self, level: &Level, task: u64) -> Result<()> {
+    fn take_post_load(
+        &self,
+        task: u64,
+    ) -> Result<(GenerationIdentity, Option<Vec<ferraloom_nbt::CompoundTag>>)> {
         let identity = self.world.borrow().full_promotions[&task].identity;
         let entities = {
             let mut world = self.world.borrow_mut();
@@ -289,62 +313,79 @@ impl GenerationRuntime {
                 )
             }
         };
-        if let Some(entities) = entities {
-            // The staged center and every later queued result remain reachable
-            // during factories, callbacks, and nested lower-status acquisition.
-            let result = level.add_worldgen_chunk_entities_shared(identity.pos, entities);
-            let mut world = self.world.borrow_mut();
-            let continuation = world.full_promotions.get_mut(&task).unwrap();
-            continuation.post_load_active = false;
-            match result {
-                Ok(()) => {
-                    continuation.entities_registered = true;
-                    if let Some(disk) = world.saved.get_mut(&identity.pos.pack()) {
-                        disk.entities = None;
-                    }
+        Ok((identity, entities))
+    }
+    fn record_post_load(
+        &self,
+        task: u64,
+        result: Result<(), ferraloom_game::level::entity::WorldgenEntityLoadError>,
+    ) -> Result<()> {
+        let identity = self.world.borrow().full_promotions[&task].identity;
+        let mut world = self.world.borrow_mut();
+        let continuation = world.full_promotions.get_mut(&task).unwrap();
+        continuation.post_load_active = false;
+        match result {
+            Ok(()) => {
+                continuation.entities_registered = true;
+                if let Some(disk) = world.saved.get_mut(&identity.pos.pack()) {
+                    disk.entities = None;
                 }
-                Err(error) => {
-                    let message = error.to_string();
-                    let original = error.entities.clone();
-                    continuation.input.as_mut().unwrap().disk.entities = Some(original.clone());
-                    continuation.entity_failure = Some(error);
-                    if let Some(disk) = world.saved.get_mut(&identity.pos.pack()) {
-                        disk.entities = Some(original);
-                    }
-                    anyhow::bail!(
-                        "{message}; owned entity load error retained, no automatic replay"
-                    );
+            }
+            Err(error) => {
+                let message = error.to_string();
+                let original = error.entities.clone();
+                continuation.input.as_mut().unwrap().disk.entities = Some(original.clone());
+                continuation.entity_failure = Some(error);
+                if let Some(disk) = world.saved.get_mut(&identity.pos.pack()) {
+                    disk.entities = Some(original);
                 }
+                anyhow::bail!("{message}; owned entity load error retained, no automatic replay");
             }
         }
         Ok(())
     }
+    pub(super) fn run_post_load_with_access(
+        access: &mut GenerationAccess<'_>,
+        task: u64,
+    ) -> Result<()> {
+        let (identity, entities) = access.read(|runtime, _| runtime.take_post_load(task))?;
+        if let Some(entities) = entities {
+            // Capability is already selected. End every runtime/guard borrow
+            // before constructors, tracking callbacks or nested chunk reads.
+            let result = access.post_load(identity.pos, entities);
+            access.read(|runtime, _| runtime.record_post_load(task, result))?;
+        }
+        Ok(())
+    }
 
-    fn run_full_promotion(&self, level: &Level, task: u64) -> Result<()> {
-        let identity = self.stage_full_promotion(level, task)?;
-        self.run_post_load(level, task)?;
-        self.publish_structure_updates(level)?;
-        let (token, finalized) = {
-            let world = self.world.borrow();
+    fn run_full_promotion_with_access(access: &mut GenerationAccess<'_>, task: u64) -> Result<()> {
+        let identity = access.read(|runtime, level| runtime.stage_full_promotion(level, task))?;
+        Self::run_post_load_with_access(access, task)?;
+        access.read(|runtime, level| runtime.publish_structure_updates(level))?;
+        let (token, finalized) = access.read(|runtime, _| {
+            let world = runtime.world.borrow();
             let continuation = &world.full_promotions[&task];
             ensure!(
                 continuation.entities_registered,
                 "FULL finalization before postLoad"
             );
-            (continuation.stage.unwrap(), continuation.finalized)
-        };
+            Ok::<_, anyhow::Error>((continuation.stage.unwrap(), continuation.finalized))
+        })?;
         let reference = if finalized {
             token.reference()
         } else {
-            match level.finalize_full_chunk(token) {
+            match access.level().finalize_full_chunk(token) {
                 Ok(reference) => reference,
                 Err(error) => {
-                    self.world
-                        .borrow_mut()
-                        .full_promotions
-                        .get_mut(&task)
-                        .unwrap()
-                        .finalization_failure = Some(error);
+                    access.read(|runtime, _| {
+                        runtime
+                            .world
+                            .borrow_mut()
+                            .full_promotions
+                            .get_mut(&task)
+                            .unwrap()
+                            .finalization_failure = Some(error);
+                    });
                     anyhow::bail!("FULL finalization failed; canonical stage/checkpoint retained");
                 }
             }
@@ -353,45 +394,48 @@ impl GenerationRuntime {
             reference.kind == ChunkKind::Full && reference == token.reference(),
             "FULL finalization changed its staged identity"
         );
-        // World::open installs the spawn tag before returning, so absent-spawn
-        // refinement is already resolved before any FULL promotion.
-        {
-            let mut world = self.world.borrow_mut();
-            let continuation = world.full_promotions.get_mut(&task).unwrap();
-            continuation.finalized = true;
-            continuation.finalization_failure = None;
-        }
-        {
-            let mut chunks = self.chunks.borrow_mut();
-            let holder = chunks
-                .holders
-                .get_mut(&identity.pos.pack())
-                .context("missing finalized holder")?;
-            ensure!(
-                holder.epoch == identity.holder_epoch,
-                "finalized holder recreated"
-            );
-            if let Some(completed) = holder
-                .generation
-                .chunk_if_present_unchecked(ChunkStatus::Full)
+        access.read(|runtime, _| -> Result<()> {
+            // World::open installs the spawn tag before returning, so absent-spawn
+            // refinement is already resolved before any FULL promotion.
             {
-                ensure!(
-                    completed == reference,
-                    "FULL future changed its staged identity"
-                );
-            } else {
-                holder.generation.acquire_status_bump(ChunkStatus::Full);
-                holder.generation.complete(ChunkStatus::Full, reference);
+                let mut world = runtime.world.borrow_mut();
+                let continuation = world.full_promotions.get_mut(&task).unwrap();
+                continuation.finalized = true;
+                continuation.finalization_failure = None;
             }
-        }
-        {
-            let mut world = self.world.borrow_mut();
-            let continuation = world.full_promotions.get_mut(&task).unwrap();
-            continuation.complete = true;
-            continuation.input = None;
-            world.light_ready.insert(identity.pos);
-        }
-        self.confirm_ready_ranges(level)
+            {
+                let mut chunks = runtime.chunks.borrow_mut();
+                let holder = chunks
+                    .holders
+                    .get_mut(&identity.pos.pack())
+                    .context("missing finalized holder")?;
+                ensure!(
+                    holder.epoch == identity.holder_epoch,
+                    "finalized holder recreated"
+                );
+                if let Some(completed) = holder
+                    .generation
+                    .chunk_if_present_unchecked(ChunkStatus::Full)
+                {
+                    ensure!(
+                        completed == reference,
+                        "FULL future changed its staged identity"
+                    );
+                } else {
+                    holder.generation.acquire_status_bump(ChunkStatus::Full);
+                    holder.generation.complete(ChunkStatus::Full, reference);
+                }
+            }
+            {
+                let mut world = runtime.world.borrow_mut();
+                let continuation = world.full_promotions.get_mut(&task).unwrap();
+                continuation.complete = true;
+                continuation.input = None;
+                world.light_ready.insert(identity.pos);
+            }
+            Ok(())
+        })?;
+        Self::confirm_ready_ranges_with_access(access)
             .map_err(|error| anyhow::anyhow!("{error:?}"))?;
         Ok(())
     }

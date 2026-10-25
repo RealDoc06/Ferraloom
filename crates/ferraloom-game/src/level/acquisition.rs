@@ -535,7 +535,7 @@ impl AcquisitionAccess<'_> {
             }
         }
         if !self.read(|_, driver, _| ChunkAcquisition::eligible(driver, pos, status)) {
-            return self.finish(pos, status, load_or_generate, None, true);
+            return self.finish(pos, status, load_or_generate, None);
         }
         let handle = self.read(|_, driver, level| driver.request_status(level, pos, status))?;
         if handle.pos != pos || handle.status != status {
@@ -566,7 +566,7 @@ impl AcquisitionAccess<'_> {
                 }
             }
         };
-        self.finish(pos, status, load_or_generate, chunk, true)
+        self.finish(pos, status, load_or_generate, chunk)
     }
     fn finish(
         &self,
@@ -574,7 +574,6 @@ impl AcquisitionAccess<'_> {
         status: ChunkStatus,
         load_or_generate: bool,
         chunk: Option<ChunkReference>,
-        cache: bool,
     ) -> Result<Option<ChunkReference>, LevelError> {
         if chunk.is_some_and(|chunk| chunk.pos != pos) {
             return Err(LevelError::ChunkAcquisition(
@@ -590,9 +589,7 @@ impl AcquisitionAccess<'_> {
                 AcquireFailure::MissingResult,
             ));
         }
-        if cache {
-            self.read(|acquisition, _, _| acquisition.cache(pos, status, chunk));
-        }
+        self.read(|acquisition, _, _| acquisition.cache(pos, status, chunk));
         Ok(chunk)
     }
 }
