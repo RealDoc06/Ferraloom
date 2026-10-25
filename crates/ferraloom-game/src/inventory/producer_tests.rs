@@ -17,7 +17,7 @@ use crate::{
 };
 use ferraloom_data::{Block, Item};
 use ferraloom_protocol::play::{ContainerInput, clientbound::Packet};
-use ferraloom_util::{BlockPos, Uuid, Vec3};
+use ferraloom_util::{BlockPos, Uuid, Vec3, random::RandomSource};
 use serde_json::json;
 use std::sync::Arc;
 

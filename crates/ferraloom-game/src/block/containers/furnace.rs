@@ -12,6 +12,7 @@ use ferraloom_protocol::{
     Identifier,
     component::{ComponentTypeId, DataComponentMap},
 };
+use ferraloom_util::random::RandomSource;
 
 /// Recipe keys are interned identities in vanilla's Reference2IntOpenHashMap;
 /// deterministic insertion order is the accepted identity-hash variation.
