@@ -60,6 +60,24 @@ impl CreakingHeartBlockEntity {
 pub(super) struct CreakingHeartBehavior;
 pub(super) static CREAKING_HEART_ENTITY: CreakingHeartBehavior = CreakingHeartBehavior;
 impl BlockEntity for CreakingHeartBehavior {
+    /// Port of preRemoveSideEffects -> removeProtector. No recorded protector
+    /// returns immediately; resolving/tearing down one requires the mob port.
+    fn pre_remove_side_effects(
+        &self,
+        handle: BlockEntityRef,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        if level
+            .block_entity::<CreakingHeartBlockEntity>(handle)?
+            .creaking_uuid
+            .is_some()
+        {
+            return Err(LevelError::UnsupportedEntity(
+                ferraloom_data::EntityType::CREAKING,
+            ));
+        }
+        Ok(())
+    }
     fn load_additional(&self, state: &mut BlockEntityState, tag: &CompoundTag) {
         let BlockEntityState::CreakingHeart(entity) = state else {
             unreachable!()

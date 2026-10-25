@@ -210,3 +210,44 @@ fn live_heart_loading_keeps_the_original_generation_and_components() {
     );
     level.release_block_entity(original);
 }
+
+#[test]
+fn removing_a_heart_without_a_protector_is_empty_but_uuid_resolution_is_required() {
+    let state = Block::CREAKING_HEART.default_state();
+    let mut level = level(state, create(POS, state).unwrap());
+    let handle = level.block_entity_ref(POS).unwrap().unwrap();
+    let behavior = level.block_entity_state(handle).unwrap().behavior();
+    let before = level
+        .block_entity_state(handle)
+        .unwrap()
+        .save_custom_only()
+        .unwrap();
+    assert_eq!(behavior.pre_remove_side_effects(handle, &mut level), Ok(()));
+    assert_eq!(
+        level
+            .block_entity_state(handle)
+            .unwrap()
+            .save_custom_only()
+            .unwrap(),
+        before
+    );
+    assert!(level.take_effects().is_empty());
+    level
+        .block_entity_mut::<CreakingHeartBlockEntity>(handle)
+        .unwrap()
+        .creaking_uuid = Some(Uuid::new(1, 2));
+    assert_eq!(
+        behavior.pre_remove_side_effects(handle, &mut level),
+        Err(LevelError::UnsupportedEntity(
+            ferraloom_data::EntityType::CREAKING
+        ))
+    );
+    assert_eq!(
+        level
+            .block_entity::<CreakingHeartBlockEntity>(handle)
+            .unwrap()
+            .creaking_uuid,
+        Some(Uuid::new(1, 2))
+    );
+    assert!(level.take_effects().is_empty());
+}
