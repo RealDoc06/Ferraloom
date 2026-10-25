@@ -818,6 +818,7 @@ impl World {
             services.dimensions.environment.clone(),
             stem.environment.clone(),
         )?;
+        context = context.with_registry_context(services.registry_context.clone());
         context.unported_behavior = services.unported_behavior;
         let mut generation_state = GenerationState::new(Arc::new(context), light_pool);
         let mut initial_chunks = BTreeMap::new();
@@ -988,6 +989,7 @@ impl World {
                 )?),
                 self.initial_difficulty,
             )
+            .with_registry_context(self.services.registry_context.clone())
             .with_block_transformers(Arc::new(
                 ferraloom_game::item::block_transformer::BlockTransformerRegistry::load(resources)?,
             )),
@@ -2629,7 +2631,7 @@ mod generation_order_tests {
         let resources = ResourceManager::new(vec![
             ferraloom_data::datapack::Pack::vanilla_jar(Path::new(&jar)).unwrap(),
         ]);
-        let registries = RegistrySet::load(&resources).unwrap();
+        let registries = Arc::new(RegistrySet::load(&resources).unwrap());
         for generate_structures in [false, true] {
             let directory = tempfile::tempdir().unwrap();
             let mut properties = ServerProperties::from_values(Default::default());
@@ -2802,7 +2804,7 @@ mod generation_order_tests {
         let resources = ResourceManager::new(vec![
             ferraloom_data::datapack::Pack::vanilla_jar(Path::new(&jar)).unwrap(),
         ]);
-        let registries = RegistrySet::load(&resources).unwrap();
+        let registries = Arc::new(RegistrySet::load(&resources).unwrap());
         let mut properties = ServerProperties::from_values(Default::default());
         properties.set("level-type", "minecraft:debug_all_block_states");
         let directory = tempfile::tempdir().unwrap();

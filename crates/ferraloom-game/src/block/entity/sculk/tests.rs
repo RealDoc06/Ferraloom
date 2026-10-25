@@ -38,7 +38,12 @@ fn native_sculk_listener_cursor_components_and_worldgen_round_trips_match() {
         assert!(entity.has_server_ticker(Some(true)).unwrap());
         match f[0] {
             "sculk" => {
-                entity.load_with_components(&parse_compound(f[2]).unwrap());
+                entity.load_with_components(
+                    &parse_compound(f[2]).unwrap(),
+                    crate::level::LevelContext::fixture(0, 63)
+                        .registry_context()
+                        .unwrap(),
+                );
                 let saved = entity.save_with_full_metadata().unwrap();
                 assert_eq!(saved, parse_compound(f[3]).unwrap(), "{row}");
                 assert_eq!(
@@ -57,7 +62,16 @@ fn native_sculk_listener_cursor_components_and_worldgen_round_trips_match() {
                     "{row}"
                 );
                 assert_eq!(flags(&entity), f[7], "{row}");
-                let again = load_static(POS, state, &saved).unwrap().unwrap();
+                let again = load_static(
+                    POS,
+                    state,
+                    &saved,
+                    crate::level::LevelContext::fixture(0, 63)
+                        .registry_context()
+                        .unwrap(),
+                )
+                .unwrap()
+                .unwrap();
                 assert_eq!(
                     again.save_with_full_metadata().unwrap(),
                     parse_compound(f[8]).unwrap(),
@@ -117,9 +131,16 @@ fn calibrated_sensor_base_projection_and_cached_vibration_identity_are_distinct(
         )),
     });
     let saved = entity.save_with_full_metadata().unwrap();
-    let loaded = load_static(POS, Block::CALIBRATED_SCULK_SENSOR.default_state(), &saved)
-        .unwrap()
-        .unwrap();
+    let loaded = load_static(
+        POS,
+        Block::CALIBRATED_SCULK_SENSOR.default_state(),
+        &saved,
+        crate::level::LevelContext::fixture(0, 63)
+            .registry_context()
+            .unwrap(),
+    )
+    .unwrap()
+    .unwrap();
     assert!(CalibratedSculkSensorBlockEntity::view(&loaded).is_some());
     let info = SculkSensorBlockEntity::view(&loaded)
         .unwrap()

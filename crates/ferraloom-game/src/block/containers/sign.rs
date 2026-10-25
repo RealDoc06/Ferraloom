@@ -173,7 +173,12 @@ impl BlockEntity for SignBehavior {
             tag.remove(key);
         }
     }
-    fn load_additional(&self, state: &mut BlockEntityState, tag: &CompoundTag) {
+    fn load_additional(
+        &self,
+        state: &mut BlockEntityState,
+        tag: &CompoundTag,
+        _registries: &dyn ferraloom_protocol::codec::RegistryContext,
+    ) {
         let BlockEntityState::Sign(sign) = state else {
             unreachable!()
         };

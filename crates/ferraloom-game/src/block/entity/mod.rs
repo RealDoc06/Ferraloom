@@ -34,6 +34,7 @@ impl BlockEntityRef {
     /// on this generation; the existing extra component map stays untouched.
     pub fn load_custom_only(self, tag: &CompoundTag, level: &mut Level) -> Result<(), LevelError> {
         level.with_block_entity_callback(self, |level| {
+            level.context().registry_context()?;
             let behavior = level.block_entity_state(self)?.behavior();
             behavior.load_additional_live(self, tag, level)
         })
@@ -46,6 +47,7 @@ impl BlockEntityRef {
         level: &mut Level,
     ) -> Result<(), LevelError> {
         level.with_block_entity_callback(self, |level| {
+            level.context().registry_context()?;
             let behavior = level.block_entity_state(self)?.behavior();
             behavior.load_additional_live(self, tag, level)?;
             level.block_entity_mut::<BlockEntityData>(self)?.components =
@@ -126,14 +128,25 @@ pub trait BlockEntity: Sync {
     ) -> Option<&'static dyn crate::level::game_event::GameEventListener> {
         None
     }
-    fn load_additional(&self, _state: &mut BlockEntityState, _tag: &CompoundTag) {}
+    fn load_additional(
+        &self,
+        _state: &mut BlockEntityState,
+        _tag: &CompoundTag,
+        _registries: &dyn ferraloom_protocol::codec::RegistryContext,
+    ) {
+    }
     fn load_additional_live(
         &self,
         handle: BlockEntityRef,
         tag: &CompoundTag,
         level: &mut Level,
     ) -> Result<(), LevelError> {
-        self.load_additional(level.block_entity_state_mut(handle)?, tag);
+        let context = level.context().clone();
+        self.load_additional(
+            level.block_entity_state_mut(handle)?,
+            tag,
+            context.registry_context()?,
+        );
         Ok(())
     }
     fn save_additional(
@@ -345,12 +358,20 @@ impl BlockEntityState {
         }
     }
     /// Port of BlockEntity#loadWithComponents. Unknown/bad component values are reported by the codec and ignored.
-    pub fn load_with_components(&mut self, tag: &CompoundTag) {
-        self.behavior().load_additional(self, tag);
+    pub fn load_with_components(
+        &mut self,
+        tag: &CompoundTag,
+        registries: &dyn ferraloom_protocol::codec::RegistryContext,
+    ) {
+        self.behavior().load_additional(self, tag, registries);
         self.data_mut().components = components::load(tag.get_compound("components"));
     }
-    pub fn load_custom_only(&mut self, tag: &CompoundTag) {
-        self.behavior().load_additional(self, tag);
+    pub fn load_custom_only(
+        &mut self,
+        tag: &CompoundTag,
+        registries: &dyn ferraloom_protocol::codec::RegistryContext,
+    ) {
+        self.behavior().load_additional(self, tag, registries);
     }
     pub fn save_custom_only(&self) -> ferraloom_protocol::Result<CompoundTag> {
         self.behavior().save_additional(self)
@@ -548,6 +569,7 @@ pub fn load_static(
     pos: BlockPos,
     state: BlockState,
     tag: &CompoundTag,
+    registries: &dyn ferraloom_protocol::codec::RegistryContext,
 ) -> Result<Option<BlockEntityState>, LevelError> {
     let id = tag
         .get_string("id")
@@ -561,7 +583,7 @@ pub fn load_static(
     }
     let mut entity = create(pos, state)?;
     if id != "DUMMY" {
-        entity.load_with_components(tag);
+        entity.load_with_components(tag, registries);
     }
     Ok(Some(entity))
 }

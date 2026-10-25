@@ -86,7 +86,12 @@ impl BlockEntity for CrafterBehavior {
             tag.remove(key);
         }
     }
-    fn load_additional(&self, state: &mut BlockEntityState, tag: &CompoundTag) {
+    fn load_additional(
+        &self,
+        state: &mut BlockEntityState,
+        tag: &CompoundTag,
+        _registries: &dyn ferraloom_protocol::codec::RegistryContext,
+    ) {
         let BlockEntityState::Crafter(crafter) = state else {
             unreachable!()
         };
@@ -170,10 +175,18 @@ mod tests {
         container.clear_content();
         state.apply_components(&DataComponentMap::default(), &DataComponentPatch::default());
         assert_eq!(generation(&state), 0);
-        state.load_custom_only(&CompoundTag::new());
+        state.load_custom_only(
+            &CompoundTag::new(),
+            crate::level::LevelContext::fixture(0, 63)
+                .registry_context()
+                .unwrap(),
+        );
         assert_eq!(generation(&state), 1);
         state.load_with_components(
             &ferraloom_nbt::parse_compound("{LootTable:'chests/simple_dungeon'}").unwrap(),
+            crate::level::LevelContext::fixture(0, 63)
+                .registry_context()
+                .unwrap(),
         );
         assert_eq!(generation(&state), 2);
         let saved = state.save_with_full_metadata().unwrap();

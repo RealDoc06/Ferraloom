@@ -323,11 +323,7 @@ impl MinecraftServer {
 
         let game_time = world_root.level_data.data.get_long_or("Time", 0);
         let (access, ops) = AccessLists::load(&options.root)?;
-        let registry_context: Arc<dyn protocol::codec::RegistryContext> = registries.clone();
-        let level_context = Arc::new(
-            Arc::unwrap_or_clone(world.level_context(&resources)?)
-                .with_registry_context(registry_context),
-        );
+        let level_context = world.level_context(&resources)?;
         let mut level = ServerLevel::new(
             Region::new(&BEHAVIORS),
             "minecraft:overworld",

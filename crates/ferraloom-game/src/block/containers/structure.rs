@@ -86,7 +86,12 @@ pub(super) fn set_placed_by(
 pub struct StructureBehavior;
 pub static STRUCTURE_ENTITY: StructureBehavior = StructureBehavior;
 impl BlockEntity for StructureBehavior {
-    fn load_additional(&self, state: &mut BlockEntityState, tag: &CompoundTag) {
+    fn load_additional(
+        &self,
+        state: &mut BlockEntityState,
+        tag: &CompoundTag,
+        _registries: &dyn ferraloom_protocol::codec::RegistryContext,
+    ) {
         let BlockEntityState::Structure(entity) = state else {
             unreachable!()
         };
@@ -156,7 +161,12 @@ impl BlockEntity for StructureBehavior {
         tag: &CompoundTag,
         level: &mut Level,
     ) -> Result<(), LevelError> {
-        self.load_additional(level.block_entity_state_mut(handle)?, tag);
+        let context = level.context().clone();
+        self.load_additional(
+            level.block_entity_state_mut(handle)?,
+            tag,
+            context.registry_context()?,
+        );
         let mode = level.block_entity::<StructureBlockEntity>(handle)?.mode;
         if level.block_entity::<BlockEntityData>(handle)?.has_level {
             let state = level.get_block_state(handle.pos)?;

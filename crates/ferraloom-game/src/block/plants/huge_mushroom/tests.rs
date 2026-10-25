@@ -145,6 +145,7 @@ fn native_huge_mushroom_virtuals_match_live_and_worldgen() {
         generator.new_chunk([0, 0]),
         ChunkStatus::Features,
     )];
+    let registry_context = crate::level::LevelContext::fixture(0, 63);
     let mut region = WorldGenRegion::new(
         &mut chunks,
         [0, 0],
@@ -156,6 +157,7 @@ fn native_huge_mushroom_virtuals_match_live_and_worldgen() {
         63,
     )
     .unwrap();
+    region.set_registry_context(registry_context.registry_context().unwrap());
     region.set_random(Random::Legacy(LegacyRandomSource::new(1234)));
     replay(&text, &mut LevelAccessRef::Worldgen(&mut region));
     drop(region);

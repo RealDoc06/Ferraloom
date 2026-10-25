@@ -16,7 +16,11 @@ pub trait WorldgenBlockEntity: std::fmt::Debug + Send + Sync {
     fn set_entity_id(&mut self, kind: EntityType, random: &mut WorldgenRandom)
     -> Result<(), Error>;
     fn populate_beehive(&mut self, random: &mut WorldgenRandom) -> Result<(), Error>;
-    fn load_with_components(&mut self, tag: &CompoundTag) -> Result<(), Error>;
+    fn load_with_components(
+        &mut self,
+        tag: &CompoundTag,
+        registries: &dyn ferraloom_protocol::codec::RegistryContext,
+    ) -> Result<(), Error>;
 }
 impl Clone for Box<dyn WorldgenBlockEntity> {
     fn clone(&self) -> Self {
