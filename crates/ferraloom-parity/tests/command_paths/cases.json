@@ -1,0 +1,2174 @@
+{
+  "clocks": [
+    {
+      "name": "commands.path.time.set.arg-time",
+      "path": "commands.path.time.set.arg-time",
+      "steps": [
+        {
+          "command": "time set 2000t",
+          "keys": [
+            "commands.time.set.absolute"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.time.set.arg-timemarker",
+      "path": "commands.path.time.set.arg-timemarker",
+      "steps": [
+        {
+          "command": "time set minecraft:night",
+          "keys": [
+            "commands.time.set.time_marker"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.time.add.arg-time",
+      "path": "commands.path.time.add.arg-time",
+      "steps": [
+        {
+          "command": "time add -20t",
+          "keys": [
+            "commands.time.set.absolute"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.time.query.time",
+      "path": "commands.path.time.query.time",
+      "steps": [
+        {
+          "command": "time query time",
+          "keys": [
+            "commands.time.query.absolute"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.time.query.arg-timeline",
+      "path": "commands.path.time.query.arg-timeline",
+      "steps": [
+        {
+          "command": "time query minecraft:day",
+          "keys": [
+            "commands.time.query.timeline"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.time.query.arg-timeline.repetition",
+      "path": "commands.path.time.query.arg-timeline.repetition",
+      "steps": [
+        {
+          "command": "time query minecraft:day repetition",
+          "keys": [
+            "commands.time.query.timeline.repetitions"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.time.pause",
+      "path": "commands.path.time.pause",
+      "steps": [
+        {
+          "command": "time pause",
+          "keys": [
+            "commands.time.pause"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.time.rate.arg-rate",
+      "path": "commands.path.time.rate.arg-rate",
+      "steps": [
+        {
+          "command": "time rate 2",
+          "keys": [
+            "commands.time.rate"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.time.resume",
+      "path": "commands.path.time.resume",
+      "steps": [
+        {
+          "command": "time resume",
+          "keys": [
+            "commands.time.resume"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "clocks.setup.time_rate_1",
+      "path": null,
+      "steps": [
+        {
+          "command": "time rate 1",
+          "keys": [
+            "commands.time.rate"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.time.of.arg-clock.set.arg-time",
+      "path": "commands.path.time.of.arg-clock.set.arg-time",
+      "steps": [
+        {
+          "command": "time of minecraft:overworld set 2000t",
+          "keys": [
+            "commands.time.set.absolute"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.time.of.arg-clock.set.arg-timemarker",
+      "path": "commands.path.time.of.arg-clock.set.arg-timemarker",
+      "steps": [
+        {
+          "command": "time of minecraft:overworld set minecraft:night",
+          "keys": [
+            "commands.time.set.time_marker"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.time.of.arg-clock.add.arg-time",
+      "path": "commands.path.time.of.arg-clock.add.arg-time",
+      "steps": [
+        {
+          "command": "time of minecraft:overworld add -20t",
+          "keys": [
+            "commands.time.set.absolute"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.time.of.arg-clock.query.time",
+      "path": "commands.path.time.of.arg-clock.query.time",
+      "steps": [
+        {
+          "command": "time of minecraft:overworld query time",
+          "keys": [
+            "commands.time.query.absolute"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.time.of.arg-clock.query.arg-timeline",
+      "path": "commands.path.time.of.arg-clock.query.arg-timeline",
+      "steps": [
+        {
+          "command": "time of minecraft:overworld query minecraft:day",
+          "keys": [
+            "commands.time.query.timeline"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.time.of.arg-clock.query.arg-timeline.repetition",
+      "path": "commands.path.time.of.arg-clock.query.arg-timeline.repetition",
+      "steps": [
+        {
+          "command": "time of minecraft:overworld query minecraft:day repetition",
+          "keys": [
+            "commands.time.query.timeline.repetitions"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.time.of.arg-clock.pause",
+      "path": "commands.path.time.of.arg-clock.pause",
+      "steps": [
+        {
+          "command": "time of minecraft:overworld pause",
+          "keys": [
+            "commands.time.pause"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.time.of.arg-clock.rate.arg-rate",
+      "path": "commands.path.time.of.arg-clock.rate.arg-rate",
+      "steps": [
+        {
+          "command": "time of minecraft:overworld rate 2",
+          "keys": [
+            "commands.time.rate"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.time.of.arg-clock.resume",
+      "path": "commands.path.time.of.arg-clock.resume",
+      "steps": [
+        {
+          "command": "time of minecraft:overworld resume",
+          "keys": [
+            "commands.time.resume"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "clocks.setup.time_of_minecraft:overworld_rate_1",
+      "path": null,
+      "steps": [
+        {
+          "command": "time of minecraft:overworld rate 1",
+          "keys": [
+            "commands.time.rate"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.time.query.gametime",
+      "path": "commands.path.time.query.gametime",
+      "steps": [
+        {
+          "command": "time query gametime",
+          "keys": [
+            "commands.time.query.gametime"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.difficulty",
+      "path": "commands.path.difficulty",
+      "steps": [
+        {
+          "command": "difficulty",
+          "keys": [
+            "commands.difficulty.query"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.difficulty.peaceful",
+      "path": "commands.path.difficulty.peaceful",
+      "steps": [
+        {
+          "command": "difficulty peaceful",
+          "keys": [
+            "commands.difficulty.success"
+          ],
+          "checks": [
+            {
+              "kind": "difficulty",
+              "value": "Peaceful"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.difficulty.easy",
+      "path": "commands.path.difficulty.easy",
+      "steps": [
+        {
+          "command": "difficulty easy",
+          "keys": [
+            "commands.difficulty.success"
+          ],
+          "checks": [
+            {
+              "kind": "difficulty",
+              "value": "Easy"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.difficulty.normal",
+      "path": "commands.path.difficulty.normal",
+      "steps": [
+        {
+          "command": "difficulty normal",
+          "keys": [
+            "commands.difficulty.success"
+          ],
+          "checks": [
+            {
+              "kind": "difficulty",
+              "value": "Normal"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.difficulty.hard",
+      "path": "commands.path.difficulty.hard",
+      "steps": [
+        {
+          "command": "difficulty hard",
+          "keys": [
+            "commands.difficulty.success"
+          ],
+          "checks": [
+            {
+              "kind": "difficulty",
+              "value": "Hard"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "clocks.daylight_weather_setup",
+      "path": null,
+      "steps": [
+        {
+          "command": "time set 1000",
+          "keys": [
+            "commands.time.set.absolute"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.weather.clear",
+      "path": "commands.path.weather.clear",
+      "steps": [
+        {
+          "command": "weather clear",
+          "keys": [
+            "commands.weather.set.clear"
+          ],
+          "checks": [
+            {
+              "kind": "weather",
+              "ticks": 30,
+              "raining": false,
+              "thunder": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.weather.clear.arg-duration.duration",
+      "path": "commands.path.weather.clear.arg-duration",
+      "steps": [
+        {
+          "command": "weather clear 60t",
+          "keys": [
+            "commands.weather.set.clear"
+          ],
+          "checks": [
+            {
+              "kind": "weather",
+              "ticks": 30,
+              "raining": false,
+              "thunder": false
+            }
+          ]
+        },
+        {
+          "command": "tick step 35t",
+          "keys": [
+            "commands.tick.step.success"
+          ],
+          "checks": [
+            {
+              "kind": "advance",
+              "ticks": 35
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.weather.rain",
+      "path": "commands.path.weather.rain",
+      "steps": [
+        {
+          "command": "weather rain",
+          "keys": [
+            "commands.weather.set.rain"
+          ],
+          "checks": [
+            {
+              "kind": "weather",
+              "ticks": 30,
+              "raining": true,
+              "thunder": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.weather.rain.arg-duration.duration",
+      "path": "commands.path.weather.rain.arg-duration",
+      "steps": [
+        {
+          "command": "weather rain 60t",
+          "keys": [
+            "commands.weather.set.rain"
+          ],
+          "checks": [
+            {
+              "kind": "weather",
+              "ticks": 30,
+              "raining": true,
+              "thunder": false
+            }
+          ]
+        },
+        {
+          "command": "tick step 35t",
+          "keys": [
+            "commands.tick.step.success"
+          ],
+          "checks": [
+            {
+              "kind": "advance",
+              "ticks": 35
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "clocks.setup.weather_reset_before_thunder",
+      "path": null,
+      "steps": [
+        {
+          "command": "weather clear 1000t",
+          "keys": [
+            "commands.weather.set.clear"
+          ],
+          "checks": [
+            {
+              "kind": "weather",
+              "ticks": 80,
+              "raining": false,
+              "thunder": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.weather.thunder",
+      "path": "commands.path.weather.thunder",
+      "steps": [
+        {
+          "command": "weather thunder",
+          "keys": [
+            "commands.weather.set.thunder"
+          ],
+          "checks": [
+            {
+              "kind": "weather",
+              "ticks": 30,
+              "raining": true,
+              "thunder": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.weather.thunder.arg-duration.duration",
+      "path": "commands.path.weather.thunder.arg-duration",
+      "steps": [
+        {
+          "command": "weather thunder 60t",
+          "keys": [
+            "commands.weather.set.thunder"
+          ],
+          "checks": [
+            {
+              "kind": "weather",
+              "ticks": 30,
+              "raining": true,
+              "thunder": true
+            }
+          ]
+        },
+        {
+          "command": "tick step 35t",
+          "keys": [
+            "commands.tick.step.success"
+          ],
+          "checks": [
+            {
+              "kind": "advance",
+              "ticks": 35
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.return.run",
+      "path": "commands.path.return.run",
+      "steps": [
+        {
+          "command": "return run say return_path_continuation",
+          "chat": true,
+          "keys": []
+        }
+      ]
+    },
+    {
+      "name": "commands.path.tick.query",
+      "path": "commands.path.tick.query",
+      "steps": [
+        {
+          "command": "tick query",
+          "keys": [
+            "commands.tick.status.frozen",
+            "commands.tick.query.rate.running",
+            "commands.tick.query.percentiles"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.tick.rate.arg-rate",
+      "path": "commands.path.tick.rate.arg-rate",
+      "steps": [
+        {
+          "command": "tick rate 30",
+          "keys": [
+            "commands.tick.rate.success"
+          ],
+          "checks": [
+            {
+              "kind": "tick_state",
+              "rate": 30,
+              "frozen": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.tick.step",
+      "path": "commands.path.tick.step",
+      "steps": [
+        {
+          "command": "tick step",
+          "keys": [
+            "commands.tick.step.success"
+          ],
+          "checks": [
+            {
+              "kind": "tick_steps",
+              "value": 1
+            },
+            {
+              "kind": "advance",
+              "ticks": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.tick.step.arg-time",
+      "path": "commands.path.tick.step.arg-time",
+      "steps": [
+        {
+          "command": "tick step 3t",
+          "keys": [
+            "commands.tick.step.success"
+          ],
+          "checks": [
+            {
+              "kind": "tick_steps",
+              "value": 3
+            },
+            {
+              "kind": "advance",
+              "ticks": 3
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "clocks.setup.tick_step_100000t",
+      "path": null,
+      "steps": [
+        {
+          "command": "tick step 100000t",
+          "keys": [
+            "commands.tick.step.success"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.tick.step.stop",
+      "path": "commands.path.tick.step.stop",
+      "steps": [
+        {
+          "command": "tick step stop",
+          "keys": [
+            "commands.tick.step.stop.success"
+          ],
+          "checks": [
+            {
+              "kind": "tick_steps",
+              "value": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.tick.unfreeze",
+      "path": "commands.path.tick.unfreeze",
+      "steps": [
+        {
+          "command": "tick unfreeze",
+          "keys": [
+            "commands.tick.status.running"
+          ],
+          "checks": [
+            {
+              "kind": "tick_state",
+              "rate": 30,
+              "frozen": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.tick.freeze",
+      "path": "commands.path.tick.freeze",
+      "steps": [
+        {
+          "command": "tick freeze",
+          "keys": [
+            "commands.tick.status.frozen"
+          ],
+          "checks": [
+            {
+              "kind": "tick_state",
+              "rate": 30,
+              "frozen": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.tick.sprint.arg-time",
+      "path": "commands.path.tick.sprint.arg-time",
+      "steps": [
+        {
+          "command": "tick sprint 1000000000t",
+          "keys": [
+            "commands.tick.status.sprinting"
+          ],
+          "checks": [
+            {
+              "kind": "tick_state",
+              "rate": 30,
+              "frozen": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.tick.sprint.stop",
+      "path": "commands.path.tick.sprint.stop",
+      "steps": [
+        {
+          "command": "tick sprint stop",
+          "keys": [
+            "commands.tick.sprint.report",
+            "commands.tick.sprint.stop.success"
+          ],
+          "checks": [
+            {
+              "kind": "tick_state",
+              "rate": 30,
+              "frozen": true
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "chat": [
+    {
+      "name": "commands.path.say.arg-message.unsigned",
+      "path": "commands.path.say.arg-message",
+      "steps": [
+        {
+          "command": "say path hello @a",
+          "chat": true,
+          "signed": false,
+          "keys": []
+        }
+      ]
+    },
+    {
+      "name": "commands.path.say.arg-message.signed",
+      "path": "commands.path.say.arg-message",
+      "steps": [
+        {
+          "command": "say path hello @a",
+          "chat": true,
+          "signed": true,
+          "keys": []
+        }
+      ]
+    },
+    {
+      "name": "commands.path.me.arg-action.unsigned",
+      "path": "commands.path.me.arg-action",
+      "steps": [
+        {
+          "command": "me path waves at @a",
+          "chat": true,
+          "signed": false,
+          "keys": []
+        }
+      ]
+    },
+    {
+      "name": "commands.path.me.arg-action.signed",
+      "path": "commands.path.me.arg-action",
+      "steps": [
+        {
+          "command": "me path waves at @a",
+          "chat": true,
+          "signed": true,
+          "keys": []
+        }
+      ]
+    },
+    {
+      "name": "commands.path.msg.arg-targets.arg-message.unsigned",
+      "path": "commands.path.msg.arg-targets.arg-message",
+      "steps": [
+        {
+          "command": "msg PathGuest path secret @s",
+          "chat": true,
+          "signed": false,
+          "keys": []
+        }
+      ]
+    },
+    {
+      "name": "commands.path.msg.arg-targets.arg-message.signed",
+      "path": "commands.path.msg.arg-targets.arg-message",
+      "steps": [
+        {
+          "command": "msg PathGuest path secret @s",
+          "chat": true,
+          "signed": true,
+          "keys": []
+        }
+      ]
+    },
+    {
+      "name": "commands.path.tell.unsigned",
+      "path": "commands.path.tell",
+      "steps": [
+        {
+          "command": "tell PathGuest path tell",
+          "chat": true,
+          "signed": false,
+          "keys": []
+        }
+      ]
+    },
+    {
+      "name": "commands.path.tell.signed",
+      "path": "commands.path.tell",
+      "steps": [
+        {
+          "command": "tell PathGuest path tell",
+          "chat": true,
+          "signed": true,
+          "keys": []
+        }
+      ]
+    },
+    {
+      "name": "commands.path.w.unsigned",
+      "path": "commands.path.w",
+      "steps": [
+        {
+          "command": "w PathGuest path whisper",
+          "chat": true,
+          "signed": false,
+          "keys": []
+        }
+      ]
+    },
+    {
+      "name": "commands.path.w.signed",
+      "path": "commands.path.w",
+      "steps": [
+        {
+          "command": "w PathGuest path whisper",
+          "chat": true,
+          "signed": true,
+          "keys": []
+        }
+      ]
+    },
+    {
+      "name": "chat.setup.team_add_paths_\"Path_Team\"",
+      "path": null,
+      "steps": [
+        {
+          "command": "team add paths \"Path Team\"",
+          "keys": [
+            "commands.team.add.success"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "chat.setup.team_modify_paths_color_gold",
+      "path": null,
+      "steps": [
+        {
+          "command": "team modify paths color gold",
+          "keys": [
+            "commands.team.option.color.success"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "chat.setup.team_join_paths_@a",
+      "path": null,
+      "steps": [
+        {
+          "command": "team join paths @a",
+          "keys": [
+            "commands.team.join.success.multiple"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.teammsg.arg-message.unsigned",
+      "path": "commands.path.teammsg.arg-message",
+      "steps": [
+        {
+          "command": "teammsg path team @a",
+          "chat": true,
+          "signed": false,
+          "keys": []
+        }
+      ]
+    },
+    {
+      "name": "commands.path.teammsg.arg-message.signed",
+      "path": "commands.path.teammsg.arg-message",
+      "steps": [
+        {
+          "command": "teammsg path team @a",
+          "chat": true,
+          "signed": true,
+          "keys": []
+        }
+      ]
+    },
+    {
+      "name": "commands.path.tm.unsigned",
+      "path": "commands.path.tm",
+      "steps": [
+        {
+          "command": "tm path team @a",
+          "chat": true,
+          "signed": false,
+          "keys": []
+        }
+      ]
+    },
+    {
+      "name": "commands.path.tm.signed",
+      "path": "commands.path.tm",
+      "steps": [
+        {
+          "command": "tm path team @a",
+          "chat": true,
+          "signed": true,
+          "keys": []
+        }
+      ]
+    }
+  ],
+  "players": [
+    {
+      "name": "commands.path.gamemode.arg-gamemode",
+      "path": "commands.path.gamemode.arg-gamemode",
+      "steps": [
+        {
+          "command": "gamemode creative",
+          "keys": [
+            "commands.gamemode.success.self"
+          ],
+          "checks": [
+            {
+              "kind": "mode",
+              "value": "Creative"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.gamemode.arg-gamemode.arg-target",
+      "path": "commands.path.gamemode.arg-gamemode.arg-target",
+      "steps": [
+        {
+          "command": "gamemode adventure @s",
+          "keys": [
+            "commands.gamemode.success.self"
+          ],
+          "checks": [
+            {
+              "kind": "mode",
+              "value": "Adventure"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.defaultgamemode.arg-gamemode",
+      "path": "commands.path.defaultgamemode.arg-gamemode",
+      "steps": [
+        {
+          "command": "defaultgamemode creative",
+          "keys": [
+            "commands.defaultgamemode.success"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.teleport.arg-location",
+      "path": "commands.path.teleport.arg-location",
+      "steps": [
+        {
+          "command": "teleport 1.0 -62 1.0",
+          "keys": [
+            "commands.teleport.success.location.single"
+          ],
+          "checks": [
+            {
+              "kind": "position",
+              "value": [
+                1,
+                -62,
+                1
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.teleport.arg-destination",
+      "path": "commands.path.teleport.arg-destination",
+      "steps": [
+        {
+          "command": "teleport PathGuest",
+          "keys": [
+            "commands.teleport.success.entity.single"
+          ],
+          "checks": [
+            {
+              "kind": "position",
+              "value": [
+                0.5,
+                -63,
+                0.5
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.teleport.arg-targets.arg-location",
+      "path": "commands.path.teleport.arg-targets.arg-location",
+      "steps": [
+        {
+          "command": "teleport @s 2.0 -62 2.0",
+          "keys": [
+            "commands.teleport.success.location.single"
+          ],
+          "checks": [
+            {
+              "kind": "position",
+              "value": [
+                2,
+                -62,
+                2
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.teleport.arg-targets.arg-destination",
+      "path": "commands.path.teleport.arg-targets.arg-destination",
+      "steps": [
+        {
+          "command": "teleport @s PathGuest",
+          "keys": [
+            "commands.teleport.success.entity.single"
+          ],
+          "checks": [
+            {
+              "kind": "position",
+              "value": [
+                0.5,
+                -63,
+                0.5
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.teleport.arg-targets.arg-location.arg-rotation",
+      "path": "commands.path.teleport.arg-targets.arg-location.arg-rotation",
+      "steps": [
+        {
+          "command": "teleport @s 3.0 -62 3.0 45 10",
+          "keys": [
+            "commands.teleport.success.location.single"
+          ],
+          "checks": [
+            {
+              "kind": "position",
+              "value": [
+                3,
+                -62,
+                3
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.teleport.arg-targets.arg-location.facing.arg-facing-location",
+      "path": "commands.path.teleport.arg-targets.arg-location.facing.arg-facing-location",
+      "steps": [
+        {
+          "command": "teleport @s 4.0 -62 4.0 facing 5 -61 5",
+          "keys": [
+            "commands.teleport.success.location.single"
+          ],
+          "checks": [
+            {
+              "kind": "position",
+              "value": [
+                4,
+                -62,
+                4
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.teleport.arg-targets.arg-location.facing.entity.arg-facing-entity",
+      "path": "commands.path.teleport.arg-targets.arg-location.facing.entity.arg-facing-entity",
+      "steps": [
+        {
+          "command": "teleport @s 5.0 -62 5.0 facing entity PathGuest",
+          "keys": [
+            "commands.teleport.success.location.single"
+          ],
+          "checks": [
+            {
+              "kind": "position",
+              "value": [
+                5,
+                -62,
+                5
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.teleport.arg-targets.arg-location.facing.entity.arg-facing-entity.arg-facing-anchor",
+      "path": "commands.path.teleport.arg-targets.arg-location.facing.entity.arg-facing-entity.arg-facing-anchor",
+      "steps": [
+        {
+          "command": "teleport @s 6.0 -62 6.0 facing entity PathGuest eyes",
+          "keys": [
+            "commands.teleport.success.location.single"
+          ],
+          "checks": [
+            {
+              "kind": "position",
+              "value": [
+                6,
+                -62,
+                6
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.tp",
+      "path": "commands.path.tp",
+      "steps": [
+        {
+          "command": "tp 7.0 -62 7.0",
+          "keys": [
+            "commands.teleport.success.location.single"
+          ],
+          "checks": [
+            {
+              "kind": "position",
+              "value": [
+                7,
+                -62,
+                7
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.spawnpoint",
+      "path": "commands.path.spawnpoint",
+      "steps": [
+        {
+          "command": "spawnpoint",
+          "keys": [
+            "commands.spawnpoint.success.single"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.spawnpoint.arg-targets",
+      "path": "commands.path.spawnpoint.arg-targets",
+      "steps": [
+        {
+          "command": "spawnpoint @s",
+          "keys": [
+            "commands.spawnpoint.success.single"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.spawnpoint.arg-targets.arg-pos",
+      "path": "commands.path.spawnpoint.arg-targets.arg-pos",
+      "steps": [
+        {
+          "command": "spawnpoint @s 8 -62 8",
+          "keys": [
+            "commands.spawnpoint.success.single"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.spawnpoint.arg-targets.arg-pos.arg-rotation",
+      "path": "commands.path.spawnpoint.arg-targets.arg-pos.arg-rotation",
+      "steps": [
+        {
+          "command": "spawnpoint @s 9 -62 9 450 -100",
+          "keys": [
+            "commands.spawnpoint.success.single"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.setworldspawn",
+      "path": "commands.path.setworldspawn",
+      "steps": [
+        {
+          "command": "setworldspawn",
+          "keys": [
+            "commands.setworldspawn.success"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.setworldspawn.arg-pos",
+      "path": "commands.path.setworldspawn.arg-pos",
+      "steps": [
+        {
+          "command": "setworldspawn 10 -62 10",
+          "keys": [
+            "commands.setworldspawn.success"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.setworldspawn.arg-pos.arg-rotation",
+      "path": "commands.path.setworldspawn.arg-pos.arg-rotation",
+      "steps": [
+        {
+          "command": "setworldspawn 11 -62 11 90 -30",
+          "keys": [
+            "commands.setworldspawn.success"
+          ]
+        }
+      ]
+    }
+  ],
+  "admin": [
+    {
+      "name": "commands.path.op.arg-targets",
+      "path": "commands.path.op.arg-targets",
+      "steps": [
+        {
+          "command": "op PathGuest",
+          "keys": [
+            "commands.op.success"
+          ]
+        },
+        {
+          "command": "gamerule keep_inventory",
+          "keys": [
+            "commands.gamerule.query"
+          ],
+          "actor": "PathGuest"
+        }
+      ]
+    },
+    {
+      "name": "commands.path.deop.arg-targets",
+      "path": "commands.path.deop.arg-targets",
+      "steps": [
+        {
+          "command": "deop PathGuest",
+          "keys": [
+            "commands.deop.success"
+          ]
+        },
+        {
+          "command": "gamerule keep_inventory",
+          "keys": [
+            "command.unknown.command"
+          ],
+          "actor": "PathGuest"
+        }
+      ]
+    },
+    {
+      "name": "commands.path.whitelist.add.arg-targets",
+      "path": "commands.path.whitelist.add.arg-targets",
+      "steps": [
+        {
+          "command": "whitelist add PathGuest",
+          "keys": [
+            "commands.whitelist.add.success"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.whitelist.list",
+      "path": "commands.path.whitelist.list",
+      "steps": [
+        {
+          "command": "whitelist list",
+          "keys": [
+            "commands.whitelist.list"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.whitelist.on",
+      "path": "commands.path.whitelist.on",
+      "steps": [
+        {
+          "command": "whitelist on",
+          "keys": [
+            "commands.whitelist.enabled"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.whitelist.reload",
+      "path": "commands.path.whitelist.reload",
+      "steps": [
+        {
+          "command": "whitelist reload",
+          "keys": [
+            "commands.whitelist.reloaded"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.whitelist.off",
+      "path": "commands.path.whitelist.off",
+      "steps": [
+        {
+          "command": "whitelist off",
+          "keys": [
+            "commands.whitelist.disabled"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.whitelist.remove.arg-targets",
+      "path": "commands.path.whitelist.remove.arg-targets",
+      "steps": [
+        {
+          "command": "whitelist remove PathGuest",
+          "keys": [
+            "commands.whitelist.remove.success"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.ban.arg-targets",
+      "path": "commands.path.ban.arg-targets",
+      "steps": [
+        {
+          "command": "ban OfflinePathOne",
+          "keys": [
+            "commands.ban.success"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.ban.arg-targets.arg-reason",
+      "path": "commands.path.ban.arg-targets.arg-reason",
+      "steps": [
+        {
+          "command": "ban OfflinePathTwo path reason @s",
+          "keys": [
+            "commands.ban.success"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.ban-ip.arg-target",
+      "path": "commands.path.ban-ip.arg-target",
+      "steps": [
+        {
+          "command": "ban-ip 198.51.100.10",
+          "keys": [
+            "commands.banip.success"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.ban-ip.arg-target.arg-reason",
+      "path": "commands.path.ban-ip.arg-target.arg-reason",
+      "steps": [
+        {
+          "command": "ban-ip 198.51.100.11 path IP reason",
+          "keys": [
+            "commands.banip.success"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.banlist",
+      "path": "commands.path.banlist",
+      "steps": [
+        {
+          "command": "banlist",
+          "keys": [
+            "commands.banlist.list"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.banlist.ips",
+      "path": "commands.path.banlist.ips",
+      "steps": [
+        {
+          "command": "banlist ips",
+          "keys": [
+            "commands.banlist.list"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.banlist.players",
+      "path": "commands.path.banlist.players",
+      "steps": [
+        {
+          "command": "banlist players",
+          "keys": [
+            "commands.banlist.list"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.pardon.arg-targets",
+      "path": "commands.path.pardon.arg-targets",
+      "steps": [
+        {
+          "command": "pardon OfflinePathOne",
+          "keys": [
+            "commands.pardon.success"
+          ]
+        },
+        {
+          "command": "pardon OfflinePathTwo",
+          "keys": [
+            "commands.pardon.success"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.pardon-ip.arg-target",
+      "path": "commands.path.pardon-ip.arg-target",
+      "steps": [
+        {
+          "command": "pardon-ip 198.51.100.10",
+          "keys": [
+            "commands.pardonip.success"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.list",
+      "path": "commands.path.list",
+      "steps": [
+        {
+          "command": "list",
+          "keys": [
+            "commands.list.players"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.list.uuids",
+      "path": "commands.path.list.uuids",
+      "steps": [
+        {
+          "command": "list uuids",
+          "keys": [
+            "commands.list.players"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.setidletimeout.arg-minutes",
+      "path": "commands.path.setidletimeout.arg-minutes",
+      "steps": [
+        {
+          "command": "setidletimeout 5",
+          "keys": [
+            "commands.setidletimeout.success"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.seed",
+      "path": "commands.path.seed",
+      "steps": [
+        {
+          "command": "seed",
+          "keys": [
+            "commands.seed.success"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.help",
+      "path": "commands.path.help",
+      "steps": [
+        {
+          "command": "help",
+          "literal_prefix": "/",
+          "actor": "PathGuest",
+          "keys": []
+        }
+      ]
+    },
+    {
+      "name": "commands.path.help.arg-command",
+      "path": "commands.path.help.arg-command",
+      "steps": [
+        {
+          "command": "help msg",
+          "literal_prefix": "/msg ",
+          "actor": "PathGuest",
+          "keys": []
+        }
+      ]
+    },
+    {
+      "name": "commands.path.save-off",
+      "path": "commands.path.save-off",
+      "steps": [
+        {
+          "command": "save-off",
+          "keys": [
+            "commands.save.disabled"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.save-on",
+      "path": "commands.path.save-on",
+      "steps": [
+        {
+          "command": "save-on",
+          "keys": [
+            "commands.save.enabled"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.save-all",
+      "path": "commands.path.save-all",
+      "steps": [
+        {
+          "command": "save-all",
+          "keys": [
+            "commands.save.success"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.save-all.flush",
+      "path": "commands.path.save-all.flush",
+      "steps": [
+        {
+          "command": "save-all flush",
+          "keys": [
+            "commands.save.success"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.kick.arg-targets",
+      "path": "commands.path.kick.arg-targets",
+      "steps": [
+        {
+          "command": "kick PathGuest",
+          "keys": [
+            "commands.kick.success"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.kick.arg-targets.arg-reason",
+      "path": "commands.path.kick.arg-targets.arg-reason",
+      "steps": [
+        {
+          "command": "kick KickGuest custom kick reason",
+          "keys": [
+            "commands.kick.success"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.stop",
+      "path": "commands.path.stop",
+      "steps": [
+        {
+          "command": "stop",
+          "keys": [
+            "commands.stop.stopping"
+          ],
+          "stop": true
+        }
+      ]
+    }
+  ],
+  "placement": [
+    {
+      "name": "commands.path.setblock.arg-pos.arg-block",
+      "path": "commands.path.setblock.arg-pos.arg-block",
+      "steps": [
+        {
+          "command": "setblock 0 -60 0 minecraft:stone",
+          "keys": [
+            "commands.setblock.success"
+          ],
+          "checks": [
+            {
+              "kind": "blocks",
+              "min": [
+                0,
+                -60,
+                0
+              ],
+              "max": [
+                0,
+                -60,
+                0
+              ],
+              "state": "minecraft:stone"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.setblock.arg-pos.arg-block.replace",
+      "path": "commands.path.setblock.arg-pos.arg-block.replace",
+      "steps": [
+        {
+          "command": "setblock 1 -60 0 minecraft:stone replace",
+          "keys": [
+            "commands.setblock.success"
+          ],
+          "checks": [
+            {
+              "kind": "blocks",
+              "min": [
+                1,
+                -60,
+                0
+              ],
+              "max": [
+                1,
+                -60,
+                0
+              ],
+              "state": "minecraft:stone"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.setblock.arg-pos.arg-block.keep",
+      "path": "commands.path.setblock.arg-pos.arg-block.keep",
+      "steps": [
+        {
+          "command": "setblock 2 -60 0 minecraft:stone keep",
+          "keys": [
+            "commands.setblock.success"
+          ],
+          "checks": [
+            {
+              "kind": "blocks",
+              "min": [
+                2,
+                -60,
+                0
+              ],
+              "max": [
+                2,
+                -60,
+                0
+              ],
+              "state": "minecraft:stone"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.setblock.arg-pos.arg-block.destroy",
+      "path": "commands.path.setblock.arg-pos.arg-block.destroy",
+      "steps": [
+        {
+          "command": "setblock 3 -60 0 minecraft:stone destroy",
+          "keys": [
+            "commands.setblock.success"
+          ],
+          "checks": [
+            {
+              "kind": "blocks",
+              "min": [
+                3,
+                -60,
+                0
+              ],
+              "max": [
+                3,
+                -60,
+                0
+              ],
+              "state": "minecraft:stone"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.setblock.arg-pos.arg-block.strict",
+      "path": "commands.path.setblock.arg-pos.arg-block.strict",
+      "steps": [
+        {
+          "command": "setblock 4 -60 0 minecraft:stone strict",
+          "keys": [
+            "commands.setblock.success"
+          ],
+          "checks": [
+            {
+              "kind": "blocks",
+              "min": [
+                4,
+                -60,
+                0
+              ],
+              "max": [
+                4,
+                -60,
+                0
+              ],
+              "state": "minecraft:stone"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.fill.arg-from.arg-to.arg-block",
+      "path": "commands.path.fill.arg-from.arg-to.arg-block",
+      "steps": [
+        {
+          "command": "fill 0 -60 2 2 -58 4 minecraft:stone",
+          "keys": [
+            "commands.fill.success"
+          ],
+          "checks": [
+            {
+              "kind": "blocks",
+              "min": [
+                0,
+                -60,
+                2
+              ],
+              "max": [
+                2,
+                -58,
+                4
+              ],
+              "state": "minecraft:stone"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.fill.arg-from.arg-to.arg-block.replace",
+      "path": "commands.path.fill.arg-from.arg-to.arg-block.replace",
+      "steps": [
+        {
+          "command": "fill 3 -60 2 5 -58 4 minecraft:stone replace",
+          "keys": [
+            "commands.fill.success"
+          ],
+          "checks": [
+            {
+              "kind": "blocks",
+              "min": [
+                3,
+                -60,
+                2
+              ],
+              "max": [
+                5,
+                -58,
+                4
+              ],
+              "state": "minecraft:stone"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.fill.arg-from.arg-to.arg-block.keep",
+      "path": "commands.path.fill.arg-from.arg-to.arg-block.keep",
+      "steps": [
+        {
+          "command": "fill 6 -60 2 8 -58 4 minecraft:stone keep",
+          "keys": [
+            "commands.fill.success"
+          ],
+          "checks": [
+            {
+              "kind": "blocks",
+              "min": [
+                6,
+                -60,
+                2
+              ],
+              "max": [
+                8,
+                -58,
+                4
+              ],
+              "state": "minecraft:stone"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.fill.arg-from.arg-to.arg-block.destroy",
+      "path": "commands.path.fill.arg-from.arg-to.arg-block.destroy",
+      "steps": [
+        {
+          "command": "fill 9 -60 2 11 -58 4 minecraft:glass",
+          "keys": [
+            "commands.fill.success"
+          ]
+        },
+        {
+          "command": "fill 9 -60 2 11 -58 4 minecraft:stone destroy",
+          "keys": [
+            "commands.fill.success"
+          ],
+          "checks": [
+            {
+              "kind": "blocks",
+              "min": [
+                9,
+                -60,
+                2
+              ],
+              "max": [
+                11,
+                -58,
+                4
+              ],
+              "state": "minecraft:stone"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.fill.arg-from.arg-to.arg-block.strict",
+      "path": "commands.path.fill.arg-from.arg-to.arg-block.strict",
+      "steps": [
+        {
+          "command": "fill 0 -60 5 2 -58 7 minecraft:stone strict",
+          "keys": [
+            "commands.fill.success"
+          ],
+          "checks": [
+            {
+              "kind": "blocks",
+              "min": [
+                0,
+                -60,
+                5
+              ],
+              "max": [
+                2,
+                -58,
+                7
+              ],
+              "state": "minecraft:stone"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.fill.arg-from.arg-to.arg-block.outline",
+      "path": "commands.path.fill.arg-from.arg-to.arg-block.outline",
+      "steps": [
+        {
+          "command": "fill 3 -60 5 5 -58 7 minecraft:glass",
+          "keys": [
+            "commands.fill.success"
+          ]
+        },
+        {
+          "command": "fill 3 -60 5 5 -58 7 minecraft:stone outline",
+          "keys": [
+            "commands.fill.success"
+          ],
+          "checks": [
+            {
+              "kind": "blocks",
+              "min": [
+                3,
+                -60,
+                5
+              ],
+              "max": [
+                5,
+                -58,
+                7
+              ],
+              "state": "minecraft:stone",
+              "interior": "minecraft:glass"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.fill.arg-from.arg-to.arg-block.hollow",
+      "path": "commands.path.fill.arg-from.arg-to.arg-block.hollow",
+      "steps": [
+        {
+          "command": "fill 6 -60 5 8 -58 7 minecraft:glass",
+          "keys": [
+            "commands.fill.success"
+          ]
+        },
+        {
+          "command": "fill 6 -60 5 8 -58 7 minecraft:stone hollow",
+          "keys": [
+            "commands.fill.success"
+          ],
+          "checks": [
+            {
+              "kind": "blocks",
+              "min": [
+                6,
+                -60,
+                5
+              ],
+              "max": [
+                8,
+                -58,
+                7
+              ],
+              "state": "minecraft:stone",
+              "interior": "minecraft:air"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.fill.arg-from.arg-to.arg-block.replace.arg-filter",
+      "path": "commands.path.fill.arg-from.arg-to.arg-block.replace.arg-filter",
+      "steps": [
+        {
+          "command": "fill 0 -60 8 2 -58 10 minecraft:stone",
+          "keys": [
+            "commands.fill.success"
+          ]
+        },
+        {
+          "command": "fill 0 -60 8 2 -58 10 minecraft:dirt replace minecraft:stone",
+          "keys": [
+            "commands.fill.success"
+          ],
+          "checks": [
+            {
+              "kind": "blocks",
+              "min": [
+                0,
+                -60,
+                8
+              ],
+              "max": [
+                2,
+                -58,
+                10
+              ],
+              "state": "minecraft:dirt"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.fill.arg-from.arg-to.arg-block.replace.arg-filter.destroy",
+      "path": "commands.path.fill.arg-from.arg-to.arg-block.replace.arg-filter.destroy",
+      "steps": [
+        {
+          "command": "fill 3 -60 8 5 -58 10 minecraft:stone",
+          "keys": [
+            "commands.fill.success"
+          ]
+        },
+        {
+          "command": "fill 3 -60 8 5 -58 10 minecraft:dirt replace minecraft:stone destroy",
+          "keys": [
+            "commands.fill.success"
+          ],
+          "checks": [
+            {
+              "kind": "blocks",
+              "min": [
+                3,
+                -60,
+                8
+              ],
+              "max": [
+                5,
+                -58,
+                10
+              ],
+              "state": "minecraft:dirt"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.fill.arg-from.arg-to.arg-block.replace.arg-filter.hollow",
+      "path": "commands.path.fill.arg-from.arg-to.arg-block.replace.arg-filter.hollow",
+      "steps": [
+        {
+          "command": "fill 6 -60 8 8 -58 10 minecraft:stone",
+          "keys": [
+            "commands.fill.success"
+          ]
+        },
+        {
+          "command": "fill 6 -60 8 8 -58 10 minecraft:dirt replace minecraft:stone hollow",
+          "keys": [
+            "commands.fill.success"
+          ],
+          "checks": [
+            {
+              "kind": "blocks",
+              "min": [
+                6,
+                -60,
+                8
+              ],
+              "max": [
+                8,
+                -58,
+                10
+              ],
+              "state": "minecraft:dirt",
+              "interior": "minecraft:air"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.fill.arg-from.arg-to.arg-block.replace.arg-filter.outline",
+      "path": "commands.path.fill.arg-from.arg-to.arg-block.replace.arg-filter.outline",
+      "steps": [
+        {
+          "command": "fill 9 -60 8 11 -58 10 minecraft:stone",
+          "keys": [
+            "commands.fill.success"
+          ]
+        },
+        {
+          "command": "fill 9 -60 8 11 -58 10 minecraft:dirt replace minecraft:stone outline",
+          "keys": [
+            "commands.fill.success"
+          ],
+          "checks": [
+            {
+              "kind": "blocks",
+              "min": [
+                9,
+                -60,
+                8
+              ],
+              "max": [
+                11,
+                -58,
+                10
+              ],
+              "state": "minecraft:dirt",
+              "interior": "minecraft:stone"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "commands.path.fill.arg-from.arg-to.arg-block.replace.arg-filter.strict",
+      "path": "commands.path.fill.arg-from.arg-to.arg-block.replace.arg-filter.strict",
+      "steps": [
+        {
+          "command": "fill 0 -60 11 2 -58 13 minecraft:stone",
+          "keys": [
+            "commands.fill.success"
+          ]
+        },
+        {
+          "command": "fill 0 -60 11 2 -58 13 minecraft:dirt replace minecraft:stone strict",
+          "keys": [
+            "commands.fill.success"
+          ],
+          "checks": [
+            {
+              "kind": "blocks",
+              "min": [
+                0,
+                -60,
+                11
+              ],
+              "max": [
+                2,
+                -58,
+                13
+              ],
+              "state": "minecraft:dirt"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
