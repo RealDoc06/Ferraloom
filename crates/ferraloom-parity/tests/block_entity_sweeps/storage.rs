@@ -1,4 +1,4 @@
-//! Storage interactions share one Strict server lifetime per backend.
+//! Each storage scenario shares one Strict server lifetime per backend.
 use super::{block_nbt, level_support, nbt, options, set};
 use anyhow::Context;
 use ferraloom_data::{Block, EntityType, Item, properties as p};
@@ -421,7 +421,15 @@ async fn storage_interactions(session: &mut Session) -> Result<ObservationLog> {
             set(bot, pos.east(1), Block::AIR).await?;
         }
     }
-    // One explicitly seeded native structure chest in the same server lifetime.
+    Ok(log)
+}
+
+async fn structure_loot(session: &mut Session) -> Result<ObservationLog> {
+    let player = session.join("ParityBot").await?;
+    let bot = session.bot(player)?;
+    level_support::freeze(bot).await?;
+    let mut log = ObservationLog::default();
+    // Keep the structure prerequisite separate from ordinary container use.
     level_support::command(
         bot,
         "place template minecraft:village/plains/houses/plains_weaponsmith_1 0 80 0",
@@ -464,6 +472,12 @@ async fn storage_interactions(session: &mut Session) -> Result<ObservationLog> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[ignore = "live Strict storage group; one boot per backend"]
-async fn strict_chest_barrel_double_inventory_openers_and_structure_loot() -> Result<()> {
+async fn strict_chest_barrel_double_inventory_openers() -> Result<()> {
     ferraloom_parity::run(options(), RunMode::Both, storage_interactions).await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "live Strict structure loot; requires /place template runtime"]
+async fn strict_generated_structure_loot_chest() -> Result<()> {
+    ferraloom_parity::run(options(), RunMode::Both, structure_loot).await
 }
