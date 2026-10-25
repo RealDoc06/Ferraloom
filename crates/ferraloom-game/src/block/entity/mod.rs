@@ -6,6 +6,7 @@ use ferraloom_protocol::component::{ComponentTypeId, DataComponentMap, DataCompo
 use ferraloom_util::{BlockPos, ChunkPos};
 
 pub mod beehive;
+pub mod brushable;
 mod components;
 pub mod potent_sulfur;
 pub mod spawner;
@@ -186,6 +187,7 @@ static THE_END_PORTAL: TheEndPortal = TheEndPortal;
 /// Canonical concrete states. Extend this enum when porting a subclass, never Any.
 #[derive(Clone, Debug)]
 pub enum BlockEntityState {
+    Brushable(Box<brushable::BrushableBlockEntity>),
     PotentSulfur(Box<potent_sulfur::PotentSulfurBlockEntity>),
     Command(Box<super::containers::command::CommandBlockEntity>),
     Structure(Box<super::containers::structure::StructureBlockEntity>),
@@ -213,6 +215,7 @@ impl BlockEntityState {
             Self::Skull(entity) => &entity.parent,
             Self::Spawner(entity) => &entity.parent,
             Self::Beehive(entity) => &entity.parent,
+            Self::Brushable(entity) => &entity.parent,
             Self::Sign(entity) => &entity.parent,
             Self::Furnace(entity) => &entity.parent.parent,
             Self::Dispenser(entity) => &entity.parent.parent.parent,
@@ -234,6 +237,7 @@ impl BlockEntityState {
             Self::Skull(entity) => &mut entity.parent,
             Self::Spawner(entity) => &mut entity.parent,
             Self::Beehive(entity) => &mut entity.parent,
+            Self::Brushable(entity) => &mut entity.parent,
             Self::Sign(entity) => &mut entity.parent,
             Self::Furnace(entity) => &mut entity.parent.parent,
             Self::Dispenser(entity) => &mut entity.parent.parent.parent,
@@ -255,6 +259,7 @@ impl BlockEntityState {
             Self::Skull(_) => &super::containers::skull::SKULL_ENTITY,
             Self::Spawner(_) => &spawner::SPAWNER_ENTITY,
             Self::Beehive(_) => &beehive::BEEHIVE_ENTITY,
+            Self::Brushable(_) => &brushable::BRUSHABLE_ENTITY,
             Self::Sign(_) => &super::containers::sign::SIGN_ENTITY,
             Self::Furnace(_) => &super::containers::furnace::FURNACE_ENTITY,
             Self::Dispenser(_) => &super::redstone::storage::DISPENSER_ENTITY,
@@ -441,6 +446,9 @@ pub fn create(pos: BlockPos, state: BlockState) -> Result<BlockEntityState, Leve
         .ok_or(LevelError::UnsupportedBlockEntity(state.block()))?;
     let data = BlockEntityData::new(kind, pos, state)?;
     match kind {
+        BlockEntityType::BRUSHABLE_BLOCK => Ok(BlockEntityState::Brushable(Box::new(
+            brushable::BrushableBlockEntity::new(data),
+        ))),
         BlockEntityType::POTENT_SULFUR => Ok(BlockEntityState::PotentSulfur(Box::new(
             potent_sulfur::PotentSulfurBlockEntity::new(data),
         ))),
@@ -538,6 +546,7 @@ pub fn supports(block: Block) -> bool {
                 | BlockEntityType::COMMAND_BLOCK
                 | BlockEntityType::STRUCTURE_BLOCK
                 | BlockEntityType::SKULL
+                | BlockEntityType::BRUSHABLE_BLOCK
                 | BlockEntityType::MOB_SPAWNER
                 | BlockEntityType::BEEHIVE
                 | BlockEntityType::END_PORTAL
@@ -590,6 +599,7 @@ projection!(super::containers::skull::SkullBlockEntity, Skull);
 projection!(ChestBlockEntity, Chest);
 projection!(spawner::SpawnerBlockEntity, Spawner);
 projection!(beehive::BeehiveBlockEntity, Beehive);
+projection!(brushable::BrushableBlockEntity, Brushable);
 projection!(BarrelBlockEntity, Barrel);
 projection!(ShulkerBoxBlockEntity, ShulkerBox);
 projection!(CrafterBlockEntity, Crafter);

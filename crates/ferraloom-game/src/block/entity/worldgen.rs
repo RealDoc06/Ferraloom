@@ -18,7 +18,13 @@ impl WorldgenBlockEntity for BlockEntityState {
         self.randomizable().is_some()
     }
     fn set_loot_table(&mut self, table: &Identifier, seed: i64) -> Result<(), Error> {
-        if let Some(container) = self.randomizable_mut() {
+        if let Self::Brushable(entity) = self {
+            entity.set_loot_table(
+                ferraloom_protocol::Identifier::parse(&table.to_string())
+                    .map_err(|error| Error(format!("loot table: {error}")))?,
+                seed,
+            );
+        } else if let Some(container) = self.randomizable_mut() {
             container.loot_table = Some(
                 ferraloom_protocol::Identifier::parse(&table.to_string())
                     .map_err(|error| Error(format!("loot table: {error}")))?,
@@ -261,5 +267,54 @@ mod tests {
             observations += 1;
         }
         assert_eq!(observations, 4);
+    }
+    #[test]
+    fn brushable_worldgen_seed_assignment_matches_native_without_randomizable_draws() {
+        let mut cases = 0;
+        for row in include_str!("../../../tests/java/blocks/entities/brushable.tsv")
+            .lines()
+            .filter(|row| row.starts_with("brushable-worldgen\t"))
+        {
+            let f: Vec<_> = row.split('\t').collect();
+            let state = Block::from_name(f[1]).unwrap().default_state();
+            let mut generated = chunk();
+            generated.set_block(8, 64, 8, state);
+            let mut chunks = [RegionChunk::new(generated, ChunkStatus::Features)];
+            chunks[0]
+                .block_entities
+                .insert(POS, parse_compound("{id:'DUMMY',x:8,y:64,z:8}").unwrap());
+            let mut region = WorldGenRegion::new(
+                &mut chunks,
+                [0, 0],
+                &[ChunkStatus::Features],
+                0,
+                None,
+                &GameWorldgenBlockBehavior,
+                0,
+                63,
+            )
+            .unwrap();
+            let mut random = WorldgenRandom::new(Algorithm::Legacy.new_instance(263777));
+            let table = "minecraft:archaeology/desert_well".parse().unwrap();
+            if f[2] == "random" {
+                region.set_loot_table(POS, &table, &mut random).unwrap();
+            } else {
+                let seed = if f[2] == "zero" {
+                    0
+                } else {
+                    BlockPos::new(8, 64, 8).as_long()
+                };
+                region.set_loot_table_seed(POS, &table, seed).unwrap();
+            }
+            assert_eq!(random.next_long(), f[4].parse::<i64>().unwrap(), "{row}");
+            assert_eq!(
+                chunks[0].saved_block_entities().unwrap(),
+                vec![parse_compound(f[3]).unwrap()],
+                "{row}"
+            );
+            assert!(chunks[0].block_entities.is_empty());
+            cases += 1;
+        }
+        assert_eq!(cases, 6);
     }
 }
