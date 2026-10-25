@@ -1030,9 +1030,7 @@ impl MinecraftServer {
                         .map_err(game_error)?;
                 }
                 self.apply_level_effects()?;
-                self.level
-                    .generation()
-                    .poll_entity_progress(&self.level.level)?;
+                self.level.generation().poll_entity_io(&self.level.level)?;
                 self.level.level.tick_entity_management()?;
                 let requests = self.level.level.take_entity_storage_requests();
                 self.level.generation().with_world_mut(|world| {
@@ -1300,10 +1298,7 @@ impl MinecraftServer {
         }
         chunks.sort_by_key(|(distance, pos)| (*distance, pos.pack()));
         for (_, pos) in chunks {
-            self.level
-                .generation()
-                .request_full(&self.level.level, pos)
-                .map_err(game_error)?;
+            self.level.request_full(pos).map_err(game_error)?;
         }
         Ok(())
     }
@@ -1520,12 +1515,7 @@ impl MinecraftServer {
         Ok(())
     }
     fn update_chunk_tickets(&mut self) -> Result<()> {
-        use ferraloom_game::level::acquisition::AcquireDriver;
-        self.level
-            .generation()
-            .run_distance_manager_updates(&self.level.level)
-            .map_err(game_error)?;
-        Ok(())
+        self.level.update_chunk_tickets().map_err(game_error)
     }
     fn integrate_jobs(&mut self) -> Result<()> {
         self.progress_chunk_jobs()?;
@@ -1536,7 +1526,7 @@ impl MinecraftServer {
         Ok(())
     }
     fn progress_chunk_jobs(&mut self) -> Result<()> {
-        self.level.generation().progress_jobs(&self.level.level)
+        self.level.progress_jobs()
     }
     fn place_player(&mut self, connection: ConnectionId) -> Result<()> {
         let mut c = self
@@ -3669,9 +3659,7 @@ impl MinecraftServer {
                 .with_world_mut(|world| world.submit_entity_requests(requests, &self.properties))?;
             let sync = self.level.generation().synchronize_entities(false)?;
             sync.await?;
-            self.level
-                .generation()
-                .poll_entity_progress(&self.level.level)?;
+            self.level.generation().poll_entity_io(&self.level.level)?;
             if self.level.level.poll_entity_save_all()? {
                 let requests = self.level.level.take_entity_storage_requests();
                 self.level.generation().with_world_mut(|world| {
@@ -3679,11 +3667,7 @@ impl MinecraftServer {
                 })?;
                 let sync = self.level.generation().synchronize_entities(true)?;
                 sync.await?;
-                while self
-                    .level
-                    .generation()
-                    .poll_entity_progress(&self.level.level)?
-                {}
+                while self.level.poll_entity_loads_for_wait()? {}
                 return Ok(());
             }
         }
