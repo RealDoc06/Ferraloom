@@ -143,10 +143,14 @@ impl LiveLevel {
         self.level
             .try_mark_chunk_saved(pos)
             .map_err(|error| anyhow::anyhow!("{error:?}"))?;
-        let result = self
-            .generation()
-            .with_world(|world| world.chunk_save_plan(pos, game_time))
-            .and_then(|plan| plan.capture(&self.level));
+        let result = (|| {
+            self.level
+                .prepare_block_entities_for_saving(pos)
+                .map_err(anyhow::Error::new)?;
+            self.generation()
+                .with_world(|world| world.chunk_save_plan(pos, game_time))
+                .and_then(|plan| plan.capture(&self.level))
+        })();
         if result.is_err() {
             self.level
                 .mark_chunk_unsaved(pos)

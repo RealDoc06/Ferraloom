@@ -69,6 +69,71 @@ impl Cow {
 /// Shared Cow dispatcher for the foundation's Entity/LivingEntity primitives.
 pub struct CowBehavior;
 impl Entity for CowBehavior {
+    fn tick(
+        &self,
+        entity: super::EntityRef,
+        level: &mut crate::level::Level,
+    ) -> Result<(), crate::level::LevelError> {
+        level.entity_mut::<LivingEntity>(entity)?.swing_state.tick();
+        super::base_tick(self, entity, level)?;
+        // The live Mob AI/travel body remains pending; these are its inherited
+        // LivingEntity damage-state slots, before the future virtual aiStep.
+        super::living::damage_state::base_tick_damage_state(entity, level)?;
+        if level.entity::<EntityData>(entity)?.tick_count % 20 == 0 {
+            super::damage::combat_tracker::recheck_status(self, entity, level)?;
+        }
+        Ok(())
+    }
+    fn is_invulnerable_to(
+        &self,
+        entity: super::EntityRef,
+        source: &super::DamageSource,
+        level: &crate::level::Level,
+    ) -> Result<bool, crate::level::LevelError> {
+        super::living::hurt::living_is_invulnerable_to(self, entity, source, level)
+    }
+    fn hurt_sound(
+        &self,
+        _entity: super::EntityRef,
+        _source: &super::DamageSource,
+        _level: &crate::level::Level,
+    ) -> Result<Option<ferraloom_data::registries::sound_event::Id>, crate::level::LevelError> {
+        Ok(Some(
+            ferraloom_data::registries::sound_event::Id::ENTITY_COW_HURT,
+        ))
+    }
+    fn death_sound(
+        &self,
+        _entity: super::EntityRef,
+        _level: &crate::level::Level,
+    ) -> Result<Option<ferraloom_data::registries::sound_event::Id>, crate::level::LevelError> {
+        Ok(Some(
+            ferraloom_data::registries::sound_event::Id::ENTITY_COW_DEATH,
+        ))
+    }
+    fn sound_volume(&self) -> f32 {
+        0.4
+    }
+    fn weapon_item<'level>(
+        &self,
+        entity: super::EntityRef,
+        level: &'level crate::level::Level,
+    ) -> Result<Option<&'level ferraloom_protocol::component::ItemStack>, crate::level::LevelError>
+    {
+        super::living::weapon_item(self, entity, level)
+    }
+    fn cause_fall_damage(
+        &self,
+        entity: super::EntityRef,
+        level: &mut crate::level::Level,
+        distance: f64,
+        modifier: f32,
+        source: &super::DamageSource,
+    ) -> Result<bool, crate::level::LevelError> {
+        super::living::fall_damage::cause_fall_damage(
+            self, entity, level, distance, modifier, source,
+        )
+    }
     fn check_fall_damage(
         &self,
         entity: super::EntityRef,
@@ -227,7 +292,10 @@ impl Entity for CowBehavior {
         state: &super::EntityState,
         references: &mut Vec<super::EntityRef>,
     ) {
-        super::trace_base_entity_refs(state.as_entity(), references);
+        state
+            .as_living()
+            .expect("Cow inherits LivingEntity")
+            .trace_damage_entity_refs(references);
         if let Some(target) = state.as_mob().and_then(|mob| mob.target) {
             references.push(target);
         }

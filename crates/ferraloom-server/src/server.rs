@@ -1489,8 +1489,7 @@ impl MinecraftServer {
         Ok(())
     }
     /// Apply accepted section transitions immediately, including Y-only moves.
-    /// Native skipPlayer/PlayerMap ignored transitions remain a tracking follow-up;
-    /// this preserves the existing default-true spectators-generate-chunks path.
+    /// This also applies ChunkMap#move's same-section ignored-player transitions.
     pub(super) fn update_player_tickets(&mut self, entity: EntityRef) -> Result<()> {
         // ChunkMap#move updates audiences before any distance-manager changes.
         self.level
@@ -2844,23 +2843,27 @@ impl MinecraftServer {
             )?;
             return Ok(());
         }
-        let center = ChunkPos::containing(BlockPos::new(
-            target.x.floor() as i32,
-            target.y.floor() as i32,
-            target.z.floor() as i32,
-        ));
-        self.request_area(center, 1)?;
-        // getChunk(..., true) waits at this visibility point, never treats missing ownership as air.
-        while (-1..=1).any(|x| {
-            (-1..=1).any(|z| {
-                self.level
-                    .level
-                    .chunk(ChunkPos::new(center.x + x, center.z + z))
-                    .is_none()
-            })
-        }) {
-            self.integrate_jobs()?;
-            tokio::time::sleep(Duration::from_millis(1)).await;
+        // Entity#move's noPhysics branch only moves the receiver; it never
+        // acquires terrain. Waiting here would deadlock an ignored spectator.
+        if !self.player(entity)?.no_physics {
+            let center = ChunkPos::containing(BlockPos::new(
+                target.x.floor() as i32,
+                target.y.floor() as i32,
+                target.z.floor() as i32,
+            ));
+            self.request_area(center, 1)?;
+            // getChunk(..., true) waits at this visibility point, never treats missing ownership as air.
+            while (-1..=1).any(|x| {
+                (-1..=1).any(|z| {
+                    self.level
+                        .level
+                        .chunk(ChunkPos::new(center.x + x, center.z + z))
+                        .is_none()
+                })
+            }) {
+                self.integrate_jobs()?;
+                tokio::time::sleep(Duration::from_millis(1)).await;
+            }
         }
         let checks = MovementChecks::dedicated(&self.tick_rate_manager);
         let result = move_player_with_checks(
@@ -2926,7 +2929,16 @@ impl MinecraftServer {
                 .level
                 .update_player_chunk_tracking(entity)
                 .map_err(game_error)?;
-            self.request_area(center, distance + 2)?;
+            // ChunkMap#skipPlayer excludes ignored spectators from generation
+            // tickets while updateChunkTracking still maintains their client view.
+            if !self
+                .level
+                .level
+                .player_ignored_by_chunk_map(entity)
+                .map_err(game_error)?
+            {
+                self.request_area(center, distance + 2)?;
+            }
         }
         Ok(())
     }
@@ -3297,7 +3309,7 @@ impl MinecraftServer {
                 .with_world(|world| world.access.path().to_path_buf());
             let progress =
                 ferraloom_game::advancements::PlayerProgressSave::capture(player, &progress_path)?;
-            let tag = player.save();
+            let tag = player.save(&self.level.level).map_err(game_error)?;
             let uuid = player.uuid.to_string();
             let name = self
                 .level
@@ -3592,7 +3604,10 @@ impl MinecraftServer {
             })
             .map(|entity| {
                 let player = self.player(entity)?;
-                Ok((player.uuid.to_string(), player.save()))
+                Ok((
+                    player.uuid.to_string(),
+                    player.save(&self.level.level).map_err(game_error)?,
+                ))
             })
             .collect::<Result<Vec<_>>>()?;
         let bootstrap = self

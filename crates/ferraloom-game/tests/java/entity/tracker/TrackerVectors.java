@@ -2,6 +2,9 @@ import java.lang.reflect.*;
 import java.util.*;
 import java.nio.file.*;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.SectionPos;
+import net.minecraft.world.level.gamerules.GameRules;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.*;
 import net.minecraft.server.level.*;
@@ -44,6 +47,52 @@ public final class TrackerVectors {
         if (packet instanceof ClientboundTakeItemEntityPacket take) return "take:"+take.getItemId()+","+take.getPlayerId()+","+take.getAmount();
         if (packet instanceof ClientboundRemoveEntitiesPacket) return "remove";
         throw new AssertionError(packet.getClass());
+    }
+    /** Actual ChunkMap add/move/remove with a real PlayerMap and observed ticket receiver. */
+    static void spectators(ServerLevel level, ChunkMap map, ArrayList<String> rows) throws Exception {
+        var players = new PlayerMap();
+        field(ChunkMap.class, "playerMap").set(map, players);
+        var distanceField = field(ChunkMap.class, "distanceManager");
+        var distance = (DistanceManager)mock(distanceField.getType());
+        distanceField.set(map, distance);
+        var active = new SectionPos[]{null};
+        doAnswer(call -> { active[0] = call.getArgument(0); return null; })
+            .when(distance).addPlayer(any(),any());
+        doAnswer(call -> { active[0] = null; return null; })
+            .when(distance).removePlayer(any(),any());
+        var rules = mock(GameRules.class);
+        doReturn(rules).when(level).getGameRules();
+        var player = mock(ServerPlayer.class);
+        doReturn(2).when(player).requestedViewDistance();
+        var section = new SectionPos[]{SectionPos.of(0,4,0)};
+        var last = new SectionPos[]{section[0]};
+        doAnswer(call -> new BlockPos(section[0].x()*16,section[0].y()*16,section[0].z()*16))
+            .when(player).blockPosition();
+        doAnswer(call -> new ChunkPos(section[0].x(),section[0].z())).when(player).chunkPosition();
+        doAnswer(call -> ChunkTrackingView.of(new ChunkPos(section[0].x(),section[0].z()),2))
+            .when(player).getChunkTrackingView();
+        doAnswer(call -> { last[0] = call.getArgument(0); return null; }).when(player).setLastSectionPos(any());
+        doAnswer(call -> last[0]).when(player).getLastSectionPos();
+        var status = ChunkMap.class.getDeclaredMethod("updatePlayerStatus",ServerPlayer.class,boolean.class);
+        status.setAccessible(true);
+        for (String input : List.of(
+            "add,spectator,false,0,4,0", "move,spectator,false,0,4,0",
+            "move,spectator,true,0,4,0", "move,spectator,true,0,5,0",
+            "move,spectator,false,0,5,0", "move,creative,false,0,5,0",
+            "move,creative,false,1,5,-2", "move,spectator,false,1,5,-2",
+            "remove,spectator,true,1,5,-2", "add,spectator,true,2,4,3",
+            "remove,spectator,false,2,4,3", "add,spectator,false,-2,4,3",
+            "remove,spectator,true,-2,4,3", "add,creative,false,0,4,0",
+            "move,survival,false,0,4,0", "remove,survival,false,0,4,0")) {
+            var args = input.split(",");
+            section[0] = SectionPos.of(Integer.parseInt(args[3]),Integer.parseInt(args[4]),Integer.parseInt(args[5]));
+            doReturn(args[1].equals("spectator")).when(player).isSpectator();
+            doReturn(Boolean.parseBoolean(args[2])).when(rules).get(GameRules.SPECTATORS_GENERATE_CHUNKS);
+            if (args[0].equals("move")) map.move(player);
+            else status.invoke(map,player,args[0].equals("add"));
+            rows.add("spectator\t"+input+"\t"+players.ignoredOrUnknown(player)+"\t"+
+                (active[0]==null?"-":active[0].x()+","+active[0].y()+","+active[0].z()));
+        }
     }
     public static void main(String[] args) throws Exception {
         AdvancementVectors.setup();
@@ -148,6 +197,8 @@ public final class TrackerVectors {
             int number = registry.getId(packet.sourceType().value());
             rows.add("damage\t"+mode+"\t"+number+"\t"+packet.sourceCauseId()+"\t"+packet.sourceDirectId()+"\t"+packet.sourcePosition().map(v->Long.toHexString(Double.doubleToRawLongBits(v.x))+","+Long.toHexString(Double.doubleToRawLongBits(v.y))+","+Long.toHexString(Double.doubleToRawLongBits(v.z))).orElse("-"));
         }
+        entries.clear();
+        spectators(level,map,rows);
         Files.write(Path.of(args[0]),rows);
         System.out.println(rows.size()+" native tracker observations");
     }

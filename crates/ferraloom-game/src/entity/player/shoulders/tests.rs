@@ -124,7 +124,9 @@ fn shoulder_tags_roundtrip_and_unsupported_effects_preserve_native_order() {
     source.set_shoulder_entity_left(left.clone());
     let right = tag(Some("minecraft:parrot"), Some(1), Some(true));
     source.set_shoulder_entity_right(right.clone());
-    let mut saved = source.save();
+    let mut saved = source
+        .save(&crate::entity::tests::persistence_level())
+        .unwrap();
     saved.remove("recipeBook");
     let mut restored = player();
     restored.try_load(saved).unwrap();
