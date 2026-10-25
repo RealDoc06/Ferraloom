@@ -16,3 +16,19 @@ damage	generic	18	-1	-1	-
 damage	player	34	7	7	-
 damage	indirect	0	7	12	-
 damage	position	10	-1	-1	3ff4000000000000,404f800000000000,8000000000000000
+spectator	add,spectator,false,0,4,0	true	-
+spectator	move,spectator,false,0,4,0	true	-
+spectator	move,spectator,true,0,4,0	false	0,4,0
+spectator	move,spectator,true,0,5,0	false	0,5,0
+spectator	move,spectator,false,0,5,0	true	-
+spectator	move,creative,false,0,5,0	false	0,5,0
+spectator	move,creative,false,1,5,-2	false	1,5,-2
+spectator	move,spectator,false,1,5,-2	true	-
+spectator	remove,spectator,true,1,5,-2	true	-
+spectator	add,spectator,true,2,4,3	false	2,4,3
+spectator	remove,spectator,false,2,4,3	true	-
+spectator	add,spectator,false,-2,4,3	true	-
+spectator	remove,spectator,true,-2,4,3	true	-
+spectator	add,creative,false,0,4,0	false	0,4,0
+spectator	move,survival,false,0,4,0	false	0,4,0
+spectator	remove,survival,false,0,4,0	true	-
