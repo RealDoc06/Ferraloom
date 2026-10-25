@@ -185,7 +185,11 @@ impl Level {
         let mut tag = match state {
             EntityState::Cow(cow) => {
                 let mut tag = base.save_without_id();
-                cow.as_living().add_additional_save_data(&mut tag);
+                cow.as_living().add_additional_save_data(
+                    &mut tag,
+                    self,
+                    crate::entity::LivingEntity::absorption_amount,
+                )?;
                 tag.insert("Age", Tag::Int(cow.parent.parent.parent.age));
                 tag.insert("InLove", Tag::Int(cow.parent.parent.in_love));
 

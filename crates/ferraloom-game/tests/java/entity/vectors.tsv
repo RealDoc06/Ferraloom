@@ -1298,6 +1298,51 @@ damage-source	player	minecraft:player_attack	1	1	true	false	true	none	3ff0000000
 damage-source	mob	minecraft:mob_attack	2	2	true	true	false	none	3ff0000000000000,4000000000000000,4008000000000000	c010000000000000,4014000000000000,c018000000000000
 damage-source	thorns	minecraft:thorns	3	3	true	false	false	none	3ff0000000000000,4000000000000000,4008000000000000	c010000000000000,4014000000000000,c018000000000000
 damage-source	bad-respawn	minecraft:bad_respawn_point	0	0	true	true	false	8000000000000000,4059000000000000,4008000000000000	8000000000000000,4059000000000000,4008000000000000	8000000000000000,4059000000000000,4008000000000000
+hurt-memory-load	player	absent	41a00000	0	0	0	false	23	-	-999	-	-999	0	0
+hurt-memory-load	player	normal	40f00000	10	12	40c80000	true	-2147483624	[1,2,3,4]	7	[5,6,7,8]	2147483647	40c80000	12
+hurt-memory-load	player	negative	40f00000	-1	-3	c0a00000	true	24	[1,2,3,4]	-1	[5,6,7,8]	-1	c0a00000	-3
+hurt-memory-load	player	nan	40f00000	10	12	7fc00000	true	-2147483624	[1,2,3,4]	7	[5,6,7,8]	2147483647	7fc00000	12
+hurt-memory-load	player	infinity	40f00000	10	12	7f800000	true	-2147483624	[1,2,3,4]	7	[5,6,7,8]	2147483647	7f800000	12
+hurt-memory-load	player	wrong	40f00000	0	0	0	true	23	-	-999	-	-999	0	0
+hurt-memory-load	player	numeric	40f00000	10	12	40c80000	true	-2147483624	[0,2,3,4]	7	[1,0,2147483647,-2147483648]	2147483647	40c80000	12
+hurt-memory-load	player	clamp	41a00000	10	12	40c80000	true	-2147483624	[1,2,3,4]	7	[5,6,7,8]	2147483647	40c80000	12
+hurt-memory-load	cow	absent	41200000	0	0	0	false	23	-	-999	-	-999	0	0
+hurt-memory-load	cow	normal	40f00000	10	12	40c80000	true	-2147483624	[1,2,3,4]	7	[5,6,7,8]	2147483647	40c80000	12
+hurt-memory-load	cow	negative	40f00000	-1	-3	c0a00000	true	24	[1,2,3,4]	-1	[5,6,7,8]	-1	c0a00000	-3
+hurt-memory-load	cow	nan	40f00000	10	12	7fc00000	true	-2147483624	[1,2,3,4]	7	[5,6,7,8]	2147483647	7fc00000	12
+hurt-memory-load	cow	infinity	40f00000	10	12	7f800000	true	-2147483624	[1,2,3,4]	7	[5,6,7,8]	2147483647	7f800000	12
+hurt-memory-load	cow	wrong	40f00000	0	0	0	true	23	-	-999	-	-999	0	0
+hurt-memory-load	cow	numeric	40f00000	10	12	40c80000	true	-2147483624	[0,2,3,4]	7	[1,0,2147483647,-2147483648]	2147483647	40c80000	12
+hurt-memory-load	cow	clamp	41200000	10	12	40c80000	true	-2147483624	[1,2,3,4]	7	[5,6,7,8]	2147483647	40c80000	12
+hurt-absorption	player	0	bf800000	0	0
+hurt-absorption	player	0	80000000	80000000	0
+hurt-absorption	player	0	40400000	0	0
+hurt-absorption	player	0	40e00000	0	0
+hurt-absorption	player	0	7fc00000	7fc00000	7fc00000
+hurt-absorption	player	0	7f800000	0	0
+hurt-absorption	player	40a00000	bf800000	0	0
+hurt-absorption	player	40a00000	80000000	80000000	0
+hurt-absorption	player	40a00000	40400000	40400000	40400000
+hurt-absorption	player	40a00000	40e00000	40a00000	40a00000
+hurt-absorption	player	40a00000	7fc00000	7fc00000	7fc00000
+hurt-absorption	player	40a00000	7f800000	40a00000	40a00000
+hurt-absorption	cow	0	bf800000	0	0
+hurt-absorption	cow	0	80000000	80000000	0
+hurt-absorption	cow	0	40400000	0	0
+hurt-absorption	cow	0	40e00000	0	0
+hurt-absorption	cow	0	7fc00000	7fc00000	7fc00000
+hurt-absorption	cow	0	7f800000	0	0
+hurt-absorption	cow	40a00000	bf800000	0	0
+hurt-absorption	cow	40a00000	80000000	80000000	0
+hurt-absorption	cow	40a00000	40400000	40400000	40400000
+hurt-absorption	cow	40a00000	40e00000	40a00000	40a00000
+hurt-absorption	cow	40a00000	7fc00000	7fc00000	7fc00000
+hurt-absorption	cow	40a00000	7f800000	40a00000	40a00000
+hurt-memory-reference	captured	[0,1,0,2]	[0,1,0,2]	19	0
+hurt-memory-reference	uuid-changed	[0,3,0,4]	[0,3,0,4]	19	0
+hurt-memory-reference	removed	[0,3,0,4]	[0,3,0,4]	19	0
+hurt-memory-reference	cache-invalidated	[0,3,0,4]	[0,3,0,4]	19	0
+hurt-memory-reference	cleared	-	-	-999	-999
 combat-armor	absent	40800000	0	0	40800000
 combat-armor	absent	40800000	41a00000	0	3f8f5c28
 combat-armor	absent	41a00000	41a00000	41000000	40ffffff
@@ -1352,6 +1397,56 @@ damage-weapon	selected1	minecraft:gold_ingot
 damage-weapon	retained-empty	minecraft:air
 damage-weapon	cow-direct	minecraft:iron_axe
 damage-weapon	tnt-direct	null
+combat-tracker	false	0	check	0	20	false,false,0,0,0,0;-	-
+combat-tracker	false	1	env	1	20	true,false,1,0,0,0;env,40800000,-,40a80000	-
+combat-tracker	false	2	check	101	20	true,false,1,0,0,0;env,40800000,-,40a80000	-
+combat-tracker	false	3	check	102	20	false,false,1,0,102,102;-	-
+combat-tracker	false	4	living	103	20	true,true,103,103,103,0;living,40800000,-,40a80000	enter:true,true,103,103,103,0;living,40800000,-,40a80000
+combat-tracker	false	5	env	104	20	true,true,104,103,103,1;living,40800000,-,40a80000/env,40800000,-,40a80000	-
+combat-tracker	false	6	check	404	20	true,true,104,103,103,301;living,40800000,-,40a80000/env,40800000,-,40a80000	-
+combat-tracker	false	7	check	405	20	false,false,104,103,405,302;-	leave:false,false,104,103,405,302;living,40800000,-,40a80000/env,40800000,-,40a80000
+combat-tracker	false	8	living	406	20	true,true,406,406,406,0;living,40800000,-,40a80000	enter:true,true,406,406,406,0;living,40800000,-,40a80000
+combat-tracker	false	9	check	407	0	false,false,406,406,407,1;-	leave:false,false,406,406,407,1;living,40800000,-,40a80000
+combat-tracker	false	10	living	408	0	true,false,408,406,407,1;living,40800000,-,40a80000	-
+combat-tracker	false	11	check	409	NaN	false,false,408,406,409,3;-	-
+combat-tracker	false	12	living	2147483643	20	true,true,2147483643,2147483643,2147483643,0;living,40800000,-,40a80000	enter:true,true,2147483643,2147483643,2147483643,0;living,40800000,-,40a80000
+combat-tracker	false	13	check	-2147483352	20	false,false,2147483643,2147483643,-2147483352,301;-	leave:false,false,2147483643,2147483643,-2147483352,301;living,40800000,-,40a80000
+combat-tracker	false	14	check	-2147483351	20	false,false,2147483643,2147483643,-2147483352,301;-	-
+combat-tracker	true	0	check	0	20	false,false,0,0,0,0;-	-
+combat-tracker	true	1	env	1	20	true,false,1,0,0,0;env,40800000,-,40a80000	-
+combat-tracker	true	2	check	101	20	true,false,1,0,0,0;env,40800000,-,40a80000	-
+combat-tracker	true	3	check	102	20	false,false,1,0,102,102;-	-
+combat-tracker	true	4	living	103	20	true,true,103,103,103,0;living,40800000,-,40a80000/env,40200000,-,40a80000	enter:true,true,103,103,103,0;living,40800000,-,40a80000|entered:true,true,103,103,103,0;living,40800000,-,40a80000/env,40200000,-,40a80000
+combat-tracker	true	5	env	104	20	true,true,104,103,103,1;living,40800000,-,40a80000/env,40200000,-,40a80000/env,40800000,-,40a80000	-
+combat-tracker	true	6	check	404	20	true,true,104,103,103,301;living,40800000,-,40a80000/env,40200000,-,40a80000/env,40800000,-,40a80000	-
+combat-tracker	true	7	check	405	20	true,false,405,103,405,302;-	leave:false,false,104,103,405,302;living,40800000,-,40a80000/env,40200000,-,40a80000/env,40800000,-,40a80000|left:true,false,405,103,405,302;living,40800000,-,40a80000/env,40200000,-,40a80000/env,40800000,-,40a80000/env,40600000,-,40a80000
+combat-tracker	true	8	living	406	20	true,true,406,406,406,0;living,40800000,-,40a80000/env,40200000,-,40a80000	enter:true,true,406,406,406,0;living,40800000,-,40a80000|entered:true,true,406,406,406,0;living,40800000,-,40a80000/env,40200000,-,40a80000
+combat-tracker	true	9	check	407	0	true,false,407,406,407,1;-	leave:false,false,406,406,407,1;living,40800000,-,40a80000/env,40200000,-,40a80000|left:true,false,407,406,407,1;living,40800000,-,40a80000/env,40200000,-,40a80000/env,40600000,-,40a80000
+combat-tracker	true	10	living	408	0	true,false,408,406,408,2;living,40800000,-,40a80000	-
+combat-tracker	true	11	check	409	NaN	false,false,408,406,409,3;-	-
+combat-tracker	true	12	living	2147483643	20	true,true,2147483643,2147483643,2147483643,0;living,40800000,-,40a80000/env,40200000,-,40a80000	enter:true,true,2147483643,2147483643,2147483643,0;living,40800000,-,40a80000|entered:true,true,2147483643,2147483643,2147483643,0;living,40800000,-,40a80000/env,40200000,-,40a80000
+combat-tracker	true	13	check	-2147483352	20	true,false,-2147483352,2147483643,-2147483352,301;-	leave:false,false,2147483643,2147483643,-2147483352,301;living,40800000,-,40a80000/env,40200000,-,40a80000|left:true,false,-2147483352,2147483643,-2147483352,301;living,40800000,-,40a80000/env,40200000,-,40a80000/env,40600000,-,40a80000
+combat-tracker	true	14	check	-2147483351	20	true,false,-2147483352,2147483643,-2147483352,301;-	-
+combat-fall-location	false	-1	env,3f800000,-,7f800000
+combat-fall-location	false	7308	env,3f800000,ladder,7f800000
+combat-fall-location	false	8799	env,3f800000,ladder,7f800000
+combat-fall-location	false	10123	env,3f800000,vines,7f800000
+combat-fall-location	false	24334	env,3f800000,weeping_vines,7f800000
+combat-fall-location	false	24360	env,3f800000,weeping_vines,7f800000
+combat-fall-location	false	24361	env,3f800000,twisting_vines,7f800000
+combat-fall-location	false	24387	env,3f800000,twisting_vines,7f800000
+combat-fall-location	false	24094	env,3f800000,scaffolding,7f800000
+combat-fall-location	false	1	env,3f800000,other_climbable,7f800000
+combat-fall-location	true	-1	env,3f800000,water,7f800000
+combat-fall-location	true	7308	env,3f800000,ladder,7f800000
+combat-fall-location	true	8799	env,3f800000,ladder,7f800000
+combat-fall-location	true	10123	env,3f800000,vines,7f800000
+combat-fall-location	true	24334	env,3f800000,weeping_vines,7f800000
+combat-fall-location	true	24360	env,3f800000,weeping_vines,7f800000
+combat-fall-location	true	24361	env,3f800000,twisting_vines,7f800000
+combat-fall-location	true	24387	env,3f800000,twisting_vines,7f800000
+combat-fall-location	true	24094	env,3f800000,scaffolding,7f800000
+combat-fall-location	true	1	env,3f800000,other_climbable,7f800000
 difficulty-read	{}	normal	false	false
 difficulty-read	{difficulty_settings:{}}	normal	false	false
 difficulty-read	{difficulty_settings:{difficulty:hard,hardcore:1b,locked:1b}}	hard	true	true

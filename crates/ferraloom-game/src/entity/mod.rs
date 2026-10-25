@@ -265,6 +265,14 @@ pub fn trace_base_entity_refs(base: &EntityData, references: &mut Vec<EntityRef>
 ///
 /// Dispatch objects are stateless. Never hold a state borrow across a world call.
 pub trait Entity: Sync {
+    /// Port of LivingEntity#onEnterCombat's empty parent callback.
+    fn on_enter_combat(&self, _entity: EntityRef, _level: &mut Level) -> Result<(), LevelError> {
+        Ok(())
+    }
+    /// Port of LivingEntity#onLeaveCombat's empty parent callback.
+    fn on_leave_combat(&self, _entity: EntityRef, _level: &mut Level) -> Result<(), LevelError> {
+        Ok(())
+    }
     /// Port of Entity#getName, with Player and ItemEntity virtual overrides.
     fn name(
         &self,

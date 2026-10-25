@@ -3,6 +3,7 @@ use ferraloom_data::datapack::{self, Identifier, ResourceManager, TagElement, Ta
 use std::{collections::BTreeMap, sync::Arc};
 
 pub mod combat_rules;
+pub mod combat_tracker;
 mod source;
 mod sources;
 mod types;

@@ -235,7 +235,10 @@ impl Entity for CowBehavior {
         state: &super::EntityState,
         references: &mut Vec<super::EntityRef>,
     ) {
-        super::trace_base_entity_refs(state.as_entity(), references);
+        state
+            .as_living()
+            .expect("Cow inherits LivingEntity")
+            .trace_damage_entity_refs(references);
         if let Some(target) = state.as_mob().and_then(|mob| mob.target) {
             references.push(target);
         }

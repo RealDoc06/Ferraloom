@@ -331,7 +331,10 @@ impl ServerPlayer {
         &mut self,
         tag: CompoundTag,
     ) -> Result<(), super::persistence::EntityLoadError> {
-        self.parent.parent.load_nbt(tag)?;
+        self.parent.parent.load_nbt_with_absorption_setter(
+            tag,
+            super::living::damage_state::player_internal_set_absorption_amount,
+        )?;
         // Player#readAdditionalSaveData restores the profile UUID after super.
         self.uuid = self.profile_id;
         self.food_data.load(&self.parent.parent.parent.saved);
@@ -385,7 +388,7 @@ impl ServerPlayer {
         self.save_without_id(level)
     }
     /// Port of Entity#saveWithoutId, Player#addAdditionalSaveData and ServerPlayer.
-    pub fn save_without_id(&self, _level: &Level) -> Result<CompoundTag, LevelError> {
+    pub fn save_without_id(&self, level: &Level) -> Result<CompoundTag, LevelError> {
         let mut tag = self.parent.parent.save_without_id();
         // Player#addAdditionalSaveData writes the version even for predicate NBT.
         tag.insert("DataVersion", Tag::Int(5023));
@@ -417,7 +420,11 @@ impl ServerPlayer {
             Tag::List(ListTag(vec![Tag::Float(self.yaw), Tag::Float(self.pitch)])),
         );
         tag.insert("playerGameType", Tag::Int(self.game_mode.id()));
-        self.parent.parent.add_additional_save_data(&mut tag);
+        self.parent.parent.add_additional_save_data(
+            &mut tag,
+            level,
+            super::living::damage_state::player_absorption_amount,
+        )?;
         tag.insert("OnGround", Tag::Byte(i8::from(self.on_ground)));
         tag.insert(
             "Inventory",
@@ -712,6 +719,33 @@ fn jump_from_ground(entity: crate::entity::EntityRef, level: &mut Level) -> Resu
 }
 pub struct PlayerBehavior;
 impl crate::entity::Entity for PlayerBehavior {
+    fn on_enter_combat(&self, entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
+        level.entity::<ServerPlayer>(entity)?;
+        level.emit(crate::level::effects::LevelEffect::PlayerPacket {
+            recipients: vec![entity],
+            packet: Box::new(
+                ferraloom_protocol::play::clientbound::Packet::PlayerCombatEnter(
+                    ferraloom_protocol::play::clientbound::PlayerCombatEnter {},
+                ),
+            ),
+        });
+        Ok(())
+    }
+    fn on_leave_combat(&self, entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
+        let player = level.entity::<ServerPlayer>(entity)?;
+        let duration = player.combat_tracker().combat_duration(player.tick_count);
+        level.emit(crate::level::effects::LevelEffect::PlayerPacket {
+            recipients: vec![entity],
+            packet: Box::new(
+                ferraloom_protocol::play::clientbound::Packet::PlayerCombatEnd(
+                    ferraloom_protocol::play::clientbound::PlayerCombatEnd {
+                        duration: ferraloom_protocol::codec::VarInt(duration),
+                    },
+                ),
+            ),
+        });
+        Ok(())
+    }
     fn check_fall_damage(
         &self,
         entity: EntityRef,
@@ -915,7 +949,10 @@ impl crate::entity::Entity for PlayerBehavior {
         state: &crate::entity::EntityState,
         references: &mut Vec<crate::entity::EntityRef>,
     ) {
-        crate::entity::trace_base_entity_refs(state.as_entity(), references);
+        state
+            .as_living()
+            .expect("Player inherits LivingEntity")
+            .trace_damage_entity_refs(references);
     }
 
     fn known_movement(
