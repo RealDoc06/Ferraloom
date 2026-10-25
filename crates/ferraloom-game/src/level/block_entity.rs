@@ -127,16 +127,21 @@ impl BlockEntityRuntime {
             state.set_level(game_time);
         }
     }
-    pub(super) fn register_published_chunk(&self, chunk: &super::chunk::LevelChunk) {
+    pub(super) fn register_published_chunk(
+        &self,
+        chunk: &super::chunk::LevelChunk,
+        has_skylight: Option<bool>,
+    ) -> Result<(), LevelError> {
         // Stateless ticker selection invokes no world callback. The metadata
         // guard is released before returning to the promotion continuation.
         let mut tickers = self.tickers.borrow_mut();
         for state in chunk.block_entities.iter() {
             let data = state.data();
-            if state.has_server_ticker() {
+            if state.has_server_ticker(has_skylight)? {
                 tickers.bind(data.reference(), data.kind);
             }
         }
+        Ok(())
     }
 }
 impl Level {
@@ -217,6 +222,8 @@ impl Level {
         if !state.data().kind.is_valid(block) {
             return Err(LevelError::UnsupportedBlockEntity(block.block()));
         }
+        state.data_mut().block_state = block;
+        let has_ticker = state.has_server_ticker(self.region().has_skylight)?;
         let region = self.region_mut();
         if let Some(mut old) = region
             .chunks
@@ -245,7 +252,7 @@ impl Level {
         let reference = data.reference();
         let kind = data.kind;
         state.set_level(region.game_time);
-        if state.has_server_ticker() {
+        if has_ticker {
             runtime.tickers.get_mut().bind(reference, kind);
         } else {
             runtime.tickers.get_mut().unbind(pos);
@@ -296,7 +303,7 @@ impl Level {
                 .set_block_state(state)?;
             let entity = self.block_entity_state(handle)?;
             let kind = entity.data().kind;
-            if entity.has_server_ticker() {
+            if entity.has_server_ticker(self.region().has_skylight)? {
                 self.region_mut()
                     .block_entity_state
                     .tickers
@@ -758,5 +765,68 @@ mod tests {
         assert!(
             matches!(level.player_and_block_entities_mut(player,&[a]),Err(LevelError::MissingBlockEntity(h)) if h==a)
         );
+    }
+    #[test]
+    fn daylight_bindings_require_real_sky_and_follow_attachment_publication_and_rebind() {
+        use crate::block::entity::{BlockEntityData, create};
+        let pos = BlockPos::new(1, 1, 1);
+        let state = Block::DAYLIGHT_DETECTOR.default_state();
+        let binding = |level: &Level| {
+            let mut tickers = level.region().block_entity_state.tickers.borrow_mut();
+            tickers.begin_phase();
+            let value = tickers.next_ticker().map(|ticker| ticker.entity);
+            assert!(tickers.next_ticker().is_none());
+            tickers.end_phase();
+            value
+        };
+        let mut missing = level();
+        missing.set_block_state(pos, state).unwrap();
+        assert_eq!(
+            missing.set_block_entity(create(pos, state).unwrap()),
+            Err(LevelError::UnsupportedLightQuery)
+        );
+        assert_eq!(missing.block_entity_ref(pos).unwrap(), None);
+        assert_eq!(binding(&missing), None);
+        for sky in [true, false] {
+            let mut level = level();
+            level.set_has_skylight(sky);
+            level.set_block_state(pos, state).unwrap();
+            level.set_block_entity(create(pos, state).unwrap()).unwrap();
+            let original = level.block_entity_ref(pos).unwrap().unwrap();
+            assert_eq!(binding(&level), sky.then_some(original));
+            // Existing-wrapper rebind must use the same owning dimension fact.
+            level.ensure_block_entity(pos, state).unwrap();
+            assert_eq!(binding(&level), sky.then_some(original));
+            // Native proto publication attaches the original prepared state.
+            level.remove_block_entity(pos).unwrap();
+            assert_eq!(binding(&level), None);
+            let key = ChunkPos::new(0, 0);
+            level.remove_chunk(key).unwrap();
+            let mut chunk = LevelChunk::new(
+                key,
+                0..1,
+                ferraloom_chunk::LevelChunkSection::new(
+                    ferraloom_chunk::Strategy::block_states(),
+                    ferraloom_chunk::Strategy::biomes(Arc::new(
+                        ferraloom_chunk::IdMap::new(vec![ferraloom_chunk::BiomeId(0)]).unwrap(),
+                    )),
+                    ferraloom_chunk::BiomeId(0),
+                ),
+            );
+            chunk.set_block_state(pos, state).unwrap();
+            chunk
+                .add_prepared_block_entity(create(pos, state).unwrap())
+                .unwrap();
+            level.add_chunk(chunk).unwrap();
+            let published = level.block_entity_ref(pos).unwrap().unwrap();
+            assert_ne!(original, published);
+            assert!(
+                level
+                    .block_entity::<BlockEntityData>(published)
+                    .unwrap()
+                    .has_level
+            );
+            assert_eq!(binding(&level), sky.then_some(published));
+        }
     }
 }

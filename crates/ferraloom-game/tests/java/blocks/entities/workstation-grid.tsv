@@ -1,0 +1,4 @@
+grid	true	true		1012,2,64	result:1:0:-	-
+grid	true	false	result:1:0:-	-	result:1:0:-;result:2:0:-	-
+grid	false	true		1012,2,64	result:1:0:-	-
+grid	false	false		1012,2,64	result:1:0:-	-
