@@ -13,6 +13,7 @@ use crate::{
 };
 
 pub mod acquisition;
+mod block_actions;
 mod block_entity;
 pub mod blockscan;
 pub mod border;
@@ -59,6 +60,7 @@ pub mod weather;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum LevelError {
+    BlockBreak(crate::entity::player::game_mode::BlockBreakFailure),
     /// Native ArrayList iterator ConcurrentModificationException during listener visitation.
     ConcurrentGameEventListenerModification,
     UnsupportedItemUseOn(ferraloom_data::Item),
@@ -130,6 +132,7 @@ pub enum LevelError {
 impl std::fmt::Display for LevelError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::BlockBreak(error) => std::fmt::Display::fmt(error.error(), formatter),
             Self::WorldgenMutationFailed { pos, source } => {
                 write!(formatter, "worldgen mutation at {pos:?}: {source}")
             }
@@ -140,6 +143,7 @@ impl std::fmt::Display for LevelError {
 impl std::error::Error for LevelError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
+            Self::BlockBreak(error) => Some(error.error()),
             Self::WorldgenMutationFailed { source, .. } => Some(source),
             _ => None,
         }

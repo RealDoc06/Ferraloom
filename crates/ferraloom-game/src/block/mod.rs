@@ -2,6 +2,7 @@
 use crate::level::{Level, LevelError, redstone::Orientation};
 use ferraloom_data::{Block, BlockState, FluidState};
 use ferraloom_util::{BlockPos, Direction};
+pub mod breaking;
 pub mod building;
 mod clone_item;
 pub mod containers;
@@ -338,6 +339,44 @@ pub trait BlockBehavior: Sync {
     ) -> Result<bool, LevelError> {
         base_is_pathfindable(state, computation, level)
     }
+    /// Port of BlockBehaviour#getDestroyProgress, including its hardness guard.
+    fn get_destroy_progress(
+        &self,
+        state: BlockState,
+        _pos: BlockPos,
+        player: crate::entity::EntityRef,
+        level: &mut Level,
+    ) -> Result<f32, LevelError> {
+        breaking::get_destroy_progress(state, player, level)
+    }
+    /// Port of BlockBehaviour#attack's inherited no-op.
+    fn attack(
+        &self,
+        _state: BlockState,
+        _pos: BlockPos,
+        _player: crate::entity::EntityRef,
+        _level: &mut Level,
+    ) -> Result<(), LevelError> {
+        Ok(())
+    }
+    /// Port of Block#destroy's inherited no-op. MovingPistonBlock overrides it.
+    fn destroy(
+        &self,
+        _state: BlockState,
+        _pos: BlockPos,
+        _level: &mut Level,
+    ) -> Result<(), LevelError> {
+        Ok(())
+    }
+    /// Port of Block#playerDestroy. The original receiver stays independent
+    /// from the state passed by a family override's native super call.
+    fn player_destroy(
+        &self,
+        context: breaking::PlayerDestroyContext<'_>,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        breaking::player_destroy(context, level)
+    }
     /// Port of BlockBehaviour#getMenuProvider's absent base provider.
     fn get_menu_provider(
         &self,
@@ -400,8 +439,7 @@ pub trait BlockBehavior: Sync {
             .required_block_behavior(state.block(), BlockMethod::SpawnDestroyByEntityParticles)?
             .spawn_destroy_by_entity_particles(state, pos, None, level)
     }
-    /// Port of Block#playerWillDestroy. The guarded-piglin AI side effect
-    /// remains a required unported call until PiglinAi is implemented.
+    /// Port of Block#playerWillDestroy, including PiglinAi's live nearby query.
     fn player_will_destroy(
         &self,
         state: BlockState,
@@ -416,9 +454,7 @@ pub trait BlockBehavior: Sync {
             ferraloom_data::tags::BlockTags::GUARDED_BY_PIGLINS,
             state.block(),
         ) {
-            return Err(LevelError::UnsupportedEntity(
-                ferraloom_data::EntityType::PIGLIN,
-            ));
+            crate::entity::monster::piglin::ai::anger_nearby_piglins(level, player, false)?;
         }
         level.game_event(
             ferraloom_data::registries::game_event::Id::BLOCK_DESTROY,

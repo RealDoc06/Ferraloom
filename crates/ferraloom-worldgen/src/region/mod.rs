@@ -7,7 +7,9 @@ use ferraloom_data::{Block, BlockState, FluidState};
 use ferraloom_nbt::{CompoundTag, Tag};
 use std::{cell::OnceCell, collections::BTreeMap};
 
+mod block_entity;
 mod lighting;
+pub use block_entity::WorldgenBlockEntity;
 pub use lighting::ProtoChunkLightEngine;
 #[cfg(test)]
 mod lighting_tests;
@@ -87,14 +89,17 @@ impl<T: PartialEq> ProtoChunkTicks<T> {
     }
 }
 
-/// Owned inputs and outputs of an off-tick worldgen job. Block entities remain
-/// NBT until the game layer converts the protochunk to a LevelChunk.
+/// Owned inputs and outputs of an off-tick worldgen job. Pending NBT and actual
+/// instantiated receivers follow ProtoChunk's separate maps. The current FULL
+/// handoff serializes receivers: saved data/first spawn selection survive, but
+/// later external mutation can observe a lost SpawnData alias across promotion.
 #[derive(Clone, Debug)]
 pub struct RegionChunk {
     pub chunk: GeneratedChunk,
     pub status: ChunkStatus,
     pub structures: crate::structure::pipeline::ChunkStructures,
     pub block_entities: BTreeMap<[i32; 3], CompoundTag>,
+    pub instantiated_block_entities: BTreeMap<[i32; 3], Box<dyn WorldgenBlockEntity>>,
     pub entities: Vec<CompoundTag>,
     pub block_ticks: ProtoChunkTicks<Block>,
     pub fluid_ticks: ProtoChunkTicks<ferraloom_data::registries::fluid::Id>,
@@ -103,6 +108,15 @@ pub struct RegionChunk {
     heightmaps: [OnceCell<[i32; 256]>; 6],
 }
 impl RegionChunk {
+    /// ChunkAccess#getBlockEntityNbtForSaving prefers the actual receiver to a
+    /// later pending tag at the same cell. Serialization occurs at IO/promotion.
+    pub fn saved_block_entities(&self) -> Result<Vec<CompoundTag>, Error> {
+        let mut tags = self.block_entities.clone();
+        for (&position, entity) in &self.instantiated_block_entities {
+            tags.insert(position, entity.save()?);
+        }
+        Ok(tags.into_values().collect())
+    }
     pub fn new(chunk: GeneratedChunk, status: ChunkStatus) -> Self {
         let heightmaps = Self::heightmap_caches(&chunk);
         Self {
@@ -111,6 +125,7 @@ impl RegionChunk {
             chunk,
             status,
             block_entities: BTreeMap::new(),
+            instantiated_block_entities: BTreeMap::new(),
             entities: Vec::new(),
             block_ticks: ProtoChunkTicks::default(),
             fluid_ticks: ProtoChunkTicks::default(),
@@ -162,6 +177,16 @@ pub struct StructureEntitySpawnFlags {
 /// Context-dependent block behavior is supplied by the game adapter. Baseline
 /// extracted collision shapes cannot answer survival or neighbor shape queries.
 pub trait WorldgenBlockBehavior: Sync {
+    /// Port of WorldGenRegion#getBlockEntity's lazy DUMMY/newBlockEntity or
+    /// loadStatic path. The returned state becomes canonical in the protochunk.
+    fn materialize_block_entity(
+        &self,
+        _position: [i32; 3],
+        _state: BlockState,
+        _tag: &CompoundTag,
+    ) -> Result<Option<Box<dyn WorldgenBlockEntity>>, Error> {
+        Err(Error("Unsupported: worldgen block entity factory".into()))
+    }
     // --- structures family ---
     /// Create an elder guardian with STRUCTURE reason; heal it to max health,
     /// snap to the supplied position with zero yaw/pitch, finalizeSpawn, and add
@@ -1008,6 +1033,7 @@ impl<'a> WorldGenRegion<'a> {
             self.chunks[index].block_entities.insert(p, tag);
         } else if in_height && old.has_block_entity() {
             self.chunks[index].block_entities.remove(&p);
+            self.chunks[index].instantiated_block_entities.remove(&p);
         }
         if flags & 16 == 0 {
             let post = state
@@ -1069,6 +1095,40 @@ impl<'a> WorldGenRegion<'a> {
             .chunk([p[0] >> 4, p[2] >> 4], ChunkStatus::Empty)?
             .block_entities
             .get(&p))
+    }
+    /// Port of WorldGenRegion#getBlockEntity. No pending tag means no factory,
+    /// and an existing receiver is returned before querying the current state.
+    pub fn get_or_create_block_entity(
+        &mut self,
+        p: [i32; 3],
+    ) -> Result<Option<&mut (dyn WorldgenBlockEntity + 'static)>, Error> {
+        let index = self.index([p[0] >> 4, p[2] >> 4], ChunkStatus::Empty)?;
+        if !self.chunks[index]
+            .instantiated_block_entities
+            .contains_key(&p)
+        {
+            let state = self.block(p)?;
+            let Some(tag) = self.chunks[index].block_entities.get(&p) else {
+                return Ok(None);
+            };
+            if self.chunks[index].status == ChunkStatus::Full {
+                return Err(Error(
+                    "Unsupported: live full-chunk worldgen block entity".into(),
+                ));
+            }
+            if let Some(entity) = self.behavior.materialize_block_entity(p, state, tag)? {
+                // ProtoChunk#setBlockEntity removes pending NBT, unlike the
+                // direct setBlockEntityNbt carrier operation above.
+                self.chunks[index].block_entities.remove(&p);
+                self.chunks[index]
+                    .instantiated_block_entities
+                    .insert(p, entity);
+            }
+        }
+        Ok(self.chunks[index]
+            .instantiated_block_entities
+            .get_mut(&p)
+            .map(Box::as_mut))
     }
     pub fn add_entity(&mut self, chunk: [i32; 2], tag: CompoundTag) -> Result<(), Error> {
         let index = self.index(chunk, ChunkStatus::Empty)?;

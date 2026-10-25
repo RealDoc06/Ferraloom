@@ -96,6 +96,11 @@ The extractor additionally exercises the base survival and shape-update methods
 for every applicable state with null level/tick/random arguments, proving those
 two known constants require no level behavior or random draws.
 
+Mining appends `getDestroyProgress`, `destroy` and `playerDestroy`; `attack`
+already has its original signature/index. Existing method and declaring-class
+indices are preserved. Every registered 26.3 block inherits the base progress
+algorithm; lifecycle and attack overrides still require their family ports.
+
 Liquid-container and bucket interfaces use `SimpleWaterloggedBlock` as the
 default owner. Reflection resolves inherited interface defaults after concrete
 class overrides. A non-implementing block records `<not implemented>`, so it

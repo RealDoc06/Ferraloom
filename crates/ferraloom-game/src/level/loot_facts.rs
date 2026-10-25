@@ -239,6 +239,12 @@ impl PredicateContext for Level {
             .map_err(required)?
             .position)
     }
+    /// Port of NbtPredicate#getEntityTagToCompare through the canonical serializer.
+    fn entity_nbt(&self, entity: EntityRef) -> Result<Tag> {
+        self.entity_nbt_to_compare(entity)
+            .map(Tag::Compound)
+            .map_err(required)
+    }
     fn entity_has_equipment(&self, entity: EntityRef) -> Result<bool> {
         Ok(self
             .entity_state(entity)
