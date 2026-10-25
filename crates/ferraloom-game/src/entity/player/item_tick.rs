@@ -5,7 +5,7 @@ use crate::{
     level::{Level, LevelError},
 };
 use ferraloom_data::{Item, registries::data_component_type::Id as ComponentType};
-use ferraloom_protocol::component::EquipmentSlot;
+use ferraloom_protocol::component::{EquipmentSlot, ItemStack};
 
 /// Native declaring class for the only two Item#inventoryTick overrides.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -48,20 +48,27 @@ pub(crate) fn inventory_tick_override(item: Item) -> Option<InventoryTickOverrid
     }
 }
 
+/// Port of CompassItem#inventoryTick's absent LODESTONE_TRACKER guard and
+/// MapItem#inventoryTick -> getSavedData's null MAP_ID guard. Neither branch reads the world.
+fn has_tick_component(stack: &ItemStack) -> bool {
+    let key = match inventory_tick_override(stack.item()) {
+        Some(InventoryTickOverride::Compass) => ComponentType::LODESTONE_TRACKER,
+        Some(InventoryTickOverride::Map) => ComponentType::MAP_ID,
+        None => return false,
+    };
+    super::inventory::component(stack, key).is_some()
+}
+
 /// Server ItemStack#inventoryTick's observable body. popTime is never read by
 /// server logic, serialized or sent, so its decrement and state are omitted.
 fn tick_item(
     item: Item,
     _slot: Option<EquipmentSlot>,
-    has_lodestone_tracker: bool,
+    has_tick_component: bool,
     level: &mut Level,
 ) -> Result<(), LevelError> {
-    // CompassItem#inventoryTick returns immediately without LODESTONE_TRACKER. Its presence
-    // is read from the canonical stack before dispatch; tracker.tick remains unsupported.
-    if item == Item::COMPASS && !has_lodestone_tracker {
-        return Ok(());
-    }
-    if inventory_tick_override(item).is_some() {
+    // Presence was read from the canonical stack; tracked compasses and maps retain their seams.
+    if inventory_tick_override(item).is_some() && has_tick_component {
         level.unported_operation(crate::block::UnportedOperation::ItemInventoryTick(item))?;
     }
     Ok(())
@@ -79,14 +86,12 @@ pub(crate) fn tick_inventory(player: EntityRef, level: &mut Level) -> Result<(),
                 (
                     stack.item(),
                     (index == inventory.selected_slot()).then_some(EquipmentSlot::Mainhand),
-                    stack.item() == Item::COMPASS
-                        && super::inventory::component(stack, ComponentType::LODESTONE_TRACKER)
-                            .is_some(),
+                    has_tick_component(stack),
                 )
             })
         };
-        if let Some((item, slot, has_lodestone_tracker)) = tick {
-            tick_item(item, slot, has_lodestone_tracker, level)?;
+        if let Some((item, slot, has_tick_component)) = tick {
+            tick_item(item, slot, has_tick_component, level)?;
         }
     }
     Ok(())
@@ -98,17 +103,10 @@ pub(crate) fn tick_equipment(entity: EntityRef, level: &mut Level) -> Result<(),
     for slot in SLOTS {
         let tick = {
             let stack = level.entity::<LivingEntity>(entity)?.equipment.get(slot);
-            (!stack.is_empty()).then(|| {
-                (
-                    stack.item(),
-                    stack.item() == Item::COMPASS
-                        && super::inventory::component(stack, ComponentType::LODESTONE_TRACKER)
-                            .is_some(),
-                )
-            })
+            (!stack.is_empty()).then(|| (stack.item(), has_tick_component(stack)))
         };
-        if let Some((item, has_lodestone_tracker)) = tick {
-            tick_item(item, Some(slot), has_lodestone_tracker, level)?;
+        if let Some((item, has_tick_component)) = tick {
+            tick_item(item, Some(slot), has_tick_component, level)?;
         }
     }
     Ok(())
@@ -153,7 +151,7 @@ mod tests {
         let stack = |item, count| {
             let mut value = ItemStack::new(item, 1, DataComponentPatch::default());
             value.0.as_mut().unwrap().count = count;
-            // The scan-order fixture exercises the required tracked-compass body.
+            // The scan-order fixture exercises the required component-present bodies.
             if item == Item::COMPASS {
                 value
                     .0
@@ -164,6 +162,14 @@ mod tests {
                         target: None,
                         tracked: true,
                     }));
+            }
+            if inventory_tick_override(item) == Some(InventoryTickOverride::Map) {
+                value
+                    .0
+                    .as_mut()
+                    .unwrap()
+                    .components
+                    .set(DataComponent::MapId(ferraloom_protocol::codec::VarInt(17)));
             }
             value
         };
@@ -234,24 +240,24 @@ mod tests {
         assert_eq!(level.unported_behavior_stats().distinct_calls, 2);
     }
 
-    #[test]
-    fn compass_without_lodestone_tracker_is_noop_but_present_tracker_requires_support() {
+    fn assert_absent_tick_component_is_noop(
+        item: Item,
+        component: ferraloom_protocol::component::DataComponent,
+    ) {
         use crate::{
             block::UnportedBehavior,
             entity::{EntityState, player::GameType},
         };
-        use ferraloom_protocol::component::{
-            DataComponent, DataComponentPatch, ItemStack, LodestoneTracker,
-        };
+        use ferraloom_protocol::component::{DataComponentPatch, ItemStack};
         use ferraloom_util::{Uuid, Vec3};
 
         let mut level = crate::entity::tests::level(false);
         level.set_unported_behavior(UnportedBehavior::Strict);
         let entity = level.next_entity_ref();
-        let plain = ItemStack::new(Item::COMPASS, 1, DataComponentPatch::default());
+        let plain = ItemStack::new(item, 1, DataComponentPatch::default());
         let mut player = ServerPlayer::new(
             Uuid::new(3, 4),
-            "compass".into(),
+            "tick_guard".into(),
             level.next_entity_id(),
             Vec3::ZERO,
             GameType::Survival,
@@ -269,15 +275,7 @@ mod tests {
         assert_eq!(level.unported_behavior_stats().skipped_calls, 0);
 
         let mut tracked = plain;
-        tracked
-            .0
-            .as_mut()
-            .unwrap()
-            .components
-            .set(DataComponent::LodestoneTracker(LodestoneTracker {
-                target: None,
-                tracked: true,
-            }));
+        tracked.0.as_mut().unwrap().components.set(component);
         {
             let player = level.entity_mut::<ServerPlayer>(entity).unwrap();
             player.inventory.set_selected_item(tracked.clone());
@@ -285,11 +283,31 @@ mod tests {
         }
         assert_eq!(
             tick_inventory(entity, &mut level),
-            Err(LevelError::UnsupportedItemInventoryTick(Item::COMPASS))
+            Err(LevelError::UnsupportedItemInventoryTick(item))
         );
         assert_eq!(
             tick_equipment(entity, &mut level),
-            Err(LevelError::UnsupportedItemInventoryTick(Item::COMPASS))
+            Err(LevelError::UnsupportedItemInventoryTick(item))
         );
+    }
+
+    #[test]
+    fn compass_without_lodestone_tracker_is_noop_but_present_tracker_requires_support() {
+        use ferraloom_protocol::component::{DataComponent, LodestoneTracker};
+        assert_absent_tick_component_is_noop(
+            Item::COMPASS,
+            DataComponent::LodestoneTracker(LodestoneTracker {
+                target: None,
+                tracked: true,
+            }),
+        );
+    }
+
+    #[test]
+    fn maps_without_map_id_are_noop_but_present_id_requires_support() {
+        use ferraloom_protocol::{codec::VarInt, component::DataComponent};
+        for item in [Item::FILLED_MAP, Item::OCEAN_MONUMENT_MAP] {
+            assert_absent_tick_component_is_noop(item, DataComponent::MapId(VarInt(17)));
+        }
     }
 }
