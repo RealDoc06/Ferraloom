@@ -117,8 +117,8 @@ pub fn player_is_invulnerable_to<E: Entity + ?Sized>(
     let player = level.entity::<ServerPlayer>(entity)?;
     Ok(player.changing_dimension && !source.is_type(DamageTypeKey::EnderPearl) || !player.loaded)
 }
-/// Port of LivingEntity#doHurtEquipment. ItemStack durability mutation remains
-/// the shared items hook; all preceding eligibility/component reads are real.
+/// Port of LivingEntity#doHurtEquipment, preserving each eligibility read before
+/// mutating that canonical equipment receiver through ItemStack#hurtAndBreak.
 pub fn hurt_equipment<E: Entity + ?Sized>(
     behavior: &E,
     entity: EntityRef,
@@ -132,21 +132,16 @@ pub fn hurt_equipment<E: Entity + ?Sized>(
     }
     let amount = java::max_f32(1.0, damage / 4.0) as i32;
     for &slot in slots {
-        let item = {
+        let wears = {
             let stack = behavior
                 .item_by_slot(entity, slot, level)?
                 .ok_or(LevelError::WrongEntityType(entity))?;
-            if matches!(component(stack,ComponentType::EQUIPPABLE),Some(DataComponent::Equippable(value)) if value.damage_on_hurt)
+            matches!(component(stack,ComponentType::EQUIPPABLE),Some(DataComponent::Equippable(value)) if value.damage_on_hurt)
                 && is_damageable_item(stack)
                 && can_be_hurt_by(stack, source, level)?
-            {
-                Some(stack.item())
-            } else {
-                None
-            }
         };
-        if let Some(item) = item {
-            level.unported_operation(UnportedOperation::ItemHurtAndBreak { item, amount, slot })?;
+        if wears {
+            crate::item::stack::hurt_equipped_item(entity, amount, slot, level)?;
         }
     }
     Ok(())
