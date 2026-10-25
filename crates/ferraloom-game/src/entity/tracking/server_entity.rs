@@ -31,10 +31,10 @@ impl TrackingError {
     pub(crate) fn into_level(self, level: &Level) -> LevelError {
         match self {
             Self::Level(error) => error,
-            Self::LivingSynchronizationPending(entity) => level
-                .entity_state(entity)
-                .map(|state| LevelError::UnsupportedEntity(state.entity_type()))
-                .unwrap_or_else(|error| error),
+            Self::LivingSynchronizationPending(entity) => match level.entity_state(entity) {
+                Ok(state) => LevelError::UnsupportedEntity(state.entity_type()),
+                Err(error) => error,
+            },
         }
     }
 }
