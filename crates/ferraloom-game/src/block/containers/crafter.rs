@@ -68,13 +68,10 @@ impl BlockEntity for CrafterBehavior {
     }
     fn tick(
         &self,
-        _receiver: crate::block::entity::BlockEntityRef,
-        _level: &mut crate::level::Level,
+        receiver: crate::block::entity::BlockEntityRef,
+        level: &mut crate::level::Level,
     ) -> Result<(), crate::level::LevelError> {
-        // Redstone's server_tick hook is not released on this base yet.
-        Err(crate::level::LevelError::UnsupportedBlockEntity(
-            ferraloom_data::Block::CRAFTER,
-        ))
+        crate::block::redstone::crafter::server_tick(receiver, level)
     }
 
     fn pre_remove_side_effects(

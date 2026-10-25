@@ -15,6 +15,7 @@ enum Event {
     Poll,
     Wait,
     Forward,
+    MainTask(AcquireTaskKind),
 }
 
 struct Driver {
@@ -33,6 +34,8 @@ struct Driver {
     status_allowed: Cell<bool>,
     prepared: RefCell<Option<crate::level::chunk::LevelChunk>>,
     published: OnceCell<crate::level::chunk::LevelChunk>,
+    main_tasks: bool,
+    main_task_runs: Vec<AcquireTaskKind>,
 }
 
 impl Driver {
@@ -53,6 +56,8 @@ impl Driver {
             status_allowed: Cell::new(true),
             prepared: RefCell::new(None),
             published: OnceCell::new(),
+            main_tasks: false,
+            main_task_runs: Vec::new(),
         }
     }
 
@@ -143,6 +148,15 @@ impl AcquireDriver for Driver {
         self.remaining.set(0);
         Ok(())
     }
+    fn main_thread_acquisition_task(
+        &self,
+        _: &Level,
+        kind: AcquireTaskKind,
+    ) -> Result<Option<Box<dyn MainThreadAcquireTask>>, LevelError> {
+        Ok(self
+            .main_tasks
+            .then(|| Box::new(MainTask(kind)) as Box<dyn MainThreadAcquireTask>))
+    }
     fn chunk_if_present_unchecked(&self, _: ChunkPos, _: ChunkStatus) -> Option<ChunkReference> {
         self.present.get()
     }
@@ -161,6 +175,136 @@ impl AcquireDriver for Driver {
         self.events.borrow_mut().push(Event::Forward);
         Ok(self.present.get())
     }
+}
+
+struct MainTask(AcquireTaskKind);
+impl MainThreadAcquireTask for MainTask {
+    fn run(self: Box<Self>, level: &mut Level) -> Result<AcquireProgress, LevelError> {
+        // This exclusive driver access proves the planning borrow has ended.
+        let driver = level
+            .acquire_driver_mut()
+            .unwrap()
+            .as_any_mut()
+            .downcast_mut::<Driver>()
+            .unwrap();
+        driver.main_task_runs.push(self.0);
+        driver.events.get_mut().push(Event::MainTask(self.0));
+        let driver = level.acquire_driver().unwrap();
+        shared_acquisition_step(driver, level, self.0)
+    }
+}
+
+#[test]
+fn mutable_acquisition_reuses_ticket_future_and_cache_policy() {
+    let mut level = Level::new(
+        crate::level::Region::new(&crate::Behaviors::EMPTY),
+        crate::level::LevelContext::fixture(0, 63),
+    );
+    let mut driver = Driver::new(None);
+    driver.main_tasks = true;
+    driver.remaining.set(1);
+    level
+        .install_acquire_driver(Box::new(driver), -64..320)
+        .unwrap();
+    let first = level.get_chunk_mut(POS, ChunkStatus::Full, true).unwrap();
+    assert_eq!(
+        level.get_chunk_mut(POS, ChunkStatus::Full, true).unwrap(),
+        first
+    );
+    let driver = level
+        .acquire_driver()
+        .unwrap()
+        .as_any()
+        .downcast_ref::<Driver>()
+        .unwrap();
+    assert_eq!(
+        driver.main_task_runs,
+        [AcquireTaskKind::DistanceUpdates, AcquireTaskKind::Poll]
+    );
+    assert_eq!(
+        *driver.events.borrow(),
+        [
+            Event::Ticket(POS, ChunkStatus::Full),
+            Event::MainTask(AcquireTaskKind::DistanceUpdates),
+            Event::Distance,
+            Event::Request(POS, ChunkStatus::Full),
+            Event::MainTask(AcquireTaskKind::Poll),
+            Event::Poll,
+        ]
+    );
+    assert_eq!(driver.requests.get(), 1);
+}
+
+#[test]
+fn mutable_poll_never_adds_tickets_requests_or_waits() {
+    let mut level = Level::new(
+        crate::level::Region::new(&crate::Behaviors::EMPTY),
+        crate::level::LevelContext::fixture(0, 63),
+    );
+    let mut driver = Driver::new(Some(33));
+    driver.main_tasks = true;
+    driver.remaining.set(2);
+    driver
+        .steps
+        .get_mut()
+        .push_back(AcquireProgress::DistanceUpdates);
+    level
+        .install_acquire_driver(Box::new(driver), -64..320)
+        .unwrap();
+    level.acquisition.cache(POS, ChunkStatus::Full, None);
+    assert_eq!(
+        level.poll_chunk_acquisition_mut().unwrap(),
+        AcquireProgress::DistanceUpdates
+    );
+    assert!(level.acquisition.cache.get().iter().all(Option::is_none));
+    let driver = level
+        .acquire_driver()
+        .unwrap()
+        .as_any()
+        .downcast_ref::<Driver>()
+        .unwrap();
+    assert_eq!(driver.remaining.get(), 1);
+    assert_eq!(
+        *driver.events.borrow(),
+        [Event::MainTask(AcquireTaskKind::Poll), Event::Poll]
+    );
+    assert_eq!(driver.requests.get(), 0);
+    assert!(driver.tickets.borrow().level(POS).is_none());
+}
+
+#[test]
+fn shared_acquisition_never_executes_a_mutable_task() {
+    let mut level = Level::new(
+        crate::level::Region::new(&crate::Behaviors::EMPTY),
+        crate::level::LevelContext::fixture(0, 63),
+    );
+    let mut driver = Driver::new(Some(33));
+    driver.main_tasks = true;
+    driver.remaining.set(1);
+    level
+        .install_acquire_driver(Box::new(driver), -64..320)
+        .unwrap();
+    assert!(
+        level
+            .get_chunk(POS, ChunkStatus::Full, true)
+            .unwrap()
+            .is_some()
+    );
+    let driver = level
+        .acquire_driver()
+        .unwrap()
+        .as_any()
+        .downcast_ref::<Driver>()
+        .unwrap();
+    assert!(driver.main_task_runs.is_empty());
+    assert_eq!(
+        *driver.events.borrow(),
+        [
+            Event::Ticket(POS, ChunkStatus::Full),
+            Event::Request(POS, ChunkStatus::Full),
+            Event::Poll
+        ]
+    );
 }
 
 #[test]

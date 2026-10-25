@@ -289,6 +289,19 @@ impl MinecraftServer {
             )
         };
         let clocks = command_runtime::load_clocks(&world_root, &resources)?;
+        // Older bossbar storage is migrated by the datafix workstream, never runtime fallback.
+        let custom_boss_events = {
+            use ferraloom_game::bossbar::{BossEventsSaveData, CustomBossEvents};
+            let storage =
+                ferraloom_storage::SavedDataStorage::new(world.access.path().join("data"));
+            CustomBossEvents::load(
+                storage
+                    .load::<BossEventsSaveData>(CustomBossEvents::STORAGE_ID)?
+                    .map(|saved| saved.value().clone())
+                    .unwrap_or_default(),
+                random_uuid,
+            )
+        };
         let command_storage_folder = world.access.path().join("data");
         let command_storage = tokio::task::spawn_blocking(move || {
             ferraloom_game::commands::storage::CommandStorage::preload(&command_storage_folder)
@@ -322,7 +335,11 @@ impl MinecraftServer {
         );
         level
             .level
-            .install_shared(Box::new(ferraloom_game::ServerShared { scoreboard, ops }));
+            .install_shared(Box::new(ferraloom_game::ServerShared {
+                scoreboard,
+                custom_boss_events,
+                ops,
+            }));
         level.game_time = game_time;
         level.level.set_command_storage(command_storage.snapshot());
         initialize_live_level(
@@ -666,6 +683,7 @@ impl MinecraftServer {
     }
     fn return_server_shared(&mut self, lent: bool) {
         self.drain_scoreboard_packets();
+        self.drain_bossbar_packets();
         if lent {
             self.shared = Some(
                 self.level
@@ -1012,9 +1030,7 @@ impl MinecraftServer {
                         .map_err(game_error)?;
                 }
                 self.apply_level_effects()?;
-                self.level
-                    .generation()
-                    .poll_entity_progress(&self.level.level)?;
+                self.level.generation().poll_entity_io(&self.level.level)?;
                 self.level.level.tick_entity_management()?;
                 let requests = self.level.level.take_entity_storage_requests();
                 self.level.generation().with_world_mut(|world| {
@@ -1282,10 +1298,7 @@ impl MinecraftServer {
         }
         chunks.sort_by_key(|(distance, pos)| (*distance, pos.pack()));
         for (_, pos) in chunks {
-            self.level
-                .generation()
-                .request_full(&self.level.level, pos)
-                .map_err(game_error)?;
+            self.level.request_full(pos).map_err(game_error)?;
         }
         Ok(())
     }
@@ -1501,12 +1514,7 @@ impl MinecraftServer {
         Ok(())
     }
     fn update_chunk_tickets(&mut self) -> Result<()> {
-        use ferraloom_game::level::acquisition::AcquireDriver;
-        self.level
-            .generation()
-            .run_distance_manager_updates(&self.level.level)
-            .map_err(game_error)?;
-        Ok(())
+        self.level.update_chunk_tickets().map_err(game_error)
     }
     fn integrate_jobs(&mut self) -> Result<()> {
         self.progress_chunk_jobs()?;
@@ -1517,7 +1525,7 @@ impl MinecraftServer {
         Ok(())
     }
     fn progress_chunk_jobs(&mut self) -> Result<()> {
-        self.level.generation().progress_jobs(&self.level.level)
+        self.level.progress_jobs()
     }
     fn place_player(&mut self, connection: ConnectionId) -> Result<()> {
         let mut c = self
@@ -1671,6 +1679,21 @@ impl MinecraftServer {
             .level
             .add_entity(entity, EntityState::Player(Box::new(player)))
             .map_err(game_error)?;
+        // PlayerList#placeNewPlayer: boss events follow addNewPlayer, before initInventoryMenu.
+        self.shared_mut().custom_boss_events.on_player_connect(
+            ferraloom_game::bossbar::BossPlayer {
+                entity,
+                uuid: c.profile.id,
+                network_id: entity_id,
+            },
+        );
+        for (target, packet) in self.shared_mut().custom_boss_events.drain_packets() {
+            if target == entity {
+                c.push(packet);
+            } else {
+                self.send_bossbar_packet(target, packet);
+            }
+        }
         ferraloom_game::inventory::send_container_packets(
             entity,
             [cb::Packet::PostEffects(common_cb::PostEffects {
@@ -3275,13 +3298,18 @@ impl MinecraftServer {
             && let Phase::Play(entity) = c.phase
         {
             let player = self.player(entity)?;
+            let boss_player = ferraloom_game::bossbar::BossPlayer {
+                entity,
+                uuid: player.uuid,
+                network_id: player.network_id,
+            };
             let progress_path = self
                 .level
                 .generation()
                 .with_world(|world| world.access.path().to_path_buf());
             let progress =
                 ferraloom_game::advancements::PlayerProgressSave::capture(player, &progress_path)?;
-            let tag = player.save();
+            let tag = player.save(&self.level.level).map_err(game_error)?;
             let uuid = player.uuid.to_string();
             let name = self
                 .level
@@ -3301,6 +3329,10 @@ impl MinecraftServer {
             self.level.level.remove_entity(entity).map_err(game_error)?;
             self.apply_level_effects()?;
             self.players.retain(|&id| id != connection);
+            self.shared_mut()
+                .custom_boss_events
+                .on_player_disconnect(boss_player);
+            self.drain_bossbar_packets();
             self.broadcast(cb::Packet::PlayerInfoRemove(cb::PlayerInfoRemove {
                 profile_ids: vec![c.profile.id],
             }));
@@ -3510,6 +3542,7 @@ impl MinecraftServer {
         self.save_live_entities(flush).await?;
 
         self.save_game_rules().await?;
+        self.save_custom_boss_events().await?;
         self.save_command_storage().await?;
         self.save_command_tickets().await?;
         let positions = self
@@ -3571,7 +3604,10 @@ impl MinecraftServer {
             })
             .map(|entity| {
                 let player = self.player(entity)?;
-                Ok((player.uuid.to_string(), player.save()))
+                Ok((
+                    player.uuid.to_string(),
+                    player.save(&self.level.level).map_err(game_error)?,
+                ))
             })
             .collect::<Result<Vec<_>>>()?;
         let bootstrap = self
@@ -3638,9 +3674,7 @@ impl MinecraftServer {
                 .with_world_mut(|world| world.submit_entity_requests(requests, &self.properties))?;
             let sync = self.level.generation().synchronize_entities(false)?;
             sync.await?;
-            self.level
-                .generation()
-                .poll_entity_progress(&self.level.level)?;
+            self.level.generation().poll_entity_io(&self.level.level)?;
             if self.level.level.poll_entity_save_all()? {
                 let requests = self.level.level.take_entity_storage_requests();
                 self.level.generation().with_world_mut(|world| {
@@ -3648,11 +3682,7 @@ impl MinecraftServer {
                 })?;
                 let sync = self.level.generation().synchronize_entities(true)?;
                 sync.await?;
-                while self
-                    .level
-                    .generation()
-                    .poll_entity_progress(&self.level.level)?
-                {}
+                while self.level.poll_entity_loads_for_wait()? {}
                 return Ok(());
             }
         }

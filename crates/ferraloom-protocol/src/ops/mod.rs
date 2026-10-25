@@ -276,9 +276,13 @@ pub fn encode_nbt<O: EncodeOps>(tag: &Tag, ops: &O) -> Result<O::Value> {
                 .collect::<Result<_>>()?,
         ),
         Tag::Compound(v) => ops.create_map(
-            v.iter()
+            // CompoundTag.CODEC copies in the source HashMap traversal order.
+            v.iter_java_order()
                 .map(|(k, v)| Ok((ops.create_string_utf16(k.as_utf16()), encode_nbt(v, ops)?)))
                 .collect::<Result<_>>()?,
         )?,
     })
 }
+
+#[cfg(test)]
+mod tests;

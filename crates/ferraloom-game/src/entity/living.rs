@@ -8,13 +8,16 @@ use ferraloom_protocol::{codec::VarInt, component::ItemStack};
 use ferraloom_util::random::RandomSource;
 
 pub mod climbable;
+pub mod damage_state;
 mod equipment;
 pub use equipment::on_equipped_item_broken;
 pub(crate) use equipment::on_equipped_item_broken_parent;
 pub mod fall_damage;
 pub mod freezing;
 pub mod gliding;
+pub mod hurt;
 pub mod jump;
+pub mod swing;
 pub mod travel;
 
 /// Port of LivingEntity.Fallsounds, selected virtually by the entity family.
@@ -37,6 +40,9 @@ pub struct LivingEntity {
     pub effects_dirty: bool,
     pub use_item: ItemStack,
     pub use_item_remaining: i32,
+    pub(crate) swing_state: swing::SwingState,
+    pub(crate) attack_strength_ticker: i32,
+    pub(crate) item_swap_ticker: i32,
     pub jumping: bool,
     pub xxa: f32,
     pub yya: f32,
@@ -56,6 +62,18 @@ pub struct LivingEntity {
     pub damage_cooldown_time: i32,
     pub hurt_time: i32,
     pub hurt_duration: i32,
+    pub death_time: i32,
+    pub(super) combat_tracker: super::damage::combat_tracker::CombatTracker,
+    pub(super) no_action_time: i32,
+    pub(super) absorption_amount: f32,
+    pub(super) last_hurt_by_player: Option<super::EntityReference<super::player::ServerPlayer>>,
+    pub(super) last_hurt_by_player_memory_time: i32,
+    pub(super) last_hurt_by_mob: Option<super::EntityReference<LivingEntity>>,
+    pub(super) last_hurt_by_mob_timestamp: i32,
+    pub(super) last_hurt_mob: Option<super::EntityRef>,
+    pub(super) last_hurt_mob_timestamp: i32,
+    pub(super) last_damage_source: Option<super::DamageSource>,
+    pub(super) last_damage_stamp: i64,
     current_impulse_context_reset_grace_time: i32,
     current_impulse_impact_pos: Option<ferraloom_util::Vec3>,
 }
@@ -80,6 +98,9 @@ impl LivingEntity {
             effects_dirty: true,
             use_item: ItemStack::default(),
             use_item_remaining: 0,
+            swing_state: Default::default(),
+            attack_strength_ticker: 0,
+            item_swap_ticker: 0,
             jumping: false,
             xxa: 0.0,
             yya: 0.0,
@@ -98,6 +119,18 @@ impl LivingEntity {
             damage_cooldown_time: 0,
             hurt_time: 0,
             hurt_duration: 0,
+            death_time: 0,
+            combat_tracker: Default::default(),
+            no_action_time: 0,
+            absorption_amount: 0.0,
+            last_hurt_by_player: None,
+            last_hurt_by_player_memory_time: 0,
+            last_hurt_by_mob: None,
+            last_hurt_by_mob_timestamp: 0,
+            last_hurt_mob: None,
+            last_hurt_mob_timestamp: 0,
+            last_damage_source: None,
+            last_damage_stamp: 0,
             current_impulse_context_reset_grace_time: 0,
             current_impulse_impact_pos: None,
         };
@@ -108,6 +141,15 @@ impl LivingEntity {
         living.parent.set_y_rot(rotation);
         living.y_head_rot = living.parent.yaw;
         living
+    }
+    pub fn is_swinging(&self) -> bool {
+        self.swing_state.is_swinging()
+    }
+    pub fn swing_description(&self) -> Option<&swing::SwingDescription> {
+        self.swing_state.current_swing()
+    }
+    pub fn swing_animation(&self, partial_ticks: f32) -> f32 {
+        self.swing_state.get_animation(partial_ticks)
     }
     /// Port of LivingEntity#isUsingItem (mask 1, not a bit index).
     pub fn is_using_item(&self) -> bool {
@@ -210,13 +252,26 @@ impl LivingEntity {
         &mut self,
         tag: CompoundTag,
     ) -> Result<(), super::persistence::EntityLoadError> {
+        self.load_nbt_with_absorption_setter(tag, LivingEntity::internal_set_absorption_amount)
+    }
+    /// Cold loading retains the derived absorption setter before attributes,
+    /// without installing a partially loaded entity in Level.
+    pub(crate) fn load_nbt_with_absorption_setter(
+        &mut self,
+        tag: CompoundTag,
+        set_absorption: fn(&mut LivingEntity, f32),
+    ) -> Result<(), super::persistence::EntityLoadError> {
         let rotation = self.parent.load_nbt_with_head_rotation(tag)?;
         self.y_head_rot = rotation;
         self.y_body_rot = rotation;
-        self.read_additional_save_data();
+        self.read_additional_save_data(set_absorption);
         Ok(())
     }
-    fn read_additional_save_data(&mut self) {
+    fn read_additional_save_data(&mut self, set_absorption: fn(&mut LivingEntity, f32)) {
+        set_absorption(
+            self,
+            self.parent.saved.get_float_or("AbsorptionAmount", 0.0),
+        );
         if let Some(attributes) = self.parent.saved.get("attributes") {
             for error in self.attributes.load_nbt(attributes) {
                 eprintln!(
@@ -239,6 +294,22 @@ impl LivingEntity {
         }
         self.set_health(self.parent.saved.get_float_or("Health", self.max_health()));
         self.hurt_time = i32::from(self.parent.saved.get_short_or("HurtTime", 0));
+        self.death_time = i32::from(self.parent.saved.get_short_or("DeathTime", 0));
+        self.parent
+            .set_shared_flag(7, self.parent.saved.get_boolean_or("FallFlying", false));
+        self.last_hurt_by_player =
+            damage_state::read_reference(&self.parent.saved, "last_hurt_by_player");
+        self.last_hurt_by_player_memory_time = self
+            .parent
+            .saved
+            .get_int_or("last_hurt_by_player_memory_time", 0);
+        self.last_hurt_by_mob =
+            damage_state::read_reference(&self.parent.saved, "last_hurt_by_mob");
+        self.last_hurt_by_mob_timestamp = self.parent.tick_count.wrapping_sub(
+            self.parent
+                .saved
+                .get_int_or("ticks_since_last_hurt_by_mob", 0),
+        );
         self.current_impulse_context_reset_grace_time = self
             .parent
             .saved
@@ -264,7 +335,12 @@ impl LivingEntity {
                     crate::level::waypoints::default_icon()
                 });
     }
-    pub(crate) fn add_additional_save_data(&self, tag: &mut CompoundTag) {
+    pub(crate) fn add_additional_save_data(
+        &self,
+        tag: &mut CompoundTag,
+        level: &crate::level::Level,
+        get_absorption: fn(&LivingEntity) -> f32,
+    ) -> Result<(), crate::level::LevelError> {
         tag.remove("locator_bar_icon");
         if self.locator_bar_icon != crate::level::waypoints::default_icon() {
             tag.insert(
@@ -274,6 +350,13 @@ impl LivingEntity {
         }
         tag.insert("Health", Tag::Float(self.health()));
         tag.insert("HurtTime", Tag::Short(self.hurt_time as i16));
+        tag.insert("DeathTime", Tag::Short(self.death_time as i16));
+        let absorption = get_absorption(self);
+        // TagValueOutput#putFloat uses FloatTag.valueOf's shared positive zero.
+        tag.insert(
+            "AbsorptionAmount",
+            Tag::Float(if absorption == 0.0 { 0.0 } else { absorption }),
+        );
         tag.insert(
             "current_impulse_context_reset_grace_time",
             Tag::Int(self.current_impulse_context_reset_grace_time),
@@ -291,13 +374,23 @@ impl LivingEntity {
             // Deterministic identity-map order, not native holder hash iteration.
             tag.insert("active_effects", self.active_effects.save());
         }
+        tag.insert(
+            "FallFlying",
+            Tag::Byte(i8::from(self.parent.shared_flag(7))),
+        );
+        damage_state::save_references(self, tag, level)?;
         tag.remove("equipment");
         if !self.equipment.is_empty() {
             tag.insert(
                 "equipment",
-                Tag::Compound(self.equipment.save().expect("canonical equipment")),
+                Tag::Compound(
+                    self.equipment.save().map_err(|_| {
+                        crate::level::LevelError::Inventory("invalid saved equipment")
+                    })?,
+                ),
             );
         }
+        Ok(())
     }
 }
 
@@ -367,6 +460,19 @@ pub fn item_by_slot(
         .equipment
         .get(slot)
         .clone())
+}
+
+/// Port of LivingEntity#getWeaponItem, retaining the derived main-hand accessor.
+pub fn weapon_item<'level, E: super::Entity + ?Sized>(
+    behavior: &E,
+    entity: super::EntityRef,
+    level: &'level crate::level::Level,
+) -> Result<Option<&'level ItemStack>, crate::level::LevelError> {
+    behavior.item_by_slot(
+        entity,
+        ferraloom_protocol::component::EquipmentSlot::Mainhand,
+        level,
+    )
 }
 
 /// Port of LivingEntity#getAttributeValue for its required supplier attributes.

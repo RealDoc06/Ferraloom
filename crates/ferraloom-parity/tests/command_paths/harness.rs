@@ -1,3 +1,6 @@
+#[path = "give_tracking.rs"]
+mod give_tracking;
+
 use ferraloom_data::Block;
 use ferraloom_parity::{
     BotId, LaunchOptions, ObservationLog, Result, RunMode, Session, Ticks, WorldPreset, ensure,
@@ -836,6 +839,11 @@ pub async fn run_family(family: &'static str) -> Result<()> {
             failures.len(),
             failures.join("\n")
         );
+        if family == "give" {
+            let tracked = give_tracking::run(&mut driver, primary).await?;
+            eprintln!("PATH give.tracker -> {}", serde_json::to_string(&tracked)?);
+            log.record("give.tracker", tracked)?;
+        }
         if family == "data_block" {
             driver.session.stop().await?;
             let saved = driver
