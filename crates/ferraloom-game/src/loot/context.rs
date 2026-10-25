@@ -1,4 +1,5 @@
 use super::{Identifier, LootError, Result};
+use crate::loot::codec::DecodeInput;
 use crate::{entity::EntityRef, predicates::PredicateContext};
 use ferraloom_data::BlockState;
 use ferraloom_nbt::Tag;
@@ -37,7 +38,7 @@ pub enum EntityTarget {
     InteractingEntity,
 }
 impl EntityTarget {
-    pub fn decode(v: &serde_json::Value) -> Result<Self> {
+    pub fn decode<I: DecodeInput>(v: &I) -> Result<Self> {
         use super::codec::{error, string};
         Ok(match string(v)? {
             "this" => Self::This,

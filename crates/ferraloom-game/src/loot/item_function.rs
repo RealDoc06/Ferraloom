@@ -2,10 +2,10 @@ use super::{
     ContextFloatProvider, ContextIntProvider, EntityTarget, EvalContext, Holder, Identifier,
     LootData, Result, codec,
 };
+use crate::loot::codec::{DecodeInput, PersistentInput};
 use ferraloom_data::Item;
 use ferraloom_protocol::component::*;
 use ferraloom_util::random::RandomSource;
-use serde_json::Value;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct LootAttributeModifier {
@@ -26,23 +26,23 @@ pub enum ItemFunction {
     FillPlayerHead(EntityTarget),
 }
 impl ItemFunction {
-    pub(crate) fn decode(kind: &str, v: &Value) -> Result<Option<Self>> {
+    pub(crate) fn decode<I: DecodeInput>(kind: &str, v: &I) -> Result<Option<Self>> {
         Ok(Some(match kind {
             "minecraft:set_attributes" => Self::SetAttributes {
                 modifiers: codec::list(codec::field(v, "modifiers")?, |v| {
                     let slot = codec::field(v, "slot")?;
                     let slots = if slot.is_array() {
-                        Vec::<EquipmentSlotGroup>::from_json(slot)?
+                        Vec::<EquipmentSlotGroup>::from_input(slot)?
                     } else {
-                        vec![EquipmentSlotGroup::from_json(slot)?]
+                        vec![EquipmentSlotGroup::from_input(slot)?]
                     };
                     if slots.is_empty() {
                         return Err(codec::error("empty modifier slots"));
                     }
                     Ok(LootAttributeModifier {
                         id: codec::id(codec::field(v, "id")?)?,
-                        attribute: Attribute::from_json(codec::field(v, "attribute")?)?,
-                        operation: AttributeOperation::from_json(codec::field(v, "operation")?)?,
+                        attribute: Attribute::from_input(codec::field(v, "attribute")?)?,
+                        operation: AttributeOperation::from_input(codec::field(v, "operation")?)?,
                         amount: Holder::decode(
                             codec::field(v, "amount")?,
                             ContextFloatProvider::decode,

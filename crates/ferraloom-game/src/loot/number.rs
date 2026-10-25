@@ -3,9 +3,9 @@ use super::{
     EntityTarget, EvalContext, Holder, HolderSet, Identifier, LootData, LootError,
     LootItemCondition, Result, ScoreHolder, codec,
 };
+use crate::loot::codec::DecodeInput;
 use ferraloom_nbt::{NbtPath, Tag};
 use ferraloom_util::{mth, random::RandomSource};
-use serde_json::Value;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum UnaryOp {
@@ -70,7 +70,7 @@ pub enum ScoreboardNameProvider {
     Fixed(String),
 }
 impl ScoreboardNameProvider {
-    pub fn decode(v: &Value) -> Result<Self> {
+    pub fn decode<I: DecodeInput>(v: &I) -> Result<Self> {
         if v.is_string() {
             return Ok(Self::Context(EntityTarget::decode(v)?));
         }
@@ -89,7 +89,7 @@ impl ScoreboardNameProvider {
 }
 pub trait Scalar: Copy + Clone + std::fmt::Debug + PartialEq + Sized {
     const FLOAT: bool;
-    fn decode(v: &Value) -> Result<Self>;
+    fn decode<I: DecodeInput>(v: &I) -> Result<Self>;
     fn zero() -> Self;
     fn unary(op: UnaryOp, input: Self) -> Result<Self>;
     fn binary(op: BinaryOp, left: Self, right: Self) -> Result<Self>;
@@ -102,7 +102,7 @@ pub trait Scalar: Copy + Clone + std::fmt::Debug + PartialEq + Sized {
     fn is_zero(value: Self) -> bool;
 }
 impl<T: Scalar> NumberProvider<T> {
-    pub fn decode(v: &Value) -> Result<Self> {
+    pub fn decode<I: DecodeInput>(v: &I) -> Result<Self> {
         if v.is_number() {
             return Ok(Self::Constant(T::decode(v)?));
         }
@@ -373,7 +373,7 @@ where
 }
 impl Scalar for i32 {
     const FLOAT: bool = false;
-    fn decode(v: &Value) -> Result<Self> {
+    fn decode<I: DecodeInput>(v: &I) -> Result<Self> {
         codec::int(v)
     }
     fn zero() -> Self {
@@ -479,7 +479,7 @@ impl Scalar for i32 {
 }
 impl Scalar for f32 {
     const FLOAT: bool = true;
-    fn decode(v: &Value) -> Result<Self> {
+    fn decode<I: DecodeInput>(v: &I) -> Result<Self> {
         codec::float(v)
     }
     fn zero() -> Self {

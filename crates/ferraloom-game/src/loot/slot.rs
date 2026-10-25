@@ -2,9 +2,9 @@ use super::{
     ContainerComponent, ContextParam, EntityTarget, EvalContext, Holder, HolderSet, LootData,
     Result, codec,
 };
+use crate::loot::codec::DecodeInput;
 use crate::predicates::ItemPredicate;
 use ferraloom_protocol::component::*;
-use serde_json::Value;
 
 /// Port of SlotRanges' fixed codec names and ordered integer slot lists.
 #[derive(Clone, Debug, PartialEq)]
@@ -13,7 +13,7 @@ pub struct SlotRange {
     pub slots: Vec<i32>,
 }
 impl SlotRange {
-    pub fn decode(v: &Value) -> Result<Self> {
+    pub fn decode<I: DecodeInput>(v: &I) -> Result<Self> {
         let name = codec::string(v)?;
         let named = match name {
             "contents" => Some(vec![0]),
@@ -72,7 +72,7 @@ pub enum SlotTarget {
     Entity(EntityTarget),
 }
 impl SlotTarget {
-    fn decode(v: &Value) -> Result<Self> {
+    fn decode<I: DecodeInput>(v: &I) -> Result<Self> {
         Ok(match codec::string(v)? {
             "container" => Self::Container,
             "block_entity" => Self::BlockEntity,
@@ -111,14 +111,19 @@ pub enum SlotSource {
     },
 }
 impl SlotSource {
-    pub fn decode(v: &Value) -> Result<Self> {
+    /// Decode through the same schema using NbtOps scalar/component readers.
+    pub fn decode_nbt(tag: &ferraloom_nbt::Tag) -> Result<Self> {
+        Self::decode(&super::NbtOps::new(tag))
+    }
+
+    pub fn decode<I: DecodeInput>(v: &I) -> Result<Self> {
         if v.is_array() || v.is_string() {
             Ok(Self::Group(HolderSet::decode(v, Self::decode_typed)?))
         } else {
             Self::decode_typed(v)
         }
     }
-    fn decode_typed(v: &Value) -> Result<Self> {
+    fn decode_typed<I: DecodeInput>(v: &I) -> Result<Self> {
         Ok(match codec::kind(v)?.as_str() {
             "minecraft:empty" => Self::Empty,
             "minecraft:group" => Self::Group(HolderSet::decode(

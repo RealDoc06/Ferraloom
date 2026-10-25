@@ -614,6 +614,13 @@ impl GenerationRuntime {
 
     fn poll_owned_step_with_access(access: &mut GenerationAccess<'_>) -> Result<bool> {
         let mut progressed = access.read(|runtime, level| runtime.poll_backend_step(level))?;
+        // A shared predicate rechecks its just-settled proto future before a
+        // separate FULL task can enter callbacks requiring exclusive access.
+        // Ordinary mutable owner progress keeps its existing callback order.
+        if progressed && matches!(access, GenerationAccess::Shared { .. }) {
+            return Ok(true);
+        }
+
         if let Some(task) = access.read(|runtime, _| runtime.next_full_promotion()) {
             Self::resume_full_promotion_with_access(access, task)?;
             progressed = true;
@@ -1107,6 +1114,39 @@ impl AcquireDriver for GenerationRuntime {
         result
             .recv()
             .map_err(|_| LevelError::ChunkAcquisition(pos, status, AcquireFailure::Cancelled))?
+    }
+    fn proto_chunk_structures(
+        &self,
+        chunk: ChunkReference,
+    ) -> Result<Arc<ferraloom_worldgen::structure::pipeline::ChunkStructures>, LevelError> {
+        let current = self
+            .chunks
+            .borrow()
+            .holders
+            .get(&chunk.pos.pack())
+            .is_some_and(|holder| {
+                chunk.kind == ferraloom_game::level::acquisition::ChunkKind::Proto
+                    && holder.epoch == chunk.generation
+                    && holder
+                        .generation
+                        .chunk_if_present_unchecked(ChunkStatus::StructureStarts)
+                        .is_some()
+            });
+        if !current {
+            return Err(LevelError::ChunkAcquisition(
+                chunk.pos,
+                ChunkStatus::StructureStarts,
+                AcquireFailure::InvalidHandle,
+            ));
+        }
+        self.world
+            .borrow()
+            .proto_chunk_structures(chunk.pos)
+            .ok_or(LevelError::ChunkAcquisition(
+                chunk.pos,
+                ChunkStatus::StructureStarts,
+                AcquireFailure::MissingResult,
+            ))
     }
     fn proto_noise_biome(
         &self,
