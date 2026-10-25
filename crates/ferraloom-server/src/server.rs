@@ -1157,6 +1157,16 @@ impl MinecraftServer {
         }
         let spawn_position = player.position;
         player.snap_to(spawn_position, yaw, pitch);
+        // ServerPlayer#updateOptions publishes canonical Avatar metadata before tracking starts.
+        let information = &self.connections[&connection].information;
+        player.entity_data.set(
+            ferraloom_game::entity::synched_data::PLAYER_MODEL_CUSTOMISATION,
+            information.model_customisation as i8,
+        );
+        player.parent.set_main_arm(match information.main_hand {
+            common::serverbound::HumanoidArm::Left => protocol::entity_data::HumanoidArm::Left,
+            common::serverbound::HumanoidArm::Right => protocol::entity_data::HumanoidArm::Right,
+        });
         player.view_distance = i32::from(self.connections[&connection].information.view_distance);
         player.text_filtering_enabled = self.connections[&connection]
             .information
@@ -1598,7 +1608,9 @@ impl MinecraftServer {
                         },
                         DataValue {
                             id: 16,
-                            value: EntityDataValue::Byte(c.information.model_customisation as i8),
+                            value: EntityDataValue::Byte(*player.entity_data.get(
+                                ferraloom_game::entity::synched_data::PLAYER_MODEL_CUSTOMISATION,
+                            )),
                         },
                     ]),
                 }),
@@ -1774,6 +1786,19 @@ impl MinecraftServer {
                     .level
                     .entity_mut::<ServerPlayer>(entity)
                     .map_err(game_error)?;
+                // ServerPlayer#updateOptions updates the same canonical accessors after join.
+                player.entity_data.set(
+                    ferraloom_game::entity::synched_data::PLAYER_MODEL_CUSTOMISATION,
+                    p.model_customisation as i8,
+                );
+                player.parent.set_main_arm(match p.main_hand {
+                    common::serverbound::HumanoidArm::Left => {
+                        protocol::entity_data::HumanoidArm::Left
+                    }
+                    common::serverbound::HumanoidArm::Right => {
+                        protocol::entity_data::HumanoidArm::Right
+                    }
+                });
                 player.view_distance = i32::from(p.view_distance);
                 player.text_filtering_enabled = p.text_filtering_enabled;
                 self.connections.get_mut(&connection).unwrap().information = p;
