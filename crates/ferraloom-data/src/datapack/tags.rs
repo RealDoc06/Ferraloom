@@ -166,3 +166,179 @@ impl<T: StaticTagElement> TagSet<T> {
 }
 
 include!(concat!(env!("OUT_DIR"), "/tag_keys.rs"));
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::datapack::Pack;
+    use serde_json::{Map, Value};
+    use std::collections::BTreeSet;
+
+    fn resources(trade_rebalance: bool) -> ResourceManager {
+        let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").expect("builder vanilla jar");
+        let vanilla = Pack::vanilla_jar(std::path::Path::new(&jar)).unwrap();
+        if !trade_rebalance {
+            return ResourceManager::new(vec![vanilla]);
+        }
+        let base = ResourceManager::new(vec![vanilla.clone()]);
+        let mut trade = Pack::new("trade_rebalance");
+        let prefix = "datapacks/trade_rebalance/data/";
+        let entries = base.list(prefix, ".json");
+        assert!(!entries.is_empty(), "optional vanilla pack must be present");
+        for name in entries {
+            let (namespace, path) = name
+                .path()
+                .strip_prefix(prefix)
+                .unwrap()
+                .split_once('/')
+                .unwrap();
+            trade.insert(
+                Identifier::new(namespace, path).unwrap(),
+                base.require(&name).unwrap().bytes.to_vec(),
+            );
+        }
+        ResourceManager::new(vec![vanilla, trade])
+    }
+    fn compare<T: TagElement + Eq + std::fmt::Debug>(
+        actual: &TagSet<T>,
+        expected: &Map<String, Value>,
+        registry: &str,
+        names: &BTreeMap<Identifier, T>,
+    ) {
+        assert!(
+            actual.diagnostics.is_empty(),
+            "{registry}: {:?}",
+            actual.diagnostics
+        );
+        assert_eq!(actual.len(), expected.len(), "{registry} tag count");
+        for (name, values) in expected {
+            let id = actual.resolve_name(&name.parse().unwrap()).unwrap();
+            assert_eq!(actual.name(id).to_string(), *name);
+            let members = values.as_array().unwrap();
+            let members = members
+                .iter()
+                .map(|value| {
+                    let name = value.as_str().unwrap().parse::<Identifier>().unwrap();
+                    *names
+                        .get(&name)
+                        .unwrap_or_else(|| panic!("{registry} tag {name}: missing element"))
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(
+                actual.values(id),
+                members,
+                "{registry} #{name}: TagLoader encounter order"
+            );
+            for (element_name, &element) in names {
+                assert_eq!(
+                    actual.contains(id, element),
+                    members.contains(&element),
+                    "{registry} #{name}: {element_name}"
+                );
+            }
+        }
+    }
+    fn compare_static<T: StaticTagElement + std::fmt::Debug>(
+        resources: &ResourceManager,
+        expected: &Map<String, Value>,
+    ) {
+        let names = crate::registry_entries(&format!("minecraft:{}", T::REGISTRY))
+            .unwrap()
+            .iter()
+            .map(|name| {
+                let name = name.parse::<Identifier>().unwrap();
+                let entry = T::from_tag_name(&name).unwrap();
+                (name, entry)
+            })
+            .collect();
+        compare(
+            &TagSet::<T>::load(resources).unwrap(),
+            expected,
+            T::REGISTRY,
+            &names,
+        );
+    }
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    struct DynamicEntry(usize);
+    impl TagElement for DynamicEntry {
+        fn tag_index(self) -> usize {
+            self.0
+        }
+    }
+    fn compare_dynamic(resources: &ResourceManager, registry: &str, expected: &Map<String, Value>) {
+        // Production dynamic registries supply their own lookup and numeric IDs.
+        // Derive this fixture's lookup from the actual jar resources, never from
+        // the expected tag members, and pass it through the same TagSet builder.
+        let names: BTreeMap<_, _> = resources
+            .registry(registry)
+            .into_keys()
+            .enumerate()
+            .map(|(index, name)| (name, DynamicEntry(index)))
+            .collect();
+        assert!(!names.is_empty(), "missing live {registry} resources");
+        let loaded = load_tags(resources, registry, |name, _| names.get(name).copied());
+        let actual = TagSet::from_tags(loaded, names.len()).unwrap();
+        compare(&actual, expected, registry, &names);
+    }
+    #[test]
+    fn resolved_tags_match_vanilla_tagloader_order_including_trade_rebalance() {
+        let native: Value = serde_json::from_str(include_str!(
+            "../../tests/fixtures/registry_parity/tags.json"
+        ))
+        .unwrap();
+        for (profile, trade) in [("vanilla", false), ("trade_rebalance", true)] {
+            let resources = resources(trade);
+            let expected = native[profile].as_object().unwrap();
+            // Verify every tag resource is covered, including extra registries
+            // or empty tags; comparing only a known subset could hide omissions.
+            let expected_files: BTreeSet<_> = expected
+                .iter()
+                .flat_map(|(registry, tags)| {
+                    let registry = registry.strip_prefix("minecraft:").unwrap();
+                    tags.as_object().unwrap().keys().map(move |name| {
+                        let name = name.parse::<Identifier>().unwrap();
+                        Identifier::new(
+                            name.namespace(),
+                            format!("tags/{registry}/{}.json", name.path()),
+                        )
+                        .unwrap()
+                    })
+                })
+                .collect();
+            assert_eq!(
+                resources.list("tags/", ".json"),
+                expected_files,
+                "{profile} resource coverage"
+            );
+            for (registry, tags) in expected {
+                let expected = tags.as_object().unwrap();
+                match registry.as_str() {
+                    "minecraft:block" => compare_static::<crate::Block>(&resources, expected),
+                    "minecraft:item" => compare_static::<crate::Item>(&resources, expected),
+                    "minecraft:entity_type" => {
+                        compare_static::<crate::EntityType>(&resources, expected)
+                    }
+                    "minecraft:fluid" => {
+                        compare_static::<crate::registries::fluid::Id>(&resources, expected)
+                    }
+                    "minecraft:game_event" => {
+                        compare_static::<crate::registries::game_event::Id>(&resources, expected)
+                    }
+                    "minecraft:potion" => {
+                        compare_static::<crate::registries::potion::Id>(&resources, expected)
+                    }
+                    "minecraft:point_of_interest_type" => {
+                        compare_static::<crate::registries::point_of_interest_type::Id>(
+                            &resources, expected,
+                        )
+                    }
+                    _ => compare_dynamic(
+                        &resources,
+                        registry.strip_prefix("minecraft:").unwrap(),
+                        expected,
+                    ),
+                }
+            }
+        }
+    }
+}

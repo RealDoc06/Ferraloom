@@ -327,8 +327,16 @@ impl AttributeMap {
                 self.attributes_to_sync.insert(key);
             }
         }
+        self.existing_instance_mut(attribute)
+    }
+    /// Direct AttributeMap#attributes lookup used by removeAttributeModifiers.
+    /// Unlike get_instance, absence never installs or dirties a lazy instance.
+    pub fn existing_instance_mut(
+        &mut self,
+        attribute: Attribute,
+    ) -> Option<AttributeInstanceMut<'_>> {
         Some(AttributeInstanceMut {
-            instance: self.attributes.get_mut(&key).unwrap(),
+            instance: self.attributes.get_mut(&AttributeKey(attribute))?,
             to_sync: &mut self.attributes_to_sync,
             to_update: &mut self.attributes_to_update,
         })
@@ -617,5 +625,64 @@ mod tests {
             map.value(Attribute::MOVEMENT_SPEED).unwrap().to_bits(),
             f64::from(0.1_f32).to_bits()
         );
+    }
+
+    #[test]
+    fn native_modifier_removal_only_visits_existing_instances_and_preserves_saved_attributes() {
+        let mut cases = 0;
+        for row in include_str!("../../../tests/java/entity/vectors.tsv")
+            .lines()
+            .filter(|line| line.starts_with("attribute-removal\t"))
+        {
+            let fields: Vec<_> = row.split('\t').collect();
+            let scenario = fields[1];
+            let mut map = AttributeMap::new(EntityType::PLAYER);
+            let attribute = if scenario == "unsupported" {
+                Attribute::FOLLOW_RANGE
+            } else {
+                Attribute::SUBMERGED_MINING_SPEED
+            };
+            let removed = modifier("minecraft:remove", 0.5, AttributeOperation::AddValue);
+            if !matches!(scenario, "absent" | "unsupported") {
+                let mut instance = map.get_instance(attribute).unwrap();
+                if matches!(scenario, "transient" | "mixed") {
+                    instance.add_transient_modifier(removed.clone()).unwrap();
+                }
+                if scenario == "permanent" {
+                    instance.add_permanent_modifier(removed.clone()).unwrap();
+                }
+                if matches!(scenario, "different-id" | "mixed") {
+                    instance
+                        .add_permanent_modifier(modifier(
+                            "minecraft:keep",
+                            0.25,
+                            AttributeOperation::AddValue,
+                        ))
+                        .unwrap();
+                }
+            }
+            map.clear_attributes_to_sync();
+            map.clear_attributes_to_update();
+            if let Some(mut instance) = map.existing_instance_mut(attribute) {
+                instance.remove_modifier(&removed.id);
+            }
+            assert_eq!(
+                map.save_nbt(),
+                ferraloom_nbt::parse(fields[2]).unwrap(),
+                "{row}",
+            );
+            assert_eq!(
+                map.attributes_to_sync().count(),
+                fields[3].parse::<usize>().unwrap(),
+                "{row}",
+            );
+            assert_eq!(
+                map.attributes_to_update().count(),
+                fields[4].parse::<usize>().unwrap(),
+                "{row}",
+            );
+            cases += 1;
+        }
+        assert_eq!(cases, 7);
     }
 }

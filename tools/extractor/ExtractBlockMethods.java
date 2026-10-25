@@ -27,7 +27,8 @@ public final class ExtractBlockMethods {
         "handlePrecipitation",
         "getSignal", "getDirectSignal", "isSignalSource", "ownSignal", "shouldRedstoneWireConnectTo",
         "getDrops", "spawnAfterBreak", "getMenuProvider",
-        "setPlacedBy", "playerWillDestroy", "spawnDestroyByEntityParticles", "spawnDestroyParticles"
+        "setPlacedBy", "playerWillDestroy", "spawnDestroyByEntityParticles", "spawnDestroyParticles",
+        "getDestroyProgress", "destroy", "playerDestroy"
     );
 
     private static Method baseMethod(String name) {

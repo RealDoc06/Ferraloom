@@ -261,7 +261,7 @@ pub fn move_entity<E: Entity + ?Sized>(
             && length >= 1.0
             && super::trace::fall_distance_resetting_hit(entity, movement, level)?
         {
-            level.entity_mut::<EntityData>(entity)?.fall_distance = 0.0;
+            behavior.reset_fall_distance(entity, level)?;
         }
         let position = level.entity::<EntityData>(entity)?.position;
         level
@@ -357,7 +357,8 @@ pub fn check_fall_damage(
         .check_fall_damage(entity, dy, on_ground, state, pos, level)
 }
 /// Port of Entity#checkFallDamage, selected explicitly by living super calls.
-pub fn base_check_fall_damage(
+pub fn base_check_fall_damage<E: Entity + ?Sized>(
+    behavior: &E,
     entity: EntityRef,
     dy: f64,
     on_ground: bool,
@@ -390,8 +391,7 @@ pub fn base_check_fall_damage(
             Some(support_state),
         )?;
     }
-    level.entity_mut::<EntityData>(entity)?.fall_distance = 0.0;
-    Ok(())
+    behavior.reset_fall_distance(entity, level)
 }
 fn restitute<E: Entity + ?Sized>(
     behavior: &E,

@@ -1582,6 +1582,40 @@ fn vanilla_hurt_triggers_preserve_damage_blocking_and_entity_roles() {
 }
 
 #[test]
+fn live_fall_from_height_reads_canonical_player_nbt_at_the_trigger_point() {
+    use crate::entity::{EntityData, player::ServerPlayer};
+
+    for fall_distance in [5.25, 0.0] {
+        let manager = ServerAdvancementManager::new(vec![AdvancementHolder {
+            id: id("test:fall_nbt"),
+            value: Advancement::decode(&json!({
+                "criteria": {"a": {"trigger": "fall_from_height", "conditions": {
+                    "player": {"type": "entity_properties", "entity": "this",
+                        "predicate": {"nbt": "{fall_distance:5.25d}"}},
+                    "distance": {"y": 10}
+                }}}
+            }))
+            .unwrap(),
+        }]);
+        let (mut level, player) = live_fixture(manager);
+        let base = level.entity_mut::<EntityData>(player).unwrap();
+        base.set_pos(Vec3::new(1.0, 64.0, 2.0));
+        base.fall_distance = fall_distance;
+        criteria::fall_from_height(&mut level, player, Vec3::new(1.0, 74.0, 2.0)).unwrap();
+        assert_eq!(
+            level
+                .entity::<ServerPlayer>(player)
+                .unwrap()
+                .advancements
+                .get_progress(&id("test:fall_nbt"))
+                .unwrap()
+                .is_done(),
+            fall_distance == 5.25
+        );
+    }
+}
+
+#[test]
 fn retained_inventory_trigger_and_stats_request_read_canonical_player() {
     use crate::{
         entity::player::{ServerPlayer, inventory},
