@@ -12,6 +12,7 @@ mod interaction;
 pub(crate) mod item_tick;
 pub mod shoulders;
 mod spawn;
+pub use spawn::SavedPosition;
 mod tick;
 pub use tick::{award_stat, player_do_tick_with_tick_rate, reset_stat};
 pub mod travel;

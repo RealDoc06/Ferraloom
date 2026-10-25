@@ -1,27 +1,78 @@
 use super::ServerPlayer;
 use ferraloom_nbt::{CompoundTag, Tag};
 
+/// Port of ServerPlayer.SavedPosition.MAP_CODEC. Partial field values are
+/// retained independently, exactly as TagValueInput#read consumes them.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct SavedPosition {
+    pub dimension: Option<ferraloom_protocol::Identifier>,
+    pub position: Option<ferraloom_util::Vec3>,
+    pub rotation: Option<(f32, f32)>,
+}
+impl SavedPosition {
+    /// Port of PrepareSpawnTask#start's nullable dimension selection. The
+    /// validated server always owns an overworld; lookup/acquire errors after
+    /// this native nullable choice are not swallowed by another fallback.
+    pub fn resolve_dimension(
+        &self,
+        respawn: &ferraloom_protocol::Identifier,
+        contains: impl Fn(&ferraloom_protocol::Identifier) -> bool,
+    ) -> ferraloom_protocol::Identifier {
+        self.dimension
+            .as_ref()
+            .filter(|key| contains(key))
+            .or_else(|| contains(respawn).then_some(respawn))
+            .cloned()
+            .unwrap_or_else(|| "minecraft:overworld".parse().expect("native dimension key"))
+    }
+}
 impl ServerPlayer {
-    /// Port of PrepareSpawnTask's SavedPosition.MAP_CODEC rotation selection.
-    /// Capture the raw saved angles before Entity#load wraps them; absent or
-    /// undecodable rotation uses the shared respawn data at the caller.
+    /// Port of ServerPlayer.SavedPosition.MAP_CODEC as read by PrepareSpawnTask.
+    pub fn saved_position(tag: Option<&CompoundTag>) -> SavedPosition {
+        let Some(tag) = tag else {
+            return SavedPosition::default();
+        };
+        let dimension = tag
+            .get_string("Dimension")
+            .and_then(|name| name.to_string_checked().ok())
+            .and_then(|name| name.parse().ok());
+        let position = tag.get("Pos").and_then(|values| {
+            let [x, y, z] = match values {
+                Tag::List(values) => prefix(values.iter().filter_map(Tag::as_double)),
+                Tag::ByteArray(values) => prefix(values.iter().map(|&value| f64::from(value))),
+                Tag::IntArray(values) => prefix(values.iter().map(|&value| f64::from(value))),
+                Tag::LongArray(values) => prefix(values.iter().map(|&value| value as f64)),
+                _ => None,
+            }?;
+            Some(ferraloom_util::Vec3::new(x, y, z))
+        });
+        let rotation = tag.get("Rotation").and_then(|values| {
+            let [yaw, pitch] = match values {
+                Tag::List(values) => prefix(values.iter().filter_map(Tag::as_float)),
+                Tag::ByteArray(values) => prefix(values.iter().map(|&value| f32::from(value))),
+                Tag::IntArray(values) => prefix(values.iter().map(|&value| value as f32)),
+                Tag::LongArray(values) => prefix(values.iter().map(|&value| value as f32)),
+                _ => None,
+            }?;
+            Some((yaw, pitch))
+        });
+        SavedPosition {
+            dimension,
+            position,
+            rotation,
+        }
+    }
+    /// PrepareSpawnTask captures raw angles before Entity#load wraps them.
     pub fn saved_spawn_rotation(tag: Option<&CompoundTag>) -> Option<(f32, f32)> {
-        let values = tag?.get("Rotation")?;
-        let [yaw, pitch] = match values {
-            Tag::List(values) => prefix(values.iter().filter_map(Tag::as_float)),
-            Tag::ByteArray(values) => prefix(values.iter().map(|value| f32::from(*value))),
-            Tag::IntArray(values) => prefix(values.iter().map(|value| *value as f32)),
-            Tag::LongArray(values) => prefix(values.iter().map(|value| *value as f32)),
-            _ => None,
-        }?;
-        Some((yaw, pitch))
+        Self::saved_position(tag).rotation
     }
 }
 
-// Codec.FLOAT.listOf retains successfully decoded entries, and Util.fixedSize
-// preserves an oversized list's first two values as its partial result.
-fn prefix(mut values: impl Iterator<Item = f32>) -> Option<[f32; 2]> {
-    Some([values.next()?, values.next()?])
+// Numeric list codecs retain successful elements and fixedSize retains an
+// oversized prefix as its partial value. Do not convert longs through double
+// when decoding FLOAT: Number#floatValue must retain its direct rounding.
+fn prefix<T, const N: usize>(values: impl Iterator<Item = T>) -> Option<[T; N]> {
+    values.take(N).collect::<Vec<_>>().try_into().ok()
 }
 
 #[cfg(test)]
@@ -30,6 +81,84 @@ mod tests {
     use crate::entity::player::GameType;
     use ferraloom_util::{Uuid, Vec3, random::RandomSource};
 
+    #[test]
+    fn full_saved_position_matches_native_optional_fields_and_partial_record_values() {
+        let mut count = 0;
+        for row in include_str!("../../../tests/java/entity/saved-position.tsv").lines() {
+            let fields: Vec<_> = row.split('\t').collect();
+            let tag = (fields[0] != "-").then(|| ferraloom_nbt::parse_compound(fields[0]).unwrap());
+            let parsed = ServerPlayer::saved_position(tag.as_ref());
+            assert_eq!(
+                parsed.dimension.as_ref().map_or("-", |id| id.as_str()),
+                fields[1],
+                "{row}"
+            );
+            assert_eq!(
+                parsed.position.map_or_else(
+                    || "-".into(),
+                    |p| format!(
+                        "{:x},{:x},{:x}",
+                        p.x.to_bits(),
+                        p.y.to_bits(),
+                        p.z.to_bits()
+                    )
+                ),
+                fields[2],
+                "{row}"
+            );
+            assert_eq!(
+                parsed.rotation.map_or_else(
+                    || "-".into(),
+                    |(a, b)| format!("{:x},{:x}", a.to_bits(), b.to_bits())
+                ),
+                fields[3],
+                "{row}"
+            );
+            count += 1;
+        }
+        assert_eq!(count, 393);
+    }
+    #[test]
+    fn spawn_dimension_uses_loaded_then_respawn_then_explicit_overworld() {
+        let respawn = "minecraft:the_end".parse().unwrap();
+        for (saved, available, expected) in [
+            (
+                Some("minecraft:the_nether"),
+                vec![
+                    "minecraft:overworld",
+                    "minecraft:the_nether",
+                    "minecraft:the_end",
+                ],
+                "minecraft:the_nether",
+            ),
+            (
+                Some("fixture:absent"),
+                vec!["minecraft:overworld", "minecraft:the_end"],
+                "minecraft:the_end",
+            ),
+            (
+                None,
+                vec!["minecraft:overworld", "minecraft:the_end"],
+                "minecraft:the_end",
+            ),
+            (
+                Some("fixture:absent"),
+                vec!["minecraft:overworld"],
+                "minecraft:overworld",
+            ),
+        ] {
+            let saved = SavedPosition {
+                dimension: saved.map(|id| id.parse().unwrap()),
+                ..Default::default()
+            };
+            assert_eq!(
+                saved
+                    .resolve_dimension(&respawn, |id| available.contains(&id.as_str()))
+                    .as_str(),
+                expected
+            );
+        }
+    }
     fn angles(values: &[f32]) -> String {
         values
             .iter()
