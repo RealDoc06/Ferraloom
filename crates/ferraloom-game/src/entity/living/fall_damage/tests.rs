@@ -134,7 +134,7 @@ fn location_enchantments_use_effective_equipment_and_the_existing_unit_policy() 
     let player = ServerPlayer::new(
         Uuid::new(3, 4),
         "landing".into(),
-        level.next_entity_id(),
+        level.next_entity_id().unwrap(),
         Vec3::ZERO,
         GameType::Survival,
     );

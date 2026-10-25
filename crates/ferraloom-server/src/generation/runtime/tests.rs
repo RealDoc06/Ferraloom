@@ -79,7 +79,11 @@ impl AcquireDriver for InlineProbe {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn acquisition_stays_inline_when_the_phase_task_moves_between_workers() {
     static BEHAVIORS: Behaviors = Behaviors::EMPTY;
-    let mut level = Level::new(Region::new(&BEHAVIORS), LevelContext::fixture(0, 63));
+    let mut level = {
+        let mut fixture_level = Level::new(Region::new(&BEHAVIORS), LevelContext::fixture(0, 63));
+        fixture_level.install_shared(Box::default());
+        fixture_level
+    };
     let (blocked, wait_blocked) = tokio::sync::oneshot::channel();
     let server = tokio::spawn(async move {
         let owner = PhaseOwner::current();
@@ -248,7 +252,7 @@ async fn resumed_full_promotion_keeps_the_successful_entity_post_load_checkpoint
             .post_load_active = false
     });
     runtime.run_post_load(&live.level, task).unwrap();
-    let allocated_probe = live.level.next_entity_id();
+    let allocated_probe = live.level.next_entity_id().unwrap();
     assert_eq!(allocated_probe, 2);
     // A cold executor failure after postLoad precedes the next finalize action.
     // Level's own test exercises the actual private tick-registration conflict;
@@ -266,7 +270,7 @@ async fn resumed_full_promotion_keeps_the_successful_entity_post_load_checkpoint
     });
     runtime.jobs.borrow_mut().suspend_integration(task);
     runtime.resume_full_promotion(&live.level, task).unwrap();
-    assert_eq!(live.level.next_entity_id(), allocated_probe + 1);
+    assert_eq!(live.level.next_entity_id().unwrap(), allocated_probe + 1);
     assert_eq!(live.level.take_entity_management_events().len(), 1);
     assert!(runtime.with_world(|world| world.full_promotions[&task].entities_registered));
     assert!(runtime.with_world(|world| world.full_promotions[&task].finalized));

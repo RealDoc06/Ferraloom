@@ -146,7 +146,9 @@ fn native_cooldown_groups_float_percent_wrapping_and_ordered_expiry_packets() {
 #[test]
 fn player_tick_expires_cooldowns_and_runtime_state_is_not_persisted() {
     let mut level = crate::entity::tests::level(false);
-    level.install_shared(Box::default());
+    if level.shared().is_err() {
+        level.install_shared(Box::default());
+    }
     let player = EntityRef(92);
     level
         .add_entity(

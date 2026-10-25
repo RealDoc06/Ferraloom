@@ -325,6 +325,7 @@ impl MinecraftServer {
                 scoreboard,
                 ops,
                 weather,
+                entity_ids: Default::default(),
             }));
         level.game_time = game_time;
         level.level.set_command_storage(command_storage.snapshot());
@@ -1204,7 +1205,7 @@ impl MinecraftServer {
         let mut player = ServerPlayer::new(
             profile.id,
             profile.name,
-            self.level.level.next_entity_id(),
+            self.level.level.next_entity_id().map_err(game_error)?,
             Vec3::new(
                 f64::from(self.world_root.spawn_position().x) + 0.5,
                 f64::from(self.world_root.spawn_position().y),

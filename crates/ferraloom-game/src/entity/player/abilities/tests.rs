@@ -107,12 +107,14 @@ fn native_server_jump_awards_stats_after_motion_and_gates_exhaustion_on_invulner
     {
         let row: Vec<_> = line.split('\t').collect();
         let mut level = crate::entity::tests::level(true);
-        level.install_shared(Box::default());
+        if level.shared().is_err() {
+            level.install_shared(Box::default());
+        }
         let id = level.next_entity_ref();
         let mut p = ServerPlayer::new(
             Uuid::new(3, 4),
             "jump".into(),
-            level.next_entity_id(),
+            level.next_entity_id().unwrap(),
             Vec3::new(8.5, 64.0, 8.5),
             GameType::from_id(row[1].parse().unwrap()),
         );

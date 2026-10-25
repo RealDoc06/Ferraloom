@@ -96,12 +96,12 @@ pub fn pop_resource_from_face(
 fn spawn_resource(
     level: &mut Level,
     stack: &ItemStack,
-    constructor: impl FnOnce(&mut Level) -> ItemEntity,
+    constructor: impl FnOnce(&mut Level) -> Result<ItemEntity, LevelError>,
 ) -> Result<Option<EntityRef>, LevelError> {
     if stack.is_empty() || !level.block_drops_enabled()? {
         return Ok(None);
     }
-    let mut item = constructor(level);
+    let mut item = constructor(level)?;
     // ItemEntity#setDefaultPickUpDelay.
     item.pickup_delay = 10;
     let handle = level.next_entity_ref();
@@ -373,10 +373,14 @@ mod tests {
             .filter(|line| line.starts_with("pop-resource-rng\t"))
         {
             let fields: Vec<_> = line.split('\t').collect();
-            let mut level = Level::new(
-                Region::new(&BEHAVIORS),
-                crate::level::LevelContext::fixture(0, 63),
-            );
+            let mut level = {
+                let mut fixture_level = Level::new(
+                    Region::new(&BEHAVIORS),
+                    crate::level::LevelContext::fixture(0, 63),
+                );
+                fixture_level.install_shared(Box::default());
+                fixture_level
+            };
             level.rules_mut().block_drops = Some(false);
             level.set_random_streams(
                 Random::Legacy(LegacyRandomSource::new(fields[1].parse().unwrap())),
@@ -413,10 +417,14 @@ mod tests {
             component::{ComponentTypeId, DataComponent},
         };
         use std::sync::Arc;
-        let mut level = Level::new(
-            Region::new(&BEHAVIORS),
-            crate::level::LevelContext::fixture(0, 63),
-        );
+        let mut level = {
+            let mut fixture_level = Level::new(
+                Region::new(&BEHAVIORS),
+                crate::level::LevelContext::fixture(0, 63),
+            );
+            fixture_level.install_shared(Box::default());
+            fixture_level
+        };
         let pos = BlockPos::new(3, 3, 3);
         let section = ferraloom_chunk::LevelChunkSection::new(
             ferraloom_chunk::Strategy::block_states(),

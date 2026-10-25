@@ -20,7 +20,11 @@ struct Vector {
 }
 fn player_level(instabuild: bool, creative: bool) -> (Level, EntityRef) {
     static BEHAVIORS: Behaviors = Behaviors::EMPTY;
-    let mut level = Level::new(Region::new(&BEHAVIORS), LevelContext::fixture(0, 63));
+    let mut level = {
+        let mut fixture_level = Level::new(Region::new(&BEHAVIORS), LevelContext::fixture(0, 63));
+        fixture_level.install_shared(Box::default());
+        fixture_level
+    };
     let entity = EntityRef(1);
     let mut player = ServerPlayer::new(
         Uuid::new(1, 2),
@@ -91,7 +95,9 @@ fn same_phase_ops_mutations_are_live_and_command_sources_keep_captured_permissio
         level.can_use_game_master_blocks(entity),
         Err(LevelError::MissingServerShared)
     ));
-    level.install_shared(Box::default());
+    if level.shared().is_err() {
+        level.install_shared(Box::default());
+    }
     let profile = GameProfile {
         id: Uuid::new(1, 2),
         name: "metadata".into(),

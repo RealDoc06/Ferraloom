@@ -123,7 +123,7 @@ impl EntityDataView for FallingBlockEntity {
 /// replacement; neighbor callbacks therefore see vanilla's entity creation order.
 pub fn fall(level: &mut Level, pos: BlockPos, state: BlockState) -> Result<EntityRef, LevelError> {
     let mut entity =
-        FallingBlockEntity::with_parent(level.create_entity_data(EntityType::FALLING_BLOCK));
+        FallingBlockEntity::with_parent(level.create_entity_data(EntityType::FALLING_BLOCK)?);
     entity.block_state = state.with(properties::WATERLOGGED, false).unwrap_or(state);
     entity.parent.blocks_building = true;
     let position = Vec3::new(
@@ -155,7 +155,7 @@ fn drop_block_item(entity: EntityRef, level: &mut Level) -> Result<(), LevelErro
         return Ok(());
     }
     let position = falling.parent.position;
-    let mut dropped = ItemEntity::new_at(level, position, stack);
+    let mut dropped = ItemEntity::new_at(level, position, stack)?;
     dropped.pickup_delay = 10;
     let id = level.next_entity_ref();
     level.add_entity(id, EntityState::Item(Box::new(dropped)))

@@ -104,7 +104,7 @@ pub fn spawn(
     value: i32,
 ) -> Result<EntityRef, LevelError> {
     let id = level.next_entity_ref();
-    let mut orb = ExperienceOrb::with_parent(level.create_entity_data(EntityType::EXPERIENCE_ORB));
+    let mut orb = ExperienceOrb::with_parent(level.create_entity_data(EntityType::EXPERIENCE_ORB)?);
     orb.parent.set_pos(position);
     orb.parent.yaw = orb.parent.random.next_float() * 360.0;
     let mut velocity = Vec3::new(

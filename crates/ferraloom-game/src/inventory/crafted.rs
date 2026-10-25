@@ -37,7 +37,12 @@ mod tests {
     #[test]
     fn crafted_map_effect_is_a_unit_and_base_callbacks_are_empty() {
         static BEHAVIORS: crate::Behaviors = crate::Behaviors::EMPTY;
-        let mut level = Level::new(Region::new(&BEHAVIORS), LevelContext::fixture(0, 63));
+        let mut level = {
+            let mut fixture_level =
+                Level::new(Region::new(&BEHAVIORS), LevelContext::fixture(0, 63));
+            fixture_level.install_shared(Box::default());
+            fixture_level
+        };
         let player = EntityRef(1);
         level
             .add_entity(

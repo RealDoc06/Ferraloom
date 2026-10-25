@@ -47,7 +47,7 @@ fn fixture(
     let mut player = ServerPlayer::new(
         Uuid::new(3, 4),
         "food".into(),
-        level.next_entity_id(),
+        level.next_entity_id().unwrap(),
         Vec3::ZERO,
         GameType::Survival,
     );

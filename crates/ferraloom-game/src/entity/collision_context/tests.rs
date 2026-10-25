@@ -107,7 +107,7 @@ fn native_entity_context_reads_position_y_and_effective_empty_hand() {
             let mut player = ServerPlayer::new(
                 Uuid::new(3, 4),
                 "context".into(),
-                level.next_entity_id(),
+                level.next_entity_id().unwrap(),
                 Vec3::ZERO,
                 GameType::Survival,
             );
@@ -121,7 +121,10 @@ fn native_entity_context_reads_position_y_and_effective_empty_hand() {
             );
             EntityState::Player(Box::new(player))
         } else {
-            EntityState::Item(Box::new(ItemEntity::new(level.next_entity_id(), 0)))
+            EntityState::Item(Box::new(ItemEntity::new(
+                level.next_entity_id().unwrap(),
+                0,
+            )))
         };
         let base = state.as_entity_mut();
         base.set_pos(Vec3::new(

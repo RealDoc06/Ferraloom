@@ -369,7 +369,8 @@ fn hopper_item_entity_copy_precedes_callbacks_and_original_survives_removal() {
             &mut level,
             Vec3::new(8.5, 65.0, 8.5),
             ItemStack::new(Item::STONE, 4, Default::default()),
-        );
+        )
+        .unwrap();
         level
             .add_entity(entity, EntityState::Item(Box::new(item)))
             .unwrap();

@@ -91,12 +91,16 @@ mod tests {
             .filter(|row| row.starts_with("bubble\t"))
         {
             let fields: Vec<_> = row.split('\t').collect();
-            let mut level = Level::new(
-                Region::new(&BEHAVIORS),
-                crate::level::LevelContext::fixture(0, 63),
-            );
+            let mut level = {
+                let mut fixture_level = Level::new(
+                    Region::new(&BEHAVIORS),
+                    crate::level::LevelContext::fixture(0, 63),
+                );
+                fixture_level.install_shared(Box::default());
+                fixture_level
+            };
             let id = level.next_entity_ref();
-            let network = level.next_entity_id();
+            let network = level.next_entity_id().unwrap();
             let state = if fields[1] != "tnt" {
                 EntityState::Player(Box::new(ServerPlayer::new(
                     Uuid::new(1, 2),
@@ -156,12 +160,16 @@ mod tests {
     #[test]
     fn above_column_particles_consume_level_random_in_native_packet_order() {
         static BEHAVIORS: Behaviors = Behaviors::EMPTY;
-        let mut level = Level::new(
-            Region::new(&BEHAVIORS),
-            crate::level::LevelContext::fixture(0, 63),
-        );
+        let mut level = {
+            let mut fixture_level = Level::new(
+                Region::new(&BEHAVIORS),
+                crate::level::LevelContext::fixture(0, 63),
+            );
+            fixture_level.install_shared(Box::default());
+            fixture_level
+        };
         let entity = level.next_entity_ref();
-        let tnt = PrimedTnt::new(level.next_entity_id(), 123);
+        let tnt = PrimedTnt::new(level.next_entity_id().unwrap(), 123);
         level
             .add_entity(entity, EntityState::PrimedTnt(Box::new(tnt)))
             .unwrap();

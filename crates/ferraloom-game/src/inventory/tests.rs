@@ -846,10 +846,14 @@ fn player_tick_broadcasts_external_inventory_mutation_in_entity_phase() {
         level::{Level, Region},
     };
     static BEHAVIORS: crate::Behaviors = crate::Behaviors::EMPTY;
-    let mut level = Level::new(
-        Region::new(&BEHAVIORS),
-        crate::level::LevelContext::fixture(0, 63),
-    );
+    let mut level = {
+        let mut fixture_level = Level::new(
+            Region::new(&BEHAVIORS),
+            crate::level::LevelContext::fixture(0, 63),
+        );
+        fixture_level.install_shared(Box::default());
+        fixture_level
+    };
     let handle = EntityRef(1);
     let player = ServerPlayer::new(
         ferraloom_util::Uuid::from_int_array([0, 0, 0, 1]),
@@ -1075,7 +1079,7 @@ fn live_crafting_clicks_and_placements_match_unchanged_native_timelines() {
             let mut state = ServerPlayer::new(
                 Uuid::new(1, 2),
                 "craft".into(),
-                level.next_entity_id(),
+                level.next_entity_id().unwrap(),
                 Vec3::new(8.5, 64.0, 8.5),
                 GameType::Survival,
             );
@@ -1244,7 +1248,7 @@ fn clear_grid_returns_lent_drop_receivers_and_preserves_native_comparator_reads(
         let mut state = ServerPlayer::new(
             Uuid::new(1, 2),
             "clear".into(),
-            level.next_entity_id(),
+            level.next_entity_id().unwrap(),
             Vec3::new(8.5, 64.0, 8.5),
             GameType::Survival,
         );

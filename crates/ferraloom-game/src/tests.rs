@@ -83,10 +83,14 @@ static TEST_BEHAVIORS: Behaviors = Behaviors::EMPTY
     .with_block(Block::DIRT, &TurnToAir);
 
 fn region() -> Level {
-    let mut region = Level::new(
-        Region::new(&TEST_BEHAVIORS),
-        crate::level::LevelContext::fixture(0, 63),
-    );
+    let mut region = {
+        let mut fixture_level = Level::new(
+            Region::new(&TEST_BEHAVIORS),
+            crate::level::LevelContext::fixture(0, 63),
+        );
+        fixture_level.install_shared(Box::default());
+        fixture_level
+    };
     for pos in [ChunkPos::containing(PLACED), ChunkPos::ZERO] {
         region
             .add_chunk(LevelChunk::new(

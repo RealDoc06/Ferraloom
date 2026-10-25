@@ -200,7 +200,12 @@ mod tests {
     #[test]
     fn canonical_plain_names_dispatch_before_language_rendering() {
         static BEHAVIORS: Behaviors = Behaviors::EMPTY;
-        let mut level = Level::new(Region::new(&BEHAVIORS), LevelContext::fixture(0, 63));
+        let mut level = {
+            let mut fixture_level =
+                Level::new(Region::new(&BEHAVIORS), LevelContext::fixture(0, 63));
+            fixture_level.install_shared(Box::default());
+            fixture_level
+        };
         let cow = EntityRef(1);
         level
             .add_entity(cow, EntityState::Cow(Box::default()))

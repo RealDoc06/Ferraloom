@@ -146,7 +146,11 @@ fn text(position: Option<Vec3>) -> String {
 #[test]
 fn native_source_constructors_preserve_actor_identity_scaling_and_live_positions() {
     static BEHAVIORS: Behaviors = Behaviors::EMPTY;
-    let mut level = Level::new(Region::new(&BEHAVIORS), LevelContext::fixture(0, 63));
+    let mut level = {
+        let mut fixture_level = Level::new(Region::new(&BEHAVIORS), LevelContext::fixture(0, 63));
+        fixture_level.install_shared(Box::default());
+        fixture_level
+    };
     let registry = registry();
     let player = ServerPlayer::new(
         Uuid::new(0, 1),
@@ -306,7 +310,11 @@ fn damage_cooldown_uses_the_contexts_loaded_tag_instead_of_a_caller_flag() {
         fixture.initial_difficulty,
     ));
     static BEHAVIORS: Behaviors = Behaviors::EMPTY;
-    let mut level = Level::new(Region::new(&BEHAVIORS), context);
+    let mut level = {
+        let mut fixture_level = Level::new(Region::new(&BEHAVIORS), context);
+        fixture_level.install_shared(Box::default());
+        fixture_level
+    };
     let entity = level.next_entity_ref();
     level
         .add_entity(entity, EntityState::Cow(Box::default()))
@@ -372,7 +380,11 @@ fn difficulty_is_required_world_context_and_updates_without_replacing_it() {
         Difficulty::Hard,
     ));
     static BEHAVIORS: Behaviors = Behaviors::EMPTY;
-    let mut level = Level::new(Region::new(&BEHAVIORS), context.clone());
+    let mut level = {
+        let mut fixture_level = Level::new(Region::new(&BEHAVIORS), context.clone());
+        fixture_level.install_shared(Box::default());
+        fixture_level
+    };
     assert_eq!(level.difficulty(), Difficulty::Hard);
     level.set_difficulty(Difficulty::Peaceful);
     assert_eq!(level.difficulty(), Difficulty::Peaceful);

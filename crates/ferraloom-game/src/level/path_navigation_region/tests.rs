@@ -62,7 +62,11 @@ fn level(chunks: &str, behaviors: &'static Behaviors) -> Level {
             entities: Arc::new(TagSet::load(&resources).unwrap()),
         }
     });
-    let mut level = Level::new(Region::new(behaviors), LevelContext::fixture(0, 63));
+    let mut level = {
+        let mut fixture_level = Level::new(Region::new(behaviors), LevelContext::fixture(0, 63));
+        fixture_level.install_shared(Box::default());
+        fixture_level
+    };
     level.set_block_tags(tags.blocks.clone());
     level.set_fluid_tags(tags.fluids.clone());
     level.set_entity_type_tags(tags.entities.clone());
@@ -437,7 +441,7 @@ fn native_collision_context_empty_entities_and_world_border_order() {
         level.set_entity_world_border(border);
         let source = if f[2] == "true" {
             let entity = level.next_entity_ref();
-            let mut item = ItemEntity::new(level.next_entity_id(), 0);
+            let mut item = ItemEntity::new(level.next_entity_id().unwrap(), 0);
             item.parent.set_pos(if f[1] == "border" {
                 ferraloom_util::Vec3::new(4.5, 64.0, 0.5)
             } else {

@@ -122,10 +122,14 @@ mod tests {
 
     fn level() -> Level {
         static BEHAVIORS: Behaviors = Behaviors::EMPTY;
-        let mut level = Level::new(
-            Region::new(&BEHAVIORS),
-            crate::level::LevelContext::fixture(0, 63),
-        );
+        let mut level = {
+            let mut fixture_level = Level::new(
+                Region::new(&BEHAVIORS),
+                crate::level::LevelContext::fixture(0, 63),
+            );
+            fixture_level.install_shared(Box::default());
+            fixture_level
+        };
         level
             .add_entity(
                 PLAYER,
@@ -144,7 +148,9 @@ mod tests {
                 EntityState::ExperienceOrb(Box::new(ExperienceOrb::new(2, 0))),
             )
             .unwrap();
-        level.install_shared(Box::default());
+        if level.shared().is_err() {
+            level.install_shared(Box::default());
+        }
         level
     }
 

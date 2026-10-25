@@ -106,6 +106,7 @@ pub enum LevelError {
     MissingEnvironmentContext,
     MissingSpawnProtectionContext,
     MissingServerShared,
+    EntityIdAllocationExhausted,
     MissingBlockTags,
     MissingBlockTag,
     MissingDamageTypeTag,

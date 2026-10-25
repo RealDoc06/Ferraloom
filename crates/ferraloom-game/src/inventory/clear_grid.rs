@@ -241,7 +241,7 @@ mod tests {
             let state = ServerPlayer::new(
                 Uuid::new(1, 2),
                 "loan".into(),
-                level.next_entity_id(),
+                level.next_entity_id().unwrap(),
                 Vec3::ZERO,
                 GameType::Survival,
             );

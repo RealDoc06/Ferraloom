@@ -573,10 +573,14 @@ mod tests {
     use std::sync::Arc;
     static BEHAVIORS: Behaviors = Behaviors::EMPTY;
     fn level() -> Level {
-        let mut level = Level::new(
-            Region::new(&BEHAVIORS),
-            crate::level::LevelContext::fixture(0, 63),
-        );
+        let mut level = {
+            let mut fixture_level = Level::new(
+                Region::new(&BEHAVIORS),
+                crate::level::LevelContext::fixture(0, 63),
+            );
+            fixture_level.install_shared(Box::default());
+            fixture_level
+        };
         for x in 0..=1 {
             level
                 .add_chunk(LevelChunk::new(

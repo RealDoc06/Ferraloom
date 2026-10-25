@@ -21,10 +21,14 @@ fn comparison_nbt_reads_subclass_data_selected_item_and_ineligible_objects() {
     {
         let fields: Vec<_> = row.split('\t').collect();
         let scenario = fields[1];
-        let mut level = Level::new(
-            Region::new(&BEHAVIORS),
-            crate::level::LevelContext::fixture(0, 63),
-        );
+        let mut level = {
+            let mut fixture_level = Level::new(
+                Region::new(&BEHAVIORS),
+                crate::level::LevelContext::fixture(0, 63),
+            );
+            fixture_level.install_shared(Box::default());
+            fixture_level
+        };
         let mut state = if scenario.starts_with("player") {
             let mut player = ServerPlayer::new(
                 Uuid::new(0, 1),

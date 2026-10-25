@@ -109,7 +109,6 @@ pub struct EntityStorage {
     states: InsertOnlyMap<EntityRef, EntityState>,
     pub lookup: EntityLookup,
     pub sections: EntitySectionStorage,
-    pub ids: EntityIdAllocator,
 }
 impl EntityStorage {
     /// Port of PersistentEntitySectionManager#areEntitiesLoaded. Visibility and
@@ -124,17 +123,19 @@ impl EntityStorage {
     pub fn get_mut(&mut self, id: &EntityRef) -> Option<&mut EntityState> {
         self.states.get_mut(id)
     }
-    fn add(&self, id: EntityRef, mut state: EntityState) -> Result<i32, LevelError> {
+    fn add(
+        &self,
+        id: EntityRef,
+        mut state: EntityState,
+        next_id: impl FnOnce() -> Result<i32, LevelError>,
+    ) -> Result<i32, LevelError> {
         if self.states.contains_key(&id) {
             return Err(LevelError::DuplicateEntity(id));
         }
         self.next_ref.set(self.next_ref.get().max(id.0));
         let base = state.as_entity_mut();
         if !base.network_id_allocated {
-            base.network_id = self
-                .ids
-                .allocate(&self.lookup)
-                .expect("regional entity ID block exhausted at barrier");
+            base.network_id = next_id()?;
             base.network_id_allocated = true;
         }
         if !self.registration.reserve_uuid(base.uuid) {
@@ -224,7 +225,10 @@ impl Level {
     }
     /// Entity constructors share RandomSource.create's seed uniquifier with the
     /// level factory, while retaining a separate random stream per entity.
-    pub fn create_entity_data(&self, kind: ferraloom_data::EntityType) -> EntityData {
+    pub fn create_entity_data(
+        &self,
+        kind: ferraloom_data::EntityType,
+    ) -> Result<EntityData, LevelError> {
         EntityData::from_random_with_id(kind, new_entity_random(), || self.next_entity_id())
     }
     pub fn emit_entity_effect(&mut self, effect: crate::entity::effects::EntityEffect) {
@@ -233,14 +237,13 @@ impl Level {
     pub fn take_entity_effects(&mut self) -> Vec<crate::entity::effects::EntityEffect> {
         std::mem::take(&mut self.region_mut().entities.effects)
     }
-    /// Port of ServerLevel#getNextEntityId. Every entity constructor, including
-    /// players, draws from this region's canonical creation-order allocator.
-    pub fn next_entity_id(&self) -> i32 {
-        let storage = &self.region().entities;
-        storage
-            .ids
-            .allocate(&storage.lookup)
-            .expect("regional entity ID block exhausted at barrier")
+    /// Port of ServerLevel#getNextEntityId over the single server counter.
+    /// Birth Regions affect internal handles, never this native wire-ID order.
+    pub fn next_entity_id(&self) -> Result<i32, LevelError> {
+        self.shared()?
+            .entity_ids
+            .allocate(&self.region().entities.lookup)
+            .ok_or(LevelError::EntityIdAllocationExhausted)
     }
     pub fn min_build_height(&self) -> i32 {
         self.region().min_y
@@ -265,7 +268,9 @@ impl Level {
         loaded: bool,
     ) -> Result<(), LevelError> {
         let region = self.region();
-        let network_id = region.entities.add(entity, state)?;
+        let network_id = region
+            .entities
+            .add(entity, state, || self.next_entity_id())?;
         let base = region.entities.get(&entity).unwrap().as_entity();
         let status = if base.entity_type == ferraloom_data::EntityType::PLAYER {
             Visibility::Ticking
@@ -678,10 +683,14 @@ mod tests {
     #[test]
     fn unassigned_network_id_allocates_one_and_retains_player_identity() {
         static BEHAVIORS: Behaviors = Behaviors::EMPTY;
-        let mut level = Level::new(
-            Region::new(&BEHAVIORS),
-            crate::level::LevelContext::fixture(0, 63),
-        );
+        let mut level = {
+            let mut fixture_level = Level::new(
+                Region::new(&BEHAVIORS),
+                crate::level::LevelContext::fixture(0, 63),
+            );
+            fixture_level.install_shared(Box::default());
+            fixture_level
+        };
         let uuid = Uuid::offline_player("JoinBot");
         let entity = EntityRef(1);
         level
@@ -709,13 +718,92 @@ mod tests {
     }
 
     #[test]
+    fn serial_levels_lend_one_native_network_id_counter() {
+        static EMPTY: Behaviors = Behaviors::EMPTY;
+        let context = crate::level::LevelContext::fixture(0, 63);
+        let mut first = Level::new(Region::new(&EMPTY), context.clone());
+        let mut second = Level::new(Region::new(&EMPTY), context);
+        first.install_shared(Box::default());
+        let data = first
+            .create_entity_data(ferraloom_data::EntityType::TNT)
+            .unwrap();
+        assert_eq!(data.network_id, 1);
+        second.install_shared(first.take_shared().unwrap());
+        let data = second
+            .create_entity_data(ferraloom_data::EntityType::ITEM)
+            .unwrap();
+        assert_eq!(data.network_id, 2);
+        let unassigned = second.next_entity_ref();
+        second
+            .add_entity(unassigned, EntityState::Cow(Box::default()))
+            .unwrap();
+        assert_eq!(
+            second.entity::<EntityData>(unassigned).unwrap().network_id,
+            3
+        );
+        first.install_shared(second.take_shared().unwrap());
+        assert_eq!(first.next_entity_id().unwrap(), 4);
+        assert_eq!(
+            second.next_entity_id(),
+            Err(LevelError::MissingServerShared)
+        );
+    }
+
+    #[test]
+    fn native_entity_factories_require_the_shared_counter_without_a_region_fallback() {
+        static EMPTY: Behaviors = Behaviors::EMPTY;
+        for policy in [
+            crate::block::UnportedBehavior::Strict,
+            crate::block::UnportedBehavior::Warn,
+        ] {
+            let mut level = Level::new(
+                Region::new(&EMPTY),
+                crate::level::LevelContext::fixture(0, 63),
+            );
+            level.set_unported_behavior(policy);
+            assert_eq!(level.next_entity_id(), Err(LevelError::MissingServerShared));
+            assert_eq!(
+                level
+                    .create_entity_data(ferraloom_data::EntityType::ITEM)
+                    .unwrap_err(),
+                LevelError::MissingServerShared
+            );
+            assert_eq!(
+                crate::entity::item::ItemEntity::new_at(
+                    &mut level,
+                    Vec3::ZERO,
+                    ferraloom_protocol::component::ItemStack::default()
+                )
+                .unwrap_err(),
+                LevelError::MissingServerShared
+            );
+            let entity = level.next_entity_ref();
+            assert_eq!(
+                level.add_entity(entity, EntityState::Cow(Box::default())),
+                Err(LevelError::MissingServerShared)
+            );
+            assert!(matches!(
+                level.entity_state(entity),
+                Err(LevelError::MissingEntity(_))
+            ));
+            level.install_shared(Box::default());
+            assert_eq!(level.next_entity_id().unwrap(), 1);
+            assert_eq!(level.unported_behavior_stats().skipped_calls, 0);
+        }
+    }
+
+    #[test]
     fn first_player_gets_one_and_shares_allocation_with_other_entities() {
         static BEHAVIORS: Behaviors = Behaviors::EMPTY;
-        let mut level = Level::new(
-            Region::new(&BEHAVIORS),
-            crate::level::LevelContext::fixture(0, 63),
-        );
-        let id = level.next_entity_id();
+        let mut level = {
+            let mut fixture_level = Level::new(
+                Region::new(&BEHAVIORS),
+                crate::level::LevelContext::fixture(0, 63),
+            );
+            fixture_level.install_shared(Box::default());
+            fixture_level
+        };
+        let id = level.next_entity_id().unwrap();
         let player = ServerPlayer::new(
             Uuid::offline_player("JoinBot"),
             "JoinBot".into(),
@@ -734,7 +822,7 @@ mod tests {
             level.entity::<EntityData>(EntityRef(2)).unwrap().network_id,
             2
         );
-        assert_eq!(level.next_entity_id(), 3);
+        assert_eq!(level.next_entity_id().unwrap(), 3);
     }
 }
 
@@ -762,7 +850,8 @@ mod removal_tests {
             &mut level,
             Vec3::new(8.5, 64.0, 8.5),
             ItemStack::new(Item::STONE, 7, Default::default()),
-        );
+        )
+        .unwrap();
         item.thrower = Some(EntityReference::of(thrower, &level).unwrap());
         let id = level.next_entity_ref();
         level
@@ -824,10 +913,14 @@ mod removal_tests {
     #[test]
     fn removal_hides_indexes_before_canonical_retirement() {
         static BEHAVIORS: Behaviors = Behaviors::EMPTY;
-        let mut level = Level::new(
-            Region::new(&BEHAVIORS),
-            crate::level::LevelContext::fixture(0, 63),
-        );
+        let mut level = {
+            let mut fixture_level = Level::new(
+                Region::new(&BEHAVIORS),
+                crate::level::LevelContext::fixture(0, 63),
+            );
+            fixture_level.install_shared(Box::default());
+            fixture_level
+        };
         let id = EntityRef(1);
         level
             .add_entity(id, EntityState::Cow(Box::default()))
@@ -865,13 +958,17 @@ mod identity_tests {
         use crate::entity::item::PrimedTnt;
         use ferraloom_data::EntityType;
 
-        let level = Level::new(
-            Region::new(&Behaviors::EMPTY),
-            crate::level::LevelContext::fixture(0, 63),
-        );
+        let level = {
+            let mut fixture_level = Level::new(
+                Region::new(&Behaviors::EMPTY),
+                crate::level::LevelContext::fixture(0, 63),
+            );
+            fixture_level.install_shared(Box::default());
+            fixture_level
+        };
         let make_state = || {
             EntityState::PrimedTnt(Box::new(PrimedTnt::with_parent(
-                level.create_entity_data(EntityType::TNT),
+                level.create_entity_data(EntityType::TNT).unwrap(),
             )))
         };
         let original = level.next_entity_ref();
@@ -910,7 +1007,7 @@ mod identity_tests {
 
         let mut level = crate::entity::tests::level(false);
         let original = level.next_entity_ref();
-        let base = level.create_entity_data(EntityType::TNT);
+        let base = level.create_entity_data(EntityType::TNT).unwrap();
         level
             .add_entity(
                 original,
@@ -940,7 +1037,7 @@ mod identity_tests {
         let player = ServerPlayer::new(
             Uuid::new(1, 2),
             "shared".into(),
-            level.next_entity_id(),
+            level.next_entity_id().unwrap(),
             Vec3::ZERO,
             GameType::Survival,
         );
@@ -965,10 +1062,14 @@ mod identity_tests {
     #[test]
     fn entity_refs_observe_existing_handles_and_never_reuse_retired_ids() {
         static BEHAVIORS: Behaviors = Behaviors::EMPTY;
-        let mut level = Level::new(
-            Region::new(&BEHAVIORS),
-            crate::level::LevelContext::fixture(0, 63),
-        );
+        let mut level = {
+            let mut fixture_level = Level::new(
+                Region::new(&BEHAVIORS),
+                crate::level::LevelContext::fixture(0, 63),
+            );
+            fixture_level.install_shared(Box::default());
+            fixture_level
+        };
         assert_eq!(level.next_entity_ref(), EntityRef(1));
         let existing = EntityRef(40);
         level
@@ -995,10 +1096,14 @@ mod visibility_tests {
     #[test]
     fn hidden_sections_keep_uuid_ownership_and_status_callbacks_keep_native_order() {
         static BEHAVIORS: Behaviors = Behaviors::EMPTY;
-        let mut level = Level::new(
-            Region::new(&BEHAVIORS),
-            crate::level::LevelContext::fixture(0, 63),
-        );
+        let mut level = {
+            let mut fixture_level = Level::new(
+                Region::new(&BEHAVIORS),
+                crate::level::LevelContext::fixture(0, 63),
+            );
+            fixture_level.install_shared(Box::default());
+            fixture_level
+        };
         let pos = ChunkPos::new(0, 0);
         for n in 1..=2 {
             level
@@ -1066,10 +1171,14 @@ mod visibility_tests {
     #[test]
     fn movement_transitions_visibility_and_retirement_keeps_replacement_uuid_index() {
         static BEHAVIORS: Behaviors = Behaviors::EMPTY;
-        let mut level = Level::new(
-            Region::new(&BEHAVIORS),
-            crate::level::LevelContext::fixture(0, 63),
-        );
+        let mut level = {
+            let mut fixture_level = Level::new(
+                Region::new(&BEHAVIORS),
+                crate::level::LevelContext::fixture(0, 63),
+            );
+            fixture_level.install_shared(Box::default());
+            fixture_level
+        };
         level
             .update_entity_chunk_status(ChunkPos::new(1, 0), Visibility::Ticking)
             .unwrap();
@@ -1085,7 +1194,7 @@ mod visibility_tests {
         level.remove_entity(id).unwrap();
         let mut replacement = Cow::default();
         replacement.as_living_mut().parent.uuid = uuid;
-        replacement.as_living_mut().parent.network_id = level.next_entity_id();
+        replacement.as_living_mut().parent.network_id = level.next_entity_id().unwrap();
         replacement.as_living_mut().parent.network_id_allocated = true;
         replacement
             .as_living_mut()

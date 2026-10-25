@@ -25,7 +25,7 @@ fn spawn_piece(
     position: Vec3,
     stack: ItemStack,
 ) -> Result<EntityRef, LevelError> {
-    let mut item = ItemEntity::new_at(level, position, stack);
+    let mut item = ItemEntity::new_at(level, position, stack)?;
     let random = level.random();
     item.parent.velocity = Vec3::new(
         random.triangle(0.0, 0.11485000171139836),
@@ -111,10 +111,14 @@ mod tests {
             let fields: Vec<_> = line.split('\t').collect();
             let seed = fields[1].parse().unwrap();
             let count = fields[2].parse().unwrap();
-            let mut level = Level::new(
-                Region::new(&BEHAVIORS),
-                crate::level::LevelContext::fixture(0, 63),
-            );
+            let mut level = {
+                let mut fixture_level = Level::new(
+                    Region::new(&BEHAVIORS),
+                    crate::level::LevelContext::fixture(0, 63),
+                );
+                fixture_level.install_shared(Box::default());
+                fixture_level
+            };
             level.set_random_streams(Random::Legacy(LegacyRandomSource::new(seed)), 0);
             let mut stack = ItemStack::new(Item::STONE, count, Default::default());
             let ids = drop_item_stack(&mut level, Vec3::new(-1.2, 64.7, 2.8), &mut stack).unwrap();

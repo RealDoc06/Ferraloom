@@ -41,21 +41,23 @@ fn spawn(level: &mut Level, kind: &str) -> EntityRef {
         "player" => EntityState::Player(Box::new(ServerPlayer::new(
             Uuid::new(0, id.0 as i64),
             "facts".into(),
-            level.next_entity_id(),
+            level.next_entity_id().unwrap(),
             Vec3::ZERO,
             GameType::Survival,
         ))),
         "cow" => EntityState::Cow(Box::new(Cow::with_parent(
-            level.create_entity_data(EntityType::COW),
+            level.create_entity_data(EntityType::COW).unwrap(),
         ))),
         "orb" => EntityState::ExperienceOrb(Box::new(ExperienceOrb::with_parent(
-            level.create_entity_data(EntityType::EXPERIENCE_ORB),
+            level
+                .create_entity_data(EntityType::EXPERIENCE_ORB)
+                .unwrap(),
         ))),
         "item" => EntityState::Item(Box::new(ItemEntity::with_parent(
-            level.create_entity_data(EntityType::ITEM),
+            level.create_entity_data(EntityType::ITEM).unwrap(),
         ))),
         _ => EntityState::PrimedTnt(Box::new(PrimedTnt::with_parent(
-            level.create_entity_data(EntityType::TNT),
+            level.create_entity_data(EntityType::TNT).unwrap(),
         ))),
     };
     level.add_entity(id, state).unwrap();
@@ -551,7 +553,11 @@ fn present_empty_damage_tag_does_not_grant_fire_immunity() {
         services.initial_difficulty,
     ));
     static BEHAVIORS: Behaviors = Behaviors::EMPTY;
-    let mut level = Level::new(Region::new(&BEHAVIORS), context);
+    let mut level = {
+        let mut fixture_level = Level::new(Region::new(&BEHAVIORS), context);
+        fixture_level.install_shared(Box::default());
+        fixture_level
+    };
     let id = spawn(&mut level, "item");
     let mut stack = stack(Item::STONE, 1);
     stack
