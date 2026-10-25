@@ -81,7 +81,7 @@ pub fn check_fall_damage<E: Entity + ?Sized>(
             )?;
         }
     }
-    movement::base_check_fall_damage(entity, dy, on_ground, state, pos, level)?;
+    movement::base_check_fall_damage(behavior, entity, dy, on_ground, state, pos, level)?;
     if on_ground {
         level
             .entity::<LivingEntity>(entity)?

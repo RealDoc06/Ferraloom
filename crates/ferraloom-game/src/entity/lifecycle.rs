@@ -221,8 +221,7 @@ pub fn living_ride_tick_with_tick_rate<E: super::Entity + ?Sized>(
     tick_rate: &crate::level::tick_rate::TickRateManager,
 ) -> Result<(), LevelError> {
     ride_tick_with_tick_rate(behavior, entity, level, tick_rate)?;
-    level.entity_mut::<EntityData>(entity)?.fall_distance = 0.0;
-    Ok(())
+    behavior.reset_fall_distance(entity, level)
 }
 
 /// Port of Entity#baseTick. Each borrow ends before fluid, damage or removal calls.

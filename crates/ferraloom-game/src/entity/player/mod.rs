@@ -13,6 +13,7 @@ mod interaction;
 pub(crate) mod item_tick;
 pub mod shoulders;
 mod spawn;
+mod stuck;
 mod tick;
 pub use tick::{award_stat, player_do_tick_with_tick_rate, reset_stat};
 pub mod travel;
@@ -66,6 +67,7 @@ pub struct ServerPlayer {
     pub food_data: food::FoodData,
     pub jump_trigger_time: i32,
     pub(crate) spawn_extra_particles_on_fall: bool,
+    starting_to_fall_position: Option<Vec3>,
     shoulder_entity_left: CompoundTag,
     shoulder_entity_right: CompoundTag,
     time_entity_sat_on_shoulder: i64,
@@ -232,6 +234,7 @@ impl ServerPlayer {
             food_data: Default::default(),
             jump_trigger_time: 0,
             spawn_extra_particles_on_fall: false,
+            starting_to_fall_position: None,
             shoulder_entity_left: CompoundTag::new(),
             shoulder_entity_right: CompoundTag::new(),
             time_entity_sat_on_shoulder: 0,
@@ -637,12 +640,11 @@ pub fn move_player_with_checks(
         let pos = movement::get_on_pos(entity, 0.2_f32, level)?;
         let state = level.get_block_state(pos)?;
         movement::check_fall_damage(entity, delta.y, input.on_ground, state, pos, level)?;
-        let player = level.entity_mut::<ServerPlayer>(entity)?;
-        player.known_movement = delta;
+        level.entity_mut::<ServerPlayer>(entity)?.known_movement = delta;
         if moved_up {
-            player.fall_distance = 0.0;
+            crate::entity::reset_fall_distance(entity, level)?;
         }
-        player.last_good = target;
+        level.entity_mut::<ServerPlayer>(entity)?.last_good = target;
         Ok(MovementResult::Accepted)
     } else {
         level.set_entity_pos(entity, start)?;
@@ -706,6 +708,18 @@ fn jump_from_ground(entity: crate::entity::EntityRef, level: &mut Level) -> Resu
 }
 pub struct PlayerBehavior;
 impl crate::entity::Entity for PlayerBehavior {
+    fn reset_fall_distance(&self, entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
+        stuck::reset_fall_distance(entity, level)
+    }
+    fn make_stuck_in_block(
+        &self,
+        entity: EntityRef,
+        state: ferraloom_data::BlockState,
+        multiplier: Vec3,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        stuck::make_stuck_in_block(self, entity, state, multiplier, level)
+    }
     fn check_fall_damage(
         &self,
         entity: EntityRef,
@@ -1107,7 +1121,9 @@ impl crate::entity::Entity for PlayerBehavior {
         crate::inventory::tick_container_menu(entity, level)?;
         // Pending camera following precedes TICK.
         crate::advancements::criteria::tick(level, entity)?;
-        // Pending levitation/falling/vehicle-lava tracking precedes attributes.
+        // Pending levitation tracking precedes the native fall-start capture.
+        stuck::track_start_falling_position(entity, level)?;
+        // Pending vehicle-lava tracking precedes attributes.
         level
             .entity_mut::<ServerPlayer>(entity)?
             .update_interaction_range_attributes();
