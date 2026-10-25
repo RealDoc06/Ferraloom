@@ -124,11 +124,18 @@ impl EntityStorage {
     pub fn get_mut(&mut self, id: &EntityRef) -> Option<&mut EntityState> {
         self.states.get_mut(id)
     }
-    fn add(&self, id: EntityRef, mut state: EntityState) -> Result<i32, LevelError> {
+    fn add(
+        &self,
+        namespace: super::RegionId,
+        id: EntityRef,
+        mut state: EntityState,
+    ) -> Result<i32, LevelError> {
         if self.states.contains_key(&id) {
             return Err(LevelError::DuplicateEntity(id));
         }
-        self.next_ref.set(self.next_ref.get().max(id.serial()));
+        if id.allocation_namespace() == namespace {
+            self.next_ref.set(self.next_ref.get().max(id.serial()));
+        }
         let base = state.as_entity_mut();
         if !base.network_id_allocated {
             base.network_id = self
@@ -259,7 +266,7 @@ impl Level {
         loaded: bool,
     ) -> Result<(), LevelError> {
         let region = self.region();
-        let network_id = region.entities.add(entity, state)?;
+        let network_id = region.entities.add(region.id, entity, state)?;
         let base = region.entities.get(&entity).unwrap().as_entity();
         let status = if base.entity_type == ferraloom_data::EntityType::PLAYER {
             Visibility::Ticking
@@ -290,9 +297,11 @@ impl Level {
     fn retain_unmanaged_entity(&self, entity: EntityRef, state: EntityState) {
         let storage = &self.region().entities;
         assert!(!storage.states.contains_key(&entity), "new entity handle");
-        storage
-            .next_ref
-            .set(storage.next_ref.get().max(entity.serial()));
+        if entity.allocation_namespace() == self.region().id {
+            storage
+                .next_ref
+                .set(storage.next_ref.get().max(entity.serial()));
+        }
         storage
             .states
             .publish(entity, state)
@@ -1003,6 +1012,26 @@ mod identity_tests {
     }
 
     #[test]
+    fn foreign_birth_serials_do_not_advance_managed_or_retained_allocators() {
+        static BEHAVIORS: Behaviors = Behaviors::EMPTY;
+        let context = crate::level::LevelContext::fixture(0, 63);
+        let origin = Level::new(Region::new(&BEHAVIORS), context.clone());
+        let foreign = EntityRef::fixture(origin.region_id(), u64::MAX);
+        let mut managed = Level::new(Region::new(&BEHAVIORS), context.clone());
+        managed
+            .add_entity(foreign, EntityState::Cow(Box::default()))
+            .unwrap();
+        assert!(managed.entity::<EntityData>(foreign).is_ok());
+        let local = managed.next_entity_ref();
+        assert_eq!(local.serial(), 1);
+        assert_eq!(local.allocation_namespace(), managed.region_id());
+        let retained = Level::new(Region::new(&BEHAVIORS), context);
+        retained.retain_unmanaged_entity(foreign, EntityState::Cow(Box::default()));
+        assert!(retained.entity::<EntityData>(foreign).is_ok());
+        assert_eq!(retained.next_entity_ref().serial(), 1);
+    }
+
+    #[test]
     fn entity_refs_observe_existing_handles_and_never_reuse_retired_ids() {
         static BEHAVIORS: Behaviors = Behaviors::EMPTY;
         let mut level = Level::new(
@@ -1010,7 +1039,7 @@ mod identity_tests {
             crate::level::LevelContext::fixture(0, 63),
         );
         assert_eq!(level.next_entity_ref().serial(), 1);
-        let existing = EntityRef::fixture(crate::level::RegionId::FIXTURE, 40);
+        let existing = EntityRef::fixture(level.region_id(), 40);
         level
             .add_entity(existing, EntityState::Cow(Box::default()))
             .unwrap();

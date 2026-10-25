@@ -51,6 +51,9 @@ def migrate(path: Path, source: str) -> str:
             source = re.sub(rf"(?<![\w.]){binding}\.0\b", f"{binding}.serial()", source)
         source = source.replace("next_entity_ref().0", "next_entity_ref().serial()")
     if relative == GAME + "level/entity/mod.rs":
+        # This fixture deliberately imports a serial in the SAME birth namespace.
+        source = source.replace("let existing = EntityRef::fixture(crate::level::RegionId::FIXTURE, 40);",
+                                "let existing = EntityRef::fixture(level.region_id(), 40);")
         # The allocator test deliberately observes known allocated serials.
         source = re.sub(r"assert_eq!\(level\.next_entity_ref\(\), EntityRef::fixture\(crate::level::RegionId::FIXTURE, (\d+)\)\)",
                         r"assert_eq!(level.next_entity_ref().serial(), \1)", source)
