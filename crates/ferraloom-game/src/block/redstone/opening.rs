@@ -81,6 +81,41 @@ fn schedule_water(level: &mut Level, pos: BlockPos, state: BlockState) -> Result
     Ok(())
 }
 impl BlockBehavior for OpeningBlock {
+    /// Port of DoorBlock#playerWillDestroy and the called
+    /// DoublePlantBlock#preventDropFromBottomPart. Suppression affects only the
+    /// matching lower half; the base destroy callbacks still use the upper state.
+    fn player_will_destroy(
+        &self,
+        state: BlockState,
+        pos: BlockPos,
+        player: EntityRef,
+        level: &mut Level,
+    ) -> Result<BlockState, LevelError> {
+        let actor = level.entity::<crate::entity::player::ServerPlayer>(player)?;
+        if (actor.prevents_block_drops() || !actor.has_correct_tool_for_drops(state, level)?)
+            && state.get(p::HALF) == Some(p::Half::Upper)
+        {
+            let below = pos.below(1);
+            let lower = level.get_block_state(below)?;
+            if lower.block() == state.block() && lower.get(p::HALF) == Some(p::Half::Lower) {
+                let replacement = if lower.data().fluid.fluid_type == Fluid::WATER {
+                    Block::WATER
+                } else {
+                    Block::AIR
+                }
+                .default_state();
+                level.set_block(below, replacement, UpdateFlags(35), UPDATE_LIMIT)?;
+                crate::block::BASE_BLOCK.spawn_destroy_by_entity_particles(
+                    lower,
+                    below,
+                    Some(player),
+                    level,
+                )?;
+            }
+        }
+        crate::block::BASE_BLOCK.player_will_destroy(state, pos, player, level)
+    }
+
     fn set_placed_by(
         &self,
         state: BlockState,
