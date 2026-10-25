@@ -121,6 +121,7 @@ public final class EntityVectors {
         EffectReadVectors.run(new EntityFixture(r));
         DamageVectors.run(new EntityFixture(r));
         DamageStateVectors.run(new EntityFixture(r));
+        ItemDamageVectors.run(new EntityFixture(r));
         CombatRulesVectors.run(new EntityFixture(r));
         CombatTrackerVectors.run(new EntityFixture(r));
         DifficultyVectors.run();
