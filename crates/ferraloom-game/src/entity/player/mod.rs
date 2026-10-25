@@ -64,6 +64,10 @@ pub struct ServerPlayer {
     pub stats: crate::stats::ServerStatsCounter,
     pub food_data: food::FoodData,
     pub jump_trigger_time: i32,
+    /// ServerPlayer's native dimension-transfer guard; no cross-dimension
+    /// transition producer is ported yet, so it starts and remains false.
+    pub changing_dimension: bool,
+    pub hurt_dir: f32,
     pub(crate) spawn_extra_particles_on_fall: bool,
     shoulder_entity_left: CompoundTag,
     shoulder_entity_right: CompoundTag,
@@ -230,6 +234,8 @@ impl ServerPlayer {
             stats: Default::default(),
             food_data: Default::default(),
             jump_trigger_time: 0,
+            changing_dimension: false,
+            hurt_dir: 0.0,
             spawn_extra_particles_on_fall: false,
             shoulder_entity_left: CompoundTag::new(),
             shoulder_entity_right: CompoundTag::new(),
@@ -719,6 +725,113 @@ fn jump_from_ground(entity: crate::entity::EntityRef, level: &mut Level) -> Resu
 }
 pub struct PlayerBehavior;
 impl crate::entity::Entity for PlayerBehavior {
+    fn is_invulnerable_to(
+        &self,
+        entity: EntityRef,
+        source: &super::DamageSource,
+        level: &Level,
+    ) -> Result<bool, LevelError> {
+        super::living::hurt::player_is_invulnerable_to(self, entity, source, level)
+    }
+    fn absorption_amount(&self, entity: EntityRef, level: &Level) -> Result<f32, LevelError> {
+        Ok(level.entity::<ServerPlayer>(entity)?.absorption_amount())
+    }
+    fn set_absorption_amount(
+        &self,
+        entity: EntityRef,
+        amount: f32,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        level
+            .entity_mut::<ServerPlayer>(entity)?
+            .set_absorption_amount(amount);
+        Ok(())
+    }
+    fn actually_hurt(
+        &self,
+        entity: EntityRef,
+        source: &super::DamageSource,
+        damage: f32,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        super::living::hurt::player_actually_hurt(self, entity, source, damage, level)
+    }
+    fn hurt_armor(
+        &self,
+        entity: EntityRef,
+        source: &super::DamageSource,
+        damage: f32,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        use ferraloom_protocol::component::EquipmentSlot;
+        super::living::hurt::hurt_equipment(
+            self,
+            entity,
+            source,
+            damage,
+            &[
+                EquipmentSlot::Feet,
+                EquipmentSlot::Legs,
+                EquipmentSlot::Chest,
+                EquipmentSlot::Head,
+            ],
+            level,
+        )
+    }
+    fn hurt_helmet(
+        &self,
+        entity: EntityRef,
+        source: &super::DamageSource,
+        damage: f32,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        super::living::hurt::hurt_equipment(
+            self,
+            entity,
+            source,
+            damage,
+            &[ferraloom_protocol::component::EquipmentSlot::Head],
+            level,
+        )
+    }
+    fn hurt_sound(
+        &self,
+        _entity: EntityRef,
+        source: &super::DamageSource,
+        _level: &Level,
+    ) -> Result<Option<ferraloom_data::registries::sound_event::Id>, LevelError> {
+        Ok(Some(source.damage_type().effects.sound()))
+    }
+    fn death_sound(
+        &self,
+        _entity: EntityRef,
+        _level: &Level,
+    ) -> Result<Option<ferraloom_data::registries::sound_event::Id>, LevelError> {
+        Ok(Some(
+            ferraloom_data::registries::sound_event::Id::ENTITY_PLAYER_DEATH,
+        ))
+    }
+    fn voice_pitch(&self, _entity: EntityRef, _level: &mut Level) -> Result<f32, LevelError> {
+        Ok(1.0)
+    }
+    fn indicate_damage(
+        &self,
+        entity: EntityRef,
+        x: f64,
+        z: f64,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        super::living::hurt::player_indicate_damage(entity, x, z, level)
+    }
+    fn hurt_server(
+        &self,
+        entity: EntityRef,
+        level: &mut Level,
+        source: super::DamageSource,
+        damage: f32,
+    ) -> Result<bool, LevelError> {
+        super::living::hurt::player_hurt_server(self, entity, source, damage, level)
+    }
     fn on_enter_combat(&self, entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
         level.entity::<ServerPlayer>(entity)?;
         level.emit(crate::level::effects::LevelEffect::PlayerPacket {

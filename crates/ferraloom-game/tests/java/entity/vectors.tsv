@@ -1496,6 +1496,142 @@ item-damage-resistant	tag-fall	1	minecraft:on_fire	true
 item-damage-resistant	tag-fall	1	minecraft:lava	true
 item-damage-resistant	tag-fall	1	minecraft:fall	false
 item-damage-resistant	tag-fall	1	minecraft:generic	true
+hurt-knockback	0.0	0.0	false	false	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	5c9f20d58361b331
+hurt-knockback	0.0	0.0	false	true	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	5c9f20d58361b331
+hurt-knockback	0.0	0.0	true	false	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	5c9f20d58361b331
+hurt-knockback	0.0	0.0	true	true	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	5c9f20d58361b331
+hurt-knockback	0.0	0.5	false	false	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	5c9f20d58361b331
+hurt-knockback	0.0	0.5	false	true	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	5c9f20d58361b331
+hurt-knockback	0.0	0.5	true	false	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	5c9f20d58361b331
+hurt-knockback	0.0	0.5	true	true	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	5c9f20d58361b331
+hurt-knockback	0.0	1.0	false	false	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	5c9f20d58361b331
+hurt-knockback	0.0	1.0	false	true	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	5c9f20d58361b331
+hurt-knockback	0.0	1.0	true	false	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	5c9f20d58361b331
+hurt-knockback	0.0	1.0	true	true	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	5c9f20d58361b331
+hurt-knockback	0.4000000059604645	0.0	false	false	bfb8cd220ef2fd94,bfc0000000000000,3fe2a67662cd8f8c	true	5c9f20d58361b331
+hurt-knockback	0.4000000059604645	0.0	false	true	3fdb26f25140d3b6,bfc0000000000000,bf8f94eb6ed9e260	true	3c4b499b090bc6fa
+hurt-knockback	0.4000000059604645	0.0	true	false	bfb8cd220ef2fd94,3fd59999a0000000,3fe2a67662cd8f8c	true	5c9f20d58361b331
+hurt-knockback	0.4000000059604645	0.0	true	true	3fdb26f25140d3b6,3fd59999a0000000,bf8f94eb6ed9e260	true	3c4b499b090bc6fa
+hurt-knockback	0.4000000059604645	0.5	false	false	3f8ccb77c43409b0,bfc0000000000000,3fdaa67662cd8f8c	true	5c9f20d58361b331
+hurt-knockback	0.4000000059604645	0.5	false	true	3fd1937928a069db,bfc0000000000000,3fbe06b1491261da	true	3c4b499b090bc6fa
+hurt-knockback	0.4000000059604645	0.5	true	false	3f8ccb77c43409b0,3fc19999a0000000,3fdaa67662cd8f8c	true	5c9f20d58361b331
+hurt-knockback	0.4000000059604645	0.5	true	true	3fd1937928a069db,3fc19999a0000000,3fbe06b1491261da	true	3c4b499b090bc6fa
+hurt-knockback	0.4000000059604645	1.0	false	false	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	5c9f20d58361b331
+hurt-knockback	0.4000000059604645	1.0	false	true	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	5c9f20d58361b331
+hurt-knockback	0.4000000059604645	1.0	true	false	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	5c9f20d58361b331
+hurt-knockback	0.4000000059604645	1.0	true	true	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	5c9f20d58361b331
+hurt-knockback	1.0	0.0	false	false	bfdb80354077d12c,bfc0000000000000,3ff15013f82cee70	true	5c9f20d58361b331
+hurt-knockback	1.0	0.0	false	true	3febf0aedf94dcec,bfc0000000000000,bfda77a25a0b1d1a	true	3c4b499b090bc6fa
+hurt-knockback	1.0	0.0	true	false	bfdb80354077d12c,3fd999999999999a,3ff15013f82cee70	true	5c9f20d58361b331
+hurt-knockback	1.0	0.0	true	true	3febf0aedf94dcec,3fd999999999999a,bfda77a25a0b1d1a	true	3c4b499b090bc6fa
+hurt-knockback	1.0	0.5	false	false	bfc380354077d12c,bfc0000000000000,3fe55013f82cee70	true	5c9f20d58361b331
+hurt-knockback	1.0	0.5	false	true	3fdff0aedf94dcec,bfc0000000000000,bfb4ef44b4163a34	true	3c4b499b090bc6fa
+hurt-knockback	1.0	0.5	true	false	bfc380354077d12c,3fd999999999999a,3fe55013f82cee70	true	5c9f20d58361b331
+hurt-knockback	1.0	0.5	true	true	3fdff0aedf94dcec,3fd999999999999a,bfb4ef44b4163a34	true	3c4b499b090bc6fa
+hurt-knockback	1.0	1.0	false	false	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	5c9f20d58361b331
+hurt-knockback	1.0	1.0	false	true	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	5c9f20d58361b331
+hurt-knockback	1.0	1.0	true	false	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	5c9f20d58361b331
+hurt-knockback	1.0	1.0	true	true	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	5c9f20d58361b331
+hurt-sound	player	generic	false	sound:minecraft:entity.player.hurt:7:3f800000:3f800000:b50cf1251ffe99cd	5c9f20d58361b331
+hurt-sound	player	generic	true	sound:minecraft:entity.player.hurt:7:3f800000:3f800000:b50cf1251ffe99cd	5c9f20d58361b331
+hurt-sound	player	fall	false	sound:minecraft:entity.player.hurt:7:3f800000:3f800000:b50cf1251ffe99cd	5c9f20d58361b331
+hurt-sound	player	fall	true	sound:minecraft:entity.player.hurt:7:3f800000:3f800000:b50cf1251ffe99cd	5c9f20d58361b331
+hurt-sound	player	lava	false	sound:minecraft:entity.player.hurt_on_fire:7:3f800000:3f800000:b50cf1251ffe99cd	5c9f20d58361b331
+hurt-sound	player	lava	true	sound:minecraft:entity.player.hurt_on_fire:7:3f800000:3f800000:b50cf1251ffe99cd	5c9f20d58361b331
+hurt-sound	player	drown	false	sound:minecraft:entity.player.hurt_drown:7:3f800000:3f800000:b50cf1251ffe99cd	5c9f20d58361b331
+hurt-sound	player	drown	true	sound:minecraft:entity.player.hurt_drown:7:3f800000:3f800000:b50cf1251ffe99cd	5c9f20d58361b331
+hurt-sound	player	freeze	false	sound:minecraft:entity.player.hurt_freeze:7:3f800000:3f800000:b50cf1251ffe99cd	5c9f20d58361b331
+hurt-sound	player	freeze	true	sound:minecraft:entity.player.hurt_freeze:7:3f800000:3f800000:b50cf1251ffe99cd	5c9f20d58361b331
+hurt-sound	cow	generic	false	sound:minecraft:entity.cow.hurt:6:3ecccccd:3f783f7c:b50cf1251ffe99cd	eed8a921eac80778
+hurt-sound	cow	generic	true	-	eed8a921eac80778
+hurt-sound	cow	fall	false	sound:minecraft:entity.cow.hurt:6:3ecccccd:3f783f7c:b50cf1251ffe99cd	eed8a921eac80778
+hurt-sound	cow	fall	true	-	eed8a921eac80778
+hurt-sound	cow	lava	false	sound:minecraft:entity.cow.hurt:6:3ecccccd:3f783f7c:b50cf1251ffe99cd	eed8a921eac80778
+hurt-sound	cow	lava	true	-	eed8a921eac80778
+hurt-sound	cow	drown	false	sound:minecraft:entity.cow.hurt:6:3ecccccd:3f783f7c:b50cf1251ffe99cd	eed8a921eac80778
+hurt-sound	cow	drown	true	-	eed8a921eac80778
+hurt-sound	cow	freeze	false	sound:minecraft:entity.cow.hurt:6:3ecccccd:3f783f7c:b50cf1251ffe99cd	eed8a921eac80778
+hurt-sound	cow	freeze	true	-	eed8a921eac80778
+hurt-sound	baby_cow	generic	false	sound:minecraft:entity.cow.hurt:6:3ecccccd:3fbc1fbe:b50cf1251ffe99cd	eed8a921eac80778
+hurt-sound	baby_cow	generic	true	-	eed8a921eac80778
+hurt-sound	baby_cow	fall	false	sound:minecraft:entity.cow.hurt:6:3ecccccd:3fbc1fbe:b50cf1251ffe99cd	eed8a921eac80778
+hurt-sound	baby_cow	fall	true	-	eed8a921eac80778
+hurt-sound	baby_cow	lava	false	sound:minecraft:entity.cow.hurt:6:3ecccccd:3fbc1fbe:b50cf1251ffe99cd	eed8a921eac80778
+hurt-sound	baby_cow	lava	true	-	eed8a921eac80778
+hurt-sound	baby_cow	drown	false	sound:minecraft:entity.cow.hurt:6:3ecccccd:3fbc1fbe:b50cf1251ffe99cd	eed8a921eac80778
+hurt-sound	baby_cow	drown	true	-	eed8a921eac80778
+hurt-sound	baby_cow	freeze	false	sound:minecraft:entity.cow.hurt:6:3ecccccd:3fbc1fbe:b50cf1251ffe99cd	eed8a921eac80778
+hurt-sound	baby_cow	freeze	true	-	eed8a921eac80778
+hurt-pipeline	player	actual	0	mob_attack	40800000,0,0,0,0,bf800000,0,0	true	actual	41800000,0,0,0,0,40,0,0	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	3dcccccd	-	false	false	packet:enter:41a00000,0,0,0,0,0,0,0;stat:minecraft.custom:minecraft.damage_taken:40:41800000,0,0,0,0,40,0,0;event:minecraft:entity_damage:41800000,0,0,0,0,40,0,0	5c9f20d58361b331
+hurt-pipeline	player	actual	1	fall	40800000,41a00000,0,0,0,bf800000,0,0	false	actual	41800000,0,0,0,0,40,0,0	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	0	-	false	false	stat:minecraft.custom:minecraft.damage_taken:40:41800000,0,0,0,0,40,0,0;event:minecraft:entity_damage:41800000,0,0,0,0,40,0,0	5c9f20d58361b331
+hurt-pipeline	player	actual	2	generic	41a00000,41a00000,41000000,0,0,0,0,0	true	actual	40800000,0,0,0,0,160,0,40	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	0	-	false	false	stat:minecraft.custom:minecraft.damage_resisted:40:41a00000,0,0,0,0,0,0,40;stat:minecraft.custom:minecraft.damage_taken:160:40800000,0,0,0,0,160,0,40;event:minecraft:entity_damage:40800000,0,0,0,0,160,0,40	5c9f20d58361b331
+hurt-pipeline	player	actual	3	generic	40c00000,0,0,40a00000,41a00000,bf800000,0,0	false	actual	41980000,0,0,0,0,10,50,0	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	0	-	false	false	stat:minecraft.custom:minecraft.damage_absorbed:50:41a00000,0,0,0,0,0,50,0;stat:minecraft.custom:minecraft.damage_taken:10:41980000,0,0,0,0,10,50,0;event:minecraft:entity_damage:41980000,0,0,0,0,10,50,0	5c9f20d58361b331
+hurt-pipeline	player	actual	4	mob_attack	40c00000,41200000,40800000,40a00000,41a00000,3f800000,0,0	true	actual	41a00000,402353f8,0,0,0,0,24,16	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	0	-	false	false	stat:minecraft.custom:minecraft.damage_resisted:16:41a00000,40a00000,0,0,0,0,0,16;stat:minecraft.custom:minecraft.damage_absorbed:24:41a00000,402353f8,0,0,0,0,24,16	5c9f20d58361b331
+hurt-pipeline	player	actual	5	fall	3f800000,0,0,40c80000,0,bf800000,0,0	false	actual	41a00000,0,0,0,0,0,10,0	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	0	-	false	false	stat:minecraft.custom:minecraft.damage_absorbed:10:41a00000,0,0,0,0,0,10,0	5c9f20d58361b331
+hurt-pipeline	player	actual	6	generic	80000000,0,0,0,0,bf800000,0,0	true	actual	41a00000,0,0,0,0,0,0,0	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	0	-	false	false	-	5c9f20d58361b331
+hurt-pipeline	player	actual	7	generic	bf800000,0,0,0,0,bf800000,0,0	false	actual	41a00000,0,0,0,0,0,0,0	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	0	-	false	false	-	5c9f20d58361b331
+hurt-pipeline	player	actual	8	mob_attack	7fc00000,0,0,0,0,bf800000,0,0	true	actual	7fc00000,7fc00000,0,0,0,0,0,0	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	3dcccccd	-	false	false	packet:enter:41a00000,7fc00000,0,0,0,0,0,0;event:minecraft:entity_damage:7fc00000,7fc00000,0,0,0,0,0,0	5c9f20d58361b331
+hurt-pipeline	player	actual	9	fall	7f800000,41a00000,41000000,0,0,bf800000,0,0	false	actual	0,ffc00000,0,0,0,0,0,0	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	0	-	false	false	event:minecraft:entity_damage:0,ffc00000,0,0,0,0,0,0	5c9f20d58361b331
+hurt-pipeline	player	actual	10	generic	40b00000,40e80000,3fc00000,3fa00000,40800000,0,41300000,40400000	true	actual	4186cccd,0,40400000,11,0,32,13,11	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	0	-	false	false	stat:minecraft.custom:minecraft.damage_resisted:11:41a00000,3fa00000,40400000,11,0,0,0,11;stat:minecraft.custom:minecraft.damage_absorbed:13:41a00000,0,40400000,11,0,0,13,11;stat:minecraft.custom:minecraft.damage_taken:32:4186cccd,0,40400000,11,0,32,13,11;event:minecraft:entity_damage:4186cccd,0,40400000,11,0,32,13,11	5c9f20d58361b331
+hurt-pipeline	player	actual	11	generic	40400000,0,0,0,0,bf800000,41300000,40a00000	false	actual	41880000,0,40a00000,11,0,30,0,0	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	0	-	false	false	stat:minecraft.custom:minecraft.damage_taken:30:41880000,0,40a00000,11,0,30,0,0;event:minecraft:entity_damage:41880000,0,40a00000,11,0,30,0,0	5c9f20d58361b331
+hurt-pipeline	player	actual	12	mob_attack	40e00000,0,0,0,0,bf800000,41300000,40400000	true	actual	41500000,0,40400000,11,0,70,0,0	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	3dcccccd	-	false	false	packet:enter:41a00000,0,40400000,11,0,0,0,0;stat:minecraft.custom:minecraft.damage_taken:70:41500000,0,40400000,11,0,70,0,0;event:minecraft:entity_damage:41500000,0,40400000,11,0,70,0,0	5c9f20d58361b331
+hurt-pipeline	player	actual	13	fall	40e00000,0,0,0,0,bf800000,41200000,40400000	false	actual	41500000,0,40400000,10,0,70,0,0	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	0	-	false	false	stat:minecraft.custom:minecraft.damage_taken:70:41500000,0,40400000,10,0,70,0,0;event:minecraft:entity_damage:41500000,0,40400000,10,0,70,0,0	5c9f20d58361b331
+hurt-pipeline	player	actual	14	freeze	40800000,0,0,0,0,40800000,0,0	true	actual	41a00000,0,0,0,0,0,0,40	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	0	-	false	false	stat:minecraft.custom:minecraft.damage_resisted:40:41a00000,0,0,0,0,0,0,40	5c9f20d58361b331
+hurt-pipeline	player	actual	15	lava	40800000,0,0,0,0,c0000000,0,0	false	actual	41800000,0,0,0,0,40,0,0	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	3dcccccd	-	false	false	stat:minecraft.custom:minecraft.damage_taken:40:41800000,0,0,0,0,40,0,0;event:minecraft:entity_damage:41800000,0,0,0,0,40,0,0	5c9f20d58361b331
+hurt-pipeline	player	hurt	0	mob_attack	40800000,0,0,0,0,bf800000,0,0	true	boundary	41800000,0,40800000,20,0,40,0,0	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	3dcccccd	-	false	false	packet:enter:41a00000,0,40800000,20,0,0,0,0;stat:minecraft.custom:minecraft.damage_taken:40:41800000,0,40800000,20,0,40,0,0;event:minecraft:entity_damage:41800000,0,40800000,20,0,40,0,0	5c9f20d58361b331
+hurt-pipeline	player	hurt	1	fall	40800000,41a00000,0,0,0,bf800000,0,0	false	boundary	41800000,0,40800000,20,0,40,0,0	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	0	-	false	false	stat:minecraft.custom:minecraft.damage_taken:40:41800000,0,40800000,20,0,40,0,0;event:minecraft:entity_damage:41800000,0,40800000,20,0,40,0,0	5c9f20d58361b331
+hurt-pipeline	player	hurt	2	generic	41a00000,41a00000,41000000,0,0,0,0,0	true	boundary	40800000,0,41a00000,20,0,160,0,40	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	0	-	false	false	stat:minecraft.custom:minecraft.damage_resisted:40:41a00000,0,41a00000,20,0,0,0,40;stat:minecraft.custom:minecraft.damage_taken:160:40800000,0,41a00000,20,0,160,0,40;event:minecraft:entity_damage:40800000,0,41a00000,20,0,160,0,40	5c9f20d58361b331
+hurt-pipeline	player	hurt	3	generic	40c00000,0,0,40a00000,41a00000,bf800000,0,0	false	boundary	41980000,0,40c00000,20,0,10,50,0	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	0	-	false	false	stat:minecraft.custom:minecraft.damage_absorbed:50:41a00000,0,40c00000,20,0,0,50,0;stat:minecraft.custom:minecraft.damage_taken:10:41980000,0,40c00000,20,0,10,50,0;event:minecraft:entity_damage:41980000,0,40c00000,20,0,10,50,0	5c9f20d58361b331
+hurt-pipeline	player	hurt	4	mob_attack	40c00000,41200000,40800000,40a00000,41a00000,3f800000,0,0	true	boundary	41a00000,402353f8,40c00000,20,0,0,24,16	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	0	-	false	false	stat:minecraft.custom:minecraft.damage_resisted:16:41a00000,40a00000,40c00000,20,0,0,0,16;stat:minecraft.custom:minecraft.damage_absorbed:24:41a00000,402353f8,40c00000,20,0,0,24,16	5c9f20d58361b331
+hurt-pipeline	player	hurt	5	fall	3f800000,0,0,40c80000,0,bf800000,0,0	false	boundary	41a00000,0,3f800000,20,0,0,10,0	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	0	-	false	false	stat:minecraft.custom:minecraft.damage_absorbed:10:41a00000,0,3f800000,20,0,0,10,0	5c9f20d58361b331
+hurt-pipeline	player	hurt	6	generic	80000000,0,0,0,0,bf800000,0,0	true	false	41a00000,0,0,0,0,0,0,0	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	0	-	false	false	-	5c9f20d58361b331
+hurt-pipeline	player	hurt	7	generic	bf800000,0,0,0,0,bf800000,0,0	false	boundary	41a00000,0,0,20,0,0,0,0	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	0	-	false	false	-	5c9f20d58361b331
+hurt-pipeline	player	hurt	8	mob_attack	7fc00000,0,0,0,0,bf800000,0,0	true	boundary	0,0,7f7fffff,20,0,0,0,0	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	3dcccccd	-	false	false	packet:enter:41a00000,0,7f7fffff,20,0,0,0,0;event:minecraft:entity_damage:0,0,7f7fffff,20,0,0,0,0	5c9f20d58361b331
+hurt-pipeline	player	hurt	9	fall	7f800000,41a00000,41000000,0,0,bf800000,0,0	false	boundary	0,0,7f7fffff,20,0,0,0,0	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	0	-	false	false	event:minecraft:entity_damage:0,0,7f7fffff,20,0,0,0,0	5c9f20d58361b331
+hurt-pipeline	player	hurt	10	generic	40b00000,40e80000,3fc00000,3fa00000,40800000,0,41300000,40400000	true	boundary	419a0000,0,40400000,11,0,8,13,5	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	0	-	false	false	stat:minecraft.custom:minecraft.damage_resisted:5:41a00000,3fa00000,40400000,11,0,0,0,5;stat:minecraft.custom:minecraft.damage_absorbed:13:41a00000,0,40400000,11,0,0,13,5;stat:minecraft.custom:minecraft.damage_taken:8:419a0000,0,40400000,11,0,8,13,5;event:minecraft:entity_damage:419a0000,0,40400000,11,0,8,13,5	5c9f20d58361b331
+hurt-pipeline	player	hurt	11	generic	40400000,0,0,0,0,bf800000,41300000,40a00000	false	false	41a00000,0,40a00000,11,0,0,0,0	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	0	-	false	false	-	5c9f20d58361b331
+hurt-pipeline	player	hurt	12	mob_attack	40e00000,0,0,0,0,bf800000,41300000,40400000	true	boundary	41800000,0,40400000,11,0,40,0,0	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	3dcccccd	-	false	false	packet:enter:41a00000,0,40400000,11,0,0,0,0;stat:minecraft.custom:minecraft.damage_taken:40:41800000,0,40400000,11,0,40,0,0;event:minecraft:entity_damage:41800000,0,40400000,11,0,40,0,0	5c9f20d58361b331
+hurt-pipeline	player	hurt	13	fall	40e00000,0,0,0,0,bf800000,41200000,40400000	false	boundary	41500000,0,40e00000,20,0,70,0,0	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	0	-	false	false	stat:minecraft.custom:minecraft.damage_taken:70:41500000,0,40e00000,20,0,70,0,0;event:minecraft:entity_damage:41500000,0,40e00000,20,0,70,0,0	5c9f20d58361b331
+hurt-pipeline	player	hurt	14	freeze	40800000,0,0,0,0,40800000,0,0	true	boundary	41a00000,0,40800000,20,0,0,0,40	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	0	-	false	false	stat:minecraft.custom:minecraft.damage_resisted:40:41a00000,0,40800000,20,0,0,0,40	5c9f20d58361b331
+hurt-pipeline	player	hurt	15	lava	40800000,0,0,0,0,c0000000,0,0	false	false	41a00000,0,0,0,0,0,0,0	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	0	-	false	false	-	5c9f20d58361b331
+hurt-pipeline	player	increment	10	generic	40b00000,40e80000,3fc00000,3fa00000,40800000,0,41300000,40400000	true	true	419a0000,0,40b00000,11,0,8,13,5	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	0	minecraft:generic	false	false	stat:minecraft.custom:minecraft.damage_resisted:5:41a00000,3fa00000,40400000,11,0,0,0,5;stat:minecraft.custom:minecraft.damage_absorbed:13:41a00000,0,40400000,11,0,0,13,5;stat:minecraft.custom:minecraft.damage_taken:8:419a0000,0,40400000,11,0,8,13,5;event:minecraft:entity_damage:419a0000,0,40400000,11,0,8,13,5;criterion:419a0000,0,40b00000,11,0,8,13,5	5c9f20d58361b331
+hurt-pipeline	player	increment	11	generic	40400000,0,0,0,0,bf800000,41300000,40a00000	false	false	41a00000,0,40a00000,11,0,0,0,0	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	0	-	false	false	-	5c9f20d58361b331
+hurt-pipeline	player	increment	12	mob_attack	40e00000,0,0,0,0,bf800000,41300000,40400000	true	true	41800000,0,40e00000,11,0,40,0,0	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	3dcccccd	minecraft:mob_attack	true	false	packet:enter:41a00000,0,40400000,11,0,0,0,0;stat:minecraft.custom:minecraft.damage_taken:40:41800000,0,40400000,11,0,40,0,0;event:minecraft:entity_damage:41800000,0,40400000,11,0,40,0,0;criterion:41800000,0,40e00000,11,0,40,0,0	5c9f20d58361b331
+hurt-pipeline	cow	actual	0	mob_attack	40800000,0,0,0,0,bf800000,0,0	true	actual	40c00000,0,0,0,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	event:minecraft:entity_damage:40c00000,0,0,0,0,-	5c9f20d58361b331
+hurt-pipeline	cow	actual	1	fall	40800000,41a00000,0,0,0,bf800000,0,0	false	actual	40c00000,0,0,0,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	event:minecraft:entity_damage:40c00000,0,0,0,0,-	5c9f20d58361b331
+hurt-pipeline	cow	actual	2	generic	41a00000,41a00000,41000000,0,0,0,0,0	true	actual	0,0,0,0,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	event:minecraft:entity_damage:0,0,0,0,0,-	5c9f20d58361b331
+hurt-pipeline	cow	actual	3	generic	40c00000,0,0,40a00000,41a00000,bf800000,0,0	false	actual	41100000,0,0,0,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	event:minecraft:entity_damage:41100000,0,0,0,0,-	5c9f20d58361b331
+hurt-pipeline	cow	actual	4	mob_attack	40c00000,41200000,40800000,40a00000,41a00000,3f800000,0,0	true	actual	41200000,402353f8,0,0,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	-	5c9f20d58361b331
+hurt-pipeline	cow	actual	5	fall	3f800000,0,0,40c80000,0,bf800000,0,0	false	actual	41200000,0,0,0,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	-	5c9f20d58361b331
+hurt-pipeline	cow	actual	6	generic	80000000,0,0,0,0,bf800000,0,0	true	actual	41200000,0,0,0,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	-	5c9f20d58361b331
+hurt-pipeline	cow	actual	7	generic	bf800000,0,0,0,0,bf800000,0,0	false	actual	41200000,0,0,0,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	-	5c9f20d58361b331
+hurt-pipeline	cow	actual	8	mob_attack	7fc00000,0,0,0,0,bf800000,0,0	true	actual	7fc00000,7fc00000,0,0,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	event:minecraft:entity_damage:7fc00000,7fc00000,0,0,0,-	5c9f20d58361b331
+hurt-pipeline	cow	actual	9	fall	7f800000,41a00000,41000000,0,0,bf800000,0,0	false	actual	0,ffc00000,0,0,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	event:minecraft:entity_damage:0,ffc00000,0,0,0,-	5c9f20d58361b331
+hurt-pipeline	cow	actual	10	generic	40b00000,40e80000,3fc00000,3fa00000,40800000,0,41300000,40400000	true	actual	40db3333,0,40400000,11,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	event:minecraft:entity_damage:40db3333,0,40400000,11,0,-	5c9f20d58361b331
+hurt-pipeline	cow	actual	11	generic	40400000,0,0,0,0,bf800000,41300000,40a00000	false	actual	40e00000,0,40a00000,11,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	event:minecraft:entity_damage:40e00000,0,40a00000,11,0,-	5c9f20d58361b331
+hurt-pipeline	cow	actual	12	mob_attack	40e00000,0,0,0,0,bf800000,41300000,40400000	true	actual	40400000,0,40400000,11,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	event:minecraft:entity_damage:40400000,0,40400000,11,0,-	5c9f20d58361b331
+hurt-pipeline	cow	actual	13	fall	40e00000,0,0,0,0,bf800000,41200000,40400000	false	actual	40400000,0,40400000,10,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	event:minecraft:entity_damage:40400000,0,40400000,10,0,-	5c9f20d58361b331
+hurt-pipeline	cow	actual	14	freeze	40800000,0,0,0,0,40800000,0,0	true	actual	41200000,0,0,0,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	-	5c9f20d58361b331
+hurt-pipeline	cow	actual	15	lava	40800000,0,0,0,0,c0000000,0,0	false	actual	40c00000,0,0,0,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	event:minecraft:entity_damage:40c00000,0,0,0,0,-	5c9f20d58361b331
+hurt-pipeline	cow	hurt	0	mob_attack	40800000,0,0,0,0,bf800000,0,0	true	boundary	40c00000,0,40800000,20,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	event:minecraft:entity_damage:40c00000,0,40800000,20,0,-	5c9f20d58361b331
+hurt-pipeline	cow	hurt	1	fall	40800000,41a00000,0,0,0,bf800000,0,0	false	boundary	40c00000,0,40800000,20,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	event:minecraft:entity_damage:40c00000,0,40800000,20,0,-	5c9f20d58361b331
+hurt-pipeline	cow	hurt	2	generic	41a00000,41a00000,41000000,0,0,0,0,0	true	boundary	0,0,41a00000,20,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	event:minecraft:entity_damage:0,0,41a00000,20,0,-	5c9f20d58361b331
+hurt-pipeline	cow	hurt	3	generic	40c00000,0,0,40a00000,41a00000,bf800000,0,0	false	boundary	41100000,0,40c00000,20,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	event:minecraft:entity_damage:41100000,0,40c00000,20,0,-	5c9f20d58361b331
+hurt-pipeline	cow	hurt	4	mob_attack	40c00000,41200000,40800000,40a00000,41a00000,3f800000,0,0	true	boundary	41200000,402353f8,40c00000,20,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	-	5c9f20d58361b331
+hurt-pipeline	cow	hurt	5	fall	3f800000,0,0,40c80000,0,bf800000,0,0	false	boundary	41200000,0,3f800000,20,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	-	5c9f20d58361b331
+hurt-pipeline	cow	hurt	6	generic	80000000,0,0,0,0,bf800000,0,0	true	boundary	41200000,0,80000000,20,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	-	5c9f20d58361b331
+hurt-pipeline	cow	hurt	7	generic	bf800000,0,0,0,0,bf800000,0,0	false	boundary	41200000,0,0,20,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	-	5c9f20d58361b331
+hurt-pipeline	cow	hurt	8	mob_attack	7fc00000,0,0,0,0,bf800000,0,0	true	boundary	0,0,7f7fffff,20,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	event:minecraft:entity_damage:0,0,7f7fffff,20,0,-	5c9f20d58361b331
+hurt-pipeline	cow	hurt	9	fall	7f800000,41a00000,41000000,0,0,bf800000,0,0	false	boundary	0,0,7f7fffff,20,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	event:minecraft:entity_damage:0,0,7f7fffff,20,0,-	5c9f20d58361b331
+hurt-pipeline	cow	hurt	10	generic	40b00000,40e80000,3fc00000,3fa00000,40800000,0,41300000,40400000	true	boundary	41140000,0,40400000,11,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	event:minecraft:entity_damage:41140000,0,40400000,11,0,-	5c9f20d58361b331
+hurt-pipeline	cow	hurt	11	generic	40400000,0,0,0,0,bf800000,41300000,40a00000	false	false	41200000,0,40a00000,11,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	-	5c9f20d58361b331
+hurt-pipeline	cow	hurt	12	mob_attack	40e00000,0,0,0,0,bf800000,41300000,40400000	true	boundary	40c00000,0,40400000,11,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	event:minecraft:entity_damage:40c00000,0,40400000,11,0,-	5c9f20d58361b331
+hurt-pipeline	cow	hurt	13	fall	40e00000,0,0,0,0,bf800000,41200000,40400000	false	boundary	40400000,0,40e00000,20,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	event:minecraft:entity_damage:40400000,0,40e00000,20,0,-	5c9f20d58361b331
+hurt-pipeline	cow	hurt	14	freeze	40800000,0,0,0,0,40800000,0,0	true	boundary	41200000,0,40800000,20,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	-	5c9f20d58361b331
+hurt-pipeline	cow	hurt	15	lava	40800000,0,0,0,0,c0000000,0,0	false	false	41200000,0,0,0,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	-	5c9f20d58361b331
+hurt-pipeline	cow	increment	10	generic	40b00000,40e80000,3fc00000,3fa00000,40800000,0,41300000,40400000	true	true	41140000,0,40b00000,11,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	minecraft:generic	false	false	event:minecraft:entity_damage:41140000,0,40400000,11,0,-	5c9f20d58361b331
+hurt-pipeline	cow	increment	11	generic	40400000,0,0,0,0,bf800000,41300000,40a00000	false	false	41200000,0,40a00000,11,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	-	5c9f20d58361b331
+hurt-pipeline	cow	increment	12	mob_attack	40e00000,0,0,0,0,bf800000,41300000,40400000	true	true	40c00000,0,40e00000,11,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	minecraft:mob_attack	true	false	event:minecraft:entity_damage:40c00000,0,40400000,11,0,-	5c9f20d58361b331
 combat-armor	absent	40800000	0	0	40800000
 combat-armor	absent	40800000	41a00000	0	3f8f5c28
 combat-armor	absent	41a00000	41a00000	41000000	40ffffff
@@ -2670,10 +2806,14 @@ block-tag	minecraft:anvil	minecraft:anvil,minecraft:chipped_anvil,minecraft:dama
 block-tag	minecraft:inside_step_sound_blocks	minecraft:glow_lichen,minecraft:lily_pad,minecraft:small_amethyst_bud,minecraft:powder_snow,minecraft:sculk_vein,minecraft:pink_petals,minecraft:wildflowers,minecraft:leaf_litter
 block-tag	minecraft:combination_step_sound_blocks	minecraft:snow,minecraft:resin_clump,minecraft:white_carpet,minecraft:orange_carpet,minecraft:magenta_carpet,minecraft:light_blue_carpet,minecraft:yellow_carpet,minecraft:lime_carpet,minecraft:pink_carpet,minecraft:gray_carpet,minecraft:light_gray_carpet,minecraft:cyan_carpet,minecraft:purple_carpet,minecraft:blue_carpet,minecraft:brown_carpet,minecraft:green_carpet,minecraft:red_carpet,minecraft:black_carpet,minecraft:warped_roots,minecraft:nether_sprouts,minecraft:crimson_roots,minecraft:moss_carpet,minecraft:pale_moss_carpet
 block-tag	minecraft:crystal_sound_blocks	minecraft:amethyst_block,minecraft:budding_amethyst
+block-tag	minecraft:trapdoors	minecraft:oak_trapdoor,minecraft:spruce_trapdoor,minecraft:birch_trapdoor,minecraft:jungle_trapdoor,minecraft:acacia_trapdoor,minecraft:cherry_trapdoor,minecraft:dark_oak_trapdoor,minecraft:pale_oak_trapdoor,minecraft:mangrove_trapdoor,minecraft:poplar_trapdoor,minecraft:bamboo_trapdoor,minecraft:iron_trapdoor,minecraft:crimson_trapdoor,minecraft:warped_trapdoor,minecraft:copper_trapdoor,minecraft:exposed_copper_trapdoor,minecraft:weathered_copper_trapdoor,minecraft:oxidized_copper_trapdoor,minecraft:waxed_copper_trapdoor,minecraft:waxed_exposed_copper_trapdoor,minecraft:waxed_weathered_copper_trapdoor,minecraft:waxed_oxidized_copper_trapdoor
 entity-tag	minecraft:non_controlling_rider	minecraft:magma_cube,minecraft:slime,minecraft:sulfur_cube
 entity-tag	minecraft:freeze_immune_entity_types	minecraft:polar_bear,minecraft:snow_golem,minecraft:stray,minecraft:wither
 entity-tag	minecraft:powder_snow_walkable_mobs	minecraft:endermite,minecraft:fox,minecraft:rabbit,minecraft:silverfish
 entity-tag	minecraft:can_float_while_ridden	minecraft:camel,minecraft:camel_husk,minecraft:donkey,minecraft:horse,minecraft:mule,minecraft:zombie_horse
+entity-tag	minecraft:fall_damage_immune	minecraft:allay,minecraft:bat,minecraft:bee,minecraft:blaze,minecraft:breeze,minecraft:cat,minecraft:chicken,minecraft:copper_golem,minecraft:ghast,minecraft:happy_ghast,minecraft:iron_golem,minecraft:magma_cube,minecraft:ocelot,minecraft:parrot,minecraft:phantom,minecraft:shulker,minecraft:snow_golem,minecraft:wither
+entity-tag	minecraft:freeze_hurts_extra_types	minecraft:blaze,minecraft:magma_cube,minecraft:strider
+entity-tag	minecraft:no_anger_from_wind_charge	minecraft:bogged,minecraft:breeze,minecraft:cave_spider,minecraft:husk,minecraft:skeleton,minecraft:slime,minecraft:spider,minecraft:stray,minecraft:zombie
 fluid-tag	minecraft:water	minecraft:flowing_water,minecraft:water
 fluid-tag	minecraft:lava	minecraft:flowing_lava,minecraft:lava
 fluid-tag	minecraft:entity_floatable	minecraft:flowing_water,minecraft:water

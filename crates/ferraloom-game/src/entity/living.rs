@@ -15,6 +15,7 @@ pub(crate) use equipment::on_equipped_item_broken_parent;
 pub mod fall_damage;
 pub mod freezing;
 pub mod gliding;
+pub mod hurt;
 pub mod jump;
 pub mod travel;
 

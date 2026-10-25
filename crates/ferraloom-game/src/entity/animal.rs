@@ -69,6 +69,36 @@ impl Cow {
 /// Shared Cow dispatcher for the foundation's Entity/LivingEntity primitives.
 pub struct CowBehavior;
 impl Entity for CowBehavior {
+    fn is_invulnerable_to(
+        &self,
+        entity: super::EntityRef,
+        source: &super::DamageSource,
+        level: &crate::level::Level,
+    ) -> Result<bool, crate::level::LevelError> {
+        super::living::hurt::living_is_invulnerable_to(self, entity, source, level)
+    }
+    fn hurt_sound(
+        &self,
+        _entity: super::EntityRef,
+        _source: &super::DamageSource,
+        _level: &crate::level::Level,
+    ) -> Result<Option<ferraloom_data::registries::sound_event::Id>, crate::level::LevelError> {
+        Ok(Some(
+            ferraloom_data::registries::sound_event::Id::ENTITY_COW_HURT,
+        ))
+    }
+    fn death_sound(
+        &self,
+        _entity: super::EntityRef,
+        _level: &crate::level::Level,
+    ) -> Result<Option<ferraloom_data::registries::sound_event::Id>, crate::level::LevelError> {
+        Ok(Some(
+            ferraloom_data::registries::sound_event::Id::ENTITY_COW_DEATH,
+        ))
+    }
+    fn sound_volume(&self) -> f32 {
+        0.4
+    }
     fn weapon_item<'level>(
         &self,
         entity: super::EntityRef,
