@@ -13,6 +13,8 @@ import net.minecraft.network.protocol.game.ClientboundBossEventPacket;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.server.bossevents.CustomBossEvent;
+import net.minecraft.server.bossevents.CustomBossEvents;
+import net.minecraft.nbt.*;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
 import net.minecraft.world.BossEvent;
@@ -84,5 +86,20 @@ public class BossEventVectors {
     step("disconnect","1"); step("connect","1"); step("players","0,0"); step("disconnect","0");
     step("players",""); step("connect","0"); step("add","0"); step("disconnect","0"); step("clear","");
     Files.writeString(Path.of(args[0]),new GsonBuilder().setPrettyPrinting().create().toJson(rows)+"\n");
+    var codecRows=new JsonArray();
+    for(String input:List.of("{}", "{'test:bar':{Name:'Boss'}}", "{'test:bar':{Name:'Boss',Visible:1b,Value:35,Max:80,Color:'red',Overlay:'notched_12',DarkenScreen:1b,PlayBossMusic:1b,CreateWorldFog:1b,Players:[[I;0,0,0,1],[I;0,0,0,1]]}}",
+        "{'test:bar':{Name:'Boss',Visible:0.5d,Value:-0.5d,Max:0}}", "{'test:bar':{Name:'Boss',Players:[[0b,0b,0b,2b]]}}",
+        "{'test:bar':{Name:'Boss',Players:[[L;0,0,0,2]]}}", "{'test:bar':{Name:'Boss',Players:['00000000-0000-0000-0000-000000000001']}}",
+        "{'test:bar':{Name:'Boss',Color:'invalid'}}", "{'test:bar':{Value:4}}", "{'test:bar':{Name:'Boss',Visible:'yes'}}")) {
+      var row=new JsonObject(); row.addProperty("input",input);
+      var decoded=CustomBossEvents.TYPE.codec().parse(NbtOps.INSTANCE,TagParser.parseCompoundFully(input));
+      row.addProperty("valid",decoded.result().isPresent());
+      if(decoded.result().isPresent()) {
+        var value=decoded.result().orElseThrow(); row.addProperty("dirty",value.isDirty());
+        row.addProperty("output",CustomBossEvents.TYPE.codec().encodeStart(NbtOps.INSTANCE,value).getOrThrow().toString());
+      }
+      codecRows.add(row);
+    }
+    Files.writeString(Path.of(args[1]),new GsonBuilder().setPrettyPrinting().create().toJson(codecRows)+"\n");
   }
 }

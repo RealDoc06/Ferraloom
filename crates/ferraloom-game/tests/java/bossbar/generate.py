@@ -12,4 +12,4 @@ jars = [vanilla / 'versions/26.3/server-26.3.jar', *sorted((vanilla / 'libraries
 classpath = ':'.join(map(str, jars))
 with tempfile.TemporaryDirectory(prefix='boss-event-vectors-') as directory:
     subprocess.run([str(java/'javac'), '-cp', classpath, '-d', directory, str(source/'BossEventVectors.java')], cwd=directory, check=True)
-    subprocess.run([str(java/'java'), '-Xmx512m', '-XX:+EnableDynamicAgentLoading', '-Dnet.bytebuddy.experimental=true', '-cp', f'{directory}:{classpath}', 'BossEventVectors', str(source/'events.json')], cwd=directory, check=True)
+    subprocess.run([str(java/'java'), '-Xmx512m', '-XX:+EnableDynamicAgentLoading', '-Dnet.bytebuddy.experimental=true', '-cp', f'{directory}:{classpath}', 'BossEventVectors', str(source/'events.json'), str(source/'codec.json')], cwd=directory, check=True)

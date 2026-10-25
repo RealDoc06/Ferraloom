@@ -1,5 +1,7 @@
 //! Port of CustomBossEvents, CustomBossEvent and ServerBossEvent.
+mod save;
 mod server;
+pub use save::{BossEventsSaveData, PackedBossEvent};
 #[cfg(test)]
 mod tests;
 pub use server::{BossEventUpdate, BossPackets, BossPlayer, ServerBossEvent};

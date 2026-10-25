@@ -1,6 +1,7 @@
 use super::*;
 use crate::entity::EntityRef;
 use ferraloom_protocol::{Wire, play::clientbound as cb};
+use ferraloom_storage::SavedDataCodec;
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 
@@ -130,5 +131,29 @@ fn vanilla_boss_event_lifecycle_and_packet_bytes() {
             "progressBits":progress_bits,"visible":event.server().is_visible(),"color":event.server().color() as u8,
             "overlay":event.server().overlay() as u8,"display":display,"online":online,"persistent":persistent,"packets":sends});
         assert_eq!(actual, expected, "{action} {argument}");
+    }
+}
+
+#[test]
+fn vanilla_boss_event_saved_data_codec() {
+    use ferraloom_nbt::{Tag, parse_compound};
+    let cases: Vec<Value> =
+        serde_json::from_str(include_str!("../../tests/java/bossbar/codec.json")).unwrap();
+    assert_eq!(cases.len(), 10);
+    for case in cases {
+        let input = Tag::Compound(parse_compound(case["input"].as_str().unwrap()).unwrap());
+        let decoded = BossEventsSaveData::decode(&input);
+        assert_eq!(decoded.is_ok(), case["valid"].as_bool().unwrap(), "{input}");
+        if let Ok(decoded) = decoded {
+            let expected = Tag::Compound(parse_compound(case["output"].as_str().unwrap()).unwrap());
+            assert_eq!(decoded.encode().unwrap(), expected, "{input}");
+            let runtime = CustomBossEvents::load(decoded, || Uuid::new(0, 17));
+            assert_eq!(
+                runtime.is_dirty(),
+                case["dirty"].as_bool().unwrap(),
+                "{input}"
+            );
+            assert_eq!(runtime.pack().encode().unwrap(), expected, "{input}");
+        }
     }
 }
