@@ -150,6 +150,17 @@ fn least_oxidized_connected(
     Ok(chosen.default_state().with_properties_of(state))
 }
 impl BlockBehavior for ContainerPlacement {
+    fn update_shape(
+        &self,
+        state: BlockState,
+        pos: BlockPos,
+        direction: Direction,
+        neighbor_pos: BlockPos,
+        neighbor: BlockState,
+        level: &mut LevelAccessRef<'_, '_>,
+    ) -> Result<BlockState, LevelError> {
+        signs::update_shape(state, pos, direction, neighbor_pos, neighbor, level)
+    }
     fn can_survive(
         &self,
         state: BlockState,
@@ -247,3 +258,6 @@ mod helper_tests;
 mod post_tests;
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod support_tests;
