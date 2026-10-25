@@ -41,6 +41,7 @@ public final class TrackerVectors {
             bundle.subPackets().forEach(child -> types.add(child.getClass().getSimpleName()));
             return "bundle:" + String.join(",", types);
         }
+        if (packet instanceof ClientboundTakeItemEntityPacket take) return "take:"+take.getItemId()+","+take.getPlayerId()+","+take.getAmount();
         if (packet instanceof ClientboundRemoveEntitiesPacket) return "remove";
         throw new AssertionError(packet.getClass());
     }
@@ -62,6 +63,7 @@ public final class TrackerVectors {
         doReturn(2).when(player).requestedViewDistance();
         var connection = mock(ServerGamePacketListenerImpl.class);
         field(ServerPlayer.class, "connection").set(player, connection);
+        doReturn(player).when(connection).getPlayer();
         doAnswer(call -> { output.add(packet(call.getArgument(0))); return null; }).when(connection).send(any());
         var entity = new ProbeItem(level); entity.map = map; entity.setId(7);
         entity.setPos(0,64,0); entity.setItem(new ItemStack(Items.STONE,3));
@@ -105,6 +107,31 @@ public final class TrackerVectors {
         seen.clear(); output.clear(); sendSelf.invoke(playerEntry,new ClientboundEntityEventPacket(subject,(byte)3));
         eventRows.add("event\tself\t"+(output.isEmpty()?"-":String.join("|",output)));
         rows.addAll(eventRows);
+        // Execute the actual LivingEntity base method; ServerPlayer's following
+        // menu broadcast is a separate integration boundary.
+        var chunkSource = mock(ServerChunkCache.class);
+        doReturn(chunkSource).when(level).getChunkSource();
+        doReturn(false).when(level).isClientSide();
+        doAnswer(call -> { map.sendToTrackingPlayers(call.getArgument(0),call.getArgument(1)); return null; }).when(chunkSource).sendToTrackingPlayers(any(),any());
+        var collector = mock(LivingEntity.class);
+        doReturn(level).when(collector).level(); doReturn(12).when(collector).getId();
+        doCallRealMethod().when(collector).take(any(),anyInt());
+        entries.remove(7); output.clear(); collector.take(entity,3);
+        rows.add("take\tuntracked\t"+(output.isEmpty()?"-":String.join("|",output)));
+        entries.put(7,tracked); output.clear(); collector.take(entity,3);
+        var remove = ChunkMap.class.getDeclaredMethod("removeEntity",Entity.class); remove.setAccessible(true);
+        remove.invoke(map,entity);
+        rows.add("take\ttracked-discard\t"+(output.isEmpty()?"-":String.join("|",output)));
+        entity.setRemoved(Entity.RemovalReason.DISCARDED);
+        entries.put(7,tracked); output.clear(); collector.take(entity,3);
+        rows.add("take\tremoved\t"+(output.isEmpty()?"-":String.join("|",output)));
+        output.clear(); collector.take(player,1);
+        rows.add("take\tnon-item\t"+(output.isEmpty()?"-":String.join("|",output)));
+        var orb = new ExperienceOrb(EntityTypes.EXPERIENCE_ORB,level); orb.setId(8); orb.setPos(0,64,0);
+        var orbEntry = ctor.newInstance(map,orb,64,UpdateInterval.NEVER,true); entries.put(8,orbEntry);
+        update.invoke(orbEntry,player);
+        output.clear(); collector.take(orb,0);
+        rows.add("take\torb-zero-count\t"+(output.isEmpty()?"-":String.join("|",output)));
         var types = AdvancementVectors.lookup.lookupOrThrow(Registries.DAMAGE_TYPE);
         doReturn(7).when(AdvancementVectors.player).getId();
         doReturn(12).when(AdvancementVectors.cow).getId();

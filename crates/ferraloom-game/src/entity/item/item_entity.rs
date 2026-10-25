@@ -271,11 +271,7 @@ pub fn player_touch(
         .add(&mut stack, &mut target.parent.equipment, infinite);
     *level.entity_mut::<ItemEntity>(entity)?.item_mut() = stack;
     if accepted {
-        level.emit_entity_effect(crate::entity::effects::EntityEffect::TakeItem {
-            entity,
-            player,
-            count: org_count,
-        });
+        level.take_item(entity, player, org_count)?;
         if level.entity::<ItemEntity>(entity)?.item().is_empty() {
             level.remove_entity_with_reason(entity, RemovalReason::Discarded)?;
             set_count(

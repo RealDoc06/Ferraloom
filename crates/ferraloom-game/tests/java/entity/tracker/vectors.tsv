@@ -7,6 +7,11 @@ event	missing	-
 event	item	event:3
 event	player	event:3|self:event:3
 event	self	self:event:3
+take	untracked	-
+take	tracked-discard	take:7,12,3|event:62|remove
+take	removed	-
+take	non-item	-
+take	orb-zero-count	take:8,12,0
 damage	generic	18	-1	-1	-
 damage	player	34	7	7	-
 damage	indirect	0	7	12	-

@@ -11,13 +11,9 @@ pub enum EntityEffect {
         pos: ferraloom_util::BlockPos,
         state: ferraloom_data::BlockState,
     },
-    TakeItem {
-        entity: EntityRef,
-        player: EntityRef,
-        count: i32,
-    },
-    /// Pending statistics/advancement and menu broadcast integration. Inventory
-    /// and source stack have already been committed when this hook is emitted.
+    /// Pending statistics and onItemPickup criteria after discard. Native
+    /// ServerPlayer#take's earlier synchronous menu broadcast remains separately
+    /// pending; this record cannot defer that callback to a later drain.
     ItemPickup {
         player: EntityRef,
         entity: EntityRef,

@@ -533,7 +533,7 @@ mod tests {
         let mut player = ServerPlayer::new(
             Uuid::new(1, 2),
             "viewer".into(),
-            level.next_entity_id(),
+            12,
             Vec3::new(0.0, 64.0, 0.0),
             GameType::Spectator,
         );
@@ -549,7 +549,7 @@ mod tests {
             .remove(&ChunkPos::ZERO);
         level.take_effects();
         let entity = level.next_entity_ref();
-        let mut item = ItemEntity::new(level.next_entity_id(), 3);
+        let mut item = ItemEntity::new(7, 3);
         item.parent.set_pos(Vec3::new(0.0, 64.0, 0.0));
         item.set_item(ItemStack::new(Item::STONE, 3, Default::default()));
         level
@@ -768,6 +768,76 @@ mod tests {
                 .iter()
                 .map(|(label, value)| (label.as_str(), value.as_str()))
                 .collect::<Vec<_>>(),
+            expected
+        );
+    }
+    #[test]
+    fn native_take_item_captures_audience_before_discard_and_preserves_gates() {
+        use super::super::entity::Visibility;
+        use crate::entity::{experience_orb::ExperienceOrb, item::item_entity};
+        let (mut level, player, item) = fixture();
+        let mut observed = Vec::new();
+        let mut capture = |label: &str, level: &mut Level| {
+            let mut packets = Vec::new();
+            for effect in level.take_effects() {
+                if let LevelEffect::PlayerPacket { recipients, packet } = effect {
+                    assert_eq!(recipients, vec![player]);
+                    packets.push(match *packet {
+                        Packet::TakeItemEntity(packet) => format!(
+                            "take:{},{},{}",
+                            packet.item_id.0, packet.player_id.0, packet.amount.0
+                        ),
+                        Packet::EntityEvent(packet) => format!("event:{}", packet.event_id),
+                        Packet::RemoveEntities(packet) => {
+                            assert_eq!(packet.entity_ids, vec![VarInt(7)]);
+                            "remove".into()
+                        }
+                        packet => panic!("unexpected pickup packet: {packet:?}"),
+                    });
+                }
+            }
+            observed.push(format!(
+                "take\t{label}\t{}",
+                if packets.is_empty() {
+                    "-".into()
+                } else {
+                    packets.join("|")
+                }
+            ));
+        };
+        level.take_item(item, player, 3).unwrap();
+        capture("untracked", &mut level);
+        level
+            .update_entity_chunk_status(ChunkPos::ZERO, Visibility::Tracked)
+            .unwrap();
+        level.take_effects();
+        item_entity::player_touch(item, player, &mut level).unwrap();
+        assert!(level.entity::<EntityData>(item).unwrap().removed);
+        capture("tracked-discard", &mut level);
+        // The native removed gate must suppress a packet even if an entry and
+        // audience still exist in a controlled receiver frame.
+        let mut entry = TrackedEntity::new(item, &level).unwrap();
+        entry.seen_by.push(player);
+        level.region_mut().entity_tracker.entries.insert(7, entry);
+        level.take_item(item, player, 3).unwrap();
+        capture("removed", &mut level);
+        level.take_item(player, player, 1).unwrap();
+        capture("non-item", &mut level);
+        let orb = level.next_entity_ref();
+        let mut state = ExperienceOrb::new(8, 1);
+        state.parent.set_pos(Vec3::new(0.0, 64.0, 0.0));
+        level
+            .add_entity(orb, EntityState::ExperienceOrb(Box::new(state)))
+            .unwrap();
+        level.take_effects();
+        level.take_item(orb, player, 0).unwrap();
+        capture("orb-zero-count", &mut level);
+        let expected: Vec<_> = include_str!("../../tests/java/entity/tracker/vectors.tsv")
+            .lines()
+            .filter(|line| line.starts_with("take\t"))
+            .collect();
+        assert_eq!(
+            observed.iter().map(String::as_str).collect::<Vec<_>>(),
             expected
         );
     }

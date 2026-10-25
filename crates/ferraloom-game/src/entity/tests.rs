@@ -1329,7 +1329,7 @@ fn item_merge_equal_counts_choose_other_and_partial_pickup_preserves_native_retu
     assert_eq!(count(item.item()), 1);
     assert!(matches!(
         level.take_entity_effects().first(),
-        Some(effects::EntityEffect::TakeItem { count: 1, .. })
+        Some(effects::EntityEffect::ItemPickup { count: 1, .. })
     ));
 }
 

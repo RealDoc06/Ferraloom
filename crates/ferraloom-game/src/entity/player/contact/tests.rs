@@ -94,7 +94,7 @@ fn native_contact_bounds_section_order_health_guards_and_orb_rng() {
             .take_entity_effects()
             .into_iter()
             .filter_map(|effect| {
-                if let EntityEffect::TakeItem { entity, .. } = effect {
+                if let EntityEffect::ItemPickup { entity, .. } = effect {
                     Some(entity.0.to_string())
                 } else {
                     None
