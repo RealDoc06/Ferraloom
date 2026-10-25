@@ -224,3 +224,32 @@ pub(crate) fn take_vibration_changes(level: &mut Level) -> Vec<String> {
             .trace,
     )
 }
+
+/// Capture a native registry visit before ServerLevel#unload drops its owner.
+pub(crate) fn post_captured_after_unload(
+    level: &mut Level,
+    pos: BlockPos,
+) -> Result<(), LevelError> {
+    let owner = level.capture_listener_owner(ChunkPos::containing(pos))?;
+    let registry = level.listener_registry(owner, pos.y >> 4);
+    let mut queued = Vec::new();
+    let result = (|| {
+        level.detach_block_entities_for_unload(ChunkPos::containing(pos))?;
+        dispatcher::visit(
+            level,
+            registry,
+            GameEvent::BLOCK_PLACE,
+            Vec3::at_center_of(pos.relative(ferraloom_util::Direction::East, 2).into()),
+            GameEventContext {
+                source_entity: None,
+                affected_state: Some(ferraloom_data::Block::STONE.default_state()),
+            },
+            &mut queued,
+        )
+    })();
+    for info in queued {
+        info.listener.release(level);
+    }
+    level.release_listener_owner(owner);
+    result
+}

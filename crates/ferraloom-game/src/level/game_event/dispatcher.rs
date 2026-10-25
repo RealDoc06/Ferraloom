@@ -1,7 +1,7 @@
 use super::*;
 
-struct ListenerInfo {
-    listener: GameEventListenerRef,
+pub(super) struct ListenerInfo {
+    pub(super) listener: GameEventListenerRef,
     distance_squared: f64,
 }
 
@@ -72,7 +72,7 @@ impl GameEventDispatcher {
     }
 }
 
-fn visit(
+pub(super) fn visit(
     level: &mut Level,
     registry: ListenerRegistryRef,
     event: GameEvent,

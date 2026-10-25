@@ -90,6 +90,7 @@ fn native_vibration_selector_travel_receive_and_listener_lifecycle() {
     let vectors = std::fs::read_to_string(path).expect("real ServerLevel vibration vectors");
     let mut level = level();
     let mut counts = [0; 6];
+    let mut lifecycle = std::collections::BTreeMap::new();
     for row in vectors.lines() {
         let f: Vec<_> = row.split('\t').collect();
         match f[0] {
@@ -195,6 +196,61 @@ fn native_vibration_selector_travel_receive_and_listener_lifecycle() {
                     "{row}"
                 );
             }
+            "listen" => {
+                let receiver = install(
+                    BlockState::from_id(f[1].parse().unwrap()).unwrap(),
+                    &mut level,
+                );
+                level
+                    .set_block_state(
+                        POS.relative(Direction::East, 1),
+                        if f[4] == "true" {
+                            Block::WHITE_WOOL
+                        } else {
+                            Block::AIR
+                        }
+                        .default_state(),
+                    )
+                    .unwrap();
+                level
+                    .set_block_state(
+                        POS.relative(Direction::South, 1),
+                        if f[5] == "true" {
+                            Block::REDSTONE_BLOCK
+                        } else {
+                            Block::AIR
+                        }
+                        .default_state(),
+                    )
+                    .unwrap();
+                let origin = if f[2] == "true" {
+                    POS
+                } else {
+                    POS.relative(Direction::East, 2)
+                };
+                let context = GameEventContext {
+                    source_entity: None,
+                    affected_state: Some(
+                        if f[3] == "true" {
+                            Block::WHITE_WOOL
+                        } else {
+                            Block::STONE
+                        }
+                        .default_state(),
+                    ),
+                };
+                let accepted = LISTENER
+                    .handle_game_event(
+                        GameEventListenerRef::BlockEntity(receiver),
+                        &mut level,
+                        GameEvent::from_name(f[6]).unwrap(),
+                        context,
+                        Vec3::at_center_of(origin.into()),
+                    )
+                    .unwrap();
+                assert_eq!(accepted.to_string(), f[7], "{row}");
+                assert_eq!(selected(receiver, &level).to_string(), f[8], "{row}");
+            }
             "catalyst" => {
                 for x in 4..=12 {
                     for z in 4..=12 {
@@ -261,55 +317,14 @@ fn native_vibration_selector_travel_receive_and_listener_lifecycle() {
                 );
             }
             "lifecycle" => {
-                // Both native rows are replayed together below on the same receiver.
+                lifecycle.insert(f[1].to_owned(), f[2].to_owned());
                 counts[5] += 1;
             }
             _ => panic!("unclassified native vector {row}"),
         }
     }
-    assert_eq!(&counts[1..], &[108, 180, 54, 60, 2]);
-    let receiver = install(Block::SCULK_SENSOR.default_state(), &mut level);
-    let context = GameEventContext {
-        source_entity: None,
-        affected_state: Some(Block::STONE.default_state()),
-    };
-    level
-        .game_event(
-            GameEvent::BLOCK_PLACE,
-            Vec3::at_center_of(POS.relative(Direction::East, 2).into()),
-            None,
-            context.affected_state,
-        )
-        .unwrap();
-    assert!(
-        data(receiver, &level)
-            .unwrap()
-            .selection_strategy
-            .current_vibration_data
-            .is_some()
-    );
-    data_mut(receiver, &mut level)
-        .unwrap()
-        .selection_strategy
-        .current_vibration_data = None;
-    level.retain_block_entity(receiver).unwrap();
-    level.remove_block_entity(POS).unwrap();
-    level
-        .game_event(
-            GameEvent::BLOCK_PLACE,
-            Vec3::at_center_of(POS.relative(Direction::East, 2).into()),
-            None,
-            context.affected_state,
-        )
-        .unwrap();
-    assert!(
-        data(receiver, &level)
-            .unwrap()
-            .selection_strategy
-            .current_vibration_data
-            .is_none()
-    );
-    level.release_block_entity(receiver);
+    assert_eq!(&counts[1..], &[108, 180, 54, 60, 7]);
+    replay_lifecycle(&lifecycle);
     eprintln!("native vibration case counts: {counts:?}");
 }
 
@@ -347,4 +362,130 @@ fn live_catalyst_keeps_canonical_cursors_and_required_reentrancy() {
     assert!(
         matches!(access.read(&crate::block::LevelAccessRef::Server(&mut level)),Err(LevelError::UnsupportedSculkCursorReentrancy(r)) if r==receiver)
     );
+}
+
+fn emit(pos: BlockPos, level: &mut Level) {
+    level
+        .game_event(
+            GameEvent::BLOCK_PLACE,
+            Vec3::at_center_of(pos.relative(Direction::East, 2).into()),
+            None,
+            Some(Block::STONE.default_state()),
+        )
+        .unwrap();
+}
+fn selected(receiver: BlockEntityRef, level: &Level) -> bool {
+    data(receiver, level)
+        .unwrap()
+        .selection_strategy
+        .current_vibration_data
+        .is_some()
+}
+fn replay_lifecycle(expected: &std::collections::BTreeMap<String, String>) {
+    let mut level = level();
+    let receiver = install(Block::SCULK_SENSOR.default_state(), &mut level);
+    emit(POS, &mut level);
+    assert_eq!(selected(receiver, &level).to_string(), expected["place"]);
+    data_mut(receiver, &mut level)
+        .unwrap()
+        .selection_strategy
+        .current_vibration_data = None;
+    level.retain_block_entity(receiver).unwrap();
+    level.remove_block_entity(POS).unwrap();
+    emit(POS, &mut level);
+    assert_eq!(selected(receiver, &level).to_string(), expected["remove"]);
+    level.release_block_entity(receiver);
+    let receiver = install(Block::SCULK_SENSOR.default_state(), &mut level);
+    level.retain_block_entity(receiver).unwrap();
+    level
+        .destroy_block(POS, false, crate::block::UPDATE_LIMIT)
+        .unwrap();
+    emit(POS, &mut level);
+    assert_eq!(selected(receiver, &level).to_string(), expected["break"]);
+    level.release_block_entity(receiver);
+    // A proto receiver is prepared before FULL publication. Shared finalization
+    // registers the listener before its ticker, without a mutable-Level escape.
+    let target = ChunkPos::new(2, 0);
+    let pos = BlockPos::new(40, 80, 8);
+    let section = ferraloom_chunk::LevelChunkSection::new(
+        ferraloom_chunk::Strategy::block_states(),
+        ferraloom_chunk::Strategy::biomes(Arc::new(
+            ferraloom_chunk::IdMap::new(vec![ferraloom_chunk::BiomeId(0)]).unwrap(),
+        )),
+        ferraloom_chunk::BiomeId(0),
+    );
+    let mut chunk = LevelChunk::new(target, 0..8, section);
+    chunk
+        .set_block_state(pos, Block::SCULK_SENSOR.default_state())
+        .unwrap();
+    chunk
+        .add_prepared_block_entity(create(pos, Block::SCULK_SENSOR.default_state()).unwrap())
+        .unwrap();
+    let staged = level
+        .stage_full_chunk(crate::level::publication::PreparedFullChunk {
+            chunk,
+            light: crate::level::weather::ChunkLightSnapshot {
+                block: Default::default(),
+                sky: Default::default(),
+            },
+            worldgen_entities: Vec::new(),
+        })
+        .unwrap();
+    let loaded = level
+        .chunk(target)
+        .unwrap()
+        .block_entities
+        .iter()
+        .next()
+        .unwrap()
+        .data()
+        .reference();
+    emit(pos, &mut level);
+    assert_eq!(
+        selected(loaded, &level).to_string(),
+        expected["before-load-register"]
+    );
+    level.finalize_full_chunk(staged.token).unwrap();
+    emit(pos, &mut level);
+    assert_eq!(
+        selected(loaded, &level).to_string(),
+        expected["load-register"]
+    );
+    data_mut(loaded, &mut level)
+        .unwrap()
+        .selection_strategy
+        .current_vibration_data = None;
+    level
+        .set_block_entity(create(pos, Block::SCULK_SENSOR.default_state()).unwrap())
+        .unwrap();
+    let replacement = level.block_entity_ref(pos).unwrap().unwrap();
+    emit(pos, &mut level);
+    assert_eq!(
+        format!(
+            "{},{},{}",
+            level.block_entity_state(loaded).unwrap().data().removed,
+            selected(loaded, &level),
+            selected(replacement, &level)
+        ),
+        expected["replacement"]
+    );
+    data_mut(replacement, &mut level)
+        .unwrap()
+        .selection_strategy
+        .current_vibration_data = None;
+    level.retain_block_entity(replacement).unwrap();
+    test_support::post_captured_after_unload(&mut level, pos).unwrap();
+    assert_eq!(
+        format!(
+            "{},{}",
+            level
+                .block_entity_state(replacement)
+                .unwrap()
+                .data()
+                .removed,
+            selected(replacement, &level)
+        ),
+        expected["captured-unload"]
+    );
+    level.release_block_entity(replacement);
 }

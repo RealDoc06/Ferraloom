@@ -99,6 +99,16 @@ public final class VibrationOracle {
                 system.getVibrationUser().onReceiveVibration(level,POS.east(3),GameEvent.BLOCK_PLACE,null,null,distance);
                 lines.add("receive\t"+Block.getId(state)+"\t"+Float.floatToRawIntBits(distance)+"\t"+summary(level,system));
             }
+            for(var block:List.of(Blocks.SCULK_SENSOR,Blocks.CALIBRATED_SCULK_SENSOR,Blocks.SCULK_SHRIEKER))for(boolean same:List.of(false,true))for(boolean wool:List.of(false,true))for(boolean blocked:List.of(false,true))for(boolean powered:List.of(false,true))for(var event:List.of(GameEvent.STEP,GameEvent.BLOCK_PLACE,GameEvent.ENTITY_DIE,GameEvent.SHRIEK)) {
+                var system=system(level,block.defaultBlockState());
+                level.setBlock(POS.east(),blocked?Blocks.WOOL.pick(net.minecraft.world.item.DyeColor.WHITE).defaultBlockState():Blocks.AIR.defaultBlockState(),816);
+                level.setBlock(POS.south(),powered?Blocks.REDSTONE_BLOCK.defaultBlockState():Blocks.AIR.defaultBlockState(),816);
+                var origin=Vec3.atCenterOf(same?POS:POS.east(2));
+                var context=GameEvent.Context.of(wool?Blocks.WOOL.pick(net.minecraft.world.item.DyeColor.WHITE).defaultBlockState():Blocks.STONE.defaultBlockState());
+                boolean accepted=((GameEventListener.Provider<?>)system).getListener().handleGameEvent(level,event,context,origin);
+                lines.add("listen\t"+Block.getId(block.defaultBlockState())+"\t"+same+"\t"+wool+"\t"+blocked+"\t"+powered+"\t"+event.unwrapKey().orElseThrow().identifier()+"\t"+accepted+"\t"+system.getVibrationData().getSelectionStrategy().chosenCandidate(Long.MAX_VALUE).isPresent());
+            }
+            level.setBlock(POS.east(),Blocks.AIR.defaultBlockState(),816);level.setBlock(POS.south(),Blocks.AIR.defaultBlockState(),816);
             for(boolean eligible:List.of(false,true))for(int charge:new int[]{0,1,50,1200})for(int calls:new int[]{1,3}) {
                 tickingOverride=eligible;
                 for(int x=4;x<=12;x++)for(int z=4;z<=12;z++)for(int y=79;y<=83;y++)level.setBlock(new BlockPos(x,y,z),y==79?Blocks.STONE.defaultBlockState():Blocks.AIR.defaultBlockState(),816);
@@ -125,6 +135,31 @@ public final class VibrationOracle {
             level.removeBlockEntity(POS);
             level.gameEvent(GameEvent.BLOCK_PLACE,Vec3.atCenterOf(POS.east(2)),GameEvent.Context.of(Blocks.STONE.defaultBlockState()));
             lines.add("lifecycle\tremove\t"+sensor.getVibrationData().getSelectionStrategy().chosenCandidate(Long.MAX_VALUE).isPresent());
+            sensor=(SculkSensorBlockEntity)system(level,Blocks.SCULK_SENSOR.defaultBlockState());
+            level.destroyBlock(POS,false);
+            level.gameEvent(GameEvent.BLOCK_PLACE,Vec3.atCenterOf(POS.east(2)),GameEvent.Context.of(Blocks.STONE.defaultBlockState()));
+            lines.add("lifecycle\tbreak\t"+sensor.getVibrationData().getSelectionStrategy().chosenCandidate(Long.MAX_VALUE).isPresent());
+            var chunk=level.getChunkAt(POS);
+            level.setBlock(POS,Blocks.SCULK_SENSOR.defaultBlockState(),816);
+            level.removeBlockEntity(POS);
+            var loaded=new SculkSensorBlockEntity(POS,Blocks.SCULK_SENSOR.defaultBlockState());
+            chunk.setBlockEntity(loaded);
+            level.gameEvent(GameEvent.BLOCK_PLACE,Vec3.atCenterOf(POS.east(2)),GameEvent.Context.of(Blocks.STONE.defaultBlockState()));
+            lines.add("lifecycle\tbefore-load-register\t"+loaded.getVibrationData().getSelectionStrategy().chosenCandidate(Long.MAX_VALUE).isPresent());
+            chunk.registerAllBlockEntitiesAfterLevelLoad();
+            level.gameEvent(GameEvent.BLOCK_PLACE,Vec3.atCenterOf(POS.east(2)),GameEvent.Context.of(Blocks.STONE.defaultBlockState()));
+            lines.add("lifecycle\tload-register\t"+loaded.getVibrationData().getSelectionStrategy().chosenCandidate(Long.MAX_VALUE).isPresent());
+            loaded.getVibrationData().getSelectionStrategy().startOver();
+            var replacement=new SculkSensorBlockEntity(POS,Blocks.SCULK_SENSOR.defaultBlockState());
+            chunk.addAndRegisterBlockEntity(replacement);
+            level.gameEvent(GameEvent.BLOCK_PLACE,Vec3.atCenterOf(POS.east(2)),GameEvent.Context.of(Blocks.STONE.defaultBlockState()));
+            lines.add("lifecycle\treplacement\t"+loaded.isRemoved()+","+loaded.getVibrationData().getSelectionStrategy().chosenCandidate(Long.MAX_VALUE).isPresent()+","+replacement.getVibrationData().getSelectionStrategy().chosenCandidate(Long.MAX_VALUE).isPresent());
+            replacement.getVibrationData().getSelectionStrategy().startOver();
+            var registry=chunk.getListenerRegistry(POS.getY()>>4);
+            level.unload(chunk);
+            var eventPos=Vec3.atCenterOf(POS.east(2));var context=GameEvent.Context.of(Blocks.STONE.defaultBlockState());
+            registry.visitInRangeListeners(GameEvent.BLOCK_PLACE,eventPos,context,(listener,position)->listener.handleGameEvent(level,GameEvent.BLOCK_PLACE,context,eventPos));
+            lines.add("lifecycle\tcaptured-unload\t"+replacement.isRemoved()+","+replacement.getVibrationData().getSelectionStrategy().chosenCandidate(Long.MAX_VALUE).isPresent());
             Files.write(output,lines);Files.writeString(output.resolveSibling("oracle-done"),"done\n");
         } catch(Throwable error) {error.printStackTrace();try {Files.writeString(output.resolveSibling("oracle-error.txt"),error.toString());}catch(Exception ignored){}}
         finally {level.getServer().halt(false);}
