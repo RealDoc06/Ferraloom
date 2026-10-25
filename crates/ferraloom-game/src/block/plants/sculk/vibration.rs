@@ -265,7 +265,7 @@ fn try_get_player(
 }
 /// Port of VibrationSelector#addCandidate, preserving the first candidate on
 /// other ticks, nearer-first and higher-frequency-at-equal-distance selection.
-pub(crate) fn add_candidate(data: &mut VibrationData, info: VibrationInfo, time: i64) {
+pub(crate) fn add_candidate(data: &mut VibrationData, info: VibrationInfo, time: i64) -> bool {
     let replace = data
         .selection_strategy
         .current_vibration_data
@@ -282,6 +282,7 @@ pub(crate) fn add_candidate(data: &mut VibrationData, info: VibrationInfo, time:
             tick: time,
         });
     }
+    replace
 }
 pub(crate) fn force_schedule(
     receiver: BlockEntityRef,
@@ -317,7 +318,19 @@ pub(crate) fn force_schedule(
         entity: context.source_entity,
     };
     let time = level.game_time();
-    add_candidate(data_mut(receiver, level)?, info, time);
+    let previous = data(receiver, level)?
+        .selection_strategy
+        .current_vibration_data
+        .as_ref()
+        .and_then(|candidate| candidate.event.entity);
+    if add_candidate(data_mut(receiver, level)?, info, time) {
+        if let Some(source) = context.source_entity {
+            level.retain_entity(source)?;
+        }
+        if let Some(source) = previous {
+            level.release_entity(source);
+        }
+    }
     Ok(())
 }
 fn is_occluded(origin: Vec3, destination: Vec3, level: &Level) -> Result<bool, LevelError> {
@@ -389,14 +402,21 @@ pub(crate) fn tick(receiver: BlockEntityRef, level: &mut Level) -> Result<(), Le
             .map(|candidate| candidate.event.clone());
         if let Some(info) = chosen {
             let (origin, delay) = (info.pos, travel_time(info.distance));
+            if let Some(source) = info.entity {
+                level.retain_entity(source)?;
+            }
             let data = data_mut(receiver, level)?;
             data.current_vibration = Some(info);
             data.travel_time_in_ticks = delay;
             particle(receiver, origin, delay, level)?;
             on_data_changed(receiver, level)?;
-            data_mut(receiver, level)?
+            let previous = data_mut(receiver, level)?
                 .selection_strategy
-                .current_vibration_data = None;
+                .current_vibration_data
+                .take();
+            if let Some(source) = previous.and_then(|candidate| candidate.event.entity) {
+                level.release_entity(source);
+            }
         }
     }
     if data(receiver, level)?.current_vibration.is_some() {
@@ -448,26 +468,50 @@ fn receive(receiver: BlockEntityRef, level: &mut Level) -> Result<bool, LevelErr
     let projectile_owner = info
         .projectile_owner_uuid
         .and_then(|uuid| level.entity_by_uuid(uuid));
-    if is_shrieker(receiver, level)? {
-        super::shrieker::try_shriek(
-            receiver,
-            try_get_player(projectile_owner.or(source), level)?,
-            level,
-        )?;
-    } else {
-        let origin = BlockPos::containing(info.pos.x, info.pos.y, info.pos.z);
-        let dx = f64::from(origin.x) - f64::from(receiver.pos.x);
-        let dy = f64::from(origin.y) - f64::from(receiver.pos.y);
-        let dz = f64::from(origin.z) - f64::from(receiver.pos.z);
-        super::sensor::receive(
-            receiver,
-            info.game_event,
-            source,
-            (dx * dx + dy * dy + dz * dz).sqrt() as f32,
-            level,
-        )?;
+    let retained = [source, projectile_owner];
+    for (count, entity) in retained.into_iter().flatten().enumerate() {
+        if let Err(error) = level.retain_entity(entity) {
+            for entity in retained.into_iter().flatten().take(count) {
+                level.release_entity(entity);
+            }
+            return Err(error);
+        }
     }
-    data_mut(receiver, level)?.current_vibration = None;
+    let result: Result<(), LevelError> = (|| {
+        if is_shrieker(receiver, level)? {
+            super::shrieker::try_shriek(
+                receiver,
+                try_get_player(projectile_owner.or(source), level)?,
+                level,
+            )?;
+        } else {
+            let origin = BlockPos::containing(info.pos.x, info.pos.y, info.pos.z);
+            let dx = f64::from(origin.x) - f64::from(receiver.pos.x);
+            let dy = f64::from(origin.y) - f64::from(receiver.pos.y);
+            let dz = f64::from(origin.z) - f64::from(receiver.pos.z);
+            super::sensor::receive(
+                receiver,
+                info.game_event,
+                source,
+                (dx * dx + dy * dy + dz * dz).sqrt() as f32,
+                level,
+            )?;
+        }
+
+        Ok(())
+    })();
+    for entity in retained.into_iter().flatten() {
+        level.release_entity(entity);
+    }
+    result?;
+    if let Some(source) = data_mut(receiver, level)?
+        .current_vibration
+        .take()
+        .and_then(|info| info.entity)
+    {
+        level.release_entity(source);
+    }
+
     Ok(true)
 }
 

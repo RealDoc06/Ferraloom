@@ -189,6 +189,19 @@ impl BlockEntity for SculkBehavior {
         }
         Ok(())
     }
+    fn load_additional_live(
+        &self,
+        receiver: BlockEntityRef,
+        tag: &CompoundTag,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        let sources = cached_entity_refs(level.block_entity_state(receiver)?);
+        self.load_additional(level.block_entity_state_mut(receiver)?, tag);
+        for source in sources.into_iter().flatten() {
+            level.release_entity(source);
+        }
+        Ok(())
+    }
     fn load_additional(&self, state: &mut BlockEntityState, tag: &CompoundTag) {
         match state {
             BlockEntityState::SculkSensor(entity) => entity.load(tag),
@@ -241,6 +254,26 @@ impl BlockEntity for SculkBehavior {
             _ => unreachable!(),
         })
     }
+}
+
+/// Strong cached VibrationInfo receivers; UUID-only decoded records own no entity.
+/// Retirement calls this before dropping a BE, without invoking world callbacks.
+pub(crate) fn cached_entity_refs(
+    state: &BlockEntityState,
+) -> [Option<crate::entity::EntityRef>; 2] {
+    let data = match state {
+        BlockEntityState::SculkSensor(value) => &value.vibration_data,
+        BlockEntityState::CalibratedSculkSensor(value) => &value.parent.vibration_data,
+        BlockEntityState::SculkShrieker(value) => &value.vibration_data,
+        _ => return [None, None],
+    };
+    [
+        data.current_vibration.as_ref().and_then(|info| info.entity),
+        data.selection_strategy
+            .current_vibration_data
+            .as_ref()
+            .and_then(|candidate| candidate.event.entity),
+    ]
 }
 
 #[cfg(test)]

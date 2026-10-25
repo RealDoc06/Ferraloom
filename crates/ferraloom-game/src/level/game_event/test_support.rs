@@ -253,3 +253,15 @@ pub(crate) fn post_captured_after_unload(
     level.release_listener_owner(owner);
     result
 }
+
+/// Observe the original proto receiver after staging, before FULL becomes visible.
+pub(crate) fn staged_block_entity_reference(
+    level: &Level,
+    pos: BlockPos,
+) -> Option<BlockEntityRef> {
+    level
+        .chunk(ChunkPos::containing(pos))?
+        .block_entities
+        .get(pos)
+        .map(|state| state.data().reference())
+}

@@ -126,6 +126,20 @@ public final class VibrationOracle {
                 lines.add("catalyst\t"+eligible+"\t"+charge+"\t"+calls+"\t"+catalyst.saveCustomOnly(level.registryAccess())+"\t"+String.join(";",blocks)+"\t"+level.getRandom().nextLong());
             }
             tickingOverride=false;
+            tickingOverride=true;
+            var retained=(SculkSensorBlockEntity)system(level,Blocks.SCULK_SENSOR.defaultBlockState());
+            var source=net.minecraft.world.entity.EntityTypes.COW.create(level,net.minecraft.world.entity.EntitySpawnReason.COMMAND);
+            source.setPos(Vec3.atCenterOf(POS.east(2)));level.addFreshEntity(source);
+            var cached=new VibrationInfo(GameEvent.BLOCK_PLACE,2,Vec3.atCenterOf(POS.east(2)),source);
+            retained.getVibrationData().getSelectionStrategy().startOver();
+            retained.getVibrationData().getSelectionStrategy().addCandidate(cached,level.getGameTime()-1);
+            level.getRandom().setSeed(1234);changes.clear();
+            VibrationSystem.Ticker.tick(level,retained.getVibrationData(),retained.getVibrationUser());
+            source.discard();
+            String identity=(cached.getEntity(level).orElseThrow()==source)+","+source.isRemoved()+","+(level.getEntity(source.getUUID())==null);
+            VibrationSystem.Ticker.tick(level,retained.getVibrationData(),retained.getVibrationUser());
+            lines.add("source-removed\t"+identity+"\t"+summary(level,retained));
+            tickingOverride=false;
             // These are native add/register and remove/unregister paths, not direct
             // calls to the listener; retained old objects remain observable.
             var sensor=(SculkSensorBlockEntity)system(level,Blocks.SCULK_SENSOR.defaultBlockState());

@@ -316,6 +316,61 @@ fn native_vibration_selector_travel_receive_and_listener_lifecycle() {
                     "{row}"
                 );
             }
+            "source-removed" => {
+                let receiver = install(Block::SCULK_SENSOR.default_state(), &mut level);
+                for x in -1..=1 {
+                    for z in -1..=1 {
+                        level
+                            .set_chunk_block_ticking(ChunkPos::new(x, z), true)
+                            .unwrap();
+                    }
+                }
+                let source = level.next_entity_ref();
+                level
+                    .add_entity(source, EntityState::Cow(Box::default()))
+                    .unwrap();
+                let uuid = level.entity::<EntityData>(source).unwrap().uuid;
+                force_schedule(
+                    receiver,
+                    GameEvent::BLOCK_PLACE,
+                    GameEventContext {
+                        source_entity: Some(source),
+                        affected_state: None,
+                    },
+                    Vec3::at_center_of(POS.relative(Direction::East, 2).into()),
+                    &mut level,
+                )
+                .unwrap();
+                *level.random() = Random::Legacy(LegacyRandomSource::new(1234));
+                level.set_game_time(level.game_time() + 1);
+                tick(receiver, &mut level).unwrap();
+                level.remove_entity(source).unwrap();
+                level.finish_entity_management();
+                let cached = data(receiver, &level)
+                    .unwrap()
+                    .current_vibration
+                    .as_ref()
+                    .unwrap()
+                    .entity
+                    == Some(source);
+                assert_eq!(
+                    format!(
+                        "{},{},{}",
+                        cached,
+                        level.entity::<EntityData>(source).unwrap().removed,
+                        level.entity_by_uuid(uuid).is_none()
+                    ),
+                    f[1],
+                    "{row}"
+                );
+                tick(receiver, &mut level).unwrap();
+                assert_eq!(summary(receiver, &mut level), f[2..].join("\t"), "{row}");
+                level.finish_entity_management();
+                assert!(
+                    matches!(level.entity_state(source),Err(LevelError::MissingEntity(id)) if id==source),
+                    "all source owner counts must be zero after delivery"
+                );
+            }
             "lifecycle" => {
                 lifecycle.insert(f[1].to_owned(), f[2].to_owned());
                 counts[5] += 1;
@@ -431,15 +486,7 @@ fn replay_lifecycle(expected: &std::collections::BTreeMap<String, String>) {
             worldgen_entities: Vec::new(),
         })
         .unwrap();
-    let loaded = level
-        .chunk(target)
-        .unwrap()
-        .block_entities
-        .iter()
-        .next()
-        .unwrap()
-        .data()
-        .reference();
+    let loaded = test_support::staged_block_entity_reference(&level, pos).unwrap();
     emit(pos, &mut level);
     assert_eq!(
         selected(loaded, &level).to_string(),
@@ -488,4 +535,46 @@ fn replay_lifecycle(expected: &std::collections::BTreeMap<String, String>) {
         expected["captured-unload"]
     );
     level.release_block_entity(replacement);
+}
+
+#[test]
+fn vibration_source_roots_balance_on_load_and_be_retirement() {
+    for load in [false, true] {
+        let mut level = level();
+        let receiver = install(Block::SCULK_SENSOR.default_state(), &mut level);
+        let source = level.next_entity_ref();
+        level
+            .add_entity(source, EntityState::Cow(Box::default()))
+            .unwrap();
+        force_schedule(
+            receiver,
+            GameEvent::STEP,
+            GameEventContext {
+                source_entity: Some(source),
+                affected_state: None,
+            },
+            Vec3::at_center_of(POS.relative(Direction::East, 2).into()),
+            &mut level,
+        )
+        .unwrap();
+        level.remove_entity(source).unwrap();
+        level.finish_entity_management();
+        assert!(
+            level.entity_state(source).is_ok(),
+            "candidate owns the removed entity"
+        );
+        if load {
+            receiver
+                .load_custom_only(&ferraloom_nbt::CompoundTag::new(), &mut level)
+                .unwrap();
+        } else {
+            level.remove_block_entity(POS).unwrap();
+            level.collect_detached_block_entities();
+        }
+        level.finish_entity_management();
+        assert!(
+            matches!(level.entity_state(source),Err(LevelError::MissingEntity(id)) if id==source),
+            "cached source owner counts must return to zero"
+        );
+    }
 }

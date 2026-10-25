@@ -576,10 +576,23 @@ impl Level {
     /// Phase-boundary retirement. Menus and other persistent holders retain roots
     /// explicitly; callback roots are released only after their frame unwinds.
     pub fn collect_detached_block_entities(&mut self) {
+        let mut sources = Vec::new();
         let runtime = &mut self.region_mut().block_entity_state;
-        runtime
-            .detached
-            .retain(|handle, _| runtime.roots.borrow().contains_key(handle));
+        runtime.detached.retain(|handle, state| {
+            if runtime.roots.borrow().contains_key(handle) {
+                true
+            } else {
+                sources.extend(
+                    crate::block::entity::sculk::cached_entity_refs(state)
+                        .into_iter()
+                        .flatten(),
+                );
+                false
+            }
+        });
+        for source in sources {
+            self.release_entity(source);
+        }
     }
     /// Disjoint pure menu borrow. Stale generations and duplicate receivers fail
     /// before any borrow; returned block entities follow the caller's refs order.
