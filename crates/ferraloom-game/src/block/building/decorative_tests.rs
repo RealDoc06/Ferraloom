@@ -70,7 +70,7 @@ fn candle_and_egg_replacement_keep_secondary_use_empty_stack_and_limit_semantics
     let mut level = connected_level();
     level
         .add_entity(
-            EntityRef(1),
+            EntityRef::fixture(crate::level::RegionId::FIXTURE, 1),
             EntityState::Player(Box::new(ServerPlayer::new(
                 Uuid::new(1, 2),
                 "building".into(),
@@ -92,7 +92,7 @@ fn candle_and_egg_replacement_keep_secondary_use_empty_stack_and_limit_semantics
         }
         level.set_block_state(POS, current).unwrap();
         level
-            .entity_mut::<EntityData>(EntityRef(1))
+            .entity_mut::<EntityData>(EntityRef::fixture(crate::level::RegionId::FIXTURE, 1))
             .unwrap()
             .set_shared_flag(1, f[3] == "1");
         let stack = match f[4] {
@@ -105,7 +105,7 @@ fn candle_and_egg_replacement_keep_secondary_use_empty_stack_and_limit_semantics
         let context = BlockPlaceContext::new(
             &LevelReaderRef::Server(&level),
             UseOnContext::new(
-                Some(EntityRef(1)),
+                Some(EntityRef::fixture(crate::level::RegionId::FIXTURE, 1)),
                 InteractionHand::MainHand,
                 &stack,
                 PlacementHit {

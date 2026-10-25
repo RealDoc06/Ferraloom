@@ -223,6 +223,10 @@ impl Default for LevelRules {
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct RegionId(u64);
 impl RegionId {
+    /// Reserved namespace for model fixtures. The monotonic allocator never
+    /// returns u64::MAX, because its checked increment fails before that point.
+    #[cfg(test)]
+    pub(crate) const FIXTURE: Self = Self(u64::MAX);
     fn new() -> Self {
         use std::sync::atomic::{AtomicU64, Ordering};
         static NEXT: AtomicU64 = AtomicU64::new(1);
@@ -410,6 +414,10 @@ impl Level {
     }
     pub fn sea_level(&self) -> i32 {
         self.context.sea_level
+    }
+    /// Stable identity of this Region's canonical stores and birth allocator.
+    pub fn region_id(&self) -> RegionId {
+        self.region().id
     }
     pub fn into_region(self) -> Region {
         self.region.expect("level is parked")
