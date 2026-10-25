@@ -985,20 +985,25 @@ impl World {
         resources: &ResourceManager,
     ) -> Result<Arc<ferraloom_game::level::LevelContext>> {
         let features = ferraloom_worldgen::feature::FeatureLoader::new(resources)?.load_all()?;
-        Ok(Arc::new(ferraloom_game::level::LevelContext::new(
-            self.seed,
-            self.generator.sea_level(),
-            self.generator.clone(),
-            Arc::new(features),
-            Arc::new(ferraloom_game::level::StructureServices::load(
-                resources,
-                self.generator.data(),
-            )?),
-            Arc::new(ferraloom_game::entity::damage::DamageTypeRegistry::load(
-                resources,
-            )?),
-            read_difficulty_settings(&self.level_data.data).0,
-        )))
+        Ok(Arc::new(
+            ferraloom_game::level::LevelContext::new(
+                self.seed,
+                self.generator.sea_level(),
+                self.generator.clone(),
+                Arc::new(features),
+                Arc::new(ferraloom_game::level::StructureServices::load(
+                    resources,
+                    self.generator.data(),
+                )?),
+                Arc::new(ferraloom_game::entity::damage::DamageTypeRegistry::load(
+                    resources,
+                )?),
+                read_difficulty_settings(&self.level_data.data).0,
+            )
+            .with_block_transformers(Arc::new(
+                ferraloom_game::item::block_transformer::BlockTransformerRegistry::load(resources)?,
+            )),
+        ))
     }
     /// Attach immutable dimension layers after the sole server clock manager
     /// loads. Callers publish its actual snapshot; no local day counter exists.
