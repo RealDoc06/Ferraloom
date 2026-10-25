@@ -83,24 +83,31 @@ impl FallingBlockEntity {
         tag: CompoundTag,
         level: &Level,
     ) -> Result<(), FallingBlockLoadError> {
-        self.block_state = tag
-            .get("BlockState")
-            .and_then(persistence::load_block_state)
-            .unwrap_or(Block::SAND.default_state());
-        self.time = tag.get_int_or("Time", 0);
+        self.parent
+            .load_nbt(tag.clone())
+            .map_err(FallingBlockLoadError::Base)?;
+        self.read_block_state(&tag);
         let default_hurt = level
             .block_tags()
             .map_err(FallingBlockLoadError::Level)?
             .contains_key(BlockTags::ANVIL, self.block_state.block());
+        self.read_additional_save_data(&tag, default_hurt);
+        Ok(())
+    }
+    pub(crate) fn read_block_state(&mut self, tag: &CompoundTag) {
+        self.block_state = tag
+            .get("BlockState")
+            .and_then(persistence::load_block_state)
+            .unwrap_or(Block::SAND.default_state());
+    }
+    pub(crate) fn read_additional_save_data(&mut self, tag: &CompoundTag, default_hurt: bool) {
+        self.time = tag.get_int_or("Time", 0);
         self.hurt_entities = tag.get_boolean_or("HurtEntities", default_hurt);
         self.fall_damage_per_distance = tag.get_float_or("FallHurtAmount", 0.0);
         self.fall_damage_max = tag.get_int_or("FallHurtMax", 40);
         self.drop_item = tag.get_boolean_or("DropItem", true);
         self.block_data = tag.get_compound("TileEntityData").cloned();
         self.cancel_drop = tag.get_boolean_or("CancelDrop", false);
-        self.parent
-            .load_nbt(tag)
-            .map_err(FallingBlockLoadError::Base)
     }
 }
 impl EntityDataView for FallingBlockEntity {
