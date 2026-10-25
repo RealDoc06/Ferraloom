@@ -1,3 +1,7 @@
+#[expect(
+    dead_code,
+    reason = "Mining keeps world time frozen and uses only the non-stepping level fixtures."
+)]
 mod level_support;
 
 use anyhow::Context;
