@@ -1234,8 +1234,8 @@ mod tests {
                 play::WaypointOperation::Track,
                 Some(0x123456),
                 play::WaypointContents::Chunk {
-                    x: 1.into(),
-                    z: 2.into(),
+                    x: VarInt(1),
+                    z: VarInt(2),
                 },
             ),
         )?;
@@ -1245,8 +1245,8 @@ mod tests {
                 play::WaypointOperation::Update,
                 None,
                 play::WaypointContents::Chunk {
-                    x: 3.into(),
-                    z: 4.into(),
+                    x: VarInt(3),
+                    z: VarInt(4),
                 },
             ),
         )?;
@@ -1257,8 +1257,8 @@ mod tests {
         assert_eq!(
             state.waypoints[&key].contents,
             play::WaypointContents::Chunk {
-                x: 3.into(),
-                z: 4.into()
+                x: VarInt(3),
+                z: VarInt(4)
             }
         );
         apply(

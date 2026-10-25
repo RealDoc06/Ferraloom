@@ -1,7 +1,7 @@
 use super::*;
 use ferraloom_data::registries::attribute::Id as Attribute;
 use ferraloom_protocol::{
-    codec::Either,
+    codec::{Either, VarInt},
     play::{RgbColor, TeamColor, TrackedWaypointData, WaypointContents},
 };
 use ferraloom_util::{BlockPos, ChunkPos, mth};
@@ -212,14 +212,14 @@ impl Connection {
             match self.position {
                 Position::Block(pos) => WaypointContents::Vec3i {
                     position: ferraloom_protocol::play::Vec3i {
-                        x: pos.x.into(),
-                        y: pos.y.into(),
-                        z: pos.z.into(),
+                        x: VarInt(pos.x),
+                        y: VarInt(pos.y),
+                        z: VarInt(pos.z),
                     },
                 },
                 Position::Chunk(pos) => WaypointContents::Chunk {
-                    x: pos.x.into(),
-                    z: pos.z.into(),
+                    x: VarInt(pos.x),
+                    z: VarInt(pos.z),
                 },
                 Position::Azimuth(angle) => WaypointContents::Azimuth { angle },
             }
