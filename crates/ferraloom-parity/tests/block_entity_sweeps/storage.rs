@@ -61,10 +61,11 @@ impl Capture {
             }
             cb::Packet::Sound(sound) => {
                 let name = sound.sound.to_json().expect("decoded sound holder");
-                if name.contains("block.chest.")
-                    || name.contains("block.barrel.")
-                    || name.contains("block.copper_chest.")
-                {
+                if name.as_str().is_some_and(|name| {
+                    name.contains("block.chest.")
+                        || name.contains("block.barrel.")
+                        || name.contains("block.copper_chest.")
+                }) {
                     assert!(
                         (0.9..1.0).contains(&sound.pitch),
                         "native container sound pitch: {}",
@@ -180,7 +181,7 @@ impl Capture {
     }
 }
 
-fn contents(bot: &Bot, menu: i32, count: usize) -> Result<Vec<String>> {
+fn contents(bot: &Bot, menu: i32, count: usize) -> Result<Vec<Value>> {
     bot.snapshot()
         .containers
         .get(&menu)
