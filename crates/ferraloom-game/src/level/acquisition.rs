@@ -76,6 +76,15 @@ pub enum AcquireFailure {
 /// keep reentrant completions reachable, never evict, and never advance a tick.
 /// Worker failure/cancellation returns an error instead of an endless Pending.
 pub trait AcquireDriver: Send + Any {
+    /// Port of ChunkMap#updatePlayerStatus's synchronous DistanceManager boundary.
+    /// This mutates the existing ticket owner, with no queued publication.
+    fn update_player_tracking_status(
+        &self,
+        _player: crate::entity::EntityRef,
+        _section: Option<ferraloom_util::SectionPos>,
+    ) -> Result<(), LevelError> {
+        Err(LevelError::UnsupportedEntityTrackingStatus)
+    }
     /// Cold access to the sole concrete runtime owner. Callers must finish this
     /// borrow and return owned work before invoking a world callback.
     fn as_any(&self) -> &dyn Any;

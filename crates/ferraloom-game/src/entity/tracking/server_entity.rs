@@ -17,6 +17,7 @@ use ferraloom_util::{Vec3, mth};
 #[derive(Debug)]
 pub enum TrackingError {
     Level(LevelError),
+
     /// Cow's variant metadata and leash state remain separate subclass work.
     /// Other living families must finish their metadata before enabling pairing.
     LivingSynchronizationPending(EntityRef),
@@ -24,6 +25,17 @@ pub enum TrackingError {
 impl From<LevelError> for TrackingError {
     fn from(error: LevelError) -> Self {
         Self::Level(error)
+    }
+}
+impl TrackingError {
+    pub(crate) fn into_level(self, level: &Level) -> LevelError {
+        match self {
+            Self::Level(error) => error,
+            Self::LivingSynchronizationPending(entity) => match level.entity_state(entity) {
+                Ok(state) => LevelError::UnsupportedEntity(state.entity_type()),
+                Err(error) => error,
+            },
+        }
     }
 }
 impl std::fmt::Display for TrackingError {
@@ -84,9 +96,6 @@ impl ServerEntity {
         track_delta: bool,
     ) -> Result<Self, TrackingError> {
         let state = level.entity_state(entity)?;
-        if state.as_living().is_some() && !matches!(state, EntityState::Player(_)) {
-            return Err(TrackingError::LivingSynchronizationPending(entity));
-        }
         let base = state.as_entity();
         Ok(Self {
             entity,
@@ -117,11 +126,25 @@ impl ServerEntity {
     }
     /// Native pairing order is spawn, cached non-default metadata, attributes,
     /// equipment, passengers and the mounted vehicle's passengers.
+    #[cfg(test)]
     pub fn pairing_data(&self, level: &mut Level) -> Result<Vec<Packet>, TrackingError> {
         level
             .entity_behavior(self.entity)?
             .update_data_before_sync(self.entity, level)?;
+        self.pairing_data_after_sync(level)
+    }
+    /// Read pairing state after updateDataBeforeSync has returned. The live
+    /// tracker keeps its canonical entry in the Region during that callback.
+    pub(crate) fn pairing_data_after_sync(
+        &self,
+        level: &Level,
+    ) -> Result<Vec<Packet>, TrackingError> {
         let state = level.entity_state(self.entity)?;
+        // Unobserved living entities may own tracking state. Pairing still
+        // requires their subclass metadata/leash port; never send partial data.
+        if state.as_living().is_some() && !matches!(state, EntityState::Player(_)) {
+            return Err(TrackingError::LivingSynchronizationPending(self.entity));
+        }
         let base = state.as_entity();
         let position = self.position_codec.base;
         let data = match state {
@@ -185,17 +208,14 @@ impl ServerEntity {
         }
         Ok(packets)
     }
+    #[cfg(test)]
     pub fn removal_packet(&self, level: &Level) -> Result<Packet, TrackingError> {
         Ok(Packet::RemoveEntities(packet::RemoveEntities {
             entity_ids: vec![VarInt(level.entity::<EntityData>(self.entity)?.network_id)],
         }))
     }
-    fn send_dirty_entity_data(
-        &mut self,
-        level: &mut Level,
-        out: &mut Vec<TrackingPacket>,
-    ) -> Result<(), TrackingError> {
-        let base = level.entity_mut::<EntityData>(self.entity)?;
+    fn send_dirty_entity_data(&mut self, state: &mut EntityState, out: &mut Vec<TrackingPacket>) {
+        let base = state.as_entity_mut();
         if let Some(data) = base.entity_data.pack_dirty() {
             self.tracked_data_values = base.entity_data.non_default_values();
             out.push(TrackingPacket::with_self(Packet::SetEntityData(
@@ -205,7 +225,6 @@ impl ServerEntity {
                 },
             )));
         }
-        let state = level.entity_state_mut(self.entity)?;
         let network_id = state.as_entity().network_id;
         if let Some(living) = state.as_living_mut() {
             let values: Vec<_> = living
@@ -223,8 +242,8 @@ impl ServerEntity {
             }
             living.attributes.clear_attributes_to_sync();
         }
-        Ok(())
     }
+    #[cfg(test)]
     pub fn send_changes(
         &mut self,
         level: &mut Level,
@@ -232,24 +251,46 @@ impl ServerEntity {
         level
             .entity_behavior(self.entity)?
             .update_data_before_sync(self.entity, level)?;
+        let passengers = self.passenger_update(level)?;
+        let (mut out, update_head) =
+            self.send_changes_before_head(level.entity_state_mut(self.entity)?, passengers);
+        if update_head {
+            let head = level
+                .entity_behavior(self.entity)?
+                .y_head_rot(self.entity, level)?;
+            self.send_head_rotation(level.entity_state_mut(self.entity)?, head, &mut out);
+        }
+        self.finish_changes(level.entity_state_mut(self.entity)?, &mut out);
+        Ok(out)
+    }
+    pub(crate) fn passenger_update(&self, level: &Level) -> Result<Option<Packet>, TrackingError> {
+        let changed = level.entity::<EntityData>(self.entity)?.passengers != self.last_passengers;
+        changed
+            .then(|| passengers_packet(self.entity, level).map_err(Into::into))
+            .transpose()
+    }
+    /// Callback-free mutations of canonical entity and wire state, with short
+    /// disjoint Region borrows. No tracker entry leaves the canonical map.
+    pub(crate) fn send_changes_before_head(
+        &mut self,
+        state: &mut EntityState,
+        passengers: Option<Packet>,
+    ) -> (Vec<TrackingPacket>, bool) {
         let mut out = Vec::new();
-        let base = level.entity::<EntityData>(self.entity)?;
-        if base.passengers != self.last_passengers {
-            out.push(TrackingPacket::players(passengers_packet(
-                self.entity,
-                level,
-            )?));
+        let base = state.as_entity();
+        if let Some(packet) = passengers {
+            out.push(TrackingPacket::players(packet));
             self.last_passengers = base.passengers.clone();
         }
         if base.sync_position {
             self.tick_count = self.update_interval.next_interval(self.tick_count);
-            level.entity_mut::<EntityData>(self.entity)?.sync_position = false;
+            state.as_entity_mut().sync_position = false;
         }
-        let base = level.entity::<EntityData>(self.entity)?;
-        if base.needs_sync
+        let base = state.as_entity();
+        let update = base.needs_sync
             || self.update_interval.test(self.tick_count)
-            || base.entity_data.is_dirty()
-        {
+            || base.entity_data.is_dirty();
+        if update {
             let (y_rot, x_rot) = (mth::pack_degrees(base.yaw), mth::pack_degrees(base.pitch));
             let rotation_changed = (i32::from(y_rot) - i32::from(self.last_sent_y_rot)).abs() >= 1
                 || (i32::from(x_rot) - i32::from(self.last_sent_x_rot)).abs() >= 1;
@@ -268,7 +309,7 @@ impl ServerEntity {
                     self.last_sent_x_rot = x_rot;
                 }
                 self.position_codec.base = position;
-                self.send_dirty_entity_data(level, &mut out)?;
+                self.send_dirty_entity_data(state, &mut out);
                 self.was_riding = true;
             } else {
                 self.teleport_delay = self.teleport_delay.wrapping_add(1);
@@ -276,10 +317,9 @@ impl ServerEntity {
                     >= 7.62939453125E-6
                     || self.tick_count % 60 == 0;
                 let (movement_packet, has_position, has_rotation) =
-                    self.create_move_packet(level, send_position, rotation_changed, y_rot, x_rot)?;
-                let base = level.entity::<EntityData>(self.entity)?;
-                let fall_flying =
-                    level.entity_state(self.entity)?.as_living().is_some() && base.shared_flag(7);
+                    self.create_move_packet(state, send_position, rotation_changed, y_rot, x_rot);
+                let base = state.as_entity();
+                let fall_flying = state.as_living().is_some() && base.shared_flag(7);
                 if base.needs_sync || self.track_delta || fall_flying {
                     let movement = base.velocity;
                     let diff = movement.distance_to_sqr(self.last_sent_movement);
@@ -299,7 +339,7 @@ impl ServerEntity {
                 }
                 if let Some(packet) = movement_packet {
                     out.push(TrackingPacket::players(packet));
-                    self.send_dirty_entity_data(level, &mut out)?;
+                    self.send_dirty_entity_data(state, &mut out);
                     if has_position {
                         self.position_codec.base = position;
                     }
@@ -308,28 +348,38 @@ impl ServerEntity {
                         self.last_sent_x_rot = x_rot;
                     }
                 } else {
-                    self.send_dirty_entity_data(level, &mut out)?;
+                    self.send_dirty_entity_data(state, &mut out);
                 }
                 self.was_riding = false;
             }
-            let y_head_rot = mth::pack_degrees(
-                level
-                    .entity_behavior(self.entity)?
-                    .y_head_rot(self.entity, level)?,
-            );
-            if (i32::from(y_head_rot) - i32::from(self.last_sent_y_head_rot)).abs() >= 1 {
-                out.push(TrackingPacket::players(Packet::RotateHead(
-                    packet::RotateHead {
-                        entity_id: VarInt(level.entity::<EntityData>(self.entity)?.network_id),
-                        y_head_rot: Angle(y_head_rot as u8),
-                    },
-                )));
-                self.last_sent_y_head_rot = y_head_rot;
-            }
-            level.entity_mut::<EntityData>(self.entity)?.needs_sync = false;
         }
+        (out, update)
+    }
+    pub(crate) fn send_head_rotation(
+        &mut self,
+        state: &mut EntityState,
+        head: f32,
+        out: &mut Vec<TrackingPacket>,
+    ) {
+        let y_head_rot = mth::pack_degrees(head);
+        if (i32::from(y_head_rot) - i32::from(self.last_sent_y_head_rot)).abs() >= 1 {
+            out.push(TrackingPacket::players(Packet::RotateHead(
+                packet::RotateHead {
+                    entity_id: VarInt(state.as_entity().network_id),
+                    y_head_rot: Angle(y_head_rot as u8),
+                },
+            )));
+            self.last_sent_y_head_rot = y_head_rot;
+        }
+        state.as_entity_mut().needs_sync = false;
+    }
+    pub(crate) fn finish_changes(
+        &mut self,
+        state: &mut EntityState,
+        out: &mut Vec<TrackingPacket>,
+    ) {
         self.tick_count = self.tick_count.wrapping_add(1);
-        let base = level.entity_mut::<EntityData>(self.entity)?;
+        let base = state.as_entity_mut();
         if base.sync_velocity {
             base.sync_velocity = false;
             out.push(TrackingPacket::with_self(Packet::SetEntityMotion(
@@ -343,17 +393,15 @@ impl ServerEntity {
                 },
             )));
         }
-        Ok(out)
     }
     fn create_move_packet(
         &mut self,
-        level: &Level,
+        state: &EntityState,
         send_position: bool,
         send_rotation: bool,
         y_rot: i8,
         x_rot: i8,
-    ) -> Result<(Option<Packet>, bool, bool), TrackingError> {
-        let state = level.entity_state(self.entity)?;
+    ) -> (Option<Packet>, bool, bool) {
         let base = state.as_entity();
         let absolute = |base: &EntityData| {
             Packet::EntityPositionSync(packet::EntityPositionSync {
@@ -375,14 +423,14 @@ impl ServerEntity {
         {
             self.was_on_ground = base.on_ground;
             self.teleport_delay = 0;
-            return Ok((Some(absolute(base)), true, true));
+            return (Some(absolute(base)), true, true);
         }
         if send_position {
             let Some(delta) = self.position_codec.try_encode(base.position) else {
-                return Ok((Some(absolute(base)), true, true));
+                return (Some(absolute(base)), true, true);
             };
             if matches!(state, EntityState::Item(_)) && item_requires_full_precision(base, &delta) {
-                return Ok((Some(absolute(base)), true, true));
+                return (Some(absolute(base)), true, true);
             }
             let delta = play::EntityDelta {
                 on_ground: base.on_ground,
@@ -401,9 +449,9 @@ impl ServerEntity {
                     delta,
                 })
             };
-            return Ok((Some(packet), true, send_rotation));
+            return (Some(packet), true, send_rotation);
         }
-        Ok((
+        (
             send_rotation.then_some(Packet::MoveEntityRot(packet::MoveEntityRot {
                 entity_id: VarInt(base.network_id),
                 on_ground: base.on_ground,
@@ -412,7 +460,7 @@ impl ServerEntity {
             })),
             false,
             send_rotation,
-        ))
+        )
     }
 }
 fn passengers_packet(entity: EntityRef, level: &Level) -> Result<Packet, LevelError> {

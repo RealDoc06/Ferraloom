@@ -295,7 +295,7 @@ impl GenerationRuntime {
                     FullChunkStatus::Full | FullChunkStatus::BlockTicking => Visibility::Tracked,
                     FullChunkStatus::EntityTicking => Visibility::Ticking,
                 };
-                level.update_entity_chunk_status(publication.pos, visibility)?;
+                level.update_entity_chunk_status_shared(publication.pos, visibility)?;
             }
         }
     }
@@ -814,6 +814,16 @@ impl GenerationRuntime {
 }
 
 impl AcquireDriver for GenerationRuntime {
+    /// Port of ChunkMap#updatePlayerStatus: use the canonical DistanceManager.
+    fn update_player_tracking_status(
+        &self,
+        player: EntityRef,
+        section: Option<SectionPos>,
+    ) -> Result<(), LevelError> {
+        self.update_player(player, section);
+        Ok(())
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }

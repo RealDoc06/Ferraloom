@@ -30,6 +30,7 @@ pub mod distance_manager;
 pub mod effects;
 pub mod emission;
 pub mod entity;
+pub mod entity_tracker;
 pub mod environment;
 pub mod events;
 mod features;
@@ -105,6 +106,15 @@ pub enum LevelError {
     MissingPlacementPlayer,
     UninitializedPlacementDirection,
     MissingEntity(EntityRef),
+    MissingTrackedEntity(i32),
+    MissingRegistryContext,
+    MissingNetworkRegistryEntry {
+        registry: ferraloom_protocol::Identifier,
+        entry: ferraloom_protocol::Identifier,
+    },
+    UnsupportedEntityTrackingStatus,
+    /// Shared acquisition cannot invoke mutable ChunkMap tracking callbacks.
+    UnsupportedSharedEntityTracking(&'static str),
     WrongEntityType(EntityRef),
     DuplicateEntity(EntityRef),
     DuplicateChunk(ChunkPos),
@@ -273,6 +283,7 @@ pub struct Region {
     chunks: store::InsertOnlyMap<ChunkPos, chunk::LevelChunk>,
     next_chunk_generation: Cell<u64>,
     entities: entity::EntityStorage,
+    entity_tracker: entity_tracker::EntityTracker,
     entity_tick_list: entity::EntityTickList,
     block_ticks: LevelTicks,
     fluid_ticks: LevelTicks<ferraloom_data::registries::fluid::Id>,
@@ -317,6 +328,7 @@ impl Region {
             chunks: store::InsertOnlyMap::default(),
             next_chunk_generation: Cell::new(0),
             entities: entity::EntityStorage::default(),
+            entity_tracker: Default::default(),
             entity_tick_list: entity::EntityTickList::default(),
             block_ticks: LevelTicks::default(),
             fluid_ticks: LevelTicks::default(),
