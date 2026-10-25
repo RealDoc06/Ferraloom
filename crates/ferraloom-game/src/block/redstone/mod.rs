@@ -12,6 +12,7 @@ pub mod moving_piston;
 pub mod note;
 pub mod observer;
 pub mod opening;
+mod pathfinding;
 pub mod piston;
 mod placement;
 pub mod rail;
@@ -47,6 +48,9 @@ pub(crate) fn ported_behavior(
     method: BlockMethod,
 ) -> Option<&'static dyn BlockBehavior> {
     use BlockMethod as M;
+    if method == M::IsPathfindable {
+        return pathfinding::behavior(block);
+    }
     if method == M::SetPlacedBy {
         return match block.class() {
             BlockClass::RepeaterBlock => Some(&diode::REPEATER),

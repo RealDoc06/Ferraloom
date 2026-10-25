@@ -96,5 +96,28 @@ pub fn try_add_frost(entity: EntityRef, level: &mut Level) -> Result<(), LevelEr
     Ok(())
 }
 
+/// Port of LivingEntity#aiStep's server freezing phase. The supporting-block
+/// frost query precedes the periodic typed-damage callback, including at zero.
+pub fn tick_freezing<E: Entity + ?Sized>(
+    behavior: &E,
+    entity: EntityRef,
+    level: &mut Level,
+) -> Result<(), LevelError> {
+    if !level.entity::<EntityData>(entity)?.is_in_powder_snow
+        || !behavior.can_freeze(entity, level)?
+    {
+        let base = level.entity_mut::<EntityData>(entity)?;
+        base.set_ticks_frozen(base.ticks_frozen().wrapping_sub(2).max(0));
+    }
+    remove_frost(entity, level)?;
+    try_add_frost(entity, level)?;
+    let base = level.entity::<EntityData>(entity)?;
+    if base.tick_count % 40 == 0 && base.is_fully_frozen() && behavior.can_freeze(entity, level)? {
+        let source = level.damage_sources().freeze();
+        behavior.hurt_server(entity, level, source, 1.0)?;
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests;

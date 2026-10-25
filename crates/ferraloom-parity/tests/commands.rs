@@ -398,6 +398,33 @@ async fn message_arguments(session: &mut Session) -> Result<ObservationLog> {
         "team message reached a nonmember"
     );
     log.record("team.outsider_messages", 0)?;
+    for (label, text, key) in [
+        (
+            "leave",
+            "team leave @s",
+            "commands.team.leave.success.single",
+        ),
+        (
+            "join",
+            "team join parity @s",
+            "commands.team.join.success.single",
+        ),
+        (
+            "rejoin",
+            "team join parity @s",
+            "commands.team.join.success.single",
+        ),
+        (
+            "leave_again",
+            "team leave @s",
+            "commands.team.leave.success.single",
+        ),
+    ] {
+        log.record(
+            format!("team.single.{label}"),
+            command(session.bot(sender)?, text, key).await?,
+        )?;
+    }
     Ok(log)
 }
 

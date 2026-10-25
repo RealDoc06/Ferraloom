@@ -26,7 +26,7 @@ macro_rules! packet {
 
 macro_rules! wire_enum {
     ($name:ident { $($variant:ident = $id:literal),* $(,)? } $(, $mode:ident)?) => {
-        #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+        #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
         pub enum $name { $($variant),* }
         impl Wire for $name {
             fn decode(r: &mut Reader<'_>) -> Result<Self> {

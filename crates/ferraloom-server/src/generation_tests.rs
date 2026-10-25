@@ -18,11 +18,11 @@ fn fixtures(bytes: &[u8]) -> serde_json::Value {
         .unwrap();
     serde_json::from_str(&text).unwrap()
 }
-fn resources() -> ResourceManager {
+pub(crate) fn resources() -> ResourceManager {
     let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").expect("builder provides vanilla jar");
     ResourceManager::new(vec![Pack::vanilla_jar(Path::new(&jar)).unwrap()])
 }
-fn generation_context(
+pub(crate) fn generation_context(
     resources: &ResourceManager,
     generator: Arc<ChunkGenerator>,
     dimension: &str,

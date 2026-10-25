@@ -1230,7 +1230,6 @@ fn clear_grid_returns_lent_drop_receivers_and_preserves_native_comparator_reads(
         block::entity::{BlockEntityState, create},
         entity::{
             EntityState,
-            effects::EntityEffect,
             item::ItemEntity,
             player::{GameType, ServerPlayer},
         },
@@ -1362,13 +1361,11 @@ fn clear_grid_returns_lent_drop_receivers_and_preserves_native_comparator_reads(
             .collect::<Vec<_>>()
             .join(";");
         assert_eq!(inventory, f[5], "{name} inventory");
+        // Drops register in order; the lookup keeps native insertion order.
         let drops = level
-            .take_entity_effects()
+            .all_entities()
             .into_iter()
-            .filter_map(|effect| match effect {
-                EntityEffect::ItemDrop { entity, .. } => Some(entity),
-                _ => None,
-            })
+            .filter(|&entity| level.entity::<ItemEntity>(entity).is_ok())
             .collect::<Vec<_>>();
         let actual = drops
             .iter()

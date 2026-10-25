@@ -2,6 +2,10 @@
 //! overlapping neighborhoods vanilla's X-major layers are serialized. Vanilla
 //! itself permits order-dependent feature writes; worker completion order never
 //! chooses which write wins here. Disjoint dimensions can use separate workers.
+#[cfg(test)]
+mod relight_tests;
+pub(crate) mod runtime;
+
 use crate::jobs::JobPool;
 use crate::world::{
     GenerationLightNeighbor, RegistryAdapter, Terrain, surface_heights_in_dimension,
@@ -11,7 +15,7 @@ use ferraloom_game::level::generation::{
     ChunkGenerationTask, ChunkStatus, ChunkStatusTask, GenerationChunkHolder, ProtoChunk,
     WorldGenContext,
 };
-use ferraloom_light::{LevelLightEngine, LightLayer, SectionSnapshots};
+use ferraloom_light::{LevelLightEngine, LightLayer, LightUpdates, SectionSnapshots};
 use ferraloom_storage::{self as storage, IoWorker, SerializableChunkData};
 use ferraloom_util::{ChunkPos, SectionPos};
 use ferraloom_worldgen::structure::{check::StructureCheck, pipeline::ChunkStructures};
@@ -54,8 +58,8 @@ pub(crate) struct ReadyGeneration {
     pub pos: ChunkPos,
     pub result: Result<GenerationOutput>,
 }
-/// Identity captured by a main-executor continuation. Request IDs identify
-/// submissions; the epoch also rejects a holder removed and recreated in place.
+/// Identity captured by a main-executor FULL continuation. The status future
+/// survives replacement tasks; epoch rejects a removed/recreated holder.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct GenerationIdentity {
     pub pos: ChunkPos,
@@ -66,12 +70,21 @@ impl GenerationIdentity {
     pub fn of(holder: &ferraloom_game::level::chunk_holder::ChunkHolder) -> Self {
         Self {
             pos: holder.position,
-            request: holder.request_id,
+            request: holder
+                .generation
+                .future_id(ChunkStatus::Full)
+                .expect("FULL continuation requires its status future")
+                .0,
             holder_epoch: holder.epoch,
         }
     }
     pub fn matches(&self, holder: &ferraloom_game::level::chunk_holder::ChunkHolder) -> bool {
-        *self == Self::of(holder)
+        self.pos == holder.position
+            && self.holder_epoch == holder.epoch
+            && holder
+                .generation
+                .future_id(ChunkStatus::Full)
+                .is_some_and(|future| future.0 == self.request)
     }
 }
 pub(crate) struct GenerationCompletion {
@@ -85,8 +98,28 @@ pub struct GenerationOutput {
     pub neighbors: Vec<(ChunkPos, SerializableChunkData)>,
     pub skips: Vec<(String, String)>,
     pub statuses: Vec<(ChunkPos, ChunkStatus)>,
+    pub(crate) proto_biomes: Vec<ProtoBiomeSnapshot>,
     pub(crate) full_structures: Vec<StructureSnapshot>,
     pub initial_mob_spawning_pending: bool,
+}
+/// Immutable owned biome result for live BIOMES acquisitions. Writable proto
+/// neighborhoods remain exclusively in the generation worker's owned cache.
+pub(crate) struct ProtoBiomeSnapshot {
+    pub pos: ChunkPos,
+    pub revision: GenerationRevision,
+    pub min_section: i32,
+    pub biomes: Vec<ferraloom_chunk::PalettedContainer<ferraloom_chunk::BiomeId>>,
+}
+impl ProtoBiomeSnapshot {
+    pub fn biome(&self, quart: [i32; 3]) -> ferraloom_chunk::BiomeId {
+        let min_quart = self.min_section * 4;
+        let y = quart[1].clamp(min_quart, min_quart + self.biomes.len() as i32 * 4 - 1);
+        self.biomes[((y - min_quart) / 4) as usize].get(
+            (quart[0] & 3) as u8,
+            (y & 3) as u8,
+            (quart[2] & 3) as u8,
+        )
+    }
 }
 /// Port of ChunkMap's generation cache. FULL entries are read-only imposter
 /// protos. No references into this cache escape an owned generation job.
@@ -97,6 +130,9 @@ pub struct GenerationState {
     light: LevelLightEngine,
     light_pool: Arc<JobPool>,
     snapshots: SectionSnapshots<'static>,
+    /// Propagation can change chunks outside the region that performed a write.
+    /// Keep those payloads reachable until an owned output carries their revision.
+    light_changed: BTreeSet<i64>,
     structure_check: StructureCheck,
     revision: GenerationRevision,
     placeholder: ferraloom_worldgen::region::RegionChunk,
@@ -117,6 +153,7 @@ impl GenerationState {
             context,
             holders: BTreeMap::new(),
             failed_loads: BTreeMap::new(),
+            light_changed: BTreeSet::new(),
             structure_check: StructureCheck::default(),
             revision: GenerationRevision::default(),
         }
@@ -149,14 +186,11 @@ impl GenerationState {
             generated.ocean_floor = *chunk
                 .heightmap(ferraloom_game::level::heightmap::Heightmap::OceanFloor)
                 .expect("attached full heightmap");
-            let mut updated =
-                ferraloom_worldgen::region::RegionChunk::new(generated, ChunkStatus::Full);
-            std::mem::swap(&mut updated.structures, &mut holder.chunk.region.structures);
-            updated.block_entities = holder.chunk.region.block_entities.clone();
-            holder.chunk.region = updated;
+            holder.chunk.region.refresh_full_snapshot(generated);
         }
     }
-    pub fn save_proto_chunks(&self, registry: &RegistryAdapter, io: &IoWorker) -> Result<()> {
+    pub fn save_proto_chunks(&mut self, registry: &RegistryAdapter, io: &IoWorker) -> Result<()> {
+        self.flush_light()?;
         for (&key, holder) in &self.holders {
             let proto = &holder.chunk;
             if proto.region.status > ChunkStatus::Empty && proto.region.status < ChunkStatus::Full {
@@ -175,6 +209,7 @@ impl GenerationState {
         registry: &RegistryAdapter,
         io: &IoWorker,
     ) -> Result<()> {
+        self.flush_light()?;
         let drop = self
             .holders
             .iter()
@@ -200,11 +235,25 @@ impl GenerationState {
         self.holders.remove(&pos.pack());
         self.failed_loads.remove(&pos.pack());
         self.snapshots.remove_chunk(pos);
+        self.light_changed.remove(&pos.pack());
         self.light.forget_chunk_sources(pos);
     }
     /// Runtime may request any saved status. A missing chunk is never fabricated
     /// at FULL, and every per-step result is retained even when a later step fails.
     pub fn generate(
+        &mut self,
+        request: u64,
+        pos: ChunkPos,
+        target: ChunkStatus,
+        registry: &RegistryAdapter,
+        io: &IoWorker,
+        cancelled: Option<&AtomicBool>,
+    ) -> Result<GenerationOutput> {
+        let result = self.generate_statuses(request, pos, target, registry, io, cancelled);
+        self.finish_light(result)
+    }
+
+    fn generate_statuses(
         &mut self,
         request: u64,
         pos: ChunkPos,
@@ -290,6 +339,7 @@ impl GenerationState {
                             self.apply_light(position, step.target)?
                         }
                         ChunkStatusTask::Full => {
+                            self.flush_light()?;
                             let proto = &mut self.holders.get_mut(&key).unwrap().chunk;
                             proto.disk = proto
                                 .capture(&self.context, registry)
@@ -341,9 +391,12 @@ impl GenerationState {
                                     std::mem::replace(&mut h.chunk.region, self.placeholder.clone())
                                 })
                                 .collect::<Vec<_>>();
-                            let result =
-                                self.context
-                                    .apply(&mut regions, [position.x, position.z], &step);
+                            let result = self.context.apply_with_light(
+                                &mut regions,
+                                [position.x, position.z],
+                                &step,
+                                &mut self.light,
+                            );
                             for ((neighbor, mut holder), region) in
                                 neighborhood.into_iter().zip(owned.drain(..)).zip(regions)
                             {
@@ -351,7 +404,10 @@ impl GenerationState {
                                 self.holders.insert(neighbor.pack(), holder);
                                 touched.insert(neighbor.pack());
                             }
-                            let stage_skips = result?;
+                            // Proto writes and partial effects are canonical before
+                            // the light executor reads its owned section snapshots.
+                            let stage_skips =
+                                self.finish_light(result.map_err(anyhow::Error::new))?;
                             skips.extend(stage_skips);
                             if matches!(
                                 step.task,
@@ -384,6 +440,8 @@ impl GenerationState {
                 touched.insert(key);
             }
         }
+        self.flush_light()?;
+        touched.extend(self.light_changed.iter().copied());
         let mut neighbors = Vec::new();
         let mut full_structures = Vec::new();
         for key in touched {
@@ -411,7 +469,11 @@ impl GenerationState {
                 neighbors.push((ChunkPos::unpack(key), disk));
             }
         }
-        let proto = &self.holders[&pos.pack()].chunk;
+        let proto = &self
+            .holders
+            .get(&pos.pack())
+            .context("generation cancelled before its center loaded")?
+            .chunk;
         let disk = proto
             .capture(&self.context, registry)
             .map_err(anyhow::Error::msg)?;
@@ -422,14 +484,20 @@ impl GenerationState {
             .filter_map(|(&key, holder)| {
                 let neighbor = ChunkPos::unpack(key);
                 if neighbor != pos
-                    && neighbor.x.abs_diff(pos.x).max(neighbor.z.abs_diff(pos.z)) <= 1
-                    && holder.completed >= ChunkStatus::InitializeLight
+                    && ((neighbor.x.abs_diff(pos.x).max(neighbor.z.abs_diff(pos.z)) <= 1
+                        && holder.completed >= ChunkStatus::InitializeLight)
+                        || (self.light_changed.contains(&key)
+                            && holder.chunk.region.status >= ChunkStatus::InitializeLight))
                 {
                     Some(GenerationLightNeighbor {
                         pos: neighbor,
                         revision: self.revision,
                         sections: holder.chunk.region.chunk.sections.clone(),
-                        disk: holder.chunk.disk.clone(),
+                        disk: {
+                            let mut disk = holder.chunk.disk.clone();
+                            disk.is_light_on = Some(holder.chunk.light_correct);
+                            disk
+                        },
                     })
                 } else {
                     None
@@ -445,49 +513,54 @@ impl GenerationState {
             disk,
             structures: proto.region.structures.clone(),
         };
-        Ok(GenerationOutput {
+        let output = GenerationOutput {
             terrain,
             neighbors,
             skips,
             full_structures,
             initial_mob_spawning_pending: proto.initial_mob_spawning_pending,
             statuses: self.completed_statuses(),
-        })
-    }
-    fn apply_light(&mut self, pos: ChunkPos, target: ChunkStatus) -> Result<()> {
-        // The light executor reads owned snapshots only; its status dependencies
-        // have completed before source propagation or disk-layer initialization.
-        for (&key, holder) in &self.holders {
-            if holder.chunk.region.status >= ChunkStatus::Terrain {
-                self.snapshots.insert_chunk(
-                    ChunkPos::unpack(key),
-                    holder
+            proto_biomes: self
+                .holders
+                .iter()
+                .filter(|(_, holder)| holder.completed >= ChunkStatus::Biomes)
+                .map(|(&key, holder)| ProtoBiomeSnapshot {
+                    pos: ChunkPos::unpack(key),
+                    revision: self.revision,
+                    min_section: self.context.dimension.min_y >> 4,
+                    biomes: holder
                         .chunk
                         .region
                         .chunk
                         .sections
                         .iter()
-                        .cloned()
-                        .map(|s| Some(Cow::Owned(s)))
+                        .map(|section| section.biomes().clone())
                         .collect(),
-                );
-            }
+                })
+                .collect(),
+        };
+        self.light_changed.clear();
+        Ok(output)
+    }
+    /// ChunkStatusTasks#initializeLight fills the canonical source buffer even
+    /// for loaded chunks. Merely reading a saved lit status never fills it.
+    fn apply_light(&mut self, pos: ChunkPos, target: ChunkStatus) -> Result<()> {
+        self.flush_light()?;
+        if target == ChunkStatus::InitializeLight {
+            self.holders
+                .get_mut(&pos.pack())
+                .context("light center missing")?
+                .chunk
+                .region
+                .initialize_light_sources();
         }
-        let holder = self.holders.get(&pos.pack()).unwrap();
+        let holder = self
+            .holders
+            .get(&pos.pack())
+            .context("light center missing")?;
         let lighted = holder.chunk.light_correct;
         let disk_sections = holder.chunk.disk.sections.clone().unwrap_or_default();
-        let mut engine = std::mem::replace(
-            &mut self.light,
-            LevelLightEngine::new(true, self.context.dimension.has_skylight),
-        );
-        let snapshots = std::mem::replace(
-            &mut self.snapshots,
-            SectionSnapshots::new(
-                self.context.dimension.min_y >> 4,
-                (self.context.dimension.min_y + self.context.dimension.height) >> 4,
-            ),
-        );
-        let work = self.light_pool.submit(move || -> Result<_> {
+        self.run_light_work(move |engine, snapshots| {
             let updates = if target == ChunkStatus::InitializeLight {
                 for section in &disk_sections {
                     if let Some(y) = section.y {
@@ -513,46 +586,121 @@ impl GenerationState {
                         }
                     }
                 }
-                engine.initialize_light(&snapshots, pos, lighted)
+                engine.initialize_light(snapshots, pos, lighted)
             } else {
-                engine.light_chunk(&snapshots, pos, lighted)
+                engine.light_chunk(snapshots, pos, lighted)
             };
-            Ok((engine, snapshots, updates))
-        });
-        let (engine, snapshots, updates) = work
-            .blocking_recv()
-            .context("generation light worker terminated")??;
-        self.light = engine;
-        self.snapshots = snapshots;
-        for update in updates.sections {
-            let Some(holder) = self.holders.get_mut(&update.section.chunk().pack()) else {
-                continue;
-            };
-            let sections = holder.chunk.disk.sections.get_or_insert_default();
-            let y = update.section.y as i8;
-            let index = if let Some(index) = sections.iter().position(|s| s.y == Some(y)) {
-                index
-            } else {
-                sections.push(storage::ChunkSection {
-                    y: Some(y),
-                    ..Default::default()
-                });
-                sections.len() - 1
-            };
-            let data = update
-                .data
-                .as_ref()
-                .map(|d| storage::ByteArray(d.to_bytes().iter().map(|&b| b as i8).collect()));
-            match update.layer {
-                LightLayer::Sky => sections[index].sky_light = data,
-                LightLayer::Block => sections[index].block_light = data,
-            }
-        }
+            Ok(updates)
+        })?;
         let proto = &mut self.holders.get_mut(&pos.pack()).unwrap().chunk;
         proto.region.status = proto.region.status.max(target);
         if target == ChunkStatus::Light {
             proto.light_correct = true;
         }
         Ok(())
+    }
+
+    /// Preserve the owned generation error after draining its partial writes.
+    /// A second executor failure is retained as context, never a rollback.
+    fn finish_light<T>(&mut self, result: Result<T>) -> Result<T> {
+        match (result, self.flush_light()) {
+            (Err(source), Err(light)) => Err(source.context(light)),
+            (Err(source), Ok(())) => Err(source),
+            (Ok(_), Err(light)) => Err(light),
+            (Ok(value), Ok(())) => Ok(value),
+        }
+    }
+
+    fn flush_light(&mut self) -> Result<()> {
+        if self.light.has_light_work() {
+            self.run_light_work(|engine, snapshots| Ok(engine.run_light_updates(snapshots)))?;
+        }
+        Ok(())
+    }
+
+    /// Transfer the same engine to its existing light pool. Snapshots contain
+    /// canonical source buffers; raw bulk writes must not derive replacements.
+    fn run_light_work(
+        &mut self,
+        work: impl FnOnce(&mut LevelLightEngine, &SectionSnapshots<'static>) -> Result<LightUpdates>
+        + Send
+        + 'static,
+    ) -> Result<()> {
+        for (&key, holder) in &self.holders {
+            if holder.chunk.region.status >= ChunkStatus::Terrain {
+                self.snapshots.insert_chunk_with_sky_light_sources(
+                    ChunkPos::unpack(key),
+                    holder
+                        .chunk
+                        .region
+                        .chunk
+                        .sections
+                        .iter()
+                        .cloned()
+                        .map(|section| Some(Cow::Owned(section)))
+                        .collect(),
+                    Some(holder.chunk.region.sky_light_sources().clone()),
+                );
+            }
+        }
+        let mut engine = std::mem::replace(
+            &mut self.light,
+            LevelLightEngine::new(true, self.context.dimension.has_skylight),
+        );
+        let snapshots = std::mem::replace(
+            &mut self.snapshots,
+            SectionSnapshots::new(
+                self.context.dimension.min_y >> 4,
+                (self.context.dimension.min_y + self.context.dimension.height) >> 4,
+            ),
+        );
+        let result = self.light_pool.submit(move || {
+            let updates = work(&mut engine, &snapshots);
+            // Return canonical ownership even when an operation fails after
+            // enqueueing part of its work. A Result must not drop the engine.
+            (engine, snapshots, updates)
+        });
+        let (engine, snapshots, updates) = result
+            .blocking_recv()
+            .context("generation light worker terminated")?;
+        self.light = engine;
+        self.snapshots = snapshots;
+        self.apply_light_updates(updates?);
+        Ok(())
+    }
+
+    fn apply_light_updates(&mut self, updates: LightUpdates) {
+        for (_, section) in updates.affected_sections {
+            let key = section.chunk().pack();
+            if self.holders.contains_key(&key) {
+                self.light_changed.insert(key);
+            }
+        }
+        for update in updates.sections {
+            let key = update.section.chunk().pack();
+            let Some(holder) = self.holders.get_mut(&key) else {
+                continue;
+            };
+            self.light_changed.insert(key);
+            let sections = holder.chunk.disk.sections.get_or_insert_default();
+            let y = update.section.y as i8;
+            let index =
+                if let Some(index) = sections.iter().position(|section| section.y == Some(y)) {
+                    index
+                } else {
+                    sections.push(storage::ChunkSection {
+                        y: Some(y),
+                        ..Default::default()
+                    });
+                    sections.len() - 1
+                };
+            let data = update.data.as_ref().map(|data| {
+                storage::ByteArray(data.to_bytes().iter().map(|&byte| byte as i8).collect())
+            });
+            match update.layer {
+                LightLayer::Sky => sections[index].sky_light = data,
+                LightLayer::Block => sections[index].block_light = data,
+            }
+        }
     }
 }

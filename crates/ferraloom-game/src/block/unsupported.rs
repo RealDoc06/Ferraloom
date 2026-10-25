@@ -19,6 +19,12 @@ pub enum UnportedOperation {
     EntityMethod(EntityType, crate::entity::EntityMethod),
     ItemUseOn(ferraloom_data::Item),
     ItemCraftedPostProcess(ferraloom_data::Item),
+    ItemInventoryTick(ferraloom_data::Item),
+    ItemHurtAndBreak {
+        item: ferraloom_data::Item,
+        amount: i32,
+        slot: ferraloom_protocol::component::EquipmentSlot,
+    },
     PortalUse(Block),
     AdvancementCriterion(crate::advancements::criteria::Trigger),
     WeatherStrike,
@@ -49,11 +55,14 @@ pub enum BlockMethod {
     FluidRandomTick,
     BubbleColumnUpdate,
     CanSurvive,
+    IsPathfindable,
     CanPlaceLiquid,
     PlaceLiquid,
     PickupBlock,
     CollisionShape,
     OutlineShape,
+    VisualShape,
+    InteractionShape,
     IsFaceSturdy,
     EntityInsideCollisionShape,
     UpdateFromNeighbourShapes,
@@ -96,8 +105,11 @@ impl BlockMethod {
             Self::Tick => Vanilla::Tick,
             Self::RandomTick => Vanilla::RandomTick,
             Self::CanSurvive => Vanilla::CanSurvive,
+            Self::IsPathfindable => Vanilla::IsPathfindable,
             Self::CollisionShape => Vanilla::GetCollisionShape,
             Self::OutlineShape => Vanilla::GetShape,
+            Self::VisualShape => Vanilla::GetVisualShape,
+            Self::InteractionShape => Vanilla::GetInteractionShape,
             Self::IsFaceSturdy => Vanilla::GetBlockSupportShape,
             Self::IsCollisionShapeFullBlock => Vanilla::IsCollisionShapeFullBlock,
             Self::EntityInsideCollisionShape => Vanilla::GetEntityInsideCollisionShape,
@@ -131,11 +143,14 @@ impl BlockMethod {
                 | Self::UseItemOn
                 | Self::PlayerWillDestroy
                 | Self::CanSurvive
+                | Self::IsPathfindable
                 | Self::CanPlaceLiquid
                 | Self::PlaceLiquid
                 | Self::PickupBlock
                 | Self::CollisionShape
                 | Self::OutlineShape
+                | Self::VisualShape
+                | Self::InteractionShape
                 | Self::IsFaceSturdy
                 | Self::EntityInsideCollisionShape
                 | Self::UpdateFromNeighbourShapes
@@ -176,11 +191,14 @@ impl BlockMethod {
             Self::FluidRandomTick => "fluid.randomTick",
             Self::BubbleColumnUpdate => "BubbleColumnBlock.updateColumn",
             Self::CanSurvive => "canSurvive",
+            Self::IsPathfindable => "isPathfindable",
             Self::CanPlaceLiquid => "canPlaceLiquid",
             Self::PlaceLiquid => "placeLiquid",
             Self::PickupBlock => "pickupBlock",
             Self::CollisionShape => "getCollisionShape",
             Self::OutlineShape => "getShape",
+            Self::VisualShape => "getVisualShape",
+            Self::InteractionShape => "getInteractionShape",
             Self::IsFaceSturdy => "isFaceSturdy",
             Self::EntityInsideCollisionShape => "getEntityInsideCollisionShape",
             Self::UpdateFromNeighbourShapes => "Block.updateFromNeighbourShapes",
@@ -266,6 +284,27 @@ impl UnportedCalls {
                         item.name(),
                         stats.skipped_calls
                     )
+                }
+                UnportedCall::Operation(UnportedOperation::ItemInventoryTick(item)) => {
+                    let class = crate::entity::player::item_tick::inventory_tick_override(*item)
+                        .expect("only native inventoryTick overrides are unported");
+                    eprintln!(
+                        "Unported item effect skipped: {} ({}, skipped calls: {})",
+                        class.method(),
+                        item.name(),
+                        stats.skipped_calls
+                    );
+                }
+                UnportedCall::Operation(UnportedOperation::ItemHurtAndBreak {
+                    item,
+                    amount,
+                    slot,
+                }) => {
+                    eprintln!(
+                        "Unported item effect skipped: ItemStack#hurtAndBreak ({}, amount: {amount}, slot: {slot:?}, skipped calls: {})",
+                        item.name(),
+                        stats.skipped_calls
+                    );
                 }
                 UnportedCall::Operation(UnportedOperation::PortalUse(block)) => eprintln!(
                     "Unported portal use effect skipped: {} (skipped calls: {})",
@@ -371,6 +410,12 @@ impl Level {
                 UnportedOperation::ItemUseOn(item) => LevelError::UnsupportedItemUseOn(item),
                 UnportedOperation::ItemCraftedPostProcess(item) => {
                     LevelError::UnsupportedItemCraftedPostProcess(item)
+                }
+                UnportedOperation::ItemInventoryTick(item) => {
+                    LevelError::UnsupportedItemInventoryTick(item)
+                }
+                UnportedOperation::ItemHurtAndBreak { item, amount, slot } => {
+                    LevelError::UnsupportedItemHurtAndBreak { item, amount, slot }
                 }
                 UnportedOperation::PortalUse(block) => LevelError::UnsupportedPortalUse(block),
                 UnportedOperation::AdvancementCriterion(trigger) => {

@@ -21,6 +21,7 @@ pub mod chunk;
 pub mod chunk_holder;
 pub mod chunk_map;
 pub mod chunk_task_dispatcher;
+pub mod clip;
 mod container_runtime;
 mod context;
 pub use context::LevelContext;
@@ -31,12 +32,14 @@ pub mod entity;
 pub mod environment;
 pub mod events;
 mod features;
+pub mod game_event;
 pub mod generation;
 pub mod heightmap;
 pub mod interaction;
 mod lighting;
 pub mod loot_facts;
 mod mutation;
+pub mod path_navigation_region;
 mod post_processing;
 pub mod publication;
 mod random;
@@ -56,8 +59,16 @@ pub mod weather;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum LevelError {
+    /// Native ArrayList iterator ConcurrentModificationException during listener visitation.
+    ConcurrentGameEventListenerModification,
     UnsupportedItemUseOn(ferraloom_data::Item),
     UnsupportedItemCraftedPostProcess(ferraloom_data::Item),
+    UnsupportedItemInventoryTick(ferraloom_data::Item),
+    UnsupportedItemHurtAndBreak {
+        item: ferraloom_data::Item,
+        amount: i32,
+        slot: ferraloom_protocol::component::EquipmentSlot,
+    },
     UnsupportedPortalUse(Block),
     UnsupportedEntityMethod(EntityType, crate::entity::EntityMethod),
     UnsupportedAdvancementCriterion(crate::advancements::criteria::Trigger),
@@ -112,6 +123,8 @@ pub enum LevelError {
     WrongChunkHeight(ChunkPos),
     InvalidChunkStructures(ChunkPos),
     InvalidStructureHolderSet,
+    PathNavigation(path_navigation_region::PathNavigationError),
+    UnsupportedPathNavigationQuery(path_navigation_region::PathNavigationQuery),
 }
 
 impl std::fmt::Display for LevelError {
@@ -143,10 +156,13 @@ pub struct LevelRules {
     pub tnt_explodes: bool,
     pub entity_drops: bool,
     pub max_entity_cramming: i32,
+    pub players_nether_portal_default_delay: i32,
     pub drowning_damage: bool,
     pub fall_damage: bool,
     pub fire_damage: bool,
     pub freeze_damage: bool,
+    pub send_command_feedback: bool,
+    pub natural_health_regeneration: bool,
     pub debug: bool,
     pub can_have_weather: bool,
     pub random_tick_speed: u32,
@@ -174,10 +190,19 @@ impl Default for LevelRules {
             tnt_explodes: true,
             entity_drops: true,
             max_entity_cramming: 24,
+            players_nether_portal_default_delay: match GameRule::PlayersNetherPortalDefaultDelay
+                .definition()
+                .kind
+            {
+                RuleType::Integer { default, .. } => default,
+                _ => unreachable!("portal delay is an integer game rule"),
+            },
             drowning_damage: damage_default(GameRule::DrowningDamage),
             fall_damage: damage_default(GameRule::FallDamage),
             fire_damage: damage_default(GameRule::FireDamage),
             freeze_damage: damage_default(GameRule::FreezeDamage),
+            send_command_feedback: damage_default(GameRule::SendCommandFeedback),
+            natural_health_regeneration: damage_default(GameRule::NaturalHealthRegeneration),
             debug: false,
             can_have_weather: true,
             random_tick_speed: 3,
@@ -193,8 +218,29 @@ impl Default for LevelRules {
     }
 }
 
+/// Identity of the owner of canonical chunk/entity stores. Reads compare only
+/// the copied integer; the monotonic counter runs once during construction.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct RegionId(u64);
+impl RegionId {
+    fn new() -> Self {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static NEXT: AtomicU64 = AtomicU64::new(1);
+        Self(
+            NEXT.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |next| {
+                next.checked_add(1)
+            })
+            .expect("region identities exhausted"),
+        )
+    }
+}
+
 /// Owned portion of ServerLevel. The scheduler moves this value between workers.
 pub struct Region {
+    id: RegionId,
+    /// Port of ServerLevel#pathTypesByPosCache. One region per level currently
+    /// matches vanilla exactly; a future region split must preserve per-level semantics.
+    path_types_by_pos_cache: crate::entity::ai::pathfinder::PathTypeCache,
     chunks: store::InsertOnlyMap<ChunkPos, chunk::LevelChunk>,
     next_chunk_generation: Cell<u64>,
     entities: entity::EntityStorage,
@@ -202,6 +248,7 @@ pub struct Region {
     block_ticks: LevelTicks,
     fluid_ticks: LevelTicks<ferraloom_data::registries::fluid::Id>,
     block_entity_state: block_entity::BlockEntityRuntime,
+    game_event_listeners: game_event::GameEventListenerRegistries,
     container_runtime: crate::block::containers::runtime::ContainerRuntime,
     next_sub_tick_order: i64,
     game_time: i64,
@@ -237,6 +284,7 @@ pub struct Region {
 impl Region {
     pub fn new(behaviors: &'static Behaviors) -> Self {
         Self {
+            id: RegionId::new(),
             chunks: store::InsertOnlyMap::default(),
             next_chunk_generation: Cell::new(0),
             entities: entity::EntityStorage::default(),
@@ -244,6 +292,7 @@ impl Region {
             block_ticks: LevelTicks::default(),
             fluid_ticks: LevelTicks::default(),
             block_entity_state: block_entity::BlockEntityRuntime::default(),
+            game_event_listeners: Default::default(),
             container_runtime: crate::block::containers::runtime::ContainerRuntime::default(),
             next_sub_tick_order: 0,
             game_time: 0,
@@ -265,6 +314,7 @@ impl Region {
             block_events: events::BlockEvents::default(),
             effects: Vec::new(),
             block_changes: broadcast::BlockChanges::default(),
+            path_types_by_pos_cache: Default::default(),
             tags: None,
             fluid_tags: None,
             entity_type_tags: None,
@@ -288,9 +338,18 @@ pub struct Level {
     difficulty: ferraloom_protocol::play::Difficulty,
     acquisition: acquisition::ChunkAcquisition,
     acquire_driver: Option<Box<dyn acquisition::AcquireDriver>>,
+    fluid_shapes: clip::FluidShapeCache,
 }
 
 impl Level {
+    pub(crate) fn path_type_cache(&self) -> &crate::entity::ai::pathfinder::PathTypeCache {
+        &self.region().path_types_by_pos_cache
+    }
+    pub(crate) fn path_type_cache_mut(
+        &mut self,
+    ) -> &mut crate::entity::ai::pathfinder::PathTypeCache {
+        &mut self.region_mut().path_types_by_pos_cache
+    }
     pub fn new(region: Region, context: Arc<LevelContext>) -> Self {
         Self {
             command_storage: None,
@@ -300,6 +359,7 @@ impl Level {
             context,
             acquisition: Default::default(),
             acquire_driver: None,
+            fluid_shapes: Default::default(),
         }
     }
     /// Required server-owned storage view, absent until startup installs it.
@@ -440,7 +500,7 @@ impl Level {
         chunk.loaded.set(true);
         region
             .block_entity_state
-            .prepare_published_chunk(&mut chunk);
+            .prepare_published_chunk(&mut chunk, region.game_time);
         region.block_entity_state.register_published_chunk(&chunk);
         region
             .block_ticks

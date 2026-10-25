@@ -3,7 +3,7 @@ use super::super::{
     BlockBehavior, BlockCollisionContext, LevelAccessRef, LevelReaderRef, UpdateFlags,
 };
 use crate::{
-    entity::{EntityData, EntityRef, collision_context::EntityCollisionView},
+    entity::EntityRef,
     level::{Level, LevelError, effects::LevelEffect},
 };
 use ferraloom_data::{Block, BlockState, EntityType, Item, tags::EntityTypeTags};
@@ -15,14 +15,20 @@ pub struct PowderSnow;
 pub static POWDER_SNOW: PowderSnow = PowderSnow;
 /// Port of PowderSnowBlock#canEntityWalkOnPowderSnow, including tagged mobs.
 pub fn can_walk_on(entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
-    let base = level.entity::<EntityData>(entity)?;
-    if level
+    can_walk_on_reader(entity, &LevelReaderRef::Server(level))
+}
+fn can_walk_on_reader(
+    entity: EntityRef,
+    reader: &LevelReaderRef<'_, '_>,
+) -> Result<bool, LevelError> {
+    let base = reader.entity_state(entity)?.as_entity();
+    if reader
         .entity_type_tags()?
         .contains_key(EntityTypeTags::POWDER_SNOW_WALKABLE_MOBS, base.entity_type)
     {
         return Ok(true);
     }
-    Ok(level
+    Ok(reader
         .entity_state(entity)?
         .as_living()
         .is_some_and(|living| {
@@ -43,17 +49,14 @@ impl BlockBehavior for PowderSnow {
     ) -> Result<VoxelShape, LevelError> {
         if !context.is_placement()
             && let BlockCollisionContext::Entity(entity_context) = context
+            && let Some(entity) = entity_context.entity.entity
         {
-            let LevelReaderRef::Server(level) = reader else {
-                return Err(LevelError::UnsupportedWorldgenEnvironment);
-            };
-            let entity = entity_context.entity.entity;
-            let base = level.entity::<EntityData>(entity)?;
+            let base = reader.entity_state(entity)?.as_entity();
             if base.fall_distance > 2.5 {
                 return Ok(shapes::create(0.0, 0.0, 0.0, 1.0, 0.8999999761581421, 1.0));
             }
             if base.entity_type == EntityType::FALLING_BLOCK
-                || (can_walk_on(entity, level)?
+                || (can_walk_on_reader(entity, reader)?
                     && context.is_above(&shapes::block(), pos, false)
                     && !context.is_descending())
             {
@@ -69,11 +72,7 @@ impl BlockBehavior for PowderSnow {
         entity: EntityRef,
         reader: &LevelReaderRef<'_, '_>,
     ) -> Result<VoxelShape, LevelError> {
-        let LevelReaderRef::Server(level) = reader else {
-            return Err(LevelError::UnsupportedWorldgenEnvironment);
-        };
-        let context =
-            BlockCollisionContext::Entity(EntityCollisionView::capture(entity, level, false)?);
+        let context = reader.collision_context(Some(entity), false)?;
         let shape = self.collision_shape(state, pos, &context, reader)?;
         Ok(if shape.is_empty() {
             shapes::block()
