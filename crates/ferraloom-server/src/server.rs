@@ -1363,7 +1363,9 @@ impl MinecraftServer {
                 LevelEffect::PlayerPacket { recipients, packet } => {
                     for entity in recipients {
                         for &connection in &self.players {
-                            let c = self.connections.get_mut(&connection).unwrap();
+                            let Some(c) = self.connections.get_mut(&connection) else {
+                                continue;
+                            };
                             if matches!(c.phase, Phase::Play(id) if id == entity) && !c.close {
                                 c.push(*packet.clone());
                                 break;
