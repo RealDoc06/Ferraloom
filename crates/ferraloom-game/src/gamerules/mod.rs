@@ -367,6 +367,7 @@ impl GameRules {
         rules.mob_griefing = self.boolean(GameRule::MobGriefing);
         rules.max_snow_accumulation_height = self.integer(GameRule::MaxSnowAccumulationHeight);
         rules.show_advancement_messages = self.boolean(GameRule::ShowAdvancementMessages);
+        rules.spectators_generate_chunks = self.boolean(GameRule::SpectatorsGenerateChunks);
         rules.natural_health_regeneration = self.boolean(GameRule::NaturalHealthRegeneration);
         rules.tnt_explodes = self.boolean(GameRule::TntExplodes);
         rules.entity_drops = self.boolean(GameRule::EntityDrops);
