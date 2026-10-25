@@ -1,0 +1,1762 @@
+{
+  "primitives": [
+    {
+      "format": "nbt",
+      "type": "bool",
+      "source": "0b",
+      "ok": true,
+      "value": "false"
+    },
+    {
+      "format": "nbt",
+      "type": "bool",
+      "source": "1b",
+      "ok": true,
+      "value": "true"
+    },
+    {
+      "format": "nbt",
+      "type": "bool",
+      "source": "-1b",
+      "ok": true,
+      "value": "true"
+    },
+    {
+      "format": "nbt",
+      "type": "bool",
+      "source": "256s",
+      "ok": true,
+      "value": "true"
+    },
+    {
+      "format": "nbt",
+      "type": "bool",
+      "source": "256",
+      "ok": true,
+      "value": "true"
+    },
+    {
+      "format": "nbt",
+      "type": "bool",
+      "source": "9007199254740993L",
+      "ok": true,
+      "value": "true"
+    },
+    {
+      "format": "nbt",
+      "type": "bool",
+      "source": "0.5f",
+      "ok": true,
+      "value": "true"
+    },
+    {
+      "format": "nbt",
+      "type": "bool",
+      "source": "1.25d",
+      "ok": true,
+      "value": "true"
+    },
+    {
+      "format": "nbt",
+      "type": "bool",
+      "source": "\"17\"",
+      "ok": false,
+      "error": "Not a number"
+    },
+    {
+      "format": "nbt",
+      "type": "bool",
+      "source": "\"0.5\"",
+      "ok": false,
+      "error": "Not a number"
+    },
+    {
+      "format": "nbt",
+      "type": "bool",
+      "source": "\"true\"",
+      "ok": false,
+      "error": "Not a number"
+    },
+    {
+      "format": "nbt",
+      "type": "bool",
+      "source": "\"stone\"",
+      "ok": false,
+      "error": "Not a number"
+    },
+    {
+      "format": "nbt",
+      "type": "bool",
+      "source": "{}",
+      "ok": false,
+      "error": "Not a number"
+    },
+    {
+      "format": "nbt",
+      "type": "bool",
+      "source": "[1,2]",
+      "ok": false,
+      "error": "Not a number"
+    },
+    {
+      "format": "nbt",
+      "type": "bool",
+      "source": "true",
+      "ok": true,
+      "value": "true"
+    },
+    {
+      "format": "nbt",
+      "type": "bool",
+      "source": "false",
+      "ok": true,
+      "value": "false"
+    },
+    {
+      "format": "json",
+      "type": "bool",
+      "source": "null",
+      "ok": false,
+      "error": "Not a boolean: null"
+    },
+    {
+      "format": "json",
+      "type": "bool",
+      "source": "true",
+      "ok": true,
+      "value": "true"
+    },
+    {
+      "format": "json",
+      "type": "bool",
+      "source": "false",
+      "ok": true,
+      "value": "false"
+    },
+    {
+      "format": "json",
+      "type": "bool",
+      "source": "0",
+      "ok": false,
+      "error": "Not a boolean: 0"
+    },
+    {
+      "format": "json",
+      "type": "bool",
+      "source": "1",
+      "ok": false,
+      "error": "Not a boolean: 1"
+    },
+    {
+      "format": "json",
+      "type": "bool",
+      "source": "-1",
+      "ok": false,
+      "error": "Not a boolean: -1"
+    },
+    {
+      "format": "json",
+      "type": "bool",
+      "source": "256",
+      "ok": false,
+      "error": "Not a boolean: 256"
+    },
+    {
+      "format": "json",
+      "type": "bool",
+      "source": "0.5",
+      "ok": false,
+      "error": "Not a boolean: 0.5"
+    },
+    {
+      "format": "json",
+      "type": "bool",
+      "source": "1.25",
+      "ok": false,
+      "error": "Not a boolean: 1.25"
+    },
+    {
+      "format": "json",
+      "type": "bool",
+      "source": "9007199254740993",
+      "ok": false,
+      "error": "Not a boolean: 9007199254740993"
+    },
+    {
+      "format": "json",
+      "type": "bool",
+      "source": "\"17\"",
+      "ok": false,
+      "error": "Not a boolean: \"17\""
+    },
+    {
+      "format": "json",
+      "type": "bool",
+      "source": "\"0.5\"",
+      "ok": false,
+      "error": "Not a boolean: \"0.5\""
+    },
+    {
+      "format": "json",
+      "type": "bool",
+      "source": "\"true\"",
+      "ok": false,
+      "error": "Not a boolean: \"true\""
+    },
+    {
+      "format": "json",
+      "type": "bool",
+      "source": "\"stone\"",
+      "ok": false,
+      "error": "Not a boolean: \"stone\""
+    },
+    {
+      "format": "json",
+      "type": "bool",
+      "source": "{}",
+      "ok": false,
+      "error": "Not a boolean: {}"
+    },
+    {
+      "format": "json",
+      "type": "bool",
+      "source": "[1,2]",
+      "ok": false,
+      "error": "Not a boolean: [1,2]"
+    },
+    {
+      "format": "nbt",
+      "type": "int",
+      "source": "0b",
+      "ok": true,
+      "value": "0"
+    },
+    {
+      "format": "nbt",
+      "type": "int",
+      "source": "1b",
+      "ok": true,
+      "value": "1"
+    },
+    {
+      "format": "nbt",
+      "type": "int",
+      "source": "-1b",
+      "ok": true,
+      "value": "-1"
+    },
+    {
+      "format": "nbt",
+      "type": "int",
+      "source": "256s",
+      "ok": true,
+      "value": "256"
+    },
+    {
+      "format": "nbt",
+      "type": "int",
+      "source": "256",
+      "ok": true,
+      "value": "256"
+    },
+    {
+      "format": "nbt",
+      "type": "int",
+      "source": "9007199254740993L",
+      "ok": true,
+      "value": "1"
+    },
+    {
+      "format": "nbt",
+      "type": "int",
+      "source": "0.5f",
+      "ok": true,
+      "value": "0"
+    },
+    {
+      "format": "nbt",
+      "type": "int",
+      "source": "1.25d",
+      "ok": true,
+      "value": "1"
+    },
+    {
+      "format": "nbt",
+      "type": "int",
+      "source": "\"17\"",
+      "ok": false,
+      "error": "Not a number"
+    },
+    {
+      "format": "nbt",
+      "type": "int",
+      "source": "\"0.5\"",
+      "ok": false,
+      "error": "Not a number"
+    },
+    {
+      "format": "nbt",
+      "type": "int",
+      "source": "\"true\"",
+      "ok": false,
+      "error": "Not a number"
+    },
+    {
+      "format": "nbt",
+      "type": "int",
+      "source": "\"stone\"",
+      "ok": false,
+      "error": "Not a number"
+    },
+    {
+      "format": "nbt",
+      "type": "int",
+      "source": "{}",
+      "ok": false,
+      "error": "Not a number"
+    },
+    {
+      "format": "nbt",
+      "type": "int",
+      "source": "[1,2]",
+      "ok": false,
+      "error": "Not a number"
+    },
+    {
+      "format": "nbt",
+      "type": "int",
+      "source": "true",
+      "ok": true,
+      "value": "1"
+    },
+    {
+      "format": "nbt",
+      "type": "int",
+      "source": "false",
+      "ok": true,
+      "value": "0"
+    },
+    {
+      "format": "json",
+      "type": "int",
+      "source": "null",
+      "ok": false,
+      "error": "Not a number: null"
+    },
+    {
+      "format": "json",
+      "type": "int",
+      "source": "true",
+      "ok": false,
+      "error": "Not a number: true"
+    },
+    {
+      "format": "json",
+      "type": "int",
+      "source": "false",
+      "ok": false,
+      "error": "Not a number: false"
+    },
+    {
+      "format": "json",
+      "type": "int",
+      "source": "0",
+      "ok": true,
+      "value": "0"
+    },
+    {
+      "format": "json",
+      "type": "int",
+      "source": "1",
+      "ok": true,
+      "value": "1"
+    },
+    {
+      "format": "json",
+      "type": "int",
+      "source": "-1",
+      "ok": true,
+      "value": "-1"
+    },
+    {
+      "format": "json",
+      "type": "int",
+      "source": "256",
+      "ok": true,
+      "value": "256"
+    },
+    {
+      "format": "json",
+      "type": "int",
+      "source": "0.5",
+      "ok": true,
+      "value": "0"
+    },
+    {
+      "format": "json",
+      "type": "int",
+      "source": "1.25",
+      "ok": true,
+      "value": "1"
+    },
+    {
+      "format": "json",
+      "type": "int",
+      "source": "9007199254740993",
+      "ok": true,
+      "value": "1"
+    },
+    {
+      "format": "json",
+      "type": "int",
+      "source": "\"17\"",
+      "ok": false,
+      "error": "Not a number: \"17\""
+    },
+    {
+      "format": "json",
+      "type": "int",
+      "source": "\"0.5\"",
+      "ok": false,
+      "error": "Not a number: \"0.5\""
+    },
+    {
+      "format": "json",
+      "type": "int",
+      "source": "\"true\"",
+      "ok": false,
+      "error": "Not a number: \"true\""
+    },
+    {
+      "format": "json",
+      "type": "int",
+      "source": "\"stone\"",
+      "ok": false,
+      "error": "Not a number: \"stone\""
+    },
+    {
+      "format": "json",
+      "type": "int",
+      "source": "{}",
+      "ok": false,
+      "error": "Not a number: {}"
+    },
+    {
+      "format": "json",
+      "type": "int",
+      "source": "[1,2]",
+      "ok": false,
+      "error": "Not a number: [1,2]"
+    },
+    {
+      "format": "nbt",
+      "type": "long",
+      "source": "0b",
+      "ok": true,
+      "value": "0"
+    },
+    {
+      "format": "nbt",
+      "type": "long",
+      "source": "1b",
+      "ok": true,
+      "value": "1"
+    },
+    {
+      "format": "nbt",
+      "type": "long",
+      "source": "-1b",
+      "ok": true,
+      "value": "-1"
+    },
+    {
+      "format": "nbt",
+      "type": "long",
+      "source": "256s",
+      "ok": true,
+      "value": "256"
+    },
+    {
+      "format": "nbt",
+      "type": "long",
+      "source": "256",
+      "ok": true,
+      "value": "256"
+    },
+    {
+      "format": "nbt",
+      "type": "long",
+      "source": "9007199254740993L",
+      "ok": true,
+      "value": "9007199254740993"
+    },
+    {
+      "format": "nbt",
+      "type": "long",
+      "source": "0.5f",
+      "ok": true,
+      "value": "0"
+    },
+    {
+      "format": "nbt",
+      "type": "long",
+      "source": "1.25d",
+      "ok": true,
+      "value": "1"
+    },
+    {
+      "format": "nbt",
+      "type": "long",
+      "source": "\"17\"",
+      "ok": false,
+      "error": "Not a number"
+    },
+    {
+      "format": "nbt",
+      "type": "long",
+      "source": "\"0.5\"",
+      "ok": false,
+      "error": "Not a number"
+    },
+    {
+      "format": "nbt",
+      "type": "long",
+      "source": "\"true\"",
+      "ok": false,
+      "error": "Not a number"
+    },
+    {
+      "format": "nbt",
+      "type": "long",
+      "source": "\"stone\"",
+      "ok": false,
+      "error": "Not a number"
+    },
+    {
+      "format": "nbt",
+      "type": "long",
+      "source": "{}",
+      "ok": false,
+      "error": "Not a number"
+    },
+    {
+      "format": "nbt",
+      "type": "long",
+      "source": "[1,2]",
+      "ok": false,
+      "error": "Not a number"
+    },
+    {
+      "format": "nbt",
+      "type": "long",
+      "source": "true",
+      "ok": true,
+      "value": "1"
+    },
+    {
+      "format": "nbt",
+      "type": "long",
+      "source": "false",
+      "ok": true,
+      "value": "0"
+    },
+    {
+      "format": "json",
+      "type": "long",
+      "source": "null",
+      "ok": false,
+      "error": "Not a number: null"
+    },
+    {
+      "format": "json",
+      "type": "long",
+      "source": "true",
+      "ok": false,
+      "error": "Not a number: true"
+    },
+    {
+      "format": "json",
+      "type": "long",
+      "source": "false",
+      "ok": false,
+      "error": "Not a number: false"
+    },
+    {
+      "format": "json",
+      "type": "long",
+      "source": "0",
+      "ok": true,
+      "value": "0"
+    },
+    {
+      "format": "json",
+      "type": "long",
+      "source": "1",
+      "ok": true,
+      "value": "1"
+    },
+    {
+      "format": "json",
+      "type": "long",
+      "source": "-1",
+      "ok": true,
+      "value": "-1"
+    },
+    {
+      "format": "json",
+      "type": "long",
+      "source": "256",
+      "ok": true,
+      "value": "256"
+    },
+    {
+      "format": "json",
+      "type": "long",
+      "source": "0.5",
+      "ok": true,
+      "value": "0"
+    },
+    {
+      "format": "json",
+      "type": "long",
+      "source": "1.25",
+      "ok": true,
+      "value": "1"
+    },
+    {
+      "format": "json",
+      "type": "long",
+      "source": "9007199254740993",
+      "ok": true,
+      "value": "9007199254740993"
+    },
+    {
+      "format": "json",
+      "type": "long",
+      "source": "\"17\"",
+      "ok": false,
+      "error": "Not a number: \"17\""
+    },
+    {
+      "format": "json",
+      "type": "long",
+      "source": "\"0.5\"",
+      "ok": false,
+      "error": "Not a number: \"0.5\""
+    },
+    {
+      "format": "json",
+      "type": "long",
+      "source": "\"true\"",
+      "ok": false,
+      "error": "Not a number: \"true\""
+    },
+    {
+      "format": "json",
+      "type": "long",
+      "source": "\"stone\"",
+      "ok": false,
+      "error": "Not a number: \"stone\""
+    },
+    {
+      "format": "json",
+      "type": "long",
+      "source": "{}",
+      "ok": false,
+      "error": "Not a number: {}"
+    },
+    {
+      "format": "json",
+      "type": "long",
+      "source": "[1,2]",
+      "ok": false,
+      "error": "Not a number: [1,2]"
+    },
+    {
+      "format": "nbt",
+      "type": "float",
+      "source": "0b",
+      "ok": true,
+      "value": "00000000"
+    },
+    {
+      "format": "nbt",
+      "type": "float",
+      "source": "1b",
+      "ok": true,
+      "value": "3f800000"
+    },
+    {
+      "format": "nbt",
+      "type": "float",
+      "source": "-1b",
+      "ok": true,
+      "value": "bf800000"
+    },
+    {
+      "format": "nbt",
+      "type": "float",
+      "source": "256s",
+      "ok": true,
+      "value": "43800000"
+    },
+    {
+      "format": "nbt",
+      "type": "float",
+      "source": "256",
+      "ok": true,
+      "value": "43800000"
+    },
+    {
+      "format": "nbt",
+      "type": "float",
+      "source": "9007199254740993L",
+      "ok": true,
+      "value": "5a000000"
+    },
+    {
+      "format": "nbt",
+      "type": "float",
+      "source": "0.5f",
+      "ok": true,
+      "value": "3f000000"
+    },
+    {
+      "format": "nbt",
+      "type": "float",
+      "source": "1.25d",
+      "ok": true,
+      "value": "3fa00000"
+    },
+    {
+      "format": "nbt",
+      "type": "float",
+      "source": "\"17\"",
+      "ok": false,
+      "error": "Not a number"
+    },
+    {
+      "format": "nbt",
+      "type": "float",
+      "source": "\"0.5\"",
+      "ok": false,
+      "error": "Not a number"
+    },
+    {
+      "format": "nbt",
+      "type": "float",
+      "source": "\"true\"",
+      "ok": false,
+      "error": "Not a number"
+    },
+    {
+      "format": "nbt",
+      "type": "float",
+      "source": "\"stone\"",
+      "ok": false,
+      "error": "Not a number"
+    },
+    {
+      "format": "nbt",
+      "type": "float",
+      "source": "{}",
+      "ok": false,
+      "error": "Not a number"
+    },
+    {
+      "format": "nbt",
+      "type": "float",
+      "source": "[1,2]",
+      "ok": false,
+      "error": "Not a number"
+    },
+    {
+      "format": "nbt",
+      "type": "float",
+      "source": "true",
+      "ok": true,
+      "value": "3f800000"
+    },
+    {
+      "format": "nbt",
+      "type": "float",
+      "source": "false",
+      "ok": true,
+      "value": "00000000"
+    },
+    {
+      "format": "json",
+      "type": "float",
+      "source": "null",
+      "ok": false,
+      "error": "Not a number: null"
+    },
+    {
+      "format": "json",
+      "type": "float",
+      "source": "true",
+      "ok": false,
+      "error": "Not a number: true"
+    },
+    {
+      "format": "json",
+      "type": "float",
+      "source": "false",
+      "ok": false,
+      "error": "Not a number: false"
+    },
+    {
+      "format": "json",
+      "type": "float",
+      "source": "0",
+      "ok": true,
+      "value": "00000000"
+    },
+    {
+      "format": "json",
+      "type": "float",
+      "source": "1",
+      "ok": true,
+      "value": "3f800000"
+    },
+    {
+      "format": "json",
+      "type": "float",
+      "source": "-1",
+      "ok": true,
+      "value": "bf800000"
+    },
+    {
+      "format": "json",
+      "type": "float",
+      "source": "256",
+      "ok": true,
+      "value": "43800000"
+    },
+    {
+      "format": "json",
+      "type": "float",
+      "source": "0.5",
+      "ok": true,
+      "value": "3f000000"
+    },
+    {
+      "format": "json",
+      "type": "float",
+      "source": "1.25",
+      "ok": true,
+      "value": "3fa00000"
+    },
+    {
+      "format": "json",
+      "type": "float",
+      "source": "9007199254740993",
+      "ok": true,
+      "value": "5a000000"
+    },
+    {
+      "format": "json",
+      "type": "float",
+      "source": "\"17\"",
+      "ok": false,
+      "error": "Not a number: \"17\""
+    },
+    {
+      "format": "json",
+      "type": "float",
+      "source": "\"0.5\"",
+      "ok": false,
+      "error": "Not a number: \"0.5\""
+    },
+    {
+      "format": "json",
+      "type": "float",
+      "source": "\"true\"",
+      "ok": false,
+      "error": "Not a number: \"true\""
+    },
+    {
+      "format": "json",
+      "type": "float",
+      "source": "\"stone\"",
+      "ok": false,
+      "error": "Not a number: \"stone\""
+    },
+    {
+      "format": "json",
+      "type": "float",
+      "source": "{}",
+      "ok": false,
+      "error": "Not a number: {}"
+    },
+    {
+      "format": "json",
+      "type": "float",
+      "source": "[1,2]",
+      "ok": false,
+      "error": "Not a number: [1,2]"
+    },
+    {
+      "format": "nbt",
+      "type": "double",
+      "source": "0b",
+      "ok": true,
+      "value": "0000000000000000"
+    },
+    {
+      "format": "nbt",
+      "type": "double",
+      "source": "1b",
+      "ok": true,
+      "value": "3ff0000000000000"
+    },
+    {
+      "format": "nbt",
+      "type": "double",
+      "source": "-1b",
+      "ok": true,
+      "value": "bff0000000000000"
+    },
+    {
+      "format": "nbt",
+      "type": "double",
+      "source": "256s",
+      "ok": true,
+      "value": "4070000000000000"
+    },
+    {
+      "format": "nbt",
+      "type": "double",
+      "source": "256",
+      "ok": true,
+      "value": "4070000000000000"
+    },
+    {
+      "format": "nbt",
+      "type": "double",
+      "source": "9007199254740993L",
+      "ok": true,
+      "value": "4340000000000000"
+    },
+    {
+      "format": "nbt",
+      "type": "double",
+      "source": "0.5f",
+      "ok": true,
+      "value": "3fe0000000000000"
+    },
+    {
+      "format": "nbt",
+      "type": "double",
+      "source": "1.25d",
+      "ok": true,
+      "value": "3ff4000000000000"
+    },
+    {
+      "format": "nbt",
+      "type": "double",
+      "source": "\"17\"",
+      "ok": false,
+      "error": "Not a number"
+    },
+    {
+      "format": "nbt",
+      "type": "double",
+      "source": "\"0.5\"",
+      "ok": false,
+      "error": "Not a number"
+    },
+    {
+      "format": "nbt",
+      "type": "double",
+      "source": "\"true\"",
+      "ok": false,
+      "error": "Not a number"
+    },
+    {
+      "format": "nbt",
+      "type": "double",
+      "source": "\"stone\"",
+      "ok": false,
+      "error": "Not a number"
+    },
+    {
+      "format": "nbt",
+      "type": "double",
+      "source": "{}",
+      "ok": false,
+      "error": "Not a number"
+    },
+    {
+      "format": "nbt",
+      "type": "double",
+      "source": "[1,2]",
+      "ok": false,
+      "error": "Not a number"
+    },
+    {
+      "format": "nbt",
+      "type": "double",
+      "source": "true",
+      "ok": true,
+      "value": "3ff0000000000000"
+    },
+    {
+      "format": "nbt",
+      "type": "double",
+      "source": "false",
+      "ok": true,
+      "value": "0000000000000000"
+    },
+    {
+      "format": "json",
+      "type": "double",
+      "source": "null",
+      "ok": false,
+      "error": "Not a number: null"
+    },
+    {
+      "format": "json",
+      "type": "double",
+      "source": "true",
+      "ok": false,
+      "error": "Not a number: true"
+    },
+    {
+      "format": "json",
+      "type": "double",
+      "source": "false",
+      "ok": false,
+      "error": "Not a number: false"
+    },
+    {
+      "format": "json",
+      "type": "double",
+      "source": "0",
+      "ok": true,
+      "value": "0000000000000000"
+    },
+    {
+      "format": "json",
+      "type": "double",
+      "source": "1",
+      "ok": true,
+      "value": "3ff0000000000000"
+    },
+    {
+      "format": "json",
+      "type": "double",
+      "source": "-1",
+      "ok": true,
+      "value": "bff0000000000000"
+    },
+    {
+      "format": "json",
+      "type": "double",
+      "source": "256",
+      "ok": true,
+      "value": "4070000000000000"
+    },
+    {
+      "format": "json",
+      "type": "double",
+      "source": "0.5",
+      "ok": true,
+      "value": "3fe0000000000000"
+    },
+    {
+      "format": "json",
+      "type": "double",
+      "source": "1.25",
+      "ok": true,
+      "value": "3ff4000000000000"
+    },
+    {
+      "format": "json",
+      "type": "double",
+      "source": "9007199254740993",
+      "ok": true,
+      "value": "4340000000000000"
+    },
+    {
+      "format": "json",
+      "type": "double",
+      "source": "\"17\"",
+      "ok": false,
+      "error": "Not a number: \"17\""
+    },
+    {
+      "format": "json",
+      "type": "double",
+      "source": "\"0.5\"",
+      "ok": false,
+      "error": "Not a number: \"0.5\""
+    },
+    {
+      "format": "json",
+      "type": "double",
+      "source": "\"true\"",
+      "ok": false,
+      "error": "Not a number: \"true\""
+    },
+    {
+      "format": "json",
+      "type": "double",
+      "source": "\"stone\"",
+      "ok": false,
+      "error": "Not a number: \"stone\""
+    },
+    {
+      "format": "json",
+      "type": "double",
+      "source": "{}",
+      "ok": false,
+      "error": "Not a number: {}"
+    },
+    {
+      "format": "json",
+      "type": "double",
+      "source": "[1,2]",
+      "ok": false,
+      "error": "Not a number: [1,2]"
+    },
+    {
+      "format": "nbt",
+      "type": "string",
+      "source": "0b",
+      "ok": false,
+      "error": "Not a string"
+    },
+    {
+      "format": "nbt",
+      "type": "string",
+      "source": "1b",
+      "ok": false,
+      "error": "Not a string"
+    },
+    {
+      "format": "nbt",
+      "type": "string",
+      "source": "-1b",
+      "ok": false,
+      "error": "Not a string"
+    },
+    {
+      "format": "nbt",
+      "type": "string",
+      "source": "256s",
+      "ok": false,
+      "error": "Not a string"
+    },
+    {
+      "format": "nbt",
+      "type": "string",
+      "source": "256",
+      "ok": false,
+      "error": "Not a string"
+    },
+    {
+      "format": "nbt",
+      "type": "string",
+      "source": "9007199254740993L",
+      "ok": false,
+      "error": "Not a string"
+    },
+    {
+      "format": "nbt",
+      "type": "string",
+      "source": "0.5f",
+      "ok": false,
+      "error": "Not a string"
+    },
+    {
+      "format": "nbt",
+      "type": "string",
+      "source": "1.25d",
+      "ok": false,
+      "error": "Not a string"
+    },
+    {
+      "format": "nbt",
+      "type": "string",
+      "source": "\"17\"",
+      "ok": true,
+      "value": "17"
+    },
+    {
+      "format": "nbt",
+      "type": "string",
+      "source": "\"0.5\"",
+      "ok": true,
+      "value": "0.5"
+    },
+    {
+      "format": "nbt",
+      "type": "string",
+      "source": "\"true\"",
+      "ok": true,
+      "value": "true"
+    },
+    {
+      "format": "nbt",
+      "type": "string",
+      "source": "\"stone\"",
+      "ok": true,
+      "value": "stone"
+    },
+    {
+      "format": "nbt",
+      "type": "string",
+      "source": "{}",
+      "ok": false,
+      "error": "Not a string"
+    },
+    {
+      "format": "nbt",
+      "type": "string",
+      "source": "[1,2]",
+      "ok": false,
+      "error": "Not a string"
+    },
+    {
+      "format": "nbt",
+      "type": "string",
+      "source": "true",
+      "ok": false,
+      "error": "Not a string"
+    },
+    {
+      "format": "nbt",
+      "type": "string",
+      "source": "false",
+      "ok": false,
+      "error": "Not a string"
+    },
+    {
+      "format": "json",
+      "type": "string",
+      "source": "null",
+      "ok": false,
+      "error": "Not a string: null"
+    },
+    {
+      "format": "json",
+      "type": "string",
+      "source": "true",
+      "ok": false,
+      "error": "Not a string: true"
+    },
+    {
+      "format": "json",
+      "type": "string",
+      "source": "false",
+      "ok": false,
+      "error": "Not a string: false"
+    },
+    {
+      "format": "json",
+      "type": "string",
+      "source": "0",
+      "ok": false,
+      "error": "Not a string: 0"
+    },
+    {
+      "format": "json",
+      "type": "string",
+      "source": "1",
+      "ok": false,
+      "error": "Not a string: 1"
+    },
+    {
+      "format": "json",
+      "type": "string",
+      "source": "-1",
+      "ok": false,
+      "error": "Not a string: -1"
+    },
+    {
+      "format": "json",
+      "type": "string",
+      "source": "256",
+      "ok": false,
+      "error": "Not a string: 256"
+    },
+    {
+      "format": "json",
+      "type": "string",
+      "source": "0.5",
+      "ok": false,
+      "error": "Not a string: 0.5"
+    },
+    {
+      "format": "json",
+      "type": "string",
+      "source": "1.25",
+      "ok": false,
+      "error": "Not a string: 1.25"
+    },
+    {
+      "format": "json",
+      "type": "string",
+      "source": "9007199254740993",
+      "ok": false,
+      "error": "Not a string: 9007199254740993"
+    },
+    {
+      "format": "json",
+      "type": "string",
+      "source": "\"17\"",
+      "ok": true,
+      "value": "17"
+    },
+    {
+      "format": "json",
+      "type": "string",
+      "source": "\"0.5\"",
+      "ok": true,
+      "value": "0.5"
+    },
+    {
+      "format": "json",
+      "type": "string",
+      "source": "\"true\"",
+      "ok": true,
+      "value": "true"
+    },
+    {
+      "format": "json",
+      "type": "string",
+      "source": "\"stone\"",
+      "ok": true,
+      "value": "stone"
+    },
+    {
+      "format": "json",
+      "type": "string",
+      "source": "{}",
+      "ok": false,
+      "error": "Not a string: {}"
+    },
+    {
+      "format": "json",
+      "type": "string",
+      "source": "[1,2]",
+      "ok": false,
+      "error": "Not a string: [1,2]"
+    }
+  ],
+  "definitions": [
+    {
+      "kind": "modifier",
+      "source": "{type:set_count,count:3b,add:1b}",
+      "ok": true,
+      "canonical_json": {
+        "count": 3,
+        "add": true,
+        "type": "minecraft:set_count"
+      },
+      "canonical_nbt": "{add:1b,count:3,type:\"minecraft:set_count\"}"
+    },
+    {
+      "kind": "modifier",
+      "source": "{type:set_count,count:3s,add:256s}",
+      "ok": true,
+      "canonical_json": {
+        "count": 3,
+        "add": true,
+        "type": "minecraft:set_count"
+      },
+      "canonical_nbt": "{add:1b,count:3,type:\"minecraft:set_count\"}"
+    },
+    {
+      "kind": "modifier",
+      "source": "{type:set_count,count:3,add:0.5d}",
+      "ok": true,
+      "canonical_json": {
+        "count": 3,
+        "add": true,
+        "type": "minecraft:set_count"
+      },
+      "canonical_nbt": "{add:1b,count:3,type:\"minecraft:set_count\"}"
+    },
+    {
+      "kind": "modifier",
+      "source": "{type:set_count,count:3,add:0b}",
+      "ok": true,
+      "canonical_json": {
+        "count": 3,
+        "type": "minecraft:set_count"
+      },
+      "canonical_nbt": "{count:3,type:\"minecraft:set_count\"}"
+    },
+    {
+      "kind": "modifier",
+      "source": "{type:set_count,count:{type:constant,value:2.75f}}",
+      "ok": true,
+      "canonical_json": {
+        "count": 2,
+        "type": "minecraft:set_count"
+      },
+      "canonical_nbt": "{count:2,type:\"minecraft:set_count\"}"
+    },
+    {
+      "kind": "modifier",
+      "source": "{type:set_count,count:{type:constant,value:\"17\"}}",
+      "ok": false,
+      "error": "Failed to parse either. First: Failed to parse either. First: Not a number; Second: Not a number; Second: Failed to parse either. First: Not a string; Second: Failed to parse either. First: Not a list: {count:{type:\"constant\",value:\"17\"},type:\"set_count\"}; Second: Failed to parse either. First: Not a number; Second: Not a number"
+    },
+    {
+      "kind": "modifier",
+      "source": "{type:set_count,count:3,add:\"true\"}",
+      "ok": false,
+      "error": "Not a number"
+    },
+    {
+      "kind": "modifier",
+      "source": "{type:set_count,count:{type:add,inputs:[B;1b,2b]}}",
+      "ok": true,
+      "canonical_json": {
+        "count": {
+          "inputs": [
+            1,
+            2
+          ],
+          "type": "minecraft:add"
+        },
+        "type": "minecraft:set_count"
+      },
+      "canonical_nbt": "{count:{inputs:[1,2],type:\"minecraft:add\"},type:\"minecraft:set_count\"}"
+    },
+    {
+      "kind": "modifier",
+      "source": "{type:set_damage,damage:0.5f,add:1b}",
+      "ok": true,
+      "canonical_json": {
+        "damage": 0.5,
+        "add": true,
+        "type": "minecraft:set_damage"
+      },
+      "canonical_nbt": "{add:1b,damage:0.5f,type:\"minecraft:set_damage\"}"
+    },
+    {
+      "kind": "modifier",
+      "source": "{type:set_count,count:1,condition:{type:weather_check,raining:0.5d}}",
+      "ok": true,
+      "canonical_json": {
+        "condition": {
+          "raining": true,
+          "type": "minecraft:weather_check"
+        },
+        "count": 1,
+        "type": "minecraft:set_count"
+      },
+      "canonical_nbt": "{condition:{raining:1b,type:\"minecraft:weather_check\"},count:1,type:\"minecraft:set_count\"}"
+    },
+    {
+      "kind": "modifier",
+      "source": "{type:filtered,item_filter:{count:{min:1b,max:3s}},on_pass:{type:set_count,count:2b,add:1b}}",
+      "ok": true,
+      "canonical_json": {
+        "item_filter": {
+          "count": {
+            "min": 1,
+            "max": 3
+          }
+        },
+        "on_pass": {
+          "count": 2,
+          "add": true,
+          "type": "minecraft:set_count"
+        },
+        "type": "minecraft:filtered"
+      },
+      "canonical_nbt": "{item_filter:{count:{max:3,min:1}},on_pass:{add:1b,count:2,type:\"minecraft:set_count\"},type:\"minecraft:filtered\"}"
+    },
+    {
+      "kind": "modifier",
+      "source": "{type:filtered,item_filter:{count:{min:3b,max:1s}},on_pass:{type:discard}}",
+      "ok": false,
+      "error": "Swapped bounds in range: Optional[3] is higher than Optional[1]"
+    },
+    {
+      "kind": "modifier",
+      "source": "{type:set_count,count:1,condition:{type:entity_properties,entity:this,predicate:{flags:{is_on_fire:256s}}}}",
+      "ok": true,
+      "canonical_json": {
+        "condition": {
+          "predicate": {
+            "minecraft:flags": {
+              "is_on_fire": true
+            }
+          },
+          "entity": "this",
+          "type": "minecraft:entity_properties"
+        },
+        "count": 1,
+        "type": "minecraft:set_count"
+      },
+      "canonical_nbt": "{condition:{entity:\"this\",predicate:{\"minecraft:flags\":{is_on_fire:1b}},type:\"minecraft:entity_properties\"},count:1,type:\"minecraft:set_count\"}"
+    },
+    {
+      "kind": "modifier",
+      "source": "{type:set_components,components:{\"minecraft:max_stack_size\":3b,\"minecraft:custom_data\":{flag:1b}}}",
+      "ok": true,
+      "canonical_json": {
+        "components": {
+          "minecraft:max_stack_size": 3,
+          "minecraft:custom_data": {
+            "flag": 1
+          }
+        },
+        "type": "minecraft:set_components"
+      },
+      "canonical_nbt": "{components:{\"minecraft:custom_data\":{flag:1b},\"minecraft:max_stack_size\":3},type:\"minecraft:set_components\"}"
+    },
+    {
+      "kind": "modifier",
+      "source": "{type:set_custom_data,tag:{n:16777217,long:9007199254740993L}}",
+      "ok": true,
+      "canonical_json": {
+        "tag": "{long:9007199254740993L,n:16777217}",
+        "type": "minecraft:set_custom_data"
+      },
+      "canonical_nbt": "{tag:\"{long:9007199254740993L,n:16777217}\",type:\"minecraft:set_custom_data\"}"
+    },
+    {
+      "kind": "modifier",
+      "source": "{type:toggle_tooltips,toggles:{\"minecraft:custom_name\":0.5d}}",
+      "ok": true,
+      "canonical_json": {
+        "toggles": {
+          "minecraft:custom_name": true
+        },
+        "type": "minecraft:toggle_tooltips"
+      },
+      "canonical_nbt": "{toggles:{\"minecraft:custom_name\":1b},type:\"minecraft:toggle_tooltips\"}"
+    },
+    {
+      "kind": "modifier",
+      "source": "[{type:set_count,count:2b},{type:set_count,count:3s,add:1b}]",
+      "ok": true,
+      "canonical_json": [
+        {
+          "count": 2,
+          "type": "minecraft:set_count"
+        },
+        {
+          "count": 3,
+          "add": true,
+          "type": "minecraft:set_count"
+        }
+      ],
+      "canonical_nbt": "[{count:2,type:\"minecraft:set_count\"},{add:1b,count:3,type:\"minecraft:set_count\"}]"
+    },
+    {
+      "kind": "modifier",
+      "source": "{type:set_count,count:1,condition:{type:weather_check,raining:\"true\"}}",
+      "ok": false,
+      "error": "Not a number"
+    },
+    {
+      "kind": "modifier",
+      "source": "{type:42b,count:1}",
+      "ok": false,
+      "error": "Failed to parse either. First: Not a string; Second: Failed to parse either. First: Not a string; Second: Failed to parse either. First: Not a list: {count:1,type:42b}; Second: Not a string"
+    },
+    {
+      "kind": "modifier",
+      "source": "{type:not_a_function}",
+      "ok": false,
+      "error": "Failed to parse either. First: Unknown registry key in ResourceKey[minecraft:root / minecraft:loot_function_type]: minecraft:not_a_function; Second: Failed to parse either. First: Not a string; Second: Failed to parse either. First: Not a list: {type:\"not_a_function\"}; Second: Unknown registry key in ResourceKey[minecraft:root / minecraft:loot_function_type]: minecraft:not_a_function"
+    },
+    {
+      "kind": "modifier",
+      "source": "{type:filtered,item_filter:{components:{\"minecraft:custom_data\":{flag:1b}}},on_pass:{type:discard}}",
+      "ok": true,
+      "canonical_json": {
+        "item_filter": {
+          "components": {
+            "minecraft:custom_data": {
+              "flag": 1
+            }
+          }
+        },
+        "on_pass": {
+          "type": "minecraft:discard"
+        },
+        "type": "minecraft:filtered"
+      },
+      "canonical_nbt": "{item_filter:{components:{\"minecraft:custom_data\":{flag:1b}}},on_pass:{type:\"minecraft:discard\"},type:\"minecraft:filtered\"}"
+    },
+    {
+      "kind": "source",
+      "source": "{type:empty}",
+      "ok": true,
+      "canonical_json": {
+        "type": "minecraft:empty"
+      },
+      "canonical_nbt": "{type:\"minecraft:empty\"}"
+    },
+    {
+      "kind": "source",
+      "source": "[]",
+      "ok": true,
+      "canonical_json": [],
+      "canonical_nbt": "[]"
+    },
+    {
+      "kind": "source",
+      "source": "[B;]",
+      "ok": true,
+      "canonical_json": [],
+      "canonical_nbt": "[]"
+    },
+    {
+      "kind": "source",
+      "source": "[I;]",
+      "ok": true,
+      "canonical_json": [],
+      "canonical_nbt": "[]"
+    },
+    {
+      "kind": "source",
+      "source": "[L;]",
+      "ok": true,
+      "canonical_json": [],
+      "canonical_nbt": "[]"
+    },
+    {
+      "kind": "source",
+      "source": "[B;1b]",
+      "ok": false,
+      "error": "Not a map: 1b"
+    },
+    {
+      "kind": "source",
+      "source": "{type:slot_range,slots:\"container.0\"}",
+      "ok": true,
+      "canonical_json": {
+        "slots": "container.0",
+        "type": "minecraft:slot_range"
+      },
+      "canonical_nbt": "{slots:\"container.0\",type:\"minecraft:slot_range\"}"
+    },
+    {
+      "kind": "source",
+      "source": "{type:slot_range,source:this,slots:\"armor.*\"}",
+      "ok": true,
+      "canonical_json": {
+        "source": "this",
+        "slots": "armor.*",
+        "type": "minecraft:slot_range"
+      },
+      "canonical_nbt": "{slots:\"armor.*\",source:\"this\",type:\"minecraft:slot_range\"}"
+    },
+    {
+      "kind": "source",
+      "source": "{type:slot_range,slots:1b}",
+      "ok": false,
+      "error": "Failed to parse either. First: Not a string; Second: Failed to parse either. First: Not a string; Second: Failed to parse either. First: Not a list: {slots:1b,type:\"slot_range\"}; Second: Not a string"
+    },
+    {
+      "kind": "source",
+      "source": "{type:slot_range,source:1b,slots:\"container.0\"}",
+      "ok": false,
+      "error": "Not a string"
+    },
+    {
+      "kind": "source",
+      "source": "{type:limit_slots,slot_source:{type:slot_range,slots:\"container.*\"},limit:2b}",
+      "ok": true,
+      "canonical_json": {
+        "slot_source": {
+          "slots": "container.*",
+          "type": "minecraft:slot_range"
+        },
+        "limit": 2,
+        "type": "minecraft:limit_slots"
+      },
+      "canonical_nbt": "{limit:2,slot_source:{slots:\"container.*\",type:\"minecraft:slot_range\"},type:\"minecraft:limit_slots\"}"
+    },
+    {
+      "kind": "source",
+      "source": "{type:limit_slots,slot_source:{type:slot_range,slots:\"container.*\"},limit:2.75f}",
+      "ok": true,
+      "canonical_json": {
+        "slot_source": {
+          "slots": "container.*",
+          "type": "minecraft:slot_range"
+        },
+        "limit": 2,
+        "type": "minecraft:limit_slots"
+      },
+      "canonical_nbt": "{limit:2,slot_source:{slots:\"container.*\",type:\"minecraft:slot_range\"},type:\"minecraft:limit_slots\"}"
+    },
+    {
+      "kind": "source",
+      "source": "{type:limit_slots,slot_source:{type:slot_range,slots:\"container.*\"},limit:0b}",
+      "ok": false,
+      "error": "Failed to parse either. First: Value must be positive: 0; Second: Failed to parse either. First: Not a string; Second: Failed to parse either. First: Not a list: {limit:0b,slot_source:{slots:\"container.*\",type:\"slot_range\"},type:\"limit_slots\"}; Second: Value must be positive: 0"
+    },
+    {
+      "kind": "source",
+      "source": "{type:limit_slots,slot_source:{type:slot_range,slots:\"container.*\"},limit:\"2\"}",
+      "ok": false,
+      "error": "Failed to parse either. First: Not a number; Second: Failed to parse either. First: Not a string; Second: Failed to parse either. First: Not a list: {limit:\"2\",slot_source:{slots:\"container.*\",type:\"slot_range\"},type:\"limit_slots\"}; Second: Not a number"
+    },
+    {
+      "kind": "source",
+      "source": "{type:filtered,slot_source:{type:slot_range,slots:\"container.*\"},item_filter:{count:{min:1b,max:3s}}}",
+      "ok": true,
+      "canonical_json": {
+        "slot_source": {
+          "slots": "container.*",
+          "type": "minecraft:slot_range"
+        },
+        "item_filter": {
+          "count": {
+            "min": 1,
+            "max": 3
+          }
+        },
+        "type": "minecraft:filtered"
+      },
+      "canonical_nbt": "{item_filter:{count:{max:3,min:1}},slot_source:{slots:\"container.*\",type:\"minecraft:slot_range\"},type:\"minecraft:filtered\"}"
+    },
+    {
+      "kind": "source",
+      "source": "{type:contents,slot_source:{type:slot_range,slots:\"container.*\"},component:\"minecraft:container\"}",
+      "ok": true,
+      "canonical_json": {
+        "slot_source": {
+          "slots": "container.*",
+          "type": "minecraft:slot_range"
+        },
+        "component": "minecraft:container",
+        "type": "minecraft:contents"
+      },
+      "canonical_nbt": "{component:\"minecraft:container\",slot_source:{slots:\"container.*\",type:\"minecraft:slot_range\"},type:\"minecraft:contents\"}"
+    },
+    {
+      "kind": "source",
+      "source": "[{type:empty},{type:slot_range,slots:\"weapon.mainhand\"}]",
+      "ok": true,
+      "canonical_json": [
+        {
+          "type": "minecraft:empty"
+        },
+        {
+          "slots": "weapon.mainhand",
+          "type": "minecraft:slot_range"
+        }
+      ],
+      "canonical_nbt": "[{type:\"minecraft:empty\"},{slots:\"weapon.mainhand\",type:\"minecraft:slot_range\"}]"
+    },
+    {
+      "kind": "source",
+      "source": "{type:not_a_source}",
+      "ok": false,
+      "error": "Failed to parse either. First: Unknown registry key in ResourceKey[minecraft:root / minecraft:slot_source_type]: minecraft:not_a_source; Second: Failed to parse either. First: Not a string; Second: Failed to parse either. First: Not a list: {type:\"not_a_source\"}; Second: Unknown registry key in ResourceKey[minecraft:root / minecraft:slot_source_type]: minecraft:not_a_source"
+    }
+  ]
+}

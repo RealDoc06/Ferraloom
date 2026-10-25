@@ -128,6 +128,8 @@ pub enum LevelError {
     UnsupportedBlockEntity(Block),
     /// A live catalyst cursor list was replaced during a retained update frame.
     UnsupportedSculkCursorReentrancy(crate::block::entity::BlockEntityRef),
+    /// CrafterBlock#dispenseItem replaced the captured CraftingInput list before remainders.
+    UnsupportedCrafterCapturedListIdentity(crate::block::entity::BlockEntityRef),
     UnsupportedGameRule(&'static str),
     UnsupportedLightQuery,
     UnsupportedEnvironmentAttribute(ferraloom_data::registries::environment_attribute::Id),

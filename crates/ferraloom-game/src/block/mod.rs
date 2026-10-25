@@ -5,6 +5,7 @@ use ferraloom_util::{BlockPos, Direction};
 pub mod breaking;
 mod bubble_column;
 pub mod building;
+pub mod campfire;
 mod clone_item;
 pub mod containers;
 pub mod dispatch;

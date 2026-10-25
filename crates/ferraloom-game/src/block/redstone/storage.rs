@@ -71,7 +71,7 @@ impl BlockEntity for DispenserEntityBehavior {
         DispenserBlockEntity::view(state)
             .expect("dispenser dispatcher")
             .parent
-            .save(false)
+            .save(true)
     }
     fn apply_implicit_components(
         &self,
@@ -111,7 +111,7 @@ impl BlockEntity for HopperEntityBehavior {
     }
     fn save_additional(&self, state: &BlockEntityState) -> ferraloom_protocol::Result<CompoundTag> {
         let e = HopperBlockEntity::view(state).expect("hopper dispatcher");
-        let mut tag = e.parent.save(false)?;
+        let mut tag = e.parent.save(true)?;
         tag.insert("TransferCooldown", Tag::Int(e.cooldown_time));
         Ok(tag)
     }
@@ -146,5 +146,45 @@ impl BlockEntity for HopperEntityBehavior {
         level: &mut Level,
     ) -> Result<(), LevelError> {
         crate::block::containers::drops::drop_contents(entity, level)
+    }
+}
+
+#[cfg(test)]
+mod nbt_tests {
+    use crate::{block::entity::create, inventory::Container};
+    use ferraloom_data::{Block, Item};
+    use ferraloom_protocol::component::ItemStack;
+    use ferraloom_util::BlockPos;
+
+    #[test]
+    fn container_save_additional_matches_native_empty_items_and_loot_branches() {
+        let vectors = include_str!("../../../tests/java/blocks/redstone/container_nbt.tsv");
+        for line in vectors.lines() {
+            let (case, expected) = line.split_once('\t').unwrap();
+            let mut args = case.split(':');
+            let block = match args.next().unwrap() {
+                "dispenser" => Block::DISPENSER,
+                "dropper" => Block::DROPPER,
+                "hopper" => Block::HOPPER,
+                _ => unreachable!(),
+            };
+            let count = args.next().unwrap().parse().unwrap();
+            let loot = args.next().unwrap() == "true";
+            let mut state = create(BlockPos::ZERO, block.default_state()).unwrap();
+            state
+                .container_mut()
+                .unwrap()
+                .set_item(0, ItemStack::new(Item::STONE, count, Default::default()));
+            if loot {
+                let container = state.randomizable_mut().unwrap();
+                container.loot_table = Some("minecraft:chests/simple_dungeon".parse().unwrap());
+                container.loot_table_seed = 42;
+            }
+            assert_eq!(
+                state.save_custom_only().unwrap(),
+                ferraloom_nbt::parse_compound(expected).unwrap(),
+                "{case}"
+            );
+        }
     }
 }

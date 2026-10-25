@@ -17,15 +17,18 @@ pub struct CrafterBlock;
 pub static CRAFTER: CrafterBlock = CrafterBlock;
 
 /// Port of CraftingInput#ofPositioned's list ownership. A full grid reads the BE
-/// list; a cropped grid retains the original ItemStack references. Reward-function
-/// list replacement needs the generation guard awaiting canonical BE integration.
+/// list; a cropped grid retains the original ItemStack references. Whole-list
+/// replacement during dispenseItem is a required boundary before getRemainingItems.
 #[derive(Debug)]
 enum CapturedInput {
     Full {
         owner: BlockEntityRef,
+        generation: u64,
         ingredients: usize,
     },
     Trimmed {
+        owner: BlockEntityRef,
+        generation: u64,
         width: usize,
         height: usize,
         ingredients: usize,
@@ -37,6 +40,10 @@ impl CapturedInput {
         owner: BlockEntityRef,
         operation: &mut StackOperation<'_>,
     ) -> Result<Self, LevelError> {
+        let generation = operation
+            .level
+            .block_entity::<CrafterBlockEntity>(owner)?
+            .items_list_generation();
         let input = CraftingInputView::of_positioned(
             3,
             3,
@@ -56,7 +63,11 @@ impl CapturedInput {
             input.top,
         );
         if width == 3 && height == 3 {
-            return Ok(Self::Full { owner, ingredients });
+            return Ok(Self::Full {
+                owner,
+                generation,
+                ingredients,
+            });
         }
         let mut items = Vec::with_capacity(width * height);
         for y in 0..height {
@@ -72,6 +83,8 @@ impl CapturedInput {
             }
         }
         Ok(Self::Trimmed {
+            owner,
+            generation,
             width,
             height,
             ingredients,
@@ -79,8 +92,23 @@ impl CapturedInput {
         })
     }
     fn borrow<'a>(&'a self, level: &'a Level) -> Result<InputView<'a>, LevelError> {
+        let (Self::Full {
+            owner, generation, ..
+        }
+        | Self::Trimmed {
+            owner, generation, ..
+        }) = self;
+        if level
+            .block_entity::<CrafterBlockEntity>(*owner)?
+            .items_list_generation()
+            != *generation
+        {
+            return Err(LevelError::UnsupportedCrafterCapturedListIdentity(*owner));
+        }
         let (width, height, ingredients, items) = match self {
-            Self::Full { owner, ingredients } => (
+            Self::Full {
+                owner, ingredients, ..
+            } => (
                 3,
                 3,
                 *ingredients,
@@ -97,6 +125,7 @@ impl CapturedInput {
                 height,
                 ingredients,
                 items,
+                ..
             } => (
                 *width,
                 *height,
@@ -510,6 +539,86 @@ mod tests {
                         expected,
                         "{name}"
                     );
+                    Ok(())
+                })
+                .unwrap();
+        }
+    }
+    #[test]
+    fn canonical_list_load_stops_captured_remainders_under_both_policies() {
+        use crate::block::UnportedBehavior;
+        use ferraloom_nbt::{CompoundTag, ListTag, Tag};
+        for policy in [UnportedBehavior::Strict, UnportedBehavior::Warn] {
+            let state = Block::CRAFTER.default_state();
+            let mut level = super::super::device_tests::level(state);
+            level.set_unported_behavior(policy);
+            let receiver = install(&mut level, state);
+            for (slot, item) in [
+                Item::MILK_BUCKET,
+                Item::MILK_BUCKET,
+                Item::MILK_BUCKET,
+                Item::SUGAR,
+                Item::EGG,
+                Item::SUGAR,
+                Item::WHEAT,
+                Item::WHEAT,
+                Item::WHEAT,
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                access::set_item(
+                    receiver,
+                    slot,
+                    ItemStack::new(item, 1, Default::default()),
+                    &mut level,
+                )
+                .unwrap();
+            }
+            level
+                .with_block_entity_callback(receiver, |level| {
+                    let mut operation = StackOperation::new(level);
+                    let input = CapturedInput::capture(receiver, &mut operation)?;
+                    assert!(matches!(input, CapturedInput::Full { .. }));
+                    let recipe = operation
+                        .level
+                        .container_resources()?
+                        .recipes
+                        .by_key(&"minecraft:cake".parse().unwrap())
+                        .unwrap()
+                        .clone();
+                    let before = recipe
+                        .value
+                        .remaining_items(&input.borrow(operation.level)?)
+                        .unwrap();
+                    assert_eq!(
+                        before
+                            .iter()
+                            .filter(|item| item.item() == Item::BUCKET)
+                            .count(),
+                        3
+                    );
+                    // Native advancement rewards can run /data merge synchronously in
+                    // dispenseItem. Exercise its canonical load seam without inventing
+                    // the still-unported reward-function runtime.
+                    let mut tag = CompoundTag::new();
+                    tag.insert("Items", Tag::List(ListTag::new()));
+                    receiver.load_with_components(&tag, operation.level)?;
+                    assert!(
+                        operation
+                            .level
+                            .block_entity::<CrafterBlockEntity>(receiver)?
+                            .parent
+                            .parent
+                            .items
+                            .iter()
+                            .all(ItemStack::is_empty)
+                    );
+                    assert_eq!(
+                        input.borrow(operation.level).unwrap_err(),
+                        LevelError::UnsupportedCrafterCapturedListIdentity(receiver)
+                    );
+                    assert_eq!(operation.level.unported_behavior_stats().skipped_calls, 0);
                     Ok(())
                 })
                 .unwrap();

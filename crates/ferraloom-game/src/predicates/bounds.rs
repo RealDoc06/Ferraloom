@@ -1,5 +1,5 @@
+use crate::loot::codec::DecodeInput;
 use crate::loot::{Result, codec};
-use serde_json::Value;
 
 /// Port of MinMaxBounds.Doubles. Squared bounds preserve negative endpoints.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -8,7 +8,7 @@ pub struct DoubleBounds {
     pub max: Option<f64>,
 }
 impl DoubleBounds {
-    pub fn decode(v: &Value) -> Result<Self> {
+    pub fn decode<I: DecodeInput>(v: &I) -> Result<Self> {
         let number = codec::double;
         if v.is_number() {
             let n = number(v)?;
@@ -41,7 +41,7 @@ pub struct IntBounds {
     pub max: Option<i32>,
 }
 impl IntBounds {
-    pub fn decode(v: &Value) -> Result<Self> {
+    pub fn decode<I: DecodeInput>(v: &I) -> Result<Self> {
         if v.is_number() {
             let n = codec::int(v)?;
             return Ok(Self {
@@ -79,7 +79,7 @@ pub struct DistancePredicate {
     pub absolute: DoubleBounds,
 }
 impl DistancePredicate {
-    pub fn decode(v: &Value) -> Result<Self> {
+    pub fn decode<I: DecodeInput>(v: &I) -> Result<Self> {
         let bound = |name| -> Result<DoubleBounds> {
             Ok(codec::optional(v, name, DoubleBounds::decode)?.unwrap_or_default())
         };
@@ -110,7 +110,7 @@ pub struct FloatDegrees {
     pub max: Option<f32>,
 }
 impl FloatDegrees {
-    pub fn decode(v: &Value) -> Result<Self> {
+    pub fn decode<I: DecodeInput>(v: &I) -> Result<Self> {
         if v.is_number() {
             let value = codec::float(v)?;
             Ok(Self {

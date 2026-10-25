@@ -1,12 +1,12 @@
 use super::function::{max_stack_size, stack_count};
 use super::{ContextIntProvider, EvalContext, Holder, Identifier, LootData, Result, codec};
+use crate::loot::codec::{DecodeInput, PersistentInput};
 use ferraloom_data::Item;
 use ferraloom_protocol::{
     codec::{HolderSet, VarInt},
     component::*,
 };
 use ferraloom_util::random::RandomSource;
-use serde_json::Value;
 
 /// Port of ExplorationMapFunction's codec. Its live search and saved map
 /// allocation are implemented by the level adapter at the original call site.
@@ -31,14 +31,14 @@ pub enum WorldFunction {
     SetStewEffect(Vec<(MobEffect, Holder<ContextIntProvider>)>),
 }
 impl WorldFunction {
-    pub(crate) fn decode(kind: &str, v: &Value) -> Result<Option<Self>> {
+    pub(crate) fn decode<I: DecodeInput>(kind: &str, v: &I) -> Result<Option<Self>> {
         Ok(Some(match kind {
             "minecraft:furnace_smelt" => Self::FurnaceSmelt {
                 use_input_count: codec::optional(v, "use_input_count", codec::boolean)?
                     .unwrap_or(true),
             },
             "minecraft:exploration_map" => Self::ExplorationMap(ExplorationMapOptions {
-                destination: HolderSet::from_json(codec::field(v, "destination")?)?,
+                destination: HolderSet::from_input(codec::field(v, "destination")?)?,
                 decoration: codec::optional(v, "decoration", codec::id)?
                     .unwrap_or(Identifier::parse("woodland_mansion")?),
                 zoom: codec::optional(v, "zoom", codec::int)?.unwrap_or(2) as i8,
@@ -49,8 +49,9 @@ impl WorldFunction {
             "minecraft:set_enchantments" => Self::SetEnchantments {
                 enchantments: codec::optional(v, "enchantments", |v| {
                     let mut keys = std::collections::BTreeSet::new();
-                    codec::object(v)?
-                        .iter()
+                    codec::map(v)?
+                        .entries()?
+                        .into_iter()
                         .map(|(key, value)| {
                             let id = Identifier::parse(key)?;
                             if !keys.insert(id.clone()) {
@@ -67,7 +68,7 @@ impl WorldFunction {
                 let effects = codec::optional(v, "effects", |v| {
                     codec::list(v, |v| {
                         Ok((
-                            MobEffect::from_json(codec::field(v, "type")?)?,
+                            MobEffect::from_input(codec::field(v, "type")?)?,
                             Holder::decode(
                                 codec::field(v, "duration")?,
                                 ContextIntProvider::decode,
