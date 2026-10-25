@@ -2,7 +2,7 @@
 use super::generation::*;
 use crate::{jobs::JobPool, world::RegistryAdapter};
 use ferraloom_data::datapack::{Pack, ResourceManager};
-use ferraloom_game::level::generation::{ChunkPyramid, ChunkStatus, WorldGenContext};
+use ferraloom_game::level::generation::{ChunkPyramid, ChunkStatus, ProtoChunk, WorldGenContext};
 use ferraloom_storage::{self as storage, IoWorker};
 use ferraloom_util::ChunkPos;
 use ferraloom_worldgen::{
