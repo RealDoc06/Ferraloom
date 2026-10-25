@@ -676,10 +676,95 @@ mod tests {
                 }
             }
             assert_eq!(
-                observed.join("|"),
+                if observed.is_empty() {
+                    "-".into()
+                } else {
+                    observed.join("|")
+                },
                 line.splitn(3, '\t').nth(2).unwrap(),
                 "native audience case {index}"
             );
         }
+    }
+    #[test]
+    fn native_entity_event_audiences_include_self_only_for_a_tracked_player() {
+        let expected: Vec<_> = include_str!("../../tests/java/entity/tracker/vectors.tsv")
+            .lines()
+            .filter_map(|line| line.strip_prefix("event\t"))
+            .map(|line| line.split_once('\t').unwrap())
+            .collect();
+        let (mut level, player, item) = fixture();
+        let mut observed = Vec::new();
+        let mut capture = |label: &str, target: EntityRef, level: &mut Level| {
+            level.broadcast_entity_event(target, 3).unwrap();
+            let mut deliveries = Vec::new();
+            for effect in level.take_effects() {
+                if let LevelEffect::PlayerPacket { recipients, packet } = effect {
+                    let Packet::EntityEvent(event) = *packet else {
+                        panic!("event packet")
+                    };
+                    assert_eq!(
+                        event.entity_id,
+                        level.entity::<EntityData>(target).unwrap().network_id
+                    );
+                    for recipient in recipients {
+                        deliveries.push(format!(
+                            "{}event:{}",
+                            if recipient == target { "self:" } else { "" },
+                            event.event_id
+                        ));
+                    }
+                }
+            }
+            observed.push((
+                label.to_owned(),
+                if deliveries.is_empty() {
+                    "-".into()
+                } else {
+                    deliveries.join("|")
+                },
+            ));
+        };
+        capture("missing", item, &mut level);
+        level.add_tracked_entity(item).unwrap();
+        level.take_effects();
+        capture("item", item, &mut level);
+        let viewer = level.next_entity_ref();
+        let state = ServerPlayer::new(
+            Uuid::new(3, 4),
+            "observer".into(),
+            level.next_entity_id(),
+            Vec3::new(0.0, 64.0, 0.0),
+            GameType::Spectator,
+        );
+        level
+            .add_entity(viewer, EntityState::Player(Box::new(state)))
+            .unwrap();
+        level
+            .entity_mut::<ServerPlayer>(viewer)
+            .unwrap()
+            .chunk_sender
+            .pending
+            .remove(&ChunkPos::ZERO);
+        let network = level.entity::<EntityData>(player).unwrap().network_id;
+        level.update_tracked_player(network, viewer).unwrap();
+        level.take_effects();
+        capture("player", player, &mut level);
+        level
+            .entity_mut::<ServerPlayer>(viewer)
+            .unwrap()
+            .chunk_sender
+            .pending
+            .insert(ChunkPos::ZERO);
+        level.update_tracked_player(network, viewer).unwrap();
+        level.take_effects();
+        capture("self", player, &mut level);
+        assert_eq!(
+            observed
+                .iter()
+                .map(|(label, value)| (label.as_str(), value.as_str()))
+                .collect::<Vec<_>>(),
+            expected
+        );
     }
 }
