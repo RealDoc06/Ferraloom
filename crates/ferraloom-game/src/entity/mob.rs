@@ -22,5 +22,7 @@ pub fn jump_in_liquid(
 }
 
 mod persistence;
+mod spawn;
 pub use persistence::{DropChances, LeashAttachment, LeashData};
 pub(crate) use persistence::{block_pos, default_variant};
+pub use spawn::{AgeableMobGroupData, finalize_spawn};

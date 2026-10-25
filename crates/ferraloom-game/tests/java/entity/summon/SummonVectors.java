@@ -89,5 +89,6 @@ public final class SummonVectors {
     BuiltInRegistries.DATA_COMPONENT_INITIALIZERS.build(context).forEach(net.minecraft.core.component.DataComponentInitializers.PendingComponents::apply);
     run(registries);
     VariantVectors.run(registries,context);
+    CowFinalizeVectors.run(registries);
   }
 }

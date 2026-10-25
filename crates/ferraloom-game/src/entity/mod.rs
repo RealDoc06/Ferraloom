@@ -294,6 +294,7 @@ pub enum EntityMethod {
     LoadSleepingPosition,
     LoadBrain,
     CowVariantBehavior,
+    FinalizeSpawn,
 }
 impl EntityMethod {
     pub const fn name(self) -> &'static str {
@@ -317,6 +318,7 @@ impl EntityMethod {
             Self::LoadSleepingPosition => "LivingEntity#readAdditionalSaveData(sleeping_pos)",
             Self::LoadBrain => "LivingEntity#makeBrain",
             Self::CowVariantBehavior => "Cow#getSoundSet",
+            Self::FinalizeSpawn => "Mob#finalizeSpawn",
             Self::Die => "LivingEntity#die",
         }
     }
