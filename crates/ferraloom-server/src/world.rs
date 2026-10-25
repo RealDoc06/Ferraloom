@@ -982,7 +982,8 @@ impl World {
             )
             .with_block_transformers(Arc::new(
                 ferraloom_game::item::block_transformer::BlockTransformerRegistry::load(resources)?,
-            )),
+            ))
+            .with_game_event_tags(Arc::new(ferraloom_data::datapack::TagSet::load(resources)?)),
         ))
     }
     /// Attach immutable dimension layers after the sole server clock manager

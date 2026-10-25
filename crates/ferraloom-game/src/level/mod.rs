@@ -139,6 +139,7 @@ pub enum LevelError {
     MissingFluidTags,
     MissingEntityTypeTags,
     MissingItemTags,
+    MissingGameEventTags,
     UnsupportedShape(BlockState),
     UnsupportedFluidRandomTick,
     UnsupportedWeatherQuery,

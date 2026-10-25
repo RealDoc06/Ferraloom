@@ -17,6 +17,8 @@ pub struct LevelContext {
     damage_types: Arc<DamageTypeRegistry>,
     block_transformers: Option<Arc<crate::item::block_transformer::BlockTransformerRegistry>>,
     registry_context: Option<Arc<dyn ferraloom_protocol::codec::RegistryContext>>,
+    game_event_tags:
+        Option<Arc<ferraloom_data::datapack::TagSet<ferraloom_data::registries::game_event::Id>>>,
 }
 
 impl LevelContext {
@@ -39,6 +41,7 @@ impl LevelContext {
             initial_difficulty,
             block_transformers: None,
             registry_context: None,
+            game_event_tags: None,
         }
     }
 
@@ -59,6 +62,26 @@ impl LevelContext {
         self.block_transformers
             .as_ref()
             .ok_or(super::LevelError::MissingBlockTransformers)
+    }
+
+    /// Install the actual merged GameEventTags used by vibration listeners.
+    pub fn with_game_event_tags(
+        mut self,
+        tags: Arc<ferraloom_data::datapack::TagSet<ferraloom_data::registries::game_event::Id>>,
+    ) -> Self {
+        self.game_event_tags = Some(tags);
+        self
+    }
+
+    pub fn game_event_tags(
+        &self,
+    ) -> Result<
+        &ferraloom_data::datapack::TagSet<ferraloom_data::registries::game_event::Id>,
+        super::LevelError,
+    > {
+        self.game_event_tags
+            .as_deref()
+            .ok_or(super::LevelError::MissingGameEventTags)
     }
 
     /// Port of ServerLevel#registryAccess: the same immutable synchronized
@@ -105,6 +128,8 @@ impl LevelContext {
             damage_types: Arc<DamageTypeRegistry>,
             block_transformers: Arc<crate::item::block_transformer::BlockTransformerRegistry>,
             registry_context: Arc<dyn ferraloom_protocol::codec::RegistryContext>,
+            game_event_tags:
+                Arc<ferraloom_data::datapack::TagSet<ferraloom_data::registries::game_event::Id>>,
         }
         static SERVICES: OnceLock<Services> = OnceLock::new();
         let services = SERVICES.get_or_init(|| {
@@ -124,6 +149,9 @@ impl LevelContext {
                     crate::item::block_transformer::BlockTransformerRegistry::load(&resources)
                         .unwrap(),
                 ),
+                game_event_tags: Arc::new(
+                    ferraloom_data::datapack::TagSet::load(&resources).unwrap(),
+                ),
                 registry_context: Arc::new(FixtureRegistryContext(resources)),
             }
         });
@@ -138,7 +166,8 @@ impl LevelContext {
                 Difficulty::Normal,
             )
             .with_block_transformers(services.block_transformers.clone())
-            .with_registry_context(services.registry_context.clone()),
+            .with_registry_context(services.registry_context.clone())
+            .with_game_event_tags(services.game_event_tags.clone()),
         )
     }
 }
