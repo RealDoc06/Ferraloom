@@ -45,13 +45,8 @@ impl PlacementAccess for PlacementLevel<'_> {
     fn block_state(&mut self, pos: BlockPos) -> Result<ferraloom_data::BlockState, LevelError> {
         self.level.get_block_state(pos)
     }
-    fn block_entity_data(&mut self, pos: BlockPos) -> Result<Option<Tag>, LevelError> {
-        let state = self.level.get_block_state(pos)?;
-        if state.has_block_entity() {
-            Err(LevelError::UnsupportedBlockEntity(state.block()))
-        } else {
-            Ok(None)
-        }
+    fn block_entity_data(&mut self, pos: BlockPos) -> Result<Option<Tag>, PlacementError> {
+        placement::block_entity_data(self.level, pos)
     }
     fn set_block(
         &mut self,
@@ -79,13 +74,13 @@ impl PlacementAccess for PlacementLevel<'_> {
     ) -> Result<(), LevelError> {
         self.level.update_neighbors_on_block_set(pos, old)
     }
-    fn load_block_entity_data(&mut self, pos: BlockPos, _: &Tag) -> Result<bool, LevelError> {
-        let state = self.level.get_block_state(pos)?;
-        if state.has_block_entity() {
-            Err(LevelError::UnsupportedBlockEntity(state.block()))
-        } else {
-            Ok(false)
-        }
+    fn load_block_entity_data(&mut self, pos: BlockPos, tag: &Tag) -> Result<bool, PlacementError> {
+        placement::load_block_entity_data(
+            self.level,
+            pos,
+            tag.as_compound()
+                .expect("BlockInput parser supplies a compound"),
+        )
     }
 }
 struct ReloadHost<'a> {
@@ -137,6 +132,7 @@ impl MinecraftServer {
                 .map_err(|error| match error {
                     PlacementError::Syntax(error) => anyhow::Error::new(error),
                     PlacementError::Level(error) => anyhow::Error::new(CommandLevelFailure(error)),
+                    PlacementError::Serialization(error) => anyhow::Error::new(error),
                 });
                 self.apply_level_effects()?;
                 self.apply_command_result(source, &command.source, result?);

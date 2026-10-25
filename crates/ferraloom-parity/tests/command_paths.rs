@@ -3,6 +3,8 @@
 mod cases;
 #[path = "command_paths/harness.rs"]
 mod harness;
+#[path = "command_paths/placement_nbt.rs"]
+mod placement_nbt;
 
 macro_rules! family {
     ($name:ident, $family:literal) => {
@@ -19,6 +21,7 @@ family!(parity_paths_chat, "chat");
 family!(parity_paths_players, "players");
 family!(parity_paths_admin, "admin");
 family!(parity_paths_placement, "placement");
+family!(parity_paths_placement_nbt, "placement_nbt");
 
 family!(parity_paths_give, "give");
 family!(parity_paths_data_storage, "data_storage");
