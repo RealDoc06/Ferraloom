@@ -173,9 +173,16 @@ pub(super) fn criterion_error(
     error: LootError,
 ) -> Result<(), LevelError> {
     match error {
-        LootError::Unsupported(_) => level.unported_operation(
-            UnportedOperation::AdvancementCriterion(super::criteria::Trigger::from_type(trigger)),
-        ),
+        LootError::Unsupported(source) => level
+            .unported_operation(UnportedOperation::AdvancementCriterion(
+                super::criteria::Trigger::from_type(trigger),
+            ))
+            .map_err(|error| match error {
+                LevelError::UnsupportedAdvancementCriterion(trigger) => {
+                    LevelError::UnsupportedAdvancementPredicate { trigger, source }
+                }
+                error => error,
+            }),
         _ => Err(LevelError::Inventory("advancement predicate evaluation")),
     }
 }
