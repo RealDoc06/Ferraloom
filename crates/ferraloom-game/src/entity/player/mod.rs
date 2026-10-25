@@ -27,7 +27,7 @@ use crate::{
     level::{Level, LevelError},
 };
 use ferraloom_nbt::{CompoundTag, ListTag, Tag};
-use ferraloom_protocol::component::Persistent;
+use ferraloom_protocol::component::{ItemStack, Persistent};
 use ferraloom_util::{BlockPos, ChunkPos, Uuid, Vec3, mth};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -99,6 +99,7 @@ pub struct ServerPlayer {
     pub last_client_input: ferraloom_protocol::play::Input,
     pub text_filtering_enabled: bool,
     pub cooldowns: cooldowns::ServerItemCooldowns,
+    pub(crate) last_item_in_main_hand: ItemStack,
     interaction_range_modifiers: [std::sync::Arc<super::ai::attributes::AttributeModifier>; 2],
     pub view_distance: i32,
     /// Port of ServerPlayer#chunkTrackingView: the canonical desired chunk set.
@@ -289,6 +290,7 @@ impl ServerPlayer {
             },
             text_filtering_enabled: false,
             cooldowns: Default::default(),
+            last_item_in_main_hand: ItemStack::default(),
             interaction_range_modifiers: interaction::range_modifiers(),
             view_distance: 10,
             chunk_tracking_view: Default::default(),

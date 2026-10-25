@@ -44,6 +44,11 @@ fn player_tick<E: Entity + ?Sized>(
     if spectator || passenger {
         crate::entity::movement::set_on_ground(player, false, None, level)?;
     }
+    // LivingEntity#baseTick advances the hand animation before Entity#baseTick.
+    level
+        .entity_mut::<crate::entity::LivingEntity>(player)?
+        .swing_state
+        .tick();
     crate::entity::base_tick(behavior, player, level)?;
     // LivingEntity#baseTick: damage timers and remembered combatants precede
     // tickEffects; breathing and the remaining effect-tick phase are pending.
@@ -62,6 +67,9 @@ fn player_tick<E: Entity + ?Sized>(
         0
     };
     living.tick_current_impulse_grace_time();
+    level
+        .entity_mut::<ServerPlayer>(player)?
+        .tick_attack_strength();
     super::cooldowns::tick(player, level)
 }
 

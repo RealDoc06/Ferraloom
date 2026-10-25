@@ -74,6 +74,7 @@ impl Entity for CowBehavior {
         entity: super::EntityRef,
         level: &mut crate::level::Level,
     ) -> Result<(), crate::level::LevelError> {
+        level.entity_mut::<LivingEntity>(entity)?.swing_state.tick();
         super::base_tick(self, entity, level)?;
         // The live Mob AI/travel body remains pending; these are its inherited
         // LivingEntity damage-state slots, before the future virtual aiStep.

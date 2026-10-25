@@ -17,6 +17,7 @@ pub mod freezing;
 pub mod gliding;
 pub mod hurt;
 pub mod jump;
+pub mod swing;
 pub mod travel;
 
 /// Port of LivingEntity.Fallsounds, selected virtually by the entity family.
@@ -37,6 +38,9 @@ pub struct LivingEntity {
     pub effects_dirty: bool,
     pub use_item: ItemStack,
     pub use_item_remaining: i32,
+    pub(crate) swing_state: swing::SwingState,
+    pub(crate) attack_strength_ticker: i32,
+    pub(crate) item_swap_ticker: i32,
     pub jumping: bool,
     pub xxa: f32,
     pub yya: f32,
@@ -91,6 +95,9 @@ impl LivingEntity {
             effects_dirty: true,
             use_item: ItemStack::default(),
             use_item_remaining: 0,
+            swing_state: Default::default(),
+            attack_strength_ticker: 0,
+            item_swap_ticker: 0,
             jumping: false,
             xxa: 0.0,
             yya: 0.0,
@@ -131,6 +138,15 @@ impl LivingEntity {
         living.parent.set_y_rot(rotation);
         living.y_head_rot = living.parent.yaw;
         living
+    }
+    pub fn is_swinging(&self) -> bool {
+        self.swing_state.is_swinging()
+    }
+    pub fn swing_description(&self) -> Option<&swing::SwingDescription> {
+        self.swing_state.current_swing()
+    }
+    pub fn swing_animation(&self, partial_ticks: f32) -> f32 {
+        self.swing_state.get_animation(partial_ticks)
     }
     /// Port of LivingEntity#isUsingItem (mask 1, not a bit index).
     pub fn is_using_item(&self) -> bool {

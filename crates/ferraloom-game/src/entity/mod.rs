@@ -262,7 +262,6 @@ impl EntityDataView for LivingEntity {
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum EntityMethod {
     PlayerTouch,
-    SwingAndResetAttackStrength,
     PlayShoulderEntityAmbientSound,
     RespawnEntityOnShoulder,
     CheckAutoSpinAttack,
@@ -284,7 +283,6 @@ impl EntityMethod {
     pub const fn name(self) -> &'static str {
         match self {
             Self::PlayerTouch => "playerTouch",
-            Self::SwingAndResetAttackStrength => "swingAndResetAttackStrength",
             Self::PlayShoulderEntityAmbientSound => "playShoulderEntityAmbientSound",
             Self::RespawnEntityOnShoulder => "respawnEntityOnShoulder",
             Self::CheckAutoSpinAttack => "checkAutoSpinAttack",
@@ -572,6 +570,17 @@ pub trait Entity: Sync {
         level: &mut Level,
     ) -> Result<(), LevelError> {
         living::fall_damage::play_block_fall_sound(self, entity, level)
+    }
+    /// Port of LivingEntity#swing, with subtype dispatch retained by callers.
+    fn swing(
+        &self,
+        entity: EntityRef,
+        hand: ferraloom_protocol::play::InteractionHand,
+        animation: ferraloom_protocol::component::SwingAnimation,
+        send_to_self: bool,
+        level: &mut Level,
+    ) -> Result<bool, LevelError> {
+        living::swing::swing(entity, hand, animation, send_to_self, level)
     }
     /// Port of LivingEntity#getFallSounds's inherited selection.
     fn fall_sounds(&self) -> living::FallSounds {
