@@ -179,3 +179,53 @@ fn native_spectator_rule_and_same_section_mode_changes_update_only_generation_ti
     }
     assert_eq!(count, 16);
 }
+
+#[test]
+fn spectator_movement_skips_fall_reads_only_when_touching_unloaded_chunks() {
+    use crate::entity::player::{
+        MovementChecks, MovementResult, PlayerMovement, move_player_with_checks,
+    };
+    use crate::level::tick_rate::TickRateManager;
+
+    for loaded in [false, true] {
+        let mut level = if loaded {
+            crate::entity::tests::level(false)
+        } else {
+            Level::new(Region::new(&Behaviors::EMPTY), LevelContext::fixture(0, 63))
+        };
+        let player = level.next_entity_ref();
+        let mut state = ServerPlayer::new(
+            Uuid::new(1, 2),
+            "spectator".into(),
+            7,
+            Vec3::new(8.5, 80.0, 10.5),
+            GameType::Spectator,
+        );
+        state.no_physics = true;
+        state.fall_distance = 3.25;
+        level
+            .add_entity(player, EntityState::Player(Box::new(state)))
+            .unwrap();
+        let target = Vec3::new(8.5, 79.0, 10.5);
+        let tick_rate = TickRateManager::default();
+        assert_eq!(
+            move_player_with_checks(
+                &mut level,
+                player,
+                PlayerMovement {
+                    position: target,
+                    yaw: 0.0,
+                    pitch: 0.0,
+                    on_ground: false,
+                    horizontal_collision: false,
+                },
+                &MovementChecks::dedicated(&tick_rate),
+            )
+            .unwrap(),
+            MovementResult::Accepted,
+        );
+        let state = level.entity::<ServerPlayer>(player).unwrap();
+        assert_eq!(state.position, target);
+        assert_eq!(state.fall_distance, if loaded { 4.25 } else { 3.25 });
+    }
+}

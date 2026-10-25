@@ -11,7 +11,10 @@ use ferraloom_util::{ChunkPos, mth};
 
 /// Port of Entity#touchingUnloadedChunk. This is a loaded-presence query; it
 /// never acquires a missing chunk or substitutes a block-state read.
-fn touching_unloaded_chunk(player: EntityRef, level: &Level) -> Result<bool, LevelError> {
+pub(super) fn touching_unloaded_chunk(
+    player: EntityRef,
+    level: &Level,
+) -> Result<bool, LevelError> {
     let bounds = level
         .entity::<EntityData>(player)?
         .bounding_box

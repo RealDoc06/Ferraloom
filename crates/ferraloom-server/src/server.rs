@@ -2820,23 +2820,27 @@ impl MinecraftServer {
             )?;
             return Ok(());
         }
-        let center = ChunkPos::containing(BlockPos::new(
-            target.x.floor() as i32,
-            target.y.floor() as i32,
-            target.z.floor() as i32,
-        ));
-        self.request_area(center, 1)?;
-        // getChunk(..., true) waits at this visibility point, never treats missing ownership as air.
-        while (-1..=1).any(|x| {
-            (-1..=1).any(|z| {
-                self.level
-                    .level
-                    .chunk(ChunkPos::new(center.x + x, center.z + z))
-                    .is_none()
-            })
-        }) {
-            self.integrate_jobs()?;
-            tokio::time::sleep(Duration::from_millis(1)).await;
+        // Entity#move's noPhysics branch only moves the receiver; it never
+        // acquires terrain. Waiting here would deadlock an ignored spectator.
+        if !self.player(entity)?.no_physics {
+            let center = ChunkPos::containing(BlockPos::new(
+                target.x.floor() as i32,
+                target.y.floor() as i32,
+                target.z.floor() as i32,
+            ));
+            self.request_area(center, 1)?;
+            // getChunk(..., true) waits at this visibility point, never treats missing ownership as air.
+            while (-1..=1).any(|x| {
+                (-1..=1).any(|z| {
+                    self.level
+                        .level
+                        .chunk(ChunkPos::new(center.x + x, center.z + z))
+                        .is_none()
+                })
+            }) {
+                self.integrate_jobs()?;
+                tokio::time::sleep(Duration::from_millis(1)).await;
+            }
         }
         let checks = MovementChecks::dedicated(&self.tick_rate_manager);
         let result = move_player_with_checks(
