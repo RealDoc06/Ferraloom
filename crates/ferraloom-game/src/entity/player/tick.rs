@@ -45,6 +45,14 @@ fn player_tick<E: Entity + ?Sized>(
         crate::entity::movement::set_on_ground(player, false, None, level)?;
     }
     crate::entity::base_tick(behavior, player, level)?;
+    // LivingEntity#baseTick: damage timers and remembered combatants precede
+    // tickEffects; breathing and the remaining effect-tick phase are pending.
+    crate::entity::living::damage_state::base_tick_damage_state(player, level)?;
+    // LivingEntity#tick checks combat after detectEquipmentUpdates (pending),
+    // before its virtual aiStep, independently of the connection cooldown tick.
+    if level.entity::<EntityData>(player)?.tick_count % 20 == 0 {
+        crate::entity::damage::combat_tracker::recheck_status(behavior, player, level)?;
+    }
     super::ai_step::ai_step(behavior, player, level, tick_rate)?;
     // LivingEntity#tick advances flight time after the virtual aiStep returns.
     let living = level.entity_mut::<crate::entity::LivingEntity>(player)?;

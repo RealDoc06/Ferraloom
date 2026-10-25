@@ -64,6 +64,8 @@ pub struct LivingEntity {
     pub(super) last_hurt_by_player_memory_time: i32,
     pub(super) last_hurt_by_mob: Option<super::EntityReference<LivingEntity>>,
     pub(super) last_hurt_by_mob_timestamp: i32,
+    pub(super) last_hurt_mob: Option<super::EntityRef>,
+    pub(super) last_hurt_mob_timestamp: i32,
     pub(super) last_damage_source: Option<super::DamageSource>,
     pub(super) last_damage_stamp: i64,
 }
@@ -113,6 +115,8 @@ impl LivingEntity {
             last_hurt_by_player_memory_time: 0,
             last_hurt_by_mob: None,
             last_hurt_by_mob_timestamp: 0,
+            last_hurt_mob: None,
+            last_hurt_mob_timestamp: 0,
             last_damage_source: None,
             last_damage_stamp: 0,
         };

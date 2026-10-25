@@ -69,6 +69,20 @@ impl Cow {
 /// Shared Cow dispatcher for the foundation's Entity/LivingEntity primitives.
 pub struct CowBehavior;
 impl Entity for CowBehavior {
+    fn tick(
+        &self,
+        entity: super::EntityRef,
+        level: &mut crate::level::Level,
+    ) -> Result<(), crate::level::LevelError> {
+        super::base_tick(self, entity, level)?;
+        // The live Mob AI/travel body remains pending; these are its inherited
+        // LivingEntity damage-state slots, before the future virtual aiStep.
+        super::living::damage_state::base_tick_damage_state(entity, level)?;
+        if level.entity::<EntityData>(entity)?.tick_count % 20 == 0 {
+            super::damage::combat_tracker::recheck_status(self, entity, level)?;
+        }
+        Ok(())
+    }
     fn is_invulnerable_to(
         &self,
         entity: super::EntityRef,

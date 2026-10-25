@@ -561,3 +561,81 @@ fn native_hurt_sound_selection_baby_pitch_silence_and_separate_sound_rng_match()
     }
     assert_eq!(checked, 30);
 }
+
+#[test]
+fn native_damage_memory_tick_keeps_the_player_cooldown_and_expires_at_the_native_boundaries() {
+    use crate::entity::living::damage_state::{
+        base_tick_damage_state, set_last_hurt_by_mob, set_last_hurt_by_player, set_last_hurt_mob,
+    };
+    let mut checked = 0;
+    for row in VECTORS
+        .lines()
+        .filter(|row| row.starts_with("hurt-memory-tick\t"))
+    {
+        let f: Vec<_> = row.split('\t').collect();
+        let (mut level, entity, attacker) = fixture(f[1] == "player");
+        let values: Vec<i32> = f[4]
+            .trim_matches(['[', ']'])
+            .split(',')
+            .map(|v| v.parse().unwrap())
+            .collect();
+        let player = level.next_entity_ref();
+        let state = ServerPlayer::new(
+            Uuid::new(10, 11),
+            "remembered".into(),
+            level.next_entity_id(),
+            Vec3::ZERO,
+            GameType::Survival,
+        );
+        level
+            .add_entity(player, EntityState::Player(Box::new(state)))
+            .unwrap();
+        level
+            .entity_mut::<LivingEntity>(attacker)
+            .unwrap()
+            .set_health(if f[2] == "true" { 10.0 } else { 0.0 });
+        level.entity_mut::<EntityData>(entity).unwrap().tick_count = values[3];
+        set_last_hurt_by_mob(entity, Some(attacker), &mut level).unwrap();
+        set_last_hurt_mob(entity, Some(attacker), &mut level).unwrap();
+        set_last_hurt_by_player(entity, Some(player), values[2], &mut level).unwrap();
+        let living = level.entity_mut::<LivingEntity>(entity).unwrap();
+        living.hurt_time = values[0];
+        living.damage_cooldown_time = values[1];
+        living.tick_count = values[4];
+        base_tick_damage_state(entity, &mut level).unwrap();
+        let living = level.entity::<LivingEntity>(entity).unwrap();
+        assert_eq!(
+            format!(
+                "{},{},{},{},{},{},{},{}",
+                living.hurt_time,
+                living.damage_cooldown_time,
+                living.last_hurt_by_player_memory_time,
+                living.last_hurt_by_player.is_some(),
+                living.last_hurt_by_mob.is_some(),
+                living.last_hurt_by_mob_timestamp,
+                living.last_hurt_mob.is_some(),
+                living.last_hurt_mob_timestamp
+            ),
+            f[5],
+            "{row}"
+        );
+        checked += 1;
+    }
+    assert_eq!(checked, 24);
+}
+#[test]
+fn last_hurt_mob_holds_the_actual_receiver_until_the_native_alive_check_clears_it() {
+    use crate::entity::living::damage_state::{base_tick_damage_state, set_last_hurt_mob};
+    let (mut level, entity, target) = fixture(false);
+    level.entity_mut::<EntityData>(entity).unwrap().tick_count = 17;
+    set_last_hurt_mob(entity, Some(target), &mut level).unwrap();
+    level.remove_entity(target).unwrap();
+    level.finish_entity_management();
+    assert!(level.entity_state(target).is_ok());
+    base_tick_damage_state(entity, &mut level).unwrap();
+    let living = level.entity::<LivingEntity>(entity).unwrap();
+    assert_eq!(living.last_hurt_mob(), None);
+    assert_eq!(living.last_hurt_mob_timestamp(), 17);
+    level.finish_entity_management();
+    assert!(level.entity_state(target).is_err());
+}

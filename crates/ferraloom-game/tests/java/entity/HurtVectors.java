@@ -35,6 +35,8 @@ public final class HurtVectors {
     List<String> events;LivingEntity victim;boolean stop;Level original;
     GameRules rules;Difficulty difficulty;ServerScoreboard board;DamageSources sources;
     ServerFixture(){super(null,null,null,null,null,null,false,0,List.of(),false);}
+    @Override public net.minecraft.world.level.chunk.ChunkAccess getChunk(int x,int z,net.minecraft.world.level.chunk.status.ChunkStatus status,boolean load){return original.getChunk(x,z,status,load);}
+    @Override public net.minecraft.world.level.border.WorldBorder getWorldBorder(){return original.getWorldBorder();}
     @Override public net.minecraft.world.level.BlockGetter getChunkForCollisions(int x,int z){return original.getChunkForCollisions(x,z);}
     @Override public net.minecraft.world.level.block.state.BlockState getBlockState(net.minecraft.core.BlockPos pos){return original.getBlockState(pos);}
     @Override public GameRules getGameRules(){return rules;}
@@ -110,6 +112,16 @@ public final class HurtVectors {
   static DamageSource source(String name,ServerFixture level,LivingEntity attacker){
     return switch(name){case "fall"->level.damageSources().fall();case "lava"->level.damageSources().lava();case "freeze"->level.damageSources().freeze();case "in_wall"->level.damageSources().inWall();case "drown"->level.damageSources().drown();case "mob_attack"->level.damageSources().mobAttack(attacker);case "generic_kill"->level.damageSources().genericKill();default->level.damageSources().generic();};
   }
+  static void memoryTicks(Level original,sun.misc.Unsafe allocator)throws Exception {
+    int[][] cases={{0,0,0,0,100},{1,1,1,0,100},{10,20,2,0,101},{-1,-1,-1,0,101},{10,20,1,0,Integer.MIN_VALUE},{10,20,2,Integer.MAX_VALUE,Integer.MIN_VALUE}};
+    for(String kind:List.of("cow","player"))for(boolean alive:List.of(false,true))for(int index=0;index<cases.length;index++) {
+      var values=cases[index];LivingEntity victim=kind.equals("player")?player(original,server(original,allocator),allocator):new CowReceiver(original);victim.setPos(8.5,64,8.5);
+      var attacker=new CowReceiver(original);attacker.setHealth(alive?10:0);
+      var player=new LivingVectors(original);victim.tickCount=values[3];victim.setLastHurtByMob(attacker);victim.setLastHurtMob(attacker);victim.setLastHurtByPlayer(player,values[2]);
+      victim.hurtTime=values[0];victim.damageCooldownTime=values[1];victim.tickCount=values[4];victim.baseTick();
+      System.out.println("hurt-memory-tick\t"+kind+"\t"+alive+"\t"+index+"\t"+Arrays.toString(values).replace(" ","")+"\t"+victim.hurtTime+","+victim.damageCooldownTime+","+victim.getLastHurtByPlayerMemoryTime()+","+(ExperienceVectors.field(LivingEntity.class,"lastHurtByPlayer").get(victim)!=null)+","+(ExperienceVectors.field(LivingEntity.class,"lastHurtByMob").get(victim)!=null)+","+victim.getLastHurtByMobTimestamp()+","+(victim.getLastHurtMob()!=null)+","+victim.getLastHurtMobTimestamp());
+    }
+  }
   static void responses(Level original,sun.misc.Unsafe allocator)throws Exception {
     for(double power:new double[]{0,0.4000000059604645,1})for(double resistance:new double[]{0,0.5,1})for(boolean ground:new boolean[]{false,true})for(boolean zero:new boolean[]{false,true}) {
       var level=server(original,allocator);var victim=new CowReceiver(original);level.victim=victim;
@@ -130,6 +142,7 @@ public final class HurtVectors {
   }
   public static void run(Level original)throws Exception {
     var field=sun.misc.Unsafe.class.getDeclaredField("theUnsafe");field.setAccessible(true);var allocator=(sun.misc.Unsafe)field.get(null);
+    memoryTicks(original,allocator);
     responses(original,allocator);
     // damage, armor, toughness, raw absorption, max absorption, resistance,
     // cooldown, lastHurt. Nonfinite full hits stop before the lethal lifecycle.

@@ -43,6 +43,12 @@ impl LivingEntity {
     pub fn last_hurt_by_mob_timestamp(&self) -> i32 {
         self.last_hurt_by_mob_timestamp
     }
+    pub fn last_hurt_mob(&self) -> Option<EntityRef> {
+        self.last_hurt_mob
+    }
+    pub fn last_hurt_mob_timestamp(&self) -> i32 {
+        self.last_hurt_mob_timestamp
+    }
     pub fn combat_tracker(&self) -> &crate::entity::damage::combat_tracker::CombatTracker {
         &self.combat_tracker
     }
@@ -67,6 +73,7 @@ impl LivingEntity {
             self.last_hurt_by_mob
                 .and_then(EntityReference::cached_entity),
         );
+        references.extend(self.last_hurt_mob);
         if let Some(source) = &self.last_damage_source {
             source.trace_entity_refs(references);
         }
@@ -176,6 +183,64 @@ pub fn set_last_hurt_by_player(
     let living = level.entity_mut::<LivingEntity>(entity)?;
     living.last_hurt_by_player = reference;
     living.last_hurt_by_player_memory_time = memory;
+    Ok(())
+}
+/// Port of LivingEntity#setLastHurtMob. The attack producer owns when to call it;
+/// a nonliving target clears the reference while still recording the timestamp.
+pub fn set_last_hurt_mob(
+    entity: EntityRef,
+    target: Option<EntityRef>,
+    level: &mut Level,
+) -> Result<(), LevelError> {
+    let target = target
+        .map(|id| {
+            level
+                .entity_state(id)
+                .map(|state| state.as_living().is_some().then_some(id))
+        })
+        .transpose()?
+        .flatten();
+    let living = level.entity_mut::<LivingEntity>(entity)?;
+    living.last_hurt_mob = target;
+    living.last_hurt_mob_timestamp = living.tick_count;
+    Ok(())
+}
+/// LivingEntity#baseTick's damage-memory slots. The native lethal tickDeath
+/// slot between the timers and memory belongs to the following death slice.
+pub fn base_tick_damage_state(entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
+    let server_player = matches!(
+        level.entity_state(entity)?,
+        crate::entity::EntityState::Player(_)
+    );
+    let living = level.entity_mut::<LivingEntity>(entity)?;
+    if living.hurt_time > 0 {
+        living.hurt_time -= 1;
+    }
+    if living.damage_cooldown_time > 0 && !server_player {
+        living.damage_cooldown_time -= 1;
+    }
+    if living.last_hurt_by_player_memory_time > 0 {
+        living.last_hurt_by_player_memory_time -= 1;
+    } else {
+        living.last_hurt_by_player = None;
+    }
+    if let Some(target) = living.last_hurt_mob
+        && !level.entity_behavior(target)?.is_alive(target, level)?
+    {
+        level.entity_mut::<LivingEntity>(entity)?.last_hurt_mob = None;
+    }
+    if let Some(attacker) = last_hurt_by_mob(entity, level)? {
+        let alive = level.entity_behavior(attacker)?.is_alive(attacker, level)?;
+        let living = level.entity::<LivingEntity>(entity)?;
+        if !alive
+            || living
+                .tick_count
+                .wrapping_sub(living.last_hurt_by_mob_timestamp)
+                > 100
+        {
+            set_last_hurt_by_mob(entity, None, level)?;
+        }
+    }
     Ok(())
 }
 /// Resolving can invalidate a removed cached object. The copied reference is

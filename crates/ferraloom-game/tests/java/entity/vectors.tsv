@@ -1496,6 +1496,30 @@ item-damage-resistant	tag-fall	1	minecraft:on_fire	true
 item-damage-resistant	tag-fall	1	minecraft:lava	true
 item-damage-resistant	tag-fall	1	minecraft:fall	false
 item-damage-resistant	tag-fall	1	minecraft:generic	true
+hurt-memory-tick	cow	false	0	[0,0,0,0,100]	0,0,0,false,false,100,false,0
+hurt-memory-tick	cow	false	1	[1,1,1,0,100]	0,0,0,true,false,100,false,0
+hurt-memory-tick	cow	false	2	[10,20,2,0,101]	9,19,1,true,false,101,false,0
+hurt-memory-tick	cow	false	3	[-1,-1,-1,0,101]	-1,-1,-1,false,false,101,false,0
+hurt-memory-tick	cow	false	4	[10,20,1,0,-2147483648]	9,19,0,true,false,-2147483648,false,0
+hurt-memory-tick	cow	false	5	[10,20,2,2147483647,-2147483648]	9,19,1,true,false,-2147483648,false,2147483647
+hurt-memory-tick	cow	true	0	[0,0,0,0,100]	0,0,0,false,true,0,true,0
+hurt-memory-tick	cow	true	1	[1,1,1,0,100]	0,0,0,true,true,0,true,0
+hurt-memory-tick	cow	true	2	[10,20,2,0,101]	9,19,1,true,false,101,true,0
+hurt-memory-tick	cow	true	3	[-1,-1,-1,0,101]	-1,-1,-1,false,false,101,true,0
+hurt-memory-tick	cow	true	4	[10,20,1,0,-2147483648]	9,19,0,true,true,0,true,0
+hurt-memory-tick	cow	true	5	[10,20,2,2147483647,-2147483648]	9,19,1,true,true,2147483647,true,2147483647
+hurt-memory-tick	player	false	0	[0,0,0,0,100]	0,0,0,false,false,100,false,0
+hurt-memory-tick	player	false	1	[1,1,1,0,100]	0,1,0,true,false,100,false,0
+hurt-memory-tick	player	false	2	[10,20,2,0,101]	9,20,1,true,false,101,false,0
+hurt-memory-tick	player	false	3	[-1,-1,-1,0,101]	-1,-1,-1,false,false,101,false,0
+hurt-memory-tick	player	false	4	[10,20,1,0,-2147483648]	9,20,0,true,false,-2147483648,false,0
+hurt-memory-tick	player	false	5	[10,20,2,2147483647,-2147483648]	9,20,1,true,false,-2147483648,false,2147483647
+hurt-memory-tick	player	true	0	[0,0,0,0,100]	0,0,0,false,true,0,true,0
+hurt-memory-tick	player	true	1	[1,1,1,0,100]	0,1,0,true,true,0,true,0
+hurt-memory-tick	player	true	2	[10,20,2,0,101]	9,20,1,true,false,101,true,0
+hurt-memory-tick	player	true	3	[-1,-1,-1,0,101]	-1,-1,-1,false,false,101,true,0
+hurt-memory-tick	player	true	4	[10,20,1,0,-2147483648]	9,20,0,true,true,0,true,0
+hurt-memory-tick	player	true	5	[10,20,2,2147483647,-2147483648]	9,20,1,true,true,2147483647,true,2147483647
 hurt-knockback	0.0	0.0	false	false	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	5c9f20d58361b331
 hurt-knockback	0.0	0.0	false	true	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	5c9f20d58361b331
 hurt-knockback	0.0	0.0	true	false	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	5c9f20d58361b331
