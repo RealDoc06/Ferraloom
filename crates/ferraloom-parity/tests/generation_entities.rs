@@ -157,8 +157,7 @@ async fn load_and_track(session: &mut Session) -> Result<ObservationLog> {
             .is_empty(),
         "legacy entity NBT was not consumed from the block chunk"
     );
-    let saved = session
-        .saved_world()?
+    let saved = world
         .entities("minecraft:overworld", CENTER)?
         .context("loaded entities were not saved")?;
     let mut uuids = saved
