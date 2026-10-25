@@ -115,3 +115,5 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | server-operations.property.use-native-transport | Parse and apply `server.properties` key `use-native-transport` | `DedicatedServerProperties#<init>` | | - | todo |
 | server-operations.property.view-distance | Parse and apply `server.properties` key `view-distance` | `DedicatedServerProperties#<init>` | | - | todo |
 | server-operations.property.white-list | Parse and apply `server.properties` key `white-list` | `DedicatedServerProperties#<init>` | | - | todo |
+
+| server-operations.levels.dimension-construction | Construct overworld first and each actual registered stem with its generator, static context and independent generation/IO runtime; unknown dimensions are nullable at server lookup and required errors at construction | `MinecraftServer#createLevels; ServerLevel` | `world::root::tests::dimensions_share_one_root_and_keep_their_actual_generators_and_io; unknown_dimension_does_not_fall_back_to_overworld_or_mutate_metadata` (source-only; multi-level ticking/routing follows) | - | partial |

@@ -95,15 +95,31 @@ pub(crate) fn visit_block_collisions(
                 {
                     continue;
                 }
-                let shape = reader.collision_shape(state, pos, context)?.move_by(
-                    f64::from(x),
-                    f64::from(y),
-                    f64::from(z),
-                );
-                if !shape.is_empty()
-                    && shapes::join_is_not_empty(&shape, &entity_shape, BooleanOp::And)
-                    && visitor(pos, shape).is_break()
-                {
+                let block_shape = reader.collision_shape(state, pos, context)?;
+                let shape = if block_shape.ptr_eq(&shapes::block()) {
+                    // BlockCollisions uses the raw box for Shapes.block(); a
+                    // thin query may already have an empty epsilon voxel shape.
+                    if !bb.intersects(Aabb::new(
+                        f64::from(x),
+                        f64::from(y),
+                        f64::from(z),
+                        f64::from(x) + 1.0,
+                        f64::from(y) + 1.0,
+                        f64::from(z) + 1.0,
+                    )) {
+                        continue;
+                    }
+                    block_shape.move_by(f64::from(x), f64::from(y), f64::from(z))
+                } else {
+                    let shape = block_shape.move_by(f64::from(x), f64::from(y), f64::from(z));
+                    if shape.is_empty()
+                        || !shapes::join_is_not_empty(&shape, &entity_shape, BooleanOp::And)
+                    {
+                        continue;
+                    }
+                    shape
+                };
+                if visitor(pos, shape).is_break() {
                     return Ok(std::ops::ControlFlow::Break(()));
                 }
             }
@@ -367,3 +383,6 @@ pub(crate) fn find_free_position_from_context(
     }
     Ok(shapes::join(allowed, &expanded, BooleanOp::OnlyFirst).closest_point_to(preferred))
 }
+
+#[cfg(test)]
+mod tests;

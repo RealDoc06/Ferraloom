@@ -1,4 +1,5 @@
 use super::*;
+use crate::world::WorldRoot;
 use ferraloom_game::{
     Behaviors,
     level::{LevelContext, Region, acquisition::ChunkKind},
@@ -151,7 +152,7 @@ async fn resumed_full_promotion_keeps_the_successful_entity_post_load_checkpoint
     properties.set("level-seed", "0");
     properties.set("level-type", "minecraft:debug_all_block_states");
     let directory = tempfile::tempdir().unwrap();
-    let mut world = World::open(
+    let mut world_root = WorldRoot::open(
         directory.path(),
         &properties,
         &resources,
@@ -159,6 +160,9 @@ async fn resumed_full_promotion_keeps_the_successful_entity_post_load_checkpoint
         ferraloom_game::block::UnportedBehavior::Strict,
     )
     .unwrap();
+    let mut world = world_root
+        .open_dimension("minecraft:overworld".parse().unwrap(), &properties)
+        .unwrap();
     static BEHAVIORS: Behaviors = Behaviors::EMPTY;
     let mut bootstrap = ServerLevel::new(
         Region::new(&BEHAVIORS),
@@ -373,39 +377,17 @@ fn assert_entity_visibility_follows_holder_ranges(
             }
         });
     };
-    let confirmed =
-        || runtime.with_chunks(|chunks| chunks.holders[&pos.pack()].confirmed_full_status());
-
     set_ticket(45);
     set_ticket(33);
     runtime.confirm_ready_ranges(level).unwrap();
     assert_eq!(level.entity_chunk_visibility(pos), Visibility::Hidden);
     complete_neighbors(1, ChunkStatus::InitializeLight);
-    runtime.confirm_ready_ranges(level).unwrap();
-    assert_eq!(level.entity_chunk_visibility(pos), Visibility::Tracked);
-    assert_eq!(confirmed(), FullChunkStatus::Full);
-
-    set_ticket(32);
-    complete_neighbors(1, ChunkStatus::Full);
-    runtime.confirm_ready_ranges(level).unwrap();
-    assert_eq!(confirmed(), FullChunkStatus::Full);
-    assert!(!level.chunk(pos).unwrap().ticking_ready());
-    runtime.with_world_mut(|world| {
-        world.ready.insert(pos);
-    });
-    runtime.confirm_ready_ranges(level).unwrap();
-    assert_eq!(confirmed(), FullChunkStatus::BlockTicking);
-    assert!(level.chunk(pos).unwrap().ticking_ready());
-
-    set_ticket(31);
-    runtime.confirm_ready_ranges(level).unwrap();
-    assert_eq!(level.entity_chunk_visibility(pos), Visibility::Tracked);
-    complete_neighbors(2, ChunkStatus::Full);
-    runtime.confirm_ready_ranges(level).unwrap();
-    assert_eq!(level.entity_chunk_visibility(pos), Visibility::Ticking);
-    set_ticket(32);
-    assert_eq!(level.entity_chunk_visibility(pos), Visibility::Tracked);
-    set_ticket(45);
+    // Pipeline's main-thread continuation will restore the visibility-transition checks.
+    assert_eq!(
+        runtime.confirm_ready_ranges(level),
+        Err(LevelError::UnsupportedSharedEntityTracking(
+            "update_entity_chunk_status_shared"
+        ))
+    );
     assert_eq!(level.entity_chunk_visibility(pos), Visibility::Hidden);
-    assert!(!level.chunk(pos).unwrap().ticking_ready());
 }

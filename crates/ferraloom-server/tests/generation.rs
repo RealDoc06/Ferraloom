@@ -1,7 +1,7 @@
 use anyhow::{Result, ensure};
 use ferraloom_data::datapack::{Pack, ResourceManager};
 use ferraloom_game::block::UnportedBehavior;
-use ferraloom_server::{properties::ServerProperties, registries::RegistrySet, world::World};
+use ferraloom_server::{properties::ServerProperties, registries::RegistrySet, world::WorldRoot};
 use ferraloom_util::ChunkPos;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -14,18 +14,21 @@ async fn default_noise_reaches_full_without_skips_and_synthetic_unported_is_reje
     properties.set("level-seed", 0);
     for policy in [UnportedBehavior::Strict, UnportedBehavior::Warn] {
         let directory = tempfile::tempdir()?;
-        let mut world = World::open(
+        let mut world_root = WorldRoot::open(
             directory.path(),
             &properties,
             &resources,
             &registries,
             policy,
         )?;
+        let mut world = world_root
+            .open_dimension("minecraft:overworld".parse().unwrap(), &properties)
+            .unwrap();
         ensure!(
             world.generation_skips.is_empty(),
             "unexpected {policy:?} generation skips"
         );
-        let pos = ChunkPos::containing(world.spawn);
+        let pos = ChunkPos::containing(world_root.spawn_position());
         world.request(0, pos);
         let terrain = tokio::time::timeout(std::time::Duration::from_secs(60), async {
             loop {
@@ -73,16 +76,17 @@ async fn default_noise_reaches_full_without_skips_and_synthetic_unported_is_reje
     }
     static PENDING: Behaviors = Behaviors::EMPTY.with_block(Block::STONE, &PendingPolicyFixture);
     let mut level = Level::new(Region::new(&PENDING), LevelContext::fixture(0, 63));
+    let unused_actor = level.next_entity_ref();
     let state = Block::STONE.default_state();
     ensure!(matches!(
-        level.call_step_on(state, BlockPos::ZERO, EntityRef(0)),
+        level.call_step_on(state, BlockPos::ZERO, unused_actor),
         Err(LevelError::UnsupportedBlock(Block::STONE))
     ));
     ensure!(level.unported_behavior_stats().skipped_calls == 0);
     level.set_unported_behavior(UnportedBehavior::Warn);
     ensure!(
         level
-            .call_step_on(state, BlockPos::ZERO, EntityRef(0))
+            .call_step_on(state, BlockPos::ZERO, unused_actor)
             .is_ok()
     );
     ensure!(level.unported_behavior_stats().skipped_calls == 1);

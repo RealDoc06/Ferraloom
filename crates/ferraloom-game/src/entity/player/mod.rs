@@ -11,7 +11,9 @@ pub mod food;
 pub mod game_mode;
 mod interaction;
 pub(crate) mod item_tick;
+mod notifications;
 pub mod shoulders;
+pub use notifications::{build_limit_packet, send_build_limit_message};
 mod spawn;
 mod stuck;
 mod tick;
@@ -95,6 +97,15 @@ pub struct ServerPlayer {
     pub cooldowns: cooldowns::ServerItemCooldowns,
     interaction_range_modifiers: [std::sync::Arc<super::ai::attributes::AttributeModifier>; 2],
     pub view_distance: i32,
+    /// Port of ServerPlayer#chunkTrackingView: the canonical desired chunk set.
+    pub chunk_tracking_view: std::collections::HashSet<ChunkPos>,
+    /// Port of ChunkTrackingView.Positioned#center, absent for EMPTY.
+    pub chunk_tracking_center: Option<ChunkPos>,
+    /// Port of ServerPlayer#getLastSectionPos, set by ChunkMap#updatePlayerPos.
+    pub chunk_tracking_section: Option<ferraloom_util::SectionPos>,
+    /// Port of ServerGamePacketListenerImpl#chunkSender: canonical pending/sent
+    /// chunks, quotas and acknowledgments, owned with the gameplay player.
+    pub chunk_sender: crate::level::chunk_map::PlayerChunkSender,
     pub loaded: bool,
     pub connection_ticks: u64,
     pub teleport: super::teleport::TeleportState,
@@ -274,6 +285,10 @@ impl ServerPlayer {
             cooldowns: Default::default(),
             interaction_range_modifiers: interaction::range_modifiers(),
             view_distance: 10,
+            chunk_tracking_view: Default::default(),
+            chunk_tracking_center: None,
+            chunk_tracking_section: None,
+            chunk_sender: Default::default(),
             loaded: false,
             connection_ticks: 0,
             teleport: Default::default(),
@@ -1385,7 +1400,7 @@ mod tests {
                 .set_block_state(BlockPos::new(4, y, 1), Block::STONE.default_state())
                 .unwrap();
         }
-        let entity = EntityRef(1);
+        let entity = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
         let player = ServerPlayer::new(
             Uuid::NIL,
             "Walker".into(),

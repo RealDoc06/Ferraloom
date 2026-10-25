@@ -10,6 +10,7 @@ use ferraloom_util::{BlockPos, Direction};
 
 mod furniture;
 mod signs;
+pub use signs::wall_hanging_sign_can_place;
 
 pub(super) struct ContainerPlacement;
 pub(super) static CONTAINER_PLACEMENT: ContainerPlacement = ContainerPlacement;
@@ -149,6 +150,17 @@ fn least_oxidized_connected(
     Ok(chosen.default_state().with_properties_of(state))
 }
 impl BlockBehavior for ContainerPlacement {
+    fn update_shape(
+        &self,
+        state: BlockState,
+        pos: BlockPos,
+        direction: Direction,
+        neighbor_pos: BlockPos,
+        neighbor: BlockState,
+        level: &mut LevelAccessRef<'_, '_>,
+    ) -> Result<BlockState, LevelError> {
+        signs::update_shape(state, pos, direction, neighbor_pos, neighbor, level)
+    }
     fn can_survive(
         &self,
         state: BlockState,
@@ -241,6 +253,11 @@ impl BlockBehavior for ContainerPlacement {
 #[cfg(test)]
 mod furniture_tests;
 #[cfg(test)]
+mod helper_tests;
+#[cfg(test)]
 mod post_tests;
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod support_tests;

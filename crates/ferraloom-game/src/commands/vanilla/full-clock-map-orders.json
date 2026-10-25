@@ -1,0 +1,44 @@
+[
+  {
+    "identity_calls": 0,
+    "entries": [
+      {
+        "clock": "minecraft:the_end",
+        "identity_hash": 1012571819,
+        "hash": 1012571819,
+        "total_ticks": 5678,
+        "partial_tick": 0.75,
+        "rate": 0.5
+      },
+      {
+        "clock": "minecraft:overworld",
+        "identity_hash": 924243260,
+        "hash": 924243260,
+        "total_ticks": 1234,
+        "partial_tick": 0.25,
+        "rate": 2.0
+      }
+    ]
+  },
+  {
+    "identity_calls": 1,
+    "entries": [
+      {
+        "clock": "minecraft:overworld",
+        "identity_hash": 1012571819,
+        "hash": 1012571819,
+        "total_ticks": 1234,
+        "partial_tick": 0.25,
+        "rate": 2.0
+      },
+      {
+        "clock": "minecraft:the_end",
+        "identity_hash": 344393853,
+        "hash": 344393853,
+        "total_ticks": 5678,
+        "partial_tick": 0.75,
+        "rate": 0.5
+      }
+    ]
+  }
+]

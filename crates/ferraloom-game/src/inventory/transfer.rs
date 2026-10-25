@@ -780,7 +780,7 @@ mod tests {
             Region::new(&BEHAVIORS),
             crate::level::LevelContext::fixture(0, 63),
         );
-        let player = EntityRef(1);
+        let player = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
         let mut state = ServerPlayer::new(
             Uuid::from_int_array([0, 0, 0, 1]),
             "transfer".into(),

@@ -1,6 +1,6 @@
 //! Port of NoteBlock's instrument selection, redstone edge and sound event.
 use crate::{
-    block::{BlockBehavior, LevelAccessRef, LevelReaderRef},
+    block::{BlockBehavior, InteractionResult, LevelAccessRef, LevelReaderRef, UseContext},
     entity::EntityRef,
     level::{Level, LevelError, events::BlockEvent, redstone::Orientation},
 };
@@ -75,6 +75,53 @@ fn play_note(
     Ok(())
 }
 impl BlockBehavior for NoteBlock {
+    /// Port of NoteBlock#useItemOn. A top instrument lets the held item place
+    /// itself; every other item reaches the native empty-hand tuning fallback.
+    fn use_item_on(
+        &self,
+        _state: BlockState,
+        _pos: BlockPos,
+        context: &UseContext,
+        level: &mut Level,
+    ) -> Result<InteractionResult, LevelError> {
+        let stack = level
+            .entity::<crate::entity::player::ServerPlayer>(context.player)?
+            .get_item_in_hand(context.hand);
+        Ok(
+            if level.item_tags()?.contains_key(
+                ferraloom_data::tags::ItemTags::NOTE_BLOCK_TOP_INSTRUMENTS,
+                stack.item(),
+            ) && context.hit.direction == Direction::Up
+            {
+                InteractionResult::Pass
+            } else {
+                InteractionResult::TryWithEmptyHand
+            },
+        )
+    }
+    /// Port of NoteBlock#useWithoutItem. The captured tuned state is passed to
+    /// playNote even if setBlock's synchronous callbacks replace the receiver.
+    fn use_without_item(
+        &self,
+        state: BlockState,
+        pos: BlockPos,
+        context: &UseContext,
+        level: &mut Level,
+    ) -> Result<InteractionResult, LevelError> {
+        let tuned = state
+            .with(p::NOTE, (state.get(p::NOTE).unwrap() + 1) % 25)
+            .unwrap();
+        level.set_block_and_update(pos, tuned)?;
+        play_note(level, pos, tuned, Some(context.player))?;
+        crate::stats::award_stat(
+            level,
+            context.player,
+            crate::stats::Stat::Custom(crate::stats::custom::Id::TUNE_NOTEBLOCK),
+            1,
+        )?;
+        Ok(InteractionResult::SUCCESS)
+    }
+
     fn update_shape(
         &self,
         state: BlockState,

@@ -162,7 +162,7 @@ fn vanilla_trigger_codecs_and_synthetic_matches() {
 struct Facts;
 impl PredicateContext for Facts {
     fn entity_type(&self, entity: EntityRef) -> Result<EntityType> {
-        Ok(match entity.0 {
+        Ok(match entity.serial() {
             0 => EntityType::PLAYER,
             1 => EntityType::PIG,
             _ => EntityType::COW,
@@ -196,8 +196,14 @@ fn scenario(instance: &TriggerInstance, n: i32, context: &mut MatchContext<'_>) 
     use TriggerEvent as E;
     let origin = context.origin;
     let start = Vec3::new(-3.0, 60.0, 2.0);
-    let pig = create_context(origin, EntityRef(1));
-    let cow = create_context(origin, EntityRef(2));
+    let pig = create_context(
+        origin,
+        EntityRef::fixture(crate::level::RegionId::FIXTURE, 1),
+    );
+    let cow = create_context(
+        origin,
+        EntityRef::fixture(crate::level::RegionId::FIXTURE, 2),
+    );
     let entity = if n == 1 { &cow } else { &pig };
     let item = match n {
         2 => ItemStack::default(),
@@ -207,15 +213,15 @@ fn scenario(instance: &TriggerInstance, n: i32, context: &mut MatchContext<'_>) 
     let state = if n == 1 { Block::OAK_LOG } else { Block::STONE }.default_state();
     let location = LootParams {
         origin: Some(origin),
-        this_entity: Some(EntityRef(0)),
+        this_entity: Some(EntityRef::fixture(crate::level::RegionId::FIXTURE, 0)),
         tool: Some(item.clone()),
         block_state: Some(state),
         ..Default::default()
     };
     let source = DamageSource {
         damage_type: id("generic"),
-        source: Some(EntityRef(1)),
-        direct: Some(EntityRef(1)),
+        source: Some(EntityRef::fixture(crate::level::RegionId::FIXTURE, 1)),
+        direct: Some(EntityRef::fixture(crate::level::RegionId::FIXTURE, 1)),
         position: None,
     };
     let inventory = [
@@ -313,7 +319,7 @@ fn scenario(instance: &TriggerInstance, n: i32, context: &mut MatchContext<'_>) 
             to: &to,
         },
         C::Effects { .. } => E::Effects {
-            player: EntityRef(0),
+            player: EntityRef::fixture(crate::level::RegionId::FIXTURE, 0),
             source: (n != 2).then_some(entity),
         },
         C::Distance { .. } => E::Distance {
@@ -479,7 +485,10 @@ impl RewardHarness {
                     for recipe in addition.unlocked {
                         let recipe = id(&recipe.to_string());
                         let origin = Vec3::new(1.0, 64.0, 2.0);
-                        let params = create_context(origin, EntityRef(0));
+                        let params = create_context(
+                            origin,
+                            EntityRef::fixture(crate::level::RegionId::FIXTURE, 0),
+                        );
                         let data = LootData::default();
                         let mut random = LegacyRandomSource::new(42);
                         let mut context =
@@ -550,7 +559,10 @@ fn vanilla_player_listeners_visibility_packets_rewards_and_persistence() {
             }
         } else if action == "trigger:tick" {
             let origin = Vec3::new(1.0, 64.0, 2.0);
-            let params = create_context(origin, EntityRef(0));
+            let params = create_context(
+                origin,
+                EntityRef::fixture(crate::level::RegionId::FIXTURE, 0),
+            );
             let data = LootData::default();
             let mut random = LegacyRandomSource::new(42);
             let mut context = MatchContext::borrowed(&data, &Facts, &mut random, origin);
@@ -656,7 +668,10 @@ fn unavailable_trigger_facts_are_errors_and_impossible_never_awards() {
         context
             .predicate(
                 criterion.instance.player.as_ref().unwrap(),
-                &create_context(Vec3::ZERO, EntityRef(0))
+                &create_context(
+                    Vec3::ZERO,
+                    EntityRef::fixture(crate::level::RegionId::FIXTURE, 0)
+                )
             )
             .is_err()
     );
@@ -868,7 +883,10 @@ fn vanilla_nested_reward_visibility_order_and_post_reward_revoke() {
                             let matched = player
                                 .matching_listeners(
                                     TriggerType::RecipeUnlocked,
-                                    &create_context(origin, EntityRef(0)),
+                                    &create_context(
+                                        origin,
+                                        EntityRef::fixture(crate::level::RegionId::FIXTURE, 0),
+                                    ),
                                     &mut context,
                                     |instance, context| {
                                         instance.matches(

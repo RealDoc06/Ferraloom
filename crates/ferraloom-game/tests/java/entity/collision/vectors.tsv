@@ -1,0 +1,15 @@
+block-collision-epsilon	minecraft:stone	thin-below	3fb999999999999a,40503fffff94a036,3fb999999999999a,3feccccccccccccd,4050400000000000,3feccccccccccccd	true	1	false	0,4050000000000000,0,3ff0000000000000,4050400000000000,3ff0000000000000
+block-collision-epsilon	minecraft:stone	wider-below	3fb999999999999a,40503fffff29406b,3fb999999999999a,3feccccccccccccd,4050400000000000,3feccccccccccccd	true	1	false	0,4050000000000000,0,3ff0000000000000,4050400000000000,3ff0000000000000
+block-collision-epsilon	minecraft:stone	touching-above	3fb999999999999a,4050400000000000,3fb999999999999a,3feccccccccccccd,4050600000000000,3feccccccccccccd	true	0	true	-
+block-collision-epsilon	minecraft:stone	thin-east	3fefffffca501acb,4050266666666666,3fb999999999999a,3ff0000000000000,405039999999999a,3feccccccccccccd	true	1	false	0,4050000000000000,0,3ff0000000000000,4050400000000000,3ff0000000000000
+block-collision-epsilon	minecraft:stone	thin-south	3fb999999999999a,4050266666666666,3fefffffca501acb,3feccccccccccccd,405039999999999a,3ff0000000000000	true	1	false	0,4050000000000000,0,3ff0000000000000,4050400000000000,3ff0000000000000
+block-collision-epsilon	minecraft:stone_slab	thin-below	3fb999999999999a,40503fffff94a036,3fb999999999999a,3feccccccccccccd,4050400000000000,3feccccccccccccd	false	0	true	-
+block-collision-epsilon	minecraft:stone_slab	wider-below	3fb999999999999a,40503fffff29406b,3fb999999999999a,3feccccccccccccd,4050400000000000,3feccccccccccccd	false	1	false	0,4050200000000000,0,3ff0000000000000,4050400000000000,3ff0000000000000
+block-collision-epsilon	minecraft:stone_slab	touching-above	3fb999999999999a,4050400000000000,3fb999999999999a,3feccccccccccccd,4050600000000000,3feccccccccccccd	false	0	true	-
+block-collision-epsilon	minecraft:stone_slab	thin-east	3fefffffca501acb,4050266666666666,3fb999999999999a,3ff0000000000000,405039999999999a,3feccccccccccccd	false	0	true	-
+block-collision-epsilon	minecraft:stone_slab	thin-south	3fb999999999999a,4050266666666666,3fefffffca501acb,3feccccccccccccd,405039999999999a,3ff0000000000000	false	0	true	-
+block-collision-epsilon	minecraft:air	thin-below	3fb999999999999a,40503fffff94a036,3fb999999999999a,3feccccccccccccd,4050400000000000,3feccccccccccccd	false	0	true	-
+block-collision-epsilon	minecraft:air	wider-below	3fb999999999999a,40503fffff29406b,3fb999999999999a,3feccccccccccccd,4050400000000000,3feccccccccccccd	false	0	true	-
+block-collision-epsilon	minecraft:air	touching-above	3fb999999999999a,4050400000000000,3fb999999999999a,3feccccccccccccd,4050600000000000,3feccccccccccccd	false	0	true	-
+block-collision-epsilon	minecraft:air	thin-east	3fefffffca501acb,4050266666666666,3fb999999999999a,3ff0000000000000,405039999999999a,3feccccccccccccd	false	0	true	-
+block-collision-epsilon	minecraft:air	thin-south	3fb999999999999a,4050266666666666,3fefffffca501acb,3feccccccccccccd,405039999999999a,3ff0000000000000	false	0	true	-

@@ -1,0 +1,3120 @@
+[
+  {
+    "input": {
+      "id": "minecraft:stone"
+    },
+    "count": 1
+  },
+  {
+    "input": {
+      "id": "minecraft:stone"
+    },
+    "count": 2
+  },
+  {
+    "input": {
+      "id": "minecraft:stone"
+    },
+    "count": 65,
+    "reason": "Item stack with stack size of 65 was larger than maximum: 64",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:stone",
+        64
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:stone"
+    },
+    "count": 100,
+    "reason": "Item stack with stack size of 100 was larger than maximum: 64",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:stone",
+        64
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:diamond_sword"
+    },
+    "count": 1
+  },
+  {
+    "input": {
+      "id": "minecraft:diamond_sword"
+    },
+    "count": 2,
+    "reason": "Item stack with stack size of 2 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:diamond_sword",
+        1
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:diamond_sword"
+    },
+    "count": 65,
+    "reason": "Item stack with stack size of 65 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:diamond_sword",
+        1
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:diamond_sword"
+    },
+    "count": 100,
+    "reason": "Item stack with stack size of 100 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:diamond_sword",
+        1
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:air"
+    },
+    "count": 1
+  },
+  {
+    "input": {
+      "id": "minecraft:air"
+    },
+    "count": 2,
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:air",
+        1
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:air"
+    },
+    "count": 65,
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:air",
+        1
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:air"
+    },
+    "count": 100,
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:air",
+        1
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:stone",
+      "components": {
+        "minecraft:max_damage": 10
+      }
+    },
+    "count": 1,
+    "reason": "Item cannot be both damageable and stackable",
+    "input_error": {
+      "translate": "arguments.item.malformed",
+      "with": [
+        "Item cannot be both damageable and stackable"
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:stone",
+      "components": {
+        "minecraft:max_damage": 10
+      }
+    },
+    "count": 2,
+    "reason": "Item cannot be both damageable and stackable",
+    "input_error": {
+      "translate": "arguments.item.malformed",
+      "with": [
+        "Item cannot be both damageable and stackable"
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:stone",
+      "components": {
+        "minecraft:max_damage": 10
+      }
+    },
+    "count": 65,
+    "reason": "Item cannot be both damageable and stackable",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:stone",
+        64
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:stone",
+      "components": {
+        "minecraft:max_damage": 10
+      }
+    },
+    "count": 100,
+    "reason": "Item cannot be both damageable and stackable",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:stone",
+        64
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:stone",
+      "components": {
+        "minecraft:max_damage": 10,
+        "minecraft:max_stack_size": 1
+      }
+    },
+    "count": 1
+  },
+  {
+    "input": {
+      "id": "minecraft:stone",
+      "components": {
+        "minecraft:max_damage": 10,
+        "minecraft:max_stack_size": 1
+      }
+    },
+    "count": 2,
+    "reason": "Item stack with stack size of 2 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:stone",
+        1
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:stone",
+      "components": {
+        "minecraft:max_damage": 10,
+        "minecraft:max_stack_size": 1
+      }
+    },
+    "count": 65,
+    "reason": "Item stack with stack size of 65 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:stone",
+        1
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:stone",
+      "components": {
+        "minecraft:max_damage": 10,
+        "minecraft:max_stack_size": 1
+      }
+    },
+    "count": 100,
+    "reason": "Item stack with stack size of 100 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:stone",
+        1
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:diamond_sword",
+      "components": {
+        "!minecraft:max_stack_size": {}
+      }
+    },
+    "count": 1
+  },
+  {
+    "input": {
+      "id": "minecraft:diamond_sword",
+      "components": {
+        "!minecraft:max_stack_size": {}
+      }
+    },
+    "count": 2,
+    "reason": "Item stack with stack size of 2 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:diamond_sword",
+        1
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:diamond_sword",
+      "components": {
+        "!minecraft:max_stack_size": {}
+      }
+    },
+    "count": 65,
+    "reason": "Item stack with stack size of 65 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:diamond_sword",
+        1
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:diamond_sword",
+      "components": {
+        "!minecraft:max_stack_size": {}
+      }
+    },
+    "count": 100,
+    "reason": "Item stack with stack size of 100 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:diamond_sword",
+        1
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:stone",
+      "components": {
+        "minecraft:container": [
+          {
+            "slot": 0,
+            "item": {
+              "id": "minecraft:diamond_sword",
+              "count": 2
+            }
+          }
+        ]
+      }
+    },
+    "count": 1,
+    "reason": "Item stack with count of 2 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.malformed",
+      "with": [
+        "Item stack with count of 2 was larger than maximum: 1"
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:stone",
+      "components": {
+        "minecraft:container": [
+          {
+            "slot": 0,
+            "item": {
+              "id": "minecraft:diamond_sword",
+              "count": 2
+            }
+          }
+        ]
+      }
+    },
+    "count": 2,
+    "reason": "Item stack with count of 2 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.malformed",
+      "with": [
+        "Item stack with count of 2 was larger than maximum: 1"
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:stone",
+      "components": {
+        "minecraft:container": [
+          {
+            "slot": 0,
+            "item": {
+              "id": "minecraft:diamond_sword",
+              "count": 2
+            }
+          }
+        ]
+      }
+    },
+    "count": 65,
+    "reason": "Item stack with count of 2 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:stone",
+        64
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:stone",
+      "components": {
+        "minecraft:container": [
+          {
+            "slot": 0,
+            "item": {
+              "id": "minecraft:diamond_sword",
+              "count": 2
+            }
+          }
+        ]
+      }
+    },
+    "count": 100,
+    "reason": "Item stack with count of 2 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:stone",
+        64
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:stone",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:diamond_sword",
+            "count": 2
+          }
+        ]
+      }
+    },
+    "count": 1,
+    "reason": "Item stack with count of 2 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.malformed",
+      "with": [
+        "Item stack with count of 2 was larger than maximum: 1"
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:stone",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:diamond_sword",
+            "count": 2
+          }
+        ]
+      }
+    },
+    "count": 2,
+    "reason": "Item stack with count of 2 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.malformed",
+      "with": [
+        "Item stack with count of 2 was larger than maximum: 1"
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:stone",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:diamond_sword",
+            "count": 2
+          }
+        ]
+      }
+    },
+    "count": 65,
+    "reason": "Item stack with count of 2 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:stone",
+        64
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:stone",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:diamond_sword",
+            "count": 2
+          }
+        ]
+      }
+    },
+    "count": 100,
+    "reason": "Item stack with count of 2 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:stone",
+        64
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:stone",
+      "components": {
+        "minecraft:charged_projectiles": [
+          {
+            "id": "minecraft:diamond_sword",
+            "count": 2
+          }
+        ]
+      }
+    },
+    "count": 1,
+    "reason": "Item stack with count of 2 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.malformed",
+      "with": [
+        "Item stack with count of 2 was larger than maximum: 1"
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:stone",
+      "components": {
+        "minecraft:charged_projectiles": [
+          {
+            "id": "minecraft:diamond_sword",
+            "count": 2
+          }
+        ]
+      }
+    },
+    "count": 2,
+    "reason": "Item stack with count of 2 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.malformed",
+      "with": [
+        "Item stack with count of 2 was larger than maximum: 1"
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:stone",
+      "components": {
+        "minecraft:charged_projectiles": [
+          {
+            "id": "minecraft:diamond_sword",
+            "count": 2
+          }
+        ]
+      }
+    },
+    "count": 65,
+    "reason": "Item stack with count of 2 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:stone",
+        64
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:stone",
+      "components": {
+        "minecraft:charged_projectiles": [
+          {
+            "id": "minecraft:diamond_sword",
+            "count": 2
+          }
+        ]
+      }
+    },
+    "count": 100,
+    "reason": "Item stack with count of 2 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:stone",
+        64
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:stone",
+      "components": {
+        "minecraft:charged_projectiles": [
+          {
+            "id": "minecraft:diamond_sword",
+            "count": 3
+          }
+        ],
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:stone",
+            "count": 65
+          }
+        ],
+        "minecraft:container": [
+          {
+            "slot": 0,
+            "item": {
+              "id": "minecraft:diamond_sword",
+              "count": 2
+            }
+          }
+        ]
+      }
+    },
+    "count": 1,
+    "reason": "Item stack with count of 2 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.malformed",
+      "with": [
+        "Item stack with count of 2 was larger than maximum: 1"
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:stone",
+      "components": {
+        "minecraft:charged_projectiles": [
+          {
+            "id": "minecraft:diamond_sword",
+            "count": 3
+          }
+        ],
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:stone",
+            "count": 65
+          }
+        ],
+        "minecraft:container": [
+          {
+            "slot": 0,
+            "item": {
+              "id": "minecraft:diamond_sword",
+              "count": 2
+            }
+          }
+        ]
+      }
+    },
+    "count": 2,
+    "reason": "Item stack with count of 2 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.malformed",
+      "with": [
+        "Item stack with count of 2 was larger than maximum: 1"
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:stone",
+      "components": {
+        "minecraft:charged_projectiles": [
+          {
+            "id": "minecraft:diamond_sword",
+            "count": 3
+          }
+        ],
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:stone",
+            "count": 65
+          }
+        ],
+        "minecraft:container": [
+          {
+            "slot": 0,
+            "item": {
+              "id": "minecraft:diamond_sword",
+              "count": 2
+            }
+          }
+        ]
+      }
+    },
+    "count": 65,
+    "reason": "Item stack with count of 2 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:stone",
+        64
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:stone",
+      "components": {
+        "minecraft:charged_projectiles": [
+          {
+            "id": "minecraft:diamond_sword",
+            "count": 3
+          }
+        ],
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:stone",
+            "count": 65
+          }
+        ],
+        "minecraft:container": [
+          {
+            "slot": 0,
+            "item": {
+              "id": "minecraft:diamond_sword",
+              "count": 2
+            }
+          }
+        ]
+      }
+    },
+    "count": 100,
+    "reason": "Item stack with count of 2 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:stone",
+        64
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:bundle",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 97
+            }
+          }
+        ]
+      }
+    },
+    "count": 1
+  },
+  {
+    "input": {
+      "id": "minecraft:bundle",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 97
+            }
+          }
+        ]
+      }
+    },
+    "count": 2,
+    "reason": "Item stack with stack size of 2 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:bundle",
+        1
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:bundle",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 97
+            }
+          }
+        ]
+      }
+    },
+    "count": 65,
+    "reason": "Item stack with stack size of 65 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:bundle",
+        1
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:bundle",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 97
+            }
+          }
+        ]
+      }
+    },
+    "count": 100,
+    "reason": "Item stack with stack size of 100 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:bundle",
+        1
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:bundle",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 97
+            }
+          },
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 89
+            }
+          }
+        ]
+      }
+    },
+    "count": 1
+  },
+  {
+    "input": {
+      "id": "minecraft:bundle",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 97
+            }
+          },
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 89
+            }
+          }
+        ]
+      }
+    },
+    "count": 2,
+    "reason": "Item stack with stack size of 2 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:bundle",
+        1
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:bundle",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 97
+            }
+          },
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 89
+            }
+          }
+        ]
+      }
+    },
+    "count": 65,
+    "reason": "Item stack with stack size of 65 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:bundle",
+        1
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:bundle",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 97
+            }
+          },
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 89
+            }
+          }
+        ]
+      }
+    },
+    "count": 100,
+    "reason": "Item stack with stack size of 100 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:bundle",
+        1
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:bundle",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 97
+            }
+          },
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 89
+            }
+          },
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 83
+            }
+          }
+        ]
+      }
+    },
+    "count": 1
+  },
+  {
+    "input": {
+      "id": "minecraft:bundle",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 97
+            }
+          },
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 89
+            }
+          },
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 83
+            }
+          }
+        ]
+      }
+    },
+    "count": 2,
+    "reason": "Item stack with stack size of 2 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:bundle",
+        1
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:bundle",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 97
+            }
+          },
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 89
+            }
+          },
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 83
+            }
+          }
+        ]
+      }
+    },
+    "count": 65,
+    "reason": "Item stack with stack size of 65 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:bundle",
+        1
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:bundle",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 97
+            }
+          },
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 89
+            }
+          },
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 83
+            }
+          }
+        ]
+      }
+    },
+    "count": 100,
+    "reason": "Item stack with stack size of 100 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:bundle",
+        1
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:bundle",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 97
+            }
+          },
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 89
+            }
+          },
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 83
+            }
+          },
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 79
+            }
+          }
+        ]
+      }
+    },
+    "count": 1
+  },
+  {
+    "input": {
+      "id": "minecraft:bundle",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 97
+            }
+          },
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 89
+            }
+          },
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 83
+            }
+          },
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 79
+            }
+          }
+        ]
+      }
+    },
+    "count": 2,
+    "reason": "Item stack with stack size of 2 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:bundle",
+        1
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:bundle",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 97
+            }
+          },
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 89
+            }
+          },
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 83
+            }
+          },
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 79
+            }
+          }
+        ]
+      }
+    },
+    "count": 65,
+    "reason": "Item stack with stack size of 65 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:bundle",
+        1
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:bundle",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 97
+            }
+          },
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 89
+            }
+          },
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 83
+            }
+          },
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 79
+            }
+          }
+        ]
+      }
+    },
+    "count": 100,
+    "reason": "Item stack with stack size of 100 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:bundle",
+        1
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:bundle",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 97
+            }
+          },
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 89
+            }
+          },
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 83
+            }
+          },
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 79
+            }
+          },
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 73
+            }
+          }
+        ]
+      }
+    },
+    "count": 1,
+    "reason": "Excessive total bundle weight",
+    "input_error": {
+      "translate": "arguments.item.malformed",
+      "with": [
+        "Excessive total bundle weight"
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:bundle",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 97
+            }
+          },
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 89
+            }
+          },
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 83
+            }
+          },
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 79
+            }
+          },
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 73
+            }
+          }
+        ]
+      }
+    },
+    "count": 2,
+    "reason": "Excessive total bundle weight",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:bundle",
+        1
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:bundle",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 97
+            }
+          },
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 89
+            }
+          },
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 83
+            }
+          },
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 79
+            }
+          },
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 73
+            }
+          }
+        ]
+      }
+    },
+    "count": 65,
+    "reason": "Excessive total bundle weight",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:bundle",
+        1
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:bundle",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 97
+            }
+          },
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 89
+            }
+          },
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 83
+            }
+          },
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 79
+            }
+          },
+          {
+            "id": "minecraft:stone",
+            "components": {
+              "minecraft:max_stack_size": 73
+            }
+          }
+        ]
+      }
+    },
+    "count": 100,
+    "reason": "Excessive total bundle weight",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:bundle",
+        1
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:bundle",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:stone"
+          }
+        ]
+      }
+    },
+    "count": 1
+  },
+  {
+    "input": {
+      "id": "minecraft:bundle",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:stone"
+          }
+        ]
+      }
+    },
+    "count": 2,
+    "reason": "Item stack with stack size of 2 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:bundle",
+        1
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:bundle",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:stone"
+          }
+        ]
+      }
+    },
+    "count": 65,
+    "reason": "Item stack with stack size of 65 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:bundle",
+        1
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:bundle",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:stone"
+          }
+        ]
+      }
+    },
+    "count": 100,
+    "reason": "Item stack with stack size of 100 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:bundle",
+        1
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:bundle",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:bundle",
+            "components": {
+              "minecraft:bundle_contents": [
+                {
+                  "id": "minecraft:stone"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "count": 1
+  },
+  {
+    "input": {
+      "id": "minecraft:bundle",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:bundle",
+            "components": {
+              "minecraft:bundle_contents": [
+                {
+                  "id": "minecraft:stone"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "count": 2,
+    "reason": "Item stack with stack size of 2 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:bundle",
+        1
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:bundle",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:bundle",
+            "components": {
+              "minecraft:bundle_contents": [
+                {
+                  "id": "minecraft:stone"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "count": 65,
+    "reason": "Item stack with stack size of 65 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:bundle",
+        1
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:bundle",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:bundle",
+            "components": {
+              "minecraft:bundle_contents": [
+                {
+                  "id": "minecraft:stone"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "count": 100,
+    "reason": "Item stack with stack size of 100 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:bundle",
+        1
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:bundle",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:bundle",
+            "components": {
+              "minecraft:bundle_contents": [
+                {
+                  "id": "minecraft:bundle",
+                  "components": {
+                    "minecraft:bundle_contents": [
+                      {
+                        "id": "minecraft:stone"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "count": 1
+  },
+  {
+    "input": {
+      "id": "minecraft:bundle",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:bundle",
+            "components": {
+              "minecraft:bundle_contents": [
+                {
+                  "id": "minecraft:bundle",
+                  "components": {
+                    "minecraft:bundle_contents": [
+                      {
+                        "id": "minecraft:stone"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "count": 2,
+    "reason": "Item stack with stack size of 2 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:bundle",
+        1
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:bundle",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:bundle",
+            "components": {
+              "minecraft:bundle_contents": [
+                {
+                  "id": "minecraft:bundle",
+                  "components": {
+                    "minecraft:bundle_contents": [
+                      {
+                        "id": "minecraft:stone"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "count": 65,
+    "reason": "Item stack with stack size of 65 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:bundle",
+        1
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:bundle",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:bundle",
+            "components": {
+              "minecraft:bundle_contents": [
+                {
+                  "id": "minecraft:bundle",
+                  "components": {
+                    "minecraft:bundle_contents": [
+                      {
+                        "id": "minecraft:stone"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "count": 100,
+    "reason": "Item stack with stack size of 100 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:bundle",
+        1
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:bundle",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:bundle",
+            "components": {
+              "minecraft:bundle_contents": [
+                {
+                  "id": "minecraft:bundle",
+                  "components": {
+                    "minecraft:bundle_contents": [
+                      {
+                        "id": "minecraft:bundle",
+                        "components": {
+                          "minecraft:bundle_contents": [
+                            {
+                              "id": "minecraft:stone"
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "count": 1
+  },
+  {
+    "input": {
+      "id": "minecraft:bundle",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:bundle",
+            "components": {
+              "minecraft:bundle_contents": [
+                {
+                  "id": "minecraft:bundle",
+                  "components": {
+                    "minecraft:bundle_contents": [
+                      {
+                        "id": "minecraft:bundle",
+                        "components": {
+                          "minecraft:bundle_contents": [
+                            {
+                              "id": "minecraft:stone"
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "count": 2,
+    "reason": "Item stack with stack size of 2 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:bundle",
+        1
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:bundle",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:bundle",
+            "components": {
+              "minecraft:bundle_contents": [
+                {
+                  "id": "minecraft:bundle",
+                  "components": {
+                    "minecraft:bundle_contents": [
+                      {
+                        "id": "minecraft:bundle",
+                        "components": {
+                          "minecraft:bundle_contents": [
+                            {
+                              "id": "minecraft:stone"
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "count": 65,
+    "reason": "Item stack with stack size of 65 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:bundle",
+        1
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:bundle",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:bundle",
+            "components": {
+              "minecraft:bundle_contents": [
+                {
+                  "id": "minecraft:bundle",
+                  "components": {
+                    "minecraft:bundle_contents": [
+                      {
+                        "id": "minecraft:bundle",
+                        "components": {
+                          "minecraft:bundle_contents": [
+                            {
+                              "id": "minecraft:stone"
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "count": 100,
+    "reason": "Item stack with stack size of 100 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:bundle",
+        1
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:bundle",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:bundle",
+            "components": {
+              "minecraft:bundle_contents": [
+                {
+                  "id": "minecraft:bundle",
+                  "components": {
+                    "minecraft:bundle_contents": [
+                      {
+                        "id": "minecraft:bundle",
+                        "components": {
+                          "minecraft:bundle_contents": [
+                            {
+                              "id": "minecraft:bundle",
+                              "components": {
+                                "minecraft:bundle_contents": [
+                                  {
+                                    "id": "minecraft:stone"
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "count": 1
+  },
+  {
+    "input": {
+      "id": "minecraft:bundle",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:bundle",
+            "components": {
+              "minecraft:bundle_contents": [
+                {
+                  "id": "minecraft:bundle",
+                  "components": {
+                    "minecraft:bundle_contents": [
+                      {
+                        "id": "minecraft:bundle",
+                        "components": {
+                          "minecraft:bundle_contents": [
+                            {
+                              "id": "minecraft:bundle",
+                              "components": {
+                                "minecraft:bundle_contents": [
+                                  {
+                                    "id": "minecraft:stone"
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "count": 2,
+    "reason": "Item stack with stack size of 2 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:bundle",
+        1
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:bundle",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:bundle",
+            "components": {
+              "minecraft:bundle_contents": [
+                {
+                  "id": "minecraft:bundle",
+                  "components": {
+                    "minecraft:bundle_contents": [
+                      {
+                        "id": "minecraft:bundle",
+                        "components": {
+                          "minecraft:bundle_contents": [
+                            {
+                              "id": "minecraft:bundle",
+                              "components": {
+                                "minecraft:bundle_contents": [
+                                  {
+                                    "id": "minecraft:stone"
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "count": 65,
+    "reason": "Item stack with stack size of 65 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:bundle",
+        1
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:bundle",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:bundle",
+            "components": {
+              "minecraft:bundle_contents": [
+                {
+                  "id": "minecraft:bundle",
+                  "components": {
+                    "minecraft:bundle_contents": [
+                      {
+                        "id": "minecraft:bundle",
+                        "components": {
+                          "minecraft:bundle_contents": [
+                            {
+                              "id": "minecraft:bundle",
+                              "components": {
+                                "minecraft:bundle_contents": [
+                                  {
+                                    "id": "minecraft:stone"
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "count": 100,
+    "reason": "Item stack with stack size of 100 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:bundle",
+        1
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:bundle",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:bundle",
+            "components": {
+              "minecraft:bundle_contents": [
+                {
+                  "id": "minecraft:bundle",
+                  "components": {
+                    "minecraft:bundle_contents": [
+                      {
+                        "id": "minecraft:bundle",
+                        "components": {
+                          "minecraft:bundle_contents": [
+                            {
+                              "id": "minecraft:bundle",
+                              "components": {
+                                "minecraft:bundle_contents": [
+                                  {
+                                    "id": "minecraft:bundle",
+                                    "components": {
+                                      "minecraft:bundle_contents": [
+                                        {
+                                          "id": "minecraft:stone"
+                                        }
+                                      ]
+                                    }
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "count": 1
+  },
+  {
+    "input": {
+      "id": "minecraft:bundle",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:bundle",
+            "components": {
+              "minecraft:bundle_contents": [
+                {
+                  "id": "minecraft:bundle",
+                  "components": {
+                    "minecraft:bundle_contents": [
+                      {
+                        "id": "minecraft:bundle",
+                        "components": {
+                          "minecraft:bundle_contents": [
+                            {
+                              "id": "minecraft:bundle",
+                              "components": {
+                                "minecraft:bundle_contents": [
+                                  {
+                                    "id": "minecraft:bundle",
+                                    "components": {
+                                      "minecraft:bundle_contents": [
+                                        {
+                                          "id": "minecraft:stone"
+                                        }
+                                      ]
+                                    }
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "count": 2,
+    "reason": "Item stack with stack size of 2 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:bundle",
+        1
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:bundle",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:bundle",
+            "components": {
+              "minecraft:bundle_contents": [
+                {
+                  "id": "minecraft:bundle",
+                  "components": {
+                    "minecraft:bundle_contents": [
+                      {
+                        "id": "minecraft:bundle",
+                        "components": {
+                          "minecraft:bundle_contents": [
+                            {
+                              "id": "minecraft:bundle",
+                              "components": {
+                                "minecraft:bundle_contents": [
+                                  {
+                                    "id": "minecraft:bundle",
+                                    "components": {
+                                      "minecraft:bundle_contents": [
+                                        {
+                                          "id": "minecraft:stone"
+                                        }
+                                      ]
+                                    }
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "count": 65,
+    "reason": "Item stack with stack size of 65 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:bundle",
+        1
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:bundle",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:bundle",
+            "components": {
+              "minecraft:bundle_contents": [
+                {
+                  "id": "minecraft:bundle",
+                  "components": {
+                    "minecraft:bundle_contents": [
+                      {
+                        "id": "minecraft:bundle",
+                        "components": {
+                          "minecraft:bundle_contents": [
+                            {
+                              "id": "minecraft:bundle",
+                              "components": {
+                                "minecraft:bundle_contents": [
+                                  {
+                                    "id": "minecraft:bundle",
+                                    "components": {
+                                      "minecraft:bundle_contents": [
+                                        {
+                                          "id": "minecraft:stone"
+                                        }
+                                      ]
+                                    }
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "count": 100,
+    "reason": "Item stack with stack size of 100 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:bundle",
+        1
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:bundle",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:bundle",
+            "components": {
+              "minecraft:bundle_contents": [
+                {
+                  "id": "minecraft:bundle",
+                  "components": {
+                    "minecraft:bundle_contents": [
+                      {
+                        "id": "minecraft:bundle",
+                        "components": {
+                          "minecraft:bundle_contents": [
+                            {
+                              "id": "minecraft:bundle",
+                              "components": {
+                                "minecraft:bundle_contents": [
+                                  {
+                                    "id": "minecraft:bundle",
+                                    "components": {
+                                      "minecraft:bundle_contents": [
+                                        {
+                                          "id": "minecraft:bundle",
+                                          "components": {
+                                            "minecraft:bundle_contents": [
+                                              {
+                                                "id": "minecraft:stone"
+                                              }
+                                            ]
+                                          }
+                                        }
+                                      ]
+                                    }
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "count": 1
+  },
+  {
+    "input": {
+      "id": "minecraft:bundle",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:bundle",
+            "components": {
+              "minecraft:bundle_contents": [
+                {
+                  "id": "minecraft:bundle",
+                  "components": {
+                    "minecraft:bundle_contents": [
+                      {
+                        "id": "minecraft:bundle",
+                        "components": {
+                          "minecraft:bundle_contents": [
+                            {
+                              "id": "minecraft:bundle",
+                              "components": {
+                                "minecraft:bundle_contents": [
+                                  {
+                                    "id": "minecraft:bundle",
+                                    "components": {
+                                      "minecraft:bundle_contents": [
+                                        {
+                                          "id": "minecraft:bundle",
+                                          "components": {
+                                            "minecraft:bundle_contents": [
+                                              {
+                                                "id": "minecraft:stone"
+                                              }
+                                            ]
+                                          }
+                                        }
+                                      ]
+                                    }
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "count": 2,
+    "reason": "Item stack with stack size of 2 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:bundle",
+        1
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:bundle",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:bundle",
+            "components": {
+              "minecraft:bundle_contents": [
+                {
+                  "id": "minecraft:bundle",
+                  "components": {
+                    "minecraft:bundle_contents": [
+                      {
+                        "id": "minecraft:bundle",
+                        "components": {
+                          "minecraft:bundle_contents": [
+                            {
+                              "id": "minecraft:bundle",
+                              "components": {
+                                "minecraft:bundle_contents": [
+                                  {
+                                    "id": "minecraft:bundle",
+                                    "components": {
+                                      "minecraft:bundle_contents": [
+                                        {
+                                          "id": "minecraft:bundle",
+                                          "components": {
+                                            "minecraft:bundle_contents": [
+                                              {
+                                                "id": "minecraft:stone"
+                                              }
+                                            ]
+                                          }
+                                        }
+                                      ]
+                                    }
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "count": 65,
+    "reason": "Item stack with stack size of 65 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:bundle",
+        1
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:bundle",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:bundle",
+            "components": {
+              "minecraft:bundle_contents": [
+                {
+                  "id": "minecraft:bundle",
+                  "components": {
+                    "minecraft:bundle_contents": [
+                      {
+                        "id": "minecraft:bundle",
+                        "components": {
+                          "minecraft:bundle_contents": [
+                            {
+                              "id": "minecraft:bundle",
+                              "components": {
+                                "minecraft:bundle_contents": [
+                                  {
+                                    "id": "minecraft:bundle",
+                                    "components": {
+                                      "minecraft:bundle_contents": [
+                                        {
+                                          "id": "minecraft:bundle",
+                                          "components": {
+                                            "minecraft:bundle_contents": [
+                                              {
+                                                "id": "minecraft:stone"
+                                              }
+                                            ]
+                                          }
+                                        }
+                                      ]
+                                    }
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "count": 100,
+    "reason": "Item stack with stack size of 100 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:bundle",
+        1
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:bundle",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:bundle",
+            "components": {
+              "minecraft:bundle_contents": [
+                {
+                  "id": "minecraft:bundle",
+                  "components": {
+                    "minecraft:bundle_contents": [
+                      {
+                        "id": "minecraft:bundle",
+                        "components": {
+                          "minecraft:bundle_contents": [
+                            {
+                              "id": "minecraft:bundle",
+                              "components": {
+                                "minecraft:bundle_contents": [
+                                  {
+                                    "id": "minecraft:bundle",
+                                    "components": {
+                                      "minecraft:bundle_contents": [
+                                        {
+                                          "id": "minecraft:bundle",
+                                          "components": {
+                                            "minecraft:bundle_contents": [
+                                              {
+                                                "id": "minecraft:bundle",
+                                                "components": {
+                                                  "minecraft:bundle_contents": [
+                                                    {
+                                                      "id": "minecraft:stone"
+                                                    }
+                                                  ]
+                                                }
+                                              }
+                                            ]
+                                          }
+                                        }
+                                      ]
+                                    }
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "count": 1
+  },
+  {
+    "input": {
+      "id": "minecraft:bundle",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:bundle",
+            "components": {
+              "minecraft:bundle_contents": [
+                {
+                  "id": "minecraft:bundle",
+                  "components": {
+                    "minecraft:bundle_contents": [
+                      {
+                        "id": "minecraft:bundle",
+                        "components": {
+                          "minecraft:bundle_contents": [
+                            {
+                              "id": "minecraft:bundle",
+                              "components": {
+                                "minecraft:bundle_contents": [
+                                  {
+                                    "id": "minecraft:bundle",
+                                    "components": {
+                                      "minecraft:bundle_contents": [
+                                        {
+                                          "id": "minecraft:bundle",
+                                          "components": {
+                                            "minecraft:bundle_contents": [
+                                              {
+                                                "id": "minecraft:bundle",
+                                                "components": {
+                                                  "minecraft:bundle_contents": [
+                                                    {
+                                                      "id": "minecraft:stone"
+                                                    }
+                                                  ]
+                                                }
+                                              }
+                                            ]
+                                          }
+                                        }
+                                      ]
+                                    }
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "count": 2,
+    "reason": "Item stack with stack size of 2 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:bundle",
+        1
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:bundle",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:bundle",
+            "components": {
+              "minecraft:bundle_contents": [
+                {
+                  "id": "minecraft:bundle",
+                  "components": {
+                    "minecraft:bundle_contents": [
+                      {
+                        "id": "minecraft:bundle",
+                        "components": {
+                          "minecraft:bundle_contents": [
+                            {
+                              "id": "minecraft:bundle",
+                              "components": {
+                                "minecraft:bundle_contents": [
+                                  {
+                                    "id": "minecraft:bundle",
+                                    "components": {
+                                      "minecraft:bundle_contents": [
+                                        {
+                                          "id": "minecraft:bundle",
+                                          "components": {
+                                            "minecraft:bundle_contents": [
+                                              {
+                                                "id": "minecraft:bundle",
+                                                "components": {
+                                                  "minecraft:bundle_contents": [
+                                                    {
+                                                      "id": "minecraft:stone"
+                                                    }
+                                                  ]
+                                                }
+                                              }
+                                            ]
+                                          }
+                                        }
+                                      ]
+                                    }
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "count": 65,
+    "reason": "Item stack with stack size of 65 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:bundle",
+        1
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:bundle",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:bundle",
+            "components": {
+              "minecraft:bundle_contents": [
+                {
+                  "id": "minecraft:bundle",
+                  "components": {
+                    "minecraft:bundle_contents": [
+                      {
+                        "id": "minecraft:bundle",
+                        "components": {
+                          "minecraft:bundle_contents": [
+                            {
+                              "id": "minecraft:bundle",
+                              "components": {
+                                "minecraft:bundle_contents": [
+                                  {
+                                    "id": "minecraft:bundle",
+                                    "components": {
+                                      "minecraft:bundle_contents": [
+                                        {
+                                          "id": "minecraft:bundle",
+                                          "components": {
+                                            "minecraft:bundle_contents": [
+                                              {
+                                                "id": "minecraft:bundle",
+                                                "components": {
+                                                  "minecraft:bundle_contents": [
+                                                    {
+                                                      "id": "minecraft:stone"
+                                                    }
+                                                  ]
+                                                }
+                                              }
+                                            ]
+                                          }
+                                        }
+                                      ]
+                                    }
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "count": 100,
+    "reason": "Item stack with stack size of 100 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:bundle",
+        1
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:bundle",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:bundle",
+            "components": {
+              "minecraft:bundle_contents": [
+                {
+                  "id": "minecraft:bundle",
+                  "components": {
+                    "minecraft:bundle_contents": [
+                      {
+                        "id": "minecraft:bundle",
+                        "components": {
+                          "minecraft:bundle_contents": [
+                            {
+                              "id": "minecraft:bundle",
+                              "components": {
+                                "minecraft:bundle_contents": [
+                                  {
+                                    "id": "minecraft:bundle",
+                                    "components": {
+                                      "minecraft:bundle_contents": [
+                                        {
+                                          "id": "minecraft:bundle",
+                                          "components": {
+                                            "minecraft:bundle_contents": [
+                                              {
+                                                "id": "minecraft:bundle",
+                                                "components": {
+                                                  "minecraft:bundle_contents": [
+                                                    {
+                                                      "id": "minecraft:bundle",
+                                                      "components": {
+                                                        "minecraft:bundle_contents": [
+                                                          {
+                                                            "id": "minecraft:stone"
+                                                          }
+                                                        ]
+                                                      }
+                                                    }
+                                                  ]
+                                                }
+                                              }
+                                            ]
+                                          }
+                                        }
+                                      ]
+                                    }
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "count": 1
+  },
+  {
+    "input": {
+      "id": "minecraft:bundle",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:bundle",
+            "components": {
+              "minecraft:bundle_contents": [
+                {
+                  "id": "minecraft:bundle",
+                  "components": {
+                    "minecraft:bundle_contents": [
+                      {
+                        "id": "minecraft:bundle",
+                        "components": {
+                          "minecraft:bundle_contents": [
+                            {
+                              "id": "minecraft:bundle",
+                              "components": {
+                                "minecraft:bundle_contents": [
+                                  {
+                                    "id": "minecraft:bundle",
+                                    "components": {
+                                      "minecraft:bundle_contents": [
+                                        {
+                                          "id": "minecraft:bundle",
+                                          "components": {
+                                            "minecraft:bundle_contents": [
+                                              {
+                                                "id": "minecraft:bundle",
+                                                "components": {
+                                                  "minecraft:bundle_contents": [
+                                                    {
+                                                      "id": "minecraft:bundle",
+                                                      "components": {
+                                                        "minecraft:bundle_contents": [
+                                                          {
+                                                            "id": "minecraft:stone"
+                                                          }
+                                                        ]
+                                                      }
+                                                    }
+                                                  ]
+                                                }
+                                              }
+                                            ]
+                                          }
+                                        }
+                                      ]
+                                    }
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "count": 2,
+    "reason": "Item stack with stack size of 2 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:bundle",
+        1
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:bundle",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:bundle",
+            "components": {
+              "minecraft:bundle_contents": [
+                {
+                  "id": "minecraft:bundle",
+                  "components": {
+                    "minecraft:bundle_contents": [
+                      {
+                        "id": "minecraft:bundle",
+                        "components": {
+                          "minecraft:bundle_contents": [
+                            {
+                              "id": "minecraft:bundle",
+                              "components": {
+                                "minecraft:bundle_contents": [
+                                  {
+                                    "id": "minecraft:bundle",
+                                    "components": {
+                                      "minecraft:bundle_contents": [
+                                        {
+                                          "id": "minecraft:bundle",
+                                          "components": {
+                                            "minecraft:bundle_contents": [
+                                              {
+                                                "id": "minecraft:bundle",
+                                                "components": {
+                                                  "minecraft:bundle_contents": [
+                                                    {
+                                                      "id": "minecraft:bundle",
+                                                      "components": {
+                                                        "minecraft:bundle_contents": [
+                                                          {
+                                                            "id": "minecraft:stone"
+                                                          }
+                                                        ]
+                                                      }
+                                                    }
+                                                  ]
+                                                }
+                                              }
+                                            ]
+                                          }
+                                        }
+                                      ]
+                                    }
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "count": 65,
+    "reason": "Item stack with stack size of 65 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:bundle",
+        1
+      ]
+    }
+  },
+  {
+    "input": {
+      "id": "minecraft:bundle",
+      "components": {
+        "minecraft:bundle_contents": [
+          {
+            "id": "minecraft:bundle",
+            "components": {
+              "minecraft:bundle_contents": [
+                {
+                  "id": "minecraft:bundle",
+                  "components": {
+                    "minecraft:bundle_contents": [
+                      {
+                        "id": "minecraft:bundle",
+                        "components": {
+                          "minecraft:bundle_contents": [
+                            {
+                              "id": "minecraft:bundle",
+                              "components": {
+                                "minecraft:bundle_contents": [
+                                  {
+                                    "id": "minecraft:bundle",
+                                    "components": {
+                                      "minecraft:bundle_contents": [
+                                        {
+                                          "id": "minecraft:bundle",
+                                          "components": {
+                                            "minecraft:bundle_contents": [
+                                              {
+                                                "id": "minecraft:bundle",
+                                                "components": {
+                                                  "minecraft:bundle_contents": [
+                                                    {
+                                                      "id": "minecraft:bundle",
+                                                      "components": {
+                                                        "minecraft:bundle_contents": [
+                                                          {
+                                                            "id": "minecraft:stone"
+                                                          }
+                                                        ]
+                                                      }
+                                                    }
+                                                  ]
+                                                }
+                                              }
+                                            ]
+                                          }
+                                        }
+                                      ]
+                                    }
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "count": 100,
+    "reason": "Item stack with stack size of 100 was larger than maximum: 1",
+    "input_error": {
+      "translate": "arguments.item.overstacked",
+      "with": [
+        "minecraft:bundle",
+        1
+      ]
+    }
+  }
+]

@@ -237,10 +237,20 @@ mod tests {
     #[test]
     fn unconstrained_food_needs_no_unavailable_state() {
         let empty = PlayerPredicate::decode(&serde_json::json!({})).unwrap();
-        assert!(empty.matches(EntityRef(1), &WithoutFood).unwrap());
+        assert!(
+            empty
+                .matches(
+                    EntityRef::fixture(crate::level::RegionId::FIXTURE, 1),
+                    &WithoutFood
+                )
+                .unwrap()
+        );
         let bounded = PlayerPredicate::decode(&serde_json::json!({"food":{"level":20}})).unwrap();
         assert!(matches!(
-            bounded.matches(EntityRef(1), &WithoutFood),
+            bounded.matches(
+                EntityRef::fixture(crate::level::RegionId::FIXTURE, 1),
+                &WithoutFood
+            ),
             Err(crate::loot::LootError::Unsupported(_))
         ));
     }

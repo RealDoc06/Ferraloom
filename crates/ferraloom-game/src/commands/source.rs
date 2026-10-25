@@ -252,17 +252,22 @@ mod tests {
     use super::*;
     #[test]
     fn entity_source_and_dimension_changes_preserve_vanilla_fields() {
-        let source =
-            CommandSourceStack::server(4, Vec3::new(80., 64., -16.)).with_entity(EntityRef(7));
+        let source = CommandSourceStack::server(4, Vec3::new(80., 64., -16.))
+            .with_entity(EntityRef::fixture(crate::level::RegionId::FIXTURE, 7));
         assert_eq!(source.source, CommandSource::Server);
         let nether = source.with_level(CommandLevel {
             dimension: "minecraft:the_nether".into(),
             coordinate_scale: 8.,
         });
         assert_eq!(nether.position, Vec3::new(10., 64., -2.));
-        assert_eq!(nether.entity, Some(EntityRef(7)));
         assert_eq!(
-            nether.with_entity(EntityRef(9)).position,
+            nether.entity,
+            Some(EntityRef::fixture(crate::level::RegionId::FIXTURE, 7))
+        );
+        assert_eq!(
+            nether
+                .with_entity(EntityRef::fixture(crate::level::RegionId::FIXTURE, 9))
+                .position,
             Vec3::new(10., 64., -2.)
         );
     }
@@ -301,11 +306,13 @@ mod java_tests {
             let source = match operation {
                 "base" => base.clone(),
                 "source" => base.clone().with_source(CommandSource::Other(1)),
-                "entity" => base.clone().with_entity(EntityRef(1)),
+                "entity" => base
+                    .clone()
+                    .with_entity(EntityRef::fixture(crate::level::RegionId::FIXTURE, 1)),
                 "entity_again" => base
                     .clone()
-                    .with_entity(EntityRef(1))
-                    .with_entity(EntityRef(2)),
+                    .with_entity(EntityRef::fixture(crate::level::RegionId::FIXTURE, 1))
+                    .with_entity(EntityRef::fixture(crate::level::RegionId::FIXTURE, 2)),
                 "position" => base.clone().with_position(Vec3::new(-2., 99., 3.)),
                 "rotation" => base.clone().with_rotation(Rotation {
                     pitch: -91.,
@@ -331,7 +338,10 @@ mod java_tests {
                     .clone()
                     .with_maximum_permission(PermissionSet::for_level(0)),
                 "anchor" => base.clone().with_anchor(EntityAnchor::Eyes),
-                "level" => base.clone().with_entity(EntityRef(1)).with_level(nether),
+                "level" => base
+                    .clone()
+                    .with_entity(EntityRef::fixture(crate::level::RegionId::FIXTURE, 1))
+                    .with_level(nether),
                 "level_roundtrip" => base
                     .clone()
                     .with_level(nether)
@@ -347,7 +357,7 @@ mod java_tests {
                         .collect::<Vec<_>>();
                     let source = if mode == "eyes_facing" {
                         base.clone()
-                            .with_entity(EntityRef(1))
+                            .with_entity(EntityRef::fixture(crate::level::RegionId::FIXTURE, 1))
                             .with_anchor(EntityAnchor::Eyes)
                     } else {
                         base.clone()
@@ -360,21 +370,23 @@ mod java_tests {
             };
             source.callback.on_success(17);
             let name = source.display_name(|entity| {
-                Component::literal(if entity == EntityRef(1) {
-                    "DisplayA"
-                } else {
-                    "DisplayB"
-                })
+                Component::literal(
+                    if entity == EntityRef::fixture(crate::level::RegionId::FIXTURE, 1) {
+                        "DisplayA"
+                    } else {
+                        "DisplayB"
+                    },
+                )
             });
             let observed = serde_json::json!({
                 "operation":operation,
                 "position":[source.position.x,source.position.y,source.position.z],
                 "rotation":[source.rotation.pitch.to_bits() as i32,source.rotation.yaw.to_bits() as i32],
                 "source":match source.source { CommandSource::Server => "normal",CommandSource::Other(2) => "always",_=>"other" },
-                "entity":match source.entity {Some(EntityRef(1))=>"a",Some(EntityRef(2))=>"b",_=>"none"},
+                "entity":match source.entity {Some(entity) if entity == EntityRef::fixture(crate::level::RegionId::FIXTURE, 1)=>"a",Some(entity) if entity == EntityRef::fixture(crate::level::RegionId::FIXTURE, 2)=>"b",_=>"none"},
                 "level":if source.level.dimension == "minecraft:the_nether" {"nether"} else {"overworld"},
                 "name":super::super::exceptions::plain_text(&name),
-                "text_name":source.text_name(|entity| if entity == EntityRef(1) {"PlainA".into()} else {"PlainB".into()}),
+                "text_name":source.text_name(|entity| if entity == EntityRef::fixture(crate::level::RegionId::FIXTURE, 1) {"PlainA".into()} else {"PlainB".into()}),
                 "silent":source.silent,
                 "eyes":source.anchor == EntityAnchor::Eyes,
                 "signing":operation == "signing",

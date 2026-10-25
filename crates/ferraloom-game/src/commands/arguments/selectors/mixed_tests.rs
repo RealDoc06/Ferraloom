@@ -136,7 +136,7 @@ fn mixed_native_selectors_use_player_lookup_and_section_iteration() {
         .unwrap();
     for (index, definition) in vectors.entities.into_iter().enumerate() {
         let kind = EntityType::from_name(&definition.kind).unwrap();
-        let handle = EntityRef(index as u64 + 1);
+        let handle = EntityRef::fixture(crate::level::RegionId::FIXTURE, index as u64 + 1);
         let uuid = parse_uuid(&definition.uuid).unwrap();
         let holder = if kind == EntityType::PLAYER {
             definition.name.clone()
@@ -188,11 +188,16 @@ fn mixed_native_selectors_use_player_lookup_and_section_iteration() {
     level.install_shared(Box::new(shared));
     let mut query = Query {
         level,
-        players: vec![EntityRef(5), EntityRef(1)],
+        players: vec![
+            EntityRef::fixture(crate::level::RegionId::FIXTURE, 5),
+            EntityRef::fixture(crate::level::RegionId::FIXTURE, 1),
+        ],
     };
     for vector in vectors.vectors {
-        let source =
-            CommandSourceStack::server(4, Vec3::ZERO).with_entity(EntityRef(vector.source_entity));
+        let source = CommandSourceStack::server(4, Vec3::ZERO).with_entity(EntityRef::fixture(
+            crate::level::RegionId::FIXTURE,
+            vector.source_entity,
+        ));
         let selector =
             EntitySelector::parse(&mut StringReader::new(&vector.selector), true).unwrap();
         let selected = selector
@@ -201,7 +206,7 @@ fn mixed_native_selectors_use_player_lookup_and_section_iteration() {
         assert_eq!(
             selected
                 .into_iter()
-                .map(|entity| entity.0)
+                .map(|entity| entity.serial())
                 .collect::<Vec<_>>(),
             vector.selected,
             "{} (players_only={}, source={})",

@@ -260,7 +260,7 @@ fn first_underwater_query_creates_and_saves_the_canonical_attribute_instance() {
 #[test]
 fn unbreakable_progress_skips_player_reads_and_player_destroy_requires_actor() {
     let mut level = Level::new(Region::new(&EMPTY), LevelContext::fixture(0, 63));
-    let player = EntityRef(u64::MAX);
+    let player = EntityRef::fixture(crate::level::RegionId::FIXTURE, u64::MAX);
     for policy in [UnportedBehavior::Strict, UnportedBehavior::Warn] {
         level.set_unported_behavior(policy);
         assert_eq!(
