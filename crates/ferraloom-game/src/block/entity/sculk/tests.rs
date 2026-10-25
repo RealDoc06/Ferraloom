@@ -58,7 +58,12 @@ fn native_sculk_listener_cursor_components_and_worldgen_round_trips_match() {
                 );
                 assert_eq!(
                     entity.collect_components(),
-                    crate::block::entity::components::load(Some(&parse_compound(f[6]).unwrap())),
+                    crate::block::entity::components::load(
+                        Some(&parse_compound(f[6]).unwrap()),
+                        crate::level::LevelContext::fixture(0, 63)
+                            .registry_context()
+                            .unwrap()
+                    ),
                     "{row}"
                 );
                 assert_eq!(flags(&entity), f[7], "{row}");
@@ -94,7 +99,12 @@ fn native_sculk_listener_cursor_components_and_worldgen_round_trips_match() {
                 );
                 assert_eq!(
                     entity.collect_components(),
-                    crate::block::entity::components::load(Some(&parse_compound(f[4]).unwrap())),
+                    crate::block::entity::components::load(
+                        Some(&parse_compound(f[4]).unwrap()),
+                        crate::level::LevelContext::fixture(0, 63)
+                            .registry_context()
+                            .unwrap()
+                    ),
                     "{row}"
                 );
                 assert_eq!(flags(&entity), f[5], "{row}");

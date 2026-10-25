@@ -257,6 +257,9 @@ pub fn block_container_at(
         return Ok(None);
     };
     let receiver = level.block_entity_state(handle)?;
+    if matches!(receiver, BlockEntityState::BrewingStand(_)) {
+        return Err(LevelError::Inventory("BrewingStand worldly container"));
+    }
     if receiver.container().is_none() {
         return Ok(None);
     }

@@ -5,10 +5,14 @@ use ferraloom_nbt::{CompoundTag, Tag};
 use ferraloom_protocol::component::{ComponentTypeId, DataComponentMap, DataComponentPatch};
 use ferraloom_util::{BlockPos, ChunkPos};
 
+pub mod banner;
 pub mod beehive;
+pub mod brewing_stand;
 pub mod brushable;
 mod components;
 pub mod daylight_detector;
+pub mod enchanting_table;
+pub mod ender_chest;
 pub mod potent_sulfur;
 pub mod sculk;
 pub mod spawner;
@@ -50,8 +54,10 @@ impl BlockEntityRef {
             level.context().registry_context()?;
             let behavior = level.block_entity_state(self)?.behavior();
             behavior.load_additional_live(self, tag, level)?;
-            level.block_entity_mut::<BlockEntityData>(self)?.components =
-                components::load(tag.get_compound("components"));
+            level.block_entity_mut::<BlockEntityData>(self)?.components = components::load(
+                tag.get_compound("components"),
+                level.context().registry_context()?,
+            );
             Ok(())
         })
     }
@@ -202,6 +208,10 @@ static THE_END_PORTAL: TheEndPortal = TheEndPortal;
 /// Canonical concrete states. Extend this enum when porting a subclass, never Any.
 #[derive(Clone, Debug)]
 pub enum BlockEntityState {
+    Banner(Box<banner::BannerBlockEntity>),
+    BrewingStand(Box<brewing_stand::BrewingStandBlockEntity>),
+    EnchantingTable(Box<enchanting_table::EnchantingTableBlockEntity>),
+    EnderChest(Box<ender_chest::EnderChestBlockEntity>),
     SculkSensor(Box<sculk::SculkSensorBlockEntity>),
     CalibratedSculkSensor(Box<sculk::CalibratedSculkSensorBlockEntity>),
     SculkShrieker(Box<sculk::SculkShriekerBlockEntity>),
@@ -229,6 +239,10 @@ pub enum BlockEntityState {
 impl BlockEntityState {
     pub fn data(&self) -> &BlockEntityData {
         match self {
+            Self::Banner(entity) => &entity.parent,
+            Self::BrewingStand(entity) => &entity.parent.parent,
+            Self::EnchantingTable(entity) => &entity.parent,
+            Self::EnderChest(entity) => &entity.parent,
             Self::SculkSensor(entity) => &entity.parent,
             Self::CalibratedSculkSensor(entity) => &entity.parent.parent,
             Self::SculkShrieker(entity) => &entity.parent,
@@ -256,6 +270,10 @@ impl BlockEntityState {
     }
     pub fn data_mut(&mut self) -> &mut BlockEntityData {
         match self {
+            Self::Banner(entity) => &mut entity.parent,
+            Self::BrewingStand(entity) => &mut entity.parent.parent,
+            Self::EnchantingTable(entity) => &mut entity.parent,
+            Self::EnderChest(entity) => &mut entity.parent,
             Self::SculkSensor(entity) => &mut entity.parent,
             Self::CalibratedSculkSensor(entity) => &mut entity.parent.parent,
             Self::SculkShrieker(entity) => &mut entity.parent,
@@ -283,6 +301,10 @@ impl BlockEntityState {
     }
     pub fn behavior(&self) -> &'static dyn BlockEntity {
         match self {
+            Self::Banner(_) => &banner::BANNER_ENTITY,
+            Self::BrewingStand(_) => &brewing_stand::BREWING_STAND_ENTITY,
+            Self::EnchantingTable(_) => &enchanting_table::ENCHANTING_TABLE_ENTITY,
+            Self::EnderChest(_) => &ender_chest::ENDER_CHEST_ENTITY,
             Self::SculkSensor(_)
             | Self::CalibratedSculkSensor(_)
             | Self::SculkShrieker(_)
@@ -348,12 +370,14 @@ impl BlockEntityState {
     pub fn container(&self) -> Option<&BaseContainerBlockEntity> {
         match self {
             Self::Furnace(entity) => Some(&entity.parent),
+            Self::BrewingStand(entity) => Some(&entity.parent),
             _ => self.randomizable().map(|entity| &entity.parent),
         }
     }
     pub fn container_mut(&mut self) -> Option<&mut BaseContainerBlockEntity> {
         match self {
             Self::Furnace(entity) => Some(&mut entity.parent),
+            Self::BrewingStand(entity) => Some(&mut entity.parent),
             _ => self.randomizable_mut().map(|entity| &mut entity.parent),
         }
     }
@@ -364,7 +388,7 @@ impl BlockEntityState {
         registries: &dyn ferraloom_protocol::codec::RegistryContext,
     ) {
         self.behavior().load_additional(self, tag, registries);
-        self.data_mut().components = components::load(tag.get_compound("components"));
+        self.data_mut().components = components::load(tag.get_compound("components"), registries);
     }
     pub fn load_custom_only(
         &mut self,
@@ -491,6 +515,18 @@ pub fn create(pos: BlockPos, state: BlockState) -> Result<BlockEntityState, Leve
         .ok_or(LevelError::UnsupportedBlockEntity(state.block()))?;
     let data = BlockEntityData::new(kind, pos, state)?;
     match kind {
+        BlockEntityType::BANNER => Ok(BlockEntityState::Banner(Box::new(
+            banner::BannerBlockEntity::new(data),
+        ))),
+        BlockEntityType::BREWING_STAND => Ok(BlockEntityState::BrewingStand(Box::new(
+            brewing_stand::BrewingStandBlockEntity::new(data),
+        ))),
+        BlockEntityType::ENCHANTING_TABLE => Ok(BlockEntityState::EnchantingTable(Box::new(
+            enchanting_table::EnchantingTableBlockEntity::new(data),
+        ))),
+        BlockEntityType::ENDER_CHEST => Ok(BlockEntityState::EnderChest(Box::new(
+            ender_chest::EnderChestBlockEntity::new(data),
+        ))),
         BlockEntityType::SCULK_SENSOR => Ok(BlockEntityState::SculkSensor(Box::new(
             sculk::SculkSensorBlockEntity::new(data),
         ))),
@@ -603,7 +639,11 @@ pub fn supports(block: Block) -> bool {
     matches!(
         registry::for_block(block),
         Some(
-            BlockEntityType::SCULK_SENSOR
+            BlockEntityType::BANNER
+                | BlockEntityType::BREWING_STAND
+                | BlockEntityType::ENCHANTING_TABLE
+                | BlockEntityType::ENDER_CHEST
+                | BlockEntityType::SCULK_SENSOR
                 | BlockEntityType::CALIBRATED_SCULK_SENSOR
                 | BlockEntityType::SCULK_SHRIEKER
                 | BlockEntityType::SCULK_CATALYST
@@ -758,3 +798,14 @@ projection!(
 mod placement_tests;
 
 projection!(potent_sulfur::PotentSulfurBlockEntity, PotentSulfur);
+
+projection!(banner::BannerBlockEntity, Banner);
+projection!(brewing_stand::BrewingStandBlockEntity, BrewingStand);
+projection!(
+    enchanting_table::EnchantingTableBlockEntity,
+    EnchantingTable
+);
+projection!(ender_chest::EnderChestBlockEntity, EnderChest);
+
+#[cfg(test)]
+mod factory_tests;

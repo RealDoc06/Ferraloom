@@ -91,9 +91,7 @@ impl BaseContainerBlockEntity {
         })
     }
     pub fn collect_components(&self, map: &mut DataComponentMap) {
-        if let Some(name) = &self.custom_name {
-            set(map, DataComponent::CustomName(Box::new(name.clone())));
-        }
+        collect_custom_name(map, self.custom_name.as_ref());
         if self.is_locked()
             && let Some(lock) = &self.lock
         {
@@ -313,3 +311,14 @@ pub fn analog_output(container: &impl Container) -> i32 {
 
 #[cfg(test)]
 mod partial_tests;
+
+/// Port of DataComponentMap.Builder#set(CUSTOM_NAME, nullable): an absent
+/// implicit name removes a value inherited from the extra component map.
+pub(crate) fn collect_custom_name(map: &mut DataComponentMap, name: Option<&Component>) {
+    if let Some(name) = name {
+        set(map, DataComponent::CustomName(Box::new(name.clone())));
+    } else {
+        map.entries
+            .retain(|value| value.component_type() != ComponentTypeId::CUSTOM_NAME);
+    }
+}
