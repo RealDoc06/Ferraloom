@@ -112,7 +112,7 @@ fn emissions(level: &mut Level) -> String {
                         p.x_max_speed.to_bits(),
                         p.y_max_speed.to_bits(),
                         p.z_max_speed.to_bits(),
-                        p.randomization as i32
+                        p.randomization_type as i32
                     ))
                 }
                 _ => None,
