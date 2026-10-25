@@ -75,7 +75,7 @@ fn vanilla_boss_event_lifecycle_and_packet_bytes() {
             _ => {
                 let update = match action {
                     "progress" => BossEventUpdate::Progress(argument.parse().unwrap()),
-                    "name" => BossEventUpdate::Name(Component::literal(argument)),
+                    "name" => BossEventUpdate::Name(Box::new(Component::literal(argument))),
                     "color" => {
                         BossEventUpdate::Color(colors[expected["color"].as_u64().unwrap() as usize])
                     }

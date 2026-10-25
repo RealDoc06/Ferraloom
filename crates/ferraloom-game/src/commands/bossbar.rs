@@ -261,7 +261,7 @@ pub fn execute(
                 return Err(error("commands.bossbar.set.name.unchanged", &[]));
             }
             events.update(&id, |event, packets| {
-                event.update(BossEventUpdate::Name(name), packets)
+                event.update(BossEventUpdate::Name(Box::new(name)), packets)
             });
             ("commands.bossbar.set.name.success", 0, vec![])
         }

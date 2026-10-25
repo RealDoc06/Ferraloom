@@ -20,7 +20,7 @@ pub type BossPackets = Vec<(EntityRef, cb::Packet)>;
 
 /// Port of BossEvent's virtual setters.
 pub enum BossEventUpdate {
-    Name(Component),
+    Name(Box<Component>),
     Progress(f32),
     Color(BossBarColor),
     Overlay(BossBarOverlay),
@@ -113,10 +113,10 @@ impl ServerBossEvent {
     pub fn update(&mut self, update: BossEventUpdate, packets: &mut BossPackets) -> bool {
         let operation = match update {
             BossEventUpdate::Name(value) => {
-                if self.name == value {
+                if self.name == *value {
                     return false;
                 }
-                self.name = value;
+                self.name = *value;
                 BossOperation::UpdateName {
                     name: self.name.clone(),
                 }
