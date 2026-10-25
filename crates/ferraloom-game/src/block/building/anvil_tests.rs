@@ -46,6 +46,13 @@ fn anvil_ticks_falling_configuration_and_damage_transform_match_native() {
                 if tick == 0 {
                     let mut level = super::fire_powder_tests::level();
                     level
+                        .set_chunk_loading_status(
+                            ChunkPos::containing(POS),
+                            crate::level::distance_manager::FullChunkStatus::BlockTicking,
+                            true,
+                        )
+                        .unwrap();
+                    level
                         .update_entity_chunk_status(
                             ChunkPos::containing(POS),
                             crate::level::entity::Visibility::Ticking,

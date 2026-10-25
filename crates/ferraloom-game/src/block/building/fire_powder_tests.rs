@@ -65,6 +65,13 @@ fn concrete_powder_landing_matches_native_replaced_fluids_and_all_water_masks() 
         level::effects::LevelEffect,
     };
     let mut level = level();
+    level
+        .set_chunk_loading_status(
+            ferraloom_util::ChunkPos::containing(POS),
+            crate::level::distance_manager::FullChunkStatus::BlockTicking,
+            true,
+        )
+        .unwrap();
     let entity = level.next_entity_ref();
     level
         .add_entity(
