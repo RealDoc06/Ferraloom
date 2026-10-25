@@ -1306,9 +1306,6 @@ impl MinecraftServer {
         Ok(())
     }
 
-    fn request_area(&mut self, center: ChunkPos, radius: i32) -> Result<()> {
-        self.request_area_in(&id("overworld"), center, radius)
-    }
     fn update_chunk_tickets(&mut self) -> Result<()> {
         self.update_chunk_tickets_in(&id("overworld"))
     }
