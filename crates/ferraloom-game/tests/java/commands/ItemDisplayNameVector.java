@@ -54,6 +54,9 @@ public final class ItemDisplayNameVector {
             row.add("input", input); row.addProperty("empty", index == -2); row.addProperty("depleted", index == -1);
             row.add("hover", ComponentSerialization.CODEC.encodeStart(ops, stack.getHoverName()).getOrThrow());
             row.add("display", ComponentSerialization.CODEC.encodeStart(ops, stack.getDisplayName()).getOrThrow());
+            var nbtOps = registries.createSerializationContext(net.minecraft.nbt.NbtOps.INSTANCE);
+            row.addProperty("hover_nbt", ComponentSerialization.CODEC.encodeStart(nbtOps, stack.getHoverName()).getOrThrow().toString());
+            row.addProperty("display_nbt", ComponentSerialization.CODEC.encodeStart(nbtOps, stack.getDisplayName()).getOrThrow().toString());
             rows.add(row);
         }
         Files.writeString(Path.of(args[0]), new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create().toJson(rows) + "\n");

@@ -21,7 +21,9 @@
           ]
         }
       ]
-    }
+    },
+    "hover_nbt": "{translate:\"block.minecraft.air\"}",
+    "display_nbt": "{translate:\"chat.square_brackets\",with:[{extra:[{translate:\"block.minecraft.air\"}],text:\"\"}]}"
   },
   {
     "case": -1,
@@ -45,7 +47,9 @@
           ]
         }
       ]
-    }
+    },
+    "hover_nbt": "{translate:\"block.minecraft.air\"}",
+    "display_nbt": "{translate:\"chat.square_brackets\",with:[{extra:[{translate:\"block.minecraft.air\"}],text:\"\"}]}"
   },
   {
     "case": 0,
@@ -74,7 +78,9 @@
         "id": "minecraft:stone",
         "action": "show_item"
       }
-    }
+    },
+    "hover_nbt": "{translate:\"block.minecraft.stone\"}",
+    "display_nbt": "{color:\"white\",hover_event:{action:\"show_item\",id:\"minecraft:stone\"},translate:\"chat.square_brackets\",with:[{extra:[{translate:\"block.minecraft.stone\"}],text:\"\"}]}"
   },
   {
     "case": 1,
@@ -105,7 +111,9 @@
         "count": 64,
         "action": "show_item"
       }
-    }
+    },
+    "hover_nbt": "{translate:\"block.minecraft.stone\"}",
+    "display_nbt": "{color:\"white\",hover_event:{action:\"show_item\",count:64,id:\"minecraft:stone\"},translate:\"chat.square_brackets\",with:[{extra:[{translate:\"block.minecraft.stone\"}],text:\"\"}]}"
   },
   {
     "case": 2,
@@ -136,7 +144,9 @@
         "count": 99,
         "action": "show_item"
       }
-    }
+    },
+    "hover_nbt": "{translate:\"block.minecraft.stone\"}",
+    "display_nbt": "{color:\"white\",hover_event:{action:\"show_item\",count:99,id:\"minecraft:stone\"},translate:\"chat.square_brackets\",with:[{extra:[{translate:\"block.minecraft.stone\"}],text:\"\"}]}"
   },
   {
     "case": 3,
@@ -165,7 +175,9 @@
         "id": "minecraft:enchanted_golden_apple",
         "action": "show_item"
       }
-    }
+    },
+    "hover_nbt": "{translate:\"item.minecraft.enchanted_golden_apple\"}",
+    "display_nbt": "{color:\"aqua\",hover_event:{action:\"show_item\",id:\"minecraft:enchanted_golden_apple\"},translate:\"chat.square_brackets\",with:[{extra:[{translate:\"item.minecraft.enchanted_golden_apple\"}],text:\"\"}]}"
   },
   {
     "case": 4,
@@ -194,7 +206,9 @@
         "id": "minecraft:dragon_egg",
         "action": "show_item"
       }
-    }
+    },
+    "hover_nbt": "{translate:\"block.minecraft.dragon_egg\"}",
+    "display_nbt": "{color:\"light_purple\",hover_event:{action:\"show_item\",id:\"minecraft:dragon_egg\"},translate:\"chat.square_brackets\",with:[{extra:[{translate:\"block.minecraft.dragon_egg\"}],text:\"\"}]}"
   },
   {
     "case": 5,
@@ -226,7 +240,9 @@
         },
         "action": "show_item"
       }
-    }
+    },
+    "hover_nbt": "\"Named stone\"",
+    "display_nbt": "{color:\"white\",hover_event:{action:\"show_item\",components:{\"minecraft:custom_name\":\"Named stone\"},id:\"minecraft:stone\"},translate:\"chat.square_brackets\",with:[{extra:[\"Named stone\"],italic:1b,text:\"\"}]}"
   },
   {
     "case": 6,
@@ -274,7 +290,9 @@
         },
         "action": "show_item"
       }
-    }
+    },
+    "hover_nbt": "{color:\"red\",italic:0b,text:\"Styled\"}",
+    "display_nbt": "{color:\"white\",hover_event:{action:\"show_item\",components:{\"minecraft:custom_name\":{color:\"red\",italic:0b,text:\"Styled\"}},id:\"minecraft:stone\"},translate:\"chat.square_brackets\",with:[{extra:[{color:\"red\",italic:0b,text:\"Styled\"}],italic:1b,text:\"\"}]}"
   },
   {
     "case": 7,
@@ -305,7 +323,9 @@
         },
         "action": "show_item"
       }
-    }
+    },
+    "hover_nbt": "\"Item override\"",
+    "display_nbt": "{color:\"white\",hover_event:{action:\"show_item\",components:{\"minecraft:item_name\":\"Item override\"},id:\"minecraft:stone\"},translate:\"chat.square_brackets\",with:[{extra:[\"Item override\"],text:\"\"}]}"
   },
   {
     "case": 8,
@@ -336,7 +356,9 @@
         },
         "action": "show_item"
       }
-    }
+    },
+    "hover_nbt": "\"\"",
+    "display_nbt": "{color:\"white\",hover_event:{action:\"show_item\",components:{\"!minecraft:item_name\":{}},id:\"minecraft:stone\"},translate:\"chat.square_brackets\",with:[{extra:[\"\"],text:\"\"}]}"
   },
   {
     "case": 9,
@@ -379,7 +401,9 @@
         },
         "action": "show_item"
       }
-    }
+    },
+    "hover_nbt": "\"Raw title\"",
+    "display_nbt": "{color:\"white\",hover_event:{action:\"show_item\",components:{\"minecraft:written_book_content\":{author:\"Author\",title:{filtered:\"Filtered title\",raw:\"Raw title\"}}},id:\"minecraft:written_book\"},translate:\"chat.square_brackets\",with:[{extra:[\"Raw title\"],text:\"\"}]}"
   },
   {
     "case": 10,
@@ -421,7 +445,9 @@
         },
         "action": "show_item"
       }
-    }
+    },
+    "hover_nbt": "\"Custom book\"",
+    "display_nbt": "{color:\"white\",hover_event:{action:\"show_item\",components:{\"minecraft:custom_name\":\"Custom book\",\"minecraft:written_book_content\":{author:\"Author\",title:{raw:\"Title\"}}},id:\"minecraft:written_book\"},translate:\"chat.square_brackets\",with:[{extra:[\"Custom book\"],italic:1b,text:\"\"}]}"
   },
   {
     "case": 11,
@@ -460,7 +486,9 @@
         },
         "action": "show_item"
       }
-    }
+    },
+    "hover_nbt": "{translate:\"item.minecraft.lodestone_compass\"}",
+    "display_nbt": "{color:\"white\",hover_event:{action:\"show_item\",components:{\"minecraft:lodestone_tracker\":{tracked:0b}},id:\"minecraft:compass\"},translate:\"chat.square_brackets\",with:[{extra:[{translate:\"item.minecraft.lodestone_compass\"}],text:\"\"}]}"
   },
   {
     "case": 12,
@@ -499,7 +527,9 @@
         },
         "action": "show_item"
       }
-    }
+    },
+    "hover_nbt": "{translate:\"item.minecraft.enchanted_book\"}",
+    "display_nbt": "{color:\"aqua\",hover_event:{action:\"show_item\",components:{\"minecraft:stored_enchantments\":{\"minecraft:sharpness\":1}},id:\"minecraft:enchanted_book\"},translate:\"chat.square_brackets\",with:[{extra:[{translate:\"item.minecraft.enchanted_book\"}],text:\"\"}]}"
   },
   {
     "case": 13,
@@ -531,7 +561,9 @@
         "id": "minecraft:stone",
         "action": "show_item"
       }
-    }
+    },
+    "hover_nbt": "{translate:\"block.minecraft.stone\"}",
+    "display_nbt": "{color:\"white\",hover_event:{action:\"show_item\",id:\"minecraft:stone\"},translate:\"chat.square_brackets\",with:[{extra:[{translate:\"block.minecraft.stone\"}],text:\"\"}]}"
   },
   {
     "case": 14,
@@ -571,7 +603,9 @@
         },
         "action": "show_item"
       }
-    }
+    },
+    "hover_nbt": "{translate:\"block.minecraft.stone\"}",
+    "display_nbt": "{color:\"aqua\",hover_event:{action:\"show_item\",components:{\"minecraft:enchantments\":{\"minecraft:sharpness\":1}},id:\"minecraft:stone\"},translate:\"chat.square_brackets\",with:[{extra:[{translate:\"block.minecraft.stone\"}],text:\"\"}]}"
   },
   {
     "case": 15,
@@ -606,7 +640,9 @@
         },
         "action": "show_item"
       }
-    }
+    },
+    "hover_nbt": "{translate:\"block.minecraft.stone\"}",
+    "display_nbt": "{color:\"yellow\",hover_event:{action:\"show_item\",components:{\"minecraft:rarity\":\"uncommon\"},id:\"minecraft:stone\"},translate:\"chat.square_brackets\",with:[{extra:[{translate:\"block.minecraft.stone\"}],text:\"\"}]}"
   },
   {
     "case": 16,
@@ -647,7 +683,9 @@
         },
         "action": "show_item"
       }
-    }
+    },
+    "hover_nbt": "{translate:\"block.minecraft.stone\"}",
+    "display_nbt": "{color:\"aqua\",hover_event:{action:\"show_item\",components:{\"minecraft:enchantments\":{\"minecraft:sharpness\":1},\"minecraft:rarity\":\"uncommon\"},id:\"minecraft:stone\"},translate:\"chat.square_brackets\",with:[{extra:[{translate:\"block.minecraft.stone\"}],text:\"\"}]}"
   },
   {
     "case": 17,
@@ -682,7 +720,9 @@
         },
         "action": "show_item"
       }
-    }
+    },
+    "hover_nbt": "{translate:\"block.minecraft.stone\"}",
+    "display_nbt": "{color:\"aqua\",hover_event:{action:\"show_item\",components:{\"minecraft:rarity\":\"rare\"},id:\"minecraft:stone\"},translate:\"chat.square_brackets\",with:[{extra:[{translate:\"block.minecraft.stone\"}],text:\"\"}]}"
   },
   {
     "case": 18,
@@ -723,7 +763,9 @@
         },
         "action": "show_item"
       }
-    }
+    },
+    "hover_nbt": "{translate:\"block.minecraft.stone\"}",
+    "display_nbt": "{color:\"light_purple\",hover_event:{action:\"show_item\",components:{\"minecraft:enchantments\":{\"minecraft:sharpness\":1},\"minecraft:rarity\":\"rare\"},id:\"minecraft:stone\"},translate:\"chat.square_brackets\",with:[{extra:[{translate:\"block.minecraft.stone\"}],text:\"\"}]}"
   },
   {
     "case": 19,
@@ -758,7 +800,9 @@
         },
         "action": "show_item"
       }
-    }
+    },
+    "hover_nbt": "{translate:\"block.minecraft.stone\"}",
+    "display_nbt": "{color:\"light_purple\",hover_event:{action:\"show_item\",components:{\"minecraft:rarity\":\"epic\"},id:\"minecraft:stone\"},translate:\"chat.square_brackets\",with:[{extra:[{translate:\"block.minecraft.stone\"}],text:\"\"}]}"
   },
   {
     "case": 20,
@@ -799,7 +843,9 @@
         },
         "action": "show_item"
       }
-    }
+    },
+    "hover_nbt": "{translate:\"block.minecraft.stone\"}",
+    "display_nbt": "{color:\"light_purple\",hover_event:{action:\"show_item\",components:{\"minecraft:enchantments\":{\"minecraft:sharpness\":1},\"minecraft:rarity\":\"epic\"},id:\"minecraft:stone\"},translate:\"chat.square_brackets\",with:[{extra:[{translate:\"block.minecraft.stone\"}],text:\"\"}]}"
   },
   {
     "case": 21,
@@ -842,7 +888,9 @@
         },
         "action": "show_item"
       }
-    }
+    },
+    "hover_nbt": "{translate:\"item.minecraft.written_book\"}",
+    "display_nbt": "{color:\"white\",hover_event:{action:\"show_item\",components:{\"minecraft:written_book_content\":{author:\"Author\",title:{raw:\"\"}}},id:\"minecraft:written_book\"},translate:\"chat.square_brackets\",with:[{extra:[{translate:\"item.minecraft.written_book\"}],text:\"\"}]}"
   },
   {
     "case": 22,
@@ -885,7 +933,9 @@
         },
         "action": "show_item"
       }
-    }
+    },
+    "hover_nbt": "{translate:\"item.minecraft.written_book\"}",
+    "display_nbt": "{color:\"white\",hover_event:{action:\"show_item\",components:{\"minecraft:written_book_content\":{author:\"Author\",title:{raw:\" \"}}},id:\"minecraft:written_book\"},translate:\"chat.square_brackets\",with:[{extra:[{translate:\"item.minecraft.written_book\"}],text:\"\"}]}"
   },
   {
     "case": 23,
@@ -928,7 +978,9 @@
         },
         "action": "show_item"
       }
-    }
+    },
+    "hover_nbt": "{translate:\"item.minecraft.written_book\"}",
+    "display_nbt": "{color:\"white\",hover_event:{action:\"show_item\",components:{\"minecraft:written_book_content\":{author:\"Author\",title:{raw:\"\\t\\n\"}}},id:\"minecraft:written_book\"},translate:\"chat.square_brackets\",with:[{extra:[{translate:\"item.minecraft.written_book\"}],text:\"\"}]}"
   },
   {
     "case": 24,
@@ -971,7 +1023,9 @@
         },
         "action": "show_item"
       }
-    }
+    },
+    "hover_nbt": "{translate:\"item.minecraft.written_book\"}",
+    "display_nbt": "{color:\"white\",hover_event:{action:\"show_item\",components:{\"minecraft:written_book_content\":{author:\"Author\",title:{raw:\" \"}}},id:\"minecraft:written_book\"},translate:\"chat.square_brackets\",with:[{extra:[{translate:\"item.minecraft.written_book\"}],text:\"\"}]}"
   },
   {
     "case": 25,
@@ -1014,7 +1068,9 @@
         },
         "action": "show_item"
       }
-    }
+    },
+    "hover_nbt": "{translate:\"item.minecraft.written_book\"}",
+    "display_nbt": "{color:\"white\",hover_event:{action:\"show_item\",components:{\"minecraft:written_book_content\":{author:\"Author\",title:{raw:\"\\x1C\"}}},id:\"minecraft:written_book\"},translate:\"chat.square_brackets\",with:[{extra:[{translate:\"item.minecraft.written_book\"}],text:\"\"}]}"
   },
   {
     "case": 26,
@@ -1053,7 +1109,9 @@
         },
         "action": "show_item"
       }
-    }
+    },
+    "hover_nbt": "\"\"",
+    "display_nbt": "{color:\"white\",hover_event:{action:\"show_item\",components:{\"minecraft:written_book_content\":{author:\"Author\",title:{raw:\"\"}}},id:\"minecraft:written_book\"},translate:\"chat.square_brackets\",with:[{extra:[\"\"],text:\"\"}]}"
   },
   {
     "case": 27,
@@ -1096,7 +1154,9 @@
         },
         "action": "show_item"
       }
-    }
+    },
+    "hover_nbt": "{translate:\"item.minecraft.written_book\"}",
+    "display_nbt": "{color:\"white\",hover_event:{action:\"show_item\",components:{\"minecraft:written_book_content\":{author:\"Author\",title:{raw:\" \"}}},id:\"minecraft:written_book\"},translate:\"chat.square_brackets\",with:[{extra:[{translate:\"item.minecraft.written_book\"}],text:\"\"}]}"
   },
   {
     "case": 28,
@@ -1139,7 +1199,9 @@
         },
         "action": "show_item"
       }
-    }
+    },
+    "hover_nbt": "{translate:\"item.minecraft.written_book\"}",
+    "display_nbt": "{color:\"white\",hover_event:{action:\"show_item\",components:{\"minecraft:written_book_content\":{author:\"Author\",title:{raw:\" \"}}},id:\"minecraft:written_book\"},translate:\"chat.square_brackets\",with:[{extra:[{translate:\"item.minecraft.written_book\"}],text:\"\"}]}"
   },
   {
     "case": 29,
@@ -1182,6 +1244,8 @@
         },
         "action": "show_item"
       }
-    }
+    },
+    "hover_nbt": "{translate:\"item.minecraft.written_book\"}",
+    "display_nbt": "{color:\"white\",hover_event:{action:\"show_item\",components:{\"minecraft:written_book_content\":{author:\"Author\",title:{raw:\"　\"}}},id:\"minecraft:written_book\"},translate:\"chat.square_brackets\",with:[{extra:[{translate:\"item.minecraft.written_book\"}],text:\"\"}]}"
   }
 ]

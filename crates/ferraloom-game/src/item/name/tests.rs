@@ -62,9 +62,16 @@ fn hover_and_display_names_match_native_custom_names_rarity_and_item_templates()
             ("hover", stack.get_hover_name().unwrap()),
             ("display", stack.get_display_name().unwrap()),
         ] {
-            let actual: serde_json::Value =
-                serde_json::from_str(&actual.to_json().unwrap()).unwrap();
-            assert_eq!(actual, row[method], "case {} {method}", row["case"]);
+            // Item hovers contain a generic NBT patch. Compare the native NBT
+            // representation used on the wire, preserving byte/boolean kinds.
+            let expected =
+                ferraloom_nbt::parse(row[format!("{method}_nbt")].as_str().unwrap()).unwrap();
+            assert_eq!(
+                actual.to_nbt().unwrap(),
+                expected,
+                "case {} {method}",
+                row["case"]
+            );
         }
     }
     assert_eq!(rows.len(), 32);
