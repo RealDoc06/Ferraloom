@@ -39,7 +39,8 @@ pub(super) async fn crops(bot: &mut Bot, log: &mut ObservationLog) -> Result<()>
     }
     put(bot, at(9, 13).below(1), Block::WATER.default_state()).await?;
     put(bot, at(9, 13), Block::GLOWSTONE.default_state()).await?;
-    // A sealed, unlit room tests the raw-light gate independently of skylight.
+    // CropBlock needs raw light 8 to survive, but 9 to grow. The sealed room
+    // excludes skylight; an adjacent level-9 light block gives the crop 8.
     fill(
         bot,
         at(2, 8),
@@ -54,14 +55,16 @@ pub(super) async fn crops(bot: &mut Bot, log: &mut ObservationLog) -> Result<()>
         Block::AIR.default_state(),
     )
     .await?;
-    let dark = at(4, 10);
+    let dim = at(4, 10);
+    put(bot, dim.west(1), state(Block::LIGHT, &[("level", "9")])).await?;
+    step(bot, 4).await?;
     put(
         bot,
-        dark.below(1),
+        dim.below(1),
         state(Block::FARMLAND, &[("moisture", "7")]),
     )
     .await?;
-    put(bot, dark, Block::WHEAT.default_state()).await?;
+    put(bot, dim, Block::WHEAT.default_state()).await?;
     step(bot, 4).await?;
     random_ticks(bot, 4096).await?;
     until(
@@ -80,8 +83,9 @@ pub(super) async fn crops(bot: &mut Bot, log: &mut ObservationLog) -> Result<()>
     )
     .await?;
     ensure!(
-        block(bot, dark)? == Block::WHEAT.default_state(),
-        "crop grew without light"
+        block(bot, dim)? == Block::WHEAT.default_state(),
+        "crop changed at the survival-only light threshold: {:?}",
+        block(bot, dim)?
     );
     record(
         log,
@@ -89,7 +93,7 @@ pub(super) async fn crops(bot: &mut Bot, log: &mut ObservationLog) -> Result<()>
         "crops.moisture_and_crowding_max_ages",
         &grown.iter().map(|(p, _)| *p).collect::<Vec<_>>(),
     )?;
-    record(log, bot, "crops.dark_control", &[dark])
+    record(log, bot, "crops.light_eight_control", &[dim])
 }
 
 pub(super) async fn columns(bot: &mut Bot, log: &mut ObservationLog) -> Result<()> {
