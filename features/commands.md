@@ -137,45 +137,45 @@ The dedicated dispatcher registers 92 native roots. Commands with pending runtim
 | commands.path.banlist | `/banlist`; executable | `net.minecraft.server.commands.BanListCommands#register` | [parity_paths_admin](../crates/ferraloom-parity/tests/command_paths.rs) | pass | pass |
 | commands.path.banlist.ips | `/banlist ips`; executable | `net.minecraft.server.commands.BanListCommands#register` | [parity_paths_admin](../crates/ferraloom-parity/tests/command_paths.rs) | pass | pass |
 | commands.path.banlist.players | `/banlist players`; executable | `net.minecraft.server.commands.BanListCommands#register` | [parity_paths_admin](../crates/ferraloom-parity/tests/command_paths.rs) | pass | pass |
-| commands.path.bossbar | `/bossbar` | `net.minecraft.server.commands.ExecuteCommand#register` | | - | todo |
-| commands.path.bossbar.add | `/bossbar add` | `net.minecraft.server.commands.ExecuteCommand#register` | | - | todo |
-| commands.path.bossbar.add.arg-id | `/bossbar add <id>`; parser `minecraft:resource_location` | `net.minecraft.server.commands.ExecuteCommand#register` | | - | todo |
-| commands.path.bossbar.add.arg-id.arg-name | `/bossbar add <id> <name>`; executable; parser `minecraft:component` | `net.minecraft.server.commands.ExecuteCommand#register` | | - | todo |
-| commands.path.bossbar.get | `/bossbar get` | `net.minecraft.server.commands.ExecuteCommand#register` | | - | todo |
-| commands.path.bossbar.get.arg-id | `/bossbar get <id>`; parser `minecraft:resource_location` | `net.minecraft.server.commands.ExecuteCommand#register` | | - | todo |
-| commands.path.bossbar.get.arg-id.max | `/bossbar get <id> max`; executable | `net.minecraft.server.commands.ExecuteCommand#register` | | - | todo |
-| commands.path.bossbar.get.arg-id.players | `/bossbar get <id> players`; executable | `net.minecraft.server.commands.ExecuteCommand#register` | | - | todo |
-| commands.path.bossbar.get.arg-id.value | `/bossbar get <id> value`; executable | `net.minecraft.server.commands.ExecuteCommand#register` | | - | todo |
-| commands.path.bossbar.get.arg-id.visible | `/bossbar get <id> visible`; executable | `net.minecraft.server.commands.ExecuteCommand#register` | | - | todo |
-| commands.path.bossbar.list | `/bossbar list`; executable | `net.minecraft.server.commands.ExecuteCommand#register` | | - | todo |
-| commands.path.bossbar.remove | `/bossbar remove` | `net.minecraft.server.commands.ExecuteCommand#register` | | - | todo |
-| commands.path.bossbar.remove.arg-id | `/bossbar remove <id>`; executable; parser `minecraft:resource_location` | `net.minecraft.server.commands.ExecuteCommand#register` | | - | todo |
-| commands.path.bossbar.set | `/bossbar set` | `net.minecraft.server.commands.ExecuteCommand#register` | | - | todo |
-| commands.path.bossbar.set.arg-id | `/bossbar set <id>`; parser `minecraft:resource_location` | `net.minecraft.server.commands.ExecuteCommand#register` | | - | todo |
-| commands.path.bossbar.set.arg-id.color | `/bossbar set <id> color` | `net.minecraft.server.commands.ExecuteCommand#register` | | - | todo |
-| commands.path.bossbar.set.arg-id.color.blue | `/bossbar set <id> color blue`; executable | `net.minecraft.server.commands.ExecuteCommand#register` | | - | todo |
-| commands.path.bossbar.set.arg-id.color.green | `/bossbar set <id> color green`; executable | `net.minecraft.server.commands.ExecuteCommand#register` | | - | todo |
-| commands.path.bossbar.set.arg-id.color.pink | `/bossbar set <id> color pink`; executable | `net.minecraft.server.commands.ExecuteCommand#register` | | - | todo |
-| commands.path.bossbar.set.arg-id.color.purple | `/bossbar set <id> color purple`; executable | `net.minecraft.server.commands.ExecuteCommand#register` | | - | todo |
-| commands.path.bossbar.set.arg-id.color.red | `/bossbar set <id> color red`; executable | `net.minecraft.server.commands.ExecuteCommand#register` | | - | todo |
-| commands.path.bossbar.set.arg-id.color.white | `/bossbar set <id> color white`; executable | `net.minecraft.server.commands.ExecuteCommand#register` | | - | todo |
-| commands.path.bossbar.set.arg-id.color.yellow | `/bossbar set <id> color yellow`; executable | `net.minecraft.server.commands.ExecuteCommand#register` | | - | todo |
-| commands.path.bossbar.set.arg-id.max | `/bossbar set <id> max` | `net.minecraft.server.commands.ExecuteCommand#register` | | - | todo |
-| commands.path.bossbar.set.arg-id.max.arg-max | `/bossbar set <id> max <max>`; executable; parser `brigadier:integer` {"min":1} | `net.minecraft.server.commands.ExecuteCommand#register` | | - | todo |
-| commands.path.bossbar.set.arg-id.name | `/bossbar set <id> name` | `net.minecraft.server.commands.ExecuteCommand#register` | | - | todo |
-| commands.path.bossbar.set.arg-id.name.arg-name | `/bossbar set <id> name <name>`; executable; parser `minecraft:component` | `net.minecraft.server.commands.ExecuteCommand#register` | | - | todo |
-| commands.path.bossbar.set.arg-id.players | `/bossbar set <id> players`; executable | `net.minecraft.server.commands.ExecuteCommand#register` | | - | todo |
-| commands.path.bossbar.set.arg-id.players.arg-targets | `/bossbar set <id> players <targets>`; executable; parser `minecraft:entity` {"amount":"multiple","type":"players"} | `net.minecraft.server.commands.ExecuteCommand#register` | | - | todo |
-| commands.path.bossbar.set.arg-id.style | `/bossbar set <id> style` | `net.minecraft.server.commands.ExecuteCommand#register` | | - | todo |
-| commands.path.bossbar.set.arg-id.style.notched-10 | `/bossbar set <id> style notched_10`; executable | `net.minecraft.server.commands.ExecuteCommand#register` | | - | todo |
-| commands.path.bossbar.set.arg-id.style.notched-12 | `/bossbar set <id> style notched_12`; executable | `net.minecraft.server.commands.ExecuteCommand#register` | | - | todo |
-| commands.path.bossbar.set.arg-id.style.notched-20 | `/bossbar set <id> style notched_20`; executable | `net.minecraft.server.commands.ExecuteCommand#register` | | - | todo |
-| commands.path.bossbar.set.arg-id.style.notched-6 | `/bossbar set <id> style notched_6`; executable | `net.minecraft.server.commands.ExecuteCommand#register` | | - | todo |
-| commands.path.bossbar.set.arg-id.style.progress | `/bossbar set <id> style progress`; executable | `net.minecraft.server.commands.ExecuteCommand#register` | | - | todo |
-| commands.path.bossbar.set.arg-id.value | `/bossbar set <id> value` | `net.minecraft.server.commands.ExecuteCommand#register` | | - | todo |
-| commands.path.bossbar.set.arg-id.value.arg-value | `/bossbar set <id> value <value>`; executable; parser `brigadier:integer` {"min":0} | `net.minecraft.server.commands.ExecuteCommand#register` | | - | todo |
-| commands.path.bossbar.set.arg-id.visible | `/bossbar set <id> visible` | `net.minecraft.server.commands.ExecuteCommand#register` | | - | todo |
-| commands.path.bossbar.set.arg-id.visible.arg-visible | `/bossbar set <id> visible <visible>`; executable; parser `brigadier:bool` | `net.minecraft.server.commands.ExecuteCommand#register` | | - | todo |
+| commands.path.bossbar | `/bossbar` | `net.minecraft.server.commands.ExecuteCommand#register` | [parity_bossbar_commands](../crates/ferraloom-parity/tests/bossbar.rs) | pass | pass |
+| commands.path.bossbar.add | `/bossbar add` | `net.minecraft.server.commands.ExecuteCommand#register` | [parity_bossbar_commands](../crates/ferraloom-parity/tests/bossbar.rs) | pass | pass |
+| commands.path.bossbar.add.arg-id | `/bossbar add <id>`; parser `minecraft:resource_location` | `net.minecraft.server.commands.ExecuteCommand#register` | [parity_bossbar_commands](../crates/ferraloom-parity/tests/bossbar.rs) | pass | pass |
+| commands.path.bossbar.add.arg-id.arg-name | `/bossbar add <id> <name>`; executable; parser `minecraft:component` | `net.minecraft.server.commands.ExecuteCommand#register` | [parity_bossbar_commands](../crates/ferraloom-parity/tests/bossbar.rs) | pass | pass |
+| commands.path.bossbar.get | `/bossbar get` | `net.minecraft.server.commands.ExecuteCommand#register` | [parity_bossbar_commands](../crates/ferraloom-parity/tests/bossbar.rs) | pass | pass |
+| commands.path.bossbar.get.arg-id | `/bossbar get <id>`; parser `minecraft:resource_location` | `net.minecraft.server.commands.ExecuteCommand#register` | [parity_bossbar_commands](../crates/ferraloom-parity/tests/bossbar.rs) | pass | pass |
+| commands.path.bossbar.get.arg-id.max | `/bossbar get <id> max`; executable | `net.minecraft.server.commands.ExecuteCommand#register` | [parity_bossbar_commands](../crates/ferraloom-parity/tests/bossbar.rs) | pass | pass |
+| commands.path.bossbar.get.arg-id.players | `/bossbar get <id> players`; executable | `net.minecraft.server.commands.ExecuteCommand#register` | [parity_bossbar_commands](../crates/ferraloom-parity/tests/bossbar.rs) | pass | pass |
+| commands.path.bossbar.get.arg-id.value | `/bossbar get <id> value`; executable | `net.minecraft.server.commands.ExecuteCommand#register` | [parity_bossbar_commands](../crates/ferraloom-parity/tests/bossbar.rs) | pass | pass |
+| commands.path.bossbar.get.arg-id.visible | `/bossbar get <id> visible`; executable | `net.minecraft.server.commands.ExecuteCommand#register` | [parity_bossbar_commands](../crates/ferraloom-parity/tests/bossbar.rs) | pass | pass |
+| commands.path.bossbar.list | `/bossbar list`; executable | `net.minecraft.server.commands.ExecuteCommand#register` | [parity_bossbar_commands](../crates/ferraloom-parity/tests/bossbar.rs) | pass | pass |
+| commands.path.bossbar.remove | `/bossbar remove` | `net.minecraft.server.commands.ExecuteCommand#register` | [parity_bossbar_commands](../crates/ferraloom-parity/tests/bossbar.rs) | pass | pass |
+| commands.path.bossbar.remove.arg-id | `/bossbar remove <id>`; executable; parser `minecraft:resource_location` | `net.minecraft.server.commands.ExecuteCommand#register` | [parity_bossbar_commands](../crates/ferraloom-parity/tests/bossbar.rs) | pass | pass |
+| commands.path.bossbar.set | `/bossbar set` | `net.minecraft.server.commands.ExecuteCommand#register` | [parity_bossbar_commands](../crates/ferraloom-parity/tests/bossbar.rs) | pass | pass |
+| commands.path.bossbar.set.arg-id | `/bossbar set <id>`; parser `minecraft:resource_location` | `net.minecraft.server.commands.ExecuteCommand#register` | [parity_bossbar_commands](../crates/ferraloom-parity/tests/bossbar.rs) | pass | pass |
+| commands.path.bossbar.set.arg-id.color | `/bossbar set <id> color` | `net.minecraft.server.commands.ExecuteCommand#register` | [parity_bossbar_commands](../crates/ferraloom-parity/tests/bossbar.rs) | pass | pass |
+| commands.path.bossbar.set.arg-id.color.blue | `/bossbar set <id> color blue`; executable | `net.minecraft.server.commands.ExecuteCommand#register` | [parity_bossbar_commands](../crates/ferraloom-parity/tests/bossbar.rs) | pass | pass |
+| commands.path.bossbar.set.arg-id.color.green | `/bossbar set <id> color green`; executable | `net.minecraft.server.commands.ExecuteCommand#register` | [parity_bossbar_commands](../crates/ferraloom-parity/tests/bossbar.rs) | pass | pass |
+| commands.path.bossbar.set.arg-id.color.pink | `/bossbar set <id> color pink`; executable | `net.minecraft.server.commands.ExecuteCommand#register` | [parity_bossbar_commands](../crates/ferraloom-parity/tests/bossbar.rs) | pass | pass |
+| commands.path.bossbar.set.arg-id.color.purple | `/bossbar set <id> color purple`; executable | `net.minecraft.server.commands.ExecuteCommand#register` | [parity_bossbar_commands](../crates/ferraloom-parity/tests/bossbar.rs) | pass | pass |
+| commands.path.bossbar.set.arg-id.color.red | `/bossbar set <id> color red`; executable | `net.minecraft.server.commands.ExecuteCommand#register` | [parity_bossbar_commands](../crates/ferraloom-parity/tests/bossbar.rs) | pass | pass |
+| commands.path.bossbar.set.arg-id.color.white | `/bossbar set <id> color white`; executable | `net.minecraft.server.commands.ExecuteCommand#register` | [parity_bossbar_commands](../crates/ferraloom-parity/tests/bossbar.rs) | pass | pass |
+| commands.path.bossbar.set.arg-id.color.yellow | `/bossbar set <id> color yellow`; executable | `net.minecraft.server.commands.ExecuteCommand#register` | [parity_bossbar_commands](../crates/ferraloom-parity/tests/bossbar.rs) | pass | pass |
+| commands.path.bossbar.set.arg-id.max | `/bossbar set <id> max` | `net.minecraft.server.commands.ExecuteCommand#register` | [parity_bossbar_commands](../crates/ferraloom-parity/tests/bossbar.rs) | pass | pass |
+| commands.path.bossbar.set.arg-id.max.arg-max | `/bossbar set <id> max <max>`; executable; parser `brigadier:integer` {"min":1} | `net.minecraft.server.commands.ExecuteCommand#register` | [parity_bossbar_commands](../crates/ferraloom-parity/tests/bossbar.rs) | pass | pass |
+| commands.path.bossbar.set.arg-id.name | `/bossbar set <id> name` | `net.minecraft.server.commands.ExecuteCommand#register` | [parity_bossbar_commands](../crates/ferraloom-parity/tests/bossbar.rs) | pass | pass |
+| commands.path.bossbar.set.arg-id.name.arg-name | `/bossbar set <id> name <name>`; executable; parser `minecraft:component` | `net.minecraft.server.commands.ExecuteCommand#register` | [parity_bossbar_commands](../crates/ferraloom-parity/tests/bossbar.rs) | pass | pass |
+| commands.path.bossbar.set.arg-id.players | `/bossbar set <id> players`; executable | `net.minecraft.server.commands.ExecuteCommand#register` | [parity_bossbar_commands](../crates/ferraloom-parity/tests/bossbar.rs) | pass | pass |
+| commands.path.bossbar.set.arg-id.players.arg-targets | `/bossbar set <id> players <targets>`; executable; parser `minecraft:entity` {"amount":"multiple","type":"players"} | `net.minecraft.server.commands.ExecuteCommand#register` | [parity_bossbar_commands](../crates/ferraloom-parity/tests/bossbar.rs) | pass | pass |
+| commands.path.bossbar.set.arg-id.style | `/bossbar set <id> style` | `net.minecraft.server.commands.ExecuteCommand#register` | [parity_bossbar_commands](../crates/ferraloom-parity/tests/bossbar.rs) | pass | pass |
+| commands.path.bossbar.set.arg-id.style.notched-10 | `/bossbar set <id> style notched_10`; executable | `net.minecraft.server.commands.ExecuteCommand#register` | [parity_bossbar_commands](../crates/ferraloom-parity/tests/bossbar.rs) | pass | pass |
+| commands.path.bossbar.set.arg-id.style.notched-12 | `/bossbar set <id> style notched_12`; executable | `net.minecraft.server.commands.ExecuteCommand#register` | [parity_bossbar_commands](../crates/ferraloom-parity/tests/bossbar.rs) | pass | pass |
+| commands.path.bossbar.set.arg-id.style.notched-20 | `/bossbar set <id> style notched_20`; executable | `net.minecraft.server.commands.ExecuteCommand#register` | [parity_bossbar_commands](../crates/ferraloom-parity/tests/bossbar.rs) | pass | pass |
+| commands.path.bossbar.set.arg-id.style.notched-6 | `/bossbar set <id> style notched_6`; executable | `net.minecraft.server.commands.ExecuteCommand#register` | [parity_bossbar_commands](../crates/ferraloom-parity/tests/bossbar.rs) | pass | pass |
+| commands.path.bossbar.set.arg-id.style.progress | `/bossbar set <id> style progress`; executable | `net.minecraft.server.commands.ExecuteCommand#register` | [parity_bossbar_commands](../crates/ferraloom-parity/tests/bossbar.rs) | pass | pass |
+| commands.path.bossbar.set.arg-id.value | `/bossbar set <id> value` | `net.minecraft.server.commands.ExecuteCommand#register` | [parity_bossbar_commands](../crates/ferraloom-parity/tests/bossbar.rs) | pass | pass |
+| commands.path.bossbar.set.arg-id.value.arg-value | `/bossbar set <id> value <value>`; executable; parser `brigadier:integer` {"min":0} | `net.minecraft.server.commands.ExecuteCommand#register` | [parity_bossbar_commands](../crates/ferraloom-parity/tests/bossbar.rs) | pass | pass |
+| commands.path.bossbar.set.arg-id.visible | `/bossbar set <id> visible` | `net.minecraft.server.commands.ExecuteCommand#register` | [parity_bossbar_commands](../crates/ferraloom-parity/tests/bossbar.rs) | pass | pass |
+| commands.path.bossbar.set.arg-id.visible.arg-visible | `/bossbar set <id> visible <visible>`; executable; parser `brigadier:bool` | `net.minecraft.server.commands.ExecuteCommand#register` | [parity_bossbar_commands](../crates/ferraloom-parity/tests/bossbar.rs) | pass | pass |
 | commands.path.clear | `/clear`; executable | `net.minecraft.server.commands.TitleCommand#register` | | - | todo |
 | commands.path.clear.arg-targets | `/clear <targets>`; executable; parser `minecraft:entity` {"amount":"multiple","type":"players"} | `net.minecraft.server.commands.TitleCommand#register` | | - | todo |
 | commands.path.clear.arg-targets.arg-item | `/clear <targets> <item>`; executable; parser `minecraft:item_predicate` | `net.minecraft.server.commands.TitleCommand#register` | | - | todo |

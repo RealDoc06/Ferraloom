@@ -19,7 +19,6 @@ public final class LandingVectors {
   static final class Receiver extends Cow {
     Receiver(Level level){super(EntityTypes.COW,level);}
     @Override protected void onChangedBlock(ServerLevel level,BlockPos pos){gameEvent(GameEvent.STEP);}
-    @Override public boolean causeFallDamage(double distance,float modifier,DamageSource source){return false;}
     void check(double dy,boolean ground,BlockState state,BlockPos pos){super.checkFallDamage(dy,ground,state,pos);}
     boolean climbableCleared() throws Exception {return ((Optional<?>)ExperienceVectors.field(LivingEntity.class,"lastClimbablePos").get(this)).isEmpty();}
   }
@@ -39,6 +38,7 @@ public final class LandingVectors {
         return Answers.RETURNS_DEFAULTS.answer(call);
       });
       var entity=new Receiver(original);entity.setPos(8.5,64.25,8.5);
+      entity.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.FALL_DAMAGE_MULTIPLIER).setBaseValue(0);
       ExperienceVectors.field(Entity.class,"level").set(entity,server);
       ExperienceVectors.field(Entity.class,"wasTouchingWater").setBoolean(entity,true);
       ExperienceVectors.field(LivingEntity.class,"lastClimbablePos").set(entity,Optional.of(new BlockPos(8,64,8)));

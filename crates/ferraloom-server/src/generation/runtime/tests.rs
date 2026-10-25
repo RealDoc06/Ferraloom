@@ -197,7 +197,7 @@ async fn resumed_full_promotion_keeps_the_successful_entity_post_load_checkpoint
     terrain.disk.entities = Some(vec![ferraloom_nbt::parse_compound(
         "{id:\"minecraft:tnt\",UUID:[I;1,2,3,4],Pos:[1024.5d,0.0d,0.5d],Motion:[0d,0d,0d],Rotation:[0f,0f]}",
     ).unwrap()]);
-    let live = LiveLevel::install(world, bootstrap, Arc::new(properties)).unwrap();
+    let mut live = LiveLevel::install(world, bootstrap, Arc::new(properties)).unwrap();
     let runtime = live.generation();
     runtime
         .accept_test_terrain(&live.level, task, terrain)
@@ -247,7 +247,12 @@ async fn resumed_full_promotion_keeps_the_successful_entity_post_load_checkpoint
             .unwrap()
             .post_load_active = false
     });
-    runtime.run_post_load(&live.level, task).unwrap();
+    GenerationRuntime::run_post_load_with_access(
+        &mut GenerationAccess::Mutable(&mut live.level),
+        task,
+    )
+    .unwrap();
+    let runtime = live.generation();
     let allocated_probe = live.level.next_entity_id();
     assert_eq!(allocated_probe, 2);
     // A cold executor failure after postLoad precedes the next finalize action.
@@ -265,14 +270,21 @@ async fn resumed_full_promotion_keeps_the_successful_entity_post_load_checkpoint
         })
     });
     runtime.jobs.borrow_mut().suspend_integration(task);
-    runtime.resume_full_promotion(&live.level, task).unwrap();
+    GenerationRuntime::resume_full_promotion_with_access(
+        &mut GenerationAccess::Mutable(&mut live.level),
+        task,
+    )
+    .unwrap();
+    let runtime = live.generation();
     assert_eq!(live.level.next_entity_id(), allocated_probe + 1);
     assert_eq!(live.level.take_entity_management_events().len(), 1);
     assert!(runtime.with_world(|world| world.full_promotions[&task].entities_registered));
     assert!(runtime.with_world(|world| world.full_promotions[&task].finalized));
     assert!(runtime.with_world(|world| world.light_ready.contains(&pos)));
     assert!(!runtime.with_world(|world| world.ready.contains(&pos)));
-    assert_entity_visibility_follows_holder_ranges(runtime, &live.level, pos);
+    assert_entity_visibility_follows_holder_ranges(&mut live.level, pos);
+    assert_eq!(live.level.next_entity_id(), allocated_probe + 2);
+    let runtime = live.generation();
     // A later task can demote the holder before its queued range confirmation
     // runs. Validate the cancellable token when publishing visibility.
     let (epoch, promotion) = runtime.with_chunks_mut(|chunks| {
@@ -317,13 +329,9 @@ async fn resumed_full_promotion_keeps_the_successful_entity_post_load_checkpoint
 
 /// Controlled neighboring status futures isolate the native range requirements;
 /// the center, driver, light publication and postLoad above use the real path.
-fn assert_entity_visibility_follows_holder_ranges(
-    runtime: &GenerationRuntime,
-    level: &Level,
-    pos: ChunkPos,
-) {
-    use ferraloom_game::level::entity::Visibility;
-    runtime.with_chunks_mut(|chunks| {
+fn assert_entity_visibility_follows_holder_ranges(level: &mut Level, pos: ChunkPos) {
+    use ferraloom_game::level::entity::{EntityManagementEvent, Visibility};
+    GenerationRuntime::from_level(level).with_chunks_mut(|chunks| {
         for x in pos.x - 2..=pos.x + 2 {
             for z in pos.z - 2..=pos.z + 2 {
                 let neighbor = ChunkPos::new(x, z);
@@ -333,7 +341,8 @@ fn assert_entity_visibility_follows_holder_ranges(
             }
         }
     });
-    let set_ticket = |ticket_level| {
+    let set_ticket = |level: &mut Level, ticket_level| {
+        let runtime = GenerationRuntime::from_level(level);
         let publication = runtime.with_chunks_mut(|chunks| {
             let holder = chunks.holders.get_mut(&pos.pack()).unwrap();
             holder.ticket_level = ticket_level;
@@ -348,10 +357,13 @@ fn assert_entity_visibility_follows_holder_ranges(
             .status_publications
             .borrow_mut()
             .push_back(publication);
-        runtime.publish_status_changes(level).unwrap();
+        GenerationRuntime::publish_status_changes_with_access(&mut GenerationAccess::Mutable(
+            level,
+        ))
+        .unwrap();
     };
-    let complete_neighbors = |radius, target: ChunkStatus| {
-        runtime.with_chunks_mut(|chunks| {
+    let complete_neighbors = |level: &Level, radius, target: ChunkStatus| {
+        GenerationRuntime::from_level(level).with_chunks_mut(|chunks| {
             for x in pos.x - radius..=pos.x + radius {
                 for z in pos.z - radius..=pos.z + radius {
                     let neighbor = ChunkPos::new(x, z);
@@ -377,17 +389,73 @@ fn assert_entity_visibility_follows_holder_ranges(
             }
         });
     };
-    set_ticket(45);
-    set_ticket(33);
-    runtime.confirm_ready_ranges(level).unwrap();
+    set_ticket(level, 45);
+    set_ticket(level, 33);
+    GenerationRuntime::confirm_ready_ranges_mut(level).unwrap();
     assert_eq!(level.entity_chunk_visibility(pos), Visibility::Hidden);
-    complete_neighbors(1, ChunkStatus::InitializeLight);
-    // Pipeline's main-thread continuation will restore the visibility-transition checks.
+    complete_neighbors(level, 1, ChunkStatus::InitializeLight);
+    // A genuinely shared read still fails before the tracking callback. Use a
+    // fresh native promotion after demotion for the independent mutable path.
     assert_eq!(
-        runtime.confirm_ready_ranges(level),
+        GenerationRuntime::from_level(level).confirm_ready_ranges(level),
         Err(LevelError::UnsupportedSharedEntityTracking(
             "update_entity_chunk_status_shared"
-        ))
+        )),
     );
     assert_eq!(level.entity_chunk_visibility(pos), Visibility::Hidden);
+    set_ticket(level, 45);
+    set_ticket(level, 33);
+    GenerationRuntime::confirm_ready_ranges_mut(level).unwrap();
+    assert_eq!(level.entity_chunk_visibility(pos), Visibility::Tracked);
+    set_ticket(level, 32);
+    complete_neighbors(level, 1, ChunkStatus::Full);
+    GenerationRuntime::confirm_ready_ranges_mut(level).unwrap();
+    assert!(!level.chunk(pos).unwrap().ticking_ready());
+    // Controlled ticking future; its actual postProcess/startTicking callbacks
+    // are covered by the Level and live join tests, independently of this range.
+    GenerationRuntime::from_level(level).with_world_mut(|world| {
+        world.ready.insert(pos);
+    });
+    GenerationRuntime::confirm_ready_ranges_mut(level).unwrap();
+    assert!(level.chunk(pos).unwrap().ticking_ready());
+    assert_eq!(level.entity_chunk_visibility(pos), Visibility::Tracked);
+    set_ticket(level, 31);
+    GenerationRuntime::confirm_ready_ranges_mut(level).unwrap();
+    assert_eq!(level.entity_chunk_visibility(pos), Visibility::Tracked);
+    complete_neighbors(level, 2, ChunkStatus::Full);
+    GenerationRuntime::confirm_ready_ranges_mut(level).unwrap();
+    assert_eq!(level.entity_chunk_visibility(pos), Visibility::Ticking);
+    set_ticket(level, 33);
+    assert_eq!(level.entity_chunk_visibility(pos), Visibility::Tracked);
+    set_ticket(level, 45);
+    assert_eq!(level.entity_chunk_visibility(pos), Visibility::Hidden);
+    let events = level.take_entity_management_events();
+    assert_eq!(
+        events
+            .iter()
+            .filter(|event| matches!(event, EntityManagementEvent::TrackingStart(_)))
+            .count(),
+        1
+    );
+    assert_eq!(
+        events
+            .iter()
+            .filter(|event| matches!(event, EntityManagementEvent::TrackingEnd(_)))
+            .count(),
+        1
+    );
+    assert_eq!(
+        events
+            .iter()
+            .filter(|event| matches!(event, EntityManagementEvent::TickingStart(_)))
+            .count(),
+        1
+    );
+    assert_eq!(
+        events
+            .iter()
+            .filter(|event| matches!(event, EntityManagementEvent::TickingEnd(_)))
+            .count(),
+        1
+    );
 }

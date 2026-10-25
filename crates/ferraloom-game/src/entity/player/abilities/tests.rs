@@ -82,7 +82,9 @@ fn player_save_keeps_independent_abilities_and_malformed_packed_load_is_atomic()
     player.abilities.flying = true;
     player.abilities.set_flying_speed(0.125);
     player.abilities.set_walking_speed(-0.25);
-    let saved = player.save();
+    let saved = player
+        .save(&crate::entity::tests::persistence_level())
+        .unwrap();
     let packed = PackedAbilities::from_nbt(saved.get("abilities").unwrap()).unwrap();
     assert_eq!(snapshot(packed), snapshot(player.abilities.pack()));
     assert!(packed.invulnerable);

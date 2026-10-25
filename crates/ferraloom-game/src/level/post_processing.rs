@@ -58,7 +58,11 @@ impl Level {
         let key = ChunkPos::containing(pos);
         let chunk = self.get_full_chunk(key)?;
         if let Some(state) = chunk.block_entities.get(pos) {
-            return Ok(Some(state.data().reference()));
+            if !state.data().removed {
+                return Ok(Some(state.data().reference()));
+            }
+            self.discard_removed_block_entity(pos)?;
+            return Ok(None);
         }
         let tag = chunk
             .pending_block_entity_nbt()

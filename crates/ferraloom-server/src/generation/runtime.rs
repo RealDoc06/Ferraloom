@@ -13,10 +13,10 @@ use anyhow::Result;
 use ferraloom_game::{
     entity::EntityRef,
     level::{
-        Level, LevelError,
+        Level, LevelError, RegionId,
         acquisition::{
             AcquireDriver, AcquireFailure, AcquireHandle, AcquireProgress, AcquireResult,
-            ChunkReference,
+            AcquireTaskKind, ChunkReference, MainThreadAcquireTask,
         },
         chunk_holder::FullStatusPromotion,
         chunk_map::ChunkMap,
@@ -59,6 +59,90 @@ struct OwnerAcquisition {
     status: ChunkStatus,
     load: bool,
     answer: mpsc::Sender<Result<Option<ChunkReference>, LevelError>>,
+}
+
+/// Capability is selected before any entity stream starts. Owned steps finish
+/// their runtime borrow before a mutable callback and reborrow it afterward.
+pub(super) enum GenerationAccess<'a> {
+    Shared {
+        runtime: &'a GenerationRuntime,
+        level: &'a Level,
+    },
+    Mutable(&'a mut Level),
+}
+impl GenerationAccess<'_> {
+    fn level(&self) -> &Level {
+        match self {
+            Self::Shared { level, .. } => level,
+            Self::Mutable(level) => level,
+        }
+    }
+    fn read<T>(&self, read: impl FnOnce(&GenerationRuntime, &Level) -> T) -> T {
+        match self {
+            Self::Shared { runtime, level } => read(runtime, level),
+            Self::Mutable(level) => read(GenerationRuntime::from_level(level), level),
+        }
+    }
+    fn update_entity_status(
+        &mut self,
+        pos: ChunkPos,
+        visibility: ferraloom_game::level::entity::Visibility,
+    ) -> Result<(), LevelError> {
+        match self {
+            Self::Shared { level, .. } => level.update_entity_chunk_status_shared(pos, visibility),
+            Self::Mutable(level) => level.update_entity_chunk_status(pos, visibility),
+        }
+    }
+    fn post_load(
+        &mut self,
+        pos: ChunkPos,
+        entities: Vec<ferraloom_nbt::CompoundTag>,
+    ) -> Result<(), ferraloom_game::level::entity::WorldgenEntityLoadError> {
+        match self {
+            Self::Shared { level, .. } => level.add_worldgen_chunk_entities_shared(pos, entities),
+            Self::Mutable(level) => level.add_worldgen_chunk_entities(pos, entities),
+        }
+    }
+    fn acquire(
+        &mut self,
+        pos: ChunkPos,
+        status: ChunkStatus,
+        load: bool,
+    ) -> Result<Option<ChunkReference>, LevelError> {
+        match self {
+            Self::Shared { level, .. } => level.get_chunk(pos, status, load),
+            Self::Mutable(level) => level.get_chunk_mut(pos, status, load),
+        }
+    }
+}
+
+struct GenerationMainTask {
+    kind: AcquireTaskKind,
+    region: RegionId,
+}
+impl MainThreadAcquireTask for GenerationMainTask {
+    fn run(self: Box<Self>, level: &mut Level) -> Result<AcquireProgress, LevelError> {
+        if level.region_id() != self.region {
+            return Err(LevelError::ChunkAcquisition(
+                ChunkPos::ZERO,
+                ChunkStatus::Full,
+                AcquireFailure::InvalidHandle,
+            ));
+        }
+        let mut access = GenerationAccess::Mutable(level);
+        match self.kind {
+            AcquireTaskKind::DistanceUpdates => {
+                GenerationRuntime::run_distance_pass_with_access(&mut access).map(|changed| {
+                    if changed {
+                        AcquireProgress::DistanceUpdates
+                    } else {
+                        AcquireProgress::Idle
+                    }
+                })
+            }
+            AcquireTaskKind::Poll => GenerationRuntime::poll_with_access(&mut access),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -177,94 +261,124 @@ impl GenerationRuntime {
         level.run_distance_manager_updates(&mut manager, &mut tickets)
     }
 
+    fn enqueue_distance_changes(&self, level: &Level) -> Result<bool, LevelError> {
+        let updates = self.distance_changes(level);
+        let graph_changed = !updates.is_empty();
+        let changes = updates
+            .into_iter()
+            .filter(|change| {
+                change.level <= 44
+                    || self
+                        .chunks
+                        .borrow()
+                        .holders
+                        .contains_key(&change.pos.pack())
+            })
+            .collect::<Vec<_>>();
+        // Native first publishes every visible ticket-level change, then
+        // updates highestAllowedStatus for all affected holders.
+        for change in &changes {
+            self.chunks
+                .borrow_mut()
+                .ensure_holder(change.pos)
+                .ticket_level = change.level;
+            self.world
+                .borrow_mut()
+                .update_generation_priority(change.pos, change.level);
+        }
+        if graph_changed {
+            level.clear_chunk_source_cache();
+        }
+        for change in &changes {
+            let task = self
+                .chunks
+                .borrow_mut()
+                .update_highest_allowed_status(change.pos);
+            self.apply_task_change(change.pos, task);
+        }
+        for change in changes {
+            let publication = {
+                let mut chunks = self.chunks.borrow_mut();
+                let holder = chunks.holders.get_mut(&change.pos.pack()).unwrap();
+                StatusPublication {
+                    pos: change.pos,
+                    epoch: holder.epoch,
+                    confirmed: holder.update_full_status(),
+                    promotion: None,
+                }
+            };
+            self.status_publications.borrow_mut().push_back(publication);
+            if change.level <= 33 {
+                self.schedule_status(change.pos, ChunkStatus::Full)?;
+            }
+        }
+        Ok(graph_changed)
+    }
+
     fn run_distance_pass(&self, level: &Level) -> Result<bool, LevelError> {
+        Self::run_distance_pass_with_access(&mut GenerationAccess::Shared {
+            runtime: self,
+            level,
+        })
+    }
+
+    fn run_distance_pass_with_access(
+        access: &mut GenerationAccess<'_>,
+    ) -> Result<bool, LevelError> {
         let mut changed = false;
         loop {
-            let updates = self.distance_changes(level);
-            let graph_changed = !updates.is_empty();
-            changed |= graph_changed;
-            let changes = updates
-                .into_iter()
-                .filter(|change| {
-                    change.level <= 44
-                        || self
-                            .chunks
-                            .borrow()
-                            .holders
-                            .contains_key(&change.pos.pack())
-                })
-                .collect::<Vec<_>>();
-            // Native first publishes every visible ticket-level change, then
-            // updates highestAllowedStatus for all affected holders.
-            for change in &changes {
-                self.chunks
-                    .borrow_mut()
-                    .ensure_holder(change.pos)
-                    .ticket_level = change.level;
-                self.world
-                    .borrow_mut()
-                    .update_generation_priority(change.pos, change.level);
-            }
-            if graph_changed {
-                level.clear_chunk_source_cache();
-            }
-            for change in &changes {
-                let task = self
-                    .chunks
-                    .borrow_mut()
-                    .update_highest_allowed_status(change.pos);
-                self.apply_task_change(change.pos, task);
-            }
-            for change in changes {
-                let publication = {
-                    let mut chunks = self.chunks.borrow_mut();
-                    let holder = chunks.holders.get_mut(&change.pos.pack()).unwrap();
-                    StatusPublication {
-                        pos: change.pos,
-                        epoch: holder.epoch,
-                        confirmed: holder.update_full_status(),
-                        promotion: None,
-                    }
-                };
-                self.status_publications.borrow_mut().push_back(publication);
-                if change.level <= 33 {
-                    self.schedule_status(change.pos, ChunkStatus::Full)?;
-                }
-            }
-            self.publish_status_changes(level)?;
-            {
-                let mut manager = self.distance_manager.borrow_mut();
-                manager.poll_player_loading_tasks(&mut self.tickets.borrow_mut());
-            }
-            if !self.tickets.borrow().has_pending_source_updates() {
+            changed |= access.read(|runtime, level| runtime.enqueue_distance_changes(level))?;
+            Self::publish_status_changes_with_access(access)?;
+            let pending = access.read(|runtime, _| {
+                let mut manager = runtime.distance_manager.borrow_mut();
+                manager.poll_player_loading_tasks(&mut runtime.tickets.borrow_mut());
+                runtime.tickets.borrow().has_pending_source_updates()
+            });
+            if !pending {
                 break;
             }
         }
-        let waiters = {
-            let mut manager = self.distance_manager.borrow_mut();
-            manager.take_player_loading_waiters(&self.tickets.borrow())
-        };
-        for pos in waiters {
-            let handle = self.schedule_status(pos, ChunkStatus::Full)?;
-            self.player_loading_futures.borrow_mut().push_back(handle);
-        }
-        self.confirm_ready_ranges(level)?;
-        self.settle_player_loading_futures();
-        let requests = level.take_entity_storage_requests();
-        self.world
-            .borrow_mut()
-            .submit_entity_requests(requests, &self.properties)
-            .map_err(|_| {
-                LevelError::ChunkAcquisition(ChunkPos::ZERO, ChunkStatus::Full, AcquireFailure::Io)
-            })?;
+        access.read(|runtime, _| -> Result<(), LevelError> {
+            let waiters = {
+                let mut manager = runtime.distance_manager.borrow_mut();
+                manager.take_player_loading_waiters(&runtime.tickets.borrow())
+            };
+            for pos in waiters {
+                let handle = runtime.schedule_status(pos, ChunkStatus::Full)?;
+                runtime
+                    .player_loading_futures
+                    .borrow_mut()
+                    .push_back(handle);
+            }
+            Ok(())
+        })?;
+        Self::confirm_ready_ranges_with_access(access)?;
+        access.read(|runtime, level| {
+            runtime.settle_player_loading_futures();
+            let requests = level.take_entity_storage_requests();
+            runtime
+                .world
+                .borrow_mut()
+                .submit_entity_requests(requests, &runtime.properties)
+                .map_err(|_| {
+                    LevelError::ChunkAcquisition(
+                        ChunkPos::ZERO,
+                        ChunkStatus::Full,
+                        AcquireFailure::Io,
+                    )
+                })
+        })?;
         Ok(changed)
     }
 
-    fn publish_status_changes(&self, level: &Level) -> Result<(), LevelError> {
+    fn take_status_publication(
+        &self,
+        level: &Level,
+    ) -> Result<Option<(ChunkPos, Option<FullChunkStatus>)>, LevelError> {
         loop {
             let publication = self.status_publications.borrow_mut().pop_front();
             let Some(publication) = publication else {
-                return Ok(());
+                return Ok(None);
             };
             let current = {
                 let mut chunks = self.chunks.borrow_mut();
@@ -290,6 +404,26 @@ impl GenerationRuntime {
                     && self.range_ready(publication.pos, FullChunkStatus::BlockTicking);
                 level.set_chunk_loading_status(publication.pos, requested, ticking)?;
             }
+            return Ok(Some((publication.pos, confirmed)));
+        }
+    }
+
+    #[cfg(test)]
+    fn publish_status_changes(&self, level: &Level) -> Result<(), LevelError> {
+        Self::publish_status_changes_with_access(&mut GenerationAccess::Shared {
+            runtime: self,
+            level,
+        })
+    }
+    fn publish_status_changes_with_access(
+        access: &mut GenerationAccess<'_>,
+    ) -> Result<(), LevelError> {
+        loop {
+            let publication =
+                access.read(|runtime, level| runtime.take_status_publication(level))?;
+            let Some((pos, confirmed)) = publication else {
+                return Ok(());
+            };
             if let Some(status) = confirmed {
                 use ferraloom_game::level::entity::Visibility;
                 let visibility = match status {
@@ -297,7 +431,7 @@ impl GenerationRuntime {
                     FullChunkStatus::Full | FullChunkStatus::BlockTicking => Visibility::Tracked,
                     FullChunkStatus::EntityTicking => Visibility::Ticking,
                 };
-                level.update_entity_chunk_status_shared(publication.pos, visibility)?;
+                access.update_entity_status(pos, visibility)?;
             }
         }
     }
@@ -313,7 +447,7 @@ impl GenerationRuntime {
         })
     }
 
-    fn confirm_ready_ranges(&self, level: &Level) -> Result<(), LevelError> {
+    fn queue_ready_ranges(&self) {
         for pos in self.holder_positions() {
             let promotion = {
                 let chunks = self.chunks.borrow();
@@ -343,7 +477,23 @@ impl GenerationRuntime {
                 });
             }
         }
-        self.publish_status_changes(level)
+    }
+
+    #[cfg(test)]
+    fn confirm_ready_ranges(&self, level: &Level) -> Result<(), LevelError> {
+        Self::confirm_ready_ranges_with_access(&mut GenerationAccess::Shared {
+            runtime: self,
+            level,
+        })
+    }
+    pub(super) fn confirm_ready_ranges_mut(level: &mut Level) -> Result<(), LevelError> {
+        Self::confirm_ready_ranges_with_access(&mut GenerationAccess::Mutable(level))
+    }
+    fn confirm_ready_ranges_with_access(
+        access: &mut GenerationAccess<'_>,
+    ) -> Result<(), LevelError> {
+        access.read(|runtime, _| runtime.queue_ready_ranges());
+        Self::publish_status_changes_with_access(access)
     }
 
     fn settle_player_loading_futures(&self) {
@@ -404,7 +554,7 @@ impl GenerationRuntime {
 
     /// One owned completion starts at a time. Later completions stay on World
     /// while this one enters callbacks, so reentrant acquisition can reach them.
-    fn poll_owned_step(&self, level: &Level) -> Result<bool> {
+    fn poll_backend_step(&self, level: &Level) -> Result<bool> {
         let mut progressed = {
             let mut world = self.world.borrow_mut();
             world.refresh_generation_snapshots(level);
@@ -459,17 +609,54 @@ impl GenerationRuntime {
             self.import_light(level, light)?;
             progressed = true;
         }
-        if let Some(task) = self.next_full_promotion() {
-            self.resume_full_promotion(level, task)?;
+        Ok(progressed)
+    }
+
+    fn poll_owned_step_with_access(access: &mut GenerationAccess<'_>) -> Result<bool> {
+        let mut progressed = access.read(|runtime, level| runtime.poll_backend_step(level))?;
+        if let Some(task) = access.read(|runtime, _| runtime.next_full_promotion()) {
+            Self::resume_full_promotion_with_access(access, task)?;
             progressed = true;
         }
-        progressed |= self.poll_entity_progress(level)?;
-        self.confirm_ready_ranges(level)
+        // Entity IO delivery is independent of publication. The native entity
+        // management phase (or an explicit mutable wait/save) consumes loads.
+        progressed |= access.read(|runtime, level| runtime.poll_entity_io(level))?;
+        Self::confirm_ready_ranges_with_access(access)
             .map_err(|error| anyhow::anyhow!("{error:?}"))?;
-        self.settle_player_loading_futures();
-        self.queue_exclusive_promotions();
-        self.release_finished_jobs();
+        access.read(|runtime, _| {
+            runtime.settle_player_loading_futures();
+            runtime.queue_exclusive_promotions();
+            runtime.release_finished_jobs();
+        });
         Ok(progressed)
+    }
+
+    fn poll_with_access(access: &mut GenerationAccess<'_>) -> Result<AcquireProgress, LevelError> {
+        if access.read(|runtime, _| !runtime.progress_failures.borrow().is_empty()) {
+            return Err(LevelError::ChunkAcquisition(
+                ChunkPos::ZERO,
+                ChunkStatus::Full,
+                AcquireFailure::Generation,
+            ));
+        }
+        if Self::run_distance_pass_with_access(access)? {
+            return Ok(AcquireProgress::DistanceUpdates);
+        }
+        let request = access.read(|runtime, _| runtime.owner_requests.try_recv().ok());
+        if let Some(request) = request {
+            let result = access.acquire(request.pos, request.status, request.load);
+            let _ = request.answer.send(result);
+            return Ok(AcquireProgress::Task);
+        }
+        Self::poll_owned_step_with_access(access)
+            .map(|progressed| {
+                if progressed {
+                    AcquireProgress::Task
+                } else {
+                    AcquireProgress::Idle
+                }
+            })
+            .map_err(|error| access.read(|runtime, _| runtime.retain_progress_failure(error)))
     }
 
     fn publish_generation_skips(&self, level: &Level) -> Result<()> {
@@ -505,27 +692,31 @@ impl GenerationRuntime {
             }
         }
     }
-    pub(super) fn refresh_loading_status(
-        &self,
-        level: &Level,
+    pub(super) fn refresh_loading_status_mut(
+        level: &mut Level,
         pos: ChunkPos,
     ) -> Result<(), LevelError> {
-        let epoch = self
-            .chunks
-            .borrow()
-            .holders
-            .get(&pos.pack())
-            .ok_or(LevelError::MissingChunk(pos))?
-            .epoch;
-        self.status_publications
-            .borrow_mut()
-            .push_back(StatusPublication {
-                pos,
-                epoch,
-                confirmed: None,
-                promotion: None,
-            });
-        self.publish_status_changes(level)
+        let mut access = GenerationAccess::Mutable(level);
+        access.read(|runtime, _| {
+            let epoch = runtime
+                .chunks
+                .borrow()
+                .holders
+                .get(&pos.pack())
+                .ok_or(LevelError::MissingChunk(pos))?
+                .epoch;
+            runtime
+                .status_publications
+                .borrow_mut()
+                .push_back(StatusPublication {
+                    pos,
+                    epoch,
+                    confirmed: None,
+                    promotion: None,
+                });
+            Ok::<_, LevelError>(())
+        })?;
+        Self::publish_status_changes_with_access(&mut access)
     }
 
     /// Controlled transport fixture: the normal worker has already returned the
@@ -714,9 +905,9 @@ impl GenerationRuntime {
             .release_finished(&mut self.chunks.borrow_mut());
     }
 
-    /// Pop one owned IO result, release World, then enter entity publication.
-    /// A nested acquire can still reach every later IO result in the backend.
-    pub(crate) fn poll_entity_progress(&self, level: &Level) -> Result<bool> {
+    /// Deposit one owned IO response. Entity-management or an explicit mutable
+    /// wait publishes the stream; background generation never advances that phase.
+    pub(crate) fn poll_entity_io(&self, level: &Level) -> Result<bool> {
         let completion = self
             .world
             .borrow_mut()
@@ -729,7 +920,6 @@ impl GenerationRuntime {
             Some(EntityIoCompletion::Store(result)) => result?,
             None => {}
         }
-        level.process_pending_entity_loads_shared()?;
         let requests = level.take_entity_storage_requests();
         self.world
             .borrow_mut()
@@ -768,24 +958,18 @@ impl GenerationRuntime {
     pub(crate) fn holder_positions(&self) -> Vec<ChunkPos> {
         self.chunks.borrow().holder_positions().collect()
     }
-    pub(crate) fn progress_jobs(&self, level: &Level) -> Result<()> {
-        while self
-            .poll_acquisition_step(level)
-            .map_err(|error| anyhow::anyhow!("{error:?}"))?
-            != AcquireProgress::Idle
-        {}
-        Ok(())
-    }
-
-    pub(crate) fn request_full(&self, level: &Level, pos: ChunkPos) -> Result<(), LevelError> {
-        self.run_distance_pass(level)?;
-        if self
-            .visible_ticket_level(pos)
-            .is_some_and(|level| level <= 33)
-        {
-            self.request_status(level, pos, ChunkStatus::Full)?;
-        }
-        Ok(())
+    pub(super) fn request_full_mut(level: &mut Level, pos: ChunkPos) -> Result<(), LevelError> {
+        let mut access = GenerationAccess::Mutable(level);
+        Self::run_distance_pass_with_access(&mut access)?;
+        access.read(|runtime, level| {
+            if runtime
+                .visible_ticket_level(pos)
+                .is_some_and(|level| level <= 33)
+            {
+                runtime.request_status(level, pos, ChunkStatus::Full)?;
+            }
+            Ok(())
+        })
     }
 
     pub(crate) fn natural_spawn_chunks(&self) -> Vec<ChunkPos> {
@@ -865,30 +1049,20 @@ impl AcquireDriver for GenerationRuntime {
         self.status_result(handle)
     }
     fn poll_acquisition_step(&self, level: &Level) -> Result<AcquireProgress, LevelError> {
-        if !self.progress_failures.borrow().is_empty() {
-            return Err(LevelError::ChunkAcquisition(
-                ChunkPos::ZERO,
-                ChunkStatus::Full,
-                AcquireFailure::Generation,
-            ));
-        }
-        if self.run_distance_pass(level)? {
-            return Ok(AcquireProgress::DistanceUpdates);
-        }
-        if let Ok(request) = self.owner_requests.try_recv() {
-            let result = level.get_chunk(request.pos, request.status, request.load);
-            let _ = request.answer.send(result);
-            return Ok(AcquireProgress::Task);
-        }
-        self.poll_owned_step(level)
-            .map(|progressed| {
-                if progressed {
-                    AcquireProgress::Task
-                } else {
-                    AcquireProgress::Idle
-                }
-            })
-            .map_err(|error| self.retain_progress_failure(error))
+        Self::poll_with_access(&mut GenerationAccess::Shared {
+            runtime: self,
+            level,
+        })
+    }
+    fn main_thread_acquisition_task(
+        &self,
+        level: &Level,
+        kind: AcquireTaskKind,
+    ) -> Result<Option<Box<dyn MainThreadAcquireTask>>, LevelError> {
+        Ok(Some(Box::new(GenerationMainTask {
+            kind,
+            region: level.region_id(),
+        })))
     }
     fn wait_for_progress(&self) -> Result<(), LevelError> {
         self.wait_for_worker()

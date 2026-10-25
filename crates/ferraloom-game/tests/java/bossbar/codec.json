@@ -1,0 +1,54 @@
+[
+  {
+    "input": "{}",
+    "valid": true,
+    "dirty": false,
+    "output": "{}"
+  },
+  {
+    "input": "{\u0027test:bar\u0027:{Name:\u0027Boss\u0027}}",
+    "valid": true,
+    "dirty": true,
+    "output": "{\"test:bar\":{Name:\"Boss\"}}"
+  },
+  {
+    "input": "{\u0027test:bar\u0027:{Name:\u0027Boss\u0027,Visible:1b,Value:35,Max:80,Color:\u0027red\u0027,Overlay:\u0027notched_12\u0027,DarkenScreen:1b,PlayBossMusic:1b,CreateWorldFog:1b,Players:[[I;0,0,0,1],[I;0,0,0,1]]}}",
+    "valid": true,
+    "dirty": true,
+    "output": "{\"test:bar\":{Color:\"red\",CreateWorldFog:1b,DarkenScreen:1b,Max:80,Name:\"Boss\",Overlay:\"notched_12\",PlayBossMusic:1b,Players:[[I;0,0,0,1]],Value:35,Visible:1b}}"
+  },
+  {
+    "input": "{\u0027test:bar\u0027:{Name:\u0027Boss\u0027,Visible:0.5d,Value:-0.5d,Max:0}}",
+    "valid": true,
+    "dirty": true,
+    "output": "{\"test:bar\":{Max:0,Name:\"Boss\",Visible:1b}}"
+  },
+  {
+    "input": "{\u0027test:bar\u0027:{Name:\u0027Boss\u0027,Players:[[0b,0b,0b,2b]]}}",
+    "valid": true,
+    "dirty": true,
+    "output": "{\"test:bar\":{Name:\"Boss\",Players:[[I;0,0,0,2]]}}"
+  },
+  {
+    "input": "{\u0027test:bar\u0027:{Name:\u0027Boss\u0027,Players:[[L;0,0,0,2]]}}",
+    "valid": true,
+    "dirty": true,
+    "output": "{\"test:bar\":{Name:\"Boss\",Players:[[I;0,0,0,2]]}}"
+  },
+  {
+    "input": "{\u0027test:bar\u0027:{Name:\u0027Boss\u0027,Players:[\u002700000000-0000-0000-0000-000000000001\u0027]}}",
+    "valid": false
+  },
+  {
+    "input": "{\u0027test:bar\u0027:{Name:\u0027Boss\u0027,Color:\u0027invalid\u0027}}",
+    "valid": false
+  },
+  {
+    "input": "{\u0027test:bar\u0027:{Value:4}}",
+    "valid": false
+  },
+  {
+    "input": "{\u0027test:bar\u0027:{Name:\u0027Boss\u0027,Visible:\u0027yes\u0027}}",
+    "valid": false
+  }
+]

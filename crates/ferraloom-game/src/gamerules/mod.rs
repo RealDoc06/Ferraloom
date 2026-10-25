@@ -375,6 +375,9 @@ impl GameRules {
         rules.fall_damage = self.boolean(GameRule::FallDamage);
         rules.fire_damage = self.boolean(GameRule::FireDamage);
         rules.freeze_damage = self.boolean(GameRule::FreezeDamage);
+        rules.pvp = self.boolean(GameRule::Pvp);
+        rules.mob_drops = self.boolean(GameRule::MobDrops);
+        rules.keep_inventory = self.boolean(GameRule::KeepInventory);
         rules.random_tick_speed = self.integer(GameRule::RandomTickSpeed).max(0) as u32;
         rules.water_source_conversion = self.boolean(GameRule::WaterSourceConversion);
         rules.lava_source_conversion = self.boolean(GameRule::LavaSourceConversion);

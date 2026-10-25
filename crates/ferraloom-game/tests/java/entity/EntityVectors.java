@@ -120,6 +120,11 @@ public final class EntityVectors {
         EffectVectors.run();
         EffectReadVectors.run(new EntityFixture(r));
         DamageVectors.run(new EntityFixture(r));
+        DamageStateVectors.run(new EntityFixture(r));
+        ItemDamageVectors.run(new EntityFixture(r));
+        HurtVectors.run(new EntityFixture(r));
+        CombatRulesVectors.run(new EntityFixture(r));
+        CombatTrackerVectors.run(new EntityFixture(r));
         DifficultyVectors.run();
         ExperienceVectors.run(new EntityFixture(r));
         DropVectors.run(new EntityFixture(r));
@@ -141,6 +146,8 @@ public final class EntityVectors {
         CollisionVectors.run();
         PlacementContextVectors.run(new EntityFixture(r));
         LandingVectors.run(new EntityFixture(r));
+        FallDamageVectors.run(new EntityFixture(r));
+        SwingVectors.run(new EntityFixture(r));
         SoundVectors.run(new EntityFixture(r));
         TeleportVectors.run(new EntityFixture(r));
         PushVectors.run(new EntityFixture(r));
@@ -189,11 +196,11 @@ public final class EntityVectors {
           var contacts=new ArrayList<String>();BlockGetter.forEachBlockIntersectedBetween(start,end,box,(pos,step)->{contacts.add(pos.getX()+","+pos.getY()+","+pos.getZ()+","+step);return true;});
           System.out.println("trace\\t"+(traceIndex++)+"\\t"+vec(start)+"\\t"+vec(end)+"\\t"+String.join(";",contacts));
         }
-        for(var tag:List.of(net.minecraft.tags.BlockTags.FENCES,net.minecraft.tags.BlockTags.WALLS,net.minecraft.tags.BlockTags.CLIMBABLE,net.minecraft.tags.BlockTags.CAN_GLIDE_THROUGH,net.minecraft.tags.BlockTags.SUPPRESSES_BOUNCE,net.minecraft.tags.BlockTags.FALL_DAMAGE_RESETTING,net.minecraft.tags.BlockTags.BLOCKS_FLUID_FLOW,net.minecraft.tags.BlockTags.FIRE,net.minecraft.tags.BlockTags.ANVIL,net.minecraft.tags.BlockTags.INSIDE_STEP_SOUND_BLOCKS,net.minecraft.tags.BlockTags.COMBINATION_STEP_SOUND_BLOCKS,net.minecraft.tags.BlockTags.CRYSTAL_SOUND_BLOCKS)){
+        for(var tag:List.of(net.minecraft.tags.BlockTags.FENCES,net.minecraft.tags.BlockTags.WALLS,net.minecraft.tags.BlockTags.CLIMBABLE,net.minecraft.tags.BlockTags.CAN_GLIDE_THROUGH,net.minecraft.tags.BlockTags.SUPPRESSES_BOUNCE,net.minecraft.tags.BlockTags.FALL_DAMAGE_RESETTING,net.minecraft.tags.BlockTags.BLOCKS_FLUID_FLOW,net.minecraft.tags.BlockTags.FIRE,net.minecraft.tags.BlockTags.ANVIL,net.minecraft.tags.BlockTags.INSIDE_STEP_SOUND_BLOCKS,net.minecraft.tags.BlockTags.COMBINATION_STEP_SOUND_BLOCKS,net.minecraft.tags.BlockTags.CRYSTAL_SOUND_BLOCKS,net.minecraft.tags.BlockTags.TRAPDOORS)){
           var names=new ArrayList<String>();for(var block:BuiltInRegistries.BLOCK)if(block.defaultBlockState().is(tag))names.add(BuiltInRegistries.BLOCK.getKey(block).toString());
           System.out.println("block-tag\\t"+tag.location()+"\\t"+String.join(",",names));
         }
-        for(var entityTag:List.of(net.minecraft.tags.EntityTypeTags.NON_CONTROLLING_RIDER,net.minecraft.tags.EntityTypeTags.FREEZE_IMMUNE_ENTITY_TYPES,net.minecraft.tags.EntityTypeTags.POWDER_SNOW_WALKABLE_MOBS,net.minecraft.tags.EntityTypeTags.CAN_FLOAT_WHILE_RIDDEN)){
+        for(var entityTag:List.of(net.minecraft.tags.EntityTypeTags.NON_CONTROLLING_RIDER,net.minecraft.tags.EntityTypeTags.FREEZE_IMMUNE_ENTITY_TYPES,net.minecraft.tags.EntityTypeTags.POWDER_SNOW_WALKABLE_MOBS,net.minecraft.tags.EntityTypeTags.CAN_FLOAT_WHILE_RIDDEN,net.minecraft.tags.EntityTypeTags.FALL_DAMAGE_IMMUNE,net.minecraft.tags.EntityTypeTags.FREEZE_HURTS_EXTRA_TYPES,net.minecraft.tags.EntityTypeTags.NO_ANGER_FROM_WIND_CHARGE)){
           var entityNames=new ArrayList<String>();
           for(var type:BuiltInRegistries.ENTITY_TYPE)if(BuiltInRegistries.ENTITY_TYPE.wrapAsHolder(type).is(entityTag))entityNames.add(BuiltInRegistries.ENTITY_TYPE.getKey(type).toString());
           System.out.println("entity-tag\\t"+entityTag.location()+"\\t"+String.join(",",entityNames));

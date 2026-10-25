@@ -784,7 +784,8 @@ pub trait BlockBehavior: Sync {
         let reduced =
             fall_distance * f64::from(1.0_f32 - state.block().data().fall_distance_reduction);
         let behavior = level.entity_behavior(entity)?;
-        behavior.cause_fall_damage(entity, level, reduced, 1.0)?;
+        let source = level.damage_sources().fall();
+        behavior.cause_fall_damage(entity, level, reduced, 1.0, &source)?;
         Ok(())
     }
     /// Port of Block#stepOn's base no-op.
