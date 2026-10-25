@@ -20,3 +20,7 @@ pub fn jump_in_liquid(
         Ok(())
     }
 }
+
+mod persistence;
+pub use persistence::{DropChances, LeashAttachment, LeashData};
+pub(crate) use persistence::{block_pos, default_variant};

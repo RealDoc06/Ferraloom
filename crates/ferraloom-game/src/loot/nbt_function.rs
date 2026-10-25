@@ -1,7 +1,7 @@
 use super::{EvalContext, NbtProvider, Result, codec};
+use crate::loot::codec::DecodeInput;
 use ferraloom_nbt::{CompoundTag, ListTag, NbtPath, Tag};
 use ferraloom_protocol::component::*;
-use serde_json::Value;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum NbtMergeStrategy {
@@ -22,7 +22,7 @@ pub struct CopyCustomData {
     pub operations: Vec<CopyOperation>,
 }
 impl CopyCustomData {
-    pub(crate) fn decode(v: &Value) -> Result<Self> {
+    pub(crate) fn decode<I: DecodeInput>(v: &I) -> Result<Self> {
         Ok(Self {
             source: NbtProvider::decode(codec::field(v, "source")?)?,
             operations: codec::list(codec::field(v, "ops")?, |v| {

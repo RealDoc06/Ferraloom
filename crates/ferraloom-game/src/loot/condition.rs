@@ -2,10 +2,10 @@ use super::{
     ContextFloatProvider, ContextIntProvider, ContextParam, EntityTarget, EvalContext, Holder,
     HolderSet, LootData, LootError, Result, codec,
 };
+use crate::loot::codec::DecodeInput;
 use crate::predicates::{BlockPredicate, EntityPredicate, ItemPredicate, LocationPredicate};
 use ferraloom_util::Vec3;
 use ferraloom_util::random::RandomSource;
-use serde_json::Value;
 
 /// Port of IntRangePredicate and FloatRangePredicate. An empty line deliberately
 /// skips evaluating the tested provider, including any random draws it owns.
@@ -18,7 +18,7 @@ pub enum ProviderRange<T> {
     },
 }
 impl<T> ProviderRange<T> {
-    fn decode(v: &Value, decode: impl Fn(&Value) -> Result<T> + Copy) -> Result<Self> {
+    fn decode<I: DecodeInput>(v: &I, decode: impl Fn(&I) -> Result<T> + Copy) -> Result<Self> {
         if let Ok(point) = Holder::decode(v, decode) {
             return Ok(Self::Point(point));
         }
@@ -117,7 +117,7 @@ pub enum LootItemCondition {
     },
 }
 impl LootItemCondition {
-    pub fn decode(v: &Value) -> Result<Self> {
+    pub fn decode<I: DecodeInput>(v: &I) -> Result<Self> {
         let kind = codec::kind(v)?;
         Ok(match kind.as_str() {
             "minecraft:inverted" => {
@@ -166,11 +166,12 @@ impl LootItemCondition {
             ),
             "minecraft:entity_scores" => Self::EntityScores(
                 EntityTarget::decode(codec::field(v, "entity")?)?,
-                codec::object(codec::field(v, "scores")?)?
-                    .iter()
+                codec::map(codec::field(v, "scores")?)?
+                    .entries()?
+                    .into_iter()
                     .map(|(key, value)| {
                         Ok((
-                            key.clone(),
+                            key.to_owned(),
                             ProviderRange::decode(value, ContextIntProvider::decode)?,
                         ))
                     })

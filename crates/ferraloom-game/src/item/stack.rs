@@ -162,7 +162,7 @@ pub(super) fn unported_use_on(
     Ok(None)
 }
 
-pub(super) fn receiver_error(error: MenuError) -> LevelError {
+pub(crate) fn receiver_error(error: MenuError) -> LevelError {
     match error {
         MenuError::Level(error) => error,
         _ => LevelError::Inventory("item use receiver"),

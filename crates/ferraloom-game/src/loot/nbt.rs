@@ -1,8 +1,8 @@
 use super::{
     ContextParam, EntityTarget, Identifier, LootFacts, LootParams, LootRuntime, Result, codec,
 };
+use crate::loot::codec::DecodeInput;
 use ferraloom_nbt::Tag;
-use serde_json::Value;
 
 /// Port of ContextNbtProvider's context argument codec.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -11,7 +11,7 @@ pub enum NbtSource {
     BlockEntity,
 }
 impl NbtSource {
-    pub fn decode(v: &Value) -> Result<Self> {
+    pub fn decode<I: DecodeInput>(v: &I) -> Result<Self> {
         if codec::string(v)? == "block_entity" {
             Ok(Self::BlockEntity)
         } else {
@@ -32,7 +32,7 @@ pub enum NbtProvider {
     Storage(Identifier),
 }
 impl NbtProvider {
-    pub fn decode(v: &Value) -> Result<Self> {
+    pub fn decode<I: DecodeInput>(v: &I) -> Result<Self> {
         if v.is_string() {
             return Ok(Self::Context(NbtSource::decode(v)?));
         }

@@ -1,6 +1,6 @@
 use super::{Identifier, Result, codec};
+use crate::loot::codec::DecodeInput;
 use ferraloom_protocol::chat::Component;
-use serde_json::Value;
 
 /// Values compared by EnvironmentAttributeCheck. Float equality follows boxed
 /// Java Float (including signed zero), and colors preserve their float channels.
@@ -39,7 +39,10 @@ impl EnvironmentValue {
 
 /// Port of EnvironmentAttribute#valueCodec, including the attribute's range.
 /// Complex particle, music and spawn values remain explicit unsupported codecs.
-pub(crate) fn check_value(id: &Identifier, v: &Value) -> Result<(EnvironmentValue, bool)> {
+pub(crate) fn check_value<I: DecodeInput>(
+    id: &Identifier,
+    v: &I,
+) -> Result<(EnvironmentValue, bool)> {
     use EnvironmentValue as E;
     let name = id.as_str();
     if let Ok(positional) = numeric_attribute(id, true) {
@@ -156,7 +159,7 @@ pub(crate) fn check_value(id: &Identifier, v: &Value) -> Result<(EnvironmentValu
     };
     Ok((value, name != "minecraft:gameplay/fast_lava"))
 }
-fn color(v: &Value, size: usize) -> Result<Vec<f32>> {
+fn color<I: DecodeInput>(v: &I, size: usize) -> Result<Vec<f32>> {
     if v.is_array() {
         let values = codec::list(v, codec::float)?;
         return if values.len() == size {

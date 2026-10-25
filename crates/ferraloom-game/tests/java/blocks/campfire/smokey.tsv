@@ -1,0 +1,85 @@
+campfire-Campfire-false-1	24241,0,0,0,0,0	false	1,2
+campfire-Campfire-false-2	0,24241,0,0,0,0	false	1,2,3
+campfire-Campfire-false-3	0,0,24241,0,0,0	false	1,2,3,4
+campfire-Campfire-false-4	0,0,0,24241,0,0	false	1,2,3,4,5
+campfire-Campfire-false-5	0,0,0,0,24241,0	false	1,2,3,4,5,6
+campfire-Campfire-false-6	0,0,0,0,0,24241	false	1,2,3,4,5
+campfire-Campfire-true-1	24237,0,0,0,0,0	true	1
+campfire-Campfire-true-2	0,24237,0,0,0,0	true	1,2
+campfire-Campfire-true-3	0,0,24237,0,0,0	true	1,2,3
+campfire-Campfire-true-4	0,0,0,24237,0,0	true	1,2,3,4
+campfire-Campfire-true-5	0,0,0,0,24237,0	true	1,2,3,4,5
+campfire-Campfire-true-6	0,0,0,0,0,24237	false	1,2,3,4,5
+campfire-Soul Campfire-false-1	24273,0,0,0,0,0	false	1,2
+campfire-Soul Campfire-false-2	0,24273,0,0,0,0	false	1,2,3
+campfire-Soul Campfire-false-3	0,0,24273,0,0,0	false	1,2,3,4
+campfire-Soul Campfire-false-4	0,0,0,24273,0,0	false	1,2,3,4,5
+campfire-Soul Campfire-false-5	0,0,0,0,24273,0	false	1,2,3,4,5,6
+campfire-Soul Campfire-false-6	0,0,0,0,0,24273	false	1,2,3,4,5
+campfire-Soul Campfire-true-1	24269,0,0,0,0,0	true	1
+campfire-Soul Campfire-true-2	0,24269,0,0,0,0	true	1,2
+campfire-Soul Campfire-true-3	0,0,24269,0,0,0	true	1,2,3
+campfire-Soul Campfire-true-4	0,0,0,24269,0,0	true	1,2,3,4
+campfire-Soul Campfire-true-5	0,0,0,0,24269,0	true	1,2,3,4,5
+campfire-Soul Campfire-true-6	0,0,0,0,0,24269	false	1,2,3,4,5
+air	0,0,0,0,0,0	false	1,2,3,4,5
+obstacle-1-2	1,24237,0,0,0,0	true	1,2
+obstacle-1-3	1,0,24237,0,0,0	false	1,2
+obstacle-1-5	1,0,0,0,24237,0	false	1,2
+obstacle-1-6	1,0,0,0,0,24237	false	1,2
+obstacle-661-2	661,24237,0,0,0,0	true	1,2
+obstacle-661-3	661,0,24237,0,0,0	false	1,2
+obstacle-661-5	661,0,0,0,24237,0	false	1,2
+obstacle-661-6	661,0,0,0,0,24237	false	1,2
+obstacle-8666-2	8666,24237,0,0,0,0	true	1,2
+obstacle-8666-3	8666,0,24237,0,0,0	false	1,2
+obstacle-8666-5	8666,0,0,0,24237,0	false	1,2
+obstacle-8666-6	8666,0,0,0,0,24237	false	1,2
+obstacle-9723-2	9723,24237,0,0,0,0	true	1,2
+obstacle-9723-3	9723,0,24237,0,0,0	false	1,2
+obstacle-9723-5	9723,0,0,0,24237,0	false	1,2
+obstacle-9723-6	9723,0,0,0,0,24237	false	1,2
+obstacle-15180-2	15180,24237,0,0,0,0	true	1,2
+obstacle-15180-3	15180,0,24237,0,0,0	false	1,2
+obstacle-15180-5	15180,0,0,0,24237,0	false	1,2
+obstacle-15180-6	15180,0,0,0,0,24237	false	1,2
+obstacle-15178-2	15178,24237,0,0,0,0	true	1,2
+obstacle-15178-3	15178,0,24237,0,0,0	false	1,2
+obstacle-15178-5	15178,0,0,0,24237,0	false	1,2
+obstacle-15178-6	15178,0,0,0,0,24237	false	1,2
+obstacle-8799-2	8799,24237,0,0,0,0	true	1,2
+obstacle-8799-3	8799,0,24237,0,0,0	false	1,2
+obstacle-8799-5	8799,0,0,0,24237,0	false	1,2
+obstacle-8799-6	8799,0,0,0,0,24237	false	1,2
+obstacle-8795-2	8795,24237,0,0,0,0	true	1,2
+obstacle-8795-3	8795,0,24237,0,0,0	true	1,2,3
+obstacle-8795-5	8795,0,0,0,24237,0	true	1,2,3,4,5
+obstacle-8795-6	8795,0,0,0,0,24237	false	1,2,3,4,5
+obstacle-7308-2	7308,24237,0,0,0,0	true	1,2
+obstacle-7308-3	7308,0,24237,0,0,0	true	1,2,3
+obstacle-7308-5	7308,0,0,0,24237,0	true	1,2,3,4,5
+obstacle-7308-6	7308,0,0,0,0,24237	false	1,2,3,4,5
+obstacle-4926-2	4926,24237,0,0,0,0	true	1,2
+obstacle-4926-3	4926,0,24237,0,0,0	true	1,2,3
+obstacle-4926-5	4926,0,0,0,24237,0	true	1,2,3,4,5
+obstacle-4926-6	4926,0,0,0,0,24237	false	1,2,3,4,5
+obstacle-9-2	9,24237,0,0,0,0	true	1,2
+obstacle-9-3	9,0,24237,0,0,0	false	1,2
+obstacle-9-5	9,0,0,0,24237,0	false	1,2
+obstacle-9-6	9,0,0,0,0,24237	false	1,2
+obstacle-8555-2	8555,24237,0,0,0,0	true	1,2
+obstacle-8555-3	8555,0,24237,0,0,0	true	1,2,3
+obstacle-8555-5	8555,0,0,0,24237,0	true	1,2,3,4,5
+obstacle-8555-6	8555,0,0,0,0,24237	false	1,2,3,4,5
+obstacle-24241-2	24241,24237,0,0,0,0	true	1,2
+obstacle-24241-3	24241,0,24237,0,0,0	false	1,2
+obstacle-24241-5	24241,0,0,0,24237,0	false	1,2
+obstacle-24241-6	24241,0,0,0,0,24237	false	1,2
+blocked-extra-1	1,24269,0,0,0,0	true	1,2
+blocked-extra-2	0,1,24269,0,0,0	true	1,2,3
+blocked-extra-3	0,0,1,24269,0,0	true	1,2,3,4
+blocked-extra-4	0,0,0,1,24269,0	true	1,2,3,4,5
+blocked-extra-5	0,0,0,0,1,24269	true	1,2,3,4,5,6
+original-position-empty-context	24094,24237,0,0,0,0	true	1,shape@0:empty,2
+location-false	{"smokey":false,"block":{"blocks":"minecraft:grass_block"}}	true	1,2,3,4,5,0
+location-true	{"smokey":true,"block":{"blocks":"minecraft:grass_block"}}	false	1,2,3,4,5

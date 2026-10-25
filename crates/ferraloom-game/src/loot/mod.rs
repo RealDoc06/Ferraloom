@@ -31,6 +31,7 @@ pub use binding::{
     RegistryBindable, RegistryHolder, RegistryKey, RegistryLookup, RegistryReference,
 };
 pub use bonus::BonusFormula;
+pub use codec::{DecodeInput, NbtOps};
 pub use component_function::{ComponentFunction, ComponentSource};
 pub use condition::LootItemCondition;
 pub use container_function::{ContainerComponent, ContainerFunction};
