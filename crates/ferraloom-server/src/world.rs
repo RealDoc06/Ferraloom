@@ -2853,6 +2853,7 @@ mod generation_order_tests {
             "minecraft:overworld",
             world.level_context(&resources).unwrap(),
         );
+        level.level.install_shared(Box::default());
         level
             .level
             .set_block_tags(world.generator.data().block_tags.clone());
