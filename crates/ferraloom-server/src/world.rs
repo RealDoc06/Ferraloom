@@ -912,7 +912,7 @@ impl World {
             sea_level: self.generator.sea_level(),
         });
         let rules = level.rules_mut();
-        rules.debug = matches!(self.generator.as_ref(), ChunkGenerator::Debug(_));
+        rules.debug = self.is_debug_world();
         rules.fast_lava = self.dimension.fast_lava;
         rules.can_have_weather = self.dimension.has_skylight && !self.dimension.has_ceiling;
     }

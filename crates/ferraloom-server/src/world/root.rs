@@ -19,6 +19,20 @@ pub struct WorldServices {
     pub(super) saving: Arc<JobPool>,
 }
 impl WorldServices {
+    /// Port of WorldDimensions#specialWorldProperty: debug/flat are global
+    /// WorldData flags, including when the player's current level is not OW.
+    pub fn is_debug_world(&self) -> bool {
+        matches!(
+            self.dimensions.overworld().generator.as_ref(),
+            ChunkGenerator::Debug(_)
+        )
+    }
+    pub fn is_flat_world(&self) -> bool {
+        matches!(
+            self.dimensions.overworld().generator.as_ref(),
+            ChunkGenerator::Flat(_)
+        )
+    }
     /// CommonPlayerSpawnInfo uses the original DimensionType holder key, not
     /// the dimension key or a structurally equal decoded value.
     pub fn dimension_type_key(&self, dimension: &Identifier) -> Result<&Identifier> {
@@ -284,6 +298,56 @@ mod tests {
         );
         assert!(holders[&"fixture:inline".parse().unwrap()].is_none());
         assert!(!holders.contains_key(&"minecraft:overworld".parse().unwrap()));
+    }
+
+    #[tokio::test]
+    async fn native_world_flags_follow_overworld_data_in_every_dimension() {
+        let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").unwrap();
+        let resources = ResourceManager::new(vec![
+            ferraloom_data::datapack::Pack::vanilla_jar(Path::new(&jar)).unwrap(),
+        ]);
+        let registries = RegistrySet::load(&resources).unwrap();
+        let cases: Vec<_> = include_str!("../../tests/java/world_data/flags.tsv")
+            .lines()
+            .map(|row| row.split('\t').collect::<Vec<_>>())
+            .collect();
+        assert_eq!(cases.len(), 9);
+        for preset in [
+            "minecraft:normal",
+            "minecraft:flat",
+            "minecraft:debug_all_block_states",
+        ] {
+            let directory = tempfile::tempdir().unwrap();
+            let mut properties = ServerProperties::from_values(Default::default());
+            properties.set("level-type", preset);
+            properties.set("level-seed", 0);
+            let mut root = WorldRoot::open(
+                directory.path(),
+                &properties,
+                &resources,
+                &registries,
+                ferraloom_game::block::UnportedBehavior::Strict,
+            )
+            .unwrap();
+            for fields in cases.iter().filter(|fields| fields[0] == preset) {
+                assert_eq!(root.is_debug_world(), fields[2] == "true", "{fields:?}");
+                assert_eq!(root.is_flat_world(), fields[3] == "true", "{fields:?}");
+                assert_eq!(
+                    root.is_flat_world(),
+                    fields[4] == "true",
+                    "native ServerLevel#isFlat: {fields:?}"
+                );
+            }
+            let mut world = root
+                .open_dimension("minecraft:the_nether".parse().unwrap(), &properties)
+                .unwrap();
+            let context = world.level_context(&resources).unwrap();
+            let mut level = Level::new(Region::new(&Behaviors::EMPTY), context);
+            world.configure_live_rules(&mut level);
+            assert_eq!(level.rules().debug, root.is_debug_world());
+            assert!(!world.dimension.has_skylight);
+            world.close_chunk_storage().await.unwrap();
+        }
     }
 
     #[tokio::test]
