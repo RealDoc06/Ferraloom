@@ -7,7 +7,8 @@ use ferraloom_data::{
 use ferraloom_parity::{
     Bot, LaunchOptions, ObservationLog, Result, RunMode, Session, Ticks, WorldPreset, ensure,
     protocol::{
-        Wire,
+        Wire, Writer,
+        codec::RegistryContext,
         component::{DataComponentPatch, ItemStack},
         play::{self, clientbound as cb, serverbound as sb},
     },
@@ -173,14 +174,16 @@ struct Rewards {
     added: usize,
 }
 impl Rewards {
-    fn observe(&mut self, packet: &cb::Packet) {
+    fn observe(&mut self, packet: &cb::Packet, context: &dyn RegistryContext) {
         let observed = match packet {
             cb::Packet::RecipeBookAdd(packet) => {
                 self.added += packet.entries.len();
-                Some(("add", packet.to_bytes()))
+                Some(("add", packet_bytes(packet, context)))
             }
-            cb::Packet::RecipeBookRemove(packet) => Some(("remove", packet.to_bytes())),
-            cb::Packet::RecipeBookSettings(packet) => Some(("settings", packet.to_bytes())),
+            cb::Packet::RecipeBookRemove(packet) => Some(("remove", packet_bytes(packet, context))),
+            cb::Packet::RecipeBookSettings(packet) => {
+                Some(("settings", packet_bytes(packet, context)))
+            }
             cb::Packet::UpdateAdvancements(packet) => {
                 self.recipe_progress += packet
                     .progress
@@ -197,7 +200,7 @@ impl Rewards {
                         }
                     }
                 }
-                Some(("advancements", packet.to_bytes()))
+                Some(("advancements", packet_bytes(&packet, context)))
             }
             _ => None,
         };
@@ -210,7 +213,18 @@ impl Rewards {
     }
 }
 
+/// Re-encode received values using that connection's synchronized IDs and bound tags.
+fn packet_bytes(
+    packet: &impl Wire,
+    context: &dyn RegistryContext,
+) -> ferraloom_parity::protocol::Result<Vec<u8>> {
+    let mut output = Writer::with_context(context);
+    packet.encode(&mut output)?;
+    Ok(output.into_inner())
+}
+
 async fn input(bot: &mut Bot, trigger: &Trigger) -> Result<Rewards> {
+    let context = bot.registry_context()?;
     ensure!(
         bot.snapshot().game_mode == Some(play::GameType::Creative),
         "fresh recipe player must be creative"
@@ -235,7 +249,7 @@ async fn input(bot: &mut Bot, trigger: &Trigger) -> Result<Rewards> {
     bot.command("scoreboard players get #recipe_capture recipe_capture")
         .await?;
     bot.wait_for("inventory input fence", Ticks::DEFAULT, |_, packet| {
-        rewards.observe(packet);
+        rewards.observe(packet, context.as_ref());
         matches!(packet, cb::Packet::SystemChat(packet) if packet.content.to_json().is_ok_and(|text| text.contains("commands.scoreboard.players.get.success") && text.contains("#recipe_capture")))
     }).await?;
     let time = bot
@@ -248,7 +262,7 @@ async fn input(bot: &mut Bot, trigger: &Trigger) -> Result<Rewards> {
         "recipe reward and advancement flush",
         Ticks::DEFAULT,
         |_, packet| {
-            rewards.observe(packet);
+            rewards.observe(packet, context.as_ref());
             matches!(packet, cb::Packet::SetTime(packet) if packet.game_time > time + 20)
         },
     )
