@@ -319,16 +319,12 @@ impl MinecraftServer {
             }
             "difficulty" => {
                 let current = self
-                    .level
-                    .generation()
-                    .with_world(|world| {
-                        world
-                            .level_data
-                            .data
-                            .get_compound("difficulty_settings")
-                            .and_then(|tag| tag.get_string("difficulty"))
-                            .map(|value| value.to_string_lossy())
-                    })
+                    .world_root
+                    .level_data
+                    .data
+                    .get_compound("difficulty_settings")
+                    .and_then(|tag| tag.get_string("difficulty"))
+                    .map(|value| value.to_string_lossy())
                     .unwrap_or_else(|| self.properties.get("difficulty").to_owned());
                 if let Some(requested) = command.literals.get(1) {
                     if *requested == current {
@@ -340,14 +336,13 @@ impl MinecraftServer {
                             ))],
                         ));
                     }
-                    let mut settings = self.level.generation().with_world(|world| {
-                        world
-                            .level_data
-                            .data
-                            .get_compound("difficulty_settings")
-                            .cloned()
-                            .unwrap_or_default()
-                    });
+                    let mut settings = self
+                        .world_root
+                        .level_data
+                        .data
+                        .get_compound("difficulty_settings")
+                        .cloned()
+                        .unwrap_or_default();
                     let changed = if settings
                         .get_boolean_or("hardcore", self.properties.boolean("hardcore"))
                     {
@@ -357,12 +352,10 @@ impl MinecraftServer {
                     };
                     let locked = settings.get_boolean_or("locked", false);
                     settings.insert("difficulty", Tag::String(changed.into()));
-                    self.level.generation().with_world_mut(|world| {
-                        world
-                            .level_data
-                            .data
-                            .insert("difficulty_settings", Tag::Compound(settings))
-                    });
+                    self.world_root
+                        .level_data
+                        .data
+                        .insert("difficulty_settings", Tag::Compound(settings));
                     self.level.level.set_difficulty(difficulty(changed));
                     self.broadcast(cb::Packet::ChangeDifficulty(cb::ChangeDifficulty {
                         difficulty: difficulty(changed),
@@ -440,12 +433,10 @@ impl MinecraftServer {
                     unreachable!()
                 };
                 self.default_game_mode = *mode;
-                self.level.generation().with_world_mut(|world| {
-                    world
-                        .level_data
-                        .data
-                        .insert("GameType", Tag::Int(mode.id()))
-                });
+                self.world_root
+                    .level_data
+                    .data
+                    .insert("GameType", Tag::Int(mode.id()));
                 let mut count = 0;
                 if self.properties.boolean("force-gamemode") {
                     for player in self.players.clone() {

@@ -22,7 +22,10 @@ impl WorldServices {
         self.dimensions
             .dimensions
             .iter()
-            .find(|stem| stem.name.as_str() == dimension.as_str())
+            .find(|stem| {
+                stem.name.namespace() == dimension.namespace()
+                    && stem.name.path() == dimension.path()
+            })
             .with_context(|| format!("Unknown dimension {dimension}"))
     }
 }
@@ -263,7 +266,7 @@ mod tests {
                 .dimensions
                 .dimensions
                 .iter()
-                .find(|stem| stem.name.as_str() != key)
+                .find(|stem| stem.name.to_string() != key)
                 .unwrap();
             world.generator = wrong_stem.generator.clone();
             assert!(

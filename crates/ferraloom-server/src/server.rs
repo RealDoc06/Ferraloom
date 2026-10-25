@@ -478,8 +478,8 @@ impl MinecraftServer {
             .dimensions
             .dimensions
             .iter()
-            .filter(|stem| stem.name.as_str() != "minecraft:overworld")
-            .map(|stem| stem.name.as_str().parse::<protocol::Identifier>())
+            .filter(|stem| stem.name.namespace() != "minecraft" || stem.name.path() != "overworld")
+            .map(|stem| stem.name.to_string().parse::<protocol::Identifier>())
             .collect::<protocol::Result<Vec<_>>>()?;
         for dimension in dimensions {
             let world = world_root.open_dimension(dimension.clone(), &properties)?;
