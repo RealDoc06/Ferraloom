@@ -488,6 +488,10 @@ pub trait Entity: Sync {
     fn is_spectator(&self, _entity: EntityRef, _level: &Level) -> Result<bool, LevelError> {
         Ok(false)
     }
+    /// Port of Entity#dampensVibrations; ItemEntity overrides its effective stack query.
+    fn dampens_vibrations(&self, _entity: EntityRef, _level: &Level) -> Result<bool, LevelError> {
+        Ok(false)
+    }
     /// Port of Entity#isSteppingCarefully; Cat and Ocelot override this read.
     fn is_stepping_carefully(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
         Ok(level.entity::<EntityData>(entity)?.shared_flag(1))
