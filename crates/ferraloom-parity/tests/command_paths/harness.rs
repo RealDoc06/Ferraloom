@@ -322,7 +322,12 @@ fn event(
             json!({"kind":"rules","values":p.values.iter().map(|v|json!([v.key.to_string(),v.value])).collect::<Vec<_>>()})
         }
         cb::Packet::SetTime(p) if !p.clock_updates.is_empty() => {
-            json!({"kind":"clocks","values":p.clock_updates.iter().map(|v|json!([format!("{:?}",v.clock),v.state.total_ticks.0,v.state.partial_tick,v.state.rate])).collect::<Vec<_>>()})
+            // Holder.Reference uses identity hashCode. ServerClockManager's
+            // Util.mapValues creates a HashMap whose entry order varies between
+            // JVMs (full-clock-map-orders.json). Normalize only this map's keys.
+            let mut updates = p.clock_updates.iter().collect::<Vec<_>>();
+            updates.sort_by_key(|update| update.clock.0);
+            json!({"kind":"clocks","values":updates.into_iter().map(|v|json!([format!("{:?}",v.clock),v.state.total_ticks.0,v.state.partial_tick,v.state.rate])).collect::<Vec<_>>()})
         }
         cb::Packet::ChangeDifficulty(p) => {
             json!({"kind":"difficulty","value":format!("{:?}",p.difficulty),"locked":p.locked})
@@ -356,6 +361,63 @@ fn event(
         _ => return Ok(None),
     };
     Ok(Some(value))
+}
+
+#[test]
+fn native_two_jvm_clock_maps_preserve_payloads_after_key_order_normalization() -> Result<()> {
+    #[derive(Deserialize)]
+    struct Capture {
+        identity_calls: usize,
+        entries: Vec<Entry>,
+    }
+    #[derive(Deserialize)]
+    struct Entry {
+        clock: String,
+        identity_hash: i32,
+        hash: i32,
+        total_ticks: i64,
+        partial_tick: f32,
+        rate: f32,
+    }
+    let captures: Vec<Capture> = serde_json::from_str(include_str!(
+        "../../../ferraloom-game/src/commands/vanilla/full-clock-map-orders.json"
+    ))?;
+    ensure!(captures.len() == 2);
+    ensure!(captures[0].identity_calls == 0 && captures[1].identity_calls == 1);
+    ensure!(captures[0].entries[0].clock != captures[1].entries[0].clock);
+    for capture in captures {
+        let mut updates = Vec::new();
+        for entry in capture.entries {
+            ensure!(entry.hash == entry.identity_hash);
+            let id = match entry.clock.as_str() {
+                "minecraft:overworld" => 0,
+                "minecraft:the_end" => 1,
+                _ => anyhow::bail!("unexpected native clock"),
+            };
+            updates.push(play::ClockUpdate {
+                clock: play::WorldClockId(id),
+                state: play::ClockNetworkState {
+                    total_ticks: ferraloom_parity::protocol::codec::VarLong(entry.total_ticks),
+                    partial_tick: entry.partial_tick,
+                    rate: entry.rate,
+                },
+            });
+        }
+        let packet = cb::Packet::SetTime(cb::SetTime {
+            game_time: 42,
+            clock_updates: updates,
+        });
+        ensure!(
+            event(&packet, None, &BTreeMap::new(), false)?
+                == Some(json!({
+                    "kind":"clocks","values":[
+                        ["WorldClockId(0)",1234,0.25,2.0],
+                        ["WorldClockId(1)",5678,0.75,0.5],
+                    ]
+                }))
+        );
+    }
+    Ok(())
 }
 impl Driver<'_> {
     async fn exchange(&mut self, actor: BotId, step: Option<&Step>) -> Result<Vec<Value>> {
