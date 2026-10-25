@@ -42,6 +42,8 @@ assert len(native) == 272, f'expected 272 native phase observations, got {len(na
 print(f'Native piston phase trace: {len(native)} observations; {log_path}')
 if args.compare_rust:
     rust = records(args.compare_rust)
+    if list(native) != list(rust):
+        raise SystemExit('canonical phase sequence differs (including missing or extra observations)')
     differences = [(key, native.get(key), rust.get(key)) for key in dict.fromkeys([*native, *rust]) if native.get(key) != rust.get(key)]
     if differences:
         for key, expected, actual in differences[:100]:
