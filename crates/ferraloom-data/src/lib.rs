@@ -14,6 +14,7 @@ mod copper_chest_properties;
 pub mod dispenser_properties;
 mod environment_attributes;
 mod game_events;
+mod item_methods;
 mod item_names;
 pub mod note_properties;
 pub mod redstone_properties;
@@ -21,6 +22,7 @@ mod sound_events;
 pub use block_methods::BlockMethod;
 pub use copper_chest_properties::CopperChestProperties;
 pub use environment_attributes::EnvironmentAttributeData;
+pub use item_methods::{ItemClass, ItemMethod};
 
 pub mod datapack;
 pub use datapack::tags;

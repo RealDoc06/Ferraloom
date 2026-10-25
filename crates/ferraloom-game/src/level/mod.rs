@@ -64,6 +64,16 @@ pub enum LevelError {
     /// Native ArrayList iterator ConcurrentModificationException during listener visitation.
     ConcurrentGameEventListenerModification,
     UnsupportedItemUseOn(ferraloom_data::Item),
+    UnsupportedItemMethod(ferraloom_data::Item, ferraloom_data::ItemMethod),
+    ItemData {
+        item: ferraloom_data::Item,
+        source: String,
+    },
+    MissingSoundEvent(ferraloom_protocol::Identifier),
+    EnchantmentEffect {
+        enchantment: crate::loot::Identifier,
+        source: String,
+    },
     UnsupportedItemCraftedPostProcess(ferraloom_data::Item),
     UnsupportedItemInventoryTick(ferraloom_data::Item),
     UnsupportedItemHurtAndBreak {
@@ -106,6 +116,7 @@ pub enum LevelError {
     UnsupportedLightQuery,
     UnsupportedEnvironmentAttribute(ferraloom_data::registries::environment_attribute::Id),
     MissingEnvironmentContext,
+    MissingBlockTransformers,
     MissingSpawnProtectionContext,
     MissingServerShared,
     MissingBlockTags,
@@ -135,6 +146,16 @@ impl std::fmt::Display for LevelError {
             Self::BlockBreak(error) => std::fmt::Display::fmt(error.error(), formatter),
             Self::WorldgenMutationFailed { pos, source } => {
                 write!(formatter, "worldgen mutation at {pos:?}: {source}")
+            }
+            Self::ItemData { item, source } => {
+                write!(formatter, "item data for {}: {source}", item.name())
+            }
+            Self::MissingSoundEvent(id) => write!(formatter, "missing sound event {id}"),
+            Self::EnchantmentEffect {
+                enchantment,
+                source,
+            } => {
+                write!(formatter, "enchantment effect {enchantment}: {source}")
             }
             error => std::fmt::Debug::fmt(error, formatter),
         }
