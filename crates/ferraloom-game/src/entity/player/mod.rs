@@ -101,6 +101,8 @@ pub struct ServerPlayer {
     pub chunk_tracking_view: std::collections::HashSet<ChunkPos>,
     /// Port of ChunkTrackingView.Positioned#center, absent for EMPTY.
     pub chunk_tracking_center: Option<ChunkPos>,
+    /// Port of ChunkTrackingView.Positioned#viewDistance, captured with its center.
+    pub chunk_tracking_distance: Option<i32>,
     /// Port of ServerPlayer#getLastSectionPos, set by ChunkMap#updatePlayerPos.
     pub chunk_tracking_section: Option<ferraloom_util::SectionPos>,
     /// Port of ServerGamePacketListenerImpl#chunkSender: canonical pending/sent
@@ -287,6 +289,7 @@ impl ServerPlayer {
             view_distance: 10,
             chunk_tracking_view: Default::default(),
             chunk_tracking_center: None,
+            chunk_tracking_distance: None,
             chunk_tracking_section: None,
             chunk_sender: Default::default(),
             loaded: false,

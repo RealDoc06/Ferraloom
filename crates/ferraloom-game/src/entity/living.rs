@@ -31,6 +31,8 @@ pub struct LivingEntity {
     pub parent: EntityData,
     pub attributes: AttributeMap,
     pub equipment: EntityEquipment,
+    /// Port of LivingEntity#locatorBarIcon; the persistent icon, before team color overrides.
+    pub locator_bar_icon: ferraloom_protocol::play::WaypointIcon,
     pub(crate) active_effects: super::effect::ActiveEffects,
     pub effects_dirty: bool,
     pub use_item: ItemStack,
@@ -73,6 +75,7 @@ impl LivingEntity {
             parent,
             attributes,
             equipment: EntityEquipment::default(),
+            locator_bar_icon: crate::level::waypoints::default_icon(),
             active_effects: super::effect::ActiveEffects::default(),
             effects_dirty: true,
             use_item: ItemStack::default(),
@@ -251,8 +254,24 @@ impl LivingEntity {
             .get("equipment")
             .and_then(|tag| EntityEquipment::from_tag(tag).ok())
             .unwrap_or_default();
+        self.locator_bar_icon =
+            crate::level::waypoints::load_icon(self.parent.saved.get("locator_bar_icon"))
+                .unwrap_or_else(|error| {
+                    eprintln!(
+                        "Failed to load locator_bar_icon for entity {}: {error}",
+                        self.parent.uuid
+                    );
+                    crate::level::waypoints::default_icon()
+                });
     }
     pub(crate) fn add_additional_save_data(&self, tag: &mut CompoundTag) {
+        tag.remove("locator_bar_icon");
+        if self.locator_bar_icon != crate::level::waypoints::default_icon() {
+            tag.insert(
+                "locator_bar_icon",
+                crate::level::waypoints::save_icon(&self.locator_bar_icon),
+            );
+        }
         tag.insert("Health", Tag::Float(self.health()));
         tag.insert("HurtTime", Tag::Short(self.hurt_time as i16));
         tag.insert(

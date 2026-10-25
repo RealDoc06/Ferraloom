@@ -50,7 +50,7 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | player.respawn.client-load | Gate player actions on client-loaded state and apply client-load timeout after respawn | `ServerGamePacketListenerImpl#tickClientLoadTimeout; ServerGamePacketListenerImpl#handleAcceptPlayerLoad` | | - | todo |
 | player.spectator.camera-reset | Follow spectator target and restore camera when target becomes invalid | `ServerPlayer#tick; ServerPlayer#setCamera` | | - | todo |
 | player.death-screen | Send death notification, combat killer data and immediate-respawn rule state | `ServerPlayer#die` | | - | todo |
-| player.locator-bar | Track eligible waypoints with dimension, range, invisibility and locator rule checks | `ServerWaypointManager` | | - | todo |
+| player.locator-bar | Track eligible waypoint transmitters and receivers through the canonical per-level service; live lifecycle, attribute, team and locator rule hooks are pending | `ServerWaypointManager; WaypointTransmitter` | native replay and Strict both-server waypoint scenario pending | - | partial |
 | player.border.damage | Apply world-border warning state, safe distance and damage amount | `WorldBorder; Player` | | - | todo |
 | player.sleep.straw-bed | Sleep at the lower straw-bed height and record the distinct slept-in-straw-bed statistic | `StrawBedBlock#getSleepHeight; StrawBedBlock#getSleptInBedStatType` | | - | todo |
 | player.sleep.environment-rules | Evaluate sleeping and respawn-setting rules independently for normal and straw beds | `AbstractBedBlock; BedRule` | | - | todo |
