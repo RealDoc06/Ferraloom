@@ -145,6 +145,7 @@ mod tests {
     use super::*;
     use crate::commands::{arguments::items::ItemInput, exceptions::error_component};
     use ferraloom_data::Item;
+    use ferraloom_protocol::component::Persistent;
 
     #[test]
     fn strict_validation_and_item_input_reasons_match_native() {

@@ -15,7 +15,7 @@ use crate::{
     level::{Level, LevelError},
 };
 use ferraloom_brigadier::CommandSyntaxException;
-use ferraloom_data::SoundEvent;
+use ferraloom_data::registries::sound_event::Id as SoundEvent;
 use ferraloom_protocol::{chat::Component, play::SoundSource};
 use ferraloom_util::random::RandomSource;
 use std::fmt;
@@ -187,7 +187,7 @@ mod tests {
             crate::level::drop_fixtures::install(&mut level);
             level.install_shared(Box::default());
             let mut players = Vec::new();
-            for index in 0..row["targets"].as_u64().unwrap() {
+            for index in 0..row["targets"].as_i64().unwrap() {
                 let entity = level.next_entity_ref();
                 let mut state = ServerPlayer::new(
                     Uuid::new(0, index + 1),
