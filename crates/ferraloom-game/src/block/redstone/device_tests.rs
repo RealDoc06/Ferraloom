@@ -22,7 +22,7 @@ use ferraloom_util::{
 };
 use std::{io::Read, sync::LazyLock};
 const POS: BlockPos = BlockPos::new(8, 64, 8);
-const PLAYER: EntityRef = EntityRef(1);
+const PLAYER: EntityRef = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
 pub(super) fn cases(prefix: &str) -> impl Iterator<Item = (&'static str, &'static str)> + use<'_> {
     static DATA: LazyLock<String> = LazyLock::new(|| {
         let mut output = String::new();
@@ -166,7 +166,7 @@ fn note_tuning_and_top_instrument_use_match_native() {
                 .entity::<ServerPlayer>(PLAYER)
                 .unwrap()
                 .stats
-                .get_value(Stat::Custom(custom::TUNE_NOTEBLOCK)),
+                .get_value(Stat::Custom(custom::Id::TUNE_NOTEBLOCK)),
             1,
             "{name}"
         );
@@ -268,7 +268,7 @@ fn door_and_head_destroy_follow_native_player_abilities_and_tool_order() {
         let mut level = level(original);
         player(&mut level);
         let actor = level.entity_mut::<ServerPlayer>(PLAYER).unwrap();
-        actor.instabuild = args[1] == "1";
+        actor.abilities.instabuild = args[1] == "1";
         if args[1] == "2" {
             actor.inventory.set_selected_item(ItemStack::new(
                 Item::IRON_PICKAXE,
@@ -307,7 +307,11 @@ fn door_and_head_destroy_follow_native_player_abilities_and_tool_order() {
         let original = state(args[0]);
         let mut level = level(original);
         player(&mut level);
-        level.entity_mut::<ServerPlayer>(PLAYER).unwrap().instabuild = args[2] == "true";
+        level
+            .entity_mut::<ServerPlayer>(PLAYER)
+            .unwrap()
+            .abilities
+            .instabuild = args[2] == "true";
         let kind = args[1].parse::<i32>().unwrap();
         let pos = POS.relative(state::facing(original).opposite(), 1);
         let base = if kind == 0 {
@@ -540,14 +544,17 @@ fn dispenser_dropper_hopper_menus_keep_native_open_before_inspection_stat_and_de
             .unwrap();
         assert_eq!(result, InteractionResult::SUCCESS, "{name}");
         let (kind, stat) = if block == Block::HOPPER {
-            (crate::inventory::MenuKind::Hopper, custom::INSPECT_HOPPER)
+            (
+                crate::inventory::MenuKind::Hopper,
+                custom::Id::INSPECT_HOPPER,
+            )
         } else {
             (
                 crate::inventory::MenuKind::Dispenser,
                 if block == Block::DROPPER {
-                    custom::INSPECT_DROPPER
+                    custom::Id::INSPECT_DROPPER
                 } else {
-                    custom::INSPECT_DISPENSER
+                    custom::Id::INSPECT_DISPENSER
                 },
             )
         };
@@ -558,8 +565,8 @@ fn dispenser_dropper_hopper_menus_keep_native_open_before_inspection_stat_and_de
             "{name} {expected}"
         );
         assert_eq!(actor.menus.container_menu.is_some(), accept, "{name}");
-        if let Some(menu) = actor.menus.container_menu {
-            assert_eq!(actor.menus.menu(menu).unwrap().kind, kind, "{name}");
+        if let Some(menu) = &actor.menus.container_menu {
+            assert_eq!(menu.kind, kind, "{name}");
         }
         let opened=game_events::take(&mut level).into_iter().filter(|effect|matches!(effect,Observation::Effect(LevelEffect::PlayerPacket{packet,..}) if matches!(packet.as_ref(),Packet::OpenScreen(_)))).count();
         assert_eq!(opened, usize::from(accept), "{name}");

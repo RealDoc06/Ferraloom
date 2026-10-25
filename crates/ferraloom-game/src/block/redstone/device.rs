@@ -104,7 +104,7 @@ pub fn on_lightning_strike(
 ) -> Result<(), LevelError> {
     level.set_block_and_update(pos, state.with(p::POWERED, true).unwrap())?;
     rod_neighbors(state, pos, level)?;
-    level.schedule_tick(pos, state.block(), 8)?;
+    level.schedule_block_tick_after(pos, state.block(), 8)?;
     level.level_event(None, 3002, pos, super::state::facing(state).axis() as i32)?;
     Ok(())
 }
@@ -160,9 +160,9 @@ impl BlockBehavior for Devices {
         crate::inventory::open_menu_live(context.player, &provider, level)
             .map_err(super::stack_error)?;
         let stat = match kind {
-            BlockEntityType::HOPPER => custom::INSPECT_HOPPER,
-            BlockEntityType::DROPPER => custom::INSPECT_DROPPER,
-            _ => custom::INSPECT_DISPENSER,
+            BlockEntityType::HOPPER => custom::Id::INSPECT_HOPPER,
+            BlockEntityType::DROPPER => custom::Id::INSPECT_DROPPER,
+            _ => custom::Id::INSPECT_DISPENSER,
         };
         stats::award_stat(level, context.player, Stat::Custom(stat), 1)?;
         Ok(InteractionResult::SUCCESS)
@@ -179,7 +179,7 @@ impl BlockBehavior for Devices {
             && state.get(p::POWERED).unwrap()
             && !level.has_scheduled_block_tick(pos, state.block())
         {
-            level.schedule_tick(pos, state.block(), 8)?;
+            level.schedule_block_tick_after(pos, state.block(), 8)?;
         }
         Ok(())
     }

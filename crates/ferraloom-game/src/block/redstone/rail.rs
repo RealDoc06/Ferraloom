@@ -551,7 +551,7 @@ fn check_pressed(state: BlockState, pos: BlockPos, level: &mut Level) -> Result<
         level.update_neighbors_at(pos.below(1), state.block())?;
     }
     if pressed {
-        level.schedule_tick(pos, state.block(), 20)?;
+        level.schedule_block_tick_after(pos, state.block(), 20)?;
     }
     level.update_neighbour_for_output_signal(pos, state.block())
 }

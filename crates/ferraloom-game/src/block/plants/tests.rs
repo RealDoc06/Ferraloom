@@ -1060,7 +1060,7 @@ fn farmland_trampling_preserves_draw_order_permission_size_and_actor() {
     };
     let (blocks, fluids) = tags();
     let pos = BlockPos::new(8, 5, 8);
-    let actor = EntityRef(1);
+    let actor = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
     // kind: 0 nonliving, 1 cow, 2 small cow, 3 player.
     for (kind, mob_griefing, protected, distance, tramples) in [
         (0, true, false, 1.5, false),
@@ -1856,7 +1856,7 @@ fn creative_double_plant_destruction_matches_native_states_and_rng() {
     .unwrap();
     let (blocks, fluids) = tags();
     let pos = BlockPos::new(8, 5, 8);
-    let actor = EntityRef(1);
+    let actor = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
     let mut count = 0;
     for line in text.lines() {
         let f: Vec<_> = line.split('\t').collect();

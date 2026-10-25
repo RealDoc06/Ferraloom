@@ -190,7 +190,7 @@ impl BlockBehavior for CrafterBlock {
         if signal != triggered {
             let transition = |level: &mut Level| {
                 if signal {
-                    level.schedule_tick(pos, state.block(), 4)?;
+                    level.schedule_block_tick_after(pos, state.block(), 4)?;
                 }
                 let mut changed = state.with(p::TRIGGERED, signal).unwrap();
                 if !signal {
@@ -721,7 +721,7 @@ mod placement_tests {
                     .set_block_state(pos.west(1), Block::REDSTONE_BLOCK.default_state())
                     .unwrap();
             }
-            let player = EntityRef(1);
+            let player = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
             level
                 .add_entity(
                     player,

@@ -98,7 +98,7 @@ fn loaded_block_entity_metadata_and_component_streams_match_java() {
                 level.set_block_entity(receiver).unwrap();
             }
         }
-        let entity = EntityRef(1);
+        let entity = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
         let mut state = EntityState::Cow(Box::default());
         state.as_entity_mut().eye_height = 1.25;
         level.add_entity(entity, state).unwrap();

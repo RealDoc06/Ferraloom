@@ -116,7 +116,7 @@ impl BlockBehavior for NoteBlock {
         crate::stats::award_stat(
             level,
             context.player,
-            crate::stats::Stat::Custom(crate::stats::custom::TUNE_NOTEBLOCK),
+            crate::stats::Stat::Custom(crate::stats::custom::Id::TUNE_NOTEBLOCK),
             1,
         )?;
         Ok(InteractionResult::SUCCESS)
