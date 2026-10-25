@@ -392,6 +392,18 @@ impl LivingEntity {
     }
 }
 
+/// Port of LivingEntity#take. ServerPlayer's override broadcasts its menu after
+/// this tracking-player packet has entered the ordered outbound stream.
+pub(crate) fn take(
+    collector: super::EntityRef,
+    entity: super::EntityRef,
+    count: i32,
+    level: &mut crate::level::Level,
+) -> Result<(), crate::level::LevelError> {
+    level.entity::<LivingEntity>(collector)?;
+    level.take_item(entity, collector, count)
+}
+
 /// Port of server-side LivingEntity#stopUsingItem and ItemStack#causeUseVibration.
 /// Clear the flag before the game event, then reset the stack and remaining ticks.
 pub fn stop_using_item(

@@ -13,8 +13,8 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Commands and argument types](features/commands.md) | 2684 | 1858 | 40 | 786 | 0 |
 | [Crafting and recipes](features/crafting-recipes.md) | 2137 | 2 | 29 | 2106 | 0 |
 | [Datapacks and resource reload](features/datapacks-reload.md) | 57 | 57 | 0 | 0 | 0 |
-| [Enchantments](features/enchantments.md) | 137 | 108 | 29 | 0 | 0 |
-| [Entities and AI](features/entities.md) | 791 | 672 | 103 | 16 | 0 |
+| [Enchantments](features/enchantments.md) | 139 | 107 | 32 | 0 | 0 |
+| [Entities and AI](features/entities.md) | 792 | 672 | 104 | 16 | 0 |
 | [Fluids](features/fluids.md) | 32 | 25 | 6 | 1 | 0 |
 | [Binary data, geometry and randomness](features/foundations.md) | 64 | 18 | 18 | 28 | 0 |
 | [Functions and macros](features/functions-macros.md) | 10 | 10 | 0 | 0 | 0 |
@@ -50,4 +50,4 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Weather, time and environment](features/weather-time.md) | 85 | 85 | 0 | 0 | 0 |
 | [World storage and data fixing](features/world-storage.md) | 308 | 305 | 3 | 0 | 0 |
 | [World generation](features/worldgen.md) | 3115 | 2640 | 175 | 300 | 0 |
-| **Total** | **19591** | **8242** | **2815** | **8534** | **0** |
+| **Total** | **19594** | **8241** | **2819** | **8534** | **0** |

@@ -80,6 +80,8 @@ pub struct ServerPlayer {
     pub experience_level: i32,
     pub experience_progress: f32,
     pub total_experience: i32,
+    /// Player#takeXpDelay is transient and decreases at Player#tick's start.
+    pub take_xp_delay: i32,
     last_level_up_time: i32,
     last_sent_experience: i32,
     last_sent_health: f32,
@@ -262,6 +264,7 @@ impl ServerPlayer {
             experience_level: 0,
             experience_progress: 0.0,
             total_experience: 0,
+            take_xp_delay: 0,
             last_level_up_time: 0,
             last_sent_experience: -99_999_999,
             last_sent_health: -1.0e8,
@@ -773,6 +776,17 @@ impl crate::entity::Entity for PlayerBehavior {
             }
         }
         super::living::on_attribute_updated_parent(self, entity, attribute, level)
+    }
+    fn take(
+        &self,
+        collector: EntityRef,
+        entity: EntityRef,
+        count: i32,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        super::living::take(collector, entity, count, level)?;
+        crate::inventory::broadcast_container_menu(collector, level)?;
+        crate::inventory::flush_container_packets(collector, level)
     }
     fn is_invulnerable_to(
         &self,

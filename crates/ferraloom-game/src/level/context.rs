@@ -16,6 +16,7 @@ pub struct LevelContext {
     pub initial_difficulty: Difficulty,
     damage_types: Arc<DamageTypeRegistry>,
     block_transformers: Option<Arc<crate::item::block_transformer::BlockTransformerRegistry>>,
+    enchantments: Option<Arc<crate::item::enchantment::EnchantmentRegistry>>,
     registry_context: Option<Arc<dyn ferraloom_protocol::codec::RegistryContext>>,
 }
 
@@ -38,6 +39,7 @@ impl LevelContext {
             damage_types,
             initial_difficulty,
             block_transformers: None,
+            enchantments: None,
             registry_context: None,
         }
     }
@@ -59,6 +61,22 @@ impl LevelContext {
         self.block_transformers
             .as_ref()
             .ok_or(super::LevelError::MissingBlockTransformers)
+    }
+
+    /// Attach the actual loaded registry, shared with every level in this world.
+    pub fn with_enchantments(
+        mut self,
+        registry: Arc<crate::item::enchantment::EnchantmentRegistry>,
+    ) -> Self {
+        self.enchantments = Some(registry);
+        self
+    }
+    pub fn enchantments(
+        &self,
+    ) -> Result<&Arc<crate::item::enchantment::EnchantmentRegistry>, super::LevelError> {
+        self.enchantments
+            .as_ref()
+            .ok_or(super::LevelError::MissingEnchantments)
     }
 
     /// Port of ServerLevel#registryAccess: the same immutable synchronized
@@ -104,6 +122,7 @@ impl LevelContext {
             structures: Arc<super::StructureServices>,
             damage_types: Arc<DamageTypeRegistry>,
             block_transformers: Arc<crate::item::block_transformer::BlockTransformerRegistry>,
+            enchantments: Arc<crate::item::enchantment::EnchantmentRegistry>,
             registry_context: Arc<dyn ferraloom_protocol::codec::RegistryContext>,
         }
         static SERVICES: OnceLock<Services> = OnceLock::new();
@@ -124,6 +143,9 @@ impl LevelContext {
                     crate::item::block_transformer::BlockTransformerRegistry::load(&resources)
                         .unwrap(),
                 ),
+                enchantments: Arc::new(
+                    crate::item::enchantment::EnchantmentRegistry::load(&resources).unwrap(),
+                ),
                 registry_context: Arc::new(FixtureRegistryContext(resources)),
             }
         });
@@ -138,6 +160,7 @@ impl LevelContext {
                 Difficulty::Normal,
             )
             .with_block_transformers(services.block_transformers.clone())
+            .with_enchantments(services.enchantments.clone())
             .with_registry_context(services.registry_context.clone()),
         )
     }
