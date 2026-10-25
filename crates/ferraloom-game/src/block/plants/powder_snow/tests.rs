@@ -291,5 +291,7 @@ fn freeze_precedes_required_live_extinguish_permission_and_errors_preserve_fire(
         );
         assert_eq!(level.unported_behavior_stats().skipped_calls, 0);
     }
-    assert!(super::super::ported_behavior(Block::POWDER_SNOW, BlockMethod::FallOn).is_some());
+    for method in [BlockMethod::EntityInside, BlockMethod::FallOn] {
+        assert!(super::super::ported_behavior(Block::POWDER_SNOW, method).is_some());
+    }
 }

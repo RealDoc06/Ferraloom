@@ -63,13 +63,6 @@ pub(crate) fn before_extinguish(
 
 /// Port of PowderSnowBlock#entityInside. The supplied callback is the entity's
 /// makeStuckInBlock virtual; no canonical entity borrow crosses that callback.
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "entityInside registration follows the canonical entity makeStuckInBlock micro"
-    )
-)]
 fn entity_inside_with_stuck(
     state: BlockState,
     pos: BlockPos,
@@ -120,6 +113,22 @@ fn entity_inside_with_stuck(
     Ok(())
 }
 impl BlockBehavior for PowderSnow {
+    fn entity_inside(
+        &self,
+        state: BlockState,
+        pos: BlockPos,
+        entity: EntityRef,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        entity_inside_with_stuck(
+            state,
+            pos,
+            entity,
+            level,
+            crate::entity::make_stuck_in_block,
+        )
+    }
+
     /// Port of PowderSnowBlock#fallOn. Powder snow never calls base fall damage.
     fn fall_on(
         &self,

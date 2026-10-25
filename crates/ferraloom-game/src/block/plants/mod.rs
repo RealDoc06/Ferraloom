@@ -176,7 +176,11 @@ pub fn ported_behavior(block: Block, method: BlockMethod) -> Option<&'static dyn
         C::PowderSnowBlock
             if matches!(
                 method,
-                M::CollisionShape | M::EntityInsideCollisionShape | M::PickupBlock | M::FallOn
+                M::CollisionShape
+                    | M::EntityInsideCollisionShape
+                    | M::PickupBlock
+                    | M::FallOn
+                    | M::EntityInside
             ) =>
         {
             &powder_snow::POWDER_SNOW
