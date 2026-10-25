@@ -137,6 +137,14 @@ impl MinecraftServer {
                 self.apply_level_effects()?;
                 self.apply_command_result(source, &command.source, result?);
             }
+            "gamemode" => {
+                let result = self.game_mode_command(source, command)?;
+                self.apply_command_result(source, &command.source, result);
+            }
+            "defaultgamemode" => {
+                let result = self.default_game_mode_command(command)?;
+                self.apply_command_result(source, &command.source, result);
+            }
             "give" => {
                 let result = self.give_command(command)?;
                 self.apply_command_result(source, &command.source, result);

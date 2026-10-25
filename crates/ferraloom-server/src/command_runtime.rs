@@ -167,7 +167,7 @@ impl MinecraftServer {
                     param: if enabled { 1. } else { 0. },
                 }))
             }
-            Some(GameRuleEffect::SynchronizeClocks) => self.broadcast(self.time_packet()),
+            Some(GameRuleEffect::SynchronizeClocks) => self.broadcast(self.clock_packet(None)),
             // Waypoint connections and mob spawning have no live content in this foundation.
             Some(GameRuleEffect::LocatorBar { .. } | GameRuleEffect::UpdateMobSpawningFlags)
             | None => {}
@@ -282,7 +282,6 @@ impl MinecraftServer {
             "ban" | "pardon" => self.ban_player_command(source, &command)?,
             "ban-ip" | "pardon-ip" => self.ban_ip_command(source, &command)?,
             "banlist" => self.ban_list_command(&command),
-            "gamemode" => self.game_mode_command(source, &command)?,
             "setworldspawn" | "spawnpoint" => self.spawn_command(source, &command)?,
             "seed" => builtins::seed(self.level.generation().with_world(|world| world.seed)),
             "help" => self.commands.help(&command)?,
@@ -428,37 +427,6 @@ impl MinecraftServer {
                     ("commands.setidletimeout.success.disabled", vec![])
                 };
                 CommandResult::success(minutes, Component::translatable(key, args), true)
-            }
-            "defaultgamemode" => {
-                let Some(ferraloom_game::commands::arguments::ArgumentValue::GameMode(mode)) =
-                    command.argument("gamemode")
-                else {
-                    unreachable!()
-                };
-                self.default_game_mode = *mode;
-                self.level.generation().with_world_mut(|world| {
-                    world
-                        .level_data
-                        .data
-                        .insert("GameType", Tag::Int(mode.id()))
-                });
-                let mut count = 0;
-                if self.properties.boolean("force-gamemode") {
-                    for player in self.players.clone() {
-                        count += i32::from(self.change_player_game_mode(player, *mode).is_some());
-                    }
-                }
-                CommandResult::success(
-                    count,
-                    Component::translatable(
-                        "commands.defaultgamemode.success",
-                        vec![builtins::component(Component::translatable(
-                            format!("gameMode.{}", game_mode_name(*mode)),
-                            vec![],
-                        ))],
-                    ),
-                    true,
-                )
             }
             _ => {
                 return Err(exceptions::error(
@@ -1348,32 +1316,75 @@ impl MinecraftServer {
 }
 
 impl MinecraftServer {
-    /// Port of ServerPlayer#setGameMode's currently available player state and packets.
+    /// Port of DefaultGameModeCommands#setMode.
+    pub(super) fn default_game_mode_command(
+        &mut self,
+        command: &PreparedCommand,
+    ) -> Result<CommandResult> {
+        let Some(ferraloom_game::commands::arguments::ArgumentValue::GameMode(mode)) =
+            command.argument("gamemode")
+        else {
+            unreachable!()
+        };
+        self.default_game_mode = *mode;
+        self.level.generation().with_world_mut(|world| {
+            world
+                .level_data
+                .data
+                .insert("GameType", Tag::Int(mode.id()))
+        });
+        let mut count = 0;
+        if self.properties.boolean("force-gamemode") {
+            for player in self.players.clone() {
+                count += i32::from(self.change_player_game_mode(player, *mode)?.is_some());
+            }
+        }
+        Ok(CommandResult::success(
+            count,
+            Component::translatable(
+                "commands.defaultgamemode.success",
+                vec![builtins::component(Component::translatable(
+                    format!("gameMode.{}", game_mode_name(*mode)),
+                    vec![],
+                ))],
+            ),
+            true,
+        ))
+    }
+    /// Port of ServerPlayerGameMode#changeGameModeForPlayer and ServerPlayer#setGameMode packet order.
     fn change_player_game_mode(
         &mut self,
         id: ConnectionId,
         mode: GameType,
-    ) -> Option<(EntityRef, Component)> {
+    ) -> Result<Option<(EntityRef, Component)>> {
         let Phase::Play(entity) = self.connections[&id].phase else {
-            return None;
+            return Ok(None);
         };
-        let Ok(player) = self.level.level.entity_mut::<ServerPlayer>(entity) else {
-            return None;
-        };
+        let player = self
+            .level
+            .level
+            .entity_mut::<ServerPlayer>(entity)
+            .map_err(super::command_level::CommandLevelFailure)?;
         if player.game_mode == mode {
-            return None;
+            return Ok(None);
         }
         player.game_mode = mode;
         player.update_game_mode_abilities();
+        ferraloom_game::commands::gamemode::stop_flying_if_near_ground(
+            entity,
+            &mut self.level.level,
+        )
+        .map_err(super::command_level::CommandLevelFailure)?;
+        let player = self
+            .level
+            .level
+            .entity::<ServerPlayer>(entity)
+            .map_err(super::command_level::CommandLevelFailure)?;
         let packet = abilities(player);
-        let name = player.display_name();
         let uuid = player.uuid;
-        let c = self.connections.get_mut(&id).unwrap();
-        c.push(cb::Packet::GameEvent(cb::GameEvent {
-            event: 3,
-            param: mode.id() as f32,
-        }));
-        c.push(packet);
+        // ServerPlayerGameMode sends abilities before the game-mode list update;
+        // ServerPlayer#setGameMode sends CHANGE_GAME_MODE then abilities again.
+        self.connections.get_mut(&id).unwrap().push(packet.clone());
         self.broadcast(cb::Packet::PlayerInfoUpdate(cb::PlayerInfoUpdate {
             actions: 4,
             entries: vec![PlayerInfoEntry {
@@ -1383,13 +1394,24 @@ impl MinecraftServer {
                 }],
             }],
         }));
-        Some((entity, name))
+        let connection = self.connections.get_mut(&id).unwrap();
+        connection.push(cb::Packet::GameEvent(cb::GameEvent {
+            event: 3,
+            param: mode.id() as f32,
+        }));
+        connection.push(packet);
+        let name = self
+            .level
+            .level
+            .entity_display_name_with_scoreboard(entity, self.shared().scoreboard.scoreboard())
+            .map_err(super::command_level::CommandLevelFailure)?;
+        Ok(Some((entity, name)))
     }
-    fn game_mode_command(
+    pub(super) fn game_mode_command(
         &mut self,
         source: Option<ConnectionId>,
         command: &PreparedCommand,
-    ) -> Result<CommandResult, ferraloom_brigadier::CommandSyntaxException> {
+    ) -> Result<CommandResult> {
         let Some(ArgumentValue::GameMode(mode)) = command.argument("gamemode") else {
             unreachable!()
         };
@@ -1403,7 +1425,7 @@ impl MinecraftServer {
             Component::translatable(format!("gameMode.{}", game_mode_name(mode)), vec![]);
         let mut count = 0;
         for id in targets {
-            let Some((entity, name)) = self.change_player_game_mode(id, mode) else {
+            let Some((entity, name)) = self.change_player_game_mode(id, mode)? else {
                 continue;
             };
             let own = command.source.entity == Some(entity);
