@@ -2,7 +2,7 @@ use super::*;
 use crate::block::entity::{BlockEntityDataView, create, load_static};
 use ferraloom_data::Block;
 use ferraloom_nbt::parse_compound;
-use ferraloom_protocol::component::{DataComponentMap, ItemStack, Persistent};
+use ferraloom_protocol::component::{ItemStack, Persistent};
 use std::io::Read;
 
 const POS: BlockPos = BlockPos::new(8, 64, 8);
@@ -53,8 +53,7 @@ fn native_sculk_listener_cursor_components_and_worldgen_round_trips_match() {
                 );
                 assert_eq!(
                     entity.collect_components(),
-                    DataComponentMap::from_nbt(&Tag::Compound(parse_compound(f[6]).unwrap()))
-                        .unwrap(),
+                    crate::block::entity::components::load(Some(&parse_compound(f[6]).unwrap())),
                     "{row}"
                 );
                 assert_eq!(flags(&entity), f[7], "{row}");
@@ -81,8 +80,7 @@ fn native_sculk_listener_cursor_components_and_worldgen_round_trips_match() {
                 );
                 assert_eq!(
                     entity.collect_components(),
-                    DataComponentMap::from_nbt(&Tag::Compound(parse_compound(f[4]).unwrap()))
-                        .unwrap(),
+                    crate::block::entity::components::load(Some(&parse_compound(f[4]).unwrap())),
                     "{row}"
                 );
                 assert_eq!(flags(&entity), f[5], "{row}");
