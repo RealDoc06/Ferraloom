@@ -107,7 +107,7 @@ mod tests {
                             .to_string(),
                         f[3]
                     );
-                    assert_eq!(entity.has_server_ticker(), f[4] == "true");
+                    assert_eq!(entity.has_server_ticker(None).unwrap(), f[4] == "true");
                     assert_eq!(
                         entity.get_update_tag().unwrap(),
                         ferraloom_nbt::parse_compound(f[5]).unwrap()

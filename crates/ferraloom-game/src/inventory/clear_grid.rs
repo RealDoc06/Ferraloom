@@ -251,7 +251,7 @@ mod tests {
                 };
                 let stack =
                     context.own_stack(ItemStack::new(Item::STONE, 3, Default::default()))?;
-                let destination = context.drop_for_clear(stack)?;
+                let destination = context.drop_for_return(stack)?;
                 let ContainerHandle::Entity(entity) = destination.container else {
                     unreachable!()
                 };
