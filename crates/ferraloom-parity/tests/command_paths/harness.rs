@@ -71,6 +71,7 @@ pub enum Check {
     Advance {
         ticks: i64,
     },
+    WeatherSample,
     Weather {
         ticks: i64,
         raining: bool,
@@ -385,6 +386,7 @@ impl Driver<'_> {
                 Check::Advance { ticks } => checks.push(
                     json!({"advance":self.wait_advance(actor,baseline.unwrap(),*ticks).await?}),
                 ),
+                Check::WeatherSample => checks.push(json!({"raining":self.weather.raining,"rain_level":self.weather.rain_level,"thunder_level":self.weather.thunder_level})),
                 Check::Weather {
                     ticks,
                     raining,

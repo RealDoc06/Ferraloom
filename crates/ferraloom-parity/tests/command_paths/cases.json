@@ -395,6 +395,9 @@
             {
               "kind": "advance",
               "ticks": 35
+            },
+            {
+              "kind": "weather_sample"
             }
           ]
         }
@@ -447,6 +450,9 @@
             {
               "kind": "advance",
               "ticks": 35
+            },
+            {
+              "kind": "weather_sample"
             }
           ]
         }
@@ -519,6 +525,9 @@
             {
               "kind": "advance",
               "ticks": 35
+            },
+            {
+              "kind": "weather_sample"
             }
           ]
         }
