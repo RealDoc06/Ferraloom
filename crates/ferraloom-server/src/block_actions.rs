@@ -1,19 +1,14 @@
-//! ServerGamePacketListenerImpl's four mining actions. The canonical player's
-//! mining-state field and production routing attach in slice D.
+//! ServerGamePacketListenerImpl's four mining actions over the canonical player.
 use super::*;
-use ferraloom_game::entity::player::game_mode::{
-    BlockBreakAction, BlockBreakingState, DestroyAction,
-};
+use ferraloom_game::entity::player::game_mode::{self, BlockBreakAction, DestroyAction};
 
 impl MinecraftServer {
     /// Port of ServerGamePacketListenerImpl#handlePlayerAction's mining cases.
-    /// The explicit state borrow becomes the player's sole field at integration;
-    /// this adapter neither allocates a listener state nor takes/restores one.
+    /// Mining state stays on ServerPlayer throughout callbacks and tick dispatch.
     pub fn handle_player_block_action(
         &mut self,
         connection: ConnectionId,
         entity: EntityRef,
-        state: &mut BlockBreakingState,
         packet: sb::PlayerActionPacket,
     ) -> Result<()> {
         if !self
@@ -37,7 +32,7 @@ impl MinecraftServer {
             direction: packet.direction.0,
             max_y: self.level.level.max_build_height(),
         };
-        state.handle_block_break_action(entity, input, &mut self.level.level)?;
+        game_mode::handle_block_break_action(entity, input, &mut self.level.level)?;
         // Native mining packets precede ACK validation, including the clear
         // already sent when a negative sequence subsequently throws.
         self.apply_level_effects()?;

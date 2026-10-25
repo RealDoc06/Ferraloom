@@ -1,6 +1,5 @@
-//! ServerPlayerGameMode's block-action state machine. The caller borrows the
-//! sole mining state separately; attaching it to ServerPlayer is a later hunk.
-use super::{BlockBreakingState, ServerPlayer, accumulated_destroy_progress};
+//! ServerPlayerGameMode actions over the canonical ServerPlayer mining state.
+use super::{ServerPlayer, accumulated_destroy_progress};
 use crate::{
     block::BlockMethod,
     entity::{
@@ -58,6 +57,30 @@ pub enum BlockBreakError {
     ItemOnHitBlock(Item),
     ItemCanDestroyBlock(Item),
 }
+/// Cold boundary for ServerPlayerGameMode#tick failures. Clone keeps the
+/// original owned cause; equality is identity-based because protocol, predicate
+/// and inventory errors do not define value equality.
+#[derive(Clone, Debug)]
+pub struct BlockBreakFailure(std::sync::Arc<BlockBreakError>);
+impl PartialEq for BlockBreakFailure {
+    fn eq(&self, other: &Self) -> bool {
+        std::sync::Arc::ptr_eq(&self.0, &other.0)
+    }
+}
+impl Eq for BlockBreakFailure {}
+impl BlockBreakFailure {
+    pub(crate) fn error(&self) -> &BlockBreakError {
+        self.0.as_ref()
+    }
+}
+impl From<BlockBreakError> for LevelError {
+    fn from(error: BlockBreakError) -> Self {
+        match error {
+            BlockBreakError::Level(error) => *error,
+            error => Self::BlockBreak(BlockBreakFailure(std::sync::Arc::new(error))),
+        }
+    }
+}
 impl From<LevelError> for BlockBreakError {
     fn from(error: LevelError) -> Self {
         Self::Level(Box::new(error))
@@ -105,201 +128,258 @@ impl std::error::Error for BlockBreakError {
 }
 type Result<T> = std::result::Result<T, BlockBreakError>;
 
-impl BlockBreakingState {
-    /// Port of ServerPlayerGameMode#handleBlockBreakAction, without the optional
-    /// DEBUG_BLOCK_BREAK logger. The listener ACKs only after this returns.
-    pub fn handle_block_break_action(
-        &mut self,
-        player: EntityRef,
-        input: BlockBreakAction,
-        level: &mut Level,
-    ) -> Result<()> {
-        let BlockBreakAction {
-            action,
-            pos,
-            direction,
-            max_y,
-        } = input;
-        if !level
+/// Port of ServerPlayerGameMode#handleBlockBreakAction. Every mining-state
+/// borrow ends before a world call, so reentrant actions address the same player.
+pub fn handle_block_break_action(
+    player: EntityRef,
+    input: BlockBreakAction,
+    level: &mut Level,
+) -> Result<()> {
+    let BlockBreakAction {
+        action,
+        pos,
+        direction,
+        max_y,
+    } = input;
+    if !level
+        .entity::<ServerPlayer>(player)?
+        .is_within_block_interaction_range(pos, 1.0)
+    {
+        if level
             .entity::<ServerPlayer>(player)?
-            .is_within_block_interaction_range(pos, 1.0)
+            .block_breaking
+            .is_destroying_block
+            && action == DestroyAction::Abort
         {
-            if self.is_destroying_block && action == DestroyAction::Abort {
-                self.abort_destroy_block(player, pos, level)?;
+            abort_destroy_block(player, pos, level)?;
+        }
+        return Ok(());
+    }
+    if pos.y > max_y {
+        return send_block_update(player, pos, level);
+    }
+    match action {
+        DestroyAction::Start => {
+            if level.is_under_spawn_protection(player, pos)? {
+                let mut content = Component::translatable(
+                    "build.spawn_protection",
+                    vec![Argument::String(format!("{}, {}, {}", pos.x, pos.y, pos.z))],
+                );
+                content.style.color = Some(TextColor::parse("red").expect("native color"));
+                level.emit(crate::level::effects::LevelEffect::PlayerPacket {
+                    recipients: vec![player],
+                    packet: Box::new(cb::Packet::SystemChat(Box::new(cb::SystemChat {
+                        content,
+                        overlay: true,
+                    }))),
+                });
+                return Ok(());
             }
-            return Ok(());
+            if !level.may_interact(player, pos)? {
+                return send_block_update(player, pos, level);
+            }
+            if level.entity::<ServerPlayer>(player)?.instabuild() {
+                return destroy_and_ack(player, pos, level);
+            }
+            if block_action_restricted(player, pos, level)? {
+                return send_block_update(player, pos, level);
+            }
+            {
+                let mining = &mut level.entity_mut::<ServerPlayer>(player)?.block_breaking;
+                mining.destroy_progress_start = mining.game_ticks;
+            }
+            let state = level.get_block_state(pos)?;
+            let mut progress = 1.0;
+            if !state.is_air() {
+                let stack = level.entity::<ServerPlayer>(player)?.get_main_hand_item();
+                if let Some(DataComponent::Enchantments(enchantments)) =
+                    inventory::component(stack, ComponentType::ENCHANTMENTS)
+                    && !enchantments.0.is_empty()
+                {
+                    return Err(BlockBreakError::ItemOnHitBlock(stack.item()));
+                }
+                level.attack_block(state, pos, player)?;
+                progress = level.get_destroy_progress(state, pos, player)?;
+            }
+            if !state.is_air() && progress >= 1.0 {
+                destroy_and_ack(player, pos, level)?;
+            } else {
+                let mining = &level.entity::<ServerPlayer>(player)?.block_breaking;
+                if mining.is_destroying_block {
+                    send_block_update(player, mining.destroy_pos, level)?;
+                }
+                {
+                    let mining = &mut level.entity_mut::<ServerPlayer>(player)?.block_breaking;
+                    mining.is_destroying_block = true;
+                    mining.destroy_pos = pos;
+                    mining.destroy_direction = direction;
+                }
+                let stage = (progress * 10.0) as i32;
+                level.destroy_block_progress(
+                    level.entity::<ServerPlayer>(player)?.network_id,
+                    pos,
+                    stage,
+                )?;
+                level
+                    .entity_mut::<ServerPlayer>(player)?
+                    .block_breaking
+                    .last_sent_state = stage;
+            }
         }
-        if pos.y > max_y {
-            return send_block_update(player, pos, level);
+        DestroyAction::ChangeDirection => {
+            level
+                .entity_mut::<ServerPlayer>(player)?
+                .block_breaking
+                .destroy_direction = direction;
         }
-        match action {
-            DestroyAction::Start => {
-                if level.is_under_spawn_protection(player, pos)? {
-                    let mut content = Component::translatable(
-                        "build.spawn_protection",
-                        vec![Argument::String(format!("{}, {}, {}", pos.x, pos.y, pos.z))],
-                    );
-                    content.style.color = Some(TextColor::parse("red").expect("native color"));
-                    level.emit(crate::level::effects::LevelEffect::PlayerPacket {
-                        recipients: vec![player],
-                        packet: Box::new(cb::Packet::SystemChat(Box::new(cb::SystemChat {
-                            content,
-                            overlay: true,
-                        }))),
-                    });
-                    return Ok(());
-                }
-                if !level.may_interact(player, pos)? {
-                    return send_block_update(player, pos, level);
-                }
-                if level.entity::<ServerPlayer>(player)?.instabuild() {
-                    return destroy_and_ack(player, pos, level);
-                }
-                if block_action_restricted(player, pos, level)? {
-                    return send_block_update(player, pos, level);
-                }
-                self.destroy_progress_start = self.game_ticks;
+        DestroyAction::Stop => {
+            let mining = &level.entity::<ServerPlayer>(player)?.block_breaking;
+            if pos == mining.destroy_pos {
+                let ticks = mining
+                    .game_ticks
+                    .wrapping_sub(mining.destroy_progress_start);
                 let state = level.get_block_state(pos)?;
-                let mut progress = 1.0;
                 if !state.is_air() {
-                    let stack = level.entity::<ServerPlayer>(player)?.get_main_hand_item();
-                    if let Some(DataComponent::Enchantments(enchantments)) =
-                        inventory::component(stack, ComponentType::ENCHANTMENTS)
-                        && !enchantments.0.is_empty()
-                    {
-                        return Err(BlockBreakError::ItemOnHitBlock(stack.item()));
+                    let progress = accumulated_destroy_progress(
+                        level.get_destroy_progress(state, pos, player)?,
+                        ticks,
+                    )
+                    .0;
+                    if progress >= 0.7 {
+                        level
+                            .entity_mut::<ServerPlayer>(player)?
+                            .block_breaking
+                            .is_destroying_block = false;
+                        level.destroy_block_progress(
+                            level.entity::<ServerPlayer>(player)?.network_id,
+                            pos,
+                            -1,
+                        )?;
+                        return destroy_and_ack(player, pos, level);
                     }
-                    level.attack_block(state, pos, player)?;
-                    progress = level.get_destroy_progress(state, pos, player)?;
-                }
-                if !state.is_air() && progress >= 1.0 {
-                    destroy_and_ack(player, pos, level)?;
-                } else {
-                    if self.is_destroying_block {
-                        send_block_update(player, self.destroy_pos, level)?;
-                    }
-                    self.is_destroying_block = true;
-                    self.destroy_pos = pos;
-                    self.destroy_direction = direction;
-                    let stage = (progress * 10.0) as i32;
-                    level.destroy_block_progress(
-                        level.entity::<ServerPlayer>(player)?.network_id,
-                        pos,
-                        stage,
-                    )?;
-                    self.last_sent_state = stage;
-                }
-            }
-            DestroyAction::ChangeDirection => self.destroy_direction = direction,
-            DestroyAction::Stop => {
-                if pos == self.destroy_pos {
-                    let ticks = self.game_ticks.wrapping_sub(self.destroy_progress_start);
-                    let state = level.get_block_state(pos)?;
-                    if !state.is_air() {
-                        let progress = accumulated_destroy_progress(
-                            level.get_destroy_progress(state, pos, player)?,
-                            ticks,
-                        )
-                        .0;
-                        if progress >= 0.7 {
-                            self.is_destroying_block = false;
-                            level.destroy_block_progress(
-                                level.entity::<ServerPlayer>(player)?.network_id,
-                                pos,
-                                -1,
-                            )?;
-                            return destroy_and_ack(player, pos, level);
-                        }
-                        if !self.has_delayed_destroy {
-                            self.is_destroying_block = false;
-                            self.has_delayed_destroy = true;
-                            self.delayed_destroy_pos = pos;
-                            self.delayed_tick_start = self.destroy_progress_start;
-                        }
+                    let mining = &mut level.entity_mut::<ServerPlayer>(player)?.block_breaking;
+                    if !mining.has_delayed_destroy {
+                        mining.is_destroying_block = false;
+                        mining.has_delayed_destroy = true;
+                        mining.delayed_destroy_pos = pos;
+                        mining.delayed_tick_start = mining.destroy_progress_start;
                     }
                 }
             }
-            DestroyAction::Abort => self.abort_destroy_block(player, pos, level)?,
         }
-        Ok(())
+        DestroyAction::Abort => abort_destroy_block(player, pos, level)?,
     }
+    Ok(())
+}
 
-    /// Port of ServerPlayerGameMode#abortDestroyBlock. A mismatched abort sends
-    /// both clears; it leaves the delayed-destruction flag untouched.
-    fn abort_destroy_block(
-        &mut self,
-        player: EntityRef,
-        pos: BlockPos,
-        level: &mut Level,
-    ) -> Result<()> {
-        self.is_destroying_block = false;
-        let id = level.entity::<ServerPlayer>(player)?.network_id;
-        if self.destroy_pos != pos {
-            eprintln!(
-                "Mismatch in destroy block pos: {:?} {:?}",
-                self.destroy_pos, pos
-            );
-            level.destroy_block_progress(id, self.destroy_pos, -1)?;
-        }
-        level.destroy_block_progress(id, pos, -1)?;
-        Ok(())
+/// Port of ServerPlayerGameMode#abortDestroyBlock. A mismatched abort clears
+/// both positions and preserves the canonical delayed-destruction flag.
+fn abort_destroy_block(player: EntityRef, pos: BlockPos, level: &mut Level) -> Result<()> {
+    level
+        .entity_mut::<ServerPlayer>(player)?
+        .block_breaking
+        .is_destroying_block = false;
+    let entity = level.entity::<ServerPlayer>(player)?;
+    let id = entity.network_id;
+    let previous = entity.block_breaking.destroy_pos;
+    if previous != pos {
+        eprintln!("Mismatch in destroy block pos: {previous:?} {pos:?}");
+        level.destroy_block_progress(id, previous, -1)?;
     }
+    level.destroy_block_progress(id, pos, -1)?;
+    Ok(())
+}
 
-    /// Port of ServerPlayerGameMode#tick. Mutations stay on this exact state;
-    /// no second player map or take/restore is used while the field is pending.
-    pub fn tick(&mut self, player: EntityRef, level: &mut Level) -> Result<()> {
-        self.game_ticks = self.game_ticks.wrapping_add(1);
-        if self.has_delayed_destroy {
-            let state = level.get_block_state(self.delayed_destroy_pos)?;
-            if state.is_air() {
-                self.has_delayed_destroy = false;
-            } else if self.increment_destroy_progress(
+/// Port of ServerPlayerGameMode#tick over the player's canonical mining state.
+/// Values are captured only at their native read points, never for writeback.
+pub fn tick(player: EntityRef, level: &mut Level) -> Result<()> {
+    {
+        let mining = &mut level.entity_mut::<ServerPlayer>(player)?.block_breaking;
+        mining.game_ticks = mining.game_ticks.wrapping_add(1);
+    }
+    let mining = &level.entity::<ServerPlayer>(player)?.block_breaking;
+    if mining.has_delayed_destroy {
+        let state = level.get_block_state(mining.delayed_destroy_pos)?;
+        if state.is_air() {
+            level
+                .entity_mut::<ServerPlayer>(player)?
+                .block_breaking
+                .has_delayed_destroy = false;
+        } else {
+            let mining = &level.entity::<ServerPlayer>(player)?.block_breaking;
+            let progress = increment_destroy_progress(
                 player,
                 state,
-                self.delayed_destroy_pos,
-                self.delayed_tick_start,
+                mining.delayed_destroy_pos,
+                mining.delayed_tick_start,
                 level,
-            )? >= 1.0
-            {
-                self.has_delayed_destroy = false;
-                destroy_block(player, self.delayed_destroy_pos, level)?;
-            }
-        } else if self.is_destroying_block {
-            let state = level.get_block_state(self.destroy_pos)?;
-            let id = level.entity::<ServerPlayer>(player)?.network_id;
-            if state.is_air() {
-                level.destroy_block_progress(id, self.destroy_pos, -1)?;
-                self.last_sent_state = -1;
-                self.is_destroying_block = false;
-            } else {
-                let ticks = self.game_ticks.wrapping_sub(self.destroy_progress_start);
-                let event = if ticks % 4 == 0 { 2020 } else { 2019 };
-                self.increment_destroy_progress(player, state, self.destroy_pos, ticks, level)?;
-                level.level_event(None, event, self.destroy_pos, self.destroy_direction as i32)?;
-            }
-        }
-        Ok(())
-    }
-    fn increment_destroy_progress(
-        &mut self,
-        player: EntityRef,
-        state: ferraloom_data::BlockState,
-        pos: BlockPos,
-        ticks: i32,
-        level: &mut Level,
-    ) -> Result<f32> {
-        let (progress, stage) =
-            accumulated_destroy_progress(level.get_destroy_progress(state, pos, player)?, ticks);
-        if stage != self.last_sent_state {
-            level.destroy_block_progress(
-                level.entity::<ServerPlayer>(player)?.network_id,
-                pos,
-                stage,
             )?;
-            self.last_sent_state = stage;
+            if progress >= 1.0 {
+                level
+                    .entity_mut::<ServerPlayer>(player)?
+                    .block_breaking
+                    .has_delayed_destroy = false;
+                let pos = level
+                    .entity::<ServerPlayer>(player)?
+                    .block_breaking
+                    .delayed_destroy_pos;
+                destroy_block(player, pos, level)?;
+            }
         }
-        Ok(progress)
+    } else if mining.is_destroying_block {
+        let state = level.get_block_state(mining.destroy_pos)?;
+        let entity = level.entity::<ServerPlayer>(player)?;
+        let id = entity.network_id;
+        if state.is_air() {
+            level.destroy_block_progress(id, entity.block_breaking.destroy_pos, -1)?;
+            let mining = &mut level.entity_mut::<ServerPlayer>(player)?.block_breaking;
+            mining.last_sent_state = -1;
+            mining.is_destroying_block = false;
+        } else {
+            let mining = &entity.block_breaking;
+            let ticks = mining
+                .game_ticks
+                .wrapping_sub(mining.destroy_progress_start);
+            let event = if ticks % 4 == 0 { 2020 } else { 2019 };
+            increment_destroy_progress(player, state, mining.destroy_pos, ticks, level)?;
+            let mining = &level.entity::<ServerPlayer>(player)?.block_breaking;
+            level.level_event(
+                None,
+                event,
+                mining.destroy_pos,
+                mining.destroy_direction as i32,
+            )?;
+        }
     }
+    Ok(())
+}
+
+fn increment_destroy_progress(
+    player: EntityRef,
+    state: ferraloom_data::BlockState,
+    pos: BlockPos,
+    ticks: i32,
+    level: &mut Level,
+) -> Result<f32> {
+    let (progress, stage) =
+        accumulated_destroy_progress(level.get_destroy_progress(state, pos, player)?, ticks);
+    if stage
+        != level
+            .entity::<ServerPlayer>(player)?
+            .block_breaking
+            .last_sent_state
+    {
+        level.destroy_block_progress(
+            level.entity::<ServerPlayer>(player)?.network_id,
+            pos,
+            stage,
+        )?;
+        level
+            .entity_mut::<ServerPlayer>(player)?
+            .block_breaking
+            .last_sent_state = stage;
+    }
+    Ok(progress)
 }
 
 /// Port of Player#blockActionRestricted and AdventureModePredicate#test with

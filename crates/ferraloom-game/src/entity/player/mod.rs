@@ -88,6 +88,7 @@ pub struct ServerPlayer {
     pub name: String,
     pub known_movement: Vec3,
     pub game_mode: GameType,
+    pub block_breaking: game_mode::BlockBreakingState,
     pub abilities: abilities::Abilities,
     pub last_client_input: ferraloom_protocol::play::Input,
     pub text_filtering_enabled: bool,
@@ -254,6 +255,7 @@ impl ServerPlayer {
             last_recorded_level: i32::MIN,
             known_movement: Vec3::ZERO,
             game_mode,
+            block_breaking: Default::default(),
             abilities: {
                 let mut abilities = abilities::Abilities::default();
                 abilities.update_game_mode(game_mode);
@@ -1114,6 +1116,8 @@ impl crate::entity::Entity for PlayerBehavior {
         crate::entity::living::ignite_for_ticks(entity, ticks, level)
     }
     fn tick(&self, entity: crate::entity::EntityRef, level: &mut Level) -> Result<(), LevelError> {
+        // ServerPlayer#tick: gameMode precedes warden, damage cooldown and menus.
+        game_mode::tick(entity, level).map_err(LevelError::from)?;
         let player = level.entity_mut::<ServerPlayer>(entity)?;
         if player.damage_cooldown_time > 0 {
             player.damage_cooldown_time -= 1;

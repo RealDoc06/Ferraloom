@@ -14,11 +14,13 @@ use ferraloom_util::{BlockPos, Direction};
 
 mod block_actions;
 mod mining_item;
-pub use block_actions::{BlockBreakAction, BlockBreakError, DestroyAction, destroy_block};
+pub use block_actions::{
+    BlockBreakAction, BlockBreakError, BlockBreakFailure, DestroyAction, destroy_block,
+    handle_block_break_action, tick,
+};
 pub use mining_item::mine_block;
 
-/// Port of ServerPlayerGameMode's destruction fields. Attachment to ServerPlayer
-/// and the native pre-menu tick slot are the separate slice-D integration.
+/// Port of ServerPlayerGameMode's destruction fields, owned by ServerPlayer.
 #[derive(Debug)]
 pub struct BlockBreakingState {
     pub is_destroying_block: bool,

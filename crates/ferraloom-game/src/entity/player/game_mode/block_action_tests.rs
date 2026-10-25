@@ -210,23 +210,25 @@ fn trace(level: &mut Level, player: EntityRef, observer: EntityRef) -> String {
 #[test]
 fn break_actions_match_real_native_sequences_and_packet_order() {
     let mut current = None;
-    let mut mining = BlockBreakingState::default();
     let mut count = 0;
     for line in VECTORS.lines() {
         let fields: Vec<_> = line.split('\t').collect();
         match fields[0] {
             "setup" => {
                 current = Some(setup(&fields));
-                mining = BlockBreakingState::default();
             }
             "step" => {
                 let (level, player, observer) = current.as_mut().unwrap();
                 let input: Vec<_> = fields[2].split(':').collect();
                 match input[0] {
-                    "tick" => mining.tick(*player, level).unwrap(),
+                    "tick" => tick(*player, level).unwrap(),
                     "field" => {
                         assert_eq!(input[1], "gameTicks");
-                        mining.game_ticks = input[2].parse().unwrap();
+                        level
+                            .entity_mut::<ServerPlayer>(*player)
+                            .unwrap()
+                            .block_breaking
+                            .game_ticks = input[2].parse().unwrap();
                     }
                     "move" => {
                         level.set_entity_pos(*player, vector(input[1])).unwrap();
@@ -248,21 +250,29 @@ fn break_actions_match_real_native_sequences_and_packet_order() {
                             _ => panic!("action: {line}"),
                         };
                         let max_y = level.max_build_height();
-                        mining
-                            .handle_block_break_action(
-                                *player,
-                                BlockBreakAction {
-                                    action,
-                                    pos: pos(input[1]),
-                                    direction: direction(input[2]),
-                                    max_y,
-                                },
-                                level,
-                            )
-                            .unwrap();
+                        handle_block_break_action(
+                            *player,
+                            BlockBreakAction {
+                                action,
+                                pos: pos(input[1]),
+                                direction: direction(input[2]),
+                                max_y,
+                            },
+                            level,
+                        )
+                        .unwrap();
                     }
                 }
-                assert_eq!(state(&mining), fields[3], "{line}");
+                assert_eq!(
+                    state(
+                        &level
+                            .entity::<ServerPlayer>(*player)
+                            .unwrap()
+                            .block_breaking
+                    ),
+                    fields[3],
+                    "{line}"
+                );
                 assert_eq!(
                     format!(
                         "{},{}",
@@ -407,13 +417,14 @@ fn pending_item_and_missing_stat_context_preserve_source_side_effects() {
                     removed: Vec::new(),
                 },
             ));
-        let mut mining = BlockBreakingState {
-            game_ticks: 17,
-            ..Default::default()
-        };
+        level
+            .entity_mut::<ServerPlayer>(player)
+            .unwrap()
+            .block_breaking
+            .game_ticks = 17;
         let max_y = level.max_build_height();
         assert!(matches!(
-            mining.handle_block_break_action(
+            handle_block_break_action(
                 player,
                 BlockBreakAction {
                     action: DestroyAction::Start,
@@ -425,6 +436,7 @@ fn pending_item_and_missing_stat_context_preserve_source_side_effects() {
             ),
             Err(BlockBreakError::ItemOnHitBlock(Item::STICK))
         ));
+        let mining = &level.entity::<ServerPlayer>(player).unwrap().block_breaking;
         assert_eq!(mining.destroy_progress_start, 17);
         assert!(!mining.is_destroying_block);
         assert!(level.take_effects().is_empty());
@@ -489,4 +501,101 @@ fn adventure_non_loading_state_read_matches_native_absence_without_a_fallback() 
             assert_eq!(level.unported_behavior_stats().skipped_calls, 0);
         }
     }
+}
+
+struct ReentrantAttack;
+impl crate::block::BlockBehavior for ReentrantAttack {
+    fn attack(
+        &self,
+        _: ferraloom_data::BlockState,
+        pos: BlockPos,
+        player: EntityRef,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        assert_eq!(
+            level
+                .entity::<ServerPlayer>(player)?
+                .block_breaking
+                .destroy_progress_start,
+            7
+        );
+        handle_block_break_action(
+            player,
+            BlockBreakAction {
+                action: DestroyAction::Stop,
+                pos: pos.relative(Direction::East, 1),
+                direction: Direction::Up,
+                max_y: level.max_build_height(),
+            },
+            level,
+        )
+        .map_err(LevelError::from)
+    }
+}
+static REENTRANT_ATTACK: crate::Behaviors =
+    crate::Behaviors::EMPTY.with_block(Block::STONE, &ReentrantAttack);
+
+#[test]
+fn nested_attack_preserves_the_canonical_delayed_receiver() {
+    let (mut level, player) = super::player_destroy_tests::fixture(&REENTRANT_ATTACK);
+    level.set_spawn_protection(SpawnProtectionSnapshot::new(
+        "minecraft:overworld".parse().unwrap(),
+        "minecraft:overworld".parse().unwrap(),
+        POS,
+        0,
+    ));
+    let previous = POS.relative(Direction::East, 1);
+    for pos in [POS, previous] {
+        level
+            .set_block_state(pos, Block::STONE.default_state())
+            .unwrap();
+    }
+    level
+        .entity_mut::<ServerPlayer>(player)
+        .unwrap()
+        .block_breaking = BlockBreakingState {
+        is_destroying_block: true,
+        destroy_pos: previous,
+        game_ticks: 7,
+        ..Default::default()
+    };
+    handle_block_break_action(
+        player,
+        BlockBreakAction {
+            action: DestroyAction::Start,
+            pos: POS,
+            direction: Direction::North,
+            max_y: level.max_build_height(),
+        },
+        &mut level,
+    )
+    .unwrap();
+    let mining = &level.entity::<ServerPlayer>(player).unwrap().block_breaking;
+    assert!(mining.is_destroying_block);
+    assert_eq!(mining.destroy_pos, POS);
+    assert!(mining.has_delayed_destroy);
+    assert_eq!(mining.delayed_destroy_pos, previous);
+    assert_eq!(mining.delayed_tick_start, 7);
+    assert_eq!(mining.game_ticks, 7);
+}
+
+#[test]
+fn tick_error_boundary_retains_the_owned_cause_and_clone_identity() {
+    use std::error::Error;
+    let failure = || LevelError::from(BlockBreakError::ItemCanDestroyBlock(Item::DEBUG_STICK));
+    let error = failure();
+    let cloned = error.clone();
+    assert_eq!(error, cloned);
+    assert_ne!(error, failure());
+    let source = error.source().unwrap();
+    assert!(matches!(
+        source.downcast_ref::<BlockBreakError>(),
+        Some(BlockBreakError::ItemCanDestroyBlock(Item::DEBUG_STICK))
+    ));
+    assert!(std::ptr::eq(source, cloned.source().unwrap()));
+    let chunk = ferraloom_util::ChunkPos::ZERO;
+    assert_eq!(
+        LevelError::from(BlockBreakError::from(LevelError::MissingChunk(chunk))),
+        LevelError::MissingChunk(chunk)
+    );
 }
