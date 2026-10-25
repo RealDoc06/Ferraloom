@@ -1525,7 +1525,12 @@ impl MinecraftServer {
                 .boolean(ferraloom_game::gamerules::GameRule::LimitedCrafting),
             common_player_spawn_info: CommonPlayerSpawnInfo {
                 dimension_type: DimensionTypeId(
-                    self.registries.numeric("dimension_type", "overworld"),
+                    self.registries.numeric(
+                        "dimension_type",
+                        self.world_root
+                            .dimension_type_key(&id("overworld"))?
+                            .as_str(),
+                    ),
                 ),
                 dimension: id("overworld"),
                 seed: ferraloom_worldgen::biome_manager::obfuscate_seed(

@@ -8,6 +8,7 @@ pub struct WorldServices {
     pub access: Arc<LevelStorageAccess>,
     pub seed: i64,
     pub dimensions: WorldDimensions,
+    dimension_types: std::collections::BTreeMap<Identifier, Option<Identifier>>,
     pub registry: Arc<RegistryAdapter>,
     pub(super) resources: Arc<ResourceManager>,
     pub(super) generate_structures: bool,
@@ -18,6 +19,18 @@ pub struct WorldServices {
     pub(super) saving: Arc<JobPool>,
 }
 impl WorldServices {
+    /// CommonPlayerSpawnInfo uses the original DimensionType holder key, not
+    /// the dimension key or a structurally equal decoded value.
+    pub fn dimension_type_key(&self, dimension: &Identifier) -> Result<&Identifier> {
+        self.stem(dimension)?;
+        self.dimension_types
+            .get(dimension)
+            .context("registered dimension is missing its type holder")?
+            .as_ref()
+            .with_context(|| {
+                format!("Unsupported: inline DimensionType network holder for {dimension}")
+            })
+    }
     pub fn stem(&self, dimension: &Identifier) -> Result<&LevelStem> {
         self.dimensions
             .dimensions
@@ -115,6 +128,7 @@ impl WorldRoot {
             )?;
             preset
         };
+        let dimension_types = dimension_type_keys(&preset.definition)?;
         let mut level_data = if access.path().join("level.dat").exists() {
             access.read_level_data()?
         } else {
@@ -128,6 +142,7 @@ impl WorldRoot {
                 access,
                 seed,
                 dimensions: preset.dimensions,
+                dimension_types,
                 registry: Arc::new(RegistryAdapter::new(registries)?),
                 resources: Arc::new(resources.clone()),
                 generate_structures,
@@ -212,11 +227,64 @@ impl WorldRoot {
     }
 }
 
+// Retain holder identity while the raw preset and resolved stems are together.
+// Inline holders remain representable here; the network boundary rejects them.
+fn dimension_type_keys(
+    definition: &serde_json::Value,
+) -> Result<std::collections::BTreeMap<Identifier, Option<Identifier>>> {
+    definition
+        .get("dimensions")
+        .and_then(serde_json::Value::as_object)
+        .context("world preset dimension map")?
+        .iter()
+        .map(|(dimension, stem)| {
+            let holder = stem.get("type").context("dimension type holder")?;
+            let key = match holder.as_str() {
+                Some(name) => Some(name.parse()?),
+                None => {
+                    ensure!(
+                        holder.is_object(),
+                        "dimension type holder is neither named nor inline"
+                    );
+                    None
+                }
+            };
+            Ok((dimension.parse()?, key))
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use ferraloom_game::{Behaviors, level::Region};
     use ferraloom_util::ChunkPos;
+
+    #[test]
+    fn dimension_type_holder_identity_is_independent_of_dimension_name() {
+        let holders = dimension_type_keys(&serde_json::json!({"dimensions": {
+            "fixture:moon": {"type": "minecraft:overworld"},
+            "fixture:other": {"type": "fixture:custom_type"},
+            "fixture:inline": {"type": {"min_y": 0, "height": 256}}
+        }}))
+        .unwrap();
+        assert_eq!(
+            holders[&"fixture:moon".parse().unwrap()]
+                .as_ref()
+                .unwrap()
+                .as_str(),
+            "minecraft:overworld"
+        );
+        assert_eq!(
+            holders[&"fixture:other".parse().unwrap()]
+                .as_ref()
+                .unwrap()
+                .as_str(),
+            "fixture:custom_type"
+        );
+        assert!(holders[&"fixture:inline".parse().unwrap()].is_none());
+        assert!(!holders.contains_key(&"minecraft:overworld".parse().unwrap()));
+    }
 
     #[tokio::test]
     async fn dimensions_share_one_root_and_keep_their_actual_generators_and_io() {
