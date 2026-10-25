@@ -132,8 +132,10 @@ fn smokey_location_predicate_keeps_required_reads_and_smokey_before_block_matchi
         .unwrap();
     for row in VECTORS.lines().filter(|row| row.starts_with("location-")) {
         let fields: Vec<_> = row.split('\t').collect();
-        let predicate =
-            LocationPredicate::decode(&serde_json::from_str(fields[1]).unwrap()).unwrap();
+        let predicate = LocationPredicate::decode(
+            &serde_json::from_str::<serde_json::Value>(fields[1]).unwrap(),
+        )
+        .unwrap();
         assert_eq!(
             predicate
                 .matches(Vec3::new(8.5, 80.0, 8.5), &level)
