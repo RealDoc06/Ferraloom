@@ -168,13 +168,13 @@ fn player_name(index: usize) -> String {
 #[derive(Default)]
 struct Rewards {
     packets: Vec<Value>,
-    recipe_progress: Vec<String>,
+    recipe_progress: usize,
     encoding_error: Option<String>,
     added: usize,
 }
 impl Rewards {
     fn observe(&mut self, packet: &cb::Packet) {
-        let book = match packet {
+        let observed = match packet {
             cb::Packet::RecipeBookAdd(packet) => {
                 self.added += packet.entries.len();
                 Some(("add", packet.to_bytes()))
@@ -182,18 +182,26 @@ impl Rewards {
             cb::Packet::RecipeBookRemove(packet) => Some(("remove", packet.to_bytes())),
             cb::Packet::RecipeBookSettings(packet) => Some(("settings", packet.to_bytes())),
             cb::Packet::UpdateAdvancements(packet) => {
-                self.recipe_progress.extend(
-                    packet
-                        .progress
-                        .iter()
-                        .filter(|progress| progress.id.as_str().starts_with("minecraft:recipes/"))
-                        .map(|progress| progress.id.to_string()),
-                );
-                None
+                self.recipe_progress += packet
+                    .progress
+                    .iter()
+                    .filter(|progress| progress.id.as_str().starts_with("minecraft:recipes/"))
+                    .count();
+                let mut packet = packet.clone();
+                // Completed nodes are visible even without a display. Only obtained wall-clock
+                // timestamps vary; keep every definition, removal, criterion and sequence intact.
+                for progress in &mut packet.progress {
+                    for criterion in &mut progress.criteria {
+                        if let Some(obtained) = &mut criterion.obtained {
+                            *obtained = 0;
+                        }
+                    }
+                }
+                Some(("advancements", packet.to_bytes()))
             }
             _ => None,
         };
-        if let Some((kind, bytes)) = book {
+        if let Some((kind, bytes)) = observed {
             match bytes {
                 Ok(bytes) => self.packets.push(json!({"kind":kind,"bytes":bytes})),
                 Err(error) => self.encoding_error = Some(error.to_string()),
@@ -246,9 +254,8 @@ async fn input(bot: &mut Bot, trigger: &Trigger) -> Result<Rewards> {
     )
     .await?;
     ensure!(
-        rewards.recipe_progress.is_empty(),
-        "hidden recipe advancement progress was sent: {:?}",
-        rewards.recipe_progress
+        rewards.recipe_progress > 0,
+        "completed recipes produced no advancement progress: {trigger:?}"
     );
     ensure!(
         rewards.added > 0,
