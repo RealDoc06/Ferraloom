@@ -372,7 +372,12 @@ impl BlockEntity for SpawnerBehavior {
     fn tick(&self, _handle: BlockEntityRef, _level: &mut Level) -> Result<(), LevelError> {
         Err(LevelError::UnsupportedBlockEntity(Block::SPAWNER))
     }
-    fn load_additional(&self, state: &mut BlockEntityState, tag: &CompoundTag) {
+    fn load_additional(
+        &self,
+        state: &mut BlockEntityState,
+        tag: &CompoundTag,
+        _registries: &dyn ferraloom_protocol::codec::RegistryContext,
+    ) {
         let BlockEntityState::Spawner(entity) = state else {
             unreachable!()
         };

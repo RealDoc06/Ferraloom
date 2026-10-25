@@ -230,7 +230,12 @@ pub(super) fn set_placed_by(
 pub struct CommandBehavior;
 pub static COMMAND_ENTITY: CommandBehavior = CommandBehavior;
 impl BlockEntity for CommandBehavior {
-    fn load_additional(&self, state: &mut BlockEntityState, tag: &CompoundTag) {
+    fn load_additional(
+        &self,
+        state: &mut BlockEntityState,
+        tag: &CompoundTag,
+        _registries: &dyn ferraloom_protocol::codec::RegistryContext,
+    ) {
         let BlockEntityState::Command(entity) = state else {
             unreachable!()
         };
@@ -246,7 +251,12 @@ impl BlockEntity for CommandBehavior {
         level: &mut Level,
     ) -> Result<(), LevelError> {
         let previous = level.block_entity::<CommandBlockEntity>(handle)?.automatic;
-        self.load_additional(level.block_entity_state_mut(handle)?, tag);
+        let context = level.context().clone();
+        self.load_additional(
+            level.block_entity_state_mut(handle)?,
+            tag,
+            context.registry_context()?,
+        );
         let automatic = level.block_entity::<CommandBlockEntity>(handle)?.automatic;
         set_automatic(handle, automatic, previous, level)
     }

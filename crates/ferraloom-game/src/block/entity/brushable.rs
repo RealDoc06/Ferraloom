@@ -43,7 +43,12 @@ impl BrushableBlockEntity {
 pub(super) struct BrushableBehavior;
 pub(super) static BRUSHABLE_ENTITY: BrushableBehavior = BrushableBehavior;
 impl BlockEntity for BrushableBehavior {
-    fn load_additional(&self, state: &mut BlockEntityState, tag: &CompoundTag) {
+    fn load_additional(
+        &self,
+        state: &mut BlockEntityState,
+        tag: &CompoundTag,
+        _registries: &dyn ferraloom_protocol::codec::RegistryContext,
+    ) {
         let BlockEntityState::Brushable(entity) = state else {
             unreachable!()
         };
@@ -121,7 +126,12 @@ mod tests {
             data.brush_count = 5;
             data.brush_count_resets_at_tick = 311;
             data.cool_down_ends_at_tick = 83;
-            entity.load_with_components(&parse_compound(f[3]).unwrap());
+            entity.load_with_components(
+                &parse_compound(f[3]).unwrap(),
+                crate::level::LevelContext::fixture(0, 63)
+                    .registry_context()
+                    .unwrap(),
+            );
             if f[2] != "load" {
                 let BlockEntityState::Brushable(data) = &mut entity else {
                     unreachable!()
@@ -138,7 +148,16 @@ mod tests {
                 parse_compound(f[5]).unwrap(),
                 "{row}"
             );
-            let again = load_static(pos, state, &saved).unwrap().unwrap();
+            let again = load_static(
+                pos,
+                state,
+                &saved,
+                crate::level::LevelContext::fixture(0, 63)
+                    .registry_context()
+                    .unwrap(),
+            )
+            .unwrap()
+            .unwrap();
             assert_eq!(
                 again.get_update_tag().unwrap(),
                 parse_compound(f[6]).unwrap(),

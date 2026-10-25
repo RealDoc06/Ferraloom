@@ -334,11 +334,7 @@ impl MinecraftServer {
             ferraloom_storage::SavedDataStorage::new(world_root.access.path().join("data"))
                 .load::<ferraloom_game::level::weather::WeatherData>("minecraft:weather")?
                 .map_or_else(Default::default, |data| *data.value());
-        let registry_context: Arc<dyn protocol::codec::RegistryContext> = registries.clone();
-        let level_context = Arc::new(
-            Arc::unwrap_or_clone(world.level_context(&resources)?)
-                .with_registry_context(registry_context.clone()),
-        );
+        let level_context = world.level_context(&resources)?;
         let mut level = ServerLevel::new(
             Region::new(&BEHAVIORS),
             "minecraft:overworld",

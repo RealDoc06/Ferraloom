@@ -69,7 +69,12 @@ impl BlockEntity for StorageBehavior {
             tag.remove(key);
         }
     }
-    fn load_additional(&self, state: &mut BlockEntityState, tag: &CompoundTag) {
+    fn load_additional(
+        &self,
+        state: &mut BlockEntityState,
+        tag: &CompoundTag,
+        _registries: &dyn ferraloom_protocol::codec::RegistryContext,
+    ) {
         state
             .randomizable_mut()
             .expect("randomizable container")

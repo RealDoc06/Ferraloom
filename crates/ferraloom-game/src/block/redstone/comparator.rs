@@ -16,7 +16,12 @@ impl ComparatorBlockEntity {
 pub struct ComparatorEntityBehavior;
 pub static COMPARATOR_ENTITY: ComparatorEntityBehavior = ComparatorEntityBehavior;
 impl BlockEntity for ComparatorEntityBehavior {
-    fn load_additional(&self, state: &mut BlockEntityState, tag: &CompoundTag) {
+    fn load_additional(
+        &self,
+        state: &mut BlockEntityState,
+        tag: &CompoundTag,
+        _registries: &dyn ferraloom_protocol::codec::RegistryContext,
+    ) {
         if let Some(entity) =
             <ComparatorBlockEntity as crate::block::entity::BlockEntityDataView>::view_mut(state)
         {

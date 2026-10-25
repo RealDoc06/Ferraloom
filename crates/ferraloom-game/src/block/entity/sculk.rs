@@ -196,13 +196,23 @@ impl BlockEntity for SculkBehavior {
         level: &mut Level,
     ) -> Result<(), LevelError> {
         let sources = cached_entity_refs(level.block_entity_state(receiver)?);
-        self.load_additional(level.block_entity_state_mut(receiver)?, tag);
+        let context = level.context().clone();
+        self.load_additional(
+            level.block_entity_state_mut(receiver)?,
+            tag,
+            context.registry_context()?,
+        );
         for source in sources.into_iter().flatten() {
             level.release_entity(source);
         }
         Ok(())
     }
-    fn load_additional(&self, state: &mut BlockEntityState, tag: &CompoundTag) {
+    fn load_additional(
+        &self,
+        state: &mut BlockEntityState,
+        tag: &CompoundTag,
+        _registries: &dyn ferraloom_protocol::codec::RegistryContext,
+    ) {
         match state {
             BlockEntityState::SculkSensor(entity) => entity.load(tag),
             BlockEntityState::CalibratedSculkSensor(entity) => entity.parent.load(tag),

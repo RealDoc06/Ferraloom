@@ -50,6 +50,9 @@ pub(crate) fn generation_context(
         dimension_environment,
     )
     .unwrap()
+    .with_registry_context(Arc::new(
+        crate::registries::RegistrySet::load(resources).unwrap(),
+    ))
 }
 #[test]
 fn live_structure_start_executor_matches_6534_vanilla_chunks() {

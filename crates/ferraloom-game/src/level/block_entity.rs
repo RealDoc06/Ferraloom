@@ -761,9 +761,16 @@ mod tests {
                     .push(raw);
             }
             let old = if matches!(kind, "live" | "pending" | "removed") {
-                let receiver = crate::block::entity::load_static(pos, state, &live)
-                    .unwrap()
-                    .unwrap();
+                let receiver = crate::block::entity::load_static(
+                    pos,
+                    state,
+                    &live,
+                    crate::level::LevelContext::fixture(0, 63)
+                        .registry_context()
+                        .unwrap(),
+                )
+                .unwrap()
+                .unwrap();
                 level.set_block_entity(receiver).unwrap();
                 let handle = level.block_entity_ref(pos).unwrap().unwrap();
                 if kind != "live" {

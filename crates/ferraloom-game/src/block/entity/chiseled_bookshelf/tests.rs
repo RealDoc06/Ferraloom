@@ -67,7 +67,12 @@ fn native_chiseled_bookshelf_factory_load_save_and_components_match() {
                 ChiseledBookShelfBlockEntity::view_mut(&mut entity)
                     .unwrap()
                     .items[5] = ItemStack::new(Item::DIAMOND, 3, Default::default());
-                entity.load_with_components(&parse_compound(fields[2]).unwrap());
+                entity.load_with_components(
+                    &parse_compound(fields[2]).unwrap(),
+                    crate::level::LevelContext::fixture(0, 63)
+                        .registry_context()
+                        .unwrap(),
+                );
                 let saved = entity.save_with_full_metadata().unwrap();
                 assert_eq!(saved, parse_compound(fields[3]).unwrap(), "{row}");
                 assert_eq!(
@@ -85,11 +90,18 @@ fn native_chiseled_bookshelf_factory_load_save_and_components_match() {
                     "{row}"
                 );
                 assert_eq!(
-                    load_static(POS, state, &saved)
-                        .unwrap()
-                        .unwrap()
-                        .save_with_full_metadata()
-                        .unwrap(),
+                    load_static(
+                        POS,
+                        state,
+                        &saved,
+                        crate::level::LevelContext::fixture(0, 63)
+                            .registry_context()
+                            .unwrap()
+                    )
+                    .unwrap()
+                    .unwrap()
+                    .save_with_full_metadata()
+                    .unwrap(),
                     parse_compound(fields[6]).unwrap(),
                     "{row}"
                 );
@@ -101,6 +113,9 @@ fn native_chiseled_bookshelf_factory_load_save_and_components_match() {
                         "{last_interacted_slot:3,Items:[{Slot:1b,id:'diamond',count:4}]}",
                     )
                     .unwrap(),
+                    crate::level::LevelContext::fixture(0, 63)
+                        .registry_context()
+                        .unwrap(),
                 );
                 entity
                     .apply_components_from_item_stack(

@@ -10,6 +10,7 @@ pub struct WorldServices {
     pub dimensions: WorldDimensions,
     dimension_types: std::collections::BTreeMap<Identifier, Option<Identifier>>,
     pub registry: Arc<RegistryAdapter>,
+    pub registry_context: Arc<RegistrySet>,
     pub(super) resources: Arc<ResourceManager>,
     pub(super) generate_structures: bool,
     pub(super) bonus_chest: bool,
@@ -78,7 +79,7 @@ impl WorldRoot {
         root: &Path,
         properties: &ServerProperties,
         resources: &ResourceManager,
-        registries: &RegistrySet,
+        registries: &Arc<RegistrySet>,
         unported_behavior: ferraloom_game::block::UnportedBehavior,
     ) -> Result<Self> {
         let access = Arc::new(LevelStorageAccess::open(
@@ -161,6 +162,7 @@ impl WorldRoot {
                 dimensions: preset.dimensions,
                 dimension_types,
                 registry: Arc::new(RegistryAdapter::new(registries)?),
+                registry_context: registries.clone(),
                 resources: Arc::new(resources.clone()),
                 generate_structures,
                 bonus_chest,
@@ -359,7 +361,7 @@ mod tests {
         let resources = ResourceManager::new(vec![
             ferraloom_data::datapack::Pack::vanilla_jar(Path::new(&jar)).unwrap(),
         ]);
-        let registries = RegistrySet::load(&resources).unwrap();
+        let registries = Arc::new(RegistrySet::load(&resources).unwrap());
         let directory = tempfile::tempdir().unwrap();
         let mut properties = ServerProperties::from_values(Default::default());
         properties.set("level-type", "minecraft:flat");
@@ -501,7 +503,7 @@ mod tests {
         let resources = ResourceManager::new(vec![
             ferraloom_data::datapack::Pack::vanilla_jar(Path::new(&jar)).unwrap(),
         ]);
-        let registries = RegistrySet::load(&resources).unwrap();
+        let registries = Arc::new(RegistrySet::load(&resources).unwrap());
         let directory = tempfile::tempdir().unwrap();
         let properties = ServerProperties::from_values(Default::default());
         let mut root = WorldRoot::open(

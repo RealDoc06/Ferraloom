@@ -141,15 +141,21 @@ impl LootRuntime for LiveLootRuntime<'_> {
         if !receiver.data().kind.is_nameable() {
             return Ok(None);
         }
-        let container = receiver.container().ok_or_else(|| {
-            LootError::Unsupported(format!(
-                "block_entity.custom_name: {}",
-                receiver.data().kind.name()
-            ))
-        })?;
-        Ok(Some(NameableName {
-            custom_name: container.custom_name.clone(),
-        }))
+        let custom_name = match receiver {
+            BlockEntityState::Banner(entity) => entity.custom_name.clone(),
+            BlockEntityState::EnchantingTable(entity) => entity.custom_name.clone(),
+            _ => receiver
+                .container()
+                .ok_or_else(|| {
+                    LootError::Unsupported(format!(
+                        "block_entity.custom_name: {}",
+                        receiver.data().kind.name()
+                    ))
+                })?
+                .custom_name
+                .clone(),
+        };
+        Ok(Some(NameableName { custom_name }))
     }
     fn with_random(&mut self, operation: &mut dyn FnMut(&mut dyn RandomSource)) {
         match &mut self.random {

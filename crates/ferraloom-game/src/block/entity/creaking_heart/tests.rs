@@ -111,7 +111,12 @@ fn native_creaking_heart_factory_load_save_updates_and_ticker_gate_match() {
                     );
                     entity = level.block_entity_state(handle).unwrap().clone();
                 } else {
-                    entity.load_with_components(&input);
+                    entity.load_with_components(
+                        &input,
+                        crate::level::LevelContext::fixture(0, 63)
+                            .registry_context()
+                            .unwrap(),
+                    );
                     assert!(fields[10].is_empty(), "{row}");
                 }
                 let saved = entity.save_with_full_metadata().unwrap();
@@ -138,7 +143,16 @@ fn native_creaking_heart_factory_load_save_updates_and_ticker_gate_match() {
                     )),
                     "{row}"
                 );
-                let reloaded = load_static(POS, state, &saved).unwrap().unwrap();
+                let reloaded = load_static(
+                    POS,
+                    state,
+                    &saved,
+                    crate::level::LevelContext::fixture(0, 63)
+                        .registry_context()
+                        .unwrap(),
+                )
+                .unwrap()
+                .unwrap();
                 assert_eq!(
                     reloaded.save_with_full_metadata().unwrap(),
                     parse_compound(fields[9]).unwrap(),

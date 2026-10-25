@@ -118,7 +118,12 @@ impl ChiseledBookShelfBlockEntity {
 pub(super) struct ChiseledBookShelfBehavior;
 pub(super) static CHISELED_BOOKSHELF_ENTITY: ChiseledBookShelfBehavior = ChiseledBookShelfBehavior;
 impl BlockEntity for ChiseledBookShelfBehavior {
-    fn load_additional(&self, state: &mut BlockEntityState, tag: &CompoundTag) {
+    fn load_additional(
+        &self,
+        state: &mut BlockEntityState,
+        tag: &CompoundTag,
+        _registries: &dyn ferraloom_protocol::codec::RegistryContext,
+    ) {
         let BlockEntityState::ChiseledBookShelf(entity) = state else {
             unreachable!()
         };
