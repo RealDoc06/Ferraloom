@@ -72,7 +72,7 @@ mod tests {
             let state = ServerPlayer::new(
                 Uuid::new(0, 1),
                 "ground".into(),
-                level.next_entity_id(),
+                level.next_entity_id().unwrap(),
                 Vec3::new(0.5, row["y"].as_f64().unwrap(), 0.5),
                 GameType::Creative,
             );

@@ -55,7 +55,12 @@ impl BlockEntity for BeehiveBehavior {
     fn tick(&self, _receiver: BlockEntityRef, _level: &mut Level) -> Result<(), LevelError> {
         Err(LevelError::UnsupportedBlockEntity(Block::BEEHIVE))
     }
-    fn load_additional(&self, state: &mut BlockEntityState, tag: &CompoundTag) {
+    fn load_additional(
+        &self,
+        state: &mut BlockEntityState,
+        tag: &CompoundTag,
+        _registries: &dyn ferraloom_protocol::codec::RegistryContext,
+    ) {
         let BlockEntityState::Beehive(entity) = state else {
             unreachable!()
         };

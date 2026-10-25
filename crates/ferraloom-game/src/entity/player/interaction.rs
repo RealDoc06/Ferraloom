@@ -26,6 +26,21 @@ pub(super) fn range_modifiers() -> [Arc<AttributeModifier>; 2] {
     })
 }
 
+/// ServerPlayer's static WAYPOINT_TRANSMIT_RANGE_CROUCH_MODIFIER. Retain one
+/// immutable modifier so repeated crouching ticks keep native reference identity.
+fn waypoint_crouch_modifier() -> &'static Arc<AttributeModifier> {
+    static MODIFIER: std::sync::OnceLock<Arc<AttributeModifier>> = std::sync::OnceLock::new();
+    MODIFIER.get_or_init(|| {
+        Arc::new(AttributeModifier {
+            id: "minecraft:waypoint_transmit_range_crouch"
+                .parse()
+                .expect("native modifier identifier"),
+            amount: (-1.0).into(),
+            operation: AttributeOperation::AddMultipliedTotal,
+        })
+    })
+}
+
 /// Port of ServerPlayer#swingAndResetAttackStrength. A rejected restart leaves
 /// both tickers unchanged; the tracker send precedes a successful reset.
 pub fn swing_and_reset_attack_strength(
@@ -162,6 +177,21 @@ impl ServerPlayer {
                 } else {
                     instance.remove_modifier(&modifier.id);
                 }
+            }
+        }
+        // ServerPlayer#updatePlayerAttributes observes the current crouching
+        // pose after both creative interaction-range modifiers.
+        let crouching = *self.entity_data.get(crate::entity::synched_data::POSE)
+            == ferraloom_protocol::entity_data::Pose::Crouching;
+        if let Some(mut instance) = self
+            .attributes
+            .get_instance(Attribute::WAYPOINT_TRANSMIT_RANGE)
+        {
+            let modifier = waypoint_crouch_modifier();
+            if crouching {
+                instance.add_or_update_transient_modifier(Arc::clone(modifier));
+            } else {
+                instance.remove_modifier(&modifier.id);
             }
         }
     }

@@ -13,7 +13,14 @@ impl Level {
         self.retain_stack_owner(slot.container)?;
         let result = (|| {
             if let ContainerHandle::BlockEntity(handle) = slot.container {
-                crate::block::containers::access::get_item(handle, slot.slot, self)?;
+                // ListBackedContainer#getItem is the direct stack_parts read
+                // below; avoid allocating its legacy owned-value adapter.
+                if !matches!(
+                    self.block_entity_state(handle)?,
+                    crate::block::entity::BlockEntityState::ChiseledBookShelf(_)
+                ) {
+                    crate::block::containers::access::get_item(handle, slot.slot, self)?;
+                }
             }
             let reference = self.stack_ref(slot)?;
             self.retain_stack(reference)?;
@@ -31,12 +38,17 @@ impl Level {
                     .stack_parts(slot.slot, &player.parent.equipment)
                     .ok_or(MenuError::InvalidSlot(slot.slot as i32))
             }
-            ContainerHandle::BlockEntity(handle) => self
-                .block_entity::<crate::block::containers::storage::BaseContainerBlockEntity>(
-                    handle,
-                )?
-                .stack_parts(slot.slot)
-                .ok_or(MenuError::InvalidSlot(slot.slot as i32)),
+            ContainerHandle::BlockEntity(handle) => match self.block_entity_state(handle)? {
+                crate::block::entity::BlockEntityState::ChiseledBookShelf(entity) => {
+                    entity.stack_parts(slot.slot)
+                }
+                _ => self
+                    .block_entity::<crate::block::containers::storage::BaseContainerBlockEntity>(
+                        handle,
+                    )?
+                    .stack_parts(slot.slot),
+            }
+            .ok_or(MenuError::InvalidSlot(slot.slot as i32)),
             ContainerHandle::MenuLocal {
                 player,
                 menu,
@@ -67,6 +79,15 @@ impl Level {
                 .entity::<crate::entity::item::ItemEntity>(entity)?
                 .stack_parts(slot.slot)
                 .ok_or(MenuError::InvalidSlot(slot.slot as i32)),
+            ContainerHandle::LivingEquipment(entity) => {
+                let equipment_slot = *crate::entity::player::equipment::SLOTS
+                    .get(slot.slot)
+                    .ok_or(MenuError::InvalidSlot(slot.slot as i32))?;
+                Ok(self
+                    .entity::<crate::entity::LivingEntity>(entity)?
+                    .equipment
+                    .stack_parts(equipment_slot))
+            }
         }
     }
     fn stack_parts_mut(
@@ -81,12 +102,13 @@ impl Level {
                     .stack_parts_mut(slot.slot, &mut player.parent.equipment)
                     .ok_or(MenuError::InvalidSlot(slot.slot as i32))
             }
-            ContainerHandle::BlockEntity(handle) => self
-                .block_entity_mut::<crate::block::containers::storage::BaseContainerBlockEntity>(
-                    handle,
-                )?
-                .stack_parts_mut(slot.slot)
-                .ok_or(MenuError::InvalidSlot(slot.slot as i32)),
+            ContainerHandle::BlockEntity(handle) => {
+                if matches!(self.block_entity_state(handle)?, crate::block::entity::BlockEntityState::ChiseledBookShelf(_)) {
+                    self.block_entity_mut::<crate::block::entity::chiseled_bookshelf::ChiseledBookShelfBlockEntity>(handle)?.stack_parts_mut(slot.slot)
+                } else {
+                    self.block_entity_mut::<crate::block::containers::storage::BaseContainerBlockEntity>(handle)?.stack_parts_mut(slot.slot)
+                }.ok_or(MenuError::InvalidSlot(slot.slot as i32))
+            }
             ContainerHandle::MenuLocal {
                 player,
                 menu,
@@ -120,6 +142,15 @@ impl Level {
                 .entity_mut::<crate::entity::item::ItemEntity>(entity)?
                 .stack_parts_mut(slot.slot)
                 .ok_or(MenuError::InvalidSlot(slot.slot as i32)),
+            ContainerHandle::LivingEquipment(entity) => {
+                let equipment_slot = *crate::entity::player::equipment::SLOTS
+                    .get(slot.slot)
+                    .ok_or(MenuError::InvalidSlot(slot.slot as i32))?;
+                Ok(self
+                    .entity_mut::<crate::entity::LivingEntity>(entity)?
+                    .equipment
+                    .stack_parts_mut(equipment_slot))
+            }
         }
     }
     fn retain_stack_owner(&mut self, owner: ContainerHandle) -> Result<()> {
@@ -148,14 +179,18 @@ impl Level {
             ContainerHandle::PlayerInventory(_)
             | ContainerHandle::MenuListenerCopies { .. }
             | ContainerHandle::MenuOperationStacks { .. } => {}
-            ContainerHandle::Entity(entity) => self.retain_entity(entity)?,
+            ContainerHandle::Entity(entity) | ContainerHandle::LivingEquipment(entity) => {
+                self.retain_entity(entity)?
+            }
         }
         Ok(())
     }
     fn release_stack_owner(&mut self, owner: ContainerHandle) {
         match owner {
             ContainerHandle::BlockEntity(handle) => self.release_block_entity(handle),
-            ContainerHandle::Entity(entity) => self.release_entity(entity),
+            ContainerHandle::Entity(entity) | ContainerHandle::LivingEquipment(entity) => {
+                self.release_entity(entity)
+            }
             ContainerHandle::MenuLocal { player, menu, .. }
             | ContainerHandle::MenuCarried { player, menu } => {
                 if let Ok(player) = self.entity_mut::<ServerPlayer>(player)
@@ -537,7 +572,8 @@ mod tests {
             &mut level,
             Vec3::new(8.5, 64.0, 8.5),
             ItemStack::new(Item::STONE, 7, Default::default()),
-        );
+        )
+        .unwrap();
         let entity = level.next_entity_ref();
         let uuid = item.parent.uuid;
         level
@@ -588,10 +624,14 @@ mod tests {
             .filter(|line| line.starts_with("listener\toperation-"))
         {
             let fields: Vec<_> = line.split('\t').collect();
-            let mut level = Level::new(
-                Region::new(&BEHAVIORS),
-                crate::level::LevelContext::fixture(0, 63),
-            );
+            let mut level = {
+                let mut fixture_level = Level::new(
+                    Region::new(&BEHAVIORS),
+                    crate::level::LevelContext::fixture(0, 63),
+                );
+                fixture_level.install_shared(Box::default());
+                fixture_level
+            };
             let player = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
             let mut state = ServerPlayer::new(
                 Uuid::new(0, 1),
@@ -692,10 +732,14 @@ mod tests {
     #[test]
     fn hand_exchange_preserves_outer_roots_and_replaced_moved_receivers() {
         static BEHAVIORS: crate::Behaviors = crate::Behaviors::EMPTY;
-        let mut level = Level::new(
-            Region::new(&BEHAVIORS),
-            crate::level::LevelContext::fixture(0, 63),
-        );
+        let mut level = {
+            let mut fixture_level = Level::new(
+                Region::new(&BEHAVIORS),
+                crate::level::LevelContext::fixture(0, 63),
+            );
+            fixture_level.install_shared(Box::default());
+            fixture_level
+        };
         let player = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
         level
             .add_entity(
@@ -811,10 +855,14 @@ mod tests {
         use ferraloom_util::{BlockPos, ChunkPos};
         use std::sync::Arc;
         static BEHAVIORS: crate::Behaviors = crate::Behaviors::EMPTY;
-        let mut level = Level::new(
-            Region::new(&BEHAVIORS),
-            crate::level::LevelContext::fixture(0, 63),
-        );
+        let mut level = {
+            let mut fixture_level = Level::new(
+                Region::new(&BEHAVIORS),
+                crate::level::LevelContext::fixture(0, 63),
+            );
+            fixture_level.install_shared(Box::default());
+            fixture_level
+        };
         let player = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
         level
             .add_entity(

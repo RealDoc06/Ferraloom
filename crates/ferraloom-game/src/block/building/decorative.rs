@@ -2,18 +2,21 @@
 use super::{schedule_water, with_facing};
 use crate::{
     block::{
-        BASE_BLOCK, BlockBehavior, BlockMethod, BlockPlaceContext, LevelAccessRef, LevelReaderRef,
-        StackView,
+        BASE_BLOCK, BlockBehavior, BlockCollisionContext, BlockMethod, BlockPlaceContext,
+        LevelAccessRef, LevelReaderRef, StackView,
     },
     entity::EntityRef,
     level::{Level, LevelError},
 };
 use ferraloom_data::{
-    Block, BlockClass as C, BlockState, properties as p,
+    Block, BlockClass as C, BlockState, Item, properties as p,
     registries::{fluid::Id as Fluid, sound_event::Id as Sound},
 };
 use ferraloom_protocol::play::SoundSource;
-use ferraloom_util::{BlockPos, Direction, Vec3};
+use ferraloom_util::{
+    BlockPos, Direction, Vec3, VoxelShape,
+    shapes::{self, CollisionContext},
+};
 
 pub(super) struct Decorative;
 pub(super) static DECORATIVE: Decorative = Decorative;
@@ -25,6 +28,7 @@ fn waterlogged(block: Block) -> bool {
 }
 pub(super) fn supports(block: Block, method: BlockMethod) -> bool {
     match method {
+        BlockMethod::OutlineShape => block.class() == C::LightBlock,
         BlockMethod::GetStateForPlacement => {
             waterlogged(block)
                 || matches!(
@@ -34,12 +38,38 @@ pub(super) fn supports(block: Block, method: BlockMethod) -> bool {
         }
         BlockMethod::CanBeReplaced => matches!(block.class(), C::CandleBlock | C::TurtleEggBlock),
         BlockMethod::CanSurvive => block.class() == C::CandleBlock,
-        BlockMethod::UpdateShape | BlockMethod::UpdateFromNeighbourShapes => waterlogged(block),
+        BlockMethod::UpdateShape | BlockMethod::UpdateFromNeighbourShapes => {
+            waterlogged(block) || block.class() == C::LightBlock
+        }
         BlockMethod::SetPlacedBy => block.class() == C::DriedGhastBlock,
         _ => false,
     }
 }
 impl BlockBehavior for Decorative {
+    /// Port of LightBlock#getShape with CollisionContext.empty(). Native base
+    /// collision also calls this overload, so holding LIGHT never adds collision.
+    fn shape(
+        &self,
+        _state: BlockState,
+        _pos: BlockPos,
+        _level: &LevelReaderRef<'_, '_>,
+    ) -> Result<VoxelShape, LevelError> {
+        Ok(shapes::empty())
+    }
+    /// Port of LightBlock#getShape: only a context holding LIGHT sees a cube.
+    fn shape_with_context(
+        &self,
+        _state: BlockState,
+        _pos: BlockPos,
+        context: &BlockCollisionContext<'_>,
+        _level: &LevelReaderRef<'_, '_>,
+    ) -> Result<VoxelShape, LevelError> {
+        Ok(if context.is_holding_item(&Item::LIGHT) {
+            shapes::block()
+        } else {
+            shapes::empty()
+        })
+    }
     /// Ports CandleBlock/TurtleEggBlock's native same-block stacking, and the
     /// native pumpkin/frame/barrier/dried-ghast placement state constructors.
     fn get_state_for_placement(
@@ -121,6 +151,17 @@ impl BlockBehavior for Decorative {
         level: &mut LevelAccessRef<'_, '_>,
     ) -> Result<BlockState, LevelError> {
         schedule_water(state, pos, level)?;
+        if state.block().class() == C::LightBlock {
+            // LightBlock#updateShape schedules its water tick before super.
+            return BASE_BLOCK.update_shape(
+                state,
+                pos,
+                _direction,
+                _neighbor_pos,
+                _neighbor,
+                level,
+            );
+        }
         Ok(state)
     }
     /// Port of DriedGhastBlock#setPlacedBy. The base is a no-op; Level retains

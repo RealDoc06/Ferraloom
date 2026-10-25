@@ -114,10 +114,14 @@ fn mixed_native_selectors_use_player_lookup_and_section_iteration() {
     let vectors: Vectors =
         serde_json::from_str(include_str!("../../vanilla/mixed-selector-vectors.json")).unwrap();
     static BEHAVIORS: Behaviors = Behaviors::EMPTY;
-    let mut level = Level::new(
-        Region::new(&BEHAVIORS),
-        crate::level::LevelContext::fixture(0, 63),
-    );
+    let mut level = {
+        let mut fixture_level = Level::new(
+            Region::new(&BEHAVIORS),
+            crate::level::LevelContext::fixture(0, 63),
+        );
+        fixture_level.install_shared(Box::default());
+        fixture_level
+    };
     for x in 0..3 {
         level
             .update_entity_chunk_status(ChunkPos::new(x, 0), Visibility::Ticking)
@@ -181,11 +185,7 @@ fn mixed_native_selectors_use_player_lookup_and_section_iteration() {
         }
         level.add_entity(handle, state).unwrap();
     }
-    let shared = crate::ServerShared {
-        scoreboard: crate::scoreboard::ServerScoreboard::new(scoreboard),
-        ..Default::default()
-    };
-    level.install_shared(Box::new(shared));
+    level.shared_mut().unwrap().scoreboard = crate::scoreboard::ServerScoreboard::new(scoreboard);
     let mut query = Query {
         level,
         players: vec![

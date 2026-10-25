@@ -82,7 +82,6 @@ fn native_sign_skull_and_utility_placement_masks_match_vanilla() {
     level.set_fluid_tags(Arc::new(
         TagSet::<ferraloom_data::registries::fluid::Id>::load(&resources).unwrap(),
     ));
-    level.install_shared(Box::<crate::ServerShared>::default());
     let profile = GameProfile {
         id: Uuid::new(1, 2),
         name: "metadata".into(),

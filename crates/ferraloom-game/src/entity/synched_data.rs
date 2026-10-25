@@ -67,6 +67,11 @@ macro_rules! value {
 value!(i8, Byte);
 value!(VarInt, Int);
 value!(bool, Boolean);
+value!(ferraloom_protocol::component::CowVariant, CowVariant);
+value!(
+    ferraloom_protocol::component::CowSoundVariant,
+    CowSoundVariant
+);
 value!(Pose, Pose);
 value!(Option<Box<Component>>, OptionalComponent);
 value!(ferraloom_data::BlockState, BlockState);
@@ -162,6 +167,11 @@ pub const SHOULDER_PARROT_RIGHT: EntityDataAccessor<
 > = EntityDataAccessor::new(20);
 pub const MOB_FLAGS: EntityDataAccessor<i8> = EntityDataAccessor::new(15);
 pub const BABY: EntityDataAccessor<bool> = EntityDataAccessor::new(16);
+pub const AGE_LOCKED: EntityDataAccessor<bool> = EntityDataAccessor::new(17);
+pub const COW_VARIANT: EntityDataAccessor<ferraloom_protocol::component::CowVariant> =
+    EntityDataAccessor::new(18);
+pub const COW_SOUND_VARIANT: EntityDataAccessor<ferraloom_protocol::component::CowSoundVariant> =
+    EntityDataAccessor::new(19);
 
 #[derive(Debug)]
 struct DataItem {

@@ -186,14 +186,13 @@ mod tests {
             let mut level = crate::entity::tests::level(false);
             level.set_unported_behavior(crate::block::UnportedBehavior::Strict);
             crate::level::drop_fixtures::install(&mut level);
-            level.install_shared(Box::default());
             let mut players = Vec::new();
             for index in 0..row["targets"].as_i64().unwrap() {
                 let entity = level.next_entity_ref();
                 let mut state = ServerPlayer::new(
                     Uuid::new(0, index + 1),
                     format!("Player{index}"),
-                    level.next_entity_id(),
+                    level.next_entity_id().unwrap(),
                     Vec3::new(0.5, 64., 0.5),
                     if row["creative"] == true {
                         GameType::Creative

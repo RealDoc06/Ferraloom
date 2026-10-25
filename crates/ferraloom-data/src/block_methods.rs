@@ -7,6 +7,7 @@ impl Block {
     /// of this exact signature. Bases live in BlockBehaviour, except placement,
     /// stepping, falling and bouncing methods whose vanilla base lives in Block;
     /// liquid interfaces use SimpleWaterloggedBlock's concrete defaults.
+    /// Fallable defaults also apply to non-implementing blocks.
     pub const fn overrides(self, method: BlockMethod) -> bool {
         BLOCK_METHOD_OVERRIDES[self.protocol_id() as usize] & (1 << method as u8) != 0
     }
@@ -38,5 +39,17 @@ mod tests {
         assert!(!Block::FIRE.overrides(BlockMethod::SpawnDestroyParticles));
         assert!(!Block::STONE.overrides(BlockMethod::SpawnDestroyParticles));
         assert!(Block::STRAW_BED.overrides(BlockMethod::SpawnDestroyParticles));
+        assert!(!Block::STONE.overrides(BlockMethod::OnLand));
+        assert!(!Block::SAND.overrides(BlockMethod::OnLand));
+        assert!(!Block::STONE.overrides(BlockMethod::GetFallDamageSource));
+        assert!(!Block::SAND.overrides(BlockMethod::GetFallDamageSource));
+        assert!(Block::ANVIL.overrides(BlockMethod::OnLand));
+        assert!(Block::DAMAGED_ANVIL.overrides(BlockMethod::OnBrokenAfterFall));
+        assert!(Block::CHIPPED_ANVIL.overrides(BlockMethod::GetFallDamageSource));
+        assert!(Block::WHITE_CONCRETE_POWDER.overrides(BlockMethod::OnLand));
+        assert!(!Block::WHITE_CONCRETE_POWDER.overrides(BlockMethod::GetFallDamageSource));
+        assert!(Block::SUSPICIOUS_SAND.overrides(BlockMethod::OnBrokenAfterFall));
+        assert!(Block::POINTED_DRIPSTONE.overrides(BlockMethod::OnBrokenAfterFall));
+        assert!(Block::SULFUR_SPIKE.overrides(BlockMethod::GetFallDamageSource));
     }
 }

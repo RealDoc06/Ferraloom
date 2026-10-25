@@ -2,7 +2,7 @@
 use super::{Level, LevelError, effects::LevelEffect};
 use ferraloom_light::{DataLayer, LightLayer};
 use ferraloom_nbt::{CompoundTag, Tag};
-use ferraloom_storage::{Error, Result, SavedDataCodec};
+use ferraloom_storage::{Error, Result as StorageResult, SavedDataCodec};
 use ferraloom_util::{BlockPos, ChunkPos};
 use ferraloom_worldgen::{
     Identifier,
@@ -58,7 +58,7 @@ pub struct WeatherData {
     pub thundering: bool,
 }
 impl SavedDataCodec for WeatherData {
-    fn decode(tag: &Tag) -> Result<Self> {
+    fn decode(tag: &Tag) -> StorageResult<Self> {
         let compound = tag
             .as_compound()
             .ok_or_else(|| Error::Invalid("weather data must be a compound".into()))?;
@@ -80,7 +80,7 @@ impl SavedDataCodec for WeatherData {
             thundering: boolean("thundering")?,
         })
     }
-    fn encode(&self) -> Result<Tag> {
+    fn encode(&self) -> StorageResult<Tag> {
         let mut tag = CompoundTag::new();
         tag.insert("clear_weather_time", Tag::Int(self.clear_weather_time));
         tag.insert("rain_time", Tag::Int(self.rain_time));
@@ -92,7 +92,6 @@ impl SavedDataCodec for WeatherData {
 }
 #[derive(Default)]
 pub(super) struct Weather {
-    data: WeatherData,
     old_rain: f32,
     rain: f32,
     old_thunder: f32,
@@ -104,7 +103,6 @@ pub(super) struct Weather {
 impl Weather {
     fn from_saved(data: WeatherData) -> Self {
         Self {
-            data,
             rain: if data.raining { 1.0 } else { 0.0 },
             thunder: if data.raining && data.thundering {
                 1.0
@@ -116,6 +114,7 @@ impl Weather {
     }
     fn advance(
         &mut self,
+        data: &mut WeatherData,
         random: &mut Random,
         advance_weather: bool,
         can_have_weather: bool,
@@ -123,7 +122,6 @@ impl Weather {
         let was_raining = self.is_raining(can_have_weather);
         if can_have_weather {
             if advance_weather {
-                let data = &mut self.data;
                 if data.clear_weather_time > 0 {
                     data.clear_weather_time -= 1;
                     data.thunder_time = i32::from(!data.thundering);
@@ -159,9 +157,9 @@ impl Weather {
             }
             self.old_thunder = self.thunder;
             self.thunder =
-                (self.thunder + if self.data.thundering { 0.01 } else { -0.01 }).clamp(0.0, 1.0);
+                (self.thunder + if data.thundering { 0.01 } else { -0.01 }).clamp(0.0, 1.0);
             self.old_rain = self.rain;
-            self.rain = (self.rain + if self.data.raining { 0.01 } else { -0.01 }).clamp(0.0, 1.0);
+            self.rain = (self.rain + if data.raining { 0.01 } else { -0.01 }).clamp(0.0, 1.0);
         }
         let mut events = Vec::new();
         if self.old_rain != self.rain {
@@ -200,53 +198,72 @@ impl Weather {
     }
 }
 impl Level {
-    pub fn load_weather(&mut self, data: WeatherData) {
+    /// Port of ServerLevel#prepareWeather: only per-level interpolation is
+    /// initialized from the one server-owned WeatherData.
+    pub fn prepare_weather(&mut self, data: &WeatherData) {
         let weather = &mut self.region_mut().weather;
         let environment = weather.environment.take();
         let lights = std::mem::take(&mut weather.lights);
-        *weather = Weather::from_saved(data);
+        *weather = Weather::from_saved(*data);
         weather.environment = environment;
         weather.lights = lights;
     }
-    pub fn weather(&self) -> &WeatherData {
-        &self.region().weather.data
+    /// Install loaded canonical weather and prepare this level's interpolation.
+    pub fn load_weather(&mut self, data: WeatherData) -> Result<(), LevelError> {
+        *self.weather_mut()? = data;
+        self.prepare_weather(&data);
+        Ok(())
+    }
+    pub fn weather(&self) -> Result<&WeatherData, LevelError> {
+        Ok(&self.shared()?.weather)
+    }
+    pub fn weather_mut(&mut self) -> Result<&mut WeatherData, LevelError> {
+        Ok(&mut self.shared_mut()?.weather)
     }
     /// Port of MinecraftServer#setWeatherParameters. A command changes targets;
-    /// levels smooth toward those targets in the next weather tick.
+    /// levels smooth toward those targets in their next weather tick.
     pub fn set_weather(
         &mut self,
         clear_time: i32,
         rain_time: i32,
         raining: bool,
         thundering: bool,
-    ) {
-        self.region_mut().weather.data = WeatherData {
+    ) -> Result<(), LevelError> {
+        *self.weather_mut()? = WeatherData {
             clear_weather_time: clear_time,
             rain_time,
             thunder_time: rain_time,
             raining,
             thundering,
         };
+        Ok(())
     }
-    /// Port of ServerLevel#resetWeatherCycle, also used after sleeping. Caller
-    /// owns vanilla's sleeping-percentage, ADVANCE_WEATHER and raining guards.
-    pub fn reset_weather_cycle(&mut self) {
-        let data = &mut self.region_mut().weather.data;
+    /// Port of ServerLevel#resetWeatherCycle, after the caller's sleep/rule guards.
+    pub fn reset_weather_cycle(&mut self) -> Result<(), LevelError> {
+        let data = self.weather_mut()?;
         data.rain_time = 0;
         data.raining = false;
         data.thunder_time = 0;
         data.thundering = false;
+        Ok(())
     }
-    /// Call at ServerLevel's weather slot before tickTime. The rule is read from
-    /// canonical GameRules at this call site rather than cached at startup.
-    pub fn advance_weather_cycle(&mut self, advance_weather: bool) {
-        let region = self.region_mut();
+    /// Port of ServerLevel#advanceWeatherCycle at each level's native slot.
+    /// The shared data and local interpolation/RNG have disjoint owners; no
+    /// shared-state copy survives a phase or gets written back after callbacks.
+    pub fn advance_weather_cycle(&mut self, advance_weather: bool) -> Result<(), LevelError> {
+        let shared = self
+            .shared
+            .as_mut()
+            .ok_or(LevelError::MissingServerShared)?;
+        let region = self.region.as_mut().expect("level region is attached");
         let events = region.weather.advance(
+            &mut shared.weather,
             &mut region.random,
             advance_weather,
             region.rules.can_have_weather,
         );
         region.effects.extend(events);
+        Ok(())
     }
     pub fn is_raining(&self) -> bool {
         self.region()
@@ -562,6 +579,74 @@ mod tests {
         Random::Legacy(LegacyRandomSource::new(0))
     }
     #[test]
+    fn weather_requires_the_lent_server_owner_under_both_policies() {
+        static EMPTY: crate::Behaviors = crate::Behaviors::EMPTY;
+        for policy in [
+            crate::block::UnportedBehavior::Strict,
+            crate::block::UnportedBehavior::Warn,
+        ] {
+            let mut level = Level::new(
+                super::super::Region::new(&EMPTY),
+                crate::level::LevelContext::fixture(0, 63),
+            );
+            level.set_unported_behavior(policy);
+            assert_eq!(level.weather(), Err(LevelError::MissingServerShared));
+            assert_eq!(
+                level.set_weather(1, 2, true, false),
+                Err(LevelError::MissingServerShared)
+            );
+            assert_eq!(
+                level.reset_weather_cycle(),
+                Err(LevelError::MissingServerShared)
+            );
+            assert_eq!(
+                level.advance_weather_cycle(true),
+                Err(LevelError::MissingServerShared)
+            );
+            assert_eq!(level.unported_behavior_stats().skipped_calls, 0);
+        }
+    }
+
+    #[test]
+    fn serial_levels_advance_the_same_weather_object_with_local_interpolation() {
+        static EMPTY: crate::Behaviors = crate::Behaviors::EMPTY;
+        let context = crate::level::LevelContext::fixture(0, 63);
+        let mut first = Level::new(super::super::Region::new(&EMPTY), context.clone());
+        let mut second = Level::new(super::super::Region::new(&EMPTY), context);
+        let data = WeatherData {
+            rain_time: 2,
+            thunder_time: 2,
+            ..Default::default()
+        };
+        first.prepare_weather(&data);
+        second.prepare_weather(&data);
+        first.install_shared(Box::new(crate::ServerShared {
+            weather: data,
+            ..Default::default()
+        }));
+        let identity = std::ptr::from_ref(first.weather().unwrap());
+        first.advance_weather_cycle(true).unwrap();
+        assert_eq!(first.weather().unwrap().rain_time, 1);
+        second.install_shared(first.take_shared().unwrap());
+        second.advance_weather_cycle(true).unwrap();
+        assert_eq!(std::ptr::from_ref(second.weather().unwrap()), identity);
+        assert_eq!(
+            *second.weather().unwrap(),
+            WeatherData {
+                raining: true,
+                thundering: true,
+                ..Default::default()
+            }
+        );
+        assert_eq!(first.region().weather.rain, 0.0);
+        assert_eq!(second.region().weather.rain, 0.01);
+        assert_eq!(first.weather(), Err(LevelError::MissingServerShared));
+        first.install_shared(second.take_shared().unwrap());
+        assert!(first.weather().unwrap().raining);
+        assert_eq!(first.region().weather.rain, 0.0);
+    }
+
+    #[test]
     fn rain_query_short_circuits_only_canonical_dry_weather() {
         static BEHAVIORS: crate::Behaviors = crate::Behaviors::EMPTY;
         for policy in [
@@ -575,10 +660,13 @@ mod tests {
             level.set_unported_behavior(policy);
             let pos = BlockPos::new(0, 0, 0);
             assert_eq!(level.is_raining_at(pos), Ok(false));
-            level.load_weather(WeatherData {
-                raining: true,
-                ..WeatherData::default()
-            });
+            level.install_shared(Box::default());
+            level
+                .load_weather(WeatherData {
+                    raining: true,
+                    ..WeatherData::default()
+                })
+                .unwrap();
             assert_eq!(
                 level.is_raining_at(pos),
                 Err(LevelError::UnsupportedLightQuery)
@@ -595,7 +683,7 @@ mod tests {
     }
     #[test]
     fn clear_time_overrides_targets_without_sampling_and_rule_false_still_smooths() {
-        let data = WeatherData {
+        let mut data = WeatherData {
             clear_weather_time: 2,
             rain_time: 5,
             thunder_time: 6,
@@ -604,9 +692,9 @@ mod tests {
         };
         let mut weather = Weather::from_saved(data);
         let mut stream = random();
-        weather.advance(&mut stream, true, true);
+        weather.advance(&mut data, &mut stream, true, true);
         assert_eq!(
-            weather.data,
+            data,
             WeatherData {
                 clear_weather_time: 1,
                 ..WeatherData::default()
@@ -614,36 +702,34 @@ mod tests {
         );
         assert_eq!(weather.rain, 0.99);
         assert_eq!(stream.next_int(), random().next_int());
-        let snapshot = weather.data;
-        weather.advance(&mut stream, false, true);
-        assert_eq!(weather.data, snapshot);
+        let snapshot = data;
+        weather.advance(&mut data, &mut stream, false, true);
+        assert_eq!(data, snapshot);
         assert_eq!(weather.rain, 0.98);
         assert_eq!(WeatherData::decode(&data.encode().unwrap()).unwrap(), data);
     }
     #[test]
     fn timer_expiry_toggles_before_resampling_and_rain_threshold_duplicates_level_packets() {
-        let mut weather = Weather::from_saved(WeatherData {
+        let mut data = WeatherData {
             rain_time: 1,
             thunder_time: 1,
             ..WeatherData::default()
-        });
+        };
+        let mut weather = Weather::from_saved(data);
         let mut stream = random();
-        weather.advance(&mut stream, true, true);
-        assert!(weather.data.raining && weather.data.thundering);
-        assert_eq!((weather.data.rain_time, weather.data.thunder_time), (0, 0));
+        weather.advance(&mut data, &mut stream, true, true);
+        assert!(data.raining && data.thundering);
+        assert_eq!((data.rain_time, data.thunder_time), (0, 0));
         let mut expected = random();
         let thunder = expected.next_int_between_inclusive(3600, 15600);
         let rain = expected.next_int_between_inclusive(12000, 24000);
-        weather.advance(&mut stream, true, true);
-        assert_eq!(
-            (weather.data.thunder_time, weather.data.rain_time),
-            (thunder, rain)
-        );
+        weather.advance(&mut data, &mut stream, true, true);
+        assert_eq!((data.thunder_time, data.rain_time), (thunder, rain));
         weather.old_rain = 0.2;
         weather.rain = 0.2;
         weather.old_thunder = 0.0;
         weather.thunder = 0.0;
-        let events = weather.advance(&mut stream, false, true);
+        let events = weather.advance(&mut data, &mut stream, false, true);
         assert!(matches!(
             events.as_slice(),
             [
@@ -652,7 +738,7 @@ mod tests {
             ]
         ));
         weather.rain = 0.19;
-        let events = weather.advance(&mut stream, false, true);
+        let events = weather.advance(&mut data, &mut stream, false, true);
         assert_eq!(
             events
                 .iter()

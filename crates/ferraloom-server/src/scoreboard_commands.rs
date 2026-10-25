@@ -78,52 +78,6 @@ impl MinecraftServer {
                     &sources,
                 )
             }
-            "team" => {
-                // TeamArgument#getTeam precedes either the member selector or getEntityOrException.
-                if matches!(command.literals[1].as_str(), "join" | "modify") {
-                    let name = command.string("team").unwrap();
-                    if self
-                        .shared()
-                        .scoreboard
-                        .scoreboard()
-                        .get_player_team(name)
-                        .is_none()
-                    {
-                        return Err(exceptions::error("team.notFound", &[name.to_owned()]));
-                    }
-                }
-                let members =
-                    if command.argument("members").is_some() {
-                        self.score_holders(command, "members", true)?
-                    } else if command.literals[1] == "join" {
-                        vec![self.score_holder(command.source.entity.ok_or_else(|| {
-                            exceptions::error("permissions.requires.entity", &[])
-                        })?)?]
-                    } else {
-                        Vec::new()
-                    };
-                let resolved = self.resolve_scoreboard_components(command)?;
-                let pending = team::execute_with_feedback(
-                    &mut self.shared_mut().scoreboard,
-                    &resolved,
-                    &members,
-                )?;
-                // The mutable owner borrow ends before the native sendSuccess supplier reads names.
-                pending.resolve_feedback(|holder| match holder.entity {
-                    Some(entity) => {
-                        let display = self
-                            .level
-                            .level
-                            .entity_display_name_with_scoreboard(
-                                entity,
-                                self.shared().scoreboard.scoreboard(),
-                            )
-                            .map_err(scoreboard_entity_error)?;
-                        Ok(holder.feedback_with_display(display))
-                    }
-                    None => Ok(holder.feedback()),
-                })
-            }
             "trigger" => {
                 let entity = command
                     .source
@@ -136,6 +90,67 @@ impl MinecraftServer {
             }
             _ => unreachable!("scoreboard command root"),
         }
+    }
+    /// The existing TeamCommand argument order, now using Level's synchronous
+    /// per-member waypoint callbacks and preserving required world failures.
+    pub(in crate::server) fn execute_team_command_live(
+        &mut self,
+        command: &PreparedCommand,
+    ) -> Result<CommandResult> {
+        // TeamArgument#getTeam precedes either the member selector or getEntityOrException.
+        if matches!(command.literals[1].as_str(), "join" | "modify") {
+            let name = command.string("team").unwrap();
+            if self
+                .shared()
+                .scoreboard
+                .scoreboard()
+                .get_player_team(name)
+                .is_none()
+            {
+                return Err(exceptions::error("team.notFound", &[name.to_owned()]).into());
+            }
+        }
+        let members = if command.argument("members").is_some() {
+            self.score_holders(command, "members", true)?
+        } else if command.literals[1] == "join" {
+            vec![
+                self.score_holder(
+                    command
+                        .source
+                        .entity
+                        .ok_or_else(|| exceptions::error("permissions.requires.entity", &[]))?,
+                )?,
+            ]
+        } else {
+            Vec::new()
+        };
+        let resolved = self.resolve_scoreboard_components(command)?;
+        // Pending level-core multi-dimension ownership: route global player
+        // lookup and each level's waypoint manager through the server adapter.
+        let pending =
+            team::execute_live(&mut self.level.level, &resolved, &members).map_err(|error| {
+                match error {
+                    team::TeamError::Command(error) => anyhow::Error::new(error),
+                    team::TeamError::Level(error) => {
+                        anyhow::Error::new(super::command_level::CommandLevelFailure(error))
+                    }
+                }
+            })?;
+        // The mutable owner borrow ends before the native sendSuccess supplier reads names.
+        Ok(pending.resolve_feedback(|holder| match holder.entity {
+            Some(entity) => {
+                let display = self
+                    .level
+                    .level
+                    .entity_display_name_with_scoreboard(
+                        entity,
+                        self.shared().scoreboard.scoreboard(),
+                    )
+                    .map_err(scoreboard_entity_error)?;
+                Ok(holder.feedback_with_display(display))
+            }
+            None => Ok(holder.feedback()),
+        })?)
     }
     fn score_holder(
         &self,

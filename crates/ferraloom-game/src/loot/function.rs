@@ -2,12 +2,12 @@ use super::{
     ContextFloatProvider, ContextIntProvider, EvalContext, Holder, HolderSet, LootData,
     LootItemCondition, Result, codec,
 };
+use crate::loot::codec::{DecodeInput, PersistentInput};
 use crate::predicates::ItemPredicate;
 use ferraloom_data::Item;
 use ferraloom_nbt::{CompoundTag, Tag};
 use ferraloom_protocol::{codec::VarInt, component::*};
 use ferraloom_util::random::RandomSource;
-use serde_json::Value;
 
 /// Port of LootItemConditionalFunction and LootItemFunctions codecs.
 #[derive(Clone, Debug, PartialEq)]
@@ -69,7 +69,12 @@ pub enum FunctionKind {
     Discard,
 }
 impl LootItemFunction {
-    pub fn decode(v: &Value) -> Result<Self> {
+    /// Decode through the same schema using NbtOps scalar/component readers.
+    pub fn decode_nbt(tag: &ferraloom_nbt::Tag) -> Result<Self> {
+        Self::decode(&super::NbtOps::new(tag))
+    }
+
+    pub fn decode<I: DecodeInput>(v: &I) -> Result<Self> {
         // SequenceFunction's inline codec accepts an array (and holder-set tags).
         if v.is_array() || v.is_string() {
             return Ok(Self {
@@ -79,7 +84,7 @@ impl LootItemFunction {
         }
         Self::decode_typed(v)
     }
-    fn decode_typed(v: &Value) -> Result<Self> {
+    fn decode_typed<I: DecodeInput>(v: &I) -> Result<Self> {
         let condition = codec::optional(v, "condition", |v| {
             Holder::decode(v, LootItemCondition::decode)
         })?;
@@ -122,10 +127,10 @@ impl LootItemFunction {
                 FunctionKind::SetComponents(codec::persistent(codec::field(v, "components")?)?)
             }
             "minecraft:set_custom_data" => {
-                FunctionKind::SetCustomData(CustomData::from_json(codec::field(v, "tag")?)?)
+                FunctionKind::SetCustomData(CustomData::from_input(codec::field(v, "tag")?)?)
             }
             "minecraft:set_potion" => {
-                FunctionKind::SetPotion(Potion::from_json(codec::field(v, "id")?)?)
+                FunctionKind::SetPotion(Potion::from_input(codec::field(v, "id")?)?)
             }
             "minecraft:set_ominous_bottle_amplifier" => FunctionKind::SetOminousBottleAmplifier(
                 Holder::decode(codec::field(v, "amplifier")?, ContextIntProvider::decode)?,
@@ -146,7 +151,7 @@ impl LootItemFunction {
             },
             "minecraft:enchant_randomly" => FunctionKind::EnchantRandomly {
                 options: codec::optional(v, "options", |v| {
-                    Ok(ferraloom_protocol::codec::HolderSet::from_json(v)?)
+                    Ok(ferraloom_protocol::codec::HolderSet::from_input(v)?)
                 })?,
                 only_compatible: codec::optional(v, "only_compatible", codec::boolean)?
                     .unwrap_or(true),
@@ -160,7 +165,7 @@ impl LootItemFunction {
             "minecraft:enchant_with_levels" => FunctionKind::EnchantWithLevels {
                 levels: Holder::decode(codec::field(v, "levels")?, ContextIntProvider::decode)?,
                 options: codec::optional(v, "options", |v| {
-                    Ok(ferraloom_protocol::codec::HolderSet::from_json(v)?)
+                    Ok(ferraloom_protocol::codec::HolderSet::from_input(v)?)
                 })?,
                 include_additional_cost_component: codec::optional(
                     v,

@@ -73,19 +73,38 @@ pub fn execute(
     }
     execute_with_feedback(board, command, members)?.resolve_feedback(|holder| Ok(holder.feedback()))
 }
-/// Port of TeamCommand#joinTeam/#leaveTeam: all mutations happen here,
-/// synchronously, before the returned feedback supplier is evaluated. Component
-/// arguments have already passed ComponentArgument resolution in the adapter.
+/// Preserve the pure scoreboard entry point for non-live callers.
 pub fn execute_with_feedback(
     board: &mut ServerScoreboard,
     command: &PreparedCommand,
     members: &[Holder],
 ) -> Result<TeamCommandResult> {
+    execute_context(&mut TeamContext::Board(board), command, members).map_err(|error| match error {
+        TeamError::Command(error) => error,
+        TeamError::Level(_) => unreachable!("pure team context has no Level"),
+    })
+}
+/// Execute the same evaluator with synchronous native waypoint mutation hooks.
+pub fn execute_live(
+    level: &mut crate::level::Level,
+    command: &PreparedCommand,
+    members: &[Holder],
+) -> TeamResult<TeamCommandResult> {
+    execute_context(&mut TeamContext::Live(level), command, members)
+}
+/// Port of TeamCommand#joinTeam/#leaveTeam: all mutations happen here,
+/// synchronously, before the returned feedback supplier is evaluated. Component
+/// arguments have already passed ComponentArgument resolution in the adapter.
+fn execute_context(
+    board: &mut TeamContext<'_>,
+    command: &PreparedCommand,
+    members: &[Holder],
+) -> TeamResult<TeamCommandResult> {
     let verb = command.literals[1].as_str();
     let name = command.string("team");
     if verb == "list" && name.is_none() {
         let teams: Vec<_> = board
-            .scoreboard()
+            .scoreboard()?
             .teams()
             .map(PlayerTeam::formatted_display_name)
             .collect();
@@ -102,10 +121,12 @@ pub fn execute_with_feedback(
         }));
     }
     if verb == "leave" {
-        let changed: Vec<_> = members
-            .iter()
-            .filter(|holder| board.remove_player_from_team(&holder.name))
-            .collect();
+        let mut changed = Vec::new();
+        for holder in members {
+            if board.remove_player_from_team(&holder.name)? {
+                changed.push(holder);
+            }
+        }
         return Ok(if changed.len() == 1 {
             TeamCommandResult::Leave {
                 holder: Box::new(changed[0].clone()),
@@ -122,17 +143,17 @@ pub fn execute_with_feedback(
 
     let name = name.unwrap();
     if verb == "add" {
-        if board.scoreboard().get_player_team(name).is_some() {
-            return Err(error("commands.team.add.duplicate", &[]));
+        if board.scoreboard()?.get_player_team(name).is_some() {
+            return Err(error("commands.team.add.duplicate", &[]).into());
         }
-        board.add_player_team(name);
+        board.add_player_team(name)?;
         let display = component(command, "displayName").unwrap_or_else(|| Component::literal(name));
-        checked(board.update_team(name, |team| team.display_name = display))?;
+        board.update_team(name, |team| team.display_name = display)?;
         return Ok(TeamCommandResult::Complete(success(
-            board.scoreboard().teams().count() as i32,
+            board.scoreboard()?.teams().count() as i32,
             "commands.team.add.success",
             vec![c(board
-                .scoreboard()
+                .scoreboard()?
                 .get_player_team(name)
                 .unwrap()
                 .formatted_display_name())],
@@ -140,7 +161,7 @@ pub fn execute_with_feedback(
         )));
     }
     let team = board
-        .scoreboard()
+        .scoreboard()?
         .get_player_team(name)
         .ok_or_else(|| error("team.notFound", &[name.to_owned()]))?;
     let formatted = team.formatted_display_name();
@@ -171,9 +192,9 @@ pub fn execute_with_feedback(
             }))
         }
         "remove" => {
-            checked(board.remove_player_team(name))?;
+            board.remove_player_team(name)?;
             Ok(TeamCommandResult::Complete(success(
-                board.scoreboard().teams().count() as i32,
+                board.scoreboard()?.teams().count() as i32,
                 "commands.team.remove.success",
                 vec![c(formatted)],
                 true,
@@ -183,10 +204,10 @@ pub fn execute_with_feedback(
             let members: Vec<_> = team.members().cloned().collect();
             let count = members.len();
             if count == 0 {
-                return Err(error("commands.team.empty.unchanged", &[]));
+                return Err(error("commands.team.empty.unchanged", &[]).into());
             }
             for member in members {
-                board.remove_player_from_team(&member);
+                board.remove_player_from_team(&member)?;
             }
             Ok(TeamCommandResult::Complete(success(
                 count as i32,
@@ -197,7 +218,7 @@ pub fn execute_with_feedback(
         }
         "join" => {
             for holder in members {
-                checked(board.add_player_to_team(&holder.name, name))?;
+                board.add_player_to_team(&holder.name, name)?;
             }
             Ok(if members.len() == 1 {
                 TeamCommandResult::Join {
@@ -218,19 +239,19 @@ pub fn execute_with_feedback(
     }
 }
 fn modify(
-    board: &mut ServerScoreboard,
+    board: &mut TeamContext<'_>,
     command: &PreparedCommand,
     name: &str,
-) -> Result<super::builtins::CommandResult> {
+) -> TeamResult<super::builtins::CommandResult> {
     let option = command.literals[2].as_str();
-    let current = board.scoreboard().get_player_team(name).unwrap();
+    let current = board.scoreboard()?.get_player_team(name).unwrap();
     let (key, extra) = match option {
         "displayName" => {
             let value = component(command, "displayName").unwrap();
             if current.display_name == value {
-                return Err(error("commands.team.option.name.unchanged", &[]));
+                return Err(error("commands.team.option.name.unchanged", &[]).into());
             }
-            checked(board.update_team(name, |team| team.display_name = value))?;
+            board.update_team(name, |team| team.display_name = value)?;
             ("commands.team.option.name.success".to_owned(), None)
         }
         "color" => {
@@ -238,9 +259,9 @@ fn modify(
                 .string("value")
                 .map(|value| enum_value(value, super::arguments::scoreboard::COLORS));
             if current.color == value {
-                return Err(error("commands.team.option.color.unchanged", &[]));
+                return Err(error("commands.team.option.color.unchanged", &[]).into());
             }
-            checked(board.update_team(name, |team| team.color = value))?;
+            board.update_team(name, |team| team.color = value)?;
             if let Some(color) = value {
                 (
                     "commands.team.option.color.success".into(),
@@ -269,15 +290,16 @@ fn modify(
                         if allowed { "Enabled" } else { "Disabled" }
                     ),
                     &[],
-                ));
+                )
+                .into());
             }
-            checked(board.update_team(name, |team| {
+            board.update_team(name, |team| {
                 if option == "friendlyFire" {
                     team.allow_friendly_fire = allowed;
                 } else {
                     team.see_friendly_invisibles = allowed;
                 }
-            }))?;
+            })?;
             (
                 format!(
                     "commands.team.option.{key}.{}",
@@ -298,18 +320,15 @@ fn modify(
                 current.death_message_visibility
             };
             if old == visibility {
-                return Err(error(
-                    &format!("commands.team.option.{option}.unchanged"),
-                    &[],
-                ));
+                return Err(error(&format!("commands.team.option.{option}.unchanged"), &[]).into());
             }
-            checked(board.update_team(name, |team| {
+            board.update_team(name, |team| {
                 if option == "nametagVisibility" {
                     team.name_tag_visibility = visibility;
                 } else {
                     team.death_message_visibility = visibility;
                 }
-            }))?;
+            })?;
             (
                 format!("commands.team.option.{option}.success"),
                 Some(c(Component::translatable(
@@ -323,9 +342,9 @@ fn modify(
             let rule: CollisionRule =
                 enum_value(value, &["always", "never", "pushOtherTeams", "pushOwnTeam"]);
             if current.collision_rule == rule {
-                return Err(error("commands.team.option.collisionRule.unchanged", &[]));
+                return Err(error("commands.team.option.collisionRule.unchanged", &[]).into());
             }
-            checked(board.update_team(name, |team| team.collision_rule = rule))?;
+            board.update_team(name, |team| team.collision_rule = rule)?;
             (
                 "commands.team.option.collisionRule.success".into(),
                 Some(c(Component::translatable(
@@ -337,13 +356,13 @@ fn modify(
         "prefix" | "suffix" => {
             let value = component(command, option).unwrap();
             let feedback = value.clone();
-            checked(board.update_team(name, |team| {
+            board.update_team(name, |team| {
                 if option == "prefix" {
                     team.prefix = value;
                 } else {
                     team.suffix = value;
                 }
-            }))?;
+            })?;
             return Ok(success(
                 1,
                 &format!("commands.team.option.{option}.success"),
@@ -354,7 +373,7 @@ fn modify(
         _ => unreachable!("native team option"),
     };
     let mut args = vec![c(board
-        .scoreboard()
+        .scoreboard()?
         .get_player_team(name)
         .unwrap()
         .formatted_display_name())];
@@ -362,4 +381,82 @@ fn modify(
         args.push(extra);
     }
     Ok(success(0, &key, args, true))
+}
+
+/// A world failure remains a required error, distinct from Brigadier feedback.
+#[derive(Debug)]
+pub enum TeamError {
+    Command(ferraloom_brigadier::CommandSyntaxException),
+    Level(crate::level::LevelError),
+}
+impl From<ferraloom_brigadier::CommandSyntaxException> for TeamError {
+    fn from(error: ferraloom_brigadier::CommandSyntaxException) -> Self {
+        Self::Command(error)
+    }
+}
+impl From<crate::level::LevelError> for TeamError {
+    fn from(error: crate::level::LevelError) -> Self {
+        Self::Level(error)
+    }
+}
+impl std::fmt::Display for TeamError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Command(error) => std::fmt::Display::fmt(error, f),
+            Self::Level(error) => std::fmt::Display::fmt(error, f),
+        }
+    }
+}
+impl std::error::Error for TeamError {}
+type TeamResult<T> = std::result::Result<T, TeamError>;
+pub(crate) fn check_scoreboard<T>(result: crate::scoreboard::Result<T>) -> TeamResult<T> {
+    checked(result).map_err(Into::into)
+}
+/// Reads and writes use the same canonical board. Live primitives end that
+/// borrow before invoking waypoint callbacks; the command evaluator is shared.
+enum TeamContext<'a> {
+    Board(&'a mut ServerScoreboard),
+    Live(&'a mut crate::level::Level),
+}
+impl TeamContext<'_> {
+    fn scoreboard(&self) -> TeamResult<&crate::scoreboard::Scoreboard> {
+        Ok(match self {
+            Self::Board(board) => board.scoreboard(),
+            Self::Live(level) => level.shared()?.scoreboard.scoreboard(),
+        })
+    }
+    fn add_player_team(&mut self, name: &str) -> TeamResult<()> {
+        match self {
+            Self::Board(board) => board.add_player_team(name),
+            Self::Live(level) => {
+                level.shared_mut()?.scoreboard.add_player_team(name);
+                level.emit_scoreboard_packets()?;
+            }
+        }
+        Ok(())
+    }
+    fn update_team(&mut self, name: &str, update: impl FnOnce(&mut PlayerTeam)) -> TeamResult<()> {
+        match self {
+            Self::Board(board) => check_scoreboard(board.update_team(name, update)),
+            Self::Live(level) => level.update_team_live(name, update),
+        }
+    }
+    fn remove_player_team(&mut self, name: &str) -> TeamResult<()> {
+        match self {
+            Self::Board(board) => check_scoreboard(board.remove_player_team(name)),
+            Self::Live(level) => level.remove_team_live(name),
+        }
+    }
+    fn add_player_to_team(&mut self, holder: &str, name: &str) -> TeamResult<bool> {
+        match self {
+            Self::Board(board) => check_scoreboard(board.add_player_to_team(holder, name)),
+            Self::Live(level) => level.add_team_member_live(holder, name),
+        }
+    }
+    fn remove_player_from_team(&mut self, holder: &str) -> TeamResult<bool> {
+        match self {
+            Self::Board(board) => Ok(board.remove_player_from_team(holder)),
+            Self::Live(level) => level.remove_team_member_live(holder),
+        }
+    }
 }

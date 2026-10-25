@@ -29,12 +29,14 @@ fn outside_primary_click_moves_the_original_cursor_into_the_item_entity() {
     };
     for amount in [0, 7] {
         let mut level = crate::entity::tests::level(false);
-        level.install_shared(Box::default());
+        if level.shared().is_err() {
+            level.install_shared(Box::default());
+        }
         let player = level.next_entity_ref();
         let mut state = ServerPlayer::new(
             Uuid::new(1, 2),
             "cursor".into(),
-            level.next_entity_id(),
+            level.next_entity_id().unwrap(),
             Vec3::new(8.5, 64.0, 8.5),
             GameType::Survival,
         );
@@ -320,7 +322,11 @@ fn pure_and_live_pickup_share_native_cursor_and_target_identity() {
     assert!(pure.in_memory_stacks.forwards_are_empty());
 
     static BEHAVIORS: crate::Behaviors = crate::Behaviors::EMPTY;
-    let mut level = Level::new(Region::new(&BEHAVIORS), LevelContext::fixture(0, 63));
+    let mut level = {
+        let mut fixture_level = Level::new(Region::new(&BEHAVIORS), LevelContext::fixture(0, 63));
+        fixture_level.install_shared(Box::default());
+        fixture_level
+    };
     let player = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
     let mut state = make_player();
     let menu = state.menus.install_container_menu(make_menu());

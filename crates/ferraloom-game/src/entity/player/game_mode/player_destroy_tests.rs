@@ -71,7 +71,7 @@ pub(super) fn fixture(behaviors: &'static Behaviors) -> (Level, EntityRef) {
     let mut miner = ServerPlayer::new(
         Uuid::offline_player("Destroy"),
         "Destroy".into(),
-        level.next_entity_id(),
+        level.next_entity_id().unwrap(),
         Vec3::new(8.5, 64.0, 8.5),
         GameType::Survival,
     );
@@ -461,13 +461,9 @@ fn mine_block_native_tool_guards_award_used_only_after_the_wear_effect() {
             Block::STONE.default_state(),
             operation.level,
         );
-        if policy == UnportedBehavior::Strict {
-            assert!(
-                matches!(result,Err(BlockBreakError::Level(ref error)) if matches!(**error,LevelError::UnsupportedItemHurtAndBreak {item:Item::STICK,amount:1,..}))
-            );
-        } else {
-            result.unwrap();
-        }
+        // Native STICK has no DAMAGE/MAX_DAMAGE, so the wear call is a no-op.
+        result.unwrap();
+        assert_eq!(operation.level.unported_behavior_stats().skipped_calls, 0);
         assert_eq!(
             operation
                 .level
@@ -475,7 +471,7 @@ fn mine_block_native_tool_guards_award_used_only_after_the_wear_effect() {
                 .unwrap()
                 .stats
                 .get_value(Stat::Used(Item::STICK)),
-            i32::from(policy == UnportedBehavior::Warn)
+            1
         );
     }
 }

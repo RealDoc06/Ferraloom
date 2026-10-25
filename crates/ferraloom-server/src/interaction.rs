@@ -22,8 +22,8 @@ impl MinecraftServer {
         packet: sb::UseItemOn,
     ) -> Result<()> {
         if !self
-            .level
-            .level
+            .level_for_entity(entity)
+            .map_err(game_error)?
             .entity::<ServerPlayer>(entity)
             .map_err(game_error)?
             .has_client_loaded()
@@ -35,8 +35,8 @@ impl MinecraftServer {
             .unwrap()
             .ack_block_changes_up_to(packet.sequence.0)?;
         let player = self
-            .level
-            .level
+            .level_for_entity(entity)
+            .map_err(game_error)?
             .entity::<ServerPlayer>(entity)
             .map_err(game_error)?;
         let stack = player.get_item_in_hand(packet.hand).clone();
@@ -55,8 +55,14 @@ impl MinecraftServer {
         }
         self.connections.get_mut(&connection).unwrap().last_action = Instant::now();
         let pos = packet.hit_result.block_pos;
-        let max_y = self.level.level.max_build_height();
-        let min_y = self.level.level.min_build_height();
+        let max_y = self
+            .level_for_entity(entity)
+            .map_err(game_error)?
+            .max_build_height();
+        let min_y = self
+            .level_for_entity(entity)
+            .map_err(game_error)?
+            .min_build_height();
         if pos.y > max_y {
             self.send_build_limit(connection, true, max_y);
         } else if pos.y < min_y {
@@ -70,8 +76,8 @@ impl MinecraftServer {
                 },
             };
             if self
-                .level
-                .level
+                .level_for_entity(entity)
+                .map_err(game_error)?
                 .is_under_spawn_protection(entity, pos)
                 .map_err(game_error)?
             {
@@ -81,16 +87,16 @@ impl MinecraftServer {
                     Argument::String(format!("{}, {}, {}", pos.x, pos.y, pos.z)),
                 );
             } else if self
-                .level
-                .level
+                .level_for_entity(entity)
+                .map_err(game_error)?
                 .entity::<ServerPlayer>(entity)
                 .map_err(game_error)?
                 .teleport
                 .awaiting_position
                 .is_none()
                 && self
-                    .level
-                    .level
+                    .level_for_entity(entity)
+                    .map_err(game_error)?
                     .may_interact(entity, pos)
                     .map_err(game_error)?
             {
@@ -99,7 +105,17 @@ impl MinecraftServer {
                     hand: packet.hand,
                     hit: packet.hit_result.clone(),
                 };
-                let mut operation = StackOperation::new(&mut self.level.level);
+                let dimension = self
+                    .level_for_entity(entity)
+                    .map_err(game_error)?
+                    .dimension_key()
+                    .map_err(game_error)?
+                    .to_string();
+                let live = std::iter::once(&mut self.level)
+                    .chain(self.additional_levels.iter_mut())
+                    .find(|live| live.dimension == dimension)
+                    .expect("selected player dimension");
+                let mut operation = StackOperation::new(&mut live.level);
                 if let Some(result) =
                     ferraloom_game::block::interaction::use_item_on(&context, &mut operation)
                         .map_err(game_error)?
@@ -160,7 +176,11 @@ impl MinecraftServer {
                 self.send_build_limit(connection, true, max_y);
             }
             for pos in [pos, pos.relative(packet.hit_result.direction, 1)] {
-                let state = self.level.level.get_block_state(pos).map_err(game_error)?;
+                let state = self
+                    .level_for_entity(entity)
+                    .map_err(game_error)?
+                    .get_block_state(pos)
+                    .map_err(game_error)?;
                 self.connections
                     .get_mut(&connection)
                     .unwrap()
@@ -207,24 +227,24 @@ impl MinecraftServer {
         });
         self.connections.get_mut(&connection).unwrap().last_action = Instant::now();
         if self
-            .level
-            .level
+            .level_for_entity(entity)
+            .map_err(game_error)?
             .chunk(ChunkPos::containing(packet.pos))
             .is_none()
         {
             return Ok(());
         }
         let Some(handle) = self
-            .level
-            .level
+            .level_for_entity(entity)
+            .map_err(game_error)?
             .block_entity_ref(packet.pos)
             .map_err(game_error)?
         else {
             return Ok(());
         };
         if !matches!(
-            self.level
-                .level
+            self.level_for_entity(entity)
+                .map_err(game_error)?
                 .block_entity_state(handle)
                 .map_err(game_error)?,
             ferraloom_game::block::entity::BlockEntityState::Sign(_)
@@ -232,8 +252,8 @@ impl MinecraftServer {
             return Ok(());
         }
         let player = self
-            .level
-            .level
+            .level_for_entity(entity)
+            .map_err(game_error)?
             .entity::<ServerPlayer>(entity)
             .map_err(game_error)?;
         let uuid = player.uuid;
@@ -244,7 +264,7 @@ impl MinecraftServer {
             packet.slot == SignTextSlot::Front,
             &lines,
             filter,
-            &mut self.level.level,
+            self.level_for_entity_mut(entity).map_err(game_error)?,
         )
         .map_err(game_error)?;
         if !accepted {

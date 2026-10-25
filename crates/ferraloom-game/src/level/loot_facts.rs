@@ -92,6 +92,9 @@ impl PredicateContext for Level {
     fn loaded(&self, pos: BlockPos) -> Result<bool> {
         Ok(Level::is_loaded(self, pos))
     }
+    fn smokey(&self, pos: BlockPos) -> Result<bool> {
+        crate::block::campfire::is_smokey_pos(&LevelReaderRef::Server(self), pos).map_err(required)
+    }
     fn block(&self, pos: BlockPos) -> Result<BlockState> {
         self.get_block_state(pos).map_err(required)
     }
@@ -127,11 +130,11 @@ impl PredicateContext for Level {
         Ok(self
             .structure_manager()
             .get_structure_with_piece_at_in(pos, set)
-            .map_err(|error| match error {
+            .map_err(|error| match error.root() {
                 LevelError::MissingChunk(chunk) => {
                     // StructureManager reads the query's references before
                     // consulting STRUCTURE_STARTS in referenced source chunks.
-                    let status = if chunk == ferraloom_util::ChunkPos::containing(pos) {
+                    let status = if *chunk == ferraloom_util::ChunkPos::containing(pos) {
                         super::chunk_holder::ChunkStatus::StructureReferences
                     } else {
                         super::chunk_holder::ChunkStatus::StructureStarts
@@ -140,7 +143,7 @@ impl PredicateContext for Level {
                         "StructureManager#getStructureWithPieceAt: MissingChunk({chunk:?}), required status {status:?}"
                     ))
                 }
-                error => required(error),
+                _ => required(error),
             })?
             .is_some())
     }

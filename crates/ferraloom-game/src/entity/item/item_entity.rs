@@ -51,8 +51,8 @@ impl ItemEntity {
     pub fn new(network_id: i32, seed: i64) -> Self {
         Self::with_parent(EntityData::new(EntityType::ITEM, network_id, seed))
     }
-    pub fn new_at(level: &mut Level, position: Vec3, stack: ItemStack) -> Self {
-        let mut entity = Self::with_parent(level.create_entity_data(EntityType::ITEM));
+    pub fn new_at(level: &mut Level, position: Vec3, stack: ItemStack) -> Result<Self, LevelError> {
+        let mut entity = Self::with_parent(level.create_entity_data(EntityType::ITEM)?);
         entity.parent.set_pos(position);
         entity.set_item(stack);
         entity.parent.velocity = Vec3::new(
@@ -60,7 +60,7 @@ impl ItemEntity {
             0.2,
             entity.parent.random.next_double() * 0.2 - 0.1,
         );
-        entity
+        Ok(entity)
     }
     /// Port of ItemEntity's explicit-velocity constructor. Unlike new_at, this
     /// overload does not consume the entity RNG for a random launch velocity.
@@ -69,12 +69,12 @@ impl ItemEntity {
         position: Vec3,
         stack: ItemStack,
         velocity: Vec3,
-    ) -> Self {
-        let mut entity = Self::with_parent(level.create_entity_data(EntityType::ITEM));
+    ) -> Result<Self, LevelError> {
+        let mut entity = Self::with_parent(level.create_entity_data(EntityType::ITEM)?);
         entity.parent.set_pos(position);
         entity.set_item(stack);
         entity.parent.velocity = velocity;
-        entity
+        Ok(entity)
     }
     /// Port of ItemEntity#makeFakeItem, used by GiveCommand before registration.
     pub fn make_fake_item(&mut self) {
@@ -154,26 +154,24 @@ impl ItemEntity {
         Ok(tag)
     }
     pub fn load_nbt(&mut self, tag: CompoundTag) -> Result<(), persistence::EntityLoadError> {
-        self.health = i32::from(tag.get_short_or("Health", 5));
-        self.age = i32::from(tag.get_short_or("Age", 0));
-        self.pickup_delay = i32::from(tag.get_short_or("PickupDelay", 0));
-        let uuid = |name| {
-            tag.get_int_array(name)
-                .and_then(|v| <[i32; 4]>::try_from(v).ok())
-                .map(Uuid::from_int_array)
-        };
-        self.thrower = uuid("Thrower").map(EntityReference::unresolved);
-        self.target = uuid("Owner");
-        self.set_item(
-            tag.get("Item")
-                .and_then(|v| ItemStack::from_nbt(v).ok())
-                .unwrap_or_default(),
-        );
-        self.parent.load_nbt(tag)?;
-        if self.item().is_empty() {
+        self.parent.load_nbt(tag.clone())?;
+        if self.read_additional_save_data(&tag) {
             self.parent.set_removed(RemovalReason::Discarded);
         }
         Ok(())
+    }
+    pub(crate) fn read_additional_save_data(&mut self, tag: &CompoundTag) -> bool {
+        self.health = i32::from(tag.get_short_or("Health", 5));
+        self.age = i32::from(tag.get_short_or("Age", 0));
+        self.pickup_delay = i32::from(tag.get_short_or("PickupDelay", 0));
+        self.target = tag.get("Owner").and_then(|tag| Uuid::from_nbt(tag).ok());
+        self.thrower = crate::entity::living::damage_state::read_reference(tag, "Thrower");
+        self.set_item(
+            tag.get("Item")
+                .and_then(|v| ItemStack::from_nbt_with_partial(v).ok())
+                .unwrap_or_default(),
+        );
+        self.item().is_empty()
     }
 }
 /// Port of ItemEntity#getOwner, including EntityReference's cache mutation.
@@ -291,6 +289,14 @@ pub fn player_touch(
 
 pub struct ItemEntityBehavior;
 impl Entity for ItemEntityBehavior {
+    /// Port of ItemEntity#dampensVibrations on the live effective item receiver.
+    fn dampens_vibrations(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
+        let stack = level.entity::<ItemEntity>(entity)?.item();
+        Ok(level.item_tags()?.contains_key(
+            ferraloom_data::tags::ItemTags::DAMPENS_VIBRATIONS,
+            stack.item(),
+        ))
+    }
     /// Port of ItemEntity#fireImmune and ItemStack#canBeHurtBy(inFire).
     fn fire_immune(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
         let item = level.entity::<ItemEntity>(entity)?;

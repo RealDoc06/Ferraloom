@@ -4,12 +4,12 @@ use super::{
     LootData, LootFacts, LootItemCondition, LootItemFunction, LootParams, LootPoolEntryContainer,
     LootRandomSelection, LootRuntime, RandomSequences, Result, codec, runtime::BorrowedRuntime,
 };
+use crate::loot::codec::DecodeInput;
 use ferraloom_protocol::component::ItemStack;
 use ferraloom_util::{
     mth,
     random::{LegacyRandomSource, RandomSource},
 };
-use serde_json::Value;
 use std::collections::BTreeSet;
 pub(crate) type Output<'a> = dyn FnMut(ItemStack, &mut EvalContext<'_>) -> Result<()> + 'a;
 
@@ -31,7 +31,7 @@ pub struct LootPool {
     pub bonus_rolls: Holder<ContextFloatProvider>,
 }
 impl LootTable {
-    pub fn decode(v: &Value) -> Result<Self> {
+    pub fn decode<I: DecodeInput>(v: &I) -> Result<Self> {
         // `type` alone is lenientOptionalFieldOf: invalid/unknown values default.
         let param_set = codec::optional(v, "type", codec::id)
             .ok()
@@ -89,7 +89,7 @@ impl Holder<LootTable> {
     }
 }
 impl LootPool {
-    pub fn decode(v: &Value) -> Result<Self> {
+    pub fn decode<I: DecodeInput>(v: &I) -> Result<Self> {
         Ok(Self {
             entries: codec::list(codec::field(v, "entries")?, LootPoolEntryContainer::decode)?,
             condition: codec::optional(v, "condition", |v| {

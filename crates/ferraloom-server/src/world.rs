@@ -820,6 +820,7 @@ impl World {
             services.dimensions.environment.clone(),
             stem.environment.clone(),
         )?;
+        context = context.with_registry_context(services.registry_context.clone());
         timing.checkpoint("worldgen_context");
         context.unported_behavior = services.unported_behavior;
         let mut generation_state = GenerationState::new(Arc::new(context), light_pool);
@@ -968,7 +969,7 @@ impl World {
             sea_level: self.generator.sea_level(),
         });
         let rules = level.rules_mut();
-        rules.debug = matches!(self.generator.as_ref(), ChunkGenerator::Debug(_));
+        rules.debug = self.is_debug_world();
         rules.fast_lava = self.dimension.fast_lava;
         rules.can_have_weather = self.dimension.has_skylight && !self.dimension.has_ceiling;
     }
@@ -996,14 +997,17 @@ impl World {
                 })?),
                 self.initial_difficulty,
             )
-            .with_block_transformers(Arc::new(timing.measure(
-                "block_transformers",
-                || {
-                    ferraloom_game::item::block_transformer::BlockTransformerRegistry::load(
-                        resources,
-                    )
-                },
-            )?)),
+            .with_registry_context(self.services.registry_context.clone())
+            .with_block_transformers(Arc::new(timing.measure("block_transformers", || {
+                ferraloom_game::item::block_transformer::BlockTransformerRegistry::load(resources)
+            })?))
+            .with_enchantments(Arc::new(
+                ferraloom_game::item::enchantment::EnchantmentRegistry::load(resources)?,
+            ))
+            .with_mob_variants(Arc::new(
+                ferraloom_game::entity::variant::MobVariants::load(resources)?,
+            ))
+            .with_game_event_tags(Arc::new(ferraloom_data::datapack::TagSet::load(resources)?)),
         ))
     }
     /// Attach immutable dimension layers after the sole server clock manager
@@ -2656,7 +2660,7 @@ mod generation_order_tests {
         let resources = ResourceManager::new(vec![
             ferraloom_data::datapack::Pack::vanilla_jar(Path::new(&jar)).unwrap(),
         ]);
-        let registries = RegistrySet::load(&resources).unwrap();
+        let registries = Arc::new(RegistrySet::load(&resources).unwrap());
         for generate_structures in [false, true] {
             let directory = tempfile::tempdir().unwrap();
             let mut properties = ServerProperties::from_values(Default::default());
@@ -2829,7 +2833,7 @@ mod generation_order_tests {
         let resources = ResourceManager::new(vec![
             ferraloom_data::datapack::Pack::vanilla_jar(Path::new(&jar)).unwrap(),
         ]);
-        let registries = RegistrySet::load(&resources).unwrap();
+        let registries = Arc::new(RegistrySet::load(&resources).unwrap());
         let mut properties = ServerProperties::from_values(Default::default());
         properties.set("level-type", "minecraft:debug_all_block_states");
         let directory = tempfile::tempdir().unwrap();
@@ -2849,6 +2853,7 @@ mod generation_order_tests {
             "minecraft:overworld",
             world.level_context(&resources).unwrap(),
         );
+        level.level.install_shared(Box::default());
         level
             .level
             .set_block_tags(world.generator.data().block_tags.clone());

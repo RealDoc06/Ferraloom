@@ -3,14 +3,13 @@ use super::{
     EvalContext, Holder, HolderSet, Identifier, LootData, LootItemCondition, LootItemFunction,
     LootTable, Result, codec,
 };
+use crate::loot::codec::{DecodeInput, PersistentInput};
 use ferraloom_data::Item;
 use ferraloom_protocol::{
     codec::HolderSet as ItemSet,
-    component::Persistent,
     component::{DataComponentPatch, ItemStack},
 };
 use ferraloom_util::mth;
-use serde_json::Value;
 
 /// Port of LootPoolEntryContainer and its uniform/composite subclasses.
 #[derive(Clone, Debug, PartialEq)]
@@ -53,7 +52,7 @@ pub(crate) struct ExpandedEntry {
     pub modifiers: Vec<Holder<LootItemFunction>>,
 }
 impl LootPoolEntryContainer {
-    pub fn decode(v: &Value) -> Result<Self> {
+    pub fn decode<I: DecodeInput>(v: &I) -> Result<Self> {
         let kind = codec::kind(v)?;
         let expand = || -> Result<bool> {
             Ok(codec::optional(v, "expand", codec::boolean)?.unwrap_or(false))
@@ -74,7 +73,7 @@ impl LootPoolEntryContainer {
                 )
             }
             "minecraft:tag" => {
-                let items = ItemSet::from_json(codec::field(v, "items")?)?;
+                let items = ItemSet::from_input(codec::field(v, "items")?)?;
                 crate::predicates::validate_static_holders(&items, "item", |id| {
                     Item::from_name(id).is_some()
                 })?;

@@ -1,5 +1,5 @@
 use super::{Result, codec};
-use serde_json::Value;
+use crate::loot::codec::DecodeInput;
 
 /// Port of ListOperation. Out-of-bounds insert/replacement and size overflows
 /// preserve the original list; replace_all returns the replacement directly.
@@ -11,7 +11,7 @@ pub enum ListOperation {
     ReplaceSection { offset: usize, size: Option<usize> },
 }
 impl ListOperation {
-    pub fn decode(v: &Value, max: usize) -> Result<Self> {
+    pub fn decode<I: DecodeInput>(v: &I, max: usize) -> Result<Self> {
         let offset = || -> Result<usize> {
             let n = codec::optional(v, "offset", codec::int)?.unwrap_or(0);
             usize::try_from(n).map_err(|_| codec::error("negative offset"))
@@ -70,7 +70,11 @@ pub struct ListEdit<T> {
     pub operation: ListOperation,
 }
 impl<T> ListEdit<T> {
-    pub fn decode(v: &Value, max: usize, decode: impl Fn(&Value) -> Result<T>) -> Result<Self> {
+    pub fn decode<I: DecodeInput>(
+        v: &I,
+        max: usize,
+        decode: impl Fn(&I) -> Result<T>,
+    ) -> Result<Self> {
         let values = codec::list(codec::field(v, "values")?, decode)?;
         if values.len() > max {
             return Err(codec::error("list exceeds limit"));

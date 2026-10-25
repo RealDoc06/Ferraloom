@@ -90,8 +90,8 @@ public final class FixtureSetupVectors {
         var resolver=new PistonStructureResolver(world,P,Direction.EAST,true);
         check(resolver.resolve(),"collision push rejected");
         check(resolver.getToPush().indexOf(root.west().north())<resolver.getToPush().indexOf(root.north()),"collision did not reorder");
-        var move=PistonBaseBlock.class.getDeclaredMethod("moveBlocks",Level.class,BlockPos.class,Direction.class,boolean.class);move.setAccessible(true);
-        check((boolean)move.invoke(Blocks.PISTON,world,P,Direction.EAST,true),"collision movement failed");
+        place(world,P.west(),Blocks.REDSTONE_BLOCK.defaultBlockState());
+        check(world.getBlockState(P).triggerEvent(world,P,0,Direction.EAST.get3DDataValue()),"collision extension event failed");
         var after=world.getBlockState(junction).getValue(RailBlock.SHAPE);
         check(before==RailShape.NORTH_WEST&&after==RailShape.NORTH_EAST,"junction order witness: "+before+" -> "+after);
     }
@@ -157,10 +157,12 @@ public final class FixtureSetupVectors {
         check(source.isEmpty(),"hopper source did not empty");
         check(sink.getItem(0).is(Items.DIRT)&&sink.getItem(0).getCount()==3&&sink.getItem(1).is(Items.STONE)&&sink.getItem(1).getCount()==2,"hopper chain did not drain at 96");
     }
-    static void dispensers(DeviceVectors world) {
+    static void dispensers(DeviceVectors world) throws Exception {
+        var method=DispenserBlock.class.getDeclaredMethod("getDispenseMethod",Level.class,ItemStack.class);method.setAccessible(true);
+        check(method.invoke(Blocks.DISPENSER,world,new ItemStack(Items.STICK)).getClass()==net.minecraft.core.dispenser.DefaultDispenseItemBehavior.class,"stick does not select the native default dispense behavior");
         for(var block:List.of(Blocks.DISPENSER,Blocks.DROPPER)) {
             world.prepare(block.defaultBlockState().setValue(DispenserBlock.FACING,Direction.EAST));
-            var entity=(DispenserBlockEntity)world.getBlockEntity(P);entity.setItem(0,new ItemStack(Items.STONE,6));
+            var entity=(DispenserBlockEntity)world.getBlockEntity(P);entity.setItem(0,new ItemStack(Items.STICK,6));
             if(block==Blocks.DROPPER)place(world,P.east(),Blocks.BARREL.defaultBlockState());
             place(world,P.above(2),Blocks.REDSTONE_BLOCK.defaultBlockState());
             for(int time=1;time<=3;time++)tick(world,time);

@@ -40,7 +40,7 @@ pub fn create_item_stack_to_drop(
     );
     let yaw = owner.yaw;
     let pitch = owner.pitch;
-    let mut item = ItemEntity::new_at(level, position, stack);
+    let mut item = ItemEntity::new_at(level, position, stack)?;
     item.pickup_delay = 40;
     if thrown_from_hand {
         item.thrower = Some(EntityReference::of(player, level)?);
@@ -178,7 +178,7 @@ mod tests {
             let mut state = ServerPlayer::new(
                 Uuid::new(1, 2),
                 "drop".into(),
-                level.next_entity_id(),
+                level.next_entity_id().unwrap(),
                 Vec3::new(8.5, 64.0, 8.5),
                 GameType::Survival,
             );
@@ -253,7 +253,7 @@ mod tests {
                         .next_long(),
                     entity_next,
                     level.random().next_long(),
-                    level.next_entity_id(),
+                    level.next_entity_id().unwrap(),
                 ),
                 fields[18..].join("\t"),
                 "{row}",
@@ -294,12 +294,14 @@ mod tests {
         let mut actual = Vec::new();
         for scenario in ["carried", "empty", "not-thrown"] {
             let mut level = crate::entity::tests::level(false);
-            level.install_shared(Box::default());
+            if level.shared().is_err() {
+                level.install_shared(Box::default());
+            }
             let player = level.next_entity_ref();
             let state = ServerPlayer::new(
                 Uuid::new(1, 2),
                 "drop".into(),
-                level.next_entity_id(),
+                level.next_entity_id().unwrap(),
                 Vec3::new(8.5, 64.0, 8.5),
                 GameType::Survival,
             );

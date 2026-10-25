@@ -1,7 +1,7 @@
 use super::{EntityPredicate, PredicateContext, PredicateRegistry};
+use crate::loot::codec::{DecodeInput, PersistentInput};
 use crate::loot::{DamageSource, Identifier, Result, codec};
 use ferraloom_util::Vec3;
-use serde_json::Value;
 
 /// Port of TagPredicate#matches. Expected false inverts membership, not validity.
 #[derive(Clone, Debug, PartialEq)]
@@ -10,9 +10,9 @@ pub struct TagPredicate {
     pub expected: bool,
 }
 impl TagPredicate {
-    pub fn decode(v: &Value) -> Result<Self> {
+    pub fn decode<I: DecodeInput>(v: &I) -> Result<Self> {
         Ok(Self {
-            tag: <ferraloom_protocol::codec::HolderSet as ferraloom_protocol::component::Persistent>::from_json(codec::field(v,"id")?)?,
+            tag: ferraloom_protocol::codec::HolderSet::from_input(codec::field(v, "id")?)?,
             expected: codec::boolean(codec::field(v, "expected")?)?,
         })
     }
@@ -34,7 +34,7 @@ pub struct DamageSourcePredicate {
     pub is_direct: Option<bool>,
 }
 impl DamageSourcePredicate {
-    pub fn decode(v: &Value) -> Result<Self> {
+    pub fn decode<I: DecodeInput>(v: &I) -> Result<Self> {
         Ok(Self {
             tags: codec::optional(v, "tags", |v| codec::list(v, TagPredicate::decode))?
                 .unwrap_or_default(),
@@ -81,7 +81,7 @@ pub struct DamagePredicate {
     pub damage_type: Option<DamageSourcePredicate>,
 }
 impl DamagePredicate {
-    pub fn decode(v: &Value) -> Result<Self> {
+    pub fn decode<I: DecodeInput>(v: &I) -> Result<Self> {
         Ok(Self {
             dealt: codec::optional(v, "dealt", super::DoubleBounds::decode)?.unwrap_or_default(),
             taken: codec::optional(v, "taken", super::DoubleBounds::decode)?.unwrap_or_default(),

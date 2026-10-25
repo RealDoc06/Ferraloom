@@ -1,0 +1,165 @@
+entity-recursive	nested	{Passengers:[{Age:-100,Passengers:[{Pos:[1.5d,64.0d,1.5d],UUID:[I;0,0,0,3],id:"minecraft:experience_orb"}],Pos:[1.5d,64.0d,1.5d],UUID:[I;0,0,0,2],id:"minecraft:cow"},{Item:{count:3,id:"minecraft:diamond"},Pos:[1.5d,64.0d,1.5d],UUID:[I;0,0,0,4],id:"minecraft:item"}],Pos:[1.5d,64.0d,1.5d],Rotation:[],UUID:[I;0,0,0,1],id:"minecraft:tnt"}	2	2:minecraft:tnt:1:0:false:false;3:minecraft:cow:2:0:false:false;4:minecraft:experience_orb:3:0:false:false;5:minecraft:item:4:0:false:false	2:minecraft:tnt:1:-:3/5:false:4021000000000000,4051800000000000,4021000000000000:0,0,0:0,0;3:minecraft:cow:2:2:4:false:4021000000000000,4051800000000000,4021000000000000:0,0,0:0,0;4:minecraft:experience_orb:3:3::false:4021000000000000,4051800000000000,4021000000000000:0,0,0:0,0;5:minecraft:item:4:2::false:4021000000000000,4051800000000000,4021000000000000:0,0,0:0,0	true	2,3,4,5	5
+entity-recursive	duplicate-root	{Pos:[1.5d,64.0d,1.5d],Rotation:[],UUID:[I;0,0,0,99],id:"minecraft:tnt"}	2	2:minecraft:tnt:99:0:false:false	2:minecraft:tnt:99:-::false:4021000000000000,4051800000000000,4021000000000000:0,0,0:0,0	false	-	2
+entity-recursive	duplicate-passenger	{Passengers:[{Pos:[1.5d,64.0d,1.5d],UUID:[I;0,0,0,99],id:"minecraft:tnt"}],Pos:[1.5d,64.0d,1.5d],Rotation:[],UUID:[I;0,0,0,1],id:"minecraft:tnt"}	2	2:minecraft:tnt:1:0:false:false;3:minecraft:tnt:99:0:false:false	2:minecraft:tnt:1:-:3:false:4021000000000000,4051800000000000,4021000000000000:0,0,0:0,0;3:minecraft:tnt:99:2::false:4021000000000000,4051800000000000,4021000000000000:0,0,0:0,0	false	-	3
+entity-recursive	internal-duplicate	{Passengers:[{Pos:[1.5d,64.0d,1.5d],UUID:[I;0,0,0,1],id:"minecraft:tnt"}],Pos:[1.5d,64.0d,1.5d],Rotation:[],UUID:[I;0,0,0,1],id:"minecraft:tnt"}	2	2:minecraft:tnt:1:0:false:false;3:minecraft:tnt:1:0:false:false	2:minecraft:tnt:1:-:3:false:4021000000000000,4051800000000000,4021000000000000:0,0,0:0,0;3:minecraft:tnt:1:2::false:4021000000000000,4051800000000000,4021000000000000:0,0,0:0,0	true	2	3
+entity-recursive	removed-root	{Passengers:[{Pos:[1.5d,64.0d,1.5d],UUID:[I;0,0,0,2],id:"minecraft:tnt"}],Pos:[1.5d,64.0d,1.5d],UUID:[I;0,0,0,1],id:"minecraft:item"}	2	2:minecraft:item:1:0:false:true;3:minecraft:tnt:2:0:false:false	2:minecraft:item:1:-:3:true:4021000000000000,4051800000000000,4021000000000000:0,0,0:0,0;3:minecraft:tnt:2:2::false:4021000000000000,4051800000000000,4021000000000000:0,0,0:0,0	true	3	3
+entity-recursive	unknown-root	{Passengers:[{Pos:[1.5d,64.0d,1.5d],UUID:[I;0,0,0,2],id:"minecraft:tnt"}],Pos:[1.5d,64.0d,1.5d],UUID:[I;0,0,0,1],id:"missing:unknown"}	2	-	-	none	-	1
+entity-recursive	unknown-child	{Passengers:[{Passengers:[{Pos:[1.5d,64.0d,1.5d],UUID:[I;0,0,0,3],id:"minecraft:tnt"}],Pos:[1.5d,64.0d,1.5d],UUID:[I;0,0,0,2],id:"missing:unknown"},{Pos:[1.5d,64.0d,1.5d],UUID:[I;0,0,0,4],id:"minecraft:tnt"}],Pos:[1.5d,64.0d,1.5d],Rotation:[],UUID:[I;0,0,0,1],id:"minecraft:tnt"}	2	2:minecraft:tnt:1:0:false:false;3:minecraft:tnt:4:0:false:false	2:minecraft:tnt:1:-:3:false:4021000000000000,4051800000000000,4021000000000000:0,0,0:0,0;3:minecraft:tnt:4:2::false:4021000000000000,4051800000000000,4021000000000000:0,0,0:0,0	true	2,3	3
+entity-recursive	invalid-position	{Pos:[NaNd,64.0d,0.0d],Rotation:[],UUID:[I;0,0,0,1],id:"minecraft:tnt"}	2	-	-	none	-	2
+entity-recursive	player-null	{Pos:[1.5d,64.0d,1.5d],UUID:[I;0,0,0,1],id:"minecraft:player"}	2	-	-	none	-	1
+entity-recursive	peaceful-zombie	{Pos:[1.5d,64.0d,1.5d],UUID:[I;0,0,0,1],id:"minecraft:zombie"}	0	-	-	none	-	1
+mob-variant	minecraft:cold	[{"condition":{"biomes":"#minecraft:spawns_cold_variant_farm_animals","type":"minecraft:biome"},"priority":1}]
+mob-variant	minecraft:temperate	[{"priority":0}]
+mob-variant	minecraft:warm	[{"condition":{"biomes":"#minecraft:spawns_warm_variant_farm_animals","type":"minecraft:biome"},"priority":1}]
+mob-sound	minecraft:classic
+mob-sound	minecraft:moody
+variant-select	0	0	c	[0, 1, 2, 3]	c	-3109364765729502342
+variant-select	0	1	c	[0, 1, 2, 3]	c	1853403699951111791
+variant-select	0	12345	c	[0, 1, 2, 3]	c	-8979699159253079774
+variant-select	1	0	a	[0, 1, 2]	a	-3109364765729502342
+variant-select	1	1	a	[0, 1, 2]	a	1853403699951111791
+variant-select	1	12345	a	[0, 1, 2]	a	-8979699159253079774
+variant-select	2	0	a	[0, 1, 2]	a	-3109364765729502342
+variant-select	2	1	a	[0, 1, 2]	a	1853403699951111791
+variant-select	2	12345	a	[0, 1, 2]	a	-8979699159253079774
+variant-select	3	0	a,a	[0, 1, 2]	a	-3109364765729502342
+variant-select	3	1	a,a	[0, 1, 2]	a	1853403699951111791
+variant-select	3	12345	a,a	[0, 1, 2]	a	-8979699159253079774
+variant-select	4	0	b	[0, 1, 2]	b	-3109364765729502342
+variant-select	4	1	b	[0, 1, 2]	b	1853403699951111791
+variant-select	4	12345	b	[0, 1, 2]	b	-8979699159253079774
+variant-select	5	0	a,b	[0, 1, 2]	b	-3109364765729502342
+variant-select	5	1	a,b	[0, 1, 2]	b	1853403699951111791
+variant-select	5	12345	a,b	[0, 1, 2]	a	-8979699159253079774
+variant-select	6	0	a,b	[0, 1, 2]	b	-3109364765729502342
+variant-select	6	1	a,b	[0, 1, 2]	b	1853403699951111791
+variant-select	6	12345	a,b	[0, 1, 2]	a	-8979699159253079774
+variant-select	7	0	a,a,b	[0, 1, 2]	a	-3109364765729502342
+variant-select	7	1	a,a,b	[0, 1, 2]	a	1853403699951111791
+variant-select	7	12345	a,a,b	[0, 1, 2]	a	-8979699159253079774
+variant-select	8	0		[]	-	-4962768465676381896
+variant-select	8	1		[]	-	-4964420948893066024
+variant-select	8	12345		[]	-	6674089274190705457
+variant-select	9	0		[0]	-	-4962768465676381896
+variant-select	9	1		[0]	-	-4964420948893066024
+variant-select	9	12345		[0]	-	6674089274190705457
+cow-finalize	minecraft:plains	0	new	minecraft:temperate	minecraft:moody	0	false	5	1	true	3d4ccccd	bfa7567eded11547	1	true	3f666666,3fb33333	2158390814503909950	-7350344493891465338
+cow-finalize	minecraft:plains	0	group-first	minecraft:temperate	minecraft:moody	0	false	5	1	true	3d4ccccd	bfa7567eded11547	1	true	3f666666,3fb33333	2158390814503909950	-7350344493891465338
+cow-finalize	minecraft:plains	0	group-next	minecraft:temperate	minecraft:moody	0	false	5	2	true	3d4ccccd	3fa17b5c445d0d24	1	true	3f666666,3fb33333	-7423979211207825555	-7350344493891465338
+cow-finalize	minecraft:plains	0	force-baby	minecraft:temperate	minecraft:moody	-24000	true	5	2	true	3f800000	3fa17b5c445d0d24	1	true	3ee66666,3f333333	-7423979211207825555	-7350344493891465338
+cow-finalize	minecraft:plains	0	never-baby	minecraft:temperate	minecraft:moody	0	false	5	2	false	3f800000	bfa7567eded11547	1	true	3f666666,3fb33333	2158390814503909950	-7350344493891465338
+cow-finalize	minecraft:plains	0	existing-bonus	minecraft:temperate	minecraft:moody	0	false	5	1	true	3d4ccccd	3fd0000000000000	0	true	3f666666,3fb33333	-7261648964369397258	-7350344493891465338
+cow-finalize	minecraft:plains	0	already-baby	minecraft:temperate	minecraft:moody	-24000	true	5	2	true	3f800000	3fa17b5c445d0d24	1	true	3ee66666,3f333333	-7423979211207825555	-7350344493891465338
+cow-finalize	minecraft:plains	0	locked-age	minecraft:temperate	minecraft:moody	-24000	true	5	2	true	3f800000	3fa17b5c445d0d24	1	true	3ee66666,3f333333	-7423979211207825555	-7350344493891465338
+cow-finalize	minecraft:plains	1	new	minecraft:temperate	minecraft:classic	0	false	5	1	true	3d4ccccd	3f97ccae35cb43d4	1	true	3f666666,3fb33333	-6292788870224356907	-7350344493891465338
+cow-finalize	minecraft:plains	1	group-first	minecraft:temperate	minecraft:classic	0	false	5	1	true	3d4ccccd	3f97ccae35cb43d4	1	true	3f666666,3fb33333	-6292788870224356907	-7350344493891465338
+cow-finalize	minecraft:plains	1	group-next	minecraft:temperate	minecraft:classic	0	false	5	2	true	3d4ccccd	3fa5d3f84ff2ae01	1	true	3f666666,3fb33333	-594798593157429144	-7350344493891465338
+cow-finalize	minecraft:plains	1	force-baby	minecraft:temperate	minecraft:classic	-24000	true	5	2	true	3f800000	3fa5d3f84ff2ae01	1	true	3ee66666,3f333333	-594798593157429144	-7350344493891465338
+cow-finalize	minecraft:plains	1	never-baby	minecraft:temperate	minecraft:classic	0	false	5	2	false	3f800000	3f97ccae35cb43d4	1	true	3f666666,3fb33333	-6292788870224356907	-7350344493891465338
+cow-finalize	minecraft:plains	1	existing-bonus	minecraft:temperate	minecraft:classic	0	false	5	1	true	3d4ccccd	3fd0000000000000	0	true	3f666666,3fb33333	7515937759503895804	-7350344493891465338
+cow-finalize	minecraft:plains	1	already-baby	minecraft:temperate	minecraft:classic	-24000	true	5	2	true	3f800000	3fa5d3f84ff2ae01	1	true	3ee66666,3f333333	-594798593157429144	-7350344493891465338
+cow-finalize	minecraft:plains	1	locked-age	minecraft:temperate	minecraft:classic	-24000	true	5	2	true	3f800000	3fa5d3f84ff2ae01	1	true	3ee66666,3f333333	-594798593157429144	-7350344493891465338
+cow-finalize	minecraft:plains	7	new	minecraft:temperate	minecraft:moody	0	false	5	1	true	3d4ccccd	3fa792646d081b59	1	true	3f666666,3fb33333	-4748404165971339003	-7350344493891465338
+cow-finalize	minecraft:plains	7	group-first	minecraft:temperate	minecraft:moody	0	false	5	1	true	3d4ccccd	3fa792646d081b59	1	true	3f666666,3fb33333	-4748404165971339003	-7350344493891465338
+cow-finalize	minecraft:plains	7	group-next	minecraft:temperate	minecraft:moody	0	false	5	2	true	3d4ccccd	bfac486e3a2d0532	1	true	3f666666,3fb33333	-5383181422176253347	-7350344493891465338
+cow-finalize	minecraft:plains	7	force-baby	minecraft:temperate	minecraft:moody	-24000	true	5	2	true	3f800000	bfac486e3a2d0532	1	true	3ee66666,3f333333	-5383181422176253347	-7350344493891465338
+cow-finalize	minecraft:plains	7	never-baby	minecraft:temperate	minecraft:moody	0	false	5	2	false	3f800000	3fa792646d081b59	1	true	3f666666,3fb33333	-4748404165971339003	-7350344493891465338
+cow-finalize	minecraft:plains	7	existing-bonus	minecraft:temperate	minecraft:moody	0	false	5	1	true	3d4ccccd	3fd0000000000000	0	true	3f666666,3fb33333	177623051241444105	-7350344493891465338
+cow-finalize	minecraft:plains	7	already-baby	minecraft:temperate	minecraft:moody	-24000	true	5	2	true	3f800000	bfac486e3a2d0532	1	true	3ee66666,3f333333	-5383181422176253347	-7350344493891465338
+cow-finalize	minecraft:plains	7	locked-age	minecraft:temperate	minecraft:moody	-24000	true	5	2	true	3f800000	bfac486e3a2d0532	1	true	3ee66666,3f333333	-5383181422176253347	-7350344493891465338
+cow-finalize	minecraft:plains	12345	new	minecraft:temperate	minecraft:moody	0	false	5	1	true	3d4ccccd	3f877f8e0bee7c8d	1	true	3f666666,3fb33333	2299721358978533787	-7350344493891465338
+cow-finalize	minecraft:plains	12345	group-first	minecraft:temperate	minecraft:moody	0	false	5	1	true	3d4ccccd	3f877f8e0bee7c8d	1	true	3f666666,3fb33333	2299721358978533787	-7350344493891465338
+cow-finalize	minecraft:plains	12345	group-next	minecraft:temperate	minecraft:moody	0	false	5	2	true	3d4ccccd	3fb9db63f54ecdc4	1	true	3f666666,3fb33333	4344647195749500666	-7350344493891465338
+cow-finalize	minecraft:plains	12345	force-baby	minecraft:temperate	minecraft:moody	-24000	true	5	2	true	3f800000	3fb9db63f54ecdc4	1	true	3ee66666,3f333333	4344647195749500666	-7350344493891465338
+cow-finalize	minecraft:plains	12345	never-baby	minecraft:temperate	minecraft:moody	0	false	5	2	false	3f800000	3f877f8e0bee7c8d	1	true	3f666666,3fb33333	2299721358978533787	-7350344493891465338
+cow-finalize	minecraft:plains	12345	existing-bonus	minecraft:temperate	minecraft:moody	0	false	5	1	true	3d4ccccd	3fd0000000000000	0	true	3f666666,3fb33333	-1528963862231680626	-7350344493891465338
+cow-finalize	minecraft:plains	12345	already-baby	minecraft:temperate	minecraft:moody	-24000	true	5	2	true	3f800000	3fb9db63f54ecdc4	1	true	3ee66666,3f333333	4344647195749500666	-7350344493891465338
+cow-finalize	minecraft:plains	12345	locked-age	minecraft:temperate	minecraft:moody	-24000	true	5	2	true	3f800000	3fb9db63f54ecdc4	1	true	3ee66666,3f333333	4344647195749500666	-7350344493891465338
+cow-finalize	minecraft:plains	987654321	new	minecraft:temperate	minecraft:moody	0	false	5	1	true	3d4ccccd	3fb6bafd7ec25b8d	1	true	3f666666,3fb33333	4765195043050656420	-7350344493891465338
+cow-finalize	minecraft:plains	987654321	group-first	minecraft:temperate	minecraft:moody	0	false	5	1	true	3d4ccccd	3fb6bafd7ec25b8d	1	true	3f666666,3fb33333	4765195043050656420	-7350344493891465338
+cow-finalize	minecraft:plains	987654321	group-next	minecraft:temperate	minecraft:moody	0	false	5	2	true	3d4ccccd	3f6b8bfa5472c51f	1	true	3f666666,3fb33333	179179319810873421	-7350344493891465338
+cow-finalize	minecraft:plains	987654321	force-baby	minecraft:temperate	minecraft:moody	-24000	true	5	2	true	3f800000	3f6b8bfa5472c51f	1	true	3ee66666,3f333333	179179319810873421	-7350344493891465338
+cow-finalize	minecraft:plains	987654321	never-baby	minecraft:temperate	minecraft:moody	0	false	5	2	false	3f800000	3fb6bafd7ec25b8d	1	true	3f666666,3fb33333	4765195043050656420	-7350344493891465338
+cow-finalize	minecraft:plains	987654321	existing-bonus	minecraft:temperate	minecraft:moody	0	false	5	1	true	3d4ccccd	3fd0000000000000	0	true	3f666666,3fb33333	3627702220766667225	-7350344493891465338
+cow-finalize	minecraft:plains	987654321	already-baby	minecraft:temperate	minecraft:moody	-24000	true	5	2	true	3f800000	3f6b8bfa5472c51f	1	true	3ee66666,3f333333	179179319810873421	-7350344493891465338
+cow-finalize	minecraft:plains	987654321	locked-age	minecraft:temperate	minecraft:moody	-24000	true	5	2	true	3f800000	3f6b8bfa5472c51f	1	true	3ee66666,3f333333	179179319810873421	-7350344493891465338
+cow-finalize	minecraft:desert	0	new	minecraft:warm	minecraft:moody	0	false	5	1	true	3d4ccccd	bfa7567eded11547	1	true	3f666666,3fb33333	2158390814503909950	-7350344493891465338
+cow-finalize	minecraft:desert	0	group-first	minecraft:warm	minecraft:moody	0	false	5	1	true	3d4ccccd	bfa7567eded11547	1	true	3f666666,3fb33333	2158390814503909950	-7350344493891465338
+cow-finalize	minecraft:desert	0	group-next	minecraft:warm	minecraft:moody	0	false	5	2	true	3d4ccccd	3fa17b5c445d0d24	1	true	3f666666,3fb33333	-7423979211207825555	-7350344493891465338
+cow-finalize	minecraft:desert	0	force-baby	minecraft:warm	minecraft:moody	-24000	true	5	2	true	3f800000	3fa17b5c445d0d24	1	true	3ee66666,3f333333	-7423979211207825555	-7350344493891465338
+cow-finalize	minecraft:desert	0	never-baby	minecraft:warm	minecraft:moody	0	false	5	2	false	3f800000	bfa7567eded11547	1	true	3f666666,3fb33333	2158390814503909950	-7350344493891465338
+cow-finalize	minecraft:desert	0	existing-bonus	minecraft:warm	minecraft:moody	0	false	5	1	true	3d4ccccd	3fd0000000000000	0	true	3f666666,3fb33333	-7261648964369397258	-7350344493891465338
+cow-finalize	minecraft:desert	0	already-baby	minecraft:warm	minecraft:moody	-24000	true	5	2	true	3f800000	3fa17b5c445d0d24	1	true	3ee66666,3f333333	-7423979211207825555	-7350344493891465338
+cow-finalize	minecraft:desert	0	locked-age	minecraft:warm	minecraft:moody	-24000	true	5	2	true	3f800000	3fa17b5c445d0d24	1	true	3ee66666,3f333333	-7423979211207825555	-7350344493891465338
+cow-finalize	minecraft:desert	1	new	minecraft:warm	minecraft:classic	0	false	5	1	true	3d4ccccd	3f97ccae35cb43d4	1	true	3f666666,3fb33333	-6292788870224356907	-7350344493891465338
+cow-finalize	minecraft:desert	1	group-first	minecraft:warm	minecraft:classic	0	false	5	1	true	3d4ccccd	3f97ccae35cb43d4	1	true	3f666666,3fb33333	-6292788870224356907	-7350344493891465338
+cow-finalize	minecraft:desert	1	group-next	minecraft:warm	minecraft:classic	0	false	5	2	true	3d4ccccd	3fa5d3f84ff2ae01	1	true	3f666666,3fb33333	-594798593157429144	-7350344493891465338
+cow-finalize	minecraft:desert	1	force-baby	minecraft:warm	minecraft:classic	-24000	true	5	2	true	3f800000	3fa5d3f84ff2ae01	1	true	3ee66666,3f333333	-594798593157429144	-7350344493891465338
+cow-finalize	minecraft:desert	1	never-baby	minecraft:warm	minecraft:classic	0	false	5	2	false	3f800000	3f97ccae35cb43d4	1	true	3f666666,3fb33333	-6292788870224356907	-7350344493891465338
+cow-finalize	minecraft:desert	1	existing-bonus	minecraft:warm	minecraft:classic	0	false	5	1	true	3d4ccccd	3fd0000000000000	0	true	3f666666,3fb33333	7515937759503895804	-7350344493891465338
+cow-finalize	minecraft:desert	1	already-baby	minecraft:warm	minecraft:classic	-24000	true	5	2	true	3f800000	3fa5d3f84ff2ae01	1	true	3ee66666,3f333333	-594798593157429144	-7350344493891465338
+cow-finalize	minecraft:desert	1	locked-age	minecraft:warm	minecraft:classic	-24000	true	5	2	true	3f800000	3fa5d3f84ff2ae01	1	true	3ee66666,3f333333	-594798593157429144	-7350344493891465338
+cow-finalize	minecraft:desert	7	new	minecraft:warm	minecraft:moody	0	false	5	1	true	3d4ccccd	3fa792646d081b59	1	true	3f666666,3fb33333	-4748404165971339003	-7350344493891465338
+cow-finalize	minecraft:desert	7	group-first	minecraft:warm	minecraft:moody	0	false	5	1	true	3d4ccccd	3fa792646d081b59	1	true	3f666666,3fb33333	-4748404165971339003	-7350344493891465338
+cow-finalize	minecraft:desert	7	group-next	minecraft:warm	minecraft:moody	0	false	5	2	true	3d4ccccd	bfac486e3a2d0532	1	true	3f666666,3fb33333	-5383181422176253347	-7350344493891465338
+cow-finalize	minecraft:desert	7	force-baby	minecraft:warm	minecraft:moody	-24000	true	5	2	true	3f800000	bfac486e3a2d0532	1	true	3ee66666,3f333333	-5383181422176253347	-7350344493891465338
+cow-finalize	minecraft:desert	7	never-baby	minecraft:warm	minecraft:moody	0	false	5	2	false	3f800000	3fa792646d081b59	1	true	3f666666,3fb33333	-4748404165971339003	-7350344493891465338
+cow-finalize	minecraft:desert	7	existing-bonus	minecraft:warm	minecraft:moody	0	false	5	1	true	3d4ccccd	3fd0000000000000	0	true	3f666666,3fb33333	177623051241444105	-7350344493891465338
+cow-finalize	minecraft:desert	7	already-baby	minecraft:warm	minecraft:moody	-24000	true	5	2	true	3f800000	bfac486e3a2d0532	1	true	3ee66666,3f333333	-5383181422176253347	-7350344493891465338
+cow-finalize	minecraft:desert	7	locked-age	minecraft:warm	minecraft:moody	-24000	true	5	2	true	3f800000	bfac486e3a2d0532	1	true	3ee66666,3f333333	-5383181422176253347	-7350344493891465338
+cow-finalize	minecraft:desert	12345	new	minecraft:warm	minecraft:moody	0	false	5	1	true	3d4ccccd	3f877f8e0bee7c8d	1	true	3f666666,3fb33333	2299721358978533787	-7350344493891465338
+cow-finalize	minecraft:desert	12345	group-first	minecraft:warm	minecraft:moody	0	false	5	1	true	3d4ccccd	3f877f8e0bee7c8d	1	true	3f666666,3fb33333	2299721358978533787	-7350344493891465338
+cow-finalize	minecraft:desert	12345	group-next	minecraft:warm	minecraft:moody	0	false	5	2	true	3d4ccccd	3fb9db63f54ecdc4	1	true	3f666666,3fb33333	4344647195749500666	-7350344493891465338
+cow-finalize	minecraft:desert	12345	force-baby	minecraft:warm	minecraft:moody	-24000	true	5	2	true	3f800000	3fb9db63f54ecdc4	1	true	3ee66666,3f333333	4344647195749500666	-7350344493891465338
+cow-finalize	minecraft:desert	12345	never-baby	minecraft:warm	minecraft:moody	0	false	5	2	false	3f800000	3f877f8e0bee7c8d	1	true	3f666666,3fb33333	2299721358978533787	-7350344493891465338
+cow-finalize	minecraft:desert	12345	existing-bonus	minecraft:warm	minecraft:moody	0	false	5	1	true	3d4ccccd	3fd0000000000000	0	true	3f666666,3fb33333	-1528963862231680626	-7350344493891465338
+cow-finalize	minecraft:desert	12345	already-baby	minecraft:warm	minecraft:moody	-24000	true	5	2	true	3f800000	3fb9db63f54ecdc4	1	true	3ee66666,3f333333	4344647195749500666	-7350344493891465338
+cow-finalize	minecraft:desert	12345	locked-age	minecraft:warm	minecraft:moody	-24000	true	5	2	true	3f800000	3fb9db63f54ecdc4	1	true	3ee66666,3f333333	4344647195749500666	-7350344493891465338
+cow-finalize	minecraft:desert	987654321	new	minecraft:warm	minecraft:moody	0	false	5	1	true	3d4ccccd	3fb6bafd7ec25b8d	1	true	3f666666,3fb33333	4765195043050656420	-7350344493891465338
+cow-finalize	minecraft:desert	987654321	group-first	minecraft:warm	minecraft:moody	0	false	5	1	true	3d4ccccd	3fb6bafd7ec25b8d	1	true	3f666666,3fb33333	4765195043050656420	-7350344493891465338
+cow-finalize	minecraft:desert	987654321	group-next	minecraft:warm	minecraft:moody	0	false	5	2	true	3d4ccccd	3f6b8bfa5472c51f	1	true	3f666666,3fb33333	179179319810873421	-7350344493891465338
+cow-finalize	minecraft:desert	987654321	force-baby	minecraft:warm	minecraft:moody	-24000	true	5	2	true	3f800000	3f6b8bfa5472c51f	1	true	3ee66666,3f333333	179179319810873421	-7350344493891465338
+cow-finalize	minecraft:desert	987654321	never-baby	minecraft:warm	minecraft:moody	0	false	5	2	false	3f800000	3fb6bafd7ec25b8d	1	true	3f666666,3fb33333	4765195043050656420	-7350344493891465338
+cow-finalize	minecraft:desert	987654321	existing-bonus	minecraft:warm	minecraft:moody	0	false	5	1	true	3d4ccccd	3fd0000000000000	0	true	3f666666,3fb33333	3627702220766667225	-7350344493891465338
+cow-finalize	minecraft:desert	987654321	already-baby	minecraft:warm	minecraft:moody	-24000	true	5	2	true	3f800000	3f6b8bfa5472c51f	1	true	3ee66666,3f333333	179179319810873421	-7350344493891465338
+cow-finalize	minecraft:desert	987654321	locked-age	minecraft:warm	minecraft:moody	-24000	true	5	2	true	3f800000	3f6b8bfa5472c51f	1	true	3ee66666,3f333333	179179319810873421	-7350344493891465338
+cow-finalize	minecraft:snowy_plains	0	new	minecraft:cold	minecraft:moody	0	false	5	1	true	3d4ccccd	bfa7567eded11547	1	true	3f666666,3fb33333	2158390814503909950	-7350344493891465338
+cow-finalize	minecraft:snowy_plains	0	group-first	minecraft:cold	minecraft:moody	0	false	5	1	true	3d4ccccd	bfa7567eded11547	1	true	3f666666,3fb33333	2158390814503909950	-7350344493891465338
+cow-finalize	minecraft:snowy_plains	0	group-next	minecraft:cold	minecraft:moody	0	false	5	2	true	3d4ccccd	3fa17b5c445d0d24	1	true	3f666666,3fb33333	-7423979211207825555	-7350344493891465338
+cow-finalize	minecraft:snowy_plains	0	force-baby	minecraft:cold	minecraft:moody	-24000	true	5	2	true	3f800000	3fa17b5c445d0d24	1	true	3ee66666,3f333333	-7423979211207825555	-7350344493891465338
+cow-finalize	minecraft:snowy_plains	0	never-baby	minecraft:cold	minecraft:moody	0	false	5	2	false	3f800000	bfa7567eded11547	1	true	3f666666,3fb33333	2158390814503909950	-7350344493891465338
+cow-finalize	minecraft:snowy_plains	0	existing-bonus	minecraft:cold	minecraft:moody	0	false	5	1	true	3d4ccccd	3fd0000000000000	0	true	3f666666,3fb33333	-7261648964369397258	-7350344493891465338
+cow-finalize	minecraft:snowy_plains	0	already-baby	minecraft:cold	minecraft:moody	-24000	true	5	2	true	3f800000	3fa17b5c445d0d24	1	true	3ee66666,3f333333	-7423979211207825555	-7350344493891465338
+cow-finalize	minecraft:snowy_plains	0	locked-age	minecraft:cold	minecraft:moody	-24000	true	5	2	true	3f800000	3fa17b5c445d0d24	1	true	3ee66666,3f333333	-7423979211207825555	-7350344493891465338
+cow-finalize	minecraft:snowy_plains	1	new	minecraft:cold	minecraft:classic	0	false	5	1	true	3d4ccccd	3f97ccae35cb43d4	1	true	3f666666,3fb33333	-6292788870224356907	-7350344493891465338
+cow-finalize	minecraft:snowy_plains	1	group-first	minecraft:cold	minecraft:classic	0	false	5	1	true	3d4ccccd	3f97ccae35cb43d4	1	true	3f666666,3fb33333	-6292788870224356907	-7350344493891465338
+cow-finalize	minecraft:snowy_plains	1	group-next	minecraft:cold	minecraft:classic	0	false	5	2	true	3d4ccccd	3fa5d3f84ff2ae01	1	true	3f666666,3fb33333	-594798593157429144	-7350344493891465338
+cow-finalize	minecraft:snowy_plains	1	force-baby	minecraft:cold	minecraft:classic	-24000	true	5	2	true	3f800000	3fa5d3f84ff2ae01	1	true	3ee66666,3f333333	-594798593157429144	-7350344493891465338
+cow-finalize	minecraft:snowy_plains	1	never-baby	minecraft:cold	minecraft:classic	0	false	5	2	false	3f800000	3f97ccae35cb43d4	1	true	3f666666,3fb33333	-6292788870224356907	-7350344493891465338
+cow-finalize	minecraft:snowy_plains	1	existing-bonus	minecraft:cold	minecraft:classic	0	false	5	1	true	3d4ccccd	3fd0000000000000	0	true	3f666666,3fb33333	7515937759503895804	-7350344493891465338
+cow-finalize	minecraft:snowy_plains	1	already-baby	minecraft:cold	minecraft:classic	-24000	true	5	2	true	3f800000	3fa5d3f84ff2ae01	1	true	3ee66666,3f333333	-594798593157429144	-7350344493891465338
+cow-finalize	minecraft:snowy_plains	1	locked-age	minecraft:cold	minecraft:classic	-24000	true	5	2	true	3f800000	3fa5d3f84ff2ae01	1	true	3ee66666,3f333333	-594798593157429144	-7350344493891465338
+cow-finalize	minecraft:snowy_plains	7	new	minecraft:cold	minecraft:moody	0	false	5	1	true	3d4ccccd	3fa792646d081b59	1	true	3f666666,3fb33333	-4748404165971339003	-7350344493891465338
+cow-finalize	minecraft:snowy_plains	7	group-first	minecraft:cold	minecraft:moody	0	false	5	1	true	3d4ccccd	3fa792646d081b59	1	true	3f666666,3fb33333	-4748404165971339003	-7350344493891465338
+cow-finalize	minecraft:snowy_plains	7	group-next	minecraft:cold	minecraft:moody	0	false	5	2	true	3d4ccccd	bfac486e3a2d0532	1	true	3f666666,3fb33333	-5383181422176253347	-7350344493891465338
+cow-finalize	minecraft:snowy_plains	7	force-baby	minecraft:cold	minecraft:moody	-24000	true	5	2	true	3f800000	bfac486e3a2d0532	1	true	3ee66666,3f333333	-5383181422176253347	-7350344493891465338
+cow-finalize	minecraft:snowy_plains	7	never-baby	minecraft:cold	minecraft:moody	0	false	5	2	false	3f800000	3fa792646d081b59	1	true	3f666666,3fb33333	-4748404165971339003	-7350344493891465338
+cow-finalize	minecraft:snowy_plains	7	existing-bonus	minecraft:cold	minecraft:moody	0	false	5	1	true	3d4ccccd	3fd0000000000000	0	true	3f666666,3fb33333	177623051241444105	-7350344493891465338
+cow-finalize	minecraft:snowy_plains	7	already-baby	minecraft:cold	minecraft:moody	-24000	true	5	2	true	3f800000	bfac486e3a2d0532	1	true	3ee66666,3f333333	-5383181422176253347	-7350344493891465338
+cow-finalize	minecraft:snowy_plains	7	locked-age	minecraft:cold	minecraft:moody	-24000	true	5	2	true	3f800000	bfac486e3a2d0532	1	true	3ee66666,3f333333	-5383181422176253347	-7350344493891465338
+cow-finalize	minecraft:snowy_plains	12345	new	minecraft:cold	minecraft:moody	0	false	5	1	true	3d4ccccd	3f877f8e0bee7c8d	1	true	3f666666,3fb33333	2299721358978533787	-7350344493891465338
+cow-finalize	minecraft:snowy_plains	12345	group-first	minecraft:cold	minecraft:moody	0	false	5	1	true	3d4ccccd	3f877f8e0bee7c8d	1	true	3f666666,3fb33333	2299721358978533787	-7350344493891465338
+cow-finalize	minecraft:snowy_plains	12345	group-next	minecraft:cold	minecraft:moody	0	false	5	2	true	3d4ccccd	3fb9db63f54ecdc4	1	true	3f666666,3fb33333	4344647195749500666	-7350344493891465338
+cow-finalize	minecraft:snowy_plains	12345	force-baby	minecraft:cold	minecraft:moody	-24000	true	5	2	true	3f800000	3fb9db63f54ecdc4	1	true	3ee66666,3f333333	4344647195749500666	-7350344493891465338
+cow-finalize	minecraft:snowy_plains	12345	never-baby	minecraft:cold	minecraft:moody	0	false	5	2	false	3f800000	3f877f8e0bee7c8d	1	true	3f666666,3fb33333	2299721358978533787	-7350344493891465338
+cow-finalize	minecraft:snowy_plains	12345	existing-bonus	minecraft:cold	minecraft:moody	0	false	5	1	true	3d4ccccd	3fd0000000000000	0	true	3f666666,3fb33333	-1528963862231680626	-7350344493891465338
+cow-finalize	minecraft:snowy_plains	12345	already-baby	minecraft:cold	minecraft:moody	-24000	true	5	2	true	3f800000	3fb9db63f54ecdc4	1	true	3ee66666,3f333333	4344647195749500666	-7350344493891465338
+cow-finalize	minecraft:snowy_plains	12345	locked-age	minecraft:cold	minecraft:moody	-24000	true	5	2	true	3f800000	3fb9db63f54ecdc4	1	true	3ee66666,3f333333	4344647195749500666	-7350344493891465338
+cow-finalize	minecraft:snowy_plains	987654321	new	minecraft:cold	minecraft:moody	0	false	5	1	true	3d4ccccd	3fb6bafd7ec25b8d	1	true	3f666666,3fb33333	4765195043050656420	-7350344493891465338
+cow-finalize	minecraft:snowy_plains	987654321	group-first	minecraft:cold	minecraft:moody	0	false	5	1	true	3d4ccccd	3fb6bafd7ec25b8d	1	true	3f666666,3fb33333	4765195043050656420	-7350344493891465338
+cow-finalize	minecraft:snowy_plains	987654321	group-next	minecraft:cold	minecraft:moody	0	false	5	2	true	3d4ccccd	3f6b8bfa5472c51f	1	true	3f666666,3fb33333	179179319810873421	-7350344493891465338
+cow-finalize	minecraft:snowy_plains	987654321	force-baby	minecraft:cold	minecraft:moody	-24000	true	5	2	true	3f800000	3f6b8bfa5472c51f	1	true	3ee66666,3f333333	179179319810873421	-7350344493891465338
+cow-finalize	minecraft:snowy_plains	987654321	never-baby	minecraft:cold	minecraft:moody	0	false	5	2	false	3f800000	3fb6bafd7ec25b8d	1	true	3f666666,3fb33333	4765195043050656420	-7350344493891465338
+cow-finalize	minecraft:snowy_plains	987654321	existing-bonus	minecraft:cold	minecraft:moody	0	false	5	1	true	3d4ccccd	3fd0000000000000	0	true	3f666666,3fb33333	3627702220766667225	-7350344493891465338
+cow-finalize	minecraft:snowy_plains	987654321	already-baby	minecraft:cold	minecraft:moody	-24000	true	5	2	true	3f800000	3f6b8bfa5472c51f	1	true	3ee66666,3f333333	179179319810873421	-7350344493891465338
+cow-finalize	minecraft:snowy_plains	987654321	locked-age	minecraft:cold	minecraft:moody	-24000	true	5	2	true	3f800000	3f6b8bfa5472c51f	1	true	3ee66666,3f333333	179179319810873421	-7350344493891465338
