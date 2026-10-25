@@ -197,6 +197,20 @@ impl Rewards {
                 packet
                     .added
                     .sort_by_key(|entry| entry.advancement.id.to_string());
+                // TreeNodePosition#firstWalk traverses ReferenceOpenHashSet children, so
+                // incidental display advancements also have identity-dependent y coordinates.
+                // Preserve every x and the display-less recipe nodes' zero x and y.
+                for entry in &mut packet.added {
+                    if entry.advancement.value.display.is_some()
+                        && !entry
+                            .advancement
+                            .id
+                            .as_str()
+                            .starts_with("minecraft:recipes/")
+                    {
+                        entry.y = 0.0;
+                    }
+                }
                 // Completed display-less nodes are visible too. Obtained wall-clock timestamps
                 // vary; retain criterion presence and all other values, arrays and packet order.
                 for progress in &mut packet.progress {
