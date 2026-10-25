@@ -5,6 +5,7 @@ pub mod builtins;
 pub mod clocks;
 pub mod components;
 pub mod context;
+pub mod data;
 pub mod exceptions;
 pub mod execution;
 pub mod feedback;
