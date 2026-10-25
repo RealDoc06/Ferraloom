@@ -47,6 +47,7 @@ fn gamerules() -> Result<Vec<Case>> {
             cases.push(Case {
                 name: format!("{path}.query"),
                 path: Some(path.clone()),
+                pending: None,
                 steps: vec![argument(
                     Step::feedback(format!("gamerule {name}"), "commands.gamerule.query"),
                     "commands.gamerule.query",
@@ -113,6 +114,9 @@ fn gamerules() -> Result<Vec<Case>> {
             cases.push(Case {
                 name: format!("{path}.set"),
                 path: Some(format!("{path}.arg-value")),
+                pending: name
+                    .ends_with("locator_bar")
+                    .then(|| "waypoint service".into()),
                 steps,
             });
         }

@@ -18,6 +18,7 @@ use std::{collections::BTreeMap, time::Duration};
 pub struct Case {
     pub name: String,
     pub path: Option<String>,
+    pub pending: Option<String>,
     pub steps: Vec<Step>,
 }
 #[derive(Clone, Debug, Deserialize)]
@@ -48,6 +49,10 @@ pub enum Check {
         slot: i32,
         item: String,
         count: i32,
+    },
+    Color {
+        key: String,
+        value: String,
     },
     Argument {
         key: String,
@@ -148,6 +153,9 @@ impl Case {
     /// A successful descendant exercises its non-executable prefixes too. The
     /// observed leaf is explicit; no syntax-only failure grants runtime coverage.
     pub fn paths(&self) -> Vec<String> {
+        if self.pending.is_some() {
+            return Vec::new();
+        }
         let Some(mut path) = self.path.clone() else {
             return Vec::new();
         };
@@ -407,7 +415,13 @@ impl Driver<'_> {
     }
     async fn capture(&mut self, actor: BotId, step: &Step) -> Result<Vec<Value>> {
         self.exchange(actor, None).await?;
-        self.exchange(actor, Some(step)).await
+        let mut events = self.exchange(actor, Some(step)).await?;
+        if !step.stop {
+            // Async message resolution may complete after the first fence. Once
+            // its feedback arrives, fence the remaining packets into this step.
+            events.extend(self.exchange(actor, None).await?);
+        }
+        Ok(events)
     }
     async fn game_time(&mut self, actor: BotId) -> Result<i64> {
         let events = self
@@ -543,6 +557,13 @@ impl Driver<'_> {
                     }
                     let snapshot = self.session.bot(actor)?.snapshot();
                     checks.push(json!({"blocks":(min[0]..=max[0]).flat_map(|x|(min[1]..=max[1]).flat_map(move|y|(min[2]..=max[2]).map(move|z|[x,y,z]))).map(|[x,y,z]|json!([x,y,z,snapshot.block(BlockPos::new(x,y,z)).unwrap().id()])).collect::<Vec<_>>()}));
+                }
+                Check::Color { key, value } => {
+                    let actual = events.iter().find_map(|event| translation(event, key))
+                        .and_then(|content| content.get("color"));
+                    ensure!(actual.and_then(Value::as_str) == Some(value.as_str()),
+                        "wrong {key} color: {actual:?}, expected {value}");
+                    checks.push(json!({"key":key,"color":value}));
                 }
                 Check::Argument { key, index, value } => {
                     let actual = events
@@ -694,6 +715,10 @@ pub async fn run_family(family: &'static str) -> Result<()> {
             Step::feedback("gamemode spectator", "commands.gamemode.success.self"),
             Step::feedback("time set 1234", "commands.time.set.absolute"),
             Step::feedback(
+                "time of minecraft:the_end set 1234",
+                "commands.time.set.absolute",
+            ),
+            Step::feedback(
                 "teleport @s 0.5 -63.0 0.5",
                 "commands.teleport.success.location.single",
             ),
@@ -720,7 +745,13 @@ pub async fn run_family(family: &'static str) -> Result<()> {
                 }
             }
             eprintln!("PATH {} -> {}", case.name, serde_json::to_string(&outputs)?);
-            log.record(&case.name, json!({"paths":case.paths(),"steps":outputs}))?;
+            if let Some(reason) = &case.pending {
+                // Keep setup and local state assertions active without granting
+                // parity or path coverage while an owned runtime service is absent.
+                eprintln!("PENDING {}: {reason}", case.name);
+            } else {
+                log.record(&case.name, json!({"paths":case.paths(),"steps":outputs}))?;
+            }
         }
         ensure!(
             failures.is_empty(),

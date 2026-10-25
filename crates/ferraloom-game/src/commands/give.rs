@@ -184,6 +184,7 @@ mod tests {
             serde_json::from_str(include_str!("vanilla/give-vectors.json")).unwrap();
         for row in &rows {
             let mut level = crate::entity::tests::level(false);
+            level.set_unported_behavior(crate::block::UnportedBehavior::Strict);
             crate::level::drop_fixtures::install(&mut level);
             level.install_shared(Box::default());
             let mut players = Vec::new();
@@ -303,6 +304,7 @@ mod tests {
                 })
                 .collect();
             actual.insert("sounds".into(), json!(sounds));
+            assert_eq!(level.unported_behavior_stats().skipped_calls, 0, "{row}");
             for (key, value) in actual {
                 assert_eq!(value, row[&key], "{key}: {row}");
             }

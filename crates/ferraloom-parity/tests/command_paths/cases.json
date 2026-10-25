@@ -884,7 +884,8 @@
             "commands.team.join.success.multiple"
           ]
         }
-      ]
+      ],
+      "pending": "waypoint service"
     },
     {
       "name": "commands.path.teammsg.arg-message.unsigned",
@@ -1619,10 +1620,19 @@
         {
           "command": "kick PathGuest",
           "keys": [
-            "commands.kick.success"
+            "commands.kick.success",
+            "multiplayer.player.left"
+          ],
+          "checks": [
+            {
+              "kind": "color",
+              "key": "multiplayer.player.left",
+              "value": "yellow"
+            }
           ]
         }
-      ]
+      ],
+      "pending": "waypoint service"
     },
     {
       "name": "commands.path.kick.arg-targets.arg-reason",
@@ -1631,10 +1641,19 @@
         {
           "command": "kick KickGuest custom kick reason",
           "keys": [
-            "commands.kick.success"
+            "commands.kick.success",
+            "multiplayer.player.left"
+          ],
+          "checks": [
+            {
+              "kind": "color",
+              "key": "multiplayer.player.left",
+              "value": "yellow"
+            }
           ]
         }
-      ]
+      ],
+      "pending": "waypoint service"
     },
     {
       "name": "commands.path.stop",
