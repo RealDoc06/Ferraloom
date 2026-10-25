@@ -50,6 +50,17 @@ use std::{
 };
 use tokio::sync::oneshot;
 
+mod root;
+use root::StartupSpawn;
+pub use root::{WorldRoot, WorldServices};
+
+impl std::ops::Deref for World {
+    type Target = WorldServices;
+    fn deref(&self) -> &Self::Target {
+        &self.services
+    }
+}
+
 pub struct RegistryAdapter {
     biomes: Vec<String>,
     strategy: Strategy<BiomeId>,
@@ -613,15 +624,13 @@ struct ChunkUnload {
     request_id: u64,
     saving: oneshot::Receiver<Result<()>>,
 }
+/// Dimension-owned chunk/generation state; global metadata belongs to WorldRoot.
 pub struct World {
-    pub access: Arc<LevelStorageAccess>,
-    pub level_data: LevelData,
-    pub seed: i64,
-    pub spawn: BlockPos,
-    pub registry: Arc<RegistryAdapter>,
+    services: Arc<WorldServices>,
+    pub dimension_key: ferraloom_protocol::Identifier,
+    initial_difficulty: Difficulty,
     pub io: Arc<IoWorker>,
     entity_io: Option<EntityIo>,
-    pub dimensions: WorldDimensions,
     generator: Arc<ChunkGenerator>,
     dimension: DimensionType,
     initial_chunks: BTreeMap<i64, Terrain>,
@@ -643,7 +652,7 @@ pub struct World {
     cancelled_outputs: Vec<GenerationOutput>,
     unloading: VecDeque<ChunkUnload>,
     evictions: Vec<ChunkPos>,
-    saving: JobPool,
+    saving: Arc<JobPool>,
     pending: BTreeMap<u64, (ChunkPos, oneshot::Receiver<Result<GenerationOutput>>)>,
     completed_generation: VecDeque<ReadyGeneration>,
     pub(crate) exclusive_ready_tasks: VecDeque<GenerationIdentity>,
@@ -728,122 +737,51 @@ impl EntityIo {
     }
 }
 impl World {
-    pub fn open(
-        root: &Path,
+    /// Construct one dimension's owned runtime, returning bootstrap spawn data
+    /// for the sole PrimaryLevelData owner before the live level is published.
+    fn open_dimension(
+        services: Arc<WorldServices>,
+        dimension_key: ferraloom_protocol::Identifier,
         properties: &ServerProperties,
-        resources: &ResourceManager,
-        registries: &RegistrySet,
-        unported_behavior: ferraloom_game::block::UnportedBehavior,
-    ) -> Result<Self> {
-        let access = Arc::new(LevelStorageAccess::open(
-            root.join(properties.get("level-name")),
-        )?);
-        let saved_data = SavedDataStorage::new(access.path().join("data"));
-        let settings = saved_data.load::<CompoundTag>("minecraft:world_gen_settings")?;
-        let seed = settings
-            .as_ref()
-            .map_or_else(|| properties.seed(), |s| s.value().get_long_or("seed", 0));
-        let bonus_chest = settings
-            .as_ref()
-            .is_some_and(|settings| settings.value().get_boolean_or("bonus_chest", false));
-        // WorldOptions.CODEC defaults a missing saved field to true. Server
-        // properties supply the value only when creating a world.
-        let generate_structures = settings.as_ref().map_or_else(
-            || properties.boolean("generate-structures"),
-            |settings| settings.value().get_boolean_or("generate_structures", true),
-        );
-        let data = Arc::new(GenerationData::load(resources)?);
-        ensure!(
-            data.biome_names
-                .iter()
-                .map(ToString::to_string)
-                .collect::<Vec<_>>()
-                == registries.entries["minecraft:worldgen/biome"],
-            "worldgen biome ids differ from synchronized registry"
-        );
-        let preset = if let Some(settings) = &settings {
-            WorldPreset::decode(
-                &nbt_json(&Tag::Compound(settings.value().clone()))?,
-                resources,
-                data,
-                seed,
-            )?
-        } else {
-            let text = properties.get("generator-settings");
-            // GsonHelper reads the first strict JSON object through its type
-            // adapter without requiring EOF. Only an empty property means {}.
-            let mut parser =
-                serde_json::Deserializer::from_str(if text.is_empty() { "{}" } else { text });
-            let generator_settings = serde_json::Value::deserialize(&mut parser)
-                .context("invalid generator-settings JSON")?;
-            let preset = WorldPreset::from_server_properties(
-                properties.get("level-type"),
-                &generator_settings,
-                resources,
-                data,
-                seed,
-            )?;
-            let mut settings = json_nbt(&preset.definition)
-                .as_compound()
-                .cloned()
-                .context("world preset compound")?;
-            settings.insert("seed", Tag::Long(seed));
-            settings.insert(
-                "generate_structures",
-                Tag::Byte(i8::from(generate_structures)),
-            );
-            settings.insert("bonus_chest", Tag::Byte(0));
-            saved_data.save(
-                "minecraft:world_gen_settings",
-                &mut SavedData::new(settings),
-            )?;
-            preset
-        };
-        let dimension = preset.dimensions.overworld().dimension;
-        let generator = preset.dimensions.overworld().generator.clone();
-        let mut level_data = if access.path().join("level.dat").exists() {
-            access.read_level_data()?
-        } else {
-            new_level_data(properties)
-        };
-        // DedicatedServer#forceDifficulty ignores the saved lock at startup.
-        force_initial_difficulty(&mut level_data.data, properties.get("difficulty"));
-        access.save_level_data(&level_data)?;
-        let mut spawn = level_data
-            .data
-            .get_compound("spawn")
-            .and_then(|t| t.get_int_array("pos"))
-            .filter(|v| v.len() == 3)
-            .map_or(BlockPos::new(0, 80, 0), |v| BlockPos::new(v[0], v[1], v[2]));
+        initialize_spawn: bool,
+        initial_difficulty: Difficulty,
+    ) -> Result<(Self, Option<StartupSpawn>)> {
+        let stem = services.stem(&dimension_key)?;
+        let dimension = stem.dimension;
+        let generator = stem.generator.clone();
+        let access = services.access.clone();
+        let seed = services.seed;
+        let mut startup_spawn = None;
         let version = match properties.get("region-file-compression") {
             "none" => storage::RegionFileVersion::None,
             "lz4" => storage::RegionFileVersion::Lz4,
             _ => storage::RegionFileVersion::Deflate,
         };
         let io = IoWorker::new(
-            access.dimension("minecraft:overworld")?.region,
+            access.dimension(dimension_key.as_str())?.region,
             version,
             properties.boolean("sync-chunk-writes"),
         )?;
-        let registry = Arc::new(RegistryAdapter::new(registries)?);
-        let generation = Arc::new(JobPool::new("ferraloom-worldgen", 2)?);
-        let light_pool = Arc::new(JobPool::new("ferraloom-generation-light", 1)?);
+        let registry = services.registry.clone();
+        let generation = services.generation.clone();
+        let light_pool = services.light_pool.clone();
         let mut context = ferraloom_game::level::generation::WorldGenContext::load(
-            resources,
+            &services.resources,
             generator.clone(),
             dimension,
             seed,
-            generate_structures,
-            preset.dimensions.environment.clone(),
-            preset.dimensions.overworld().environment.clone(),
+            services.generate_structures,
+            services.dimensions.environment.clone(),
+            stem.environment.clone(),
         )?;
-        context.unported_behavior = unported_behavior;
+        context.unported_behavior = services.unported_behavior;
         let mut generation_state = GenerationState::new(Arc::new(context), light_pool);
         let mut initial_chunks = BTreeMap::new();
         let mut generation_skips = Vec::new();
-        let io = if !level_data.data.contains_key("spawn") {
+        let io = if initialize_spawn {
             let (reply, result) = mpsc::channel();
             let spawn_generator = generator.clone();
+            let bonus_chest = services.bonus_chest;
             let registry = registry.clone();
             let _task = generation.submit(move || {
                 let outcome = (|| -> Result<_> {
@@ -872,10 +810,9 @@ impl World {
             initial_chunks = chunks;
             generation_state = state;
             generation_skips = skips;
-            spawn = BlockPos::new(position[0], position[1], position[2]);
-            level_data.data.insert("spawn", spawn_tag(spawn));
-            level_data.data.insert("initialized", Tag::Byte(1));
-            access.save_level_data(&level_data)?;
+            startup_spawn = Some(StartupSpawn {
+                position: BlockPos::new(position[0], position[1], position[2]),
+            });
             if matches!(generator.as_ref(), ChunkGenerator::Noise(_)) {
                 println!(
                     "Initial spawn terrain will continue through the chunk generation pipeline."
@@ -899,69 +836,70 @@ impl World {
                     dimension.has_skylight,
                 )
             })?;
-        Ok(Self {
-            access,
-            level_data,
-            seed,
-            spawn,
-            registry,
-            io: Arc::new(io),
-            entity_io: None,
-            dimensions: preset.dimensions,
-            generator: generator.clone(),
-            dimension,
-            structure_snapshots: initial_chunks
-                .iter()
-                .filter_map(|(&key, terrain)| {
-                    terrain.disk.structures.clone().map(|data| {
-                        (
-                            key,
-                            StructureSnapshot {
-                                pos: terrain.pos,
-                                revision: terrain.revision,
-                                data,
-                                structures: terrain.structures.clone(),
-                                unattached_disk: None,
-                            },
-                        )
+        let saving = services.saving.clone();
+        Ok((
+            Self {
+                services,
+                dimension_key,
+                initial_difficulty,
+                io: Arc::new(io),
+                entity_io: None,
+                generator: generator.clone(),
+                dimension,
+                structure_snapshots: initial_chunks
+                    .iter()
+                    .filter_map(|(&key, terrain)| {
+                        terrain.disk.structures.clone().map(|data| {
+                            (
+                                key,
+                                StructureSnapshot {
+                                    pos: terrain.pos,
+                                    revision: terrain.revision,
+                                    data,
+                                    structures: terrain.structures.clone(),
+                                    unattached_disk: None,
+                                },
+                            )
+                        })
                     })
-                })
-                .collect(),
-            initial_chunks,
-            pending_structure_publications: VecDeque::new(),
-            generation_save_revisions: BTreeMap::new(),
-            proto_biomes: BTreeMap::new(),
-            generation,
-            generation_state: Some(generation_state),
-            generation_work: None,
-            progress_waker: Waker::noop().clone(),
-            generation_dispatcher: ThrottlingChunkTaskDispatcher::new(4),
-            active_generation: BTreeMap::new(),
-            running_generation: None,
-            settled_generation: VecDeque::new(),
-            retained_generation: BTreeSet::new(),
-            failed_generation: Vec::new(),
-            proto_saves: VecDeque::new(),
-            cancelled_outputs: Vec::new(),
-            unloading: VecDeque::new(),
-            evictions: Vec::new(),
-            saving: JobPool::new("ferraloom-save", 1)?,
-            pending: BTreeMap::new(),
-            completed_generation: VecDeque::new(),
-            exclusive_ready_tasks: VecDeque::new(),
-            full_promotions: BTreeMap::new(),
-            light_tx,
-            light_rx,
-            saved: BTreeMap::new(),
-            lights: BTreeMap::new(),
-            ready: Default::default(),
-            light_ready: Default::default(),
-            generation_skips,
-            pending_initial_spawns,
-            generation_statuses: BTreeMap::new(),
-            pending_light_updates: Default::default(),
-            light_chunks_to_broadcast: Default::default(),
-        })
+                    .collect(),
+                initial_chunks,
+                pending_structure_publications: VecDeque::new(),
+                generation_save_revisions: BTreeMap::new(),
+                proto_biomes: BTreeMap::new(),
+                generation,
+                generation_state: Some(generation_state),
+                generation_work: None,
+                progress_waker: Waker::noop().clone(),
+                generation_dispatcher: ThrottlingChunkTaskDispatcher::new(4),
+                active_generation: BTreeMap::new(),
+                running_generation: None,
+                settled_generation: VecDeque::new(),
+                retained_generation: BTreeSet::new(),
+                failed_generation: Vec::new(),
+                proto_saves: VecDeque::new(),
+                cancelled_outputs: Vec::new(),
+                unloading: VecDeque::new(),
+                evictions: Vec::new(),
+                saving,
+                pending: BTreeMap::new(),
+                completed_generation: VecDeque::new(),
+                exclusive_ready_tasks: VecDeque::new(),
+                full_promotions: BTreeMap::new(),
+                light_tx,
+                light_rx,
+                saved: BTreeMap::new(),
+                lights: BTreeMap::new(),
+                ready: Default::default(),
+                light_ready: Default::default(),
+                generation_skips,
+                pending_initial_spawns,
+                generation_statuses: BTreeMap::new(),
+                pending_light_updates: Default::default(),
+                light_chunks_to_broadcast: Default::default(),
+            },
+            startup_spawn,
+        ))
     }
     pub fn configure_live_rules(&self, level: &mut Level) {
         level.set_has_skylight(self.dimension.has_skylight);
@@ -997,7 +935,7 @@ impl World {
             Arc::new(ferraloom_game::entity::damage::DamageTypeRegistry::load(
                 resources,
             )?),
-            read_difficulty_settings(&self.level_data.data).0,
+            self.initial_difficulty,
         )))
     }
     /// Attach immutable dimension layers after the sole server clock manager
@@ -1007,7 +945,7 @@ impl World {
         level: &mut Level,
         clocks: ferraloom_worldgen::environment::ClockSnapshot,
     ) -> Result<()> {
-        let stem = self.dimensions.overworld();
+        let stem = self.services.stem(&self.dimension_key)?;
         level
             .set_environment_attributes(
                 self.dimensions.environment.clone(),
@@ -1046,12 +984,10 @@ impl World {
             chunk.prime_heightmaps(&captured.tags);
             write_runtime_heightmaps(&chunk, &mut terrain.disk)?;
         }
-        let weather = captured.weather;
         let border = captured.border;
-        let path = self.access.path().join("data");
+        let path = self.access.dimension(self.dimension_key.as_str())?.data;
         Ok(self.saving.submit(move || -> Result<()> {
             let saved = SavedDataStorage::new(path);
-            saved.save("minecraft:weather", &mut SavedData::new(weather))?;
             saved.save(
                 ferraloom_game::level::border::SAVED_DATA_ID,
                 &mut SavedData::new(border),
@@ -1068,7 +1004,7 @@ impl World {
             };
             self.entity_io = Some(EntityIo {
                 worker: IoWorker::new(
-                    self.access.dimension("minecraft:overworld")?.entities,
+                    self.access.dimension(self.dimension_key.as_str())?.entities,
                     version,
                     properties.boolean("sync-chunk-writes"),
                 )?,
@@ -2000,19 +1936,6 @@ impl World {
     ) -> Result<Vec<(ChunkPos, CompoundTag)>> {
         self.begin_encode_saves(snapshots).await?
     }
-    pub async fn save_level_and_players(
-        &mut self,
-        game_time: i64,
-        players: Vec<(String, CompoundTag)>,
-    ) -> Result<()> {
-        let snapshots = self.take_bootstrap_save_snapshots(game_time);
-        for (pos, tag) in self.encode_saves(snapshots).await? {
-            self.io.store(pos, Some(tag)).await?;
-        }
-        self.begin_save_level_and_players(game_time, players)
-            .await??;
-        Ok(())
-    }
     pub(crate) fn take_bootstrap_save_snapshots(
         &mut self,
         game_time: i64,
@@ -2028,52 +1951,6 @@ impl World {
                 game_time,
             })
             .collect()
-    }
-    /// Owned metadata IO operation. Caller first stores any bootstrap snapshots,
-    /// then awaits this task without retaining World or its RefCell guard.
-    pub(crate) fn begin_save_level_and_players(
-        &mut self,
-        game_time: i64,
-        players: Vec<(String, CompoundTag)>,
-    ) -> oneshot::Receiver<Result<()>> {
-        self.level_data.data.insert("Time", Tag::Long(game_time));
-        self.level_data.data.insert(
-            "LastPlayed",
-            Tag::Long(
-                time::OffsetDateTime::now_utc()
-                    .unix_timestamp_nanos()
-                    .div_euclid(1_000_000) as i64,
-            ),
-        );
-        let mut spawn = self
-            .level_data
-            .data
-            .get_compound("spawn")
-            .cloned()
-            .unwrap_or_default();
-        if !spawn.contains_key("dimension") {
-            spawn.insert("dimension", Tag::String("minecraft:overworld".into()));
-        }
-        spawn.insert(
-            "pos",
-            Tag::IntArray(vec![self.spawn.x, self.spawn.y, self.spawn.z]),
-        );
-        if !spawn.contains_key("yaw") {
-            spawn.insert("yaw", Tag::Float(0.));
-        }
-        if !spawn.contains_key("pitch") {
-            spawn.insert("pitch", Tag::Float(0.));
-        }
-        self.level_data.data.insert("spawn", Tag::Compound(spawn));
-        let access = self.access.clone();
-        let level = self.level_data.clone();
-        self.saving.submit(move || -> Result<()> {
-            for (uuid, tag) in players {
-                access.player_data().save(&uuid, &tag)?;
-            }
-            access.save_level_data(&level)?;
-            Ok(())
-        })
     }
 }
 
@@ -2668,7 +2545,7 @@ mod generation_order_tests {
             properties.set("level-type", "minecraft:debug_all_block_states");
             properties.set("level-seed", 8675309);
             properties.set("generate-structures", generate_structures);
-            let mut world = World::open(
+            let mut world_root = WorldRoot::open(
                 directory.path(),
                 &properties,
                 &resources,
@@ -2676,6 +2553,9 @@ mod generation_order_tests {
                 ferraloom_game::block::UnportedBehavior::Strict,
             )
             .unwrap();
+            let mut world = world_root
+                .open_dimension("minecraft:overworld".parse().unwrap(), &properties)
+                .unwrap();
             let saved_data = SavedDataStorage::new(world.access.path().join("data"));
             let saved = saved_data
                 .load::<CompoundTag>("minecraft:world_gen_settings")
@@ -2688,11 +2568,12 @@ mod generation_order_tests {
             assert!(!saved.value().contains_key("generate_features"));
             world.close_chunk_storage().await.unwrap();
             drop(world);
+            drop(world_root);
 
             properties.set("generate-structures", !generate_structures);
             properties.set("level-seed", 0);
             properties.set("level-type", "minecraft:flat");
-            let mut world = World::open(
+            let mut world_root = WorldRoot::open(
                 directory.path(),
                 &properties,
                 &resources,
@@ -2700,6 +2581,9 @@ mod generation_order_tests {
                 ferraloom_game::block::UnportedBehavior::Strict,
             )
             .unwrap();
+            let mut world = world_root
+                .open_dimension("minecraft:overworld".parse().unwrap(), &properties)
+                .unwrap();
             assert_eq!(
                 world
                     .generation_state
@@ -2713,6 +2597,7 @@ mod generation_order_tests {
             assert!(matches!(world.generator.as_ref(), ChunkGenerator::Debug(_)));
             world.close_chunk_storage().await.unwrap();
             drop(world);
+            drop(world_root);
 
             if !generate_structures {
                 // The old, unrelated key does not override the codec default.
@@ -2726,7 +2611,7 @@ mod generation_order_tests {
                     )
                     .unwrap();
                 properties.set("generate-structures", false);
-                let mut world = World::open(
+                let mut world_root = WorldRoot::open(
                     directory.path(),
                     &properties,
                     &resources,
@@ -2734,6 +2619,9 @@ mod generation_order_tests {
                     ferraloom_game::block::UnportedBehavior::Strict,
                 )
                 .unwrap();
+                let mut world = world_root
+                    .open_dimension("minecraft:overworld".parse().unwrap(), &properties)
+                    .unwrap();
                 assert!(
                     world
                         .generation_state
@@ -2827,7 +2715,7 @@ mod generation_order_tests {
         let mut properties = ServerProperties::from_values(Default::default());
         properties.set("level-type", "minecraft:debug_all_block_states");
         let directory = tempfile::tempdir().unwrap();
-        let mut world = World::open(
+        let mut world_root = WorldRoot::open(
             directory.path(),
             &properties,
             &resources,
@@ -2835,6 +2723,9 @@ mod generation_order_tests {
             ferraloom_game::block::UnportedBehavior::Strict,
         )
         .unwrap();
+        let mut world = world_root
+            .open_dimension("minecraft:overworld".parse().unwrap(), &properties)
+            .unwrap();
         let mut level = ServerLevel::new(
             Region::new(&BEHAVIORS),
             "minecraft:overworld",

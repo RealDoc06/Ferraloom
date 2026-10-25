@@ -15,7 +15,7 @@ use ferraloom_nbt::Tag;
 use ferraloom_storage::{SavedData, SavedDataStorage};
 use std::net::IpAddr;
 
-pub(super) fn load_game_rules(world: &World) -> Result<GameRules> {
+pub(super) fn load_game_rules(world: &WorldRoot) -> Result<GameRules> {
     let storage = SavedDataStorage::new(world.access.path().join("data"));
     let map = match storage.load::<Tag>(GameRuleMap::STORAGE_ID) {
         Ok(Some(data)) => {
@@ -34,7 +34,7 @@ pub(super) fn load_game_rules(world: &World) -> Result<GameRules> {
     Ok(GameRules::new(rule_features(world), map))
 }
 /// GameRules and command registration share WorldData#enabledFeatures.
-pub(super) fn rule_features(world: &World) -> RuleFeatures {
+pub(super) fn rule_features(world: &WorldRoot) -> RuleFeatures {
     RuleFeatures {
         minecart_improvements: world
             .level_data
@@ -71,15 +71,19 @@ impl MinecraftServer {
 
     /// Port of MinecraftServer#sendDifficultyUpdate; also used when a new player joins.
     pub(super) fn difficulty_packet(&self) -> cb::Packet {
-        let (current, locked) = self.level.generation().with_world(|world| {
-            let settings = world.level_data.data.get_compound("difficulty_settings");
+        let (current, locked) = {
+            let settings = self
+                .world_root
+                .level_data
+                .data
+                .get_compound("difficulty_settings");
             (
                 settings
                     .and_then(|tag| tag.get_string("difficulty"))
                     .map(|value| value.to_string_lossy()),
                 settings.is_some_and(|tag| tag.get_boolean_or("locked", false)),
             )
-        });
+        };
         cb::Packet::ChangeDifficulty(cb::ChangeDifficulty {
             difficulty: difficulty(
                 current
@@ -685,7 +689,7 @@ use ferraloom_game::commands::{
     context::CommandBuildContext,
 };
 pub(super) fn load_clocks(
-    world: &World,
+    world: &WorldRoot,
     resources: &ResourceManager,
 ) -> Result<ServerClockManager> {
     let storage = SavedDataStorage::new(world.access.path().join("data"));
@@ -1996,19 +2000,19 @@ impl MinecraftServer {
 
 impl MinecraftServer {
     pub(super) fn default_spawn_data(&self) -> ferraloom_game::commands::spawn::SpawnData {
-        self.level.generation().with_world(|world| {
-            let data = world.level_data.data.get_compound("spawn");
+        {
+            let data = self.world_root.level_data.data.get_compound("spawn");
             ferraloom_game::commands::spawn::SpawnData {
                 dimension: data
                     .and_then(|data| data.get_string("dimension"))
                     .map_or_else(|| "minecraft:overworld".into(), |id| id.to_string_lossy()),
-                position: world.spawn,
+                position: self.world_root.spawn_position(),
                 rotation: ferraloom_game::commands::source::Rotation {
                     yaw: data.map_or(0., |data| data.get_float_or("yaw", 0.)),
                     pitch: data.map_or(0., |data| data.get_float_or("pitch", 0.)),
                 },
             }
-        })
+        }
     }
     fn spawn_command(
         &mut self,
@@ -2029,13 +2033,10 @@ impl MinecraftServer {
         let spawn = SpawnData::command(command)?;
         if command.command == "setworldspawn" {
             if self.default_spawn_data() != spawn {
-                self.level.generation().with_world_mut(|world| {
-                    world.spawn = spawn.position;
-                    world
-                        .level_data
-                        .data
-                        .insert("spawn", Tag::Compound(spawn.to_nbt()));
-                });
+                self.world_root
+                    .level_data
+                    .data
+                    .insert("spawn", Tag::Compound(spawn.to_nbt()));
                 self.publish_spawn_protection();
                 self.broadcast(cb::Packet::SetDefaultSpawnPosition(
                     cb::SetDefaultSpawnPosition {

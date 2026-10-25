@@ -1,4 +1,5 @@
 use super::*;
+use crate::world::WorldRoot;
 use ferraloom_game::{
     Behaviors,
     level::{LevelContext, Region, acquisition::ChunkKind},
@@ -151,7 +152,7 @@ async fn resumed_full_promotion_keeps_the_successful_entity_post_load_checkpoint
     properties.set("level-seed", "0");
     properties.set("level-type", "minecraft:debug_all_block_states");
     let directory = tempfile::tempdir().unwrap();
-    let mut world = World::open(
+    let mut world_root = WorldRoot::open(
         directory.path(),
         &properties,
         &resources,
@@ -159,6 +160,9 @@ async fn resumed_full_promotion_keeps_the_successful_entity_post_load_checkpoint
         ferraloom_game::block::UnportedBehavior::Strict,
     )
     .unwrap();
+    let mut world = world_root
+        .open_dimension("minecraft:overworld".parse().unwrap(), &properties)
+        .unwrap();
     static BEHAVIORS: Behaviors = Behaviors::EMPTY;
     let mut bootstrap = ServerLevel::new(
         Region::new(&BEHAVIORS),

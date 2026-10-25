@@ -215,14 +215,16 @@ impl MinecraftServer {
     pub(super) fn save_command_tickets(
         &self,
     ) -> impl std::future::Future<Output = Result<()>> + Send + 'static {
-        let storage = ferraloom_storage::SavedDataStorage::new(
-            self.level
-                .generation()
-                .with_world(|world| world.access.path().join("data")),
-        );
+        let storage = self.level.generation().with_world(|world| {
+            world
+                .access
+                .dimension(world.dimension_key.as_str())
+                .map(|paths| ferraloom_storage::SavedDataStorage::new(paths.data))
+        });
         let mut data =
             ferraloom_storage::SavedData::new(self.level.generation().with_tickets(Clone::clone));
         async move {
+            let storage = storage?;
             tokio::task::spawn_blocking(move || {
                 storage.save(
                     ferraloom_game::level::tickets::TicketStorage::STORAGE_ID,
@@ -236,7 +238,9 @@ impl MinecraftServer {
 }
 pub(super) fn load_command_tickets(level: &mut ServerLevel, world: &World) -> Result<()> {
     use ferraloom_game::level::tickets::TicketStorage;
-    let storage = ferraloom_storage::SavedDataStorage::new(world.access.path().join("data"));
+    let storage = ferraloom_storage::SavedDataStorage::new(
+        world.access.dimension(world.dimension_key.as_str())?.data,
+    );
     if let Some(data) = storage.load::<Tag>(TicketStorage::STORAGE_ID)? {
         let decoded = TicketStorage::decode_partial(data.value());
         if let Some(error) = decoded.error {
