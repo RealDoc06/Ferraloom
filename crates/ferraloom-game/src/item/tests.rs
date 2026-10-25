@@ -2,7 +2,10 @@ use crate::{
     block::{BlockPlaceContext, LevelReaderRef, PlacementHit, StackView, UseOnContext},
     entity::{
         EntityState,
-        player::{GameType, ServerPlayer, inventory::set_count},
+        player::{
+            GameType, ServerPlayer,
+            inventory::{count, set_count},
+        },
     },
     inventory::{ContainerHandle, ContainerSlot, StackOperation, StackValue},
 };
@@ -68,7 +71,7 @@ fn use_context_keeps_its_receiver_when_callbacks_replace_the_hand() {
             view.read(&reader).unwrap(),
         ] {
             assert_eq!(stack.item(), Item::STONE);
-            assert_eq!(stack.count(), 2);
+            assert_eq!(count(stack), 2);
         }
         let current = operation
             .level
@@ -76,7 +79,7 @@ fn use_context_keeps_its_receiver_when_callbacks_replace_the_hand() {
             .unwrap()
             .get_main_hand_item();
         assert_eq!(current.item(), Item::DIRT);
-        assert_eq!(current.count(), 8);
+        assert_eq!(count(current), 8);
     }
     assert!(
         context

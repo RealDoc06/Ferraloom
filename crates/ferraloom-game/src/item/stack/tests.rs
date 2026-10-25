@@ -371,6 +371,7 @@ fn consume_preserves_empty_receivers_for_creative_restoration() {
         .level
         .entity_mut::<ServerPlayer>(player)
         .unwrap()
+        .abilities
         .instabuild = true;
     consume(receiver, 1, Some(player), &mut operation).unwrap();
     assert_eq!(
