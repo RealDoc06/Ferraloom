@@ -120,6 +120,7 @@ public final class EntityVectors {
         EffectVectors.run();
         EffectReadVectors.run(new EntityFixture(r));
         DamageVectors.run(new EntityFixture(r));
+        CombatRulesVectors.run(new EntityFixture(r));
         DifficultyVectors.run();
         ExperienceVectors.run(new EntityFixture(r));
         DropVectors.run(new EntityFixture(r));

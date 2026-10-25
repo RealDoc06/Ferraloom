@@ -279,6 +279,19 @@ pub fn item_by_slot(
         .clone())
 }
 
+/// Port of LivingEntity#getWeaponItem, retaining the derived main-hand accessor.
+pub fn weapon_item<'level, E: super::Entity + ?Sized>(
+    behavior: &E,
+    entity: super::EntityRef,
+    level: &'level crate::level::Level,
+) -> Result<Option<&'level ItemStack>, crate::level::LevelError> {
+    behavior.item_by_slot(
+        entity,
+        ferraloom_protocol::component::EquipmentSlot::Mainhand,
+        level,
+    )
+}
+
 /// Port of LivingEntity#getAttributeValue for its required supplier attributes.
 pub fn attribute(
     entity: super::EntityRef,

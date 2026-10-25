@@ -69,6 +69,14 @@ impl Cow {
 /// Shared Cow dispatcher for the foundation's Entity/LivingEntity primitives.
 pub struct CowBehavior;
 impl Entity for CowBehavior {
+    fn weapon_item<'level>(
+        &self,
+        entity: super::EntityRef,
+        level: &'level crate::level::Level,
+    ) -> Result<Option<&'level ferraloom_protocol::component::ItemStack>, crate::level::LevelError>
+    {
+        super::living::weapon_item(self, entity, level)
+    }
     fn check_fall_damage(
         &self,
         entity: super::EntityRef,

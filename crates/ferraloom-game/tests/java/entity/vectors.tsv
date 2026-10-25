@@ -1298,6 +1298,60 @@ damage-source	player	minecraft:player_attack	1	1	true	false	true	none	3ff0000000
 damage-source	mob	minecraft:mob_attack	2	2	true	true	false	none	3ff0000000000000,4000000000000000,4008000000000000	c010000000000000,4014000000000000,c018000000000000
 damage-source	thorns	minecraft:thorns	3	3	true	false	false	none	3ff0000000000000,4000000000000000,4008000000000000	c010000000000000,4014000000000000,c018000000000000
 damage-source	bad-respawn	minecraft:bad_respawn_point	0	0	true	true	false	8000000000000000,4059000000000000,4008000000000000	8000000000000000,4059000000000000,4008000000000000	8000000000000000,4059000000000000,4008000000000000
+combat-armor	absent	40800000	0	0	40800000
+combat-armor	absent	40800000	41a00000	0	3f8f5c28
+combat-armor	absent	41a00000	41a00000	41000000	40ffffff
+combat-armor	absent	42c80000	41f00000	41a00000	42149249
+combat-armor	absent	bf800000	41f00000	41000000	be4ccccc
+combat-armor	absent	80000000	0	0	80000000
+combat-armor	absent	358637bd	40e00000	0	35414606
+combat-armor	absent	3e99999a	40e80000	3fc00000	3e5baa07
+combat-armor	absent	7fc00000	41a00000	0	7fc00000
+combat-armor	absent	7f800000	41a00000	41000000	7f800000
+combat-armor	absent	ff800000	41a00000	41000000	ff800000
+combat-armor	absent	7f7fffff	41f00000	41a00000	7f428f5b
+combat-armor	empty	40800000	0	0	40800000
+combat-armor	empty	40800000	41a00000	0	3f8f5c28
+combat-armor	empty	41a00000	41a00000	41000000	40ffffff
+combat-armor	empty	42c80000	41f00000	41a00000	42149249
+combat-armor	empty	bf800000	41f00000	41000000	be4ccccc
+combat-armor	empty	80000000	0	0	80000000
+combat-armor	empty	358637bd	40e00000	0	35414606
+combat-armor	empty	3e99999a	40e80000	3fc00000	3e5baa07
+combat-armor	empty	7fc00000	41a00000	0	7fc00000
+combat-armor	empty	7f800000	41a00000	41000000	7f800000
+combat-armor	empty	ff800000	41a00000	41000000	ff800000
+combat-armor	empty	7f7fffff	41f00000	41a00000	7f428f5b
+combat-armor	stone	40800000	0	0	40800000
+combat-armor	stone	40800000	41a00000	0	3f8f5c28
+combat-armor	stone	41a00000	41a00000	41000000	40ffffff
+combat-armor	stone	42c80000	41f00000	41a00000	42149249
+combat-armor	stone	bf800000	41f00000	41000000	be4ccccc
+combat-armor	stone	80000000	0	0	80000000
+combat-armor	stone	358637bd	40e00000	0	35414606
+combat-armor	stone	3e99999a	40e80000	3fc00000	3e5baa07
+combat-armor	stone	7fc00000	41a00000	0	7fc00000
+combat-armor	stone	7f800000	41a00000	41000000	7f800000
+combat-armor	stone	ff800000	41a00000	41000000	ff800000
+combat-armor	stone	7f7fffff	41f00000	41a00000	7f428f5b
+combat-magic	3f800000	0	3f800000
+combat-magic	3f800000	bf800000	3f800000
+combat-magic	3f800000	41a00000	3e4ccccc
+combat-magic	3f800000	41c80000	3e4ccccc
+combat-magic	40e9999a	40800000	40c43959
+combat-magic	80000000	41a00000	80000000
+combat-magic	0	41a00000	0
+combat-magic	bf800000	40800000	bf570a3e
+combat-magic	7f7fffff	41a00000	7e4ccccb
+combat-magic	7f800000	40800000	7f800000
+combat-magic	7fc00000	40800000	7fc00000
+combat-magic	40800000	7fc00000	7fc00000
+damage-weapon	absent	null
+damage-weapon	selected0	minecraft:stone
+damage-weapon	selected1	minecraft:gold_ingot
+damage-weapon	retained-empty	minecraft:air
+damage-weapon	cow-direct	minecraft:iron_axe
+damage-weapon	tnt-direct	null
 difficulty-read	{}	normal	false	false
 difficulty-read	{difficulty_settings:{}}	normal	false	false
 difficulty-read	{difficulty_settings:{difficulty:hard,hardcore:1b,locked:1b}}	hard	true	true

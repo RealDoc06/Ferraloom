@@ -233,6 +233,7 @@ pub enum EntityMethod {
     BroadcastDamageEvent,
     EnchantmentAttributeModifiers,
     StopLocationBasedEffects,
+    ModifyArmorEffectiveness,
     JumpInLiquid,
 }
 impl EntityMethod {
@@ -248,6 +249,7 @@ impl EntityMethod {
             Self::BroadcastDamageEvent => "ServerLevel#broadcastDamageEvent",
             Self::EnchantmentAttributeModifiers => "EnchantmentHelper#forEachModifier",
             Self::StopLocationBasedEffects => "EnchantmentHelper#stopLocationBasedEffects",
+            Self::ModifyArmorEffectiveness => "EnchantmentHelper#modifyArmorEffectiveness",
             Self::JumpInLiquid => "jumpInLiquid",
         }
     }
@@ -354,6 +356,14 @@ pub trait Entity: Sync {
             .entity_state(entity)?
             .as_living()
             .map(|living| living.equipment.get(slot)))
+    }
+    /// Port of Entity#getWeaponItem; LivingEntity returns its live main hand.
+    fn weapon_item<'level>(
+        &self,
+        _entity: EntityRef,
+        _level: &'level Level,
+    ) -> Result<Option<&'level ferraloom_protocol::component::ItemStack>, LevelError> {
+        Ok(None)
     }
     /// Port of LivingEntity#isBaby; ageable entities override this read.
     fn is_baby(&self, _entity: EntityRef, _level: &Level) -> Result<bool, LevelError> {
