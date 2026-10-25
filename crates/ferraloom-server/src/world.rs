@@ -1965,7 +1965,6 @@ pub(crate) struct ChunkSavePlan {
 }
 pub(crate) struct LiveLevelSaveContext {
     tags: ferraloom_data::datapack::TagSet<Block>,
-    weather: ferraloom_game::level::weather::WeatherData,
     border: ferraloom_game::level::border::WorldBorder,
 }
 impl LiveLevelSaveContext {
@@ -1975,7 +1974,6 @@ impl LiveLevelSaveContext {
                 .block_tags()
                 .map_err(|error| anyhow::anyhow!("{error:?}"))?
                 .clone(),
-            weather: *level.weather(),
             border: level.entity_world_border().clone(),
         })
     }
