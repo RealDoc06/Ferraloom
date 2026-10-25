@@ -627,12 +627,12 @@ fn shared_visibility_requires_mutable_tracking_without_losing_the_transition() {
         .unwrap();
     assert_eq!(
         level.all_entities(),
-        [EntityRef::fixture(shared.region_id(), 1)]
+        [EntityRef::fixture(level.region_id(), 1)]
     );
     assert_eq!(
         level.take_entity_management_events(),
         [EntityManagementEvent::TrackingStart(EntityRef::fixture(
-            shared.region_id(),
+            level.region_id(),
             1
         ))]
     );
