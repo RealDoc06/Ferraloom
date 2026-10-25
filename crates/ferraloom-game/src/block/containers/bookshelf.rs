@@ -4,9 +4,7 @@ use crate::{
         BlockBehavior, InteractionResult, UseContext,
         entity::{
             BlockEntityRef, BlockEntityState,
-            chiseled_bookshelf::{
-                ChiseledBookShelfBlockEntity, MAX_BOOKS_IN_STORAGE, update_state,
-            },
+            chiseled_bookshelf::{MAX_BOOKS_IN_STORAGE, update_state},
         },
     },
     entity::player::{

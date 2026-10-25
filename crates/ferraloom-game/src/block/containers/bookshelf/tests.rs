@@ -1,7 +1,7 @@
 use super::*;
 use crate::{
     Behaviors, ServerShared,
-    block::entity::{self, BlockEntityDataView},
+    block::entity::{self, BlockEntityDataView, chiseled_bookshelf::ChiseledBookShelfBlockEntity},
     entity::{EntityData, EntityRef, EntityState, player::GameType},
     level::{
         LevelContext, Region, RegionId,
