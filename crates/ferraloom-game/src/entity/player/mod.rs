@@ -8,6 +8,7 @@ pub mod cooldowns;
 pub mod equipment;
 mod experience;
 pub mod food;
+pub mod game_mode;
 mod interaction;
 pub(crate) mod item_tick;
 pub mod shoulders;
