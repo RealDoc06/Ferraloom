@@ -1616,6 +1616,7 @@ fn live_fall_from_height_reads_canonical_player_nbt_at_the_trigger_point() {
             .unwrap(),
         }]);
         let (mut level, player) = live_fixture(manager);
+        crate::entity::tests::install_test_environment(&mut level, false, "minecraft:overworld");
         let base = level.entity_mut::<EntityData>(player).unwrap();
         base.set_pos(Vec3::new(1.0, 64.0, 2.0));
         base.fall_distance = fall_distance;
