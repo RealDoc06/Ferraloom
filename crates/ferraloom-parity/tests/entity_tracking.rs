@@ -252,7 +252,7 @@ impl Pairing {
                         "equipment receiver mismatch"
                     );
                     equipped = packet.slots.iter().any(|entry| {
-                        entry.slot == p::component::EquipmentSlot::MainHand
+                        entry.slot == p::component::EquipmentSlot::Mainhand
                             && entry.item.item() == item
                             && entry
                                 .item
