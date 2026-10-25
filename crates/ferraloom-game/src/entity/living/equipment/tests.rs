@@ -216,6 +216,7 @@ fn living_equipment_break_parent_does_not_award_player_stats() {
 #[test]
 fn required_enchantment_iteration_preserves_completed_component_cleanup_prefix() {
     let (mut level, owner) = receiver(true);
+    level.set_unported_behavior(UnportedBehavior::Strict);
     let mut broken = broken_stack(
         EquipmentSlot::Mainhand,
         "installed",
