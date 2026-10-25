@@ -330,7 +330,9 @@ fn fall_criterion_observes_pre_reset_nbt_and_is_not_repeated_after_the_fall_is_c
         id,
         value: Advancement::decode(&json!({
             "criteria": {"fell": {"trigger": "fall_from_height", "conditions": {
-                "player": {"nbt": "{fall_distance:5.25d,current_impulse_context_reset_grace_time:0,current_explosion_impact_pos:[0.0d,70.25d,3.0d]}"},
+                "player": {"type":"entity_properties", "entity":"this", "predicate": {
+                    "nbt": "{fall_distance:5.25d,current_impulse_context_reset_grace_time:0,current_explosion_impact_pos:[0.0d,70.25d,3.0d]}"
+                }},
                 "distance": {"y": {"min":10,"max":10}}
             }}},
             "rewards": {"experience":1}
