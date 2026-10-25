@@ -909,6 +909,15 @@ pub trait Entity: Sync {
         movement::base_cause_fall_damage(entity, level, fall_distance, damage_modifier, source)
     }
 
+    /// Port of LivingEntity#onAttributeUpdated with the derived dispatcher.
+    fn on_attribute_updated(
+        &self,
+        entity: EntityRef,
+        attribute: ferraloom_data::registries::attribute::Id,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        living::on_attribute_updated_parent(self, entity, attribute, level)
+    }
     /// Port of LivingEntity#onEquippedItemBroken, overridden by ServerPlayer.
     fn on_equipped_item_broken(
         &self,

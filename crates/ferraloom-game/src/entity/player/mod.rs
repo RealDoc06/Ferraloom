@@ -759,6 +759,22 @@ fn jump_from_ground(entity: crate::entity::EntityRef, level: &mut Level) -> Resu
 }
 pub struct PlayerBehavior;
 impl crate::entity::Entity for PlayerBehavior {
+    /// ServerPlayer#onAttributeUpdated handles RECEIVE before its LivingEntity parent.
+    fn on_attribute_updated(
+        &self,
+        entity: EntityRef,
+        attribute: ferraloom_data::registries::attribute::Id,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        if attribute == ferraloom_data::registries::attribute::Id::WAYPOINT_RECEIVE_RANGE {
+            if super::living::attribute(entity, attribute, level)? > 0.0 {
+                level.add_waypoint_player(entity)?;
+            } else {
+                level.remove_waypoint_player(entity)?;
+            }
+        }
+        super::living::on_attribute_updated_parent(self, entity, attribute, level)
+    }
     fn is_invulnerable_to(
         &self,
         entity: EntityRef,

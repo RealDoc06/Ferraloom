@@ -7,6 +7,8 @@ use ferraloom_nbt::{CompoundTag, Tag};
 use ferraloom_protocol::{codec::VarInt, component::ItemStack};
 use ferraloom_util::random::RandomSource;
 
+mod attribute_updates;
+pub use attribute_updates::{on_attribute_updated_parent, refresh_dirty_attributes};
 pub mod climbable;
 pub mod damage_state;
 mod equipment;
