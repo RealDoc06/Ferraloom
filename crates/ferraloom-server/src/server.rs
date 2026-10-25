@@ -1476,8 +1476,7 @@ impl MinecraftServer {
         Ok(())
     }
     /// Apply accepted section transitions immediately, including Y-only moves.
-    /// Native skipPlayer/PlayerMap ignored transitions remain a tracking follow-up;
-    /// this preserves the existing default-true spectators-generate-chunks path.
+    /// This also applies ChunkMap#move's same-section ignored-player transitions.
     pub(super) fn update_player_tickets(&mut self, entity: EntityRef) -> Result<()> {
         // ChunkMap#move updates audiences before any distance-manager changes.
         self.level
@@ -2903,7 +2902,16 @@ impl MinecraftServer {
                 .level
                 .update_player_chunk_tracking(entity)
                 .map_err(game_error)?;
-            self.request_area(center, distance + 2)?;
+            // ChunkMap#skipPlayer excludes ignored spectators from generation
+            // tickets while updateChunkTracking still maintains their client view.
+            if !self
+                .level
+                .level
+                .player_ignored_by_chunk_map(entity)
+                .map_err(game_error)?
+            {
+                self.request_area(center, distance + 2)?;
+            }
         }
         Ok(())
     }
