@@ -21,3 +21,5 @@ pub mod storage;
 pub mod structure;
 mod wither;
 pub(crate) use behavior::ported_behavior;
+
+pub use placement::wall_hanging_sign_can_place;

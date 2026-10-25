@@ -304,7 +304,33 @@ pub fn drop_from_block_interact_loot_table(
     tool: Option<&ItemStack>,
     interacting_entity: Option<EntityRef>,
 ) -> Result<bool, LevelError> {
-    let operation = |level: &mut Level| {
+    drop_from_block_interact_loot_table_with_popper(
+        level,
+        table,
+        pos,
+        state,
+        block_entity,
+        tool,
+        interacting_entity,
+        |level, stack| pop_resource(level, pos, stack).map(|_| ()),
+    )
+}
+
+/// Port of Block#dropFromBlockInteractLootTable's consumer overload. Evaluate
+/// all loot before ordered synchronous delivery, retaining the original BE
+/// generation through the final consumer call, including replacement callbacks.
+#[allow(clippy::too_many_arguments)]
+pub fn drop_from_block_interact_loot_table_with_popper(
+    level: &mut Level,
+    table: &Identifier,
+    pos: BlockPos,
+    state: BlockState,
+    block_entity: Option<BlockEntityRef>,
+    tool: Option<&ItemStack>,
+    interacting_entity: Option<EntityRef>,
+    mut popper: impl FnMut(&mut Level, ItemStack) -> Result<(), LevelError>,
+) -> Result<bool, LevelError> {
+    let mut operation = |level: &mut Level| {
         let mut params = LootParams {
             origin: Some(Vec3::new(
                 f64::from(pos.x) + 0.5,
@@ -348,7 +374,7 @@ pub fn drop_from_block_interact_loot_table(
         };
         let generated = !drops.is_empty();
         for stack in drops {
-            pop_resource(level, pos, stack)?;
+            popper(level, stack)?;
         }
         Ok(generated)
     };
@@ -357,6 +383,9 @@ pub fn drop_from_block_interact_loot_table(
         None => operation(level),
     }
 }
+
+#[cfg(test)]
+mod interact_tests;
 
 #[cfg(test)]
 mod tests {
