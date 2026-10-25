@@ -2,8 +2,8 @@
 use super::{BlockMethod, LevelAccessRef, LevelReaderRef};
 use crate::level::LevelError;
 use ferraloom_data::{BlockState, FluidState};
-use ferraloom_util::{BlockPos, Direction, shapes};
 use ferraloom_util::random::RandomSource;
+use ferraloom_util::{BlockPos, Direction, shapes};
 use ferraloom_worldgen::{
     Error,
     region::{WorldGenRegion, WorldgenBlockBehavior},

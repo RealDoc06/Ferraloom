@@ -100,7 +100,11 @@ impl BlockEntity for BeehiveBehavior {
         }
         Ok(tag)
     }
-    fn apply_implicit_components(&self, state: &mut BlockEntityState, map: &DataComponentMap) -> &'static [ComponentTypeId] {
+    fn apply_implicit_components(
+        &self,
+        state: &mut BlockEntityState,
+        map: &DataComponentMap,
+    ) -> &'static [ComponentTypeId] {
         let BlockEntityState::Beehive(entity) = state else {
             unreachable!()
         };

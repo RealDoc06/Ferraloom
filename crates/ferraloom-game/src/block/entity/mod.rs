@@ -430,7 +430,10 @@ pub fn load_static(
         .get_string("id")
         .map(|id| id.to_string_lossy())
         .unwrap_or_default();
-    if id != "DUMMY" && BlockEntityType::from_name(&id) != registry::for_block(state.block()) {
+    if id != "DUMMY"
+        && (BlockEntityType::from_name(&id).is_none()
+            || BlockEntityType::from_name(&id) != registry::for_block(state.block()))
+    {
         return Ok(None);
     }
     let mut entity = create(pos, state)?;
