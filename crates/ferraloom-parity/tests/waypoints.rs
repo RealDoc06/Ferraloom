@@ -98,7 +98,7 @@ async fn setup(
 )> {
     let first = session.join("ParityBot").await?;
     level_support::freeze(session.bot(first)?).await?;
-    session.bot(first)?.teleport([8.5, 80.0, 10.5]).await?;
+    session.bot(first)?.teleport([8.5, -63.0, 10.5]).await?;
     let second = session.join("WaypointOther").await?;
     session.bot(second)?.synchronize().await?;
     let initial = wait_waypoint(session.bot(second)?, Uuid::offline_player("ParityBot")).await?;
@@ -111,7 +111,7 @@ async fn setup(
         "join.retained_transmitter",
         initial.identifier == p::codec::Either::Left(Uuid::offline_player("ParityBot")),
     )?;
-    session.bot(second)?.teleport([12.5, 80.0, 10.5]).await?;
+    session.bot(second)?.teleport([12.5, -63.0, 10.5]).await?;
     // Chunk delivery and the positional acknowledgment both precede this state read.
     session.bot(first)?.synchronize().await?;
     wait_waypoint(session.bot(first)?, Uuid::offline_player("WaypointOther")).await?;
@@ -120,11 +120,11 @@ async fn setup(
 async fn loaded_area(session: &mut Session) -> Result<ObservationLog> {
     let (first, second, mut log) = setup(session).await?;
     let source = Uuid::offline_player("WaypointOther");
-    // All positions stay inside the initial loaded chunk. This measures the
-    // actual position producer without depending on new structure-data access.
+    // Both actors stand on the actual bedrock surface in the initial loaded
+    // chunk, keeping gravity outside this exact waypoint-packet comparison.
     for (label, text) in [
-        ("movement.update", "tp WaypointOther 13.5 80 10.5"),
-        ("movement.replace", "tp WaypointOther 15.5 80 10.5"),
+        ("movement.update", "tp WaypointOther 13.5 -63 10.5"),
+        ("movement.replace", "tp WaypointOther 15.5 -63 10.5"),
         ("team.create", "team add waypoint"),
         ("team.black", "team modify waypoint color black"),
         ("team.join", "team join waypoint WaypointOther"),
@@ -142,7 +142,7 @@ async fn loaded_area(session: &mut Session) -> Result<ObservationLog> {
     }
     let current = wait_waypoint(session.bot(first)?, source).await?;
     ensure!(
-        matches!(current.contents, play::WaypointContents::Vec3i { ref position } if position.x.0 == 15 && position.y.0 == 80 && position.z.0 == 10),
+        matches!(current.contents, play::WaypointContents::Vec3i { ref position } if position.x.0 == 15 && position.y.0 == -63 && position.z.0 == 10),
         "wrong final waypoint position: {:?}",
         current.contents
     );
@@ -195,10 +195,10 @@ async fn loaded_area(session: &mut Session) -> Result<ObservationLog> {
 async fn far_area(session: &mut Session) -> Result<ObservationLog> {
     let (first, _, mut log) = setup(session).await?;
     for (label, text) in [
-        ("chunk.track", "tp WaypointOther 100.5 80 10.5"),
-        ("chunk.update", "tp WaypointOther 116.5 80 10.5"),
-        ("azimuth.track", "tp WaypointOther 380.5 80 10.5"),
-        ("azimuth.update", "tp WaypointOther 380.5 80 30.5"),
+        ("chunk.track", "tp WaypointOther 100.5 -63 10.5"),
+        ("chunk.update", "tp WaypointOther 116.5 -63 10.5"),
+        ("azimuth.track", "tp WaypointOther 380.5 -63 10.5"),
+        ("azimuth.update", "tp WaypointOther 380.5 -63 30.5"),
     ] {
         log.record(label, command(session.bot(first)?, text).await?)?;
     }
