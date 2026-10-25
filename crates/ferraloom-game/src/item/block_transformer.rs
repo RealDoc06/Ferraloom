@@ -60,7 +60,7 @@ struct BlockTransformData {
     sound: SoundEventHolder,
     particle: TransformParticle,
     disallowed_faces: Vec<Direction>,
-    loot: Option<Identifier>,
+    loot: Option<ferraloom_protocol::Identifier>,
     drop_strategy: DropStrategy,
     update_from_neighbors: bool,
     transform_type: TransformType,
@@ -199,7 +199,11 @@ impl BlockTransformData {
             .unwrap_or_default();
         let loot = value
             .get("loot")
-            .map(|value| -> Result<Identifier, Error> { Ok(string(value)?.parse()?) })
+            .map(|value| -> Result<ferraloom_protocol::Identifier, Error> {
+                string(value)?
+                    .parse()
+                    .map_err(|error: ferraloom_protocol::Error| Error(error.to_string()))
+            })
             .transpose()?;
         let drop_strategy = match value
             .get("drop_strategy")
