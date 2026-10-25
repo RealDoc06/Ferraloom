@@ -1,13 +1,18 @@
 //! Live structure data. Published immutable versions remain readable through
 //! nested acquisition; only an exclusive phase boundary reclaims old versions.
-use super::{Level, LevelError};
+use super::{
+    Level, LevelError,
+    acquisition::{AcquireFailure, ChunkKind},
+    chunk_holder::ChunkStatus,
+};
 use elsa::FrozenVec;
 use ferraloom_util::ChunkPos;
 use ferraloom_worldgen::structure::pipeline::ChunkStructures;
+use std::{ops::Deref, sync::Arc};
 
 pub(super) struct StructureVersion {
     pub revision: u64,
-    pub payload: ChunkStructures,
+    pub payload: Arc<ChunkStructures>,
 }
 pub(super) struct StructureVersions(FrozenVec<Box<StructureVersion>>);
 impl StructureVersions {
@@ -15,7 +20,7 @@ impl StructureVersions {
         let versions = Self(FrozenVec::new());
         versions.0.push(Box::new(StructureVersion {
             revision: 0,
-            payload: ChunkStructures::new([pos.x, pos.z]),
+            payload: Arc::new(ChunkStructures::new([pos.x, pos.z])),
         }));
         versions
     }
@@ -30,7 +35,10 @@ impl StructureVersions {
     ) -> Result<(), LevelError> {
         validate(pos, &payload)?;
         let versions = FrozenVec::new();
-        versions.push(Box::new(StructureVersion { revision, payload }));
+        versions.push(Box::new(StructureVersion {
+            revision,
+            payload: Arc::new(payload),
+        }));
         self.0 = versions;
         Ok(())
     }
@@ -44,8 +52,10 @@ impl StructureVersions {
         if revision <= self.current().revision {
             return Ok(false);
         }
-        self.0
-            .push(Box::new(StructureVersion { revision, payload }));
+        self.0.push(Box::new(StructureVersion {
+            revision,
+            payload: Arc::new(payload),
+        }));
         Ok(true)
     }
     pub fn collect(&mut self) {
@@ -63,6 +73,40 @@ fn validate(pos: ChunkPos, payload: &ChunkStructures) -> Result<(), LevelError> 
     }
 }
 impl Level {
+    /// StructureManager obtains the native status, including proto or staged
+    /// imposter data. A lower-status read never requires FULL finalization.
+    pub fn chunk_structures(
+        &self,
+        pos: ChunkPos,
+        status: ChunkStatus,
+    ) -> Result<Arc<ChunkStructures>, LevelError> {
+        let reference = self
+            .get_chunk(pos, status, true)?
+            .ok_or(LevelError::ChunkAcquisition(
+                pos,
+                status,
+                AcquireFailure::MissingResult,
+            ))?;
+        let structures = match reference.kind {
+            ChunkKind::Full => Ok(Arc::clone(
+                &self
+                    .resolve_full_chunk(reference)?
+                    .structures
+                    .current()
+                    .payload,
+            )),
+            ChunkKind::Proto => self
+                .acquire_driver()
+                .ok_or(LevelError::ChunkAcquisition(
+                    pos,
+                    status,
+                    AcquireFailure::DriverUnavailable,
+                ))?
+                .proto_chunk_structures(reference),
+        }?;
+        validate(pos, &structures)?;
+        Ok(structures)
+    }
     /// Publish a newer source revision without invalidating references already
     /// returned to a suspended reader. Equal/older revisions have no effects.
     pub fn publish_chunk_structures(
@@ -103,33 +147,57 @@ impl Level {
         StructureManager { level: self }
     }
 }
-impl<'a> StructureManager<'a> {
-    fn data(&self, pos: ChunkPos) -> Result<&'a ChunkStructures, LevelError> {
-        self.level
-            .chunk(pos)
-            .map(|chunk| chunk.structures())
-            .ok_or(LevelError::MissingChunk(pos))
+/// A start held through its immutable source version. New publications cannot
+/// invalidate a start while another source chunk is acquired synchronously.
+#[derive(Clone, Debug)]
+pub struct StructureStartRef {
+    source: Arc<ChunkStructures>,
+    structure: Identifier,
+}
+impl Deref for StructureStartRef {
+    type Target = StructureStart;
+    fn deref(&self) -> &Self::Target {
+        &self.source.starts[&self.structure]
+    }
+}
+impl StructureManager<'_> {
+    fn data(&self, pos: ChunkPos, status: ChunkStatus) -> Result<Arc<ChunkStructures>, LevelError> {
+        self.level.chunk_structures(pos, status)
     }
     pub fn get_start_for_structure(
         &self,
         pos: ChunkPos,
         structure: &Identifier,
-    ) -> Result<Option<&'a StructureStart>, LevelError> {
-        Ok(self.data(pos)?.starts.get(structure))
+    ) -> Result<Option<StructureStartRef>, LevelError> {
+        let source = self.data(pos, ChunkStatus::StructureStarts)?;
+        Ok(source
+            .starts
+            .contains_key(structure)
+            .then(|| StructureStartRef {
+                source,
+                structure: structure.clone(),
+            }))
     }
     pub fn get_references_for_structure(
         &self,
         pos: ChunkPos,
         structure: &Identifier,
-    ) -> Result<Option<&'a StructureReferences>, LevelError> {
-        Ok(self.data(pos)?.references.get(structure))
+    ) -> Result<Option<StructureReferences>, LevelError> {
+        Ok(self
+            .data(pos, ChunkStatus::StructureReferences)?
+            .references
+            .get(structure)
+            .cloned())
     }
     /// Port of getAllStructuresAt; this is the reference map, not local starts.
     pub fn get_all_structures_at(
         &self,
         pos: BlockPos,
-    ) -> Result<&'a BTreeMap<Identifier, StructureReferences>, LevelError> {
-        Ok(&self.data(ChunkPos::containing(pos))?.references)
+    ) -> Result<BTreeMap<Identifier, StructureReferences>, LevelError> {
+        Ok(self
+            .data(ChunkPos::containing(pos), ChunkStatus::StructureReferences)?
+            .references
+            .clone())
     }
     pub fn has_any_structure_at(&self, pos: BlockPos) -> Result<bool, LevelError> {
         Ok(!self.get_all_structures_at(pos)?.is_empty())
@@ -140,7 +208,7 @@ impl<'a> StructureManager<'a> {
         &self,
         structure: &Identifier,
         references: &StructureReferences,
-        mut consumer: impl FnMut(&'a StructureStart),
+        mut consumer: impl FnMut(StructureStartRef),
     ) -> Result<(), LevelError> {
         for packed in references.iter() {
             if let Some(start) =
@@ -156,10 +224,10 @@ impl<'a> StructureManager<'a> {
         &self,
         pos: ChunkPos,
         structure: &Identifier,
-    ) -> Result<Vec<&'a StructureStart>, LevelError> {
+    ) -> Result<Vec<StructureStartRef>, LevelError> {
         let mut starts = Vec::new();
         if let Some(references) = self.get_references_for_structure(pos, structure)? {
-            self.fill_starts_for_structure(structure, references, |start| starts.push(start))?;
+            self.fill_starts_for_structure(structure, &references, |start| starts.push(start))?;
         }
         Ok(starts)
     }
@@ -169,10 +237,11 @@ impl<'a> StructureManager<'a> {
         &self,
         pos: ChunkPos,
         mut matcher: impl FnMut(&Identifier) -> bool,
-    ) -> Result<Vec<&'a StructureStart>, LevelError> {
+    ) -> Result<Vec<StructureStartRef>, LevelError> {
         let mut starts = Vec::new();
         // JVM identity-keyed map order is non-parity; use deterministic Identifier order.
-        for (structure, references) in &self.data(pos)?.references {
+        for (structure, references) in &self.data(pos, ChunkStatus::StructureReferences)?.references
+        {
             if matcher(structure) {
                 self.fill_starts_for_structure(structure, references, |start| starts.push(start))?;
             }
@@ -213,7 +282,7 @@ impl<'a> StructureManager<'a> {
         &self,
         pos: ChunkPos,
         structures: &HolderSet,
-    ) -> Result<Vec<&'a StructureStart>, LevelError> {
+    ) -> Result<Vec<StructureStartRef>, LevelError> {
         let ids = self.resolve(structures)?;
         self.starts_for_structure_matching(pos, |id| ids.contains(id))
     }
@@ -221,7 +290,7 @@ impl<'a> StructureManager<'a> {
         &self,
         pos: BlockPos,
         structure: &Identifier,
-    ) -> Result<Option<&'a StructureStart>, LevelError> {
+    ) -> Result<Option<StructureStartRef>, LevelError> {
         Self::containing(
             pos,
             self.starts_for_structure(ChunkPos::containing(pos), structure)?,
@@ -231,7 +300,7 @@ impl<'a> StructureManager<'a> {
         &self,
         pos: BlockPos,
         structures: &HolderSet,
-    ) -> Result<Option<&'a StructureStart>, LevelError> {
+    ) -> Result<Option<StructureStartRef>, LevelError> {
         Self::containing(
             pos,
             self.starts_for_structures(ChunkPos::containing(pos), structures)?,
@@ -239,8 +308,8 @@ impl<'a> StructureManager<'a> {
     }
     fn containing(
         pos: BlockPos,
-        starts: Vec<&'a StructureStart>,
-    ) -> Result<Option<&'a StructureStart>, LevelError> {
+        starts: Vec<StructureStartRef>,
+    ) -> Result<Option<StructureStartRef>, LevelError> {
         for start in starts {
             if start
                 .bounding_box()
@@ -256,7 +325,7 @@ impl<'a> StructureManager<'a> {
         &self,
         pos: BlockPos,
         structure: &Identifier,
-    ) -> Result<Option<&'a StructureStart>, LevelError> {
+    ) -> Result<Option<StructureStartRef>, LevelError> {
         Ok(self
             .starts_for_structure(ChunkPos::containing(pos), structure)?
             .into_iter()
@@ -266,7 +335,7 @@ impl<'a> StructureManager<'a> {
         &self,
         pos: BlockPos,
         structures: &HolderSet,
-    ) -> Result<Option<&'a StructureStart>, LevelError> {
+    ) -> Result<Option<StructureStartRef>, LevelError> {
         Ok(self
             .starts_for_structures(ChunkPos::containing(pos), structures)?
             .into_iter()
