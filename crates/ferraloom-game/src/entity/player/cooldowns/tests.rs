@@ -186,7 +186,7 @@ fn player_tick_expires_cooldowns_and_runtime_state_is_not_persisted() {
     assert!(!player_data.cooldowns.is_on_cooldown(stack));
     assert_eq!(player_data.block_interaction_range(), 5.0);
     assert_eq!(player_data.entity_interaction_range(), 5.0);
-    let saved = player_data.save();
+    let saved = player_data.save(&level).unwrap();
     assert!(!saved.contains_key("cooldowns"));
     assert!(!saved.contains_key("lastClientInput"));
     assert!(!saved.contains_key("textFilteringEnabled"));

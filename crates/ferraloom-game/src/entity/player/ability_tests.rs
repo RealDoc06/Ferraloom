@@ -47,7 +47,9 @@ fn native_saved_ability_speeds_survive_mode_updates_and_malformed_fields_default
         assert_eq!(bits(player.ability_flying_speed()), row[4], "{row:?}");
         assert_eq!(bits(player.ability_walking_speed()), row[5], "{row:?}");
         assert_eq!(player.abilities.flying.to_string(), row[6], "{row:?}");
-        let saved = player.save_without_id();
+        let saved = player
+            .save_without_id(&crate::entity::tests::persistence_level())
+            .unwrap();
         let abilities = saved.get_compound("abilities").unwrap();
         assert_eq!(bits(abilities.get_float("flySpeed").unwrap()), row[4]);
         assert_eq!(bits(abilities.get_float("walkSpeed").unwrap()), row[5]);

@@ -171,7 +171,9 @@ mod tests {
                 let applied = player.instabuild();
                 player.abilities.instabuild = !applied;
                 let prevents = player.prevents_block_drops();
-                let mut tag = player.save();
+                let mut tag = player
+                    .save(&crate::entity::tests::persistence_level())
+                    .unwrap();
                 let saved = tag
                     .get_compound("abilities")
                     .unwrap()

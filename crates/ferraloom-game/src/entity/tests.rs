@@ -785,6 +785,13 @@ pub(super) fn tags(level: &mut Level) {
 pub(crate) fn level(floor: bool) -> Level {
     level_with_behaviors(floor, &BEHAVIORS)
 }
+/// Cold entity-NBT tests use explicit world services without loaded terrain.
+pub(crate) fn persistence_level() -> Level {
+    Level::new(
+        Region::new(&BEHAVIORS),
+        crate::level::LevelContext::fixture(0, 63),
+    )
+}
 fn install_test_environment(level: &mut Level, fast_lava: bool) {
     use crate::level::environment::{ClockSnapshot, EnvironmentDefinitions};
     let resources = ferraloom_data::datapack::ResourceManager::new(Vec::new());
@@ -2187,7 +2194,9 @@ fn may_build_is_independent_and_game_mode_updates_match_native_abilities() {
             let may_build = player.may_build();
             let result_flying = player.abilities.flying;
             player.abilities.may_build = !may_build;
-            let saved = player.save();
+            let saved = player
+                .save(&crate::entity::tests::persistence_level())
+                .unwrap();
             let saved_may_build = saved
                 .get_compound("abilities")
                 .unwrap()

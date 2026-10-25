@@ -381,11 +381,11 @@ impl ServerPlayer {
         Ok(())
     }
     /// PlayerDataStorage's payload uses the same full player save chain.
-    pub fn save(&self) -> CompoundTag {
-        self.save_without_id()
+    pub fn save(&self, level: &Level) -> Result<CompoundTag, LevelError> {
+        self.save_without_id(level)
     }
     /// Port of Entity#saveWithoutId, Player#addAdditionalSaveData and ServerPlayer.
-    pub fn save_without_id(&self) -> CompoundTag {
+    pub fn save_without_id(&self, _level: &Level) -> Result<CompoundTag, LevelError> {
         let mut tag = self.parent.parent.save_without_id();
         // Player#addAdditionalSaveData writes the version even for predicate NBT.
         tag.insert("DataVersion", Tag::Int(5023));
@@ -421,7 +421,11 @@ impl ServerPlayer {
         tag.insert("OnGround", Tag::Byte(i8::from(self.on_ground)));
         tag.insert(
             "Inventory",
-            Tag::List(self.inventory.save().expect("canonical inventory stacks")),
+            Tag::List(
+                self.inventory
+                    .save()
+                    .map_err(|_| LevelError::Inventory("invalid saved inventory"))?,
+            ),
         );
         tag.insert(
             "SelectedItemSlot",
@@ -444,9 +448,12 @@ impl ServerPlayer {
         }
         tag.insert(
             "abilities",
-            self.abilities.pack().to_nbt().expect("canonical abilities"),
+            self.abilities
+                .pack()
+                .to_nbt()
+                .map_err(|_| LevelError::Inventory("invalid saved abilities"))?,
         );
-        tag
+        Ok(tag)
     }
 }
 /// Embedded-parent projection preserving the bring-up's public field access.
@@ -1166,7 +1173,9 @@ mod tests {
                 tag.insert("UUID", Tag::IntArray(saved.to_int_array().to_vec()));
             }
             player.try_load(tag).unwrap();
-            let saved = player.save();
+            let saved = player
+                .save(&crate::entity::tests::persistence_level())
+                .unwrap();
             let Some(Tag::IntArray(words)) = saved.get("UUID") else {
                 panic!("saved UUID")
             };
@@ -1209,7 +1218,9 @@ mod tests {
             .unwrap()
             .set_base_value(40.0);
         player.set_health(35.0);
-        let saved = player.save();
+        let saved = player
+            .save(&crate::entity::tests::persistence_level())
+            .unwrap();
         let mut loaded = ServerPlayer::new(
             Uuid::new(1, 2),
             "health".into(),
@@ -1272,7 +1283,9 @@ mod tests {
         };
         let mut original = make_player();
         original.recipe_book.add(kept.clone());
-        let mut saved = original.save();
+        let mut saved = original
+            .save(&crate::entity::tests::persistence_level())
+            .unwrap();
         let book = saved
             .get_mut("recipeBook")
             .unwrap()
@@ -1296,7 +1309,12 @@ mod tests {
         assert!(loaded.recipe_book.settings.0[0].open);
         let mut round_trip = make_player();
         round_trip
-            .try_load_with_recipes(loaded.save(), &manager)
+            .try_load_with_recipes(
+                loaded
+                    .save(&crate::entity::tests::persistence_level())
+                    .unwrap(),
+                &manager,
+            )
             .unwrap();
         assert_eq!(round_trip.recipe_book.to_nbt(), loaded.recipe_book.to_nbt());
     }
@@ -1312,7 +1330,9 @@ mod tests {
             GameType::Survival,
         );
         let before = player.recipe_book.to_nbt();
-        let mut saved = player.save();
+        let mut saved = player
+            .save(&crate::entity::tests::persistence_level())
+            .unwrap();
         saved.insert(
             "recipeBook",
             Tag::String("invalid optional packed data".into()),

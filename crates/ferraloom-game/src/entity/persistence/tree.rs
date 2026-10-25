@@ -195,7 +195,7 @@ impl Level {
             EntityState::Item(item) => item.save_without_id(self)?,
             EntityState::FallingBlock(block) => block.save_without_id(),
             EntityState::ExperienceOrb(orb) => orb.save_without_id(),
-            EntityState::Player(player) => player.save_without_id(),
+            EntityState::Player(player) => player.save_without_id(self)?,
         };
         if let Some(vehicle) = base.vehicle.get() {
             let mount = self.entity::<EntityData>(vehicle)?;
