@@ -45,6 +45,7 @@ fn anvil_ticks_falling_configuration_and_damage_transform_match_native() {
                 let tick = f[4].parse::<i64>().unwrap();
                 if tick == 0 {
                     let mut level = super::fire_powder_tests::level();
+                    crate::level::drop_fixtures::install(&mut level);
                     let chunk = ChunkPos::containing(POS);
                     level
                         .set_chunk_loading_status(
@@ -90,7 +91,9 @@ fn anvil_ticks_falling_configuration_and_damage_transform_match_native() {
                     current = Some(level);
                 }
                 let level = current.as_mut().unwrap();
-                level.tick_block_phase(tick, 65536).unwrap();
+                level
+                    .tick_block_phase(tick, 65536)
+                    .unwrap_or_else(|error| panic!("{line}: {error:?}"));
                 let entities = level
                     .all_entities()
                     .into_iter()
