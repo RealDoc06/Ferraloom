@@ -24,17 +24,23 @@ public final class AttributeUpdateVectors {
         var field=owner.getDeclaredField(name);field.setAccessible(true);return field;
     }
     static String bits(float value) { return Integer.toHexString(Float.floatToRawIntBits(value)); }
-    static ServerPlayer player(ServerLevel level,ArrayList<String> events) throws Exception {
-        var player=mock(ServerPlayer.class,call->{
-            if(call.getMethod().getName().equals("refreshDimensions")) {events.add("scale");return null;}
-            if(call.getMethod().getName().equals("gameMode")) return GameType.SURVIVAL;
-            if(call.getMethod().getName().equals("onAttributeUpdated")) {
-                Holder<Attribute> attribute=call.getArgument(0);
-                events.add(attribute.unwrapKey().orElseThrow().identifier().getPath());
-                if(playerDirty(call.getMock())==0)throw new AssertionError("dirty set cleared before callback");
-            }
-            return call.callRealMethod();
-        });
+    static final class Receiver extends ServerPlayer {
+        ArrayList<String> events;
+        GameType mode;
+        Receiver() { super(null,null,null,null); }
+        @Override public GameType gameMode() { return mode; }
+        @Override public void refreshDimensions() { events.add("scale"); }
+        @Override protected void onAttributeUpdated(Holder<Attribute> attribute) {
+            events.add(attribute.unwrapKey().orElseThrow().identifier().getPath());
+            if(playerDirty(this)==0)throw new AssertionError("dirty set cleared before callback");
+            super.onAttributeUpdated(attribute);
+        }
+    }
+    static Receiver player(ServerLevel level,ArrayList<String> events) throws Exception {
+        var unsafe=field(sun.misc.Unsafe.class,"theUnsafe");
+        var allocator=(sun.misc.Unsafe)unsafe.get(null);
+        var player=(Receiver)allocator.allocateInstance(Receiver.class);
+        player.events=events;player.mode=GameType.SURVIVAL;
         var parent=new Parent(level);
         for(Class<?> owner=Player.class;owner!=Object.class;owner=owner.getSuperclass()) {
             for(var field:owner.getDeclaredFields()) if(!Modifier.isStatic(field.getModifiers())) {

@@ -65,6 +65,54 @@ impl ServerWaypointManager {
     }
 }
 impl Level {
+    /// ServerLevel.EntityCallbacks#onTrackingStart follows ChunkMap#addEntity:
+    /// register receiving players before the common transmitting parent.
+    pub(super) fn start_entity_waypoints(&mut self, entity: EntityRef) -> Result<(), LevelError> {
+        if self.entity::<ServerPlayer>(entity).is_ok() && self.is_receiving_waypoints(entity)? {
+            self.add_waypoint_player(entity)?;
+        }
+        if self.is_transmitting_waypoint(entity)? {
+            self.track_waypoint(entity)?;
+        }
+        Ok(())
+    }
+    /// Port of Entity#setPosRaw's callbacks after levelCallback.onMove. A live
+    /// registered ServerPlayer already has its connection; constructors remain
+    /// gated by firstTick before any receiver callback is eligible.
+    pub(super) fn update_waypoints_after_position_change(
+        &mut self,
+        entity: EntityRef,
+    ) -> Result<(), LevelError> {
+        let base = self.entity::<EntityData>(entity)?;
+        if base.first_tick || base.removed {
+            return Ok(());
+        }
+        if self.is_transmitting_waypoint(entity)? {
+            self.update_waypoint(entity)?;
+        }
+        if self.entity::<ServerPlayer>(entity).is_ok() && self.is_receiving_waypoints(entity)? {
+            self.update_waypoint_player(entity)?;
+        }
+        Ok(())
+    }
+    /// Port of MinecraftServer#onGameRuleChanged's per-level LOCATOR_BAR body.
+    /// updatePlayer visits all level players, independently of receiver membership.
+    pub fn update_locator_bar(&mut self, enabled: bool) -> Result<(), LevelError> {
+        if enabled {
+            let players: Vec<_> = self
+                .all_entities()
+                .into_iter()
+                .filter(|&entity| self.entity::<ServerPlayer>(entity).is_ok())
+                .collect();
+            for player in players {
+                self.update_waypoint_player(player)?;
+            }
+        } else {
+            self.break_all_waypoint_connections()?;
+        }
+        Ok(())
+    }
+
     /// Port of ServerPlayer#restoreFrom's Waypoint.Icon#copyFrom. Respawn's
     /// producer calls this helper at its native copy point when that system lands.
     pub fn copy_waypoint_icon(
@@ -330,3 +378,6 @@ impl Level {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests;

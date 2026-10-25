@@ -37,17 +37,19 @@ fn ignores(source: EntityRef, receiver: EntityRef, level: &Level) -> Result<bool
     if level.entity_behavior(source)?.is_spectator(source, level)? {
         return Ok(true);
     }
-    let mut passengers = level.entity::<EntityData>(source)?.passengers.to_vec();
-    while let Some(passenger) = passengers.pop() {
-        if passenger == receiver {
+    // Entity#hasIndirectPassenger follows the receiver's retained vehicle
+    // chain, not a traversal of the source's passenger list.
+    let mut vehicle = level.entity::<EntityData>(receiver)?.vehicle.get();
+    while let Some(current) = vehicle {
+        if current == source {
             return Ok(true);
         }
-        passengers.extend_from_slice(&level.entity::<EntityData>(passenger)?.passengers);
+        vehicle = level.entity::<EntityData>(current)?.vehicle.get();
     }
-    let range =
-        crate::entity::living::attribute(source, Attribute::WAYPOINT_TRANSMIT_RANGE, level)?.min(
-            crate::entity::living::attribute(receiver, Attribute::WAYPOINT_RECEIVE_RANGE, level)?,
-        );
+    let range = ferraloom_util::java::min(
+        crate::entity::living::attribute(source, Attribute::WAYPOINT_TRANSMIT_RANGE, level)?,
+        crate::entity::living::attribute(receiver, Attribute::WAYPOINT_RECEIVE_RANGE, level)?,
+    );
     Ok(f64::from(distance(source, receiver, level)?) >= range)
 }
 fn chunk_visible(

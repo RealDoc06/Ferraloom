@@ -122,6 +122,28 @@ impl MinecraftServer {
         command: &PreparedCommand,
     ) -> Result<bool> {
         match command.command.as_str() {
+            "gamerule" => {
+                let mut result =
+                    ferraloom_game::commands::builtins::gamerule(&mut self.game_rules, command)?;
+                if let Some(change) = result.rule_change.take() {
+                    let locator = match &change.effect {
+                        Some(ferraloom_game::gamerules::GameRuleEffect::LocatorBar { enabled }) => {
+                            Some(*enabled)
+                        }
+                        _ => None,
+                    };
+                    self.on_game_rule_changed(change);
+                    if let Some(enabled) = locator {
+                        // MinecraftServer#onGameRuleChanged runs before command feedback.
+                        self.level
+                            .level
+                            .update_locator_bar(enabled)
+                            .map_err(CommandLevelFailure)?;
+                    }
+                }
+                self.apply_level_effects()?;
+                self.apply_command_result(source, &command.source, result);
+            }
             "team" => {
                 let result = self.execute_team_command_live(command);
                 self.apply_level_effects()?;

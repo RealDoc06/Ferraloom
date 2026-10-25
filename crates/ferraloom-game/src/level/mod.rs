@@ -111,6 +111,10 @@ pub enum LevelError {
     MissingPlacementPlayer,
     UninitializedPlacementDirection,
     MissingEntity(EntityRef),
+    MissingEntityAttribute {
+        entity_type: EntityType,
+        attribute: ferraloom_data::registries::attribute::Id,
+    },
     MissingTrackedEntity(i32),
     MissingRegistryContext,
     MissingNetworkRegistryEntry {
