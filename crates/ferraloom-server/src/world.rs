@@ -811,8 +811,8 @@ impl World {
         let generation = services.generation.clone();
         let light_pool = services.light_pool.clone();
         timing.checkpoint("storage_and_stem");
-        let mut context = ferraloom_game::level::generation::WorldGenContext::load(
-            &services.resources,
+        let mut context = ferraloom_game::level::generation::WorldGenContext::from_registries(
+            services.worldgen.clone(),
             generator.clone(),
             dimension,
             seed,
@@ -2653,6 +2653,90 @@ mod light_worker_tests {
 #[cfg(test)]
 mod generation_order_tests {
     use super::*;
+
+    #[tokio::test]
+    async fn dimensions_share_worldgen_registries_and_keep_flat_features_separate() {
+        let resources = crate::generation_tests::resources();
+        let registries = Arc::new(RegistrySet::load(&resources).unwrap());
+        let directory = tempfile::tempdir().unwrap();
+        let mut properties = ServerProperties::from_values(Default::default());
+        properties.set("level-type", "minecraft:normal");
+        properties.set("level-seed", 12345);
+        properties.set("generate-structures", false);
+        let mut root = WorldRoot::open(
+            directory.path(),
+            &properties,
+            &resources,
+            &registries,
+            ferraloom_game::block::UnportedBehavior::Strict,
+        )
+        .unwrap();
+        // This fixture exercises construction, without invoking spawn search.
+        root.level_data
+            .data
+            .insert("spawn", spawn_tag(BlockPos::new(0, 80, 0)));
+        let shared = root.services.worldgen.clone();
+        let dimensions = root
+            .dimensions
+            .dimensions
+            .iter()
+            .map(|stem| stem.name.to_string().parse().unwrap())
+            .collect::<Vec<_>>();
+        assert!(dimensions.len() > 1);
+        let mut contexts = Vec::new();
+        for dimension in dimensions {
+            let mut world = root.open_dimension(dimension, &properties).unwrap();
+            let context = world.generation_state.as_ref().unwrap().context.clone();
+            assert!(Arc::ptr_eq(&shared, &context.registries));
+            assert!(Arc::ptr_eq(&world.generator, &context.generator));
+            assert!(std::ptr::eq(context.features(), &shared.features));
+            assert_eq!(context.seed, root.seed);
+            assert_eq!(context.structure_state.seed, root.seed);
+            assert_eq!(
+                context.structure_state.origin,
+                world.generator.get_origin().unwrap()
+            );
+            assert_eq!(context.dimension.height, world.dimension.height);
+            assert_eq!(context.dimension.has_skylight, world.dimension.has_skylight);
+            contexts.push(context);
+            world.close_chunk_storage().await.unwrap();
+        }
+        assert!(!Arc::ptr_eq(&contexts[0], &contexts[1]));
+        let generator = Arc::new(
+            ChunkGenerator::decode(
+                &serde_json::json!({"type":"minecraft:flat", "settings":{
+                    "layers":[{"height":1,"block":"minecraft:water"}],
+                    "biome":"minecraft:plains", "features":true, "lakes":true,
+                    "structure_overrides":[]
+                }}),
+                &resources,
+                Arc::new(GenerationData::load(&resources).unwrap()),
+                root.seed,
+            )
+            .unwrap(),
+        );
+        let ChunkGenerator::Flat(flat) = generator.as_ref() else {
+            unreachable!()
+        };
+        let expected = flat.feature_registry(&resources).unwrap();
+        let flat = ferraloom_game::level::generation::WorldGenContext::from_registries(
+            shared.clone(),
+            generator,
+            contexts[0].dimension,
+            root.seed,
+            false,
+            contexts[0].environment.clone(),
+            contexts[0].dimension_environment.clone(),
+        )
+        .unwrap();
+        assert!(Arc::ptr_eq(&shared, &flat.registries));
+        assert!(!std::ptr::eq(flat.features(), &shared.features));
+        assert_eq!(flat.features().biome_features, expected.biome_features);
+        assert_eq!(
+            flat.features().placed.keys().collect::<Vec<_>>(),
+            expected.placed.keys().collect::<Vec<_>>()
+        );
+    }
 
     #[tokio::test]
     async fn saved_world_structure_option_overrides_properties_and_defaults_to_true() {

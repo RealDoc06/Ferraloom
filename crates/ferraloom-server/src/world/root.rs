@@ -11,7 +11,7 @@ pub struct WorldServices {
     dimension_types: std::collections::BTreeMap<Identifier, Option<Identifier>>,
     pub registry: Arc<RegistryAdapter>,
     pub registry_context: Arc<RegistrySet>,
-    pub(super) resources: Arc<ResourceManager>,
+    pub(super) worldgen: Arc<ferraloom_game::level::generation::WorldGenRegistries>,
     pub(super) generate_structures: bool,
     pub(super) bonus_chest: bool,
     pub(super) unported_behavior: ferraloom_game::block::UnportedBehavior,
@@ -112,7 +112,7 @@ impl WorldRoot {
             WorldPreset::decode(
                 &nbt_json(&Tag::Compound(settings.value().clone()))?,
                 resources,
-                data,
+                data.clone(),
                 seed,
             )?
         } else {
@@ -127,7 +127,7 @@ impl WorldRoot {
                 properties.get("level-type"),
                 &generator_settings,
                 resources,
-                data,
+                data.clone(),
                 seed,
             )?;
             let mut settings = json_nbt(&preset.definition)
@@ -147,6 +147,12 @@ impl WorldRoot {
             preset
         };
         let dimension_types = dimension_type_keys(&preset.definition)?;
+        let worldgen = {
+            let _timing = crate::generation::profile::Span::new("worldgen_registries", None);
+            Arc::new(ferraloom_game::level::generation::WorldGenRegistries::load(
+                resources, &data,
+            )?)
+        };
         let mut level_data = if access.path().join("level.dat").exists() {
             access.read_level_data()?
         } else {
@@ -163,7 +169,7 @@ impl WorldRoot {
                 dimension_types,
                 registry: Arc::new(RegistryAdapter::new(registries)?),
                 registry_context: registries.clone(),
-                resources: Arc::new(resources.clone()),
+                worldgen,
                 generate_structures,
                 bonus_chest,
                 unported_behavior,
