@@ -255,10 +255,35 @@ fn saved_proto_resumes_and_full_reload_preserves_owned_payload_and_tick_delays()
         IoWorker::new(directory.path(), storage::RegionFileVersion::Deflate, false).unwrap();
     let light = Arc::new(JobPool::new("resume-light", 1).unwrap());
     let pos = ChunkPos::new(-2, 3);
+    // ChunkMap#createEmptyChunk leaves all flat layers for buildTerrain.
+    let empty = ProtoChunk::empty(&context, pos).unwrap();
+    for section in &empty.region.chunk.sections {
+        assert_eq!(
+            section.states().counts(),
+            vec![(ferraloom_data::Block::AIR.default_state(), 4096)]
+        );
+        assert_eq!(section.biomes().counts().len(), 1);
+    }
+    assert_eq!(
+        empty.region.chunk.world_surface,
+        [context.dimension.min_y; 256]
+    );
+    assert_eq!(
+        empty.region.chunk.ocean_floor,
+        [context.dimension.min_y; 256]
+    );
     let mut original = GenerationState::new(context.clone(), light.clone());
     let full = original
         .generate(0, pos, ChunkStatus::Full, &registry, &io, None)
         .unwrap();
+    assert_eq!(
+        full.terrain.sections[0].get_block_state(0, 0, 0),
+        ferraloom_data::Block::BEDROCK.default_state()
+    );
+    assert_eq!(
+        full.terrain.sections[0].get_block_state(0, 3, 0),
+        ferraloom_data::Block::STONE.default_state()
+    );
     for (neighbor, disk) in &full.neighbors {
         io.store(*neighbor, Some(disk.write().unwrap()))
             .wait()

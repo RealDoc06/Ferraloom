@@ -148,26 +148,7 @@ impl WorldGenContext {
         let generated = match self.generator.as_ref() {
             ChunkGenerator::Noise(noise) => noise.new_chunk_in_dimension(position, self.dimension),
             ChunkGenerator::Debug(debug) => debug.build_terrain(position, self.dimension),
-            ChunkGenerator::Flat(flat) => {
-                let mut generated = flat.build_terrain(position, self.dimension);
-                for section in &mut generated.sections {
-                    for y in 0..16 {
-                        for z in 0..16 {
-                            for x in 0..16 {
-                                section.set_block_state(
-                                    x,
-                                    y,
-                                    z,
-                                    ferraloom_data::Block::AIR.default_state(),
-                                );
-                            }
-                        }
-                    }
-                }
-                generated.world_surface.fill(self.dimension.min_y);
-                generated.ocean_floor.fill(self.dimension.min_y);
-                generated
-            }
+            ChunkGenerator::Flat(flat) => flat.new_chunk_in_dimension(position, self.dimension),
         };
         Ok(RegionChunk::new(generated, ChunkStatus::Empty))
     }
