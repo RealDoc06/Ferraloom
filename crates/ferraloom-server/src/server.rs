@@ -1511,6 +1511,18 @@ impl MinecraftServer {
             .level
             .update_player_chunk_tracking(entity)
             .map_err(game_error)?;
+        // ServerChunkCache#move refreshes receiving connections after ChunkMap#move.
+        if self
+            .level
+            .level
+            .is_receiving_waypoints(entity)
+            .map_err(game_error)?
+        {
+            self.level
+                .level
+                .update_waypoint_player(entity)
+                .map_err(game_error)?;
+        }
         Ok(())
     }
     fn update_chunk_tickets(&mut self) -> Result<()> {

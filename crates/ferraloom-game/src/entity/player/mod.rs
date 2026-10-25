@@ -106,6 +106,8 @@ pub struct ServerPlayer {
     pub chunk_tracking_view: std::collections::HashSet<ChunkPos>,
     /// Port of ChunkTrackingView.Positioned#center, absent for EMPTY.
     pub chunk_tracking_center: Option<ChunkPos>,
+    /// Port of ChunkTrackingView.Positioned#viewDistance, captured with its center.
+    pub chunk_tracking_distance: Option<i32>,
     /// Port of ServerPlayer#getLastSectionPos, set by ChunkMap#updatePlayerPos.
     pub chunk_tracking_section: Option<ferraloom_util::SectionPos>,
     /// Port of ServerGamePacketListenerImpl#chunkSender: canonical pending/sent
@@ -295,6 +297,7 @@ impl ServerPlayer {
             view_distance: 10,
             chunk_tracking_view: Default::default(),
             chunk_tracking_center: None,
+            chunk_tracking_distance: None,
             chunk_tracking_section: None,
             chunk_sender: Default::default(),
             loaded: false,
@@ -755,6 +758,22 @@ fn jump_from_ground(entity: crate::entity::EntityRef, level: &mut Level) -> Resu
 }
 pub struct PlayerBehavior;
 impl crate::entity::Entity for PlayerBehavior {
+    /// ServerPlayer#onAttributeUpdated handles RECEIVE before its LivingEntity parent.
+    fn on_attribute_updated(
+        &self,
+        entity: EntityRef,
+        attribute: ferraloom_data::registries::attribute::Id,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        if attribute == ferraloom_data::registries::attribute::Id::WAYPOINT_RECEIVE_RANGE {
+            if super::living::attribute(entity, attribute, level)? > 0.0 {
+                level.add_waypoint_player(entity)?;
+            } else {
+                level.remove_waypoint_player(entity)?;
+            }
+        }
+        super::living::on_attribute_updated_parent(self, entity, attribute, level)
+    }
     fn is_invulnerable_to(
         &self,
         entity: EntityRef,

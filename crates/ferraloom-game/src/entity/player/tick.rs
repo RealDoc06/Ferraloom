@@ -69,7 +69,10 @@ fn player_tick<E: Entity + ?Sized>(
     } else {
         0
     };
-    living.tick_current_impulse_grace_time();
+    crate::entity::living::refresh_dirty_attributes(player, level)?;
+    level
+        .entity_mut::<crate::entity::LivingEntity>(player)?
+        .tick_current_impulse_grace_time();
     level
         .entity_mut::<ServerPlayer>(player)?
         .tick_attack_strength();

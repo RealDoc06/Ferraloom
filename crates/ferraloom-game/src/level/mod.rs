@@ -57,6 +57,7 @@ pub use structure_services::StructureServices;
 pub mod tick_rate;
 pub mod tickets;
 mod ticking;
+pub mod waypoints;
 pub mod weather;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -110,6 +111,10 @@ pub enum LevelError {
     MissingPlacementPlayer,
     UninitializedPlacementDirection,
     MissingEntity(EntityRef),
+    MissingEntityAttribute {
+        entity_type: EntityType,
+        attribute: ferraloom_data::registries::attribute::Id,
+    },
     MissingTrackedEntity(i32),
     MissingRegistryContext,
     MissingNetworkRegistryEntry {
@@ -198,6 +203,7 @@ pub struct LevelRules {
     pub block_drops: Option<bool>,
     pub show_advancement_messages: bool,
     pub spectators_generate_chunks: bool,
+    pub locator_bar: bool,
     pub tnt_explodes: bool,
     pub entity_drops: bool,
     pub max_entity_cramming: i32,
@@ -236,6 +242,7 @@ impl Default for LevelRules {
             block_drops: None,
             show_advancement_messages: true,
             spectators_generate_chunks: damage_default(GameRule::SpectatorsGenerateChunks),
+            locator_bar: damage_default(GameRule::LocatorBar),
             tnt_explodes: true,
             entity_drops: true,
             max_entity_cramming: 24,
@@ -301,6 +308,7 @@ pub struct Region {
     next_chunk_generation: Cell<u64>,
     entities: entity::EntityStorage,
     entity_tracker: entity_tracker::EntityTracker,
+    waypoint_manager: waypoints::ServerWaypointManager,
     entity_tick_list: entity::EntityTickList,
     block_ticks: LevelTicks,
     fluid_ticks: LevelTicks<ferraloom_data::registries::fluid::Id>,
@@ -346,6 +354,7 @@ impl Region {
             next_chunk_generation: Cell::new(0),
             entities: entity::EntityStorage::default(),
             entity_tracker: Default::default(),
+            waypoint_manager: Default::default(),
             entity_tick_list: entity::EntityTickList::default(),
             block_ticks: LevelTicks::default(),
             fluid_ticks: LevelTicks::default(),
