@@ -81,10 +81,11 @@ async fn dispensers(bot: &mut Bot, log: &mut ObservationLog) -> Result<()> {
         redstone_support::merge(
             bot,
             pos,
-            "{Items:[{Slot:0b,id:\"minecraft:stone\",count:6}]}",
+            "{Items:[{Slot:0b,id:\"minecraft:stick\",count:6}]}",
         )
         .await?;
-        // A dropper uses a real destination; dispenser uses DefaultDispenseItemBehavior.
+        // Stick selects native DefaultDispenseItemBehavior; stone selects the
+        // separate sulfur-cube equipment behavior. Dropper uses a real sink.
         if name == "dropper" {
             set(bot, pos.east(1), Block::BARREL).await?;
         }
@@ -124,7 +125,7 @@ async fn dispensers(bot: &mut Bot, log: &mut ObservationLog) -> Result<()> {
         ensure!(inventory(bot, pos).await?.first().map(|item| item.2) == Some(4));
         if name == "dropper" {
             let destination = inventory(bot, pos.east(1)).await?;
-            ensure!(destination == [(0, "minecraft:stone".into(), 2)]);
+            ensure!(destination == [(0, "minecraft:stick".into(), 2)]);
             log.record("dropper.destination", destination)?;
         } else {
             let snapshot = bot.snapshot();
@@ -142,7 +143,7 @@ async fn dispensers(bot: &mut Bot, log: &mut ObservationLog) -> Result<()> {
                     else {
                         return None;
                     };
-                    (stack.item() == Item::STONE)
+                    (stack.item() == Item::STICK)
                         .then(|| stack.0.as_ref().map_or(0, |stack| stack.count))
                 })
                 .collect::<Vec<_>>();
