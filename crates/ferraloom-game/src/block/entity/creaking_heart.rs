@@ -35,7 +35,12 @@ impl CreakingHeartBlockEntity {
     /// Port of CreakingHeartBlockEntity#loadAdditional, setCreakingInfo(UUID)
     /// and clearCreakingInfo. The live dispatcher performs their setChanged.
     fn load(&mut self, tag: &CompoundTag) {
-        self.creaking_uuid = tag.get("creaking").and_then(|tag| Uuid::from_nbt(tag).ok());
+        // TagValueInput#read recovers Util.fixedSize's first-four partial for
+        // an oversized UUID stream. The shared strict UUID codec stays strict.
+        self.creaking_uuid = tag.get("creaking").and_then(|tag| {
+            let words = Vec::<i32>::from_nbt(tag).ok()?;
+            Some(Uuid::from_int_array(words.get(..4)?.try_into().ok()?))
+        });
         if self.creaking_uuid.is_some() {
             self.ticks_existed = 0;
         }

@@ -122,34 +122,31 @@ impl SpawnData {
         if let Some(id) = id {
             entity.insert("id", Tag::String(id.as_str().into()));
         }
-        let rules = match tag.get("custom_spawn_rules") {
-            None => None,
-            Some(value) => {
-                let value = value.as_compound()?;
-                let rules = SpawnRules {
-                    block: value
-                        .get("block_light_limit")
-                        .and_then(LightRange::decode)
-                        .unwrap_or_default(),
-                    sky: value
-                        .get("sky_light_limit")
-                        .and_then(LightRange::decode)
-                        .unwrap_or_default(),
-                };
-                if rules.block.min < 0
-                    || rules.block.max > 15
-                    || rules.sky.min < 0
-                    || rules.sky.max > 15
-                {
-                    return None;
-                }
-                Some(rules)
+        // TagValueInput#read accepts SpawnData's partial value: an invalid
+        // optional rules/equipment field becomes empty without losing entity.
+        let rules = tag.get_compound("custom_spawn_rules").and_then(|value| {
+            let rules = SpawnRules {
+                block: value
+                    .get("block_light_limit")
+                    .and_then(LightRange::decode)
+                    .unwrap_or_default(),
+                sky: value
+                    .get("sky_light_limit")
+                    .and_then(LightRange::decode)
+                    .unwrap_or_default(),
+            };
+            if rules.block.min < 0
+                || rules.block.max > 15
+                || rules.sky.min < 0
+                || rules.sky.max > 15
+            {
+                return None;
             }
-        };
-        let equipment = match tag.get("equipment") {
-            None => None,
-            Some(value) => Some(SpawnEquipment::decode(value.as_compound()?)?),
-        };
+            Some(rules)
+        });
+        let equipment = tag
+            .get_compound("equipment")
+            .and_then(SpawnEquipment::decode);
         Some(Self {
             entity,
             rules,
