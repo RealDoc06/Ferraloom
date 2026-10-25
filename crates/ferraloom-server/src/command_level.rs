@@ -122,6 +122,11 @@ impl MinecraftServer {
         command: &PreparedCommand,
     ) -> Result<bool> {
         match command.command.as_str() {
+            "team" => {
+                let result = self.execute_team_command_live(command);
+                self.apply_level_effects()?;
+                self.apply_command_result(source, &command.source, result?);
+            }
             "data" => {
                 let result = self.data_command(command)?;
                 self.apply_command_result(source, &command.source, result);

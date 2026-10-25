@@ -7,6 +7,7 @@ use ferraloom_util::collections::{HashSet, JavaHash, LinkedHashMap};
 
 mod connection;
 mod icon;
+mod team;
 use connection::Connection;
 pub use icon::{IconDecodeError, default_icon, load_icon, save_icon};
 
