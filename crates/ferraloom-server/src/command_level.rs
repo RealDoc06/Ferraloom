@@ -122,6 +122,10 @@ impl MinecraftServer {
         command: &PreparedCommand,
     ) -> Result<bool> {
         match command.command.as_str() {
+            "data" => {
+                let result = self.data_command(command)?;
+                self.apply_command_result(source, &command.source, result);
+            }
             "setblock" | "fill" => {
                 let result = placement::run(
                     command,

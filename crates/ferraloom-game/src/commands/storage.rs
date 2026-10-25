@@ -202,6 +202,27 @@ impl CommandStorage {
     pub fn keys(&self) -> Vec<Identifier> {
         self.current.keys()
     }
+    /// Port of mutations through Container#get's aliased compound. A failed
+    /// /data operation can change an existing value without Container#put, so
+    /// neither the key's existence nor the current dirty flag changes here.
+    pub fn publish_read_mutation(
+        &mut self,
+        id: &Identifier,
+        value: &CompoundTag,
+    ) -> Result<(), StorageReadError> {
+        self.get(id)?;
+        let snapshot = Arc::make_mut(&mut self.current);
+        if let Some(Ok(data)) = snapshot.namespaces.get_mut(&id.namespace().to_owned())
+            && data.value().contents.contains_key(&id.path().to_owned())
+        {
+            let dirty = data.is_dirty();
+            data.value_mut()
+                .contents
+                .insert(id.path().to_owned(), value.clone());
+            data.set_dirty(dirty);
+        }
+        Ok(())
+    }
     /// Port of Container#put: empty compounds remove entries; every set dirties.
     /// Canonical callers are server-exclusive /data handlers, never Level readers.
     pub fn set(&mut self, id: &Identifier, contents: CompoundTag) -> Result<(), StorageReadError> {

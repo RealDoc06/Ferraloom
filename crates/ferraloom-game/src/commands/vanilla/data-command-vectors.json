@@ -1,0 +1,4388 @@
+[
+  {
+    "command": "data get storage test:root",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.get.storage.arg-target",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.query",
+          "with": [
+            "test:root",
+            {
+              "text": "",
+              "extra": [
+                "{",
+                "",
+                {
+                  "text": "longs",
+                  "color": "aqua"
+                },
+                ":",
+                " ",
+                "[",
+                {
+                  "text": "L",
+                  "color": "red"
+                },
+                ";",
+                " ",
+                {
+                  "text": "5",
+                  "color": "gold"
+                },
+                {
+                  "text": "L",
+                  "color": "red"
+                },
+                ",",
+                " ",
+                {
+                  "text": "6",
+                  "color": "gold"
+                },
+                {
+                  "text": "L",
+                  "color": "red"
+                },
+                "]",
+                ",",
+                " ",
+                "",
+                {
+                  "text": "flag",
+                  "color": "aqua"
+                },
+                ":",
+                " ",
+                {
+                  "text": "1",
+                  "color": "gold"
+                },
+                {
+                  "text": "b",
+                  "color": "red"
+                },
+                ",",
+                " ",
+                "",
+                {
+                  "text": "ints",
+                  "color": "aqua"
+                },
+                ":",
+                " ",
+                "[",
+                {
+                  "text": "I",
+                  "color": "red"
+                },
+                ";",
+                " ",
+                {
+                  "text": "3",
+                  "color": "gold"
+                },
+                ",",
+                " ",
+                {
+                  "text": "4",
+                  "color": "gold"
+                },
+                "]",
+                ",",
+                " ",
+                "",
+                {
+                  "text": "bytes",
+                  "color": "aqua"
+                },
+                ":",
+                " ",
+                "[",
+                {
+                  "text": "B",
+                  "color": "red"
+                },
+                ";",
+                " ",
+                {
+                  "text": "1",
+                  "color": "gold"
+                },
+                {
+                  "text": "b",
+                  "color": "red"
+                },
+                ",",
+                " ",
+                {
+                  "text": "2",
+                  "color": "gold"
+                },
+                {
+                  "text": "b",
+                  "color": "red"
+                },
+                "]",
+                ",",
+                " ",
+                "",
+                {
+                  "text": "objects",
+                  "color": "aqua"
+                },
+                ":",
+                " ",
+                "[",
+                "",
+                "{",
+                "",
+                {
+                  "text": "a",
+                  "color": "aqua"
+                },
+                ":",
+                " ",
+                {
+                  "text": "1",
+                  "color": "gold"
+                },
+                "}",
+                ",",
+                " ",
+                "",
+                "{",
+                "",
+                {
+                  "text": "a",
+                  "color": "aqua"
+                },
+                ":",
+                " ",
+                {
+                  "text": "2",
+                  "color": "gold"
+                },
+                "}",
+                "]",
+                ",",
+                " ",
+                "",
+                {
+                  "text": "i",
+                  "color": "aqua"
+                },
+                ":",
+                " ",
+                {
+                  "text": "7",
+                  "color": "gold"
+                },
+                ",",
+                " ",
+                "",
+                {
+                  "text": "mixed",
+                  "color": "aqua"
+                },
+                ":",
+                " ",
+                "[",
+                "",
+                "{",
+                "",
+                {
+                  "text": "a",
+                  "color": "aqua"
+                },
+                ":",
+                " ",
+                {
+                  "text": "1",
+                  "color": "gold"
+                },
+                "}",
+                ",",
+                " ",
+                "",
+                {
+                  "text": "2",
+                  "color": "gold"
+                },
+                "]",
+                ",",
+                " ",
+                "",
+                {
+                  "text": "text",
+                  "color": "aqua"
+                },
+                ":",
+                " ",
+                "\"",
+                {
+                  "text": "A😀BC",
+                  "color": "green"
+                },
+                "\"",
+                ",",
+                " ",
+                "",
+                {
+                  "text": "list",
+                  "color": "aqua"
+                },
+                ":",
+                " ",
+                "[",
+                {
+                  "text": "1",
+                  "color": "gold"
+                },
+                ",",
+                " ",
+                {
+                  "text": "2",
+                  "color": "gold"
+                },
+                ",",
+                " ",
+                {
+                  "text": "3",
+                  "color": "gold"
+                },
+                "]",
+                ",",
+                " ",
+                "",
+                {
+                  "text": "nested",
+                  "color": "aqua"
+                },
+                ":",
+                " ",
+                "{",
+                "",
+                {
+                  "text": "Aa",
+                  "color": "aqua"
+                },
+                ":",
+                " ",
+                {
+                  "text": "1",
+                  "color": "gold"
+                },
+                ",",
+                " ",
+                "",
+                {
+                  "text": "BB",
+                  "color": "aqua"
+                },
+                ":",
+                " ",
+                {
+                  "text": "2",
+                  "color": "gold"
+                },
+                "}",
+                ",",
+                " ",
+                "",
+                {
+                  "text": "n",
+                  "color": "aqua"
+                },
+                ":",
+                " ",
+                {
+                  "text": "-1.5",
+                  "color": "gold"
+                },
+                {
+                  "text": "d",
+                  "color": "red"
+                },
+                ",",
+                " ",
+                "",
+                {
+                  "text": "empty",
+                  "color": "aqua"
+                },
+                ":",
+                " ",
+                "[",
+                "]",
+                "}"
+              ]
+            }
+          ]
+        },
+        "broadcast": false
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data get storage test:root n",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.get.storage.arg-target.arg-path",
+    "value": -2,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.query",
+          "with": [
+            "test:root",
+            {
+              "text": "",
+              "extra": [
+                {
+                  "text": "-1.5",
+                  "color": "gold"
+                },
+                {
+                  "text": "d",
+                  "color": "red"
+                }
+              ]
+            }
+          ]
+        },
+        "broadcast": false
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data get storage test:root n 2.5",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.get.storage.arg-target.arg-path.arg-scale",
+    "value": -4,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.get",
+          "with": [
+            "n",
+            "test:root",
+            "2.50",
+            -4
+          ]
+        },
+        "broadcast": false
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data get storage test:root i",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.get.storage.arg-target.arg-path",
+    "value": 7,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.query",
+          "with": [
+            "test:root",
+            {
+              "text": "",
+              "extra": [
+                {
+                  "text": "7",
+                  "color": "gold"
+                }
+              ]
+            }
+          ]
+        },
+        "broadcast": false
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data get storage test:root i 2.5",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.get.storage.arg-target.arg-path.arg-scale",
+    "value": 17,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.get",
+          "with": [
+            "i",
+            "test:root",
+            "2.50",
+            17
+          ]
+        },
+        "broadcast": false
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data get storage test:root text",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.get.storage.arg-target.arg-path",
+    "value": 5,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.query",
+          "with": [
+            "test:root",
+            {
+              "text": "",
+              "extra": [
+                "\"",
+                {
+                  "text": "A😀BC",
+                  "color": "green"
+                },
+                "\""
+              ]
+            }
+          ]
+        },
+        "broadcast": false
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data get storage test:root text 2.5",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.get.storage.arg-target.arg-path.arg-scale",
+    "error": {
+      "translate": "commands.data.get.invalid",
+      "with": [
+        "text"
+      ]
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data get storage test:root list",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.get.storage.arg-target.arg-path",
+    "value": 3,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.query",
+          "with": [
+            "test:root",
+            {
+              "text": "",
+              "extra": [
+                "[",
+                {
+                  "text": "1",
+                  "color": "gold"
+                },
+                ",",
+                " ",
+                {
+                  "text": "2",
+                  "color": "gold"
+                },
+                ",",
+                " ",
+                {
+                  "text": "3",
+                  "color": "gold"
+                },
+                "]"
+              ]
+            }
+          ]
+        },
+        "broadcast": false
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data get storage test:root list 2.5",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.get.storage.arg-target.arg-path.arg-scale",
+    "error": {
+      "translate": "commands.data.get.invalid",
+      "with": [
+        "list"
+      ]
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data get storage test:root objects",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.get.storage.arg-target.arg-path",
+    "value": 2,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.query",
+          "with": [
+            "test:root",
+            {
+              "text": "",
+              "extra": [
+                "[",
+                "",
+                "{",
+                "",
+                {
+                  "text": "a",
+                  "color": "aqua"
+                },
+                ":",
+                " ",
+                {
+                  "text": "1",
+                  "color": "gold"
+                },
+                "}",
+                ",",
+                " ",
+                "",
+                "{",
+                "",
+                {
+                  "text": "a",
+                  "color": "aqua"
+                },
+                ":",
+                " ",
+                {
+                  "text": "2",
+                  "color": "gold"
+                },
+                "}",
+                "]"
+              ]
+            }
+          ]
+        },
+        "broadcast": false
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data get storage test:root objects 2.5",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.get.storage.arg-target.arg-path.arg-scale",
+    "error": {
+      "translate": "commands.data.get.invalid",
+      "with": [
+        "objects"
+      ]
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data get storage test:root nested",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.get.storage.arg-target.arg-path",
+    "value": 2,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.query",
+          "with": [
+            "test:root",
+            {
+              "text": "",
+              "extra": [
+                "{",
+                "",
+                {
+                  "text": "Aa",
+                  "color": "aqua"
+                },
+                ":",
+                " ",
+                {
+                  "text": "1",
+                  "color": "gold"
+                },
+                ",",
+                " ",
+                "",
+                {
+                  "text": "BB",
+                  "color": "aqua"
+                },
+                ":",
+                " ",
+                {
+                  "text": "2",
+                  "color": "gold"
+                },
+                "}"
+              ]
+            }
+          ]
+        },
+        "broadcast": false
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data get storage test:root nested 2.5",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.get.storage.arg-target.arg-path.arg-scale",
+    "error": {
+      "translate": "commands.data.get.invalid",
+      "with": [
+        "nested"
+      ]
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data get storage test:root bytes",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.get.storage.arg-target.arg-path",
+    "value": 2,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.query",
+          "with": [
+            "test:root",
+            {
+              "text": "",
+              "extra": [
+                "[",
+                {
+                  "text": "B",
+                  "color": "red"
+                },
+                ";",
+                " ",
+                {
+                  "text": "1",
+                  "color": "gold"
+                },
+                {
+                  "text": "b",
+                  "color": "red"
+                },
+                ",",
+                " ",
+                {
+                  "text": "2",
+                  "color": "gold"
+                },
+                {
+                  "text": "b",
+                  "color": "red"
+                },
+                "]"
+              ]
+            }
+          ]
+        },
+        "broadcast": false
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data get storage test:root bytes 2.5",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.get.storage.arg-target.arg-path.arg-scale",
+    "error": {
+      "translate": "commands.data.get.invalid",
+      "with": [
+        "bytes"
+      ]
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data get storage test:root ints",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.get.storage.arg-target.arg-path",
+    "value": 2,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.query",
+          "with": [
+            "test:root",
+            {
+              "text": "",
+              "extra": [
+                "[",
+                {
+                  "text": "I",
+                  "color": "red"
+                },
+                ";",
+                " ",
+                {
+                  "text": "3",
+                  "color": "gold"
+                },
+                ",",
+                " ",
+                {
+                  "text": "4",
+                  "color": "gold"
+                },
+                "]"
+              ]
+            }
+          ]
+        },
+        "broadcast": false
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data get storage test:root ints 2.5",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.get.storage.arg-target.arg-path.arg-scale",
+    "error": {
+      "translate": "commands.data.get.invalid",
+      "with": [
+        "ints"
+      ]
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data get storage test:root longs",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.get.storage.arg-target.arg-path",
+    "value": 2,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.query",
+          "with": [
+            "test:root",
+            {
+              "text": "",
+              "extra": [
+                "[",
+                {
+                  "text": "L",
+                  "color": "red"
+                },
+                ";",
+                " ",
+                {
+                  "text": "5",
+                  "color": "gold"
+                },
+                {
+                  "text": "L",
+                  "color": "red"
+                },
+                ",",
+                " ",
+                {
+                  "text": "6",
+                  "color": "gold"
+                },
+                {
+                  "text": "L",
+                  "color": "red"
+                },
+                "]"
+              ]
+            }
+          ]
+        },
+        "broadcast": false
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data get storage test:root longs 2.5",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.get.storage.arg-target.arg-path.arg-scale",
+    "error": {
+      "translate": "commands.data.get.invalid",
+      "with": [
+        "longs"
+      ]
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data get storage test:root empty",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.get.storage.arg-target.arg-path",
+    "value": 0,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.query",
+          "with": [
+            "test:root",
+            {
+              "text": "",
+              "extra": [
+                "[",
+                "]"
+              ]
+            }
+          ]
+        },
+        "broadcast": false
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data get storage test:root empty 2.5",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.get.storage.arg-target.arg-path.arg-scale",
+    "error": {
+      "translate": "commands.data.get.invalid",
+      "with": [
+        "empty"
+      ]
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data get storage test:root flag",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.get.storage.arg-target.arg-path",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.query",
+          "with": [
+            "test:root",
+            {
+              "text": "",
+              "extra": [
+                {
+                  "text": "1",
+                  "color": "gold"
+                },
+                {
+                  "text": "b",
+                  "color": "red"
+                }
+              ]
+            }
+          ]
+        },
+        "broadcast": false
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data get storage test:root flag 2.5",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.get.storage.arg-target.arg-path.arg-scale",
+    "value": 2,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.get",
+          "with": [
+            "flag",
+            "test:root",
+            "2.50",
+            2
+          ]
+        },
+        "broadcast": false
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data get storage test:root absent",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.get.storage.arg-target.arg-path",
+    "error": {
+      "translate": "arguments.nbtpath.nothing_found",
+      "with": [
+        "absent"
+      ]
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data get storage test:root absent 2.5",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.get.storage.arg-target.arg-path.arg-scale",
+    "error": {
+      "translate": "arguments.nbtpath.nothing_found",
+      "with": [
+        "absent"
+      ]
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data get storage test:root objects[].a",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.get.storage.arg-target.arg-path",
+    "error": {
+      "translate": "commands.data.get.multiple"
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data get storage test:root objects[].a 2.5",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.get.storage.arg-target.arg-path.arg-scale",
+    "error": {
+      "translate": "commands.data.get.multiple"
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data merge storage test:root {}",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.merge.storage.arg-target.arg-nbt",
+    "error": {
+      "translate": "commands.data.merge.failed"
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data merge storage test:root {i:7}",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.merge.storage.arg-target.arg-nbt",
+    "error": {
+      "translate": "commands.data.merge.failed"
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data merge storage test:root {i:8}",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.merge.storage.arg-target.arg-nbt",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:8,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data merge storage test:root {nested:{Aa:9},new:42}",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.merge.storage.arg-target.arg-nbt",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:9,BB:2},new:42,objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data merge storage test:root {list:[7,8]}",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.merge.storage.arg-target.arg-nbt",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[7,8],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data merge storage test:root {nested:3}",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.merge.storage.arg-target.arg-nbt",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:3,objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data remove storage test:root absent",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.remove.storage.arg-target.arg-path",
+    "error": {
+      "translate": "commands.data.merge.failed"
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data remove storage test:root i",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.remove.storage.arg-target.arg-path",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data remove storage test:root list[0]",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.remove.storage.arg-target.arg-path",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data remove storage test:root list[-1]",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.remove.storage.arg-target.arg-path",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data remove storage test:root list[]",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.remove.storage.arg-target.arg-path",
+    "value": 3,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data remove storage test:root objects[].a",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.remove.storage.arg-target.arg-path",
+    "value": 2,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{},{}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data remove storage test:root objects[].absent",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.remove.storage.arg-target.arg-path",
+    "error": {
+      "translate": "commands.data.merge.failed"
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data remove storage test:root {i:7}",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.remove.storage.arg-target.arg-path",
+    "error": {
+      "translate": "commands.data.merge.failed"
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data remove storage test:root nested",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.remove.storage.arg-target.arg-path",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root list set value {added:9}",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.set.value.arg-value",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:{added:9},longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root list set from storage test:source values[]",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.set.from.storage.arg-source.arg-source-path",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:5,longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root absent.children set value {added:9}",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.set.value.arg-value",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{absent:{children:{added:9}},bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root absent.children set from storage test:source values[]",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.set.from.storage.arg-source.arg-source-path",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{absent:{children:5},bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root objects[].next set value {added:9}",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.set.value.arg-value",
+    "value": 2,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1,next:{added:9}},{a:2,next:{added:9}}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root objects[].next set from storage test:source values[]",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.set.from.storage.arg-source.arg-source-path",
+    "value": 2,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1,next:5},{a:2,next:5}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root mixed[] set value {added:9}",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.set.value.arg-value",
+    "value": 2,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{added:9},{added:9}],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root mixed[] set from storage test:source values[]",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.set.from.storage.arg-source.arg-source-path",
+    "value": 2,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[5,5],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root list append value {added:9}",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.append.value.arg-value",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3,{added:9}],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root list append from storage test:source values[]",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.append.from.storage.arg-source.arg-source-path",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3,4,5],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root absent.children append value {added:9}",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.append.value.arg-value",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{absent:{children:[{added:9}]},bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root absent.children append from storage test:source values[]",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.append.from.storage.arg-source.arg-source-path",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{absent:{children:[4,5]},bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root objects[].next append value {added:9}",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.append.value.arg-value",
+    "value": 2,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1,next:[{added:9}]},{a:2,next:[{added:9}]}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root objects[].next append from storage test:source values[]",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.append.from.storage.arg-source.arg-source-path",
+    "value": 2,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1,next:[4,5]},{a:2,next:[4,5]}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root mixed[] append value {added:9}",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.append.value.arg-value",
+    "error": {
+      "translate": "commands.data.modify.expected_list",
+      "with": [
+        "{a:1}"
+      ]
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root mixed[] append from storage test:source values[]",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.append.from.storage.arg-source.arg-source-path",
+    "error": {
+      "translate": "commands.data.modify.expected_list",
+      "with": [
+        "{a:1}"
+      ]
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root list prepend value {added:9}",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.prepend.value.arg-value",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[{added:9},1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root list prepend from storage test:source values[]",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.prepend.from.storage.arg-source.arg-source-path",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[4,5,1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root absent.children prepend value {added:9}",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.prepend.value.arg-value",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{absent:{children:[{added:9}]},bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root absent.children prepend from storage test:source values[]",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.prepend.from.storage.arg-source.arg-source-path",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{absent:{children:[4,5]},bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root objects[].next prepend value {added:9}",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.prepend.value.arg-value",
+    "value": 2,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1,next:[{added:9}]},{a:2,next:[{added:9}]}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root objects[].next prepend from storage test:source values[]",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.prepend.from.storage.arg-source.arg-source-path",
+    "value": 2,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1,next:[4,5]},{a:2,next:[4,5]}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root mixed[] prepend value {added:9}",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.prepend.value.arg-value",
+    "error": {
+      "translate": "commands.data.modify.expected_list",
+      "with": [
+        "{a:1}"
+      ]
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root mixed[] prepend from storage test:source values[]",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.prepend.from.storage.arg-source.arg-source-path",
+    "error": {
+      "translate": "commands.data.modify.expected_list",
+      "with": [
+        "{a:1}"
+      ]
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root list insert 0 value {added:9}",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.insert.arg-index.value.arg-value",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[{added:9},1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root list insert 0 from storage test:source values[]",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.insert.arg-index.from.storage.arg-source.arg-source-path",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[4,5,1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root absent.children insert 0 value {added:9}",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.insert.arg-index.value.arg-value",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{absent:{children:[{added:9}]},bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root absent.children insert 0 from storage test:source values[]",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.insert.arg-index.from.storage.arg-source.arg-source-path",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{absent:{children:[4,5]},bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root objects[].next insert 0 value {added:9}",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.insert.arg-index.value.arg-value",
+    "value": 2,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1,next:[{added:9}]},{a:2,next:[{added:9}]}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root objects[].next insert 0 from storage test:source values[]",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.insert.arg-index.from.storage.arg-source.arg-source-path",
+    "value": 2,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1,next:[4,5]},{a:2,next:[4,5]}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root mixed[] insert 0 value {added:9}",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.insert.arg-index.value.arg-value",
+    "error": {
+      "translate": "commands.data.modify.expected_list",
+      "with": [
+        "{a:1}"
+      ]
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root mixed[] insert 0 from storage test:source values[]",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.insert.arg-index.from.storage.arg-source.arg-source-path",
+    "error": {
+      "translate": "commands.data.modify.expected_list",
+      "with": [
+        "{a:1}"
+      ]
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root list insert -1 value {added:9}",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.insert.arg-index.value.arg-value",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3,{added:9}],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root list insert -1 from storage test:source values[]",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.insert.arg-index.from.storage.arg-source.arg-source-path",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3,4,5],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root absent.children insert -1 value {added:9}",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.insert.arg-index.value.arg-value",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{absent:{children:[{added:9}]},bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root absent.children insert -1 from storage test:source values[]",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.insert.arg-index.from.storage.arg-source.arg-source-path",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{absent:{children:[4,5]},bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root objects[].next insert -1 value {added:9}",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.insert.arg-index.value.arg-value",
+    "value": 2,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1,next:[{added:9}]},{a:2,next:[{added:9}]}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root objects[].next insert -1 from storage test:source values[]",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.insert.arg-index.from.storage.arg-source.arg-source-path",
+    "value": 2,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1,next:[4,5]},{a:2,next:[4,5]}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root mixed[] insert -1 value {added:9}",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.insert.arg-index.value.arg-value",
+    "error": {
+      "translate": "commands.data.modify.expected_list",
+      "with": [
+        "{a:1}"
+      ]
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root mixed[] insert -1 from storage test:source values[]",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.insert.arg-index.from.storage.arg-source.arg-source-path",
+    "error": {
+      "translate": "commands.data.modify.expected_list",
+      "with": [
+        "{a:1}"
+      ]
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root list insert 2 value {added:9}",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.insert.arg-index.value.arg-value",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,{added:9},3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root list insert 2 from storage test:source values[]",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.insert.arg-index.from.storage.arg-source.arg-source-path",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,4,5,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root absent.children insert 2 value {added:9}",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.insert.arg-index.value.arg-value",
+    "error": {
+      "translate": "commands.data.modify.invalid_index",
+      "with": [
+        2
+      ]
+    },
+    "feedback": [],
+    "root": "{absent:{children:[]},bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root absent.children insert 2 from storage test:source values[]",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.insert.arg-index.from.storage.arg-source.arg-source-path",
+    "error": {
+      "translate": "commands.data.modify.invalid_index",
+      "with": [
+        2
+      ]
+    },
+    "feedback": [],
+    "root": "{absent:{children:[]},bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root objects[].next insert 2 value {added:9}",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.insert.arg-index.value.arg-value",
+    "error": {
+      "translate": "commands.data.modify.invalid_index",
+      "with": [
+        2
+      ]
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1,next:[]},{a:2,next:[]}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root objects[].next insert 2 from storage test:source values[]",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.insert.arg-index.from.storage.arg-source.arg-source-path",
+    "error": {
+      "translate": "commands.data.modify.invalid_index",
+      "with": [
+        2
+      ]
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1,next:[]},{a:2,next:[]}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root mixed[] insert 2 value {added:9}",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.insert.arg-index.value.arg-value",
+    "error": {
+      "translate": "commands.data.modify.expected_list",
+      "with": [
+        "{a:1}"
+      ]
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root mixed[] insert 2 from storage test:source values[]",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.insert.arg-index.from.storage.arg-source.arg-source-path",
+    "error": {
+      "translate": "commands.data.modify.expected_list",
+      "with": [
+        "{a:1}"
+      ]
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root list insert -4 value {added:9}",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.insert.arg-index.value.arg-value",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[{added:9},1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root list insert -4 from storage test:source values[]",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.insert.arg-index.from.storage.arg-source.arg-source-path",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[4,5,1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root absent.children insert -4 value {added:9}",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.insert.arg-index.value.arg-value",
+    "error": {
+      "translate": "commands.data.modify.invalid_index",
+      "with": [
+        -3
+      ]
+    },
+    "feedback": [],
+    "root": "{absent:{children:[]},bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root absent.children insert -4 from storage test:source values[]",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.insert.arg-index.from.storage.arg-source.arg-source-path",
+    "error": {
+      "translate": "commands.data.modify.invalid_index",
+      "with": [
+        -3
+      ]
+    },
+    "feedback": [],
+    "root": "{absent:{children:[]},bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root objects[].next insert -4 value {added:9}",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.insert.arg-index.value.arg-value",
+    "error": {
+      "translate": "commands.data.modify.invalid_index",
+      "with": [
+        -3
+      ]
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1,next:[]},{a:2,next:[]}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root objects[].next insert -4 from storage test:source values[]",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.insert.arg-index.from.storage.arg-source.arg-source-path",
+    "error": {
+      "translate": "commands.data.modify.invalid_index",
+      "with": [
+        -3
+      ]
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1,next:[]},{a:2,next:[]}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root mixed[] insert -4 value {added:9}",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.insert.arg-index.value.arg-value",
+    "error": {
+      "translate": "commands.data.modify.expected_list",
+      "with": [
+        "{a:1}"
+      ]
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root mixed[] insert -4 from storage test:source values[]",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.insert.arg-index.from.storage.arg-source.arg-source-path",
+    "error": {
+      "translate": "commands.data.modify.expected_list",
+      "with": [
+        "{a:1}"
+      ]
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root list insert 100 value {added:9}",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.insert.arg-index.value.arg-value",
+    "error": {
+      "translate": "commands.data.modify.invalid_index",
+      "with": [
+        100
+      ]
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root list insert 100 from storage test:source values[]",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.insert.arg-index.from.storage.arg-source.arg-source-path",
+    "error": {
+      "translate": "commands.data.modify.invalid_index",
+      "with": [
+        100
+      ]
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root absent.children insert 100 value {added:9}",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.insert.arg-index.value.arg-value",
+    "error": {
+      "translate": "commands.data.modify.invalid_index",
+      "with": [
+        100
+      ]
+    },
+    "feedback": [],
+    "root": "{absent:{children:[]},bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root absent.children insert 100 from storage test:source values[]",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.insert.arg-index.from.storage.arg-source.arg-source-path",
+    "error": {
+      "translate": "commands.data.modify.invalid_index",
+      "with": [
+        100
+      ]
+    },
+    "feedback": [],
+    "root": "{absent:{children:[]},bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root objects[].next insert 100 value {added:9}",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.insert.arg-index.value.arg-value",
+    "error": {
+      "translate": "commands.data.modify.invalid_index",
+      "with": [
+        100
+      ]
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1,next:[]},{a:2,next:[]}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root objects[].next insert 100 from storage test:source values[]",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.insert.arg-index.from.storage.arg-source.arg-source-path",
+    "error": {
+      "translate": "commands.data.modify.invalid_index",
+      "with": [
+        100
+      ]
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1,next:[]},{a:2,next:[]}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root mixed[] insert 100 value {added:9}",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.insert.arg-index.value.arg-value",
+    "error": {
+      "translate": "commands.data.modify.expected_list",
+      "with": [
+        "{a:1}"
+      ]
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root mixed[] insert 100 from storage test:source values[]",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.insert.arg-index.from.storage.arg-source.arg-source-path",
+    "error": {
+      "translate": "commands.data.modify.expected_list",
+      "with": [
+        "{a:1}"
+      ]
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root list merge value {added:9}",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.merge.value.arg-value",
+    "error": {
+      "translate": "commands.data.modify.expected_object",
+      "with": [
+        "[1,2,3]"
+      ]
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root list merge from storage test:source values[]",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.merge.from.storage.arg-source.arg-source-path",
+    "error": {
+      "translate": "commands.data.modify.expected_object",
+      "with": [
+        "4"
+      ]
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root absent.children merge value {added:9}",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.merge.value.arg-value",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{absent:{children:{added:9}},bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root absent.children merge from storage test:source values[]",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.merge.from.storage.arg-source.arg-source-path",
+    "error": {
+      "translate": "commands.data.modify.expected_object",
+      "with": [
+        "4"
+      ]
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root objects[].next merge value {added:9}",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.merge.value.arg-value",
+    "value": 2,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1,next:{added:9}},{a:2,next:{added:9}}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root objects[].next merge from storage test:source values[]",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.merge.from.storage.arg-source.arg-source-path",
+    "error": {
+      "translate": "commands.data.modify.expected_object",
+      "with": [
+        "4"
+      ]
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root mixed[] merge value {added:9}",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.merge.value.arg-value",
+    "error": {
+      "translate": "commands.data.modify.expected_object",
+      "with": [
+        "2"
+      ]
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1,added:9},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root mixed[] merge from storage test:source values[]",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.merge.from.storage.arg-source.arg-source-path",
+    "error": {
+      "translate": "commands.data.modify.expected_object",
+      "with": [
+        "4"
+      ]
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root objects[] merge from storage test:source objects[]",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.merge.from.storage.arg-source.arg-source-path",
+    "value": 2,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1,b:3,c:4},{a:2,b:3,c:4}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root objects[] merge from storage test:source mixed[]",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.merge.from.storage.arg-source.arg-source-path",
+    "error": {
+      "translate": "commands.data.modify.expected_object",
+      "with": [
+        "2"
+      ]
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root mixed[] merge from storage test:source objects[]",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.merge.from.storage.arg-source.arg-source-path",
+    "error": {
+      "translate": "commands.data.modify.expected_object",
+      "with": [
+        "2"
+      ]
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1,b:3,c:4},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root mixed[] merge from storage test:source mixed[]",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.merge.from.storage.arg-source.arg-source-path",
+    "error": {
+      "translate": "commands.data.modify.expected_object",
+      "with": [
+        "2"
+      ]
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root absent.child merge from storage test:source objects[]",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.merge.from.storage.arg-source.arg-source-path",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{absent:{child:{b:3,c:4}},bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root absent.child merge from storage test:source mixed[]",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.merge.from.storage.arg-source.arg-source-path",
+    "error": {
+      "translate": "commands.data.modify.expected_object",
+      "with": [
+        "2"
+      ]
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root list[] merge from storage test:source objects[]",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.merge.from.storage.arg-source.arg-source-path",
+    "error": {
+      "translate": "commands.data.modify.expected_object",
+      "with": [
+        "1"
+      ]
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root list[] merge from storage test:source mixed[]",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.merge.from.storage.arg-source.arg-source-path",
+    "error": {
+      "translate": "commands.data.modify.expected_object",
+      "with": [
+        "2"
+      ]
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root result set from storage test:source",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.set.from.storage.arg-source",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],result:{flag:1b,mixed:[{b:3},2],n:2.5f,objects:[{b:3},{c:4}],text:\"W😀XYZ\",values:[4,5]},text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root result set string storage test:source",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.set.string.storage.arg-source",
+    "error": {
+      "translate": "commands.data.modify.expected_value",
+      "with": [
+        "{flag:1b,mixed:[{b:3},2],n:2.5f,objects:[{b:3},{c:4}],text:\"W😀XYZ\",values:[4,5]}"
+      ]
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root result set from storage test:source text",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.set.from.storage.arg-source.arg-source-path",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],result:\"W😀XYZ\",text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root result set string storage test:source text",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.set.string.storage.arg-source.arg-source-path",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],result:\"W😀XYZ\",text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root result set from storage test:source n",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.set.from.storage.arg-source.arg-source-path",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],result:2.5f,text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root result set string storage test:source n",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.set.string.storage.arg-source.arg-source-path",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],result:\"2.5f\",text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root result set from storage test:source values[]",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.set.from.storage.arg-source.arg-source-path",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],result:5,text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root result set string storage test:source values[]",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.set.string.storage.arg-source.arg-source-path",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],result:\"5\",text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root result set from storage test:source flag",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.set.from.storage.arg-source.arg-source-path",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],result:1b,text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root result set string storage test:source flag",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.set.string.storage.arg-source.arg-source-path",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],result:\"1b\",text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root result set from storage test:source objects[]",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.set.from.storage.arg-source.arg-source-path",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],result:{c:4},text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root result set string storage test:source objects[]",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.set.string.storage.arg-source.arg-source-path",
+    "error": {
+      "translate": "commands.data.modify.expected_value",
+      "with": [
+        "{b:3}"
+      ]
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root result set from storage test:source absent",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.set.from.storage.arg-source.arg-source-path",
+    "error": {
+      "translate": "arguments.nbtpath.nothing_found",
+      "with": [
+        "absent"
+      ]
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root result set string storage test:source absent",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.set.string.storage.arg-source.arg-source-path",
+    "error": {
+      "translate": "arguments.nbtpath.nothing_found",
+      "with": [
+        "absent"
+      ]
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root result set from storage test:root list[]",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.set.from.storage.arg-source.arg-source-path",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],result:3,text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root result set string storage test:root list[]",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.set.string.storage.arg-source.arg-source-path",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],result:\"3\",text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root result set from storage test:absent",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.set.from.storage.arg-source",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],result:{},text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root result set string storage test:absent",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.set.string.storage.arg-source",
+    "error": {
+      "translate": "commands.data.modify.expected_value",
+      "with": [
+        "{}"
+      ]
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root result set string storage test:source text 0",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.set.string.storage.arg-source.arg-source-path.arg-start",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],result:\"W😀XYZ\",text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root result set string storage test:source text 1",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.set.string.storage.arg-source.arg-source-path.arg-start",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],result:\"😀XYZ\",text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root result set string storage test:source text -1",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.set.string.storage.arg-source.arg-source-path.arg-start",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],result:\"Z\",text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root result set string storage test:source text -20",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.set.string.storage.arg-source.arg-source-path.arg-start",
+    "error": {
+      "translate": "commands.data.modify.invalid_substring",
+      "with": [
+        -14,
+        6
+      ]
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root result set string storage test:source text 6",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.set.string.storage.arg-source.arg-source-path.arg-start",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],result:\"\",text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root result set string storage test:source text 0 0",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.set.string.storage.arg-source.arg-source-path.arg-start.arg-end",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],result:\"\",text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root result set string storage test:source text 0 3",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.set.string.storage.arg-source.arg-source-path.arg-start.arg-end",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],result:\"W😀\",text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root result set string storage test:source text 1 3",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.set.string.storage.arg-source.arg-source-path.arg-start.arg-end",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],result:\"😀\",text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root result set string storage test:source text -3 -1",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.set.string.storage.arg-source.arg-source-path.arg-start.arg-end",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],result:\"XY\",text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root result set string storage test:source text 4 1",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.set.string.storage.arg-source.arg-source-path.arg-start.arg-end",
+    "error": {
+      "translate": "commands.data.modify.invalid_substring",
+      "with": [
+        4,
+        1
+      ]
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root result set string storage test:source text 0 10",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.set.string.storage.arg-source.arg-source-path.arg-start.arg-end",
+    "error": {
+      "translate": "commands.data.modify.invalid_substring",
+      "with": [
+        0,
+        10
+      ]
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root result set string storage test:source text -20 -1",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.set.string.storage.arg-source.arg-source-path.arg-start.arg-end",
+    "error": {
+      "translate": "commands.data.modify.invalid_substring",
+      "with": [
+        -14,
+        5
+      ]
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:root list append from storage test:root list[]",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.append.from.storage.arg-source.arg-source-path",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.modified",
+          "with": [
+            "test:root"
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3,1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": true,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data modify storage test:absent created.items insert 100 value 1",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.modify.storage.arg-target.arg-target-path.insert.arg-index.value.arg-value",
+    "error": {
+      "translate": "commands.data.modify.invalid_index",
+      "with": [
+        100
+      ]
+    },
+    "feedback": [],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data get storage missing:root",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.get.storage.arg-target",
+    "value": 1,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.query",
+          "with": [
+            "missing:root",
+            {
+              "text": "",
+              "extra": [
+                "{",
+                "}"
+              ]
+            }
+          ]
+        },
+        "broadcast": false
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data get storage test:root i 1.005",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.get.storage.arg-target.arg-path.arg-scale",
+    "value": 7,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.get",
+          "with": [
+            "i",
+            "test:root",
+            "1.01",
+            7
+          ]
+        },
+        "broadcast": false
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data get storage test:root i 2.675",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.get.storage.arg-target.arg-path.arg-scale",
+    "value": 18,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.get",
+          "with": [
+            "i",
+            "test:root",
+            "2.68",
+            18
+          ]
+        },
+        "broadcast": false
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data get storage test:root i 0.0",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.get.storage.arg-target.arg-path.arg-scale",
+    "value": 0,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.get",
+          "with": [
+            "i",
+            "test:root",
+            "0.00",
+            0
+          ]
+        },
+        "broadcast": false
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data get storage test:root i 0.005",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.get.storage.arg-target.arg-path.arg-scale",
+    "value": 0,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.get",
+          "with": [
+            "i",
+            "test:root",
+            "0.01",
+            0
+          ]
+        },
+        "broadcast": false
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data get storage test:root i 0.00000010",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.get.storage.arg-target.arg-path.arg-scale",
+    "value": 0,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.get",
+          "with": [
+            "i",
+            "test:root",
+            "0.00",
+            0
+          ]
+        },
+        "broadcast": false
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data get storage test:root i -1.005",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.get.storage.arg-target.arg-path.arg-scale",
+    "value": -8,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.get",
+          "with": [
+            "i",
+            "test:root",
+            "-1.01",
+            -8
+          ]
+        },
+        "broadcast": false
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data get storage test:root i 100000000000000000000000",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.get.storage.arg-target.arg-path.arg-scale",
+    "value": 2147483647,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.get",
+          "with": [
+            "i",
+            "test:root",
+            "100000000000000000000000.00",
+            2147483647
+          ]
+        },
+        "broadcast": false
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data get storage test:root i 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.get.storage.arg-target.arg-path.arg-scale",
+    "value": 2147483647,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.get",
+          "with": [
+            "i",
+            "test:root",
+            "10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000.00",
+            2147483647
+          ]
+        },
+        "broadcast": false
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data get storage test:root i 179769313486231570000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.get.storage.arg-target.arg-path.arg-scale",
+    "value": 2147483647,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.get",
+          "with": [
+            "i",
+            "test:root",
+            "179769313486231570000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000.00",
+            2147483647
+          ]
+        },
+        "broadcast": false
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data get storage test:root i 0.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000049",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.get.storage.arg-target.arg-path.arg-scale",
+    "value": 0,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.get",
+          "with": [
+            "i",
+            "test:root",
+            "0.00",
+            0
+          ]
+        },
+        "broadcast": false
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  },
+  {
+    "command": "data get storage test:root i -0.0",
+    "initial": "{n:-1.5d,i:7,text:'A😀BC',list:[1,2,3],objects:[{a:1},{a:2}],mixed:[{a:1},2],nested:{Aa:1,BB:2},bytes:[B;1b,2b],ints:[I;3,4],longs:[L;5L,6L],empty:[],flag:1b}",
+    "source": "{n:2.5f,text:'W😀XYZ',values:[4,5],objects:[{b:3},{c:4}],mixed:[{b:3},2],flag:1b}",
+    "path": "commands.path.data.get.storage.arg-target.arg-path.arg-scale",
+    "value": 0,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.data.storage.get",
+          "with": [
+            "i",
+            "test:root",
+            "-0.00",
+            0
+          ]
+        },
+        "broadcast": false
+      }
+    ],
+    "root": "{bytes:[B;1B,2B],empty:[],flag:1b,i:7,ints:[I;3,4],list:[1,2,3],longs:[L;5L,6L],mixed:[{a:1},2],n:-1.5d,nested:{Aa:1,BB:2},objects:[{a:1},{a:2}],text:\"A😀BC\"}",
+    "absent": "{}",
+    "dirty": false,
+    "keys": [
+      "test:root",
+      "test:source"
+    ]
+  }
+]

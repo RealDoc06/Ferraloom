@@ -1,5 +1,7 @@
 //! Exclusive call-site adapters. Game code owns parsing, feedback policy and command behavior.
 use super::*;
+#[path = "data_commands.rs"]
+mod data_commands;
 #[path = "scoreboard_commands.rs"]
 mod scoreboard_commands;
 use ferraloom_game::{
@@ -629,6 +631,7 @@ impl MinecraftServer {
             if error.to_string() == "disconnect.spam"
                 || error.is::<super::command_level::CommandLevelFailure>()
                 || error.is::<ferraloom_game::commands::give::GiveError>()
+                || error.is::<ferraloom_game::commands::data::DataError>()
             {
                 return Err(error);
             }
