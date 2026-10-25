@@ -2,6 +2,7 @@
 //! overlapping neighborhoods vanilla's X-major layers are serialized. Vanilla
 //! itself permits order-dependent feature writes; worker completion order never
 //! chooses which write wins here. Disjoint dimensions can use separate workers.
+pub(crate) mod profile;
 #[cfg(test)]
 mod relight_tests;
 pub(crate) mod runtime;
@@ -190,15 +191,18 @@ impl GenerationState {
         }
     }
     pub fn save_proto_chunks(&mut self, registry: &RegistryAdapter, io: &IoWorker) -> Result<()> {
+        let mut timing = profile::Span::new("save_proto_chunks", None);
         self.flush_light()?;
         for (&key, holder) in &self.holders {
             let proto = &holder.chunk;
             if proto.region.status > ChunkStatus::Empty && proto.region.status < ChunkStatus::Full {
-                let disk = proto
-                    .capture(&self.context, registry)
+                let disk = timing
+                    .measure("capture", || proto.capture(&self.context, registry))
                     .map_err(anyhow::Error::msg)?;
-                io.store(ChunkPos::unpack(key), Some(disk.write()?))
-                    .wait()?;
+                let tag = timing.measure("encode", || disk.write())?;
+                timing.measure("write_wait", || {
+                    io.store(ChunkPos::unpack(key), Some(tag)).wait()
+                })?;
             }
         }
         Ok(())
@@ -209,6 +213,7 @@ impl GenerationState {
         registry: &RegistryAdapter,
         io: &IoWorker,
     ) -> Result<()> {
+        let mut timing = profile::Span::new("save_unclaimed_protos", None);
         self.flush_light()?;
         let drop = self
             .holders
@@ -219,13 +224,15 @@ impl GenerationState {
                     .then_some(pos)
             })
             .collect::<Vec<_>>();
+        timing.items(drop.len());
         for pos in drop {
             let proto = &self.holders[&pos.pack()].chunk;
             if proto.region.status > ChunkStatus::Empty {
-                let disk = proto
-                    .capture(&self.context, registry)
+                let disk = timing
+                    .measure("capture", || proto.capture(&self.context, registry))
                     .map_err(anyhow::Error::msg)?;
-                io.store(pos, Some(disk.write()?)).wait()?;
+                let tag = timing.measure("encode", || disk.write())?;
+                timing.measure("write_wait", || io.store(pos, Some(tag)).wait())?;
             }
             self.forget(pos);
         }
@@ -249,6 +256,7 @@ impl GenerationState {
         io: &IoWorker,
         cancelled: Option<&AtomicBool>,
     ) -> Result<GenerationOutput> {
+        let _timing = profile::Span::new("generate", Some((request, pos))).status(target);
         let result = self.generate_statuses(request, pos, target, registry, io, cancelled);
         self.finish_light(result)
     }
@@ -281,6 +289,9 @@ impl GenerationState {
             else {
                 break;
             };
+            let mut timing =
+                profile::Span::new("status_layer", Some((request, pos))).status(layer.status);
+            timing.items(layer.positions.len());
             for position in layer.positions {
                 let key = position.pack();
                 if layer.status == ChunkStatus::Empty {
@@ -291,16 +302,22 @@ impl GenerationState {
                         self.holders.entry(key)
                     {
                         let loaded = (|| -> Result<ProtoChunk> {
-                            if let Some(tag) = io.load(position).wait()? {
-                                ProtoChunk::load(
-                                    &self.context,
-                                    registry,
-                                    position,
-                                    SerializableChunkData::parse(tag)?,
-                                )
-                                .map_err(anyhow::Error::msg)
+                            if let Some(tag) =
+                                timing.measure("read_wait", || io.load(position).wait())?
+                            {
+                                timing.measure("decode", || {
+                                    ProtoChunk::load(
+                                        &self.context,
+                                        registry,
+                                        position,
+                                        SerializableChunkData::parse(tag)?,
+                                    )
+                                    .map_err(anyhow::Error::msg)
+                                })
                             } else {
-                                Ok(ProtoChunk::empty(&self.context, position)?)
+                                timing.measure("empty_chunk", || {
+                                    Ok(ProtoChunk::empty(&self.context, position)?)
+                                })
                             }
                         })();
                         let proto = match loaded {
@@ -391,12 +408,14 @@ impl GenerationState {
                                     std::mem::replace(&mut h.chunk.region, self.placeholder.clone())
                                 })
                                 .collect::<Vec<_>>();
-                            let result = self.context.apply_with_light(
-                                &mut regions,
-                                [position.x, position.z],
-                                &step,
-                                &mut self.light,
-                            );
+                            let result = timing.measure("apply", || {
+                                self.context.apply_with_light(
+                                    &mut regions,
+                                    [position.x, position.z],
+                                    &step,
+                                    &mut self.light,
+                                )
+                            });
                             for ((neighbor, mut holder), region) in
                                 neighborhood.into_iter().zip(owned.drain(..)).zip(regions)
                             {
@@ -441,7 +460,9 @@ impl GenerationState {
             }
         }
         self.flush_light()?;
+        let mut timing = profile::Span::new("capture_output", Some((request, pos))).status(target);
         touched.extend(self.light_changed.iter().copied());
+        timing.items(touched.len());
         let mut neighbors = Vec::new();
         let mut full_structures = Vec::new();
         for key in touched {
@@ -626,23 +647,27 @@ impl GenerationState {
         + Send
         + 'static,
     ) -> Result<()> {
-        for (&key, holder) in &self.holders {
-            if holder.chunk.region.status >= ChunkStatus::Terrain {
-                self.snapshots.insert_chunk_with_sky_light_sources(
-                    ChunkPos::unpack(key),
-                    holder
-                        .chunk
-                        .region
-                        .chunk
-                        .sections
-                        .iter()
-                        .cloned()
-                        .map(|section| Some(Cow::Owned(section)))
-                        .collect(),
-                    Some(holder.chunk.region.sky_light_sources().clone()),
-                );
+        let mut timing = profile::Span::new("proto_light", None);
+        timing.items(self.holders.len());
+        timing.measure("snapshots", || {
+            for (&key, holder) in &self.holders {
+                if holder.chunk.region.status >= ChunkStatus::Terrain {
+                    self.snapshots.insert_chunk_with_sky_light_sources(
+                        ChunkPos::unpack(key),
+                        holder
+                            .chunk
+                            .region
+                            .chunk
+                            .sections
+                            .iter()
+                            .cloned()
+                            .map(|section| Some(Cow::Owned(section)))
+                            .collect(),
+                        Some(holder.chunk.region.sky_light_sources().clone()),
+                    );
+                }
             }
-        }
+        });
         let mut engine = std::mem::replace(
             &mut self.light,
             LevelLightEngine::new(true, self.context.dimension.has_skylight),
@@ -654,18 +679,21 @@ impl GenerationState {
                 (self.context.dimension.min_y + self.context.dimension.height) >> 4,
             ),
         );
+        let parent = timing.id();
         let result = self.light_pool.submit(move || {
+            let _timing = profile::Span::new("proto_light_compute", None).parent(parent);
             let updates = work(&mut engine, &snapshots);
             // Return canonical ownership even when an operation fails after
             // enqueueing part of its work. A Result must not drop the engine.
             (engine, snapshots, updates)
         });
-        let (engine, snapshots, updates) = result
-            .blocking_recv()
+        let (engine, snapshots, updates) = timing
+            .measure("queue_and_compute_wait", || result.blocking_recv())
             .context("generation light worker terminated")?;
         self.light = engine;
         self.snapshots = snapshots;
-        self.apply_light_updates(updates?);
+        let updates = updates?;
+        timing.measure("apply_updates", || self.apply_light_updates(updates));
         Ok(())
     }
 

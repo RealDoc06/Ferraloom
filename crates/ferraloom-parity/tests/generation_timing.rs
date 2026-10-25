@@ -7,7 +7,7 @@ use ferraloom_parity::{
 };
 use ferraloom_util::ChunkPos;
 use serde_json::Value;
-use std::time::Instant;
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 fn has_translation(value: &Value, key: &str) -> bool {
     match value {
@@ -21,6 +21,7 @@ fn has_translation(value: &Value, key: &str) -> bool {
 }
 
 async fn command(bot: &mut Bot, text: &str, key: &str) -> Result<()> {
+    let started_unix_ns = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
     let start = Instant::now();
     let result = async {
         bot.command(text).await?;
@@ -43,6 +44,7 @@ async fn command(bot: &mut Bot, text: &str, key: &str) -> Result<()> {
         "WORLDGEN_COMMAND_INTERVAL {}",
         serde_json::json!({
             "command": text,
+            "started_unix_ns": started_unix_ns,
             "elapsed_ms": start.elapsed().as_secs_f64() * 1000.,
             "outcome": if result.is_ok() { "complete" } else { "error" }
         })
