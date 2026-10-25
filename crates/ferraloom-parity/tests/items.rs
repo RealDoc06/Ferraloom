@@ -98,7 +98,7 @@ async fn build_blocks(session: &mut Session) -> Result<ObservationLog> {
             Item::RED_MUSHROOM_BLOCK,
             Block::RED_MUSHROOM_BLOCK
                 .default_state()
-                .with(p::NORTH, false)
+                .with(p::NORTH, p::North::False)
                 .unwrap(),
             false,
             false,
