@@ -237,6 +237,7 @@ struct PendingLevelHooks {
 }
 impl MinecraftServer {
     pub async fn start(options: ServerOptions) -> Result<RunningServer> {
+        let mut startup = crate::generation::profile::Span::new("server_startup", None);
         std::fs::create_dir_all(&options.root)?;
         let mut properties = ServerProperties::load(&options.root.join("server.properties"))?;
         properties::check_eula(&options.root)?;
@@ -266,6 +267,7 @@ impl MinecraftServer {
             &resources,
             registries.as_ref(),
         )?);
+        startup.checkpoint("resources");
 
         let mut world_root = WorldRoot::open(
             &options.root,
@@ -274,7 +276,9 @@ impl MinecraftServer {
             &registries,
             options.unported_behavior,
         )?;
+        startup.checkpoint("world_root");
         let world = world_root.open_dimension("minecraft:overworld".parse()?, &properties)?;
+        startup.checkpoint("overworld_and_spawn");
         let game_rules = command_runtime::load_game_rules(&world_root)?;
         // Older scoreboard paths are migrated by the datafix workstream, not runtime loading.
         let scoreboard = {
@@ -307,6 +311,7 @@ impl MinecraftServer {
             ferraloom_game::commands::storage::CommandStorage::preload(&command_storage_folder)
         })
         .await?;
+        startup.checkpoint("saved_command_data");
         let command_context = command_runtime::command_build_context(
             &registries,
             &resources,
@@ -320,6 +325,7 @@ impl MinecraftServer {
             .into_iter()
             .map(|(id, types)| (id.to_string(), types))
             .collect();
+        startup.checkpoint("command_context_and_entity_tags");
 
         let game_time = world_root.level_data.data.get_long_or("Time", 0);
         let (access, ops) = AccessLists::load(&options.root)?;
@@ -328,6 +334,7 @@ impl MinecraftServer {
             Arc::unwrap_or_clone(world.level_context(&resources)?)
                 .with_registry_context(registry_context),
         );
+        startup.checkpoint("overworld_level_context");
         let mut level = ServerLevel::new(
             Region::new(&BEHAVIORS),
             "minecraft:overworld",
@@ -349,6 +356,7 @@ impl MinecraftServer {
             &properties,
             options.unported_behavior,
         )?;
+        startup.checkpoint("overworld_live_initialization");
         let loaded_recipe_tags =
             ferraloom_data::datapack::load_tags(&resources, "recipe", |id, _| {
                 recipe_manager.by_key(id).map(|recipe| {
@@ -398,6 +406,7 @@ impl MinecraftServer {
             recipe_tags,
             recipe_synchronization: Arc::clone(&recipe_synchronization),
         });
+        startup.checkpoint("advancements_and_recipe_tags");
         level
             .level
             .set_container_resources(container_resources.clone(), world.seed);
@@ -493,8 +502,10 @@ impl MinecraftServer {
                     }
                 })?;
         }
+        startup.checkpoint("environment_network_and_services");
         let mut level =
             crate::generation::runtime::LiveLevel::install(world, level, properties.clone())?;
+        startup.checkpoint("overworld_driver");
         let mut additional_levels = Vec::new();
         // ResourceKey identity-hash traversal is non-parity order. Keep the
         // baked WorldDimensions order after the explicit overworld insertion.
@@ -544,6 +555,7 @@ impl MinecraftServer {
                 properties.clone(),
             )?);
         }
+        startup.checkpoint("additional_dimensions");
         let shared = Some(level.level.take_shared().map_err(game_error)?);
         let mut server = Self {
             properties: properties.clone(),
@@ -586,8 +598,10 @@ impl MinecraftServer {
             listener_task: Some(listener_task),
             pending_level_hooks: PendingLevelHooks::default(),
         };
+        startup.checkpoint("command_dispatcher_and_server");
         server.publish_spawn_protection();
         let task = tokio::spawn(server.run());
+        startup.checkpoint("owner_task_start");
         Ok(RunningServer {
             address,
             ingress: send,

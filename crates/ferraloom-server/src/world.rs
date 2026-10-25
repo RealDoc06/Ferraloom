@@ -790,6 +790,7 @@ impl World {
         initialize_spawn: bool,
         initial_difficulty: Difficulty,
     ) -> Result<(Self, Option<StartupSpawn>)> {
+        let mut timing = crate::generation::profile::Span::new("open_dimension", None);
         let stem = services.stem(&dimension_key)?;
         let dimension = stem.dimension;
         let generator = stem.generator.clone();
@@ -809,6 +810,7 @@ impl World {
         let registry = services.registry.clone();
         let generation = services.generation.clone();
         let light_pool = services.light_pool.clone();
+        timing.checkpoint("storage_and_stem");
         let mut context = ferraloom_game::level::generation::WorldGenContext::load(
             &services.resources,
             generator.clone(),
@@ -818,8 +820,10 @@ impl World {
             services.dimensions.environment.clone(),
             stem.environment.clone(),
         )?;
+        timing.checkpoint("worldgen_context");
         context.unported_behavior = services.unported_behavior;
         let mut generation_state = GenerationState::new(Arc::new(context), light_pool);
+        timing.checkpoint("generation_state");
         let mut initial_chunks = BTreeMap::new();
         let mut generation_skips = Vec::new();
         let io = if initialize_spawn {
@@ -866,6 +870,7 @@ impl World {
         } else {
             io
         };
+        timing.checkpoint("spawn");
         let pending_initial_spawns = generation_state.pending_initial_spawns();
         let proto_structures = generation_state
             .structure_versions(&BTreeSet::new())
@@ -886,6 +891,7 @@ impl World {
                 )
             })?;
         let saving = services.saving.clone();
+        timing.checkpoint("structure_versions_and_light_worker");
         Ok((
             Self {
                 services,
@@ -972,25 +978,32 @@ impl World {
         &self,
         resources: &ResourceManager,
     ) -> Result<Arc<ferraloom_game::level::LevelContext>> {
-        let features = ferraloom_worldgen::feature::FeatureLoader::new(resources)?.load_all()?;
+        let mut timing = crate::generation::profile::Span::new("level_context", None);
+        let features = timing.measure("features", || {
+            ferraloom_worldgen::feature::FeatureLoader::new(resources)?.load_all()
+        })?;
         Ok(Arc::new(
             ferraloom_game::level::LevelContext::new(
                 self.seed,
                 self.generator.sea_level(),
                 self.generator.clone(),
                 Arc::new(features),
-                Arc::new(ferraloom_game::level::StructureServices::load(
-                    resources,
-                    self.generator.data(),
-                )?),
-                Arc::new(ferraloom_game::entity::damage::DamageTypeRegistry::load(
-                    resources,
-                )?),
+                Arc::new(timing.measure("structure_services", || {
+                    ferraloom_game::level::StructureServices::load(resources, self.generator.data())
+                })?),
+                Arc::new(timing.measure("damage_types", || {
+                    ferraloom_game::entity::damage::DamageTypeRegistry::load(resources)
+                })?),
                 self.initial_difficulty,
             )
-            .with_block_transformers(Arc::new(
-                ferraloom_game::item::block_transformer::BlockTransformerRegistry::load(resources)?,
-            )),
+            .with_block_transformers(Arc::new(timing.measure(
+                "block_transformers",
+                || {
+                    ferraloom_game::item::block_transformer::BlockTransformerRegistry::load(
+                        resources,
+                    )
+                },
+            )?)),
         ))
     }
     /// Attach immutable dimension layers after the sole server clock manager
@@ -1628,7 +1641,7 @@ impl World {
             pos,
             result,
         } = completion;
-        let _timing =
+        let mut timing =
             crate::generation::profile::Span::new("integrate_output", Some((request, pos)));
         if self
             .active_generation
@@ -1649,30 +1662,44 @@ impl World {
                 .insert(output.terrain.pos.pack());
         }
         self.generation_skips.extend(output.skips);
-        for snapshot in output.proto_biomes {
-            if self
-                .proto_biomes
-                .get(&snapshot.pos.pack())
-                .is_none_or(|old| old.revision < snapshot.revision)
-            {
-                self.proto_biomes.insert(snapshot.pos.pack(), snapshot);
+        timing.measure("proto_biomes", || {
+            for snapshot in output.proto_biomes {
+                if self
+                    .proto_biomes
+                    .get(&snapshot.pos.pack())
+                    .is_none_or(|old| old.revision < snapshot.revision)
+                {
+                    self.proto_biomes.insert(snapshot.pos.pack(), snapshot);
+                }
             }
-        }
-        for snapshot in output.proto_structures {
-            self.integrate_proto_structures(snapshot)?;
-        }
-        for (pos, status) in output.statuses {
-            self.generation_statuses
-                .entry(pos.pack())
-                .and_modify(|known| *known = (*known).max(status))
-                .or_insert(status);
-        }
-        for snapshot in output.full_structures {
-            self.integrate_structure_snapshot(snapshot)?;
-        }
-        for (pos, disk) in output.neighbors {
-            self.store_generation_chunk(pos, output.terrain.revision, disk)?;
-        }
+        });
+        timing.measure("proto_structures", || -> Result<()> {
+            for snapshot in output.proto_structures {
+                self.integrate_proto_structures(snapshot)?;
+            }
+            Ok(())
+        })?;
+        timing.measure("statuses", || {
+            for (pos, status) in output.statuses {
+                self.generation_statuses
+                    .entry(pos.pack())
+                    .and_modify(|known| *known = (*known).max(status))
+                    .or_insert(status);
+            }
+        });
+        timing.measure("full_structures", || -> Result<()> {
+            for snapshot in output.full_structures {
+                self.integrate_structure_snapshot(snapshot)?;
+            }
+            Ok(())
+        })?;
+        timing.items(output.neighbors.len());
+        timing.measure("neighbor_saves", || -> Result<()> {
+            for (pos, disk) in output.neighbors {
+                self.store_generation_chunk(pos, output.terrain.revision, disk)?;
+            }
+            Ok(())
+        })?;
         Ok(Some((request, output.terrain)))
     }
     fn integrate_proto_structures(&mut self, snapshot: ProtoStructureSnapshot) -> Result<()> {
