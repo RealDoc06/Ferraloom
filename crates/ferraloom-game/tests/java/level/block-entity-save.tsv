@@ -1,0 +1,5 @@
+live	{id:"fixture:stale",keepPacked:1b,x:1,y:1,z:1}	{LootTable:"minecraft:chests/simple_dungeon",LootTableSeed:17L,components:{},id:"minecraft:chest",keepPacked:0b,x:1,y:1,z:1}	{id:"fixture:stale",keepPacked:1b,x:1,y:1,z:1}	true
+promoted	{LootTable:"minecraft:chests/simple_dungeon",LootTableSeed:17L,id:"minecraft:chest",keepPacked:1b,x:1,y:1,z:1}	{LootTable:"minecraft:chests/simple_dungeon",LootTableSeed:17L,components:{},id:"minecraft:chest",keepPacked:0b,x:1,y:1,z:1}	-	true
+pending	{id:"fixture:pending",keepPacked:0b,opaque:{values:[I;3,2,1]},x:1,y:1,z:1}	{id:"fixture:pending",keepPacked:1b,opaque:{values:[I;3,2,1]},x:1,y:1,z:1}	{id:"fixture:pending",keepPacked:0b,opaque:{values:[I;3,2,1]},x:1,y:1,z:1}	false
+empty-promotion	{id:"DUMMY",keepPacked:0b,x:1,y:1,z:1}	-	-	false
+removed	-	-	-	false
