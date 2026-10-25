@@ -1,0 +1,706 @@
+survive	false	0	false
+shape	false	0	0	0	18652	fluid:5;block:5
+shape	false	0	0	1	18652	fluid:5;block:5
+shape	false	0	0	89	18652	fluid:5;block:5
+shape	false	0	0	90	18652	fluid:5;block:5
+shape	false	0	0	18652	18652	fluid:5;block:5
+shape	false	0	0	18651	18652	fluid:5;block:5
+shape	false	0	0	15179	18652	fluid:5;block:5
+shape	false	0	1	0	18652	fluid:5;block:5
+shape	false	0	1	1	18652	fluid:5;block:5
+shape	false	0	1	89	18652	fluid:5;block:5
+shape	false	0	1	90	18652	fluid:5;block:5
+shape	false	0	1	18652	18652	fluid:5;block:5
+shape	false	0	1	18651	18652	fluid:5;block:5
+shape	false	0	1	15179	18652	fluid:5;block:5
+shape	false	0	2	0	18652	fluid:5;block:5
+shape	false	0	2	1	18652	fluid:5;block:5
+shape	false	0	2	89	18652	fluid:5;block:5
+shape	false	0	2	90	18652	fluid:5;block:5
+shape	false	0	2	18652	18652	fluid:5;block:5
+shape	false	0	2	18651	18652	fluid:5;block:5
+shape	false	0	2	15179	18652	fluid:5;block:5
+shape	false	0	3	0	18652	fluid:5;block:5
+shape	false	0	3	1	18652	fluid:5;block:5
+shape	false	0	3	89	18652	fluid:5;block:5
+shape	false	0	3	90	18652	fluid:5;block:5
+shape	false	0	3	18652	18652	fluid:5;block:5
+shape	false	0	3	18651	18652	fluid:5;block:5
+shape	false	0	3	15179	18652	fluid:5;block:5
+shape	false	0	4	0	18652	fluid:5;block:5
+shape	false	0	4	1	18652	fluid:5;block:5
+shape	false	0	4	89	18652	fluid:5;block:5
+shape	false	0	4	90	18652	fluid:5;block:5
+shape	false	0	4	18652	18652	fluid:5;block:5
+shape	false	0	4	18651	18652	fluid:5;block:5
+shape	false	0	4	15179	18652	fluid:5;block:5
+shape	false	0	5	0	18652	fluid:5;block:5
+shape	false	0	5	1	18652	fluid:5;block:5
+shape	false	0	5	89	18652	fluid:5;block:5
+shape	false	0	5	90	18652	fluid:5;block:5
+shape	false	0	5	18652	18652	fluid:5;block:5
+shape	false	0	5	18651	18652	fluid:5;block:5
+shape	false	0	5	15179	18652	fluid:5;block:5
+survive	false	1	false
+shape	false	1	0	0	18652	fluid:5;block:5
+shape	false	1	0	1	18652	fluid:5;block:5
+shape	false	1	0	89	18652	fluid:5;block:5
+shape	false	1	0	90	18652	fluid:5;block:5
+shape	false	1	0	18652	18652	fluid:5;block:5
+shape	false	1	0	18651	18652	fluid:5;block:5
+shape	false	1	0	15179	18652	fluid:5;block:5
+shape	false	1	1	0	18652	fluid:5;block:5
+shape	false	1	1	1	18652	fluid:5;block:5
+shape	false	1	1	89	18652	fluid:5;block:5
+shape	false	1	1	90	18652	fluid:5;block:5
+shape	false	1	1	18652	18652	fluid:5;block:5
+shape	false	1	1	18651	18652	fluid:5;block:5
+shape	false	1	1	15179	18652	fluid:5;block:5
+shape	false	1	2	0	18652	fluid:5;block:5
+shape	false	1	2	1	18652	fluid:5;block:5
+shape	false	1	2	89	18652	fluid:5;block:5
+shape	false	1	2	90	18652	fluid:5;block:5
+shape	false	1	2	18652	18652	fluid:5;block:5
+shape	false	1	2	18651	18652	fluid:5;block:5
+shape	false	1	2	15179	18652	fluid:5;block:5
+shape	false	1	3	0	18652	fluid:5;block:5
+shape	false	1	3	1	18652	fluid:5;block:5
+shape	false	1	3	89	18652	fluid:5;block:5
+shape	false	1	3	90	18652	fluid:5;block:5
+shape	false	1	3	18652	18652	fluid:5;block:5
+shape	false	1	3	18651	18652	fluid:5;block:5
+shape	false	1	3	15179	18652	fluid:5;block:5
+shape	false	1	4	0	18652	fluid:5;block:5
+shape	false	1	4	1	18652	fluid:5;block:5
+shape	false	1	4	89	18652	fluid:5;block:5
+shape	false	1	4	90	18652	fluid:5;block:5
+shape	false	1	4	18652	18652	fluid:5;block:5
+shape	false	1	4	18651	18652	fluid:5;block:5
+shape	false	1	4	15179	18652	fluid:5;block:5
+shape	false	1	5	0	18652	fluid:5;block:5
+shape	false	1	5	1	18652	fluid:5;block:5
+shape	false	1	5	89	18652	fluid:5;block:5
+shape	false	1	5	90	18652	fluid:5;block:5
+shape	false	1	5	18652	18652	fluid:5;block:5
+shape	false	1	5	18651	18652	fluid:5;block:5
+shape	false	1	5	15179	18652	fluid:5;block:5
+survive	false	8668	true
+shape	false	8668	0	0	18652	fluid:5;block:5
+shape	false	8668	0	1	18652	fluid:5;block:5
+shape	false	8668	0	89	18652	fluid:5;block:5
+shape	false	8668	0	90	18652	fluid:5;block:5
+shape	false	8668	0	18652	18652	fluid:5;block:5
+shape	false	8668	0	18651	18652	fluid:5;block:5
+shape	false	8668	0	15179	18652	fluid:5;block:5
+shape	false	8668	1	0	18652	fluid:5
+shape	false	8668	1	1	18652	fluid:5
+shape	false	8668	1	89	18652	fluid:5;block:5
+shape	false	8668	1	90	18652	fluid:5
+shape	false	8668	1	18652	18652	fluid:5
+shape	false	8668	1	18651	18652	fluid:5
+shape	false	8668	1	15179	18652	fluid:5
+shape	false	8668	2	0	18652	fluid:5
+shape	false	8668	2	1	18652	fluid:5
+shape	false	8668	2	89	18652	fluid:5
+shape	false	8668	2	90	18652	fluid:5
+shape	false	8668	2	18652	18652	fluid:5
+shape	false	8668	2	18651	18652	fluid:5
+shape	false	8668	2	15179	18652	fluid:5
+shape	false	8668	3	0	18652	fluid:5
+shape	false	8668	3	1	18652	fluid:5
+shape	false	8668	3	89	18652	fluid:5
+shape	false	8668	3	90	18652	fluid:5
+shape	false	8668	3	18652	18652	fluid:5
+shape	false	8668	3	18651	18652	fluid:5
+shape	false	8668	3	15179	18652	fluid:5
+shape	false	8668	4	0	18652	fluid:5
+shape	false	8668	4	1	18652	fluid:5
+shape	false	8668	4	89	18652	fluid:5
+shape	false	8668	4	90	18652	fluid:5
+shape	false	8668	4	18652	18652	fluid:5
+shape	false	8668	4	18651	18652	fluid:5
+shape	false	8668	4	15179	18652	fluid:5
+shape	false	8668	5	0	18652	fluid:5
+shape	false	8668	5	1	18652	fluid:5
+shape	false	8668	5	89	18652	fluid:5
+shape	false	8668	5	90	18652	fluid:5
+shape	false	8668	5	18652	18652	fluid:5
+shape	false	8668	5	18651	18652	fluid:5
+shape	false	8668	5	15179	18652	fluid:5
+survive	false	16826	true
+shape	false	16826	0	0	18652	fluid:5;block:5
+shape	false	16826	0	1	18652	fluid:5;block:5
+shape	false	16826	0	89	18652	fluid:5;block:5
+shape	false	16826	0	90	18652	fluid:5;block:5
+shape	false	16826	0	18652	18652	fluid:5;block:5
+shape	false	16826	0	18651	18652	fluid:5;block:5
+shape	false	16826	0	15179	18652	fluid:5;block:5
+shape	false	16826	1	0	18652	fluid:5
+shape	false	16826	1	1	18652	fluid:5
+shape	false	16826	1	89	18652	fluid:5;block:5
+shape	false	16826	1	90	18652	fluid:5
+shape	false	16826	1	18652	18652	fluid:5
+shape	false	16826	1	18651	18652	fluid:5
+shape	false	16826	1	15179	18652	fluid:5
+shape	false	16826	2	0	18652	fluid:5
+shape	false	16826	2	1	18652	fluid:5
+shape	false	16826	2	89	18652	fluid:5
+shape	false	16826	2	90	18652	fluid:5
+shape	false	16826	2	18652	18652	fluid:5
+shape	false	16826	2	18651	18652	fluid:5
+shape	false	16826	2	15179	18652	fluid:5
+shape	false	16826	3	0	18652	fluid:5
+shape	false	16826	3	1	18652	fluid:5
+shape	false	16826	3	89	18652	fluid:5
+shape	false	16826	3	90	18652	fluid:5
+shape	false	16826	3	18652	18652	fluid:5
+shape	false	16826	3	18651	18652	fluid:5
+shape	false	16826	3	15179	18652	fluid:5
+shape	false	16826	4	0	18652	fluid:5
+shape	false	16826	4	1	18652	fluid:5
+shape	false	16826	4	89	18652	fluid:5
+shape	false	16826	4	90	18652	fluid:5
+shape	false	16826	4	18652	18652	fluid:5
+shape	false	16826	4	18651	18652	fluid:5
+shape	false	16826	4	15179	18652	fluid:5
+shape	false	16826	5	0	18652	fluid:5
+shape	false	16826	5	1	18652	fluid:5
+shape	false	16826	5	89	18652	fluid:5
+shape	false	16826	5	90	18652	fluid:5
+shape	false	16826	5	18652	18652	fluid:5
+shape	false	16826	5	18651	18652	fluid:5
+shape	false	16826	5	15179	18652	fluid:5
+survive	false	18652	true
+shape	false	18652	0	0	18652	fluid:5;block:5
+shape	false	18652	0	1	18652	fluid:5;block:5
+shape	false	18652	0	89	18652	fluid:5;block:5
+shape	false	18652	0	90	18652	fluid:5;block:5
+shape	false	18652	0	18652	18652	fluid:5;block:5
+shape	false	18652	0	18651	18652	fluid:5;block:5
+shape	false	18652	0	15179	18652	fluid:5;block:5
+shape	false	18652	1	0	18652	fluid:5
+shape	false	18652	1	1	18652	fluid:5
+shape	false	18652	1	89	18652	fluid:5;block:5
+shape	false	18652	1	90	18652	fluid:5
+shape	false	18652	1	18652	18652	fluid:5
+shape	false	18652	1	18651	18652	fluid:5
+shape	false	18652	1	15179	18652	fluid:5
+shape	false	18652	2	0	18652	fluid:5
+shape	false	18652	2	1	18652	fluid:5
+shape	false	18652	2	89	18652	fluid:5
+shape	false	18652	2	90	18652	fluid:5
+shape	false	18652	2	18652	18652	fluid:5
+shape	false	18652	2	18651	18652	fluid:5
+shape	false	18652	2	15179	18652	fluid:5
+shape	false	18652	3	0	18652	fluid:5
+shape	false	18652	3	1	18652	fluid:5
+shape	false	18652	3	89	18652	fluid:5
+shape	false	18652	3	90	18652	fluid:5
+shape	false	18652	3	18652	18652	fluid:5
+shape	false	18652	3	18651	18652	fluid:5
+shape	false	18652	3	15179	18652	fluid:5
+shape	false	18652	4	0	18652	fluid:5
+shape	false	18652	4	1	18652	fluid:5
+shape	false	18652	4	89	18652	fluid:5
+shape	false	18652	4	90	18652	fluid:5
+shape	false	18652	4	18652	18652	fluid:5
+shape	false	18652	4	18651	18652	fluid:5
+shape	false	18652	4	15179	18652	fluid:5
+shape	false	18652	5	0	18652	fluid:5
+shape	false	18652	5	1	18652	fluid:5
+shape	false	18652	5	89	18652	fluid:5
+shape	false	18652	5	90	18652	fluid:5
+shape	false	18652	5	18652	18652	fluid:5
+shape	false	18652	5	18651	18652	fluid:5
+shape	false	18652	5	15179	18652	fluid:5
+survive	false	18651	true
+shape	false	18651	0	0	18652	fluid:5;block:5
+shape	false	18651	0	1	18652	fluid:5;block:5
+shape	false	18651	0	89	18652	fluid:5;block:5
+shape	false	18651	0	90	18652	fluid:5;block:5
+shape	false	18651	0	18652	18652	fluid:5;block:5
+shape	false	18651	0	18651	18652	fluid:5;block:5
+shape	false	18651	0	15179	18652	fluid:5;block:5
+shape	false	18651	1	0	18652	fluid:5
+shape	false	18651	1	1	18652	fluid:5
+shape	false	18651	1	89	18652	fluid:5;block:5
+shape	false	18651	1	90	18652	fluid:5
+shape	false	18651	1	18652	18652	fluid:5
+shape	false	18651	1	18651	18652	fluid:5
+shape	false	18651	1	15179	18652	fluid:5
+shape	false	18651	2	0	18652	fluid:5
+shape	false	18651	2	1	18652	fluid:5
+shape	false	18651	2	89	18652	fluid:5
+shape	false	18651	2	90	18652	fluid:5
+shape	false	18651	2	18652	18652	fluid:5
+shape	false	18651	2	18651	18652	fluid:5
+shape	false	18651	2	15179	18652	fluid:5
+shape	false	18651	3	0	18652	fluid:5
+shape	false	18651	3	1	18652	fluid:5
+shape	false	18651	3	89	18652	fluid:5
+shape	false	18651	3	90	18652	fluid:5
+shape	false	18651	3	18652	18652	fluid:5
+shape	false	18651	3	18651	18652	fluid:5
+shape	false	18651	3	15179	18652	fluid:5
+shape	false	18651	4	0	18652	fluid:5
+shape	false	18651	4	1	18652	fluid:5
+shape	false	18651	4	89	18652	fluid:5
+shape	false	18651	4	90	18652	fluid:5
+shape	false	18651	4	18652	18652	fluid:5
+shape	false	18651	4	18651	18652	fluid:5
+shape	false	18651	4	15179	18652	fluid:5
+shape	false	18651	5	0	18652	fluid:5
+shape	false	18651	5	1	18652	fluid:5
+shape	false	18651	5	89	18652	fluid:5
+shape	false	18651	5	90	18652	fluid:5
+shape	false	18651	5	18652	18652	fluid:5
+shape	false	18651	5	18651	18652	fluid:5
+shape	false	18651	5	15179	18652	fluid:5
+survive	true	0	false
+shape	true	0	0	0	18651	fluid:5;block:5
+shape	true	0	0	1	18651	fluid:5;block:5
+shape	true	0	0	89	18651	fluid:5;block:5
+shape	true	0	0	90	18651	fluid:5;block:5
+shape	true	0	0	18652	18651	fluid:5;block:5
+shape	true	0	0	18651	18651	fluid:5;block:5
+shape	true	0	0	15179	18651	fluid:5;block:5
+shape	true	0	1	0	18651	fluid:5;block:5
+shape	true	0	1	1	18651	fluid:5;block:5
+shape	true	0	1	89	18651	fluid:5;block:5
+shape	true	0	1	90	18651	fluid:5;block:5
+shape	true	0	1	18652	18651	fluid:5;block:5
+shape	true	0	1	18651	18651	fluid:5;block:5
+shape	true	0	1	15179	18651	fluid:5;block:5
+shape	true	0	2	0	18651	fluid:5;block:5
+shape	true	0	2	1	18651	fluid:5;block:5
+shape	true	0	2	89	18651	fluid:5;block:5
+shape	true	0	2	90	18651	fluid:5;block:5
+shape	true	0	2	18652	18651	fluid:5;block:5
+shape	true	0	2	18651	18651	fluid:5;block:5
+shape	true	0	2	15179	18651	fluid:5;block:5
+shape	true	0	3	0	18651	fluid:5;block:5
+shape	true	0	3	1	18651	fluid:5;block:5
+shape	true	0	3	89	18651	fluid:5;block:5
+shape	true	0	3	90	18651	fluid:5;block:5
+shape	true	0	3	18652	18651	fluid:5;block:5
+shape	true	0	3	18651	18651	fluid:5;block:5
+shape	true	0	3	15179	18651	fluid:5;block:5
+shape	true	0	4	0	18651	fluid:5;block:5
+shape	true	0	4	1	18651	fluid:5;block:5
+shape	true	0	4	89	18651	fluid:5;block:5
+shape	true	0	4	90	18651	fluid:5;block:5
+shape	true	0	4	18652	18651	fluid:5;block:5
+shape	true	0	4	18651	18651	fluid:5;block:5
+shape	true	0	4	15179	18651	fluid:5;block:5
+shape	true	0	5	0	18651	fluid:5;block:5
+shape	true	0	5	1	18651	fluid:5;block:5
+shape	true	0	5	89	18651	fluid:5;block:5
+shape	true	0	5	90	18651	fluid:5;block:5
+shape	true	0	5	18652	18651	fluid:5;block:5
+shape	true	0	5	18651	18651	fluid:5;block:5
+shape	true	0	5	15179	18651	fluid:5;block:5
+survive	true	1	false
+shape	true	1	0	0	18651	fluid:5;block:5
+shape	true	1	0	1	18651	fluid:5;block:5
+shape	true	1	0	89	18651	fluid:5;block:5
+shape	true	1	0	90	18651	fluid:5;block:5
+shape	true	1	0	18652	18651	fluid:5;block:5
+shape	true	1	0	18651	18651	fluid:5;block:5
+shape	true	1	0	15179	18651	fluid:5;block:5
+shape	true	1	1	0	18651	fluid:5;block:5
+shape	true	1	1	1	18651	fluid:5;block:5
+shape	true	1	1	89	18651	fluid:5;block:5
+shape	true	1	1	90	18651	fluid:5;block:5
+shape	true	1	1	18652	18651	fluid:5;block:5
+shape	true	1	1	18651	18651	fluid:5;block:5
+shape	true	1	1	15179	18651	fluid:5;block:5
+shape	true	1	2	0	18651	fluid:5;block:5
+shape	true	1	2	1	18651	fluid:5;block:5
+shape	true	1	2	89	18651	fluid:5;block:5
+shape	true	1	2	90	18651	fluid:5;block:5
+shape	true	1	2	18652	18651	fluid:5;block:5
+shape	true	1	2	18651	18651	fluid:5;block:5
+shape	true	1	2	15179	18651	fluid:5;block:5
+shape	true	1	3	0	18651	fluid:5;block:5
+shape	true	1	3	1	18651	fluid:5;block:5
+shape	true	1	3	89	18651	fluid:5;block:5
+shape	true	1	3	90	18651	fluid:5;block:5
+shape	true	1	3	18652	18651	fluid:5;block:5
+shape	true	1	3	18651	18651	fluid:5;block:5
+shape	true	1	3	15179	18651	fluid:5;block:5
+shape	true	1	4	0	18651	fluid:5;block:5
+shape	true	1	4	1	18651	fluid:5;block:5
+shape	true	1	4	89	18651	fluid:5;block:5
+shape	true	1	4	90	18651	fluid:5;block:5
+shape	true	1	4	18652	18651	fluid:5;block:5
+shape	true	1	4	18651	18651	fluid:5;block:5
+shape	true	1	4	15179	18651	fluid:5;block:5
+shape	true	1	5	0	18651	fluid:5;block:5
+shape	true	1	5	1	18651	fluid:5;block:5
+shape	true	1	5	89	18651	fluid:5;block:5
+shape	true	1	5	90	18651	fluid:5;block:5
+shape	true	1	5	18652	18651	fluid:5;block:5
+shape	true	1	5	18651	18651	fluid:5;block:5
+shape	true	1	5	15179	18651	fluid:5;block:5
+survive	true	8668	true
+shape	true	8668	0	0	18651	fluid:5;block:5
+shape	true	8668	0	1	18651	fluid:5;block:5
+shape	true	8668	0	89	18651	fluid:5;block:5
+shape	true	8668	0	90	18651	fluid:5;block:5
+shape	true	8668	0	18652	18651	fluid:5;block:5
+shape	true	8668	0	18651	18651	fluid:5;block:5
+shape	true	8668	0	15179	18651	fluid:5;block:5
+shape	true	8668	1	0	18651	fluid:5
+shape	true	8668	1	1	18651	fluid:5
+shape	true	8668	1	89	18651	fluid:5;block:5
+shape	true	8668	1	90	18651	fluid:5
+shape	true	8668	1	18652	18651	fluid:5
+shape	true	8668	1	18651	18651	fluid:5
+shape	true	8668	1	15179	18651	fluid:5
+shape	true	8668	2	0	18651	fluid:5
+shape	true	8668	2	1	18651	fluid:5
+shape	true	8668	2	89	18651	fluid:5
+shape	true	8668	2	90	18651	fluid:5
+shape	true	8668	2	18652	18651	fluid:5
+shape	true	8668	2	18651	18651	fluid:5
+shape	true	8668	2	15179	18651	fluid:5
+shape	true	8668	3	0	18651	fluid:5
+shape	true	8668	3	1	18651	fluid:5
+shape	true	8668	3	89	18651	fluid:5
+shape	true	8668	3	90	18651	fluid:5
+shape	true	8668	3	18652	18651	fluid:5
+shape	true	8668	3	18651	18651	fluid:5
+shape	true	8668	3	15179	18651	fluid:5
+shape	true	8668	4	0	18651	fluid:5
+shape	true	8668	4	1	18651	fluid:5
+shape	true	8668	4	89	18651	fluid:5
+shape	true	8668	4	90	18651	fluid:5
+shape	true	8668	4	18652	18651	fluid:5
+shape	true	8668	4	18651	18651	fluid:5
+shape	true	8668	4	15179	18651	fluid:5
+shape	true	8668	5	0	18651	fluid:5
+shape	true	8668	5	1	18651	fluid:5
+shape	true	8668	5	89	18651	fluid:5
+shape	true	8668	5	90	18651	fluid:5
+shape	true	8668	5	18652	18651	fluid:5
+shape	true	8668	5	18651	18651	fluid:5
+shape	true	8668	5	15179	18651	fluid:5
+survive	true	16826	true
+shape	true	16826	0	0	18651	fluid:5;block:5
+shape	true	16826	0	1	18651	fluid:5;block:5
+shape	true	16826	0	89	18651	fluid:5;block:5
+shape	true	16826	0	90	18651	fluid:5;block:5
+shape	true	16826	0	18652	18651	fluid:5;block:5
+shape	true	16826	0	18651	18651	fluid:5;block:5
+shape	true	16826	0	15179	18651	fluid:5;block:5
+shape	true	16826	1	0	18651	fluid:5
+shape	true	16826	1	1	18651	fluid:5
+shape	true	16826	1	89	18651	fluid:5;block:5
+shape	true	16826	1	90	18651	fluid:5
+shape	true	16826	1	18652	18651	fluid:5
+shape	true	16826	1	18651	18651	fluid:5
+shape	true	16826	1	15179	18651	fluid:5
+shape	true	16826	2	0	18651	fluid:5
+shape	true	16826	2	1	18651	fluid:5
+shape	true	16826	2	89	18651	fluid:5
+shape	true	16826	2	90	18651	fluid:5
+shape	true	16826	2	18652	18651	fluid:5
+shape	true	16826	2	18651	18651	fluid:5
+shape	true	16826	2	15179	18651	fluid:5
+shape	true	16826	3	0	18651	fluid:5
+shape	true	16826	3	1	18651	fluid:5
+shape	true	16826	3	89	18651	fluid:5
+shape	true	16826	3	90	18651	fluid:5
+shape	true	16826	3	18652	18651	fluid:5
+shape	true	16826	3	18651	18651	fluid:5
+shape	true	16826	3	15179	18651	fluid:5
+shape	true	16826	4	0	18651	fluid:5
+shape	true	16826	4	1	18651	fluid:5
+shape	true	16826	4	89	18651	fluid:5
+shape	true	16826	4	90	18651	fluid:5
+shape	true	16826	4	18652	18651	fluid:5
+shape	true	16826	4	18651	18651	fluid:5
+shape	true	16826	4	15179	18651	fluid:5
+shape	true	16826	5	0	18651	fluid:5
+shape	true	16826	5	1	18651	fluid:5
+shape	true	16826	5	89	18651	fluid:5
+shape	true	16826	5	90	18651	fluid:5
+shape	true	16826	5	18652	18651	fluid:5
+shape	true	16826	5	18651	18651	fluid:5
+shape	true	16826	5	15179	18651	fluid:5
+survive	true	18652	true
+shape	true	18652	0	0	18651	fluid:5;block:5
+shape	true	18652	0	1	18651	fluid:5;block:5
+shape	true	18652	0	89	18651	fluid:5;block:5
+shape	true	18652	0	90	18651	fluid:5;block:5
+shape	true	18652	0	18652	18651	fluid:5;block:5
+shape	true	18652	0	18651	18651	fluid:5;block:5
+shape	true	18652	0	15179	18651	fluid:5;block:5
+shape	true	18652	1	0	18651	fluid:5
+shape	true	18652	1	1	18651	fluid:5
+shape	true	18652	1	89	18651	fluid:5;block:5
+shape	true	18652	1	90	18651	fluid:5
+shape	true	18652	1	18652	18651	fluid:5
+shape	true	18652	1	18651	18651	fluid:5
+shape	true	18652	1	15179	18651	fluid:5
+shape	true	18652	2	0	18651	fluid:5
+shape	true	18652	2	1	18651	fluid:5
+shape	true	18652	2	89	18651	fluid:5
+shape	true	18652	2	90	18651	fluid:5
+shape	true	18652	2	18652	18651	fluid:5
+shape	true	18652	2	18651	18651	fluid:5
+shape	true	18652	2	15179	18651	fluid:5
+shape	true	18652	3	0	18651	fluid:5
+shape	true	18652	3	1	18651	fluid:5
+shape	true	18652	3	89	18651	fluid:5
+shape	true	18652	3	90	18651	fluid:5
+shape	true	18652	3	18652	18651	fluid:5
+shape	true	18652	3	18651	18651	fluid:5
+shape	true	18652	3	15179	18651	fluid:5
+shape	true	18652	4	0	18651	fluid:5
+shape	true	18652	4	1	18651	fluid:5
+shape	true	18652	4	89	18651	fluid:5
+shape	true	18652	4	90	18651	fluid:5
+shape	true	18652	4	18652	18651	fluid:5
+shape	true	18652	4	18651	18651	fluid:5
+shape	true	18652	4	15179	18651	fluid:5
+shape	true	18652	5	0	18651	fluid:5
+shape	true	18652	5	1	18651	fluid:5
+shape	true	18652	5	89	18651	fluid:5
+shape	true	18652	5	90	18651	fluid:5
+shape	true	18652	5	18652	18651	fluid:5
+shape	true	18652	5	18651	18651	fluid:5
+shape	true	18652	5	15179	18651	fluid:5
+survive	true	18651	true
+shape	true	18651	0	0	18651	fluid:5;block:5
+shape	true	18651	0	1	18651	fluid:5;block:5
+shape	true	18651	0	89	18651	fluid:5;block:5
+shape	true	18651	0	90	18651	fluid:5;block:5
+shape	true	18651	0	18652	18651	fluid:5;block:5
+shape	true	18651	0	18651	18651	fluid:5;block:5
+shape	true	18651	0	15179	18651	fluid:5;block:5
+shape	true	18651	1	0	18651	fluid:5
+shape	true	18651	1	1	18651	fluid:5
+shape	true	18651	1	89	18651	fluid:5;block:5
+shape	true	18651	1	90	18651	fluid:5
+shape	true	18651	1	18652	18651	fluid:5
+shape	true	18651	1	18651	18651	fluid:5
+shape	true	18651	1	15179	18651	fluid:5
+shape	true	18651	2	0	18651	fluid:5
+shape	true	18651	2	1	18651	fluid:5
+shape	true	18651	2	89	18651	fluid:5
+shape	true	18651	2	90	18651	fluid:5
+shape	true	18651	2	18652	18651	fluid:5
+shape	true	18651	2	18651	18651	fluid:5
+shape	true	18651	2	15179	18651	fluid:5
+shape	true	18651	3	0	18651	fluid:5
+shape	true	18651	3	1	18651	fluid:5
+shape	true	18651	3	89	18651	fluid:5
+shape	true	18651	3	90	18651	fluid:5
+shape	true	18651	3	18652	18651	fluid:5
+shape	true	18651	3	18651	18651	fluid:5
+shape	true	18651	3	15179	18651	fluid:5
+shape	true	18651	4	0	18651	fluid:5
+shape	true	18651	4	1	18651	fluid:5
+shape	true	18651	4	89	18651	fluid:5
+shape	true	18651	4	90	18651	fluid:5
+shape	true	18651	4	18652	18651	fluid:5
+shape	true	18651	4	18651	18651	fluid:5
+shape	true	18651	4	15179	18651	fluid:5
+shape	true	18651	5	0	18651	fluid:5
+shape	true	18651	5	1	18651	fluid:5
+shape	true	18651	5	89	18651	fluid:5
+shape	true	18651	5	90	18651	fluid:5
+shape	true	18651	5	18652	18651	fluid:5
+shape	true	18651	5	18651	18651	fluid:5
+shape	true	18651	5	15179	18651	fluid:5
+column	false	0	89,89,89,0	89,89,89,0	-5025562857975149833
+column	true	0	89,89,89,0	89,89,89,0	-5025562857975149833
+column	false	0	18652,89,89,0	89,89,89,0	-5025562857975149833
+column	true	0	18652,89,89,0	89,89,89,0	-5025562857975149833
+column	false	0	18651,18652,18651,0	89,89,89,0	-5025562857975149833
+column	true	0	18651,18652,18651,0	89,89,89,0	-5025562857975149833
+column	false	0	18652,18652,89,0	89,89,89,0	-5025562857975149833
+column	true	0	18652,18652,89,0	89,89,89,0	-5025562857975149833
+column	false	0	89,90,89,0	89,90,89,0	-5025562857975149833
+column	true	0	89,90,89,0	89,90,89,0	-5025562857975149833
+column	false	0	89,15179,89,0	89,15179,89,0	-5025562857975149833
+column	true	0	89,15179,89,0	89,15179,89,0	-5025562857975149833
+column	false	0	0,89,89,0	0,89,89,0	-5025562857975149833
+column	false	0	18651,1,89,0	89,1,89,0	-5025562857975149833
+column	true	0	18651,1,89,0	89,1,89,0	-5025562857975149833
+column	false	1	89,89,89,0	89,89,89,0	-5025562857975149833
+column	true	1	89,89,89,0	89,89,89,0	-5025562857975149833
+column	false	1	18652,89,89,0	89,89,89,0	-5025562857975149833
+column	true	1	18652,89,89,0	89,89,89,0	-5025562857975149833
+column	false	1	18651,18652,18651,0	89,89,89,0	-5025562857975149833
+column	true	1	18651,18652,18651,0	89,89,89,0	-5025562857975149833
+column	false	1	18652,18652,89,0	89,89,89,0	-5025562857975149833
+column	true	1	18652,18652,89,0	89,89,89,0	-5025562857975149833
+column	false	1	89,90,89,0	89,90,89,0	-5025562857975149833
+column	true	1	89,90,89,0	89,90,89,0	-5025562857975149833
+column	false	1	89,15179,89,0	89,15179,89,0	-5025562857975149833
+column	true	1	89,15179,89,0	89,15179,89,0	-5025562857975149833
+column	false	1	0,89,89,0	0,89,89,0	-5025562857975149833
+column	false	1	18651,1,89,0	89,1,89,0	-5025562857975149833
+column	true	1	18651,1,89,0	89,1,89,0	-5025562857975149833
+column	false	8668	89,89,89,0	18652,18652,18652,0	-5025562857975149833
+column	true	8668	89,89,89,0	18652,18652,18652,0	-5025562857975149833
+column	false	8668	18652,89,89,0	18652,18652,18652,0	-5025562857975149833
+column	true	8668	18652,89,89,0	18652,18652,18652,0	-5025562857975149833
+column	false	8668	18651,18652,18651,0	18652,18652,18651,0	-5025562857975149833
+column	true	8668	18651,18652,18651,0	18652,18652,18651,0	-5025562857975149833
+column	false	8668	18652,18652,89,0	18652,18652,89,0	-5025562857975149833
+column	true	8668	18652,18652,89,0	18652,18652,89,0	-5025562857975149833
+column	false	8668	89,90,89,0	18652,90,89,0	-5025562857975149833
+column	true	8668	89,90,89,0	18652,90,89,0	-5025562857975149833
+column	false	8668	89,15179,89,0	18652,15179,89,0	-5025562857975149833
+column	true	8668	89,15179,89,0	18652,15179,89,0	-5025562857975149833
+column	false	8668	0,89,89,0	0,89,89,0	-5025562857975149833
+column	false	8668	18651,1,89,0	18652,1,89,0	-5025562857975149833
+column	true	8668	18651,1,89,0	18652,1,89,0	-5025562857975149833
+column	false	16826	89,89,89,0	18651,18651,18651,0	-5025562857975149833
+column	true	16826	89,89,89,0	18651,18651,18651,0	-5025562857975149833
+column	false	16826	18652,89,89,0	18651,18651,18651,0	-5025562857975149833
+column	true	16826	18652,89,89,0	18651,18651,18651,0	-5025562857975149833
+column	false	16826	18651,18652,18651,0	18651,18651,18651,0	-5025562857975149833
+column	true	16826	18651,18652,18651,0	18651,18651,18651,0	-5025562857975149833
+column	false	16826	18652,18652,89,0	18651,18651,18651,0	-5025562857975149833
+column	true	16826	18652,18652,89,0	18651,18651,18651,0	-5025562857975149833
+column	false	16826	89,90,89,0	18651,90,89,0	-5025562857975149833
+column	true	16826	89,90,89,0	18651,90,89,0	-5025562857975149833
+column	false	16826	89,15179,89,0	18651,15179,89,0	-5025562857975149833
+column	true	16826	89,15179,89,0	18651,15179,89,0	-5025562857975149833
+column	false	16826	0,89,89,0	0,89,89,0	-5025562857975149833
+column	false	16826	18651,1,89,0	18651,1,89,0	-5025562857975149833
+column	true	16826	18651,1,89,0	18651,1,89,0	-5025562857975149833
+column	false	18652	89,89,89,0	18652,18652,18652,0	-5025562857975149833
+column	true	18652	89,89,89,0	18652,18652,18652,0	-5025562857975149833
+column	false	18652	18652,89,89,0	18652,18652,18652,0	-5025562857975149833
+column	true	18652	18652,89,89,0	18652,18652,18652,0	-5025562857975149833
+column	false	18652	18651,18652,18651,0	18652,18652,18651,0	-5025562857975149833
+column	true	18652	18651,18652,18651,0	18652,18652,18651,0	-5025562857975149833
+column	false	18652	18652,18652,89,0	18652,18652,89,0	-5025562857975149833
+column	true	18652	18652,18652,89,0	18652,18652,89,0	-5025562857975149833
+column	false	18652	89,90,89,0	18652,90,89,0	-5025562857975149833
+column	true	18652	89,90,89,0	18652,90,89,0	-5025562857975149833
+column	false	18652	89,15179,89,0	18652,15179,89,0	-5025562857975149833
+column	true	18652	89,15179,89,0	18652,15179,89,0	-5025562857975149833
+column	false	18652	0,89,89,0	0,89,89,0	-5025562857975149833
+column	false	18652	18651,1,89,0	18652,1,89,0	-5025562857975149833
+column	true	18652	18651,1,89,0	18652,1,89,0	-5025562857975149833
+column	false	18651	89,89,89,0	18651,18651,18651,0	-5025562857975149833
+column	true	18651	89,89,89,0	18651,18651,18651,0	-5025562857975149833
+column	false	18651	18652,89,89,0	18651,18651,18651,0	-5025562857975149833
+column	true	18651	18652,89,89,0	18651,18651,18651,0	-5025562857975149833
+column	false	18651	18651,18652,18651,0	18651,18651,18651,0	-5025562857975149833
+column	true	18651	18651,18652,18651,0	18651,18651,18651,0	-5025562857975149833
+column	false	18651	18652,18652,89,0	18651,18651,18651,0	-5025562857975149833
+column	true	18651	18652,18652,89,0	18651,18651,18651,0	-5025562857975149833
+column	false	18651	89,90,89,0	18651,90,89,0	-5025562857975149833
+column	true	18651	89,90,89,0	18651,90,89,0	-5025562857975149833
+column	false	18651	89,15179,89,0	18651,15179,89,0	-5025562857975149833
+column	true	18651	89,15179,89,0	18651,15179,89,0	-5025562857975149833
+column	false	18651	0,89,89,0	0,89,89,0	-5025562857975149833
+column	false	18651	18651,1,89,0	18651,1,89,0	-5025562857975149833
+column	true	18651	18651,1,89,0	18651,1,89,0	-5025562857975149833
+inside	0	false	false	bff3333333333333	bff3333333333333	4020000000000000	-5025562857975149833
+inside	0	false	false	0	0	4020000000000000	-5025562857975149833
+inside	0	false	false	3fe6147ae147ae14	3fe6147ae147ae14	4020000000000000	-5025562857975149833
+inside	0	false	false	3ffca3d70a3d70a4	3ffca3d70a3d70a4	4020000000000000	-5025562857975149833
+inside	0	false	true	bff3333333333333	bff1999999999999	4020000000000000	8552898714322622292
+inside	0	false	true	0	3fb999999999999a	4020000000000000	8552898714322622292
+inside	0	false	true	3fe6147ae147ae14	3fe947ae147ae147	4020000000000000	8552898714322622292
+inside	0	false	true	3ffca3d70a3d70a4	3ffccccccccccccd	4020000000000000	8552898714322622292
+inside	0	true	false	bff3333333333333	bff3333333333333	4020000000000000	-5025562857975149833
+inside	0	true	false	0	0	4020000000000000	-5025562857975149833
+inside	0	true	false	3fe6147ae147ae14	3fe6147ae147ae14	4020000000000000	-5025562857975149833
+inside	0	true	false	3ffca3d70a3d70a4	3ffca3d70a3d70a4	4020000000000000	-5025562857975149833
+inside	0	true	true	bff3333333333333	bfeccccccccccccd	4020000000000000	8552898714322622292
+inside	0	true	true	0	bf9eb851eb851eb8	4020000000000000	8552898714322622292
+inside	0	true	true	3fe6147ae147ae14	3fe51eb851eb851e	4020000000000000	8552898714322622292
+inside	0	true	true	3ffca3d70a3d70a4	3ffc28f5c28f5c29	4020000000000000	8552898714322622292
+inside	1	false	false	bff3333333333333	bff3333333333333	4020000000000000	-5025562857975149833
+inside	1	false	false	0	0	4020000000000000	-5025562857975149833
+inside	1	false	false	3fe6147ae147ae14	3fe6147ae147ae14	4020000000000000	-5025562857975149833
+inside	1	false	false	3ffca3d70a3d70a4	3ffca3d70a3d70a4	4020000000000000	-5025562857975149833
+inside	1	false	true	bff3333333333333	bff23d70a3d70a3d	0	-5025562857975149833
+inside	1	false	true	0	3faeb851eb851eb8	0	-5025562857975149833
+inside	1	false	true	3fe6147ae147ae14	3fe6666666666666	0	-5025562857975149833
+inside	1	false	true	3ffca3d70a3d70a4	3fe6666666666666	0	-5025562857975149833
+inside	1	true	false	bff3333333333333	bff3333333333333	4020000000000000	-5025562857975149833
+inside	1	true	false	0	0	4020000000000000	-5025562857975149833
+inside	1	true	false	3fe6147ae147ae14	3fe6147ae147ae14	4020000000000000	-5025562857975149833
+inside	1	true	false	3ffca3d70a3d70a4	3ffca3d70a3d70a4	4020000000000000	-5025562857975149833
+inside	1	true	true	bff3333333333333	bfd3333333333333	0	-5025562857975149833
+inside	1	true	true	0	bf9eb851eb851eb8	0	-5025562857975149833
+inside	1	true	true	3fe6147ae147ae14	3fe51eb851eb851e	0	-5025562857975149833
+inside	1	true	true	3ffca3d70a3d70a4	3ffc28f5c28f5c29	0	-5025562857975149833
+inside	89	false	false	bff3333333333333	bff3333333333333	4020000000000000	-5025562857975149833
+inside	89	false	false	0	0	4020000000000000	-5025562857975149833
+inside	89	false	false	3fe6147ae147ae14	3fe6147ae147ae14	4020000000000000	-5025562857975149833
+inside	89	false	false	3ffca3d70a3d70a4	3ffca3d70a3d70a4	4020000000000000	-5025562857975149833
+inside	89	false	true	bff3333333333333	bff23d70a3d70a3d	0	-5025562857975149833
+inside	89	false	true	0	3faeb851eb851eb8	0	-5025562857975149833
+inside	89	false	true	3fe6147ae147ae14	3fe6666666666666	0	-5025562857975149833
+inside	89	false	true	3ffca3d70a3d70a4	3fe6666666666666	0	-5025562857975149833
+inside	89	true	false	bff3333333333333	bff3333333333333	4020000000000000	-5025562857975149833
+inside	89	true	false	0	0	4020000000000000	-5025562857975149833
+inside	89	true	false	3fe6147ae147ae14	3fe6147ae147ae14	4020000000000000	-5025562857975149833
+inside	89	true	false	3ffca3d70a3d70a4	3ffca3d70a3d70a4	4020000000000000	-5025562857975149833
+inside	89	true	true	bff3333333333333	bfd3333333333333	0	-5025562857975149833
+inside	89	true	true	0	bf9eb851eb851eb8	0	-5025562857975149833
+inside	89	true	true	3fe6147ae147ae14	3fe51eb851eb851e	0	-5025562857975149833
+inside	89	true	true	3ffca3d70a3d70a4	3ffc28f5c28f5c29	0	-5025562857975149833
+inside	18652	false	false	bff3333333333333	bff3333333333333	4020000000000000	-5025562857975149833
+inside	18652	false	false	0	0	4020000000000000	-5025562857975149833
+inside	18652	false	false	3fe6147ae147ae14	3fe6147ae147ae14	4020000000000000	-5025562857975149833
+inside	18652	false	false	3ffca3d70a3d70a4	3ffca3d70a3d70a4	4020000000000000	-5025562857975149833
+inside	18652	false	true	bff3333333333333	bff23d70a3d70a3d	0	-5025562857975149833
+inside	18652	false	true	0	3faeb851eb851eb8	0	-5025562857975149833
+inside	18652	false	true	3fe6147ae147ae14	3fe6666666666666	0	-5025562857975149833
+inside	18652	false	true	3ffca3d70a3d70a4	3fe6666666666666	0	-5025562857975149833
+inside	18652	true	false	bff3333333333333	bff3333333333333	4020000000000000	-5025562857975149833
+inside	18652	true	false	0	0	4020000000000000	-5025562857975149833
+inside	18652	true	false	3fe6147ae147ae14	3fe6147ae147ae14	4020000000000000	-5025562857975149833
+inside	18652	true	false	3ffca3d70a3d70a4	3ffca3d70a3d70a4	4020000000000000	-5025562857975149833
+inside	18652	true	true	bff3333333333333	bfd3333333333333	0	-5025562857975149833
+inside	18652	true	true	0	bf9eb851eb851eb8	0	-5025562857975149833
+inside	18652	true	true	3fe6147ae147ae14	3fe51eb851eb851e	0	-5025562857975149833
+inside	18652	true	true	3ffca3d70a3d70a4	3ffc28f5c28f5c29	0	-5025562857975149833
+inside	2362	false	false	bff3333333333333	bff3333333333333	4020000000000000	-5025562857975149833
+inside	2362	false	false	0	0	4020000000000000	-5025562857975149833
+inside	2362	false	false	3fe6147ae147ae14	3fe6147ae147ae14	4020000000000000	-5025562857975149833
+inside	2362	false	false	3ffca3d70a3d70a4	3ffca3d70a3d70a4	4020000000000000	-5025562857975149833
+inside	2362	false	true	bff3333333333333	bff1999999999999	4020000000000000	8552898714322622292
+inside	2362	false	true	0	3fb999999999999a	4020000000000000	8552898714322622292
+inside	2362	false	true	3fe6147ae147ae14	3fe947ae147ae147	4020000000000000	8552898714322622292
+inside	2362	false	true	3ffca3d70a3d70a4	3ffccccccccccccd	4020000000000000	8552898714322622292
+inside	2362	true	false	bff3333333333333	bff3333333333333	4020000000000000	-5025562857975149833
+inside	2362	true	false	0	0	4020000000000000	-5025562857975149833
+inside	2362	true	false	3fe6147ae147ae14	3fe6147ae147ae14	4020000000000000	-5025562857975149833
+inside	2362	true	false	3ffca3d70a3d70a4	3ffca3d70a3d70a4	4020000000000000	-5025562857975149833
+inside	2362	true	true	bff3333333333333	bfeccccccccccccd	4020000000000000	8552898714322622292
+inside	2362	true	true	0	bf9eb851eb851eb8	4020000000000000	8552898714322622292
+inside	2362	true	true	3fe6147ae147ae14	3fe51eb851eb851e	4020000000000000	8552898714322622292
+inside	2362	true	true	3ffca3d70a3d70a4	3ffc28f5c28f5c29	4020000000000000	8552898714322622292
+inside	3801	false	false	bff3333333333333	bff3333333333333	4020000000000000	-5025562857975149833
+inside	3801	false	false	0	0	4020000000000000	-5025562857975149833
+inside	3801	false	false	3fe6147ae147ae14	3fe6147ae147ae14	4020000000000000	-5025562857975149833
+inside	3801	false	false	3ffca3d70a3d70a4	3ffca3d70a3d70a4	4020000000000000	-5025562857975149833
+inside	3801	false	true	bff3333333333333	bff1999999999999	4020000000000000	8552898714322622292
+inside	3801	false	true	0	3fb999999999999a	4020000000000000	8552898714322622292
+inside	3801	false	true	3fe6147ae147ae14	3fe947ae147ae147	4020000000000000	8552898714322622292
+inside	3801	false	true	3ffca3d70a3d70a4	3ffccccccccccccd	4020000000000000	8552898714322622292
+inside	3801	true	false	bff3333333333333	bff3333333333333	4020000000000000	-5025562857975149833
+inside	3801	true	false	0	0	4020000000000000	-5025562857975149833
+inside	3801	true	false	3fe6147ae147ae14	3fe6147ae147ae14	4020000000000000	-5025562857975149833
+inside	3801	true	false	3ffca3d70a3d70a4	3ffca3d70a3d70a4	4020000000000000	-5025562857975149833
+inside	3801	true	true	bff3333333333333	bfeccccccccccccd	4020000000000000	8552898714322622292
+inside	3801	true	true	0	bf9eb851eb851eb8	4020000000000000	8552898714322622292
+inside	3801	true	true	3fe6147ae147ae14	3fe51eb851eb851e	4020000000000000	8552898714322622292
+inside	3801	true	true	3ffca3d70a3d70a4	3ffc28f5c28f5c29	4020000000000000	8552898714322622292
+pickup	false	false	minecraft:water_bucket	1	0	set:0:11:512
+pickup	false	true	minecraft:water_bucket	1	0	set:0:11:512
+pickup	true	false	minecraft:water_bucket	1	0	set:0:11:512
+pickup	true	true	minecraft:water_bucket	1	0	set:0:11:512
