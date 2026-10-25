@@ -38,11 +38,10 @@ fn has_enchantments<E: Entity + ?Sized>(
     level: &Level,
 ) -> Result<bool, LevelError> {
     for slot in SLOTS {
-        if let Some(stack) = behavior.item_by_slot(entity, slot, level)? {
-            if matches!(component(stack,ComponentType::ENCHANTMENTS),Some(DataComponent::Enchantments(value)) if !value.0.is_empty())
-            {
-                return Ok(true);
-            }
+        if let Some(stack) = behavior.item_by_slot(entity, slot, level)?
+            && matches!(component(stack,ComponentType::ENCHANTMENTS),Some(DataComponent::Enchantments(value)) if !value.0.is_empty())
+        {
+            return Ok(true);
         }
     }
     Ok(false)

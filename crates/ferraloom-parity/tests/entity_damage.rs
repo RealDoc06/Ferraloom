@@ -1,3 +1,7 @@
+#[expect(
+    dead_code,
+    reason = "The fall scenario uses only the non-stepping shared level fixtures."
+)]
 mod level_support;
 
 use anyhow::Context;
@@ -82,9 +86,12 @@ async fn survival_fall(session: &mut Session) -> Result<ObservationLog> {
     )
     .await?;
     ensure!(
-        order == ["damage", "hurt_animation", "health"],
+        order == ["damage", "health"],
         "fall packet order: {order:?}"
     );
+    // FALL is tagged NO_KNOCKBACK: dealDefaultKnockback, which also calls
+    // ServerPlayer#indicateDamage, is skipped by the native hurtServer body.
+    ensure!(hurt_yaw.is_none(), "fall unexpectedly sent HurtAnimation");
     let (source_id, cause, direct, position) = damage_source.context("fall damage event")?;
     let source_name = damage_types
         .get(usize::try_from(source_id)?)
@@ -135,10 +142,7 @@ async fn survival_fall(session: &mut Session) -> Result<ObservationLog> {
     let mut log = ObservationLog::default();
     log.record("fall.packet_order", order)?;
     log.record("fall.source", source_name)?;
-    log.record(
-        "fall.hurt_yaw_bits",
-        hurt_yaw.context("hurt animation yaw")?,
-    )?;
+    log.record("fall.hurt_animation_sent", hurt_yaw.is_some())?;
     log.record("fall.health_food_saturation_bits", health)?;
     log.record("fall.damage_stats", [taken, absorbed])?;
     session.stop().await?;
