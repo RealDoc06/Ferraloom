@@ -2,7 +2,7 @@
 use super::{Level, LevelError, effects::LevelEffect};
 use ferraloom_light::{DataLayer, LightLayer};
 use ferraloom_nbt::{CompoundTag, Tag};
-use ferraloom_storage::{Error, Result, SavedDataCodec};
+use ferraloom_storage::{Error, Result as StorageResult, SavedDataCodec};
 use ferraloom_util::{BlockPos, ChunkPos};
 use ferraloom_worldgen::{
     Identifier,
@@ -58,7 +58,7 @@ pub struct WeatherData {
     pub thundering: bool,
 }
 impl SavedDataCodec for WeatherData {
-    fn decode(tag: &Tag) -> Result<Self> {
+    fn decode(tag: &Tag) -> StorageResult<Self> {
         let compound = tag
             .as_compound()
             .ok_or_else(|| Error::Invalid("weather data must be a compound".into()))?;
@@ -80,7 +80,7 @@ impl SavedDataCodec for WeatherData {
             thundering: boolean("thundering")?,
         })
     }
-    fn encode(&self) -> Result<Tag> {
+    fn encode(&self) -> StorageResult<Tag> {
         let mut tag = CompoundTag::new();
         tag.insert("clear_weather_time", Tag::Int(self.clear_weather_time));
         tag.insert("rain_time", Tag::Int(self.rain_time));
