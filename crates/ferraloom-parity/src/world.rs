@@ -20,6 +20,26 @@ impl SavedWorld {
     pub fn level(&self) -> Result<LevelData> {
         Ok(self.access.read_level_data()?)
     }
+    /// Read the namespaced saved-data payload through storage's DataVersion validation.
+    pub fn saved_data(&self, id: &str) -> Result<Option<Tag>> {
+        Ok(
+            ferraloom_storage::SavedDataStorage::new(self.access.path().join("data"))
+                .load::<Tag>(id)?
+                .map(|data| data.value().clone()),
+        )
+    }
+    /// Read the actual on-disk PlayerAdvancements JSON after the server has saved and stopped.
+    pub fn player_advancements(&self, name: &str) -> Result<serde_json::Value> {
+        let uuid = ferraloom_protocol::Uuid::offline_player(name);
+        let path = self
+            .access
+            .path()
+            .join("advancements")
+            .join(format!("{uuid}.json"));
+        Ok(serde_json::from_slice(
+            &std::fs::read(&path).with_context(|| format!("saved player advancements {name}"))?,
+        )?)
+    }
     pub fn player(&self, name: &str) -> Result<CompoundTag> {
         self.access
             .player_data()

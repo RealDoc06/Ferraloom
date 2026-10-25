@@ -13,7 +13,7 @@ use ferraloom_protocol::{
 use ferraloom_server::{network::PacketIo, registries::RegistrySet};
 use ferraloom_util::{BlockPos, Direction};
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, HashMap},
     net::SocketAddr,
     sync::{Arc, Mutex},
     time::{Duration, SystemTime, UNIX_EPOCH},
@@ -57,6 +57,15 @@ pub struct Entity {
     pub rotation: [f32; 2],
     pub data: BTreeMap<u8, p::entity_data::EntityDataValue>,
 }
+/// Client state reconstructed solely from decoded ClientboundBossEventPacket operations.
+#[derive(Clone, Debug, PartialEq)]
+pub struct BossEventState {
+    pub name: p::chat::Component,
+    pub progress: f32,
+    pub color: play::BossBarColor,
+    pub overlay: play::BossBarOverlay,
+    pub properties: play::BossProperties,
+}
 #[derive(Clone, Debug, Default)]
 pub struct BotState {
     pub entity_id: Option<i32>,
@@ -78,6 +87,8 @@ pub struct BotState {
     pub inventory: BTreeMap<i32, ItemStack>,
     /// Latest full advancement progress, including packets consumed during join.
     pub advancement_progress: BTreeMap<p::Identifier, play::AdvancementProgress>,
+    /// Includes initial Add operations consumed while connecting.
+    pub boss_events: HashMap<Uuid, BossEventState>,
     pub scores: BTreeMap<(String, String), i32>,
     pub objectives: BTreeMap<String, play::ObjectiveOperation>,
     pub display_objectives: Vec<cb::SetDisplayObjective>,
@@ -997,6 +1008,47 @@ fn apply(s: &mut BotState, p: &cb::Packet) -> Result<()> {
             s.containers.remove(&p.container_id.0);
         }
         cb::Packet::ChangeDifficulty(p) => s.difficulty = Some(p.clone()),
+        cb::Packet::BossEvent(p) => match &p.operation {
+            play::BossOperation::Add {
+                name,
+                progress,
+                color,
+                overlay,
+                properties,
+            } => {
+                s.boss_events.insert(
+                    p.id,
+                    BossEventState {
+                        name: name.clone(),
+                        progress: *progress,
+                        color: *color,
+                        overlay: *overlay,
+                        properties: properties.clone(),
+                    },
+                );
+            }
+            play::BossOperation::Remove {} => {
+                s.boss_events.remove(&p.id);
+            }
+            operation => {
+                if let Some(event) = s.boss_events.get_mut(&p.id) {
+                    match operation {
+                        play::BossOperation::UpdateProgress { progress } => {
+                            event.progress = *progress
+                        }
+                        play::BossOperation::UpdateName { name } => event.name = name.clone(),
+                        play::BossOperation::UpdateStyle { color, overlay } => {
+                            event.color = *color;
+                            event.overlay = *overlay;
+                        }
+                        play::BossOperation::UpdateProperties { properties } => {
+                            event.properties = properties.clone()
+                        }
+                        _ => unreachable!("handled add and remove"),
+                    }
+                }
+            }
+        },
         cb::Packet::SetScore(p) => {
             s.scores
                 .insert((p.objective_name.clone(), p.owner.clone()), p.score.0);
