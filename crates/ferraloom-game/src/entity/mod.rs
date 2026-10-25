@@ -399,6 +399,16 @@ pub trait Entity: Sync {
         Ok(true)
     }
     /// Port of Entity#playerTouch; concrete pickup entities override this hook.
+    /// Port of LivingEntity#take, overridden by ServerPlayer for menu sync.
+    fn take(
+        &self,
+        collector: EntityRef,
+        entity: EntityRef,
+        count: i32,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        living::take(collector, entity, count, level)
+    }
     fn player_touch(
         &self,
         _entity: EntityRef,

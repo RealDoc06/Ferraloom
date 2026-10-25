@@ -35,6 +35,41 @@ fn vector(value: Vec3) -> String {
 }
 
 #[test]
+fn native_player_tick_decrements_only_positive_orb_pickup_delay() {
+    let mut checked = 0;
+    for row in VECTORS
+        .lines()
+        .filter(|row| row.starts_with("orb-delay-tick\t"))
+    {
+        let fields: Vec<_> = row.split('\t').collect();
+        let mut level = crate::entity::tests::level(true);
+        let player = add_player(&mut level, Vec3::new(8.5, 64.0, 8.5), GameType::Survival);
+        level
+            .entity_mut::<ServerPlayer>(player)
+            .unwrap()
+            .take_xp_delay = fields[1].parse().unwrap();
+        player_tick(
+            &crate::entity::player::PlayerBehavior,
+            player,
+            &mut level,
+            &TickRateManager::default(),
+        )
+        .unwrap();
+        assert_eq!(
+            level
+                .entity::<ServerPlayer>(player)
+                .unwrap()
+                .take_xp_delay
+                .to_string(),
+            fields[2],
+            "{row}"
+        );
+        checked += 1;
+    }
+    assert_eq!(checked, 7);
+}
+
+#[test]
 fn loaded_neighbor_guard_matches_native_expanded_bounds_at_chunk_edges() {
     let mut count = 0;
     for row in VECTORS

@@ -47,6 +47,10 @@ fn player_tick<E: Entity + ?Sized>(
     if spectator || passenger {
         crate::entity::movement::set_on_ground(player, false, None, level)?;
     }
+    let state = level.entity_mut::<ServerPlayer>(player)?;
+    if state.take_xp_delay > 0 {
+        state.take_xp_delay -= 1;
+    }
     // LivingEntity#baseTick advances the hand animation before Entity#baseTick.
     level
         .entity_mut::<crate::entity::LivingEntity>(player)?

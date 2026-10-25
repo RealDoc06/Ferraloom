@@ -1,6 +1,6 @@
 use super::*;
 use crate::entity::{
-    EntityMethod, EntityState, RemovalReason,
+    EntityState, RemovalReason,
     effects::EntityEffect,
     experience_orb::ExperienceOrb,
     item::{ItemEntity, PrimedTnt},
@@ -139,8 +139,10 @@ fn native_contact_bounds_section_order_health_guards_and_orb_rng() {
     assert_eq!(actual, expected);
 }
 #[test]
-fn orb_contact_is_explicit_until_xp_and_mending_are_ported() {
+fn orb_contact_awards_canonical_xp_and_sets_the_shared_pickup_delay() {
     let mut level = crate::entity::tests::level(false);
+    level.install_shared(Box::default());
+    crate::level::drop_fixtures::install(&mut level);
     let player = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
     level
         .add_entity(
@@ -155,6 +157,7 @@ fn orb_contact_is_explicit_until_xp_and_mending_are_ported() {
         )
         .unwrap();
     let mut orb = ExperienceOrb::new(2, 2);
+    orb.set_value(7);
     orb.parent.set_pos(Vec3::new(8.5, 64.0, 8.5));
     level
         .add_entity(
@@ -163,11 +166,15 @@ fn orb_contact_is_explicit_until_xp_and_mending_are_ported() {
         )
         .unwrap();
     level.set_unported_behavior(crate::block::UnportedBehavior::Strict);
-    assert_eq!(
-        touch_entities(player, &mut level),
-        Err(LevelError::UnsupportedEntityMethod(
-            EntityType::EXPERIENCE_ORB,
-            EntityMethod::PlayerTouch
-        ))
+    touch_entities(player, &mut level).unwrap();
+    let state = level.entity::<ServerPlayer>(player).unwrap();
+    assert_eq!(state.total_experience, 7);
+    assert_eq!(state.take_xp_delay, 2);
+    assert!(
+        level
+            .entity::<ExperienceOrb>(EntityRef::fixture(crate::level::RegionId::FIXTURE, 2))
+            .unwrap()
+            .parent
+            .removed
     );
 }

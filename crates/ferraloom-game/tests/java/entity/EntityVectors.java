@@ -127,6 +127,7 @@ public final class EntityVectors {
         CombatTrackerVectors.run(new EntityFixture(r));
         DifficultyVectors.run();
         ExperienceVectors.run(new EntityFixture(r));
+        OrbPickupVectors.run(new EntityFixture(r));
         DropVectors.run(new EntityFixture(r));
         StuckVectors.run(new EntityFixture(r));
         EquipmentBreakVectors.run(new EntityFixture(r));
