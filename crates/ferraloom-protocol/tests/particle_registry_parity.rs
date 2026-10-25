@@ -1,6 +1,26 @@
 //! Fresh vanilla bootstrap/codec vectors; production particle code stays unchanged.
-use ferraloom_data::registries::particle_type;
-use ferraloom_protocol::{Wire, entity_data::Particle};
+use ferraloom_data::{registries::particle_type, registry_entries};
+use ferraloom_protocol::{
+    Identifier, Reader, Wire, Writer, codec::RegistryContext, entity_data::Particle,
+};
+
+/// The same static bootstrap registries used by the native particle stream.
+struct Registries;
+impl RegistryContext for Registries {
+    fn entry_id(&self, registry: &Identifier, entry: &Identifier) -> Option<i32> {
+        let entries = registry_entries(registry.as_str())?;
+        i32::try_from(entries.iter().position(|&name| name == entry.as_str())?).ok()
+    }
+
+    fn entry_key(&self, registry: &Identifier, id: i32) -> Option<Identifier> {
+        let entries = registry_entries(registry.as_str())?;
+        Identifier::parse(entries.get(usize::try_from(id).ok()?)?).ok()
+    }
+
+    fn has_tag(&self, _: &Identifier, _: &Identifier) -> bool {
+        false
+    }
+}
 
 fn codec_kind(particle: &Particle) -> &'static str {
     match particle {
@@ -33,29 +53,34 @@ fn particle_registry_names_ids_and_options_codecs_match_vanilla_bootstrap() {
     ))
     .unwrap();
     let entries = native.as_array().unwrap();
+    let registries = Registries;
     assert_eq!(particle_type::ALL.len(), entries.len());
     for (ordinal, (id, entry)) in particle_type::ALL.iter().zip(entries).enumerate() {
         assert_eq!(usize::from(id.protocol_id()), ordinal);
         assert_eq!(u64::from(id.protocol_id()), entry["id"].as_u64().unwrap());
         assert_eq!(id.name(), entry["name"].as_str().unwrap());
         let wire = entry["wire"].as_str().unwrap();
-        assert_eq!(wire.len() % 2, 0);
-        let wire = wire
-            .as_bytes()
-            .chunks_exact(2)
+        let (pairs, remainder) = wire.as_bytes().as_chunks::<2>();
+        assert!(remainder.is_empty());
+        let wire = pairs
+            .iter()
             .map(|pair| u8::from_str_radix(std::str::from_utf8(pair).unwrap(), 16).unwrap())
             .collect::<Vec<_>>();
         // Native ParticleType#codec creates the options, then the actual native
         // registry-dispatched StreamCodec writes them. Decode checks the modeled
         // options kind; exact re-encoding checks its entire typed payload.
+        let mut reader = Reader::with_context(&wire, &registries);
         let particle =
-            Particle::from_bytes(&wire).unwrap_or_else(|error| panic!("{}: {error}", id.name()));
+            Particle::decode(&mut reader).unwrap_or_else(|error| panic!("{}: {error}", id.name()));
+        reader.finish().unwrap();
         assert_eq!(
             codec_kind(&particle),
             entry["codec_kind"].as_str().unwrap(),
             "{} codec",
             id.name()
         );
-        assert_eq!(particle.to_bytes().unwrap(), wire, "{} payload", id.name());
+        let mut writer = Writer::with_context(&registries);
+        particle.encode(&mut writer).unwrap();
+        assert_eq!(writer.as_slice(), wire, "{} payload", id.name());
     }
 }
