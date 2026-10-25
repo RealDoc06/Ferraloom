@@ -1,11 +1,11 @@
 use super::{DistancePredicate, LocationPredicate, NbtPredicate, PredicateContext};
+use crate::loot::codec::{DecodeInput, PersistentInput};
 use crate::{
     entity::EntityRef,
     loot::{Identifier, LootError, Result, codec},
 };
-use ferraloom_protocol::{codec::HolderSet, component::Persistent};
+use ferraloom_protocol::codec::HolderSet;
 use ferraloom_util::Vec3;
-use serde_json::Value;
 
 /// Port of EntityFlagsPredicate. Type-specific flags await the living-entity adapter.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -75,17 +75,17 @@ pub struct EntityPredicate {
     pub parts: Vec<EntitySubPredicate>,
 }
 impl EntityPredicate {
-    pub fn decode(v: &Value) -> Result<Self> {
+    pub fn decode<I: DecodeInput>(v: &I) -> Result<Self> {
         let mut parts = Vec::new();
         let mut keys = std::collections::BTreeSet::new();
-        for (name, value) in codec::object(v)? {
+        for (name, value) in codec::map(v)?.entries()? {
             let id = Identifier::parse(name)?;
             if !keys.insert(id.clone()) {
                 return Err(codec::error("duplicate entity sub-predicate"));
             }
             let part = match id.as_str() {
                 "minecraft:entity_type" => {
-                    let set = HolderSet::from_json(value)?;
+                    let set = HolderSet::from_input(value)?;
                     super::validate_static_holders(&set, "entity_type", |id| {
                         ferraloom_data::EntityType::from_name(id).is_some()
                     })?;
@@ -108,14 +108,17 @@ impl EntityPredicate {
                     EntitySubPredicate::Movement(super::MovementPredicate::decode(value)?)
                 }
                 "minecraft:effects" => EntitySubPredicate::Effects(
-                    ferraloom_protocol::component::MobEffectsPredicate::from_json(value)?,
+                    ferraloom_protocol::component::MobEffectsPredicate::from_input(value)?,
                 ),
                 "minecraft:slots" => EntitySubPredicate::Slots(
-                    codec::object(value)?
-                        .iter()
+                    codec::map(value)?
+                        .entries()?
+                        .into_iter()
                         .map(|(key, value)| {
                             Ok((
-                                crate::loot::SlotRange::decode(&Value::String(key.clone()))?,
+                                crate::loot::SlotRange::decode(&serde_json::Value::String(
+                                    key.to_owned(),
+                                ))?,
                                 super::ItemPredicate::decode(value)?,
                             ))
                         })
@@ -183,13 +186,13 @@ impl EntityPredicate {
                     }
                 }
                 "minecraft:components" => EntitySubPredicate::Components(
-                    ferraloom_protocol::component::DataComponentMatchers::from_json(
-                        &serde_json::json!({"components":value}),
+                    value.read_wrapped::<ferraloom_protocol::component::DataComponentMatchers>(
+                        "components",
                     )?,
                 ),
                 "minecraft:predicates" => EntitySubPredicate::Components(
-                    ferraloom_protocol::component::DataComponentMatchers::from_json(
-                        &serde_json::json!({"predicates":value}),
+                    value.read_wrapped::<ferraloom_protocol::component::DataComponentMatchers>(
+                        "predicates",
                     )?,
                 ),
                 "minecraft:type_specific/sheep" => EntitySubPredicate::Specific(
