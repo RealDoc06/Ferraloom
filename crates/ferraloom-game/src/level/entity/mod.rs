@@ -21,7 +21,29 @@ pub use persistent::{
 };
 pub use worldgen::{WorldgenEntityLoadError, WorldgenEntityLoadStage};
 
+#[cfg(test)]
+thread_local! {
+    static NEXT_ENTITY_SEED: Cell<Option<i64>> = const { Cell::new(None) };
+}
+
+/// Control one constructor's nondeterministic RandomSource.create for native vectors.
+#[cfg(test)]
+pub(crate) fn with_entity_random_seed<R>(seed: i64, body: impl FnOnce() -> R) -> R {
+    struct Reset(Option<i64>);
+    impl Drop for Reset {
+        fn drop(&mut self) {
+            NEXT_ENTITY_SEED.with(|seed| seed.set(self.0));
+        }
+    }
+    let _reset = Reset(NEXT_ENTITY_SEED.with(|next| next.replace(Some(seed))));
+    body()
+}
+
 pub(crate) fn new_entity_random() -> ferraloom_util::random::LegacyRandomSource {
+    #[cfg(test)]
+    if let Some(seed) = NEXT_ENTITY_SEED.with(Cell::take) {
+        return ferraloom_util::random::LegacyRandomSource::new(seed);
+    }
     let ferraloom_util::random::Random::Legacy(random) = super::random::new_level_random() else {
         unreachable!("RandomSource.create uses LegacyRandomSource")
     };

@@ -76,6 +76,11 @@ impl ItemEntity {
         entity.parent.velocity = velocity;
         entity
     }
+    /// Port of ItemEntity#makeFakeItem, used by GiveCommand before registration.
+    pub fn make_fake_item(&mut self) {
+        self.pickup_delay = 32767;
+        self.age = 5999;
+    }
     pub fn item(&self) -> &ItemStack {
         self.parent.entity_data.get(ITEM)
     }
