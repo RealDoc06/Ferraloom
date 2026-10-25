@@ -14,8 +14,8 @@ use ferraloom_parity::{
     protocol::{Uuid, entity_data::EntityDataValue},
 };
 use ferraloom_storage::{
-    BlockStatePaletteEntry, ChunkSection, EntityChunk, IntArray, PackedPalette, RegionFileStorage,
-    RegionFileVersion, SerializableChunkData,
+    BlockStatePaletteEntry, ChunkSection, EntityChunk, IntArray, LevelStorageAccess, PackedPalette,
+    RegionFileStorage, RegionFileVersion, SerializableChunkData,
 };
 use ferraloom_util::ChunkPos;
 use std::path::Path;
@@ -68,11 +68,12 @@ fn fixture(path: &Path) -> Result<()> {
         entities: Some(vec![item(102, 1030.5)?]),
         ..Default::default()
     };
-    for (folder, tag) in [
-        ("region", chunk.write()?),
-        ("entities", entity_chunk.write()?),
+    let access = LevelStorageAccess::open(path)?;
+    let dimension = access.dimension("minecraft:overworld")?;
+    for (directory, tag) in [
+        (dimension.region, chunk.write()?),
+        (dimension.entities, entity_chunk.write()?),
     ] {
-        let directory = path.join(folder);
         std::fs::create_dir_all(&directory)?;
         let mut storage = RegionFileStorage::new(directory, RegionFileVersion::Deflate, false);
         storage.write(CENTER, Some(&tag))?;
