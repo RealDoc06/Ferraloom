@@ -122,6 +122,8 @@ pub enum LevelError {
     UnsupportedBlock(Block),
     UnsupportedBlockMethod(Block, crate::block::BlockMethod),
     UnsupportedBlockEntity(Block),
+    /// CrafterBlock#dispenseItem replaced the captured CraftingInput list before remainders.
+    UnsupportedCrafterCapturedListIdentity(crate::block::entity::BlockEntityRef),
     UnsupportedGameRule(&'static str),
     UnsupportedLightQuery,
     UnsupportedEnvironmentAttribute(ferraloom_data::registries::environment_attribute::Id),
