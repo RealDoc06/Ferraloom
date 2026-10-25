@@ -1,4 +1,6 @@
 //! Single-region MinecraftServer phase driver. Game state has one mutable owner.
+#[path = "block_actions.rs"]
+mod block_actions;
 #[path = "command_level.rs"]
 mod command_level;
 #[path = "command_runtime.rs"]
@@ -18,7 +20,7 @@ use crate::{
     network::{self, ConnectionId, Incoming, Ingress, OutboundBatch, Outgoing},
     properties::{self, ServerProperties},
     registries::{LootRegistryLookup, RegistrySet, core_pack, id},
-    world::{ChunkLight, World, heightmap},
+    world::{ChunkLight, World, WorldRoot, heightmap},
 };
 use anyhow::{Context, Result, bail, ensure};
 use ferraloom_data::{
@@ -44,8 +46,6 @@ use ferraloom_game::{
     level::{
         LevelError, Region,
         chunk_holder::ChunkStatus,
-        chunk_map::PlayerChunkSender,
-        distance_manager::tracking_view,
         server_level::ServerLevel,
         tick_rate::{ServerTickRateManager, TickRateEvent},
     },
@@ -137,9 +137,6 @@ struct Connection {
     close: bool,
     information: common::serverbound::ClientInformation,
     player: Option<ServerPlayer>,
-    chunks: PlayerChunkSender,
-    view: HashSet<ChunkPos>,
-    center: Option<ChunkPos>,
     last_keepalive: Instant,
     keepalive: Option<i64>,
     last_action: Instant,
@@ -188,12 +185,14 @@ impl Connection {
 pub struct MinecraftServer {
     properties: Arc<ServerProperties>,
     root: PathBuf,
-    registries: RegistrySet,
+    registries: Arc<RegistrySet>,
     recipe_manager: Arc<RecipeManager>,
     recipe_synchronization: Arc<RecipeSynchronization>,
     crafting_context: Arc<RuntimeCraftingContext>,
     access: AccessLists,
+    world_root: WorldRoot,
     level: crate::generation::runtime::LiveLevel,
+    additional_levels: Vec<crate::generation::runtime::LiveLevel>,
     commands: Commands,
     game_rules: ferraloom_game::gamerules::GameRules,
     shared: Option<Box<ferraloom_game::ServerShared>>,
@@ -255,7 +254,7 @@ impl MinecraftServer {
         );
         let jar = assets::vanilla_jar(&options.cache).await?;
         let resources = ResourceManager::new(vec![Pack::vanilla_jar(&jar)?]);
-        let registries = RegistrySet::load(&resources)?;
+        let registries = Arc::new(RegistrySet::load(&resources)?);
         let recipe_manager = Arc::new(RecipeManager::load(&resources, &TagSet::load(&resources)?)?);
         let recipe_synchronization =
             Arc::new(RecipeSynchronization::new(&recipe_manager, |_| true));
@@ -263,16 +262,20 @@ impl MinecraftServer {
             &resources,
             Some(&LootRegistryLookup::new(&registries, &resources)),
         )?);
-        let crafting_context = Arc::new(RuntimeCraftingContext::load(&resources, &registries)?);
+        let crafting_context = Arc::new(RuntimeCraftingContext::load(
+            &resources,
+            registries.as_ref(),
+        )?);
 
-        let world = World::open(
+        let mut world_root = WorldRoot::open(
             &options.root,
             &properties,
             &resources,
             &registries,
             options.unported_behavior,
         )?;
-        let game_rules = command_runtime::load_game_rules(&world)?;
+        let world = world_root.open_dimension("minecraft:overworld".parse()?, &properties)?;
+        let game_rules = command_runtime::load_game_rules(&world_root)?;
         // Older scoreboard paths are migrated by the datafix workstream, not runtime loading.
         let scoreboard = {
             use ferraloom_game::scoreboard::{ScoreboardSaveData, ServerScoreboard};
@@ -285,7 +288,7 @@ impl MinecraftServer {
                     .unwrap_or_default(),
             )
         };
-        let clocks = command_runtime::load_clocks(&world, &resources)?;
+        let clocks = command_runtime::load_clocks(&world_root, &resources)?;
         let command_storage_folder = world.access.path().join("data");
         let command_storage = tokio::task::spawn_blocking(move || {
             ferraloom_game::commands::storage::CommandStorage::preload(&command_storage_folder)
@@ -294,7 +297,7 @@ impl MinecraftServer {
         let command_context = command_runtime::command_build_context(
             &registries,
             &resources,
-            command_runtime::rule_features(&world),
+            command_runtime::rule_features(&world_root),
         );
         let command_entity_tags =
             ferraloom_data::datapack::load_tags(&resources, "entity_type", |id, _| {
@@ -305,12 +308,17 @@ impl MinecraftServer {
             .map(|(id, types)| (id.to_string(), types))
             .collect();
 
-        let game_time = world.level_data.data.get_long_or("Time", 0);
+        let game_time = world_root.level_data.data.get_long_or("Time", 0);
         let (access, ops) = AccessLists::load(&options.root)?;
+        let registry_context: Arc<dyn protocol::codec::RegistryContext> = registries.clone();
+        let level_context = Arc::new(
+            Arc::unwrap_or_clone(world.level_context(&resources)?)
+                .with_registry_context(registry_context),
+        );
         let mut level = ServerLevel::new(
             Region::new(&BEHAVIORS),
             "minecraft:overworld",
-            world.level_context(&resources)?,
+            level_context,
         );
         level
             .level
@@ -365,17 +373,17 @@ impl MinecraftServer {
                 warning.problem.message
             );
         }
-        level.level.set_container_resources(
-            Arc::new(ContainerResources {
-                recipes: Arc::clone(&recipe_manager),
-                loot,
-                crafting: Arc::clone(&crafting_context),
-                advancements,
-                recipe_tags,
-                recipe_synchronization: Arc::clone(&recipe_synchronization),
-            }),
-            world.seed,
-        );
+        let container_resources = Arc::new(ContainerResources {
+            recipes: Arc::clone(&recipe_manager),
+            loot,
+            crafting: Arc::clone(&crafting_context),
+            advancements,
+            recipe_tags,
+            recipe_synchronization: Arc::clone(&recipe_synchronization),
+        });
+        level
+            .level
+            .set_container_resources(container_resources.clone(), world.seed);
         game_rules.update_level_rules(level.level.rules_mut());
         world.install_live_environment(
             &mut level.level,
@@ -384,6 +392,10 @@ impl MinecraftServer {
         level
             .distance_manager
             .set_view_distance(properties.int("view-distance"));
+        level.level.configure_entity_tracking(
+            properties.int("view-distance"),
+            properties.int("entity-broadcast-range-percentage"),
+        );
         level.distance_manager.set_simulation_distance(
             properties.int("simulation-distance").clamp(2, 32),
             &mut level.tickets,
@@ -436,7 +448,7 @@ impl MinecraftServer {
             keys: protocol::transport::LoginKeyPair::generate()?,
             session_id: random_uuid(),
             status: status_rx,
-            registries: Arc::new(registries.clone()),
+            registries: Arc::clone(&registries),
             encoding: Arc::new(crate::jobs::JobPool::new("ferraloom-packet-encode", 2)?),
         });
         let net_send = send.clone();
@@ -466,6 +478,55 @@ impl MinecraftServer {
         }
         let mut level =
             crate::generation::runtime::LiveLevel::install(world, level, properties.clone())?;
+        let mut additional_levels = Vec::new();
+        // ResourceKey identity-hash traversal is non-parity order. Keep the
+        // baked WorldDimensions order after the explicit overworld insertion.
+        let dimensions = world_root
+            .dimensions
+            .dimensions
+            .iter()
+            .filter(|stem| stem.name.namespace() != "minecraft" || stem.name.path() != "overworld")
+            .map(|stem| stem.name.to_string().parse::<protocol::Identifier>())
+            .collect::<protocol::Result<Vec<_>>>()?;
+        for dimension in dimensions {
+            let world = world_root.open_dimension(dimension.clone(), &properties)?;
+            let mut bootstrap = ServerLevel::new(
+                Region::new(&BEHAVIORS),
+                dimension.to_string(),
+                world.level_context(&resources)?,
+            );
+            bootstrap.game_time = game_time;
+            initialize_live_level(
+                &mut bootstrap,
+                &world,
+                &resources,
+                &properties,
+                options.unported_behavior,
+            )?;
+            bootstrap
+                .level
+                .set_command_storage(command_storage.snapshot());
+            bootstrap
+                .level
+                .set_container_resources(container_resources.clone(), world.seed);
+            game_rules.update_level_rules(bootstrap.level.rules_mut());
+            world.install_live_environment(
+                &mut bootstrap.level,
+                command_runtime::environment_clock_snapshot(&clocks),
+            )?;
+            bootstrap
+                .distance_manager
+                .set_view_distance(properties.int("view-distance"));
+            bootstrap.distance_manager.set_simulation_distance(
+                properties.int("simulation-distance").clamp(2, 32),
+                &mut bootstrap.tickets,
+            );
+            additional_levels.push(crate::generation::runtime::LiveLevel::install(
+                world,
+                bootstrap,
+                properties.clone(),
+            )?);
+        }
         let shared = Some(level.level.take_shared().map_err(game_error)?);
         let mut server = Self {
             properties: properties.clone(),
@@ -475,7 +536,9 @@ impl MinecraftServer {
             recipe_synchronization,
             crafting_context,
             access,
+            world_root,
             level,
+            additional_levels,
             game_rules,
             shared,
             clocks,
@@ -612,6 +675,37 @@ impl MinecraftServer {
             );
         }
     }
+    /// Port of MinecraftServer#getLevel. An unknown key is nullable, never an
+    /// overworld fallback; callers retain short concrete Level borrows.
+    pub fn get_level(
+        &self,
+        dimension: &protocol::Identifier,
+    ) -> Option<&ferraloom_game::level::Level> {
+        if dimension.as_str() == "minecraft:overworld" {
+            return Some(&self.level.level);
+        }
+        self.additional_levels
+            .iter()
+            .find(|level| level.dimension == dimension.as_str())
+            .map(|level| &level.level)
+    }
+    pub fn get_level_mut(
+        &mut self,
+        dimension: &protocol::Identifier,
+    ) -> Option<&mut ferraloom_game::level::Level> {
+        if dimension.as_str() == "minecraft:overworld" {
+            return Some(&mut self.level.level);
+        }
+        self.additional_levels
+            .iter_mut()
+            .find(|level| level.dimension == dimension.as_str())
+            .map(|level| &mut level.level)
+    }
+    /// Port of MinecraftServer#getAllLevels in insertion order.
+    pub fn get_all_levels(&self) -> impl Iterator<Item = &ferraloom_game::level::Level> {
+        std::iter::once(&self.level.level)
+            .chain(self.additional_levels.iter().map(|level| &level.level))
+    }
     pub fn average_tick_time_nanos(&self) -> i64 {
         self.aggregated_tick_times_nanos / self.tick.clamp(1, 100) as i64
     }
@@ -729,9 +823,6 @@ impl MinecraftServer {
                         close: false,
                         information: client_information(),
                         player: None,
-                        chunks: PlayerChunkSender::default(),
-                        view: HashSet::new(),
-                        center: None,
                         last_keepalive: Instant::now(),
                         keepalive: None,
                         last_action: Instant::now(),
@@ -892,6 +983,11 @@ impl MinecraftServer {
                 }
                 // ChunkMap tracking precedes block events and entities.
                 self.track_players()?;
+                self.level
+                    .level
+                    .tick_entity_tracker()
+                    .map_err(anyhow::Error::new)?;
+                self.apply_level_effects()?;
                 if self.tick_rate_manager.runs_normally() {
                     self.level.level.run_block_events().map_err(game_error)?;
                 }
@@ -1108,9 +1204,9 @@ impl MinecraftServer {
             profile.name,
             self.level.level.next_entity_id(),
             Vec3::new(
-                f64::from(self.level.generation().with_world(|world| world.spawn.x)) + 0.5,
-                f64::from(self.level.generation().with_world(|world| world.spawn.y)),
-                f64::from(self.level.generation().with_world(|world| world.spawn.z)) + 0.5,
+                f64::from(self.world_root.spawn_position().x) + 0.5,
+                f64::from(self.world_root.spawn_position().y),
+                f64::from(self.world_root.spawn_position().z) + 0.5,
             ),
             mode,
         );
@@ -1148,6 +1244,16 @@ impl MinecraftServer {
         }
         let spawn_position = player.position;
         player.snap_to(spawn_position, yaw, pitch);
+        // ServerPlayer#updateOptions publishes canonical Avatar metadata before tracking starts.
+        let information = &self.connections[&connection].information;
+        player.entity_data.set(
+            ferraloom_game::entity::synched_data::PLAYER_MODEL_CUSTOMISATION,
+            information.model_customisation as i8,
+        );
+        player.parent.set_main_arm(match information.main_hand {
+            common::serverbound::HumanoidArm::Left => protocol::entity_data::HumanoidArm::Left,
+            common::serverbound::HumanoidArm::Right => protocol::entity_data::HumanoidArm::Right,
+        });
         player.view_distance = i32::from(self.connections[&connection].information.view_distance);
         player.text_filtering_enabled = self.connections[&connection]
             .information
@@ -1292,7 +1398,19 @@ impl MinecraftServer {
                 })
             });
             for c in self.connections.values_mut() {
-                if matches!(c.phase, Phase::Play(_)) && !c.close && c.chunks.sent.contains(&pos) {
+                let Phase::Play(entity) = c.phase else {
+                    continue;
+                };
+                if !c.close
+                    && self
+                        .level
+                        .level
+                        .entity::<ServerPlayer>(entity)
+                        .map_err(game_error)?
+                        .chunk_sender
+                        .sent
+                        .contains(&pos)
+                {
                     if let Some(light) = &light {
                         c.push(light.clone());
                     }
@@ -1332,7 +1450,9 @@ impl MinecraftServer {
                 LevelEffect::PlayerPacket { recipients, packet } => {
                     for entity in recipients {
                         for &connection in &self.players {
-                            let c = self.connections.get_mut(&connection).unwrap();
+                            let Some(c) = self.connections.get_mut(&connection) else {
+                                continue;
+                            };
                             if matches!(c.phase, Phase::Play(id) if id == entity) && !c.close {
                                 c.push(*packet.clone());
                                 break;
@@ -1341,7 +1461,10 @@ impl MinecraftServer {
                     }
                 }
                 LevelEffect::PlayerSectionChange { player, section } => {
-                    self.level.generation().update_player(player, Some(section));
+                    self.level
+                        .level
+                        .update_player_tracking_section(player, section)
+                        .map_err(game_error)?;
                 }
             }
         }
@@ -1353,14 +1476,29 @@ impl MinecraftServer {
         Ok(())
     }
     /// Apply accepted section transitions immediately, including Y-only moves.
-    /// The commands branch supplies the current SpectatorsGenerateChunks rule
-    /// when its canonical GameRules state lands (vanilla's default is true).
+    /// Native skipPlayer/PlayerMap ignored transitions remain a tracking follow-up;
+    /// this preserves the existing default-true spectators-generate-chunks path.
     pub(super) fn update_player_tickets(&mut self, entity: EntityRef) -> Result<()> {
+        // ChunkMap#move updates audiences before any distance-manager changes.
+        self.level
+            .level
+            .move_tracked_player(entity)
+            .map_err(anyhow::Error::new)?;
         for (player, section) in self.level.level.take_player_section_changes() {
-            self.level.generation().update_player(player, Some(section));
+            self.level
+                .level
+                .update_player_tracking_section(player, section)
+                .map_err(game_error)?;
         }
         let section = ferraloom_util::SectionPos::from_position(self.player(entity)?.position);
-        self.level.generation().update_player(entity, Some(section));
+        self.level
+            .level
+            .update_player_tracking_section(entity, section)
+            .map_err(game_error)?;
+        self.level
+            .level
+            .update_player_chunk_tracking(entity)
+            .map_err(game_error)?;
         Ok(())
     }
     fn update_chunk_tickets(&mut self) -> Result<()> {
@@ -1391,7 +1529,7 @@ impl MinecraftServer {
         if player.saved.is_empty() {
             let position = Vec3::new(
                 player.position.x,
-                f64::from(self.level.generation().with_world(|world| world.spawn.y)),
+                f64::from(self.world_root.spawn_position().y),
                 player.position.z,
             );
             player.set_pos(position);
@@ -1402,7 +1540,6 @@ impl MinecraftServer {
         let pos = player.position;
         let yaw = player.yaw;
         let pitch = player.pitch;
-        let center = player.chunk_position();
         let mode = protocol_game_type(player.game_mode);
         let entity_id = player.network_id;
         let permission = self.shared().ops.permission_level(player.uuid).id();
@@ -1531,18 +1668,17 @@ impl MinecraftServer {
         c.push(cb::Packet::TickingStep(cb::TickingStep {
             tick_steps: VarInt(self.tick_rate_manager.frozen_ticks_to_run()),
         }));
-        c.push(cb::Packet::SetChunkCacheCenter(cb::SetChunkCacheCenter {
-            x: VarInt(center.x),
-            z: VarInt(center.z),
-        }));
-        c.center = Some(center);
-        c.push(cb::Packet::PostEffects(common_cb::PostEffects {
-            post_effects: Vec::new(),
-        }));
         self.level
             .level
             .add_entity(entity, EntityState::Player(Box::new(player)))
             .map_err(game_error)?;
+        ferraloom_game::inventory::send_container_packets(
+            entity,
+            [cb::Packet::PostEffects(common_cb::PostEffects {
+                post_effects: Vec::new(),
+            })],
+            &mut self.level.level,
+        )?;
         ferraloom_game::inventory::initialize_inventory_menu(entity, &mut self.level.level)?;
         use protocol::entity_data::{DataValue, EntityDataItems, EntityDataValue};
         let post_initialization = {
@@ -1561,7 +1697,9 @@ impl MinecraftServer {
                         },
                         DataValue {
                             id: 16,
-                            value: EntityDataValue::Byte(c.information.model_customisation as i8),
+                            value: EntityDataValue::Byte(*player.entity_data.get(
+                                ferraloom_game::entity::synched_data::PLAYER_MODEL_CUSTOMISATION,
+                            )),
                         },
                     ]),
                 }),
@@ -1586,7 +1724,6 @@ impl MinecraftServer {
             "{} joined at {}, {}, {}",
             c.profile.name, pos.x, pos.y, pos.z
         );
-        self.update_player_tickets(entity)?;
         self.players.push(connection);
         self.connections.insert(connection, c);
         self.apply_level_effects()
@@ -1628,6 +1765,17 @@ impl MinecraftServer {
             }
             sb::Packet::SetCarriedItem(packet) => {
                 self.handle_set_carried_item(connection, entity, packet)?
+            }
+            sb::Packet::PlayerAction(packet)
+                if matches!(
+                    packet.action,
+                    PlayerAction::StartDestroyBlock
+                        | PlayerAction::ChangeDestroyDirection
+                        | PlayerAction::AbortDestroyBlock
+                        | PlayerAction::StopDestroyBlock
+                ) =>
+            {
+                self.handle_player_block_action(connection, entity, packet)?;
             }
             sb::Packet::PlayerAction(packet)
                 if matches!(
@@ -1712,10 +1860,11 @@ impl MinecraftServer {
                     .on_ground = p.flags.on_ground
             }
             sb::Packet::ChunkBatchReceived(p) => self
-                .connections
-                .get_mut(&connection)
-                .unwrap()
-                .chunks
+                .level
+                .level
+                .entity_mut::<ServerPlayer>(entity)
+                .map_err(game_error)?
+                .chunk_sender
                 .acknowledge(p.desired_chunks_per_tick),
             sb::Packet::KeepAlive(p) => self.keepalive_reply(connection, p.id)?,
             sb::Packet::PlayerLoaded(_) => {
@@ -1737,6 +1886,19 @@ impl MinecraftServer {
                     .level
                     .entity_mut::<ServerPlayer>(entity)
                     .map_err(game_error)?;
+                // ServerPlayer#updateOptions updates the same canonical accessors after join.
+                player.entity_data.set(
+                    ferraloom_game::entity::synched_data::PLAYER_MODEL_CUSTOMISATION,
+                    p.model_customisation as i8,
+                );
+                player.parent.set_main_arm(match p.main_hand {
+                    common::serverbound::HumanoidArm::Left => {
+                        protocol::entity_data::HumanoidArm::Left
+                    }
+                    common::serverbound::HumanoidArm::Right => {
+                        protocol::entity_data::HumanoidArm::Right
+                    }
+                });
                 player.view_distance = i32::from(p.view_distance);
                 player.text_filtering_enabled = p.text_filtering_enabled;
                 self.connections.get_mut(&connection).unwrap().information = p;
@@ -2732,35 +2894,16 @@ impl MinecraftServer {
             let Phase::Play(entity) = c.phase else {
                 continue;
             };
-            self.update_player_tickets(entity)?;
             let player = self.player(entity)?;
             let center = player.chunk_position();
             let distance = player
                 .view_distance
                 .clamp(2, self.properties.int("view-distance").clamp(2, 32));
-            let desired: HashSet<_> = tracking_view(center, distance).into_iter().collect();
+            self.level
+                .level
+                .update_player_chunk_tracking(entity)
+                .map_err(game_error)?;
             self.request_area(center, distance + 2)?;
-            let c = self.connections.get_mut(&connection).unwrap();
-            if c.center != Some(center) {
-                c.push(cb::Packet::SetChunkCacheCenter(cb::SetChunkCacheCenter {
-                    x: VarInt(center.x),
-                    z: VarInt(center.z),
-                }));
-                c.center = Some(center);
-            }
-            let mut leaving = c.view.difference(&desired).copied().collect::<Vec<_>>();
-            leaving.sort_by_key(|p| p.pack());
-            for pos in leaving {
-                if c.chunks.drop_chunk(pos) {
-                    c.push(cb::Packet::ForgetLevelChunk(cb::ForgetLevelChunk {
-                        pos: play::ChunkPos { x: pos.x, z: pos.z },
-                    }));
-                }
-            }
-            for &pos in desired.difference(&c.view) {
-                c.chunks.pending.insert(pos);
-            }
-            c.view = desired;
         }
         Ok(())
     }
@@ -2912,13 +3055,25 @@ impl MinecraftServer {
             if c.close {
                 continue;
             }
-            if let Phase::Play(_) = c.phase {
-                let positions = c.chunks.next_batch(c.center.unwrap(), |pos| {
-                    // prepareTickingChunk already awaited the FULL neighborhood
-                    // and post-processing; sending does not await its neighbors'
-                    // own ticking futures. Retain the center light dependency.
-                    ready.contains(&pos)
-                });
+            if let Phase::Play(entity) = c.phase {
+                let center = self
+                    .level
+                    .level
+                    .entity::<ServerPlayer>(entity)
+                    .map_err(game_error)?
+                    .chunk_position();
+                let positions = self
+                    .level
+                    .level
+                    .entity_mut::<ServerPlayer>(entity)
+                    .map_err(game_error)?
+                    .chunk_sender
+                    .next_batch(center, |pos| {
+                        // prepareTickingChunk already awaited the FULL neighborhood
+                        // and post-processing; sending does not await its neighbors'
+                        // own ticking futures. Retain the center light dependency.
+                        ready.contains(&pos)
+                    });
                 if !positions.is_empty() {
                     batches.push((connection, positions));
                 }
@@ -3131,8 +3286,8 @@ impl MinecraftServer {
                 Ok(())
             })
             .await??;
-            self.level.generation().update_player(entity, None);
             self.level.level.remove_entity(entity).map_err(game_error)?;
+            self.apply_level_effects()?;
             self.players.retain(|&id| id != connection);
             self.broadcast(cb::Packet::PlayerInfoRemove(cb::PlayerInfoRemove {
                 profile_ids: vec![c.profile.id],
@@ -3181,7 +3336,7 @@ impl MinecraftServer {
             );
             stack
         } else {
-            let spawn = self.level.generation().with_world(|world| world.spawn);
+            let spawn = self.world_root.spawn_position();
             CommandSourceStack::server(
                 4,
                 Vec3::new(f64::from(spawn.x), f64::from(spawn.y), f64::from(spawn.z)),
@@ -3337,6 +3492,9 @@ impl MinecraftServer {
             .generation()
             .with_world_mut(|world| world.begin_save_live_level_context(context))?;
         save_context.await??;
+        self.world_root
+            .begin_save_weather(*self.level.level.weather())
+            .await??;
         self.save_live_entities(flush).await?;
 
         self.save_game_rules().await?;
@@ -3419,9 +3577,9 @@ impl MinecraftServer {
                 .with_world(|world| world.io.store(pos, Some(tag)));
             save.await?;
         }
-        let save = self.level.generation().with_world_mut(|world| {
-            world.begin_save_level_and_players(self.level.game_time, players)
-        });
+        let save = self
+            .world_root
+            .begin_save_level_and_players(self.level.game_time, players);
         save.await??;
         tokio::task::spawn_blocking(move || progress.into_iter().try_for_each(|save| save.write()))
             .await??;
@@ -3560,14 +3718,14 @@ fn initialize_live_level(
     level
         .level
         .set_max_chained_neighbor_updates(properties.int("max-chained-neighbor-updates"));
-    let saved = SavedDataStorage::new(world.access.path().join("data"));
+    let saved = SavedDataStorage::new(world.access.dimension(&level.dimension)?.data);
     let mut border = saved
         .load::<WorldBorder>(border::SAVED_DATA_ID)?
         .map_or_else(WorldBorder::default, |data| data.value().clone());
     let _ = border.apply_initial_settings(level.game_time);
     border.set_absolute_max_size(properties.int("max-world-size"));
     level.level.set_entity_world_border(border);
-    let weather = saved
+    let weather = SavedDataStorage::new(world.access.path().join("data"))
         .load::<WeatherData>("minecraft:weather")?
         .map_or_else(WeatherData::default, |data| *data.value());
     level.level.load_weather(weather);

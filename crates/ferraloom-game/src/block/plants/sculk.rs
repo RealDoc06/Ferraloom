@@ -1,5 +1,8 @@
 //! Ports of SculkSpreader, ChargeCursor and the participating SculkBehaviour methods.
 //! Both level arms use the same cursor algorithm and native caller random stream.
+mod shapes;
+pub(super) use shapes::WATERLOGGED_SCULK;
+
 use super::{multiface, multiface_spreader::SpreaderConfig};
 use crate::{
     block::{LevelAccessRef, LevelReaderRef, UpdateFlags},
@@ -11,7 +14,7 @@ use ferraloom_util::{
     BlockPos, Direction, Vec3,
     collections::{JavaHashMap, Object2IntOpenHashMap},
     random::RandomSource,
-    shapes::{self, BooleanOp},
+    shapes::{self as voxel_shapes, BooleanOp},
 };
 use ferraloom_worldgen::feature::FeatureRandomSelector;
 
@@ -452,8 +455,11 @@ fn attempt_place_sculk(
                         let reader = level.as_reader();
                         let old_shape = reader.collision_shape_without_context(old, at)?;
                         let new_shape = reader.collision_shape_without_context(sculk, at)?;
-                        let _ =
-                            shapes::join_unoptimized(&old_shape, &new_shape, BooleanOp::OnlySecond);
+                        let _ = voxel_shapes::join_unoptimized(
+                            &old_shape,
+                            &new_shape,
+                            BooleanOp::OnlySecond,
+                        );
                     }
                 }
                 play_spread_sound(level, at)?;

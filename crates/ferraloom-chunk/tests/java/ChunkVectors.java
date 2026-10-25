@@ -83,6 +83,24 @@ public class ChunkVectors {
         }
         System.out.println("],");
     }
+    static void uniformSections() throws Exception {
+        var lookup=net.minecraft.data.registries.VanillaRegistries.createWorldLookup();
+        Holder<Biome> plains=lookup.lookupOrThrow(Registries.BIOME).getOrThrow(Biomes.PLAINS);
+        IdMapper<Holder<Biome>> biomes=new IdMapper<>(); biomes.add(plains);
+        System.out.println("pub const UNIFORM_SECTIONS: &[(u16,[u16;4],u8,bool)] = &[");
+        for(Block block:new Block[]{Blocks.AIR,Blocks.STONE,Blocks.WATER,Blocks.LAVA}) {
+            BlockState state=block.defaultBlockState();
+            var strategy=Strategy.createForBlockStates(Block.BLOCK_STATE_REGISTRY);
+            var states=new PalettedContainer<>(state,strategy);
+            var section=new LevelChunkSection(states,new PalettedContainer<>(plains,Strategy.createForBiomes(biomes)));
+            var packed=states.pack(strategy);
+            if(packed.paletteEntries().size()!=1 || packed.paletteEntries().getFirst()!=state) throw new AssertionError();
+            states.count((value,count)->{if(value!=state || count!=4096) throw new AssertionError();});
+            System.out.print("("+Block.getId(state)+","); counts(section);
+            System.out.println(packed.bitsPerEntry()+","+packed.storage().isPresent()+"),");
+        }
+        System.out.println("];");
+    }
     public static void main(String[] args) throws Exception {
         net.minecraft.SharedConstants.tryDetectVersion();
         var output=System.out;
@@ -100,5 +118,6 @@ public class ChunkVectors {
         System.out.println("];\npub const PALETTES: &[(bool,usize,u8,usize,[u16;8],[u64;6],u8,usize,[u16;8],[u64;6])] = &[");
         palette(false); palette(true); System.out.println("];");
         section();
+        uniformSections();
     }
 }

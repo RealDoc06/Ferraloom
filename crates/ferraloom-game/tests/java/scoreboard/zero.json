@@ -1,0 +1,251 @@
+[
+  {
+    "command": "scoreboard players set #one points 0",
+    "value": 0,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.scoreboard.players.set.success.multiple",
+          "with": [
+            {
+              "translate": "chat.square_brackets",
+              "with": [
+                {
+                  "text": "Points",
+                  "hover_event": {
+                    "value": "points",
+                    "action": "show_text"
+                  }
+                }
+              ]
+            },
+            0,
+            0
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "packets": [
+      {
+        "type": "ClientboundSetScorePacket",
+        "hex": "04236f6e6506706f696e7473000000"
+      }
+    ]
+  },
+  {
+    "command": "scoreboard players set #one points 0",
+    "value": 0,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.scoreboard.players.set.success.multiple",
+          "with": [
+            {
+              "translate": "chat.square_brackets",
+              "with": [
+                {
+                  "text": "Points",
+                  "hover_event": {
+                    "value": "points",
+                    "action": "show_text"
+                  }
+                }
+              ]
+            },
+            0,
+            0
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "packets": []
+  },
+  {
+    "command": "scoreboard players add #one points 0",
+    "value": 0,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.scoreboard.players.add.success.single",
+          "with": [
+            0,
+            {
+              "translate": "chat.square_brackets",
+              "with": [
+                {
+                  "text": "Points",
+                  "hover_event": {
+                    "value": "points",
+                    "action": "show_text"
+                  }
+                }
+              ]
+            },
+            "#one",
+            0
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "packets": []
+  },
+  {
+    "command": "scoreboard players remove #one points 0",
+    "value": 0,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.scoreboard.players.remove.success.single",
+          "with": [
+            0,
+            {
+              "translate": "chat.square_brackets",
+              "with": [
+                {
+                  "text": "Points",
+                  "hover_event": {
+                    "value": "points",
+                    "action": "show_text"
+                  }
+                }
+              ]
+            },
+            "#one",
+            0
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "packets": []
+  },
+  {
+    "command": "scoreboard players set #one points -2",
+    "value": -2,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.scoreboard.players.set.success.single",
+          "with": [
+            {
+              "translate": "chat.square_brackets",
+              "with": [
+                {
+                  "text": "Points",
+                  "hover_event": {
+                    "value": "points",
+                    "action": "show_text"
+                  }
+                }
+              ]
+            },
+            "#one",
+            -2
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "packets": [
+      {
+        "type": "ClientboundSetScorePacket",
+        "hex": "04236f6e6506706f696e7473feffffff0f0000"
+      }
+    ]
+  },
+  {
+    "command": "scoreboard players set * points 0",
+    "value": 0,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.scoreboard.players.set.success.multiple",
+          "with": [
+            {
+              "translate": "chat.square_brackets",
+              "with": [
+                {
+                  "text": "Points",
+                  "hover_event": {
+                    "value": "points",
+                    "action": "show_text"
+                  }
+                }
+              ]
+            },
+            0,
+            0
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "packets": [
+      {
+        "type": "ClientboundSetScorePacket",
+        "hex": "04236f6e6506706f696e7473000000"
+      }
+    ]
+  },
+  {
+    "command": "scoreboard players add * points 0",
+    "value": 0,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.scoreboard.players.add.success.multiple",
+          "with": [
+            0,
+            {
+              "translate": "chat.square_brackets",
+              "with": [
+                {
+                  "text": "Points",
+                  "hover_event": {
+                    "value": "points",
+                    "action": "show_text"
+                  }
+                }
+              ]
+            },
+            2
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "packets": []
+  },
+  {
+    "command": "scoreboard players remove * points 0",
+    "value": 0,
+    "feedback": [
+      {
+        "message": {
+          "translate": "commands.scoreboard.players.remove.success.multiple",
+          "with": [
+            0,
+            {
+              "translate": "chat.square_brackets",
+              "with": [
+                {
+                  "text": "Points",
+                  "hover_event": {
+                    "value": "points",
+                    "action": "show_text"
+                  }
+                }
+              ]
+            },
+            2
+          ]
+        },
+        "broadcast": true
+      }
+    ],
+    "packets": []
+  }
+]

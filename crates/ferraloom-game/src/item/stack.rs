@@ -1,185 +1,180 @@
-//! Canonical ItemStack#validateStrict; runtime validation is distinct from its codecs.
-use ferraloom_protocol::component::{ComponentTypeId, DataComponent, ItemStack, ItemStackTemplate};
-use std::fmt;
+//! Handle-based ItemStack operations. Native copy() capture points create values;
+//! mutable use receivers always remain in the caller's canonical operation.
+mod strict;
+use crate::{
+    block::{InteractionResult, UnportedOperation, UseOnContext},
+    entity::{EntityRef, EntityState, player::inventory},
+    inventory::{MenuError, StackOperation, StackRef},
+    level::{Level, LevelError},
+};
+use ferraloom_data::{Item, ItemMethod};
+use ferraloom_protocol::component::{ComponentTypeId, DataComponent};
+pub use strict::{ValidationError, validate_strict};
 
-#[derive(Debug)]
-pub enum ValidationError {
-    Invalid(String),
-    Protocol(ferraloom_protocol::Error),
-}
-impl fmt::Display for ValidationError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Invalid(reason) => f.write_str(reason),
-            Self::Protocol(error) => error.fmt(f),
+/// Port of ItemStack#useOn. Receiver and context.getItemInHand are distinct
+/// captured objects. Every returned stack handle is scoped to this operation.
+pub fn use_on(
+    receiver: StackRef,
+    context: &UseOnContext<'_>,
+    operation: &mut StackOperation<'_>,
+) -> Result<Option<InteractionResult>, LevelError> {
+    let stack = operation.level.stack(receiver).map_err(receiver_error)?;
+    let item = stack.item();
+    if let Some(player) = context.player()
+        && !operation
+            .level
+            .entity::<crate::entity::player::ServerPlayer>(player)?
+            .may_build()
+    {
+        if inventory::component(stack, ComponentTypeId::CAN_PLACE_ON).is_none() {
+            return Ok(Some(InteractionResult::Pass));
         }
+        // AdventureModePredicate's cached BlockInWorld/BE receiver is not yet
+        // ported. Do not substitute a fresh predicate evaluation for that cache.
+        return unported_use_on(item, operation);
     }
-}
-impl std::error::Error for ValidationError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            Self::Protocol(error) => Some(error),
-            Self::Invalid(_) => None,
+    let before = stack.copy_with_count(inventory::count(stack));
+    let Some(behavior) = super::ported_behavior(item, ItemMethod::UseOn) else {
+        return unported_use_on(item, operation);
+    };
+    let Some(mut result) = behavior.use_on(item, receiver, context, operation)? else {
+        return Ok(None);
+    };
+    if let Some(player) = context.player()
+        && let InteractionResult::Success { item_context, .. } = &mut result
+        && item_context.was_item_interaction
+    {
+        crate::stats::award_stat(operation.level, player, crate::stats::Stat::Used(item), 1)?;
+        let transformed = item_context.held_item_transformed_to.unwrap_or(receiver);
+        let used = operation.level.stack(transformed).map_err(receiver_error)?;
+        if inventory::component(&before, ComponentTypeId::USE_REMAINDER).is_some()
+            && !has_infinite_materials(Some(player), operation.level)?
+            && inventory::count(used) < inventory::count(&before)
+        {
+            // The native fresh template and extra-created-item callback belong
+            // to the consumables slice. Preserve the call site until it lands.
+            return unported_use_on(item, operation);
         }
-    }
-}
-impl From<ferraloom_protocol::Error> for ValidationError {
-    fn from(error: ferraloom_protocol::Error) -> Self {
-        Self::Protocol(error)
-    }
-}
-fn maximum(stack: &ItemStack) -> std::result::Result<i32, ValidationError> {
-    Ok(match stack.component(ComponentTypeId::MAX_STACK_SIZE)? {
-        Some(DataComponent::MaxStackSize(value)) => value.0,
-        _ => 1,
-    })
-}
-fn contained<'a>(
-    items: impl IntoIterator<Item = &'a ItemStackTemplate>,
-) -> std::result::Result<(), ValidationError> {
-    for item in items {
-        let stack = ItemStack::new(item.item, item.count, item.components.clone());
-        let maximum = maximum(&stack)?;
-        if item.count > maximum {
-            return Err(ValidationError::Invalid(format!(
-                "Item stack with count of {} was larger than maximum: {maximum}",
-                item.count
-            )));
+        if let Some(DataComponent::UseCooldown(cooldown)) =
+            inventory::component(&before, ComponentTypeId::USE_COOLDOWN)
+        {
+            crate::entity::player::cooldowns::add_cooldown(
+                player,
+                &before,
+                (cooldown.seconds.0 * 20.0) as i32,
+                operation.level,
+            )?;
         }
+        if item_context.held_item_transformed_to.is_none() {
+            // An existing receiver is retained by the outer complete-use frame;
+            // producers of fresh results already root them with operation.own.
+            operation
+                .pin_existing(transformed)
+                .map_err(receiver_error)?;
+        }
+        item_context.held_item_transformed_to = Some(transformed);
+    }
+    Ok(Some(result))
+}
+
+/// Port of ItemStack#consume. The actual owner ability is reread after callbacks.
+pub fn consume(
+    receiver: StackRef,
+    amount: i32,
+    owner: Option<EntityRef>,
+    operation: &mut StackOperation<'_>,
+) -> Result<(), LevelError> {
+    if !has_infinite_materials(owner, operation.level)? {
+        let stack = operation
+            .level
+            .stack_mut(receiver)
+            .map_err(receiver_error)?;
+        inventory::set_count(stack, inventory::count(stack).wrapping_sub(amount));
     }
     Ok(())
 }
-/// Port of ItemStack#validateStrict and #validateComponents. Retain native check
-/// order, including contained-size and bundle-weight errors before the own count.
-pub fn validate_strict(stack: &ItemStack) -> std::result::Result<(), ValidationError> {
-    let maximum = maximum(stack)?;
-    if stack.component(ComponentTypeId::MAX_DAMAGE)?.is_some() && maximum > 1 {
-        return Err(ValidationError::Invalid(
-            "Item cannot be both damageable and stackable".into(),
-        ));
-    }
-    if let Some(DataComponent::Container(items)) = stack.component(ComponentTypeId::CONTAINER)? {
-        contained(items.0.iter().flatten())?;
-    }
-    if let Some(DataComponent::BundleContents(items)) =
-        stack.component(ComponentTypeId::BUNDLE_CONTENTS)?
+
+/// Port of ItemStack#causeUseVibration; the post-use receiver decides whether
+/// USE_EFFECTS is present, then the causer's current position supplies the event.
+pub fn cause_use_vibration(
+    receiver: StackRef,
+    causer: Option<EntityRef>,
+    event: ferraloom_data::registries::game_event::Id,
+    operation: &mut StackOperation<'_>,
+) -> Result<(), LevelError> {
+    let stack = operation.level.stack(receiver).map_err(receiver_error)?;
+    if matches!(inventory::component(stack, ComponentTypeId::USE_EFFECTS), Some(DataComponent::UseEffects(effects)) if effects.interact_vibrations)
     {
-        contained(items)?;
-        if bundle_weight(items)?.is_none() {
-            return Err(ValidationError::Invalid(
-                "Excessive total bundle weight".into(),
-            ));
-        }
-    }
-    if let Some(DataComponent::ChargedProjectiles(items)) =
-        stack.component(ComponentTypeId::CHARGED_PROJECTILES)?
-    {
-        contained(&items.0)?;
-    }
-    let count = stack
-        .0
-        .as_ref()
-        .filter(|_| !stack.is_empty())
-        .map_or(0, |s| s.count);
-    if count > maximum {
-        return Err(ValidationError::Invalid(format!(
-            "Item stack with stack size of {count} was larger than maximum: {maximum}"
-        )));
+        let causer = causer.ok_or(LevelError::Inventory("item vibration causer"))?;
+        let position = operation
+            .level
+            .entity::<crate::entity::EntityData>(causer)?
+            .position;
+        operation
+            .level
+            .game_event(event, position, Some(causer), None)?;
     }
     Ok(())
 }
-// Apache Fraction uses signed 32-bit numerators/denominators, reducing before
-// overflow checks. The checked arithmetic here follows that representable range.
-fn fraction(n: i64, d: i64) -> Option<(i32, i32)> {
-    fn gcd(mut a: i64, mut b: i64) -> i64 {
-        while b != 0 {
-            (a, b) = (b, a % b);
-        }
-        a.abs()
+
+fn has_infinite_materials(owner: Option<EntityRef>, level: &Level) -> Result<bool, LevelError> {
+    if let Some(owner) = owner {
+        level.entity::<crate::entity::LivingEntity>(owner)?;
     }
-    let gcd = gcd(n, d);
-    Some((i32::try_from(n / gcd).ok()?, i32::try_from(d / gcd).ok()?))
+    Ok(
+        match owner.map(|owner| level.entity_state(owner)).transpose()? {
+            Some(EntityState::Player(player)) => player.instabuild(),
+            _ => false,
+        },
+    )
 }
-fn bundle_weight(
-    items: &[ItemStackTemplate],
-) -> std::result::Result<Option<(i32, i32)>, ValidationError> {
-    let mut weight = (0i32, 1i32);
-    for item in items {
-        let item_stack = ItemStack::new(item.item, item.count, item.components.clone());
-        let components = item_stack.components()?;
-        let single = if let Some(DataComponent::BundleContents(items)) =
-            components.get(ComponentTypeId::BUNDLE_CONTENTS)
-        {
-            let Some((n, d)) = bundle_weight(items)? else {
-                return Ok(None);
-            };
-            fraction(i64::from(n) * 16 + i64::from(d), i64::from(d) * 16)
-        } else if matches!(components.get(ComponentTypeId::BEES),Some(DataComponent::Bees(bees)) if !bees.is_empty())
-        {
-            Some((1, 1))
-        } else {
-            let maximum = match components.get(ComponentTypeId::MAX_STACK_SIZE) {
-                Some(DataComponent::MaxStackSize(v)) => v.0,
-                _ => 1,
-            };
-            Some((1, maximum))
-        };
-        let Some((n, d)) =
-            single.and_then(|(n, d)| fraction(i64::from(n) * i64::from(item.count), i64::from(d)))
-        else {
-            return Ok(None);
-        };
-        let Some(next) = fraction(
-            i64::from(weight.0) * i64::from(d) + i64::from(n) * i64::from(weight.1),
-            i64::from(weight.1) * i64::from(d),
-        ) else {
-            return Ok(None);
-        };
-        weight = next;
+
+/// Port of ItemStack#hurtAndBreak's current required effect boundary. Slice C
+/// replaces this body for every caller while retaining the same receiver root.
+pub fn hurt_and_break(
+    receiver: StackRef,
+    damage: i32,
+    _player: EntityRef,
+    slot: ferraloom_protocol::component::EquipmentSlot,
+    operation: &mut StackOperation<'_>,
+) -> Result<(), LevelError> {
+    let item = operation
+        .level
+        .stack(receiver)
+        .map_err(receiver_error)?
+        .item();
+    operation
+        .level
+        .unported_operation(UnportedOperation::ItemHurtAndBreak {
+            item,
+            amount: damage,
+            slot,
+        })
+}
+
+pub(super) fn unported_use_on(
+    item: Item,
+    operation: &mut StackOperation<'_>,
+) -> Result<Option<InteractionResult>, LevelError> {
+    operation
+        .level
+        .unported_operation(UnportedOperation::ItemUseOn(item))?;
+    Ok(None)
+}
+
+pub(super) fn receiver_error(error: MenuError) -> LevelError {
+    match error {
+        MenuError::Level(error) => error,
+        _ => LevelError::Inventory("item use receiver"),
     }
-    Ok(Some(weight))
+}
+
+pub(super) fn item_data_error(item: Item, error: ferraloom_protocol::Error) -> LevelError {
+    LevelError::ItemData {
+        item,
+        source: error.to_string(),
+    }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::commands::{arguments::items::ItemInput, exceptions::error_component};
-    use ferraloom_data::Item;
-    use ferraloom_protocol::component::Persistent;
-
-    #[test]
-    fn strict_validation_and_item_input_reasons_match_native() {
-        let rows: Vec<serde_json::Value> = serde_json::from_str(include_str!(
-            "../commands/vanilla/item-validation-vectors.json"
-        ))
-        .unwrap();
-        for row in &rows {
-            let item = Item::from_name(row["input"]["id"].as_str().unwrap()).unwrap();
-            let source = if item == Item::AIR {
-                ItemStack::default()
-            } else {
-                ItemStack::from_json(&row["input"]).unwrap()
-            };
-            let count = row["count"].as_i64().unwrap() as i32;
-            let value = source.copy_with_count(count);
-            let reason = validate_strict(&value).err().map(|e| e.to_string());
-            assert_eq!(
-                reason.as_deref(),
-                row.get("reason").and_then(serde_json::Value::as_str),
-                "{row}"
-            );
-            let input = ItemInput {
-                item,
-                components: source.components_patch().clone(),
-            };
-            let error = input.create_item_stack(count).err().map(|error| {
-                serde_json::from_str::<serde_json::Value>(
-                    &error_component(&error).to_json().unwrap(),
-                )
-                .unwrap()
-            });
-            assert_eq!(error.as_ref(), row.get("input_error"), "{row}");
-        }
-        assert_eq!(rows.len(), 96);
-    }
-}
+pub(in crate::item) mod tests;

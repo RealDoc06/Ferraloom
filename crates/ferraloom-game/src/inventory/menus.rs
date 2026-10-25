@@ -1001,6 +1001,9 @@ impl AbstractContainerMenu {
         ctx: &mut MenuContext<'_>,
         disconnected: bool,
     ) -> Vec<crate::entity::player::inventory::InventoryEffect> {
+        if self.kind.is_workstation() {
+            return super::workstation_removed::removed_pure(self, ctx, disconnected);
+        }
         use crate::entity::player::inventory::InventoryEffect;
         let mut effects = Vec::new();
         let mut carried = self.take_carried_unrooted();

@@ -16,6 +16,48 @@ pub fn component(stack: &ItemStack, key: ComponentType) -> Option<&DataComponent
         .component(key)
         .expect("generated vanilla item components")
 }
+/// Port of ItemStack#getDestroySpeed, Item#getDestroySpeed and Tool#getMiningSpeed.
+/// Rules without a speed do not resolve their holder set at all.
+pub fn get_destroy_speed(
+    stack: &ItemStack,
+    state: ferraloom_data::BlockState,
+    level: &crate::level::Level,
+) -> std::result::Result<f32, crate::level::LevelError> {
+    if stack.is_empty() {
+        return Ok(1.0);
+    }
+    let Some(DataComponent::Tool(tool)) = component(stack, ComponentType::TOOL) else {
+        return Ok(1.0);
+    };
+    for rule in &tool.rules {
+        if let Some(speed) = rule.speed
+            && tool_blocks_match(&rule.blocks, state, level)?
+        {
+            return Ok(speed.0);
+        }
+    }
+    Ok(tool.default_mining_speed.0)
+}
+
+fn tool_blocks_match(
+    blocks: &ferraloom_protocol::component::BlockSet,
+    state: ferraloom_data::BlockState,
+    level: &crate::level::Level,
+) -> std::result::Result<bool, crate::level::LevelError> {
+    use crate::level::LevelError;
+    use ferraloom_protocol::codec::HolderSet;
+    Ok(match &blocks.0 {
+        HolderSet::Direct(blocks) => blocks.iter().any(|id| id.as_str() == state.block().name()),
+        HolderSet::Named(name) => {
+            let tags = level.block_tags()?;
+            let key = ferraloom_data::datapack::Identifier::new(name.namespace(), name.path())
+                .map_err(|_| LevelError::MissingBlockTag)?;
+            // TODO(5a): registry-aware component decoding must reject missing tags.
+            let tag = tags.resolve_name(&key).ok_or(LevelError::MissingBlockTag)?;
+            tags.contains(tag, state.block())
+        }
+    })
+}
 /// Port of ItemStack#isCorrectToolForDrops, Item#isCorrectToolForDrops and
 /// Tool#isCorrectForDrops. Membership uses the current datapack's block tags.
 pub fn is_correct_tool_for_drops(
@@ -23,8 +65,6 @@ pub fn is_correct_tool_for_drops(
     state: ferraloom_data::BlockState,
     level: &crate::level::Level,
 ) -> std::result::Result<bool, crate::level::LevelError> {
-    use crate::level::LevelError;
-    use ferraloom_protocol::codec::HolderSet;
     if stack.is_empty() {
         return Ok(false);
     }
@@ -35,20 +75,7 @@ pub fn is_correct_tool_for_drops(
         let Some(correct) = rule.correct_for_drops else {
             continue;
         };
-        let matches = match &rule.blocks.0 {
-            HolderSet::Direct(blocks) => {
-                blocks.iter().any(|id| id.as_str() == state.block().name())
-            }
-            HolderSet::Named(name) => {
-                let tags = level.block_tags()?;
-                let key = ferraloom_data::datapack::Identifier::new(name.namespace(), name.path())
-                    .map_err(|_| LevelError::MissingBlockTag)?;
-                // TODO(5a): registry-aware component decoding must reject missing tags.
-                let tag = tags.resolve_name(&key).ok_or(LevelError::MissingBlockTag)?;
-                tags.contains(tag, state.block())
-            }
-        };
-        if matches {
+        if tool_blocks_match(&rule.blocks, state, level)? {
             return Ok(correct);
         }
     }

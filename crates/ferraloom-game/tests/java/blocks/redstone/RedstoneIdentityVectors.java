@@ -26,7 +26,7 @@ import net.minecraft.world.phys.Vec3;
 
 /** Actual native hopper helpers and dispenser ticks. Callback fixtures replace
  * slots synchronously; Java object identity is recorded alongside stack values. */
-public final class RedstoneIdentityVectors extends ServerLevel {
+public class RedstoneIdentityVectors extends ServerLevel {
     static final BlockPos POS = new BlockPos(8,64,8);
     final Map<ChunkPos,LevelChunk> chunks = new HashMap<>();
     final List<Integer> events = new ArrayList<>();

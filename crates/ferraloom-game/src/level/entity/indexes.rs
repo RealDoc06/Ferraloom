@@ -278,8 +278,8 @@ mod tests {
 
     #[test]
     fn owned_index_results_allow_publication_before_iteration_resumes() {
-        let a = EntityRef(1);
-        let b = EntityRef(2);
+        let a = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
+        let b = EntityRef::fixture(crate::level::RegionId::FIXTURE, 2);
         let ticks = EntityTickList::default();
         ticks.add(10, a);
         let tick_snapshot = ticks.snapshot();

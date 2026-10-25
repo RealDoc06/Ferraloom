@@ -1,0 +1,356 @@
+//! Item-side placement subclasses. Block virtuals remain in their family registries.
+use super::{ItemBehavior, required_behavior};
+use crate::{
+    block::{
+        BlockCollisionContext, BlockPlaceContext, InteractionResult, LevelReaderRef, UPDATE_LIMIT,
+        UpdateFlags, UseOnContext,
+    },
+    entity::player::{ServerPlayer, send_build_limit_message},
+    inventory::{StackOperation, StackValue},
+    level::LevelError,
+};
+use ferraloom_data::{
+    Block, BlockClass, BlockState, Item, ItemClass, ItemMethod, registries::sound_event,
+    tags::FluidTags,
+};
+use ferraloom_protocol::component::ItemStack;
+use ferraloom_util::{BlockPos, Direction};
+
+struct DoubleHigh;
+impl ItemBehavior for DoubleHigh {
+    /// Port of DoubleHighBlockItem#placeBlock; clearing the upper half precedes base placement.
+    fn place_block(
+        &self,
+        _item: Item,
+        context: &BlockPlaceContext<'_>,
+        state: BlockState,
+        operation: &mut StackOperation<'_>,
+    ) -> Result<bool, LevelError> {
+        let above = context.clicked_pos().above(1);
+        let reader = LevelReaderRef::Server(operation.level);
+        let fluid = reader.get_fluid_state(above)?;
+        let block = if reader
+            .fluid_tags()?
+            .contains_key(FluidTags::WATER, fluid.fluid_type)
+        {
+            Block::WATER
+        } else {
+            Block::AIR
+        };
+        operation
+            .level
+            .set_block(above, block.default_state(), UpdateFlags(27), UPDATE_LIMIT)?;
+        operation.level.set_block(
+            context.clicked_pos(),
+            state,
+            UpdateFlags::ALL_IMMEDIATE,
+            UPDATE_LIMIT,
+        )
+    }
+}
+static DOUBLE_HIGH: DoubleHigh = DoubleHigh;
+
+struct StandingAndWall;
+impl ItemBehavior for StandingAndWall {
+    fn get_placement_state(
+        &self,
+        item: Item,
+        context: &BlockPlaceContext<'_>,
+        operation: &mut StackOperation<'_>,
+    ) -> Result<Option<BlockState>, LevelError> {
+        standing_or_wall_state(item, context, operation)
+    }
+}
+static STANDING_AND_WALL: StandingAndWall = StandingAndWall;
+
+/// Port of StandingAndWallBlockItem#getPlacementState. The wall query happens
+/// first, even if the first tested direction chooses the standing block.
+fn standing_or_wall_state(
+    item: Item,
+    context: &BlockPlaceContext<'_>,
+    operation: &mut StackOperation<'_>,
+) -> Result<Option<BlockState>, LevelError> {
+    let wall = item.wall_block().expect("standing/wall item constructor");
+    let attachment = item
+        .attachment_direction()
+        .expect("standing/wall attachment");
+    let wall_state = operation.level.get_state_for_placement(wall, context)?;
+    let pos = context.clicked_pos();
+    let directions =
+        context.nearest_looking_directions(&LevelReaderRef::Server(operation.level))?;
+    for direction in directions {
+        if direction == attachment.opposite() {
+            continue;
+        }
+        let possible = if direction == attachment {
+            let block =
+                required_behavior(item, ItemMethod::GetBlock)?.get_block(item, operation)?;
+            operation.level.get_state_for_placement(block, context)?
+        } else {
+            wall_state
+        };
+        if let Some(state) = possible
+            && required_behavior(item, ItemMethod::CanPlaceStandingOrWall)?
+                .can_place_standing_or_wall(
+                    item,
+                    state,
+                    pos,
+                    &LevelReaderRef::Server(operation.level),
+                )?
+        {
+            return Ok(operation
+                .level
+                .is_unobstructed(state, pos, &BlockCollisionContext::empty())?
+                .then_some(state));
+        }
+    }
+    Ok(None)
+}
+
+struct HangingSign;
+impl ItemBehavior for HangingSign {
+    /// Port of HangingSignItem#canPlace's extra wall-hanging support test.
+    fn can_place_standing_or_wall(
+        &self,
+        _item: Item,
+        state: BlockState,
+        pos: BlockPos,
+        level: &LevelReaderRef<'_, '_>,
+    ) -> Result<bool, LevelError> {
+        if state
+            .block()
+            .is_instance_of(BlockClass::WallHangingSignBlock)
+            && !crate::block::containers::wall_hanging_sign_can_place(state, level, pos)?
+        {
+            return Ok(false);
+        }
+        level.can_survive(state, pos)
+    }
+}
+static HANGING_SIGN: HangingSign = HangingSign;
+
+struct GameMaster;
+impl ItemBehavior for GameMaster {
+    /// Port of GameMasterBlockItem#getPlacementState, before any block query.
+    fn get_placement_state(
+        &self,
+        item: Item,
+        context: &BlockPlaceContext<'_>,
+        operation: &mut StackOperation<'_>,
+    ) -> Result<Option<BlockState>, LevelError> {
+        if let Some(player) = context.player()
+            && !operation.level.can_use_game_master_blocks(player)?
+        {
+            return Ok(None);
+        }
+        super::behavior::base_get_placement_state(item, context, operation)
+    }
+}
+static GAME_MASTER: GameMaster = GameMaster;
+
+struct Scaffolding;
+impl ItemBehavior for Scaffolding {
+    fn must_survive(
+        &self,
+        _item: Item,
+        _operation: &mut StackOperation<'_>,
+    ) -> Result<bool, LevelError> {
+        Ok(false)
+    }
+    /// Port of ScaffoldingBlockItem#updatePlacementContext, including the seven
+    /// horizontal-block limit and the different unbounded vertical traversal.
+    fn update_placement_context<'stack>(
+        &self,
+        item: Item,
+        context: BlockPlaceContext<'stack>,
+        operation: &mut StackOperation<'_>,
+    ) -> Result<Option<BlockPlaceContext<'stack>>, LevelError> {
+        let pos = context.clicked_pos();
+        let block = required_behavior(item, ItemMethod::GetBlock)?.get_block(item, operation)?;
+        if operation.level.get_block_state(pos)?.block() != block {
+            return Ok((crate::block::building::scaffolding_distance(
+                &LevelReaderRef::Server(operation.level),
+                pos,
+            )? != 7)
+                .then_some(context));
+        }
+        let reader = LevelReaderRef::Server(operation.level);
+        let direction = if context.is_secondary_use_active(&reader)? {
+            if context.is_inside() {
+                context.clicked_face().opposite()
+            } else {
+                context.clicked_face()
+            }
+        } else if context.clicked_face() == Direction::Up {
+            context.horizontal_direction(&reader)?
+        } else {
+            Direction::Up
+        };
+        let mut distance = 0;
+        let mut target = pos.relative(direction, 1);
+        while distance < 7 {
+            // Level#isInWorldBounds is narrower than its chunk-coordinate
+            // isInValidBounds check; preserve the gameplay horizontal limits.
+            if target.y < operation.level.min_build_height()
+                || target.y > operation.level.max_build_height()
+                || !(-30_000_000..30_000_000).contains(&target.x)
+                || !(-30_000_000..30_000_000).contains(&target.z)
+            {
+                if let Some(player) = context.player()
+                    && target.y > operation.level.max_build_height()
+                {
+                    send_build_limit_message(
+                        player,
+                        true,
+                        operation.level.max_build_height(),
+                        operation.level,
+                    )?;
+                }
+                break;
+            }
+            let state = operation.level.get_block_state(target)?;
+            if state.block()
+                != required_behavior(item, ItemMethod::GetBlock)?.get_block(item, operation)?
+            {
+                let reader = LevelReaderRef::Server(operation.level);
+                return if reader.can_be_replaced(state, &context)? {
+                    Ok(Some(BlockPlaceContext::at(
+                        &reader, &context, target, direction,
+                    )?))
+                } else {
+                    Ok(None)
+                };
+            }
+            target = target.relative(direction, 1);
+            if direction.axis().is_horizontal() {
+                distance += 1;
+            }
+        }
+        Ok(None)
+    }
+}
+static SCAFFOLDING: Scaffolding = Scaffolding;
+
+struct SolidBucket;
+impl ItemBehavior for SolidBucket {
+    fn use_on(
+        &self,
+        item: Item,
+        _receiver: crate::inventory::StackRef,
+        context: &UseOnContext<'_>,
+        operation: &mut StackOperation<'_>,
+    ) -> Result<Option<InteractionResult>, LevelError> {
+        let result = super::block_item::use_on(item, context, operation)?;
+        if result
+            .as_ref()
+            .is_some_and(InteractionResult::consumes_action)
+            && let Some(player) = context.player()
+        {
+            let receiver = if operation.level.entity::<ServerPlayer>(player)?.instabuild() {
+                let receiver = super::block_item::retained(context.stack_view())?;
+                operation
+                    .pin_existing(receiver)
+                    .map_err(super::stack::receiver_error)?;
+                receiver
+            } else {
+                operation
+                    .own(player, ItemStack::new(Item::BUCKET, 1, Default::default()))
+                    .map_err(super::stack::receiver_error)?
+            };
+            operation
+                .level
+                .replace_stack_object(
+                    crate::block::interaction::hand_slot(operation.level, player, context.hand())?,
+                    StackValue::Existing(receiver),
+                )
+                .map_err(super::stack::receiver_error)?;
+        }
+        Ok(result)
+    }
+    fn get_place_sound(
+        &self,
+        item: Item,
+        _state: BlockState,
+        _operation: &mut StackOperation<'_>,
+    ) -> Result<sound_event::Id, LevelError> {
+        Ok(item.place_sound().expect("solid bucket constructor"))
+    }
+}
+static SOLID_BUCKET: SolidBucket = SolidBucket;
+
+struct PlaceOnWater;
+impl ItemBehavior for PlaceOnWater {
+    /// Port of PlaceOnWaterBlockItem#use's source-fluid ray and explicit base
+    /// BlockItem#useOn call. withPosition changes only the hit block position.
+    fn use_item(
+        &self,
+        item: Item,
+        player: crate::entity::EntityRef,
+        hand: ferraloom_protocol::play::InteractionHand,
+        operation: &mut StackOperation<'_>,
+    ) -> Result<Option<InteractionResult>, LevelError> {
+        let hit = super::get_player_pov_hit_result(
+            operation.level,
+            player,
+            crate::level::clip::ClipFluid::SourceOnly,
+        )?;
+        let above = hit.block_pos.above(1);
+        let hit = hit.with_position(above);
+        let held = operation
+            .pin(crate::block::interaction::hand_slot(
+                operation.level,
+                player,
+                hand,
+            )?)
+            .map_err(super::stack::receiver_error)?;
+        let context = UseOnContext::new_retained(
+            Some(player),
+            hand,
+            held,
+            crate::block::PlacementHit {
+                pos: hit.block_pos,
+                face: hit.direction,
+                location: hit.location,
+                inside: hit.inside,
+            },
+        );
+        super::block_item::use_on(item, &context, operation)
+    }
+    /// Port of PlaceOnWaterBlockItem#useOn. Its air-use raycast is separate.
+    fn use_on(
+        &self,
+        _item: Item,
+        _receiver: crate::inventory::StackRef,
+        _context: &UseOnContext<'_>,
+        _operation: &mut StackOperation<'_>,
+    ) -> Result<Option<InteractionResult>, LevelError> {
+        Ok(Some(InteractionResult::Pass))
+    }
+}
+static PLACE_ON_WATER: PlaceOnWater = PlaceOnWater;
+
+pub(super) fn ported_behavior(
+    method: ItemMethod,
+    owner: ItemClass,
+) -> Option<&'static dyn ItemBehavior> {
+    match (method, owner) {
+        (ItemMethod::PlaceBlock, ItemClass::DoubleHighBlockItem) => Some(&DOUBLE_HIGH),
+        (
+            ItemMethod::GetPlacementState | ItemMethod::CanPlaceStandingOrWall,
+            ItemClass::StandingAndWallBlockItem,
+        ) => Some(&STANDING_AND_WALL),
+        (ItemMethod::CanPlaceStandingOrWall, ItemClass::HangingSignItem) => Some(&HANGING_SIGN),
+        (ItemMethod::GetPlacementState, ItemClass::GameMasterBlockItem) => Some(&GAME_MASTER),
+        (
+            ItemMethod::UpdatePlacementContext | ItemMethod::MustSurvive,
+            ItemClass::ScaffoldingBlockItem,
+        ) => Some(&SCAFFOLDING),
+        (ItemMethod::UseOn | ItemMethod::GetPlaceSound, ItemClass::SolidBucketItem) => {
+            Some(&SOLID_BUCKET)
+        }
+        (ItemMethod::UseOn | ItemMethod::Use, ItemClass::PlaceOnWaterBlockItem) => {
+            Some(&PLACE_ON_WATER)
+        }
+        _ => None,
+    }
+}

@@ -39,7 +39,7 @@ fn native_stop_using_item_preserves_flags_metadata_and_use_vibration_conditions(
         let mut level = crate::entity::tests::level(false);
         game_events::observe(&mut level);
         level.set_unported_behavior(UnportedBehavior::Strict);
-        let entity = EntityRef(1);
+        let entity = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
         let player = ServerPlayer::new(
             Uuid::new(1, 2),
             "using".into(),
