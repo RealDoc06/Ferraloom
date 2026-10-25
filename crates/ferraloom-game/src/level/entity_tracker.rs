@@ -501,6 +501,22 @@ mod tests {
                 .unwrap();
             Ok(())
         }
+        fn stop_seen_by_player(
+            &self,
+            entity: EntityRef,
+            player: EntityRef,
+            level: &mut Level,
+        ) -> Result<(), LevelError> {
+            let network = level.entity::<EntityData>(entity)?.network_id;
+            level.emit_tracking_message(
+                vec![player],
+                ClientboundMessage::Packet(Box::new(Packet::EntityEvent(packet::EntityEvent {
+                    entity_id: network,
+                    event_id: 62,
+                }))),
+            );
+            Ok(())
+        }
     }
     fn fixture() -> (Level, EntityRef, EntityRef) {
         static BEHAVIORS: Behaviors =
@@ -530,7 +546,7 @@ mod tests {
         level.take_effects();
         let entity = level.next_entity_ref();
         let mut item = ItemEntity::new(level.next_entity_id(), 3);
-        item.parent.set_pos(Vec3::new(1.0, 64.0, 1.0));
+        item.parent.set_pos(Vec3::new(0.0, 64.0, 0.0));
         item.set_item(ItemStack::new(Item::STONE, 3, Default::default()));
         level
             .add_entity(entity, EntityState::Item(Box::new(item)))
@@ -584,5 +600,86 @@ mod tests {
             .remove(&ChunkPos::ZERO);
         level.move_tracked_player(viewer).unwrap();
         assert!(level.take_effects().iter().any(|effect| matches!(effect, LevelEffect::PlayerPacket { packet, .. } if matches!(packet.as_ref(), Packet::AddEntity(_)))));
+    }
+    #[test]
+    fn native_audience_boundary_pending_chunk_and_callback_packet_order() {
+        let (mut level, viewer, entity) = fixture();
+        level
+            .entity_mut::<ServerPlayer>(viewer)
+            .unwrap()
+            .view_distance = 2;
+        level
+            .entity_mut::<EntityData>(viewer)
+            .unwrap()
+            .set_pos(Vec3::new(32.0, 100000.0, 0.0));
+        level.add_tracked_entity(entity).unwrap();
+        let network = level.entity::<EntityData>(entity).unwrap().network_id;
+        let mut packer = ferraloom_protocol::play::BundlePacker::default();
+        for (index, line) in include_str!("../../tests/java/entity/tracker/vectors.tsv")
+            .lines()
+            .filter(|line| line.starts_with("audience\t"))
+            .enumerate()
+        {
+            let x = if index == 2 {
+                f64::from_bits(32.0_f64.to_bits() + 1)
+            } else {
+                32.0
+            };
+            level
+                .entity_mut::<EntityData>(viewer)
+                .unwrap()
+                .set_pos(Vec3::new(x, 100000.0, 0.0));
+            if index == 3 {
+                level
+                    .entity_mut::<ServerPlayer>(viewer)
+                    .unwrap()
+                    .chunk_sender
+                    .pending
+                    .insert(ChunkPos::ZERO);
+            }
+            if index == 4 {
+                level
+                    .entity_mut::<ServerPlayer>(viewer)
+                    .unwrap()
+                    .chunk_sender
+                    .pending
+                    .remove(&ChunkPos::ZERO);
+            }
+            if index != 0 {
+                level.update_tracked_player(network, viewer).unwrap();
+            }
+            let mut observed = Vec::new();
+            for effect in level.take_effects() {
+                if let LevelEffect::PlayerPacket { packet, .. } = effect {
+                    if let Some(message) = packer.push(*packet).unwrap() {
+                        observed.push(match message {
+                            ClientboundMessage::Packet(packet) => match *packet {
+                                Packet::EntityEvent(event) => format!("event:{}", event.event_id),
+                                Packet::RemoveEntities(_) => "remove".into(),
+                                packet => panic!("unexpected {packet:?}"),
+                            },
+                            ClientboundMessage::Bundle(packets) => format!(
+                                "bundle:{}",
+                                packets
+                                    .iter()
+                                    .map(|packet| match packet {
+                                        Packet::AddEntity(_) => "ClientboundAddEntityPacket",
+                                        Packet::SetEntityData(_) =>
+                                            "ClientboundSetEntityDataPacket",
+                                        packet => panic!("unexpected {packet:?}"),
+                                    })
+                                    .collect::<Vec<_>>()
+                                    .join(",")
+                            ),
+                        });
+                    }
+                }
+            }
+            assert_eq!(
+                observed.join("|"),
+                line.splitn(3, '\t').nth(2).unwrap(),
+                "native audience case {index}"
+            );
+        }
     }
 }

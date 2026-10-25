@@ -1,0 +1,9 @@
+audience	0	event:60|bundle:ClientboundAddEntityPacket,ClientboundSetEntityDataPacket|event:61
+audience	1	
+audience	2	event:62|remove
+audience	3	
+audience	4	event:60|bundle:ClientboundAddEntityPacket,ClientboundSetEntityDataPacket|event:61
+damage	generic	18	-1	-1	-
+damage	player	34	7	7	-
+damage	indirect	0	7	12	-
+damage	position	10	-1	-1	3ff4000000000000,404f800000000000,8000000000000000
