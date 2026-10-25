@@ -1,5 +1,5 @@
 //! Proto-chunk entity insertion at FULL promotion, through canonical factories.
-use super::Level;
+use super::{EntityPublication, Level};
 use crate::entity::{
     EntityRef,
     persistence::{self, EntityPersistenceError},
@@ -77,16 +77,21 @@ impl Level {
         pos: ChunkPos,
         entities: Vec<CompoundTag>,
     ) -> Result<(), WorldgenEntityLoadError> {
-        self.add_worldgen_chunk_entities_shared(pos, entities)
+        EntityPublication::Mutable(self).publish_worldgen_entities(pos, entities)
     }
-
-    /// The same native postLoad stream during a suspended shared chunk read.
-    /// Each owned constructor is registered before its children are created;
-    /// state and captured passenger views remain stable during nested loads.
-    /// The chunk publisher calls this once, before BE/tick publication and FULL
-    /// completion; it must not replay a completed postLoad on a nested poll.
+    /// Shared postLoad can publish hidden entities; a required tracking callback
+    /// needs the pipeline's main-thread mutable continuation.
     pub fn add_worldgen_chunk_entities_shared(
         &self,
+        pos: ChunkPos,
+        entities: Vec<CompoundTag>,
+    ) -> Result<(), WorldgenEntityLoadError> {
+        EntityPublication::Shared(self).publish_worldgen_entities(pos, entities)
+    }
+}
+impl EntityPublication<'_> {
+    fn publish_worldgen_entities(
+        &mut self,
         pos: ChunkPos,
         entities: Vec<CompoundTag>,
     ) -> Result<(), WorldgenEntityLoadError> {
@@ -115,7 +120,7 @@ impl Level {
     }
 
     fn load_worldgen_entity_tree(
-        &self,
+        &mut self,
         tag: CompoundTag,
     ) -> Result<Option<EntityRef>, EntityPersistenceError> {
         if entity_type(&tag).is_none() {
@@ -141,7 +146,7 @@ impl Level {
         {
             self.retain_unmanaged_entity(entity, state);
         } else {
-            self.add_entity_with_origin(entity, state, false)?;
+            self.publish(entity, state, false, "add_worldgen_chunk_entities_shared")?;
         }
         for passenger in passengers.iter().filter_map(Tag::as_compound) {
             if let Some(passenger) = self.load_worldgen_entity_tree(passenger.clone())? {
@@ -339,8 +344,8 @@ mod tests {
         assert_eq!(created_ids(&level, &events), expected_created(&native));
     }
     #[test]
-    fn shared_worldgen_registration_publishes_tick_and_visible_indexes_immediately() {
-        let level = level();
+    fn mutable_worldgen_registration_publishes_tick_and_visible_indexes_immediately() {
+        let mut level = level();
         let pos = ChunkPos::new(0, 0);
         level
             .update_entity_chunk_status(pos, Visibility::Ticking)
@@ -353,9 +358,7 @@ mod tests {
                 Uuid::new(1, 2),
             ))])),
         );
-        level
-            .add_worldgen_chunk_entities_shared(pos, vec![root])
-            .unwrap();
+        level.add_worldgen_chunk_entities(pos, vec![root]).unwrap();
         assert_eq!(level.all_entities(), [EntityRef(1), EntityRef(2)]);
         assert_eq!(
             level.region().entity_tick_list.snapshot(),
@@ -376,6 +379,29 @@ mod tests {
             level.entity_chunk_load_status(pos),
             ChunkLoadStatus::Pending
         );
+    }
+    #[test]
+    fn shared_visible_publication_requires_the_mutable_tracker_continuation() {
+        let mut level = level();
+        let pos = ChunkPos::ZERO;
+        level
+            .update_entity_chunk_status(pos, Visibility::Tracked)
+            .unwrap();
+        let input = vec![tag("minecraft:tnt", Uuid::new(4, 5))];
+        let error = level
+            .add_worldgen_chunk_entities_shared(pos, input.clone())
+            .unwrap_err();
+        assert!(matches!(
+            error.source,
+            EntityPersistenceError::Level(
+                crate::level::LevelError::UnsupportedSharedEntityTracking(
+                    "add_worldgen_chunk_entities_shared"
+                )
+            )
+        ));
+        assert_eq!(error.entities, input);
+        assert!(level.all_entities().is_empty());
+        assert!(level.take_entity_management_events().is_empty());
     }
     #[test]
     fn shared_worldgen_required_context_fails_before_any_constructor() {

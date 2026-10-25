@@ -11,6 +11,8 @@ use crate::entity::{EntityData, EntityRef, EntityState, RemovalReason};
 
 mod indexes;
 mod persistent;
+mod publication;
+use publication::EntityPublication;
 mod push;
 mod worldgen;
 use indexes::EntityRegistration;
@@ -259,13 +261,35 @@ impl Level {
         self.add_entity_with_origin(entity, state, false)
     }
     fn add_entity_with_origin(
-        &self,
+        &mut self,
         entity: EntityRef,
         state: EntityState,
         loaded: bool,
     ) -> Result<(), LevelError> {
+        let status = self.publish_entity_data(entity, state, loaded)?;
+        if status.is_accessible() {
+            self.region()
+                .entities
+                .registration
+                .push_event(EntityManagementEvent::TrackingStart(entity));
+            self.add_tracked_entity(entity)
+                .map_err(|error| error.into_level(self))?;
+        }
+        if status.is_ticking() {
+            self.start_entity_ticking(entity);
+        }
+        Ok(())
+    }
+    /// Register canonical state without crossing a mutable callback boundary.
+    /// Shared publication calls this only for hidden entities.
+    fn publish_entity_data(
+        &self,
+        entity: EntityRef,
+        state: EntityState,
+        loaded: bool,
+    ) -> Result<Visibility, LevelError> {
         let region = self.region();
-        let network_id = region.entities.add(entity, state)?;
+        region.entities.add(entity, state)?;
         let base = region.entities.get(&entity).unwrap().as_entity();
         let status = if base.entity_type == ferraloom_data::EntityType::PLAYER {
             Visibility::Ticking
@@ -278,20 +302,7 @@ impl Level {
                 .registration
                 .push_event(EntityManagementEvent::Created(entity));
         }
-        if status.is_accessible() {
-            region
-                .entities
-                .registration
-                .push_event(EntityManagementEvent::TrackingStart(entity));
-        }
-        if status.is_ticking() {
-            region.entity_tick_list.add(network_id, entity);
-            region
-                .entities
-                .registration
-                .push_event(EntityManagementEvent::TickingStart(entity));
-        }
-        Ok(())
+        Ok(status)
     }
     fn retain_unmanaged_entity(&self, entity: EntityRef, state: EntityState) {
         let storage = &self.region().entities;
@@ -313,7 +324,7 @@ impl Level {
         self.entity::<EntityData>(entity)
             .is_ok_and(|base| base.entity_type == ferraloom_data::EntityType::PLAYER)
     }
-    fn start_entity_tracking(&self, entity: EntityRef) -> Result<(), LevelError> {
+    fn start_entity_tracking(&mut self, entity: EntityRef) -> Result<(), LevelError> {
         let base = self.entity::<EntityData>(entity)?;
         let (network, uuid) = (base.network_id, base.uuid);
         let storage = &self.region().entities;
@@ -323,9 +334,12 @@ impl Level {
         storage
             .registration
             .push_event(EntityManagementEvent::TrackingStart(entity));
-        Ok(())
+        self.add_tracked_entity(entity)
+            .map_err(|error| error.into_level(self))
     }
-    fn stop_entity_tracking(&self, entity: EntityRef) {
+    fn stop_entity_tracking(&mut self, entity: EntityRef) -> Result<(), LevelError> {
+        self.remove_tracked_entity(entity)
+            .map_err(|error| error.into_level(self))?;
         let storage = &self.region().entities;
         storage
             .registration
@@ -333,6 +347,7 @@ impl Level {
         storage
             .lookup
             .remove(storage.states.get(&entity).unwrap().as_entity());
+        Ok(())
     }
     fn start_entity_ticking(&self, entity: EntityRef) {
         let region = self.region();
@@ -367,45 +382,19 @@ impl Level {
     /// Port of PersistentEntitySectionManager#updateChunkStatus. This is driven
     /// by FullChunkStatus/ticket eligibility, independently of loaded chunks.
     pub fn update_entity_chunk_status(
+        &mut self,
+        pos: ChunkPos,
+        status: Visibility,
+    ) -> Result<(), LevelError> {
+        EntityPublication::Mutable(self).update_entity_chunk_status(pos, status)
+    }
+    /// Shared acquisition can change visibility only when no tracker callback is required.
+    pub fn update_entity_chunk_status_shared(
         &self,
         pos: ChunkPos,
         status: Visibility,
     ) -> Result<(), LevelError> {
-        let storage = &self.region().entities;
-        storage.persistent.update_visibility(pos, status);
-        let sections = storage.sections.sections_in_chunk(pos);
-        for section_key in sections {
-            let (previous, entities) = self
-                .region()
-                .entities
-                .sections
-                .replace_visibility(section_key, status)
-                .expect("existing section");
-            let entities: Vec<_> = entities
-                .into_iter()
-                .filter(|id| !self.always_ticking(*id))
-                .collect();
-            if previous.is_ticking() && !status.is_ticking() {
-                for &id in &entities {
-                    self.stop_entity_ticking(id);
-                }
-            }
-            if previous.is_accessible() && !status.is_accessible() {
-                for &id in &entities {
-                    self.stop_entity_tracking(id);
-                }
-            } else if !previous.is_accessible() && status.is_accessible() {
-                for &id in &entities {
-                    self.start_entity_tracking(id)?;
-                }
-            }
-            if !previous.is_ticking() && status.is_ticking() {
-                for &id in &entities {
-                    self.start_entity_ticking(id);
-                }
-            }
-        }
-        Ok(())
+        EntityPublication::Shared(self).update_entity_chunk_status(pos, status)
     }
     pub fn remove_entity(&mut self, entity: EntityRef) -> Result<(), LevelError> {
         self.remove_entity_with_reason(entity, RemovalReason::Discarded)
@@ -443,7 +432,7 @@ impl Level {
                 self.stop_entity_ticking(entity);
             }
             if status.is_accessible() {
-                self.stop_entity_tracking(entity);
+                self.stop_entity_tracking(entity)?;
             }
             if reason.should_destroy() {
                 self.region_mut()
@@ -485,7 +474,7 @@ impl Level {
                     (previous_status, status)
                 };
                 if before.is_accessible() && !after.is_accessible() {
-                    self.stop_entity_tracking(entity);
+                    self.stop_entity_tracking(entity)?;
                 } else if !before.is_accessible() && after.is_accessible() {
                     self.start_entity_tracking(entity)?;
                 }
@@ -665,6 +654,76 @@ impl Level {
 
 #[cfg(test)]
 mod tick_tests;
+
+impl EntityPublication<'_> {
+    pub(super) fn update_entity_chunk_status(
+        &mut self,
+        pos: ChunkPos,
+        status: Visibility,
+    ) -> Result<(), LevelError> {
+        if matches!(self, EntityPublication::Shared(_)) {
+            for key in self.region().entities.sections.sections_in_chunk(pos) {
+                let previous = self
+                    .region()
+                    .entities
+                    .sections
+                    .section_visibility(key)
+                    .unwrap();
+                if previous.is_accessible() != status.is_accessible()
+                    && self
+                        .region()
+                        .entities
+                        .sections
+                        .chunk_entities(pos)
+                        .into_iter()
+                        .any(|id| {
+                            self.region().entities.sections.member_section(id) == Some(key)
+                                && !self.always_ticking(id)
+                        })
+                {
+                    return Err(LevelError::UnsupportedSharedEntityTracking(
+                        "update_entity_chunk_status_shared",
+                    ));
+                }
+            }
+        }
+        let storage = &self.region().entities;
+        storage.persistent.update_visibility(pos, status);
+        let sections = storage.sections.sections_in_chunk(pos);
+        for section_key in sections {
+            let (previous, entities) = self
+                .region()
+                .entities
+                .sections
+                .replace_visibility(section_key, status)
+                .expect("existing section");
+            let entities: Vec<_> = entities
+                .into_iter()
+                .filter(|id| !self.always_ticking(*id))
+                .collect();
+            if previous.is_ticking() && !status.is_ticking() {
+                for &id in &entities {
+                    self.stop_entity_ticking(id);
+                }
+            }
+            if previous.is_accessible() && !status.is_accessible() {
+                for &id in &entities {
+                    self.stop_tracking(id)?;
+                }
+            } else if !previous.is_accessible() && status.is_accessible() {
+                for &id in &entities {
+                    self.start_tracking(id)?;
+                }
+            }
+            if !previous.is_ticking() && status.is_ticking() {
+                for &id in &entities {
+                    self.start_entity_ticking(id);
+                }
+            }
+        }
+        Ok(())
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -876,18 +935,18 @@ mod identity_tests {
         };
         let original = level.next_entity_ref();
         level
-            .add_entity_with_origin(original, make_state(), false)
+            .publish_entity_data(original, make_state(), false)
             .unwrap();
         let borrowed = level.entity::<EntityData>(original).unwrap();
         let original_uuid = borrowed.uuid;
         let passenger_view = borrowed.passengers.as_slice();
         for _ in 0..1024 {
             level
-                .add_entity_with_origin(level.next_entity_ref(), make_state(), false)
+                .publish_entity_data(level.next_entity_ref(), make_state(), false)
                 .unwrap();
         }
         assert_eq!(
-            level.add_entity_with_origin(original, make_state(), false),
+            level.publish_entity_data(original, make_state(), false),
             Err(LevelError::DuplicateEntity(original))
         );
         assert!(std::ptr::eq(
