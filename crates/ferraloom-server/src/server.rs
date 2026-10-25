@@ -286,6 +286,19 @@ impl MinecraftServer {
             )
         };
         let clocks = command_runtime::load_clocks(&world, &resources)?;
+        // Older bossbar storage is migrated by the datafix workstream, never runtime fallback.
+        let custom_boss_events = {
+            use ferraloom_game::bossbar::{BossEventsSaveData, CustomBossEvents};
+            let storage =
+                ferraloom_storage::SavedDataStorage::new(world.access.path().join("data"));
+            CustomBossEvents::load(
+                storage
+                    .load::<BossEventsSaveData>(CustomBossEvents::STORAGE_ID)?
+                    .map(|saved| saved.value().clone())
+                    .unwrap_or_default(),
+                random_uuid,
+            )
+        };
         let command_storage_folder = world.access.path().join("data");
         let command_storage = tokio::task::spawn_blocking(move || {
             ferraloom_game::commands::storage::CommandStorage::preload(&command_storage_folder)
@@ -314,7 +327,11 @@ impl MinecraftServer {
         );
         level
             .level
-            .install_shared(Box::new(ferraloom_game::ServerShared { scoreboard, ops }));
+            .install_shared(Box::new(ferraloom_game::ServerShared {
+                scoreboard,
+                custom_boss_events,
+                ops,
+            }));
         level.game_time = game_time;
         level.level.set_command_storage(command_storage.snapshot());
         initialize_live_level(
@@ -603,6 +620,7 @@ impl MinecraftServer {
     }
     fn return_server_shared(&mut self, lent: bool) {
         self.drain_scoreboard_packets();
+        self.drain_bossbar_packets();
         if lent {
             self.shared = Some(
                 self.level
@@ -1543,6 +1561,21 @@ impl MinecraftServer {
             .level
             .add_entity(entity, EntityState::Player(Box::new(player)))
             .map_err(game_error)?;
+        // PlayerList#placeNewPlayer: boss events follow addNewPlayer, before initInventoryMenu.
+        self.shared_mut().custom_boss_events.on_player_connect(
+            ferraloom_game::bossbar::BossPlayer {
+                entity,
+                uuid: c.profile.id,
+                network_id: entity_id,
+            },
+        );
+        for (target, packet) in self.shared_mut().custom_boss_events.drain_packets() {
+            if target == entity {
+                c.push(packet);
+            } else {
+                self.send_bossbar_packet(target, packet);
+            }
+        }
         ferraloom_game::inventory::initialize_inventory_menu(entity, &mut self.level.level)?;
         use protocol::entity_data::{DataValue, EntityDataItems, EntityDataValue};
         let post_initialization = {
@@ -3108,6 +3141,11 @@ impl MinecraftServer {
             && let Phase::Play(entity) = c.phase
         {
             let player = self.player(entity)?;
+            let boss_player = ferraloom_game::bossbar::BossPlayer {
+                entity,
+                uuid: player.uuid,
+                network_id: player.network_id,
+            };
             let progress_path = self
                 .level
                 .generation()
@@ -3130,6 +3168,10 @@ impl MinecraftServer {
             self.level.generation().update_player(entity, None);
             self.level.level.remove_entity(entity).map_err(game_error)?;
             self.players.retain(|&id| id != connection);
+            self.shared_mut()
+                .custom_boss_events
+                .on_player_disconnect(boss_player);
+            self.drain_bossbar_packets();
             self.broadcast(cb::Packet::PlayerInfoRemove(cb::PlayerInfoRemove {
                 profile_ids: vec![c.profile.id],
             }));
@@ -3332,6 +3374,7 @@ impl MinecraftServer {
         self.save_live_entities(flush).await?;
 
         self.save_game_rules().await?;
+        self.save_custom_boss_events().await?;
         self.save_command_storage().await?;
         self.save_command_tickets().await?;
         let positions = self

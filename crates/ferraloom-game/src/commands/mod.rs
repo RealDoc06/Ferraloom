@@ -1,6 +1,7 @@
 //! Vanilla command parsing and synchronous execution support.
 //! Callers enter the server-exclusive lane before selector evaluation or mutation.
 pub mod arguments;
+pub mod bossbar;
 pub mod builtins;
 pub mod clocks;
 pub mod components;
