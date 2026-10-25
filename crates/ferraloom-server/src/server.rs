@@ -195,7 +195,7 @@ impl Connection {
 pub struct MinecraftServer {
     properties: Arc<ServerProperties>,
     root: PathBuf,
-    registries: RegistrySet,
+    registries: Arc<RegistrySet>,
     recipe_manager: Arc<RecipeManager>,
     recipe_synchronization: Arc<RecipeSynchronization>,
     crafting_context: Arc<RuntimeCraftingContext>,
@@ -264,7 +264,7 @@ impl MinecraftServer {
         );
         let jar = assets::vanilla_jar(&options.cache).await?;
         let resources = ResourceManager::new(vec![Pack::vanilla_jar(&jar)?]);
-        let registries = RegistrySet::load(&resources)?;
+        let registries = Arc::new(RegistrySet::load(&resources)?);
         let recipe_manager = Arc::new(RecipeManager::load(&resources, &TagSet::load(&resources)?)?);
         let recipe_synchronization =
             Arc::new(RecipeSynchronization::new(&recipe_manager, |_| true));
@@ -321,10 +321,15 @@ impl MinecraftServer {
             ferraloom_storage::SavedDataStorage::new(world_root.access.path().join("data"))
                 .load::<ferraloom_game::level::weather::WeatherData>("minecraft:weather")?
                 .map_or_else(Default::default, |data| *data.value());
+        let registry_context: Arc<dyn protocol::codec::RegistryContext> = registries.clone();
+        let level_context = Arc::new(
+            Arc::unwrap_or_clone(world.level_context(&resources)?)
+                .with_registry_context(registry_context.clone()),
+        );
         let mut level = ServerLevel::new(
             Region::new(&BEHAVIORS),
             "minecraft:overworld",
-            world.level_context(&resources)?,
+            level_context,
         );
         level
             .level
@@ -456,7 +461,7 @@ impl MinecraftServer {
             keys: protocol::transport::LoginKeyPair::generate()?,
             session_id: random_uuid(),
             status: status_rx,
-            registries: Arc::new(registries.clone()),
+            registries: Arc::clone(&registries),
             encoding: Arc::new(crate::jobs::JobPool::new("ferraloom-packet-encode", 2)?),
         });
         let net_send = send.clone();
@@ -498,10 +503,14 @@ impl MinecraftServer {
             .collect::<protocol::Result<Vec<_>>>()?;
         for dimension in dimensions {
             let world = world_root.open_dimension(dimension.clone(), &properties)?;
+            let level_context = Arc::new(
+                Arc::unwrap_or_clone(world.level_context(&resources)?)
+                    .with_registry_context(registry_context.clone()),
+            );
             let mut bootstrap = ServerLevel::new(
                 Region::new(&BEHAVIORS),
                 dimension.to_string(),
-                world.level_context(&resources)?,
+                level_context,
             );
             bootstrap.game_time = game_time;
             initialize_live_level(
