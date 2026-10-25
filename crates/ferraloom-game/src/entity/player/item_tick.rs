@@ -4,7 +4,7 @@ use crate::{
     entity::{EntityRef, LivingEntity},
     level::{Level, LevelError},
 };
-use ferraloom_data::Item;
+use ferraloom_data::{Item, registries::data_component_type::Id as ComponentType};
 use ferraloom_protocol::component::EquipmentSlot;
 
 /// Native declaring class for the only two Item#inventoryTick overrides.
@@ -53,8 +53,14 @@ pub(crate) fn inventory_tick_override(item: Item) -> Option<InventoryTickOverrid
 fn tick_item(
     item: Item,
     _slot: Option<EquipmentSlot>,
+    has_lodestone_tracker: bool,
     level: &mut Level,
 ) -> Result<(), LevelError> {
+    // CompassItem#inventoryTick returns immediately without LODESTONE_TRACKER. Its presence
+    // is read from the canonical stack before dispatch; tracker.tick remains unsupported.
+    if item == Item::COMPASS && !has_lodestone_tracker {
+        return Ok(());
+    }
     if inventory_tick_override(item).is_some() {
         level.unported_operation(crate::block::UnportedOperation::ItemInventoryTick(item))?;
     }
@@ -73,11 +79,14 @@ pub(crate) fn tick_inventory(player: EntityRef, level: &mut Level) -> Result<(),
                 (
                     stack.item(),
                     (index == inventory.selected_slot()).then_some(EquipmentSlot::Mainhand),
+                    stack.item() == Item::COMPASS
+                        && super::inventory::component(stack, ComponentType::LODESTONE_TRACKER)
+                            .is_some(),
                 )
             })
         };
-        if let Some((item, slot)) = tick {
-            tick_item(item, slot, level)?;
+        if let Some((item, slot, has_lodestone_tracker)) = tick {
+            tick_item(item, slot, has_lodestone_tracker, level)?;
         }
     }
     Ok(())
@@ -87,12 +96,19 @@ pub(crate) fn tick_inventory(player: EntityRef, level: &mut Level) -> Result<(),
 /// its mainhand entry, rather than PlayerEquipment's selected-hand override.
 pub(crate) fn tick_equipment(entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
     for slot in SLOTS {
-        let item = {
+        let tick = {
             let stack = level.entity::<LivingEntity>(entity)?.equipment.get(slot);
-            (!stack.is_empty()).then(|| stack.item())
+            (!stack.is_empty()).then(|| {
+                (
+                    stack.item(),
+                    stack.item() == Item::COMPASS
+                        && super::inventory::component(stack, ComponentType::LODESTONE_TRACKER)
+                            .is_some(),
+                )
+            })
         };
-        if let Some(item) = item {
-            tick_item(item, Some(slot), level)?;
+        if let Some((item, has_lodestone_tracker)) = tick {
+            tick_item(item, Some(slot), has_lodestone_tracker, level)?;
         }
     }
     Ok(())
@@ -130,11 +146,25 @@ mod tests {
             block::UnportedBehavior,
             entity::{EntityState, player::GameType},
         };
-        use ferraloom_protocol::component::{DataComponentPatch, ItemStack};
+        use ferraloom_protocol::component::{
+            DataComponent, DataComponentPatch, ItemStack, LodestoneTracker,
+        };
         use ferraloom_util::{Uuid, Vec3};
         let stack = |item, count| {
             let mut value = ItemStack::new(item, 1, DataComponentPatch::default());
             value.0.as_mut().unwrap().count = count;
+            // The scan-order fixture exercises the required tracked-compass body.
+            if item == Item::COMPASS {
+                value
+                    .0
+                    .as_mut()
+                    .unwrap()
+                    .components
+                    .set(DataComponent::LodestoneTracker(LodestoneTracker {
+                        target: None,
+                        tracked: true,
+                    }));
+            }
             value
         };
         let mut level = crate::entity::tests::level(false);
@@ -202,5 +232,64 @@ mod tests {
         tick_equipment(entity, &mut level).unwrap();
         assert_eq!(level.unported_behavior_stats().skipped_calls, 4);
         assert_eq!(level.unported_behavior_stats().distinct_calls, 2);
+    }
+
+    #[test]
+    fn compass_without_lodestone_tracker_is_noop_but_present_tracker_requires_support() {
+        use crate::{
+            block::UnportedBehavior,
+            entity::{EntityState, player::GameType},
+        };
+        use ferraloom_protocol::component::{
+            DataComponent, DataComponentPatch, ItemStack, LodestoneTracker,
+        };
+        use ferraloom_util::{Uuid, Vec3};
+
+        let mut level = crate::entity::tests::level(false);
+        level.set_unported_behavior(UnportedBehavior::Strict);
+        let entity = level.next_entity_ref();
+        let plain = ItemStack::new(Item::COMPASS, 1, DataComponentPatch::default());
+        let mut player = ServerPlayer::new(
+            Uuid::new(3, 4),
+            "compass".into(),
+            level.next_entity_id(),
+            Vec3::ZERO,
+            GameType::Survival,
+        );
+        player.inventory.set_selected_item(plain.clone());
+        player.equipment.set(EquipmentSlot::Offhand, plain.clone());
+        level
+            .add_entity(entity, EntityState::Player(Box::new(player)))
+            .unwrap();
+        tick_inventory(entity, &mut level).unwrap();
+        tick_equipment(entity, &mut level).unwrap();
+        let player = level.entity::<ServerPlayer>(entity).unwrap();
+        assert_eq!(player.inventory.selected_item(), &plain);
+        assert_eq!(player.equipment.get(EquipmentSlot::Offhand), &plain);
+        assert_eq!(level.unported_behavior_stats().skipped_calls, 0);
+
+        let mut tracked = plain;
+        tracked
+            .0
+            .as_mut()
+            .unwrap()
+            .components
+            .set(DataComponent::LodestoneTracker(LodestoneTracker {
+                target: None,
+                tracked: true,
+            }));
+        {
+            let player = level.entity_mut::<ServerPlayer>(entity).unwrap();
+            player.inventory.set_selected_item(tracked.clone());
+            player.equipment.set(EquipmentSlot::Offhand, tracked);
+        }
+        assert_eq!(
+            tick_inventory(entity, &mut level),
+            Err(LevelError::UnsupportedItemInventoryTick(Item::COMPASS))
+        );
+        assert_eq!(
+            tick_equipment(entity, &mut level),
+            Err(LevelError::UnsupportedItemInventoryTick(Item::COMPASS))
+        );
     }
 }
