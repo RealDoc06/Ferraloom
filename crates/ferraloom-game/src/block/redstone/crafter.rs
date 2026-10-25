@@ -16,9 +16,9 @@ use ferraloom_util::{Aabb, BlockPos, Direction, Vec3};
 pub struct CrafterBlock;
 pub static CRAFTER: CrafterBlock = CrafterBlock;
 
-/// Port of CraftingInput#ofPositioned's list ownership. A full grid wraps the
-/// original BE list; a cropped grid stores the original ItemStack references.
-/// Whole-list replacement (ItemCommands, chest swaps and /data/structure/chunk/BlockItem loads) is unreachable during dispenseFrom.
+/// Port of CraftingInput#ofPositioned's list ownership. A full grid reads the BE
+/// list; a cropped grid retains the original ItemStack references. Reward-function
+/// list replacement needs the generation guard awaiting canonical BE integration.
 #[derive(Debug)]
 enum CapturedInput {
     Full {
