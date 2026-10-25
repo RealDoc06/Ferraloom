@@ -73,9 +73,9 @@ async fn sign_edits(session: &mut Session) -> Result<ObservationLog> {
     }
     let mut log = ObservationLog::default();
     for (index, (block, north_front)) in [
-        (Block::OAK_SIGN, false),
+        (Block::OAK_SIGN, true),
         (Block::OAK_WALL_SIGN, true),
-        (Block::OAK_HANGING_SIGN, false),
+        (Block::OAK_HANGING_SIGN, true),
         (Block::OAK_WALL_HANGING_SIGN, true),
     ]
     .into_iter()

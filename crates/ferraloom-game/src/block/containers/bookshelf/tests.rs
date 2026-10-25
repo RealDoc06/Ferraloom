@@ -29,14 +29,18 @@ use std::{
 const POS: BlockPos = BlockPos::new(8, 64, 8);
 const PLAYER: EntityRef = EntityRef::fixture(RegionId::FIXTURE, 1);
 static BEHAVIORS: Behaviors = Behaviors::EMPTY;
-static TAGS: LazyLock<(Arc<TagSet<Block>>, Arc<TagSet<Item>>)> = LazyLock::new(|| {
+struct TestTags {
+    blocks: Arc<TagSet<Block>>,
+    items: Arc<TagSet<Item>>,
+}
+static TAGS: LazyLock<TestTags> = LazyLock::new(|| {
     let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").expect("builder supplies vanilla jar");
     let resources =
         ResourceManager::new(vec![Pack::vanilla_jar(std::path::Path::new(&jar)).unwrap()]);
-    (
-        Arc::new(TagSet::load(&resources).unwrap()),
-        Arc::new(TagSet::load(&resources).unwrap()),
-    )
+    TestTags {
+        blocks: Arc::new(TagSet::load(&resources).unwrap()),
+        items: Arc::new(TagSet::load(&resources).unwrap()),
+    }
 });
 fn vectors() -> String {
     let mut text = String::new();
@@ -79,8 +83,15 @@ fn fixture(mask: u8) -> (Level, BlockEntityRef) {
             ),
         ))
         .unwrap();
-    level.set_block_tags(TAGS.0.clone());
-    level.set_item_tags(TAGS.1.clone());
+    level
+        .set_chunk_loading_status(
+            ChunkPos::new(0, 0),
+            crate::level::distance_manager::FullChunkStatus::BlockTicking,
+            true,
+        )
+        .unwrap();
+    level.set_block_tags(TAGS.blocks.clone());
+    level.set_item_tags(TAGS.items.clone());
     level.install_shared(Box::<ServerShared>::default());
     let state = state(mask);
     level.set_block_state(POS, state).unwrap();
@@ -102,7 +113,11 @@ fn fixture(mask: u8) -> (Level, BlockEntityRef) {
     (level, handle)
 }
 fn tag(stack: &ItemStack) -> Tag {
-    stack.to_nbt().unwrap()
+    if stack.is_empty() {
+        Tag::Compound(Default::default())
+    } else {
+        stack.to_nbt().unwrap()
+    }
 }
 fn expected(snbt: &str) -> Tag {
     Tag::Compound(parse_compound(snbt).unwrap())

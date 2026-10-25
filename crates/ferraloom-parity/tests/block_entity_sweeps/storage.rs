@@ -188,7 +188,13 @@ fn contents(bot: &Bot, menu: i32, count: usize) -> Result<Vec<Value>> {
         .context("opened menu")?
         .slots[..count]
         .iter()
-        .map(Persistent::to_json)
+        .map(|stack| {
+            if stack.is_empty() {
+                Ok(json!({}))
+            } else {
+                stack.to_json()
+            }
+        })
         .collect::<std::result::Result<_, _>>()
         .map_err(Into::into)
 }
