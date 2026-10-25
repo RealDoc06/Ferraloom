@@ -54,12 +54,6 @@ async fn record(session: &mut Session) -> Result<ObservationLog> {
     let id = session.join("ParityBot").await?;
     let bot = session.bot(id)?;
     redstone_support::prepare(bot).await?;
-    command(
-        bot,
-        "fill 4 -60 4 30 -60 20 minecraft:stone strict",
-        "commands.fill.success",
-    )
-    .await?;
     let mut log = ObservationLog::default();
     command(
         bot,
