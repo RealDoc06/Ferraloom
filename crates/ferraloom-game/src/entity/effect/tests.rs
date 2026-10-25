@@ -150,7 +150,9 @@ fn native_living_load_keeps_valid_partial_effects_and_saves_the_full_hidden_chai
             assert!(player.has_effect(effect.effect()));
             assert_eq!(player.get_effect(effect.effect()).unwrap(), *effect);
         }
-        let saved = player.save_without_id();
+        let saved = player
+            .save_without_id(&crate::entity::tests::persistence_level())
+            .unwrap();
         let mut saved_effects = saved
             .get_list("active_effects")
             .cloned()

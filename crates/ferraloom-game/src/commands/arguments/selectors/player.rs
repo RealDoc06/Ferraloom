@@ -38,6 +38,11 @@ mod tests {
             }
             static BEHAVIORS: Behaviors = Behaviors::EMPTY;
             let mut level = Level::new(Region::new(&BEHAVIORS), LevelContext::fixture(0, 63));
+            crate::entity::tests::install_test_environment(
+                &mut level,
+                false,
+                "minecraft:overworld",
+            );
             let entity = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
             level
                 .add_entity(entity, EntityState::Player(Box::new(player)))
