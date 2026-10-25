@@ -1,0 +1,12 @@
+dispenser:0:false	{Items:[]}
+dispenser:1:false	{Items:[{Slot:0b,count:1,id:"minecraft:stone"}]}
+dispenser:64:false	{Items:[{Slot:0b,count:64,id:"minecraft:stone"}]}
+dispenser:0:true	{LootTable:"minecraft:chests/simple_dungeon",LootTableSeed:42L}
+dropper:0:false	{Items:[]}
+dropper:1:false	{Items:[{Slot:0b,count:1,id:"minecraft:stone"}]}
+dropper:64:false	{Items:[{Slot:0b,count:64,id:"minecraft:stone"}]}
+dropper:0:true	{LootTable:"minecraft:chests/simple_dungeon",LootTableSeed:42L}
+hopper:0:false	{Items:[],TransferCooldown:-1}
+hopper:1:false	{Items:[{Slot:0b,count:1,id:"minecraft:stone"}],TransferCooldown:-1}
+hopper:64:false	{Items:[{Slot:0b,count:64,id:"minecraft:stone"}],TransferCooldown:-1}
+hopper:0:true	{LootTable:"minecraft:chests/simple_dungeon",LootTableSeed:42L,TransferCooldown:-1}

@@ -10,7 +10,7 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Chat and text components](features/chat.md) | 23 | 21 | 2 | 0 | 0 |
 | [Chunks and tickets](features/chunks.md) | 58 | 20 | 37 | 1 | 0 |
 | [Combat and damage](features/combat-damage.md) | 204 | 204 | 0 | 0 | 0 |
-| [Commands and argument types](features/commands.md) | 2683 | 1908 | 40 | 735 | 0 |
+| [Commands and argument types](features/commands.md) | 2683 | 1858 | 39 | 786 | 0 |
 | [Crafting and recipes](features/crafting-recipes.md) | 2137 | 2 | 29 | 2106 | 0 |
 | [Datapacks and resource reload](features/datapacks-reload.md) | 57 | 57 | 0 | 0 | 0 |
 | [Enchantments](features/enchantments.md) | 137 | 108 | 29 | 0 | 0 |
@@ -37,7 +37,7 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Predicates](features/predicates.md) | 101 | 79 | 22 | 0 | 0 |
 | [Protocol packets](features/protocol.md) | 271 | 47 | 1 | 223 | 0 |
 | [Raids](features/raids.md) | 8 | 8 | 0 | 0 | 0 |
-| [Redstone mechanics](features/redstone.md) | 66 | 12 | 51 | 3 | 0 |
+| [Redstone mechanics](features/redstone.md) | 68 | 11 | 51 | 6 | 0 |
 | [Scoreboard, teams and bossbars](features/scoreboard-teams-bossbars.md) | 79 | 2 | 18 | 59 | 0 |
 | [Server operations](features/server-operations.md) | 112 | 96 | 16 | 0 | 0 |
 | [Sounds and particles](features/sounds-particles.md) | 2146 | 5 | 0 | 2141 | 0 |
@@ -50,4 +50,4 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Weather, time and environment](features/weather-time.md) | 85 | 85 | 0 | 0 | 0 |
 | [World storage and data fixing](features/world-storage.md) | 308 | 305 | 3 | 0 | 0 |
 | [World generation](features/worldgen.md) | 3114 | 2640 | 174 | 300 | 0 |
-| **Total** | **19574** | **8297** | **2836** | **8441** | **0** |
+| **Total** | **19576** | **8246** | **2835** | **8495** | **0** |
