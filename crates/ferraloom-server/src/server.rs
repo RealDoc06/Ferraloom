@@ -1389,8 +1389,8 @@ impl MinecraftServer {
         Ok(())
     }
     /// Apply accepted section transitions immediately, including Y-only moves.
-    /// The commands branch supplies the current SpectatorsGenerateChunks rule
-    /// when its canonical GameRules state lands (vanilla's default is true).
+    /// Native skipPlayer/PlayerMap ignored transitions remain a tracking follow-up;
+    /// this preserves the existing default-true spectators-generate-chunks path.
     pub(super) fn update_player_tickets(&mut self, entity: EntityRef) -> Result<()> {
         // ChunkMap#move updates audiences before any distance-manager changes.
         self.level

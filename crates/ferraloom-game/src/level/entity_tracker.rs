@@ -41,7 +41,8 @@ impl Level {
     }
     /// Port of ChunkMap#updatePlayerPos and its DistanceManager call. Keep the
     /// canonical player's last section so join and packet adapters cannot repeat
-    /// an already applied status update.
+    /// an already applied status update. Native skipPlayer/PlayerMap ignored
+    /// transitions remain pending; this preserves the existing default-true path.
     pub fn update_player_tracking_section(
         &mut self,
         player: EntityRef,
@@ -189,6 +190,9 @@ impl Level {
         })
     }
     fn emit_tracking_message(&mut self, recipients: Vec<EntityRef>, message: ClientboundMessage) {
+        if recipients.is_empty() {
+            return;
+        }
         for packet in message.into_packets() {
             self.emit(LevelEffect::PlayerPacket {
                 recipients: recipients.clone(),
