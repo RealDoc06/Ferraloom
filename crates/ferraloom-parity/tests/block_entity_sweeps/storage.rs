@@ -66,8 +66,10 @@ impl Capture {
                         || name.contains("block.barrel.")
                         || name.contains("block.copper_chest.")
                 }) {
+                    // Native nextFloat()*0.1f+0.9f can round its largest
+                    // draw to exactly 1.0f, despite nextFloat's excluded end.
                     assert!(
-                        (0.9..1.0).contains(&sound.pitch),
+                        (0.9..=1.0).contains(&sound.pitch),
                         "native container sound pitch: {}",
                         sound.pitch
                     );
