@@ -381,6 +381,10 @@ impl MinecraftServer {
         level
             .distance_manager
             .set_view_distance(properties.int("view-distance"));
+        level.level.configure_entity_tracking(
+            properties.int("view-distance"),
+            properties.int("entity-broadcast-range-percentage"),
+        );
         level.distance_manager.set_simulation_distance(
             properties.int("simulation-distance").clamp(2, 32),
             &mut level.tickets,
@@ -887,6 +891,11 @@ impl MinecraftServer {
                 }
                 // ChunkMap tracking precedes block events and entities.
                 self.track_players()?;
+                self.level
+                    .level
+                    .tick_entity_tracker()
+                    .map_err(anyhow::Error::new)?;
+                self.apply_level_effects()?;
                 if self.tick_rate_manager.runs_normally() {
                     self.level.level.run_block_events().map_err(game_error)?;
                 }
