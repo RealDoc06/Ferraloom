@@ -183,10 +183,10 @@ public final class PublishedLightTrace {
     static final class Server extends MinecraftServer {
         private final LocalSampleLogger logger=new LocalSampleLogger(4);
         Server(LevelStorageSource.LevelStorageAccess storage,PackRepository packs,WorldStem stem)throws Exception {
-            super(Thread.currentThread(),storage,packs,stem,Optional.empty(),Proxy.NO_PROXY,DataFixers.getDataFixer(),services(),LoggingLevelLoadListener.forDedicatedServer(),false,new NotificationManager());
+            super(Thread.currentThread(),storage,packs,stem,Optional.empty(),Proxy.NO_PROXY,DataFixers.getDataFixer(),noServices(),LoggingLevelLoadListener.forDedicatedServer(),false,new NotificationManager());
             setPlayerList(new PlayerList(this,registries(),playerDataStorage,new EmptyNotificationService()){}); createLevels();
         }
-        static Services services()throws Exception { var f=GameTestServer.class.getDeclaredField("NO_SERVICES");f.setAccessible(true);return (Services)f.get(null); }
+        static Services noServices()throws Exception { var f=GameTestServer.class.getDeclaredField("NO_SERVICES");f.setAccessible(true);return (Services)f.get(null); }
         @Override protected boolean initServer(){return true;}
         @Override public LevelBasedPermissionSet operatorUserPermissions(){return LevelBasedPermissionSet.ALL;}
         @Override public PermissionSet getFunctionCompilationPermissions(){return LevelBasedPermissionSet.OWNER;}
