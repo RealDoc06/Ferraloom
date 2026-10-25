@@ -95,6 +95,11 @@ pub enum LevelError {
     UninitializedPlacementDirection,
     MissingEntity(EntityRef),
     MissingTrackedEntity(i32),
+    MissingRegistryContext,
+    MissingNetworkRegistryEntry {
+        registry: ferraloom_protocol::Identifier,
+        entry: ferraloom_protocol::Identifier,
+    },
     UnsupportedEntityTrackingStatus,
     /// Shared acquisition cannot invoke mutable ChunkMap tracking callbacks.
     UnsupportedSharedEntityTracking(&'static str),

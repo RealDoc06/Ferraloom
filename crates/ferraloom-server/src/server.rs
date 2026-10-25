@@ -183,7 +183,7 @@ impl Connection {
 pub struct MinecraftServer {
     properties: Arc<ServerProperties>,
     root: PathBuf,
-    registries: RegistrySet,
+    registries: Arc<RegistrySet>,
     recipe_manager: Arc<RecipeManager>,
     recipe_synchronization: Arc<RecipeSynchronization>,
     crafting_context: Arc<RuntimeCraftingContext>,
@@ -250,7 +250,7 @@ impl MinecraftServer {
         );
         let jar = assets::vanilla_jar(&options.cache).await?;
         let resources = ResourceManager::new(vec![Pack::vanilla_jar(&jar)?]);
-        let registries = RegistrySet::load(&resources)?;
+        let registries = Arc::new(RegistrySet::load(&resources)?);
         let recipe_manager = Arc::new(RecipeManager::load(&resources, &TagSet::load(&resources)?)?);
         let recipe_synchronization =
             Arc::new(RecipeSynchronization::new(&recipe_manager, |_| true));
@@ -258,7 +258,10 @@ impl MinecraftServer {
             &resources,
             Some(&LootRegistryLookup::new(&registries, &resources)),
         )?);
-        let crafting_context = Arc::new(RuntimeCraftingContext::load(&resources, &registries)?);
+        let crafting_context = Arc::new(RuntimeCraftingContext::load(
+            &resources,
+            registries.as_ref(),
+        )?);
 
         let world = World::open(
             &options.root,
@@ -302,10 +305,15 @@ impl MinecraftServer {
 
         let game_time = world.level_data.data.get_long_or("Time", 0);
         let (access, ops) = AccessLists::load(&options.root)?;
+        let registry_context: Arc<dyn protocol::codec::RegistryContext> = registries.clone();
+        let level_context = Arc::new(
+            Arc::unwrap_or_clone(world.level_context(&resources)?)
+                .with_registry_context(registry_context),
+        );
         let mut level = ServerLevel::new(
             Region::new(&BEHAVIORS),
             "minecraft:overworld",
-            world.level_context(&resources)?,
+            level_context,
         );
         level
             .level
@@ -435,7 +443,7 @@ impl MinecraftServer {
             keys: protocol::transport::LoginKeyPair::generate()?,
             session_id: random_uuid(),
             status: status_rx,
-            registries: Arc::new(registries.clone()),
+            registries: Arc::clone(&registries),
             encoding: Arc::new(crate::jobs::JobPool::new("ferraloom-packet-encode", 2)?),
         });
         let net_send = send.clone();
