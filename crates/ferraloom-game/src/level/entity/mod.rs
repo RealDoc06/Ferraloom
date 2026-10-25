@@ -13,6 +13,7 @@ mod indexes;
 mod persistent;
 mod publication;
 use publication::EntityPublication;
+mod fresh;
 mod push;
 mod worldgen;
 use indexes::EntityRegistration;
@@ -268,6 +269,13 @@ impl Level {
         loaded: bool,
     ) -> Result<(), LevelError> {
         let status = self.publish_entity_data(entity, state, loaded)?;
+        self.complete_entity_registration(entity, status)
+    }
+    fn complete_entity_registration(
+        &mut self,
+        entity: EntityRef,
+        status: Visibility,
+    ) -> Result<(), LevelError> {
         if status.is_accessible() {
             self.region()
                 .entities
