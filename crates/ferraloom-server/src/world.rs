@@ -2,7 +2,8 @@
 use crate::{
     generation::{
         GenerationCompletion, GenerationIdentity, GenerationOutput, GenerationRequest,
-        GenerationRevision, GenerationState, ReadyGeneration, StructureSnapshot,
+        GenerationRevision, GenerationState, ProtoStructureSnapshot, ReadyGeneration,
+        StructureSnapshot,
     },
     jobs::JobPool,
     properties::ServerProperties,
@@ -643,6 +644,7 @@ pub struct World {
     pending_structure_publications: VecDeque<ChunkPos>,
     generation_save_revisions: BTreeMap<i64, GenerationRevision>,
     proto_biomes: BTreeMap<i64, crate::generation::ProtoBiomeSnapshot>,
+    proto_structures: BTreeMap<i64, ProtoStructureSnapshot>,
     generation: Arc<JobPool>,
     generation_state: Option<GenerationState>,
     generation_work: Option<oneshot::Receiver<GenerationCompletion>>,
@@ -865,6 +867,11 @@ impl World {
             io
         };
         let pending_initial_spawns = generation_state.pending_initial_spawns();
+        let proto_structures = generation_state
+            .structure_versions(&BTreeSet::new())
+            .into_iter()
+            .map(|snapshot| (snapshot.pos.pack(), snapshot))
+            .collect();
         let (light_tx, light_in) = mpsc::channel::<LightJob>();
         let (light_out, light_rx) = tokio::sync::mpsc::unbounded_channel();
         std::thread::Builder::new()
@@ -909,6 +916,7 @@ impl World {
                 pending_structure_publications: VecDeque::new(),
                 generation_save_revisions: BTreeMap::new(),
                 proto_biomes: BTreeMap::new(),
+                proto_structures,
                 generation,
                 generation_state: Some(generation_state),
                 generation_work: None,
@@ -1358,6 +1366,7 @@ impl World {
     }
     pub fn forget_proto_holder(&mut self, pos: ChunkPos) {
         self.proto_biomes.remove(&pos.pack());
+        self.proto_structures.remove(&pos.pack());
         self.pending_structure_publications
             .retain(|&queued| queued != pos);
         self.full_promotions
@@ -1443,6 +1452,7 @@ impl World {
     }
     pub fn finish_unload(&mut self, pos: ChunkPos) -> Result<()> {
         self.proto_biomes.remove(&pos.pack());
+        self.proto_structures.remove(&pos.pack());
         self.pending_structure_publications
             .retain(|&queued| queued != pos);
         self.full_promotions
@@ -1648,6 +1658,9 @@ impl World {
                 self.proto_biomes.insert(snapshot.pos.pack(), snapshot);
             }
         }
+        for snapshot in output.proto_structures {
+            self.integrate_proto_structures(snapshot)?;
+        }
         for (pos, status) in output.statuses {
             self.generation_statuses
                 .entry(pos.pack())
@@ -1661,6 +1674,30 @@ impl World {
             self.store_generation_chunk(pos, output.terrain.revision, disk)?;
         }
         Ok(Some((request, output.terrain)))
+    }
+    fn integrate_proto_structures(&mut self, snapshot: ProtoStructureSnapshot) -> Result<()> {
+        ensure!(
+            snapshot.structures.position == [snapshot.pos.x, snapshot.pos.z],
+            "proto structures belong to another chunk"
+        );
+        ensure!(
+            snapshot.status >= ChunkStatus::StructureStarts,
+            "proto structures precede STRUCTURE_STARTS"
+        );
+        let key = snapshot.pos.pack();
+        if self
+            .proto_structures
+            .get(&key)
+            .is_none_or(|old| old.revision < snapshot.revision)
+        {
+            self.proto_structures.insert(key, snapshot);
+        }
+        Ok(())
+    }
+    pub(crate) fn proto_chunk_structures(&self, pos: ChunkPos) -> Option<Arc<ChunkStructures>> {
+        self.proto_structures
+            .get(&pos.pack())
+            .map(|snapshot| Arc::clone(&snapshot.structures))
     }
     pub(crate) fn proto_noise_biome(
         &self,
@@ -2866,6 +2903,7 @@ mod generation_order_tests {
             skips: vec![(unit.into(), "pending callback".into())],
             statuses: vec![(pos, ChunkStatus::Full)],
             proto_biomes: Vec::new(),
+            proto_structures: Vec::new(),
             full_structures: Vec::new(),
             initial_mob_spawning_pending: true,
         };

@@ -442,3 +442,180 @@ fn location_predicate_uses_piece_membership_and_loaded_gate() {
             .unwrap()
     );
 }
+
+use super::super::acquisition::{
+    AcquireDriver, AcquireHandle, AcquireProgress, AcquireResult, ChunkReference, ticket_level,
+};
+use std::cell::RefCell;
+
+struct ProtoStructuresDriver {
+    sources: RefCell<BTreeMap<i64, (u64, Arc<ChunkStructures>)>>,
+    unknown: RefCell<Vec<(ChunkPos, i32)>>,
+    requested: RefCell<Vec<(ChunkPos, ChunkStatus)>>,
+}
+impl AcquireDriver for ProtoStructuresDriver {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+    fn is_owner_thread(&self) -> bool {
+        true
+    }
+    fn visible_ticket_level(&self, _: ChunkPos) -> Option<i32> {
+        Some(33)
+    }
+    fn add_unknown_ticket(&self, pos: ChunkPos, status: ChunkStatus) -> Result<(), LevelError> {
+        self.unknown.borrow_mut().push((pos, ticket_level(status)));
+        Ok(())
+    }
+    fn run_distance_manager_updates(&self, _: &Level) -> Result<bool, LevelError> {
+        panic!("eligible proto fixture needs no distance pass")
+    }
+    fn request_status(
+        &self,
+        _: &Level,
+        pos: ChunkPos,
+        status: ChunkStatus,
+    ) -> Result<AcquireHandle, LevelError> {
+        self.requested.borrow_mut().push((pos, status));
+        Ok(AcquireHandle {
+            pos,
+            status,
+            request_id: status as u64 + 1,
+            holder_epoch: self
+                .sources
+                .borrow()
+                .get(&pos.pack())
+                .map_or(0, |source| source.0),
+        })
+    }
+    fn acquisition_result(&self, handle: AcquireHandle) -> Result<AcquireResult, LevelError> {
+        Ok(AcquireResult::Complete(Some(ChunkReference {
+            pos: handle.pos,
+            generation: handle.holder_epoch,
+            kind: ChunkKind::Proto,
+        })))
+    }
+    fn poll_acquisition_step(&self, _: &Level) -> Result<AcquireProgress, LevelError> {
+        panic!("a settled proto future must not execute a FULL callback")
+    }
+    fn wait_for_progress(&self) -> Result<(), LevelError> {
+        panic!("settled proto")
+    }
+    fn chunk_if_present(&self, _: ChunkPos, _: ChunkStatus) -> Option<ChunkReference> {
+        None
+    }
+    fn chunk_if_present_unchecked(&self, _: ChunkPos, _: ChunkStatus) -> Option<ChunkReference> {
+        None
+    }
+    fn acquire_on_owner(
+        &self,
+        _: ChunkPos,
+        _: ChunkStatus,
+        _: bool,
+    ) -> Result<Option<ChunkReference>, LevelError> {
+        panic!("owner fixture")
+    }
+    fn proto_chunk_structures(
+        &self,
+        chunk: ChunkReference,
+    ) -> Result<Arc<ChunkStructures>, LevelError> {
+        self.sources
+            .borrow()
+            .get(&chunk.pos.pack())
+            .filter(|source| source.0 == chunk.generation)
+            .map(|source| Arc::clone(&source.1))
+            .ok_or(LevelError::ChunkAcquisition(
+                chunk.pos,
+                ChunkStatus::StructureStarts,
+                AcquireFailure::InvalidHandle,
+            ))
+    }
+}
+
+#[test]
+fn proto_queries_acquire_reference_then_source_status_and_retain_source_versions() {
+    let query = ChunkPos::ZERO;
+    let source = ChunkPos::new(1, 0);
+    let id: Identifier = "minecraft:buried_treasure".parse().unwrap();
+    let mut references = ChunkStructures::new([0, 0]);
+    references.references.insert(
+        id.clone(),
+        StructureReferences::from_array(&[source.pack()]),
+    );
+    let make_start = |marker| {
+        let mut data = ChunkStructures::new([1, 0]);
+        data.starts.insert(
+            id.clone(),
+            start(&id, source, marker, true, TerrainAdjustment::None),
+        );
+        Arc::new(data)
+    };
+    let mut level = Level::new(Region::new(&BEHAVIORS), LevelContext::fixture(0, 63));
+    level
+        .install_acquire_driver(
+            Box::new(ProtoStructuresDriver {
+                sources: RefCell::new(
+                    [
+                        (query.pack(), (1, Arc::new(references))),
+                        (source.pack(), (2, make_start(7))),
+                    ]
+                    .into(),
+                ),
+                unknown: RefCell::new(Vec::new()),
+                requested: RefCell::new(Vec::new()),
+            }),
+            0..256,
+        )
+        .unwrap();
+    let pos = BlockPos::new(1, 61, 1);
+    let held = level
+        .structure_manager()
+        .get_structure_with_piece_at(pos, &id)
+        .unwrap()
+        .unwrap();
+    assert_eq!(held.references, 7);
+    assert!(level.chunk(query).is_none() && level.chunk(source).is_none());
+    let driver = level
+        .acquire_driver()
+        .unwrap()
+        .as_any()
+        .downcast_ref::<ProtoStructuresDriver>()
+        .unwrap();
+    assert_eq!(
+        *driver.requested.borrow(),
+        [
+            (query, ChunkStatus::StructureReferences),
+            (source, ChunkStatus::StructureStarts)
+        ]
+    );
+    assert_eq!(*driver.unknown.borrow(), [(query, 36), (source, 44)]);
+    driver
+        .sources
+        .borrow_mut()
+        .insert(source.pack(), (2, make_start(8)));
+    let newer = level
+        .structure_manager()
+        .get_structure_with_piece_at(pos, &id)
+        .unwrap()
+        .unwrap();
+    assert_eq!((held.references, newer.references), (7, 8));
+    // A cache entry identifies a holder incarnation, not a recreated source.
+    driver
+        .sources
+        .borrow_mut()
+        .insert(source.pack(), (3, make_start(9)));
+    assert_eq!(
+        level
+            .chunk_structures(source, ChunkStatus::StructureStarts)
+            .unwrap_err(),
+        LevelError::ChunkAcquisition(
+            source,
+            ChunkStatus::StructureStarts,
+            AcquireFailure::InvalidHandle
+        )
+    );
+    assert_eq!(held.references, 7);
+}

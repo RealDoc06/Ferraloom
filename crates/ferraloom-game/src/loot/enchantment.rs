@@ -1,5 +1,5 @@
 use super::{Result, codec};
-use serde_json::Value;
+use crate::loot::codec::DecodeInput;
 
 /// Port of LevelBasedValue, shared by enchanted loot probabilities and counts.
 #[derive(Clone, Debug, PartialEq)]
@@ -23,7 +23,7 @@ pub enum LevelBasedValue {
     },
 }
 impl LevelBasedValue {
-    pub fn decode(v: &Value) -> Result<Self> {
+    pub fn decode<I: DecodeInput>(v: &I) -> Result<Self> {
         if v.is_number() {
             return Ok(Self::Constant(codec::float(v)?));
         }

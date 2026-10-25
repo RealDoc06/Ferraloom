@@ -1,10 +1,10 @@
 use super::{DoubleBounds, EntityPredicate, IntBounds, PredicateContext};
+use crate::loot::codec::DecodeInput;
 use crate::{
     entity::EntityRef,
     loot::{Identifier, Result, codec},
 };
 use ferraloom_protocol::play::GameType;
-use serde_json::Value;
 use std::collections::BTreeMap;
 
 /// Port of FoodPredicate#matches.
@@ -14,7 +14,7 @@ pub struct FoodPredicate {
     pub saturation: DoubleBounds,
 }
 impl FoodPredicate {
-    pub fn decode(v: &Value) -> Result<Self> {
+    pub fn decode<I: DecodeInput>(v: &I) -> Result<Self> {
         Ok(Self {
             level: codec::optional(v, "level", IntBounds::decode)?.unwrap_or_default(),
             saturation: codec::optional(v, "saturation", DoubleBounds::decode)?.unwrap_or_default(),
@@ -28,7 +28,7 @@ impl FoodPredicate {
 #[derive(Clone, Debug, PartialEq)]
 pub struct InputPredicate(pub [Option<bool>; 7]);
 impl InputPredicate {
-    pub fn decode(v: &Value) -> Result<Self> {
+    pub fn decode<I: DecodeInput>(v: &I) -> Result<Self> {
         let mut flags = [None; 7];
         for (i, key) in [
             "forward", "backward", "left", "right", "jump", "sneak", "sprint",
@@ -51,7 +51,7 @@ impl InputPredicate {
 #[derive(Clone, Debug, PartialEq)]
 pub struct GameTypePredicate(pub Vec<GameType>);
 impl GameTypePredicate {
-    pub fn decode(v: &Value) -> Result<Self> {
+    pub fn decode<I: DecodeInput>(v: &I) -> Result<Self> {
         Ok(Self(codec::list(v, |v| {
             Ok(match codec::string(v)? {
                 "survival" => GameType::Survival,
@@ -95,7 +95,7 @@ pub struct PlayerPredicate {
     pub input: Option<InputPredicate>,
 }
 impl PlayerPredicate {
-    pub fn decode(v: &Value) -> Result<Self> {
+    pub fn decode<I: DecodeInput>(v: &I) -> Result<Self> {
         Ok(Self {
             level: codec::optional(v, "level", IntBounds::decode)?.unwrap_or_default(),
             food: codec::optional(v, "food", FoodPredicate::decode)?.unwrap_or_default(),
@@ -129,23 +129,28 @@ impl PlayerPredicate {
             })?
             .unwrap_or_default(),
             recipes: codec::optional(v, "recipes", |v| {
-                codec::object(v)?
-                    .iter()
+                codec::map(v)?
+                    .entries()?
+                    .into_iter()
                     .map(|(key, value)| Ok((Identifier::parse(key)?, codec::boolean(value)?)))
                     .collect::<Result<_>>()
             })?
             .unwrap_or_default(),
             advancements: codec::optional(v, "advancements", |v| {
-                codec::object(v)?
-                    .iter()
+                codec::map(v)?
+                    .entries()?
+                    .into_iter()
                     .map(|(key, value)| {
                         let test = if value.is_boolean() {
                             AdvancementPredicate::Done(codec::boolean(value)?)
                         } else {
                             AdvancementPredicate::Criteria(
-                                codec::object(value)?
-                                    .iter()
-                                    .map(|(key, value)| Ok((key.clone(), codec::boolean(value)?)))
+                                codec::map(value)?
+                                    .entries()?
+                                    .into_iter()
+                                    .map(|(key, value)| {
+                                        Ok((key.to_owned(), codec::boolean(value)?))
+                                    })
                                     .collect::<Result<_>>()?,
                             )
                         };

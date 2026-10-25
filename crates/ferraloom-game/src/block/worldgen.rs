@@ -16,8 +16,24 @@ pub struct GameWorldgenBlockBehavior;
 fn pos(p: [i32; 3]) -> BlockPos {
     BlockPos::new(p[0], p[1], p[2])
 }
-fn result<T>(value: Result<T, LevelError>) -> Result<T, Error> {
-    value.map_err(|error| Error(format!("game block behavior: {error:?}")))
+#[track_caller]
+fn result<T>(
+    value: Result<T, LevelError>,
+    context: impl FnOnce() -> (Option<BlockState>, BlockPos),
+) -> Result<T, Error> {
+    match value {
+        Ok(value) => Ok(value),
+        Err(error) => {
+            let (state, position) = context();
+            let block = state.map(|state| (state.block().name(), state.id()));
+            let caller = std::panic::Location::caller();
+            Err(Error(format!(
+                "game block behavior: {error:?}; block={block:?}; position={position:?}; call_site={}:{}",
+                caller.file(),
+                caller.line()
+            )))
+        }
+    }
 }
 impl WorldgenBlockBehavior for GameWorldgenBlockBehavior {
     fn materialize_block_entity(
@@ -33,9 +49,13 @@ impl WorldgenBlockBehavior for GameWorldgenBlockBehavior {
             if !state.has_block_entity() {
                 return Ok(None);
             }
-            result(super::entity::new_block_entity(pos(p), state))?
+            result(super::entity::new_block_entity(pos(p), state), || {
+                (Some(state), pos(p))
+            })?
         } else {
-            result(super::entity::load_static(pos(p), state, tag))?
+            result(super::entity::load_static(pos(p), state, tag), || {
+                (Some(state), pos(p))
+            })?
         };
         Ok(entity.map(|entity| {
             Box::new(entity) as Box<dyn ferraloom_worldgen::region::WorldgenBlockEntity>
@@ -118,11 +138,14 @@ impl WorldgenBlockBehavior for GameWorldgenBlockBehavior {
         p: [i32; 3],
         direction: Direction,
     ) -> Result<bool, Error> {
-        result(super::plants::vine_acceptable_neighbor(
-            &LevelReaderRef::Worldgen(region),
-            pos(p),
-            direction,
-        ))
+        result(
+            super::plants::vine_acceptable_neighbor(
+                &LevelReaderRef::Worldgen(region),
+                pos(p),
+                direction,
+            ),
+            || (region.block(p).ok(), pos(p)),
+        )
     }
     fn place_double_plant(
         &self,
@@ -131,12 +154,15 @@ impl WorldgenBlockBehavior for GameWorldgenBlockBehavior {
         p: [i32; 3],
         flags: u32,
     ) -> Result<(), Error> {
-        result(super::plants::place_double_plant(
-            &mut LevelAccessRef::Worldgen(region),
-            state,
-            pos(p),
-            super::UpdateFlags(flags),
-        ))
+        result(
+            super::plants::place_double_plant(
+                &mut LevelAccessRef::Worldgen(region),
+                state,
+                pos(p),
+                super::UpdateFlags(flags),
+            ),
+            || (Some(state), pos(p)),
+        )
     }
     fn place_mossy_carpet(
         &self,
@@ -144,11 +170,14 @@ impl WorldgenBlockBehavior for GameWorldgenBlockBehavior {
         p: [i32; 3],
         flags: u32,
     ) -> Result<(), Error> {
-        result(super::plants::place_mossy_carpet(
-            &mut LevelAccessRef::Worldgen(region),
-            pos(p),
-            super::UpdateFlags(flags),
-        ))
+        result(
+            super::plants::place_mossy_carpet(
+                &mut LevelAccessRef::Worldgen(region),
+                pos(p),
+                super::UpdateFlags(flags),
+            ),
+            || (region.block(p).ok(), pos(p)),
+        )
     }
     fn multiface_state_for_placement(
         &self,
@@ -158,13 +187,16 @@ impl WorldgenBlockBehavior for GameWorldgenBlockBehavior {
         p: [i32; 3],
         face: Direction,
     ) -> Result<Option<BlockState>, Error> {
-        result(super::plants::multiface::state_for_placement(
-            &LevelReaderRef::Worldgen(region),
-            block,
-            old,
-            pos(p),
-            face,
-        ))
+        result(
+            super::plants::multiface::state_for_placement(
+                &LevelReaderRef::Worldgen(region),
+                block,
+                old,
+                pos(p),
+                face,
+            ),
+            || (Some(block.default_state()), pos(p)),
+        )
     }
     #[allow(clippy::too_many_arguments)]
     fn multiface_spread(
@@ -185,6 +217,7 @@ impl WorldgenBlockBehavior for GameWorldgenBlockBehavior {
                 random,
                 post,
             ),
+            || (Some(state), pos(p)),
         )
         .map(|value| value.is_some())
     }
@@ -201,16 +234,19 @@ impl WorldgenBlockBehavior for GameWorldgenBlockBehavior {
         spread_rounds: i32,
     ) -> Result<(), Error> {
         use ferraloom_worldgen::feature::{FeatureRandom, FeatureRandomSelector};
-        result(super::plants::sculk::spread_patch(
-            &mut LevelAccessRef::Worldgen(region),
-            pos(origin),
-            &mut FeatureRandomSelector::External(FeatureRandom::Region(random)),
-            charge_count,
-            amount_per_charge,
-            spread_attempts,
-            growth_rounds,
-            spread_rounds,
-        ))
+        result(
+            super::plants::sculk::spread_patch(
+                &mut LevelAccessRef::Worldgen(region),
+                pos(origin),
+                &mut FeatureRandomSelector::External(FeatureRandom::Region(random)),
+                charge_count,
+                amount_per_charge,
+                spread_attempts,
+                growth_rounds,
+                spread_rounds,
+            ),
+            || (region.block(origin).ok(), pos(origin)),
+        )
     }
     fn post_process_pos(
         &self,
@@ -231,7 +267,10 @@ impl WorldgenBlockBehavior for GameWorldgenBlockBehavior {
         region: &WorldGenRegion<'_>,
         p: [i32; 3],
     ) -> Result<bool, Error> {
-        result(LevelReaderRef::Worldgen(region).can_survive(state, pos(p)))
+        result(
+            LevelReaderRef::Worldgen(region).can_survive(state, pos(p)),
+            || (Some(state), pos(p)),
+        )
     }
     fn is_outline_full_block(
         &self,
@@ -239,8 +278,11 @@ impl WorldgenBlockBehavior for GameWorldgenBlockBehavior {
         state: BlockState,
         p: [i32; 3],
     ) -> Result<bool, Error> {
-        result(LevelReaderRef::Worldgen(region).shape(state, pos(p)))
-            .map(|shape| shapes::is_shape_full_block(&shape))
+        result(
+            LevelReaderRef::Worldgen(region).shape(state, pos(p)),
+            || (Some(state), pos(p)),
+        )
+        .map(|shape| shapes::is_shape_full_block(&shape))
     }
     fn is_collision_full_block(
         &self,
@@ -248,13 +290,19 @@ impl WorldgenBlockBehavior for GameWorldgenBlockBehavior {
         state: BlockState,
         p: [i32; 3],
     ) -> Result<bool, Error> {
-        result(LevelReaderRef::Worldgen(region).is_collision_shape_full_block(state, pos(p)))
+        result(
+            LevelReaderRef::Worldgen(region).is_collision_shape_full_block(state, pos(p)),
+            || (Some(state), pos(p)),
+        )
     }
     fn is_collision_empty(&self, region: &WorldGenRegion<'_>, p: [i32; 3]) -> Result<bool, Error> {
         let reader = LevelReaderRef::Worldgen(region);
         let p = pos(p);
-        let state = result(reader.get_block_state(p))?;
-        result(reader.collision_shape_without_context(state, p)).map(|shape| shape.is_empty())
+        let state = result(reader.get_block_state(p), || (None, p))?;
+        result(reader.collision_shape_without_context(state, p), || {
+            (Some(state), p)
+        })
+        .map(|shape| shape.is_empty())
     }
     fn is_collision_face_full(
         &self,
@@ -263,8 +311,11 @@ impl WorldgenBlockBehavior for GameWorldgenBlockBehavior {
         p: [i32; 3],
         face: Direction,
     ) -> Result<bool, Error> {
-        result(LevelReaderRef::Worldgen(region).collision_shape_without_context(state, pos(p)))
-            .map(|shape| shapes::is_face_full(&shape, face))
+        result(
+            LevelReaderRef::Worldgen(region).collision_shape_without_context(state, pos(p)),
+            || (Some(state), pos(p)),
+        )
+        .map(|shape| shapes::is_face_full(&shape, face))
     }
     fn has_sturdy_face(
         &self,
@@ -273,7 +324,10 @@ impl WorldgenBlockBehavior for GameWorldgenBlockBehavior {
         p: [i32; 3],
         face: Direction,
     ) -> Result<bool, Error> {
-        result(LevelReaderRef::Worldgen(region).is_face_sturdy(state, pos(p), face))
+        result(
+            LevelReaderRef::Worldgen(region).is_face_sturdy(state, pos(p), face),
+            || (Some(state), pos(p)),
+        )
     }
     fn state_has_sturdy_face(
         &self,
@@ -293,20 +347,24 @@ impl WorldgenBlockBehavior for GameWorldgenBlockBehavior {
         neighbor: BlockState,
     ) -> Result<BlockState, Error> {
         let mut access = LevelAccessRef::Worldgen(region);
-        let state = result(access.get_block_state(pos(p)))?;
+        let state = result(access.get_block_state(pos(p)), || (None, pos(p)))?;
         let behavior = result(
             access
                 .as_reader()
                 .required_behavior(state.block(), BlockMethod::UpdateShape),
+            || (Some(state), pos(p)),
         )?;
-        result(behavior.update_shape(
-            state,
-            pos(p),
-            direction,
-            pos(neighbor_p),
-            neighbor,
-            &mut access,
-        ))
+        result(
+            behavior.update_shape(
+                state,
+                pos(p),
+                direction,
+                pos(neighbor_p),
+                neighbor,
+                &mut access,
+            ),
+            || (Some(state), pos(p)),
+        )
     }
     fn update_from_neighbor_shapes(
         &self,
@@ -314,7 +372,10 @@ impl WorldgenBlockBehavior for GameWorldgenBlockBehavior {
         p: [i32; 3],
         state: BlockState,
     ) -> Result<BlockState, Error> {
-        result(LevelAccessRef::Worldgen(region).update_from_neighbor_shapes(state, pos(p)))
+        result(
+            LevelAccessRef::Worldgen(region).update_from_neighbor_shapes(state, pos(p)),
+            || (Some(state), pos(p)),
+        )
     }
     fn place_liquid(
         &self,
@@ -323,13 +384,17 @@ impl WorldgenBlockBehavior for GameWorldgenBlockBehavior {
         fluid: FluidState,
     ) -> Result<bool, Error> {
         let mut access = LevelAccessRef::Worldgen(region);
-        let state = result(access.get_block_state(pos(p)))?;
+        let state = result(access.get_block_state(pos(p)), || (None, pos(p)))?;
         let behavior = result(
             access
                 .as_reader()
                 .required_behavior(state.block(), BlockMethod::PlaceLiquid),
+            || (Some(state), pos(p)),
         )?;
-        result(behavior.place_liquid(state, pos(p), fluid, &mut access))
+        result(
+            behavior.place_liquid(state, pos(p), fluid, &mut access),
+            || (Some(state), pos(p)),
+        )
     }
 }
 
