@@ -2731,8 +2731,12 @@ impl MinecraftServer {
             }
         }
         let checks = MovementChecks::dedicated(&self.tick_rate_manager);
+        let live = std::iter::once(&mut self.level)
+            .chain(self.additional_levels.iter_mut())
+            .find(|live| live.dimension == dimension.as_str())
+            .expect("selected player dimension");
         let result = move_player_with_checks(
-            self.level_for_entity_mut(entity).map_err(game_error)?,
+            &mut live.level,
             entity,
             PlayerMovement {
                 position: target,
