@@ -501,7 +501,9 @@ impl Level {
         region
             .block_entity_state
             .prepare_published_chunk(&mut chunk, region.game_time);
-        region.block_entity_state.register_published_chunk(&chunk);
+        region
+            .block_entity_state
+            .register_published_chunk(&chunk, region.has_skylight)?;
         region
             .block_ticks
             .add_container(pos, std::mem::take(&mut chunk.block_ticks));
