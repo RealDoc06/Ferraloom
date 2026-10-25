@@ -11,6 +11,7 @@ pub mod item;
 pub mod language;
 pub mod level;
 pub mod loot;
+pub mod particles;
 pub mod predicates;
 pub mod scoreboard;
 pub mod stats;

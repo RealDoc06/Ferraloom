@@ -1,0 +1,46 @@
+[
+  {
+    "block": 1198,
+    "weathering_stage": 0,
+    "is_waxed": false
+  },
+  {
+    "block": 1199,
+    "weathering_stage": 1,
+    "is_waxed": false
+  },
+  {
+    "block": 1200,
+    "weathering_stage": 2,
+    "is_waxed": false
+  },
+  {
+    "block": 1201,
+    "weathering_stage": 3,
+    "is_waxed": false
+  },
+  {
+    "block": 1202,
+    "weathering_stage": 0,
+    "is_waxed": true,
+    "unwaxed": 1198
+  },
+  {
+    "block": 1203,
+    "weathering_stage": 1,
+    "is_waxed": true,
+    "unwaxed": 1199
+  },
+  {
+    "block": 1204,
+    "weathering_stage": 2,
+    "is_waxed": true,
+    "unwaxed": 1200
+  },
+  {
+    "block": 1205,
+    "weathering_stage": 3,
+    "is_waxed": true,
+    "unwaxed": 1201
+  }
+]

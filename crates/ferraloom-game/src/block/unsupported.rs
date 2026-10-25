@@ -55,6 +55,7 @@ pub enum BlockMethod {
     FluidRandomTick,
     BubbleColumnUpdate,
     CanSurvive,
+    IsPathfindable,
     CanPlaceLiquid,
     PlaceLiquid,
     PickupBlock,
@@ -104,6 +105,7 @@ impl BlockMethod {
             Self::Tick => Vanilla::Tick,
             Self::RandomTick => Vanilla::RandomTick,
             Self::CanSurvive => Vanilla::CanSurvive,
+            Self::IsPathfindable => Vanilla::IsPathfindable,
             Self::CollisionShape => Vanilla::GetCollisionShape,
             Self::OutlineShape => Vanilla::GetShape,
             Self::VisualShape => Vanilla::GetVisualShape,
@@ -141,6 +143,7 @@ impl BlockMethod {
                 | Self::UseItemOn
                 | Self::PlayerWillDestroy
                 | Self::CanSurvive
+                | Self::IsPathfindable
                 | Self::CanPlaceLiquid
                 | Self::PlaceLiquid
                 | Self::PickupBlock
@@ -188,6 +191,7 @@ impl BlockMethod {
             Self::FluidRandomTick => "fluid.randomTick",
             Self::BubbleColumnUpdate => "BubbleColumnBlock.updateColumn",
             Self::CanSurvive => "canSurvive",
+            Self::IsPathfindable => "isPathfindable",
             Self::CanPlaceLiquid => "canPlaceLiquid",
             Self::PlaceLiquid => "placeLiquid",
             Self::PickupBlock => "pickupBlock",
