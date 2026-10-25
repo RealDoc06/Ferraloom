@@ -996,7 +996,8 @@ impl World {
             ))
             .with_mob_variants(Arc::new(
                 ferraloom_game::entity::variant::MobVariants::load(resources)?,
-            )),
+            ))
+            .with_game_event_tags(Arc::new(ferraloom_data::datapack::TagSet::load(resources)?)),
         ))
     }
     /// Attach immutable dimension layers after the sole server clock manager

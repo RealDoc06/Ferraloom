@@ -289,6 +289,14 @@ pub fn player_touch(
 
 pub struct ItemEntityBehavior;
 impl Entity for ItemEntityBehavior {
+    /// Port of ItemEntity#dampensVibrations on the live effective item receiver.
+    fn dampens_vibrations(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
+        let stack = level.entity::<ItemEntity>(entity)?.item();
+        Ok(level.item_tags()?.contains_key(
+            ferraloom_data::tags::ItemTags::DAMPENS_VIBRATIONS,
+            stack.item(),
+        ))
+    }
     /// Port of ItemEntity#fireImmune and ItemStack#canBeHurtBy(inFire).
     fn fire_immune(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
         let item = level.entity::<ItemEntity>(entity)?;

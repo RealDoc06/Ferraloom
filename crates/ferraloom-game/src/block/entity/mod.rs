@@ -280,10 +280,10 @@ impl BlockEntityState {
         match self {
             Self::ChiseledBookShelf(_) => &chiseled_bookshelf::CHISELED_BOOKSHELF_ENTITY,
             Self::CreakingHeart(_) => &creaking_heart::CREAKING_HEART_ENTITY,
-            Self::SculkSensor(_)
-            | Self::CalibratedSculkSensor(_)
-            | Self::SculkShrieker(_)
-            | Self::SculkCatalyst(_) => &sculk::SCULK_ENTITY,
+            Self::SculkSensor(_) | Self::CalibratedSculkSensor(_) | Self::SculkShrieker(_) => {
+                &sculk::SCULK_ENTITY
+            }
+            Self::SculkCatalyst(_) => &sculk::CATALYST_ENTITY,
             Self::DaylightDetector(_) => &daylight_detector::DAYLIGHT_DETECTOR_ENTITY,
             Self::PotentSulfur(_) => &potent_sulfur::POTENT_SULFUR_ENTITY,
             Self::Command(_) => &super::containers::command::COMMAND_ENTITY,

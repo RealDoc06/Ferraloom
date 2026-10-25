@@ -18,7 +18,7 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Fluids](features/fluids.md) | 32 | 25 | 6 | 1 | 0 |
 | [Binary data, geometry and randomness](features/foundations.md) | 64 | 18 | 18 | 28 | 0 |
 | [Functions and macros](features/functions-macros.md) | 10 | 10 | 0 | 0 | 0 |
-| [Game events and vibrations](features/game-events.md) | 7 | 2 | 0 | 5 | 0 |
+| [Game events and vibrations](features/game-events.md) | 11 | 1 | 4 | 6 | 0 |
 | [Game rules](features/game-rules.md) | 76 | 1 | 5 | 70 | 0 |
 | [GameTest](features/gametest.md) | 23 | 23 | 0 | 0 | 0 |
 | [Inventory and menus](features/inventory-menus.md) | 63 | 12 | 51 | 0 | 0 |
@@ -50,4 +50,4 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Weather, time and environment](features/weather-time.md) | 85 | 85 | 0 | 0 | 0 |
 | [World storage and data fixing](features/world-storage.md) | 308 | 305 | 3 | 0 | 0 |
 | [World generation](features/worldgen.md) | 3115 | 2640 | 175 | 300 | 0 |
-| **Total** | **19611** | **8223** | **2828** | **8560** | **0** |
+| **Total** | **19615** | **8222** | **2832** | **8561** | **0** |
