@@ -33,7 +33,7 @@ fn speleothem_placement_keeps_native_support_fallback_and_cross_type_thickness_r
     let item = ItemStack::default();
     level
         .add_entity(
-            EntityRef(1),
+            EntityRef::fixture(crate::level::RegionId::FIXTURE, 1),
             EntityState::Player(Box::new(ServerPlayer::new(
                 Uuid::new(1, 2),
                 "building".into(),
@@ -50,13 +50,15 @@ fn speleothem_placement_keeps_native_support_fallback_and_cross_type_thickness_r
         level.set_block_state(POS, state(f[6])).unwrap();
         level.set_block_state(POS.below(1), state(f[2])).unwrap();
         level.set_block_state(POS.above(1), state(f[3])).unwrap();
-        let actor = level.entity_mut::<EntityData>(EntityRef(1)).unwrap();
+        let actor = level
+            .entity_mut::<EntityData>(EntityRef::fixture(crate::level::RegionId::FIXTURE, 1))
+            .unwrap();
         actor.pitch = f[4].parse().unwrap();
         actor.set_shared_flag(1, f[5] == "1");
         let context = BlockPlaceContext::new(
             &LevelReaderRef::Server(&level),
             UseOnContext::new(
-                Some(EntityRef(1)),
+                Some(EntityRef::fixture(crate::level::RegionId::FIXTURE, 1)),
                 InteractionHand::MainHand,
                 &item,
                 PlacementHit {

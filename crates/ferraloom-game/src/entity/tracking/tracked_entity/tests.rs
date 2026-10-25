@@ -37,7 +37,7 @@ fn item(level: &mut Level) -> EntityRef {
 fn player(level: &mut Level, position: Vec3) -> EntityRef {
     let id = level.next_entity_ref();
     let mut player = ServerPlayer::new(
-        Uuid::new(0, id.0 as i64),
+        Uuid::new(0, id.serial() as i64),
         "viewer".into(),
         level.next_entity_id(),
         position,

@@ -73,16 +73,17 @@ async fn default_noise_reaches_full_without_skips_and_synthetic_unported_is_reje
     }
     static PENDING: Behaviors = Behaviors::EMPTY.with_block(Block::STONE, &PendingPolicyFixture);
     let mut level = Level::new(Region::new(&PENDING), LevelContext::fixture(0, 63));
+    let unused_actor = level.next_entity_ref();
     let state = Block::STONE.default_state();
     ensure!(matches!(
-        level.call_step_on(state, BlockPos::ZERO, EntityRef(0)),
+        level.call_step_on(state, BlockPos::ZERO, unused_actor),
         Err(LevelError::UnsupportedBlock(Block::STONE))
     ));
     ensure!(level.unported_behavior_stats().skipped_calls == 0);
     level.set_unported_behavior(UnportedBehavior::Warn);
     ensure!(
         level
-            .call_step_on(state, BlockPos::ZERO, EntityRef(0))
+            .call_step_on(state, BlockPos::ZERO, unused_actor)
             .is_ok()
     );
     ensure!(level.unported_behavior_stats().skipped_calls == 1);

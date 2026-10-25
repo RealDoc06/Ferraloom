@@ -470,7 +470,7 @@ fn vanilla_single_entity_team_feedback_reads_completed_membership() {
     let commands = commands::Commands::default();
     for kind in ["player", "cow"] {
         let mut level = Level::new(Region::new(&BEHAVIORS), LevelContext::fixture(0, 63));
-        let entity = EntityRef(1);
+        let entity = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
         let uuid = Uuid::new(0, 1);
         let mut state = if kind == "player" {
             EntityState::Player(Box::new(ServerPlayer::new(
