@@ -250,10 +250,21 @@ impl BaseSpawner {
             .insert("id", Tag::String(kind.name().into()));
     }
     pub fn load(&mut self, tag: &CompoundTag) {
+        self.load_spawn_data(tag);
+        self.load_remaining(tag);
+    }
+    /// BaseSpawner#load invokes the class's setNextSpawnData callback here,
+    /// before replacing potentials and the remaining configuration fields.
+    fn load_spawn_data(&mut self, tag: &CompoundTag) -> bool {
         self.spawn_delay = i32::from(tag.get_short_or("Delay", 20));
         if let Some(value) = tag.get_compound("SpawnData").and_then(SpawnData::decode) {
             self.next = Some(self.insert(value));
+            true
+        } else {
+            false
         }
+    }
+    fn load_remaining(&mut self, tag: &CompoundTag) {
         let decoded = tag.get_list("SpawnPotentials").and_then(|list| {
             let mut total = 0i32;
             list.iter()
@@ -370,6 +381,29 @@ impl BlockEntity for SpawnerBehavior {
         };
         entity.spawner.load(tag);
     }
+    /// Port of SpawnerBlockEntity's setNextSpawnData override during load. The
+    /// flag-260 notification reads the world's current state, while the rest of
+    /// load continues on the original generation after that callback point.
+    fn load_additional_live(
+        &self,
+        handle: BlockEntityRef,
+        tag: &CompoundTag,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        let notify = level
+            .block_entity_mut::<SpawnerBlockEntity>(handle)?
+            .spawner
+            .load_spawn_data(tag);
+        if notify && level.block_entity_state(handle)?.data().has_level {
+            let state = level.get_block_state(handle.pos)?;
+            level.send_block_updated(handle.pos, state, state);
+        }
+        level
+            .block_entity_mut::<SpawnerBlockEntity>(handle)?
+            .spawner
+            .load_remaining(tag);
+        Ok(())
+    }
     fn save_additional(&self, state: &BlockEntityState) -> ferraloom_protocol::Result<CompoundTag> {
         let BlockEntityState::Spawner(entity) = state else {
             unreachable!()
@@ -385,3 +419,6 @@ impl BlockEntity for SpawnerBehavior {
         Ok(tag)
     }
 }
+
+#[cfg(test)]
+mod tests;
