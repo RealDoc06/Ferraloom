@@ -148,6 +148,41 @@ impl Drop for Bot {
     }
 }
 impl Bot {
+    /// Close this client's socket and release observations while keeping its session index stable.
+    pub async fn disconnect(&mut self) -> Result<()> {
+        let tasks = std::mem::take(&mut self.tasks);
+        for task in &tasks {
+            task.abort();
+        }
+        let mut failure = None;
+        for task in tasks {
+            if let Err(error) = task.await
+                && !error.is_cancelled()
+                && failure.is_none()
+            {
+                failure = Some(error);
+            }
+        }
+        *self.state.lock().unwrap() = BotState {
+            error: Some("client disconnected".into()),
+            ..Default::default()
+        };
+        *self.sequence.lock().unwrap() = Sequence {
+            login: Vec::new(),
+            configuration: Vec::new(),
+            registries: Vec::new(),
+            join: Vec::new(),
+        };
+        // The closed broadcast channel can otherwise retain decoded chunk packets in its ring.
+        let (_, events) = broadcast::channel(1);
+        self.events = events;
+        if let Some(error) = failure {
+            Err(error.into())
+        } else {
+            Ok(())
+        }
+    }
+
     pub async fn connect(address: SocketAddr, name: &str) -> Result<Self> {
         tokio::time::timeout(Duration::from_secs(180), Self::connect_inner(address, name))
             .await

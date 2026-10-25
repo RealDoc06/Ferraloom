@@ -34,7 +34,7 @@ impl SavedWorld {
         let path = self
             .access
             .path()
-            .join("advancements")
+            .join("players/advancements")
             .join(format!("{uuid}.json"));
         Ok(serde_json::from_slice(
             &std::fs::read(&path).with_context(|| format!("saved player advancements {name}"))?,
