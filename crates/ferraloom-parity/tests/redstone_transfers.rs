@@ -28,7 +28,9 @@ async fn hoppers(bot: &mut Bot, log: &mut ObservationLog) -> Result<()> {
     }
     state(bot, origin.east(4), "minecraft:barrel").await?;
     state(bot,origin.above(1),"minecraft:barrel{Items:[{Slot:0b,id:\"minecraft:dirt\",count:3},{Slot:1b,id:\"minecraft:stone\",count:2}]}").await?;
-    for tick in 0..=56 {
+    // Allow the final source item to cross all four staggered eight-tick
+    // cooldowns, including the two lock intervals above.
+    for tick in 0..=96 {
         if [0, 24].contains(&tick) {
             source(bot, origin.north(1), true).await?;
         }

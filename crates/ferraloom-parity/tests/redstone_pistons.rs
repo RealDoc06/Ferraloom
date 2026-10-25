@@ -361,9 +361,10 @@ async fn immovable(bot: &mut Bot, log: &mut ObservationLog) -> Result<()> {
     )
     .await?;
     ensure!(block(bot, high)?.get(p::EXTENDED) == Some(false));
-    // Native default border is x=29,999,984. The next destination is outside;
-    // no /worldborder command or synthetic border state is needed.
-    let edge = BlockPos::new(29_999_982, -59, 8);
+    // Native isPushable checks the current block against the border. The
+    // blocker itself must be outside: pushing an inside block into outside air
+    // is allowed by addBlockLine's early air return. No synthetic border state.
+    let edge = BlockPos::new(29_999_983, -59, 8);
     bot.teleport([29_999_980.5, -59.0, 11.5]).await?;
     state(bot, edge, "minecraft:piston[facing=east]").await?;
     set(bot, edge.east(1), Block::STONE).await?;
