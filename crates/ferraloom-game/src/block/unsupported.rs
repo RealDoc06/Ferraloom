@@ -55,6 +55,7 @@ pub enum BlockMethod {
     FluidRandomTick,
     BubbleColumnUpdate,
     CanSurvive,
+    IsPathfindable,
     CanPlaceLiquid,
     PlaceLiquid,
     PickupBlock,
@@ -81,6 +82,10 @@ pub enum BlockMethod {
     PlayerWillDestroy,
     SpawnDestroyByEntityParticles,
     SpawnDestroyParticles,
+    GetDestroyProgress,
+    Attack,
+    Destroy,
+    PlayerDestroy,
 }
 impl BlockMethod {
     pub(crate) const fn vanilla_method(self) -> Option<ferraloom_data::BlockMethod> {
@@ -104,6 +109,7 @@ impl BlockMethod {
             Self::Tick => Vanilla::Tick,
             Self::RandomTick => Vanilla::RandomTick,
             Self::CanSurvive => Vanilla::CanSurvive,
+            Self::IsPathfindable => Vanilla::IsPathfindable,
             Self::CollisionShape => Vanilla::GetCollisionShape,
             Self::OutlineShape => Vanilla::GetShape,
             Self::VisualShape => Vanilla::GetVisualShape,
@@ -126,6 +132,10 @@ impl BlockMethod {
             Self::PlayerWillDestroy => Vanilla::PlayerWillDestroy,
             Self::SpawnDestroyByEntityParticles => Vanilla::SpawnDestroyByEntityParticles,
             Self::SpawnDestroyParticles => Vanilla::SpawnDestroyParticles,
+            Self::GetDestroyProgress => Vanilla::GetDestroyProgress,
+            Self::Attack => Vanilla::Attack,
+            Self::Destroy => Vanilla::Destroy,
+            Self::PlayerDestroy => Vanilla::PlayerDestroy,
             Self::CanPlaceLiquid => Vanilla::CanPlaceLiquid,
             Self::PlaceLiquid => Vanilla::PlaceLiquid,
             Self::PickupBlock => Vanilla::PickupBlock,
@@ -136,11 +146,13 @@ impl BlockMethod {
         !matches!(
             self,
             Self::GetMenuProvider
+                | Self::GetDestroyProgress
                 | Self::GetDrops
                 | Self::UseWithoutItem
                 | Self::UseItemOn
                 | Self::PlayerWillDestroy
                 | Self::CanSurvive
+                | Self::IsPathfindable
                 | Self::CanPlaceLiquid
                 | Self::PlaceLiquid
                 | Self::PickupBlock
@@ -188,6 +200,7 @@ impl BlockMethod {
             Self::FluidRandomTick => "fluid.randomTick",
             Self::BubbleColumnUpdate => "BubbleColumnBlock.updateColumn",
             Self::CanSurvive => "canSurvive",
+            Self::IsPathfindable => "isPathfindable",
             Self::CanPlaceLiquid => "canPlaceLiquid",
             Self::PlaceLiquid => "placeLiquid",
             Self::PickupBlock => "pickupBlock",
@@ -214,6 +227,10 @@ impl BlockMethod {
             Self::PlayerWillDestroy => "playerWillDestroy",
             Self::SpawnDestroyByEntityParticles => "spawnDestroyByEntityParticles",
             Self::SpawnDestroyParticles => "spawnDestroyParticles",
+            Self::GetDestroyProgress => "getDestroyProgress",
+            Self::Attack => "attack",
+            Self::Destroy => "destroy",
+            Self::PlayerDestroy => "playerDestroy",
         }
     }
 }

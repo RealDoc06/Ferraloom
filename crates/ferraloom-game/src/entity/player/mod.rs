@@ -8,10 +8,12 @@ pub mod cooldowns;
 pub mod equipment;
 mod experience;
 pub mod food;
+pub mod game_mode;
 mod interaction;
 pub(crate) mod item_tick;
 pub mod shoulders;
 mod spawn;
+mod stuck;
 mod tick;
 pub use tick::{award_stat, player_do_tick_with_tick_rate, reset_stat};
 pub mod travel;
@@ -69,6 +71,7 @@ pub struct ServerPlayer {
     pub changing_dimension: bool,
     pub hurt_dir: f32,
     pub(crate) spawn_extra_particles_on_fall: bool,
+    starting_to_fall_position: Option<Vec3>,
     shoulder_entity_left: CompoundTag,
     shoulder_entity_right: CompoundTag,
     time_entity_sat_on_shoulder: i64,
@@ -89,6 +92,7 @@ pub struct ServerPlayer {
     pub name: String,
     pub known_movement: Vec3,
     pub game_mode: GameType,
+    pub block_breaking: game_mode::BlockBreakingState,
     pub abilities: abilities::Abilities,
     pub last_client_input: ferraloom_protocol::play::Input,
     pub text_filtering_enabled: bool,
@@ -237,6 +241,7 @@ impl ServerPlayer {
             changing_dimension: false,
             hurt_dir: 0.0,
             spawn_extra_particles_on_fall: false,
+            starting_to_fall_position: None,
             shoulder_entity_left: CompoundTag::new(),
             shoulder_entity_right: CompoundTag::new(),
             time_entity_sat_on_shoulder: 0,
@@ -256,6 +261,7 @@ impl ServerPlayer {
             last_recorded_level: i32::MIN,
             known_movement: Vec3::ZERO,
             game_mode,
+            block_breaking: Default::default(),
             abilities: {
                 let mut abilities = abilities::Abilities::default();
                 abilities.update_game_mode(game_mode);
@@ -659,12 +665,11 @@ pub fn move_player_with_checks(
         let pos = movement::get_on_pos(entity, 0.2_f32, level)?;
         let state = level.get_block_state(pos)?;
         movement::check_fall_damage(entity, delta.y, input.on_ground, state, pos, level)?;
-        let player = level.entity_mut::<ServerPlayer>(entity)?;
-        player.known_movement = delta;
+        level.entity_mut::<ServerPlayer>(entity)?.known_movement = delta;
         if moved_up {
-            player.fall_distance = 0.0;
+            crate::entity::reset_fall_distance(entity, level)?;
         }
-        player.last_good = target;
+        level.entity_mut::<ServerPlayer>(entity)?.last_good = target;
         Ok(MovementResult::Accepted)
     } else {
         level.set_entity_pos(entity, start)?;
@@ -861,6 +866,18 @@ impl crate::entity::Entity for PlayerBehavior {
             ),
         });
         Ok(())
+    }
+    fn reset_fall_distance(&self, entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
+        stuck::reset_fall_distance(entity, level)
+    }
+    fn make_stuck_in_block(
+        &self,
+        entity: EntityRef,
+        state: ferraloom_data::BlockState,
+        multiplier: Vec3,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        stuck::make_stuck_in_block(self, entity, state, multiplier, level)
     }
     fn check_fall_damage(
         &self,
@@ -1266,6 +1283,8 @@ impl crate::entity::Entity for PlayerBehavior {
         crate::entity::living::ignite_for_ticks(entity, ticks, level)
     }
     fn tick(&self, entity: crate::entity::EntityRef, level: &mut Level) -> Result<(), LevelError> {
+        // ServerPlayer#tick: gameMode precedes warden, damage cooldown and menus.
+        game_mode::tick(entity, level).map_err(LevelError::from)?;
         let player = level.entity_mut::<ServerPlayer>(entity)?;
         if player.damage_cooldown_time > 0 {
             player.damage_cooldown_time -= 1;
@@ -1273,7 +1292,9 @@ impl crate::entity::Entity for PlayerBehavior {
         crate::inventory::tick_container_menu(entity, level)?;
         // Pending camera following precedes TICK.
         crate::advancements::criteria::tick(level, entity)?;
-        // Pending levitation/falling/vehicle-lava tracking precedes attributes.
+        // Pending levitation tracking precedes the native fall-start capture.
+        stuck::track_start_falling_position(entity, level)?;
+        // Pending vehicle-lava tracking precedes attributes.
         level
             .entity_mut::<ServerPlayer>(entity)?
             .update_interaction_range_attributes();

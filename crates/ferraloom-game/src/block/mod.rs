@@ -2,6 +2,7 @@
 use crate::level::{Level, LevelError, redstone::Orientation};
 use ferraloom_data::{Block, BlockState, FluidState};
 use ferraloom_util::{BlockPos, Direction};
+pub mod breaking;
 pub mod building;
 mod clone_item;
 pub mod containers;
@@ -44,6 +45,15 @@ pub enum LevelReaderRef<'call, 'chunks> {
     PathNavigation(crate::level::path_navigation_region::PathNavigationReader<'call>),
 }
 impl LevelReaderRef<'_, '_> {
+    /// Port of BlockStateBase#isPathfindable. Queries remain required even under Warn.
+    pub fn is_pathfindable(
+        &self,
+        state: BlockState,
+        computation: crate::entity::ai::pathfinder::PathComputationType,
+    ) -> Result<bool, LevelError> {
+        self.required_behavior(state.block(), BlockMethod::IsPathfindable)?
+            .is_pathfindable(state, computation, self)
+    }
     pub fn get_block_state(&self, pos: BlockPos) -> Result<BlockState, LevelError> {
         match self {
             Self::Server(level) => level.get_block_state(pos),
@@ -295,9 +305,78 @@ impl<'chunks> LevelAccessRef<'_, 'chunks> {
     }
 }
 
+/// Port of BlockBehaviour#isPathfindable. The extracted collision shape uses
+/// EmptyBlockGetter at ZERO, exactly as this body does. Dynamic states normally
+/// fall through isCollisionShapeFullBlock to the Block virtual; its only
+/// overrides, SpeleothemBlock and BambooStalkBlock, override isPathfindable too
+/// (both false), so neither reaches this base computation.
+fn base_is_pathfindable(
+    state: BlockState,
+    computation: crate::entity::ai::pathfinder::PathComputationType,
+    level: &LevelReaderRef<'_, '_>,
+) -> Result<bool, LevelError> {
+    use crate::entity::ai::pathfinder::PathComputationType;
+    match computation {
+        PathComputationType::Land | PathComputationType::Air => Ok(
+            !ferraloom_util::shapes::is_shape_full_block(state.cached_shapes().collision.get()),
+        ),
+        PathComputationType::Water => Ok(level.fluid_tags()?.contains_key(
+            ferraloom_data::tags::FluidTags::WATER,
+            state.data().fluid.fluid_type,
+        )),
+    }
+}
+
 /// Port of BlockBehaviour's virtual methods. Defaults are vanilla base behavior;
 /// only classes explicitly registered by dispatch may inherit these defaults.
 pub trait BlockBehavior: Sync {
+    /// Port of BlockBehaviour#isPathfindable; the reader supplies live tag membership.
+    fn is_pathfindable(
+        &self,
+        state: BlockState,
+        computation: crate::entity::ai::pathfinder::PathComputationType,
+        level: &LevelReaderRef<'_, '_>,
+    ) -> Result<bool, LevelError> {
+        base_is_pathfindable(state, computation, level)
+    }
+    /// Port of BlockBehaviour#getDestroyProgress, including its hardness guard.
+    fn get_destroy_progress(
+        &self,
+        state: BlockState,
+        _pos: BlockPos,
+        player: crate::entity::EntityRef,
+        level: &mut Level,
+    ) -> Result<f32, LevelError> {
+        breaking::get_destroy_progress(state, player, level)
+    }
+    /// Port of BlockBehaviour#attack's inherited no-op.
+    fn attack(
+        &self,
+        _state: BlockState,
+        _pos: BlockPos,
+        _player: crate::entity::EntityRef,
+        _level: &mut Level,
+    ) -> Result<(), LevelError> {
+        Ok(())
+    }
+    /// Port of Block#destroy's inherited no-op. MovingPistonBlock overrides it.
+    fn destroy(
+        &self,
+        _state: BlockState,
+        _pos: BlockPos,
+        _level: &mut Level,
+    ) -> Result<(), LevelError> {
+        Ok(())
+    }
+    /// Port of Block#playerDestroy. The original receiver stays independent
+    /// from the state passed by a family override's native super call.
+    fn player_destroy(
+        &self,
+        context: breaking::PlayerDestroyContext<'_>,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        breaking::player_destroy(context, level)
+    }
     /// Port of BlockBehaviour#getMenuProvider's absent base provider.
     fn get_menu_provider(
         &self,
@@ -360,8 +439,7 @@ pub trait BlockBehavior: Sync {
             .required_block_behavior(state.block(), BlockMethod::SpawnDestroyByEntityParticles)?
             .spawn_destroy_by_entity_particles(state, pos, None, level)
     }
-    /// Port of Block#playerWillDestroy. The guarded-piglin AI side effect
-    /// remains a required unported call until PiglinAi is implemented.
+    /// Port of Block#playerWillDestroy, including PiglinAi's live nearby query.
     fn player_will_destroy(
         &self,
         state: BlockState,
@@ -376,9 +454,7 @@ pub trait BlockBehavior: Sync {
             ferraloom_data::tags::BlockTags::GUARDED_BY_PIGLINS,
             state.block(),
         ) {
-            return Err(LevelError::UnsupportedEntity(
-                ferraloom_data::EntityType::PIGLIN,
-            ));
+            crate::entity::monster::piglin::ai::anger_nearby_piglins(level, player, false)?;
         }
         level.game_event(
             ferraloom_data::registries::game_event::Id::BLOCK_DESTROY,

@@ -68,6 +68,8 @@ pub struct LivingEntity {
     pub(super) last_hurt_mob_timestamp: i32,
     pub(super) last_damage_source: Option<super::DamageSource>,
     pub(super) last_damage_stamp: i64,
+    current_impulse_context_reset_grace_time: i32,
+    current_impulse_impact_pos: Option<ferraloom_util::Vec3>,
 }
 impl LivingEntity {
     /// Port of LivingEntity's constructor after Entity's derived metadata build.
@@ -119,6 +121,8 @@ impl LivingEntity {
             last_hurt_mob_timestamp: 0,
             last_damage_source: None,
             last_damage_stamp: 0,
+            current_impulse_context_reset_grace_time: 0,
+            current_impulse_impact_pos: None,
         };
         living.set_health(living.max_health());
         living.parent.blocks_building = true;
@@ -131,6 +135,53 @@ impl LivingEntity {
     /// Port of LivingEntity#isUsingItem (mask 1, not a bit index).
     pub fn is_using_item(&self) -> bool {
         self.parent.entity_data.get(data::LIVING_ENTITY_FLAGS) & 1 > 0
+    }
+    /// Port of LivingEntity#applyPostImpulseGraceTime.
+    pub fn apply_post_impulse_grace_time(&mut self, ticks: i32) {
+        self.current_impulse_context_reset_grace_time =
+            self.current_impulse_context_reset_grace_time.max(ticks);
+    }
+    /// Port of LivingEntity#setIgnoreFallDamageFromCurrentImpulse. Turning it
+    /// off clears grace only; the captured position is cleared by resetContext.
+    pub fn set_ignore_fall_damage_from_current_impulse(
+        &mut self,
+        ignore: bool,
+        position: ferraloom_util::Vec3,
+    ) {
+        if ignore {
+            self.apply_post_impulse_grace_time(40);
+            self.current_impulse_impact_pos = Some(position);
+        } else {
+            self.current_impulse_context_reset_grace_time = 0;
+        }
+    }
+    pub fn current_impulse_impact_pos(&self) -> Option<ferraloom_util::Vec3> {
+        self.current_impulse_impact_pos
+    }
+    /// Port of LivingEntity#isIgnoringFallDamageFromCurrentImpulse.
+    pub fn is_ignoring_fall_damage_from_current_impulse(&self) -> bool {
+        self.current_impulse_impact_pos.is_some()
+    }
+    /// Port of LivingEntity#isInPostImpulseGraceTime.
+    pub fn is_in_post_impulse_grace_time(&self) -> bool {
+        self.current_impulse_context_reset_grace_time > 0
+    }
+    /// Port of LivingEntity#resetCurrentImpulseContext.
+    pub fn reset_current_impulse_context(&mut self) {
+        self.current_impulse_context_reset_grace_time = 0;
+        self.current_impulse_impact_pos = None;
+    }
+    /// Port of LivingEntity#tryResetCurrentImpulseContext; negative loaded grace
+    /// is intentionally distinct from zero, even though it is not active grace.
+    pub fn try_reset_current_impulse_context(&mut self) {
+        if self.current_impulse_context_reset_grace_time == 0 {
+            self.reset_current_impulse_context();
+        }
+    }
+    pub(crate) fn tick_current_impulse_grace_time(&mut self) {
+        if self.current_impulse_context_reset_grace_time > 0 {
+            self.current_impulse_context_reset_grace_time -= 1;
+        }
     }
     /// Port of LivingEntity#getUseItem.
     pub fn get_use_item(&self) -> &ItemStack {
@@ -240,6 +291,15 @@ impl LivingEntity {
                 .saved
                 .get_int_or("ticks_since_last_hurt_by_mob", 0),
         );
+        self.current_impulse_context_reset_grace_time = self
+            .parent
+            .saved
+            .get_int_or("current_impulse_context_reset_grace_time", 0);
+        self.current_impulse_impact_pos = self
+            .parent
+            .saved
+            .get("current_explosion_impact_pos")
+            .and_then(super::persistence::optional_vector);
         self.equipment = self
             .parent
             .saved
@@ -262,6 +322,17 @@ impl LivingEntity {
             "AbsorptionAmount",
             Tag::Float(if absorption == 0.0 { 0.0 } else { absorption }),
         );
+        tag.insert(
+            "current_impulse_context_reset_grace_time",
+            Tag::Int(self.current_impulse_context_reset_grace_time),
+        );
+        tag.remove("current_explosion_impact_pos");
+        if let Some(position) = self.current_impulse_impact_pos {
+            tag.insert(
+                "current_explosion_impact_pos",
+                super::persistence::codec_vector_tag(position),
+            );
+        }
         tag.insert("attributes", self.attributes.save_nbt());
         tag.remove("active_effects");
         if !self.active_effects.is_empty() {
