@@ -79,6 +79,15 @@ impl Level {
                 .entity::<crate::entity::item::ItemEntity>(entity)?
                 .stack_parts(slot.slot)
                 .ok_or(MenuError::InvalidSlot(slot.slot as i32)),
+            ContainerHandle::LivingEquipment(entity) => {
+                let equipment_slot = *crate::entity::player::equipment::SLOTS
+                    .get(slot.slot)
+                    .ok_or(MenuError::InvalidSlot(slot.slot as i32))?;
+                Ok(self
+                    .entity::<crate::entity::LivingEntity>(entity)?
+                    .equipment
+                    .stack_parts(equipment_slot))
+            }
         }
     }
     fn stack_parts_mut(
@@ -133,6 +142,15 @@ impl Level {
                 .entity_mut::<crate::entity::item::ItemEntity>(entity)?
                 .stack_parts_mut(slot.slot)
                 .ok_or(MenuError::InvalidSlot(slot.slot as i32)),
+            ContainerHandle::LivingEquipment(entity) => {
+                let equipment_slot = *crate::entity::player::equipment::SLOTS
+                    .get(slot.slot)
+                    .ok_or(MenuError::InvalidSlot(slot.slot as i32))?;
+                Ok(self
+                    .entity_mut::<crate::entity::LivingEntity>(entity)?
+                    .equipment
+                    .stack_parts_mut(equipment_slot))
+            }
         }
     }
     fn retain_stack_owner(&mut self, owner: ContainerHandle) -> Result<()> {
@@ -161,14 +179,18 @@ impl Level {
             ContainerHandle::PlayerInventory(_)
             | ContainerHandle::MenuListenerCopies { .. }
             | ContainerHandle::MenuOperationStacks { .. } => {}
-            ContainerHandle::Entity(entity) => self.retain_entity(entity)?,
+            ContainerHandle::Entity(entity) | ContainerHandle::LivingEquipment(entity) => {
+                self.retain_entity(entity)?
+            }
         }
         Ok(())
     }
     fn release_stack_owner(&mut self, owner: ContainerHandle) {
         match owner {
             ContainerHandle::BlockEntity(handle) => self.release_block_entity(handle),
-            ContainerHandle::Entity(entity) => self.release_entity(entity),
+            ContainerHandle::Entity(entity) | ContainerHandle::LivingEquipment(entity) => {
+                self.release_entity(entity)
+            }
             ContainerHandle::MenuLocal { player, menu, .. }
             | ContainerHandle::MenuCarried { player, menu } => {
                 if let Ok(player) = self.entity_mut::<ServerPlayer>(player)

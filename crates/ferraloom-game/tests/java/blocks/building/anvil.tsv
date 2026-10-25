@@ -1,0 +1,645 @@
+damage	12962	12966
+tick	12962	0	false	0	12962	true	0	-
+tick	12962	0	false	1	12962	true	0	-
+tick	12962	0	false	2	0	false	1	true,1073741824,40
+tick	12962	0	false	3	0	false	1	true,1073741824,40
+tick	12962	0	true	0	12962	true	0	-
+tick	12962	0	true	1	12962	true	0	-
+tick	12962	0	true	2	0	false	1	true,1073741824,40
+tick	12962	0	true	3	0	false	1	true,1073741824,40
+tick	12962	1	false	0	12962	true	0	-
+tick	12962	1	false	1	12962	true	0	-
+tick	12962	1	false	2	12962	false	0	-
+tick	12962	1	false	3	12962	false	0	-
+tick	12962	1	true	0	12962	true	0	-
+tick	12962	1	true	1	12962	true	0	-
+tick	12962	1	true	2	12962	false	0	-
+tick	12962	1	true	3	12962	false	0	-
+tick	12962	89	false	0	12962	true	0	-
+tick	12962	89	false	1	12962	true	0	-
+tick	12962	89	false	2	0	false	1	true,1073741824,40
+tick	12962	89	false	3	0	false	1	true,1073741824,40
+tick	12962	89	true	0	12962	true	0	-
+tick	12962	89	true	1	12962	true	0	-
+tick	12962	89	true	2	0	false	1	true,1073741824,40
+tick	12962	89	true	3	0	false	1	true,1073741824,40
+tick	12962	4962	false	0	12962	true	0	-
+tick	12962	4962	false	1	12962	true	0	-
+tick	12962	4962	false	2	0	false	1	true,1073741824,40
+tick	12962	4962	false	3	0	false	1	true,1073741824,40
+tick	12962	4962	true	0	12962	true	0	-
+tick	12962	4962	true	1	12962	true	0	-
+tick	12962	4962	true	2	0	false	1	true,1073741824,40
+tick	12962	4962	true	3	0	false	1	true,1073741824,40
+tick	12962	2362	false	0	12962	true	0	-
+tick	12962	2362	false	1	12962	true	0	-
+tick	12962	2362	false	2	12962	false	0	-
+tick	12962	2362	false	3	12962	false	0	-
+tick	12962	2362	true	0	12962	true	0	-
+tick	12962	2362	true	1	12962	true	0	-
+tick	12962	2362	true	2	12962	false	0	-
+tick	12962	2362	true	3	12962	false	0	-
+tick	12962	15252	false	0	12962	true	0	-
+tick	12962	15252	false	1	12962	true	0	-
+tick	12962	15252	false	2	12962	false	0	-
+tick	12962	15252	false	3	12962	false	0	-
+tick	12962	15252	true	0	12962	true	0	-
+tick	12962	15252	true	1	12962	true	0	-
+tick	12962	15252	true	2	12962	false	0	-
+tick	12962	15252	true	3	12962	false	0	-
+event	12962	false	false	[1031]
+event	12962	false	true	[1029]
+event	12962	true	false	[]
+event	12962	true	true	[]
+damage	12963	12967
+tick	12963	0	false	0	12963	true	0	-
+tick	12963	0	false	1	12963	true	0	-
+tick	12963	0	false	2	0	false	1	true,1073741824,40
+tick	12963	0	false	3	0	false	1	true,1073741824,40
+tick	12963	0	true	0	12963	true	0	-
+tick	12963	0	true	1	12963	true	0	-
+tick	12963	0	true	2	0	false	1	true,1073741824,40
+tick	12963	0	true	3	0	false	1	true,1073741824,40
+tick	12963	1	false	0	12963	true	0	-
+tick	12963	1	false	1	12963	true	0	-
+tick	12963	1	false	2	12963	false	0	-
+tick	12963	1	false	3	12963	false	0	-
+tick	12963	1	true	0	12963	true	0	-
+tick	12963	1	true	1	12963	true	0	-
+tick	12963	1	true	2	12963	false	0	-
+tick	12963	1	true	3	12963	false	0	-
+tick	12963	89	false	0	12963	true	0	-
+tick	12963	89	false	1	12963	true	0	-
+tick	12963	89	false	2	0	false	1	true,1073741824,40
+tick	12963	89	false	3	0	false	1	true,1073741824,40
+tick	12963	89	true	0	12963	true	0	-
+tick	12963	89	true	1	12963	true	0	-
+tick	12963	89	true	2	0	false	1	true,1073741824,40
+tick	12963	89	true	3	0	false	1	true,1073741824,40
+tick	12963	4962	false	0	12963	true	0	-
+tick	12963	4962	false	1	12963	true	0	-
+tick	12963	4962	false	2	0	false	1	true,1073741824,40
+tick	12963	4962	false	3	0	false	1	true,1073741824,40
+tick	12963	4962	true	0	12963	true	0	-
+tick	12963	4962	true	1	12963	true	0	-
+tick	12963	4962	true	2	0	false	1	true,1073741824,40
+tick	12963	4962	true	3	0	false	1	true,1073741824,40
+tick	12963	2362	false	0	12963	true	0	-
+tick	12963	2362	false	1	12963	true	0	-
+tick	12963	2362	false	2	12963	false	0	-
+tick	12963	2362	false	3	12963	false	0	-
+tick	12963	2362	true	0	12963	true	0	-
+tick	12963	2362	true	1	12963	true	0	-
+tick	12963	2362	true	2	12963	false	0	-
+tick	12963	2362	true	3	12963	false	0	-
+tick	12963	15252	false	0	12963	true	0	-
+tick	12963	15252	false	1	12963	true	0	-
+tick	12963	15252	false	2	12963	false	0	-
+tick	12963	15252	false	3	12963	false	0	-
+tick	12963	15252	true	0	12963	true	0	-
+tick	12963	15252	true	1	12963	true	0	-
+tick	12963	15252	true	2	12963	false	0	-
+tick	12963	15252	true	3	12963	false	0	-
+event	12963	false	false	[1031]
+event	12963	false	true	[1029]
+event	12963	true	false	[]
+event	12963	true	true	[]
+damage	12964	12968
+tick	12964	0	false	0	12964	true	0	-
+tick	12964	0	false	1	12964	true	0	-
+tick	12964	0	false	2	0	false	1	true,1073741824,40
+tick	12964	0	false	3	0	false	1	true,1073741824,40
+tick	12964	0	true	0	12964	true	0	-
+tick	12964	0	true	1	12964	true	0	-
+tick	12964	0	true	2	0	false	1	true,1073741824,40
+tick	12964	0	true	3	0	false	1	true,1073741824,40
+tick	12964	1	false	0	12964	true	0	-
+tick	12964	1	false	1	12964	true	0	-
+tick	12964	1	false	2	12964	false	0	-
+tick	12964	1	false	3	12964	false	0	-
+tick	12964	1	true	0	12964	true	0	-
+tick	12964	1	true	1	12964	true	0	-
+tick	12964	1	true	2	12964	false	0	-
+tick	12964	1	true	3	12964	false	0	-
+tick	12964	89	false	0	12964	true	0	-
+tick	12964	89	false	1	12964	true	0	-
+tick	12964	89	false	2	0	false	1	true,1073741824,40
+tick	12964	89	false	3	0	false	1	true,1073741824,40
+tick	12964	89	true	0	12964	true	0	-
+tick	12964	89	true	1	12964	true	0	-
+tick	12964	89	true	2	0	false	1	true,1073741824,40
+tick	12964	89	true	3	0	false	1	true,1073741824,40
+tick	12964	4962	false	0	12964	true	0	-
+tick	12964	4962	false	1	12964	true	0	-
+tick	12964	4962	false	2	0	false	1	true,1073741824,40
+tick	12964	4962	false	3	0	false	1	true,1073741824,40
+tick	12964	4962	true	0	12964	true	0	-
+tick	12964	4962	true	1	12964	true	0	-
+tick	12964	4962	true	2	0	false	1	true,1073741824,40
+tick	12964	4962	true	3	0	false	1	true,1073741824,40
+tick	12964	2362	false	0	12964	true	0	-
+tick	12964	2362	false	1	12964	true	0	-
+tick	12964	2362	false	2	12964	false	0	-
+tick	12964	2362	false	3	12964	false	0	-
+tick	12964	2362	true	0	12964	true	0	-
+tick	12964	2362	true	1	12964	true	0	-
+tick	12964	2362	true	2	12964	false	0	-
+tick	12964	2362	true	3	12964	false	0	-
+tick	12964	15252	false	0	12964	true	0	-
+tick	12964	15252	false	1	12964	true	0	-
+tick	12964	15252	false	2	12964	false	0	-
+tick	12964	15252	false	3	12964	false	0	-
+tick	12964	15252	true	0	12964	true	0	-
+tick	12964	15252	true	1	12964	true	0	-
+tick	12964	15252	true	2	12964	false	0	-
+tick	12964	15252	true	3	12964	false	0	-
+event	12964	false	false	[1031]
+event	12964	false	true	[1029]
+event	12964	true	false	[]
+event	12964	true	true	[]
+damage	12965	12969
+tick	12965	0	false	0	12965	true	0	-
+tick	12965	0	false	1	12965	true	0	-
+tick	12965	0	false	2	0	false	1	true,1073741824,40
+tick	12965	0	false	3	0	false	1	true,1073741824,40
+tick	12965	0	true	0	12965	true	0	-
+tick	12965	0	true	1	12965	true	0	-
+tick	12965	0	true	2	0	false	1	true,1073741824,40
+tick	12965	0	true	3	0	false	1	true,1073741824,40
+tick	12965	1	false	0	12965	true	0	-
+tick	12965	1	false	1	12965	true	0	-
+tick	12965	1	false	2	12965	false	0	-
+tick	12965	1	false	3	12965	false	0	-
+tick	12965	1	true	0	12965	true	0	-
+tick	12965	1	true	1	12965	true	0	-
+tick	12965	1	true	2	12965	false	0	-
+tick	12965	1	true	3	12965	false	0	-
+tick	12965	89	false	0	12965	true	0	-
+tick	12965	89	false	1	12965	true	0	-
+tick	12965	89	false	2	0	false	1	true,1073741824,40
+tick	12965	89	false	3	0	false	1	true,1073741824,40
+tick	12965	89	true	0	12965	true	0	-
+tick	12965	89	true	1	12965	true	0	-
+tick	12965	89	true	2	0	false	1	true,1073741824,40
+tick	12965	89	true	3	0	false	1	true,1073741824,40
+tick	12965	4962	false	0	12965	true	0	-
+tick	12965	4962	false	1	12965	true	0	-
+tick	12965	4962	false	2	0	false	1	true,1073741824,40
+tick	12965	4962	false	3	0	false	1	true,1073741824,40
+tick	12965	4962	true	0	12965	true	0	-
+tick	12965	4962	true	1	12965	true	0	-
+tick	12965	4962	true	2	0	false	1	true,1073741824,40
+tick	12965	4962	true	3	0	false	1	true,1073741824,40
+tick	12965	2362	false	0	12965	true	0	-
+tick	12965	2362	false	1	12965	true	0	-
+tick	12965	2362	false	2	12965	false	0	-
+tick	12965	2362	false	3	12965	false	0	-
+tick	12965	2362	true	0	12965	true	0	-
+tick	12965	2362	true	1	12965	true	0	-
+tick	12965	2362	true	2	12965	false	0	-
+tick	12965	2362	true	3	12965	false	0	-
+tick	12965	15252	false	0	12965	true	0	-
+tick	12965	15252	false	1	12965	true	0	-
+tick	12965	15252	false	2	12965	false	0	-
+tick	12965	15252	false	3	12965	false	0	-
+tick	12965	15252	true	0	12965	true	0	-
+tick	12965	15252	true	1	12965	true	0	-
+tick	12965	15252	true	2	12965	false	0	-
+tick	12965	15252	true	3	12965	false	0	-
+event	12965	false	false	[1031]
+event	12965	false	true	[1029]
+event	12965	true	false	[]
+event	12965	true	true	[]
+damage	12966	12970
+tick	12966	0	false	0	12966	true	0	-
+tick	12966	0	false	1	12966	true	0	-
+tick	12966	0	false	2	0	false	1	true,1073741824,40
+tick	12966	0	false	3	0	false	1	true,1073741824,40
+tick	12966	0	true	0	12966	true	0	-
+tick	12966	0	true	1	12966	true	0	-
+tick	12966	0	true	2	0	false	1	true,1073741824,40
+tick	12966	0	true	3	0	false	1	true,1073741824,40
+tick	12966	1	false	0	12966	true	0	-
+tick	12966	1	false	1	12966	true	0	-
+tick	12966	1	false	2	12966	false	0	-
+tick	12966	1	false	3	12966	false	0	-
+tick	12966	1	true	0	12966	true	0	-
+tick	12966	1	true	1	12966	true	0	-
+tick	12966	1	true	2	12966	false	0	-
+tick	12966	1	true	3	12966	false	0	-
+tick	12966	89	false	0	12966	true	0	-
+tick	12966	89	false	1	12966	true	0	-
+tick	12966	89	false	2	0	false	1	true,1073741824,40
+tick	12966	89	false	3	0	false	1	true,1073741824,40
+tick	12966	89	true	0	12966	true	0	-
+tick	12966	89	true	1	12966	true	0	-
+tick	12966	89	true	2	0	false	1	true,1073741824,40
+tick	12966	89	true	3	0	false	1	true,1073741824,40
+tick	12966	4962	false	0	12966	true	0	-
+tick	12966	4962	false	1	12966	true	0	-
+tick	12966	4962	false	2	0	false	1	true,1073741824,40
+tick	12966	4962	false	3	0	false	1	true,1073741824,40
+tick	12966	4962	true	0	12966	true	0	-
+tick	12966	4962	true	1	12966	true	0	-
+tick	12966	4962	true	2	0	false	1	true,1073741824,40
+tick	12966	4962	true	3	0	false	1	true,1073741824,40
+tick	12966	2362	false	0	12966	true	0	-
+tick	12966	2362	false	1	12966	true	0	-
+tick	12966	2362	false	2	12966	false	0	-
+tick	12966	2362	false	3	12966	false	0	-
+tick	12966	2362	true	0	12966	true	0	-
+tick	12966	2362	true	1	12966	true	0	-
+tick	12966	2362	true	2	12966	false	0	-
+tick	12966	2362	true	3	12966	false	0	-
+tick	12966	15252	false	0	12966	true	0	-
+tick	12966	15252	false	1	12966	true	0	-
+tick	12966	15252	false	2	12966	false	0	-
+tick	12966	15252	false	3	12966	false	0	-
+tick	12966	15252	true	0	12966	true	0	-
+tick	12966	15252	true	1	12966	true	0	-
+tick	12966	15252	true	2	12966	false	0	-
+tick	12966	15252	true	3	12966	false	0	-
+event	12966	false	false	[1031]
+event	12966	false	true	[1029]
+event	12966	true	false	[]
+event	12966	true	true	[]
+damage	12967	12971
+tick	12967	0	false	0	12967	true	0	-
+tick	12967	0	false	1	12967	true	0	-
+tick	12967	0	false	2	0	false	1	true,1073741824,40
+tick	12967	0	false	3	0	false	1	true,1073741824,40
+tick	12967	0	true	0	12967	true	0	-
+tick	12967	0	true	1	12967	true	0	-
+tick	12967	0	true	2	0	false	1	true,1073741824,40
+tick	12967	0	true	3	0	false	1	true,1073741824,40
+tick	12967	1	false	0	12967	true	0	-
+tick	12967	1	false	1	12967	true	0	-
+tick	12967	1	false	2	12967	false	0	-
+tick	12967	1	false	3	12967	false	0	-
+tick	12967	1	true	0	12967	true	0	-
+tick	12967	1	true	1	12967	true	0	-
+tick	12967	1	true	2	12967	false	0	-
+tick	12967	1	true	3	12967	false	0	-
+tick	12967	89	false	0	12967	true	0	-
+tick	12967	89	false	1	12967	true	0	-
+tick	12967	89	false	2	0	false	1	true,1073741824,40
+tick	12967	89	false	3	0	false	1	true,1073741824,40
+tick	12967	89	true	0	12967	true	0	-
+tick	12967	89	true	1	12967	true	0	-
+tick	12967	89	true	2	0	false	1	true,1073741824,40
+tick	12967	89	true	3	0	false	1	true,1073741824,40
+tick	12967	4962	false	0	12967	true	0	-
+tick	12967	4962	false	1	12967	true	0	-
+tick	12967	4962	false	2	0	false	1	true,1073741824,40
+tick	12967	4962	false	3	0	false	1	true,1073741824,40
+tick	12967	4962	true	0	12967	true	0	-
+tick	12967	4962	true	1	12967	true	0	-
+tick	12967	4962	true	2	0	false	1	true,1073741824,40
+tick	12967	4962	true	3	0	false	1	true,1073741824,40
+tick	12967	2362	false	0	12967	true	0	-
+tick	12967	2362	false	1	12967	true	0	-
+tick	12967	2362	false	2	12967	false	0	-
+tick	12967	2362	false	3	12967	false	0	-
+tick	12967	2362	true	0	12967	true	0	-
+tick	12967	2362	true	1	12967	true	0	-
+tick	12967	2362	true	2	12967	false	0	-
+tick	12967	2362	true	3	12967	false	0	-
+tick	12967	15252	false	0	12967	true	0	-
+tick	12967	15252	false	1	12967	true	0	-
+tick	12967	15252	false	2	12967	false	0	-
+tick	12967	15252	false	3	12967	false	0	-
+tick	12967	15252	true	0	12967	true	0	-
+tick	12967	15252	true	1	12967	true	0	-
+tick	12967	15252	true	2	12967	false	0	-
+tick	12967	15252	true	3	12967	false	0	-
+event	12967	false	false	[1031]
+event	12967	false	true	[1029]
+event	12967	true	false	[]
+event	12967	true	true	[]
+damage	12968	12972
+tick	12968	0	false	0	12968	true	0	-
+tick	12968	0	false	1	12968	true	0	-
+tick	12968	0	false	2	0	false	1	true,1073741824,40
+tick	12968	0	false	3	0	false	1	true,1073741824,40
+tick	12968	0	true	0	12968	true	0	-
+tick	12968	0	true	1	12968	true	0	-
+tick	12968	0	true	2	0	false	1	true,1073741824,40
+tick	12968	0	true	3	0	false	1	true,1073741824,40
+tick	12968	1	false	0	12968	true	0	-
+tick	12968	1	false	1	12968	true	0	-
+tick	12968	1	false	2	12968	false	0	-
+tick	12968	1	false	3	12968	false	0	-
+tick	12968	1	true	0	12968	true	0	-
+tick	12968	1	true	1	12968	true	0	-
+tick	12968	1	true	2	12968	false	0	-
+tick	12968	1	true	3	12968	false	0	-
+tick	12968	89	false	0	12968	true	0	-
+tick	12968	89	false	1	12968	true	0	-
+tick	12968	89	false	2	0	false	1	true,1073741824,40
+tick	12968	89	false	3	0	false	1	true,1073741824,40
+tick	12968	89	true	0	12968	true	0	-
+tick	12968	89	true	1	12968	true	0	-
+tick	12968	89	true	2	0	false	1	true,1073741824,40
+tick	12968	89	true	3	0	false	1	true,1073741824,40
+tick	12968	4962	false	0	12968	true	0	-
+tick	12968	4962	false	1	12968	true	0	-
+tick	12968	4962	false	2	0	false	1	true,1073741824,40
+tick	12968	4962	false	3	0	false	1	true,1073741824,40
+tick	12968	4962	true	0	12968	true	0	-
+tick	12968	4962	true	1	12968	true	0	-
+tick	12968	4962	true	2	0	false	1	true,1073741824,40
+tick	12968	4962	true	3	0	false	1	true,1073741824,40
+tick	12968	2362	false	0	12968	true	0	-
+tick	12968	2362	false	1	12968	true	0	-
+tick	12968	2362	false	2	12968	false	0	-
+tick	12968	2362	false	3	12968	false	0	-
+tick	12968	2362	true	0	12968	true	0	-
+tick	12968	2362	true	1	12968	true	0	-
+tick	12968	2362	true	2	12968	false	0	-
+tick	12968	2362	true	3	12968	false	0	-
+tick	12968	15252	false	0	12968	true	0	-
+tick	12968	15252	false	1	12968	true	0	-
+tick	12968	15252	false	2	12968	false	0	-
+tick	12968	15252	false	3	12968	false	0	-
+tick	12968	15252	true	0	12968	true	0	-
+tick	12968	15252	true	1	12968	true	0	-
+tick	12968	15252	true	2	12968	false	0	-
+tick	12968	15252	true	3	12968	false	0	-
+event	12968	false	false	[1031]
+event	12968	false	true	[1029]
+event	12968	true	false	[]
+event	12968	true	true	[]
+damage	12969	12973
+tick	12969	0	false	0	12969	true	0	-
+tick	12969	0	false	1	12969	true	0	-
+tick	12969	0	false	2	0	false	1	true,1073741824,40
+tick	12969	0	false	3	0	false	1	true,1073741824,40
+tick	12969	0	true	0	12969	true	0	-
+tick	12969	0	true	1	12969	true	0	-
+tick	12969	0	true	2	0	false	1	true,1073741824,40
+tick	12969	0	true	3	0	false	1	true,1073741824,40
+tick	12969	1	false	0	12969	true	0	-
+tick	12969	1	false	1	12969	true	0	-
+tick	12969	1	false	2	12969	false	0	-
+tick	12969	1	false	3	12969	false	0	-
+tick	12969	1	true	0	12969	true	0	-
+tick	12969	1	true	1	12969	true	0	-
+tick	12969	1	true	2	12969	false	0	-
+tick	12969	1	true	3	12969	false	0	-
+tick	12969	89	false	0	12969	true	0	-
+tick	12969	89	false	1	12969	true	0	-
+tick	12969	89	false	2	0	false	1	true,1073741824,40
+tick	12969	89	false	3	0	false	1	true,1073741824,40
+tick	12969	89	true	0	12969	true	0	-
+tick	12969	89	true	1	12969	true	0	-
+tick	12969	89	true	2	0	false	1	true,1073741824,40
+tick	12969	89	true	3	0	false	1	true,1073741824,40
+tick	12969	4962	false	0	12969	true	0	-
+tick	12969	4962	false	1	12969	true	0	-
+tick	12969	4962	false	2	0	false	1	true,1073741824,40
+tick	12969	4962	false	3	0	false	1	true,1073741824,40
+tick	12969	4962	true	0	12969	true	0	-
+tick	12969	4962	true	1	12969	true	0	-
+tick	12969	4962	true	2	0	false	1	true,1073741824,40
+tick	12969	4962	true	3	0	false	1	true,1073741824,40
+tick	12969	2362	false	0	12969	true	0	-
+tick	12969	2362	false	1	12969	true	0	-
+tick	12969	2362	false	2	12969	false	0	-
+tick	12969	2362	false	3	12969	false	0	-
+tick	12969	2362	true	0	12969	true	0	-
+tick	12969	2362	true	1	12969	true	0	-
+tick	12969	2362	true	2	12969	false	0	-
+tick	12969	2362	true	3	12969	false	0	-
+tick	12969	15252	false	0	12969	true	0	-
+tick	12969	15252	false	1	12969	true	0	-
+tick	12969	15252	false	2	12969	false	0	-
+tick	12969	15252	false	3	12969	false	0	-
+tick	12969	15252	true	0	12969	true	0	-
+tick	12969	15252	true	1	12969	true	0	-
+tick	12969	15252	true	2	12969	false	0	-
+tick	12969	15252	true	3	12969	false	0	-
+event	12969	false	false	[1031]
+event	12969	false	true	[1029]
+event	12969	true	false	[]
+event	12969	true	true	[]
+damage	12970	-1
+tick	12970	0	false	0	12970	true	0	-
+tick	12970	0	false	1	12970	true	0	-
+tick	12970	0	false	2	0	false	1	true,1073741824,40
+tick	12970	0	false	3	0	false	1	true,1073741824,40
+tick	12970	0	true	0	12970	true	0	-
+tick	12970	0	true	1	12970	true	0	-
+tick	12970	0	true	2	0	false	1	true,1073741824,40
+tick	12970	0	true	3	0	false	1	true,1073741824,40
+tick	12970	1	false	0	12970	true	0	-
+tick	12970	1	false	1	12970	true	0	-
+tick	12970	1	false	2	12970	false	0	-
+tick	12970	1	false	3	12970	false	0	-
+tick	12970	1	true	0	12970	true	0	-
+tick	12970	1	true	1	12970	true	0	-
+tick	12970	1	true	2	12970	false	0	-
+tick	12970	1	true	3	12970	false	0	-
+tick	12970	89	false	0	12970	true	0	-
+tick	12970	89	false	1	12970	true	0	-
+tick	12970	89	false	2	0	false	1	true,1073741824,40
+tick	12970	89	false	3	0	false	1	true,1073741824,40
+tick	12970	89	true	0	12970	true	0	-
+tick	12970	89	true	1	12970	true	0	-
+tick	12970	89	true	2	0	false	1	true,1073741824,40
+tick	12970	89	true	3	0	false	1	true,1073741824,40
+tick	12970	4962	false	0	12970	true	0	-
+tick	12970	4962	false	1	12970	true	0	-
+tick	12970	4962	false	2	0	false	1	true,1073741824,40
+tick	12970	4962	false	3	0	false	1	true,1073741824,40
+tick	12970	4962	true	0	12970	true	0	-
+tick	12970	4962	true	1	12970	true	0	-
+tick	12970	4962	true	2	0	false	1	true,1073741824,40
+tick	12970	4962	true	3	0	false	1	true,1073741824,40
+tick	12970	2362	false	0	12970	true	0	-
+tick	12970	2362	false	1	12970	true	0	-
+tick	12970	2362	false	2	12970	false	0	-
+tick	12970	2362	false	3	12970	false	0	-
+tick	12970	2362	true	0	12970	true	0	-
+tick	12970	2362	true	1	12970	true	0	-
+tick	12970	2362	true	2	12970	false	0	-
+tick	12970	2362	true	3	12970	false	0	-
+tick	12970	15252	false	0	12970	true	0	-
+tick	12970	15252	false	1	12970	true	0	-
+tick	12970	15252	false	2	12970	false	0	-
+tick	12970	15252	false	3	12970	false	0	-
+tick	12970	15252	true	0	12970	true	0	-
+tick	12970	15252	true	1	12970	true	0	-
+tick	12970	15252	true	2	12970	false	0	-
+tick	12970	15252	true	3	12970	false	0	-
+event	12970	false	false	[1031]
+event	12970	false	true	[1029]
+event	12970	true	false	[]
+event	12970	true	true	[]
+damage	12971	-1
+tick	12971	0	false	0	12971	true	0	-
+tick	12971	0	false	1	12971	true	0	-
+tick	12971	0	false	2	0	false	1	true,1073741824,40
+tick	12971	0	false	3	0	false	1	true,1073741824,40
+tick	12971	0	true	0	12971	true	0	-
+tick	12971	0	true	1	12971	true	0	-
+tick	12971	0	true	2	0	false	1	true,1073741824,40
+tick	12971	0	true	3	0	false	1	true,1073741824,40
+tick	12971	1	false	0	12971	true	0	-
+tick	12971	1	false	1	12971	true	0	-
+tick	12971	1	false	2	12971	false	0	-
+tick	12971	1	false	3	12971	false	0	-
+tick	12971	1	true	0	12971	true	0	-
+tick	12971	1	true	1	12971	true	0	-
+tick	12971	1	true	2	12971	false	0	-
+tick	12971	1	true	3	12971	false	0	-
+tick	12971	89	false	0	12971	true	0	-
+tick	12971	89	false	1	12971	true	0	-
+tick	12971	89	false	2	0	false	1	true,1073741824,40
+tick	12971	89	false	3	0	false	1	true,1073741824,40
+tick	12971	89	true	0	12971	true	0	-
+tick	12971	89	true	1	12971	true	0	-
+tick	12971	89	true	2	0	false	1	true,1073741824,40
+tick	12971	89	true	3	0	false	1	true,1073741824,40
+tick	12971	4962	false	0	12971	true	0	-
+tick	12971	4962	false	1	12971	true	0	-
+tick	12971	4962	false	2	0	false	1	true,1073741824,40
+tick	12971	4962	false	3	0	false	1	true,1073741824,40
+tick	12971	4962	true	0	12971	true	0	-
+tick	12971	4962	true	1	12971	true	0	-
+tick	12971	4962	true	2	0	false	1	true,1073741824,40
+tick	12971	4962	true	3	0	false	1	true,1073741824,40
+tick	12971	2362	false	0	12971	true	0	-
+tick	12971	2362	false	1	12971	true	0	-
+tick	12971	2362	false	2	12971	false	0	-
+tick	12971	2362	false	3	12971	false	0	-
+tick	12971	2362	true	0	12971	true	0	-
+tick	12971	2362	true	1	12971	true	0	-
+tick	12971	2362	true	2	12971	false	0	-
+tick	12971	2362	true	3	12971	false	0	-
+tick	12971	15252	false	0	12971	true	0	-
+tick	12971	15252	false	1	12971	true	0	-
+tick	12971	15252	false	2	12971	false	0	-
+tick	12971	15252	false	3	12971	false	0	-
+tick	12971	15252	true	0	12971	true	0	-
+tick	12971	15252	true	1	12971	true	0	-
+tick	12971	15252	true	2	12971	false	0	-
+tick	12971	15252	true	3	12971	false	0	-
+event	12971	false	false	[1031]
+event	12971	false	true	[1029]
+event	12971	true	false	[]
+event	12971	true	true	[]
+damage	12972	-1
+tick	12972	0	false	0	12972	true	0	-
+tick	12972	0	false	1	12972	true	0	-
+tick	12972	0	false	2	0	false	1	true,1073741824,40
+tick	12972	0	false	3	0	false	1	true,1073741824,40
+tick	12972	0	true	0	12972	true	0	-
+tick	12972	0	true	1	12972	true	0	-
+tick	12972	0	true	2	0	false	1	true,1073741824,40
+tick	12972	0	true	3	0	false	1	true,1073741824,40
+tick	12972	1	false	0	12972	true	0	-
+tick	12972	1	false	1	12972	true	0	-
+tick	12972	1	false	2	12972	false	0	-
+tick	12972	1	false	3	12972	false	0	-
+tick	12972	1	true	0	12972	true	0	-
+tick	12972	1	true	1	12972	true	0	-
+tick	12972	1	true	2	12972	false	0	-
+tick	12972	1	true	3	12972	false	0	-
+tick	12972	89	false	0	12972	true	0	-
+tick	12972	89	false	1	12972	true	0	-
+tick	12972	89	false	2	0	false	1	true,1073741824,40
+tick	12972	89	false	3	0	false	1	true,1073741824,40
+tick	12972	89	true	0	12972	true	0	-
+tick	12972	89	true	1	12972	true	0	-
+tick	12972	89	true	2	0	false	1	true,1073741824,40
+tick	12972	89	true	3	0	false	1	true,1073741824,40
+tick	12972	4962	false	0	12972	true	0	-
+tick	12972	4962	false	1	12972	true	0	-
+tick	12972	4962	false	2	0	false	1	true,1073741824,40
+tick	12972	4962	false	3	0	false	1	true,1073741824,40
+tick	12972	4962	true	0	12972	true	0	-
+tick	12972	4962	true	1	12972	true	0	-
+tick	12972	4962	true	2	0	false	1	true,1073741824,40
+tick	12972	4962	true	3	0	false	1	true,1073741824,40
+tick	12972	2362	false	0	12972	true	0	-
+tick	12972	2362	false	1	12972	true	0	-
+tick	12972	2362	false	2	12972	false	0	-
+tick	12972	2362	false	3	12972	false	0	-
+tick	12972	2362	true	0	12972	true	0	-
+tick	12972	2362	true	1	12972	true	0	-
+tick	12972	2362	true	2	12972	false	0	-
+tick	12972	2362	true	3	12972	false	0	-
+tick	12972	15252	false	0	12972	true	0	-
+tick	12972	15252	false	1	12972	true	0	-
+tick	12972	15252	false	2	12972	false	0	-
+tick	12972	15252	false	3	12972	false	0	-
+tick	12972	15252	true	0	12972	true	0	-
+tick	12972	15252	true	1	12972	true	0	-
+tick	12972	15252	true	2	12972	false	0	-
+tick	12972	15252	true	3	12972	false	0	-
+event	12972	false	false	[1031]
+event	12972	false	true	[1029]
+event	12972	true	false	[]
+event	12972	true	true	[]
+damage	12973	-1
+tick	12973	0	false	0	12973	true	0	-
+tick	12973	0	false	1	12973	true	0	-
+tick	12973	0	false	2	0	false	1	true,1073741824,40
+tick	12973	0	false	3	0	false	1	true,1073741824,40
+tick	12973	0	true	0	12973	true	0	-
+tick	12973	0	true	1	12973	true	0	-
+tick	12973	0	true	2	0	false	1	true,1073741824,40
+tick	12973	0	true	3	0	false	1	true,1073741824,40
+tick	12973	1	false	0	12973	true	0	-
+tick	12973	1	false	1	12973	true	0	-
+tick	12973	1	false	2	12973	false	0	-
+tick	12973	1	false	3	12973	false	0	-
+tick	12973	1	true	0	12973	true	0	-
+tick	12973	1	true	1	12973	true	0	-
+tick	12973	1	true	2	12973	false	0	-
+tick	12973	1	true	3	12973	false	0	-
+tick	12973	89	false	0	12973	true	0	-
+tick	12973	89	false	1	12973	true	0	-
+tick	12973	89	false	2	0	false	1	true,1073741824,40
+tick	12973	89	false	3	0	false	1	true,1073741824,40
+tick	12973	89	true	0	12973	true	0	-
+tick	12973	89	true	1	12973	true	0	-
+tick	12973	89	true	2	0	false	1	true,1073741824,40
+tick	12973	89	true	3	0	false	1	true,1073741824,40
+tick	12973	4962	false	0	12973	true	0	-
+tick	12973	4962	false	1	12973	true	0	-
+tick	12973	4962	false	2	0	false	1	true,1073741824,40
+tick	12973	4962	false	3	0	false	1	true,1073741824,40
+tick	12973	4962	true	0	12973	true	0	-
+tick	12973	4962	true	1	12973	true	0	-
+tick	12973	4962	true	2	0	false	1	true,1073741824,40
+tick	12973	4962	true	3	0	false	1	true,1073741824,40
+tick	12973	2362	false	0	12973	true	0	-
+tick	12973	2362	false	1	12973	true	0	-
+tick	12973	2362	false	2	12973	false	0	-
+tick	12973	2362	false	3	12973	false	0	-
+tick	12973	2362	true	0	12973	true	0	-
+tick	12973	2362	true	1	12973	true	0	-
+tick	12973	2362	true	2	12973	false	0	-
+tick	12973	2362	true	3	12973	false	0	-
+tick	12973	15252	false	0	12973	true	0	-
+tick	12973	15252	false	1	12973	true	0	-
+tick	12973	15252	false	2	12973	false	0	-
+tick	12973	15252	false	3	12973	false	0	-
+tick	12973	15252	true	0	12973	true	0	-
+tick	12973	15252	true	1	12973	true	0	-
+tick	12973	15252	true	2	12973	false	0	-
+tick	12973	15252	true	3	12973	false	0	-
+event	12973	false	false	[1031]
+event	12973	false	true	[1029]
+event	12973	true	false	[]
+event	12973	true	true	[]
+source	0	minecraft:falling_block	true	true
+source	1	minecraft:falling_block	true	true
+source	39	minecraft:falling_block	true	true
+base-events	39	[]
+source	520	minecraft:falling_anvil	true	true
+source	521	minecraft:falling_anvil	true	true
+source	522	minecraft:falling_anvil	true	true
+damage	0	-1
+damage	1	-1

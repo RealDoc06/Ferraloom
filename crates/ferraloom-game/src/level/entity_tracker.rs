@@ -144,6 +144,7 @@ impl Level {
         }
         state.chunk_tracking_view = desired;
         state.chunk_tracking_center = Some(center);
+        state.chunk_tracking_distance = Some(distance);
         Ok(())
     }
     fn remove_player_tracking_status(&mut self, player: EntityRef) -> Result<(), LevelError> {
@@ -186,6 +187,7 @@ impl Level {
         let state = self.entity_mut::<ServerPlayer>(player)?;
         state.chunk_tracking_view.clear();
         state.chunk_tracking_center = None;
+        state.chunk_tracking_distance = None;
         Ok(())
     }
     fn tracked_entity(&self, network: i32) -> Result<&TrackedEntity, TrackingError> {
@@ -332,6 +334,8 @@ impl Level {
                 .clear();
             self.entity_mut::<ServerPlayer>(entity)?
                 .chunk_tracking_center = None;
+            self.entity_mut::<ServerPlayer>(entity)?
+                .chunk_tracking_distance = None;
             self.update_player_chunk_tracking(entity)?;
             for id in self.tracker_ids() {
                 if id != network {

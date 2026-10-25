@@ -194,6 +194,12 @@ fn data_storage() -> Result<Vec<Case>> {
     Ok(cases)
 }
 pub fn family(name: &str) -> Result<Vec<Case>> {
+    if name == "placement_nbt" {
+        return Ok(super::placement_nbt::cases(false));
+    }
+    if name == "placement_nbt_banner" {
+        return Ok(super::placement_nbt::cases(true));
+    }
     if name == "data_storage" {
         return data_storage();
     }
@@ -223,6 +229,8 @@ fn every_sweep_path_has_an_inventory_row_and_an_observable_command() -> Result<(
         "players",
         "admin",
         "placement",
+        "placement_nbt",
+        "placement_nbt_banner",
         "data_storage",
         "data_block",
     ] {

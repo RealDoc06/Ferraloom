@@ -1,10 +1,10 @@
 use super::{
     BlockPredicate, DoubleBounds, FluidPredicate, IntBounds, PredicateContext, PredicateRegistry,
 };
+use crate::loot::codec::{DecodeInput, PersistentInput};
 use crate::loot::{Identifier, Result, codec};
-use ferraloom_protocol::{codec::HolderSet, component::Persistent};
+use ferraloom_protocol::codec::HolderSet;
 use ferraloom_util::{BlockPos, Vec3, mth};
-use serde_json::Value;
 
 /// Port of LightPredicate. Even unconstrained light requires a loaded position.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -12,7 +12,7 @@ pub struct LightPredicate {
     pub light: IntBounds,
 }
 impl LightPredicate {
-    pub fn decode(v: &Value) -> Result<Self> {
+    pub fn decode<I: DecodeInput>(v: &I) -> Result<Self> {
         Ok(Self {
             light: codec::optional(v, "light", IntBounds::decode)?.unwrap_or_default(),
         })
@@ -35,8 +35,8 @@ pub struct LocationPredicate {
     pub can_see_sky: Option<bool>,
 }
 impl LocationPredicate {
-    pub fn decode(v: &Value) -> Result<Self> {
-        let set = |v: &Value| -> Result<HolderSet> { Ok(HolderSet::from_json(v)?) };
+    pub fn decode<I: DecodeInput>(v: &I) -> Result<Self> {
+        let set = |v: &I| -> Result<HolderSet> { Ok(HolderSet::from_input(v)?) };
         Ok(Self {
             position: codec::optional(v, "position", |v| {
                 Ok([

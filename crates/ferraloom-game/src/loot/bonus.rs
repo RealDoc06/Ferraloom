@@ -1,8 +1,8 @@
 use super::function::stack_count;
 use super::{ContextFloatProvider, EvalContext, Holder, Identifier, LootData, Result, codec};
+use crate::loot::codec::DecodeInput;
 use ferraloom_protocol::component::{ComponentTypeId, DataComponent, ItemStack};
 use ferraloom_util::random::RandomSource;
-use serde_json::Value;
 
 /// Port of ApplyBonusCount's three formula codecs and evaluation.
 #[derive(Clone, Debug, PartialEq)]
@@ -12,7 +12,7 @@ pub enum BonusFormula {
     BinomialWithBonusCount { extra: i32, probability: f32 },
 }
 impl BonusFormula {
-    pub fn decode(v: &Value) -> Result<Self> {
+    pub fn decode<I: DecodeInput>(v: &I) -> Result<Self> {
         Ok(match codec::id(codec::field(v, "formula")?)?.as_str() {
             "minecraft:ore_drops" => Self::OreDrops,
             "minecraft:uniform_bonus_count" => Self::UniformBonusCount(codec::int(codec::field(

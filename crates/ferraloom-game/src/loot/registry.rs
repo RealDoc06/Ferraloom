@@ -2,8 +2,8 @@ use super::{
     ContextFloatProvider, ContextIntProvider, Identifier, LootError, LootItemCondition,
     LootItemFunction, LootTable, Result, codec,
 };
+use crate::loot::codec::DecodeInput;
 use ferraloom_data::datapack::{ResourceManager, load_tags};
-use serde_json::Value;
 use std::collections::BTreeMap;
 
 /// Port of RegistryCodecs#holder. References stay symbolic across reload validation.
@@ -13,7 +13,7 @@ pub enum Holder<T> {
     Inline(Box<T>),
 }
 impl<T> Holder<T> {
-    pub fn decode(v: &Value, decode: impl FnOnce(&Value) -> Result<T>) -> Result<Self> {
+    pub fn decode<I: DecodeInput>(v: &I, decode: impl FnOnce(&I) -> Result<T>) -> Result<Self> {
         if v.is_string() {
             if let Ok(id) = codec::id(v) {
                 return Ok(Self::Reference(id));
@@ -34,7 +34,7 @@ pub enum HolderSet<T> {
     Direct(Vec<Holder<T>>),
 }
 impl<T> HolderSet<T> {
-    pub fn decode(v: &Value, decode: impl Fn(&Value) -> Result<T> + Copy) -> Result<Self> {
+    pub fn decode<I: DecodeInput>(v: &I, decode: impl Fn(&I) -> Result<T> + Copy) -> Result<Self> {
         if let Some(tag) = v.as_str().and_then(|s| s.strip_prefix('#')) {
             return Ok(Self::Tag(Identifier::parse(tag)?));
         }

@@ -1,7 +1,7 @@
 //! Native fire placement/survival and concrete powder's liquid conversion.
 use crate::{
     block::{BlockBehavior, BlockMethod, BlockPlaceContext, LevelAccessRef, LevelReaderRef},
-    level::LevelError,
+    level::{Level, LevelError},
 };
 use ferraloom_data::{
     Block, BlockClass as C, BlockState, properties as p,
@@ -20,6 +20,7 @@ pub(super) fn supports(block: Block, method: BlockMethod) -> bool {
             C::FireBlock | C::SoulFireBlock | C::ConcretePowderBlock
         ),
         BlockMethod::CanSurvive => matches!(block.class(), C::FireBlock | C::SoulFireBlock),
+        BlockMethod::OnLand => block.class() == C::ConcretePowderBlock,
         _ => false,
     }
 }
@@ -102,6 +103,23 @@ fn touches_liquid(pos: BlockPos, level: &LevelReaderRef<'_, '_>) -> Result<bool,
     Ok(false)
 }
 impl BlockBehavior for FirePowder {
+    /// Port of ConcretePowderBlock#onLand. Reuse the same native liquid-contact
+    /// queries as placement, then end the reader borrow before flags-3 mutation.
+    fn on_land(
+        &self,
+        state: BlockState,
+        pos: BlockPos,
+        replaced: BlockState,
+        _entity: crate::entity::EntityRef,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        let reader = LevelReaderRef::Server(level);
+        if can_solidify(replaced, &reader)? || touches_liquid(pos, &reader)? {
+            let concrete = state.block().concrete_powder_target().unwrap();
+            level.set_block_and_update(pos, concrete.default_state())?;
+        }
+        Ok(())
+    }
     fn get_state_for_placement(
         &self,
         block: Block,

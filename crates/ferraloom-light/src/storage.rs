@@ -324,3 +324,93 @@ impl Storage {
         );
     }
 }
+
+#[cfg(test)]
+mod published_read_tests {
+    use super::*;
+
+    fn pattern(sky: bool) -> Arc<DataLayer> {
+        let mut data = DataLayer::default();
+        for y in 0..16 {
+            for z in 0..16 {
+                for x in 0..16 {
+                    data.set(
+                        x,
+                        y,
+                        z,
+                        if sky {
+                            x + 2 * y + 3 * z
+                        } else {
+                            2 * x + y + z
+                        } & 15,
+                    );
+                }
+            }
+        }
+        Arc::new(data)
+    }
+    fn storage(case: &str, layer: LightLayer) -> Storage {
+        let mut storage = Storage::new(layer);
+        if case == "empty" {
+            return storage;
+        }
+        let section = SectionPos::new(9, 9, -1);
+        storage.visible_bottom = -5;
+        storage.visible_tops.insert(section.chunk().pack(), 12);
+        storage.visible_tops.insert(ChunkPos::new(-1, -1).pack(), 1);
+        match (case, layer) {
+            ("initialized", LightLayer::Sky) => {
+                storage
+                    .visible
+                    .insert(section.as_long(), Arc::new(DataLayer::default()));
+            }
+            ("initialized", LightLayer::Block) => {}
+            ("pattern", LightLayer::Sky) => {
+                for pos in [
+                    section,
+                    SectionPos::new(9, 11, -1),
+                    SectionPos::new(-1, 0, -1),
+                ] {
+                    storage.visible.insert(pos.as_long(), pattern(true));
+                }
+            }
+            ("pattern", LightLayer::Block) => {
+                for pos in [section, SectionPos::new(-1, -2, -1)] {
+                    storage.visible.insert(pos.as_long(), pattern(false));
+                }
+            }
+            _ => panic!("unknown native fixture: {case}"),
+        }
+        // Poison both unpublished inputs: a layer read must ignore them.
+        storage
+            .updating
+            .insert(section.as_long(), Arc::new(DataLayer::new(15)));
+        storage.queue(section, Some(DataLayer::new(14)));
+        storage
+    }
+    #[test]
+    fn published_reads_match_native_top_holes_and_queued_layer_vectors() {
+        let mut count = 0;
+        for row in include_str!("../tests/fixtures/published_reads.tsv").lines() {
+            let fields: Vec<_> = row.split('\t').collect();
+            let pos = BlockPos::new(
+                fields[1].parse().unwrap(),
+                fields[2].parse().unwrap(),
+                fields[3].parse().unwrap(),
+            );
+            let sky = storage(fields[0], LightLayer::Sky).value(pos);
+            let block = storage(fields[0], LightLayer::Block).value(pos);
+            let expected: Vec<u8> = fields[4..]
+                .iter()
+                .map(|value| value.parse().unwrap())
+                .collect();
+            assert_eq!(
+                [sky, block, sky.max(block), sky.saturating_sub(5).max(block)].as_slice(),
+                expected,
+                "{row}"
+            );
+            count += 1;
+        }
+        assert_eq!(count, 36);
+    }
+}

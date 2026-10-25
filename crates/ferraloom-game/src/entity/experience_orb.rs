@@ -18,6 +18,7 @@ use ferraloom_util::{Aabb, BlockPos, Vec3, random::RandomSource, shapes};
 
 pub const VALUE: EntityDataAccessor<VarInt> = EntityDataAccessor::new(8);
 const VALUES: [i32; 11] = [1, 3, 7, 17, 37, 73, 149, 307, 617, 1237, 2477];
+mod pickup;
 #[derive(Debug)]
 pub struct ExperienceOrb {
     pub parent: EntityData,
@@ -72,11 +73,15 @@ impl ExperienceOrb {
         tag
     }
     pub fn load_nbt(&mut self, tag: CompoundTag) -> Result<(), persistence::EntityLoadError> {
+        self.parent.load_nbt(tag.clone())?;
+        self.read_additional_save_data(&tag);
+        Ok(())
+    }
+    pub(crate) fn read_additional_save_data(&mut self, tag: &CompoundTag) {
         self.health = i32::from(tag.get_short_or("Health", 5));
         self.age = i32::from(tag.get_short_or("Age", 0));
         self.set_value(i32::from(tag.get_short_or("Value", 0)));
         self.count = tag.get_int("Count").filter(|&v| v > 0).unwrap_or(1);
-        self.parent.load_nbt(tag)
     }
 }
 impl EntityDataView for ExperienceOrb {
@@ -245,14 +250,11 @@ pub struct ExperienceOrbBehavior;
 impl Entity for ExperienceOrbBehavior {
     fn player_touch(
         &self,
-        _entity: EntityRef,
-        _player: EntityRef,
+        entity: EntityRef,
+        player: EntityRef,
         level: &mut Level,
     ) -> Result<(), LevelError> {
-        level.unported_operation(crate::block::UnportedOperation::EntityMethod(
-            EntityType::EXPERIENCE_ORB,
-            super::EntityMethod::PlayerTouch,
-        ))
+        pickup::player_touch(entity, player, level)
     }
     fn do_water_splash_effect(
         &self,

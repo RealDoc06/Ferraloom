@@ -1,21 +1,21 @@
 use super::{PredicateContext, PredicateRegistry};
+use crate::loot::codec::{DecodeInput, PersistentInput};
 use crate::loot::{Identifier, LootError, Result};
 use ferraloom_data::Item;
 use ferraloom_nbt::compare_nbt;
 use ferraloom_protocol::{codec::HolderSet, component::*};
-use serde_json::Value;
 
 /// Port of ItemPredicate. The persistent schema is shared with container lock predicates.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ItemPredicate(pub LockCode);
 impl ItemPredicate {
-    pub fn decode(v: &Value) -> Result<Self> {
+    pub fn decode<I: DecodeInput>(v: &I) -> Result<Self> {
         // Persistent codecs supply the component schema; bounds need the matching
         // decode-time swapped-endpoint validation (rather than encode-time only).
         if let Some(count) = v.get("count") {
             super::IntBounds::decode(count)?;
         }
-        let value = LockCode::from_json(v)?;
+        let value = LockCode::from_input(v)?;
         if let Some(set) = &value.items {
             super::validate_static_holders(&set.0, "item", |id| Item::from_name(id).is_some())?;
         }

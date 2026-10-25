@@ -80,6 +80,8 @@ pub struct ServerPlayer {
     pub experience_level: i32,
     pub experience_progress: f32,
     pub total_experience: i32,
+    /// Player#takeXpDelay is transient and decreases at Player#tick's start.
+    pub take_xp_delay: i32,
     last_level_up_time: i32,
     last_sent_experience: i32,
     last_sent_health: f32,
@@ -106,6 +108,8 @@ pub struct ServerPlayer {
     pub chunk_tracking_view: std::collections::HashSet<ChunkPos>,
     /// Port of ChunkTrackingView.Positioned#center, absent for EMPTY.
     pub chunk_tracking_center: Option<ChunkPos>,
+    /// Port of ChunkTrackingView.Positioned#viewDistance, captured with its center.
+    pub chunk_tracking_distance: Option<i32>,
     /// Port of ServerPlayer#getLastSectionPos, set by ChunkMap#updatePlayerPos.
     pub chunk_tracking_section: Option<ferraloom_util::SectionPos>,
     /// Port of ServerGamePacketListenerImpl#chunkSender: canonical pending/sent
@@ -260,6 +264,7 @@ impl ServerPlayer {
             experience_level: 0,
             experience_progress: 0.0,
             total_experience: 0,
+            take_xp_delay: 0,
             last_level_up_time: 0,
             last_sent_experience: -99_999_999,
             last_sent_health: -1.0e8,
@@ -295,6 +300,7 @@ impl ServerPlayer {
             view_distance: 10,
             chunk_tracking_view: Default::default(),
             chunk_tracking_center: None,
+            chunk_tracking_distance: None,
             chunk_tracking_section: None,
             chunk_sender: Default::default(),
             loaded: false,
@@ -361,29 +367,33 @@ impl ServerPlayer {
         tag: CompoundTag,
     ) -> Result<(), super::persistence::EntityLoadError> {
         self.parent.parent.load_nbt_with_absorption_setter(
-            tag,
+            tag.clone(),
             super::living::damage_state::player_internal_set_absorption_amount,
         )?;
+        self.read_player_additional_save_data(&tag)
+    }
+    pub(crate) fn read_player_additional_save_data(
+        &mut self,
+        tag: &CompoundTag,
+    ) -> Result<(), super::persistence::EntityLoadError> {
         // Player#readAdditionalSaveData restores the profile UUID after super.
         self.uuid = self.profile_id;
-        self.food_data.load(&self.parent.parent.parent.saved);
+        self.food_data.load(tag);
         self.set_shoulder_entity_left(
-            self.saved
-                .get_compound("ShoulderEntityLeft")
+            tag.get_compound("ShoulderEntityLeft")
                 .cloned()
                 .unwrap_or_default(),
         );
         self.set_shoulder_entity_right(
-            self.saved
-                .get_compound("ShoulderEntityRight")
+            tag.get_compound("ShoulderEntityRight")
                 .cloned()
                 .unwrap_or_default(),
         );
-        self.experience_progress = self.saved.get_float_or("XpP", 0.0);
-        self.experience_level = self.saved.get_int_or("XpLevel", 0);
-        self.total_experience = self.saved.get_int_or("XpTotal", 0);
-        self.set_score(self.saved.get_int_or("Score", 0));
-        if let Some(tag) = self.saved.get("abilities") {
+        self.experience_progress = tag.get_float_or("XpP", 0.0);
+        self.experience_level = tag.get_int_or("XpLevel", 0);
+        self.total_experience = tag.get_int_or("XpTotal", 0);
+        self.set_score(tag.get_int_or("Score", 0));
+        if let Some(tag) = tag.get("abilities") {
             match abilities::PackedAbilities::from_nbt(tag) {
                 Ok(packed) => self.abilities.apply(packed),
                 Err(error) => {
@@ -396,16 +406,11 @@ impl ServerPlayer {
             .get_instance(ferraloom_data::registries::attribute::Id::MOVEMENT_SPEED)
             .expect("player supplier defines MOVEMENT_SPEED")
             .set_base_value(f64::from(walking_speed));
-        self.game_mode =
-            GameType::from_id(self.saved.get_int_or("playerGameType", self.game_mode.id()));
+        self.game_mode = GameType::from_id(tag.get_int_or("playerGameType", self.game_mode.id()));
         // ServerPlayer reads saved abilities before applying its loaded game mode.
         self.update_game_mode_abilities();
-        let inventory = self
-            .saved
-            .get_list("Inventory")
-            .cloned()
-            .unwrap_or_default();
-        let selected = self.saved.get_int_or("SelectedItemSlot", 0);
+        let inventory = tag.get_list("Inventory").cloned().unwrap_or_default();
+        let selected = tag.get_int_or("SelectedItemSlot", 0);
         self.inventory.load(&inventory);
         self.inventory.set_selected_slot(selected as usize);
         self.first_good = self.position;
@@ -756,6 +761,33 @@ fn jump_from_ground(entity: crate::entity::EntityRef, level: &mut Level) -> Resu
 }
 pub struct PlayerBehavior;
 impl crate::entity::Entity for PlayerBehavior {
+    /// ServerPlayer#onAttributeUpdated handles RECEIVE before its LivingEntity parent.
+    fn on_attribute_updated(
+        &self,
+        entity: EntityRef,
+        attribute: ferraloom_data::registries::attribute::Id,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        if attribute == ferraloom_data::registries::attribute::Id::WAYPOINT_RECEIVE_RANGE {
+            if super::living::attribute(entity, attribute, level)? > 0.0 {
+                level.add_waypoint_player(entity)?;
+            } else {
+                level.remove_waypoint_player(entity)?;
+            }
+        }
+        super::living::on_attribute_updated_parent(self, entity, attribute, level)
+    }
+    fn take(
+        &self,
+        collector: EntityRef,
+        entity: EntityRef,
+        count: i32,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        super::living::take(collector, entity, count, level)?;
+        crate::inventory::broadcast_container_menu(collector, level)?;
+        crate::inventory::flush_container_packets(collector, level)
+    }
     fn is_invulnerable_to(
         &self,
         entity: EntityRef,
@@ -990,6 +1022,24 @@ impl crate::entity::Entity for PlayerBehavior {
         scoreboard: &crate::scoreboard::Scoreboard,
     ) -> Result<ferraloom_protocol::chat::Component, LevelError> {
         super::names::player_display_name(self, entity, level, scoreboard)
+    }
+    fn set_y_head_rot(
+        &self,
+        entity: EntityRef,
+        value: f32,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        level.entity_mut::<super::LivingEntity>(entity)?.y_head_rot = value;
+        Ok(())
+    }
+    fn set_y_body_rot(
+        &self,
+        entity: EntityRef,
+        value: f32,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        level.entity_mut::<super::LivingEntity>(entity)?.y_body_rot = value;
+        Ok(())
     }
     fn y_head_rot(
         &self,
