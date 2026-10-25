@@ -34,7 +34,9 @@ pub(super) fn supports(block: Block, method: BlockMethod) -> bool {
         }
         BlockMethod::CanBeReplaced => matches!(block.class(), C::CandleBlock | C::TurtleEggBlock),
         BlockMethod::CanSurvive => block.class() == C::CandleBlock,
-        BlockMethod::UpdateShape | BlockMethod::UpdateFromNeighbourShapes => waterlogged(block),
+        BlockMethod::UpdateShape | BlockMethod::UpdateFromNeighbourShapes => {
+            waterlogged(block) || block.class() == C::LightBlock
+        }
         BlockMethod::SetPlacedBy => block.class() == C::DriedGhastBlock,
         _ => false,
     }
@@ -121,6 +123,17 @@ impl BlockBehavior for Decorative {
         level: &mut LevelAccessRef<'_, '_>,
     ) -> Result<BlockState, LevelError> {
         schedule_water(state, pos, level)?;
+        if state.block().class() == C::LightBlock {
+            // LightBlock#updateShape schedules its water tick before super.
+            return BASE_BLOCK.update_shape(
+                state,
+                pos,
+                _direction,
+                _neighbor_pos,
+                _neighbor,
+                level,
+            );
+        }
         Ok(state)
     }
     /// Port of DriedGhastBlock#setPlacedBy. The base is a no-op; Level retains

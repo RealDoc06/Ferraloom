@@ -325,3 +325,6 @@ mod runtime_tests;
 
 #[cfg(test)]
 mod fixtures;
+
+#[cfg(test)]
+mod preflight_tests;
