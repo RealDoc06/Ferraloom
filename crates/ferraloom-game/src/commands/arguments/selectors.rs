@@ -926,7 +926,7 @@ mod capture_tests {
     impl EntityQuery for Query {
         fn candidates(&self, _: bool) -> Vec<EntityRef> {
             (0..self.names.len())
-                .map(|id| EntityRef(id as u64))
+                .map(|id| EntityRef::fixture(crate::level::RegionId::FIXTURE, id as u64))
                 .collect()
         }
         fn info(&self, entity: EntityRef) -> Option<SelectorEntity<'_>> {
@@ -980,12 +980,12 @@ mod capture_tests {
             };
             let mut source = CommandSourceStack::server(4, Vec3::ZERO);
             if vector.current_entity {
-                source = source.with_entity(EntityRef(0)).with_level(
-                    crate::commands::source::CommandLevel {
+                source = source
+                    .with_entity(EntityRef::fixture(crate::level::RegionId::FIXTURE, 0))
+                    .with_level(crate::commands::source::CommandLevel {
                         dimension: "minecraft:the_nether".into(),
                         coordinate_scale: 8.,
-                    },
-                );
+                    });
             }
             let selected = selector.find(&source, &mut query, true).unwrap();
             assert_eq!(query.examined, vector.examined, "{}", vector.selector);

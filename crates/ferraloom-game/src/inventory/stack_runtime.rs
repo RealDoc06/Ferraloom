@@ -592,7 +592,7 @@ mod tests {
                 Region::new(&BEHAVIORS),
                 crate::level::LevelContext::fixture(0, 63),
             );
-            let player = EntityRef(1);
+            let player = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
             let mut state = ServerPlayer::new(
                 Uuid::new(0, 1),
                 "operation".into(),
@@ -696,7 +696,7 @@ mod tests {
             Region::new(&BEHAVIORS),
             crate::level::LevelContext::fixture(0, 63),
         );
-        let player = EntityRef(1);
+        let player = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
         level
             .add_entity(
                 player,
@@ -815,7 +815,7 @@ mod tests {
             Region::new(&BEHAVIORS),
             crate::level::LevelContext::fixture(0, 63),
         );
-        let player = EntityRef(1);
+        let player = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
         level
             .add_entity(
                 player,

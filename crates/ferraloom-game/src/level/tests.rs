@@ -575,7 +575,10 @@ fn block_event_audiences_capture_before_later_event_movement() {
             level: &mut Level,
         ) -> Result<bool, LevelError> {
             if a == 1 {
-                level.set_entity_pos(EntityRef(1000), Vec3::new(100.0, 0.0, 4.0))?;
+                level.set_entity_pos(
+                    EntityRef::fixture(crate::level::RegionId::FIXTURE, 1000),
+                    Vec3::new(100.0, 0.0, 4.0),
+                )?;
             }
             Ok(true)
         }
@@ -587,7 +590,7 @@ fn block_event_audiences_capture_before_later_event_movement() {
         .set_block_state(p, Block::STONE.default_state())
         .unwrap();
     level.set_chunk_block_ticking(ChunkPos::ZERO, true).unwrap();
-    let player = EntityRef(1000);
+    let player = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1000);
     let network_id = level.next_entity_id();
     level
         .add_entity(
@@ -1600,7 +1603,11 @@ fn reflected_method_ownership_ports_inherited_defaults_without_masking_overrides
     );
     assert!(
         LevelReaderRef::Server(&level)
-            .entity_inside_collision_shape(leaves, pos, crate::entity::EntityRef(0))
+            .entity_inside_collision_shape(
+                leaves,
+                pos,
+                crate::entity::EntityRef::fixture(crate::level::RegionId::FIXTURE, 0)
+            )
             .unwrap()
             .ptr_eq(&ferraloom_util::shapes::block())
     );
@@ -1614,7 +1621,7 @@ fn reflected_method_ownership_ports_inherited_defaults_without_masking_overrides
         LevelReaderRef::Server(&level).entity_inside_collision_shape(
             Block::STONE.default_state(),
             pos,
-            crate::entity::EntityRef(0)
+            crate::entity::EntityRef::fixture(crate::level::RegionId::FIXTURE, 0)
         ),
         Err(LevelError::UnsupportedBlockMethod(
             _,

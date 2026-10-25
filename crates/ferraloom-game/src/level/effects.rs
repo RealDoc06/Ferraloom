@@ -98,7 +98,7 @@ mod tests {
             Region::new(&BEHAVIORS),
             crate::level::LevelContext::fixture(0, 63),
         );
-        let player = EntityRef(1);
+        let player = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
         let a = SectionPos::new(0, 4, 0);
         let b = SectionPos::new(1, 4, 0);
         for section in [a, b, a] {

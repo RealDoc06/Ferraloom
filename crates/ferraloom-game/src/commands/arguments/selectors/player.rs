@@ -38,7 +38,7 @@ mod tests {
             }
             static BEHAVIORS: Behaviors = Behaviors::EMPTY;
             let mut level = Level::new(Region::new(&BEHAVIORS), LevelContext::fixture(0, 63));
-            let entity = EntityRef(1);
+            let entity = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
             level
                 .add_entity(entity, EntityState::Player(Box::new(player)))
                 .unwrap();
