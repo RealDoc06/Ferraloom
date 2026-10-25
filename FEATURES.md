@@ -48,6 +48,6 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Villages, trading and POI](features/villages-trading-poi.md) | 599 | 599 | 0 | 0 | 0 |
 | [Wandering traders](features/wandering-traders.md) | 5 | 5 | 0 | 0 | 0 |
 | [Weather, time and environment](features/weather-time.md) | 85 | 85 | 0 | 0 | 0 |
-| [World storage and data fixing](features/world-storage.md) | 308 | 306 | 2 | 0 | 0 |
+| [World storage and data fixing](features/world-storage.md) | 308 | 305 | 3 | 0 | 0 |
 | [World generation](features/worldgen.md) | 3114 | 2640 | 174 | 300 | 0 |
-| **Total** | **19571** | **8297** | **4560** | **6714** | **0** |
+| **Total** | **19571** | **8296** | **4561** | **6714** | **0** |
