@@ -67,6 +67,40 @@ fn stack(item: Item, count: i32) -> ItemStack {
     stack.0.as_mut().unwrap().count = count;
     stack
 }
+
+#[test]
+fn native_careful_stepping_reads_shift_independently_of_crouching_pose() {
+    let mut cases = 0;
+    for fields in rows("entity-careful-stepping\t") {
+        let mut level = super::tests::level(false);
+        let entity = spawn(&mut level, fields[1]);
+        level
+            .entity_mut::<EntityData>(entity)
+            .unwrap()
+            .set_shared_flag(1, fields[2].parse().unwrap());
+        super::dimensions::set_pose(
+            entity,
+            if fields[3] == "true" {
+                Pose::Crouching
+            } else {
+                Pose::Standing
+            },
+            &mut level,
+        )
+        .unwrap();
+        assert_eq!(
+            level
+                .entity_behavior(entity)
+                .unwrap()
+                .is_stepping_carefully(entity, &level)
+                .unwrap(),
+            fields[4].parse::<bool>().unwrap(),
+            "{fields:?}",
+        );
+        cases += 1;
+    }
+    assert_eq!(cases, 12);
+}
 fn equip(level: &mut Level, id: EntityRef, slot: EquipmentSlot, stack: ItemStack) {
     if slot == EquipmentSlot::Mainhand
         && let Ok(player) = level.entity_mut::<ServerPlayer>(id)

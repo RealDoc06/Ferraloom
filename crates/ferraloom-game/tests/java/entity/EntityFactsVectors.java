@@ -87,6 +87,11 @@ public final class EntityFactsVectors {
         pos(entity.getOnPos())+"\t"+pos(entity.getOnPosLegacy())+"\t"+pos(entity.getBlockPosBelowThatAffectsMyMovement())+"\t"+pos((BlockPos)offset.invoke(entity,Float.NaN))+"\t"+on.matches(entity,world,null)+"\t"+affected.matches(entity,world,null));
     }
     var shared=Entity.class.getDeclaredMethod("setSharedFlag",int.class,boolean.class);shared.setAccessible(true);
+    for(String kind:List.of("player","cow","item"))for(boolean shift:List.of(false,true))for(boolean crouch:List.of(false,true)) {
+      Entity entity=switch(kind){case "player"->new LivingVectors(level);case "cow"->new Cow(EntityTypes.COW,level);default->new ItemEntity(EntityTypes.ITEM,level);};
+      shared.invoke(entity,1,shift);entity.setPose(crouch?Pose.CROUCHING:Pose.STANDING);
+      System.out.println("entity-careful-stepping\t"+kind+"\t"+shift+"\t"+crouch+"\t"+entity.isSteppingCarefully());
+    }
     for(String scenario:List.of("base","player-base","player-flying","player-glide","player-spectator","cow-baby","cow-glide","tnt-glide","item-stone","item-netherite","item-zero","item-negative","item-direct","item-other")) {
       Entity entity;
       if(scenario.startsWith("item")) {
