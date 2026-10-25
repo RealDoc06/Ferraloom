@@ -40,14 +40,14 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Redstone mechanics](features/redstone.md) | 61 | 12 | 48 | 1 | 0 |
 | [Scoreboard, teams and bossbars](features/scoreboard-teams-bossbars.md) | 77 | 46 | 27 | 4 | 0 |
 | [Server operations](features/server-operations.md) | 111 | 96 | 15 | 0 | 0 |
-| [Sounds and particles](features/sounds-particles.md) | 2146 | 2146 | 0 | 0 | 0 |
+| [Sounds and particles](features/sounds-particles.md) | 2146 | 5 | 0 | 2141 | 0 |
 | [Spawning, trial spawners and vaults](features/spawning.md) | 138 | 138 | 0 | 0 | 0 |
 | [Statistics](features/statistics.md) | 104 | 5 | 94 | 5 | 0 |
-| [Tags](features/tags.md) | 907 | 907 | 0 | 0 | 0 |
+| [Tags](features/tags.md) | 907 | 7 | 0 | 900 | 0 |
 | [Ticking, game events and vibrations](features/ticking.md) | 191 | 181 | 10 | 0 | 0 |
 | [Villages, trading and POI](features/villages-trading-poi.md) | 599 | 599 | 0 | 0 | 0 |
 | [Wandering traders](features/wandering-traders.md) | 5 | 5 | 0 | 0 | 0 |
 | [Weather, time and environment](features/weather-time.md) | 85 | 85 | 0 | 0 | 0 |
 | [World storage and data fixing](features/world-storage.md) | 307 | 306 | 1 | 0 | 0 |
 | [World generation](features/worldgen.md) | 3114 | 2640 | 174 | 300 | 0 |
-| **Total** | **19497** | **12067** | **4474** | **2956** | **0** |
+| **Total** | **19497** | **9026** | **4474** | **5997** | **0** |
