@@ -115,7 +115,7 @@ fn wrong_chunk_positions_follow_vanilla_local_coordinate_fixup() {
 }
 #[test]
 fn unsupported_and_mismatched_factories_do_not_fabricate_data() {
-    assert!(create(BlockPos::new(0, 0, 0), Block::SPAWNER.default_state()).is_err());
+    assert!(create(BlockPos::new(0, 0, 0), Block::TRIAL_SPAWNER.default_state()).is_err());
     let mut tag = CompoundTag::new();
     tag.insert("id", Tag::String("minecraft:chest".into()));
     assert!(

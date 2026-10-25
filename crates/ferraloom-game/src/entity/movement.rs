@@ -261,7 +261,7 @@ pub fn move_entity<E: Entity + ?Sized>(
             && length >= 1.0
             && super::trace::fall_distance_resetting_hit(entity, movement, level)?
         {
-            level.entity_mut::<EntityData>(entity)?.fall_distance = 0.0;
+            behavior.reset_fall_distance(entity, level)?;
         }
         let position = level.entity::<EntityData>(entity)?.position;
         level
@@ -343,6 +343,30 @@ pub fn move_entity<E: Entity + ?Sized>(
     Ok(())
 }
 
+/// Port of Entity#causeFallDamage. The native immunity check precedes
+/// passenger capture, whose immutable list survives synchronous child calls.
+pub(crate) fn base_cause_fall_damage(
+    entity: EntityRef,
+    level: &mut Level,
+    distance: f64,
+    modifier: f32,
+    source: &super::DamageSource,
+) -> Result<bool, LevelError> {
+    if level.entity_type_tags()?.contains_key(
+        ferraloom_data::tags::EntityTypeTags::FALL_DAMAGE_IMMUNE,
+        level.entity::<EntityData>(entity)?.entity_type,
+    ) {
+        return Ok(false);
+    }
+    let passengers = level.entity::<EntityData>(entity)?.passengers.clone();
+    for passenger in passengers {
+        level
+            .entity_behavior(passenger)?
+            .cause_fall_damage(passenger, level, distance, modifier, source)?;
+    }
+    Ok(false)
+}
+
 /// Port of Entity#checkFallDamage. fallOn runs before reset and can reenter.
 pub fn check_fall_damage(
     entity: EntityRef,
@@ -357,7 +381,8 @@ pub fn check_fall_damage(
         .check_fall_damage(entity, dy, on_ground, state, pos, level)
 }
 /// Port of Entity#checkFallDamage, selected explicitly by living super calls.
-pub fn base_check_fall_damage(
+pub fn base_check_fall_damage<E: Entity + ?Sized>(
+    behavior: &E,
     entity: EntityRef,
     dy: f64,
     on_ground: bool,
@@ -390,8 +415,7 @@ pub fn base_check_fall_damage(
             Some(support_state),
         )?;
     }
-    level.entity_mut::<EntityData>(entity)?.fall_distance = 0.0;
-    Ok(())
+    behavior.reset_fall_distance(entity, level)
 }
 fn restitute<E: Entity + ?Sized>(
     behavior: &E,

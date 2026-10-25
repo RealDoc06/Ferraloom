@@ -122,6 +122,10 @@ impl MinecraftServer {
         command: &PreparedCommand,
     ) -> Result<bool> {
         match command.command.as_str() {
+            "data" => {
+                let result = self.data_command(command)?;
+                self.apply_command_result(source, &command.source, result);
+            }
             "setblock" | "fill" => {
                 let result = placement::run(
                     command,
@@ -137,6 +141,18 @@ impl MinecraftServer {
                 self.apply_level_effects()?;
                 self.apply_command_result(source, &command.source, result?);
             }
+            "gamemode" => {
+                let result = self.game_mode_command(source, command)?;
+                self.apply_command_result(source, &command.source, result);
+            }
+            "defaultgamemode" => {
+                let result = self.default_game_mode_command(command)?;
+                self.apply_command_result(source, &command.source, result);
+            }
+            "give" => {
+                let result = self.give_command(command)?;
+                self.apply_command_result(source, &command.source, result);
+            }
             "teleport" => {
                 let result = self.teleport_command(command)?;
                 self.apply_command_result(source, &command.source, result);
@@ -144,12 +160,12 @@ impl MinecraftServer {
             "time" => {
                 let (result, changed) = self.clocks.command(command, self.level.game_time);
                 if let Some(clock) = changed {
-                    self.level
-                        .level
-                        .refresh_environment_attributes(
-                            super::command_runtime::environment_clock_snapshot(&self.clocks),
-                        )
-                        .map_err(CommandLevelFailure)?;
+                    let snapshot = super::command_runtime::environment_clock_snapshot(&self.clocks);
+                    for live in self.live_levels_mut() {
+                        live.level
+                            .refresh_environment_attributes(snapshot.clone())
+                            .map_err(CommandLevelFailure)?;
+                    }
                     self.broadcast(self.clock_packet(Some(&clock)));
                 }
                 self.apply_command_result(source, &command.source, result?);

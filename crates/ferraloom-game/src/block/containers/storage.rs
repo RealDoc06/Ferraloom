@@ -258,6 +258,8 @@ pub fn set(map: &mut DataComponentMap, component: DataComponent) {
         map.entries.push(component);
     }
 }
+/// Port of ContainerHelper#loadAllItems: TagValueInput's typed-list iterator
+/// retains ItemStackWithSlot codec partials, including an invalid count's 1.
 fn item_entries(tag: &CompoundTag, size: usize) -> impl Iterator<Item = (usize, ItemStack)> + '_ {
     tag.get_list("Items")
         .into_iter()
@@ -265,7 +267,7 @@ fn item_entries(tag: &CompoundTag, size: usize) -> impl Iterator<Item = (usize, 
         .filter_map(Tag::as_compound)
         .filter_map(move |entry| {
             let slot = usize::from(entry.get_byte_or("Slot", 0) as u8);
-            let stack = ItemStack::from_nbt(&Tag::Compound(entry.clone())).ok()?;
+            let stack = ItemStack::from_nbt_with_partial(&Tag::Compound(entry.clone())).ok()?;
             (slot < size).then_some((slot, stack))
         })
 }
@@ -308,3 +310,6 @@ pub fn analog_output(container: &impl Container) -> i32 {
     full /= container.size() as f32;
     (full * 14.0).floor() as i32 + i32::from(full > 0.0)
 }
+
+#[cfg(test)]
+mod partial_tests;

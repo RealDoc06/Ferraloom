@@ -64,7 +64,7 @@ fn snapshot(name: &str, player: EntityRef, stacks: &[ItemStack], level: &mut Lev
 #[test]
 fn native_cooldown_groups_float_percent_wrapping_and_ordered_expiry_packets() {
     let mut level = crate::entity::tests::level(false);
-    let player = EntityRef(91);
+    let player = EntityRef::fixture(crate::level::RegionId::FIXTURE, 91);
     level
         .add_entity(
             player,
@@ -149,7 +149,7 @@ fn player_tick_expires_cooldowns_and_runtime_state_is_not_persisted() {
     if level.shared().is_err() {
         level.install_shared(Box::default());
     }
-    let player = EntityRef(92);
+    let player = EntityRef::fixture(crate::level::RegionId::FIXTURE, 92);
     level
         .add_entity(
             player,
@@ -188,7 +188,7 @@ fn player_tick_expires_cooldowns_and_runtime_state_is_not_persisted() {
     assert!(!player_data.cooldowns.is_on_cooldown(stack));
     assert_eq!(player_data.block_interaction_range(), 5.0);
     assert_eq!(player_data.entity_interaction_range(), 5.0);
-    let saved = player_data.save();
+    let saved = player_data.save(&level).unwrap();
     assert!(!saved.contains_key("cooldowns"));
     assert!(!saved.contains_key("lastClientInput"));
     assert!(!saved.contains_key("textFilteringEnabled"));

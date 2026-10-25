@@ -121,7 +121,7 @@ fn value_and_retained_inventory_add_match_native_remainders_and_detached_sources
             "value {kind}"
         );
 
-        let player_id = EntityRef(1);
+        let player_id = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
         let mut state = player(kind);
         state.menus.current_mut().set_carried(input(kind));
         let menu = state.menus.current_ref();

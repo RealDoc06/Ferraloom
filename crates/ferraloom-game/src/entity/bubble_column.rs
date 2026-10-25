@@ -44,8 +44,7 @@ pub fn on_inside_bubble_column<E: Entity + ?Sized>(
             (base.velocity.y + 0.06).min(0.7)
         };
     }
-    level.entity_mut::<EntityData>(entity)?.fall_distance = 0.0;
-    Ok(())
+    behavior.reset_fall_distance(entity, level)
 }
 
 fn send_particles(

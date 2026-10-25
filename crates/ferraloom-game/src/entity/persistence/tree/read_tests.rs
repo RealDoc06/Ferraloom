@@ -13,7 +13,6 @@ use ferraloom_util::Uuid;
 
 #[test]
 fn comparison_nbt_reads_subclass_data_selected_item_and_ineligible_objects() {
-    static BEHAVIORS: Behaviors = Behaviors::EMPTY;
     let mut count = 0;
     for row in include_str!("../../../../tests/java/entity/vectors.tsv")
         .lines()
@@ -21,14 +20,7 @@ fn comparison_nbt_reads_subclass_data_selected_item_and_ineligible_objects() {
     {
         let fields: Vec<_> = row.split('\t').collect();
         let scenario = fields[1];
-        let mut level = {
-            let mut fixture_level = Level::new(
-                Region::new(&BEHAVIORS),
-                crate::level::LevelContext::fixture(0, 63),
-            );
-            fixture_level.install_shared(Box::default());
-            fixture_level
-        };
+        let mut level = crate::entity::tests::persistence_level();
         let mut state = if scenario.starts_with("player") {
             let mut player = ServerPlayer::new(
                 Uuid::new(0, 1),
@@ -62,20 +54,23 @@ fn comparison_nbt_reads_subclass_data_selected_item_and_ineligible_objects() {
         base.set_y_rot(0.0);
         base.set_x_rot(0.0);
         base.velocity = Vec3::ZERO;
-        let entity = EntityRef(1);
+        let entity = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
         level.add_entity(entity, state).unwrap();
         if scenario == "item-riding" {
             let mut vehicle = PrimedTnt::new(2, 0);
             vehicle.parent.uuid = Uuid::new(0, 2);
             vehicle.parent.set_pos(Vec3::new(10.0, 70.0, -20.0));
             level
-                .add_entity(EntityRef(2), EntityState::PrimedTnt(Box::new(vehicle)))
+                .add_entity(
+                    EntityRef::fixture(crate::level::RegionId::FIXTURE, 2),
+                    EntityState::PrimedTnt(Box::new(vehicle)),
+                )
                 .unwrap();
             level
                 .entity::<EntityData>(entity)
                 .unwrap()
                 .vehicle
-                .set(Some(EntityRef(2)));
+                .set(Some(EntityRef::fixture(crate::level::RegionId::FIXTURE, 2)));
         } else if scenario == "item-removed" {
             level
                 .remove_entity_with_reason(entity, RemovalReason::Discarded)
@@ -103,4 +98,54 @@ fn comparison_nbt_reads_subclass_data_selected_item_and_ineligible_objects() {
         count += 1;
     }
     assert_eq!(count, 7);
+}
+
+#[test]
+fn player_save_and_comparison_nbt_require_the_current_dimension_instead_of_saved_dimension() {
+    static BEHAVIORS: Behaviors = Behaviors::EMPTY;
+    let mut level = Level::new(
+        Region::new(&BEHAVIORS),
+        crate::level::LevelContext::fixture(0, 63),
+    );
+    level.install_shared(Box::default());
+    let entity = level.next_entity_ref();
+    let mut player = ServerPlayer::new(
+        Uuid::new(9, 10),
+        "dimension".into(),
+        level.next_entity_id().unwrap(),
+        Vec3::ZERO,
+        GameType::Survival,
+    );
+    player
+        .saved
+        .insert("Dimension", Tag::String("stale:dimension".into()));
+    level
+        .add_entity(entity, EntityState::Player(Box::new(player)))
+        .unwrap();
+    assert_eq!(
+        level.entity::<ServerPlayer>(entity).unwrap().save(&level),
+        Err(LevelError::MissingEnvironmentContext),
+    );
+    assert_eq!(
+        level.entity_nbt_to_compare(entity),
+        Err(LevelError::MissingEnvironmentContext),
+    );
+    for dimension in [
+        "minecraft:overworld",
+        "minecraft:the_nether",
+        "minecraft:the_end",
+        "test:custom",
+    ] {
+        crate::entity::tests::install_test_environment(&mut level, false, dimension);
+        let saved = level
+            .entity::<ServerPlayer>(entity)
+            .unwrap()
+            .save(&level)
+            .unwrap();
+        assert_eq!(
+            saved.get_string("Dimension").unwrap().to_string_lossy(),
+            dimension
+        );
+        assert_eq!(level.entity_nbt_to_compare(entity).unwrap(), saved);
+    }
 }

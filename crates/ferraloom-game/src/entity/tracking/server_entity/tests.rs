@@ -173,7 +173,7 @@ fn real_player_pairing_and_updates_preserve_equipment_attributes_head_and_motion
     use ferraloom_protocol::component::EquipmentSlot;
     use std::sync::Arc;
     let mut level = level();
-    let id = EntityRef(1);
+    let id = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
     let mut player = ServerPlayer::new(
         ferraloom_util::Uuid::new(1, 2),
         "tracking".into(),
@@ -311,8 +311,8 @@ fn nonliving_damage_forces_native_velocity_sync_even_without_an_update_interval(
 #[test]
 fn vanilla_server_entity_packet_order_velocity_precision_mount_and_sync_flags() {
     let mut level = level();
-    let id = EntityRef(1);
-    let mount = EntityRef(2);
+    let id = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
+    let mount = EntityRef::fixture(crate::level::RegionId::FIXTURE, 2);
     let mut item = ItemEntity::new(2, 1);
     item.parent.set_pos(Vec3::new(8.5, 64.0, 8.5));
     item.parent.set_y_rot(0.0);
@@ -401,7 +401,7 @@ fn vanilla_server_entity_packet_order_velocity_precision_mount_and_sync_flags() 
 #[test]
 fn vanilla_periodic_position_and_forced_teleport_cadence() {
     let mut level = level();
-    let id = EntityRef(1);
+    let id = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
     let mut tnt = PrimedTnt::new(3, 1);
     tnt.parent.set_pos(Vec3::new(0.0, 64.0, 0.0));
     level
@@ -435,7 +435,7 @@ fn vanilla_periodic_position_and_forced_teleport_cadence() {
 #[test]
 fn pairing_uses_cached_metadata_and_position_until_the_next_sync() {
     let mut level = level();
-    let id = EntityRef(1);
+    let id = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
     let mut item = ItemEntity::new(2, 1);
     item.parent.set_pos(Vec3::new(1.0, 64.0, 2.0));
     item.set_item(stack(3));

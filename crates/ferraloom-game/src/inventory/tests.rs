@@ -854,7 +854,7 @@ fn player_tick_broadcasts_external_inventory_mutation_in_entity_phase() {
         fixture_level.install_shared(Box::default());
         fixture_level
     };
-    let handle = EntityRef(1);
+    let handle = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
     let player = ServerPlayer::new(
         ferraloom_util::Uuid::from_int_array([0, 0, 0, 1]),
         "menus".into(),
@@ -878,6 +878,7 @@ fn player_tick_broadcasts_external_inventory_mutation_in_entity_phase() {
         );
         assert!(player.menus.pending_packets.is_empty());
     }
+    level.take_effects(); // Initial join packets precede the menu broadcast under test.
     tick_container_menu(handle, &mut level).unwrap();
     let packets = level
         .take_effects()
@@ -1085,7 +1086,13 @@ fn live_crafting_clicks_and_placements_match_unchanged_native_timelines() {
             );
             if f[2] == "crafting" {
                 state.menus.install_container_menu(
-                    AbstractContainerMenu::new(MenuKind::Crafting, 7).unwrap(),
+                    AbstractContainerMenu::new_bound_workstation(
+                        MenuKind::Crafting,
+                        7,
+                        ferraloom_util::BlockPos::ZERO,
+                        &level,
+                    )
+                    .unwrap(),
                 );
             }
             menu = state.menus.current_ref();
@@ -1273,7 +1280,11 @@ fn clear_grid_returns_lent_drop_receivers_and_preserves_native_comparator_reads(
             None
         };
         if kind != MenuKind::Inventory {
-            let mut receiver = AbstractContainerMenu::new(kind, 7).unwrap();
+            let mut receiver = if kind == MenuKind::Crafting {
+                AbstractContainerMenu::new_bound_workstation(kind, 7, pos, &level).unwrap()
+            } else {
+                AbstractContainerMenu::new(kind, 7).unwrap()
+            };
             if let Some(handle) = handle {
                 for slot in &mut receiver.slots {
                     if slot.container == ContainerId::Local(0) {

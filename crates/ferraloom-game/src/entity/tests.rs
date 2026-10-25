@@ -111,7 +111,7 @@ fn lava_fall_distance_starts_after_the_first_base_tick() {
     level
         .set_block_state(BlockPos::new(8, 64, 8), Block::LAVA.default_state())
         .unwrap();
-    let id = EntityRef(1);
+    let id = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
     let mut tnt = item::PrimedTnt::new(1, 123);
     tnt.parent.set_pos(Vec3::new(8.5, 64.0, 8.5));
     tnt.parent.fall_distance = 8.0;
@@ -166,7 +166,7 @@ fn entity_sound_packets_rng_and_events_match_real_native_call_sites() {
             .set_block_state(pos, Block::STONE.default_state())
             .unwrap();
         level.set_sound_seed(321);
-        let id = EntityRef(1);
+        let id = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
         let is_player = name.starts_with("player-")
             || name == "sprint-player-spectator"
             || name.starts_with("extinguish-player");
@@ -192,7 +192,7 @@ fn entity_sound_packets_rng_and_events_match_real_native_call_sites() {
             EntityState::PrimedTnt(Box::new(item::PrimedTnt::new(1, 123)))
         };
         level.add_entity(id, state).unwrap();
-        let observer = EntityRef(99);
+        let observer = EntityRef::fixture(crate::level::RegionId::FIXTURE, 99);
         level
             .add_entity(
                 observer,
@@ -243,9 +243,18 @@ fn entity_sound_packets_rng_and_events_match_real_native_call_sites() {
                 animal::Cow::with_parent(EntityData::new(ferraloom_data::EntityType::COW, 2, 124));
             rider.as_living_mut().velocity = Vec3::new(2.0, -3.0, 1.0);
             level
-                .add_entity(EntityRef(2), EntityState::Cow(Box::new(rider)))
+                .add_entity(
+                    EntityRef::fixture(crate::level::RegionId::FIXTURE, 2),
+                    EntityState::Cow(Box::new(rider)),
+                )
                 .unwrap();
-            start_riding(EntityRef(2), id, true, &mut level).unwrap();
+            start_riding(
+                EntityRef::fixture(crate::level::RegionId::FIXTURE, 2),
+                id,
+                true,
+                &mut level,
+            )
+            .unwrap();
         }
         game_events::take(&mut level);
         let behavior = level.entity_behavior(id).unwrap();
@@ -361,7 +370,7 @@ fn entity_sound_packets_rng_and_events_match_real_native_call_sites() {
                     events.push(format!(
                         "{}:{}:{}:{}",
                         event.name(),
-                        source.map_or_else(|| "none".into(), |id| id.0.to_string()),
+                        source.map_or_else(|| "none".into(), |id| id.serial().to_string()),
                         affected_state
                             .map_or_else(|| "none".into(), |state| state.id().to_string()),
                         bits(position)
@@ -395,7 +404,7 @@ fn living_movement_and_ignition_use_live_attributes_with_native_float_steps() {
     level
         .set_block_state(BlockPos::new(8, 63, 8), Block::SOUL_SAND.default_state())
         .unwrap();
-    let id = EntityRef(1);
+    let id = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
     let player = player::ServerPlayer::new(
         Uuid::new(1, 2),
         "movement".into(),
@@ -523,10 +532,13 @@ fn native_dimensions_pose_scales_and_attachment_rotations_keep_float_and_double_
         player::GameType::Survival,
     );
     level
-        .add_entity(EntityRef(1), EntityState::Player(Box::new(player)))
+        .add_entity(
+            EntityRef::fixture(crate::level::RegionId::FIXTURE, 1),
+            EntityState::Player(Box::new(player)),
+        )
         .unwrap();
     level
-        .entity_mut::<LivingEntity>(EntityRef(1))
+        .entity_mut::<LivingEntity>(EntityRef::fixture(crate::level::RegionId::FIXTURE, 1))
         .unwrap()
         .attributes
         .get_instance(ferraloom_data::registries::attribute::Id::SCALE)
@@ -556,7 +568,11 @@ fn native_dimensions_pose_scales_and_attachment_rotations_keep_float_and_double_
     .enumerate()
     {
         let dimensions = player::PlayerBehavior
-            .dimensions(EntityRef(1), pose, &level)
+            .dimensions(
+                EntityRef::fixture(crate::level::RegionId::FIXTURE, 1),
+                pose,
+                &level,
+            )
             .unwrap();
         actual.push(row(&format!("player-{index}"), &dimensions));
     }
@@ -638,7 +654,7 @@ fn native_size_refresh_moves_nonplayers_out_of_blocks_and_preserves_player_posit
             .set_block_state(BlockPos::new(9, y, 8), Block::STONE.default_state())
             .unwrap();
     }
-    let entity = EntityRef(1);
+    let entity = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
     let mut tnt = item::PrimedTnt::new(1, 4);
     tnt.parent.set_pos(Vec3::new(8.7, 64.0, 8.5));
     level
@@ -670,7 +686,7 @@ fn native_size_refresh_moves_nonplayers_out_of_blocks_and_preserves_player_posit
     base.saved.insert("height", ferraloom_nbt::Tag::Float(2.0));
     dimensions::refresh_dimensions(&ResizeBehavior, entity, &mut level).unwrap();
     check("growth-low-ceiling", entity, &level);
-    let player = EntityRef(2);
+    let player = EntityRef::fixture(crate::level::RegionId::FIXTURE, 2);
     let mut state = player::ServerPlayer::new(
         Uuid::new(1, 2),
         "resize".into(),
@@ -789,7 +805,17 @@ pub(super) fn tags(level: &mut Level) {
 pub(crate) fn level(floor: bool) -> Level {
     level_with_behaviors(floor, &BEHAVIORS)
 }
-fn install_test_environment(level: &mut Level, fast_lava: bool) {
+/// Cold entity-NBT tests use explicit world services without loaded terrain.
+pub(crate) fn persistence_level() -> Level {
+    let mut level = Level::new(
+        Region::new(&BEHAVIORS),
+        crate::level::LevelContext::fixture(0, 63),
+    );
+    level.install_shared(Box::default());
+    install_test_environment(&mut level, false, "minecraft:overworld");
+    level
+}
+pub(crate) fn install_test_environment(level: &mut Level, fast_lava: bool, dimension_key: &str) {
     use crate::level::environment::{ClockSnapshot, EnvironmentDefinitions};
     let resources = ferraloom_data::datapack::ResourceManager::new(Vec::new());
     let definitions = Arc::new(EnvironmentDefinitions::load(&resources).unwrap());
@@ -802,7 +828,7 @@ fn install_test_environment(level: &mut Level, fast_lava: bool) {
         .set_environment_attributes(
             definitions,
             &dimension,
-            "test".parse().unwrap(),
+            dimension_key.parse().unwrap(),
             &[],
             ClockSnapshot::default(),
         )
@@ -825,7 +851,7 @@ fn level_with_behaviors(floor: bool, behaviors: &'static Behaviors) -> Level {
         fixture_level
     };
     // Explicit controlled dimension with native constants and no timelines.
-    install_test_environment(&mut level, false);
+    install_test_environment(&mut level, false, "test");
     for x in -2..=2 {
         for z in -2..=2 {
             level
@@ -886,7 +912,7 @@ fn vanilla_entity_move_positions_flags_fall_distance_and_velocity_bits() {
                 )
                 .unwrap();
         }
-        let id = EntityRef(1);
+        let mut id = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
         let position = vector(f[4]);
         let state = if f[2] == "player" {
             EntityState::Player(Box::new(player::ServerPlayer::new(
@@ -910,8 +936,7 @@ fn vanilla_entity_move_positions_flags_fall_distance_and_velocity_bits() {
             base.fall_distance = double(f[8]);
             base.velocity = delta;
         }
-        EntityRef(id.0)
-            .move_by(&mut level, movement::MoverType::SelfMovement, delta)
+        id.move_by(&mut level, movement::MoverType::SelfMovement, delta)
             .unwrap();
         let base = level.entity::<EntityData>(id).unwrap();
         assert_vector(base.position, vector(f[9]), f[1]);
@@ -935,7 +960,7 @@ fn vanilla_player_sneak_edge_backoff_bits() {
     level
         .set_block_state(BlockPos::new(3, 63, 4), Block::STONE.default_state())
         .unwrap();
-    let mut id = EntityRef(1);
+    let mut id = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
     level
         .add_entity(
             id,
@@ -1099,7 +1124,7 @@ fn vanilla_fluid_interaction_heights_eyes_and_current_bits() {
         let mut cow = animal::Cow::default();
         cow.as_living_mut().parent.set_pos(vector(f[3]));
         cow.as_living_mut().parent.fall_distance = 12.5;
-        let id = EntityRef(1);
+        let id = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
         level
             .add_entity(id, EntityState::Cow(Box::new(cow)))
             .unwrap();
@@ -1163,7 +1188,7 @@ fn vanilla_primed_tnt_tick_motion_fuse_and_removal_bits() {
     tnt.parent.set_pos(Vec3::new(8.5, 66.0, 8.5));
     tnt.parent.velocity = Vec3::new(0.125, 0.2, -0.03);
     tnt.set_fuse(4);
-    let mut entity = EntityRef(1);
+    let mut entity = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
     level
         .add_entity(entity, EntityState::PrimedTnt(Box::new(tnt)))
         .unwrap();
@@ -1202,7 +1227,7 @@ fn vanilla_item_ticks_preserve_friction_gravity_flags_and_pickup_delay() {
     item.parent.set_pos(Vec3::new(8.5, 64.7, 8.5));
     item.parent.velocity = Vec3::new(0.15, 0.0, 0.03);
     item.pickup_delay = 7;
-    let mut entity = EntityRef(1);
+    let mut entity = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
     level
         .add_entity(entity, EntityState::Item(Box::new(item)))
         .unwrap();
@@ -1242,16 +1267,30 @@ fn item_pickup_uses_mutable_instabuild_when_inventory_is_full() {
                 .items
                 .fill_with(|| ItemStack::new(Item::STONE, 64, Default::default()));
             level
-                .add_entity(EntityRef(1), EntityState::Player(Box::new(player)))
+                .add_entity(
+                    EntityRef::fixture(crate::level::RegionId::FIXTURE, 1),
+                    EntityState::Player(Box::new(player)),
+                )
                 .unwrap();
             let mut item = item::ItemEntity::new(2, 2);
             item.set_item(ItemStack::new(Item::STONE, 2, Default::default()));
             level
-                .add_entity(EntityRef(2), EntityState::Item(Box::new(item)))
+                .add_entity(
+                    EntityRef::fixture(crate::level::RegionId::FIXTURE, 2),
+                    EntityState::Item(Box::new(item)),
+                )
                 .unwrap();
-            item::item_entity::player_touch(EntityRef(2), EntityRef(1), &mut level).unwrap();
+            item::item_entity::player_touch(
+                EntityRef::fixture(crate::level::RegionId::FIXTURE, 2),
+                EntityRef::fixture(crate::level::RegionId::FIXTURE, 1),
+                &mut level,
+            )
+            .unwrap();
             assert_eq!(
-                level.entity::<EntityData>(EntityRef(2)).unwrap().removed,
+                level
+                    .entity::<EntityData>(EntityRef::fixture(crate::level::RegionId::FIXTURE, 2))
+                    .unwrap()
+                    .removed,
                 instabuild
             );
             assert_eq!(level.take_entity_effects().is_empty(), !instabuild);
@@ -1273,15 +1312,27 @@ fn item_merge_equal_counts_choose_other_and_partial_pickup_preserves_native_retu
             Default::default(),
         ));
         level
-            .add_entity(EntityRef(n as u64), EntityState::Item(Box::new(item)))
+            .add_entity(
+                EntityRef::fixture(crate::level::RegionId::FIXTURE, n as u64),
+                EntityState::Item(Box::new(item)),
+            )
             .unwrap();
     }
-    item::item_entity::merge_with_neighbours(EntityRef(1), &mut level).unwrap();
-    assert!(level.entity::<EntityData>(EntityRef(1)).unwrap().removed);
+    item::item_entity::merge_with_neighbours(
+        EntityRef::fixture(crate::level::RegionId::FIXTURE, 1),
+        &mut level,
+    )
+    .unwrap();
+    assert!(
+        level
+            .entity::<EntityData>(EntityRef::fixture(crate::level::RegionId::FIXTURE, 1))
+            .unwrap()
+            .removed
+    );
     assert_eq!(
         count(
             level
-                .entity::<item::ItemEntity>(EntityRef(2))
+                .entity::<item::ItemEntity>(EntityRef::fixture(crate::level::RegionId::FIXTURE, 2))
                 .unwrap()
                 .item()
         ),
@@ -1290,13 +1341,13 @@ fn item_merge_equal_counts_choose_other_and_partial_pickup_preserves_native_retu
     assert_eq!(
         count(
             level
-                .entity::<item::ItemEntity>(EntityRef(3))
+                .entity::<item::ItemEntity>(EntityRef::fixture(crate::level::RegionId::FIXTURE, 3))
                 .unwrap()
                 .item()
         ),
         10
     );
-    let player_id = EntityRef(4);
+    let player_id = EntityRef::fixture(crate::level::RegionId::FIXTURE, 4);
     let mut player = player::ServerPlayer::new(
         Uuid::new(1, 2),
         "fixture".into(),
@@ -1312,7 +1363,7 @@ fn item_merge_equal_counts_choose_other_and_partial_pickup_preserves_native_retu
     level
         .add_entity(player_id, EntityState::Player(Box::new(player)))
         .unwrap();
-    let pickup = EntityRef(3);
+    let pickup = EntityRef::fixture(crate::level::RegionId::FIXTURE, 3);
     set_count(
         level
             .entity_mut::<item::ItemEntity>(pickup)
@@ -1337,7 +1388,7 @@ fn item_merge_equal_counts_choose_other_and_partial_pickup_preserves_native_retu
     assert_eq!(count(item.item()), 1);
     assert!(matches!(
         level.take_entity_effects().first(),
-        Some(effects::EntityEffect::TakeItem { count: 1, .. })
+        Some(effects::EntityEffect::ItemPickup { count: 1, .. })
     ));
 }
 
@@ -1345,7 +1396,7 @@ fn item_merge_equal_counts_choose_other_and_partial_pickup_preserves_native_retu
 fn pick_result_preserves_null_and_cow_spawn_egg() {
     use ferraloom_protocol::component::ItemStack;
     let mut level = level(false);
-    let cow = EntityRef(1);
+    let cow = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
     level
         .add_entity(cow, EntityState::Cow(Box::default()))
         .unwrap();
@@ -1362,7 +1413,7 @@ fn pick_result_preserves_null_and_cow_spawn_egg() {
             Default::default()
         ))
     );
-    let item = EntityRef(2);
+    let item = EntityRef::fixture(crate::level::RegionId::FIXTURE, 2);
     level
         .add_entity(
             item,
@@ -1431,7 +1482,7 @@ fn vanilla_falling_block_airborne_motion_flags_and_fall_distance_bits() {
     let mut level = level(true);
     let mut falling = item::FallingBlockEntity::new(3, 123);
     falling.parent.set_pos(Vec3::new(8.5, 68.0, 8.5));
-    let mut id = EntityRef(1);
+    let mut id = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
     level
         .add_entity(id, EntityState::FallingBlock(Box::new(falling)))
         .unwrap();
@@ -1480,7 +1531,8 @@ fn falling_sand_is_constructed_before_source_replacement_then_lands() {
     level
         .set_block_state(source, Block::SAND.default_state())
         .unwrap();
-    let id = item::falling_block::fall(&mut level, source, Block::SAND.default_state()).unwrap();
+    let mut id =
+        item::falling_block::fall(&mut level, source, Block::SAND.default_state()).unwrap();
     assert!(level.get_block_state(source).unwrap().is_air());
     assert_eq!(
         level
@@ -1506,7 +1558,7 @@ fn falling_sand_is_constructed_before_source_replacement_then_lands() {
             break;
         }
         common_tick(id, &mut level).unwrap();
-        EntityRef(id.0).tick(&mut level).unwrap();
+        id.tick(&mut level).unwrap();
     }
     assert!(level.entity::<EntityData>(id).unwrap().removed);
     assert_eq!(
@@ -1529,7 +1581,7 @@ fn vanilla_experience_orb_motion_friction_and_bounce_bits() {
     let mut orb = ExperienceOrb::new(4, 123);
     orb.parent.set_pos(Vec3::new(8.5, 64.7, 8.5));
     orb.parent.velocity = Vec3::new(0.1, 0.0, 0.01);
-    let mut id = EntityRef(1);
+    let mut id = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
     level
         .add_entity(id, EntityState::ExperienceOrb(Box::new(orb)))
         .unwrap();
@@ -1556,7 +1608,7 @@ fn vanilla_experience_orb_motion_friction_and_bounce_bits() {
 fn orb_retains_disconnected_player_until_its_native_follow_cache_clears() {
     use experience_orb::{ExperienceOrb, follow_nearby_player};
     let mut level = level(false);
-    let player_id = EntityRef(1);
+    let player_id = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
     let uuid = Uuid::new(1, 2);
     let player = player::ServerPlayer::new(
         uuid,
@@ -1570,7 +1622,7 @@ fn orb_retains_disconnected_player_until_its_native_follow_cache_clears() {
         .unwrap();
     let mut orb = ExperienceOrb::new(2, 123);
     orb.parent.set_pos(Vec3::new(1.5, 64.0, 1.5));
-    let orb_id = EntityRef(2);
+    let orb_id = EntityRef::fixture(crate::level::RegionId::FIXTURE, 2);
     level
         .add_entity(orb_id, EntityState::ExperienceOrb(Box::new(orb)))
         .unwrap();
@@ -1639,12 +1691,12 @@ fn orb_merges_only_matching_value_and_modulo_forty_group() {
         orb.parent.set_pos(Vec3::new(8.5, 65.0, 8.5));
         level
             .add_entity(
-                EntityRef(n as u64),
+                EntityRef::fixture(crate::level::RegionId::FIXTURE, n as u64),
                 EntityState::ExperienceOrb(Box::new(orb)),
             )
             .unwrap();
     }
-    let mut id = EntityRef(1);
+    let mut id = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
     common_tick(id, &mut level).unwrap();
     id.tick(&mut level).unwrap();
     let orb = level.entity::<ExperienceOrb>(id).unwrap();
@@ -1652,13 +1704,16 @@ fn orb_merges_only_matching_value_and_modulo_forty_group() {
     assert_eq!(orb.age, 6);
     assert!(
         level
-            .entity::<ExperienceOrb>(EntityRef(2))
+            .entity::<ExperienceOrb>(EntityRef::fixture(crate::level::RegionId::FIXTURE, 2))
             .unwrap()
             .parent
             .removed
     );
     assert_eq!(
-        level.entity::<ExperienceOrb>(EntityRef(3)).unwrap().count,
+        level
+            .entity::<ExperienceOrb>(EntityRef::fixture(crate::level::RegionId::FIXTURE, 3))
+            .unwrap()
+            .count,
         3
     );
 }
@@ -1717,7 +1772,7 @@ fn relative_teleports_match_native_transform_state_and_packet_flags() {
         };
         actual.push(format!("teleport-transform\t{flags}\t{}", text(&absolute)));
         let mut level = level(true);
-        let id = EntityRef(1);
+        let id = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
         let mut player = player::ServerPlayer::new(
             Uuid::new(1, 2),
             "teleport".into(),
@@ -1739,6 +1794,7 @@ fn relative_teleports_match_native_transform_state_and_packet_flags() {
         level
             .add_entity(id, EntityState::Player(Box::new(player)))
             .unwrap();
+        level.take_effects(); // Initial join packets precede the teleport under test.
         teleport_player(id, change.clone(), flags, &mut level).unwrap();
         let player = level.entity::<player::ServerPlayer>(id).unwrap();
         let state =
@@ -1781,8 +1837,8 @@ fn player_teleport_counter_confirmation_and_mounted_known_movement_are_canonical
         accept_teleport, position_move_rotation, teleport_player, teleport_relative,
     };
     let mut level = level(true);
-    let id = EntityRef(1);
-    let vehicle = EntityRef(2);
+    let id = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
+    let vehicle = EntityRef::fixture(crate::level::RegionId::FIXTURE, 2);
     let mut player = player::ServerPlayer::new(
         Uuid::new(1, 2),
         "teleport".into(),
@@ -1886,7 +1942,10 @@ fn push_entities_up_matches_native_shape_difference_query_order_and_spectators()
             tnt.parent.uuid = Uuid::new(0, id as i64);
             tnt.parent.set_pos(position);
             level
-                .add_entity(EntityRef(id), EntityState::PrimedTnt(Box::new(tnt)))
+                .add_entity(
+                    EntityRef::fixture(crate::level::RegionId::FIXTURE, id),
+                    EntityState::PrimedTnt(Box::new(tnt)),
+                )
                 .unwrap();
         }
         let spectator = player::ServerPlayer::new(
@@ -1897,8 +1956,12 @@ fn push_entities_up_matches_native_shape_difference_query_order_and_spectators()
             player::GameType::Spectator,
         );
         level
-            .add_entity(EntityRef(3), EntityState::Player(Box::new(spectator)))
+            .add_entity(
+                EntityRef::fixture(crate::level::RegionId::FIXTURE, 3),
+                EntityState::Player(Box::new(spectator)),
+            )
             .unwrap();
+        game_events::take(&mut level); // Initial join packets precede the push under test.
         let state = level
             .push_entities_up(
                 old.default_state(),
@@ -1919,7 +1982,7 @@ fn push_entities_up_matches_native_shape_difference_query_order_and_spectators()
                 };
                 format!(
                     "{}:{:x},{:x},{:x}",
-                    entity.0,
+                    entity.serial(),
                     position.x.to_bits(),
                     position.y.to_bits(),
                     position.z.to_bits()
@@ -1927,7 +1990,10 @@ fn push_entities_up_matches_native_shape_difference_query_order_and_spectators()
             })
             .collect();
         let vec = |id| {
-            let p = level.entity::<EntityData>(EntityRef(id)).unwrap().position;
+            let p = level
+                .entity::<EntityData>(EntityRef::fixture(crate::level::RegionId::FIXTURE, id))
+                .unwrap()
+                .position;
             format!(
                 "{:x},{:x},{:x}",
                 p.x.to_bits(),
@@ -1976,19 +2042,33 @@ fn nonplayer_teleport_snaps_recursive_passengers_without_changing_motion_or_rota
         entity.parent.velocity = Vec3::new(0.25, -0.125, 0.5);
         level
             .add_entity(
-                EntityRef(index as u64 + 1),
+                EntityRef::fixture(crate::level::RegionId::FIXTURE, index as u64 + 1),
                 EntityState::PrimedTnt(Box::new(entity)),
             )
             .unwrap();
     }
-    start_riding(EntityRef(2), EntityRef(1), true, &mut level).unwrap();
-    start_riding(EntityRef(3), EntityRef(2), true, &mut level).unwrap();
-    EntityRef(1)
+    start_riding(
+        EntityRef::fixture(crate::level::RegionId::FIXTURE, 2),
+        EntityRef::fixture(crate::level::RegionId::FIXTURE, 1),
+        true,
+        &mut level,
+    )
+    .unwrap();
+    start_riding(
+        EntityRef::fixture(crate::level::RegionId::FIXTURE, 3),
+        EntityRef::fixture(crate::level::RegionId::FIXTURE, 2),
+        true,
+        &mut level,
+    )
+    .unwrap();
+    EntityRef::fixture(crate::level::RegionId::FIXTURE, 1)
         .teleport_relative(Vec3::new(2.0, 2.0, 4.0), &mut level)
         .unwrap();
     let mut actual = Vec::new();
     for id in 1..=3 {
-        let entity = level.entity::<EntityData>(EntityRef(id)).unwrap();
+        let entity = level
+            .entity::<EntityData>(EntityRef::fixture(crate::level::RegionId::FIXTURE, id))
+            .unwrap();
         let text = |p: Vec3| {
             format!(
                 "{:x},{:x},{:x}",
@@ -2017,7 +2097,7 @@ fn nonplayer_teleport_snaps_recursive_passengers_without_changing_motion_or_rota
 fn accepted_player_section_changes_capture_a_to_b_to_a_before_any_drain() {
     use ferraloom_util::SectionPos;
     let mut level = level(false);
-    let id = EntityRef(1);
+    let id = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
     let player = player::ServerPlayer::new(
         Uuid::new(1, 2),
         "sections".into(),
@@ -2043,7 +2123,7 @@ fn accepted_player_section_changes_capture_a_to_b_to_a_before_any_drain() {
 #[test]
 fn piston_effects_use_only_the_explicit_path_and_keep_recorded_movements() {
     let mut level = level(false);
-    let id = EntityRef(1);
+    let id = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
     level
         .set_block_state(BlockPos::new(8, 64, 8), Block::WATER.default_state())
         .unwrap();
@@ -2125,7 +2205,7 @@ fn teleport_confirmation_uses_native_clamp_and_preserves_interpolation_history()
         Vec3::new(3.0e7 + 1.0, 65.0, -3.0e7 - 1.0),
     ] {
         let mut level = level(false);
-        let id = EntityRef(1);
+        let id = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
         level
             .add_entity(
                 id,
@@ -2197,7 +2277,9 @@ fn may_build_is_independent_and_game_mode_updates_match_native_abilities() {
             let may_build = player.may_build();
             let result_flying = player.abilities.flying;
             player.abilities.may_build = !may_build;
-            let saved = player.save();
+            let saved = player
+                .save(&crate::entity::tests::persistence_level())
+                .unwrap();
             let saved_may_build = saved
                 .get_compound("abilities")
                 .unwrap()
@@ -2234,12 +2316,12 @@ fn lava_entity_force_reads_the_live_dimension_instead_of_the_legacy_rule_input()
         .unwrap();
     let mut entity = item::PrimedTnt::new(1, 123);
     entity.parent.set_pos(Vec3::new(8.5, 64.0, 8.5));
-    let id = EntityRef(1);
+    let id = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
     level
         .add_entity(id, EntityState::PrimedTnt(Box::new(entity)))
         .unwrap();
     for fast in [false, true, false] {
-        install_test_environment(&mut level, fast);
+        install_test_environment(&mut level, fast, "test");
         level.rules_mut().fast_lava = !fast;
         level.entity_mut::<EntityData>(id).unwrap().velocity = Vec3::new(0.1, 0.0, 0.0);
         fluid::update_fluid_interaction(&item::PrimedTntBehavior, id, &mut level).unwrap();

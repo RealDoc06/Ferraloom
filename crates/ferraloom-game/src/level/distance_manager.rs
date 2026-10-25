@@ -250,8 +250,8 @@ mod player_tests {
         let mut manager = DistanceManager::default();
         let mut tickets = TicketStorage::default();
         let mut simulation = super::super::simulation::SimulationChunkTracker::default();
-        let a = EntityRef(1);
-        let b = EntityRef(2);
+        let a = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
+        let b = EntityRef::fixture(crate::level::RegionId::FIXTURE, 2);
         let origin = SectionPos::new(0, 4, 0);
         manager.update_player(a, Some(origin), &mut tickets);
         manager.update_player(b, Some(origin), &mut tickets);

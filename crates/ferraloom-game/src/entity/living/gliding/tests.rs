@@ -120,7 +120,10 @@ fn fixture(row: &[&str]) -> (Level, EntityRef) {
         }
     }
     if kind == 5 {
-        player.vehicle.set(Some(EntityRef(999)));
+        player.vehicle.set(Some(EntityRef::fixture(
+            crate::level::RegionId::FIXTURE,
+            999,
+        )));
     }
     player.fall_fly_ticks = row[3].parse().unwrap();
     player.fall_distance = 10.0;

@@ -307,7 +307,7 @@ mod tests {
             if fields[1] == "true" {
                 level
                     .add_entity(
-                        EntityRef(1),
+                        EntityRef::fixture(crate::level::RegionId::FIXTURE, 1),
                         EntityState::Player(Box::new(ServerPlayer::new(
                             editor,
                             "sign".into(),

@@ -206,14 +206,14 @@ mod tests {
             fixture_level.install_shared(Box::default());
             fixture_level
         };
-        let cow = EntityRef(1);
+        let cow = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
         level
             .add_entity(cow, EntityState::Cow(Box::default()))
             .unwrap();
         assert_eq!(level.entity_plain_text_name(cow).unwrap(), "Cow");
         let mut item = ItemEntity::new(2, 0);
         item.set_item(ItemStack::new(Item::STONE, 1, Default::default()));
-        let stone = EntityRef(2);
+        let stone = EntityRef::fixture(crate::level::RegionId::FIXTURE, 2);
         level
             .add_entity(stone, EntityState::Item(Box::new(item)))
             .unwrap();
@@ -233,8 +233,11 @@ mod tests {
             );
         assert_eq!(level.entity_plain_text_name(cow).unwrap(), "Named Cow!");
         assert_eq!(
-            level.entity_plain_text_name(EntityRef(99)),
-            Err(crate::level::LevelError::MissingEntity(EntityRef(99)))
+            level.entity_plain_text_name(EntityRef::fixture(crate::level::RegionId::FIXTURE, 99)),
+            Err(crate::level::LevelError::MissingEntity(EntityRef::fixture(
+                crate::level::RegionId::FIXTURE,
+                99
+            )))
         );
     }
 }

@@ -25,7 +25,7 @@ fn player_level(instabuild: bool, creative: bool) -> (Level, EntityRef) {
         fixture_level.install_shared(Box::default());
         fixture_level
     };
-    let entity = EntityRef(1);
+    let entity = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
     let mut player = ServerPlayer::new(
         Uuid::new(1, 2),
         "metadata".into(),
@@ -87,6 +87,7 @@ fn dedicated_permissions_entry_defaults_and_independent_abilities_match_java() {
 #[test]
 fn same_phase_ops_mutations_are_live_and_command_sources_keep_captured_permissions() {
     let (mut level, entity) = player_level(true, false);
+    drop(level.take_shared().unwrap());
     assert!(matches!(
         level.player_permissions(entity),
         Err(LevelError::MissingServerShared)

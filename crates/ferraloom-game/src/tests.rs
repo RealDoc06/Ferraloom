@@ -13,8 +13,8 @@ use crate::{
     ticks::{LevelTicks, TickPriority},
 };
 
-const ATTACKER: EntityRef = EntityRef(1);
-const TARGET: EntityRef = EntityRef(2);
+const ATTACKER: EntityRef = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
+const TARGET: EntityRef = EntityRef::fixture(crate::level::RegionId::FIXTURE, 2);
 const PLACED: BlockPos = BlockPos::new(-1, 64, -1);
 
 struct TestCow;

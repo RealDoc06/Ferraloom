@@ -71,6 +71,11 @@ impl MinecraftServer {
             self.broadcast_block_changes_in(dimension)?;
         }
         self.track_players_in(dimension)?;
+        self.live_level_in_mut(dimension)?
+            .level
+            .tick_entity_tracker()
+            .map_err(anyhow::Error::new)?;
+        self.apply_level_effects_in(dimension)?;
         if runs {
             self.live_level_in_mut(dimension)?
                 .level
@@ -408,7 +413,14 @@ impl MinecraftServer {
                 .level
                 .update_player_chunk_tracking(entity)
                 .map_err(game_error)?;
-            self.request_area_in(dimension, center, distance + 2)?;
+            if !self
+                .live_level_in(dimension)?
+                .level
+                .player_ignored_by_chunk_map(entity)
+                .map_err(game_error)?
+            {
+                self.request_area_in(dimension, center, distance + 2)?;
+            }
         }
         Ok(())
     }

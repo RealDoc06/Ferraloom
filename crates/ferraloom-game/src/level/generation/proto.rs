@@ -8,6 +8,16 @@ use ferraloom_worldgen::{
     region::{Heightmap, RegionChunk, SavedTick},
 };
 
+/// Packed sections and heightmaps from an unchanged generation-owned chunk.
+/// Runtime invalidates this on biome, block or saved light changes; metadata
+/// such as shared structure piece flags is always captured from the live proto.
+#[derive(Debug)]
+pub struct CapturedChunkTerrain {
+    sections: Vec<storage::ChunkSection>,
+    heightmaps: std::collections::BTreeMap<ferraloom_nbt::NbtString, storage::LongArray>,
+    before_terrain: bool,
+}
+
 /// Port of ProtoChunk's owned payload. Keep inherited disk fields until the
 /// corresponding runtime subsystem explicitly takes ownership of them.
 #[derive(Clone, Debug)]
@@ -170,34 +180,61 @@ impl ProtoChunk {
         context: &WorldGenContext,
         registry: &impl SectionRegistry,
     ) -> Result<SerializableChunkData, String> {
+        self.capture_with_cached_terrain(context, registry, &mut None)
+    }
+    /// Reuse serialized terrain, keeping all status/structure/entity/tick data
+    /// fresh. The owner must invalidate before any biome, block or light write,
+    /// including a failed step's partial effects and live FULL snapshot refresh.
+    pub fn capture_with_cached_terrain(
+        &self,
+        context: &WorldGenContext,
+        registry: &impl SectionRegistry,
+        terrain: &mut Option<CapturedChunkTerrain>,
+    ) -> Result<SerializableChunkData, String> {
+        let before_terrain = self.region.status < ChunkStatus::Terrain;
+        if terrain
+            .as_ref()
+            .is_some_and(|cached| cached.before_terrain != before_terrain)
+        {
+            *terrain = None;
+        }
         let mut disk = self.disk.clone();
         disk.status = Some(status_name(self.region.status).into());
         disk.is_light_on = Some(self.light_correct);
-        let mut sections = disk.sections.take().unwrap_or_default();
-        for (index, runtime) in self.region.chunk.sections.iter().enumerate() {
-            let y = (self.region.chunk.min_y >> 4) + index as i32;
-            let entry = if let Some(index) = sections.iter().position(|s| s.y == Some(y as i8)) {
-                &mut sections[index]
-            } else {
-                sections.push(storage::ChunkSection {
-                    y: Some(y as i8),
-                    ..Default::default()
-                });
-                sections.last_mut().unwrap()
-            };
-            entry
-                .update_from_runtime(runtime, registry)
-                .map_err(|e| e.to_string())?;
+        if let Some(cached) = terrain.as_ref() {
+            disk.sections = Some(cached.sections.clone());
+        } else {
+            let mut sections = disk.sections.take().unwrap_or_default();
+            for (index, runtime) in self.region.chunk.sections.iter().enumerate() {
+                let y = (self.region.chunk.min_y >> 4) + index as i32;
+                let entry = if let Some(index) = sections.iter().position(|s| s.y == Some(y as i8))
+                {
+                    &mut sections[index]
+                } else {
+                    sections.push(storage::ChunkSection {
+                        y: Some(y as i8),
+                        ..Default::default()
+                    });
+                    sections.last_mut().unwrap()
+                };
+                entry
+                    .update_from_runtime(runtime, registry)
+                    .map_err(|e| e.to_string())?;
+            }
+            sections.sort_by_key(|s| s.y);
+            disk.sections = Some(sections);
         }
-        sections.sort_by_key(|s| s.y);
-        disk.sections = Some(sections);
         disk.structures = Some(
             storage::StructureData::from_nbt(
                 self.region.structures.to_nbt().map_err(|e| e.to_string())?,
             )
             .map_err(|e| e.to_string())?,
         );
-        disk.block_entities = Some(self.region.block_entities.values().cloned().collect());
+        disk.block_entities = Some(
+            self.region
+                .saved_block_entities()
+                .map_err(|e| e.to_string())?,
+        );
         disk.entities = Some(self.region.entities.clone());
         // Full chunks keep trigger delays from LevelChunkTicks. ProtoChunkTicks
         // discards time, preserving only insertion order, kind and priority.
@@ -239,51 +276,61 @@ impl ProtoChunk {
                 .push(((x & 15) | ((y & 15) << 4) | ((z & 15) << 8)) as i16);
         }
         disk.post_processing = Some(post_processing);
-        let maps = disk.heightmaps.get_or_insert_default();
-        maps.retain(|name, _| {
-            let wg = matches!(
-                name.to_string_lossy().as_str(),
-                "WORLD_SURFACE_WG" | "OCEAN_FLOOR_WG"
-            );
-            if self.region.status < ChunkStatus::Terrain {
-                wg
-            } else {
-                !wg
-            }
-        });
-        let data = context.generator.access().data();
-        for (map, name) in [
-            (Heightmap::WorldSurfaceWg, "WORLD_SURFACE_WG"),
-            (Heightmap::OceanFloorWg, "OCEAN_FLOOR_WG"),
-            (Heightmap::WorldSurface, "WORLD_SURFACE"),
-            (Heightmap::OceanFloor, "OCEAN_FLOOR"),
-            (Heightmap::MotionBlocking, "MOTION_BLOCKING"),
-            (
-                Heightmap::MotionBlockingNoLeaves,
-                "MOTION_BLOCKING_NO_LEAVES",
-            ),
-        ] {
-            if (self.region.status < ChunkStatus::Terrain)
-                != matches!(map, Heightmap::WorldSurfaceWg | Heightmap::OceanFloorWg)
-            {
-                continue;
-            }
-            let heights: [u64; 256] = std::array::from_fn(|index| {
-                (column_height(
-                    &self.region.chunk,
-                    data,
-                    map,
-                    (index & 15) as u8,
-                    (index >> 4) as u8,
-                ) - self.region.chunk.min_y) as u64
+        if let Some(cached) = terrain.as_ref() {
+            disk.heightmaps = Some(cached.heightmaps.clone());
+        } else {
+            let maps = disk.heightmaps.get_or_insert_default();
+            maps.retain(|name, _| {
+                let wg = matches!(
+                    name.to_string_lossy().as_str(),
+                    "WORLD_SURFACE_WG" | "OCEAN_FLOOR_WG"
+                );
+                if self.region.status < ChunkStatus::Terrain {
+                    wg
+                } else {
+                    !wg
+                }
             });
-            let bits = 32 - (self.region.chunk.height as u32).leading_zeros();
-            let per_word = 64 / bits as usize;
-            let mut words = vec![0i64; 256usize.div_ceil(per_word)];
-            for (index, height) in heights.into_iter().enumerate() {
-                words[index / per_word] |= (height << ((index % per_word) * bits as usize)) as i64;
+            let data = context.generator.access().data();
+            for (map, name) in [
+                (Heightmap::WorldSurfaceWg, "WORLD_SURFACE_WG"),
+                (Heightmap::OceanFloorWg, "OCEAN_FLOOR_WG"),
+                (Heightmap::WorldSurface, "WORLD_SURFACE"),
+                (Heightmap::OceanFloor, "OCEAN_FLOOR"),
+                (Heightmap::MotionBlocking, "MOTION_BLOCKING"),
+                (
+                    Heightmap::MotionBlockingNoLeaves,
+                    "MOTION_BLOCKING_NO_LEAVES",
+                ),
+            ] {
+                if (self.region.status < ChunkStatus::Terrain)
+                    != matches!(map, Heightmap::WorldSurfaceWg | Heightmap::OceanFloorWg)
+                {
+                    continue;
+                }
+                let heights: [u64; 256] = std::array::from_fn(|index| {
+                    (column_height(
+                        &self.region.chunk,
+                        data,
+                        map,
+                        (index & 15) as u8,
+                        (index >> 4) as u8,
+                    ) - self.region.chunk.min_y) as u64
+                });
+                let bits = 32 - (self.region.chunk.height as u32).leading_zeros();
+                let per_word = 64 / bits as usize;
+                let mut words = vec![0i64; 256usize.div_ceil(per_word)];
+                for (index, height) in heights.into_iter().enumerate() {
+                    words[index / per_word] |=
+                        (height << ((index % per_word) * bits as usize)) as i64;
+                }
+                maps.insert(name.into(), storage::LongArray(words));
             }
-            maps.insert(name.into(), storage::LongArray(words));
+            *terrain = Some(CapturedChunkTerrain {
+                sections: disk.sections.as_ref().unwrap().clone(),
+                heightmaps: disk.heightmaps.as_ref().unwrap().clone(),
+                before_terrain,
+            });
         }
         Ok(disk)
     }

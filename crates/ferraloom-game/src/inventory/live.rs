@@ -66,6 +66,9 @@ pub fn live_menu_still_valid(
     level: &Level,
 ) -> Result<bool> {
     let menu = level.entity::<ServerPlayer>(player)?.menus.menu(menu)?;
+    if !menu.workstation_still_valid(player, level)? {
+        return Ok(false);
+    }
     if menu.block_entities.is_empty()
         && menu
             .slots

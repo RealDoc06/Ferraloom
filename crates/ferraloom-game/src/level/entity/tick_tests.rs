@@ -128,7 +128,7 @@ fn add_cow(level: &mut Level) -> EntityRef {
 fn add_player(level: &mut Level) -> EntityRef {
     let id = level.next_entity_ref();
     let player = ServerPlayer::new(
-        Uuid::new(1, id.0 as i64),
+        Uuid::new(1, id.serial() as i64),
         "fixture".into(),
         level.next_entity_id().unwrap(),
         Vec3::ZERO,

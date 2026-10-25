@@ -139,6 +139,7 @@ fn live_stat_counter_and_scoreboard_update_in_native_order() {
         )
         .unwrap();
     let stat = Stat::Custom(custom::Id::OPEN_CHEST);
+    drop(level.take_shared().unwrap());
     assert_eq!(
         award_stat(&mut level, player, stat, 2),
         Err(LevelError::MissingServerShared)

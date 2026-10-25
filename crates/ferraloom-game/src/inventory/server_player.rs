@@ -214,6 +214,15 @@ fn close_container_with_delivery(
     disconnected: bool,
     live: bool,
 ) -> Result<Vec<cb::Packet>> {
+    if level
+        .entity::<ServerPlayer>(player)?
+        .menus
+        .current()
+        .kind
+        .is_workstation()
+    {
+        return super::workstation_removed::close(player, level, send_close, disconnected, live);
+    }
     super::block_containers::ensure_unrooted_menu_values(player, level)?;
     let bound = level
         .entity::<ServerPlayer>(player)?

@@ -26,9 +26,9 @@ fn native_flying_speed_uses_independent_ability_sprint_and_passenger_gates() {
         let mut player = player();
         player.set_ability_flying_speed(f32::from_bits(u32::from_str_radix(row[1], 16).unwrap()));
         player.abilities.flying = row[2].parse().unwrap();
-        player
-            .vehicle
-            .set((row[3] == "true").then_some(EntityRef(2)));
+        player.vehicle.set(
+            (row[3] == "true").then_some(EntityRef::fixture(crate::level::RegionId::FIXTURE, 2)),
+        );
         player.set_shared_flag(3, row[4].parse().unwrap());
         assert_eq!(bits(player.flying_movement_speed()), row[5], "{row:?}");
         checked += 1;
@@ -47,7 +47,9 @@ fn native_saved_ability_speeds_survive_mode_updates_and_malformed_fields_default
         assert_eq!(bits(player.ability_flying_speed()), row[4], "{row:?}");
         assert_eq!(bits(player.ability_walking_speed()), row[5], "{row:?}");
         assert_eq!(player.abilities.flying.to_string(), row[6], "{row:?}");
-        let saved = player.save_without_id();
+        let saved = player
+            .save_without_id(&crate::entity::tests::persistence_level())
+            .unwrap();
         let abilities = saved.get_compound("abilities").unwrap();
         assert_eq!(bits(abilities.get_float("flySpeed").unwrap()), row[4]);
         assert_eq!(bits(abilities.get_float("walkSpeed").unwrap()), row[5]);

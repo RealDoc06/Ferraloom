@@ -363,7 +363,7 @@ fn pressure_plate_sensitivity_weighted_rounding_and_release_ticks_match_vanilla(
                 f64::from(ORIGIN.y) + 0.1,
                 f64::from(ORIGIN.z) + 0.5,
             );
-            let id = EntityRef(i + 1);
+            let id = EntityRef::fixture(crate::level::RegionId::FIXTURE, i + 1);
             let mut entity = if kind == 0 {
                 EntityState::PrimedTnt(Box::new(PrimedTnt::new(i as i32 + 1, 123 + i as i64)))
             } else {
@@ -503,7 +503,7 @@ fn switches_and_openings_keep_native_click_results_updates_and_event_sources() {
                 .unwrap();
         }
         level.set_block_state(ORIGIN, state).unwrap();
-        let actor = EntityRef(1);
+        let actor = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
         let player = ServerPlayer::new(
             Uuid::new(1, 2),
             "redstone".into(),
@@ -753,7 +753,7 @@ fn tripwire_shears_disarm_and_base_destroy_event_order_match_vanilla() {
         let mut level = level();
         game_events::observe(&mut level);
         level.set_block_state(ORIGIN, state).unwrap();
-        let actor = EntityRef(1);
+        let actor = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
         let mut player = ServerPlayer::new(
             Uuid::new(1, 2),
             "redstone".into(),
@@ -971,7 +971,7 @@ fn tripwire_entity_press_and_release_scheduled_timelines_match_vanilla() {
         }
         tripwire::calculate_state(&mut level, ORIGIN, hook, false, true, None).unwrap();
         let pos = ORIGIN.relative(direction, 2);
-        let actor = EntityRef(1);
+        let actor = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
         let mut tnt = PrimedTnt::new(1, 123);
         tnt.parent.set_pos(Vec3::new(
             f64::from(pos.x) + 0.5,
@@ -1692,7 +1692,7 @@ fn piston_entity_push_slime_velocity_and_honey_drag_match_real_vanilla_moves() {
             .set_block_entity(BlockEntityState::MovingPiston(Box::new(moving)))
             .unwrap();
         let handle: BlockEntityRef = level.block_entity_ref(ORIGIN).unwrap().unwrap();
-        let actor = EntityRef(1);
+        let actor = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
         let mut tnt = PrimedTnt::new(1, 123);
         tnt.parent.set_pos(Vec3::new(
             f64::from(ORIGIN.x) + if stuck { -0.4 } else { 0.1 },

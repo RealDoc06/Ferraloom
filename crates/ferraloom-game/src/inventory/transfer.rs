@@ -784,7 +784,7 @@ mod tests {
             fixture_level.install_shared(Box::default());
             fixture_level
         };
-        let player = EntityRef(1);
+        let player = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
         let mut state = ServerPlayer::new(
             Uuid::from_int_array([0, 0, 0, 1]),
             "transfer".into(),

@@ -177,6 +177,7 @@ impl Entity for FallingBlockBehavior {
         level: &mut Level,
         _distance: f64,
         _modifier: f32,
+        _source: &crate::entity::DamageSource,
     ) -> Result<bool, LevelError> {
         if level.entity::<FallingBlockEntity>(entity)?.hurt_entities {
             return Err(LevelError::UnsupportedEntity(EntityType::FALLING_BLOCK));

@@ -76,14 +76,17 @@ mod tests {
     fn captured_lists_match_vanilla_immutable_passenger_replacements() {
         let passengers = PassengerList::default();
         let empty = passengers.as_slice();
-        passengers.replace_shared(vec![EntityRef(2)]);
+        passengers.replace_shared(vec![EntityRef::fixture(crate::level::RegionId::FIXTURE, 2)]);
         let first = passengers.as_slice();
-        passengers.replace_shared(vec![EntityRef(2), EntityRef(3)]);
+        passengers.replace_shared(vec![
+            EntityRef::fixture(crate::level::RegionId::FIXTURE, 2),
+            EntityRef::fixture(crate::level::RegionId::FIXTURE, 3),
+        ]);
         let both = passengers.as_slice();
-        passengers.replace_shared(vec![EntityRef(3)]);
+        passengers.replace_shared(vec![EntityRef::fixture(crate::level::RegionId::FIXTURE, 3)]);
         let ids = |list: &[EntityRef]| {
             list.iter()
-                .map(|entity| entity.0.to_string())
+                .map(|entity| entity.serial().to_string())
                 .collect::<Vec<_>>()
                 .join(",")
         };

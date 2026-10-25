@@ -1,4 +1,6 @@
 //! Single-region MinecraftServer phase driver. Game state has one mutable owner.
+#[path = "block_actions.rs"]
+mod block_actions;
 #[path = "command_level.rs"]
 mod command_level;
 #[path = "command_runtime.rs"]
@@ -514,8 +516,8 @@ impl MinecraftServer {
             .dimensions
             .dimensions
             .iter()
-            .filter(|stem| stem.name.as_str() != "minecraft:overworld")
-            .map(|stem| stem.name.as_str().parse::<protocol::Identifier>())
+            .filter(|stem| stem.name.namespace() != "minecraft" || stem.name.path() != "overworld")
+            .map(|stem| stem.name.to_string().parse::<protocol::Identifier>())
             .collect::<protocol::Result<Vec<_>>>()?;
         for dimension in dimensions {
             let world = world_root.open_dimension(dimension.clone(), &properties)?;
@@ -1219,6 +1221,16 @@ impl MinecraftServer {
             player.update_game_mode_abilities();
         }
         player.snap_to(spawn.position, spawn.yaw, spawn.pitch);
+        // ServerPlayer#updateOptions publishes canonical Avatar metadata before tracking starts.
+        let information = &self.connections[&connection].information;
+        player.entity_data.set(
+            ferraloom_game::entity::synched_data::PLAYER_MODEL_CUSTOMISATION,
+            information.model_customisation as i8,
+        );
+        player.parent.set_main_arm(match information.main_hand {
+            common::serverbound::HumanoidArm::Left => protocol::entity_data::HumanoidArm::Left,
+            common::serverbound::HumanoidArm::Right => protocol::entity_data::HumanoidArm::Right,
+        });
         player.view_distance = i32::from(self.connections[&connection].information.view_distance);
         player.text_filtering_enabled = self.connections[&connection]
             .information
@@ -1499,7 +1511,9 @@ impl MinecraftServer {
                         },
                         DataValue {
                             id: 16,
-                            value: EntityDataValue::Byte(c.information.model_customisation as i8),
+                            value: EntityDataValue::Byte(*player.entity_data.get(
+                                ferraloom_game::entity::synched_data::PLAYER_MODEL_CUSTOMISATION,
+                            )),
                         },
                     ]),
                 }),
@@ -1565,6 +1579,17 @@ impl MinecraftServer {
             }
             sb::Packet::SetCarriedItem(packet) => {
                 self.handle_set_carried_item(connection, entity, packet)?
+            }
+            sb::Packet::PlayerAction(packet)
+                if matches!(
+                    packet.action,
+                    PlayerAction::StartDestroyBlock
+                        | PlayerAction::ChangeDestroyDirection
+                        | PlayerAction::AbortDestroyBlock
+                        | PlayerAction::StopDestroyBlock
+                ) =>
+            {
+                self.handle_player_block_action(connection, entity, packet)?;
             }
             sb::Packet::PlayerAction(packet)
                 if matches!(
@@ -1679,6 +1704,19 @@ impl MinecraftServer {
                     .map_err(game_error)?
                     .entity_mut::<ServerPlayer>(entity)
                     .map_err(game_error)?;
+                // ServerPlayer#updateOptions updates the same canonical accessors after join.
+                player.entity_data.set(
+                    ferraloom_game::entity::synched_data::PLAYER_MODEL_CUSTOMISATION,
+                    p.model_customisation as i8,
+                );
+                player.parent.set_main_arm(match p.main_hand {
+                    common::serverbound::HumanoidArm::Left => {
+                        protocol::entity_data::HumanoidArm::Left
+                    }
+                    common::serverbound::HumanoidArm::Right => {
+                        protocol::entity_data::HumanoidArm::Right
+                    }
+                });
                 player.view_distance = i32::from(p.view_distance);
                 player.text_filtering_enabled = p.text_filtering_enabled;
                 self.connections.get_mut(&connection).unwrap().information = p;
@@ -2643,29 +2681,32 @@ impl MinecraftServer {
             )?;
             return Ok(());
         }
-        let center = ChunkPos::containing(BlockPos::new(
-            target.x.floor() as i32,
-            target.y.floor() as i32,
-            target.z.floor() as i32,
-        ));
-        self.request_area_in(&dimension, center, 1)?;
-        // A required chunk read retains its selected dimension across the IO wait.
-        loop {
-            let missing = {
-                let level = self.level_for_entity(entity).map_err(game_error)?;
-                (-1..=1).any(|x| {
-                    (-1..=1).any(|z| {
-                        level
-                            .chunk(ChunkPos::new(center.x + x, center.z + z))
-                            .is_none()
+        // Native noPhysics movement never waits for generation tickets.
+        if !self.player(entity)?.no_physics {
+            let center = ChunkPos::containing(BlockPos::new(
+                target.x.floor() as i32,
+                target.y.floor() as i32,
+                target.z.floor() as i32,
+            ));
+            self.request_area_in(&dimension, center, 1)?;
+            // A required chunk read retains its selected dimension across the IO wait.
+            loop {
+                let missing = {
+                    let level = self.level_for_entity(entity).map_err(game_error)?;
+                    (-1..=1).any(|x| {
+                        (-1..=1).any(|z| {
+                            level
+                                .chunk(ChunkPos::new(center.x + x, center.z + z))
+                                .is_none()
+                        })
                     })
-                })
-            };
-            if !missing {
-                break;
+                };
+                if !missing {
+                    break;
+                }
+                self.integrate_jobs_in(&dimension)?;
+                tokio::time::sleep(Duration::from_millis(1)).await;
             }
-            self.integrate_jobs_in(&dimension)?;
-            tokio::time::sleep(Duration::from_millis(1)).await;
         }
         let checks = MovementChecks::dedicated(&self.tick_rate_manager);
         let result = move_player_with_checks(
@@ -3132,11 +3173,15 @@ impl MinecraftServer {
             self.broadcast(cb::Packet::PlayerInfoRemove(cb::PlayerInfoRemove {
                 profile_ids: vec![c.profile.id],
             }));
+            // ServerGamePacketListenerImpl#removePlayerFromWorld styles the
+            // complete leave component, so the name inherits yellow as well.
+            let mut message = Component::translatable(
+                "multiplayer.player.left",
+                vec![protocol::chat::Argument::Component(Box::new(name))],
+            );
+            message.style.color = Some(protocol::chat::TextColor::parse("yellow").unwrap());
             self.broadcast(cb::Packet::SystemChat(Box::new(cb::SystemChat {
-                content: Component::translatable(
-                    "multiplayer.player.left",
-                    vec![protocol::chat::Argument::Component(Box::new(name))],
-                ),
+                content: message,
                 overlay: false,
             })));
         }

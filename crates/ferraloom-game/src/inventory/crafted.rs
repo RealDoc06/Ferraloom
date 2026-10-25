@@ -43,7 +43,7 @@ mod tests {
             fixture_level.install_shared(Box::default());
             fixture_level
         };
-        let player = EntityRef(1);
+        let player = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
         level
             .add_entity(
                 player,

@@ -327,7 +327,7 @@ fn pure_and_live_pickup_share_native_cursor_and_target_identity() {
         fixture_level.install_shared(Box::default());
         fixture_level
     };
-    let player = EntityRef(1);
+    let player = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
     let mut state = make_player();
     let menu = state.menus.install_container_menu(make_menu());
     level

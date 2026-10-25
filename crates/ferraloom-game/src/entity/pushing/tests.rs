@@ -39,7 +39,10 @@ fn add(level: &mut Level, id: u64, position: Vec3, velocity: Vec3, pushable: boo
         .custom_data
         .insert("pushable", Tag::Byte(i8::from(pushable)));
     level
-        .add_entity(EntityRef(id), EntityState::PrimedTnt(Box::new(tnt)))
+        .add_entity(
+            EntityRef::fixture(crate::level::RegionId::FIXTURE, id),
+            EntityState::PrimedTnt(Box::new(tnt)),
+        )
         .unwrap();
 }
 fn vector(bits: &str) -> Vec3 {
@@ -87,9 +90,9 @@ fn native_pair_push_preserves_impulse_bits_vehicle_gates_and_sync_flags() {
             !row[4].parse::<bool>().unwrap(),
         );
         add(&mut level, 3, Vec3::ZERO, Vec3::ZERO, true, true);
-        let a = EntityRef(1);
-        let b = EntityRef(2);
-        let mount = EntityRef(3);
+        let a = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
+        let b = EntityRef::fixture(crate::level::RegionId::FIXTURE, 2);
+        let mount = EntityRef::fixture(crate::level::RegionId::FIXTURE, 3);
         match row[7] {
             "1" => {
                 crate::entity::start_riding(a, mount, true, &mut level).unwrap();
@@ -190,10 +193,21 @@ fn native_push_predicate_captures_source_rule_and_short_circuits_target_reads() 
             }),
             reads: [Cell::new(0), Cell::new(0)],
         };
-        let predicate = PushableBy::new(EntityRef(1), &level, &teams).unwrap();
+        let predicate = PushableBy::new(
+            EntityRef::fixture(crate::level::RegionId::FIXTURE, 1),
+            &level,
+            &teams,
+        )
+        .unwrap();
         teams.own_rule.set(TeamCollisionRule::Always);
         assert_eq!(
-            predicate.test(EntityRef(2), &level).unwrap().to_string(),
+            predicate
+                .test(
+                    EntityRef::fixture(crate::level::RegionId::FIXTURE, 2),
+                    &level
+                )
+                .unwrap()
+                .to_string(),
             row[2]
         );
         assert_eq!(
@@ -246,7 +260,10 @@ impl Entity for CrammingProbe {
             .custom_data
             .get_long("last-target")
             .unwrap();
-        level.remove_entity(EntityRef(target as u64))?;
+        level.remove_entity(EntityRef::fixture(
+            crate::level::RegionId::FIXTURE,
+            target as u64,
+        ))?;
         Ok(false)
     }
     fn do_push(
@@ -275,9 +292,12 @@ fn native_cramming_preserves_rng_gates_passenger_count_and_damage_before_capture
         cow.as_living_mut().parent.uuid = Uuid::new(0, 1000);
         cow.as_living_mut().parent.network_id = 1000;
         level
-            .add_entity(EntityRef(1000), EntityState::Cow(Box::new(cow)))
+            .add_entity(
+                EntityRef::fixture(crate::level::RegionId::FIXTURE, 1000),
+                EntityState::Cow(Box::new(cow)),
+            )
             .unwrap();
-        let entity = EntityRef(1000);
+        let entity = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1000);
         let mut targets = Vec::new();
         add(&mut level, 99, Vec3::ZERO, Vec3::ZERO, true, true);
         let total: usize = fields[1].parse().unwrap();
@@ -285,9 +305,15 @@ fn native_cramming_preserves_rng_gates_passenger_count_and_damage_before_capture
         for index in 0..total {
             let id = 100 + index as u64;
             add(&mut level, id, Vec3::ZERO, Vec3::ZERO, true, true);
-            let target = EntityRef(id);
+            let target = EntityRef::fixture(crate::level::RegionId::FIXTURE, id);
             if passengers == 1 || passengers == 2 && index > 0 {
-                crate::entity::start_riding(target, EntityRef(99), true, &mut level).unwrap();
+                crate::entity::start_riding(
+                    target,
+                    EntityRef::fixture(crate::level::RegionId::FIXTURE, 99),
+                    true,
+                    &mut level,
+                )
+                .unwrap();
             }
             targets.push(target);
         }
@@ -296,7 +322,7 @@ fn native_cramming_preserves_rng_gates_passenger_count_and_damage_before_capture
                 .entity_mut::<EntityData>(entity)
                 .unwrap()
                 .custom_data
-                .insert("last-target", Tag::Long(target.0 as i64));
+                .insert("last-target", Tag::Long(target.serial() as i64));
         }
         level.rules_mut().max_entity_cramming = fields[2].parse().unwrap();
         level
@@ -374,10 +400,17 @@ fn server_player_push_queries_follow_the_borrowed_manager_current_run_flag() {
             GameType::Survival,
         );
         level
-            .add_entity(EntityRef(1), EntityState::Player(Box::new(player)))
+            .add_entity(
+                EntityRef::fixture(crate::level::RegionId::FIXTURE, 1),
+                EntityState::Player(Box::new(player)),
+            )
             .unwrap();
+        drop(level.take_shared().unwrap());
         assert_eq!(
-            pushable_entities(EntityRef(1), &level),
+            pushable_entities(
+                EntityRef::fixture(crate::level::RegionId::FIXTURE, 1),
+                &level
+            ),
             Err(LevelError::MissingServerShared)
         );
         if level.shared().is_err() {
@@ -402,15 +435,19 @@ fn server_player_push_queries_follow_the_borrowed_manager_current_run_flag() {
             tick_rate.tick();
         }
         level
-            .entity_behavior(EntityRef(1))
+            .entity_behavior(EntityRef::fixture(crate::level::RegionId::FIXTURE, 1))
             .unwrap()
-            .push_entities(EntityRef(1), &mut level, &tick_rate)
+            .push_entities(
+                EntityRef::fixture(crate::level::RegionId::FIXTURE, 1),
+                &mut level,
+                &tick_rate,
+            )
             .unwrap();
         assert_eq!(tick_rate.runs_normally().to_string(), fields[2]);
         assert_eq!(
             usize::from(
                 level
-                    .entity::<EntityData>(EntityRef(2))
+                    .entity::<EntityData>(EntityRef::fixture(crate::level::RegionId::FIXTURE, 2))
                     .unwrap()
                     .in_block_state
                     .get()

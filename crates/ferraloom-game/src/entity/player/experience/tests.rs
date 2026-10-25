@@ -158,7 +158,9 @@ fn player_xp_nbt_preserves_native_unclamped_values_and_metadata_score() {
         let (mut level, player) = level();
         let data = level.entity_mut::<ServerPlayer>(player).unwrap();
         data.try_load(tag).unwrap();
-        let saved = data.save_without_id();
+        let saved = data
+            .save_without_id(&crate::entity::tests::persistence_level())
+            .unwrap();
         assert_eq!(
             format!(
                 "{}\t{:x}\t{}\t{}",

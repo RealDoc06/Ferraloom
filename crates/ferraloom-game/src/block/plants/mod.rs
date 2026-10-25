@@ -30,6 +30,8 @@ mod nylium;
 mod pathfinding;
 mod pitcher;
 mod placement;
+#[cfg(test)]
+mod placement_tests;
 mod powder_snow;
 mod sapling;
 pub mod sculk;
@@ -38,7 +40,9 @@ mod snow;
 mod survival;
 pub mod tree_grower;
 mod vines;
+mod wall_plants;
 pub use moss::place_at as place_mossy_carpet;
+pub(crate) use powder_snow::before_extinguish as powder_snow_before_extinguish;
 pub use powder_snow::can_walk_on as can_entity_walk_on_powder_snow;
 pub use survival::place_double_plant;
 pub use vines::acceptable_neighbor as vine_acceptable_neighbor;
@@ -50,8 +54,20 @@ use ferraloom_data::{Block, BlockClass};
 pub fn ported_behavior(block: Block, method: BlockMethod) -> Option<&'static dyn BlockBehavior> {
     use BlockClass as C;
     use BlockMethod as M;
+    if matches!(block.class(), C::CocoaBlock | C::ShelfMushroomBlock)
+        && matches!(method, M::CanSurvive | M::GetStateForPlacement)
+    {
+        return Some(&wall_plants::WALL_PLANTS);
+    }
     if method == M::IsPathfindable {
         return pathfinding::behavior(block);
+    }
+    if matches!(
+        block.class(),
+        C::SculkSensorBlock | C::CalibratedSculkSensorBlock | C::SculkShriekerBlock
+    ) && matches!(method, M::UpdateShape | M::UpdateFromNeighbourShapes)
+    {
+        return Some(&sculk::WATERLOGGED_SCULK);
     }
     if block.class() == C::HugeMushroomBlock
         && matches!(
@@ -175,7 +191,11 @@ pub fn ported_behavior(block: Block, method: BlockMethod) -> Option<&'static dyn
         C::PowderSnowBlock
             if matches!(
                 method,
-                M::CollisionShape | M::EntityInsideCollisionShape | M::PickupBlock
+                M::CollisionShape
+                    | M::EntityInsideCollisionShape
+                    | M::PickupBlock
+                    | M::FallOn
+                    | M::EntityInside
             ) =>
         {
             &powder_snow::POWDER_SNOW

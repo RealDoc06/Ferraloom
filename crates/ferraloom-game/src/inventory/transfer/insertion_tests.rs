@@ -199,7 +199,7 @@ fn live_safe_insert_preserves_target_generation_and_runs_both_change_calls() {
         fixture_level.install_shared(Box::default());
         fixture_level
     };
-    let player = EntityRef(1);
+    let player = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
     let mut state = ServerPlayer::new(
         Uuid::new(0, 1),
         "insert".into(),

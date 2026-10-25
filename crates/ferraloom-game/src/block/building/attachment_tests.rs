@@ -54,7 +54,7 @@ fn player_context<'stack>(level: &Level, item: &'stack ItemStack) -> BlockPlaceC
     BlockPlaceContext::new(
         &LevelReaderRef::Server(level),
         UseOnContext::new(
-            Some(EntityRef(1)),
+            Some(EntityRef::fixture(crate::level::RegionId::FIXTURE, 1)),
             InteractionHand::MainHand,
             item,
             PlacementHit {
@@ -72,7 +72,7 @@ fn attachments_match_every_variant_face_support_mask_and_actual_player_look_orde
     let mut level = connected_level();
     level
         .add_entity(
-            EntityRef(1),
+            EntityRef::fixture(crate::level::RegionId::FIXTURE, 1),
             EntityState::Player(Box::new(ServerPlayer::new(
                 Uuid::new(1, 2),
                 "building".into(),
@@ -101,7 +101,9 @@ fn attachments_match_every_variant_face_support_mask_and_actual_player_look_orde
             .unwrap();
             level.get_state_for_placement(block, &context)
         } else {
-            let actor = level.entity_mut::<ServerPlayer>(EntityRef(1)).unwrap();
+            let actor = level
+                .entity_mut::<ServerPlayer>(EntityRef::fixture(crate::level::RegionId::FIXTURE, 1))
+                .unwrap();
             actor.yaw = f[3].parse().unwrap();
             actor.y_head_rot = actor.yaw;
             actor.pitch = f[4].parse().unwrap();
@@ -125,7 +127,7 @@ fn player_view_placement_uses_head_yaw_independently_of_body_yaw() {
     let mut level = connected_level();
     level
         .add_entity(
-            EntityRef(1),
+            EntityRef::fixture(crate::level::RegionId::FIXTURE, 1),
             EntityState::Player(Box::new(ServerPlayer::new(
                 Uuid::new(1, 2),
                 "building".into(),
@@ -142,7 +144,9 @@ fn player_view_placement_uses_head_yaw_independently_of_body_yaw() {
     let item = ItemStack::default();
     let line = cases("view\t").next().unwrap();
     let f: Vec<_> = line.split('\t').collect();
-    let actor = level.entity_mut::<ServerPlayer>(EntityRef(1)).unwrap();
+    let actor = level
+        .entity_mut::<ServerPlayer>(EntityRef::fixture(crate::level::RegionId::FIXTURE, 1))
+        .unwrap();
     actor.yaw = f[1].parse().unwrap();
     actor.y_head_rot = f[2].parse().unwrap();
     actor.pitch = f[3].parse().unwrap();

@@ -6,7 +6,10 @@ use crate::{
     },
     entity::{EntityDataView, EntityRef, player::ServerPlayer},
 };
-use ferraloom_util::{BlockPos, ChunkPos, collections::Object2ObjectOpenHashMap};
+use ferraloom_util::{
+    BlockPos, ChunkPos,
+    collections::{JavaHashSet, Object2ObjectOpenHashMap},
+};
 use std::{
     cell::{Cell, RefCell},
     collections::HashMap,
@@ -127,16 +130,21 @@ impl BlockEntityRuntime {
             state.set_level(game_time);
         }
     }
-    pub(super) fn register_published_chunk(&self, chunk: &super::chunk::LevelChunk) {
+    pub(super) fn register_published_chunk(
+        &self,
+        chunk: &super::chunk::LevelChunk,
+        has_skylight: Option<bool>,
+    ) -> Result<(), LevelError> {
         // Stateless ticker selection invokes no world callback. The metadata
         // guard is released before returning to the promotion continuation.
         let mut tickers = self.tickers.borrow_mut();
         for state in chunk.block_entities.iter() {
             let data = state.data();
-            if state.has_server_ticker() {
+            if state.has_server_ticker(has_skylight)? {
                 tickers.bind(data.reference(), data.kind);
             }
         }
+        Ok(())
     }
 }
 impl Level {
@@ -217,6 +225,8 @@ impl Level {
         if !state.data().kind.is_valid(block) {
             return Err(LevelError::UnsupportedBlockEntity(block.block()));
         }
+        state.data_mut().block_state = block;
+        let has_ticker = state.has_server_ticker(self.region().has_skylight)?;
         let region = self.region_mut();
         if let Some(mut old) = region
             .chunks
@@ -245,7 +255,7 @@ impl Level {
         let reference = data.reference();
         let kind = data.kind;
         state.set_level(region.game_time);
-        if state.has_server_ticker() {
+        if has_ticker {
             runtime.tickers.get_mut().bind(reference, kind);
         } else {
             runtime.tickers.get_mut().unbind(pos);
@@ -296,7 +306,7 @@ impl Level {
                 .set_block_state(state)?;
             let entity = self.block_entity_state(handle)?;
             let kind = entity.data().kind;
-            if entity.has_server_ticker() {
+            if entity.has_server_ticker(self.region().has_skylight)? {
                 self.region_mut()
                     .block_entity_state
                     .tickers
@@ -450,8 +460,63 @@ impl Level {
             .block_entities = tags;
         Ok(())
     }
-    /// Serialize active receivers in vanilla's fastutil map order, retaining raw
-    /// unactivated NBT exactly for factories which are still unported.
+    /// Port of LevelChunk#getBlockEntity(CHECK)'s removed-entry cleanup. A
+    /// retained receiver stays addressable; its pending replacement is not
+    /// promoted again during this same CHECK.
+    pub(super) fn discard_removed_block_entity(
+        &mut self,
+        pos: BlockPos,
+    ) -> Result<bool, LevelError> {
+        let key = ChunkPos::containing(pos);
+        let chunk = self.chunk(key).ok_or(LevelError::MissingChunk(key))?;
+        if !chunk
+            .block_entities
+            .get(pos)
+            .is_some_and(|state| state.data().removed)
+        {
+            return Ok(false);
+        }
+        let region = self.region_mut();
+        let state = region
+            .chunks
+            .get_mut(&key)
+            .unwrap()
+            .block_entities
+            .remove(pos)
+            .unwrap();
+        region
+            .block_entity_state
+            .detached
+            .insert(state.data().reference(), state);
+        Ok(true)
+    }
+
+    /// Mutable CHECK half of LevelChunk#getBlockEntityNbtForSaving, before the
+    /// save plan borrows Level immutably. Each captured position is checked once;
+    /// errors retain the existing seam's pending payload and required cause.
+    pub fn prepare_block_entities_for_saving(&mut self, key: ChunkPos) -> Result<(), LevelError> {
+        let chunk = self.chunk(key).ok_or(LevelError::MissingChunk(key))?;
+        // ChunkAccess#getBlockEntitiesPos copies pending keys into a JDK
+        // HashSet, then adds live keys. Preserve its value-defined traversal.
+        let mut positions = JavaHashSet::<BlockPos>::with_capacity(
+            (chunk.pending_block_entity_nbt().len().max(12) * 4).div_ceil(3),
+        );
+        for tag in chunk.pending_block_entity_nbt() {
+            positions.insert(crate::block::entity::get_pos_from_tag(key, tag));
+        }
+        for state in chunk.block_entities.iter() {
+            positions.insert(state.data().pos);
+        }
+        let positions: Vec<_> = positions.into_iter().collect();
+        for pos in positions {
+            self.get_or_promote_block_entity(pos)?;
+        }
+        Ok(())
+    }
+
+    /// Immutable serialization half of LevelChunk#getBlockEntityNbtForSaving.
+    /// Active receivers override pending data; removed receivers do not. A raw
+    /// fallback is copied before setting keepPacked, preserving its stored NBT.
     pub fn block_entity_tags_for_saving(
         &self,
         key: ChunkPos,
@@ -459,11 +524,13 @@ impl Level {
         let chunk = self.chunk(key).ok_or(LevelError::MissingChunk(key))?;
         let mut tags = Vec::new();
         for state in chunk.block_entities.iter() {
-            tags.push(
-                state
+            if !state.data().removed {
+                let mut tag = state
                     .save_with_full_metadata()
-                    .map_err(|_| LevelError::Inventory("block entity serialization codec"))?,
-            );
+                    .map_err(|_| LevelError::Inventory("block entity serialization codec"))?;
+                tag.insert("keepPacked", ferraloom_nbt::Tag::Byte(0));
+                tags.push(tag);
+            }
         }
         tags.extend(
             chunk
@@ -471,9 +538,16 @@ impl Level {
                 .iter()
                 .filter(|tag| {
                     let pos = crate::block::entity::get_pos_from_tag(key, tag);
-                    chunk.block_entities.get(pos).is_none()
+                    chunk
+                        .block_entities
+                        .get(pos)
+                        .is_none_or(|state| state.data().removed)
                 })
-                .cloned(),
+                .map(|tag| {
+                    let mut tag = tag.clone();
+                    tag.insert("keepPacked", ferraloom_nbt::Tag::Byte(1));
+                    tag
+                }),
         );
         Ok(tags)
     }
@@ -603,6 +677,87 @@ mod tests {
         level.set_block_state(pos, state).unwrap();
         level.set_block_entity(create(pos, state).unwrap()).unwrap();
         level.block_entity_ref(pos).unwrap().unwrap()
+    }
+    #[test]
+    fn native_chunk_save_promotes_pending_and_marks_only_raw_fallbacks_packed() {
+        use ferraloom_nbt::{CompoundTag, parse_compound};
+        let pos = BlockPos::new(1, 1, 1);
+        let key = ChunkPos::ZERO;
+        let live = parse_compound(
+            "{id:'minecraft:chest',x:1,y:1,z:1,LootTable:'minecraft:chests/simple_dungeon',LootTableSeed:17L}",
+        )
+        .unwrap();
+        let mut count = 0;
+        for row in include_str!("../../tests/java/level/block-entity-save.tsv").lines() {
+            let fields: Vec<_> = row.split('\t').collect();
+            let kind = fields[0];
+            let raw = (fields[1] != "-").then(|| parse_compound(fields[1]).unwrap());
+            let expected = (fields[2] != "-").then(|| parse_compound(fields[2]).unwrap());
+            let pending = (fields[3] != "-").then(|| parse_compound(fields[3]).unwrap());
+            let mut level = level();
+            let state = if kind == "empty-promotion" {
+                Block::AIR.default_state()
+            } else {
+                Block::CHEST.default_state()
+            };
+            level.set_block_state(pos, state).unwrap();
+            if let Some(raw) = raw {
+                level
+                    .region_mut()
+                    .chunks
+                    .get_mut(&key)
+                    .unwrap()
+                    .pending_generation
+                    .block_entities
+                    .push(raw);
+            }
+            let old = if matches!(kind, "live" | "pending" | "removed") {
+                let receiver = crate::block::entity::load_static(pos, state, &live)
+                    .unwrap()
+                    .unwrap();
+                level.set_block_entity(receiver).unwrap();
+                let handle = level.block_entity_ref(pos).unwrap().unwrap();
+                if kind != "live" {
+                    level.retain_block_entity(handle).unwrap();
+                    level
+                        .block_entity_mut::<BlockEntityData>(handle)
+                        .unwrap()
+                        .set_removed();
+                }
+                Some(handle)
+            } else {
+                None
+            };
+            level.prepare_block_entities_for_saving(key).unwrap();
+            let saved = level.block_entity_tags_for_saving(key).unwrap();
+            assert_eq!(
+                saved,
+                expected.into_iter().collect::<Vec<CompoundTag>>(),
+                "{row}"
+            );
+            assert_eq!(
+                level.chunk(key).unwrap().pending_block_entity_nbt(),
+                pending.into_iter().collect::<Vec<_>>(),
+                "stored pending payload: {row}"
+            );
+            assert_eq!(
+                level.chunk(key).unwrap().block_entities.get(pos).is_some(),
+                fields[4] == "true",
+                "live receiver: {row}"
+            );
+            if let Some(old) = old
+                && kind != "live"
+            {
+                level.collect_detached_block_entities();
+                assert!(level.block_entity::<BlockEntityData>(old).unwrap().removed);
+                level.release_block_entity(old);
+            }
+            // Repeating immutable capture neither promotes a fallback nor
+            // rewrites its original keepPacked field.
+            assert_eq!(level.block_entity_tags_for_saving(key).unwrap(), saved);
+            count += 1;
+        }
+        assert_eq!(count, 5);
     }
     #[test]
     fn placement_updates_receiver_before_broadcast_and_skip_side_effects_removes_it() {
@@ -762,5 +917,68 @@ mod tests {
         assert!(
             matches!(level.player_and_block_entities_mut(player,&[a]),Err(LevelError::MissingBlockEntity(h)) if h==a)
         );
+    }
+    #[test]
+    fn daylight_bindings_require_real_sky_and_follow_attachment_publication_and_rebind() {
+        use crate::block::entity::{BlockEntityData, create};
+        let pos = BlockPos::new(1, 1, 1);
+        let state = Block::DAYLIGHT_DETECTOR.default_state();
+        let binding = |level: &Level| {
+            let mut tickers = level.region().block_entity_state.tickers.borrow_mut();
+            tickers.begin_phase();
+            let value = tickers.next_ticker().map(|ticker| ticker.entity);
+            assert!(tickers.next_ticker().is_none());
+            tickers.end_phase();
+            value
+        };
+        let mut missing = level();
+        missing.set_block_state(pos, state).unwrap();
+        assert_eq!(
+            missing.set_block_entity(create(pos, state).unwrap()),
+            Err(LevelError::UnsupportedLightQuery)
+        );
+        assert_eq!(missing.block_entity_ref(pos).unwrap(), None);
+        assert_eq!(binding(&missing), None);
+        for sky in [true, false] {
+            let mut level = level();
+            level.set_has_skylight(sky);
+            level.set_block_state(pos, state).unwrap();
+            level.set_block_entity(create(pos, state).unwrap()).unwrap();
+            let original = level.block_entity_ref(pos).unwrap().unwrap();
+            assert_eq!(binding(&level), sky.then_some(original));
+            // Existing-wrapper rebind must use the same owning dimension fact.
+            level.ensure_block_entity(pos, state).unwrap();
+            assert_eq!(binding(&level), sky.then_some(original));
+            // Native proto publication attaches the original prepared state.
+            level.remove_block_entity(pos).unwrap();
+            assert_eq!(binding(&level), None);
+            let key = ChunkPos::new(0, 0);
+            level.remove_chunk(key).unwrap();
+            let mut chunk = LevelChunk::new(
+                key,
+                0..1,
+                ferraloom_chunk::LevelChunkSection::new(
+                    ferraloom_chunk::Strategy::block_states(),
+                    ferraloom_chunk::Strategy::biomes(Arc::new(
+                        ferraloom_chunk::IdMap::new(vec![ferraloom_chunk::BiomeId(0)]).unwrap(),
+                    )),
+                    ferraloom_chunk::BiomeId(0),
+                ),
+            );
+            chunk.set_block_state(pos, state).unwrap();
+            chunk
+                .add_prepared_block_entity(create(pos, state).unwrap())
+                .unwrap();
+            level.add_chunk(chunk).unwrap();
+            let published = level.block_entity_ref(pos).unwrap().unwrap();
+            assert_ne!(original, published);
+            assert!(
+                level
+                    .block_entity::<BlockEntityData>(published)
+                    .unwrap()
+                    .has_level
+            );
+            assert_eq!(binding(&level), sky.then_some(published));
+        }
     }
 }

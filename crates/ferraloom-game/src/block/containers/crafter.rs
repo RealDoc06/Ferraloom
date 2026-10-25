@@ -13,6 +13,7 @@ pub struct CrafterBlockEntity {
     pub disabled_slots: [bool; 9],
     pub triggered: i32,
     pub crafting_ticks_remaining: i32,
+    items_list_generation: u64,
 }
 impl CrafterBlockEntity {
     pub fn new(parent: BlockEntityData) -> Self {
@@ -21,7 +22,13 @@ impl CrafterBlockEntity {
             disabled_slots: [false; 9],
             triggered: 0,
             crafting_ticks_remaining: 0,
+            items_list_generation: 0,
         }
+    }
+    /// Identity of the list replaced by CrafterBlockEntity#loadAdditional.
+    /// Slot/count edits and component application keep the same list identity.
+    pub const fn items_list_generation(&self) -> u64 {
+        self.items_list_generation
     }
     pub fn set_slot_state(&mut self, slot: usize, enabled: bool) {
         if slot < 9 && self.parent.parent.items[slot].is_empty() {
@@ -56,6 +63,17 @@ impl CrafterBlockEntity {
 pub struct CrafterBehavior;
 pub static CRAFTER_ENTITY: CrafterBehavior = CrafterBehavior;
 impl BlockEntity for CrafterBehavior {
+    fn has_server_ticker(&self) -> bool {
+        true
+    }
+    fn tick(
+        &self,
+        receiver: crate::block::entity::BlockEntityRef,
+        level: &mut crate::level::Level,
+    ) -> Result<(), crate::level::LevelError> {
+        crate::block::redstone::crafter::server_tick(receiver, level)
+    }
+
     fn pre_remove_side_effects(
         &self,
         entity: crate::block::entity::BlockEntityRef,
@@ -72,6 +90,11 @@ impl BlockEntity for CrafterBehavior {
         let BlockEntityState::Crafter(crafter) = state else {
             unreachable!()
         };
+        // Native allocates a fresh NonNullList even when a loot table is loaded.
+        crafter.items_list_generation = crafter
+            .items_list_generation
+            .checked_add(1)
+            .expect("crafter items list generations exhausted");
         crafter.parent.load(tag);
         crafter.crafting_ticks_remaining = tag.get_int_or("crafting_ticks_remaining", 0);
         crafter.triggered = tag.get_int_or("triggered", 0);
@@ -119,5 +142,42 @@ impl BlockEntity for CrafterBehavior {
             unreachable!()
         };
         crafter.parent.collect_components(map);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::block::entity::create;
+    use ferraloom_data::{Block, Item};
+    use ferraloom_protocol::component::DataComponentPatch;
+    use ferraloom_util::BlockPos;
+
+    fn generation(state: &BlockEntityState) -> u64 {
+        let BlockEntityState::Crafter(crafter) = state else {
+            unreachable!()
+        };
+        crafter.items_list_generation()
+    }
+
+    #[test]
+    fn only_crafter_loading_changes_the_captured_items_list_generation() {
+        let mut state = create(BlockPos::ZERO, Block::CRAFTER.default_state()).unwrap();
+        assert_eq!(generation(&state), 0);
+        let container = state.container_mut().unwrap();
+        container.set_item(0, ItemStack::new(Item::STONE, 3, Default::default()));
+        container.set_item_count(0, 2).unwrap();
+        container.clear_content();
+        state.apply_components(&DataComponentMap::default(), &DataComponentPatch::default());
+        assert_eq!(generation(&state), 0);
+        state.load_custom_only(&CompoundTag::new());
+        assert_eq!(generation(&state), 1);
+        state.load_with_components(
+            &ferraloom_nbt::parse_compound("{LootTable:'chests/simple_dungeon'}").unwrap(),
+        );
+        assert_eq!(generation(&state), 2);
+        let saved = state.save_with_full_metadata().unwrap();
+        assert!(!saved.contains_key("items_list_generation"));
+        assert_eq!(generation(&state), 2);
     }
 }

@@ -213,7 +213,7 @@ fn native_food_tick_preserves_thresholds_difficulty_damage_order_and_timer_wrap(
         } else {
             assert!(damage.is_none());
         }
-        let mut saved = player.save();
+        let mut saved = player.save(&level).unwrap();
         assert_eq!(
             saved.get_int_or("foodTickTimer", -999),
             player.food_data.tick_timer

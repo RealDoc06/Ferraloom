@@ -5,7 +5,7 @@ use ferraloom_game::level::generation::ChunkPyramid;
 use ferraloom_util::BlockPos;
 use ferraloom_worldgen::generator::{ChunkGenerator, GenerationData};
 
-fn fixture() -> (GenerationState, RegistryAdapter) {
+pub(super) fn fixture() -> (GenerationState, RegistryAdapter) {
     let resources = resources();
     let data = Arc::new(GenerationData::load(&resources).unwrap());
     let generator = Arc::new(
@@ -102,6 +102,11 @@ fn partial_write_error_flushes_propagated_neighbors_before_transport_and_save() 
     let source = BlockPos::new(31, 8, 8);
     let probe = BlockPos::new(32, 8, 8);
     write(&mut state, source, Block::GLOWSTONE.default_state());
+    let changed_neighbor = ChunkPos::containing(probe);
+    let before = state
+        .capture_proto(changed_neighbor.pack(), &registry)
+        .unwrap();
+    assert_eq!(block_light(&before, probe), 0);
     assert!(state.light.has_light_work());
     let failure = state
         .finish_light::<()>(Err(ferraloom_worldgen::Error(
@@ -118,8 +123,12 @@ fn partial_write_error_flushes_propagated_neighbors_before_transport_and_save() 
     );
     assert!(!state.light.has_light_work());
     assert_eq!(state.light.light_value(LightLayer::Block, probe), 14);
-    let changed_neighbor = ChunkPos::containing(probe);
     assert!(state.light_changed.contains(&changed_neighbor.pack()));
+    assert!(
+        !state
+            .captured_terrain
+            .contains_key(&changed_neighbor.pack())
+    );
 
     let directory = tempfile::tempdir().unwrap();
     let mut io =

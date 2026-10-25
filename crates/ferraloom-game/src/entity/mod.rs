@@ -17,15 +17,52 @@ pub mod mob;
 pub mod monster;
 pub mod player;
 pub mod pushing;
+mod stuck;
+pub use stuck::{make_stuck_in_block, reset_fall_distance};
 mod relationships;
 pub use relationships::PassengerList;
 
 /// Server-lifetime identity, independent of storage location and network ID.
 /// The server allocator must never reuse a value, including after removal.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct EntityRef(pub u64);
+pub struct EntityRef {
+    allocation_namespace: crate::level::RegionId,
+    serial: u64,
+}
 
 impl EntityRef {
+    /// Allocate from the sole birth-Region counter. The namespace identifies
+    /// the allocator, not the current storage location, so transfers retain it.
+    pub(crate) fn allocate(
+        namespace: crate::level::RegionId,
+        counter: &std::cell::Cell<u64>,
+    ) -> Self {
+        let serial = counter
+            .get()
+            .checked_add(1)
+            .expect("entity reference space exhausted");
+        counter.set(serial);
+        Self {
+            allocation_namespace: namespace,
+            serial,
+        }
+    }
+    pub const fn allocation_namespace(self) -> crate::level::RegionId {
+        self.allocation_namespace
+    }
+    pub const fn serial(self) -> u64 {
+        self.serial
+    }
+
+    /// Explicit identities for model fixtures or a known serial in a live
+    /// fixture's namespace. Production callers must use Level#next_entity_ref.
+    #[cfg(test)]
+    pub const fn fixture(namespace: crate::level::RegionId, serial: u64) -> Self {
+        Self {
+            allocation_namespace: namespace,
+            serial,
+        }
+    }
     pub fn teleport_relative(
         self,
         delta: ferraloom_util::Vec3,
@@ -225,23 +262,43 @@ impl EntityDataView for LivingEntity {
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum EntityMethod {
     PlayerTouch,
-    SwingAndResetAttackStrength,
     PlayShoulderEntityAmbientSound,
     RespawnEntityOnShoulder,
     CheckAutoSpinAttack,
     RunLocationChangedEffects,
+    BroadcastEntityEvent,
+    BroadcastDamageEvent,
+    EnchantmentAttributeModifiers,
+    StopLocationBasedEffects,
+    ModifyArmorEffectiveness,
     JumpInLiquid,
+    EnchantmentDamageImmunity,
+    EnchantmentDamageProtection,
+    ApplyItemBlocking,
+    StopSleeping,
+    CheckTotemDeathProtection,
+    Die,
 }
 impl EntityMethod {
     pub const fn name(self) -> &'static str {
         match self {
             Self::PlayerTouch => "playerTouch",
-            Self::SwingAndResetAttackStrength => "swingAndResetAttackStrength",
             Self::PlayShoulderEntityAmbientSound => "playShoulderEntityAmbientSound",
             Self::RespawnEntityOnShoulder => "respawnEntityOnShoulder",
             Self::CheckAutoSpinAttack => "checkAutoSpinAttack",
             Self::RunLocationChangedEffects => "EnchantmentHelper#runLocationChangedEffects",
+            Self::BroadcastEntityEvent => "ServerLevel#broadcastEntityEvent",
+            Self::BroadcastDamageEvent => "ServerLevel#broadcastDamageEvent",
+            Self::EnchantmentAttributeModifiers => "EnchantmentHelper#forEachModifier",
+            Self::StopLocationBasedEffects => "EnchantmentHelper#stopLocationBasedEffects",
+            Self::ModifyArmorEffectiveness => "EnchantmentHelper#modifyArmorEffectiveness",
             Self::JumpInLiquid => "jumpInLiquid",
+            Self::EnchantmentDamageImmunity => "EnchantmentHelper#isImmuneToDamage",
+            Self::EnchantmentDamageProtection => "EnchantmentHelper#getDamageProtection",
+            Self::ApplyItemBlocking => "LivingEntity#applyItemBlocking",
+            Self::StopSleeping => "LivingEntity#stopSleeping",
+            Self::CheckTotemDeathProtection => "LivingEntity#checkTotemDeathProtection",
+            Self::Die => "LivingEntity#die",
         }
     }
 }
@@ -256,6 +313,59 @@ pub fn trace_base_entity_refs(base: &EntityData, references: &mut Vec<EntityRef>
 ///
 /// Dispatch objects are stateless. Never hold a state borrow across a world call.
 pub trait Entity: Sync {
+    /// Port of Player#awardStat's virtual entry. ServerPlayer owns the single
+    /// canonical counter and scoreboard producer.
+    fn award_stat(
+        &self,
+        entity: EntityRef,
+        stat: crate::stats::Stat,
+        amount: i32,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        player::award_stat(entity, stat, amount, level)
+    }
+    /// Port of Entity#gameEvent(Holder), retaining the derived overload dispatch.
+    fn game_event(
+        &self,
+        entity: EntityRef,
+        event: ferraloom_data::registries::game_event::Id,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        self.game_event_with_source(entity, event, Some(entity), level)
+    }
+    /// Port of Entity#gameEvent(Holder, Entity).
+    fn game_event_with_source(
+        &self,
+        entity: EntityRef,
+        event: ferraloom_data::registries::game_event::Id,
+        source: Option<EntityRef>,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        let position = level.entity::<EntityData>(entity)?.position;
+        level.game_event(event, position, source, None)
+    }
+    /// Port of LivingEntity#onEnterCombat's empty parent callback.
+    fn on_enter_combat(&self, _entity: EntityRef, _level: &mut Level) -> Result<(), LevelError> {
+        Ok(())
+    }
+    /// Port of LivingEntity#onLeaveCombat's empty parent callback.
+    fn on_leave_combat(&self, _entity: EntityRef, _level: &mut Level) -> Result<(), LevelError> {
+        Ok(())
+    }
+    /// Port of Entity#resetFallDistance; ServerPlayer adds its fall criterion.
+    fn reset_fall_distance(&self, entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
+        stuck::base_reset_fall_distance(entity, level)
+    }
+    /// Port of Entity#makeStuckInBlock, retaining this derived reset dispatcher.
+    fn make_stuck_in_block(
+        &self,
+        entity: EntityRef,
+        state: ferraloom_data::BlockState,
+        multiplier: Vec3,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        stuck::base_make_stuck_in_block(self, entity, state, multiplier, level)
+    }
     /// Port of Entity#getName, with Player and ItemEntity virtual overrides.
     fn name(
         &self,
@@ -348,6 +458,14 @@ pub trait Entity: Sync {
             .as_living()
             .map(|living| living.equipment.get(slot)))
     }
+    /// Port of Entity#getWeaponItem; LivingEntity returns its live main hand.
+    fn weapon_item<'level>(
+        &self,
+        _entity: EntityRef,
+        _level: &'level Level,
+    ) -> Result<Option<&'level ferraloom_protocol::component::ItemStack>, LevelError> {
+        Ok(None)
+    }
     /// Port of LivingEntity#isBaby; ageable entities override this read.
     fn is_baby(&self, _entity: EntityRef, _level: &Level) -> Result<bool, LevelError> {
         Ok(false)
@@ -435,6 +553,34 @@ pub trait Entity: Sync {
     }
     fn swim_sound(&self) -> ferraloom_data::registries::sound_event::Id {
         ferraloom_data::registries::sound_event::Id::ENTITY_GENERIC_SWIM
+    }
+    /// Port of LivingEntity#calculateFallDamage's virtual calculation.
+    fn calculate_fall_damage(
+        &self,
+        entity: EntityRef,
+        distance: f64,
+        modifier: f32,
+        level: &Level,
+    ) -> Result<i32, LevelError> {
+        living::fall_damage::calculate_fall_damage(entity, distance, modifier, level)
+    }
+    fn play_block_fall_sound(
+        &self,
+        entity: EntityRef,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        living::fall_damage::play_block_fall_sound(self, entity, level)
+    }
+    /// Port of LivingEntity#swing, with subtype dispatch retained by callers.
+    fn swing(
+        &self,
+        entity: EntityRef,
+        hand: ferraloom_protocol::play::InteractionHand,
+        animation: ferraloom_protocol::component::SwingAnimation,
+        send_to_self: bool,
+        level: &mut Level,
+    ) -> Result<bool, LevelError> {
+        living::swing::swing(entity, hand, animation, send_to_self, level)
     }
     /// Port of LivingEntity#getFallSounds's inherited selection.
     fn fall_sounds(&self) -> living::FallSounds {
@@ -720,7 +866,7 @@ pub trait Entity: Sync {
         pos: ferraloom_util::BlockPos,
         level: &mut Level,
     ) -> Result<(), LevelError> {
-        movement::base_check_fall_damage(entity, dy, on_ground, state, pos, level)
+        movement::base_check_fall_damage(self, entity, dy, on_ground, state, pos, level)
     }
     fn on_changed_block(
         &self,
@@ -751,21 +897,27 @@ pub trait Entity: Sync {
         Ok(ferraloom_util::shapes::empty())
     }
 
-    /// Port of Entity#causeFallDamage's passenger propagation. LivingEntity
-    /// overrides the damage calculation; the base entity itself takes none.
+    /// Port of Entity#causeFallDamage's immunity and passenger propagation.
     fn cause_fall_damage(
         &self,
         entity: EntityRef,
         level: &mut Level,
         fall_distance: f64,
         damage_modifier: f32,
+        source: &DamageSource,
     ) -> Result<bool, LevelError> {
-        let passengers = level.entity::<EntityData>(entity)?.passengers.clone();
-        for passenger in passengers {
-            let behavior = level.entity_behavior(passenger)?;
-            behavior.cause_fall_damage(passenger, level, fall_distance, damage_modifier)?;
-        }
-        Ok(false)
+        movement::base_cause_fall_damage(entity, level, fall_distance, damage_modifier, source)
+    }
+
+    /// Port of LivingEntity#onEquippedItemBroken, overridden by ServerPlayer.
+    fn on_equipped_item_broken(
+        &self,
+        entity: EntityRef,
+        broken: ferraloom_protocol::component::ItemStack,
+        slot: ferraloom_protocol::component::EquipmentSlot,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        living::on_equipped_item_broken_parent(entity, &broken, slot, level)
     }
 
     fn can_be_collided_with(
@@ -928,6 +1080,133 @@ pub trait Entity: Sync {
         self.ride_tick(entity, level)
     }
 
+    fn is_invulnerable_to(
+        &self,
+        entity: EntityRef,
+        source: &DamageSource,
+        level: &Level,
+    ) -> Result<bool, LevelError> {
+        living::hurt::is_invulnerable_to_base(self, entity, source, level)
+    }
+    fn absorption_amount(&self, entity: EntityRef, level: &Level) -> Result<f32, LevelError> {
+        Ok(level.entity::<LivingEntity>(entity)?.absorption_amount())
+    }
+    fn set_absorption_amount(
+        &self,
+        entity: EntityRef,
+        amount: f32,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        level
+            .entity_mut::<LivingEntity>(entity)?
+            .set_absorption_amount(amount);
+        Ok(())
+    }
+    fn actually_hurt(
+        &self,
+        entity: EntityRef,
+        source: &DamageSource,
+        damage: f32,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        living::hurt::actually_hurt(self, entity, source, damage, level)
+    }
+    /// LivingEntity's armor and helmet parent callbacks are empty.
+    fn hurt_armor(
+        &self,
+        _entity: EntityRef,
+        _source: &DamageSource,
+        _damage: f32,
+        _level: &mut Level,
+    ) -> Result<(), LevelError> {
+        Ok(())
+    }
+    fn hurt_helmet(
+        &self,
+        _entity: EntityRef,
+        _source: &DamageSource,
+        _damage: f32,
+        _level: &mut Level,
+    ) -> Result<(), LevelError> {
+        Ok(())
+    }
+    fn apply_item_blocking(
+        &self,
+        entity: EntityRef,
+        _source: &DamageSource,
+        damage: f32,
+        level: &mut Level,
+    ) -> Result<f32, LevelError> {
+        living::hurt::apply_item_blocking(entity, damage, level)
+    }
+    #[allow(clippy::too_many_arguments)]
+    fn knockback(
+        &self,
+        entity: EntityRef,
+        power: f64,
+        x: f64,
+        z: f64,
+        _source: &DamageSource,
+        _damage: f32,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        living::hurt::knockback(entity, power, x, z, level)
+    }
+    fn indicate_damage(
+        &self,
+        _entity: EntityRef,
+        _x: f64,
+        _z: f64,
+        _level: &mut Level,
+    ) -> Result<(), LevelError> {
+        Ok(())
+    }
+    fn deal_default_knockback(
+        &self,
+        entity: EntityRef,
+        source: &DamageSource,
+        damage: f32,
+        blocked: bool,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        living::hurt::default_knockback(self, entity, source, damage, blocked, level)
+    }
+    fn hurt_sound(
+        &self,
+        _entity: EntityRef,
+        _source: &DamageSource,
+        _level: &Level,
+    ) -> Result<Option<ferraloom_data::registries::sound_event::Id>, LevelError> {
+        Ok(Some(
+            ferraloom_data::registries::sound_event::Id::ENTITY_GENERIC_HURT,
+        ))
+    }
+    fn death_sound(
+        &self,
+        _entity: EntityRef,
+        _level: &Level,
+    ) -> Result<Option<ferraloom_data::registries::sound_event::Id>, LevelError> {
+        Ok(Some(
+            ferraloom_data::registries::sound_event::Id::ENTITY_GENERIC_DEATH,
+        ))
+    }
+    fn sound_volume(&self) -> f32 {
+        1.0
+    }
+    fn voice_pitch(&self, entity: EntityRef, level: &mut Level) -> Result<f32, LevelError> {
+        living::hurt::voice_pitch(self, entity, level)
+    }
+    fn die(
+        &self,
+        entity: EntityRef,
+        _source: &DamageSource,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        Err(LevelError::UnsupportedEntityMethod(
+            level.entity_state(entity)?.entity_type(),
+            EntityMethod::Die,
+        ))
+    }
     fn hurt_server(
         &self,
         entity: EntityRef,
@@ -936,7 +1215,7 @@ pub trait Entity: Sync {
         damage: f32,
     ) -> Result<bool, LevelError> {
         if level.entity_state(entity)?.as_living().is_some() {
-            hurt_unarmored(entity, level, source, damage)
+            living::hurt::hurt_server(self, entity, source, damage, level)
         } else {
             Ok(false)
         }
@@ -960,11 +1239,10 @@ pub(crate) fn base_effective_gravity<E: Entity + ?Sized>(
     }
 }
 
-/// Port of LivingEntity#hurtServer's cooldown branch and unarmored health change.
-///
-/// Defense, effects, death, knockback and criteria remain separate porting work.
-/// This helper must only be called after those earlier damage modifiers are applied.
-pub fn hurt_unarmored(
+/// Isolated block-dispatch fixtures retain their historical controlled damage
+/// body; production always enters living::hurt and its virtual callbacks.
+#[cfg(test)]
+pub(crate) fn hurt_unarmored(
     entity: EntityRef,
     level: &mut Level,
     source: DamageSource,

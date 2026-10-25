@@ -475,7 +475,7 @@ fn finalization_retry_keeps_entities_ticker_binding_and_both_tick_queues() {
         .update_entity_chunk_status(TARGET, crate::level::entity::Visibility::Tracked)
         .unwrap();
     level
-        .add_worldgen_chunk_entities_shared(TARGET, staged.worldgen_entities)
+        .add_worldgen_chunk_entities(TARGET, staged.worldgen_entities)
         .unwrap();
     let entity = level
         .entity_by_uuid(ferraloom_util::Uuid::new(0, 42))

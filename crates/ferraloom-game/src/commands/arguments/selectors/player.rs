@@ -43,7 +43,12 @@ mod tests {
                 fixture_level.install_shared(Box::default());
                 fixture_level
             };
-            let entity = EntityRef(1);
+            crate::entity::tests::install_test_environment(
+                &mut level,
+                false,
+                "minecraft:overworld",
+            );
+            let entity = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
             level
                 .add_entity(entity, EntityState::Player(Box::new(player)))
                 .unwrap();

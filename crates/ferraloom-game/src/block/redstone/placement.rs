@@ -45,7 +45,8 @@ pub static PLACEMENT: RedstonePlacement = RedstonePlacement;
 pub(super) fn supports(block: Block) -> bool {
     matches!(
         block.class(),
-        BlockClass::RedstoneWireBlock
+        BlockClass::CrafterBlock
+            | BlockClass::RedstoneWireBlock
             | BlockClass::RepeaterBlock
             | BlockClass::ComparatorBlock
             | BlockClass::ObserverBlock
@@ -125,6 +126,34 @@ impl BlockBehavior for RedstonePlacement {
         let pos = context.clicked_pos();
         let state = block.default_state();
         let result = match block.class() {
+            BlockClass::CrafterBlock => {
+                let direction = context.nearest_looking_direction(&reader)?.opposite();
+                let orientation = match direction {
+                    Direction::Down => match context.horizontal_direction(&reader)?.opposite() {
+                        Direction::East => p::Orientation::DownEast,
+                        Direction::North => p::Orientation::DownNorth,
+                        Direction::South => p::Orientation::DownSouth,
+                        Direction::West => p::Orientation::DownWest,
+                        _ => unreachable!(),
+                    },
+                    Direction::Up => match context.horizontal_direction(&reader)? {
+                        Direction::East => p::Orientation::UpEast,
+                        Direction::North => p::Orientation::UpNorth,
+                        Direction::South => p::Orientation::UpSouth,
+                        Direction::West => p::Orientation::UpWest,
+                        _ => unreachable!(),
+                    },
+                    Direction::North => p::Orientation::NorthUp,
+                    Direction::South => p::Orientation::SouthUp,
+                    Direction::West => p::Orientation::WestUp,
+                    Direction::East => p::Orientation::EastUp,
+                };
+                state
+                    .with(p::ORIENTATION, orientation)
+                    .unwrap()
+                    .with(p::TRIGGERED, reader.has_neighbor_signal(pos)?)
+                    .unwrap()
+            }
             BlockClass::RedstoneLampBlock => state
                 .with(p::LIT, reader.has_neighbor_signal(pos)?)
                 .unwrap(),

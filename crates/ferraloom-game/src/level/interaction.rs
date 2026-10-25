@@ -108,8 +108,8 @@ mod tests {
         protected: bool,
         may_interact: bool,
     }
-    const PLAYER: EntityRef = EntityRef(1);
-    const OTHER: EntityRef = EntityRef(2);
+    const PLAYER: EntityRef = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
+    const OTHER: EntityRef = EntityRef::fixture(crate::level::RegionId::FIXTURE, 2);
     const UUID: Uuid = Uuid::new(1, 2);
 
     fn profile(id: Uuid) -> ferraloom_protocol::login::GameProfile {
@@ -211,8 +211,14 @@ mod tests {
         );
         assert_eq!(level.may_interact(OTHER, pos), Ok(true));
         assert_eq!(
-            level.may_interact(EntityRef(999), pos),
-            Err(LevelError::MissingEntity(EntityRef(999)))
+            level.may_interact(
+                EntityRef::fixture(crate::level::RegionId::FIXTURE, 999),
+                pos
+            ),
+            Err(LevelError::MissingEntity(EntityRef::fixture(
+                crate::level::RegionId::FIXTURE,
+                999
+            )))
         );
         for operators in [vec![Uuid::new(3, 4)], vec![UUID], vec![]] {
             let protected = operators == [Uuid::new(3, 4)];

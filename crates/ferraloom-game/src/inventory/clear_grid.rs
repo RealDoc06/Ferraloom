@@ -1,14 +1,11 @@
 //! ServerPlaceRecipe#clearGrid temporarily lends a dropped copy back to its
 //! physical container. The entity is not read in this window; normal container
 //! readers, including synchronous comparator callbacks, see the real stack.
+use super::inventory_return::{InventoryReturnContext, place_item_back};
 use super::*;
 
-pub(super) trait ClearGridContext: MenuClickContext {
-    type DroppedAddress: Copy;
+pub(super) trait ClearGridContext: InventoryReturnContext {
     fn clearing_slots(&self) -> Result<Vec<usize>>;
-    fn inventory_return_slot(&self, stack: Self::Stack) -> Result<Option<usize>>;
-    fn add_at_slot(&mut self, slot: usize, stack: Self::Stack) -> Result<bool>;
-    fn drop_for_clear(&mut self, stack: Self::Stack) -> Result<Self::DroppedAddress>;
     /// Callback-free move; ItemEntity ITEM is restored without setItem dirtiness.
     fn return_lent(&mut self, stack: Self::Stack, destination: Self::DroppedAddress) -> Result<()>;
     fn clear_result_content(&mut self) -> Result<()>;
@@ -45,24 +42,12 @@ impl<C: ClearGridContext> ClearGridScope<'_, C> {
             } else {
                 value
             })?;
-            while !self.context.stack(copy)?.is_empty() {
-                let Some(slot) = self.context.inventory_return_slot(copy)? else {
-                    let destination = self.context.drop_for_clear(copy)?;
-                    self.loans.push(Loan {
-                        index,
-                        stack: copy,
-                        destination,
-                    });
-                    break;
-                };
-                let target = self.context.inventory_stack(slot)?;
-                let capacity = max_stack_size(&self.context.stack(copy)?)
-                    - count(&self.context.stack(target)?);
-                let split = self.context.split_stack(copy, capacity)?;
-                let split = self.context.own_stack(split)?;
-                // send=false: the native add and pop time still happen, with
-                // no inventory SetSlot packet between this split and the next.
-                self.context.add_at_slot(slot, split)?;
+            if let Some(destination) = place_item_back(self.context, copy, |_, _| Ok(()))? {
+                self.loans.push(Loan {
+                    index,
+                    stack: copy,
+                    destination,
+                });
             }
             self.context.set_slot_stack(index, copy, None, hooks)?;
         }
@@ -106,30 +91,13 @@ pub(super) fn clear_grid<C: ClearGridContext>(
 }
 
 impl ClearGridContext for super::in_memory::InMemoryMenuOperation<'_, '_, '_> {
-    type DroppedAddress = usize;
     fn clearing_slots(&self) -> Result<Vec<usize>> {
         Ok(match self.menu.crafting_grid_size() {
             Some(width) => (1..=width * width).collect(),
             None => vec![0, 2],
         })
     }
-    fn inventory_return_slot(&self, stack: Self::Stack) -> Result<Option<usize>> {
-        Ok(self
-            .context
-            .player
-            .inventory
-            .get_slot_with_remaining_space(self.read(stack)?, self.context.player.equipment)
-            .or_else(|| self.context.player.inventory.get_free_slot()))
-    }
-    fn add_at_slot(&mut self, slot: usize, stack: Self::Stack) -> Result<bool> {
-        add_inventory_stack(self, stack, Some(slot))
-    }
-    fn drop_for_clear(&mut self, stack: Self::Stack) -> Result<usize> {
-        let destination = self.context.drops.len();
-        self.drop_stack(stack, false)?;
-        Ok(destination)
-    }
-    fn return_lent(&mut self, stack: Self::Stack, destination: usize) -> Result<()> {
+    fn return_lent(&mut self, stack: Self::Stack, destination: Self::DroppedAddress) -> Result<()> {
         self.replace(
             super::in_memory::MemoryContainer::Dropped,
             destination,
@@ -145,13 +113,54 @@ impl ClearGridContext for super::in_memory::InMemoryMenuOperation<'_, '_, '_> {
         Ok(())
     }
 }
+impl InventoryReturnContext for super::in_memory::InMemoryMenuOperation<'_, '_, '_> {
+    type DroppedAddress = usize;
+    fn read_return_stack(&self, stack: Self::Stack) -> Result<&ItemStack> {
+        self.read(stack)
+    }
+    fn inventory_return_slot(&self, stack: Self::Stack) -> Result<Option<usize>> {
+        Ok(self
+            .context
+            .player
+            .inventory
+            .get_slot_with_remaining_space(self.read(stack)?, self.context.player.equipment)
+            .or_else(|| self.context.player.inventory.get_free_slot()))
+    }
+    fn add_at_slot(&mut self, slot: usize, stack: Self::Stack) -> Result<bool> {
+        add_inventory_stack(self, stack, Some(slot))
+    }
+    fn drop_for_return(&mut self, stack: Self::Stack) -> Result<usize> {
+        let destination = self.context.drops.len();
+        self.drop_stack(stack, false)?;
+        Ok(destination)
+    }
+}
 impl ClearGridContext for super::transfer::LiveMenuTransfer<'_> {
-    type DroppedAddress = ContainerSlot;
     fn clearing_slots(&self) -> Result<Vec<usize>> {
         Ok(match self.menu()?.crafting_grid_size() {
             Some(width) => (1..=width * width).collect(),
             None => vec![0, 2],
         })
+    }
+    fn return_lent(&mut self, stack: StackRef, destination: Self::DroppedAddress) -> Result<()> {
+        // The invisible lend/return does not mark ItemEntity ITEM dirty.
+        self.operation
+            .level
+            .replace_stack_object(destination, StackValue::Existing(stack))
+    }
+    fn clear_result_content(&mut self) -> Result<()> {
+        self.menu_mut()?.local[1].clear_content();
+        Ok(())
+    }
+    fn clear_grid_content(&mut self) -> Result<()> {
+        self.menu_mut()?.local[0].clear_content();
+        Ok(())
+    }
+}
+impl InventoryReturnContext for super::transfer::LiveMenuTransfer<'_> {
+    type DroppedAddress = ContainerSlot;
+    fn read_return_stack(&self, stack: StackRef) -> Result<&ItemStack> {
+        self.operation.level.stack(stack)
     }
     fn inventory_return_slot(&self, stack: StackRef) -> Result<Option<usize>> {
         let player = self
@@ -169,7 +178,7 @@ impl ClearGridContext for super::transfer::LiveMenuTransfer<'_> {
     fn add_at_slot(&mut self, slot: usize, stack: StackRef) -> Result<bool> {
         super::add::add_item_stack_at(self.player, stack, Some(slot), self.operation.level)
     }
-    fn drop_for_clear(&mut self, stack: StackRef) -> Result<ContainerSlot> {
+    fn drop_for_return(&mut self, stack: StackRef) -> Result<ContainerSlot> {
         let entity = crate::entity::player::drop_item_stack(
             self.player,
             StackValue::Existing(stack),
@@ -181,21 +190,6 @@ impl ClearGridContext for super::transfer::LiveMenuTransfer<'_> {
             container: ContainerHandle::Entity(entity),
             slot: 0,
         })
-    }
-    fn return_lent(&mut self, stack: StackRef, destination: ContainerSlot) -> Result<()> {
-        // stack_parts_mut edits canonical ITEM directly. No setItem or metadata
-        // dirty marker is called for this invisible lend/return transaction.
-        self.operation
-            .level
-            .replace_stack_object(destination, StackValue::Existing(stack))
-    }
-    fn clear_result_content(&mut self) -> Result<()> {
-        self.menu_mut()?.local[1].clear_content();
-        Ok(())
-    }
-    fn clear_grid_content(&mut self) -> Result<()> {
-        self.menu_mut()?.local[0].clear_content();
-        Ok(())
     }
 }
 
@@ -257,7 +251,7 @@ mod tests {
                 };
                 let stack =
                     context.own_stack(ItemStack::new(Item::STONE, 3, Default::default()))?;
-                let destination = context.drop_for_clear(stack)?;
+                let destination = context.drop_for_return(stack)?;
                 let ContainerHandle::Entity(entity) = destination.container else {
                     unreachable!()
                 };

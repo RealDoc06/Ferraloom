@@ -6,9 +6,11 @@ mod click;
 mod container;
 mod crafted;
 mod in_memory;
+mod inventory_return;
 pub use block_containers::{block_menu_still_valid, with_block_menu_context};
 mod crafting;
 mod crafting_runtime;
+mod level_access;
 mod listener_copies;
 mod live;
 mod live_crafting;
@@ -27,6 +29,7 @@ mod stack_runtime;
 mod stacks;
 mod sync;
 mod transfer;
+mod workstation_removed;
 
 pub(crate) use add::add_inventory_value;
 pub use add::{InventoryAddContext, add_inventory_stack, add_item_stack};
@@ -40,6 +43,7 @@ pub use container::*;
 pub use crafted::crafted_item_post_process;
 pub use crafting::*;
 pub use crafting_runtime::*;
+pub use level_access::ContainerLevelAccess;
 pub use listener_copies::{ListenerCopyArena, ListenerCopyRef};
 pub use live::*;
 pub use live_crafting::{LiveRecipeMenuHooks, refresh_live_crafting_result};
@@ -135,6 +139,8 @@ impl From<crate::level::LevelError> for MenuError {
     }
 }
 
+#[cfg(test)]
+mod producer_tests;
 #[cfg(test)]
 mod tests;
 

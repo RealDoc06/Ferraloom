@@ -258,7 +258,7 @@ impl FluidPredicate {
 
 /// IntegerProperty uses Integer.parseInt, including BMP decimal digits and '+';
 /// supplementary digits are rejected because Java traverses UTF-16 chars.
-fn java_integer(input: &str) -> Option<i32> {
+pub(crate) fn java_integer(input: &str) -> Option<i32> {
     let (negative, digits) = if let Some(s) = input.strip_prefix('-') {
         (true, s)
     } else {

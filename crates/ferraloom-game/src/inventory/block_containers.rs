@@ -297,7 +297,7 @@ mod tests {
         level.set_block_state(pos, state).unwrap();
         level.set_block_entity(create(pos, state).unwrap()).unwrap();
         let handle = level.block_entity_ref(pos).unwrap().unwrap();
-        let player = EntityRef(1);
+        let player = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
         level
             .add_entity(
                 player,

@@ -39,7 +39,7 @@ fn spawn(level: &mut Level, kind: &str) -> EntityRef {
     let id = level.next_entity_ref();
     let state = match kind {
         "player" => EntityState::Player(Box::new(ServerPlayer::new(
-            Uuid::new(0, id.0 as i64),
+            Uuid::new(0, id.serial() as i64),
             "facts".into(),
             level.next_entity_id().unwrap(),
             Vec3::ZERO,

@@ -13,6 +13,7 @@ use crate::{
 };
 
 pub mod acquisition;
+mod block_actions;
 mod block_entity;
 pub mod blockscan;
 pub mod border;
@@ -29,6 +30,7 @@ pub mod distance_manager;
 pub mod effects;
 pub mod emission;
 pub mod entity;
+pub mod entity_tracker;
 pub mod environment;
 pub mod events;
 mod features;
@@ -59,9 +61,20 @@ pub mod weather;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum LevelError {
+    BlockBreak(crate::entity::player::game_mode::BlockBreakFailure),
     /// Native ArrayList iterator ConcurrentModificationException during listener visitation.
     ConcurrentGameEventListenerModification,
     UnsupportedItemUseOn(ferraloom_data::Item),
+    UnsupportedItemMethod(ferraloom_data::Item, ferraloom_data::ItemMethod),
+    ItemData {
+        item: ferraloom_data::Item,
+        source: String,
+    },
+    MissingSoundEvent(ferraloom_protocol::Identifier),
+    EnchantmentEffect {
+        enchantment: crate::loot::Identifier,
+        source: String,
+    },
     UnsupportedItemCraftedPostProcess(ferraloom_data::Item),
     UnsupportedItemInventoryTick(ferraloom_data::Item),
     UnsupportedItemHurtAndBreak {
@@ -72,6 +85,10 @@ pub enum LevelError {
     UnsupportedPortalUse(Block),
     UnsupportedEntityMethod(EntityType, crate::entity::EntityMethod),
     UnsupportedAdvancementCriterion(crate::advancements::criteria::Trigger),
+    UnsupportedAdvancementPredicate {
+        trigger: crate::advancements::criteria::Trigger,
+        source: String,
+    },
     Inventory(&'static str),
     MissingBlockEntity(crate::block::entity::BlockEntityRef),
     WrongBlockEntityType(crate::block::entity::BlockEntityRef),
@@ -93,6 +110,15 @@ pub enum LevelError {
     MissingPlacementPlayer,
     UninitializedPlacementDirection,
     MissingEntity(EntityRef),
+    MissingTrackedEntity(i32),
+    MissingRegistryContext,
+    MissingNetworkRegistryEntry {
+        registry: ferraloom_protocol::Identifier,
+        entry: ferraloom_protocol::Identifier,
+    },
+    UnsupportedEntityTrackingStatus,
+    /// Shared acquisition cannot invoke mutable ChunkMap tracking callbacks.
+    UnsupportedSharedEntityTracking(&'static str),
     WrongEntityType(EntityRef),
     DuplicateEntity(EntityRef),
     DuplicateChunk(ChunkPos),
@@ -104,6 +130,7 @@ pub enum LevelError {
     UnsupportedLightQuery,
     UnsupportedEnvironmentAttribute(ferraloom_data::registries::environment_attribute::Id),
     MissingEnvironmentContext,
+    MissingBlockTransformers,
     MissingSpawnProtectionContext,
     MissingServerShared,
     EntityIdAllocationExhausted,
@@ -131,8 +158,22 @@ pub enum LevelError {
 impl std::fmt::Display for LevelError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::BlockBreak(error) => std::fmt::Display::fmt(error.error(), formatter),
             Self::WorldgenMutationFailed { pos, source } => {
                 write!(formatter, "worldgen mutation at {pos:?}: {source}")
+            }
+            Self::ItemData { item, source } => {
+                write!(formatter, "item data for {}: {source}", item.name())
+            }
+            Self::MissingSoundEvent(id) => write!(formatter, "missing sound event {id}"),
+            Self::UnsupportedAdvancementPredicate { trigger, source } => {
+                write!(formatter, "{}: {source}", trigger.name())
+            }
+            Self::EnchantmentEffect {
+                enchantment,
+                source,
+            } => {
+                write!(formatter, "enchantment effect {enchantment}: {source}")
             }
             error => std::fmt::Debug::fmt(error, formatter),
         }
@@ -141,6 +182,7 @@ impl std::fmt::Display for LevelError {
 impl std::error::Error for LevelError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
+            Self::BlockBreak(error) => Some(error.error()),
             Self::WorldgenMutationFailed { source, .. } => Some(source),
             _ => None,
         }
@@ -154,6 +196,7 @@ pub struct LevelRules {
     /// Published by the canonical GameRules owner after load and each change.
     pub block_drops: Option<bool>,
     pub show_advancement_messages: bool,
+    pub spectators_generate_chunks: bool,
     pub tnt_explodes: bool,
     pub entity_drops: bool,
     pub max_entity_cramming: i32,
@@ -162,6 +205,9 @@ pub struct LevelRules {
     pub fall_damage: bool,
     pub fire_damage: bool,
     pub freeze_damage: bool,
+    pub pvp: bool,
+    pub mob_drops: bool,
+    pub keep_inventory: bool,
     pub send_command_feedback: bool,
     pub natural_health_regeneration: bool,
     pub debug: bool,
@@ -188,6 +234,7 @@ impl Default for LevelRules {
         Self {
             block_drops: None,
             show_advancement_messages: true,
+            spectators_generate_chunks: damage_default(GameRule::SpectatorsGenerateChunks),
             tnt_explodes: true,
             entity_drops: true,
             max_entity_cramming: 24,
@@ -202,6 +249,9 @@ impl Default for LevelRules {
             fall_damage: damage_default(GameRule::FallDamage),
             fire_damage: damage_default(GameRule::FireDamage),
             freeze_damage: damage_default(GameRule::FreezeDamage),
+            pvp: damage_default(GameRule::Pvp),
+            mob_drops: damage_default(GameRule::MobDrops),
+            keep_inventory: damage_default(GameRule::KeepInventory),
             send_command_feedback: damage_default(GameRule::SendCommandFeedback),
             natural_health_regeneration: damage_default(GameRule::NaturalHealthRegeneration),
             debug: false,
@@ -224,6 +274,10 @@ impl Default for LevelRules {
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct RegionId(u64);
 impl RegionId {
+    /// Reserved namespace for model fixtures. The monotonic allocator never
+    /// returns u64::MAX, because its checked increment fails before that point.
+    #[cfg(test)]
+    pub(crate) const FIXTURE: Self = Self(u64::MAX);
     fn new() -> Self {
         use std::sync::atomic::{AtomicU64, Ordering};
         static NEXT: AtomicU64 = AtomicU64::new(1);
@@ -245,6 +299,7 @@ pub struct Region {
     chunks: store::InsertOnlyMap<ChunkPos, chunk::LevelChunk>,
     next_chunk_generation: Cell<u64>,
     entities: entity::EntityStorage,
+    entity_tracker: entity_tracker::EntityTracker,
     entity_tick_list: entity::EntityTickList,
     block_ticks: LevelTicks,
     fluid_ticks: LevelTicks<ferraloom_data::registries::fluid::Id>,
@@ -289,6 +344,7 @@ impl Region {
             chunks: store::InsertOnlyMap::default(),
             next_chunk_generation: Cell::new(0),
             entities: entity::EntityStorage::default(),
+            entity_tracker: Default::default(),
             entity_tick_list: entity::EntityTickList::default(),
             block_ticks: LevelTicks::default(),
             fluid_ticks: LevelTicks::default(),
@@ -412,6 +468,10 @@ impl Level {
     pub fn sea_level(&self) -> i32 {
         self.context.sea_level
     }
+    /// Stable identity of this Region's canonical stores and birth allocator.
+    pub fn region_id(&self) -> RegionId {
+        self.region().id
+    }
     pub fn into_region(self) -> Region {
         self.region.expect("level is parked")
     }
@@ -502,7 +562,9 @@ impl Level {
         region
             .block_entity_state
             .prepare_published_chunk(&mut chunk, region.game_time);
-        region.block_entity_state.register_published_chunk(&chunk);
+        region
+            .block_entity_state
+            .register_published_chunk(&chunk, region.has_skylight)?;
         region
             .block_ticks
             .add_container(pos, std::mem::take(&mut chunk.block_ticks));

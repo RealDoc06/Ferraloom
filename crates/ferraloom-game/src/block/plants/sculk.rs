@@ -1,5 +1,8 @@
 //! Ports of SculkSpreader, ChargeCursor and the participating SculkBehaviour methods.
 //! Both level arms use the same cursor algorithm and native caller random stream.
+mod shapes;
+pub(super) use shapes::WATERLOGGED_SCULK;
+
 use super::{multiface, multiface_spreader::SpreaderConfig};
 use crate::{
     block::{LevelAccessRef, LevelReaderRef, UpdateFlags},
@@ -11,7 +14,7 @@ use ferraloom_util::{
     BlockPos, Direction, Vec3,
     collections::{JavaHashMap, Object2IntOpenHashMap},
     random::RandomSource,
-    shapes::{self, BooleanOp},
+    shapes::{self as voxel_shapes, BooleanOp},
 };
 use ferraloom_worldgen::feature::FeatureRandomSelector;
 
@@ -117,7 +120,7 @@ impl ChargeCursor {
 }
 
 /// Port of SculkSpreader. Cursor insertion and native fastutil event order matter.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct SculkSpreader {
     pub settings: SpreadSettings,
     cursors: Vec<ChargeCursor>,
@@ -152,6 +155,11 @@ impl SculkSpreader {
     }
     pub fn clear(&mut self) {
         self.cursors.clear();
+    }
+    /// Port of SculkSpreader#load's decoded-list installation. Preserve each
+    /// cursor's charge, delays and optional facings; never split/reset it.
+    pub(crate) fn replace_cursors(&mut self, cursors: Vec<ChargeCursor>) {
+        self.cursors = cursors.into_iter().take(32).collect();
     }
     pub fn add_cursors(&mut self, pos: BlockPos, mut charge: i32) {
         while charge > 0 {
@@ -452,8 +460,11 @@ fn attempt_place_sculk(
                         let reader = level.as_reader();
                         let old_shape = reader.collision_shape_without_context(old, at)?;
                         let new_shape = reader.collision_shape_without_context(sculk, at)?;
-                        let _ =
-                            shapes::join_unoptimized(&old_shape, &new_shape, BooleanOp::OnlySecond);
+                        let _ = voxel_shapes::join_unoptimized(
+                            &old_shape,
+                            &new_shape,
+                            BooleanOp::OnlySecond,
+                        );
                     }
                 }
                 play_spread_sound(level, at)?;

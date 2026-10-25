@@ -162,7 +162,7 @@ fn vanilla_trigger_codecs_and_synthetic_matches() {
 struct Facts;
 impl PredicateContext for Facts {
     fn entity_type(&self, entity: EntityRef) -> Result<EntityType> {
-        Ok(match entity.0 {
+        Ok(match entity.serial() {
             0 => EntityType::PLAYER,
             1 => EntityType::PIG,
             _ => EntityType::COW,
@@ -196,8 +196,14 @@ fn scenario(instance: &TriggerInstance, n: i32, context: &mut MatchContext<'_>) 
     use TriggerEvent as E;
     let origin = context.origin;
     let start = Vec3::new(-3.0, 60.0, 2.0);
-    let pig = create_context(origin, EntityRef(1));
-    let cow = create_context(origin, EntityRef(2));
+    let pig = create_context(
+        origin,
+        EntityRef::fixture(crate::level::RegionId::FIXTURE, 1),
+    );
+    let cow = create_context(
+        origin,
+        EntityRef::fixture(crate::level::RegionId::FIXTURE, 2),
+    );
     let entity = if n == 1 { &cow } else { &pig };
     let item = match n {
         2 => ItemStack::default(),
@@ -207,15 +213,15 @@ fn scenario(instance: &TriggerInstance, n: i32, context: &mut MatchContext<'_>) 
     let state = if n == 1 { Block::OAK_LOG } else { Block::STONE }.default_state();
     let location = LootParams {
         origin: Some(origin),
-        this_entity: Some(EntityRef(0)),
+        this_entity: Some(EntityRef::fixture(crate::level::RegionId::FIXTURE, 0)),
         tool: Some(item.clone()),
         block_state: Some(state),
         ..Default::default()
     };
     let source = DamageSource {
         damage_type: id("generic"),
-        source: Some(EntityRef(1)),
-        direct: Some(EntityRef(1)),
+        source: Some(EntityRef::fixture(crate::level::RegionId::FIXTURE, 1)),
+        direct: Some(EntityRef::fixture(crate::level::RegionId::FIXTURE, 1)),
         position: None,
     };
     let inventory = [
@@ -313,7 +319,7 @@ fn scenario(instance: &TriggerInstance, n: i32, context: &mut MatchContext<'_>) 
             to: &to,
         },
         C::Effects { .. } => E::Effects {
-            player: EntityRef(0),
+            player: EntityRef::fixture(crate::level::RegionId::FIXTURE, 0),
             source: (n != 2).then_some(entity),
         },
         C::Distance { .. } => E::Distance {
@@ -479,7 +485,10 @@ impl RewardHarness {
                     for recipe in addition.unlocked {
                         let recipe = id(&recipe.to_string());
                         let origin = Vec3::new(1.0, 64.0, 2.0);
-                        let params = create_context(origin, EntityRef(0));
+                        let params = create_context(
+                            origin,
+                            EntityRef::fixture(crate::level::RegionId::FIXTURE, 0),
+                        );
                         let data = LootData::default();
                         let mut random = LegacyRandomSource::new(42);
                         let mut context =
@@ -550,7 +559,10 @@ fn vanilla_player_listeners_visibility_packets_rewards_and_persistence() {
             }
         } else if action == "trigger:tick" {
             let origin = Vec3::new(1.0, 64.0, 2.0);
-            let params = create_context(origin, EntityRef(0));
+            let params = create_context(
+                origin,
+                EntityRef::fixture(crate::level::RegionId::FIXTURE, 0),
+            );
             let data = LootData::default();
             let mut random = LegacyRandomSource::new(42);
             let mut context = MatchContext::borrowed(&data, &Facts, &mut random, origin);
@@ -656,7 +668,10 @@ fn unavailable_trigger_facts_are_errors_and_impossible_never_awards() {
         context
             .predicate(
                 criterion.instance.player.as_ref().unwrap(),
-                &create_context(Vec3::ZERO, EntityRef(0))
+                &create_context(
+                    Vec3::ZERO,
+                    EntityRef::fixture(crate::level::RegionId::FIXTURE, 0)
+                )
             )
             .is_err()
     );
@@ -868,7 +883,10 @@ fn vanilla_nested_reward_visibility_order_and_post_reward_revoke() {
                             let matched = player
                                 .matching_listeners(
                                     TriggerType::RecipeUnlocked,
-                                    &create_context(origin, EntityRef(0)),
+                                    &create_context(
+                                        origin,
+                                        EntityRef::fixture(crate::level::RegionId::FIXTURE, 0),
+                                    ),
                                     &mut context,
                                     |instance, context| {
                                         instance.matches(
@@ -995,6 +1013,197 @@ fn live_fixture(manager: ServerAdvancementManager) -> (crate::level::Level, Enti
 }
 
 #[test]
+fn native_location_tick_tail_checks_interval_after_experience_packet() {
+    use crate::{
+        entity::player::{GameType, ServerPlayer, player_do_tick_with_tick_rate},
+        level::{effects::LevelEffect, tick_rate::TickRateManager},
+    };
+    use ferraloom_protocol::play::clientbound as cb;
+
+    let manager = ServerAdvancementManager::new(holders(&json!([{
+        "id":"test:location_tick", "value":{
+            "criteria":{"location":{"trigger":"location"}},
+            "display":{"icon":{"id":"stone"},"title":"Tail","description":"Native interval","background":"test:background"},
+            "rewards":{"experience":1}
+        }
+    }])));
+    let (mut level, player) = live_fixture(manager);
+    // An unloaded spectator skips the parent Player tick, leaving the native
+    // tickCount fixed so the doTick tail can be checked at exact boundaries.
+    let owner = level.entity_mut::<ServerPlayer>(player).unwrap();
+    owner.game_mode = GameType::Spectator;
+    owner.tick_count = 19;
+    player_do_tick_with_tick_rate(player, &mut level, &TickRateManager::default()).unwrap();
+    assert_eq!(
+        level
+            .entity::<ServerPlayer>(player)
+            .unwrap()
+            .total_experience,
+        0
+    );
+    level.take_effects();
+
+    level.entity_mut::<ServerPlayer>(player).unwrap().tick_count = 20;
+    crate::entity::player::give_experience_points(player, 1, &mut level).unwrap();
+    player_do_tick_with_tick_rate(player, &mut level, &TickRateManager::default()).unwrap();
+    let packets: Vec<_> = level
+        .take_effects()
+        .into_iter()
+        .filter_map(|effect| match effect {
+            LevelEffect::PlayerPacket { packet, .. } => Some(*packet),
+            _ => None,
+        })
+        .collect();
+    assert!(
+        matches!(packets.as_slice(), [cb::Packet::SetExperience(experience), cb::Packet::SystemChat(_)] if experience.total_experience.0 == 1)
+    );
+    let owner = level.entity::<ServerPlayer>(player).unwrap();
+    assert_eq!(owner.total_experience, 2);
+    assert!(
+        owner
+            .advancements
+            .get_progress(&id("test:location_tick"))
+            .unwrap()
+            .is_done()
+    );
+
+    // The reward's XP is sent at the next native XP slot, without re-awarding
+    // the completed advancement at the same interval boundary.
+    player_do_tick_with_tick_rate(player, &mut level, &TickRateManager::default()).unwrap();
+    assert_eq!(
+        level
+            .entity::<ServerPlayer>(player)
+            .unwrap()
+            .total_experience,
+        2
+    );
+    assert!(
+        matches!(level.take_effects().as_slice(), [LevelEffect::PlayerPacket { packet, .. }] if matches!(packet.as_ref(), cb::Packet::SetExperience(experience) if experience.total_experience.0 == 2))
+    );
+}
+
+#[test]
+fn live_location_awards_native_leather_boots_predicate_from_canonical_facts() {
+    use crate::{
+        entity::{EntityData, player::ServerPlayer},
+        level::chunk::LevelChunk,
+    };
+    use ferraloom_chunk::{BiomeId, IdMap, LevelChunkSection, Strategy};
+    use ferraloom_protocol::component::EquipmentSlot;
+    use ferraloom_util::{BlockPos, ChunkPos};
+    use std::sync::Arc;
+
+    let target = id("minecraft:adventure/walk_on_powder_snow_with_leather_boots");
+    // Keep the captured built-in and its actual parent chain, including display
+    // visibility, while isolating this trigger from unrelated advancements.
+    let builtins = oracle()["builtins"].as_array().unwrap();
+    let mut rows = Vec::new();
+    let mut next = Some(target.as_str());
+    while let Some(name) = next {
+        let row = builtins.iter().find(|row| row["id"] == name).unwrap();
+        rows.push(row.clone());
+        next = row["value"]["parent"].as_str();
+    }
+    for (label, boots, count, on_ground, supporting, block, expected) in [
+        (
+            "fallback",
+            Item::LEATHER_BOOTS,
+            1,
+            true,
+            false,
+            Block::POWDER_SNOW,
+            true,
+        ),
+        (
+            "supporting",
+            Item::LEATHER_BOOTS,
+            1,
+            true,
+            true,
+            Block::POWDER_SNOW,
+            true,
+        ),
+        (
+            "wrong boots",
+            Item::IRON_BOOTS,
+            1,
+            true,
+            false,
+            Block::POWDER_SNOW,
+            false,
+        ),
+        (
+            "empty boots",
+            Item::LEATHER_BOOTS,
+            0,
+            true,
+            false,
+            Block::POWDER_SNOW,
+            false,
+        ),
+        (
+            "airborne",
+            Item::LEATHER_BOOTS,
+            1,
+            false,
+            false,
+            Block::POWDER_SNOW,
+            false,
+        ),
+        (
+            "wrong block",
+            Item::LEATHER_BOOTS,
+            1,
+            true,
+            false,
+            Block::STONE,
+            false,
+        ),
+    ] {
+        let manager = ServerAdvancementManager::new(holders(&json!(rows)));
+        let (mut level, player) = live_fixture(manager);
+        level
+            .add_chunk(LevelChunk::new(
+                ChunkPos::new(0, 0),
+                -1..1,
+                LevelChunkSection::new(
+                    Strategy::block_states(),
+                    Strategy::biomes(Arc::new(IdMap::new(vec![BiomeId(0)]).unwrap())),
+                    BiomeId(0),
+                ),
+            ))
+            .unwrap();
+        let pos = BlockPos::new(if supporting { 1 } else { 0 }, -1, 0);
+        level.set_block_state(pos, block.default_state()).unwrap();
+        level
+            .entity_mut::<ServerPlayer>(player)
+            .unwrap()
+            .parent
+            .equipment
+            .set(
+                EquipmentSlot::Feet,
+                ItemStack::new(boots, count, Default::default()),
+            );
+        let base = level.entity_mut::<EntityData>(player).unwrap();
+        base.on_ground = on_ground;
+        base.supporting_block_pos = supporting.then_some(pos);
+
+        criteria::location(&mut level, player).unwrap();
+        assert_eq!(
+            level
+                .entity::<ServerPlayer>(player)
+                .unwrap()
+                .advancements
+                .get_progress(&target)
+                .unwrap()
+                .is_done(),
+            expected,
+            "{label}"
+        );
+    }
+}
+
+#[test]
 fn live_rewards_nest_recipe_awards_before_outer_announcement_and_visibility() {
     use crate::{entity::player::ServerPlayer, level::effects::LevelEffect};
     use ferraloom_protocol::play::clientbound as cb;
@@ -1062,6 +1271,373 @@ fn live_rewards_nest_recipe_awards_before_outer_announcement_and_visibility() {
         ),
         row["root_order"]
     );
+}
+
+#[test]
+fn vanilla_live_item_triggers_preserve_receivers_and_pre_damage_values() {
+    use crate::{
+        entity::player::{ServerPlayer, inventory},
+        inventory::{ContainerHandle, ContainerSlot, StackValue},
+        level::chunk::LevelChunk,
+    };
+    use ferraloom_chunk::{BiomeId, IdMap, LevelChunkSection, Strategy};
+    use ferraloom_protocol::component::{ComponentTypeId, DataComponent};
+    use ferraloom_util::{BlockPos, ChunkPos};
+    use std::sync::Arc;
+
+    let mut bytes = Vec::new();
+    flate2::read::GzDecoder::new(&include_bytes!("item-triggers.json.gz")[..])
+        .read_to_end(&mut bytes)
+        .unwrap();
+    let rows: Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(rows.as_array().unwrap().len(), 9);
+    for row in rows.as_array().unwrap() {
+        let stack = ItemStack::from_json(&row["stack"]).unwrap();
+        let block = Block::from_name(row["block"].as_str().unwrap()).unwrap();
+        let new_damage = row["new_damage"].as_i64().unwrap() as i32;
+        let criterion = Criterion::decode(&row["input"]["criteria"]["a"]).unwrap();
+        let params = LootParams {
+            origin: Some(Vec3::new(0.5, 0.5, 0.5)),
+            block_state: Some(block.default_state()),
+            tool: Some(stack.clone()),
+            ..Default::default()
+        };
+        let event = match criterion.trigger {
+            TriggerType::PlacedBlock => TriggerEvent::Location(&params),
+            TriggerType::ItemDurabilityChanged => TriggerEvent::Durability {
+                item: &stack,
+                new_damage,
+            },
+            TriggerType::ConsumeItem => TriggerEvent::Item(&stack),
+            _ => unreachable!(),
+        };
+        let mut random = LegacyRandomSource::new(42);
+        let data = LootData::default();
+        let mut context = MatchContext::borrowed(&data, &Facts, &mut random, Vec3::ZERO);
+        assert_eq!(
+            criterion.instance.matches(event, &mut context).unwrap(),
+            row["done"].as_bool().unwrap(),
+            "{}",
+            row["input"]
+        );
+
+        for detached in [false, true] {
+            let manager = ServerAdvancementManager::new(vec![AdvancementHolder {
+                id: id("test:item"),
+                value: Advancement::decode(&row["input"]).unwrap(),
+            }]);
+            let (mut level, player) = live_fixture(manager);
+            level
+                .add_chunk(LevelChunk::new(
+                    ChunkPos::new(0, 0),
+                    0..1,
+                    LevelChunkSection::new(
+                        Strategy::block_states(),
+                        Strategy::biomes(Arc::new(IdMap::new(vec![BiomeId(0)]).unwrap())),
+                        BiomeId(0),
+                    ),
+                ))
+                .unwrap();
+            let pos = BlockPos::new(0, 0, 0);
+            level.set_block_state(pos, block.default_state()).unwrap();
+            level
+                .entity_mut::<ServerPlayer>(player)
+                .unwrap()
+                .inventory
+                .items[0] = stack.clone();
+            let address = ContainerSlot {
+                container: ContainerHandle::PlayerInventory(player),
+                slot: 0,
+            };
+            let receiver = level.stack_ref(address).unwrap();
+            level.retain_stack(receiver).unwrap();
+            if detached {
+                level
+                    .replace_stack_object(address, StackValue::New(ItemStack::default()))
+                    .unwrap();
+            }
+            match criterion.trigger {
+                TriggerType::PlacedBlock => {
+                    criteria::placed_block(&mut level, player, pos, receiver)
+                }
+                TriggerType::ItemDurabilityChanged => {
+                    criteria::item_durability_changed(&mut level, player, receiver, new_damage)
+                }
+                TriggerType::ConsumeItem => criteria::consume_item(&mut level, player, receiver),
+                _ => unreachable!(),
+            }
+            .unwrap();
+            let owner = level.entity::<ServerPlayer>(player).unwrap();
+            assert_eq!(
+                owner
+                    .advancements
+                    .get_progress(&id("test:item"))
+                    .unwrap()
+                    .is_done(),
+                row["done"].as_bool().unwrap(),
+                "detached={detached}: {}",
+                row["input"]
+            );
+            assert_eq!(
+                owner.total_experience as usize,
+                row["reward_reads"].as_array().unwrap().len()
+            );
+            let after = level.stack(receiver).unwrap();
+            assert_eq!(after, &ItemStack::from_json(&row["after_trigger"]).unwrap());
+            if let Some(read) = row["reward_reads"].as_array().unwrap().first() {
+                let components = after.components().unwrap();
+                let damage = match components.get(ComponentTypeId::DAMAGE) {
+                    Some(DataComponent::Damage(value)) => value.0,
+                    _ => 0,
+                };
+                assert_eq!(
+                    json!({"count":inventory::count(after),"damage":damage}),
+                    *read
+                );
+            }
+            level.release_stack(receiver);
+            assert!(!level.stack_is_retained(address).unwrap());
+            if detached {
+                assert!(level.stack(receiver).is_err());
+            }
+        }
+    }
+}
+
+#[test]
+fn vanilla_sculk_triggers_use_canonical_player_victim_and_damage_source() {
+    use crate::entity::{
+        EntityData, EntityState, animal::Cow, damage::DamageSource, player::ServerPlayer,
+    };
+
+    let mut bytes = Vec::new();
+    flate2::read::GzDecoder::new(&include_bytes!("sculk-triggers.json.gz")[..])
+        .read_to_end(&mut bytes)
+        .unwrap();
+    let rows: Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(rows.as_array().unwrap().len(), 9);
+    for row in rows.as_array().unwrap() {
+        let manager = ServerAdvancementManager::new(vec![AdvancementHolder {
+            id: id("test:sculk"),
+            value: Advancement::decode(&row["input"]).unwrap(),
+        }]);
+        let (mut level, player) = live_fixture(manager);
+        level
+            .entity_mut::<EntityData>(player)
+            .unwrap()
+            .set_pos(Vec3::new(1.0, 64.0, 2.0));
+        let victim = level.next_entity_ref();
+        let mut victim_data = EntityData::new(EntityType::COW, 2, 0);
+        victim_data.set_pos(Vec3::new(4.0, 64.0, 2.0));
+        level
+            .add_entity(
+                victim,
+                EntityState::Cow(Box::new(Cow::with_parent(victim_data))),
+            )
+            .unwrap();
+        let source = if row["indirect"].as_bool().unwrap() {
+            let holder = level
+                .context()
+                .damage_types()
+                .get(&"arrow".parse().unwrap())
+                .unwrap()
+                .clone();
+            DamageSource::with_entities(holder, Some(victim), Some(player))
+        } else {
+            level.context().damage_sources().player_attack(player)
+        };
+        assert_eq!(source.is_direct(), row["is_direct"].as_bool().unwrap());
+        assert_eq!(
+            source.to_loot_source().damage_type.as_str(),
+            row["damage_type"].as_str().unwrap()
+        );
+        match row["input"]["criteria"]["a"]["trigger"].as_str().unwrap() {
+            "avoid_vibration" => criteria::avoid_vibration(&mut level, player),
+            "kill_mob_near_sculk_catalyst" => {
+                criteria::kill_mob_near_sculk_catalyst(&mut level, player, victim, &source)
+            }
+            _ => unreachable!(),
+        }
+        .unwrap();
+        let owner = level.entity::<ServerPlayer>(player).unwrap();
+        assert_eq!(
+            owner
+                .advancements
+                .get_progress(&id("test:sculk"))
+                .unwrap()
+                .is_done(),
+            row["done"].as_bool().unwrap(),
+            "{}",
+            row["input"]
+        );
+        assert_eq!(
+            owner.total_experience,
+            row["experience"].as_i64().unwrap() as i32
+        );
+    }
+}
+
+#[test]
+fn vanilla_fall_from_height_uses_start_and_captured_current_position() {
+    use crate::entity::{EntityData, player::ServerPlayer};
+
+    let mut bytes = Vec::new();
+    flate2::read::GzDecoder::new(&include_bytes!("fall-height.json.gz")[..])
+        .read_to_end(&mut bytes)
+        .unwrap();
+    let rows: Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(rows.as_array().unwrap().len(), 9);
+    for row in rows.as_array().unwrap() {
+        let vector = |value: &Value| {
+            let values = value.as_array().unwrap();
+            Vec3::new(
+                values[0].as_f64().unwrap(),
+                values[1].as_f64().unwrap(),
+                values[2].as_f64().unwrap(),
+            )
+        };
+        let manager = ServerAdvancementManager::new(vec![AdvancementHolder {
+            id: id("test:fall"),
+            value: Advancement::decode(&row["input"]).unwrap(),
+        }]);
+        let (mut level, player) = live_fixture(manager);
+        level
+            .entity_mut::<EntityData>(player)
+            .unwrap()
+            .set_pos(vector(&row["end"]));
+        criteria::fall_from_height(&mut level, player, vector(&row["start"])).unwrap();
+        let owner = level.entity::<ServerPlayer>(player).unwrap();
+        assert_eq!(
+            owner
+                .advancements
+                .get_progress(&id("test:fall"))
+                .unwrap()
+                .is_done(),
+            row["done"].as_bool().unwrap(),
+            "{row}"
+        );
+        assert_eq!(
+            owner.total_experience,
+            row["experience"].as_i64().unwrap() as i32
+        );
+    }
+}
+
+#[test]
+fn vanilla_hurt_triggers_preserve_damage_blocking_and_entity_roles() {
+    use crate::entity::{
+        EntityData, EntityState, animal::Cow, damage::DamageSource, player::ServerPlayer,
+    };
+
+    let mut bytes = Vec::new();
+    flate2::read::GzDecoder::new(&include_bytes!("hurt-triggers.json.gz")[..])
+        .read_to_end(&mut bytes)
+        .unwrap();
+    let rows: Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(rows.as_array().unwrap().len(), 13);
+    for row in rows.as_array().unwrap() {
+        let manager = ServerAdvancementManager::new(vec![AdvancementHolder {
+            id: id("test:hurt"),
+            value: Advancement::decode(&row["input"]).unwrap(),
+        }]);
+        let (mut level, player) = live_fixture(manager);
+        level
+            .entity_mut::<EntityData>(player)
+            .unwrap()
+            .set_pos(Vec3::new(1.0, 64.0, 2.0));
+        let other = level.next_entity_ref();
+        let mut other_data = EntityData::new(EntityType::COW, 2, 0);
+        other_data.set_pos(Vec3::new(4.0, 64.0, 2.0));
+        level
+            .add_entity(
+                other,
+                EntityState::Cow(Box::new(Cow::with_parent(other_data))),
+            )
+            .unwrap();
+        let source = match row["source"].as_str().unwrap() {
+            "player" => level.context().damage_sources().player_attack(player),
+            "mob" => level.context().damage_sources().mob_attack(other),
+            "generic" => level.context().damage_sources().generic(),
+            "indirect" => {
+                let holder = level
+                    .context()
+                    .damage_types()
+                    .get(&"arrow".parse().unwrap())
+                    .unwrap()
+                    .clone();
+                DamageSource::with_entities(holder, Some(other), Some(player))
+            }
+            _ => unreachable!(),
+        };
+        assert_eq!(
+            source.to_loot_source().damage_type.as_str(),
+            row["damage_type"].as_str().unwrap()
+        );
+        let original = row["original"].as_f64().unwrap() as f32;
+        let damage = row["damage"].as_f64().unwrap() as f32;
+        let blocked = row["blocked"].as_bool().unwrap();
+        let health = level.entity::<ServerPlayer>(player).unwrap().health();
+        match row["input"]["criteria"]["a"]["trigger"].as_str().unwrap() {
+            "entity_hurt_player" => {
+                criteria::entity_hurt_player(&mut level, player, &source, original, damage, blocked)
+            }
+            "player_hurt_entity" => criteria::player_hurt_entity(
+                &mut level, player, other, &source, original, damage, blocked,
+            ),
+            _ => unreachable!(),
+        }
+        .unwrap();
+        let owner = level.entity::<ServerPlayer>(player).unwrap();
+        assert_eq!(
+            owner
+                .advancements
+                .get_progress(&id("test:hurt"))
+                .unwrap()
+                .is_done(),
+            row["done"].as_bool().unwrap(),
+            "{row}"
+        );
+        assert_eq!(
+            owner.total_experience,
+            row["experience"].as_i64().unwrap() as i32
+        );
+        assert_eq!(owner.health(), health);
+    }
+}
+
+#[test]
+fn live_fall_from_height_reads_canonical_player_nbt_at_the_trigger_point() {
+    use crate::entity::{EntityData, player::ServerPlayer};
+
+    for fall_distance in [5.25, 0.0] {
+        let manager = ServerAdvancementManager::new(vec![AdvancementHolder {
+            id: id("test:fall_nbt"),
+            value: Advancement::decode(&json!({
+                "criteria": {"a": {"trigger": "fall_from_height", "conditions": {
+                    "player": {"type": "entity_properties", "entity": "this",
+                        "predicate": {"nbt": "{fall_distance:5.25d}"}},
+                    "distance": {"y": 10}
+                }}}
+            }))
+            .unwrap(),
+        }]);
+        let (mut level, player) = live_fixture(manager);
+        crate::entity::tests::install_test_environment(&mut level, false, "minecraft:overworld");
+        let base = level.entity_mut::<EntityData>(player).unwrap();
+        base.set_pos(Vec3::new(1.0, 64.0, 2.0));
+        base.fall_distance = fall_distance;
+        criteria::fall_from_height(&mut level, player, Vec3::new(1.0, 74.0, 2.0)).unwrap();
+        assert_eq!(
+            level
+                .entity::<ServerPlayer>(player)
+                .unwrap()
+                .advancements
+                .get_progress(&id("test:fall_nbt"))
+                .unwrap()
+                .is_done(),
+            fall_distance == 5.25
+        );
+    }
 }
 
 #[test]
@@ -1351,6 +1927,51 @@ fn vanilla_recipe_crafted_retained_receivers_preserve_order_and_duplicates() {
 }
 
 #[test]
+fn recipe_crafted_families_use_distinct_listeners_and_shared_retained_inputs() {
+    use crate::{
+        entity::player::ServerPlayer,
+        inventory::{ContainerHandle, ContainerSlot},
+    };
+    let rows: Vec<_> = [("ordinary", "recipe_crafted"), ("crafter", "crafter_recipe_crafted")]
+        .into_iter()
+        .map(|(name, trigger)| json!({"id":format!("test:{name}"),"value":{"criteria":{"used":{
+            "trigger":trigger,"conditions":{"recipes":"crafting_table","ingredients":[{"items":"stone"},{"items":"stone"}]}
+        }}}}))
+        .collect();
+    let manager = ServerAdvancementManager::new(holders(&json!(rows)));
+    let (mut level, player) = live_fixture(manager);
+    level
+        .entity_mut::<ServerPlayer>(player)
+        .unwrap()
+        .inventory
+        .items[0] = ItemStack::new(Item::STONE, 1, Default::default());
+    let address = ContainerSlot {
+        container: ContainerHandle::PlayerInventory(player),
+        slot: 0,
+    };
+    let input = level.stack_ref(address).unwrap();
+    let resources = level.container_resources().unwrap();
+    let recipe = &resources.recipes.recipes()[0];
+    let done = |level: &crate::level::Level| {
+        ["test:ordinary", "test:crafter"].map(|name| {
+            level
+                .entity::<ServerPlayer>(player)
+                .unwrap()
+                .advancements
+                .get_progress(&id(name))
+                .unwrap()
+                .is_done()
+        })
+    };
+    criteria::crafter_recipe_crafted(&mut level, player, recipe, &[input, input]).unwrap();
+    assert_eq!(done(&level), [false, true]);
+    assert!(!level.stack_is_retained(address).unwrap());
+    criteria::recipe_crafted(&mut level, player, recipe, &[input, input]).unwrap();
+    assert_eq!(done(&level), [true, true]);
+    assert!(!level.stack_is_retained(address).unwrap());
+}
+
+#[test]
 fn recipe_crafted_releases_roots_on_capture_and_predicate_errors() {
     use crate::{
         entity::player::ServerPlayer,
@@ -1386,9 +2007,10 @@ fn recipe_crafted_releases_roots_on_capture_and_predicate_errors() {
     assert!(!level.stack_is_retained(address).unwrap());
     assert!(matches!(
         criteria::recipe_crafted(&mut level, player, recipe, &[input]),
-        Err(crate::level::LevelError::UnsupportedAdvancementCriterion(
-            criteria::Trigger::Native(TriggerType::RecipeCrafted)
-        ))
+        Err(crate::level::LevelError::UnsupportedAdvancementPredicate {
+            trigger: criteria::Trigger::Native(TriggerType::RecipeCrafted),
+            ..
+        })
     ));
     assert!(!level.stack_is_retained(address).unwrap());
     assert!(

@@ -150,6 +150,13 @@ attribute-map	fresh	0	0	0
 attribute-map	created	1	1	1
 attribute-map	unchanged	0	0	1
 attribute-map	modified	1	1	1
+attribute-removal	absent	[]	0	0
+attribute-removal	created	[{base:0.2d,id:"minecraft:submerged_mining_speed"}]	0	0
+attribute-removal	transient	[{base:0.2d,id:"minecraft:submerged_mining_speed"}]	1	1
+attribute-removal	permanent	[{base:0.2d,id:"minecraft:submerged_mining_speed"}]	1	1
+attribute-removal	different-id	[{base:0.2d,id:"minecraft:submerged_mining_speed",modifiers:[{amount:0.25d,id:"minecraft:keep",operation:"add_value"}]}]	0	0
+attribute-removal	mixed	[{base:0.2d,id:"minecraft:submerged_mining_speed",modifiers:[{amount:0.25d,id:"minecraft:keep",operation:"add_value"}]}]	1	1
+attribute-removal	unsupported	[]	0	0
 attribute-nbt	0	true	0:
 attribute-nbt	1	false	0:
 attribute-nbt	2	false	403e000000000000:yes
@@ -1291,6 +1298,468 @@ damage-source	player	minecraft:player_attack	1	1	true	false	true	none	3ff0000000
 damage-source	mob	minecraft:mob_attack	2	2	true	true	false	none	3ff0000000000000,4000000000000000,4008000000000000	c010000000000000,4014000000000000,c018000000000000
 damage-source	thorns	minecraft:thorns	3	3	true	false	false	none	3ff0000000000000,4000000000000000,4008000000000000	c010000000000000,4014000000000000,c018000000000000
 damage-source	bad-respawn	minecraft:bad_respawn_point	0	0	true	true	false	8000000000000000,4059000000000000,4008000000000000	8000000000000000,4059000000000000,4008000000000000	8000000000000000,4059000000000000,4008000000000000
+hurt-memory-load	player	absent	41a00000	0	0	0	false	23	-	-999	-	-999	0	0
+hurt-memory-load	player	normal	40f00000	10	12	40c80000	true	-2147483624	[1,2,3,4]	7	[5,6,7,8]	2147483647	40c80000	12
+hurt-memory-load	player	negative	40f00000	-1	-3	c0a00000	true	24	[1,2,3,4]	-1	[5,6,7,8]	-1	c0a00000	-3
+hurt-memory-load	player	nan	40f00000	10	12	7fc00000	true	-2147483624	[1,2,3,4]	7	[5,6,7,8]	2147483647	7fc00000	12
+hurt-memory-load	player	infinity	40f00000	10	12	7f800000	true	-2147483624	[1,2,3,4]	7	[5,6,7,8]	2147483647	7f800000	12
+hurt-memory-load	player	wrong	40f00000	0	0	0	true	23	-	-999	-	-999	0	0
+hurt-memory-load	player	numeric	40f00000	10	12	40c80000	true	-2147483624	[0,2,3,4]	7	[1,0,2147483647,-2147483648]	2147483647	40c80000	12
+hurt-memory-load	player	clamp	41a00000	10	12	40c80000	true	-2147483624	[1,2,3,4]	7	[5,6,7,8]	2147483647	40c80000	12
+hurt-memory-load	cow	absent	41200000	0	0	0	false	23	-	-999	-	-999	0	0
+hurt-memory-load	cow	normal	40f00000	10	12	40c80000	true	-2147483624	[1,2,3,4]	7	[5,6,7,8]	2147483647	40c80000	12
+hurt-memory-load	cow	negative	40f00000	-1	-3	c0a00000	true	24	[1,2,3,4]	-1	[5,6,7,8]	-1	c0a00000	-3
+hurt-memory-load	cow	nan	40f00000	10	12	7fc00000	true	-2147483624	[1,2,3,4]	7	[5,6,7,8]	2147483647	7fc00000	12
+hurt-memory-load	cow	infinity	40f00000	10	12	7f800000	true	-2147483624	[1,2,3,4]	7	[5,6,7,8]	2147483647	7f800000	12
+hurt-memory-load	cow	wrong	40f00000	0	0	0	true	23	-	-999	-	-999	0	0
+hurt-memory-load	cow	numeric	40f00000	10	12	40c80000	true	-2147483624	[0,2,3,4]	7	[1,0,2147483647,-2147483648]	2147483647	40c80000	12
+hurt-memory-load	cow	clamp	41200000	10	12	40c80000	true	-2147483624	[1,2,3,4]	7	[5,6,7,8]	2147483647	40c80000	12
+hurt-absorption	player	0	bf800000	0	0
+hurt-absorption	player	0	80000000	80000000	0
+hurt-absorption	player	0	40400000	0	0
+hurt-absorption	player	0	40e00000	0	0
+hurt-absorption	player	0	7fc00000	7fc00000	7fc00000
+hurt-absorption	player	0	7f800000	0	0
+hurt-absorption	player	40a00000	bf800000	0	0
+hurt-absorption	player	40a00000	80000000	80000000	0
+hurt-absorption	player	40a00000	40400000	40400000	40400000
+hurt-absorption	player	40a00000	40e00000	40a00000	40a00000
+hurt-absorption	player	40a00000	7fc00000	7fc00000	7fc00000
+hurt-absorption	player	40a00000	7f800000	40a00000	40a00000
+hurt-absorption	cow	0	bf800000	0	0
+hurt-absorption	cow	0	80000000	80000000	0
+hurt-absorption	cow	0	40400000	0	0
+hurt-absorption	cow	0	40e00000	0	0
+hurt-absorption	cow	0	7fc00000	7fc00000	7fc00000
+hurt-absorption	cow	0	7f800000	0	0
+hurt-absorption	cow	40a00000	bf800000	0	0
+hurt-absorption	cow	40a00000	80000000	80000000	0
+hurt-absorption	cow	40a00000	40400000	40400000	40400000
+hurt-absorption	cow	40a00000	40e00000	40a00000	40a00000
+hurt-absorption	cow	40a00000	7fc00000	7fc00000	7fc00000
+hurt-absorption	cow	40a00000	7f800000	40a00000	40a00000
+hurt-memory-reference	captured	[0,1,0,2]	[0,1,0,2]	19	0
+hurt-memory-reference	uuid-changed	[0,3,0,4]	[0,3,0,4]	19	0
+hurt-memory-reference	removed	[0,3,0,4]	[0,3,0,4]	19	0
+hurt-memory-reference	cache-invalidated	[0,3,0,4]	[0,3,0,4]	19	0
+hurt-memory-reference	cleared	-	-	-999	-999
+item-damageable	minecraft:stone	prototype	-1	false
+item-damageable	minecraft:stone	prototype	0	false
+item-damageable	minecraft:stone	prototype	1	false
+item-damageable	minecraft:stone	remove-damage	-1	false
+item-damageable	minecraft:stone	remove-damage	0	false
+item-damageable	minecraft:stone	remove-damage	1	false
+item-damageable	minecraft:stone	force-damage	-1	false
+item-damageable	minecraft:stone	force-damage	0	false
+item-damageable	minecraft:stone	force-damage	1	true
+item-damageable	minecraft:stone	unbreakable	-1	false
+item-damageable	minecraft:stone	unbreakable	0	false
+item-damageable	minecraft:stone	unbreakable	1	false
+item-damageable	minecraft:iron_sword	prototype	-1	false
+item-damageable	minecraft:iron_sword	prototype	0	false
+item-damageable	minecraft:iron_sword	prototype	1	true
+item-damageable	minecraft:iron_sword	remove-damage	-1	false
+item-damageable	minecraft:iron_sword	remove-damage	0	false
+item-damageable	minecraft:iron_sword	remove-damage	1	false
+item-damageable	minecraft:iron_sword	force-damage	-1	false
+item-damageable	minecraft:iron_sword	force-damage	0	false
+item-damageable	minecraft:iron_sword	force-damage	1	true
+item-damageable	minecraft:iron_sword	unbreakable	-1	false
+item-damageable	minecraft:iron_sword	unbreakable	0	false
+item-damageable	minecraft:iron_sword	unbreakable	1	false
+item-damageable	minecraft:elytra	prototype	-1	false
+item-damageable	minecraft:elytra	prototype	0	false
+item-damageable	minecraft:elytra	prototype	1	true
+item-damageable	minecraft:elytra	remove-damage	-1	false
+item-damageable	minecraft:elytra	remove-damage	0	false
+item-damageable	minecraft:elytra	remove-damage	1	false
+item-damageable	minecraft:elytra	force-damage	-1	false
+item-damageable	minecraft:elytra	force-damage	0	false
+item-damageable	minecraft:elytra	force-damage	1	true
+item-damageable	minecraft:elytra	unbreakable	-1	false
+item-damageable	minecraft:elytra	unbreakable	0	false
+item-damageable	minecraft:elytra	unbreakable	1	false
+item-damageable	minecraft:netherite_ingot	prototype	-1	false
+item-damageable	minecraft:netherite_ingot	prototype	0	false
+item-damageable	minecraft:netherite_ingot	prototype	1	false
+item-damageable	minecraft:netherite_ingot	remove-damage	-1	false
+item-damageable	minecraft:netherite_ingot	remove-damage	0	false
+item-damageable	minecraft:netherite_ingot	remove-damage	1	false
+item-damageable	minecraft:netherite_ingot	force-damage	-1	false
+item-damageable	minecraft:netherite_ingot	force-damage	0	false
+item-damageable	minecraft:netherite_ingot	force-damage	1	true
+item-damageable	minecraft:netherite_ingot	unbreakable	-1	false
+item-damageable	minecraft:netherite_ingot	unbreakable	0	false
+item-damageable	minecraft:netherite_ingot	unbreakable	1	false
+item-damage-resistant	none	-1	minecraft:in_fire	true
+item-damage-resistant	none	-1	minecraft:on_fire	true
+item-damage-resistant	none	-1	minecraft:lava	true
+item-damage-resistant	none	-1	minecraft:fall	true
+item-damage-resistant	none	-1	minecraft:generic	true
+item-damage-resistant	none	0	minecraft:in_fire	true
+item-damage-resistant	none	0	minecraft:on_fire	true
+item-damage-resistant	none	0	minecraft:lava	true
+item-damage-resistant	none	0	minecraft:fall	true
+item-damage-resistant	none	0	minecraft:generic	true
+item-damage-resistant	none	1	minecraft:in_fire	true
+item-damage-resistant	none	1	minecraft:on_fire	true
+item-damage-resistant	none	1	minecraft:lava	true
+item-damage-resistant	none	1	minecraft:fall	true
+item-damage-resistant	none	1	minecraft:generic	true
+item-damage-resistant	prototype	-1	minecraft:in_fire	true
+item-damage-resistant	prototype	-1	minecraft:on_fire	true
+item-damage-resistant	prototype	-1	minecraft:lava	true
+item-damage-resistant	prototype	-1	minecraft:fall	true
+item-damage-resistant	prototype	-1	minecraft:generic	true
+item-damage-resistant	prototype	0	minecraft:in_fire	true
+item-damage-resistant	prototype	0	minecraft:on_fire	true
+item-damage-resistant	prototype	0	minecraft:lava	true
+item-damage-resistant	prototype	0	minecraft:fall	true
+item-damage-resistant	prototype	0	minecraft:generic	true
+item-damage-resistant	prototype	1	minecraft:in_fire	false
+item-damage-resistant	prototype	1	minecraft:on_fire	false
+item-damage-resistant	prototype	1	minecraft:lava	false
+item-damage-resistant	prototype	1	minecraft:fall	true
+item-damage-resistant	prototype	1	minecraft:generic	true
+item-damage-resistant	direct-fire	-1	minecraft:in_fire	true
+item-damage-resistant	direct-fire	-1	minecraft:on_fire	true
+item-damage-resistant	direct-fire	-1	minecraft:lava	true
+item-damage-resistant	direct-fire	-1	minecraft:fall	true
+item-damage-resistant	direct-fire	-1	minecraft:generic	true
+item-damage-resistant	direct-fire	0	minecraft:in_fire	true
+item-damage-resistant	direct-fire	0	minecraft:on_fire	true
+item-damage-resistant	direct-fire	0	minecraft:lava	true
+item-damage-resistant	direct-fire	0	minecraft:fall	true
+item-damage-resistant	direct-fire	0	minecraft:generic	true
+item-damage-resistant	direct-fire	1	minecraft:in_fire	false
+item-damage-resistant	direct-fire	1	minecraft:on_fire	true
+item-damage-resistant	direct-fire	1	minecraft:lava	true
+item-damage-resistant	direct-fire	1	minecraft:fall	true
+item-damage-resistant	direct-fire	1	minecraft:generic	true
+item-damage-resistant	direct-mixed	-1	minecraft:in_fire	true
+item-damage-resistant	direct-mixed	-1	minecraft:on_fire	true
+item-damage-resistant	direct-mixed	-1	minecraft:lava	true
+item-damage-resistant	direct-mixed	-1	minecraft:fall	true
+item-damage-resistant	direct-mixed	-1	minecraft:generic	true
+item-damage-resistant	direct-mixed	0	minecraft:in_fire	true
+item-damage-resistant	direct-mixed	0	minecraft:on_fire	true
+item-damage-resistant	direct-mixed	0	minecraft:lava	true
+item-damage-resistant	direct-mixed	0	minecraft:fall	true
+item-damage-resistant	direct-mixed	0	minecraft:generic	true
+item-damage-resistant	direct-mixed	1	minecraft:in_fire	false
+item-damage-resistant	direct-mixed	1	minecraft:on_fire	true
+item-damage-resistant	direct-mixed	1	minecraft:lava	true
+item-damage-resistant	direct-mixed	1	minecraft:fall	false
+item-damage-resistant	direct-mixed	1	minecraft:generic	true
+item-damage-resistant	direct-empty	-1	minecraft:in_fire	true
+item-damage-resistant	direct-empty	-1	minecraft:on_fire	true
+item-damage-resistant	direct-empty	-1	minecraft:lava	true
+item-damage-resistant	direct-empty	-1	minecraft:fall	true
+item-damage-resistant	direct-empty	-1	minecraft:generic	true
+item-damage-resistant	direct-empty	0	minecraft:in_fire	true
+item-damage-resistant	direct-empty	0	minecraft:on_fire	true
+item-damage-resistant	direct-empty	0	minecraft:lava	true
+item-damage-resistant	direct-empty	0	minecraft:fall	true
+item-damage-resistant	direct-empty	0	minecraft:generic	true
+item-damage-resistant	direct-empty	1	minecraft:in_fire	true
+item-damage-resistant	direct-empty	1	minecraft:on_fire	true
+item-damage-resistant	direct-empty	1	minecraft:lava	true
+item-damage-resistant	direct-empty	1	minecraft:fall	true
+item-damage-resistant	direct-empty	1	minecraft:generic	true
+item-damage-resistant	tag-fire	-1	minecraft:in_fire	true
+item-damage-resistant	tag-fire	-1	minecraft:on_fire	true
+item-damage-resistant	tag-fire	-1	minecraft:lava	true
+item-damage-resistant	tag-fire	-1	minecraft:fall	true
+item-damage-resistant	tag-fire	-1	minecraft:generic	true
+item-damage-resistant	tag-fire	0	minecraft:in_fire	true
+item-damage-resistant	tag-fire	0	minecraft:on_fire	true
+item-damage-resistant	tag-fire	0	minecraft:lava	true
+item-damage-resistant	tag-fire	0	minecraft:fall	true
+item-damage-resistant	tag-fire	0	minecraft:generic	true
+item-damage-resistant	tag-fire	1	minecraft:in_fire	false
+item-damage-resistant	tag-fire	1	minecraft:on_fire	false
+item-damage-resistant	tag-fire	1	minecraft:lava	false
+item-damage-resistant	tag-fire	1	minecraft:fall	true
+item-damage-resistant	tag-fire	1	minecraft:generic	true
+item-damage-resistant	tag-fall	-1	minecraft:in_fire	true
+item-damage-resistant	tag-fall	-1	minecraft:on_fire	true
+item-damage-resistant	tag-fall	-1	minecraft:lava	true
+item-damage-resistant	tag-fall	-1	minecraft:fall	true
+item-damage-resistant	tag-fall	-1	minecraft:generic	true
+item-damage-resistant	tag-fall	0	minecraft:in_fire	true
+item-damage-resistant	tag-fall	0	minecraft:on_fire	true
+item-damage-resistant	tag-fall	0	minecraft:lava	true
+item-damage-resistant	tag-fall	0	minecraft:fall	true
+item-damage-resistant	tag-fall	0	minecraft:generic	true
+item-damage-resistant	tag-fall	1	minecraft:in_fire	true
+item-damage-resistant	tag-fall	1	minecraft:on_fire	true
+item-damage-resistant	tag-fall	1	minecraft:lava	true
+item-damage-resistant	tag-fall	1	minecraft:fall	false
+item-damage-resistant	tag-fall	1	minecraft:generic	true
+hurt-memory-tick	cow	false	0	[0,0,0,0,100]	0,0,0,false,false,100,false,0
+hurt-memory-tick	cow	false	1	[1,1,1,0,100]	0,0,0,true,false,100,false,0
+hurt-memory-tick	cow	false	2	[10,20,2,0,101]	9,19,1,true,false,101,false,0
+hurt-memory-tick	cow	false	3	[-1,-1,-1,0,101]	-1,-1,-1,false,false,101,false,0
+hurt-memory-tick	cow	false	4	[10,20,1,0,-2147483648]	9,19,0,true,false,-2147483648,false,0
+hurt-memory-tick	cow	false	5	[10,20,2,2147483647,-2147483648]	9,19,1,true,false,-2147483648,false,2147483647
+hurt-memory-tick	cow	true	0	[0,0,0,0,100]	0,0,0,false,true,0,true,0
+hurt-memory-tick	cow	true	1	[1,1,1,0,100]	0,0,0,true,true,0,true,0
+hurt-memory-tick	cow	true	2	[10,20,2,0,101]	9,19,1,true,false,101,true,0
+hurt-memory-tick	cow	true	3	[-1,-1,-1,0,101]	-1,-1,-1,false,false,101,true,0
+hurt-memory-tick	cow	true	4	[10,20,1,0,-2147483648]	9,19,0,true,true,0,true,0
+hurt-memory-tick	cow	true	5	[10,20,2,2147483647,-2147483648]	9,19,1,true,true,2147483647,true,2147483647
+hurt-memory-tick	player	false	0	[0,0,0,0,100]	0,0,0,false,false,100,false,0
+hurt-memory-tick	player	false	1	[1,1,1,0,100]	0,1,0,true,false,100,false,0
+hurt-memory-tick	player	false	2	[10,20,2,0,101]	9,20,1,true,false,101,false,0
+hurt-memory-tick	player	false	3	[-1,-1,-1,0,101]	-1,-1,-1,false,false,101,false,0
+hurt-memory-tick	player	false	4	[10,20,1,0,-2147483648]	9,20,0,true,false,-2147483648,false,0
+hurt-memory-tick	player	false	5	[10,20,2,2147483647,-2147483648]	9,20,1,true,false,-2147483648,false,2147483647
+hurt-memory-tick	player	true	0	[0,0,0,0,100]	0,0,0,false,true,0,true,0
+hurt-memory-tick	player	true	1	[1,1,1,0,100]	0,1,0,true,true,0,true,0
+hurt-memory-tick	player	true	2	[10,20,2,0,101]	9,20,1,true,false,101,true,0
+hurt-memory-tick	player	true	3	[-1,-1,-1,0,101]	-1,-1,-1,false,false,101,true,0
+hurt-memory-tick	player	true	4	[10,20,1,0,-2147483648]	9,20,0,true,true,0,true,0
+hurt-memory-tick	player	true	5	[10,20,2,2147483647,-2147483648]	9,20,1,true,true,2147483647,true,2147483647
+hurt-knockback	0.0	0.0	false	false	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	5c9f20d58361b331
+hurt-knockback	0.0	0.0	false	true	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	5c9f20d58361b331
+hurt-knockback	0.0	0.0	true	false	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	5c9f20d58361b331
+hurt-knockback	0.0	0.0	true	true	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	5c9f20d58361b331
+hurt-knockback	0.0	0.5	false	false	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	5c9f20d58361b331
+hurt-knockback	0.0	0.5	false	true	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	5c9f20d58361b331
+hurt-knockback	0.0	0.5	true	false	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	5c9f20d58361b331
+hurt-knockback	0.0	0.5	true	true	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	5c9f20d58361b331
+hurt-knockback	0.0	1.0	false	false	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	5c9f20d58361b331
+hurt-knockback	0.0	1.0	false	true	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	5c9f20d58361b331
+hurt-knockback	0.0	1.0	true	false	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	5c9f20d58361b331
+hurt-knockback	0.0	1.0	true	true	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	5c9f20d58361b331
+hurt-knockback	0.4000000059604645	0.0	false	false	bfb8cd220ef2fd94,bfc0000000000000,3fe2a67662cd8f8c	true	5c9f20d58361b331
+hurt-knockback	0.4000000059604645	0.0	false	true	3fdb26f25140d3b6,bfc0000000000000,bf8f94eb6ed9e260	true	3c4b499b090bc6fa
+hurt-knockback	0.4000000059604645	0.0	true	false	bfb8cd220ef2fd94,3fd59999a0000000,3fe2a67662cd8f8c	true	5c9f20d58361b331
+hurt-knockback	0.4000000059604645	0.0	true	true	3fdb26f25140d3b6,3fd59999a0000000,bf8f94eb6ed9e260	true	3c4b499b090bc6fa
+hurt-knockback	0.4000000059604645	0.5	false	false	3f8ccb77c43409b0,bfc0000000000000,3fdaa67662cd8f8c	true	5c9f20d58361b331
+hurt-knockback	0.4000000059604645	0.5	false	true	3fd1937928a069db,bfc0000000000000,3fbe06b1491261da	true	3c4b499b090bc6fa
+hurt-knockback	0.4000000059604645	0.5	true	false	3f8ccb77c43409b0,3fc19999a0000000,3fdaa67662cd8f8c	true	5c9f20d58361b331
+hurt-knockback	0.4000000059604645	0.5	true	true	3fd1937928a069db,3fc19999a0000000,3fbe06b1491261da	true	3c4b499b090bc6fa
+hurt-knockback	0.4000000059604645	1.0	false	false	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	5c9f20d58361b331
+hurt-knockback	0.4000000059604645	1.0	false	true	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	5c9f20d58361b331
+hurt-knockback	0.4000000059604645	1.0	true	false	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	5c9f20d58361b331
+hurt-knockback	0.4000000059604645	1.0	true	true	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	5c9f20d58361b331
+hurt-knockback	1.0	0.0	false	false	bfdb80354077d12c,bfc0000000000000,3ff15013f82cee70	true	5c9f20d58361b331
+hurt-knockback	1.0	0.0	false	true	3febf0aedf94dcec,bfc0000000000000,bfda77a25a0b1d1a	true	3c4b499b090bc6fa
+hurt-knockback	1.0	0.0	true	false	bfdb80354077d12c,3fd999999999999a,3ff15013f82cee70	true	5c9f20d58361b331
+hurt-knockback	1.0	0.0	true	true	3febf0aedf94dcec,3fd999999999999a,bfda77a25a0b1d1a	true	3c4b499b090bc6fa
+hurt-knockback	1.0	0.5	false	false	bfc380354077d12c,bfc0000000000000,3fe55013f82cee70	true	5c9f20d58361b331
+hurt-knockback	1.0	0.5	false	true	3fdff0aedf94dcec,bfc0000000000000,bfb4ef44b4163a34	true	3c4b499b090bc6fa
+hurt-knockback	1.0	0.5	true	false	bfc380354077d12c,3fd999999999999a,3fe55013f82cee70	true	5c9f20d58361b331
+hurt-knockback	1.0	0.5	true	true	3fdff0aedf94dcec,3fd999999999999a,bfb4ef44b4163a34	true	3c4b499b090bc6fa
+hurt-knockback	1.0	1.0	false	false	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	5c9f20d58361b331
+hurt-knockback	1.0	1.0	false	true	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	5c9f20d58361b331
+hurt-knockback	1.0	1.0	true	false	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	5c9f20d58361b331
+hurt-knockback	1.0	1.0	true	true	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	5c9f20d58361b331
+hurt-sound	player	generic	false	sound:minecraft:entity.player.hurt:7:3f800000:3f800000:b50cf1251ffe99cd	5c9f20d58361b331
+hurt-sound	player	generic	true	sound:minecraft:entity.player.hurt:7:3f800000:3f800000:b50cf1251ffe99cd	5c9f20d58361b331
+hurt-sound	player	fall	false	sound:minecraft:entity.player.hurt:7:3f800000:3f800000:b50cf1251ffe99cd	5c9f20d58361b331
+hurt-sound	player	fall	true	sound:minecraft:entity.player.hurt:7:3f800000:3f800000:b50cf1251ffe99cd	5c9f20d58361b331
+hurt-sound	player	lava	false	sound:minecraft:entity.player.hurt_on_fire:7:3f800000:3f800000:b50cf1251ffe99cd	5c9f20d58361b331
+hurt-sound	player	lava	true	sound:minecraft:entity.player.hurt_on_fire:7:3f800000:3f800000:b50cf1251ffe99cd	5c9f20d58361b331
+hurt-sound	player	drown	false	sound:minecraft:entity.player.hurt_drown:7:3f800000:3f800000:b50cf1251ffe99cd	5c9f20d58361b331
+hurt-sound	player	drown	true	sound:minecraft:entity.player.hurt_drown:7:3f800000:3f800000:b50cf1251ffe99cd	5c9f20d58361b331
+hurt-sound	player	freeze	false	sound:minecraft:entity.player.hurt_freeze:7:3f800000:3f800000:b50cf1251ffe99cd	5c9f20d58361b331
+hurt-sound	player	freeze	true	sound:minecraft:entity.player.hurt_freeze:7:3f800000:3f800000:b50cf1251ffe99cd	5c9f20d58361b331
+hurt-sound	cow	generic	false	sound:minecraft:entity.cow.hurt:6:3ecccccd:3f783f7c:b50cf1251ffe99cd	eed8a921eac80778
+hurt-sound	cow	generic	true	-	eed8a921eac80778
+hurt-sound	cow	fall	false	sound:minecraft:entity.cow.hurt:6:3ecccccd:3f783f7c:b50cf1251ffe99cd	eed8a921eac80778
+hurt-sound	cow	fall	true	-	eed8a921eac80778
+hurt-sound	cow	lava	false	sound:minecraft:entity.cow.hurt:6:3ecccccd:3f783f7c:b50cf1251ffe99cd	eed8a921eac80778
+hurt-sound	cow	lava	true	-	eed8a921eac80778
+hurt-sound	cow	drown	false	sound:minecraft:entity.cow.hurt:6:3ecccccd:3f783f7c:b50cf1251ffe99cd	eed8a921eac80778
+hurt-sound	cow	drown	true	-	eed8a921eac80778
+hurt-sound	cow	freeze	false	sound:minecraft:entity.cow.hurt:6:3ecccccd:3f783f7c:b50cf1251ffe99cd	eed8a921eac80778
+hurt-sound	cow	freeze	true	-	eed8a921eac80778
+hurt-sound	baby_cow	generic	false	sound:minecraft:entity.cow.hurt:6:3ecccccd:3fbc1fbe:b50cf1251ffe99cd	eed8a921eac80778
+hurt-sound	baby_cow	generic	true	-	eed8a921eac80778
+hurt-sound	baby_cow	fall	false	sound:minecraft:entity.cow.hurt:6:3ecccccd:3fbc1fbe:b50cf1251ffe99cd	eed8a921eac80778
+hurt-sound	baby_cow	fall	true	-	eed8a921eac80778
+hurt-sound	baby_cow	lava	false	sound:minecraft:entity.cow.hurt:6:3ecccccd:3fbc1fbe:b50cf1251ffe99cd	eed8a921eac80778
+hurt-sound	baby_cow	lava	true	-	eed8a921eac80778
+hurt-sound	baby_cow	drown	false	sound:minecraft:entity.cow.hurt:6:3ecccccd:3fbc1fbe:b50cf1251ffe99cd	eed8a921eac80778
+hurt-sound	baby_cow	drown	true	-	eed8a921eac80778
+hurt-sound	baby_cow	freeze	false	sound:minecraft:entity.cow.hurt:6:3ecccccd:3fbc1fbe:b50cf1251ffe99cd	eed8a921eac80778
+hurt-sound	baby_cow	freeze	true	-	eed8a921eac80778
+hurt-pipeline	player	actual	0	mob_attack	40800000,0,0,0,0,bf800000,0,0	true	actual	41800000,0,0,0,0,40,0,0	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	3dcccccd	-	false	false	packet:enter:41a00000,0,0,0,0,0,0,0;stat:minecraft.custom:minecraft.damage_taken:40:41800000,0,0,0,0,40,0,0;event:minecraft:entity_damage:41800000,0,0,0,0,40,0,0	5c9f20d58361b331
+hurt-pipeline	player	actual	1	fall	40800000,41a00000,0,0,0,bf800000,0,0	false	actual	41800000,0,0,0,0,40,0,0	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	0	-	false	false	stat:minecraft.custom:minecraft.damage_taken:40:41800000,0,0,0,0,40,0,0;event:minecraft:entity_damage:41800000,0,0,0,0,40,0,0	5c9f20d58361b331
+hurt-pipeline	player	actual	2	generic	41a00000,41a00000,41000000,0,0,0,0,0	true	actual	40800000,0,0,0,0,160,0,40	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	0	-	false	false	stat:minecraft.custom:minecraft.damage_resisted:40:41a00000,0,0,0,0,0,0,40;stat:minecraft.custom:minecraft.damage_taken:160:40800000,0,0,0,0,160,0,40;event:minecraft:entity_damage:40800000,0,0,0,0,160,0,40	5c9f20d58361b331
+hurt-pipeline	player	actual	3	generic	40c00000,0,0,40a00000,41a00000,bf800000,0,0	false	actual	41980000,0,0,0,0,10,50,0	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	0	-	false	false	stat:minecraft.custom:minecraft.damage_absorbed:50:41a00000,0,0,0,0,0,50,0;stat:minecraft.custom:minecraft.damage_taken:10:41980000,0,0,0,0,10,50,0;event:minecraft:entity_damage:41980000,0,0,0,0,10,50,0	5c9f20d58361b331
+hurt-pipeline	player	actual	4	mob_attack	40c00000,41200000,40800000,40a00000,41a00000,3f800000,0,0	true	actual	41a00000,402353f8,0,0,0,0,24,16	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	0	-	false	false	stat:minecraft.custom:minecraft.damage_resisted:16:41a00000,40a00000,0,0,0,0,0,16;stat:minecraft.custom:minecraft.damage_absorbed:24:41a00000,402353f8,0,0,0,0,24,16	5c9f20d58361b331
+hurt-pipeline	player	actual	5	fall	3f800000,0,0,40c80000,0,bf800000,0,0	false	actual	41a00000,0,0,0,0,0,10,0	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	0	-	false	false	stat:minecraft.custom:minecraft.damage_absorbed:10:41a00000,0,0,0,0,0,10,0	5c9f20d58361b331
+hurt-pipeline	player	actual	6	generic	80000000,0,0,0,0,bf800000,0,0	true	actual	41a00000,0,0,0,0,0,0,0	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	0	-	false	false	-	5c9f20d58361b331
+hurt-pipeline	player	actual	7	generic	bf800000,0,0,0,0,bf800000,0,0	false	actual	41a00000,0,0,0,0,0,0,0	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	0	-	false	false	-	5c9f20d58361b331
+hurt-pipeline	player	actual	8	mob_attack	7fc00000,0,0,0,0,bf800000,0,0	true	actual	7fc00000,7fc00000,0,0,0,0,0,0	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	3dcccccd	-	false	false	packet:enter:41a00000,7fc00000,0,0,0,0,0,0;event:minecraft:entity_damage:7fc00000,7fc00000,0,0,0,0,0,0	5c9f20d58361b331
+hurt-pipeline	player	actual	9	fall	7f800000,41a00000,41000000,0,0,bf800000,0,0	false	actual	0,ffc00000,0,0,0,0,0,0	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	0	-	false	false	event:minecraft:entity_damage:0,ffc00000,0,0,0,0,0,0	5c9f20d58361b331
+hurt-pipeline	player	actual	10	generic	40b00000,40e80000,3fc00000,3fa00000,40800000,0,41300000,40400000	true	actual	4186cccd,0,40400000,11,0,32,13,11	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	0	-	false	false	stat:minecraft.custom:minecraft.damage_resisted:11:41a00000,3fa00000,40400000,11,0,0,0,11;stat:minecraft.custom:minecraft.damage_absorbed:13:41a00000,0,40400000,11,0,0,13,11;stat:minecraft.custom:minecraft.damage_taken:32:4186cccd,0,40400000,11,0,32,13,11;event:minecraft:entity_damage:4186cccd,0,40400000,11,0,32,13,11	5c9f20d58361b331
+hurt-pipeline	player	actual	11	generic	40400000,0,0,0,0,bf800000,41300000,40a00000	false	actual	41880000,0,40a00000,11,0,30,0,0	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	0	-	false	false	stat:minecraft.custom:minecraft.damage_taken:30:41880000,0,40a00000,11,0,30,0,0;event:minecraft:entity_damage:41880000,0,40a00000,11,0,30,0,0	5c9f20d58361b331
+hurt-pipeline	player	actual	12	mob_attack	40e00000,0,0,0,0,bf800000,41300000,40400000	true	actual	41500000,0,40400000,11,0,70,0,0	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	3dcccccd	-	false	false	packet:enter:41a00000,0,40400000,11,0,0,0,0;stat:minecraft.custom:minecraft.damage_taken:70:41500000,0,40400000,11,0,70,0,0;event:minecraft:entity_damage:41500000,0,40400000,11,0,70,0,0	5c9f20d58361b331
+hurt-pipeline	player	actual	13	fall	40e00000,0,0,0,0,bf800000,41200000,40400000	false	actual	41500000,0,40400000,10,0,70,0,0	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	0	-	false	false	stat:minecraft.custom:minecraft.damage_taken:70:41500000,0,40400000,10,0,70,0,0;event:minecraft:entity_damage:41500000,0,40400000,10,0,70,0,0	5c9f20d58361b331
+hurt-pipeline	player	actual	14	freeze	40800000,0,0,0,0,40800000,0,0	true	actual	41a00000,0,0,0,0,0,0,40	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	0	-	false	false	stat:minecraft.custom:minecraft.damage_resisted:40:41a00000,0,0,0,0,0,0,40	5c9f20d58361b331
+hurt-pipeline	player	actual	15	lava	40800000,0,0,0,0,c0000000,0,0	false	actual	41800000,0,0,0,0,40,0,0	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	3dcccccd	-	false	false	stat:minecraft.custom:minecraft.damage_taken:40:41800000,0,0,0,0,40,0,0;event:minecraft:entity_damage:41800000,0,0,0,0,40,0,0	5c9f20d58361b331
+hurt-pipeline	player	hurt	0	mob_attack	40800000,0,0,0,0,bf800000,0,0	true	boundary	41800000,0,40800000,20,0,40,0,0	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	3dcccccd	-	false	false	packet:enter:41a00000,0,40800000,20,0,0,0,0;stat:minecraft.custom:minecraft.damage_taken:40:41800000,0,40800000,20,0,40,0,0;event:minecraft:entity_damage:41800000,0,40800000,20,0,40,0,0	5c9f20d58361b331
+hurt-pipeline	player	hurt	1	fall	40800000,41a00000,0,0,0,bf800000,0,0	false	boundary	41800000,0,40800000,20,0,40,0,0	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	0	-	false	false	stat:minecraft.custom:minecraft.damage_taken:40:41800000,0,40800000,20,0,40,0,0;event:minecraft:entity_damage:41800000,0,40800000,20,0,40,0,0	5c9f20d58361b331
+hurt-pipeline	player	hurt	2	generic	41a00000,41a00000,41000000,0,0,0,0,0	true	boundary	40800000,0,41a00000,20,0,160,0,40	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	0	-	false	false	stat:minecraft.custom:minecraft.damage_resisted:40:41a00000,0,41a00000,20,0,0,0,40;stat:minecraft.custom:minecraft.damage_taken:160:40800000,0,41a00000,20,0,160,0,40;event:minecraft:entity_damage:40800000,0,41a00000,20,0,160,0,40	5c9f20d58361b331
+hurt-pipeline	player	hurt	3	generic	40c00000,0,0,40a00000,41a00000,bf800000,0,0	false	boundary	41980000,0,40c00000,20,0,10,50,0	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	0	-	false	false	stat:minecraft.custom:minecraft.damage_absorbed:50:41a00000,0,40c00000,20,0,0,50,0;stat:minecraft.custom:minecraft.damage_taken:10:41980000,0,40c00000,20,0,10,50,0;event:minecraft:entity_damage:41980000,0,40c00000,20,0,10,50,0	5c9f20d58361b331
+hurt-pipeline	player	hurt	4	mob_attack	40c00000,41200000,40800000,40a00000,41a00000,3f800000,0,0	true	boundary	41a00000,402353f8,40c00000,20,0,0,24,16	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	0	-	false	false	stat:minecraft.custom:minecraft.damage_resisted:16:41a00000,40a00000,40c00000,20,0,0,0,16;stat:minecraft.custom:minecraft.damage_absorbed:24:41a00000,402353f8,40c00000,20,0,0,24,16	5c9f20d58361b331
+hurt-pipeline	player	hurt	5	fall	3f800000,0,0,40c80000,0,bf800000,0,0	false	boundary	41a00000,0,3f800000,20,0,0,10,0	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	0	-	false	false	stat:minecraft.custom:minecraft.damage_absorbed:10:41a00000,0,3f800000,20,0,0,10,0	5c9f20d58361b331
+hurt-pipeline	player	hurt	6	generic	80000000,0,0,0,0,bf800000,0,0	true	false	41a00000,0,0,0,0,0,0,0	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	0	-	false	false	-	5c9f20d58361b331
+hurt-pipeline	player	hurt	7	generic	bf800000,0,0,0,0,bf800000,0,0	false	boundary	41a00000,0,0,20,0,0,0,0	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	0	-	false	false	-	5c9f20d58361b331
+hurt-pipeline	player	hurt	8	mob_attack	7fc00000,0,0,0,0,bf800000,0,0	true	boundary	0,0,7f7fffff,20,0,0,0,0	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	3dcccccd	-	false	false	packet:enter:41a00000,0,7f7fffff,20,0,0,0,0;event:minecraft:entity_damage:0,0,7f7fffff,20,0,0,0,0	5c9f20d58361b331
+hurt-pipeline	player	hurt	9	fall	7f800000,41a00000,41000000,0,0,bf800000,0,0	false	boundary	0,0,7f7fffff,20,0,0,0,0	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	0	-	false	false	event:minecraft:entity_damage:0,0,7f7fffff,20,0,0,0,0	5c9f20d58361b331
+hurt-pipeline	player	hurt	10	generic	40b00000,40e80000,3fc00000,3fa00000,40800000,0,41300000,40400000	true	boundary	419a0000,0,40400000,11,0,8,13,5	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	0	-	false	false	stat:minecraft.custom:minecraft.damage_resisted:5:41a00000,3fa00000,40400000,11,0,0,0,5;stat:minecraft.custom:minecraft.damage_absorbed:13:41a00000,0,40400000,11,0,0,13,5;stat:minecraft.custom:minecraft.damage_taken:8:419a0000,0,40400000,11,0,8,13,5;event:minecraft:entity_damage:419a0000,0,40400000,11,0,8,13,5	5c9f20d58361b331
+hurt-pipeline	player	hurt	11	generic	40400000,0,0,0,0,bf800000,41300000,40a00000	false	false	41a00000,0,40a00000,11,0,0,0,0	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	0	-	false	false	-	5c9f20d58361b331
+hurt-pipeline	player	hurt	12	mob_attack	40e00000,0,0,0,0,bf800000,41300000,40400000	true	boundary	41800000,0,40400000,11,0,40,0,0	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	3dcccccd	-	false	false	packet:enter:41a00000,0,40400000,11,0,0,0,0;stat:minecraft.custom:minecraft.damage_taken:40:41800000,0,40400000,11,0,40,0,0;event:minecraft:entity_damage:41800000,0,40400000,11,0,40,0,0	5c9f20d58361b331
+hurt-pipeline	player	hurt	13	fall	40e00000,0,0,0,0,bf800000,41200000,40400000	false	boundary	41500000,0,40e00000,20,0,70,0,0	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	0	-	false	false	stat:minecraft.custom:minecraft.damage_taken:70:41500000,0,40e00000,20,0,70,0,0;event:minecraft:entity_damage:41500000,0,40e00000,20,0,70,0,0	5c9f20d58361b331
+hurt-pipeline	player	hurt	14	freeze	40800000,0,0,0,0,40800000,0,0	true	boundary	41a00000,0,40800000,20,0,0,0,40	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	0	-	false	false	stat:minecraft.custom:minecraft.damage_resisted:40:41a00000,0,40800000,20,0,0,0,40	5c9f20d58361b331
+hurt-pipeline	player	hurt	15	lava	40800000,0,0,0,0,c0000000,0,0	false	false	41a00000,0,0,0,0,0,0,0	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	0	-	false	false	-	5c9f20d58361b331
+hurt-pipeline	player	increment	10	generic	40b00000,40e80000,3fc00000,3fa00000,40800000,0,41300000,40400000	true	true	419a0000,0,40b00000,11,0,8,13,5	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	0	minecraft:generic	false	false	stat:minecraft.custom:minecraft.damage_resisted:5:41a00000,3fa00000,40400000,11,0,0,0,5;stat:minecraft.custom:minecraft.damage_absorbed:13:41a00000,0,40400000,11,0,0,13,5;stat:minecraft.custom:minecraft.damage_taken:8:419a0000,0,40400000,11,0,8,13,5;event:minecraft:entity_damage:419a0000,0,40400000,11,0,8,13,5;criterion:419a0000,0,40b00000,11,0,8,13,5	5c9f20d58361b331
+hurt-pipeline	player	increment	11	generic	40400000,0,0,0,0,bf800000,41300000,40a00000	false	false	41a00000,0,40a00000,11,0,0,0,0	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	0	-	false	false	-	5c9f20d58361b331
+hurt-pipeline	player	increment	12	mob_attack	40e00000,0,0,0,0,bf800000,41300000,40400000	true	true	41800000,0,40e00000,11,0,40,0,0	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	3dcccccd	minecraft:mob_attack	true	false	packet:enter:41a00000,0,40400000,11,0,0,0,0;stat:minecraft.custom:minecraft.damage_taken:40:41800000,0,40400000,11,0,40,0,0;event:minecraft:entity_damage:41800000,0,40400000,11,0,40,0,0;criterion:41800000,0,40e00000,11,0,40,0,0	5c9f20d58361b331
+hurt-pipeline	cow	actual	0	mob_attack	40800000,0,0,0,0,bf800000,0,0	true	actual	40c00000,0,0,0,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	event:minecraft:entity_damage:40c00000,0,0,0,0,-	5c9f20d58361b331
+hurt-pipeline	cow	actual	1	fall	40800000,41a00000,0,0,0,bf800000,0,0	false	actual	40c00000,0,0,0,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	event:minecraft:entity_damage:40c00000,0,0,0,0,-	5c9f20d58361b331
+hurt-pipeline	cow	actual	2	generic	41a00000,41a00000,41000000,0,0,0,0,0	true	actual	0,0,0,0,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	event:minecraft:entity_damage:0,0,0,0,0,-	5c9f20d58361b331
+hurt-pipeline	cow	actual	3	generic	40c00000,0,0,40a00000,41a00000,bf800000,0,0	false	actual	41100000,0,0,0,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	event:minecraft:entity_damage:41100000,0,0,0,0,-	5c9f20d58361b331
+hurt-pipeline	cow	actual	4	mob_attack	40c00000,41200000,40800000,40a00000,41a00000,3f800000,0,0	true	actual	41200000,402353f8,0,0,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	-	5c9f20d58361b331
+hurt-pipeline	cow	actual	5	fall	3f800000,0,0,40c80000,0,bf800000,0,0	false	actual	41200000,0,0,0,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	-	5c9f20d58361b331
+hurt-pipeline	cow	actual	6	generic	80000000,0,0,0,0,bf800000,0,0	true	actual	41200000,0,0,0,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	-	5c9f20d58361b331
+hurt-pipeline	cow	actual	7	generic	bf800000,0,0,0,0,bf800000,0,0	false	actual	41200000,0,0,0,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	-	5c9f20d58361b331
+hurt-pipeline	cow	actual	8	mob_attack	7fc00000,0,0,0,0,bf800000,0,0	true	actual	7fc00000,7fc00000,0,0,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	event:minecraft:entity_damage:7fc00000,7fc00000,0,0,0,-	5c9f20d58361b331
+hurt-pipeline	cow	actual	9	fall	7f800000,41a00000,41000000,0,0,bf800000,0,0	false	actual	0,ffc00000,0,0,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	event:minecraft:entity_damage:0,ffc00000,0,0,0,-	5c9f20d58361b331
+hurt-pipeline	cow	actual	10	generic	40b00000,40e80000,3fc00000,3fa00000,40800000,0,41300000,40400000	true	actual	40db3333,0,40400000,11,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	event:minecraft:entity_damage:40db3333,0,40400000,11,0,-	5c9f20d58361b331
+hurt-pipeline	cow	actual	11	generic	40400000,0,0,0,0,bf800000,41300000,40a00000	false	actual	40e00000,0,40a00000,11,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	event:minecraft:entity_damage:40e00000,0,40a00000,11,0,-	5c9f20d58361b331
+hurt-pipeline	cow	actual	12	mob_attack	40e00000,0,0,0,0,bf800000,41300000,40400000	true	actual	40400000,0,40400000,11,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	event:minecraft:entity_damage:40400000,0,40400000,11,0,-	5c9f20d58361b331
+hurt-pipeline	cow	actual	13	fall	40e00000,0,0,0,0,bf800000,41200000,40400000	false	actual	40400000,0,40400000,10,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	event:minecraft:entity_damage:40400000,0,40400000,10,0,-	5c9f20d58361b331
+hurt-pipeline	cow	actual	14	freeze	40800000,0,0,0,0,40800000,0,0	true	actual	41200000,0,0,0,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	-	5c9f20d58361b331
+hurt-pipeline	cow	actual	15	lava	40800000,0,0,0,0,c0000000,0,0	false	actual	40c00000,0,0,0,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	event:minecraft:entity_damage:40c00000,0,0,0,0,-	5c9f20d58361b331
+hurt-pipeline	cow	hurt	0	mob_attack	40800000,0,0,0,0,bf800000,0,0	true	boundary	40c00000,0,40800000,20,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	event:minecraft:entity_damage:40c00000,0,40800000,20,0,-	5c9f20d58361b331
+hurt-pipeline	cow	hurt	1	fall	40800000,41a00000,0,0,0,bf800000,0,0	false	boundary	40c00000,0,40800000,20,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	event:minecraft:entity_damage:40c00000,0,40800000,20,0,-	5c9f20d58361b331
+hurt-pipeline	cow	hurt	2	generic	41a00000,41a00000,41000000,0,0,0,0,0	true	boundary	0,0,41a00000,20,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	event:minecraft:entity_damage:0,0,41a00000,20,0,-	5c9f20d58361b331
+hurt-pipeline	cow	hurt	3	generic	40c00000,0,0,40a00000,41a00000,bf800000,0,0	false	boundary	41100000,0,40c00000,20,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	event:minecraft:entity_damage:41100000,0,40c00000,20,0,-	5c9f20d58361b331
+hurt-pipeline	cow	hurt	4	mob_attack	40c00000,41200000,40800000,40a00000,41a00000,3f800000,0,0	true	boundary	41200000,402353f8,40c00000,20,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	-	5c9f20d58361b331
+hurt-pipeline	cow	hurt	5	fall	3f800000,0,0,40c80000,0,bf800000,0,0	false	boundary	41200000,0,3f800000,20,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	-	5c9f20d58361b331
+hurt-pipeline	cow	hurt	6	generic	80000000,0,0,0,0,bf800000,0,0	true	boundary	41200000,0,80000000,20,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	-	5c9f20d58361b331
+hurt-pipeline	cow	hurt	7	generic	bf800000,0,0,0,0,bf800000,0,0	false	boundary	41200000,0,0,20,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	-	5c9f20d58361b331
+hurt-pipeline	cow	hurt	8	mob_attack	7fc00000,0,0,0,0,bf800000,0,0	true	boundary	0,0,7f7fffff,20,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	event:minecraft:entity_damage:0,0,7f7fffff,20,0,-	5c9f20d58361b331
+hurt-pipeline	cow	hurt	9	fall	7f800000,41a00000,41000000,0,0,bf800000,0,0	false	boundary	0,0,7f7fffff,20,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	event:minecraft:entity_damage:0,0,7f7fffff,20,0,-	5c9f20d58361b331
+hurt-pipeline	cow	hurt	10	generic	40b00000,40e80000,3fc00000,3fa00000,40800000,0,41300000,40400000	true	boundary	41140000,0,40400000,11,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	event:minecraft:entity_damage:41140000,0,40400000,11,0,-	5c9f20d58361b331
+hurt-pipeline	cow	hurt	11	generic	40400000,0,0,0,0,bf800000,41300000,40a00000	false	false	41200000,0,40a00000,11,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	-	5c9f20d58361b331
+hurt-pipeline	cow	hurt	12	mob_attack	40e00000,0,0,0,0,bf800000,41300000,40400000	true	boundary	40c00000,0,40400000,11,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	event:minecraft:entity_damage:40c00000,0,40400000,11,0,-	5c9f20d58361b331
+hurt-pipeline	cow	hurt	13	fall	40e00000,0,0,0,0,bf800000,41200000,40400000	false	boundary	40400000,0,40e00000,20,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	event:minecraft:entity_damage:40400000,0,40e00000,20,0,-	5c9f20d58361b331
+hurt-pipeline	cow	hurt	14	freeze	40800000,0,0,0,0,40800000,0,0	true	boundary	41200000,0,40800000,20,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	-	5c9f20d58361b331
+hurt-pipeline	cow	hurt	15	lava	40800000,0,0,0,0,c0000000,0,0	false	false	41200000,0,0,0,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	-	5c9f20d58361b331
+hurt-pipeline	cow	increment	10	generic	40b00000,40e80000,3fc00000,3fa00000,40800000,0,41300000,40400000	true	true	41140000,0,40b00000,11,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	minecraft:generic	false	false	event:minecraft:entity_damage:41140000,0,40400000,11,0,-	5c9f20d58361b331
+hurt-pipeline	cow	increment	11	generic	40400000,0,0,0,0,bf800000,41300000,40a00000	false	false	41200000,0,40a00000,11,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	-	false	false	-	5c9f20d58361b331
+hurt-pipeline	cow	increment	12	mob_attack	40e00000,0,0,0,0,bf800000,41300000,40400000	true	true	40c00000,0,40e00000,11,0,-	3fd0000000000000,bfc0000000000000,3fe0000000000000	false	false	-	minecraft:mob_attack	true	false	event:minecraft:entity_damage:40c00000,0,40400000,11,0,-	5c9f20d58361b331
+combat-armor	absent	40800000	0	0	40800000
+combat-armor	absent	40800000	41a00000	0	3f8f5c28
+combat-armor	absent	41a00000	41a00000	41000000	40ffffff
+combat-armor	absent	42c80000	41f00000	41a00000	42149249
+combat-armor	absent	bf800000	41f00000	41000000	be4ccccc
+combat-armor	absent	80000000	0	0	80000000
+combat-armor	absent	358637bd	40e00000	0	35414606
+combat-armor	absent	3e99999a	40e80000	3fc00000	3e5baa07
+combat-armor	absent	7fc00000	41a00000	0	7fc00000
+combat-armor	absent	7f800000	41a00000	41000000	7f800000
+combat-armor	absent	ff800000	41a00000	41000000	ff800000
+combat-armor	absent	7f7fffff	41f00000	41a00000	7f428f5b
+combat-armor	empty	40800000	0	0	40800000
+combat-armor	empty	40800000	41a00000	0	3f8f5c28
+combat-armor	empty	41a00000	41a00000	41000000	40ffffff
+combat-armor	empty	42c80000	41f00000	41a00000	42149249
+combat-armor	empty	bf800000	41f00000	41000000	be4ccccc
+combat-armor	empty	80000000	0	0	80000000
+combat-armor	empty	358637bd	40e00000	0	35414606
+combat-armor	empty	3e99999a	40e80000	3fc00000	3e5baa07
+combat-armor	empty	7fc00000	41a00000	0	7fc00000
+combat-armor	empty	7f800000	41a00000	41000000	7f800000
+combat-armor	empty	ff800000	41a00000	41000000	ff800000
+combat-armor	empty	7f7fffff	41f00000	41a00000	7f428f5b
+combat-armor	stone	40800000	0	0	40800000
+combat-armor	stone	40800000	41a00000	0	3f8f5c28
+combat-armor	stone	41a00000	41a00000	41000000	40ffffff
+combat-armor	stone	42c80000	41f00000	41a00000	42149249
+combat-armor	stone	bf800000	41f00000	41000000	be4ccccc
+combat-armor	stone	80000000	0	0	80000000
+combat-armor	stone	358637bd	40e00000	0	35414606
+combat-armor	stone	3e99999a	40e80000	3fc00000	3e5baa07
+combat-armor	stone	7fc00000	41a00000	0	7fc00000
+combat-armor	stone	7f800000	41a00000	41000000	7f800000
+combat-armor	stone	ff800000	41a00000	41000000	ff800000
+combat-armor	stone	7f7fffff	41f00000	41a00000	7f428f5b
+combat-magic	3f800000	0	3f800000
+combat-magic	3f800000	bf800000	3f800000
+combat-magic	3f800000	41a00000	3e4ccccc
+combat-magic	3f800000	41c80000	3e4ccccc
+combat-magic	40e9999a	40800000	40c43959
+combat-magic	80000000	41a00000	80000000
+combat-magic	0	41a00000	0
+combat-magic	bf800000	40800000	bf570a3e
+combat-magic	7f7fffff	41a00000	7e4ccccb
+combat-magic	7f800000	40800000	7f800000
+combat-magic	7fc00000	40800000	7fc00000
+combat-magic	40800000	7fc00000	7fc00000
+damage-weapon	absent	null
+damage-weapon	selected0	minecraft:stone
+damage-weapon	selected1	minecraft:gold_ingot
+damage-weapon	retained-empty	minecraft:air
+damage-weapon	cow-direct	minecraft:iron_axe
+damage-weapon	tnt-direct	null
+combat-tracker	false	0	check	0	20	false,false,0,0,0,0;-	-
+combat-tracker	false	1	env	1	20	true,false,1,0,0,0;env,40800000,-,40a80000	-
+combat-tracker	false	2	check	101	20	true,false,1,0,0,0;env,40800000,-,40a80000	-
+combat-tracker	false	3	check	102	20	false,false,1,0,102,102;-	-
+combat-tracker	false	4	living	103	20	true,true,103,103,103,0;living,40800000,-,40a80000	enter:true,true,103,103,103,0;living,40800000,-,40a80000
+combat-tracker	false	5	env	104	20	true,true,104,103,103,1;living,40800000,-,40a80000/env,40800000,-,40a80000	-
+combat-tracker	false	6	check	404	20	true,true,104,103,103,301;living,40800000,-,40a80000/env,40800000,-,40a80000	-
+combat-tracker	false	7	check	405	20	false,false,104,103,405,302;-	leave:false,false,104,103,405,302;living,40800000,-,40a80000/env,40800000,-,40a80000
+combat-tracker	false	8	living	406	20	true,true,406,406,406,0;living,40800000,-,40a80000	enter:true,true,406,406,406,0;living,40800000,-,40a80000
+combat-tracker	false	9	check	407	0	false,false,406,406,407,1;-	leave:false,false,406,406,407,1;living,40800000,-,40a80000
+combat-tracker	false	10	living	408	0	true,false,408,406,407,1;living,40800000,-,40a80000	-
+combat-tracker	false	11	check	409	NaN	false,false,408,406,409,3;-	-
+combat-tracker	false	12	living	2147483643	20	true,true,2147483643,2147483643,2147483643,0;living,40800000,-,40a80000	enter:true,true,2147483643,2147483643,2147483643,0;living,40800000,-,40a80000
+combat-tracker	false	13	check	-2147483352	20	false,false,2147483643,2147483643,-2147483352,301;-	leave:false,false,2147483643,2147483643,-2147483352,301;living,40800000,-,40a80000
+combat-tracker	false	14	check	-2147483351	20	false,false,2147483643,2147483643,-2147483352,301;-	-
+combat-tracker	true	0	check	0	20	false,false,0,0,0,0;-	-
+combat-tracker	true	1	env	1	20	true,false,1,0,0,0;env,40800000,-,40a80000	-
+combat-tracker	true	2	check	101	20	true,false,1,0,0,0;env,40800000,-,40a80000	-
+combat-tracker	true	3	check	102	20	false,false,1,0,102,102;-	-
+combat-tracker	true	4	living	103	20	true,true,103,103,103,0;living,40800000,-,40a80000/env,40200000,-,40a80000	enter:true,true,103,103,103,0;living,40800000,-,40a80000|entered:true,true,103,103,103,0;living,40800000,-,40a80000/env,40200000,-,40a80000
+combat-tracker	true	5	env	104	20	true,true,104,103,103,1;living,40800000,-,40a80000/env,40200000,-,40a80000/env,40800000,-,40a80000	-
+combat-tracker	true	6	check	404	20	true,true,104,103,103,301;living,40800000,-,40a80000/env,40200000,-,40a80000/env,40800000,-,40a80000	-
+combat-tracker	true	7	check	405	20	true,false,405,103,405,302;-	leave:false,false,104,103,405,302;living,40800000,-,40a80000/env,40200000,-,40a80000/env,40800000,-,40a80000|left:true,false,405,103,405,302;living,40800000,-,40a80000/env,40200000,-,40a80000/env,40800000,-,40a80000/env,40600000,-,40a80000
+combat-tracker	true	8	living	406	20	true,true,406,406,406,0;living,40800000,-,40a80000/env,40200000,-,40a80000	enter:true,true,406,406,406,0;living,40800000,-,40a80000|entered:true,true,406,406,406,0;living,40800000,-,40a80000/env,40200000,-,40a80000
+combat-tracker	true	9	check	407	0	true,false,407,406,407,1;-	leave:false,false,406,406,407,1;living,40800000,-,40a80000/env,40200000,-,40a80000|left:true,false,407,406,407,1;living,40800000,-,40a80000/env,40200000,-,40a80000/env,40600000,-,40a80000
+combat-tracker	true	10	living	408	0	true,false,408,406,408,2;living,40800000,-,40a80000	-
+combat-tracker	true	11	check	409	NaN	false,false,408,406,409,3;-	-
+combat-tracker	true	12	living	2147483643	20	true,true,2147483643,2147483643,2147483643,0;living,40800000,-,40a80000/env,40200000,-,40a80000	enter:true,true,2147483643,2147483643,2147483643,0;living,40800000,-,40a80000|entered:true,true,2147483643,2147483643,2147483643,0;living,40800000,-,40a80000/env,40200000,-,40a80000
+combat-tracker	true	13	check	-2147483352	20	true,false,-2147483352,2147483643,-2147483352,301;-	leave:false,false,2147483643,2147483643,-2147483352,301;living,40800000,-,40a80000/env,40200000,-,40a80000|left:true,false,-2147483352,2147483643,-2147483352,301;living,40800000,-,40a80000/env,40200000,-,40a80000/env,40600000,-,40a80000
+combat-tracker	true	14	check	-2147483351	20	true,false,-2147483352,2147483643,-2147483352,301;-	-
+combat-fall-location	false	-1	env,3f800000,-,7f800000
+combat-fall-location	false	7308	env,3f800000,ladder,7f800000
+combat-fall-location	false	8799	env,3f800000,ladder,7f800000
+combat-fall-location	false	10123	env,3f800000,vines,7f800000
+combat-fall-location	false	24334	env,3f800000,weeping_vines,7f800000
+combat-fall-location	false	24360	env,3f800000,weeping_vines,7f800000
+combat-fall-location	false	24361	env,3f800000,twisting_vines,7f800000
+combat-fall-location	false	24387	env,3f800000,twisting_vines,7f800000
+combat-fall-location	false	24094	env,3f800000,scaffolding,7f800000
+combat-fall-location	false	1	env,3f800000,other_climbable,7f800000
+combat-fall-location	true	-1	env,3f800000,water,7f800000
+combat-fall-location	true	7308	env,3f800000,ladder,7f800000
+combat-fall-location	true	8799	env,3f800000,ladder,7f800000
+combat-fall-location	true	10123	env,3f800000,vines,7f800000
+combat-fall-location	true	24334	env,3f800000,weeping_vines,7f800000
+combat-fall-location	true	24360	env,3f800000,weeping_vines,7f800000
+combat-fall-location	true	24361	env,3f800000,twisting_vines,7f800000
+combat-fall-location	true	24387	env,3f800000,twisting_vines,7f800000
+combat-fall-location	true	24094	env,3f800000,scaffolding,7f800000
+combat-fall-location	true	1	env,3f800000,other_climbable,7f800000
 difficulty-read	{}	normal	false	false
 difficulty-read	{difficulty_settings:{}}	normal	false	false
 difficulty-read	{difficulty_settings:{difficulty:hard,hardcore:1b,locked:1b}}	hard	true	true
@@ -1395,6 +1864,97 @@ drop-create	3	fake	0	9223372036854775807	-9223372036854775808	c4345000,42f70000	
 drop-create	3	fake	3	9223372036854775807	-9223372036854775808	c4345000,42f70000	4021000000000000,4050547ae1400000,4021000000000000	bfa985a340000000,3fc99999a0000000,bfbff8d980000000	2	bb20b45f-d4d9-4138-bd93-cb799b3970be	4080290e,42de8433	5999	32767	00000000-0000-0001-0000-000000000002	-	3	1	32420168c4bff9e	554dcd2b40b5f04b	ae7de47c11751682	3
 drop-create	3	leftover	0	9223372036854775807	-9223372036854775808	c4345000,42f70000	-	-	-	-	-	-	-	-	-	0	0	44d96cb3708722c3	bb20b45fd4d95138	ae7de47c11751682	2
 drop-create	3	leftover	3	9223372036854775807	-9223372036854775808	c4345000,42f70000	4021000000000000,4050547ae1400000,4021000000000000	bfa985a340000000,3fc99999a0000000,bfbff8d980000000	2	bb20b45f-d4d9-4138-bd93-cb799b3970be	4080290e,42de8433	0	0	00000000-0000-0001-0000-000000000002	00000000-0000-0001-0000-000000000002	3	1	32420168c4bff9e	554dcd2b40b5f04b	ae7de47c11751682	3
+stuck-reset	base	stuck	false	0	0	41a00000	false	0	3feccccccccccccd,3ff8000000000000,3feccccccccccccd	-	-	-	b921f1dd3cbc0495
+stuck-reset	base	stuck	false	0	4015000000000000	41a00000	true	0	3feccccccccccccd,3ff8000000000000,3feccccccccccccd	-	-	-	b921f1dd3cbc0495
+stuck-reset	base	stuck	false	0	7ff8000000000000	0	true	0	3feccccccccccccd,3ff8000000000000,3feccccccccccccd	-	-	-	b921f1dd3cbc0495
+stuck-reset	base	reset	false	0	0	41a00000	false	0	bfd0000000000000,3fe0000000000000,8000000000000000	-	-	-	b921f1dd3cbc0495
+stuck-reset	base	reset	false	0	4015000000000000	41a00000	true	0	bfd0000000000000,3fe0000000000000,8000000000000000	-	-	-	b921f1dd3cbc0495
+stuck-reset	base	reset	false	0	7ff8000000000000	0	true	0	bfd0000000000000,3fe0000000000000,8000000000000000	-	-	-	b921f1dd3cbc0495
+stuck-reset	player	stuck	false	0	0	41a00000	false	0	3feccccccccccccd,3ff8000000000000,3feccccccccccccd	-	0	-	b921f1dd3cbc0495
+stuck-reset	player	stuck	false	0	4015000000000000	41a00000	true	0	3feccccccccccccd,3ff8000000000000,3feccccccccccccd	-	0	-	b921f1dd3cbc0495
+stuck-reset	player	stuck	false	0	7ff8000000000000	0	true	0	3feccccccccccccd,3ff8000000000000,3feccccccccccccd	-	0	-	b921f1dd3cbc0495
+stuck-reset	player	stuck	false	1	0	41a00000	false	0	3feccccccccccccd,3ff8000000000000,3feccccccccccccd	-	1	8000000000000000,4051900000000000,4008000000000000	b921f1dd3cbc0495
+stuck-reset	player	stuck	false	1	4015000000000000	41a00000	true	0	3feccccccccccccd,3ff8000000000000,3feccccccccccccd	-	1	8000000000000000,4051900000000000,4008000000000000	b921f1dd3cbc0495
+stuck-reset	player	stuck	false	1	7ff8000000000000	0	true	0	3feccccccccccccd,3ff8000000000000,3feccccccccccccd	-	1	8000000000000000,4051900000000000,4008000000000000	b921f1dd3cbc0495
+stuck-reset	player	stuck	false	-1	0	41a00000	false	0	3feccccccccccccd,3ff8000000000000,3feccccccccccccd	-	-1	8000000000000000,4051900000000000,4008000000000000	b921f1dd3cbc0495
+stuck-reset	player	stuck	false	-1	4015000000000000	41a00000	true	0	3feccccccccccccd,3ff8000000000000,3feccccccccccccd	-	-1	8000000000000000,4051900000000000,4008000000000000	b921f1dd3cbc0495
+stuck-reset	player	stuck	false	-1	7ff8000000000000	0	true	0	3feccccccccccccd,3ff8000000000000,3feccccccccccccd	-	-1	8000000000000000,4051900000000000,4008000000000000	b921f1dd3cbc0495
+stuck-reset	player	stuck	true	0	0	41a00000	false	0	bfd0000000000000,3fe0000000000000,8000000000000000	-	0	-	b921f1dd3cbc0495
+stuck-reset	player	stuck	true	0	4015000000000000	41a00000	true	4015000000000000	bfd0000000000000,3fe0000000000000,8000000000000000	4000000000000000,4054000000000000,c008000000000000	0	-	b921f1dd3cbc0495
+stuck-reset	player	stuck	true	0	7ff8000000000000	0	true	7ff8000000000000	bfd0000000000000,3fe0000000000000,8000000000000000	4000000000000000,4054000000000000,c008000000000000	0	-	b921f1dd3cbc0495
+stuck-reset	player	stuck	true	1	0	41a00000	false	0	bfd0000000000000,3fe0000000000000,8000000000000000	-	1	8000000000000000,4051900000000000,4008000000000000	b921f1dd3cbc0495
+stuck-reset	player	stuck	true	1	4015000000000000	41a00000	true	4015000000000000	bfd0000000000000,3fe0000000000000,8000000000000000	4000000000000000,4054000000000000,c008000000000000	1	8000000000000000,4051900000000000,4008000000000000	b921f1dd3cbc0495
+stuck-reset	player	stuck	true	1	7ff8000000000000	0	true	7ff8000000000000	bfd0000000000000,3fe0000000000000,8000000000000000	4000000000000000,4054000000000000,c008000000000000	1	8000000000000000,4051900000000000,4008000000000000	b921f1dd3cbc0495
+stuck-reset	player	stuck	true	-1	0	41a00000	false	0	bfd0000000000000,3fe0000000000000,8000000000000000	-	-1	8000000000000000,4051900000000000,4008000000000000	b921f1dd3cbc0495
+stuck-reset	player	stuck	true	-1	4015000000000000	41a00000	true	4015000000000000	bfd0000000000000,3fe0000000000000,8000000000000000	4000000000000000,4054000000000000,c008000000000000	-1	8000000000000000,4051900000000000,4008000000000000	b921f1dd3cbc0495
+stuck-reset	player	stuck	true	-1	7ff8000000000000	0	true	7ff8000000000000	bfd0000000000000,3fe0000000000000,8000000000000000	4000000000000000,4054000000000000,c008000000000000	-1	8000000000000000,4051900000000000,4008000000000000	b921f1dd3cbc0495
+stuck-reset	player	reset	false	0	0	41a00000	false	0	bfd0000000000000,3fe0000000000000,8000000000000000	-	0	8000000000000000,4051900000000000,4008000000000000	b921f1dd3cbc0495
+stuck-reset	player	reset	false	0	4015000000000000	41a00000	true	0	bfd0000000000000,3fe0000000000000,8000000000000000	-	0	8000000000000000,4051900000000000,4008000000000000	b921f1dd3cbc0495
+stuck-reset	player	reset	false	0	7ff8000000000000	0	true	0	bfd0000000000000,3fe0000000000000,8000000000000000	-	0	8000000000000000,4051900000000000,4008000000000000	b921f1dd3cbc0495
+stuck-reset	player	reset	false	1	0	41a00000	false	0	bfd0000000000000,3fe0000000000000,8000000000000000	-	1	8000000000000000,4051900000000000,4008000000000000	b921f1dd3cbc0495
+stuck-reset	player	reset	false	1	4015000000000000	41a00000	true	0	bfd0000000000000,3fe0000000000000,8000000000000000	-	1	8000000000000000,4051900000000000,4008000000000000	b921f1dd3cbc0495
+stuck-reset	player	reset	false	1	7ff8000000000000	0	true	0	bfd0000000000000,3fe0000000000000,8000000000000000	-	1	8000000000000000,4051900000000000,4008000000000000	b921f1dd3cbc0495
+stuck-reset	player	reset	false	-1	0	41a00000	false	0	bfd0000000000000,3fe0000000000000,8000000000000000	-	-1	8000000000000000,4051900000000000,4008000000000000	b921f1dd3cbc0495
+stuck-reset	player	reset	false	-1	4015000000000000	41a00000	true	0	bfd0000000000000,3fe0000000000000,8000000000000000	-	-1	8000000000000000,4051900000000000,4008000000000000	b921f1dd3cbc0495
+stuck-reset	player	reset	false	-1	7ff8000000000000	0	true	0	bfd0000000000000,3fe0000000000000,8000000000000000	-	-1	8000000000000000,4051900000000000,4008000000000000	b921f1dd3cbc0495
+stuck-reset	player	reset	true	0	0	41a00000	false	0	bfd0000000000000,3fe0000000000000,8000000000000000	-	0	8000000000000000,4051900000000000,4008000000000000	b921f1dd3cbc0495
+stuck-reset	player	reset	true	0	4015000000000000	41a00000	true	0	bfd0000000000000,3fe0000000000000,8000000000000000	-	0	8000000000000000,4051900000000000,4008000000000000	b921f1dd3cbc0495
+stuck-reset	player	reset	true	0	7ff8000000000000	0	true	0	bfd0000000000000,3fe0000000000000,8000000000000000	-	0	8000000000000000,4051900000000000,4008000000000000	b921f1dd3cbc0495
+stuck-reset	player	reset	true	1	0	41a00000	false	0	bfd0000000000000,3fe0000000000000,8000000000000000	-	1	8000000000000000,4051900000000000,4008000000000000	b921f1dd3cbc0495
+stuck-reset	player	reset	true	1	4015000000000000	41a00000	true	0	bfd0000000000000,3fe0000000000000,8000000000000000	-	1	8000000000000000,4051900000000000,4008000000000000	b921f1dd3cbc0495
+stuck-reset	player	reset	true	1	7ff8000000000000	0	true	0	bfd0000000000000,3fe0000000000000,8000000000000000	-	1	8000000000000000,4051900000000000,4008000000000000	b921f1dd3cbc0495
+stuck-reset	player	reset	true	-1	0	41a00000	false	0	bfd0000000000000,3fe0000000000000,8000000000000000	-	-1	8000000000000000,4051900000000000,4008000000000000	b921f1dd3cbc0495
+stuck-reset	player	reset	true	-1	4015000000000000	41a00000	true	0	bfd0000000000000,3fe0000000000000,8000000000000000	-	-1	8000000000000000,4051900000000000,4008000000000000	b921f1dd3cbc0495
+stuck-reset	player	reset	true	-1	7ff8000000000000	0	true	0	bfd0000000000000,3fe0000000000000,8000000000000000	-	-1	8000000000000000,4051900000000000,4008000000000000	b921f1dd3cbc0495
+fall-start	0	4000000000000000,4051800000000000,c008000000000000
+fall-start	bff0000000000000	4000000000000000,4051800000000000,c008000000000000
+fall-start	4015000000000000	4000000000000000,4054000000000000,c008000000000000
+fall-start	7ff8000000000000	4000000000000000,4051800000000000,c008000000000000
+impulse-load	absent	0	-	0	-
+impulse-load	valid	7	0,4051900000000000,4008000000000000	7	0,4051900000000000,4008000000000000
+impulse-load	negative	-1	0,4051900000000000,4008000000000000	-1	0,4051900000000000,4008000000000000
+impulse-load	wrong	0	-	0	-
+impulse-load	short	7	-	7	-
+impulse-load	bytes	7	bff0000000000000,4000000000000000,4008000000000000	7	bff0000000000000,4000000000000000,4008000000000000
+impulse-load	ints	7	bff0000000000000,4000000000000000,4008000000000000	7	bff0000000000000,4000000000000000,4008000000000000
+impulse-load	longs	7	43e0000000000000,4000000000000000,4008000000000000	7	43e0000000000000,4000000000000000,4008000000000000
+impulse-load	mixed	7	3ff0000000000000,4004000000000000,4008000000000000	7	3ff0000000000000,4004000000000000,4008000000000000
+impulse-state	enable	40	4000000000000000,4054000000000000,c008000000000000	true	true	4000000000000000,4054000000000000,c008000000000000
+impulse-state	disable	0	8000000000000000,4051900000000000,4008000000000000	false	true	0,4051900000000000,4008000000000000
+impulse-state	max-grace	47	8000000000000000,4051900000000000,4008000000000000	true	true	0,4051900000000000,4008000000000000
+impulse-state	reset	0	-	false	false	-
+equipment-break	mainhand	absent	event:47:false;stat:minecraft:stone:1	[{base:0.2d,id:"minecraft:submerged_mining_speed"}]	1	1
+equipment-break	mainhand	installed	event:47:true;stat:minecraft:stone:1	[{base:0.2d,id:"minecraft:submerged_mining_speed"}]	1	1
+equipment-break	mainhand	other-slot	event:47:false;stat:minecraft:stone:1	[]	0	0
+equipment-break	mainhand	empty	event:47:false;stat:minecraft:air:1	[]	0	0
+equipment-break	offhand	absent	event:48:false;stat:minecraft:stone:1	[{base:0.2d,id:"minecraft:submerged_mining_speed"}]	1	1
+equipment-break	offhand	installed	event:48:true;stat:minecraft:stone:1	[{base:0.2d,id:"minecraft:submerged_mining_speed"}]	1	1
+equipment-break	offhand	other-slot	event:48:false;stat:minecraft:stone:1	[]	0	0
+equipment-break	offhand	empty	event:48:false;stat:minecraft:air:1	[]	0	0
+equipment-break	feet	absent	event:52:false;stat:minecraft:stone:1	[{base:0.2d,id:"minecraft:submerged_mining_speed"}]	1	1
+equipment-break	feet	installed	event:52:true;stat:minecraft:stone:1	[{base:0.2d,id:"minecraft:submerged_mining_speed"}]	1	1
+equipment-break	feet	other-slot	event:52:false;stat:minecraft:stone:1	[]	0	0
+equipment-break	feet	empty	event:52:false;stat:minecraft:air:1	[]	0	0
+equipment-break	legs	absent	event:51:false;stat:minecraft:stone:1	[{base:0.2d,id:"minecraft:submerged_mining_speed"}]	1	1
+equipment-break	legs	installed	event:51:true;stat:minecraft:stone:1	[{base:0.2d,id:"minecraft:submerged_mining_speed"}]	1	1
+equipment-break	legs	other-slot	event:51:false;stat:minecraft:stone:1	[]	0	0
+equipment-break	legs	empty	event:51:false;stat:minecraft:air:1	[]	0	0
+equipment-break	chest	absent	event:50:false;stat:minecraft:stone:1	[{base:0.2d,id:"minecraft:submerged_mining_speed"}]	1	1
+equipment-break	chest	installed	event:50:true;stat:minecraft:stone:1	[{base:0.2d,id:"minecraft:submerged_mining_speed"}]	1	1
+equipment-break	chest	other-slot	event:50:false;stat:minecraft:stone:1	[]	0	0
+equipment-break	chest	empty	event:50:false;stat:minecraft:air:1	[]	0	0
+equipment-break	head	absent	event:49:false;stat:minecraft:stone:1	[{base:0.2d,id:"minecraft:submerged_mining_speed"}]	1	1
+equipment-break	head	installed	event:49:true;stat:minecraft:stone:1	[{base:0.2d,id:"minecraft:submerged_mining_speed"}]	1	1
+equipment-break	head	other-slot	event:49:false;stat:minecraft:stone:1	[]	0	0
+equipment-break	head	empty	event:49:false;stat:minecraft:air:1	[]	0	0
+equipment-break	body	absent	event:65:false;stat:minecraft:stone:1	[{base:0.2d,id:"minecraft:submerged_mining_speed"}]	1	1
+equipment-break	body	installed	event:65:true;stat:minecraft:stone:1	[{base:0.2d,id:"minecraft:submerged_mining_speed"}]	1	1
+equipment-break	body	other-slot	event:65:false;stat:minecraft:stone:1	[]	0	0
+equipment-break	body	empty	event:65:false;stat:minecraft:air:1	[]	0	0
+equipment-break	saddle	absent	event:68:false;stat:minecraft:stone:1	[{base:0.2d,id:"minecraft:submerged_mining_speed"}]	1	1
+equipment-break	saddle	installed	event:68:true;stat:minecraft:stone:1	[{base:0.2d,id:"minecraft:submerged_mining_speed"}]	1	1
+equipment-break	saddle	other-slot	event:68:false;stat:minecraft:stone:1	[]	0	0
+equipment-break	saddle	empty	event:68:false;stat:minecraft:air:1	[]	0	0
 entity-equipment-fact	player	head	1	minecraft:leather_boots	true
 entity-equipment-fact	player	head	0	minecraft:air	false
 entity-equipment-fact	player	head	-1	minecraft:air	false
@@ -1891,6 +2451,336 @@ living-landing	8	0	true	event:minecraft:step;event:minecraft:hit_ground
 living-landing	9	400a000000000000	false	-
 living-landing	10	0	true	event:minecraft:step;particles:1:4021000000000000,4050100000000000,4021000000000000:375:0,0,0:3fc3333340000000;event:minecraft:hit_ground
 living-landing	11	0	true	event:minecraft:step;particles:1:4020000000000000,4050100000000000,4020000000000000:40:0,0,0:3fc3333340000000;event:minecraft:hit_ground
+fall-calculate	fff0000000000000	0	0	0	0
+fall-calculate	bff0000000000000	0	0	0	0
+fall-calculate	8000000000000000	0	0	0	0
+fall-calculate	0	3e4ccccd	0	0	0
+fall-calculate	3ffffffef39085f5	3e4ccccd	0	0	0
+fall-calculate	4000000000000000	3e4ccccd	4008000000000000	0	0
+fall-calculate	4007fffef39085f5	3f800000	4008000000000000	0	0
+fall-calculate	4007ffff79c842fa	3f800000	4008000000000000	3fc0000000000000	0
+fall-calculate	4008000000000000	3f800000	4008000000000000	3fc0000000000000	0
+fall-calculate	400a000000000000	3fc00000	4008000000000000	3fc0000000000000	0
+fall-calculate	4010000000000000	3fc00000	4022800000000000	3fc0000000000000	-1
+fall-calculate	4018000000000000	3fc00000	4022800000000000	3fc0000000000000	-1
+fall-calculate	4022800000000000	bf800000	4022800000000000	3fc0000000000000	-1
+fall-calculate	4034000000000000	bf800000	4022800000000000	3fc0000000000000	-2
+fall-calculate	7ff0000000000000	bf800000	4022800000000000	3ff0000000000000	-2147483648
+fall-calculate	7ff8000000000000	7f800000	0	3ff0000000000000	0
+fall-calculate	fff0000000000000	7f800000	0	3ff0000000000000	-2147483648
+fall-calculate	bff0000000000000	7f800000	0	3ff0000000000000	-2147483648
+fall-calculate	8000000000000000	7fc00000	0	3ff0000000000000	0
+fall-calculate	0	7fc00000	0	3ff0000000000000	0
+fall-calculate	3ffffffef39085f5	7fc00000	4008000000000000	3ff0000000000000	0
+fall-calculate	4000000000000000	0	4008000000000000	4004000000000000	0
+fall-calculate	4007fffef39085f5	0	4008000000000000	4004000000000000	0
+fall-calculate	4007ffff79c842fa	0	4008000000000000	4004000000000000	0
+fall-calculate	4008000000000000	3e4ccccd	4008000000000000	4004000000000000	0
+fall-calculate	400a000000000000	3e4ccccd	4022800000000000	4004000000000000	-3
+fall-calculate	4010000000000000	3e4ccccd	4022800000000000	4004000000000000	-3
+fall-calculate	4018000000000000	3f800000	4022800000000000	4004000000000000	-9
+fall-calculate	4022800000000000	3f800000	4022800000000000	0	0
+fall-calculate	4034000000000000	3f800000	4022800000000000	0	0
+fall-calculate	7ff0000000000000	3fc00000	0	0	0
+fall-calculate	7ff8000000000000	3fc00000	0	0	0
+fall-calculate	fff0000000000000	3fc00000	0	0	0
+fall-calculate	bff0000000000000	bf800000	0	0	0
+fall-calculate	8000000000000000	bf800000	0	0	0
+fall-calculate	0	bf800000	4008000000000000	3fc0000000000000	0
+fall-calculate	3ffffffef39085f5	7f800000	4008000000000000	3fc0000000000000	-2147483648
+fall-calculate	4000000000000000	7f800000	4008000000000000	3fc0000000000000	-2147483648
+fall-calculate	4007fffef39085f5	7f800000	4008000000000000	3fc0000000000000	-2147483648
+fall-calculate	4007ffff79c842fa	7fc00000	4008000000000000	3fc0000000000000	0
+fall-calculate	4008000000000000	7fc00000	4022800000000000	3fc0000000000000	0
+fall-calculate	400a000000000000	7fc00000	4022800000000000	3fc0000000000000	0
+fall-calculate	4010000000000000	0	4022800000000000	3ff0000000000000	0
+fall-calculate	4018000000000000	0	4022800000000000	3ff0000000000000	0
+fall-calculate	4022800000000000	0	4022800000000000	3ff0000000000000	0
+fall-calculate	4034000000000000	3e4ccccd	0	3ff0000000000000	4
+fall-calculate	7ff0000000000000	3e4ccccd	0	3ff0000000000000	2147483647
+fall-calculate	7ff8000000000000	3e4ccccd	0	3ff0000000000000	0
+fall-calculate	fff0000000000000	3f800000	0	3ff0000000000000	-2147483648
+fall-calculate	bff0000000000000	3f800000	0	4004000000000000	-3
+fall-calculate	8000000000000000	3f800000	4008000000000000	4004000000000000	-8
+fall-calculate	0	3fc00000	4008000000000000	4004000000000000	-12
+fall-calculate	3ffffffef39085f5	3fc00000	4008000000000000	4004000000000000	-4
+fall-calculate	4000000000000000	3fc00000	4008000000000000	4004000000000000	-4
+fall-calculate	4007fffef39085f5	bf800000	4008000000000000	4004000000000000	0
+fall-calculate	4007ffff79c842fa	bf800000	4022800000000000	4004000000000000	15
+fall-calculate	4008000000000000	bf800000	4022800000000000	0	0
+fall-calculate	400a000000000000	7f800000	4022800000000000	0	0
+fall-calculate	4010000000000000	7f800000	4022800000000000	0	0
+fall-calculate	4018000000000000	7f800000	4022800000000000	0	0
+fall-calculate	4022800000000000	7fc00000	0	0	0
+fall-calculate	4034000000000000	7fc00000	0	0	0
+fall-calculate	7ff0000000000000	7fc00000	0	0	0
+fall-calculate	7ff8000000000000	0	0	3fc0000000000000	0
+fall-calculate	fff0000000000000	0	0	3fc0000000000000	0
+fall-calculate	bff0000000000000	0	4008000000000000	3fc0000000000000	0
+fall-calculate	8000000000000000	3e4ccccd	4008000000000000	3fc0000000000000	-1
+fall-calculate	0	3e4ccccd	4008000000000000	3fc0000000000000	-1
+fall-calculate	3ffffffef39085f5	3e4ccccd	4008000000000000	3fc0000000000000	-1
+fall-calculate	4000000000000000	3f800000	4008000000000000	3fc0000000000000	-1
+fall-calculate	4007fffef39085f5	3f800000	4022800000000000	3ff0000000000000	-7
+fall-calculate	4007ffff79c842fa	3f800000	4022800000000000	3ff0000000000000	-7
+fall-calculate	4008000000000000	3fc00000	4022800000000000	3ff0000000000000	-10
+fall-calculate	400a000000000000	3fc00000	4022800000000000	3ff0000000000000	-9
+fall-calculate	4010000000000000	3fc00000	4022800000000000	3ff0000000000000	-8
+fall-calculate	4018000000000000	bf800000	0	3ff0000000000000	-7
+fall-calculate	4022800000000000	bf800000	0	3ff0000000000000	-10
+fall-calculate	4034000000000000	bf800000	0	4004000000000000	-51
+fall-calculate	7ff0000000000000	7f800000	0	4004000000000000	2147483647
+fall-calculate	7ff8000000000000	7f800000	0	4004000000000000	0
+fall-apply	cow	0	fff0000000000000	0	0	0	none	0	true	true	true	false	none,0	-
+fall-apply	cow	1	bff0000000000000	0	0	0	4051800000000000	40	false	false	false	false	none,0	-
+fall-apply	cow	2	8000000000000000	0	0	0	4051800000000000	-1	false	false	false	false	none,0	-
+fall-apply	cow	3	0	0	0	0	404f800000000000	0	false	false	true	false	none,0	-
+fall-apply	cow	4	3ffffffef39085f5	3e4ccccd	0	0	4050000000000000	0	true	false	false	false	none,0	-
+fall-apply	cow	5	4000000000000000	3e4ccccd	4008000000000000	0	none	0	false	false	false	false	none,0	-
+fall-apply	cow	6	4007fffef39085f5	3e4ccccd	4008000000000000	3fc0000000000000	4051800000000000	40	false	false	true	false	4051800000000000,40	-
+fall-apply	cow	7	4007ffff79c842fa	3e4ccccd	4008000000000000	3fc0000000000000	4051800000000000	-1	false	true	false	false	4051800000000000,-1	-
+fall-apply	cow	8	4008000000000000	3f800000	4008000000000000	3fc0000000000000	404f800000000000	0	true	false	false	false	none,0	-
+fall-apply	cow	9	400a000000000000	3f800000	4008000000000000	3fc0000000000000	4050000000000000	0	false	false	true	false	none,0	-
+fall-apply	cow	10	4010000000000000	3f800000	4022800000000000	3fc0000000000000	none	0	false	false	false	false	none,0	-
+fall-apply	cow	11	4018000000000000	3f800000	4022800000000000	3fc0000000000000	4051800000000000	40	false	false	false	false	4051800000000000,40	-
+fall-apply	cow	12	4022800000000000	3fc00000	4022800000000000	3ff0000000000000	4051800000000000	-1	true	false	true	false	4051800000000000,-1	-
+fall-apply	cow	13	4034000000000000	3fc00000	4022800000000000	3ff0000000000000	404f800000000000	0	false	false	false	false	none,0	-
+fall-apply	cow	14	7ff0000000000000	3fc00000	4022800000000000	3ff0000000000000	4050000000000000	0	false	true	false	false	none,0	-
+fall-apply	cow	15	7ff8000000000000	3fc00000	0	3ff0000000000000	none	0	false	false	true	false	none,0	-
+fall-apply	cow	16	fff0000000000000	bf800000	0	3ff0000000000000	4051800000000000	40	true	false	false	true	none,0	sound:minecraft:entity.generic.big_fall:3f800000:3f800000;hurt:minecraft:fall:4f000000:none,0
+fall-apply	cow	17	bff0000000000000	bf800000	0	3ff0000000000000	4051800000000000	-1	false	false	false	false	none,0	-
+fall-apply	cow	18	8000000000000000	bf800000	0	4004000000000000	404f800000000000	0	false	false	true	true	none,0	sound:minecraft:entity.generic.small_fall:3f800000:3f800000;hurt:minecraft:fall:40000000:none,0
+fall-apply	cow	19	0	bf800000	0	4004000000000000	4050000000000000	0	false	false	false	false	none,0	-
+fall-apply	cow	20	3ffffffef39085f5	7f800000	4008000000000000	4004000000000000	none	0	true	false	false	false	none,0	-
+fall-apply	cow	21	4000000000000000	7f800000	4008000000000000	4004000000000000	4051800000000000	40	false	true	true	false	4051800000000000,40	-
+fall-apply	cow	22	4007fffef39085f5	7f800000	4008000000000000	4004000000000000	4051800000000000	-1	false	false	false	false	4051800000000000,-1	-
+fall-apply	cow	23	4007ffff79c842fa	7f800000	4008000000000000	4004000000000000	404f800000000000	0	false	false	false	false	none,0	-
+fall-apply	cow	24	4008000000000000	7fc00000	4008000000000000	0	4050000000000000	0	true	false	true	false	none,0	-
+fall-apply	cow	25	400a000000000000	7fc00000	4022800000000000	0	none	0	false	false	false	false	none,0	-
+fall-apply	cow	26	4010000000000000	7fc00000	4022800000000000	0	4051800000000000	40	false	false	false	false	4051800000000000,40	-
+fall-apply	cow	27	4018000000000000	7fc00000	4022800000000000	0	4051800000000000	-1	false	false	true	false	4051800000000000,-1	-
+fall-apply	cow	28	4022800000000000	0	4022800000000000	0	404f800000000000	0	true	true	false	false	none,0	-
+fall-apply	cow	29	4034000000000000	0	4022800000000000	0	4050000000000000	0	false	false	false	false	none,0	-
+fall-apply	cow	30	7ff0000000000000	0	0	3fc0000000000000	none	0	false	false	true	false	none,0	-
+fall-apply	cow	31	7ff8000000000000	0	0	3fc0000000000000	4051800000000000	40	false	false	false	false	4051800000000000,40	-
+fall-apply	player	0	fff0000000000000	0	0	0	none	0	true	true	true	false	none,0	-
+fall-apply	player	1	bff0000000000000	0	0	0	4051800000000000	40	false	false	false	false	none,0	-
+fall-apply	player	2	8000000000000000	0	0	0	4051800000000000	-1	false	false	false	false	none,0	-
+fall-apply	player	3	0	0	0	0	404f800000000000	0	false	false	true	false	none,0	-
+fall-apply	player	4	3ffffffef39085f5	3e4ccccd	0	0	4050000000000000	0	true	false	false	false	none,0	-
+fall-apply	player	5	4000000000000000	3e4ccccd	4008000000000000	0	none	0	false	false	false	false	none,0	stat:minecraft.custom:minecraft.fall_one_cm:200
+fall-apply	player	6	4007fffef39085f5	3e4ccccd	4008000000000000	3fc0000000000000	4051800000000000	40	false	false	true	false	4051800000000000,40	stat:minecraft.custom:minecraft.fall_one_cm:300
+fall-apply	player	7	4007ffff79c842fa	3e4ccccd	4008000000000000	3fc0000000000000	4051800000000000	-1	false	true	false	false	4051800000000000,-1	-
+fall-apply	player	8	4008000000000000	3f800000	4008000000000000	3fc0000000000000	404f800000000000	0	true	false	false	false	none,0	stat:minecraft.custom:minecraft.fall_one_cm:300
+fall-apply	player	9	400a000000000000	3f800000	4008000000000000	3fc0000000000000	4050000000000000	0	false	false	true	false	none,0	stat:minecraft.custom:minecraft.fall_one_cm:325
+fall-apply	player	10	4010000000000000	3f800000	4022800000000000	3fc0000000000000	none	0	false	false	false	false	none,0	stat:minecraft.custom:minecraft.fall_one_cm:400
+fall-apply	player	11	4018000000000000	3f800000	4022800000000000	3fc0000000000000	4051800000000000	40	false	false	false	false	4051800000000000,40	stat:minecraft.custom:minecraft.fall_one_cm:600
+fall-apply	player	12	4022800000000000	3fc00000	4022800000000000	3ff0000000000000	4051800000000000	-1	true	false	true	false	4051800000000000,-1	stat:minecraft.custom:minecraft.fall_one_cm:925
+fall-apply	player	13	4034000000000000	3fc00000	4022800000000000	3ff0000000000000	404f800000000000	0	false	false	false	false	none,0	stat:minecraft.custom:minecraft.fall_one_cm:2000
+fall-apply	player	14	7ff0000000000000	3fc00000	4022800000000000	3ff0000000000000	4050000000000000	0	false	true	false	false	4050000000000000,0	-
+fall-apply	player	15	7ff8000000000000	3fc00000	0	3ff0000000000000	none	0	false	false	true	false	none,0	-
+fall-apply	player	16	fff0000000000000	bf800000	0	3ff0000000000000	4051800000000000	40	true	false	false	true	none,0	sound:minecraft:entity.player.big_fall:3f800000:3f800000;hurt:minecraft:fall:4f000000:none,0
+fall-apply	player	17	bff0000000000000	bf800000	0	3ff0000000000000	4051800000000000	-1	false	false	false	false	none,0	-
+fall-apply	player	18	8000000000000000	bf800000	0	4004000000000000	404f800000000000	0	false	false	true	true	none,0	sound:minecraft:entity.player.small_fall:3f800000:3f800000;hurt:minecraft:fall:40000000:none,0
+fall-apply	player	19	0	bf800000	0	4004000000000000	4050000000000000	0	false	false	false	false	none,0	-
+fall-apply	player	20	3ffffffef39085f5	7f800000	4008000000000000	4004000000000000	none	0	true	false	false	false	none,0	-
+fall-apply	player	21	4000000000000000	7f800000	4008000000000000	4004000000000000	4051800000000000	40	false	true	true	false	4051800000000000,40	-
+fall-apply	player	22	4007fffef39085f5	7f800000	4008000000000000	4004000000000000	4051800000000000	-1	false	false	false	false	4051800000000000,-1	stat:minecraft.custom:minecraft.fall_one_cm:300
+fall-apply	player	23	4007ffff79c842fa	7f800000	4008000000000000	4004000000000000	404f800000000000	0	false	false	false	false	none,0	stat:minecraft.custom:minecraft.fall_one_cm:300
+fall-apply	player	24	4008000000000000	7fc00000	4008000000000000	0	4050000000000000	0	true	false	true	false	none,0	stat:minecraft.custom:minecraft.fall_one_cm:300
+fall-apply	player	25	400a000000000000	7fc00000	4022800000000000	0	none	0	false	false	false	false	none,0	stat:minecraft.custom:minecraft.fall_one_cm:325
+fall-apply	player	26	4010000000000000	7fc00000	4022800000000000	0	4051800000000000	40	false	false	false	false	4051800000000000,40	stat:minecraft.custom:minecraft.fall_one_cm:400
+fall-apply	player	27	4018000000000000	7fc00000	4022800000000000	0	4051800000000000	-1	false	false	true	false	4051800000000000,-1	stat:minecraft.custom:minecraft.fall_one_cm:600
+fall-apply	player	28	4022800000000000	0	4022800000000000	0	404f800000000000	0	true	true	false	false	404f800000000000,0	-
+fall-apply	player	29	4034000000000000	0	4022800000000000	0	4050000000000000	0	false	false	false	false	none,0	stat:minecraft.custom:minecraft.fall_one_cm:2000
+fall-apply	player	30	7ff0000000000000	0	0	3fc0000000000000	none	0	false	false	true	false	none,0	stat:minecraft.custom:minecraft.fall_one_cm:-1
+fall-apply	player	31	7ff8000000000000	0	0	3fc0000000000000	4051800000000000	40	false	false	false	false	4051800000000000,40	-
+fall-passengers	0	true	none,0	sound:minecraft:entity.generic.small_fall:3f800000:3f800000;sound:minecraft:block.stone.fall:3f000000:3f400000;hurt:minecraft:drown:40400000:none,0
+fall-passengers	40	true	4051400000000000,40	sound:minecraft:entity.generic.small_fall:3f800000:3f800000;sound:minecraft:block.stone.fall:3f000000:3f400000;hurt:minecraft:drown:40400000:none,0
+swing-state	-2	0	start	0	1	true	0,1,-2,-2:0:0:0	0,0,0,0
+swing-state	-2	1	tick	0	1	-	none:1:0:0	0,0,0,0
+swing-state	-2	2	start	0	1	true	0,1,-2,-2:0:0:0	0,0,0,0
+swing-state	-2	3	tick	0	1	-	none:1:0:0	0,0,0,0
+swing-state	-2	4	tick	0	1	-	none:1:0:0	0,0,0,0
+swing-state	-2	5	tick	0	1	-	none:1:0:0	0,0,0,0
+swing-state	-2	6	start	0	1	true	0,1,-2,-2:0:0:0	0,0,0,0
+swing-state	-2	7	tick	0	1	-	none:1:0:0	0,0,0,0
+swing-state	-2	8	tick	0	1	-	none:1:0:0	0,0,0,0
+swing-state	-2	9	start	1	1	true	1,1,-2,-2:0:0:0	0,0,0,0
+swing-state	-2	10	tick	1	1	-	none:1:0:0	0,0,0,0
+swing-state	-2	11	tick	1	1	-	none:1:0:0	0,0,0,0
+swing-state	-2	12	tick	1	1	-	none:1:0:0	0,0,0,0
+swing-state	-2	13	start	1	2	true	1,2,-2,-2:0:0:0	0,0,0,0
+swing-state	-2	14	tick	1	2	-	none:1:0:0	0,0,0,0
+swing-state	-2	15	tick	1	2	-	none:1:0:0	0,0,0,0
+swing-state	-1	0	start	0	1	true	0,1,-1,-1:0:0:0	0,0,0,0
+swing-state	-1	1	tick	0	1	-	none:1:0:0	0,0,0,0
+swing-state	-1	2	start	0	1	true	0,1,-1,-1:0:0:0	0,0,0,0
+swing-state	-1	3	tick	0	1	-	none:1:0:0	0,0,0,0
+swing-state	-1	4	tick	0	1	-	none:1:0:0	0,0,0,0
+swing-state	-1	5	tick	0	1	-	none:1:0:0	0,0,0,0
+swing-state	-1	6	start	0	1	true	0,1,-1,-1:0:0:0	0,0,0,0
+swing-state	-1	7	tick	0	1	-	none:1:0:0	0,0,0,0
+swing-state	-1	8	tick	0	1	-	none:1:0:0	0,0,0,0
+swing-state	-1	9	start	1	1	true	1,1,-1,-1:0:0:0	0,0,0,0
+swing-state	-1	10	tick	1	1	-	none:1:0:0	0,0,0,0
+swing-state	-1	11	tick	1	1	-	none:1:0:0	0,0,0,0
+swing-state	-1	12	tick	1	1	-	none:1:0:0	0,0,0,0
+swing-state	-1	13	start	1	2	true	1,2,-1,-1:0:0:0	0,0,0,0
+swing-state	-1	14	tick	1	2	-	none:1:0:0	0,0,0,0
+swing-state	-1	15	tick	1	2	-	none:1:0:0	0,0,0,0
+swing-state	0	0	start	0	1	true	0,1,0,0:0:0:0	0,0,0,0
+swing-state	0	1	tick	0	1	-	0,1,0,0:1:0:0	0,0,0,0
+swing-state	0	2	start	0	1	true	0,1,0,0:0:0:0	0,0,0,0
+swing-state	0	3	tick	0	1	-	0,1,0,0:1:0:0	0,0,0,0
+swing-state	0	4	tick	0	1	-	none:2:0:0	0,0,0,0
+swing-state	0	5	tick	0	1	-	none:2:0:0	0,0,0,0
+swing-state	0	6	start	0	1	true	0,1,0,0:0:0:0	0,0,0,0
+swing-state	0	7	tick	0	1	-	0,1,0,0:1:0:0	0,0,0,0
+swing-state	0	8	tick	0	1	-	none:2:0:0	0,0,0,0
+swing-state	0	9	start	1	1	true	1,1,0,0:0:0:0	0,0,0,0
+swing-state	0	10	tick	1	1	-	1,1,0,0:1:0:0	0,0,0,0
+swing-state	0	11	tick	1	1	-	none:2:0:0	0,0,0,0
+swing-state	0	12	tick	1	1	-	none:2:0:0	0,0,0,0
+swing-state	0	13	start	1	2	true	1,2,0,0:0:0:0	0,0,0,0
+swing-state	0	14	tick	1	2	-	1,2,0,0:1:0:0	0,0,0,0
+swing-state	0	15	tick	1	2	-	none:2:0:0	0,0,0,0
+swing-state	1	0	start	0	1	true	0,1,1,1:0:0:0	0,0,0,0
+swing-state	1	1	tick	0	1	-	0,1,1,1:1:0:0	0,0,0,0
+swing-state	1	2	start	0	1	true	0,1,1,1:0:0:0	0,0,0,0
+swing-state	1	3	tick	0	1	-	0,1,1,1:1:0:0	0,0,0,0
+swing-state	1	4	tick	0	1	-	0,1,1,1:2:0:3f800000	be800000,0,3f000000,3fc00000
+swing-state	1	5	tick	0	1	-	none:3:3f800000:0	3f800000,3f800000,3f800000,3f800000
+swing-state	1	6	start	0	1	true	0,1,1,1:0:0:0	0,0,0,0
+swing-state	1	7	tick	0	1	-	0,1,1,1:1:0:0	0,0,0,0
+swing-state	1	8	tick	0	1	-	0,1,1,1:2:0:3f800000	be800000,0,3f000000,3fc00000
+swing-state	1	9	start	1	1	true	1,1,1,1:0:0:0	0,0,0,0
+swing-state	1	10	tick	1	1	-	1,1,1,1:1:0:0	0,0,0,0
+swing-state	1	11	tick	1	1	-	1,1,1,1:2:0:3f800000	be800000,0,3f000000,3fc00000
+swing-state	1	12	tick	1	1	-	none:3:3f800000:0	3f800000,3f800000,3f800000,3f800000
+swing-state	1	13	start	1	2	true	1,2,1,1:0:0:0	0,0,0,0
+swing-state	1	14	tick	1	2	-	1,2,1,1:1:0:0	0,0,0,0
+swing-state	1	15	tick	1	2	-	1,2,1,1:2:0:3f800000	be800000,0,3f000000,3fc00000
+swing-state	2	0	start	0	1	true	0,1,2,2:0:0:0	0,0,0,0
+swing-state	2	1	tick	0	1	-	0,1,2,2:1:0:0	0,0,0,0
+swing-state	2	2	start	0	1	false	0,1,2,2:1:0:0	0,0,0,0
+swing-state	2	3	tick	0	1	-	0,1,2,2:2:0:3f000000	be000000,0,3e800000,3f400000
+swing-state	2	4	tick	0	1	-	0,1,2,2:3:3f000000:3f800000	3ec00000,3f000000,3f400000,3fa00000
+swing-state	2	5	tick	0	1	-	none:4:3f800000:0	3f800000,3f800000,3f800000,3f800000
+swing-state	2	6	start	0	1	true	0,1,2,2:0:0:0	0,0,0,0
+swing-state	2	7	tick	0	1	-	0,1,2,2:1:0:0	0,0,0,0
+swing-state	2	8	tick	0	1	-	0,1,2,2:2:0:3f000000	be000000,0,3e800000,3f400000
+swing-state	2	9	start	1	1	true	1,1,2,2:0:0:0	0,0,0,0
+swing-state	2	10	tick	1	1	-	1,1,2,2:1:0:0	0,0,0,0
+swing-state	2	11	tick	1	1	-	1,1,2,2:2:0:3f000000	be000000,0,3e800000,3f400000
+swing-state	2	12	tick	1	1	-	1,1,2,2:3:3f000000:3f800000	3ec00000,3f000000,3f400000,3fa00000
+swing-state	2	13	start	1	2	true	1,2,2,2:0:0:0	0,0,0,0
+swing-state	2	14	tick	1	2	-	1,2,2,2:1:0:0	0,0,0,0
+swing-state	2	15	tick	1	2	-	1,2,2,2:2:0:3f000000	be000000,0,3e800000,3f400000
+swing-state	6	0	start	0	1	true	0,1,6,6:0:0:0	0,0,0,0
+swing-state	6	1	tick	0	1	-	0,1,6,6:1:0:0	0,0,0,0
+swing-state	6	2	start	0	1	false	0,1,6,6:1:0:0	0,0,0,0
+swing-state	6	3	tick	0	1	-	0,1,6,6:2:0:3e2aaaab	bd2aaaab,0,3daaaaab,3e800000
+swing-state	6	4	tick	0	1	-	0,1,6,6:3:3e2aaaab:3eaaaaab	3e000000,3e2aaaab,3e800000,3ed55556
+swing-state	6	5	tick	0	1	-	0,1,6,6:4:3eaaaaab:3f000000	3e955556,3eaaaaab,3ed55556,3f155555
+swing-state	6	6	start	0	1	true	0,1,6,6:0:3eaaaaab:3f000000	3e955556,3eaaaaab,3ed55556,3f155555
+swing-state	6	7	tick	0	1	-	0,1,6,6:1:3f000000:0	3ec00000,3f000000,3f400000,3fa00000
+swing-state	6	8	tick	0	1	-	0,1,6,6:2:0:3e2aaaab	bd2aaaab,0,3daaaaab,3e800000
+swing-state	6	9	start	1	1	false	0,1,6,6:2:0:3e2aaaab	bd2aaaab,0,3daaaaab,3e800000
+swing-state	6	10	tick	1	1	-	0,1,6,6:3:3e2aaaab:3eaaaaab	3e000000,3e2aaaab,3e800000,3ed55556
+swing-state	6	11	tick	1	1	-	0,1,6,6:4:3eaaaaab:3f000000	3e955556,3eaaaaab,3ed55556,3f155555
+swing-state	6	12	tick	1	1	-	0,1,6,6:5:3f000000:3f2aaaab	3eeaaaaa,3f000000,3f155556,3f400000
+swing-state	6	13	start	1	2	true	1,2,6,6:0:0:0	0,0,0,0
+swing-state	6	14	tick	1	2	-	1,2,6,6:1:0:0	0,0,0,0
+swing-state	6	15	tick	1	2	-	1,2,6,6:2:0:3e2aaaab	bd2aaaab,0,3daaaaab,3e800000
+swing-state	12	0	start	0	1	true	0,1,12,12:0:0:0	0,0,0,0
+swing-state	12	1	tick	0	1	-	0,1,12,12:1:0:0	0,0,0,0
+swing-state	12	2	start	0	1	false	0,1,12,12:1:0:0	0,0,0,0
+swing-state	12	3	tick	0	1	-	0,1,12,12:2:0:3daaaaab	bcaaaaab,0,3d2aaaab,3e000000
+swing-state	12	4	tick	0	1	-	0,1,12,12:3:3daaaaab:3e2aaaab	3d800000,3daaaaab,3e000000,3e555556
+swing-state	12	5	tick	0	1	-	0,1,12,12:4:3e2aaaab:3e800000	3e155556,3e2aaaab,3e555556,3e955555
+swing-state	12	6	start	0	1	false	0,1,12,12:4:3e2aaaab:3e800000	3e155556,3e2aaaab,3e555556,3e955555
+swing-state	12	7	tick	0	1	-	0,1,12,12:5:3e800000:3eaaaaab	3e6aaaaa,3e800000,3e955556,3ec00000
+swing-state	12	8	tick	0	1	-	0,1,12,12:6:3eaaaaab:3ed55555	3ea00000,3eaaaaab,3ec00000,3eeaaaaa
+swing-state	12	9	start	1	1	false	0,1,12,12:6:3eaaaaab:3ed55555	3ea00000,3eaaaaab,3ec00000,3eeaaaaa
+swing-state	12	10	tick	1	1	-	0,1,12,12:7:3ed55555:3f000000	3ecaaaaa,3ed55555,3eeaaaaa,3f0aaaab
+swing-state	12	11	tick	1	1	-	0,1,12,12:8:3f000000:3f155555	3ef55556,3f000000,3f0aaaaa,3f200000
+swing-state	12	12	tick	1	1	-	0,1,12,12:9:3f155555:3f2aaaab	3f100000,3f155555,3f200000,3f355556
+swing-state	12	13	start	1	2	true	1,2,12,12:0:0:0	0,0,0,0
+swing-state	12	14	tick	1	2	-	1,2,12,12:1:0:0	0,0,0,0
+swing-state	12	15	tick	1	2	-	1,2,12,12:2:0:3daaaaab	bcaaaaab,0,3d2aaaab,3e000000
+swing-state	2147483647	0	start	0	1	true	0,1,2147483647,2147483647:0:0:0	0,0,0,0
+swing-state	2147483647	1	tick	0	1	-	0,1,2147483647,2147483647:1:0:0	0,0,0,0
+swing-state	2147483647	2	start	0	1	false	0,1,2147483647,2147483647:1:0:0	0,0,0,0
+swing-state	2147483647	3	tick	0	1	-	0,1,2147483647,2147483647:2:0:30000000	af000000,0,2f800000,30400000
+swing-state	2147483647	4	tick	0	1	-	0,1,2147483647,2147483647:3:30000000:30800000	2fc00000,30000000,30400000,30a00000
+swing-state	2147483647	5	tick	0	1	-	0,1,2147483647,2147483647:4:30800000:30c00000	30600000,30800000,30a00000,30e00000
+swing-state	2147483647	6	start	0	1	false	0,1,2147483647,2147483647:4:30800000:30c00000	30600000,30800000,30a00000,30e00000
+swing-state	2147483647	7	tick	0	1	-	0,1,2147483647,2147483647:5:30c00000:31000000	30b00000,30c00000,30e00000,31100000
+swing-state	2147483647	8	tick	0	1	-	0,1,2147483647,2147483647:6:31000000:31200000	30f00000,31000000,31100000,31300000
+swing-state	2147483647	9	start	1	1	false	0,1,2147483647,2147483647:6:31000000:31200000	30f00000,31000000,31100000,31300000
+swing-state	2147483647	10	tick	1	1	-	0,1,2147483647,2147483647:7:31200000:31400000	31180000,31200000,31300000,31500000
+swing-state	2147483647	11	tick	1	1	-	0,1,2147483647,2147483647:8:31400000:31600000	31380000,31400000,31500000,31700000
+swing-state	2147483647	12	tick	1	1	-	0,1,2147483647,2147483647:9:31600000:31800000	31580000,31600000,31700000,31880000
+swing-state	2147483647	13	start	1	2	false	0,1,2147483647,2147483647:9:31600000:31800000	31580000,31600000,31700000,31880000
+swing-state	2147483647	14	tick	1	2	-	0,1,2147483647,2147483647:10:31800000:31900000	31780000,31800000,31880000,31980000
+swing-state	2147483647	15	tick	1	2	-	0,1,2147483647,2147483647:11:31900000:31a00000	318c0000,31900000,31980000,31a80000
+swing-player	0	0	0	1	0	-2	true	1,0,-2,-2:0:0:0	0,0	self:4d0100feffffff0f
+swing-player	1	1	1	0	1	-1	false	0,1,6,5:1:0:0	18,24	-
+swing-player	2	2	3	0	2	0	true	0,2,0,-256:0:0:0	0,0	self:4d000200
+swing-player	3	3	4	1	0	1	false	1,0,1,-2:0:0:0	0,0	players:4d010001
+swing-player	4	4	6	0	1	2	true	0,1,6,12:6:3eaaaaab:3ed55555	21,27	-
+swing-player	5	5	8	0	2	6	false	0,2,6,4:0:0:0	0,0	players:4d000206
+swing-player	6	6	0	1	0	12	true	1,0,12,11:0:0:0	0,0	self:4d01000c
+swing-player	7	7	1	0	1	2147483647	false	0,1,6,518:1:0:0	24,30	-
+swing-player	8	0	3	0	2	-2	true	0,1,6,6:3:3e2aaaab:3eaaaaab	25,31	-
+swing-player	9	1	4	1	0	-1	false	1,0,-1,-2:0:0:0	0,0	players:4d0100ffffffff0f
+swing-player	10	2	6	0	1	0	true	0,1,0,-256:0:0:0	0,0	self:4d000100
+swing-player	11	3	8	0	2	1	false	0,2,1,-2:0:0:0	0,0	players:4d000201
+swing-player	12	4	0	1	0	2	true	1,0,2,8:0:0:0	0,0	self:4d010002
+swing-player	13	5	1	0	1	6	false	0,1,6,4:1:0:0	30,36	-
+swing-player	14	6	3	0	2	12	true	0,2,12,11:0:0:0	0,0	self:4d00020c
+swing-player	15	7	4	1	0	2147483647	false	0,1,6,518:4:3b7d08e5:3bbdc6ac	32,38	-
+swing-player	16	0	6	0	1	-2	true	0,1,-2,-2:0:0:0	0,0	self:4d0001feffffff0f
+swing-player	17	1	8	0	2	-1	false	0,2,-1,-2:0:0:0	0,0	players:4d0002ffffffff0f
+swing-player	18	2	0	1	0	0	true	1,0,0,-256:0:0:0	0,0	self:4d010000
+swing-player	19	3	1	0	1	1	false	0,1,6,3:1:0:0	36,42	-
+swing-player	20	4	3	0	2	2	true	0,1,6,12:3:3daaaaab:3e2aaaab	37,43	-
+swing-player	21	5	4	1	0	6	false	1,0,6,4:0:0:0	0,0	players:4d010006
+swing-player	22	6	6	0	1	12	true	0,1,12,11:0:0:0	0,0	self:4d00010c
+swing-player	23	7	8	0	2	2147483647	false	0,1,6,518:8:3c3dc6ac:3c5d67c9	40,46	-
+swing-player	24	0	0	1	0	-2	true	1,0,-2,-2:0:0:0	0,0	self:4d0100feffffff0f
+swing-player	25	1	1	0	1	-1	false	0,1,6,5:1:0:0	42,48	-
+swing-player	26	2	3	0	2	0	true	0,2,0,-256:0:0:0	0,0	self:4d000200
+swing-player	27	3	4	1	0	1	false	1,0,1,-2:0:0:0	0,0	players:4d010001
+swing-player	28	4	6	0	1	2	true	0,1,6,12:6:3eaaaaab:3ed55555	45,51	-
+swing-player	29	5	8	0	2	6	false	0,2,6,4:0:0:0	0,0	players:4d000206
+swing-player	30	6	0	1	0	12	true	1,0,12,11:0:0:0	0,0	self:4d01000c
+swing-player	31	7	1	0	1	2147483647	false	0,1,6,518:1:0:0	48,54	-
+swing-player	32	0	3	0	2	-2	true	0,1,6,6:3:3e2aaaab:3eaaaaab	49,55	-
+swing-player	33	1	4	1	0	-1	false	1,0,-1,-2:0:0:0	0,0	players:4d0100ffffffff0f
+swing-player	34	2	6	0	1	0	true	0,1,0,-256:0:0:0	0,0	self:4d000100
+swing-player	35	3	8	0	2	1	false	0,2,1,-2:0:0:0	0,0	players:4d000201
+swing-player	36	4	0	1	0	2	true	1,0,2,8:0:0:0	0,0	self:4d010002
+swing-player	37	5	1	0	1	6	false	0,1,6,4:1:0:0	54,60	-
+swing-player	38	6	3	0	2	12	true	0,2,12,11:0:0:0	0,0	self:4d00020c
+swing-player	39	7	4	1	0	2147483647	false	0,1,6,518:4:3b7d08e5:3bbdc6ac	56,62	-
+swing-player	40	0	6	0	1	-2	true	0,1,-2,-2:0:0:0	0,0	self:4d0001feffffff0f
+swing-player	41	1	8	0	2	-1	false	0,2,-1,-2:0:0:0	0,0	players:4d0002ffffffff0f
+swing-player	42	2	0	1	0	0	true	1,0,0,-256:0:0:0	0,0	self:4d010000
+swing-player	43	3	1	0	1	1	false	0,1,6,3:1:0:0	60,66	-
+swing-player	44	4	3	0	2	2	true	0,1,6,12:3:3daaaaab:3e2aaaab	61,67	-
+swing-player	45	5	4	1	0	6	false	1,0,6,4:0:0:0	0,0	players:4d010006
+swing-player	46	6	6	0	1	12	true	0,1,12,11:0:0:0	0,0	self:4d00010c
+swing-player	47	7	8	0	2	2147483647	false	0,1,6,518:8:3c3dc6ac:3c5d67c9	64,70	-
+swing-clock	0	18,24	minecraft:air,0
+swing-clock	1	0,0	minecraft:air,0
+swing-clock	2	0,0	minecraft:dirt,3
+swing-clock	3	18,24	minecraft:stone,5
+swing-clock	4	18,24	minecraft:stone,3
+swing-clock	5	0,0	minecraft:air,0
+swing-clock	6	0,0	minecraft:air,0
+swing-clock	7	-2147483648,-2147483648	minecraft:stone,3
 entity-sound	base-step	none:minecraft:block.stone.step:6:68,512,68:3e19999a:3f800000:bf82071f723fe4e0	b921f1dd	-
 entity-sound	base-silent-step		b921f1dd	-
 entity-sound	player-silent-step	1:minecraft:block.stone.step:7:68,512,68:3e19999a:3f800000:bf82071f723fe4e0	b921f1dd	-
@@ -2329,10 +3219,14 @@ block-tag	minecraft:anvil	minecraft:anvil,minecraft:chipped_anvil,minecraft:dama
 block-tag	minecraft:inside_step_sound_blocks	minecraft:glow_lichen,minecraft:lily_pad,minecraft:small_amethyst_bud,minecraft:powder_snow,minecraft:sculk_vein,minecraft:pink_petals,minecraft:wildflowers,minecraft:leaf_litter
 block-tag	minecraft:combination_step_sound_blocks	minecraft:snow,minecraft:resin_clump,minecraft:white_carpet,minecraft:orange_carpet,minecraft:magenta_carpet,minecraft:light_blue_carpet,minecraft:yellow_carpet,minecraft:lime_carpet,minecraft:pink_carpet,minecraft:gray_carpet,minecraft:light_gray_carpet,minecraft:cyan_carpet,minecraft:purple_carpet,minecraft:blue_carpet,minecraft:brown_carpet,minecraft:green_carpet,minecraft:red_carpet,minecraft:black_carpet,minecraft:warped_roots,minecraft:nether_sprouts,minecraft:crimson_roots,minecraft:moss_carpet,minecraft:pale_moss_carpet
 block-tag	minecraft:crystal_sound_blocks	minecraft:amethyst_block,minecraft:budding_amethyst
+block-tag	minecraft:trapdoors	minecraft:oak_trapdoor,minecraft:spruce_trapdoor,minecraft:birch_trapdoor,minecraft:jungle_trapdoor,minecraft:acacia_trapdoor,minecraft:cherry_trapdoor,minecraft:dark_oak_trapdoor,minecraft:pale_oak_trapdoor,minecraft:mangrove_trapdoor,minecraft:poplar_trapdoor,minecraft:bamboo_trapdoor,minecraft:iron_trapdoor,minecraft:crimson_trapdoor,minecraft:warped_trapdoor,minecraft:copper_trapdoor,minecraft:exposed_copper_trapdoor,minecraft:weathered_copper_trapdoor,minecraft:oxidized_copper_trapdoor,minecraft:waxed_copper_trapdoor,minecraft:waxed_exposed_copper_trapdoor,minecraft:waxed_weathered_copper_trapdoor,minecraft:waxed_oxidized_copper_trapdoor
 entity-tag	minecraft:non_controlling_rider	minecraft:magma_cube,minecraft:slime,minecraft:sulfur_cube
 entity-tag	minecraft:freeze_immune_entity_types	minecraft:polar_bear,minecraft:snow_golem,minecraft:stray,minecraft:wither
 entity-tag	minecraft:powder_snow_walkable_mobs	minecraft:endermite,minecraft:fox,minecraft:rabbit,minecraft:silverfish
 entity-tag	minecraft:can_float_while_ridden	minecraft:camel,minecraft:camel_husk,minecraft:donkey,minecraft:horse,minecraft:mule,minecraft:zombie_horse
+entity-tag	minecraft:fall_damage_immune	minecraft:allay,minecraft:bat,minecraft:bee,minecraft:blaze,minecraft:breeze,minecraft:cat,minecraft:chicken,minecraft:copper_golem,minecraft:ghast,minecraft:happy_ghast,minecraft:iron_golem,minecraft:magma_cube,minecraft:ocelot,minecraft:parrot,minecraft:phantom,minecraft:shulker,minecraft:snow_golem,minecraft:wither
+entity-tag	minecraft:freeze_hurts_extra_types	minecraft:blaze,minecraft:magma_cube,minecraft:strider
+entity-tag	minecraft:no_anger_from_wind_charge	minecraft:bogged,minecraft:breeze,minecraft:cave_spider,minecraft:husk,minecraft:skeleton,minecraft:slime,minecraft:spider,minecraft:stray,minecraft:zombie
 fluid-tag	minecraft:water	minecraft:flowing_water,minecraft:water
 fluid-tag	minecraft:lava	minecraft:flowing_lava,minecraft:lava
 fluid-tag	minecraft:entity_floatable	minecraft:flowing_water,minecraft:water

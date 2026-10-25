@@ -239,6 +239,11 @@ fn run_light_worker(
     let mut full_chunks = std::collections::HashSet::new();
     let mut imported = BTreeMap::<i64, ImportedGenerationLight>::new();
     while let Ok(job) = light_in.recv() {
+        let context = match &job {
+            LightJob::Initialize { request, pos, .. } => Some((*request, *pos)),
+            _ => None,
+        };
+        let _timing = crate::generation::profile::Span::new("live_light", context);
         let (initialized, changes) = match job {
             LightJob::Initialize {
                 request,
@@ -737,6 +742,43 @@ impl EntityIo {
     }
 }
 impl World {
+    /// Validate createLevels' dimension/service binding before a runtime
+    /// installs callbacks or attaches any progress queues.
+    pub(crate) fn validate_dimension_binding(
+        &self,
+        dimension: &ferraloom_protocol::Identifier,
+    ) -> Result<()> {
+        ensure!(
+            dimension == &self.dimension_key,
+            "generation runtime dimension differs from its World"
+        );
+        let stem = self.services.stem(dimension)?;
+        ensure!(
+            Arc::ptr_eq(&self.generator, &stem.generator),
+            "World generator differs from its registered stem"
+        );
+        let properties = |value: DimensionType| {
+            (
+                value.min_y,
+                value.height,
+                value.logical_height,
+                value.has_ceiling,
+                value.has_skylight,
+                value.fast_lava,
+                value.coordinate_scale.to_bits(),
+            )
+        };
+        ensure!(
+            properties(self.dimension) == properties(stem.dimension),
+            "World dimension properties differ from its registered stem"
+        );
+        ensure!(
+            Arc::ptr_eq(&self.generation, &self.services.generation)
+                && Arc::ptr_eq(&self.saving, &self.services.saving),
+            "World worker services differ from its root services"
+        );
+        Ok(())
+    }
     /// Construct one dimension's owned runtime, returning bootstrap spawn data
     /// for the sole PrimaryLevelData owner before the live level is published.
     fn open_dimension(
@@ -923,20 +965,25 @@ impl World {
         resources: &ResourceManager,
     ) -> Result<Arc<ferraloom_game::level::LevelContext>> {
         let features = ferraloom_worldgen::feature::FeatureLoader::new(resources)?.load_all()?;
-        Ok(Arc::new(ferraloom_game::level::LevelContext::new(
-            self.seed,
-            self.generator.sea_level(),
-            self.generator.clone(),
-            Arc::new(features),
-            Arc::new(ferraloom_game::level::StructureServices::load(
-                resources,
-                self.generator.data(),
-            )?),
-            Arc::new(ferraloom_game::entity::damage::DamageTypeRegistry::load(
-                resources,
-            )?),
-            self.initial_difficulty,
-        )))
+        Ok(Arc::new(
+            ferraloom_game::level::LevelContext::new(
+                self.seed,
+                self.generator.sea_level(),
+                self.generator.clone(),
+                Arc::new(features),
+                Arc::new(ferraloom_game::level::StructureServices::load(
+                    resources,
+                    self.generator.data(),
+                )?),
+                Arc::new(ferraloom_game::entity::damage::DamageTypeRegistry::load(
+                    resources,
+                )?),
+                self.initial_difficulty,
+            )
+            .with_block_transformers(Arc::new(
+                ferraloom_game::item::block_transformer::BlockTransformerRegistry::load(resources)?,
+            )),
+        ))
     }
     /// Attach immutable dimension layers after the sole server clock manager
     /// loads. Callers publish its actual snapshot; no local day counter exists.
@@ -1222,6 +1269,11 @@ impl World {
         }
         self.running_generation = Some((request.id, request.pos));
         self.generation_work = Some(self.generation.submit(move || {
+            let _timing = crate::generation::profile::Span::new(
+                "generation_job",
+                Some((request.id, request.pos)),
+            )
+            .status(request.status);
             let mut result = state.generate(
                 request.id,
                 request.pos,
@@ -1566,6 +1618,8 @@ impl World {
             pos,
             result,
         } = completion;
+        let _timing =
+            crate::generation::profile::Span::new("integrate_output", Some((request, pos)));
         if self
             .active_generation
             .get(&pos.pack())
@@ -1818,6 +1872,8 @@ impl World {
         light_revision: GenerationRevision,
         terrain: &mut Terrain,
     ) -> Result<LevelChunk> {
+        let _timing =
+            crate::generation::profile::Span::new("prepare_full", Some((request, terrain.pos)));
         ensure!(
             terrain.structures.position == [terrain.pos.x, terrain.pos.z],
             "promotion structures belong to another chunk"

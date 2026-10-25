@@ -1,0 +1,1251 @@
+[
+  {
+    "case": -2,
+    "input": {
+      "id": "minecraft:stone"
+    },
+    "empty": true,
+    "depleted": false,
+    "hover": {
+      "translate": "block.minecraft.air"
+    },
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        {
+          "text": "",
+          "extra": [
+            {
+              "translate": "block.minecraft.air"
+            }
+          ]
+        }
+      ]
+    },
+    "hover_nbt": "{translate:\"block.minecraft.air\"}",
+    "display_nbt": "{translate:\"chat.square_brackets\",with:[{extra:[{translate:\"block.minecraft.air\"}],text:\"\"}]}"
+  },
+  {
+    "case": -1,
+    "input": {
+      "id": "minecraft:stone"
+    },
+    "empty": false,
+    "depleted": true,
+    "hover": {
+      "translate": "block.minecraft.air"
+    },
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        {
+          "text": "",
+          "extra": [
+            {
+              "translate": "block.minecraft.air"
+            }
+          ]
+        }
+      ]
+    },
+    "hover_nbt": "{translate:\"block.minecraft.air\"}",
+    "display_nbt": "{translate:\"chat.square_brackets\",with:[{extra:[{translate:\"block.minecraft.air\"}],text:\"\"}]}"
+  },
+  {
+    "case": 0,
+    "input": {
+      "id": "minecraft:stone"
+    },
+    "empty": false,
+    "depleted": false,
+    "hover": {
+      "translate": "block.minecraft.stone"
+    },
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        {
+          "text": "",
+          "extra": [
+            {
+              "translate": "block.minecraft.stone"
+            }
+          ]
+        }
+      ],
+      "color": "white",
+      "hover_event": {
+        "id": "minecraft:stone",
+        "action": "show_item"
+      }
+    },
+    "hover_nbt": "{translate:\"block.minecraft.stone\"}",
+    "display_nbt": "{color:\"white\",hover_event:{action:\"show_item\",id:\"minecraft:stone\"},translate:\"chat.square_brackets\",with:[{extra:[{translate:\"block.minecraft.stone\"}],text:\"\"}]}"
+  },
+  {
+    "case": 1,
+    "input": {
+      "id": "minecraft:stone",
+      "count": 64
+    },
+    "empty": false,
+    "depleted": false,
+    "hover": {
+      "translate": "block.minecraft.stone"
+    },
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        {
+          "text": "",
+          "extra": [
+            {
+              "translate": "block.minecraft.stone"
+            }
+          ]
+        }
+      ],
+      "color": "white",
+      "hover_event": {
+        "id": "minecraft:stone",
+        "count": 64,
+        "action": "show_item"
+      }
+    },
+    "hover_nbt": "{translate:\"block.minecraft.stone\"}",
+    "display_nbt": "{color:\"white\",hover_event:{action:\"show_item\",count:64,id:\"minecraft:stone\"},translate:\"chat.square_brackets\",with:[{extra:[{translate:\"block.minecraft.stone\"}],text:\"\"}]}"
+  },
+  {
+    "case": 2,
+    "input": {
+      "id": "minecraft:stone",
+      "count": 99
+    },
+    "empty": false,
+    "depleted": false,
+    "hover": {
+      "translate": "block.minecraft.stone"
+    },
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        {
+          "text": "",
+          "extra": [
+            {
+              "translate": "block.minecraft.stone"
+            }
+          ]
+        }
+      ],
+      "color": "white",
+      "hover_event": {
+        "id": "minecraft:stone",
+        "count": 99,
+        "action": "show_item"
+      }
+    },
+    "hover_nbt": "{translate:\"block.minecraft.stone\"}",
+    "display_nbt": "{color:\"white\",hover_event:{action:\"show_item\",count:99,id:\"minecraft:stone\"},translate:\"chat.square_brackets\",with:[{extra:[{translate:\"block.minecraft.stone\"}],text:\"\"}]}"
+  },
+  {
+    "case": 3,
+    "input": {
+      "id": "minecraft:enchanted_golden_apple"
+    },
+    "empty": false,
+    "depleted": false,
+    "hover": {
+      "translate": "item.minecraft.enchanted_golden_apple"
+    },
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        {
+          "text": "",
+          "extra": [
+            {
+              "translate": "item.minecraft.enchanted_golden_apple"
+            }
+          ]
+        }
+      ],
+      "color": "aqua",
+      "hover_event": {
+        "id": "minecraft:enchanted_golden_apple",
+        "action": "show_item"
+      }
+    },
+    "hover_nbt": "{translate:\"item.minecraft.enchanted_golden_apple\"}",
+    "display_nbt": "{color:\"aqua\",hover_event:{action:\"show_item\",id:\"minecraft:enchanted_golden_apple\"},translate:\"chat.square_brackets\",with:[{extra:[{translate:\"item.minecraft.enchanted_golden_apple\"}],text:\"\"}]}"
+  },
+  {
+    "case": 4,
+    "input": {
+      "id": "minecraft:dragon_egg"
+    },
+    "empty": false,
+    "depleted": false,
+    "hover": {
+      "translate": "block.minecraft.dragon_egg"
+    },
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        {
+          "text": "",
+          "extra": [
+            {
+              "translate": "block.minecraft.dragon_egg"
+            }
+          ]
+        }
+      ],
+      "color": "light_purple",
+      "hover_event": {
+        "id": "minecraft:dragon_egg",
+        "action": "show_item"
+      }
+    },
+    "hover_nbt": "{translate:\"block.minecraft.dragon_egg\"}",
+    "display_nbt": "{color:\"light_purple\",hover_event:{action:\"show_item\",id:\"minecraft:dragon_egg\"},translate:\"chat.square_brackets\",with:[{extra:[{translate:\"block.minecraft.dragon_egg\"}],text:\"\"}]}"
+  },
+  {
+    "case": 5,
+    "input": {
+      "id": "minecraft:stone",
+      "components": {
+        "minecraft:custom_name": "Named stone"
+      }
+    },
+    "empty": false,
+    "depleted": false,
+    "hover": "Named stone",
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        {
+          "text": "",
+          "extra": [
+            "Named stone"
+          ],
+          "italic": true
+        }
+      ],
+      "color": "white",
+      "hover_event": {
+        "id": "minecraft:stone",
+        "components": {
+          "minecraft:custom_name": "Named stone"
+        },
+        "action": "show_item"
+      }
+    },
+    "hover_nbt": "\"Named stone\"",
+    "display_nbt": "{color:\"white\",hover_event:{action:\"show_item\",components:{\"minecraft:custom_name\":\"Named stone\"},id:\"minecraft:stone\"},translate:\"chat.square_brackets\",with:[{extra:[\"Named stone\"],italic:1b,text:\"\"}]}"
+  },
+  {
+    "case": 6,
+    "input": {
+      "id": "minecraft:stone",
+      "components": {
+        "minecraft:custom_name": {
+          "text": "Styled",
+          "italic": false,
+          "color": "red"
+        }
+      }
+    },
+    "empty": false,
+    "depleted": false,
+    "hover": {
+      "text": "Styled",
+      "color": "red",
+      "italic": false
+    },
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        {
+          "text": "",
+          "extra": [
+            {
+              "text": "Styled",
+              "color": "red",
+              "italic": false
+            }
+          ],
+          "italic": true
+        }
+      ],
+      "color": "white",
+      "hover_event": {
+        "id": "minecraft:stone",
+        "components": {
+          "minecraft:custom_name": {
+            "text": "Styled",
+            "color": "red",
+            "italic": false
+          }
+        },
+        "action": "show_item"
+      }
+    },
+    "hover_nbt": "{color:\"red\",italic:0b,text:\"Styled\"}",
+    "display_nbt": "{color:\"white\",hover_event:{action:\"show_item\",components:{\"minecraft:custom_name\":{color:\"red\",italic:0b,text:\"Styled\"}},id:\"minecraft:stone\"},translate:\"chat.square_brackets\",with:[{extra:[{color:\"red\",italic:0b,text:\"Styled\"}],italic:1b,text:\"\"}]}"
+  },
+  {
+    "case": 7,
+    "input": {
+      "id": "minecraft:stone",
+      "components": {
+        "minecraft:item_name": "Item override"
+      }
+    },
+    "empty": false,
+    "depleted": false,
+    "hover": "Item override",
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        {
+          "text": "",
+          "extra": [
+            "Item override"
+          ]
+        }
+      ],
+      "color": "white",
+      "hover_event": {
+        "id": "minecraft:stone",
+        "components": {
+          "minecraft:item_name": "Item override"
+        },
+        "action": "show_item"
+      }
+    },
+    "hover_nbt": "\"Item override\"",
+    "display_nbt": "{color:\"white\",hover_event:{action:\"show_item\",components:{\"minecraft:item_name\":\"Item override\"},id:\"minecraft:stone\"},translate:\"chat.square_brackets\",with:[{extra:[\"Item override\"],text:\"\"}]}"
+  },
+  {
+    "case": 8,
+    "input": {
+      "id": "minecraft:stone",
+      "components": {
+        "!minecraft:item_name": {}
+      }
+    },
+    "empty": false,
+    "depleted": false,
+    "hover": "",
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        {
+          "text": "",
+          "extra": [
+            ""
+          ]
+        }
+      ],
+      "color": "white",
+      "hover_event": {
+        "id": "minecraft:stone",
+        "components": {
+          "!minecraft:item_name": {}
+        },
+        "action": "show_item"
+      }
+    },
+    "hover_nbt": "\"\"",
+    "display_nbt": "{color:\"white\",hover_event:{action:\"show_item\",components:{\"!minecraft:item_name\":{}},id:\"minecraft:stone\"},translate:\"chat.square_brackets\",with:[{extra:[\"\"],text:\"\"}]}"
+  },
+  {
+    "case": 9,
+    "input": {
+      "id": "minecraft:written_book",
+      "components": {
+        "minecraft:written_book_content": {
+          "title": {
+            "raw": "Raw title",
+            "filtered": "Filtered title"
+          },
+          "author": "Author"
+        }
+      }
+    },
+    "empty": false,
+    "depleted": false,
+    "hover": "Raw title",
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        {
+          "text": "",
+          "extra": [
+            "Raw title"
+          ]
+        }
+      ],
+      "color": "white",
+      "hover_event": {
+        "id": "minecraft:written_book",
+        "components": {
+          "minecraft:written_book_content": {
+            "title": {
+              "raw": "Raw title",
+              "filtered": "Filtered title"
+            },
+            "author": "Author"
+          }
+        },
+        "action": "show_item"
+      }
+    },
+    "hover_nbt": "\"Raw title\"",
+    "display_nbt": "{color:\"white\",hover_event:{action:\"show_item\",components:{\"minecraft:written_book_content\":{author:\"Author\",title:{filtered:\"Filtered title\",raw:\"Raw title\"}}},id:\"minecraft:written_book\"},translate:\"chat.square_brackets\",with:[{extra:[\"Raw title\"],text:\"\"}]}"
+  },
+  {
+    "case": 10,
+    "input": {
+      "id": "minecraft:written_book",
+      "components": {
+        "minecraft:written_book_content": {
+          "title": "Title",
+          "author": "Author"
+        },
+        "minecraft:custom_name": "Custom book"
+      }
+    },
+    "empty": false,
+    "depleted": false,
+    "hover": "Custom book",
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        {
+          "text": "",
+          "extra": [
+            "Custom book"
+          ],
+          "italic": true
+        }
+      ],
+      "color": "white",
+      "hover_event": {
+        "id": "minecraft:written_book",
+        "components": {
+          "minecraft:written_book_content": {
+            "title": {
+              "raw": "Title"
+            },
+            "author": "Author"
+          },
+          "minecraft:custom_name": "Custom book"
+        },
+        "action": "show_item"
+      }
+    },
+    "hover_nbt": "\"Custom book\"",
+    "display_nbt": "{color:\"white\",hover_event:{action:\"show_item\",components:{\"minecraft:custom_name\":\"Custom book\",\"minecraft:written_book_content\":{author:\"Author\",title:{raw:\"Title\"}}},id:\"minecraft:written_book\"},translate:\"chat.square_brackets\",with:[{extra:[\"Custom book\"],italic:1b,text:\"\"}]}"
+  },
+  {
+    "case": 11,
+    "input": {
+      "id": "minecraft:compass",
+      "components": {
+        "minecraft:lodestone_tracker": {
+          "tracked": false
+        }
+      }
+    },
+    "empty": false,
+    "depleted": false,
+    "hover": {
+      "translate": "item.minecraft.lodestone_compass"
+    },
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        {
+          "text": "",
+          "extra": [
+            {
+              "translate": "item.minecraft.lodestone_compass"
+            }
+          ]
+        }
+      ],
+      "color": "white",
+      "hover_event": {
+        "id": "minecraft:compass",
+        "components": {
+          "minecraft:lodestone_tracker": {
+            "tracked": false
+          }
+        },
+        "action": "show_item"
+      }
+    },
+    "hover_nbt": "{translate:\"item.minecraft.lodestone_compass\"}",
+    "display_nbt": "{color:\"white\",hover_event:{action:\"show_item\",components:{\"minecraft:lodestone_tracker\":{tracked:0b}},id:\"minecraft:compass\"},translate:\"chat.square_brackets\",with:[{extra:[{translate:\"item.minecraft.lodestone_compass\"}],text:\"\"}]}"
+  },
+  {
+    "case": 12,
+    "input": {
+      "id": "minecraft:enchanted_book",
+      "components": {
+        "minecraft:stored_enchantments": {
+          "minecraft:sharpness": 1
+        }
+      }
+    },
+    "empty": false,
+    "depleted": false,
+    "hover": {
+      "translate": "item.minecraft.enchanted_book"
+    },
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        {
+          "text": "",
+          "extra": [
+            {
+              "translate": "item.minecraft.enchanted_book"
+            }
+          ]
+        }
+      ],
+      "color": "aqua",
+      "hover_event": {
+        "id": "minecraft:enchanted_book",
+        "components": {
+          "minecraft:stored_enchantments": {
+            "minecraft:sharpness": 1
+          }
+        },
+        "action": "show_item"
+      }
+    },
+    "hover_nbt": "{translate:\"item.minecraft.enchanted_book\"}",
+    "display_nbt": "{color:\"aqua\",hover_event:{action:\"show_item\",components:{\"minecraft:stored_enchantments\":{\"minecraft:sharpness\":1}},id:\"minecraft:enchanted_book\"},translate:\"chat.square_brackets\",with:[{extra:[{translate:\"item.minecraft.enchanted_book\"}],text:\"\"}]}"
+  },
+  {
+    "case": 13,
+    "input": {
+      "id": "minecraft:stone",
+      "components": {
+        "minecraft:rarity": "common"
+      }
+    },
+    "empty": false,
+    "depleted": false,
+    "hover": {
+      "translate": "block.minecraft.stone"
+    },
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        {
+          "text": "",
+          "extra": [
+            {
+              "translate": "block.minecraft.stone"
+            }
+          ]
+        }
+      ],
+      "color": "white",
+      "hover_event": {
+        "id": "minecraft:stone",
+        "action": "show_item"
+      }
+    },
+    "hover_nbt": "{translate:\"block.minecraft.stone\"}",
+    "display_nbt": "{color:\"white\",hover_event:{action:\"show_item\",id:\"minecraft:stone\"},translate:\"chat.square_brackets\",with:[{extra:[{translate:\"block.minecraft.stone\"}],text:\"\"}]}"
+  },
+  {
+    "case": 14,
+    "input": {
+      "id": "minecraft:stone",
+      "components": {
+        "minecraft:rarity": "common",
+        "minecraft:enchantments": {
+          "minecraft:sharpness": 1
+        }
+      }
+    },
+    "empty": false,
+    "depleted": false,
+    "hover": {
+      "translate": "block.minecraft.stone"
+    },
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        {
+          "text": "",
+          "extra": [
+            {
+              "translate": "block.minecraft.stone"
+            }
+          ]
+        }
+      ],
+      "color": "aqua",
+      "hover_event": {
+        "id": "minecraft:stone",
+        "components": {
+          "minecraft:enchantments": {
+            "minecraft:sharpness": 1
+          }
+        },
+        "action": "show_item"
+      }
+    },
+    "hover_nbt": "{translate:\"block.minecraft.stone\"}",
+    "display_nbt": "{color:\"aqua\",hover_event:{action:\"show_item\",components:{\"minecraft:enchantments\":{\"minecraft:sharpness\":1}},id:\"minecraft:stone\"},translate:\"chat.square_brackets\",with:[{extra:[{translate:\"block.minecraft.stone\"}],text:\"\"}]}"
+  },
+  {
+    "case": 15,
+    "input": {
+      "id": "minecraft:stone",
+      "components": {
+        "minecraft:rarity": "uncommon"
+      }
+    },
+    "empty": false,
+    "depleted": false,
+    "hover": {
+      "translate": "block.minecraft.stone"
+    },
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        {
+          "text": "",
+          "extra": [
+            {
+              "translate": "block.minecraft.stone"
+            }
+          ]
+        }
+      ],
+      "color": "yellow",
+      "hover_event": {
+        "id": "minecraft:stone",
+        "components": {
+          "minecraft:rarity": "uncommon"
+        },
+        "action": "show_item"
+      }
+    },
+    "hover_nbt": "{translate:\"block.minecraft.stone\"}",
+    "display_nbt": "{color:\"yellow\",hover_event:{action:\"show_item\",components:{\"minecraft:rarity\":\"uncommon\"},id:\"minecraft:stone\"},translate:\"chat.square_brackets\",with:[{extra:[{translate:\"block.minecraft.stone\"}],text:\"\"}]}"
+  },
+  {
+    "case": 16,
+    "input": {
+      "id": "minecraft:stone",
+      "components": {
+        "minecraft:rarity": "uncommon",
+        "minecraft:enchantments": {
+          "minecraft:sharpness": 1
+        }
+      }
+    },
+    "empty": false,
+    "depleted": false,
+    "hover": {
+      "translate": "block.minecraft.stone"
+    },
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        {
+          "text": "",
+          "extra": [
+            {
+              "translate": "block.minecraft.stone"
+            }
+          ]
+        }
+      ],
+      "color": "aqua",
+      "hover_event": {
+        "id": "minecraft:stone",
+        "components": {
+          "minecraft:rarity": "uncommon",
+          "minecraft:enchantments": {
+            "minecraft:sharpness": 1
+          }
+        },
+        "action": "show_item"
+      }
+    },
+    "hover_nbt": "{translate:\"block.minecraft.stone\"}",
+    "display_nbt": "{color:\"aqua\",hover_event:{action:\"show_item\",components:{\"minecraft:enchantments\":{\"minecraft:sharpness\":1},\"minecraft:rarity\":\"uncommon\"},id:\"minecraft:stone\"},translate:\"chat.square_brackets\",with:[{extra:[{translate:\"block.minecraft.stone\"}],text:\"\"}]}"
+  },
+  {
+    "case": 17,
+    "input": {
+      "id": "minecraft:stone",
+      "components": {
+        "minecraft:rarity": "rare"
+      }
+    },
+    "empty": false,
+    "depleted": false,
+    "hover": {
+      "translate": "block.minecraft.stone"
+    },
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        {
+          "text": "",
+          "extra": [
+            {
+              "translate": "block.minecraft.stone"
+            }
+          ]
+        }
+      ],
+      "color": "aqua",
+      "hover_event": {
+        "id": "minecraft:stone",
+        "components": {
+          "minecraft:rarity": "rare"
+        },
+        "action": "show_item"
+      }
+    },
+    "hover_nbt": "{translate:\"block.minecraft.stone\"}",
+    "display_nbt": "{color:\"aqua\",hover_event:{action:\"show_item\",components:{\"minecraft:rarity\":\"rare\"},id:\"minecraft:stone\"},translate:\"chat.square_brackets\",with:[{extra:[{translate:\"block.minecraft.stone\"}],text:\"\"}]}"
+  },
+  {
+    "case": 18,
+    "input": {
+      "id": "minecraft:stone",
+      "components": {
+        "minecraft:rarity": "rare",
+        "minecraft:enchantments": {
+          "minecraft:sharpness": 1
+        }
+      }
+    },
+    "empty": false,
+    "depleted": false,
+    "hover": {
+      "translate": "block.minecraft.stone"
+    },
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        {
+          "text": "",
+          "extra": [
+            {
+              "translate": "block.minecraft.stone"
+            }
+          ]
+        }
+      ],
+      "color": "light_purple",
+      "hover_event": {
+        "id": "minecraft:stone",
+        "components": {
+          "minecraft:rarity": "rare",
+          "minecraft:enchantments": {
+            "minecraft:sharpness": 1
+          }
+        },
+        "action": "show_item"
+      }
+    },
+    "hover_nbt": "{translate:\"block.minecraft.stone\"}",
+    "display_nbt": "{color:\"light_purple\",hover_event:{action:\"show_item\",components:{\"minecraft:enchantments\":{\"minecraft:sharpness\":1},\"minecraft:rarity\":\"rare\"},id:\"minecraft:stone\"},translate:\"chat.square_brackets\",with:[{extra:[{translate:\"block.minecraft.stone\"}],text:\"\"}]}"
+  },
+  {
+    "case": 19,
+    "input": {
+      "id": "minecraft:stone",
+      "components": {
+        "minecraft:rarity": "epic"
+      }
+    },
+    "empty": false,
+    "depleted": false,
+    "hover": {
+      "translate": "block.minecraft.stone"
+    },
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        {
+          "text": "",
+          "extra": [
+            {
+              "translate": "block.minecraft.stone"
+            }
+          ]
+        }
+      ],
+      "color": "light_purple",
+      "hover_event": {
+        "id": "minecraft:stone",
+        "components": {
+          "minecraft:rarity": "epic"
+        },
+        "action": "show_item"
+      }
+    },
+    "hover_nbt": "{translate:\"block.minecraft.stone\"}",
+    "display_nbt": "{color:\"light_purple\",hover_event:{action:\"show_item\",components:{\"minecraft:rarity\":\"epic\"},id:\"minecraft:stone\"},translate:\"chat.square_brackets\",with:[{extra:[{translate:\"block.minecraft.stone\"}],text:\"\"}]}"
+  },
+  {
+    "case": 20,
+    "input": {
+      "id": "minecraft:stone",
+      "components": {
+        "minecraft:rarity": "epic",
+        "minecraft:enchantments": {
+          "minecraft:sharpness": 1
+        }
+      }
+    },
+    "empty": false,
+    "depleted": false,
+    "hover": {
+      "translate": "block.minecraft.stone"
+    },
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        {
+          "text": "",
+          "extra": [
+            {
+              "translate": "block.minecraft.stone"
+            }
+          ]
+        }
+      ],
+      "color": "light_purple",
+      "hover_event": {
+        "id": "minecraft:stone",
+        "components": {
+          "minecraft:rarity": "epic",
+          "minecraft:enchantments": {
+            "minecraft:sharpness": 1
+          }
+        },
+        "action": "show_item"
+      }
+    },
+    "hover_nbt": "{translate:\"block.minecraft.stone\"}",
+    "display_nbt": "{color:\"light_purple\",hover_event:{action:\"show_item\",components:{\"minecraft:enchantments\":{\"minecraft:sharpness\":1},\"minecraft:rarity\":\"epic\"},id:\"minecraft:stone\"},translate:\"chat.square_brackets\",with:[{extra:[{translate:\"block.minecraft.stone\"}],text:\"\"}]}"
+  },
+  {
+    "case": 21,
+    "input": {
+      "id": "minecraft:written_book",
+      "components": {
+        "minecraft:written_book_content": {
+          "title": "",
+          "author": "Author"
+        }
+      }
+    },
+    "empty": false,
+    "depleted": false,
+    "hover": {
+      "translate": "item.minecraft.written_book"
+    },
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        {
+          "text": "",
+          "extra": [
+            {
+              "translate": "item.minecraft.written_book"
+            }
+          ]
+        }
+      ],
+      "color": "white",
+      "hover_event": {
+        "id": "minecraft:written_book",
+        "components": {
+          "minecraft:written_book_content": {
+            "title": {
+              "raw": ""
+            },
+            "author": "Author"
+          }
+        },
+        "action": "show_item"
+      }
+    },
+    "hover_nbt": "{translate:\"item.minecraft.written_book\"}",
+    "display_nbt": "{color:\"white\",hover_event:{action:\"show_item\",components:{\"minecraft:written_book_content\":{author:\"Author\",title:{raw:\"\"}}},id:\"minecraft:written_book\"},translate:\"chat.square_brackets\",with:[{extra:[{translate:\"item.minecraft.written_book\"}],text:\"\"}]}"
+  },
+  {
+    "case": 22,
+    "input": {
+      "id": "minecraft:written_book",
+      "components": {
+        "minecraft:written_book_content": {
+          "title": " ",
+          "author": "Author"
+        }
+      }
+    },
+    "empty": false,
+    "depleted": false,
+    "hover": {
+      "translate": "item.minecraft.written_book"
+    },
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        {
+          "text": "",
+          "extra": [
+            {
+              "translate": "item.minecraft.written_book"
+            }
+          ]
+        }
+      ],
+      "color": "white",
+      "hover_event": {
+        "id": "minecraft:written_book",
+        "components": {
+          "minecraft:written_book_content": {
+            "title": {
+              "raw": " "
+            },
+            "author": "Author"
+          }
+        },
+        "action": "show_item"
+      }
+    },
+    "hover_nbt": "{translate:\"item.minecraft.written_book\"}",
+    "display_nbt": "{color:\"white\",hover_event:{action:\"show_item\",components:{\"minecraft:written_book_content\":{author:\"Author\",title:{raw:\" \"}}},id:\"minecraft:written_book\"},translate:\"chat.square_brackets\",with:[{extra:[{translate:\"item.minecraft.written_book\"}],text:\"\"}]}"
+  },
+  {
+    "case": 23,
+    "input": {
+      "id": "minecraft:written_book",
+      "components": {
+        "minecraft:written_book_content": {
+          "title": "\t\n",
+          "author": "Author"
+        }
+      }
+    },
+    "empty": false,
+    "depleted": false,
+    "hover": {
+      "translate": "item.minecraft.written_book"
+    },
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        {
+          "text": "",
+          "extra": [
+            {
+              "translate": "item.minecraft.written_book"
+            }
+          ]
+        }
+      ],
+      "color": "white",
+      "hover_event": {
+        "id": "minecraft:written_book",
+        "components": {
+          "minecraft:written_book_content": {
+            "title": {
+              "raw": "\t\n"
+            },
+            "author": "Author"
+          }
+        },
+        "action": "show_item"
+      }
+    },
+    "hover_nbt": "{translate:\"item.minecraft.written_book\"}",
+    "display_nbt": "{color:\"white\",hover_event:{action:\"show_item\",components:{\"minecraft:written_book_content\":{author:\"Author\",title:{raw:\"\\t\\n\"}}},id:\"minecraft:written_book\"},translate:\"chat.square_brackets\",with:[{extra:[{translate:\"item.minecraft.written_book\"}],text:\"\"}]}"
+  },
+  {
+    "case": 24,
+    "input": {
+      "id": "minecraft:written_book",
+      "components": {
+        "minecraft:written_book_content": {
+          "title": " ",
+          "author": "Author"
+        }
+      }
+    },
+    "empty": false,
+    "depleted": false,
+    "hover": {
+      "translate": "item.minecraft.written_book"
+    },
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        {
+          "text": "",
+          "extra": [
+            {
+              "translate": "item.minecraft.written_book"
+            }
+          ]
+        }
+      ],
+      "color": "white",
+      "hover_event": {
+        "id": "minecraft:written_book",
+        "components": {
+          "minecraft:written_book_content": {
+            "title": {
+              "raw": " "
+            },
+            "author": "Author"
+          }
+        },
+        "action": "show_item"
+      }
+    },
+    "hover_nbt": "{translate:\"item.minecraft.written_book\"}",
+    "display_nbt": "{color:\"white\",hover_event:{action:\"show_item\",components:{\"minecraft:written_book_content\":{author:\"Author\",title:{raw:\" \"}}},id:\"minecraft:written_book\"},translate:\"chat.square_brackets\",with:[{extra:[{translate:\"item.minecraft.written_book\"}],text:\"\"}]}"
+  },
+  {
+    "case": 25,
+    "input": {
+      "id": "minecraft:written_book",
+      "components": {
+        "minecraft:written_book_content": {
+          "title": "\u001c",
+          "author": "Author"
+        }
+      }
+    },
+    "empty": false,
+    "depleted": false,
+    "hover": {
+      "translate": "item.minecraft.written_book"
+    },
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        {
+          "text": "",
+          "extra": [
+            {
+              "translate": "item.minecraft.written_book"
+            }
+          ]
+        }
+      ],
+      "color": "white",
+      "hover_event": {
+        "id": "minecraft:written_book",
+        "components": {
+          "minecraft:written_book_content": {
+            "title": {
+              "raw": "\u001c"
+            },
+            "author": "Author"
+          }
+        },
+        "action": "show_item"
+      }
+    },
+    "hover_nbt": "{translate:\"item.minecraft.written_book\"}",
+    "display_nbt": "{color:\"white\",hover_event:{action:\"show_item\",components:{\"minecraft:written_book_content\":{author:\"Author\",title:{raw:\"\\x1C\"}}},id:\"minecraft:written_book\"},translate:\"chat.square_brackets\",with:[{extra:[{translate:\"item.minecraft.written_book\"}],text:\"\"}]}"
+  },
+  {
+    "case": 26,
+    "input": {
+      "id": "minecraft:written_book",
+      "components": {
+        "minecraft:written_book_content": {
+          "title": "",
+          "author": "Author"
+        }
+      }
+    },
+    "empty": false,
+    "depleted": false,
+    "hover": "",
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        {
+          "text": "",
+          "extra": [
+            ""
+          ]
+        }
+      ],
+      "color": "white",
+      "hover_event": {
+        "id": "minecraft:written_book",
+        "components": {
+          "minecraft:written_book_content": {
+            "title": {
+              "raw": ""
+            },
+            "author": "Author"
+          }
+        },
+        "action": "show_item"
+      }
+    },
+    "hover_nbt": "\"\"",
+    "display_nbt": "{color:\"white\",hover_event:{action:\"show_item\",components:{\"minecraft:written_book_content\":{author:\"Author\",title:{raw:\"\"}}},id:\"minecraft:written_book\"},translate:\"chat.square_brackets\",with:[{extra:[\"\"],text:\"\"}]}"
+  },
+  {
+    "case": 27,
+    "input": {
+      "id": "minecraft:written_book",
+      "components": {
+        "minecraft:written_book_content": {
+          "title": " ",
+          "author": "Author"
+        }
+      }
+    },
+    "empty": false,
+    "depleted": false,
+    "hover": {
+      "translate": "item.minecraft.written_book"
+    },
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        {
+          "text": "",
+          "extra": [
+            {
+              "translate": "item.minecraft.written_book"
+            }
+          ]
+        }
+      ],
+      "color": "white",
+      "hover_event": {
+        "id": "minecraft:written_book",
+        "components": {
+          "minecraft:written_book_content": {
+            "title": {
+              "raw": " "
+            },
+            "author": "Author"
+          }
+        },
+        "action": "show_item"
+      }
+    },
+    "hover_nbt": "{translate:\"item.minecraft.written_book\"}",
+    "display_nbt": "{color:\"white\",hover_event:{action:\"show_item\",components:{\"minecraft:written_book_content\":{author:\"Author\",title:{raw:\" \"}}},id:\"minecraft:written_book\"},translate:\"chat.square_brackets\",with:[{extra:[{translate:\"item.minecraft.written_book\"}],text:\"\"}]}"
+  },
+  {
+    "case": 28,
+    "input": {
+      "id": "minecraft:written_book",
+      "components": {
+        "minecraft:written_book_content": {
+          "title": " ",
+          "author": "Author"
+        }
+      }
+    },
+    "empty": false,
+    "depleted": false,
+    "hover": {
+      "translate": "item.minecraft.written_book"
+    },
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        {
+          "text": "",
+          "extra": [
+            {
+              "translate": "item.minecraft.written_book"
+            }
+          ]
+        }
+      ],
+      "color": "white",
+      "hover_event": {
+        "id": "minecraft:written_book",
+        "components": {
+          "minecraft:written_book_content": {
+            "title": {
+              "raw": " "
+            },
+            "author": "Author"
+          }
+        },
+        "action": "show_item"
+      }
+    },
+    "hover_nbt": "{translate:\"item.minecraft.written_book\"}",
+    "display_nbt": "{color:\"white\",hover_event:{action:\"show_item\",components:{\"minecraft:written_book_content\":{author:\"Author\",title:{raw:\" \"}}},id:\"minecraft:written_book\"},translate:\"chat.square_brackets\",with:[{extra:[{translate:\"item.minecraft.written_book\"}],text:\"\"}]}"
+  },
+  {
+    "case": 29,
+    "input": {
+      "id": "minecraft:written_book",
+      "components": {
+        "minecraft:written_book_content": {
+          "title": "　",
+          "author": "Author"
+        }
+      }
+    },
+    "empty": false,
+    "depleted": false,
+    "hover": {
+      "translate": "item.minecraft.written_book"
+    },
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        {
+          "text": "",
+          "extra": [
+            {
+              "translate": "item.minecraft.written_book"
+            }
+          ]
+        }
+      ],
+      "color": "white",
+      "hover_event": {
+        "id": "minecraft:written_book",
+        "components": {
+          "minecraft:written_book_content": {
+            "title": {
+              "raw": "　"
+            },
+            "author": "Author"
+          }
+        },
+        "action": "show_item"
+      }
+    },
+    "hover_nbt": "{translate:\"item.minecraft.written_book\"}",
+    "display_nbt": "{color:\"white\",hover_event:{action:\"show_item\",components:{\"minecraft:written_book_content\":{author:\"Author\",title:{raw:\"　\"}}},id:\"minecraft:written_book\"},translate:\"chat.square_brackets\",with:[{extra:[{translate:\"item.minecraft.written_book\"}],text:\"\"}]}"
+  }
+]

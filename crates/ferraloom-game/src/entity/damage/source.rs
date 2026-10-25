@@ -57,6 +57,17 @@ impl DamageSource {
     pub fn causing_entity(&self) -> Option<EntityRef> {
         self.causing_entity
     }
+    /// Port of DamageSource#getWeaponItem: resolve the direct entity's virtual
+    /// main-hand read at the call, independently of the causing entity.
+    pub fn weapon_item<'level>(
+        &self,
+        level: &'level Level,
+    ) -> Result<Option<&'level ferraloom_protocol::component::ItemStack>, LevelError> {
+        match self.direct_entity {
+            Some(entity) => level.entity_behavior(entity)?.weapon_item(entity, level),
+            None => Ok(None),
+        }
+    }
     pub fn is_direct(&self) -> bool {
         self.direct_entity == self.causing_entity
     }

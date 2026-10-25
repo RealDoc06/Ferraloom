@@ -10,6 +10,7 @@ use ferraloom_util::{BlockPos, Direction};
 
 mod furniture;
 mod signs;
+pub use signs::wall_hanging_sign_can_place;
 
 pub(super) struct ContainerPlacement;
 pub(super) static CONTAINER_PLACEMENT: ContainerPlacement = ContainerPlacement;
@@ -48,8 +49,23 @@ fn direction(value: p::Facing) -> Direction {
         p::Facing::East => Direction::East,
     }
 }
-/// Port of ChestBlock#candidatePartnerFacing, including CopperChestBlock's live
-/// chestCanConnectTo override. Joined neighbors cannot accept another partner.
+/// Port of ChestBlock#chestCanConnectTo and CopperChestBlock's live-tag override.
+pub(super) fn chest_can_connect_to(
+    block: Block,
+    neighbor: BlockState,
+    reader: &LevelReaderRef<'_, '_>,
+) -> Result<bool, LevelError> {
+    Ok(if block.is_instance_of(BlockClass::CopperChestBlock) {
+        reader
+            .block_tags()?
+            .contains_key(BlockTags::COPPER_CHESTS, neighbor.block())
+            && neighbor.property_values("type") == block.default_state().property_values("type")
+    } else {
+        neighbor.block() == block
+    })
+}
+/// Port of ChestBlock#candidatePartnerFacing. Joined neighbors cannot accept
+/// another partner, even when their class allows cross-variant connections.
 fn candidate_partner_facing(
     block: Block,
     pos: BlockPos,
@@ -57,14 +73,7 @@ fn candidate_partner_facing(
     reader: &LevelReaderRef<'_, '_>,
 ) -> Result<Option<Direction>, LevelError> {
     let state = reader.get_block_state(pos.relative(side, 1))?;
-    let connects = if block.is_instance_of(BlockClass::CopperChestBlock) {
-        reader
-            .block_tags()?
-            .contains_key(BlockTags::COPPER_CHESTS, state.block())
-            && state.property_values("type") == block.default_state().property_values("type")
-    } else {
-        state.block() == block
-    };
+    let connects = chest_can_connect_to(block, state, reader)?;
     Ok(
         if connects && state.get(p::TYPE_) == Some(p::Type::Single) {
             state.get(p::FACING).map(direction)
@@ -149,6 +158,17 @@ fn least_oxidized_connected(
     Ok(chosen.default_state().with_properties_of(state))
 }
 impl BlockBehavior for ContainerPlacement {
+    fn update_shape(
+        &self,
+        state: BlockState,
+        pos: BlockPos,
+        direction: Direction,
+        neighbor_pos: BlockPos,
+        neighbor: BlockState,
+        level: &mut LevelAccessRef<'_, '_>,
+    ) -> Result<BlockState, LevelError> {
+        signs::update_shape(state, pos, direction, neighbor_pos, neighbor, level)
+    }
     fn can_survive(
         &self,
         state: BlockState,
@@ -241,6 +261,11 @@ impl BlockBehavior for ContainerPlacement {
 #[cfg(test)]
 mod furniture_tests;
 #[cfg(test)]
+mod helper_tests;
+#[cfg(test)]
 mod post_tests;
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod support_tests;

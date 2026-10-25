@@ -5,8 +5,14 @@ use ferraloom_nbt::{CompoundTag, Tag};
 use ferraloom_protocol::component::{ComponentTypeId, DataComponentMap, DataComponentPatch};
 use ferraloom_util::{BlockPos, ChunkPos};
 
+pub mod beehive;
+pub mod brushable;
 mod components;
+pub mod daylight_detector;
 pub mod potent_sulfur;
+pub mod sculk;
+pub mod spawner;
+mod worldgen;
 use super::containers::{
     chest::{BarrelBlockEntity, ChestBlockEntity, ShulkerBoxBlockEntity},
     crafter::CrafterBlockEntity,
@@ -183,10 +189,18 @@ static THE_END_PORTAL: TheEndPortal = TheEndPortal;
 /// Canonical concrete states. Extend this enum when porting a subclass, never Any.
 #[derive(Clone, Debug)]
 pub enum BlockEntityState {
+    SculkSensor(Box<sculk::SculkSensorBlockEntity>),
+    CalibratedSculkSensor(Box<sculk::CalibratedSculkSensorBlockEntity>),
+    SculkShrieker(Box<sculk::SculkShriekerBlockEntity>),
+    SculkCatalyst(Box<sculk::SculkCatalystBlockEntity>),
+    DaylightDetector(Box<daylight_detector::DaylightDetectorBlockEntity>),
+    Brushable(Box<brushable::BrushableBlockEntity>),
     PotentSulfur(Box<potent_sulfur::PotentSulfurBlockEntity>),
     Command(Box<super::containers::command::CommandBlockEntity>),
     Structure(Box<super::containers::structure::StructureBlockEntity>),
     Skull(Box<super::containers::skull::SkullBlockEntity>),
+    Spawner(Box<spawner::SpawnerBlockEntity>),
+    Beehive(Box<beehive::BeehiveBlockEntity>),
     Sign(Box<super::containers::sign::SignBlockEntity>),
     Furnace(Box<super::containers::furnace::AbstractFurnaceBlockEntity>),
     Dispenser(Box<super::redstone::storage::DispenserBlockEntity>),
@@ -202,10 +216,18 @@ pub enum BlockEntityState {
 impl BlockEntityState {
     pub fn data(&self) -> &BlockEntityData {
         match self {
+            Self::SculkSensor(entity) => &entity.parent,
+            Self::CalibratedSculkSensor(entity) => &entity.parent.parent,
+            Self::SculkShrieker(entity) => &entity.parent,
+            Self::SculkCatalyst(entity) => &entity.parent,
+            Self::DaylightDetector(entity) => &entity.parent,
             Self::PotentSulfur(entity) => &entity.parent,
             Self::Command(entity) => &entity.parent,
             Self::Structure(entity) => &entity.parent,
             Self::Skull(entity) => &entity.parent,
+            Self::Spawner(entity) => &entity.parent,
+            Self::Beehive(entity) => &entity.parent,
+            Self::Brushable(entity) => &entity.parent,
             Self::Sign(entity) => &entity.parent,
             Self::Furnace(entity) => &entity.parent.parent,
             Self::Dispenser(entity) => &entity.parent.parent.parent,
@@ -221,10 +243,18 @@ impl BlockEntityState {
     }
     pub fn data_mut(&mut self) -> &mut BlockEntityData {
         match self {
+            Self::SculkSensor(entity) => &mut entity.parent,
+            Self::CalibratedSculkSensor(entity) => &mut entity.parent.parent,
+            Self::SculkShrieker(entity) => &mut entity.parent,
+            Self::SculkCatalyst(entity) => &mut entity.parent,
+            Self::DaylightDetector(entity) => &mut entity.parent,
             Self::PotentSulfur(entity) => &mut entity.parent,
             Self::Command(entity) => &mut entity.parent,
             Self::Structure(entity) => &mut entity.parent,
             Self::Skull(entity) => &mut entity.parent,
+            Self::Spawner(entity) => &mut entity.parent,
+            Self::Beehive(entity) => &mut entity.parent,
+            Self::Brushable(entity) => &mut entity.parent,
             Self::Sign(entity) => &mut entity.parent,
             Self::Furnace(entity) => &mut entity.parent.parent,
             Self::Dispenser(entity) => &mut entity.parent.parent.parent,
@@ -240,10 +270,18 @@ impl BlockEntityState {
     }
     pub fn behavior(&self) -> &'static dyn BlockEntity {
         match self {
+            Self::SculkSensor(_)
+            | Self::CalibratedSculkSensor(_)
+            | Self::SculkShrieker(_)
+            | Self::SculkCatalyst(_) => &sculk::SCULK_ENTITY,
+            Self::DaylightDetector(_) => &daylight_detector::DAYLIGHT_DETECTOR_ENTITY,
             Self::PotentSulfur(_) => &potent_sulfur::POTENT_SULFUR_ENTITY,
             Self::Command(_) => &super::containers::command::COMMAND_ENTITY,
             Self::Structure(_) => &super::containers::structure::STRUCTURE_ENTITY,
             Self::Skull(_) => &super::containers::skull::SKULL_ENTITY,
+            Self::Spawner(_) => &spawner::SPAWNER_ENTITY,
+            Self::Beehive(_) => &beehive::BEEHIVE_ENTITY,
+            Self::Brushable(_) => &brushable::BRUSHABLE_ENTITY,
             Self::Sign(_) => &super::containers::sign::SIGN_ENTITY,
             Self::Furnace(_) => &super::containers::furnace::FURNACE_ENTITY,
             Self::Dispenser(_) => &super::redstone::storage::DISPENSER_ENTITY,
@@ -263,11 +301,13 @@ impl BlockEntityState {
             _ => self.data_mut().has_level = true,
         }
     }
-    /// Native ticker eligibility can depend on the current cached block state.
-    pub fn has_server_ticker(&self) -> bool {
+    /// Port of EntityBlock#getTicker selection from cached state and the owning
+    /// dimension's static fact. Types that do not use sky never require it.
+    pub fn has_server_ticker(&self, has_skylight: Option<bool>) -> Result<bool, LevelError> {
         match self {
-            Self::PotentSulfur(entity) => entity.has_server_ticker(),
-            _ => self.behavior().has_server_ticker(),
+            Self::DaylightDetector(_) => has_skylight.ok_or(LevelError::UnsupportedLightQuery),
+            Self::PotentSulfur(entity) => Ok(entity.has_server_ticker()),
+            _ => Ok(self.behavior().has_server_ticker()),
         }
     }
     pub fn randomizable(&self) -> Option<&RandomizableContainerBlockEntity> {
@@ -430,6 +470,24 @@ pub fn create(pos: BlockPos, state: BlockState) -> Result<BlockEntityState, Leve
         .ok_or(LevelError::UnsupportedBlockEntity(state.block()))?;
     let data = BlockEntityData::new(kind, pos, state)?;
     match kind {
+        BlockEntityType::SCULK_SENSOR => Ok(BlockEntityState::SculkSensor(Box::new(
+            sculk::SculkSensorBlockEntity::new(data),
+        ))),
+        BlockEntityType::CALIBRATED_SCULK_SENSOR => Ok(BlockEntityState::CalibratedSculkSensor(
+            Box::new(sculk::CalibratedSculkSensorBlockEntity::new(data)),
+        )),
+        BlockEntityType::SCULK_SHRIEKER => Ok(BlockEntityState::SculkShrieker(Box::new(
+            sculk::SculkShriekerBlockEntity::new(data),
+        ))),
+        BlockEntityType::SCULK_CATALYST => Ok(BlockEntityState::SculkCatalyst(Box::new(
+            sculk::SculkCatalystBlockEntity::new(data),
+        ))),
+        BlockEntityType::DAYLIGHT_DETECTOR => Ok(BlockEntityState::DaylightDetector(Box::new(
+            daylight_detector::DaylightDetectorBlockEntity::new(data),
+        ))),
+        BlockEntityType::BRUSHABLE_BLOCK => Ok(BlockEntityState::Brushable(Box::new(
+            brushable::BrushableBlockEntity::new(data),
+        ))),
         BlockEntityType::POTENT_SULFUR => Ok(BlockEntityState::PotentSulfur(Box::new(
             potent_sulfur::PotentSulfurBlockEntity::new(data),
         ))),
@@ -441,6 +499,12 @@ pub fn create(pos: BlockPos, state: BlockState) -> Result<BlockEntityState, Leve
         ))),
         BlockEntityType::SKULL => Ok(BlockEntityState::Skull(Box::new(
             super::containers::skull::SkullBlockEntity::new(data),
+        ))),
+        BlockEntityType::MOB_SPAWNER => Ok(BlockEntityState::Spawner(Box::new(
+            spawner::SpawnerBlockEntity::new(data),
+        ))),
+        BlockEntityType::BEEHIVE => Ok(BlockEntityState::Beehive(Box::new(
+            beehive::BeehiveBlockEntity::new(data),
         ))),
         BlockEntityType::END_PORTAL => Ok(BlockEntityState::EndPortal(data)),
         BlockEntityType::PISTON => Ok(BlockEntityState::MovingPiston(Box::new(
@@ -489,7 +553,10 @@ pub fn load_static(
         .get_string("id")
         .map(|id| id.to_string_lossy())
         .unwrap_or_default();
-    if id != "DUMMY" && BlockEntityType::from_name(&id) != registry::for_block(state.block()) {
+    if id != "DUMMY"
+        && (BlockEntityType::from_name(&id).is_none()
+            || BlockEntityType::from_name(&id) != registry::for_block(state.block()))
+    {
         return Ok(None);
     }
     let mut entity = create(pos, state)?;
@@ -514,10 +581,18 @@ pub fn supports(block: Block) -> bool {
     matches!(
         registry::for_block(block),
         Some(
-            BlockEntityType::POTENT_SULFUR
+            BlockEntityType::SCULK_SENSOR
+                | BlockEntityType::CALIBRATED_SCULK_SENSOR
+                | BlockEntityType::SCULK_SHRIEKER
+                | BlockEntityType::SCULK_CATALYST
+                | BlockEntityType::DAYLIGHT_DETECTOR
+                | BlockEntityType::POTENT_SULFUR
                 | BlockEntityType::COMMAND_BLOCK
                 | BlockEntityType::STRUCTURE_BLOCK
                 | BlockEntityType::SKULL
+                | BlockEntityType::BRUSHABLE_BLOCK
+                | BlockEntityType::MOB_SPAWNER
+                | BlockEntityType::BEEHIVE
                 | BlockEntityType::END_PORTAL
                 | BlockEntityType::PISTON
                 | BlockEntityType::DISPENSER
@@ -565,7 +640,36 @@ projection!(
     Structure
 );
 projection!(super::containers::skull::SkullBlockEntity, Skull);
+projection!(
+    daylight_detector::DaylightDetectorBlockEntity,
+    DaylightDetector
+);
+impl BlockEntityDataView for sculk::SculkSensorBlockEntity {
+    fn view(state: &BlockEntityState) -> Option<&Self> {
+        match state {
+            BlockEntityState::SculkSensor(entity) => Some(entity),
+            BlockEntityState::CalibratedSculkSensor(entity) => Some(&entity.parent),
+            _ => None,
+        }
+    }
+    fn view_mut(state: &mut BlockEntityState) -> Option<&mut Self> {
+        match state {
+            BlockEntityState::SculkSensor(entity) => Some(entity),
+            BlockEntityState::CalibratedSculkSensor(entity) => Some(&mut entity.parent),
+            _ => None,
+        }
+    }
+}
+projection!(
+    sculk::CalibratedSculkSensorBlockEntity,
+    CalibratedSculkSensor
+);
+projection!(sculk::SculkShriekerBlockEntity, SculkShrieker);
+projection!(sculk::SculkCatalystBlockEntity, SculkCatalyst);
 projection!(ChestBlockEntity, Chest);
+projection!(spawner::SpawnerBlockEntity, Spawner);
+projection!(beehive::BeehiveBlockEntity, Beehive);
+projection!(brushable::BrushableBlockEntity, Brushable);
 projection!(BarrelBlockEntity, Barrel);
 projection!(ShulkerBoxBlockEntity, ShulkerBox);
 projection!(CrafterBlockEntity, Crafter);
@@ -607,7 +711,14 @@ pub fn new_block_entity(
     if state.block() == Block::MOVING_PISTON {
         return Ok(None);
     }
-    create(pos, state).map(Some)
+    let mut entity = create(pos, state)?;
+    // CrafterBlock#newBlockEntity initializes this scalar after the typed ctor;
+    // BlockEntityType#create/loadStatic retain the constructor's zero default.
+    if let BlockEntityState::Crafter(crafter) = &mut entity {
+        crafter.triggered =
+            i32::from(state.get(ferraloom_data::properties::TRIGGERED) == Some(true));
+    }
+    Ok(Some(entity))
 }
 pub fn supports_creation(block: Block) -> bool {
     block == Block::MOVING_PISTON || supports(block)

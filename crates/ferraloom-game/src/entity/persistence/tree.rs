@@ -193,7 +193,11 @@ impl Level {
         let mut tag = match state {
             EntityState::Cow(cow) => {
                 let mut tag = base.save_without_id();
-                cow.as_living().add_additional_save_data(&mut tag);
+                cow.as_living().add_additional_save_data(
+                    &mut tag,
+                    self,
+                    crate::entity::LivingEntity::absorption_amount,
+                )?;
                 tag.insert("Age", Tag::Int(cow.parent.parent.parent.age));
                 tag.insert("InLove", Tag::Int(cow.parent.parent.in_love));
 
@@ -203,7 +207,7 @@ impl Level {
             EntityState::Item(item) => item.save_without_id(self)?,
             EntityState::FallingBlock(block) => block.save_without_id(),
             EntityState::ExperienceOrb(orb) => orb.save_without_id(),
-            EntityState::Player(player) => player.save_without_id(),
+            EntityState::Player(player) => player.save_without_id(self)?,
         };
         if let Some(vehicle) = base.vehicle.get() {
             let mount = self.entity::<EntityData>(vehicle)?;

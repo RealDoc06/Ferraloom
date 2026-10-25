@@ -173,14 +173,17 @@ fn native_source_constructors_preserve_actor_identity_scaling_and_live_positions
     .enumerate()
     {
         level
-            .add_entity(EntityRef(index as u64 + 1), state)
+            .add_entity(
+                EntityRef::fixture(crate::level::RegionId::FIXTURE, index as u64 + 1),
+                state,
+            )
             .unwrap();
     }
     let actors = [
         None,
-        Some(EntityRef(1)),
-        Some(EntityRef(2)),
-        Some(EntityRef(3)),
+        Some(EntityRef::fixture(crate::level::RegionId::FIXTURE, 1)),
+        Some(EntityRef::fixture(crate::level::RegionId::FIXTURE, 2)),
+        Some(EntityRef::fixture(crate::level::RegionId::FIXTURE, 3)),
     ];
     let sources = registry.sources();
     let mut count = 0;
@@ -212,9 +215,11 @@ fn native_source_constructors_preserve_actor_identity_scaling_and_live_positions
                     registry.holder(DamageTypeKey::Generic).clone(),
                     Vec3::new(-0.0, 100.0, 3.0),
                 ),
-                "player" => sources.player_attack(EntityRef(1)),
-                "mob" => sources.mob_attack(EntityRef(2)),
-                "thorns" => sources.thorns(EntityRef(3)),
+                "player" => {
+                    sources.player_attack(EntityRef::fixture(crate::level::RegionId::FIXTURE, 1))
+                }
+                "mob" => sources.mob_attack(EntityRef::fixture(crate::level::RegionId::FIXTURE, 2)),
+                "thorns" => sources.thorns(EntityRef::fixture(crate::level::RegionId::FIXTURE, 3)),
                 "bad-respawn" => sources.bad_respawn_point_explosion(Vec3::new(-0.0, 100.0, 3.0)),
                 _ => panic!("unexpected source case {name}"),
             }
@@ -364,6 +369,36 @@ fn damage_rule_snapshots_use_definition_defaults_and_current_canonical_values() 
     canonical.update_level_rules(&mut snapshot);
     assert!(snapshot.fire_damage);
     assert!(!snapshot.drowning_damage && !snapshot.fall_damage && !snapshot.freeze_damage);
+}
+
+#[test]
+fn combat_and_drop_rules_publish_definition_defaults_and_each_canonical_change() {
+    use crate::{
+        gamerules::{GameRule, GameRuleValue, GameRules},
+        level::LevelRules,
+    };
+    let mut canonical = GameRules::default();
+    let mut snapshot = LevelRules::default();
+    for (rule, initial) in [
+        (GameRule::Pvp, snapshot.pvp),
+        (GameRule::MobDrops, snapshot.mob_drops),
+        (GameRule::KeepInventory, snapshot.keep_inventory),
+    ] {
+        assert_eq!(
+            GameRuleValue::Boolean(initial),
+            rule.definition().kind.default_value()
+        );
+        canonical
+            .set(rule, GameRuleValue::Boolean(!initial))
+            .unwrap();
+        canonical.update_level_rules(&mut snapshot);
+        assert_eq!(snapshot.pvp, canonical.boolean(GameRule::Pvp));
+        assert_eq!(snapshot.mob_drops, canonical.boolean(GameRule::MobDrops));
+        assert_eq!(
+            snapshot.keep_inventory,
+            canonical.boolean(GameRule::KeepInventory)
+        );
+    }
 }
 
 #[test]

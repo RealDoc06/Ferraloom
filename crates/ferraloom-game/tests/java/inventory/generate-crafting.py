@@ -10,7 +10,7 @@ vanilla=cache/'vanilla/26.3'
 java=cache/'toolchains/jdk-25.0.4.1+1/bin'
 classes=cache/'tools/inventory-vectors'
 cp=':'.join(map(str,[classes,vanilla/'versions/26.3/server-26.3.jar',*sorted((vanilla/'libraries').rglob('*.jar')),*sorted((vanilla/'tree-harness').rglob('*.jar'))]))
-for args in [[str(java/'javac'),'-cp',cp,'-d',str(classes),str(source/'CraftingMenuVectors.java'),str(source/'ClearGridVectors.java')],[str(java/'java'),'-Xmx768m','-Dnet.bytebuddy.experimental=true','-XX:+EnableDynamicAgentLoading','-cp',cp,'CraftingMenuVectors']]:
+for args in [[str(java/'javac'),'-cp',cp,'-d',str(classes),str(source/'CraftingMenuVectors.java'),str(source/'ClearGridVectors.java'),str(source/'ProducerVectors.java')],[str(java/'java'),'-Xmx768m','-Dnet.bytebuddy.experimental=true','-XX:+EnableDynamicAgentLoading','-cp',cp,'CraftingMenuVectors']]:
     result=subprocess.run(args,cwd=vanilla,text=True,capture_output=True)
     if result.returncode:
         print(result.stdout[-3000:]);print(result.stderr);raise SystemExit(result.returncode)
@@ -22,3 +22,8 @@ clear_rows=[line for line in result.stdout.splitlines() if line.startswith('clea
 assert len(clear_rows)==5
 (source/'clear-grid.tsv').write_text('\n'.join(clear_rows)+'\n')
 print(f'{len(clear_rows)} native full-inventory clearGrid timelines')
+
+producer_rows=[line for line in result.stdout.splitlines() if line.startswith('producer\t')]
+assert len(producer_rows)==5
+(source/'producers.tsv').write_text('\n'.join(producer_rows)+'\n')
+print(f'{len(producer_rows)} native advancement producer timelines')

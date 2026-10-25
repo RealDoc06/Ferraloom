@@ -132,7 +132,7 @@ fn retained_broadcast_receivers_and_memoized_copies_match_native_reentry() {
             fixture_level.install_shared(Box::default());
             fixture_level
         };
-        let player = EntityRef(1);
+        let player = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
         level
             .add_entity(
                 player,
@@ -211,7 +211,7 @@ fn menu_transfer_keeps_the_native_copy_alias_when_either_cache_is_replaced() {
             fixture_level.install_shared(Box::default());
             fixture_level
         };
-        let player = EntityRef(1);
+        let player = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
         level
             .add_entity(
                 player,

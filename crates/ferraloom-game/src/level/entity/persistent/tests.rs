@@ -46,7 +46,7 @@ fn load_request(level: &mut Level) -> (EntityLoadRequestId, ChunkPos) {
 }
 
 #[test]
-fn shared_status_and_io_queues_preserve_native_events_and_borrowed_state() {
+fn mutable_status_and_io_queues_preserve_native_events_and_canonical_state() {
     use crate::entity::player::{GameType, ServerPlayer};
     let mut level = level();
     let pos = ChunkPos::ZERO;
@@ -70,8 +70,12 @@ fn shared_status_and_io_queues_preserve_native_events_and_borrowed_state() {
     level
         .add_entity(player, EntityState::Player(Box::new(state)))
         .unwrap();
-    let shared = &level;
-    let captured = shared.entity::<EntityData>(EntityRef(1)).unwrap();
+    let shared = &mut level;
+    let captured_address = std::ptr::from_ref(
+        shared
+            .entity::<EntityData>(EntityRef::fixture(shared.region_id(), 1))
+            .unwrap(),
+    );
     shared.take_entity_management_events();
     let mut count = 0;
     for row in include_str!("../../../../tests/java/entity/vectors.tsv")
@@ -90,10 +94,12 @@ fn shared_status_and_io_queues_preserve_native_events_and_borrowed_state() {
             .take_entity_management_events()
             .into_iter()
             .map(|event| match event {
-                EntityManagementEvent::TrackingStart(id) => format!("TrackingStart:{}", id.0),
-                EntityManagementEvent::TrackingEnd(id) => format!("TrackingEnd:{}", id.0),
-                EntityManagementEvent::TickingStart(id) => format!("TickingStart:{}", id.0),
-                EntityManagementEvent::TickingEnd(id) => format!("TickingEnd:{}", id.0),
+                EntityManagementEvent::TrackingStart(id) => {
+                    format!("TrackingStart:{}", id.serial())
+                }
+                EntityManagementEvent::TrackingEnd(id) => format!("TrackingEnd:{}", id.serial()),
+                EntityManagementEvent::TickingStart(id) => format!("TickingStart:{}", id.serial()),
+                EntityManagementEvent::TickingEnd(id) => format!("TickingEnd:{}", id.serial()),
                 _ => panic!("unexpected status event {event:?}"),
             })
             .collect();
@@ -102,16 +108,36 @@ fn shared_status_and_io_queues_preserve_native_events_and_borrowed_state() {
             shared
                 .all_entities()
                 .iter()
-                .map(|id| id.0.to_string())
+                .map(|id| id.serial().to_string())
                 .collect::<Vec<_>>()
                 .join(","),
             values[3]
         );
-        assert_eq!(captured.uuid, Uuid::new(0, 1));
-        assert_eq!(captured.tick_count, 0);
+        assert_eq!(
+            shared
+                .entity::<EntityData>(EntityRef::fixture(shared.region_id(), 1))
+                .unwrap()
+                .uuid,
+            Uuid::new(0, 1)
+        );
+        assert_eq!(
+            shared
+                .entity::<EntityData>(EntityRef::fixture(shared.region_id(), 1))
+                .unwrap()
+                .tick_count,
+            0
+        );
         count += 1;
     }
     assert_eq!(count, 5);
+    assert_eq!(
+        captured_address,
+        std::ptr::from_ref(
+            shared
+                .entity::<EntityData>(EntityRef::fixture(shared.region_id(), 1))
+                .unwrap()
+        )
+    );
     let requests = shared.take_entity_storage_requests();
     assert_eq!(requests.len(), 1);
     let EntityStorageRequest::Load { id, pos: loaded } = requests[0] else {
@@ -128,7 +154,7 @@ fn shared_status_and_io_queues_preserve_native_events_and_borrowed_state() {
         ChunkLoadStatus::Pending
     );
     assert!(shared.take_entity_storage_requests().is_empty());
-    shared.process_pending_entity_loads_shared().unwrap();
+    shared.process_pending_entity_loads().unwrap();
     assert_eq!(
         shared.entity_chunk_load_status(pos),
         ChunkLoadStatus::Loaded
@@ -136,12 +162,21 @@ fn shared_status_and_io_queues_preserve_native_events_and_borrowed_state() {
     shared
         .update_entity_chunk_status(pos, Visibility::Hidden)
         .unwrap();
-    shared.process_pending_entity_loads_shared().unwrap();
+    shared.process_pending_entity_loads().unwrap();
     assert!(
-        !captured.removed,
+        !shared
+            .entity::<EntityData>(EntityRef::fixture(shared.region_id(), 1))
+            .unwrap()
+            .removed,
         "load integration does not run unload management"
     );
-    assert_eq!(captured.tick_count, 0);
+    assert_eq!(
+        shared
+            .entity::<EntityData>(EntityRef::fixture(shared.region_id(), 1))
+            .unwrap()
+            .tick_count,
+        0
+    );
 }
 
 #[test]
@@ -385,7 +420,7 @@ fn shared_entity_io_preflight_keeps_owned_nbt_and_never_replays_it() {
     let shared = &level;
     let pos = ChunkPos::ZERO;
     shared
-        .update_entity_chunk_status(pos, Visibility::Ticking)
+        .update_entity_chunk_status_shared(pos, Visibility::Ticking)
         .unwrap();
     let requests = shared.take_entity_storage_requests();
     let EntityStorageRequest::Load { id, .. } = requests[0] else {
@@ -419,14 +454,17 @@ fn shared_entity_io_preflight_keeps_owned_nbt_and_never_replays_it() {
         ChunkLoadStatus::Pending
     );
     assert_eq!(shared.next_entity_id().unwrap(), 1);
-    assert_eq!(shared.next_entity_ref(), EntityRef(1));
+    assert_eq!(
+        shared.next_entity_ref(),
+        EntityRef::fixture(shared.region_id(), 1)
+    );
     assert!(shared.all_entities().is_empty());
 }
 
 #[test]
-fn shared_legacy_load_skips_unknown_trees_and_keeps_registered_passenger_order() {
-    let level = level();
-    let shared = &level;
+fn mutable_legacy_load_skips_unknown_trees_and_keeps_registered_passenger_order() {
+    let mut level = level();
+    let shared = &mut level;
     let pos = ChunkPos::ZERO;
     shared
         .update_entity_chunk_status(pos, Visibility::Ticking)
@@ -452,25 +490,36 @@ fn shared_legacy_load_skips_unknown_trees_and_keeps_registered_passenger_order()
     shared
         .complete_entity_chunk_load(id, Ok(Some(chunk(pos, vec![unknown, root]))))
         .unwrap();
-    shared.process_pending_entity_loads_shared().unwrap();
-    assert_eq!(shared.all_entities(), [EntityRef(1), EntityRef(2)]);
-    let parent = shared.entity::<EntityData>(EntityRef(1)).unwrap();
-    assert_eq!(parent.passengers.as_slice(), &[EntityRef(2)]);
+    shared.process_pending_entity_loads().unwrap();
+    assert_eq!(
+        shared.all_entities(),
+        [
+            EntityRef::fixture(shared.region_id(), 1),
+            EntityRef::fixture(shared.region_id(), 2)
+        ]
+    );
+    let parent = shared
+        .entity::<EntityData>(EntityRef::fixture(shared.region_id(), 1))
+        .unwrap();
+    assert_eq!(
+        parent.passengers.as_slice(),
+        &[EntityRef::fixture(shared.region_id(), 2)]
+    );
     assert_eq!(
         shared
-            .entity::<EntityData>(EntityRef(2))
+            .entity::<EntityData>(EntityRef::fixture(shared.region_id(), 2))
             .unwrap()
             .vehicle
             .get(),
-        Some(EntityRef(1))
+        Some(EntityRef::fixture(shared.region_id(), 1))
     );
     assert_eq!(
         shared.take_entity_management_events(),
         [
-            EntityManagementEvent::TrackingStart(EntityRef(1)),
-            EntityManagementEvent::TickingStart(EntityRef(1)),
-            EntityManagementEvent::TrackingStart(EntityRef(2)),
-            EntityManagementEvent::TickingStart(EntityRef(2))
+            EntityManagementEvent::TrackingStart(EntityRef::fixture(shared.region_id(), 1)),
+            EntityManagementEvent::TickingStart(EntityRef::fixture(shared.region_id(), 1)),
+            EntityManagementEvent::TrackingStart(EntityRef::fixture(shared.region_id(), 2)),
+            EntityManagementEvent::TickingStart(EntityRef::fixture(shared.region_id(), 2))
         ]
     );
     assert!(shared.are_entities_loaded(pos));
@@ -558,4 +607,37 @@ fn duplicate_vehicle_uuid_keeps_held_object_without_stealing_the_visible_identit
     assert!(level.entity_state(duplicate).is_err());
     assert_eq!(level.entity_by_uuid(Uuid::new(0, 1)), Some(original));
     assert_eq!(level.entity_chunk_load_status(pos), ChunkLoadStatus::Loaded);
+}
+
+#[test]
+fn shared_visibility_requires_mutable_tracking_without_losing_the_transition() {
+    let mut level = level();
+    let pos = ChunkPos::ZERO;
+    level
+        .add_worldgen_chunk_entities_shared(pos, vec![orb_tag(1, Vec3::new(1.0, 64.0, 1.0))])
+        .unwrap();
+    level.take_entity_management_events();
+    assert_eq!(
+        level.update_entity_chunk_status_shared(pos, Visibility::Tracked),
+        Err(LevelError::UnsupportedSharedEntityTracking(
+            "update_entity_chunk_status_shared"
+        ))
+    );
+    assert_eq!(level.entity_chunk_visibility(pos), Visibility::Hidden);
+    assert!(level.all_entities().is_empty());
+    assert!(level.take_entity_management_events().is_empty());
+    level
+        .update_entity_chunk_status(pos, Visibility::Tracked)
+        .unwrap();
+    assert_eq!(
+        level.all_entities(),
+        [EntityRef::fixture(level.region_id(), 1)]
+    );
+    assert_eq!(
+        level.take_entity_management_events(),
+        [EntityManagementEvent::TrackingStart(EntityRef::fixture(
+            level.region_id(),
+            1
+        ))]
+    );
 }

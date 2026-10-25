@@ -1,9 +1,14 @@
 //! Port of ChunkMap.TrackedEntity's audience and movement gates.
-use super::{ServerEntity, TrackingAudience, TrackingError, TrackingPacket, codec::UpdateInterval};
+use super::{ServerEntity, TrackingError, codec::UpdateInterval};
+#[cfg(test)]
+use super::{TrackingAudience, TrackingPacket};
+#[cfg(test)]
+use crate::entity::EntityState;
 use crate::{
-    entity::{EntityData, EntityRef, EntityState, player::ServerPlayer},
+    entity::{EntityData, EntityRef, player::ServerPlayer},
     level::Level,
 };
+#[cfg(test)]
 use ferraloom_protocol::play::{ClientboundMessage, clientbound::Packet};
 use ferraloom_util::SectionPos;
 
@@ -16,6 +21,7 @@ pub struct PlayerTrackingView {
     pub broadcast_range_percentage: i32,
     pub chunk_tracked: bool,
 }
+#[cfg(test)]
 #[derive(Clone, Debug, PartialEq)]
 pub struct DirectedTrackingMessage {
     pub player: EntityRef,
@@ -25,10 +31,10 @@ pub struct DirectedTrackingMessage {
 pub struct TrackedEntity {
     pub server_entity: ServerEntity,
     range: i32,
-    last_section_pos: SectionPos,
+    pub(crate) last_section_pos: SectionPos,
     // Java's connection identity hashes vary across runs. A unique insertion
     // sequence gives the reference-set order Ferraloom intentionally uses.
-    seen_by: Vec<EntityRef>,
+    pub(crate) seen_by: Vec<EntityRef>,
 }
 impl TrackedEntity {
     pub fn new(entity: EntityRef, level: &Level) -> Result<Self, TrackingError> {
@@ -62,16 +68,15 @@ impl TrackedEntity {
         }
         Ok(percentage.wrapping_mul(range) / 100)
     }
-    /// Native horizontal-circle boundary is inclusive; vertical separation is
-    /// deliberately absent. The chunk-tracked guard remains independent.
-    pub fn update_player(
-        &mut self,
-        level: &mut Level,
+    /// The shared ChunkMap.TrackedEntity#updatePlayer eligibility test.
+    pub(crate) fn visible_to(
+        &self,
+        level: &Level,
         view: PlayerTrackingView,
-    ) -> Result<Vec<DirectedTrackingMessage>, TrackingError> {
+    ) -> Result<bool, TrackingError> {
         let entity = self.server_entity.entity;
         if view.player == entity {
-            return Ok(Vec::new());
+            return Ok(false);
         }
         let player = level.entity::<ServerPlayer>(view.player)?;
         let entity_position = level.entity::<EntityData>(entity)?.position;
@@ -86,6 +91,23 @@ impl TrackedEntity {
                 .entity_behavior(entity)?
                 .broadcast_to_player(entity, view.player, level)?
             && view.chunk_tracked;
+        Ok(visible)
+    }
+}
+
+// Pure value adapter for the established native unit vectors. Production world
+// callbacks use Level's canonical tracker entry and ordered packet effects.
+#[cfg(test)]
+impl TrackedEntity {
+    /// Native horizontal-circle boundary is inclusive; vertical separation is
+    /// deliberately absent. The chunk-tracked guard remains independent.
+    pub fn update_player(
+        &mut self,
+        level: &mut Level,
+        view: PlayerTrackingView,
+    ) -> Result<Vec<DirectedTrackingMessage>, TrackingError> {
+        let entity = self.server_entity.entity;
+        let visible = self.visible_to(level, view)?;
         if visible {
             if self.seen_by.contains(&view.player) {
                 return Ok(Vec::new());
