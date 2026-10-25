@@ -1,0 +1,898 @@
+[
+  {
+    "name": "minecraft:angry_villager",
+    "id": 0,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "00"
+  },
+  {
+    "name": "minecraft:block",
+    "id": 1,
+    "override_limiter": false,
+    "codec_kind": "BlockParticleOption",
+    "wire": "0101"
+  },
+  {
+    "name": "minecraft:block_marker",
+    "id": 2,
+    "override_limiter": true,
+    "codec_kind": "BlockParticleOption",
+    "wire": "0201"
+  },
+  {
+    "name": "minecraft:bubble",
+    "id": 3,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "03"
+  },
+  {
+    "name": "minecraft:sulfur_bubbles",
+    "id": 4,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "04"
+  },
+  {
+    "name": "minecraft:noxious_gas",
+    "id": 5,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "05"
+  },
+  {
+    "name": "minecraft:noxious_gas_cloud",
+    "id": 6,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "06"
+  },
+  {
+    "name": "minecraft:geyser",
+    "id": 7,
+    "override_limiter": true,
+    "codec_kind": "GeyserParticleOptions",
+    "wire": "0700000003"
+  },
+  {
+    "name": "minecraft:geyser_base",
+    "id": 8,
+    "override_limiter": true,
+    "codec_kind": "GeyserBaseParticleOptions",
+    "wire": "08000000033e800000"
+  },
+  {
+    "name": "minecraft:geyser_poof",
+    "id": 9,
+    "override_limiter": true,
+    "codec_kind": "GeyserBaseParticleOptions",
+    "wire": "09000000033e800000"
+  },
+  {
+    "name": "minecraft:geyser_plume",
+    "id": 10,
+    "override_limiter": true,
+    "codec_kind": "GeyserParticleOptions",
+    "wire": "0a00000003"
+  },
+  {
+    "name": "minecraft:cloud",
+    "id": 11,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "0b"
+  },
+  {
+    "name": "minecraft:copper_fire_flame",
+    "id": 12,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "0c"
+  },
+  {
+    "name": "minecraft:crit",
+    "id": 13,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "0d"
+  },
+  {
+    "name": "minecraft:damage_indicator",
+    "id": 14,
+    "override_limiter": true,
+    "codec_kind": "SimpleParticleType",
+    "wire": "0e"
+  },
+  {
+    "name": "minecraft:dragon_breath",
+    "id": 15,
+    "override_limiter": false,
+    "codec_kind": "PowerParticleOption",
+    "wire": "0f3f400000"
+  },
+  {
+    "name": "minecraft:dripping_lava",
+    "id": 16,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "10"
+  },
+  {
+    "name": "minecraft:falling_lava",
+    "id": 17,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "11"
+  },
+  {
+    "name": "minecraft:landing_lava",
+    "id": 18,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "12"
+  },
+  {
+    "name": "minecraft:dripping_water",
+    "id": 19,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "13"
+  },
+  {
+    "name": "minecraft:falling_water",
+    "id": 20,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "14"
+  },
+  {
+    "name": "minecraft:dust",
+    "id": 21,
+    "override_limiter": false,
+    "codec_kind": "DustParticleOptions",
+    "wire": "15003366993fa00000"
+  },
+  {
+    "name": "minecraft:dust_color_transition",
+    "id": 22,
+    "override_limiter": false,
+    "codec_kind": "DustColorTransitionOptions",
+    "wire": "1600336699006688cc3fa00000"
+  },
+  {
+    "name": "minecraft:effect",
+    "id": 23,
+    "override_limiter": false,
+    "codec_kind": "SpellParticleOption",
+    "wire": "17003366993f400000"
+  },
+  {
+    "name": "minecraft:elder_guardian",
+    "id": 24,
+    "override_limiter": true,
+    "codec_kind": "SimpleParticleType",
+    "wire": "18"
+  },
+  {
+    "name": "minecraft:enchanted_hit",
+    "id": 25,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "19"
+  },
+  {
+    "name": "minecraft:enchant",
+    "id": 26,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "1a"
+  },
+  {
+    "name": "minecraft:end_rod",
+    "id": 27,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "1b"
+  },
+  {
+    "name": "minecraft:entity_effect",
+    "id": 28,
+    "override_limiter": false,
+    "codec_kind": "ColorParticleOption",
+    "wire": "1c00336699"
+  },
+  {
+    "name": "minecraft:explosion_emitter",
+    "id": 29,
+    "override_limiter": true,
+    "codec_kind": "SimpleParticleType",
+    "wire": "1d"
+  },
+  {
+    "name": "minecraft:explosion",
+    "id": 30,
+    "override_limiter": true,
+    "codec_kind": "SimpleParticleType",
+    "wire": "1e"
+  },
+  {
+    "name": "minecraft:gust",
+    "id": 31,
+    "override_limiter": true,
+    "codec_kind": "SimpleParticleType",
+    "wire": "1f"
+  },
+  {
+    "name": "minecraft:small_gust",
+    "id": 32,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "20"
+  },
+  {
+    "name": "minecraft:gust_emitter_large",
+    "id": 33,
+    "override_limiter": true,
+    "codec_kind": "SimpleParticleType",
+    "wire": "21"
+  },
+  {
+    "name": "minecraft:gust_emitter_small",
+    "id": 34,
+    "override_limiter": true,
+    "codec_kind": "SimpleParticleType",
+    "wire": "22"
+  },
+  {
+    "name": "minecraft:sonic_boom",
+    "id": 35,
+    "override_limiter": true,
+    "codec_kind": "SimpleParticleType",
+    "wire": "23"
+  },
+  {
+    "name": "minecraft:falling_dust",
+    "id": 36,
+    "override_limiter": false,
+    "codec_kind": "BlockParticleOption",
+    "wire": "2401"
+  },
+  {
+    "name": "minecraft:firework",
+    "id": 37,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "25"
+  },
+  {
+    "name": "minecraft:fishing",
+    "id": 38,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "26"
+  },
+  {
+    "name": "minecraft:flame",
+    "id": 39,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "27"
+  },
+  {
+    "name": "minecraft:infested",
+    "id": 40,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "28"
+  },
+  {
+    "name": "minecraft:cherry_leaves",
+    "id": 41,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "29"
+  },
+  {
+    "name": "minecraft:pale_oak_leaves",
+    "id": 42,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "2a"
+  },
+  {
+    "name": "minecraft:red_poplar_leaves",
+    "id": 43,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "2b"
+  },
+  {
+    "name": "minecraft:orange_poplar_leaves",
+    "id": 44,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "2c"
+  },
+  {
+    "name": "minecraft:yellow_poplar_leaves",
+    "id": 45,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "2d"
+  },
+  {
+    "name": "minecraft:tinted_leaves",
+    "id": 46,
+    "override_limiter": false,
+    "codec_kind": "ColorParticleOption",
+    "wire": "2e00336699"
+  },
+  {
+    "name": "minecraft:sculk_soul",
+    "id": 47,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "2f"
+  },
+  {
+    "name": "minecraft:sculk_charge",
+    "id": 48,
+    "override_limiter": true,
+    "codec_kind": "SculkChargeParticleOptions",
+    "wire": "303e800000"
+  },
+  {
+    "name": "minecraft:sculk_charge_pop",
+    "id": 49,
+    "override_limiter": true,
+    "codec_kind": "SimpleParticleType",
+    "wire": "31"
+  },
+  {
+    "name": "minecraft:soul_fire_flame",
+    "id": 50,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "32"
+  },
+  {
+    "name": "minecraft:soul",
+    "id": 51,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "33"
+  },
+  {
+    "name": "minecraft:flash",
+    "id": 52,
+    "override_limiter": false,
+    "codec_kind": "ColorParticleOption",
+    "wire": "3400336699"
+  },
+  {
+    "name": "minecraft:happy_villager",
+    "id": 53,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "35"
+  },
+  {
+    "name": "minecraft:composter",
+    "id": 54,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "36"
+  },
+  {
+    "name": "minecraft:heart",
+    "id": 55,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "37"
+  },
+  {
+    "name": "minecraft:instant_effect",
+    "id": 56,
+    "override_limiter": false,
+    "codec_kind": "SpellParticleOption",
+    "wire": "38003366993f400000"
+  },
+  {
+    "name": "minecraft:item",
+    "id": 57,
+    "override_limiter": false,
+    "codec_kind": "ItemParticleOption",
+    "wire": "3901020000"
+  },
+  {
+    "name": "minecraft:vibration",
+    "id": 58,
+    "override_limiter": true,
+    "codec_kind": "VibrationParticleOption",
+    "wire": "3a00000000400000300205"
+  },
+  {
+    "name": "minecraft:trail",
+    "id": 59,
+    "override_limiter": false,
+    "codec_kind": "TrailParticleOption",
+    "wire": "3b3ff80000000000004004000000000000400c0000000000000033669907"
+  },
+  {
+    "name": "minecraft:pause_mob_growth",
+    "id": 60,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "3c"
+  },
+  {
+    "name": "minecraft:reset_mob_growth",
+    "id": 61,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "3d"
+  },
+  {
+    "name": "minecraft:item_slime",
+    "id": 62,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "3e"
+  },
+  {
+    "name": "minecraft:item_cobweb",
+    "id": 63,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "3f"
+  },
+  {
+    "name": "minecraft:item_snowball",
+    "id": 64,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "40"
+  },
+  {
+    "name": "minecraft:large_smoke",
+    "id": 65,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "41"
+  },
+  {
+    "name": "minecraft:lava",
+    "id": 66,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "42"
+  },
+  {
+    "name": "minecraft:mycelium",
+    "id": 67,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "43"
+  },
+  {
+    "name": "minecraft:note",
+    "id": 68,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "44"
+  },
+  {
+    "name": "minecraft:poof",
+    "id": 69,
+    "override_limiter": true,
+    "codec_kind": "SimpleParticleType",
+    "wire": "45"
+  },
+  {
+    "name": "minecraft:portal",
+    "id": 70,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "46"
+  },
+  {
+    "name": "minecraft:rain",
+    "id": 71,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "47"
+  },
+  {
+    "name": "minecraft:smoke",
+    "id": 72,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "48"
+  },
+  {
+    "name": "minecraft:white_smoke",
+    "id": 73,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "49"
+  },
+  {
+    "name": "minecraft:sneeze",
+    "id": 74,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "4a"
+  },
+  {
+    "name": "minecraft:spit",
+    "id": 75,
+    "override_limiter": true,
+    "codec_kind": "SimpleParticleType",
+    "wire": "4b"
+  },
+  {
+    "name": "minecraft:squid_ink",
+    "id": 76,
+    "override_limiter": true,
+    "codec_kind": "SimpleParticleType",
+    "wire": "4c"
+  },
+  {
+    "name": "minecraft:sweep_attack",
+    "id": 77,
+    "override_limiter": true,
+    "codec_kind": "SimpleParticleType",
+    "wire": "4d"
+  },
+  {
+    "name": "minecraft:totem_of_undying",
+    "id": 78,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "4e"
+  },
+  {
+    "name": "minecraft:underwater",
+    "id": 79,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "4f"
+  },
+  {
+    "name": "minecraft:splash",
+    "id": 80,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "50"
+  },
+  {
+    "name": "minecraft:witch",
+    "id": 81,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "51"
+  },
+  {
+    "name": "minecraft:bubble_pop",
+    "id": 82,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "52"
+  },
+  {
+    "name": "minecraft:current_down",
+    "id": 83,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "53"
+  },
+  {
+    "name": "minecraft:bubble_column_up",
+    "id": 84,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "54"
+  },
+  {
+    "name": "minecraft:nautilus",
+    "id": 85,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "55"
+  },
+  {
+    "name": "minecraft:dolphin",
+    "id": 86,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "56"
+  },
+  {
+    "name": "minecraft:campfire_cosy_smoke",
+    "id": 87,
+    "override_limiter": true,
+    "codec_kind": "SimpleParticleType",
+    "wire": "57"
+  },
+  {
+    "name": "minecraft:campfire_signal_smoke",
+    "id": 88,
+    "override_limiter": true,
+    "codec_kind": "SimpleParticleType",
+    "wire": "58"
+  },
+  {
+    "name": "minecraft:dripping_honey",
+    "id": 89,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "59"
+  },
+  {
+    "name": "minecraft:falling_honey",
+    "id": 90,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "5a"
+  },
+  {
+    "name": "minecraft:landing_honey",
+    "id": 91,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "5b"
+  },
+  {
+    "name": "minecraft:falling_nectar",
+    "id": 92,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "5c"
+  },
+  {
+    "name": "minecraft:falling_spore_blossom",
+    "id": 93,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "5d"
+  },
+  {
+    "name": "minecraft:ash",
+    "id": 94,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "5e"
+  },
+  {
+    "name": "minecraft:crimson_spore",
+    "id": 95,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "5f"
+  },
+  {
+    "name": "minecraft:warped_spore",
+    "id": 96,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "60"
+  },
+  {
+    "name": "minecraft:spore_blossom_air",
+    "id": 97,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "61"
+  },
+  {
+    "name": "minecraft:dripping_obsidian_tear",
+    "id": 98,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "62"
+  },
+  {
+    "name": "minecraft:falling_obsidian_tear",
+    "id": 99,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "63"
+  },
+  {
+    "name": "minecraft:landing_obsidian_tear",
+    "id": 100,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "64"
+  },
+  {
+    "name": "minecraft:reverse_portal",
+    "id": 101,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "65"
+  },
+  {
+    "name": "minecraft:white_ash",
+    "id": 102,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "66"
+  },
+  {
+    "name": "minecraft:small_flame",
+    "id": 103,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "67"
+  },
+  {
+    "name": "minecraft:snowflake",
+    "id": 104,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "68"
+  },
+  {
+    "name": "minecraft:dripping_dripstone_lava",
+    "id": 105,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "69"
+  },
+  {
+    "name": "minecraft:falling_dripstone_lava",
+    "id": 106,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "6a"
+  },
+  {
+    "name": "minecraft:dripping_dripstone_water",
+    "id": 107,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "6b"
+  },
+  {
+    "name": "minecraft:falling_dripstone_water",
+    "id": 108,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "6c"
+  },
+  {
+    "name": "minecraft:glow_squid_ink",
+    "id": 109,
+    "override_limiter": true,
+    "codec_kind": "SimpleParticleType",
+    "wire": "6d"
+  },
+  {
+    "name": "minecraft:glow",
+    "id": 110,
+    "override_limiter": true,
+    "codec_kind": "SimpleParticleType",
+    "wire": "6e"
+  },
+  {
+    "name": "minecraft:wax_on",
+    "id": 111,
+    "override_limiter": true,
+    "codec_kind": "SimpleParticleType",
+    "wire": "6f"
+  },
+  {
+    "name": "minecraft:wax_off",
+    "id": 112,
+    "override_limiter": true,
+    "codec_kind": "SimpleParticleType",
+    "wire": "70"
+  },
+  {
+    "name": "minecraft:electric_spark",
+    "id": 113,
+    "override_limiter": true,
+    "codec_kind": "SimpleParticleType",
+    "wire": "71"
+  },
+  {
+    "name": "minecraft:scrape",
+    "id": 114,
+    "override_limiter": true,
+    "codec_kind": "SimpleParticleType",
+    "wire": "72"
+  },
+  {
+    "name": "minecraft:shriek",
+    "id": 115,
+    "override_limiter": false,
+    "codec_kind": "ShriekParticleOption",
+    "wire": "7302"
+  },
+  {
+    "name": "minecraft:egg_crack",
+    "id": 116,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "74"
+  },
+  {
+    "name": "minecraft:dust_plume",
+    "id": 117,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "75"
+  },
+  {
+    "name": "minecraft:trial_spawner_detection",
+    "id": 118,
+    "override_limiter": true,
+    "codec_kind": "SimpleParticleType",
+    "wire": "76"
+  },
+  {
+    "name": "minecraft:trial_spawner_detection_ominous",
+    "id": 119,
+    "override_limiter": true,
+    "codec_kind": "SimpleParticleType",
+    "wire": "77"
+  },
+  {
+    "name": "minecraft:vault_connection",
+    "id": 120,
+    "override_limiter": true,
+    "codec_kind": "SimpleParticleType",
+    "wire": "78"
+  },
+  {
+    "name": "minecraft:dust_pillar",
+    "id": 121,
+    "override_limiter": false,
+    "codec_kind": "BlockParticleOption",
+    "wire": "7901"
+  },
+  {
+    "name": "minecraft:ominous_spawning",
+    "id": 122,
+    "override_limiter": true,
+    "codec_kind": "SimpleParticleType",
+    "wire": "7a"
+  },
+  {
+    "name": "minecraft:raid_omen",
+    "id": 123,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "7b"
+  },
+  {
+    "name": "minecraft:trial_omen",
+    "id": 124,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "7c"
+  },
+  {
+    "name": "minecraft:block_crumble",
+    "id": 125,
+    "override_limiter": false,
+    "codec_kind": "BlockParticleOption",
+    "wire": "7d01"
+  },
+  {
+    "name": "minecraft:firefly",
+    "id": 126,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "7e"
+  },
+  {
+    "name": "minecraft:sulfur_cube_goo",
+    "id": 127,
+    "override_limiter": false,
+    "codec_kind": "SimpleParticleType",
+    "wire": "7f"
+  }
+]

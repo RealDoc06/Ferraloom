@@ -144,7 +144,7 @@ async fn sweep(session: &mut Session) -> Result<ObservationLog> {
             "commands.scoreboard.objectives.add.success",
         ),
         (
-            "scoreboard players set #capture_barrier capture_barrier 0",
+            "scoreboard players set #capture_barrier capture_barrier 1",
             "commands.scoreboard.players.set.success.single",
         ),
     ] {
@@ -193,7 +193,7 @@ async fn sweep(session: &mut Session) -> Result<ObservationLog> {
             !text.contains(['<', '>']),
             "unbound command argument: {text}"
         );
-        let observed = command(bot, &text).await?;
+        let mut observed = command(bot, &text).await?;
         ensure!(
             observed.iter().any(|event| event.get("chat").is_some()),
             "{id}: missing command feedback"
@@ -205,6 +205,24 @@ async fn sweep(session: &mut Session) -> Result<ObservationLog> {
                     .any(|event| event.to_string().contains("command.unknown")),
                 "{id}: executable path rejected: {observed:?}"
             );
+        }
+        if id == "commands.path.scoreboard.players.list.arg-target" {
+            // PlayerScores keys this independent entry list by Objective identity hash.
+            // Only these entry lines vary with JVM allocation; the header and all other
+            // commands and packets retain their original emission order.
+            ensure!(
+                observed
+                    .first()
+                    .is_some_and(|event| event["chat"]["translate"]
+                        == "commands.scoreboard.players.list.entity.success"),
+                "{id}: missing list header"
+            );
+            ensure!(
+                observed[1..].iter().all(|event| event["chat"]["translate"]
+                    == "commands.scoreboard.players.list.entity.entry"),
+                "{id}: unexpected entry/packet shape"
+            );
+            observed[1..].sort_by_key(Value::to_string);
         }
         log.record(id, observed)?;
     }
@@ -330,6 +348,14 @@ async fn sweep(session: &mut Session) -> Result<ObservationLog> {
         "operation.readonly-target",
         command(bot, "scoreboard players get #holder points").await?,
     )?;
+    for (label, text) in [
+        ("zero.set", "scoreboard players set #holder points 0"),
+        ("zero.repeat", "scoreboard players set #holder points 0"),
+        ("zero.add", "scoreboard players add #holder points 0"),
+        ("zero.remove", "scoreboard players remove #holder points 0"),
+    ] {
+        log.record(label, command(bot, text).await?)?;
+    }
     command(bot, "scoreboard players enable ParityBot toggle").await?;
     log.record(
         "trigger.primed",

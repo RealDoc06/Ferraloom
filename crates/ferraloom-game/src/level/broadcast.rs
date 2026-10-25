@@ -14,7 +14,7 @@ pub(super) struct BlockChanges {
     pending: ferraloom_util::collections::LongLinkedOpenHashSet,
 }
 impl Level {
-    pub(super) fn send_block_updated(&mut self, pos: BlockPos, old: BlockState, new: BlockState) {
+    pub fn send_block_updated(&mut self, pos: BlockPos, old: BlockState, new: BlockState) {
         let chunk_pos = ChunkPos::containing(pos);
         if self
             .chunk(chunk_pos)

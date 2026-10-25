@@ -26,7 +26,7 @@ import net.minecraft.world.phys.Vec3;
 
 /** Real ServerLevel loot, Level#destroyBlock and LevelChunk removal callbacks.
  * Only outbound effects and chunk acquisition are captured; no allocation bypass. */
-public final class DestroyBlockVectors extends ServerLevel {
+public class DestroyBlockVectors extends ServerLevel {
     static final BlockPos POS = new BlockPos(8, 64, 8);
     final Map<ChunkPos, LevelChunk> chunks = new HashMap<>();
     final List<String> trace = new ArrayList<>();

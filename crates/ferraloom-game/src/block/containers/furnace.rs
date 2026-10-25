@@ -12,6 +12,7 @@ use ferraloom_protocol::{
     Identifier,
     component::{ComponentTypeId, DataComponentMap},
 };
+use ferraloom_util::random::RandomSource;
 
 /// Recipe keys are interned identities in vanilla's Reference2IntOpenHashMap;
 /// deterministic insertion order is the accepted identity-hash variation.
@@ -59,6 +60,97 @@ impl FromIterator<(Identifier, i32)> for RecipesUsed {
             result.insert(id, count);
         }
         result
+    }
+}
+
+/// Port of AbstractFurnaceBlockEntity#getRecipesToAwardAndPopExperience.
+/// Each entry's XP is spawned before looking up the next entry; the returned
+/// holder list is vanilla's explicit capture, not a copy of container contents.
+pub fn get_recipes_to_award_and_pop_experience<'a>(
+    handle: BlockEntityRef,
+    position: ferraloom_util::Vec3,
+    recipes: &'a crate::crafting::RecipeManager,
+    level: &mut Level,
+) -> Result<Vec<&'a crate::crafting::RecipeHolder>, LevelError> {
+    let mut result = Vec::new();
+    let mut ordinal = 0;
+    loop {
+        let entry = level
+            .block_entity::<AbstractFurnaceBlockEntity>(handle)?
+            .recipes_used
+            .iter()
+            .nth(ordinal)
+            .map(|(id, count)| (id.clone(), *count));
+        let Some((id, count)) = entry else {
+            break;
+        };
+        ordinal += 1;
+        let key = id
+            .as_str()
+            .parse()
+            .map_err(|_| LevelError::Inventory("furnace recipe identifier"))?;
+        if let Some(recipe) = recipes.by_key(&key) {
+            result.push(recipe);
+            let experience = recipe
+                .value
+                .experience()
+                .ok_or(LevelError::Inventory("furnace cooking recipe"))?;
+            let product = count as f32 * experience;
+            let mut reward = ferraloom_util::mth::floor(f64::from(product));
+            let fraction = product - reward as f32;
+            if fraction != 0.0 && level.random().next_float() < fraction {
+                reward = reward.wrapping_add(1);
+            }
+            crate::entity::experience_orb::award(
+                level,
+                position,
+                ferraloom_util::Vec3::ZERO,
+                reward,
+            )?;
+        }
+    }
+    Ok(result)
+}
+
+/// Port of AbstractFurnaceBlockEntity#awardUsedRecipesAndPopExperience. All XP
+/// precedes unlock callbacks and their packet, then each recipe-crafted trigger
+/// reads the furnace's current item receivers before recipesUsed is cleared.
+pub fn award_used_recipes_and_pop_experience(
+    handle: BlockEntityRef,
+    player: crate::entity::EntityRef,
+    level: &mut Level,
+) -> Result<(), LevelError> {
+    let resources = level.container_resources()?;
+    let position = level.entity::<crate::entity::EntityData>(player)?.position;
+    let recipes =
+        get_recipes_to_award_and_pop_experience(handle, position, &resources.recipes, level)?;
+    crate::advancements::award_recipes(level, player, recipes.iter().copied())?;
+    for recipe in recipes {
+        let mut operation = crate::inventory::StackOperation::new(level);
+        let mut items = Vec::with_capacity(3);
+        for slot in 0..3 {
+            items.push(
+                operation
+                    .pin(crate::inventory::ContainerSlot {
+                        container: crate::inventory::ContainerHandle::BlockEntity(handle),
+                        slot,
+                    })
+                    .map_err(furnace_menu_error)?,
+            );
+        }
+        crate::advancements::criteria::recipe_crafted(operation.level, player, recipe, &items)?;
+    }
+    level
+        .block_entity_mut::<AbstractFurnaceBlockEntity>(handle)?
+        .recipes_used
+        .clear();
+    Ok(())
+}
+
+fn furnace_menu_error(error: crate::inventory::MenuError) -> LevelError {
+    match error {
+        crate::inventory::MenuError::Level(error) => error,
+        _ => LevelError::Inventory("furnace item receiver"),
     }
 }
 
@@ -244,13 +336,20 @@ impl BlockEntity for FurnaceBehavior {
         entity: BlockEntityRef,
         level: &mut Level,
     ) -> Result<(), LevelError> {
+        super::drops::drop_contents(entity, level)?;
         if !level
             .block_entity::<AbstractFurnaceBlockEntity>(entity)?
             .recipes_used
             .is_empty()
         {
-            return Err(LevelError::Inventory("furnace recipe experience hook"));
+            let resources = level.container_resources()?;
+            let position = ferraloom_util::Vec3::new(
+                f64::from(entity.pos.x) + 0.5,
+                f64::from(entity.pos.y) + 0.5,
+                f64::from(entity.pos.z) + 0.5,
+            );
+            get_recipes_to_award_and_pop_experience(entity, position, &resources.recipes, level)?;
         }
-        super::drops::drop_contents(entity, level)
+        Ok(())
     }
 }

@@ -10,5 +10,6 @@ pub(super) fn ported_behavior(
     super::plants::ported_behavior(block, method)
         .or_else(|| super::redstone::ported_behavior(block, method))
         .or_else(|| super::containers::ported_behavior(block, method))
+        .or_else(|| super::breaking::ported_behavior(block, method))
         .or_else(|| super::building::ported_behavior(block, method))
 }

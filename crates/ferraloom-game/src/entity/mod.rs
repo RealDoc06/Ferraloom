@@ -17,6 +17,8 @@ pub mod mob;
 pub mod monster;
 pub mod player;
 pub mod pushing;
+mod stuck;
+pub use stuck::{make_stuck_in_block, reset_fall_distance};
 mod relationships;
 pub use relationships::PassengerList;
 
@@ -230,6 +232,9 @@ pub enum EntityMethod {
     RespawnEntityOnShoulder,
     CheckAutoSpinAttack,
     RunLocationChangedEffects,
+    BroadcastEntityEvent,
+    EnchantmentAttributeModifiers,
+    StopLocationBasedEffects,
     JumpInLiquid,
 }
 impl EntityMethod {
@@ -241,6 +246,9 @@ impl EntityMethod {
             Self::RespawnEntityOnShoulder => "respawnEntityOnShoulder",
             Self::CheckAutoSpinAttack => "checkAutoSpinAttack",
             Self::RunLocationChangedEffects => "EnchantmentHelper#runLocationChangedEffects",
+            Self::BroadcastEntityEvent => "ServerLevel#broadcastEntityEvent",
+            Self::EnchantmentAttributeModifiers => "EnchantmentHelper#forEachModifier",
+            Self::StopLocationBasedEffects => "EnchantmentHelper#stopLocationBasedEffects",
             Self::JumpInLiquid => "jumpInLiquid",
         }
     }
@@ -256,6 +264,20 @@ pub fn trace_base_entity_refs(base: &EntityData, references: &mut Vec<EntityRef>
 ///
 /// Dispatch objects are stateless. Never hold a state borrow across a world call.
 pub trait Entity: Sync {
+    /// Port of Entity#resetFallDistance; ServerPlayer adds its fall criterion.
+    fn reset_fall_distance(&self, entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
+        stuck::base_reset_fall_distance(entity, level)
+    }
+    /// Port of Entity#makeStuckInBlock, retaining this derived reset dispatcher.
+    fn make_stuck_in_block(
+        &self,
+        entity: EntityRef,
+        state: ferraloom_data::BlockState,
+        multiplier: Vec3,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        stuck::base_make_stuck_in_block(self, entity, state, multiplier, level)
+    }
     /// Port of Entity#getName, with Player and ItemEntity virtual overrides.
     fn name(
         &self,
@@ -720,7 +742,7 @@ pub trait Entity: Sync {
         pos: ferraloom_util::BlockPos,
         level: &mut Level,
     ) -> Result<(), LevelError> {
-        movement::base_check_fall_damage(entity, dy, on_ground, state, pos, level)
+        movement::base_check_fall_damage(self, entity, dy, on_ground, state, pos, level)
     }
     fn on_changed_block(
         &self,
@@ -766,6 +788,17 @@ pub trait Entity: Sync {
             behavior.cause_fall_damage(passenger, level, fall_distance, damage_modifier)?;
         }
         Ok(false)
+    }
+
+    /// Port of LivingEntity#onEquippedItemBroken, overridden by ServerPlayer.
+    fn on_equipped_item_broken(
+        &self,
+        entity: EntityRef,
+        broken: ferraloom_protocol::component::ItemStack,
+        slot: ferraloom_protocol::component::EquipmentSlot,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        living::on_equipped_item_broken_parent(entity, &broken, slot, level)
     }
 
     fn can_be_collided_with(

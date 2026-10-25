@@ -210,9 +210,8 @@ fn finish<E: Entity + ?Sized>(
     let interaction = &level.entity::<EntityData>(entity)?.fluid_interaction;
     let water = interaction.height(FluidTags::WATER, level)? > 0.0;
     let lava = interaction.height(FluidTags::LAVA, level)? > 0.0;
-    let currents = interaction.currents;
     if water {
-        level.entity_mut::<EntityData>(entity)?.fall_distance = 0.0;
+        behavior.reset_fall_distance(entity, level)?;
         let base = level.entity::<EntityData>(entity)?;
         if !base.was_touching_water && !base.first_tick {
             behavior.do_water_splash_effect(entity, level)?;
@@ -221,12 +220,20 @@ fn finish<E: Entity + ?Sized>(
     level.entity_mut::<EntityData>(entity)?.was_touching_water = water;
     if behavior.is_pushed_by_fluid(entity, level)? {
         if water {
-            apply_current(entity, currents[0], 0.014, level)?;
+            let current = level
+                .entity::<EntityData>(entity)?
+                .fluid_interaction
+                .currents[0];
+            apply_current(entity, current, 0.014, level)?;
         }
         if lava {
+            let current = level
+                .entity::<EntityData>(entity)?
+                .fluid_interaction
+                .currents[1];
             apply_current(
                 entity,
-                currents[1],
+                current,
                 if level.fast_lava()? {
                     0.007
                 } else {
