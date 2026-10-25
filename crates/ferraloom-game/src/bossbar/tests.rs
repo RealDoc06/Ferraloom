@@ -17,12 +17,12 @@ fn vanilla_boss_event_lifecycle_and_packet_bytes() {
     );
     let players = [
         BossPlayer {
-            entity: EntityRef(1),
+            entity: EntityRef::fixture(crate::level::RegionId::FIXTURE, 1),
             uuid: Uuid::new(0, 1),
             network_id: 16,
         },
         BossPlayer {
-            entity: EntityRef(2),
+            entity: EntityRef::fixture(crate::level::RegionId::FIXTURE, 2),
             uuid: Uuid::new(0, 2),
             network_id: 32,
         },
@@ -178,7 +178,7 @@ fn vanilla_boss_event_identifier_tree_bin_order() {
     assert_eq!(serde_json::to_value(actual).unwrap(), case["ordered"]);
     events.set_dirty(false);
     let player = BossPlayer {
-        entity: EntityRef(1),
+        entity: EntityRef::fixture(crate::level::RegionId::FIXTURE, 1),
         uuid: Uuid::new(0, 1),
         network_id: 1,
     };
