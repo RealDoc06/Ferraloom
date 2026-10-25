@@ -10,6 +10,7 @@ use ferraloom_util::{BlockPos, Direction};
 
 mod furniture;
 mod signs;
+pub use signs::wall_hanging_sign_can_place;
 
 pub(super) struct ContainerPlacement;
 pub(super) static CONTAINER_PLACEMENT: ContainerPlacement = ContainerPlacement;
@@ -240,6 +241,8 @@ impl BlockBehavior for ContainerPlacement {
 
 #[cfg(test)]
 mod furniture_tests;
+#[cfg(test)]
+mod helper_tests;
 #[cfg(test)]
 mod post_tests;
 #[cfg(test)]

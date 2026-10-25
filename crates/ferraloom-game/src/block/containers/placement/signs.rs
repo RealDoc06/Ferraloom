@@ -40,12 +40,12 @@ pub(super) fn can_survive(
     let back = direction(state.get(p::FACING).unwrap()).opposite();
     Ok(reader.get_block_state(pos.relative(back, 1))?.is_solid())
 }
-/// Ports WallHangingSignBlock#canPlace/canAttachTo. Chained signs match axes;
+/// Port of WallHangingSignBlock#canPlace/canAttachTo. Chained signs match axes;
 /// other supports require a full sturdy face, in clockwise-first query order.
-fn hanging_can_place(
+pub fn wall_hanging_sign_can_place(
     state: BlockState,
-    pos: BlockPos,
     reader: &LevelReaderRef<'_, '_>,
+    pos: BlockPos,
 ) -> Result<bool, LevelError> {
     let forward = direction(state.get(p::FACING).unwrap());
     for side in [forward.clockwise(), forward.counter_clockwise()] {
@@ -195,7 +195,7 @@ pub(super) fn get_state_for_placement(
         };
         if survives
             && (block.class() != C::WallHangingSignBlock
-                || hanging_can_place(placed, context.clicked_pos(), reader)?)
+                || wall_hanging_sign_can_place(placed, reader, context.clicked_pos())?)
         {
             return Ok(Some(
                 if matches!(block.class(), C::WallSignBlock | C::WallHangingSignBlock) {
