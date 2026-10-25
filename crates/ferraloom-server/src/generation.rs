@@ -102,8 +102,18 @@ pub struct GenerationOutput {
     pub skips: Vec<(String, String)>,
     pub statuses: Vec<(ChunkPos, ChunkStatus)>,
     pub(crate) proto_biomes: Vec<ProtoBiomeSnapshot>,
+    pub(crate) proto_structures: Vec<ProtoStructureSnapshot>,
     pub(crate) full_structures: Vec<StructureSnapshot>,
     pub initial_mob_spawning_pending: bool,
+}
+/// Immutable typed structure source carried before its status futures settle.
+/// Untouched sources reuse their Arc; nested readers retain earlier versions.
+#[derive(Clone)]
+pub(crate) struct ProtoStructureSnapshot {
+    pub pos: ChunkPos,
+    pub revision: GenerationRevision,
+    pub status: ChunkStatus,
+    pub structures: Arc<ChunkStructures>,
 }
 /// Immutable owned biome result for live BIOMES acquisitions. Writable proto
 /// neighborhoods remain exclusively in the generation worker's owned cache.
@@ -131,6 +141,7 @@ pub struct GenerationState {
     holders: BTreeMap<i64, GenerationChunkHolder<ProtoChunk>>,
     failed_loads: BTreeMap<i64, ferraloom_game::level::generation::GenerationError>,
     captured_terrain: BTreeMap<i64, Option<CapturedChunkTerrain>>,
+    structure_versions: BTreeMap<i64, ProtoStructureSnapshot>,
     light: LevelLightEngine,
     light_pool: Arc<JobPool>,
     snapshots: SectionSnapshots<'static>,
@@ -158,6 +169,7 @@ impl GenerationState {
             holders: BTreeMap::new(),
             failed_loads: BTreeMap::new(),
             captured_terrain: BTreeMap::new(),
+            structure_versions: BTreeMap::new(),
             light_changed: BTreeSet::new(),
             structure_check: StructureCheck::default(),
             revision: GenerationRevision::default(),
@@ -168,6 +180,27 @@ impl GenerationState {
             .iter()
             .map(|(&key, holder)| (ChunkPos::unpack(key), holder.completed))
             .collect()
+    }
+    pub(crate) fn structure_versions(
+        &mut self,
+        touched: &BTreeSet<i64>,
+    ) -> Vec<ProtoStructureSnapshot> {
+        for (&key, holder) in &self.holders {
+            if holder.completed >= ChunkStatus::StructureStarts
+                && (touched.contains(&key) || !self.structure_versions.contains_key(&key))
+            {
+                self.structure_versions.insert(
+                    key,
+                    ProtoStructureSnapshot {
+                        pos: ChunkPos::unpack(key),
+                        revision: self.revision,
+                        status: holder.completed,
+                        structures: Arc::new(holder.chunk.region.structures.clone()),
+                    },
+                );
+            }
+        }
+        self.structure_versions.values().cloned().collect()
     }
     pub fn pending_initial_spawns(&self) -> BTreeSet<i64> {
         self.holders
@@ -244,6 +277,7 @@ impl GenerationState {
         self.holders.remove(&pos.pack());
         self.failed_loads.remove(&pos.pack());
         self.captured_terrain.remove(&pos.pack());
+        self.structure_versions.remove(&pos.pack());
         self.snapshots.remove_chunk(pos);
         self.light_changed.remove(&pos.pack());
         self.light.forget_chunk_sources(pos);
@@ -468,8 +502,14 @@ impl GenerationState {
                             }
                             // Proto writes and partial effects are canonical before
                             // the light executor reads its owned section snapshots.
-                            let stage_skips =
-                                self.finish_light(result.map_err(anyhow::Error::new))?;
+                            let stage_skips = self.finish_light(
+                                result.map_err(anyhow::Error::new).with_context(|| {
+                                    format!(
+                                        "generation chunk={position:?} status={:?} task={:?}",
+                                        step.target, step.task
+                                    )
+                                }),
+                            )?;
                             skips.extend(stage_skips);
                             if matches!(
                                 step.task,
@@ -506,6 +546,7 @@ impl GenerationState {
         let mut timing = profile::Span::new("capture_output", Some((request, pos))).status(target);
         touched.extend(self.light_changed.iter().copied());
         timing.items(touched.len());
+        let proto_structures = self.structure_versions(&touched);
         let mut neighbors = Vec::new();
         let mut full_structures = Vec::new();
         for key in touched {
@@ -585,6 +626,7 @@ impl GenerationState {
             neighbors,
             skips,
             full_structures,
+            proto_structures,
             initial_mob_spawning_pending: proto.initial_mob_spawning_pending,
             statuses: self.completed_statuses(),
             proto_biomes: self
@@ -756,7 +798,6 @@ impl GenerationState {
                 continue;
             };
             self.light_changed.insert(key);
-            self.captured_terrain.remove(&key);
             let sections = holder.chunk.disk.sections.get_or_insert_default();
             let y = update.section.y as i8;
             let index =
@@ -775,6 +816,9 @@ impl GenerationState {
             match update.layer {
                 LightLayer::Sky => sections[index].sky_light = data,
                 LightLayer::Block => sections[index].block_light = data,
+            }
+            if let Some(Some(cached)) = self.captured_terrain.get_mut(&key) {
+                cached.sync_light_section(&sections[index]);
             }
         }
     }

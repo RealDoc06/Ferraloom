@@ -11,7 +11,7 @@ fn level() -> Level {
     level
 }
 fn register(level: &mut Level, id: usize) {
-    let pos = level.region().game_event_listeners.tests.listeners[id].pos;
+    let pos = level.region().game_event_listeners.borrow().tests.listeners[id].pos;
     level
         .register_listener(GameEventListenerRef::Test(id), pos)
         .unwrap();
@@ -20,10 +20,24 @@ fn emit(level: &mut Level) -> Result<(), LevelError> {
     level.game_event(GameEvent::STEP, SOURCE, None, None)
 }
 fn trace(level: &mut Level) -> String {
-    std::mem::take(&mut level.region_mut().game_event_listeners.tests.trace).join(",")
+    std::mem::take(
+        &mut level
+            .region_mut()
+            .game_event_listeners
+            .get_mut()
+            .tests
+            .trace,
+    )
+    .join(",")
 }
 fn actions(level: &mut Level, id: usize, actions: Vec<Action>) {
-    level.region_mut().game_event_listeners.tests.listeners[id].actions = actions;
+    level
+        .region_mut()
+        .game_event_listeners
+        .get_mut()
+        .tests
+        .listeners[id]
+        .actions = actions;
 }
 
 #[test]
@@ -186,6 +200,7 @@ fn detaching_chunk_preserves_current_visit_and_queued_delivery() {
         level
             .region()
             .game_event_listeners
+            .borrow()
             .owners
             .values()
             .all(|owner| owner.attached)
@@ -194,6 +209,7 @@ fn detaching_chunk_preserves_current_visit_and_queued_delivery() {
         level
             .region()
             .game_event_listeners
+            .borrow()
             .registries
             .values()
             .all(|registry| registry.attached)
@@ -212,5 +228,12 @@ fn absent_chunks_are_not_loaded_for_game_event_delivery() {
         )
         .unwrap();
     assert_eq!(level.region().chunks.values().count(), chunks);
-    assert!(level.region().game_event_listeners.owners.is_empty());
+    assert!(
+        level
+            .region()
+            .game_event_listeners
+            .borrow()
+            .owners
+            .is_empty()
+    );
 }

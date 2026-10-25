@@ -7,6 +7,8 @@ use ferraloom_nbt::{CompoundTag, Tag};
 use ferraloom_protocol::{codec::VarInt, component::ItemStack};
 use ferraloom_util::random::RandomSource;
 
+mod attribute_updates;
+pub use attribute_updates::{on_attribute_updated_parent, refresh_dirty_attributes};
 pub mod climbable;
 pub mod damage_state;
 mod equipment;
@@ -34,6 +36,8 @@ pub struct LivingEntity {
     pub parent: EntityData,
     pub attributes: AttributeMap,
     pub equipment: EntityEquipment,
+    /// Port of LivingEntity#locatorBarIcon; the persistent icon, before team color overrides.
+    pub locator_bar_icon: ferraloom_protocol::play::WaypointIcon,
     pub(crate) active_effects: super::effect::ActiveEffects,
     pub effects_dirty: bool,
     pub use_item: ItemStack,
@@ -91,6 +95,7 @@ impl LivingEntity {
             parent,
             attributes,
             equipment: EntityEquipment::default(),
+            locator_bar_icon: crate::level::waypoints::default_icon(),
             active_effects: super::effect::ActiveEffects::default(),
             effects_dirty: true,
             use_item: ItemStack::default(),
@@ -258,18 +263,27 @@ impl LivingEntity {
         tag: CompoundTag,
         set_absorption: fn(&mut LivingEntity, f32),
     ) -> Result<(), super::persistence::EntityLoadError> {
-        let rotation = self.parent.load_nbt_with_head_rotation(tag)?;
+        let rotation = self.parent.load_nbt_with_head_rotation(tag.clone())?;
         self.y_head_rot = rotation;
         self.y_body_rot = rotation;
-        self.read_additional_save_data(set_absorption);
+        self.read_additional_save_data(&tag, set_absorption);
         Ok(())
     }
-    fn read_additional_save_data(&mut self, set_absorption: fn(&mut LivingEntity, f32)) {
-        set_absorption(
-            self,
-            self.parent.saved.get_float_or("AbsorptionAmount", 0.0),
-        );
-        if let Some(attributes) = self.parent.saved.get("attributes") {
+    pub(crate) fn read_additional_save_data(
+        &mut self,
+        tag: &CompoundTag,
+        set_absorption: fn(&mut LivingEntity, f32),
+    ) {
+        self.read_living_prefix(tag, set_absorption);
+        self.read_living_tail(tag);
+    }
+    pub(crate) fn read_living_prefix(
+        &mut self,
+        tag: &CompoundTag,
+        set_absorption: fn(&mut LivingEntity, f32),
+    ) {
+        set_absorption(self, tag.get_float_or("AbsorptionAmount", 0.0));
+        if let Some(attributes) = tag.get("attributes") {
             for error in self.attributes.load_nbt(attributes) {
                 eprintln!(
                     "Failed to load attributes for entity {}: {error:?}",
@@ -277,10 +291,7 @@ impl LivingEntity {
                 );
             }
         }
-        for error in self
-            .active_effects
-            .load(self.parent.saved.get("active_effects"))
-        {
+        for error in self.active_effects.load(tag.get("active_effects")) {
             eprintln!(
                 "Failed to load active effects for entity {}: {error}",
                 self.parent.uuid
@@ -289,39 +300,38 @@ impl LivingEntity {
         if !self.active_effects.is_empty() {
             self.effects_dirty = true;
         }
-        self.set_health(self.parent.saved.get_float_or("Health", self.max_health()));
-        self.hurt_time = i32::from(self.parent.saved.get_short_or("HurtTime", 0));
-        self.death_time = i32::from(self.parent.saved.get_short_or("DeathTime", 0));
+        self.set_health(tag.get_float_or("Health", self.max_health()));
+        self.hurt_time = i32::from(tag.get_short_or("HurtTime", 0));
+        self.death_time = i32::from(tag.get_short_or("DeathTime", 0));
         self.parent
-            .set_shared_flag(7, self.parent.saved.get_boolean_or("FallFlying", false));
-        self.last_hurt_by_player =
-            damage_state::read_reference(&self.parent.saved, "last_hurt_by_player");
-        self.last_hurt_by_player_memory_time = self
+            .set_shared_flag(7, tag.get_boolean_or("FallFlying", false));
+    }
+    pub(crate) fn read_living_tail(&mut self, tag: &CompoundTag) {
+        self.last_hurt_by_player = damage_state::read_reference(tag, "last_hurt_by_player");
+        self.last_hurt_by_player_memory_time = tag.get_int_or("last_hurt_by_player_memory_time", 0);
+        self.last_hurt_by_mob = damage_state::read_reference(tag, "last_hurt_by_mob");
+        self.last_hurt_by_mob_timestamp = self
             .parent
-            .saved
-            .get_int_or("last_hurt_by_player_memory_time", 0);
-        self.last_hurt_by_mob =
-            damage_state::read_reference(&self.parent.saved, "last_hurt_by_mob");
-        self.last_hurt_by_mob_timestamp = self.parent.tick_count.wrapping_sub(
-            self.parent
-                .saved
-                .get_int_or("ticks_since_last_hurt_by_mob", 0),
-        );
-        self.current_impulse_context_reset_grace_time = self
-            .parent
-            .saved
-            .get_int_or("current_impulse_context_reset_grace_time", 0);
-        self.current_impulse_impact_pos = self
-            .parent
-            .saved
-            .get("current_explosion_impact_pos")
-            .and_then(super::persistence::optional_vector);
-        self.equipment = self
-            .parent
-            .saved
+            .tick_count
+            .wrapping_sub(tag.get_int_or("ticks_since_last_hurt_by_mob", 0));
+        let equipment = tag
             .get("equipment")
             .and_then(|tag| EntityEquipment::from_tag(tag).ok())
             .unwrap_or_default();
+        self.equipment.set_all(&equipment);
+        self.locator_bar_icon = crate::level::waypoints::load_icon(tag.get("locator_bar_icon"))
+            .unwrap_or_else(|error| {
+                eprintln!(
+                    "Failed to load locator_bar_icon for entity {}: {error}",
+                    self.parent.uuid
+                );
+                crate::level::waypoints::default_icon()
+            });
+        self.current_impulse_context_reset_grace_time =
+            tag.get_int_or("current_impulse_context_reset_grace_time", 0);
+        self.current_impulse_impact_pos = tag
+            .get("current_explosion_impact_pos")
+            .and_then(super::persistence::optional_vector);
     }
     pub(crate) fn add_additional_save_data(
         &self,
@@ -329,6 +339,13 @@ impl LivingEntity {
         level: &crate::level::Level,
         get_absorption: fn(&LivingEntity) -> f32,
     ) -> Result<(), crate::level::LevelError> {
+        tag.remove("locator_bar_icon");
+        if self.locator_bar_icon != crate::level::waypoints::default_icon() {
+            tag.insert(
+                "locator_bar_icon",
+                crate::level::waypoints::save_icon(&self.locator_bar_icon),
+            );
+        }
         tag.insert("Health", Tag::Float(self.health()));
         tag.insert("HurtTime", Tag::Short(self.hurt_time as i16));
         tag.insert("DeathTime", Tag::Short(self.death_time as i16));
@@ -373,6 +390,18 @@ impl LivingEntity {
         }
         Ok(())
     }
+}
+
+/// Port of LivingEntity#take. ServerPlayer's override broadcasts its menu after
+/// this tracking-player packet has entered the ordered outbound stream.
+pub(crate) fn take(
+    collector: super::EntityRef,
+    entity: super::EntityRef,
+    count: i32,
+    level: &mut crate::level::Level,
+) -> Result<(), crate::level::LevelError> {
+    level.entity::<LivingEntity>(collector)?;
+    level.take_item(entity, collector, count)
 }
 
 /// Port of server-side LivingEntity#stopUsingItem and ItemStack#causeUseVibration.

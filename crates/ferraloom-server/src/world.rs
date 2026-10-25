@@ -2,7 +2,8 @@
 use crate::{
     generation::{
         GenerationCompletion, GenerationIdentity, GenerationOutput, GenerationRequest,
-        GenerationRevision, GenerationState, ReadyGeneration, StructureSnapshot,
+        GenerationRevision, GenerationState, ProtoStructureSnapshot, ReadyGeneration,
+        StructureSnapshot,
     },
     jobs::JobPool,
     properties::ServerProperties,
@@ -643,6 +644,7 @@ pub struct World {
     pending_structure_publications: VecDeque<ChunkPos>,
     generation_save_revisions: BTreeMap<i64, GenerationRevision>,
     proto_biomes: BTreeMap<i64, crate::generation::ProtoBiomeSnapshot>,
+    proto_structures: BTreeMap<i64, ProtoStructureSnapshot>,
     generation: Arc<JobPool>,
     generation_state: Option<GenerationState>,
     generation_work: Option<oneshot::Receiver<GenerationCompletion>>,
@@ -788,6 +790,7 @@ impl World {
         initialize_spawn: bool,
         initial_difficulty: Difficulty,
     ) -> Result<(Self, Option<StartupSpawn>)> {
+        let mut timing = crate::generation::profile::Span::new("open_dimension", None);
         let stem = services.stem(&dimension_key)?;
         let dimension = stem.dimension;
         let generator = stem.generator.clone();
@@ -807,6 +810,7 @@ impl World {
         let registry = services.registry.clone();
         let generation = services.generation.clone();
         let light_pool = services.light_pool.clone();
+        timing.checkpoint("storage_and_stem");
         let mut context = ferraloom_game::level::generation::WorldGenContext::load(
             &services.resources,
             generator.clone(),
@@ -816,8 +820,11 @@ impl World {
             services.dimensions.environment.clone(),
             stem.environment.clone(),
         )?;
+        context = context.with_registry_context(services.registry_context.clone());
+        timing.checkpoint("worldgen_context");
         context.unported_behavior = services.unported_behavior;
         let mut generation_state = GenerationState::new(Arc::new(context), light_pool);
+        timing.checkpoint("generation_state");
         let mut initial_chunks = BTreeMap::new();
         let mut generation_skips = Vec::new();
         let io = if initialize_spawn {
@@ -864,7 +871,13 @@ impl World {
         } else {
             io
         };
+        timing.checkpoint("spawn");
         let pending_initial_spawns = generation_state.pending_initial_spawns();
+        let proto_structures = generation_state
+            .structure_versions(&BTreeSet::new())
+            .into_iter()
+            .map(|snapshot| (snapshot.pos.pack(), snapshot))
+            .collect();
         let (light_tx, light_in) = mpsc::channel::<LightJob>();
         let (light_out, light_rx) = tokio::sync::mpsc::unbounded_channel();
         std::thread::Builder::new()
@@ -879,6 +892,7 @@ impl World {
                 )
             })?;
         let saving = services.saving.clone();
+        timing.checkpoint("structure_versions_and_light_worker");
         Ok((
             Self {
                 services,
@@ -909,6 +923,7 @@ impl World {
                 pending_structure_publications: VecDeque::new(),
                 generation_save_revisions: BTreeMap::new(),
                 proto_biomes: BTreeMap::new(),
+                proto_structures,
                 generation,
                 generation_state: Some(generation_state),
                 generation_work: None,
@@ -964,25 +979,35 @@ impl World {
         &self,
         resources: &ResourceManager,
     ) -> Result<Arc<ferraloom_game::level::LevelContext>> {
-        let features = ferraloom_worldgen::feature::FeatureLoader::new(resources)?.load_all()?;
+        let mut timing = crate::generation::profile::Span::new("level_context", None);
+        let features = timing.measure("features", || {
+            ferraloom_worldgen::feature::FeatureLoader::new(resources)?.load_all()
+        })?;
         Ok(Arc::new(
             ferraloom_game::level::LevelContext::new(
                 self.seed,
                 self.generator.sea_level(),
                 self.generator.clone(),
                 Arc::new(features),
-                Arc::new(ferraloom_game::level::StructureServices::load(
-                    resources,
-                    self.generator.data(),
-                )?),
-                Arc::new(ferraloom_game::entity::damage::DamageTypeRegistry::load(
-                    resources,
-                )?),
+                Arc::new(timing.measure("structure_services", || {
+                    ferraloom_game::level::StructureServices::load(resources, self.generator.data())
+                })?),
+                Arc::new(timing.measure("damage_types", || {
+                    ferraloom_game::entity::damage::DamageTypeRegistry::load(resources)
+                })?),
                 self.initial_difficulty,
             )
-            .with_block_transformers(Arc::new(
-                ferraloom_game::item::block_transformer::BlockTransformerRegistry::load(resources)?,
-            )),
+            .with_registry_context(self.services.registry_context.clone())
+            .with_block_transformers(Arc::new(timing.measure("block_transformers", || {
+                ferraloom_game::item::block_transformer::BlockTransformerRegistry::load(resources)
+            })?))
+            .with_enchantments(Arc::new(
+                ferraloom_game::item::enchantment::EnchantmentRegistry::load(resources)?,
+            ))
+            .with_mob_variants(Arc::new(
+                ferraloom_game::entity::variant::MobVariants::load(resources)?,
+            ))
+            .with_game_event_tags(Arc::new(ferraloom_data::datapack::TagSet::load(resources)?)),
         ))
     }
     /// Attach immutable dimension layers after the sole server clock manager
@@ -1358,6 +1383,7 @@ impl World {
     }
     pub fn forget_proto_holder(&mut self, pos: ChunkPos) {
         self.proto_biomes.remove(&pos.pack());
+        self.proto_structures.remove(&pos.pack());
         self.pending_structure_publications
             .retain(|&queued| queued != pos);
         self.full_promotions
@@ -1443,6 +1469,7 @@ impl World {
     }
     pub fn finish_unload(&mut self, pos: ChunkPos) -> Result<()> {
         self.proto_biomes.remove(&pos.pack());
+        self.proto_structures.remove(&pos.pack());
         self.pending_structure_publications
             .retain(|&queued| queued != pos);
         self.full_promotions
@@ -1618,7 +1645,7 @@ impl World {
             pos,
             result,
         } = completion;
-        let _timing =
+        let mut timing =
             crate::generation::profile::Span::new("integrate_output", Some((request, pos)));
         if self
             .active_generation
@@ -1639,28 +1666,69 @@ impl World {
                 .insert(output.terrain.pos.pack());
         }
         self.generation_skips.extend(output.skips);
-        for snapshot in output.proto_biomes {
-            if self
-                .proto_biomes
-                .get(&snapshot.pos.pack())
-                .is_none_or(|old| old.revision < snapshot.revision)
-            {
-                self.proto_biomes.insert(snapshot.pos.pack(), snapshot);
+        timing.measure("proto_biomes", || {
+            for snapshot in output.proto_biomes {
+                if self
+                    .proto_biomes
+                    .get(&snapshot.pos.pack())
+                    .is_none_or(|old| old.revision < snapshot.revision)
+                {
+                    self.proto_biomes.insert(snapshot.pos.pack(), snapshot);
+                }
             }
-        }
-        for (pos, status) in output.statuses {
-            self.generation_statuses
-                .entry(pos.pack())
-                .and_modify(|known| *known = (*known).max(status))
-                .or_insert(status);
-        }
-        for snapshot in output.full_structures {
-            self.integrate_structure_snapshot(snapshot)?;
-        }
-        for (pos, disk) in output.neighbors {
-            self.store_generation_chunk(pos, output.terrain.revision, disk)?;
-        }
+        });
+        timing.measure("proto_structures", || -> Result<()> {
+            for snapshot in output.proto_structures {
+                self.integrate_proto_structures(snapshot)?;
+            }
+            Ok(())
+        })?;
+        timing.measure("statuses", || {
+            for (pos, status) in output.statuses {
+                self.generation_statuses
+                    .entry(pos.pack())
+                    .and_modify(|known| *known = (*known).max(status))
+                    .or_insert(status);
+            }
+        });
+        timing.measure("full_structures", || -> Result<()> {
+            for snapshot in output.full_structures {
+                self.integrate_structure_snapshot(snapshot)?;
+            }
+            Ok(())
+        })?;
+        timing.items(output.neighbors.len());
+        timing.measure("neighbor_saves", || -> Result<()> {
+            for (pos, disk) in output.neighbors {
+                self.store_generation_chunk(pos, output.terrain.revision, disk)?;
+            }
+            Ok(())
+        })?;
         Ok(Some((request, output.terrain)))
+    }
+    fn integrate_proto_structures(&mut self, snapshot: ProtoStructureSnapshot) -> Result<()> {
+        ensure!(
+            snapshot.structures.position == [snapshot.pos.x, snapshot.pos.z],
+            "proto structures belong to another chunk"
+        );
+        ensure!(
+            snapshot.status >= ChunkStatus::StructureStarts,
+            "proto structures precede STRUCTURE_STARTS"
+        );
+        let key = snapshot.pos.pack();
+        if self
+            .proto_structures
+            .get(&key)
+            .is_none_or(|old| old.revision < snapshot.revision)
+        {
+            self.proto_structures.insert(key, snapshot);
+        }
+        Ok(())
+    }
+    pub(crate) fn proto_chunk_structures(&self, pos: ChunkPos) -> Option<Arc<ChunkStructures>> {
+        self.proto_structures
+            .get(&pos.pack())
+            .map(|snapshot| Arc::clone(&snapshot.structures))
     }
     pub(crate) fn proto_noise_biome(
         &self,
@@ -2592,7 +2660,7 @@ mod generation_order_tests {
         let resources = ResourceManager::new(vec![
             ferraloom_data::datapack::Pack::vanilla_jar(Path::new(&jar)).unwrap(),
         ]);
-        let registries = RegistrySet::load(&resources).unwrap();
+        let registries = Arc::new(RegistrySet::load(&resources).unwrap());
         for generate_structures in [false, true] {
             let directory = tempfile::tempdir().unwrap();
             let mut properties = ServerProperties::from_values(Default::default());
@@ -2765,7 +2833,7 @@ mod generation_order_tests {
         let resources = ResourceManager::new(vec![
             ferraloom_data::datapack::Pack::vanilla_jar(Path::new(&jar)).unwrap(),
         ]);
-        let registries = RegistrySet::load(&resources).unwrap();
+        let registries = Arc::new(RegistrySet::load(&resources).unwrap());
         let mut properties = ServerProperties::from_values(Default::default());
         properties.set("level-type", "minecraft:debug_all_block_states");
         let directory = tempfile::tempdir().unwrap();
@@ -2785,6 +2853,7 @@ mod generation_order_tests {
             "minecraft:overworld",
             world.level_context(&resources).unwrap(),
         );
+        level.level.install_shared(Box::default());
         level
             .level
             .set_block_tags(world.generator.data().block_tags.clone());
@@ -2866,6 +2935,7 @@ mod generation_order_tests {
             skips: vec![(unit.into(), "pending callback".into())],
             statuses: vec![(pos, ChunkStatus::Full)],
             proto_biomes: Vec::new(),
+            proto_structures: Vec::new(),
             full_structures: Vec::new(),
             initial_mob_spawning_pending: true,
         };

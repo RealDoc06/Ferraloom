@@ -12,11 +12,16 @@ use crate::{
     },
 };
 use ferraloom_util::{ChunkPos, Uuid, Vec3};
-use std::cell::Cell;
+use ferraloom_worldgen::structure::pipeline::ChunkStructures;
+use std::{cell::Cell, sync::Arc};
 
 /// Observe only the synchronous ticket receiver; unrelated acquisition is forbidden.
 #[derive(Default)]
-struct TrackingDriver(Cell<Option<SectionPos>>, bool);
+struct TrackingDriver(
+    Cell<Option<SectionPos>>,
+    Option<Arc<ChunkStructures>>,
+    Cell<usize>,
+);
 impl AcquireDriver for TrackingDriver {
     fn update_player_tracking_status(
         &self,
@@ -36,11 +41,20 @@ impl AcquireDriver for TrackingDriver {
         true
     }
     fn visible_ticket_level(&self, _: ChunkPos) -> Option<i32> {
-        assert!(self.1, "fixture did not permit an acquisition query");
+        assert!(
+            self.1.is_some(),
+            "fixture did not permit an acquisition query"
+        );
         Some(33)
     }
-    fn add_unknown_ticket(&self, _: ChunkPos, _: ChunkStatus) -> Result<(), LevelError> {
-        unreachable!()
+    fn add_unknown_ticket(&self, pos: ChunkPos, status: ChunkStatus) -> Result<(), LevelError> {
+        assert!(self.1.is_some());
+        assert_eq!(
+            (pos, status),
+            (ChunkPos::new(16, 0), ChunkStatus::StructureReferences)
+        );
+        assert_eq!(crate::level::acquisition::ticket_level(status), 36);
+        Ok(())
     }
     fn run_distance_manager_updates(&self, _: &Level) -> Result<bool, LevelError> {
         unreachable!()
@@ -48,13 +62,38 @@ impl AcquireDriver for TrackingDriver {
     fn request_status(
         &self,
         _: &Level,
-        _: ChunkPos,
-        _: ChunkStatus,
+        pos: ChunkPos,
+        status: ChunkStatus,
     ) -> Result<AcquireHandle, LevelError> {
-        unreachable!()
+        assert!(self.1.is_some());
+        assert_eq!(
+            (pos, status),
+            (ChunkPos::new(16, 0), ChunkStatus::StructureReferences)
+        );
+        self.2.set(self.2.get() + 1);
+        Ok(AcquireHandle {
+            pos,
+            status,
+            request_id: 1,
+            holder_epoch: 1,
+        })
     }
-    fn acquisition_result(&self, _: AcquireHandle) -> Result<AcquireResult, LevelError> {
-        unreachable!()
+    fn acquisition_result(&self, handle: AcquireHandle) -> Result<AcquireResult, LevelError> {
+        assert_eq!(handle.status, ChunkStatus::StructureReferences);
+        Ok(AcquireResult::Complete(Some(ChunkReference {
+            pos: handle.pos,
+            generation: handle.holder_epoch,
+            kind: crate::level::acquisition::ChunkKind::Proto,
+        })))
+    }
+    fn proto_chunk_structures(
+        &self,
+        chunk: ChunkReference,
+    ) -> Result<Arc<ChunkStructures>, LevelError> {
+        let structures = self.1.as_ref().expect("proto fixture");
+        assert_eq!(structures.position, [chunk.pos.x, chunk.pos.z]);
+        assert_eq!(chunk.generation, 1);
+        Ok(Arc::clone(structures))
     }
     fn poll_acquisition_step(&self, _: &Level) -> Result<AcquireProgress, LevelError> {
         unreachable!()
@@ -234,7 +273,6 @@ fn spectator_movement_skips_fall_reads_only_when_touching_unloaded_chunks() {
 /// An eligible FULL ticket is not a published FULL chunk. The built-in predicate
 /// must synchronously obtain STRUCTURE_REFERENCES through the proto access path.
 #[test]
-#[ignore = "awaiting structure-data bridge"]
 fn location_structure_predicate_acquires_ticket_eligible_proto_references() {
     use crate::{
         advancements::{
@@ -274,7 +312,14 @@ fn location_structure_predicate_acquires_ticket_eligible_proto_references() {
         0,
     );
     level
-        .install_acquire_driver(Box::new(TrackingDriver(Cell::new(None), true)), 0..256)
+        .install_acquire_driver(
+            Box::new(TrackingDriver(
+                Cell::new(None),
+                Some(Arc::new(ChunkStructures::new([16, 0]))),
+                Cell::new(0),
+            )),
+            0..256,
+        )
         .unwrap();
     let player = level.next_entity_ref();
     let mut state = ServerPlayer::new(
@@ -291,6 +336,14 @@ fn location_structure_predicate_acquires_ticket_eligible_proto_references() {
     assert!(level.is_loaded(ferraloom_util::BlockPos::new(264, 80, 10)));
     assert!(level.chunk(ChunkPos::new(16, 0)).is_none());
     criteria::location(&mut level, player).unwrap_or_else(|error| panic!("{error}"));
+    let driver = level
+        .acquire_driver()
+        .unwrap()
+        .as_any()
+        .downcast_ref::<TrackingDriver>()
+        .unwrap();
+    assert_eq!(driver.2.get(), 1);
+    assert!(level.chunk(ChunkPos::new(16, 0)).is_none());
     assert!(
         !level
             .entity::<ServerPlayer>(player)

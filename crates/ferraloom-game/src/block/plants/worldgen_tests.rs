@@ -193,6 +193,7 @@ fn replay(require_pending: bool) {
         let original_pending = {
             let mut chunks = bases[case["terrain"].as_str().unwrap()].clone();
             let origin = point(&case["origin"]);
+            let registry_context = crate::level::LevelContext::fixture(0, 63);
             let mut region = WorldGenRegion::new(
                 &mut chunks,
                 [origin[0] >> 4, origin[2] >> 4],
@@ -204,6 +205,7 @@ fn replay(require_pending: bool) {
                 63,
             )
             .unwrap();
+            region.set_registry_context(registry_context.registry_context().unwrap());
             region.set_has_skylight(true);
             let mut random = WorldgenRandom::new(Random::Xoroshiro(XoroshiroRandomSource::new(
                 case["seed"].as_i64().unwrap(),
@@ -233,6 +235,7 @@ fn replay(require_pending: bool) {
         )));
         let origin = point(&case["origin"]);
         let center = [origin[0] >> 4, origin[2] >> 4];
+        let registry_context = crate::level::LevelContext::fixture(0, 63);
         let mut region = WorldGenRegion::new(
             &mut chunks,
             center,
@@ -244,6 +247,7 @@ fn replay(require_pending: bool) {
             63,
         )
         .unwrap();
+        region.set_registry_context(registry_context.registry_context().unwrap());
         region.set_has_skylight(true);
         region.set_block_tags(generator.data.block_tags.clone());
         region.set_fluid_tags(generator.data.fluid_tags.clone());
@@ -351,6 +355,7 @@ fn worldgen_bonemeal_targets_follow_native_non_server_branch_without_rng() {
         generator.new_chunk([0, 0]),
         ChunkStatus::Features,
     )];
+    let registry_context = crate::level::LevelContext::fixture(0, 63);
     let mut region = WorldGenRegion::new(
         &mut chunks,
         [0, 0],
@@ -362,6 +367,7 @@ fn worldgen_bonemeal_targets_follow_native_non_server_branch_without_rng() {
         63,
     )
     .unwrap();
+    region.set_registry_context(registry_context.registry_context().unwrap());
     let pos = BlockPos::new(8, 5, 8);
     let mut count = 0;
     for line in text.lines() {

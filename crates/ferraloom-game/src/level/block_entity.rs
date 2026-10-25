@@ -82,7 +82,7 @@ impl ChunkBlockEntities {
 pub(super) struct BlockEntityRuntime {
     next_generation: Cell<u64>,
     pub(super) detached: HashMap<BlockEntityRef, BlockEntityState>,
-    roots: HashMap<BlockEntityRef, usize>,
+    roots: RefCell<HashMap<BlockEntityRef, usize>>,
     pub(super) tickers: RefCell<BlockEntityTickers>,
 }
 impl super::chunk::LevelChunk {
@@ -134,14 +134,15 @@ impl BlockEntityRuntime {
         &self,
         chunk: &super::chunk::LevelChunk,
         has_skylight: Option<bool>,
+        level: &Level,
     ) -> Result<(), LevelError> {
-        // Stateless ticker selection invokes no world callback. The metadata
-        // guard is released before returning to the promotion continuation.
-        let mut tickers = self.tickers.borrow_mut();
+        // Native registerAllBlockEntitiesAfterLevelLoad registers each listener
+        // before its ticker. These cold metadata writes invoke no world callback.
         for state in chunk.block_entities.iter() {
             let data = state.data();
+            super::game_event::register_block_entity_listener(data.reference(), level)?;
             if state.has_server_ticker(has_skylight)? {
-                tickers.bind(data.reference(), data.kind);
+                self.tickers.borrow_mut().bind(data.reference(), data.kind);
             }
         }
         Ok(())
@@ -255,36 +256,53 @@ impl Level {
         let reference = data.reference();
         let kind = data.kind;
         state.set_level(region.game_time);
-        if has_ticker {
-            runtime.tickers.get_mut().bind(reference, kind);
-        } else {
-            runtime.tickers.get_mut().unbind(pos);
-        }
         region
             .chunks
             .get_mut(&key)
             .ok_or(LevelError::MissingChunk(key))?
             .block_entities
             .insert(state);
+        super::game_event::register_block_entity_listener(reference, self)?;
+        let tickers = self.region_mut().block_entity_state.tickers.get_mut();
+        if has_ticker {
+            tickers.bind(reference, kind);
+        } else {
+            tickers.unbind(pos);
+        }
         Ok(())
     }
     /// Port of LevelChunk#removeBlockEntity. It does not call preRemoveSideEffects;
     /// setBlockState invokes that virtual before this operation at its source slot.
     pub fn remove_block_entity(&mut self, pos: BlockPos) -> Result<(), LevelError> {
+        self.detach_block_entity(pos, true)
+    }
+    fn detach_block_entity(&mut self, pos: BlockPos, unregister: bool) -> Result<(), LevelError> {
         let key = ChunkPos::containing(pos);
-        let region = self.region_mut();
-        let chunk = region
+        let state = self
+            .region_mut()
             .chunks
             .get_mut(&key)
-            .ok_or(LevelError::MissingChunk(key))?;
-        if let Some(mut state) = chunk.block_entities.remove(pos) {
-            state.data_mut().set_removed();
-            region
+            .ok_or(LevelError::MissingChunk(key))?
+            .block_entities
+            .remove(pos);
+        if let Some(state) = state {
+            let handle = state.data().reference();
+            self.region_mut()
                 .block_entity_state
                 .detached
-                .insert(state.data().reference(), state);
+                .insert(handle, state);
+            if unregister {
+                super::game_event::unregister_block_entity_listener(handle, self)?;
+            }
+            self.block_entity_state_mut(handle)?
+                .data_mut()
+                .set_removed();
         }
-        region.block_entity_state.tickers.get_mut().unbind(pos);
+        self.region_mut()
+            .block_entity_state
+            .tickers
+            .get_mut()
+            .unbind(pos);
         Ok(())
     }
     /// LevelChunk#setBlockState's post-onPlace receiver validation and binding.
@@ -399,18 +417,19 @@ impl Level {
         }
         Ok(())
     }
-    pub fn retain_block_entity(&mut self, handle: BlockEntityRef) -> Result<(), LevelError> {
+    pub fn retain_block_entity(&self, handle: BlockEntityRef) -> Result<(), LevelError> {
         self.block_entity_state(handle)?;
         *self
-            .region_mut()
+            .region()
             .block_entity_state
             .roots
+            .borrow_mut()
             .entry(handle)
             .or_default() += 1;
         Ok(())
     }
-    pub fn release_block_entity(&mut self, handle: BlockEntityRef) {
-        let roots = &mut self.region_mut().block_entity_state.roots;
+    pub fn release_block_entity(&self, handle: BlockEntityRef) {
+        let mut roots = self.region().block_entity_state.roots.borrow_mut();
         let count = roots
             .get_mut(&handle)
             .expect("unbalanced block entity root release");
@@ -458,9 +477,12 @@ impl Level {
             .iter()
             .map(|entity| entity.data().pos)
             .collect();
+        // ServerLevel#unload clears receivers/tickers and detaches the chunk
+        // registry owner as a whole, without unregistering individual listeners.
         for pos in positions {
-            self.remove_block_entity(pos)?;
+            self.detach_block_entity(pos, false)?;
         }
+        super::game_event::detach_chunk_listeners(key, self)?;
         self.region_mut()
             .chunks
             .get_mut(&key)
@@ -563,10 +585,23 @@ impl Level {
     /// Phase-boundary retirement. Menus and other persistent holders retain roots
     /// explicitly; callback roots are released only after their frame unwinds.
     pub fn collect_detached_block_entities(&mut self) {
+        let mut sources = Vec::new();
         let runtime = &mut self.region_mut().block_entity_state;
-        runtime
-            .detached
-            .retain(|handle, _| runtime.roots.contains_key(handle));
+        runtime.detached.retain(|handle, state| {
+            if runtime.roots.borrow().contains_key(handle) {
+                true
+            } else {
+                sources.extend(
+                    crate::block::entity::sculk::cached_entity_refs(state)
+                        .into_iter()
+                        .flatten(),
+                );
+                false
+            }
+        });
+        for source in sources {
+            self.release_entity(source);
+        }
     }
     /// Disjoint pure menu borrow. Stale generations and duplicate receivers fail
     /// before any borrow; returned block entities follow the caller's refs order.
@@ -602,7 +637,12 @@ impl Level {
                 .is_some_and(|state| state.data().reference() == handle);
             if !current
                 && !(retained
-                    && self.region().block_entity_state.roots.contains_key(&handle)
+                    && self
+                        .region()
+                        .block_entity_state
+                        .roots
+                        .borrow()
+                        .contains_key(&handle)
                     && self
                         .region()
                         .block_entity_state
@@ -721,9 +761,16 @@ mod tests {
                     .push(raw);
             }
             let old = if matches!(kind, "live" | "pending" | "removed") {
-                let receiver = crate::block::entity::load_static(pos, state, &live)
-                    .unwrap()
-                    .unwrap();
+                let receiver = crate::block::entity::load_static(
+                    pos,
+                    state,
+                    &live,
+                    crate::level::LevelContext::fixture(0, 63)
+                        .registry_context()
+                        .unwrap(),
+                )
+                .unwrap()
+                .unwrap();
                 level.set_block_entity(receiver).unwrap();
                 let handle = level.block_entity_ref(pos).unwrap().unwrap();
                 if kind != "live" {

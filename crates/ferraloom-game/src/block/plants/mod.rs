@@ -64,6 +64,24 @@ pub fn ported_behavior(block: Block, method: BlockMethod) -> Option<&'static dyn
     }
     if matches!(
         block.class(),
+        C::SculkSensorBlock | C::CalibratedSculkSensorBlock
+    ) && matches!(
+        method,
+        M::OnPlace
+            | M::AffectNeighborsAfterRemoval
+            | M::Tick
+            | M::StepOn
+            | M::IsSignalSource
+            | M::OwnSignal
+            | M::Signal
+            | M::DirectSignal
+            | M::HasAnalogOutputSignal
+            | M::AnalogOutputSignal
+    ) {
+        return Some(&sculk::SENSOR);
+    }
+    if matches!(
+        block.class(),
         C::SculkSensorBlock | C::CalibratedSculkSensorBlock | C::SculkShriekerBlock
     ) && matches!(method, M::UpdateShape | M::UpdateFromNeighbourShapes)
     {
@@ -325,3 +343,6 @@ mod runtime_tests;
 
 #[cfg(test)]
 mod fixtures;
+
+#[cfg(test)]
+mod preflight_tests;

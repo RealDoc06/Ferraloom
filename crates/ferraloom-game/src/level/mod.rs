@@ -57,6 +57,7 @@ pub use structure_services::StructureServices;
 pub mod tick_rate;
 pub mod tickets;
 mod ticking;
+pub mod waypoints;
 pub mod weather;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -116,8 +117,14 @@ pub enum LevelError {
     MissingPlacementPlayer,
     UninitializedPlacementDirection,
     MissingEntity(EntityRef),
+    MissingEntityAttribute {
+        entity_type: EntityType,
+        attribute: ferraloom_data::registries::attribute::Id,
+    },
     MissingTrackedEntity(i32),
     MissingRegistryContext,
+    MissingMobVariants,
+    UnsupportedSpawnCondition(ferraloom_protocol::Identifier),
     MissingNetworkRegistryEntry {
         registry: ferraloom_protocol::Identifier,
         entry: ferraloom_protocol::Identifier,
@@ -132,11 +139,16 @@ pub enum LevelError {
     UnsupportedBlock(Block),
     UnsupportedBlockMethod(Block, crate::block::BlockMethod),
     UnsupportedBlockEntity(Block),
+    /// A live catalyst cursor list was replaced during a retained update frame.
+    UnsupportedSculkCursorReentrancy(crate::block::entity::BlockEntityRef),
+    /// CrafterBlock#dispenseItem replaced the captured CraftingInput list before remainders.
+    UnsupportedCrafterCapturedListIdentity(crate::block::entity::BlockEntityRef),
     UnsupportedGameRule(&'static str),
     UnsupportedLightQuery,
     UnsupportedEnvironmentAttribute(ferraloom_data::registries::environment_attribute::Id),
     MissingEnvironmentContext,
     MissingBlockTransformers,
+    MissingEnchantments,
     MissingSpawnProtectionContext,
     MissingServerShared,
     EntityIdAllocationExhausted,
@@ -146,6 +158,7 @@ pub enum LevelError {
     MissingFluidTags,
     MissingEntityTypeTags,
     MissingItemTags,
+    MissingGameEventTags,
     UnsupportedShape(BlockState),
     UnsupportedFluidRandomTick,
     UnsupportedWeatherQuery,
@@ -226,6 +239,7 @@ pub struct LevelRules {
     pub block_drops: Option<bool>,
     pub show_advancement_messages: bool,
     pub spectators_generate_chunks: bool,
+    pub locator_bar: bool,
     pub tnt_explodes: bool,
     pub entity_drops: bool,
     pub max_entity_cramming: i32,
@@ -264,6 +278,7 @@ impl Default for LevelRules {
             block_drops: None,
             show_advancement_messages: true,
             spectators_generate_chunks: damage_default(GameRule::SpectatorsGenerateChunks),
+            locator_bar: damage_default(GameRule::LocatorBar),
             tnt_explodes: true,
             entity_drops: true,
             max_entity_cramming: 24,
@@ -329,11 +344,12 @@ pub struct Region {
     next_chunk_generation: Cell<u64>,
     entities: entity::EntityStorage,
     entity_tracker: entity_tracker::EntityTracker,
+    waypoint_manager: waypoints::ServerWaypointManager,
     entity_tick_list: entity::EntityTickList,
     block_ticks: LevelTicks,
     fluid_ticks: LevelTicks<ferraloom_data::registries::fluid::Id>,
     block_entity_state: block_entity::BlockEntityRuntime,
-    game_event_listeners: game_event::GameEventListenerRegistries,
+    game_event_listeners: std::cell::RefCell<game_event::GameEventListenerRegistries>,
     container_runtime: crate::block::containers::runtime::ContainerRuntime,
     next_sub_tick_order: i64,
     game_time: i64,
@@ -374,6 +390,7 @@ impl Region {
             next_chunk_generation: Cell::new(0),
             entities: entity::EntityStorage::default(),
             entity_tracker: Default::default(),
+            waypoint_manager: Default::default(),
             entity_tick_list: entity::EntityTickList::default(),
             block_ticks: LevelTicks::default(),
             fluid_ticks: LevelTicks::default(),
@@ -591,16 +608,20 @@ impl Level {
         region
             .block_entity_state
             .prepare_published_chunk(&mut chunk, region.game_time);
-        region
-            .block_entity_state
-            .register_published_chunk(&chunk, region.has_skylight)?;
-        region
-            .block_ticks
-            .add_container(pos, std::mem::take(&mut chunk.block_ticks));
-        region
-            .fluid_ticks
-            .add_container(pos, std::mem::take(&mut chunk.fluid_ticks));
+        let block_ticks = std::mem::take(&mut chunk.block_ticks);
+        let fluid_ticks = std::mem::take(&mut chunk.fluid_ticks);
+        // Listener roots must resolve the canonical receiver before native
+        // listener-before-ticker registration, including the attached fixture path.
         region.chunks.insert(pos, chunk);
+        let region = self.region();
+        region.block_entity_state.register_published_chunk(
+            region.chunks.get(&pos).expect("just attached"),
+            region.has_skylight,
+            self,
+        )?;
+        let region = self.region_mut();
+        region.block_ticks.add_container(pos, block_ticks);
+        region.fluid_ticks.add_container(pos, fluid_ticks);
         Ok(())
     }
     /// Port of ServerLevel#startTickingChunk, after generation post-processing.

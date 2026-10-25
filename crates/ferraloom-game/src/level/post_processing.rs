@@ -84,7 +84,7 @@ impl Level {
                 None
             }
         } else {
-            crate::block::entity::load_static(pos, state, &tag)?
+            crate::block::entity::load_static(pos, state, &tag, self.context().registry_context()?)?
         };
         if let Some(entity) = entity {
             self.set_block_entity(entity)?;

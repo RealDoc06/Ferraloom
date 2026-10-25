@@ -86,6 +86,9 @@ pub enum BlockMethod {
     Attack,
     Destroy,
     PlayerDestroy,
+    OnLand,
+    OnBrokenAfterFall,
+    GetFallDamageSource,
 }
 impl BlockMethod {
     pub(crate) const fn vanilla_method(self) -> Option<ferraloom_data::BlockMethod> {
@@ -136,6 +139,9 @@ impl BlockMethod {
             Self::Attack => Vanilla::Attack,
             Self::Destroy => Vanilla::Destroy,
             Self::PlayerDestroy => Vanilla::PlayerDestroy,
+            Self::OnLand => Vanilla::OnLand,
+            Self::OnBrokenAfterFall => Vanilla::OnBrokenAfterFall,
+            Self::GetFallDamageSource => Vanilla::GetFallDamageSource,
             Self::CanPlaceLiquid => Vanilla::CanPlaceLiquid,
             Self::PlaceLiquid => Vanilla::PlaceLiquid,
             Self::PickupBlock => Vanilla::PickupBlock,
@@ -146,6 +152,9 @@ impl BlockMethod {
         !matches!(
             self,
             Self::GetMenuProvider
+                | Self::OnLand
+                | Self::OnBrokenAfterFall
+                | Self::GetFallDamageSource
                 | Self::GetDestroyProgress
                 | Self::GetDrops
                 | Self::UseWithoutItem
@@ -231,6 +240,9 @@ impl BlockMethod {
             Self::Attack => "attack",
             Self::Destroy => "destroy",
             Self::PlayerDestroy => "playerDestroy",
+            Self::OnLand => "onLand",
+            Self::OnBrokenAfterFall => "onBrokenAfterFall",
+            Self::GetFallDamageSource => "getFallDamageSource",
         }
     }
 }

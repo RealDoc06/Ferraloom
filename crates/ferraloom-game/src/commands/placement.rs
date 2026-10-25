@@ -5,10 +5,10 @@ use super::{
     builtins::{self, CommandResult},
     exceptions::error,
 };
-use crate::level::LevelError;
+use crate::level::{Level, LevelError};
 use ferraloom_brigadier::CommandSyntaxException;
 use ferraloom_data::{Block, BlockState};
-use ferraloom_nbt::Tag;
+use ferraloom_nbt::{CompoundTag, Tag};
 use ferraloom_protocol::chat::Component;
 use ferraloom_util::BlockPos;
 use std::fmt;
@@ -17,16 +17,31 @@ use std::fmt;
 pub enum PlacementError {
     Syntax(CommandSyntaxException),
     Level(LevelError),
+    Serialization(ferraloom_protocol::Error),
 }
 impl fmt::Display for PlacementError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Syntax(error) => error.fmt(f),
-            Self::Level(error) => write!(f, "{error:?}"),
+            Self::Level(error) => error.fmt(f),
+            Self::Serialization(error) => error.fmt(f),
         }
     }
 }
-impl std::error::Error for PlacementError {}
+impl std::error::Error for PlacementError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(match self {
+            Self::Syntax(error) => error,
+            Self::Level(error) => error,
+            Self::Serialization(error) => error,
+        })
+    }
+}
+impl From<ferraloom_protocol::Error> for PlacementError {
+    fn from(error: ferraloom_protocol::Error) -> Self {
+        Self::Serialization(error)
+    }
+}
 impl From<LevelError> for PlacementError {
     fn from(error: LevelError) -> Self {
         Self::Level(error)
@@ -43,7 +58,7 @@ pub trait PlacementAccess {
     fn has_chunk_at(&self, pos: BlockPos) -> bool;
     fn in_world_bounds(&self, pos: BlockPos) -> bool;
     fn block_state(&mut self, pos: BlockPos) -> Result<BlockState, LevelError>;
-    fn block_entity_data(&mut self, pos: BlockPos) -> Result<Option<Tag>, LevelError>;
+    fn block_entity_data(&mut self, pos: BlockPos) -> Result<Option<Tag>, PlacementError>;
     fn set_block(
         &mut self,
         pos: BlockPos,
@@ -62,8 +77,49 @@ pub trait PlacementAccess {
         old: BlockState,
     ) -> Result<(), LevelError>;
     /// Load components, compare saveWithoutMetadata before/after, and mark changed on mutation.
-    fn load_block_entity_data(&mut self, pos: BlockPos, tag: &Tag) -> Result<bool, LevelError>;
+    fn load_block_entity_data(&mut self, pos: BlockPos, tag: &Tag) -> Result<bool, PlacementError>;
 }
+/// Port of BlockInWorld#getEntity and BlockInput#test's full-metadata save.
+pub fn block_entity_data(level: &mut Level, pos: BlockPos) -> Result<Option<Tag>, PlacementError> {
+    level
+        .get_or_promote_block_entity(pos)?
+        .map(|handle| {
+            Ok(Tag::Compound(
+                level
+                    .block_entity_state(handle)?
+                    .save_with_full_metadata()?,
+            ))
+        })
+        .transpose()
+}
+
+/// Port of BlockInput#place's NBT branch. The supplied tag is loaded as-is;
+/// metadata does not mutate the receiver's identity or position. Retain the
+/// original generation across class callbacks before comparing or notifying.
+pub fn load_block_entity_data(
+    level: &mut Level,
+    pos: BlockPos,
+    tag: &CompoundTag,
+) -> Result<bool, PlacementError> {
+    let Some(handle) = level.get_or_promote_block_entity(pos)? else {
+        return Ok(false);
+    };
+    level.retain_block_entity(handle)?;
+    let result = (|| {
+        let before = level.block_entity_state(handle)?.save_without_metadata()?;
+        handle.load_with_components(tag, level)?;
+        let after = level.block_entity_state(handle)?.save_without_metadata()?;
+        let changed = after != before;
+        if changed {
+            handle.set_changed(level)?;
+            level.block_changed(pos);
+        }
+        Ok(changed)
+    })();
+    level.release_block_entity(handle);
+    result
+}
+
 impl BlockInput {
     /// Port of BlockInput#place, including defined-property restoration and NBT-only changes.
     pub fn place<A: PlacementAccess>(
@@ -71,7 +127,7 @@ impl BlockInput {
         access: &mut A,
         pos: BlockPos,
         flags: u32,
-    ) -> Result<bool, LevelError> {
+    ) -> Result<bool, PlacementError> {
         let mut state = if flags & 16 != 0 {
             self.state
         } else {
@@ -353,7 +409,7 @@ mod tests {
                 .copied()
                 .unwrap_or(Block::AIR.default_state()))
         }
-        fn block_entity_data(&mut self, pos: BlockPos) -> Result<Option<Tag>, LevelError> {
+        fn block_entity_data(&mut self, pos: BlockPos) -> Result<Option<Tag>, PlacementError> {
             self.record("nbt", pos, None, None);
             Ok(None)
         }
@@ -397,7 +453,7 @@ mod tests {
             &mut self,
             pos: BlockPos,
             _tag: &Tag,
-        ) -> Result<bool, LevelError> {
+        ) -> Result<bool, PlacementError> {
             self.record("load_nbt", pos, None, None);
             Ok(false)
         }
@@ -470,3 +526,7 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "placement/block_entity_tests.rs"]
+mod block_entity_tests;

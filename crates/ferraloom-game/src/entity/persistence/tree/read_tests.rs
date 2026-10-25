@@ -3,6 +3,8 @@ use crate::{
     Behaviors,
     entity::{
         RemovalReason,
+        animal::Cow,
+        item::{ItemEntity, PrimedTnt},
         player::{GameType, ServerPlayer},
     },
     level::Region,

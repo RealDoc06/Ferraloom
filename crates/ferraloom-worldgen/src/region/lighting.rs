@@ -1,5 +1,5 @@
 //! ProtoChunk's synchronous light-source update and its borrowed engine sink.
-use super::RegionChunk;
+use super::{LightLayer, RegionChunk};
 use crate::generator::GeneratedChunk;
 use ferraloom_chunk::LevelChunkSection;
 use ferraloom_light::{ChunkSkyLightSources, LevelLightEngine, LightWorld};
@@ -11,6 +11,13 @@ use ferraloom_util::{BlockPos, ChunkPos, SectionPos};
 pub trait ProtoChunkLightEngine {
     fn update_section_status(&mut self, pos: SectionPos, empty: bool);
     fn check_block(&mut self, pos: BlockPos);
+    /// WorldGenRegion#getLightEngine reads the engine's published storage,
+    /// independently of pending checks or queued disk-layer imports.
+    fn light_value(&self, _layer: LightLayer, _pos: BlockPos) -> Result<u8, crate::Error> {
+        Err(crate::Error(
+            "Unsupported: initialized worldgen light storage".into(),
+        ))
+    }
 }
 impl ProtoChunkLightEngine for LevelLightEngine {
     fn update_section_status(&mut self, pos: SectionPos, empty: bool) {
@@ -18,6 +25,16 @@ impl ProtoChunkLightEngine for LevelLightEngine {
     }
     fn check_block(&mut self, pos: BlockPos) {
         LevelLightEngine::check_block(self, pos);
+    }
+    fn light_value(&self, layer: LightLayer, pos: BlockPos) -> Result<u8, crate::Error> {
+        Ok(LevelLightEngine::light_value(
+            self,
+            match layer {
+                LightLayer::Block => ferraloom_light::LightLayer::Block,
+                LightLayer::Sky => ferraloom_light::LightLayer::Sky,
+            },
+            pos,
+        ))
     }
 }
 

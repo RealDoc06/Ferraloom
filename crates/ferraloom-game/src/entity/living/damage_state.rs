@@ -108,7 +108,7 @@ pub(crate) fn player_internal_set_absorption_amount(living: &mut LivingEntity, a
 
 /// EntityReference.read uses UUIDUtil.CODEC, including numeric NBT collections;
 /// the lenient optional read skips invalid UUIDs rather than accepting strings.
-pub(super) fn read_reference<T: EntityDataView>(
+pub(crate) fn read_reference<T: EntityDataView>(
     tag: &CompoundTag,
     key: &str,
 ) -> Option<EntityReference<T>> {

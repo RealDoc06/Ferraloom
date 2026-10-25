@@ -1,5 +1,7 @@
 //! DataCommands. Accessors retain captured handles through exclusive execution.
+mod entity;
 mod manipulation;
+pub use entity::set_entity_data;
 pub mod text;
 use super::{
     PreparedCommand,
@@ -31,6 +33,7 @@ pub enum DataAccessor {
 pub enum DataError {
     Syntax(CommandSyntaxException),
     Level(LevelError),
+    Entity(crate::entity::EntityPersistenceError),
     Storage(StorageReadError),
     Serialization(ferraloom_protocol::Error),
 }
@@ -39,6 +42,7 @@ impl std::fmt::Display for DataError {
         match self {
             Self::Syntax(error) => error.fmt(f),
             Self::Level(error) => error.fmt(f),
+            Self::Entity(error) => error.fmt(f),
             Self::Storage(error) => error.fmt(f),
             Self::Serialization(error) => error.fmt(f),
         }
@@ -49,6 +53,7 @@ impl std::error::Error for DataError {
         Some(match self {
             Self::Syntax(error) => error,
             Self::Level(error) => error,
+            Self::Entity(error) => error,
             Self::Storage(error) => error,
             Self::Serialization(error) => error,
         })
@@ -62,6 +67,11 @@ impl From<CommandSyntaxException> for DataError {
 impl From<LevelError> for DataError {
     fn from(error: LevelError) -> Self {
         Self::Level(error)
+    }
+}
+impl From<crate::entity::EntityPersistenceError> for DataError {
+    fn from(error: crate::entity::EntityPersistenceError) -> Self {
+        Self::Entity(error)
     }
 }
 impl From<StorageReadError> for DataError {

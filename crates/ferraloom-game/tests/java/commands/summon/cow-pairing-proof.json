@@ -1,0 +1,4358 @@
+[
+  [
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.0018986237371779557,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": 0.0640248910040036,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.007750047581501885,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": 0.004468270315897969,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": 0.05257867139330273,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.028557258685767514,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.0777907992056288,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.021039151974152747,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.008964043172264756,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.006023682838388184,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.014130184326340925,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.03544865658910168,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": 0.06983860801235857,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.0268937396312848,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.017354256645306907,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": 0.01609416308699661,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.04295740458428045,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.061171796080247205,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": 0.05185983207223271,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.05269169700430741,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": true,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.10137559835216084,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "010903412000000f0002131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.0005243160728190938,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": 0.04742933068110962,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.0074300680221667135,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.0709110241781756,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": 0.003129161695448792,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.02353216330772326,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.06969712185188519,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.062176267951526774,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.020332082995482923,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.052114375715608036,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": true,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": 0.012900976591797656,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "010903412000000f0002ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.030560285306535068,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": 0.062116017369973436,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.02066325306337702,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.004242474260626701,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": 0.03207098863976224,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.07565789113854386,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": true,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.02561167064828755,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "010903412000000f0002131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": 0.004077261671974456,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.03520767906140339,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.06606605610824814,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.03311823765860513,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.008908261474491481,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.047504306389792667,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": 0.07719985519688606,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.00501566880607723,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.03516749416843258,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.0022302012688594957,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.033940503125227076,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.013757818949526395,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.0791970663821498,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.011198451638215041,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.016871698434546473,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": 0.05911460908036733,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.05695598973673927,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.011502598924697016,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.024621500059609752,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.026811234424553087,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": true,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.07048332449637078,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "010903412000000f0002ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": 0.03978382762808188,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.03770314732954541,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.03234348250132438,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.09314180036044499,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.0446239593074492,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.01754405655135107,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.008393475257974823,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.017101790174934843,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.01975385030266215,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.03208308339997979,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.015829870847555605,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.026880225157595306,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": 0.04386148704652777,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.03172776913002858,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.04907143590341688,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": true,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.0386920833215662,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "010903412000000f0002131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": 0.05077042523587586,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": 0.02244873901535739,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.0014395338952811348,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.012141447555091141,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.02594545557524878,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.08136041459076639,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.046260724997403205,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.0021104702241657876,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.029196519386434444,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.017273733896336647,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.026324954896070677,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.03322671762050801,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.03185135624682157,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.0544516717272453,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.003999400019277788,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.03649916201494556,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": 0.02335769979965271,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.03813093321279358,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.0061102325934765675,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.04341960157054144,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.013429425187250542,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.03097747045194037,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": true,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.02016677250900597,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "010903412000000f0002131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.05364162128808738,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.0071600957626381115,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.02521083239148946,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.06494262810996547,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": 0.03266314942313003,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": 0.020617769778067868,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.01205131679497574,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.06895815243849647,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.08501560094896701,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": 0.08784145351720943,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.034097114140539085,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.018528621468432992,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.04447490590009172,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.0405279967532597,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.026182589330205123,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": true,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.06967640543107191,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "010903412000000f0002131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": true,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": 0.0033573061993031946,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "010903412000000f0002ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.005183934449795511,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": 0.04034036013316909,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.01979117970622273,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.043799855386828394,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.004313388338240239,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.003386903775901252,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": 0.02069047051526591,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.05623698929380467,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": 0.09142394161548306,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": 0.04326853006502246,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.003666595374672311,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.0008350930368815464,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    }
+  ],
+  [
+    {
+      "left_handed": true,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.08209373291180436,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "010903412000000f0002ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": 0.018683242447553882,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": 0.06351373426363113,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": 0.05325883359348903,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": 0.02112508137801327,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.030797057764238085,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.0418678129274092,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": 0.017288910735105693,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.09359545667807133,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.007581884077210214,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.04195123922725444,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.008310796564990838,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.08068740520918885,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.017637454430205292,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.0035119771864857595,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.025588560557574816,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": 0.0007994240501967955,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.00030574971796295587,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.008570104446933702,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.024618116509267613,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": 0.040196837037555035,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": 0.005470005521950796,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": 0.022152930519468136,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.009591469561545366,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.010735438732130533,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.019057365443412178,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.039244200381930876,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": 0.017970494052393687,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.07688893642561241,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.07245828670002591,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": 0.017441793712326004,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.10038946988063753,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.07338106987039189,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.021561278253332938,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.0030914590806414783,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.04174730844451067,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.0711748953971701,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": 0.0021725805758733155,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": 0.006293951285845056,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.061928759761513366,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.031065854065904095,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.0018426093784200117,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.10971793224025314,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": 0.10926278407450077,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.05526588427493553,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.000592794034714511,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.0761234692334642,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.06270700666333315,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.04199083492609972,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.05404360841512351,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.03692809540458218,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": 0.013039226543003154,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.09503646475782068,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.014234551677750939,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.051045935310228024,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.024118671710656552,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.014727822093051244,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.06432802178083799,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.04416749656858808,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.07690995555177473,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.07284871694879731,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.031702022202122544,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.07941824368787102,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": true,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.0007637894665654253,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "010903412000000f0002131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.04630263043444781,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": 0.05629923532653347,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.06398204269672511,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.0675150430548951,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.03350071626652959,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.04950162784136851,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.038649574509511536,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.0847566262312343,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.018905611200713806,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": 0.030430590187134707,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.08149347093165829,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": 0.03110163247422749,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": true,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.063830571140129,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "010903412000000f0002131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.013326347457842143,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.025643207207629554,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.008420111734779813,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.04785895692233006,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": true,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.004410115748902191,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "010903412000000f0002131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.04499128139735223,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.026738840617599232,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.04523192044758948,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.04371108655555711,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.032850255378371135,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": 0.07134545063962328,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.025442243476190368,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.01087465102703802,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.04503010873106386,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": true,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": 0.0579051400941927,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "010903412000000f0002ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": 0.04131482076965537,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.09993146141358553,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.08827155670232609,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": 0.02293409824931382,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.02161372619766033,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.019713690040960945,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.006910602686688088,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.004645854095421288,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.06892503154044896,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.0010510177156154744,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.022802821256031468,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.027713795151673295,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.046920707043297524,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": 0.0486284601600875,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.06408806618517476,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.04299103987840712,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.023038013496712414,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.07178069316267838,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.07020555208605056,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.03337777160147664,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": 0.05047316517067384,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.0033897893292152773,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.001993826639549207,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.05039282642888244,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": true,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.05836514629612277,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "010903412000000f0002ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.07897180396573315,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.06339572269083996,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.07230464293445464,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": 0.04655412279718353,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.029361505644802256,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.017472983139788612,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.03516792664385339,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": -0.04540165478408639,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": -0.025234528272981834,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:moody",
+      "follow_range_amount": 0.04785407688147338,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000131801ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    },
+    {
+      "left_handed": false,
+      "sound_variant": "minecraft:classic",
+      "follow_range_amount": 0.03164976577643341,
+      "follow_range_syncable": false,
+      "packets": [
+        {
+          "kind": "ClientboundAddEntityPacket",
+          "wire": "01000000000000000000000000000000011e4021000000000000c04e00000000000040210000000000000000000000"
+        },
+        {
+          "kind": "ClientboundSetEntityDataPacket",
+          "wire": "01090341200000ff",
+          "stable_wire": "01090341200000ff"
+        }
+      ]
+    }
+  ]
+]

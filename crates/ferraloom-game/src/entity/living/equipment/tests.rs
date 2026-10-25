@@ -199,7 +199,7 @@ fn required_enchantment_iteration_preserves_completed_component_cleanup_prefix()
     let (mut level, owner) = receiver(true);
     level.set_unported_behavior(UnportedBehavior::Strict);
     let mut broken = broken_stack(
-        EquipmentSlot::Mainhand,
+        EquipmentSlot::Legs,
         "installed",
         Attribute::SUBMERGED_MINING_SPEED,
     );
@@ -209,11 +209,11 @@ fn required_enchantment_iteration_preserves_completed_component_cleanup_prefix()
         .unwrap()
         .components
         .set(DataComponent::Enchantments(ItemEnchantments(vec![(
-            Enchantment("minecraft:unbreaking".parse().unwrap()),
+            Enchantment("minecraft:swift_sneak".parse().unwrap()),
             VarInt(1),
         )])));
     assert_eq!(
-        stop_location_based_effects(owner, &broken, EquipmentSlot::Mainhand, &mut level),
+        stop_location_based_effects(owner, &broken, EquipmentSlot::Legs, &mut level),
         Err(LevelError::UnsupportedEntityMethod(
             EntityType::PLAYER,
             EntityMethod::EnchantmentAttributeModifiers,
@@ -227,8 +227,8 @@ fn required_enchantment_iteration_preserves_completed_component_cleanup_prefix()
             .has_modifier(Attribute::SUBMERGED_MINING_SPEED, &modifier().id)
     );
     level.set_unported_behavior(UnportedBehavior::Warn);
-    on_equipped_item_broken(owner, broken, EquipmentSlot::Mainhand, &mut level).unwrap();
-    assert_eq!(level.unported_behavior_stats().skipped_calls, 2);
+    on_equipped_item_broken(owner, broken, EquipmentSlot::Legs, &mut level).unwrap();
+    assert_eq!(level.unported_behavior_stats().skipped_calls, 1);
     assert_eq!(
         level
             .entity::<ServerPlayer>(owner)

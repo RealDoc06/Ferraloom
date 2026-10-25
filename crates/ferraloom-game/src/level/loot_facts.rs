@@ -92,6 +92,9 @@ impl PredicateContext for Level {
     fn loaded(&self, pos: BlockPos) -> Result<bool> {
         Ok(Level::is_loaded(self, pos))
     }
+    fn smokey(&self, pos: BlockPos) -> Result<bool> {
+        crate::block::campfire::is_smokey_pos(&LevelReaderRef::Server(self), pos).map_err(required)
+    }
     fn block(&self, pos: BlockPos) -> Result<BlockState> {
         self.get_block_state(pos).map_err(required)
     }

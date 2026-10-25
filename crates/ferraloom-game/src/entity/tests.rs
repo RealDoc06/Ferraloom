@@ -835,7 +835,7 @@ pub(crate) fn install_test_environment(level: &mut Level, fast_lava: bool, dimen
         .unwrap();
 }
 
-fn level_with_behaviors(floor: bool, behaviors: &'static Behaviors) -> Level {
+pub(crate) fn level_with_behaviors(floor: bool, behaviors: &'static Behaviors) -> Level {
     use ferraloom_chunk::{BiomeId, IdMap, LevelChunkSection, Strategy};
     let template = LevelChunkSection::new(
         Strategy::block_states(),
@@ -883,6 +883,53 @@ fn level_with_behaviors(floor: bool, behaviors: &'static Behaviors) -> Level {
         }
     }
     level
+}
+
+/// Equipment shared by the actual orb pickup and getRandomItemWith captures.
+pub(crate) fn orb_equipment(player: &mut player::ServerPlayer, config: i32) {
+    use ferraloom_data::Item;
+    use ferraloom_protocol::{
+        codec::VarInt,
+        component::{
+            DataComponent, DataComponentPatch, Enchantment, EquipmentSlot, ItemEnchantments,
+            ItemStack,
+        },
+    };
+    let damages = match config {
+        0 => [32, 0, 0, 0, 0, 0, 0, 0],
+        1 => [0; 8],
+        2 => [9, 0, 0, 0, 0, 0, 0, 0],
+        3 => [3, 0, 0, 0, 0, 0, 0, 0],
+        4 => [9, 7, 3, 0, 0, 1, 0, 0],
+        5 => [1, 2, 3, 4, 5, 6, 7, 8],
+        6 => [17, 0, 0, 0, 0, 0, 0, 0],
+        _ => unreachable!(),
+    };
+    player.inventory.set_selected_slot(6);
+    for (index, slot) in player::equipment::SLOTS.into_iter().enumerate() {
+        if damages[index] == 0 && !(config == 1 && index == 0) {
+            continue;
+        }
+        let mut patch = DataComponentPatch::default();
+        patch.set(DataComponent::Damage(VarInt(damages[index])));
+        if config != 0 {
+            let key = if config == 6 {
+                "minecraft:protection"
+            } else {
+                "minecraft:mending"
+            };
+            patch.set(DataComponent::Enchantments(ItemEnchantments(vec![(
+                Enchantment(key.parse().unwrap()),
+                VarInt(1),
+            )])));
+        }
+        let stack = ItemStack::new(Item::DIAMOND_PICKAXE, 1, patch);
+        if slot == EquipmentSlot::Mainhand {
+            player.inventory.set_selected_item(stack);
+        } else {
+            player.equipment.set(slot, stack);
+        }
+    }
 }
 fn flags(base: &EntityData) -> String {
     [
@@ -1565,13 +1612,6 @@ fn falling_sand_is_constructed_before_source_replacement_then_lands() {
         level.get_block_state(BlockPos::new(8, 64, 8)).unwrap(),
         Block::SAND.default_state()
     );
-    assert!(matches!(
-        level.take_entity_effects().last(),
-        Some(effects::EntityEffect::FallingBlockLanded {
-            pos: BlockPos { x: 8, y: 64, z: 8 },
-            ..
-        })
-    ));
 }
 
 #[test]

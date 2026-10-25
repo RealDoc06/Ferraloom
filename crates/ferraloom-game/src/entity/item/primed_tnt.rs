@@ -12,7 +12,7 @@ use crate::{
 use ferraloom_data::{Block, BlockState, EntityType};
 use ferraloom_nbt::{CompoundTag, Tag};
 use ferraloom_protocol::codec::VarInt;
-use ferraloom_util::{Uuid, Vec3, mth, random::RandomSource};
+use ferraloom_util::{Vec3, mth, random::RandomSource};
 
 pub const FUSE: EntityDataAccessor<VarInt> = EntityDataAccessor::new(8);
 pub const BLOCK_STATE: EntityDataAccessor<BlockState> = EntityDataAccessor::new(9);
@@ -99,6 +99,11 @@ impl PrimedTnt {
         Ok(tag)
     }
     pub fn load_nbt(&mut self, tag: CompoundTag) -> Result<(), persistence::EntityLoadError> {
+        self.parent.load_nbt(tag.clone())?;
+        self.read_additional_save_data(&tag);
+        Ok(())
+    }
+    pub(crate) fn read_additional_save_data(&mut self, tag: &CompoundTag) {
         self.set_fuse(i32::from(tag.get_short_or("fuse", 80)));
         self.set_block_state(
             tag.get("block_state")
@@ -106,11 +111,7 @@ impl PrimedTnt {
                 .unwrap_or(Block::TNT.default_state()),
         );
         self.explosion_power = mth::clamp_f32(tag.get_float_or("explosion_power", 4.0), 0.0, 128.0);
-        self.owner = tag
-            .get_int_array("owner")
-            .and_then(|v| <[i32; 4]>::try_from(v).ok())
-            .map(|uuid| EntityReference::unresolved(Uuid::from_int_array(uuid)));
-        self.parent.load_nbt(tag)
+        self.owner = crate::entity::living::damage_state::read_reference(tag, "owner");
     }
 }
 /// Port of PrimedTnt#getOwner, retaining the LivingEntity type restriction.
@@ -221,6 +222,7 @@ impl Entity for PrimedTntBehavior {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ferraloom_util::Uuid;
     #[test]
     fn vanilla_tnt_launch_uses_level_random_after_canonical_construction() {
         let mut rows = 0;

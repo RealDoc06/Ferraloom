@@ -1,0 +1,293 @@
+[
+  {
+    "block": "chest",
+    "initial": "{}",
+    "input": "{}",
+    "setResult": false,
+    "entity": true,
+    "affected": false,
+    "trace": [
+      "set",
+      "save",
+      "load",
+      "save"
+    ],
+    "before": "{Items:[],components:{}}",
+    "after": "{Items:[],components:{}}",
+    "full": "{Items:[],components:{},id:\"minecraft:chest\",x:8,y:5,z:8}"
+  },
+  {
+    "block": "chest",
+    "initial": "{}",
+    "input": "{unknown:1,id:bad,x:99,y:99,z:99}",
+    "setResult": false,
+    "entity": true,
+    "affected": false,
+    "trace": [
+      "set",
+      "save",
+      "load",
+      "save"
+    ],
+    "before": "{Items:[],components:{}}",
+    "after": "{Items:[],components:{}}",
+    "full": "{Items:[],components:{},id:\"minecraft:chest\",x:8,y:5,z:8}"
+  },
+  {
+    "block": "chest",
+    "initial": "{}",
+    "input": "{CustomName:'named',Items:[{Slot:0b,id:'minecraft:stone',count:3}]}",
+    "setResult": true,
+    "entity": true,
+    "affected": true,
+    "trace": [
+      "set",
+      "save",
+      "load",
+      "save",
+      "changed",
+      "block_changed"
+    ],
+    "before": "{Items:[],components:{}}",
+    "after": "{CustomName:\"named\",Items:[{Slot:0b,count:3,id:\"minecraft:stone\"}],components:{}}",
+    "full": "{CustomName:\"named\",Items:[{Slot:0b,count:3,id:\"minecraft:stone\"}],components:{},id:\"minecraft:chest\",x:8,y:5,z:8}"
+  },
+  {
+    "block": "chest",
+    "initial": "{Items:[{Slot:0b,id:'minecraft:stone',count:3}]}",
+    "input": "{}",
+    "setResult": false,
+    "entity": true,
+    "affected": true,
+    "trace": [
+      "set",
+      "save",
+      "load",
+      "save",
+      "changed",
+      "block_changed"
+    ],
+    "before": "{Items:[{Slot:0b,count:3,id:\"minecraft:stone\"}],components:{}}",
+    "after": "{Items:[],components:{}}",
+    "full": "{Items:[],components:{},id:\"minecraft:chest\",x:8,y:5,z:8}"
+  },
+  {
+    "block": "chest",
+    "initial": "{components:{'minecraft:custom_data':{before:1b}}}",
+    "input": "{}",
+    "setResult": false,
+    "entity": true,
+    "affected": true,
+    "trace": [
+      "set",
+      "save",
+      "load",
+      "save",
+      "changed",
+      "block_changed"
+    ],
+    "before": "{Items:[],components:{\"minecraft:custom_data\":{before:1b}}}",
+    "after": "{Items:[],components:{}}",
+    "full": "{Items:[],components:{},id:\"minecraft:chest\",x:8,y:5,z:8}"
+  },
+  {
+    "block": "chest",
+    "initial": "{}",
+    "input": "{components:{'minecraft:custom_data':{after:2b}}}",
+    "setResult": false,
+    "entity": true,
+    "affected": true,
+    "trace": [
+      "set",
+      "save",
+      "load",
+      "save",
+      "changed",
+      "block_changed"
+    ],
+    "before": "{Items:[],components:{}}",
+    "after": "{Items:[],components:{\"minecraft:custom_data\":{after:2b}}}",
+    "full": "{Items:[],components:{\"minecraft:custom_data\":{after:2b}},id:\"minecraft:chest\",x:8,y:5,z:8}"
+  },
+  {
+    "block": "chest",
+    "initial": "{CustomName:'same'}",
+    "input": "{CustomName:'same'}",
+    "setResult": false,
+    "entity": true,
+    "affected": false,
+    "trace": [
+      "set",
+      "save",
+      "load",
+      "save"
+    ],
+    "before": "{CustomName:\"same\",Items:[],components:{}}",
+    "after": "{CustomName:\"same\",Items:[],components:{}}",
+    "full": "{CustomName:\"same\",Items:[],components:{},id:\"minecraft:chest\",x:8,y:5,z:8}"
+  },
+  {
+    "block": "oak_sign",
+    "initial": "{}",
+    "input": "{front_text:{messages:['alpha','beta','',''],color:red,has_glowing_text:true},is_waxed:true}",
+    "setResult": true,
+    "entity": true,
+    "affected": true,
+    "trace": [
+      "set",
+      "save",
+      "load",
+      "save",
+      "changed",
+      "block_changed"
+    ],
+    "before": "{back_text:{color:\"black\",has_glowing_text:0b,messages:[\"\",\"\",\"\",\"\"]},components:{},front_text:{color:\"black\",has_glowing_text:0b,messages:[\"\",\"\",\"\",\"\"]},is_waxed:0b}",
+    "after": "{back_text:{color:\"black\",has_glowing_text:0b,messages:[\"\",\"\",\"\",\"\"]},components:{},front_text:{color:\"red\",has_glowing_text:1b,messages:[\"alpha\",\"beta\",\"\",\"\"]},is_waxed:1b}",
+    "full": "{back_text:{color:\"black\",has_glowing_text:0b,messages:[\"\",\"\",\"\",\"\"]},components:{},front_text:{color:\"red\",has_glowing_text:1b,messages:[\"alpha\",\"beta\",\"\",\"\"]},id:\"minecraft:sign\",is_waxed:1b,x:8,y:5,z:8}",
+    "packet": "{back_text:{color:\"black\",has_glowing_text:0b,messages:[\"\",\"\",\"\",\"\"]},front_text:{color:\"red\",has_glowing_text:1b,messages:[\"alpha\",\"beta\",\"\",\"\"]},is_waxed:1b}"
+  },
+  {
+    "block": "oak_sign",
+    "initial": "{is_waxed:true}",
+    "input": "{}",
+    "setResult": false,
+    "entity": true,
+    "affected": true,
+    "trace": [
+      "set",
+      "save",
+      "load",
+      "save",
+      "changed",
+      "block_changed"
+    ],
+    "before": "{back_text:{color:\"black\",has_glowing_text:0b,messages:[\"\",\"\",\"\",\"\"]},components:{},front_text:{color:\"black\",has_glowing_text:0b,messages:[\"\",\"\",\"\",\"\"]},is_waxed:1b}",
+    "after": "{back_text:{color:\"black\",has_glowing_text:0b,messages:[\"\",\"\",\"\",\"\"]},components:{},front_text:{color:\"black\",has_glowing_text:0b,messages:[\"\",\"\",\"\",\"\"]},is_waxed:0b}",
+    "full": "{back_text:{color:\"black\",has_glowing_text:0b,messages:[\"\",\"\",\"\",\"\"]},components:{},front_text:{color:\"black\",has_glowing_text:0b,messages:[\"\",\"\",\"\",\"\"]},id:\"minecraft:sign\",is_waxed:0b,x:8,y:5,z:8}",
+    "packet": "{back_text:{color:\"black\",has_glowing_text:0b,messages:[\"\",\"\",\"\",\"\"]},front_text:{color:\"black\",has_glowing_text:0b,messages:[\"\",\"\",\"\",\"\"]},is_waxed:0b}"
+  },
+  {
+    "block": "white_banner",
+    "initial": "{}",
+    "input": "{patterns:[{pattern:'minecraft:stripe_bottom',color:red}],CustomName:'banner'}",
+    "setResult": true,
+    "entity": true,
+    "pending": "BannerBlockEntity factory not ported",
+    "affected": true,
+    "trace": [
+      "set",
+      "save",
+      "load",
+      "save",
+      "changed",
+      "block_changed"
+    ],
+    "before": "{components:{}}",
+    "after": "{CustomName:\"banner\",components:{},patterns:[{color:\"red\",pattern:\"minecraft:stripe_bottom\"}]}",
+    "full": "{CustomName:\"banner\",components:{},id:\"minecraft:banner\",patterns:[{color:\"red\",pattern:\"minecraft:stripe_bottom\"}],x:8,y:5,z:8}",
+    "packet": "{CustomName:\"banner\",components:{},patterns:[{color:\"red\",pattern:\"minecraft:stripe_bottom\"}]}"
+  },
+  {
+    "block": "white_banner",
+    "initial": "{patterns:[{pattern:'minecraft:stripe_bottom',color:red}]}",
+    "input": "{}",
+    "setResult": false,
+    "entity": true,
+    "pending": "BannerBlockEntity factory not ported",
+    "affected": true,
+    "trace": [
+      "set",
+      "save",
+      "load",
+      "save",
+      "changed",
+      "block_changed"
+    ],
+    "before": "{components:{},patterns:[{color:\"red\",pattern:\"minecraft:stripe_bottom\"}]}",
+    "after": "{components:{}}",
+    "full": "{components:{},id:\"minecraft:banner\",x:8,y:5,z:8}",
+    "packet": "{components:{}}"
+  },
+  {
+    "block": "spawner",
+    "initial": "{}",
+    "input": "{Delay:100s,MinSpawnDelay:20,MaxSpawnDelay:30,SpawnCount:2,RequiredPlayerRange:0,SpawnRange:1}",
+    "setResult": true,
+    "entity": true,
+    "affected": true,
+    "trace": [
+      "set",
+      "save",
+      "load",
+      "save",
+      "changed",
+      "block_changed"
+    ],
+    "before": "{Delay:20s,MaxNearbyEntities:6s,MaxSpawnDelay:800s,MinSpawnDelay:200s,RequiredPlayerRange:16s,SpawnCount:4s,SpawnPotentials:[{data:{entity:{}},weight:1}],SpawnRange:4s,components:{}}",
+    "after": "{Delay:100s,MaxNearbyEntities:6s,MaxSpawnDelay:30s,MinSpawnDelay:20s,RequiredPlayerRange:0s,SpawnCount:2s,SpawnPotentials:[{data:{entity:{}},weight:1}],SpawnRange:1s,components:{}}",
+    "full": "{Delay:100s,MaxNearbyEntities:6s,MaxSpawnDelay:30s,MinSpawnDelay:20s,RequiredPlayerRange:0s,SpawnCount:2s,SpawnPotentials:[{data:{entity:{}},weight:1}],SpawnRange:1s,components:{},id:\"minecraft:mob_spawner\",x:8,y:5,z:8}",
+    "packet": "{Delay:100s,MaxNearbyEntities:6s,MaxSpawnDelay:30s,MinSpawnDelay:20s,RequiredPlayerRange:0s,SpawnCount:2s,SpawnRange:1s}"
+  },
+  {
+    "block": "spawner",
+    "initial": "{Delay:100s}",
+    "input": "{Delay:100s}",
+    "setResult": false,
+    "entity": true,
+    "affected": false,
+    "trace": [
+      "set",
+      "save",
+      "load",
+      "save"
+    ],
+    "before": "{Delay:100s,MaxNearbyEntities:6s,MaxSpawnDelay:800s,MinSpawnDelay:200s,RequiredPlayerRange:16s,SpawnCount:4s,SpawnPotentials:[{data:{entity:{}},weight:1}],SpawnRange:4s,components:{}}",
+    "after": "{Delay:100s,MaxNearbyEntities:6s,MaxSpawnDelay:800s,MinSpawnDelay:200s,RequiredPlayerRange:16s,SpawnCount:4s,SpawnPotentials:[{data:{entity:{}},weight:1}],SpawnRange:4s,components:{}}",
+    "full": "{Delay:100s,MaxNearbyEntities:6s,MaxSpawnDelay:800s,MinSpawnDelay:200s,RequiredPlayerRange:16s,SpawnCount:4s,SpawnPotentials:[{data:{entity:{}},weight:1}],SpawnRange:4s,components:{},id:\"minecraft:mob_spawner\",x:8,y:5,z:8}",
+    "packet": "{Delay:100s,MaxNearbyEntities:6s,MaxSpawnDelay:800s,MinSpawnDelay:200s,RequiredPlayerRange:16s,SpawnCount:4s,SpawnRange:4s}"
+  },
+  {
+    "block": "spawner",
+    "initial": "{}",
+    "input": "{SpawnData:{entity:{id:'minecraft:pig'}}}",
+    "setResult": false,
+    "entity": true,
+    "pending": "spawner loadWithComponents SpawnData callback",
+    "affected": true,
+    "trace": [
+      "set",
+      "save",
+      "load",
+      "send",
+      "save",
+      "changed",
+      "block_changed"
+    ],
+    "before": "{Delay:20s,MaxNearbyEntities:6s,MaxSpawnDelay:800s,MinSpawnDelay:200s,RequiredPlayerRange:16s,SpawnCount:4s,SpawnPotentials:[{data:{entity:{}},weight:1}],SpawnRange:4s,components:{}}",
+    "after": "{Delay:20s,MaxNearbyEntities:6s,MaxSpawnDelay:800s,MinSpawnDelay:200s,RequiredPlayerRange:16s,SpawnCount:4s,SpawnData:{entity:{id:\"minecraft:pig\"}},SpawnPotentials:[{data:{entity:{id:\"minecraft:pig\"}},weight:1}],SpawnRange:4s,components:{}}",
+    "full": "{Delay:20s,MaxNearbyEntities:6s,MaxSpawnDelay:800s,MinSpawnDelay:200s,RequiredPlayerRange:16s,SpawnCount:4s,SpawnData:{entity:{id:\"minecraft:pig\"}},SpawnPotentials:[{data:{entity:{id:\"minecraft:pig\"}},weight:1}],SpawnRange:4s,components:{},id:\"minecraft:mob_spawner\",x:8,y:5,z:8}",
+    "packet": "{Delay:20s,MaxNearbyEntities:6s,MaxSpawnDelay:800s,MinSpawnDelay:200s,RequiredPlayerRange:16s,SpawnCount:4s,SpawnData:{entity:{id:\"minecraft:pig\"}},SpawnRange:4s}"
+  },
+  {
+    "block": "stone",
+    "initial": "{}",
+    "input": "{CustomName:'ignored'}",
+    "setResult": true,
+    "entity": false,
+    "affected": true,
+    "trace": [
+      "set"
+    ]
+  },
+  {
+    "block": "stone",
+    "initial": "{}",
+    "input": "{CustomName:'ignored'}",
+    "setResult": false,
+    "entity": false,
+    "affected": false,
+    "trace": [
+      "set"
+    ]
+  }
+]

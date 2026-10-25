@@ -56,9 +56,12 @@ pub fn drop_item_stack(
 /// is reborrowed after every spawn, even if an entity callback replaced its block.
 pub fn drop_contents(entity: BlockEntityRef, level: &mut Level) -> Result<(), LevelError> {
     use super::storage::BaseContainerBlockEntity;
-    let size = level
-        .block_entity::<BaseContainerBlockEntity>(entity)?
-        .size();
+    let size = match level.block_entity_state(entity)? {
+        crate::block::entity::BlockEntityState::ChiseledBookShelf(entity) => entity.items.len(),
+        _ => level
+            .block_entity::<BaseContainerBlockEntity>(entity)?
+            .size(),
+    };
     let mut operation = crate::inventory::StackOperation::new(level);
     for slot in 0..size {
         let stack = operation
