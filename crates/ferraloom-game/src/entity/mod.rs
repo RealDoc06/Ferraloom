@@ -14,6 +14,7 @@ pub mod effects;
 pub mod experience_orb;
 pub mod item;
 pub mod mob;
+pub mod monster;
 pub mod player;
 pub mod pushing;
 mod relationships;
