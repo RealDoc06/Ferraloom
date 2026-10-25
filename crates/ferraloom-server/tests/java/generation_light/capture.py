@@ -4,6 +4,7 @@ from pathlib import Path
 import json
 import os
 import subprocess
+import sys
 import tempfile
 import zipfile
 
@@ -20,6 +21,25 @@ OUTPUT = CACHE / 'logs'
 OUTPUT.mkdir(parents=True, exist_ok=True)
 with tempfile.TemporaryDirectory(prefix='ferraloom-published-light-java-') as temporary:
     root = Path(temporary)
+    if '--vectors-only' in sys.argv or '--check-vectors' in sys.argv:
+        subprocess.run([str(JDK / 'javac'), '-cp', CLASSPATH, '-d', temporary,
+                        str(HERE / 'PublishedReadVectors.java')], check=True)
+        output = subprocess.check_output([str(JDK / 'java'), '-Xmx2G', '-cp',
+                                          temporary + ':' + CLASSPATH,
+                                          'PublishedReadVectors'], text=True, cwd=temporary)
+        rows = [line.removeprefix('PUBLISHED_READ_VECTOR\t')
+                for line in output.splitlines() if line.startswith('PUBLISHED_READ_VECTOR\t')]
+        if len(rows) != 36:
+            raise RuntimeError(f'expected 36 native reads, got {len(rows)}')
+        target = HERE.parents[3] / 'ferraloom-light/tests/fixtures/published_reads.tsv'
+        captured = '\n'.join(rows) + '\n'
+        if '--check-vectors' in sys.argv:
+            if target.read_text() != captured:
+                raise RuntimeError('native published read vectors differ from committed fixture')
+        else:
+            target.write_text(captured)
+        print(f'{len(rows)} native published read vectors: {target}')
+        raise SystemExit(0)
     subprocess.run([str(JDK / 'javac'), '-cp', CLASSPATH, '-d', temporary,
                     str(HERE / 'PublishedLightTrace.java')], check=True)
     agent = root / 'trace-agent.jar'
