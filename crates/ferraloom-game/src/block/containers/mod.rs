@@ -10,6 +10,7 @@ mod furnace_tick;
 pub mod loot;
 pub mod loot_runtime;
 pub mod menu;
+mod pathfinding;
 mod placement;
 mod post_placement;
 pub mod runtime;

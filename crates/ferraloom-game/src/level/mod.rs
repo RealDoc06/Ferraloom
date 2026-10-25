@@ -238,6 +238,9 @@ impl RegionId {
 /// Owned portion of ServerLevel. The scheduler moves this value between workers.
 pub struct Region {
     id: RegionId,
+    /// Port of ServerLevel#pathTypesByPosCache. One region per level currently
+    /// matches vanilla exactly; a future region split must preserve per-level semantics.
+    path_types_by_pos_cache: crate::entity::ai::pathfinder::PathTypeCache,
     chunks: store::InsertOnlyMap<ChunkPos, chunk::LevelChunk>,
     next_chunk_generation: Cell<u64>,
     entities: entity::EntityStorage,
@@ -311,6 +314,7 @@ impl Region {
             block_events: events::BlockEvents::default(),
             effects: Vec::new(),
             block_changes: broadcast::BlockChanges::default(),
+            path_types_by_pos_cache: Default::default(),
             tags: None,
             fluid_tags: None,
             entity_type_tags: None,
@@ -338,6 +342,14 @@ pub struct Level {
 }
 
 impl Level {
+    pub(crate) fn path_type_cache(&self) -> &crate::entity::ai::pathfinder::PathTypeCache {
+        &self.region().path_types_by_pos_cache
+    }
+    pub(crate) fn path_type_cache_mut(
+        &mut self,
+    ) -> &mut crate::entity::ai::pathfinder::PathTypeCache {
+        &mut self.region_mut().path_types_by_pos_cache
+    }
     pub fn new(region: Region, context: Arc<LevelContext>) -> Self {
         Self {
             command_storage: None,
