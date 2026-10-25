@@ -538,7 +538,7 @@ pub fn supports(block: Block) -> bool {
                 | BlockEntityType::COMMAND_BLOCK
                 | BlockEntityType::STRUCTURE_BLOCK
                 | BlockEntityType::SKULL
-            BlockEntityType::MOB_SPAWNER
+                | BlockEntityType::MOB_SPAWNER
                 | BlockEntityType::BEEHIVE
                 | BlockEntityType::END_PORTAL
                 | BlockEntityType::PISTON
