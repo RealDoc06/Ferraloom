@@ -19,7 +19,7 @@ import net.minecraft.world.ticks.*;
 
 /** Actual FallingBlock ticks and AnvilBlock/Fallable methods; the world's
  * addFreshEntity sink captures the same receiver before native falling sets it. */
-public final class AnvilVectors extends RedstoneIdentityVectors {
+public class AnvilVectors extends RedstoneIdentityVectors {
     final LevelTicks<Block> ticks = new LevelTicks<>(pos -> true);
     final LevelTicks<Fluid> fluidTicks = new LevelTicks<>(pos -> true);
     final List<FallingBlockEntity> added = new ArrayList<>();

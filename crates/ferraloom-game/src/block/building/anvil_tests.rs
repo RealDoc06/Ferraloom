@@ -44,7 +44,7 @@ fn anvil_ticks_falling_configuration_and_damage_transform_match_native() {
                 let original = state(f[1]);
                 let tick = f[4].parse::<i64>().unwrap();
                 if tick == 0 {
-                    let mut level = super::tests::tagged_level();
+                    let mut level = super::fire_powder_tests::level();
                     level
                         .update_entity_chunk_status(
                             ChunkPos::containing(POS),

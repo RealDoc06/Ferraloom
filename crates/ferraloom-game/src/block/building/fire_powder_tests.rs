@@ -39,7 +39,7 @@ fn state(id: &str) -> BlockState {
 fn side(id: &str) -> Direction {
     Direction::VALUES[id.parse::<usize>().unwrap()]
 }
-fn level() -> Level {
+pub(super) fn level() -> Level {
     let mut level = connected_level();
     level.set_fluid_tags(Arc::clone(&FLUID_TAGS));
     level
@@ -57,6 +57,54 @@ fn neighbors(level: &mut Level, mask: u8, neighbor: BlockState) {
             )
             .unwrap();
     }
+}
+#[test]
+fn concrete_powder_landing_matches_native_replaced_fluids_and_all_water_masks() {
+    use crate::{
+        entity::{EntityState, item::falling_block::FallingBlockEntity},
+        level::effects::LevelEffect,
+    };
+    let mut level = level();
+    let entity = level.next_entity_ref();
+    level
+        .add_entity(
+            entity,
+            EntityState::FallingBlock(Box::new(FallingBlockEntity::new(1, 42))),
+        )
+        .unwrap();
+    let mut checked = 0;
+    for line in include_str!("../../../tests/java/blocks/building/powder-land.tsv").lines() {
+        let f: Vec<_> = line.split('\t').collect();
+        let original = state(f[1]);
+        neighbors(
+            &mut level,
+            f[3].parse().unwrap(),
+            Block::WATER.default_state(),
+        );
+        level.set_block_state(POS, original).unwrap();
+        level.take_effects();
+        level
+            .required_block_behavior(original.block(), BlockMethod::OnLand)
+            .unwrap()
+            .on_land(original, POS, state(f[2]), entity, &mut level)
+            .unwrap();
+        assert_eq!(
+            level.get_block_state(POS).unwrap().id().to_string(),
+            f[4],
+            "{line}"
+        );
+        let mutations = level
+            .take_effects()
+            .into_iter()
+            .filter_map(|effect| match effect {
+                LevelEffect::BlockUpdated { pos, new, .. } if pos == POS => Some(new.id()),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(format!("{mutations:?}"), f[5], "{line}");
+        checked += 1;
+    }
+    assert_eq!(checked, 5120);
 }
 #[test]
 fn fire_placement_distinguishes_direct_fire_soul_selection_and_all_fuel_masks() {
