@@ -613,7 +613,7 @@ async fn structure_status_reads_settle_before_a_queued_full_tracking_failure() {
             .entity_failure
             .as_ref()
             .unwrap();
-        assert_eq!(error.stage, WorldgenEntityLoadStage::Preflight);
+        assert_eq!(error.stage, WorldgenEntityLoadStage::Publishing);
         assert!(matches!(
             error.source,
             ferraloom_game::entity::persistence::EntityPersistenceError::Level(
