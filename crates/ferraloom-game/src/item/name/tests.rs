@@ -42,3 +42,30 @@ fn unknown_potion_is_an_error_and_empty_payloads_use_air_holder_names() {
         Component::translatable("block.minecraft.air", Vec::new())
     );
 }
+
+#[test]
+fn hover_and_display_names_match_native_custom_names_rarity_and_item_templates() {
+    let rows: Vec<serde_json::Value> = serde_json::from_str(include_str!(
+        "../../commands/vanilla/item-display-name-vectors.json"
+    ))
+    .unwrap();
+    for row in &rows {
+        let mut stack = if row["empty"] == true {
+            ItemStack::default()
+        } else {
+            ItemStack::from_json(&row["input"]).unwrap()
+        };
+        if row["depleted"] == true {
+            stack.0.as_mut().unwrap().count = 0;
+        }
+        for (method, actual) in [
+            ("hover", stack.get_hover_name().unwrap()),
+            ("display", stack.get_display_name().unwrap()),
+        ] {
+            let actual: serde_json::Value =
+                serde_json::from_str(&actual.to_json().unwrap()).unwrap();
+            assert_eq!(actual, row[method], "case {} {method}", row["case"]);
+        }
+    }
+    assert_eq!(rows.len(), 32);
+}
