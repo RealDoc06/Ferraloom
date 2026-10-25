@@ -234,13 +234,14 @@ async fn input(bot: &mut Bot, trigger: &Trigger) -> Result<Rewards> {
         .snapshot()
         .game_time
         .context("joined player game time")?;
-    // Observe a subsequent actual tick update so PlayerAdvancements#flushDirty has run too.
+    // Time is sent before entity ticks. Passing the following update also observes that tick's
+    // later PlayerAdvancements#flushDirty packets, even when the input arrived at the boundary.
     bot.wait_for(
         "recipe reward and advancement flush",
         Ticks::DEFAULT,
         |_, packet| {
             rewards.observe(packet);
-            matches!(packet, cb::Packet::SetTime(packet) if packet.game_time > time)
+            matches!(packet, cb::Packet::SetTime(packet) if packet.game_time > time + 20)
         },
     )
     .await?;
