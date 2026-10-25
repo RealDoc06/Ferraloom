@@ -68,7 +68,7 @@ fn replace(level: &mut Level, pos: BlockPos, state: ferraloom_data::BlockState) 
 }
 fn setup(fields: &[&str]) -> (Level, EntityRef, EntityRef) {
     let (mut level, player) = super::tests::fixture(false, true);
-    let mut shared = crate::ServerShared::default();
+    let shared = level.shared_mut().unwrap();
     if fields[4] == "true" {
         shared.ops.set_operator(
             &ferraloom_protocol::login::GameProfile {
@@ -79,7 +79,6 @@ fn setup(fields: &[&str]) -> (Level, EntityRef, EntityRef) {
             Some(crate::commands::permissions::PermissionLevel::Owners),
         );
     }
-    level.install_shared(Box::new(shared));
     assert_eq!(level.min_build_height(), fields[7].parse::<i32>().unwrap());
     assert_eq!(level.max_build_height(), fields[8].parse::<i32>().unwrap());
     let mode = match fields[2] {
@@ -117,7 +116,7 @@ fn setup(fields: &[&str]) -> (Level, EntityRef, EntityRef) {
             EntityState::Player(Box::new(ServerPlayer::new(
                 Uuid::offline_player("observer"),
                 "observer".into(),
-                level.next_entity_id(),
+                level.next_entity_id().unwrap(),
                 Vec3::new(8.0, 64.0, 8.0),
                 GameType::Spectator,
             ))),
@@ -310,7 +309,7 @@ fn crack_audience_is_captured_includes_spectators_and_encodes_native_byte() {
                 EntityState::Player(Box::new(ServerPlayer::new(
                     Uuid::offline_player(&name),
                     name,
-                    level.next_entity_id(),
+                    level.next_entity_id().unwrap(),
                     Vec3::new(8.0 + offset, 64.0, 8.0),
                     if index == 0 {
                         GameType::Spectator
@@ -369,6 +368,7 @@ fn pending_item_and_missing_stat_context_preserve_source_side_effects() {
             0,
         ));
         replace(&mut level, POS, Block::DIRT.default_state());
+        let shared = level.take_shared().unwrap();
         let error = destroy_block(player, POS, &mut level).unwrap_err();
         assert!(
             matches!(error,BlockBreakError::Level(ref error) if matches!(error.as_ref(),LevelError::MissingServerShared))
@@ -396,7 +396,7 @@ fn pending_item_and_missing_stat_context_preserve_source_side_effects() {
                 .iter()
                 .any(|event| matches!(event, Observation::GameEvent { .. }))
         );
-        level.install_shared(Box::default());
+        level.install_shared(shared);
         replace(&mut level, POS, Block::STONE.default_state());
         level
             .entity_mut::<ServerPlayer>(player)
@@ -456,12 +456,13 @@ fn adventure_non_loading_state_read_matches_native_absence_without_a_fallback() 
                 crate::level::Region::new(&crate::Behaviors::EMPTY),
                 crate::level::LevelContext::fixture(0, 63),
             );
+            level.install_shared(Box::default());
             level.set_unported_behavior(policy);
             let player = level.next_entity_ref();
             let mut state = ServerPlayer::new(
                 Uuid::offline_player("missing"),
                 "missing".into(),
-                level.next_entity_id(),
+                level.next_entity_id().unwrap(),
                 Vec3::new(8.5, 64.0, 8.5),
                 GameType::Adventure,
             );

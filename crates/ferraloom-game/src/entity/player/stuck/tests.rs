@@ -16,7 +16,7 @@ const VECTORS: &str = include_str!("../../../../tests/java/entity/vectors.tsv");
 fn fixture(player: bool) -> (Level, EntityRef) {
     let mut level = crate::entity::tests::persistence_level();
     let entity = level.next_entity_ref();
-    let id = level.next_entity_id();
+    let id = level.next_entity_id().unwrap();
     let state = if player {
         EntityState::Player(Box::new(ServerPlayer::new(
             Uuid::new(1, 2),

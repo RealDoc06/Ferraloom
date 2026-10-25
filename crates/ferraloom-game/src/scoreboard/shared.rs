@@ -8,6 +8,8 @@ pub struct ServerShared {
     pub scoreboard: ServerScoreboard,
     pub custom_boss_events: crate::bossbar::CustomBossEvents,
     pub ops: crate::commands::permissions::ServerOpList,
+    pub weather: crate::level::weather::WeatherData,
+    pub entity_ids: crate::level::entity::EntityIdAllocator,
 }
 
 #[cfg(test)]

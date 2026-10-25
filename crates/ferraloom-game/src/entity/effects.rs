@@ -4,13 +4,6 @@ use ferraloom_util::{Uuid, Vec3};
 
 #[derive(Clone, Debug)]
 pub enum EntityEffect {
-    /// Captured after successful synchronous placement, before entity removal.
-    /// The tracker sends BlockUpdate then AddTransientBlock to its watchers.
-    FallingBlockLanded {
-        entity: EntityRef,
-        pos: ferraloom_util::BlockPos,
-        state: ferraloom_data::BlockState,
-    },
     /// Pending statistics and onItemPickup criteria after discard. Native
     /// ServerPlayer#take's earlier synchronous menu broadcast remains separately
     /// pending; this record cannot defer that callback to a later drain.

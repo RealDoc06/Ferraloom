@@ -5,6 +5,7 @@ use crate::{Error, generator::GeneratedChunk};
 use ferraloom_chunk::BiomeId;
 use ferraloom_data::{Block, BlockState, FluidState};
 use ferraloom_nbt::{CompoundTag, Tag};
+use ferraloom_protocol::codec::RegistryContext;
 use std::{cell::OnceCell, collections::BTreeMap};
 
 mod block_entity;
@@ -184,6 +185,7 @@ pub trait WorldgenBlockBehavior: Sync {
         _position: [i32; 3],
         _state: BlockState,
         _tag: &CompoundTag,
+        _registries: &dyn RegistryContext,
     ) -> Result<Option<Box<dyn WorldgenBlockEntity>>, Error> {
         Err(Error("Unsupported: worldgen block entity factory".into()))
     }
@@ -540,6 +542,7 @@ struct RegionEnvironment {
     biome_indices: Vec<usize>,
 }
 pub struct WorldGenRegion<'a> {
+    registry_context: Option<&'a dyn RegistryContext>,
     light_engine: Option<&'a mut dyn ProtoChunkLightEngine>,
     environment: Option<RegionEnvironment>,
     random: Option<ferraloom_util::random::Random>,
@@ -634,6 +637,7 @@ impl<'a> WorldGenRegion<'a> {
             return Err(Error("duplicate worldgen chunk".into()));
         }
         Ok(Self {
+            registry_context: None,
             light_engine: None,
             environment: None,
             random: None,
@@ -652,6 +656,15 @@ impl<'a> WorldGenRegion<'a> {
             seed,
             sea_level,
         })
+    }
+    /// Port of WorldGenRegion#registryAccess. The caller lends the same immutable
+    /// registry owner as the live level; absence is an error only on BE loading.
+    pub fn set_registry_context(&mut self, context: &'a dyn RegistryContext) {
+        self.registry_context = Some(context);
+    }
+    pub fn registry_context(&self) -> Result<&'a dyn RegistryContext, Error> {
+        self.registry_context
+            .ok_or_else(|| Error("Unsupported: worldgen registry context unavailable".into()))
     }
     /// Lend the executor's canonical proto light engine for this region call.
     /// The executor drains its checks before any changed proto save/transport.
@@ -1116,7 +1129,10 @@ impl<'a> WorldGenRegion<'a> {
                     "Unsupported: live full-chunk worldgen block entity".into(),
                 ));
             }
-            if let Some(entity) = self.behavior.materialize_block_entity(p, state, tag)? {
+            if let Some(entity) =
+                self.behavior
+                    .materialize_block_entity(p, state, tag, self.registry_context()?)?
+            {
                 // ProtoChunk#setBlockEntity removes pending NBT, unlike the
                 // direct setBlockEntityNbt carrier operation above.
                 self.chunks[index].block_entities.remove(&p);
@@ -1325,15 +1341,18 @@ pub enum LightLayer {
 
 impl WorldGenRegion<'_> {
     // --- vegetation family ---
-    /// Port of BlockAndLightGetter#getBrightness before INITIALIZE_LIGHT.
-    /// No section light exists yet: block light is zero and sky storage returns 15.
-    /// A feature placing an emitter does not initialize or propagate lighting.
+    /// Port of WorldGenRegion#getLightEngine / BlockAndLightGetter#getBrightness.
+    /// Initialized neighbors read the borrowed engine's published layer map.
+    /// Before initialization, no section light exists; placing an emitter alone
+    /// does not initialize or propagate lighting.
     pub fn brightness(&self, layer: LightLayer, p: [i32; 3]) -> Result<u8, Error> {
         let chunk = self.chunk([p[0] >> 4, p[2] >> 4], ChunkStatus::Empty)?;
         if chunk.status >= ChunkStatus::InitializeLight {
-            return Err(Error(
-                "Unsupported: initialized worldgen light storage".into(),
-            ));
+            return self
+                .light_engine
+                .as_deref()
+                .ok_or_else(|| Error("Unsupported: initialized worldgen light storage".into()))?
+                .light_value(layer, ferraloom_util::BlockPos::new(p[0], p[1], p[2]));
         }
         Ok(match layer {
             LightLayer::Block => 0,

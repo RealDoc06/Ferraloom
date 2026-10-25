@@ -30,7 +30,7 @@ pub(in crate::item) fn level() -> (Level, EntityRef) {
     level.set_block_tags(blocks);
     level.set_fluid_tags(fluids);
     let player = level.next_entity_ref();
-    let network_id = level.next_entity_id();
+    let network_id = level.next_entity_id().unwrap();
     let state = ServerPlayer::new(
         Uuid::new(0, 1),
         "block-item".into(),

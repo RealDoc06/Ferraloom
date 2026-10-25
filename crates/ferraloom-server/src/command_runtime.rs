@@ -57,20 +57,21 @@ impl MinecraftServer {
     /// Publish DedicatedServer's owned spawn-protection inputs to the live level.
     pub(super) fn publish_spawn_protection(&mut self) {
         let spawn = self.default_spawn_data();
-        self.level.level.set_spawn_protection(
-            ferraloom_game::level::interaction::SpawnProtectionSnapshot::new(
-                self.level
-                    .dimension
-                    .parse()
-                    .expect("registered level dimension"),
-                spawn
-                    .dimension
-                    .parse()
-                    .expect("validated shared spawn dimension"),
-                spawn.position,
-                self.properties.int("spawn-protection"),
-            ),
-        );
+        let spawn_dimension = spawn
+            .dimension
+            .parse::<ferraloom_data::datapack::Identifier>()
+            .expect("validated shared spawn dimension");
+        let radius = self.properties.int("spawn-protection");
+        for live in self.live_levels_mut() {
+            live.level.set_spawn_protection(
+                ferraloom_game::level::interaction::SpawnProtectionSnapshot::new(
+                    live.dimension.parse().expect("registered level dimension"),
+                    spawn_dimension.clone(),
+                    spawn.position,
+                    radius,
+                ),
+            );
+        }
     }
 
     /// Port of MinecraftServer#sendDifficultyUpdate; also used when a new player joins.
@@ -147,8 +148,10 @@ impl MinecraftServer {
         }
     }
     pub(super) fn on_game_rule_changed(&mut self, change: GameRuleChange) {
-        self.game_rules
-            .update_level_rules(self.level.level.rules_mut());
+        // Disjoint borrows preserve getAllLevels order without copying the rule store.
+        for live in std::iter::once(&mut self.level).chain(self.additional_levels.iter_mut()) {
+            self.game_rules.update_level_rules(live.level.rules_mut());
+        }
         match change.effect {
             Some(GameRuleEffect::ReducedDebugInfo { event }) => {
                 let players = self.players.clone();
@@ -176,7 +179,8 @@ impl MinecraftServer {
                 }))
             }
             Some(GameRuleEffect::SynchronizeClocks) => self.broadcast(self.clock_packet(None)),
-            // Waypoint connections and mob spawning have no live content in this foundation.
+            // LocatorBar's fallible live callback runs in run_level_command
+            // before feedback. Mob-spawning flags still await their producer.
             Some(GameRuleEffect::LocatorBar { .. } | GameRuleEffect::UpdateMobSpawningFlags)
             | None => {}
         }
@@ -282,8 +286,7 @@ impl MinecraftServer {
     ) -> Result<(), ferraloom_brigadier::CommandSyntaxException> {
         let stack = &command.source;
         let result = match command.command.as_str() {
-            "gamerule" => builtins::gamerule(&mut self.game_rules, &command)?,
-            "scoreboard" | "team" | "trigger" => self.scoreboard_command(&command)?,
+            "scoreboard" | "trigger" => self.scoreboard_command(&command)?,
             "bossbar" => self.bossbar_command(&command)?,
             "op" | "deop" => self.operator_command(source, &command)?,
             "kick" => self.kick_command(source, &command)?,
@@ -360,7 +363,10 @@ impl MinecraftServer {
                         .level_data
                         .data
                         .insert("difficulty_settings", Tag::Compound(settings));
-                    self.level.level.set_difficulty(difficulty(changed));
+                    let published = difficulty(changed);
+                    for live in self.live_levels_mut() {
+                        live.level.set_difficulty(published);
+                    }
                     self.broadcast(cb::Packet::ChangeDifficulty(cb::ChangeDifficulty {
                         difficulty: difficulty(changed),
                         locked,

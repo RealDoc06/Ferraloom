@@ -1,0 +1,256 @@
+[
+  [
+    {
+      "command": "summon minecraft:experience_orb 8.5 -60 8.5",
+      "value": 1,
+      "uuid": "23697e7d-55f2-4457-8273-61351f743507",
+      "removed": false,
+      "display_name": {
+        "translate": "entity.minecraft.experience_orb",
+        "hover_event": {
+          "id": "minecraft:experience_orb",
+          "uuid": [
+            594116221,
+            1441940567,
+            -2106367691,
+            527709447
+          ],
+          "name": {
+            "translate": "entity.minecraft.experience_orb"
+          },
+          "action": "show_entity"
+        },
+        "insertion": "23697e7d-55f2-4457-8273-61351f743507"
+      }
+    },
+    {
+      "command": "summon minecraft:item 8.5 -60 8.5",
+      "value": 1,
+      "uuid": "dec94ab8-8ada-4caf-9db9-8360cd0ed27a",
+      "removed": true,
+      "display_name": {
+        "translate": "block.minecraft.air",
+        "hover_event": {
+          "id": "minecraft:item",
+          "uuid": [
+            -557233480,
+            -1965405009,
+            -1648786592,
+            -854666630
+          ],
+          "name": {
+            "translate": "block.minecraft.air"
+          },
+          "action": "show_entity"
+        },
+        "insertion": "dec94ab8-8ada-4caf-9db9-8360cd0ed27a"
+      }
+    },
+    {
+      "command": "summon minecraft:tnt 8.5 -60 8.5",
+      "value": 1,
+      "uuid": "6e34f34e-393e-4962-8c1d-caf1b7f2f255",
+      "removed": false,
+      "display_name": {
+        "translate": "entity.minecraft.tnt",
+        "hover_event": {
+          "id": "minecraft:tnt",
+          "uuid": [
+            1848963918,
+            960383330,
+            -1944204559,
+            -1208815019
+          ],
+          "name": {
+            "translate": "entity.minecraft.tnt"
+          },
+          "action": "show_entity"
+        },
+        "insertion": "6e34f34e-393e-4962-8c1d-caf1b7f2f255"
+      }
+    },
+    {
+      "command": "summon minecraft:falling_block 8.5 -60 8.5",
+      "value": 1,
+      "uuid": "9bbf434e-2ac4-4658-987a-6c6bdc349e92",
+      "removed": false,
+      "display_name": {
+        "translate": "entity.minecraft.falling_block_type",
+        "with": [
+          {
+            "translate": "block.minecraft.sand"
+          }
+        ],
+        "hover_event": {
+          "id": "minecraft:falling_block",
+          "uuid": [
+            -1681964210,
+            717506136,
+            -1736807317,
+            -600531310
+          ],
+          "name": {
+            "translate": "entity.minecraft.falling_block_type",
+            "with": [
+              {
+                "translate": "block.minecraft.sand"
+              }
+            ]
+          },
+          "action": "show_entity"
+        },
+        "insertion": "9bbf434e-2ac4-4658-987a-6c6bdc349e92"
+      }
+    },
+    {
+      "command": "summon minecraft:cow 8.5 -60 8.5",
+      "value": 1,
+      "uuid": "9c28a776-4343-495a-a8c9-f89ac9f5bbdc",
+      "removed": false,
+      "display_name": {
+        "translate": "entity.minecraft.cow",
+        "hover_event": {
+          "id": "minecraft:cow",
+          "uuid": [
+            -1675057290,
+            1128483162,
+            -1463158630,
+            -906642468
+          ],
+          "name": {
+            "translate": "entity.minecraft.cow"
+          },
+          "action": "show_entity"
+        },
+        "insertion": "9c28a776-4343-495a-a8c9-f89ac9f5bbdc"
+      }
+    }
+  ],
+  [
+    {
+      "command": "summon minecraft:experience_orb 8.5 -60 8.5",
+      "value": 1,
+      "uuid": "ee0df109-6dbc-49f7-b531-52cf72aaf9ad",
+      "removed": false,
+      "display_name": {
+        "translate": "entity.minecraft.experience_orb",
+        "hover_event": {
+          "id": "minecraft:experience_orb",
+          "uuid": [
+            -301076215,
+            1841056247,
+            -1255058737,
+            1923807661
+          ],
+          "name": {
+            "translate": "entity.minecraft.experience_orb"
+          },
+          "action": "show_entity"
+        },
+        "insertion": "ee0df109-6dbc-49f7-b531-52cf72aaf9ad"
+      }
+    },
+    {
+      "command": "summon minecraft:item 8.5 -60 8.5",
+      "value": 1,
+      "uuid": "7b2c6469-4b67-487d-823f-98792a97b6ac",
+      "removed": true,
+      "display_name": {
+        "translate": "block.minecraft.air",
+        "hover_event": {
+          "id": "minecraft:item",
+          "uuid": [
+            2066506857,
+            1265059965,
+            -2109761415,
+            714585772
+          ],
+          "name": {
+            "translate": "block.minecraft.air"
+          },
+          "action": "show_entity"
+        },
+        "insertion": "7b2c6469-4b67-487d-823f-98792a97b6ac"
+      }
+    },
+    {
+      "command": "summon minecraft:tnt 8.5 -60 8.5",
+      "value": 1,
+      "uuid": "05fb996a-f00b-4345-b4b6-ad68722c21a0",
+      "removed": false,
+      "display_name": {
+        "translate": "entity.minecraft.tnt",
+        "hover_event": {
+          "id": "minecraft:tnt",
+          "uuid": [
+            100374890,
+            -267697339,
+            -1263096472,
+            1915494816
+          ],
+          "name": {
+            "translate": "entity.minecraft.tnt"
+          },
+          "action": "show_entity"
+        },
+        "insertion": "05fb996a-f00b-4345-b4b6-ad68722c21a0"
+      }
+    },
+    {
+      "command": "summon minecraft:falling_block 8.5 -60 8.5",
+      "value": 1,
+      "uuid": "eae5ff6b-2801-45c1-9a30-4f2e147be665",
+      "removed": false,
+      "display_name": {
+        "translate": "entity.minecraft.falling_block_type",
+        "with": [
+          {
+            "translate": "block.minecraft.sand"
+          }
+        ],
+        "hover_event": {
+          "id": "minecraft:falling_block",
+          "uuid": [
+            -354025621,
+            671172033,
+            -1708110034,
+            343664229
+          ],
+          "name": {
+            "translate": "entity.minecraft.falling_block_type",
+            "with": [
+              {
+                "translate": "block.minecraft.sand"
+              }
+            ]
+          },
+          "action": "show_entity"
+        },
+        "insertion": "eae5ff6b-2801-45c1-9a30-4f2e147be665"
+      }
+    },
+    {
+      "command": "summon minecraft:cow 8.5 -60 8.5",
+      "value": 1,
+      "uuid": "cf124a60-7ad9-42b0-bb1d-df37374a0402",
+      "removed": false,
+      "display_name": {
+        "translate": "entity.minecraft.cow",
+        "hover_event": {
+          "id": "minecraft:cow",
+          "uuid": [
+            -820884896,
+            2061058736,
+            -1155670217,
+            927597570
+          ],
+          "name": {
+            "translate": "entity.minecraft.cow"
+          },
+          "action": "show_entity"
+        },
+        "insertion": "cf124a60-7ad9-42b0-bb1d-df37374a0402"
+      }
+    }
+  ]
+]

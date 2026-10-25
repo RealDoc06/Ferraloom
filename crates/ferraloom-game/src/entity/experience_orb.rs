@@ -18,6 +18,7 @@ use ferraloom_util::{Aabb, BlockPos, Vec3, random::RandomSource, shapes};
 
 pub const VALUE: EntityDataAccessor<VarInt> = EntityDataAccessor::new(8);
 const VALUES: [i32; 11] = [1, 3, 7, 17, 37, 73, 149, 307, 617, 1237, 2477];
+mod pickup;
 #[derive(Debug)]
 pub struct ExperienceOrb {
     pub parent: EntityData,
@@ -108,7 +109,7 @@ pub fn spawn(
     value: i32,
 ) -> Result<EntityRef, LevelError> {
     let id = level.next_entity_ref();
-    let mut orb = ExperienceOrb::with_parent(level.create_entity_data(EntityType::EXPERIENCE_ORB));
+    let mut orb = ExperienceOrb::with_parent(level.create_entity_data(EntityType::EXPERIENCE_ORB)?);
     orb.parent.set_pos(position);
     orb.parent.yaw = orb.parent.random.next_float() * 360.0;
     let mut velocity = Vec3::new(
@@ -249,14 +250,11 @@ pub struct ExperienceOrbBehavior;
 impl Entity for ExperienceOrbBehavior {
     fn player_touch(
         &self,
-        _entity: EntityRef,
-        _player: EntityRef,
+        entity: EntityRef,
+        player: EntityRef,
         level: &mut Level,
     ) -> Result<(), LevelError> {
-        level.unported_operation(crate::block::UnportedOperation::EntityMethod(
-            EntityType::EXPERIENCE_ORB,
-            super::EntityMethod::PlayerTouch,
-        ))
+        pickup::player_touch(entity, player, level)
     }
     fn do_water_splash_effect(
         &self,

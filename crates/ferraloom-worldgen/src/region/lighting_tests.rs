@@ -340,3 +340,74 @@ fn full_snapshot_refresh_preserves_canonical_sources_and_pending_payload() {
         assert_eq!(region.height_at(map, 8, 8).unwrap(), 16);
     }
 }
+
+#[test]
+fn initialized_region_reads_published_layers_instead_of_pending_disk_data() {
+    let chunk_pos = ChunkPos::new(9, -1);
+    let p = [153, 14, -1];
+    let mut generated = generated([9, -1]);
+    generated.set_block(9, 13, 15, Block::STONE.default_state());
+    let mut chunks = [RegionChunk::new(generated, ChunkStatus::InitializeLight)];
+    chunks[0].initialize_light_sources();
+    let mut engine = LevelLightEngine::new(true, true);
+    engine.initialize_light(&snapshot(&chunks[0]), chunk_pos, false);
+    // As in the native mushroom trace, initialization publishes zero light;
+    // it does not enable and propagate this chunk's own skylight sources.
+    assert_eq!(
+        engine.light_value(LightLayer::Sky, BlockPos::new(p[0], p[1], p[2])),
+        0
+    );
+    assert!(
+        view(&mut chunks, [9, -1])
+            .brightness(super::LightLayer::Sky, p)
+            .is_err()
+    );
+    let section = SectionPos::new(9, 0, -1);
+    engine.queue_section_data(
+        LightLayer::Sky,
+        section,
+        Some(ferraloom_light::DataLayer::new(7)),
+    );
+    engine.queue_section_data(
+        LightLayer::Block,
+        section,
+        Some(ferraloom_light::DataLayer::new(5)),
+    );
+    assert_eq!(
+        engine
+            .data_layer(LightLayer::Sky, section)
+            .unwrap()
+            .get(9, 14, 15),
+        7
+    );
+    {
+        let mut region = view(&mut chunks, [9, -1]);
+        region.set_light_engine(&mut engine);
+        assert_eq!(region.brightness(super::LightLayer::Sky, p).unwrap(), 0);
+        assert_eq!(region.brightness(super::LightLayer::Block, p).unwrap(), 0);
+    }
+    engine.run_light_updates(&snapshot(&chunks[0]));
+    for status in [
+        ChunkStatus::InitializeLight,
+        ChunkStatus::Light,
+        ChunkStatus::Full,
+    ] {
+        chunks[0].status = status;
+        let mut region = view(&mut chunks, [9, -1]);
+        region.set_light_engine(&mut engine);
+        assert_eq!(region.brightness(super::LightLayer::Sky, p).unwrap(), 7);
+        assert_eq!(region.brightness(super::LightLayer::Block, p).unwrap(), 5);
+        assert_eq!(
+            region
+                .brightness(super::LightLayer::Sky, [153, 32, -1])
+                .unwrap(),
+            15
+        );
+        assert_eq!(
+            region
+                .brightness(super::LightLayer::Block, [153, 32, -1])
+                .unwrap(),
+            0
+        );
+    }
+}

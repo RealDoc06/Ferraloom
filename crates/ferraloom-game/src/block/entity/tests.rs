@@ -84,7 +84,12 @@ fn components_keep_only_unconsumed_added_patch_values() {
         ferraloom_nbt::parse_compound(line.split_once('\t').unwrap().1).unwrap()
     );
     let mut loaded = portal();
-    loaded.load_with_components(&saved);
+    loaded.load_with_components(
+        &saved,
+        crate::level::LevelContext::fixture(0, 63)
+            .registry_context()
+            .unwrap(),
+    );
     // Native DataComponentMap equality ignores its backing-map traversal order.
     // Compare the loaded persistent map, rather than the Rust entry vector.
     assert_eq!(loaded.save_without_metadata().unwrap(), saved);
@@ -122,7 +127,10 @@ fn unsupported_and_mismatched_factories_do_not_fabricate_data() {
         load_static(
             BlockPos::new(0, 0, 0),
             Block::END_PORTAL.default_state(),
-            &tag
+            &tag,
+            crate::level::LevelContext::fixture(0, 63)
+                .registry_context()
+                .unwrap()
         )
         .unwrap()
         .is_none()
@@ -132,6 +140,9 @@ fn unsupported_and_mismatched_factories_do_not_fabricate_data() {
         BlockPos::new(0, 0, 0),
         Block::END_PORTAL.default_state(),
         &tag,
+        crate::level::LevelContext::fixture(0, 63)
+            .registry_context()
+            .unwrap(),
     )
     .unwrap()
     .unwrap();
@@ -214,7 +225,12 @@ fn container_and_sign_persistence_matches_real_block_entities() {
                     "{line}"
                 );
                 let mut loaded = create(entity.data().pos, block.default_state()).unwrap();
-                loaded.load_with_components(&expected);
+                loaded.load_with_components(
+                    &expected,
+                    crate::level::LevelContext::fixture(0, 63)
+                        .registry_context()
+                        .unwrap(),
+                );
                 assert_eq!(
                     loaded.save_with_full_metadata().unwrap(),
                     expected,
@@ -235,7 +251,12 @@ fn container_and_sign_persistence_matches_real_block_entities() {
                 };
                 let expected = ferraloom_nbt::parse_compound(fields[2]).unwrap();
                 assert_eq!(entity.save_without_metadata().unwrap(), expected, "{line}");
-                entity.load_with_components(&expected);
+                entity.load_with_components(
+                    &expected,
+                    crate::level::LevelContext::fixture(0, 63)
+                        .registry_context()
+                        .unwrap(),
+                );
                 assert!(entity.container().unwrap().is_empty());
             }
             "default-save" => assert_eq!(

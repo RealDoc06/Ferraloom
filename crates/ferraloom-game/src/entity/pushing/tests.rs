@@ -20,10 +20,14 @@ impl Entity for PushProbe {
 fn level() -> Level {
     static BEHAVIORS: Behaviors =
         Behaviors::EMPTY.with_entity(ferraloom_data::EntityType::TNT, &PushProbe);
-    Level::new(
-        Region::new(&BEHAVIORS),
-        crate::level::LevelContext::fixture(0, 63),
-    )
+    {
+        let mut fixture_level = Level::new(
+            Region::new(&BEHAVIORS),
+            crate::level::LevelContext::fixture(0, 63),
+        );
+        fixture_level.install_shared(Box::default());
+        fixture_level
+    }
 }
 fn add(level: &mut Level, id: u64, position: Vec3, velocity: Vec3, pushable: bool, physics: bool) {
     let mut tnt = PrimedTnt::new(id as i32, id as i64);
@@ -380,10 +384,14 @@ fn server_player_push_queries_follow_the_borrowed_manager_current_run_flag() {
         let stage: i32 = fields[1].parse().unwrap();
         static BEHAVIORS: Behaviors =
             Behaviors::EMPTY.with_entity(ferraloom_data::EntityType::TNT, &GateProbe);
-        let mut level = Level::new(
-            Region::new(&BEHAVIORS),
-            crate::level::LevelContext::fixture(0, 63),
-        );
+        let mut level = {
+            let mut fixture_level = Level::new(
+                Region::new(&BEHAVIORS),
+                crate::level::LevelContext::fixture(0, 63),
+            );
+            fixture_level.install_shared(Box::default());
+            fixture_level
+        };
         let player = ServerPlayer::new(
             Uuid::new(0, 1),
             "push".into(),
@@ -397,6 +405,7 @@ fn server_player_push_queries_follow_the_borrowed_manager_current_run_flag() {
                 EntityState::Player(Box::new(player)),
             )
             .unwrap();
+        drop(level.take_shared().unwrap());
         assert_eq!(
             pushable_entities(
                 EntityRef::fixture(crate::level::RegionId::FIXTURE, 1),
@@ -404,7 +413,9 @@ fn server_player_push_queries_follow_the_borrowed_manager_current_run_flag() {
             ),
             Err(LevelError::MissingServerShared)
         );
-        level.install_shared(Box::default());
+        if level.shared().is_err() {
+            level.install_shared(Box::default());
+        }
         add(
             &mut level,
             2,

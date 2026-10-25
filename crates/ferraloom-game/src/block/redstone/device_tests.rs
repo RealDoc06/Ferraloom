@@ -50,7 +50,6 @@ pub(super) fn level(state: BlockState) -> Level {
     level
 }
 fn player(level: &mut Level) {
-    level.install_shared(Box::new(crate::ServerShared::default()));
     let actor = ServerPlayer::new(
         Uuid::new(1, 2),
         "redstone".into(),

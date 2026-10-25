@@ -19,6 +19,7 @@ static EMPTY: Behaviors = Behaviors::EMPTY;
 pub(super) fn fixture(water: bool, ground: bool) -> (Level, EntityRef) {
     let context = LevelContext::fixture(0, 63);
     let mut level = Level::new(Region::new(&EMPTY), context.clone());
+    level.install_shared(Box::default());
     let data = context.generator.access().data();
     level.set_block_tags(data.block_tags.clone());
     level.set_fluid_tags(data.fluid_tags.clone());
@@ -40,7 +41,7 @@ pub(super) fn fixture(water: bool, ground: bool) -> (Level, EntityRef) {
     let mut state = ServerPlayer::new(
         Uuid::offline_player("Mining"),
         "Mining".into(),
-        level.next_entity_id(),
+        level.next_entity_id().unwrap(),
         Vec3::new(8.5, 64.0, 8.5),
         GameType::Survival,
     );

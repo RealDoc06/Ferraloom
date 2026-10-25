@@ -379,6 +379,7 @@ fn native_worldgen_and_server_cursors_blocks_events_and_rng_match() {
                     chunks.push(RegionChunk::new(chunk, ChunkStatus::Terrain));
                 }
             }
+            let registry_context = crate::level::LevelContext::fixture(0, 63);
             let mut region = WorldGenRegion::new(
                 &mut chunks,
                 [center.x, center.z],
@@ -390,6 +391,7 @@ fn native_worldgen_and_server_cursors_blocks_events_and_rng_match() {
                 -63,
             )
             .unwrap();
+            region.set_registry_context(registry_context.registry_context().unwrap());
             region.set_has_skylight(true);
             region.set_block_tags(generator.data.block_tags.clone());
             region.set_fluid_tags(fluid_tags.clone());

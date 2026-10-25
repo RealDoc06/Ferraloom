@@ -47,7 +47,7 @@ impl GameEventListener for Recorder {
             unreachable!()
         };
         Ok(PositionSource::Block(
-            level.region().game_event_listeners.tests.listeners[id].pos,
+            level.region().game_event_listeners.borrow().tests.listeners[id].pos,
         ))
     }
     fn get_listener_radius(
@@ -58,7 +58,7 @@ impl GameEventListener for Recorder {
         let GameEventListenerRef::Test(id) = listener else {
             unreachable!()
         };
-        Ok(level.region().game_event_listeners.tests.listeners[id].radius)
+        Ok(level.region().game_event_listeners.borrow().tests.listeners[id].radius)
     }
     fn get_delivery_mode(&self) -> DeliveryMode {
         self.0
@@ -75,7 +75,7 @@ impl GameEventListener for Recorder {
             unreachable!()
         };
         let effect_count = level.region().effects.len();
-        let tests = &mut level.region_mut().game_event_listeners.tests;
+        let tests = &mut level.region_mut().game_event_listeners.get_mut().tests;
         let data = &mut tests.listeners[id];
         if data.recorder {
             let source = BlockPos::containing(position.x, position.y, position.z);
@@ -101,11 +101,13 @@ impl GameEventListener for Recorder {
         for action in actions {
             match action {
                 Action::Register(other) => {
-                    let pos = level.region().game_event_listeners.tests.listeners[other].pos;
+                    let pos =
+                        level.region().game_event_listeners.borrow().tests.listeners[other].pos;
                     level.register_listener(GameEventListenerRef::Test(other), pos)?;
                 }
                 Action::Unregister(other) => {
-                    let pos = level.region().game_event_listeners.tests.listeners[other].pos;
+                    let pos =
+                        level.region().game_event_listeners.borrow().tests.listeners[other].pos;
                     level.unregister_listener(GameEventListenerRef::Test(other), pos)?;
                 }
                 Action::Reenter(source) => level.game_event(
@@ -128,7 +130,7 @@ pub(super) fn add(
     mode: DeliveryMode,
     label: &str,
 ) -> usize {
-    let tests = &mut level.region_mut().game_event_listeners.tests;
+    let tests = &mut level.region_mut().game_event_listeners.get_mut().tests;
     let id = tests.listeners.len();
     tests.listeners.push(TestListenerState {
         behavior: if mode == DeliveryMode::ByDistance {
@@ -158,14 +160,27 @@ pub(crate) fn observe(level: &mut Level) {
     }
     for pos in positions {
         let id = add(level, pos, 32, DeliveryMode::Unspecified, "recorder");
-        level.region_mut().game_event_listeners.tests.listeners[id].recorder = true;
+        level
+            .region_mut()
+            .game_event_listeners
+            .get_mut()
+            .tests
+            .listeners[id]
+            .recorder = true;
         level
             .register_listener(GameEventListenerRef::Test(id), pos)
             .unwrap();
     }
 }
 pub(crate) fn take(level: &mut Level) -> Vec<Observation> {
-    let records = std::mem::take(&mut level.region_mut().game_event_listeners.tests.events);
+    let records = std::mem::take(
+        &mut level
+            .region_mut()
+            .game_event_listeners
+            .get_mut()
+            .tests
+            .events,
+    );
     let effects = level.take_effects();
     let mut records = records.into_iter().peekable();
     let mut observed = Vec::new();
@@ -187,4 +202,66 @@ pub(crate) fn take(level: &mut Level) -> Vec<Observation> {
         "fixture cleared effects without clearing its synchronous listener observations"
     );
     observed
+}
+
+/// Native VibrationSystem.User#onDataChanged observation, before setChanged.
+pub(crate) fn record_vibration_change(level: &mut Level, entry: String) {
+    level
+        .region_mut()
+        .game_event_listeners
+        .get_mut()
+        .tests
+        .trace
+        .push(entry);
+}
+pub(crate) fn take_vibration_changes(level: &mut Level) -> Vec<String> {
+    std::mem::take(
+        &mut level
+            .region_mut()
+            .game_event_listeners
+            .get_mut()
+            .tests
+            .trace,
+    )
+}
+
+/// Capture a native registry visit before ServerLevel#unload drops its owner.
+pub(crate) fn post_captured_after_unload(
+    level: &mut Level,
+    pos: BlockPos,
+) -> Result<(), LevelError> {
+    let owner = level.capture_listener_owner(ChunkPos::containing(pos))?;
+    let registry = level.listener_registry(owner, pos.y >> 4);
+    let mut queued = Vec::new();
+    let result = (|| {
+        level.detach_block_entities_for_unload(ChunkPos::containing(pos))?;
+        dispatcher::visit(
+            level,
+            registry,
+            GameEvent::BLOCK_PLACE,
+            Vec3::at_center_of(pos.relative(ferraloom_util::Direction::East, 2).into()),
+            GameEventContext {
+                source_entity: None,
+                affected_state: Some(ferraloom_data::Block::STONE.default_state()),
+            },
+            &mut queued,
+        )
+    })();
+    for info in queued {
+        info.listener.release(level);
+    }
+    level.release_listener_owner(owner);
+    result
+}
+
+/// Observe the original proto receiver after staging, before FULL becomes visible.
+pub(crate) fn staged_block_entity_reference(
+    level: &Level,
+    pos: BlockPos,
+) -> Option<BlockEntityRef> {
+    level
+        .chunk(ChunkPos::containing(pos))?
+        .block_entities
+        .get(pos)
+        .map(|state| state.data().reference())
 }

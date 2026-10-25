@@ -37,7 +37,12 @@ mod tests {
                 ));
             }
             static BEHAVIORS: Behaviors = Behaviors::EMPTY;
-            let mut level = Level::new(Region::new(&BEHAVIORS), LevelContext::fixture(0, 63));
+            let mut level = {
+                let mut fixture_level =
+                    Level::new(Region::new(&BEHAVIORS), LevelContext::fixture(0, 63));
+                fixture_level.install_shared(Box::default());
+                fixture_level
+            };
             crate::entity::tests::install_test_environment(
                 &mut level,
                 false,

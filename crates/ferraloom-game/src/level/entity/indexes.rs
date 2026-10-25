@@ -248,6 +248,11 @@ impl EntityRegistration {
     pub(super) fn remove_unmanaged(&self, entity: EntityRef) {
         self.indexes.borrow_mut().unmanaged.remove(&entity);
     }
+    pub(super) fn publish_unmanaged(&self, entity: EntityRef) {
+        let mut indexes = self.indexes.borrow_mut();
+        indexes.unmanaged.remove(&entity);
+        indexes.pending_retire.retain(|pending| *pending != entity);
+    }
     pub(super) fn has_pending_retirements(&self) -> bool {
         !self.indexes.borrow().pending_retire.is_empty()
     }

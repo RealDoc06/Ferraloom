@@ -84,7 +84,7 @@ impl Level {
                 None
             }
         } else {
-            crate::block::entity::load_static(pos, state, &tag)?
+            crate::block::entity::load_static(pos, state, &tag, self.context().registry_context()?)?
         };
         if let Some(entity) = entity {
             self.set_block_entity(entity)?;
@@ -178,7 +178,7 @@ impl Level {
         let positions: Vec<_> = pending.keys().copied().collect();
         for pos in positions {
             if let Err(error) = self.get_or_promote_block_entity(pos) {
-                match error {
+                match error.root() {
                     LevelError::UnsupportedBlockEntity(block) => {
                         let factory = self
                             .chunk(key)
@@ -190,7 +190,7 @@ impl Level {
                             .and_then(|tag| tag.get_string("id"))
                             .cloned()
                             .unwrap_or_default();
-                        self.skip_block_entity_activation(block, factory)?;
+                        self.skip_block_entity_activation(*block, factory)?;
                     }
                     _ => return Err(error),
                 }

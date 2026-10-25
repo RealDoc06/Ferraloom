@@ -1,9 +1,8 @@
 //! Port of FallingBlockEntity's sand/gravel physics, landing and persistence.
 use crate::{
-    block::{DirectionalPlaceContext, LevelReaderRef, fluid::legacy_block},
+    block::{BlockMethod, DirectionalPlaceContext, LevelReaderRef, fluid::legacy_block},
     entity::{
         Entity, EntityData, EntityDataView, EntityRef, EntityState,
-        effects::EntityEffect,
         item::ItemEntity,
         movement::{MovementEmission, MoverType},
         persistence,
@@ -14,7 +13,10 @@ use crate::{
 use ferraloom_data::{Block, BlockClass, BlockState, EntityType, properties, tags::BlockTags};
 use ferraloom_nbt::{CompoundTag, Tag};
 use ferraloom_protocol::component::ItemStack;
-use ferraloom_util::{BlockPos, Direction, Vec3};
+use ferraloom_util::{BlockPos, Direction, Vec3, mth, random::RandomSource};
+
+#[cfg(test)]
+mod tests;
 
 pub const START_POS: EntityDataAccessor<BlockPos> = EntityDataAccessor::new(8);
 #[derive(Debug)]
@@ -130,7 +132,7 @@ impl EntityDataView for FallingBlockEntity {
 /// replacement; neighbor callbacks therefore see vanilla's entity creation order.
 pub fn fall(level: &mut Level, pos: BlockPos, state: BlockState) -> Result<EntityRef, LevelError> {
     let mut entity =
-        FallingBlockEntity::with_parent(level.create_entity_data(EntityType::FALLING_BLOCK));
+        FallingBlockEntity::with_parent(level.create_entity_data(EntityType::FALLING_BLOCK)?);
     entity.block_state = state.with(properties::WATERLOGGED, false).unwrap_or(state);
     entity.parent.blocks_building = true;
     let position = Vec3::new(
@@ -154,18 +156,159 @@ pub fn is_free(state: BlockState, level: &Level) -> Result<bool, LevelError> {
         || state.liquid()
         || state.data().replaceable)
 }
-fn drop_block_item(entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
+fn drop_block_item(entity: EntityRef, block: Block, level: &mut Level) -> Result<(), LevelError> {
     let falling = level.entity::<FallingBlockEntity>(entity)?;
-    let item = falling.block_state.block().as_item();
+    let item = block.as_item();
     let stack = ItemStack::new(item, 1, Default::default());
     if stack.is_empty() {
         return Ok(());
     }
     let position = falling.parent.position;
-    let mut dropped = ItemEntity::new_at(level, position, stack);
+    let mut dropped = ItemEntity::new_at(level, position, stack)?;
     dropped.pickup_delay = 10;
     let id = level.next_entity_ref();
     level.add_entity(id, EntityState::Item(Box::new(dropped)))
+}
+
+/// Native callback frames and the getEntities result hold entity objects even
+/// when a callback removes them and runs management before the loop resumes.
+fn with_entity_refs<T>(
+    references: &[EntityRef],
+    level: &mut Level,
+    body: impl FnOnce(&mut Level) -> Result<T, LevelError>,
+) -> Result<T, LevelError> {
+    for (retained, &entity) in references.iter().enumerate() {
+        if let Err(error) = level.retain_entity(entity) {
+            for &prior in references[..retained].iter().rev() {
+                level.release_entity(prior);
+            }
+            return Err(error);
+        }
+    }
+    let result = body(level);
+    for &entity in references.iter().rev() {
+        level.release_entity(entity);
+    }
+    result
+}
+
+/// Port of FallingBlockEntity#causeFallDamage. The block owns the damage source;
+/// victims are captured in native query order before any synchronous hurt call.
+fn cause_fall_damage(
+    entity: EntityRef,
+    distance: f64,
+    level: &mut Level,
+) -> Result<bool, LevelError> {
+    if !level.entity::<FallingBlockEntity>(entity)?.hurt_entities {
+        return Ok(false);
+    }
+    let distance = mth::ceil(distance - 1.0);
+    if distance < 0 {
+        return Ok(false);
+    }
+    let block = level
+        .entity::<FallingBlockEntity>(entity)?
+        .block_state
+        .block();
+    let source = level
+        .required_block_behavior(block, BlockMethod::GetFallDamageSource)?
+        .get_fall_damage_source(entity, level)?;
+    let falling = level.entity::<FallingBlockEntity>(entity)?;
+    let damage = mth::floor(f64::from(
+        distance as f32 * falling.fall_damage_per_distance,
+    ))
+    .min(falling.fall_damage_max) as f32;
+    let bounds = falling.parent.bounding_box;
+    let mut victims = Vec::new();
+    for victim in level.entities_in(bounds, |id, _| id != entity) {
+        let behavior = level.entity_behavior(victim)?;
+        if let EntityState::Player(player) = level.entity_state(victim)?
+            && (behavior.is_spectator(victim, level)?
+                || player.game_mode == crate::entity::player::GameType::Creative)
+        {
+            continue;
+        }
+        if behavior.is_alive(victim, level)? && level.entity_state(victim)?.as_living().is_some() {
+            victims.push(victim);
+        }
+    }
+    let mut references = vec![entity];
+    references.extend_from_slice(&victims);
+    source.trace_entity_refs(&mut references);
+    with_entity_refs(&references, level, |level| {
+        for victim in victims {
+            level
+                .entity_behavior(victim)?
+                .hurt_server(victim, level, source.clone(), damage)?;
+        }
+        // Hurt callbacks may have changed the canonical block being carried.
+        let state = level.entity::<FallingBlockEntity>(entity)?.block_state;
+        let is_anvil = level
+            .block_tags()?
+            .contains_key(BlockTags::ANVIL, state.block());
+        if is_anvil
+            && damage > 0.0
+            && level.entity_mut::<EntityData>(entity)?.random.next_float()
+                < 0.05_f32 + distance as f32 * 0.05_f32
+        {
+            let state = level.entity::<FallingBlockEntity>(entity)?.block_state;
+            let next = crate::block::building::anvil::damage(state);
+            let falling = level.entity_mut::<FallingBlockEntity>(entity)?;
+            match next {
+                Some(state) => falling.block_state = state,
+                None => falling.cancel_drop = true,
+            }
+        }
+        Ok(false)
+    })
+}
+
+/// Port of FallingBlockEntity#callOnBrokenAfterFall, using tick's original Block
+/// receiver even when movement degraded the canonical state in the meantime.
+fn call_on_broken_after_fall(
+    entity: EntityRef,
+    block: Block,
+    pos: BlockPos,
+    level: &mut Level,
+) -> Result<(), LevelError> {
+    level
+        .required_block_behavior(block, BlockMethod::OnBrokenAfterFall)?
+        .on_broken_after_fall(pos, entity, level)
+}
+
+fn send_landing_packets(
+    entity: EntityRef,
+    pos: BlockPos,
+    level: &mut Level,
+) -> Result<(), LevelError> {
+    use crate::entity::tracking::{TrackingAudience, TrackingPacket};
+    use ferraloom_protocol::play::clientbound as cb;
+    let state = level.get_block_state(pos)?;
+    level
+        .broadcast_tracked_packet(
+            entity,
+            TrackingPacket {
+                audience: TrackingAudience::Players,
+                packet: cb::Packet::BlockUpdate(cb::BlockUpdate {
+                    pos,
+                    block_state: ferraloom_protocol::play::BlockStateId(i32::from(state.id())),
+                }),
+            },
+        )
+        .map_err(|error| error.into_level(level))?;
+    let state = level.get_block_state(pos)?;
+    level
+        .broadcast_tracked_packet(
+            entity,
+            TrackingPacket {
+                audience: TrackingAudience::Players,
+                packet: cb::Packet::AddTransientBlock(cb::AddTransientBlock {
+                    pos,
+                    block_state: ferraloom_protocol::play::BlockStateId(i32::from(state.id())),
+                }),
+            },
+        )
+        .map_err(|error| error.into_level(level))
 }
 
 pub struct FallingBlockBehavior;
@@ -182,14 +325,11 @@ impl Entity for FallingBlockBehavior {
         &self,
         entity: EntityRef,
         level: &mut Level,
-        _distance: f64,
+        distance: f64,
         _modifier: f32,
         _source: &crate::entity::DamageSource,
     ) -> Result<bool, LevelError> {
-        if level.entity::<FallingBlockEntity>(entity)?.hurt_entities {
-            return Err(LevelError::UnsupportedEntity(EntityType::FALLING_BLOCK));
-        }
-        Ok(false)
+        cause_fall_damage(entity, distance, level)
     }
     fn default_gravity(
         &self,
@@ -201,26 +341,42 @@ impl Entity for FallingBlockBehavior {
     fn movement_emission(&self) -> MovementEmission {
         MovementEmission::None
     }
-    /// Concrete-powder hydration, anvils and block-entity restoration have their
-    /// own block ports. Required unsupported behavior fails before ticking it.
+    /// Concrete-powder hydration and block-entity restoration retain required
+    /// boundaries until those families supply their live callback ports.
     fn tick(&self, entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
+        with_entity_refs(&[entity], level, |level| {
+            self.tick_falling_block(entity, level)
+        })
+    }
+    fn hurt_server(
+        &self,
+        entity: EntityRef,
+        level: &mut Level,
+        _source: crate::entity::DamageSource,
+        _damage: f32,
+    ) -> Result<bool, LevelError> {
+        if !level.entity::<EntityData>(entity)?.permanently_invulnerable {
+            level.entity_mut::<EntityData>(entity)?.needs_sync = true;
+        }
+        Ok(false)
+    }
+}
+impl FallingBlockBehavior {
+    fn tick_falling_block(&self, entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
         let falling = level.entity::<FallingBlockEntity>(entity)?;
         let state = falling.block_state;
+        let block = state.block();
         if state.is_air() {
             return level.remove_entity(entity);
         }
         if state
             .block()
             .is_instance_of(BlockClass::ConcretePowderBlock)
-            || state.block().is_instance_of(BlockClass::AnvilBlock)
         {
             return Err(LevelError::UnsupportedBlock(state.block()));
         }
         if falling.block_data.is_some() && state.has_block_entity() {
             return Err(LevelError::UnsupportedBlockEntity(state.block()));
-        }
-        if falling.hurt_entities {
-            return Err(LevelError::UnsupportedEntity(EntityType::FALLING_BLOCK));
         }
         let time = falling.time.wrapping_add(1);
         level.entity_mut::<FallingBlockEntity>(entity)?.time = time;
@@ -240,7 +396,7 @@ impl Entity for FallingBlockBehavior {
                     || falling.time > 600
                 {
                     if falling.drop_item && level.rules().entity_drops {
-                        drop_block_item(entity, level)?;
+                        drop_block_item(entity, block, level)?;
                     }
                     level.remove_entity(entity)?;
                 }
@@ -262,6 +418,7 @@ impl Entity for FallingBlockBehavior {
                         let may_replace = reader.can_be_replaced(current, &context)?;
                         let continues_falling =
                             is_free(level.get_block_state(pos.below(1))?, level)?;
+                        let state = level.entity::<FallingBlockEntity>(entity)?.block_state;
                         let survives = reader.can_survive(state, pos)? && !continues_falling;
                         if may_replace && survives {
                             let mut placed = state;
@@ -276,30 +433,31 @@ impl Entity for FallingBlockBehavior {
                                     placed;
                             }
                             if level.set_block_and_update(pos, placed)? {
-                                let state = level.get_block_state(pos)?;
-                                level.emit_entity_effect(EntityEffect::FallingBlockLanded {
-                                    entity,
-                                    pos,
-                                    state,
-                                });
+                                send_landing_packets(entity, pos, level)?;
                                 level.remove_entity(entity)?;
-                                // Sand/gravel inherit Fallable's empty onLand.
+                                let state = level.entity::<FallingBlockEntity>(entity)?.block_state;
+                                level
+                                    .required_block_behavior(block, BlockMethod::OnLand)?
+                                    .on_land(state, pos, current, entity, level)?;
                             } else if level.entity::<FallingBlockEntity>(entity)?.drop_item
                                 && level.rules().entity_drops
                             {
                                 level.remove_entity(entity)?;
-                                drop_block_item(entity, level)?;
+                                call_on_broken_after_fall(entity, block, pos, level)?;
+                                drop_block_item(entity, block, level)?;
                             }
                         } else {
                             level.remove_entity(entity)?;
                             if level.entity::<FallingBlockEntity>(entity)?.drop_item
                                 && level.rules().entity_drops
                             {
-                                drop_block_item(entity, level)?;
+                                call_on_broken_after_fall(entity, block, pos, level)?;
+                                drop_block_item(entity, block, level)?;
                             }
                         }
                     } else {
                         level.remove_entity(entity)?;
+                        call_on_broken_after_fall(entity, block, pos, level)?;
                     }
                 }
             }
@@ -309,17 +467,5 @@ impl Entity for FallingBlockBehavior {
         base.velocity = base.velocity.scale(f64::from(air));
         base.requires_precise_position = base.horizontal_collision || base.vertical_collision;
         Ok(())
-    }
-    fn hurt_server(
-        &self,
-        entity: EntityRef,
-        level: &mut Level,
-        _source: crate::entity::DamageSource,
-        _damage: f32,
-    ) -> Result<bool, LevelError> {
-        if !level.entity::<EntityData>(entity)?.permanently_invulnerable {
-            level.entity_mut::<EntityData>(entity)?.needs_sync = true;
-        }
-        Ok(false)
     }
 }

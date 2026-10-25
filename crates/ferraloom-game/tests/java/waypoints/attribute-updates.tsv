@@ -1,0 +1,20 @@
+refresh	health-down	max_health	max_health	41400000	41700000	0
+refresh	health-up	max_health	max_health	420c0000	41700000	0
+refresh	absorption-down	max_absorption	max_absorption	420c0000	40c00000	0
+refresh	absorption-up	max_absorption	max_absorption	420c0000	41700000	0
+refresh	scale	scale	scale,scale	420c0000	41700000	0
+refresh	receive-on	waypoint_receive_range	waypoint_receive_range,addPlayer	420c0000	41700000	0
+refresh	receive-off	waypoint_receive_range	waypoint_receive_range,removePlayer	420c0000	41700000	0
+refresh	transmit-on	waypoint_transmit_range	waypoint_transmit_range,trackWaypoint	420c0000	41700000	0
+refresh	transmit-off	waypoint_transmit_range	waypoint_transmit_range,untrackWaypoint	420c0000	41700000	0
+refresh	other	movement_speed	movement_speed	420c0000	41700000	0
+refresh-order	5	true	0
+absorption	bf800000	0
+absorption	80000000	80000000
+absorption	0	0
+absorption	40500000	40500000
+absorption	40c00000	40c00000
+absorption	41100000	40c00000
+absorption	7fc00000	7fc00000
+absorption	7f800000	40c00000
+absorption	ff800000	0

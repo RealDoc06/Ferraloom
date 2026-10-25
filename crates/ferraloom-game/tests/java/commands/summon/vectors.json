@@ -1,0 +1,1409 @@
+[
+  {
+    "command": "summon minecraft:experience_orb",
+    "peaceful": false,
+    "load": true,
+    "duplicate": false,
+    "passengers": 0,
+    "permission": 4,
+    "display": {
+      "text": "Loaded ",
+      "extra": [
+        {
+          "translate": "entity.minecraft.cow"
+        }
+      ],
+      "color": "yellow"
+    },
+    "eyes": false,
+    "mob": false,
+    "allowed": true,
+    "value": 1,
+    "trace": [
+      "difficulty",
+      {
+        "call": "load",
+        "tag": "{id:\"minecraft:experience_orb\"}",
+        "reason": "COMMAND",
+        "ignore_checks": false
+      },
+      {
+        "call": "snap",
+        "index": 0,
+        "pos": [
+          80.25,
+          64.5,
+          -16.75
+        ],
+        "yaw": 10.5,
+        "pitch": -25.25
+      },
+      "register",
+      "display_name",
+      "success"
+    ],
+    "feedback": [
+      {
+        "broadcast": true,
+        "message": {
+          "translate": "commands.summon.success",
+          "with": [
+            {
+              "text": "Loaded ",
+              "extra": [
+                {
+                  "translate": "entity.minecraft.cow"
+                }
+              ],
+              "color": "yellow"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "command": "summon minecraft:cow",
+    "peaceful": false,
+    "load": true,
+    "duplicate": false,
+    "passengers": 0,
+    "permission": 4,
+    "display": {
+      "text": "Loaded ",
+      "extra": [
+        {
+          "translate": "entity.minecraft.cow"
+        }
+      ],
+      "color": "yellow"
+    },
+    "eyes": false,
+    "mob": true,
+    "allowed": true,
+    "value": 1,
+    "trace": [
+      "difficulty",
+      {
+        "call": "load",
+        "tag": "{id:\"minecraft:cow\"}",
+        "reason": "COMMAND",
+        "ignore_checks": false
+      },
+      {
+        "call": "snap",
+        "index": 0,
+        "pos": [
+          80.25,
+          64.5,
+          -16.75
+        ],
+        "yaw": 10.5,
+        "pitch": -25.25
+      },
+      {
+        "call": "local_difficulty",
+        "pos": [
+          80,
+          64,
+          -17
+        ]
+      },
+      "finalize",
+      "register",
+      "display_name",
+      "success"
+    ],
+    "feedback": [
+      {
+        "broadcast": true,
+        "message": {
+          "translate": "commands.summon.success",
+          "with": [
+            {
+              "text": "Loaded ",
+              "extra": [
+                {
+                  "translate": "entity.minecraft.cow"
+                }
+              ],
+              "color": "yellow"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "command": "summon minecraft:experience_orb 8 -60 8",
+    "peaceful": false,
+    "load": true,
+    "duplicate": false,
+    "passengers": 0,
+    "permission": 4,
+    "display": {
+      "text": "Loaded ",
+      "extra": [
+        {
+          "translate": "entity.minecraft.cow"
+        }
+      ],
+      "color": "yellow"
+    },
+    "eyes": false,
+    "mob": false,
+    "allowed": true,
+    "value": 1,
+    "trace": [
+      "difficulty",
+      {
+        "call": "load",
+        "tag": "{id:\"minecraft:experience_orb\"}",
+        "reason": "COMMAND",
+        "ignore_checks": false
+      },
+      {
+        "call": "snap",
+        "index": 0,
+        "pos": [
+          8.5,
+          -60.0,
+          8.5
+        ],
+        "yaw": 10.5,
+        "pitch": -25.25
+      },
+      "register",
+      "display_name",
+      "success"
+    ],
+    "feedback": [
+      {
+        "broadcast": true,
+        "message": {
+          "translate": "commands.summon.success",
+          "with": [
+            {
+              "text": "Loaded ",
+              "extra": [
+                {
+                  "translate": "entity.minecraft.cow"
+                }
+              ],
+              "color": "yellow"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "command": "summon minecraft:cow 8.5 -60 8.5 {}",
+    "peaceful": false,
+    "load": true,
+    "duplicate": false,
+    "passengers": 0,
+    "permission": 4,
+    "display": {
+      "text": "Loaded ",
+      "extra": [
+        {
+          "translate": "entity.minecraft.cow"
+        }
+      ],
+      "color": "yellow"
+    },
+    "eyes": false,
+    "mob": true,
+    "allowed": true,
+    "value": 1,
+    "trace": [
+      "difficulty",
+      {
+        "call": "load",
+        "tag": "{id:\"minecraft:cow\"}",
+        "reason": "COMMAND",
+        "ignore_checks": false
+      },
+      {
+        "call": "snap",
+        "index": 0,
+        "pos": [
+          8.5,
+          -60.0,
+          8.5
+        ],
+        "yaw": 10.5,
+        "pitch": -25.25
+      },
+      "register",
+      "display_name",
+      "success"
+    ],
+    "feedback": [
+      {
+        "broadcast": true,
+        "message": {
+          "translate": "commands.summon.success",
+          "with": [
+            {
+              "text": "Loaded ",
+              "extra": [
+                {
+                  "translate": "entity.minecraft.cow"
+                }
+              ],
+              "color": "yellow"
+            }
+          ]
+        }
+      }
+    ],
+    "original_after": "{}"
+  },
+  {
+    "command": "summon minecraft:cow 8.5 -60 8.5 {Age:-24000}",
+    "peaceful": false,
+    "load": true,
+    "duplicate": false,
+    "passengers": 0,
+    "permission": 4,
+    "display": {
+      "text": "Loaded ",
+      "extra": [
+        {
+          "translate": "entity.minecraft.cow"
+        }
+      ],
+      "color": "yellow"
+    },
+    "eyes": false,
+    "mob": true,
+    "allowed": true,
+    "value": 1,
+    "trace": [
+      "difficulty",
+      {
+        "call": "load",
+        "tag": "{Age:-24000,id:\"minecraft:cow\"}",
+        "reason": "COMMAND",
+        "ignore_checks": false
+      },
+      {
+        "call": "snap",
+        "index": 0,
+        "pos": [
+          8.5,
+          -60.0,
+          8.5
+        ],
+        "yaw": 10.5,
+        "pitch": -25.25
+      },
+      "register",
+      "display_name",
+      "success"
+    ],
+    "feedback": [
+      {
+        "broadcast": true,
+        "message": {
+          "translate": "commands.summon.success",
+          "with": [
+            {
+              "text": "Loaded ",
+              "extra": [
+                {
+                  "translate": "entity.minecraft.cow"
+                }
+              ],
+              "color": "yellow"
+            }
+          ]
+        }
+      }
+    ],
+    "original_after": "{Age:-24000}"
+  },
+  {
+    "command": "summon minecraft:item 8.5 -60 8.5 {Item:{id:'minecraft:stone',count:3}}",
+    "peaceful": false,
+    "load": true,
+    "duplicate": false,
+    "passengers": 0,
+    "permission": 4,
+    "display": {
+      "text": "Loaded ",
+      "extra": [
+        {
+          "translate": "entity.minecraft.cow"
+        }
+      ],
+      "color": "yellow"
+    },
+    "eyes": false,
+    "mob": false,
+    "allowed": true,
+    "value": 1,
+    "trace": [
+      "difficulty",
+      {
+        "call": "load",
+        "tag": "{Item:{count:3,id:\"minecraft:stone\"},id:\"minecraft:item\"}",
+        "reason": "COMMAND",
+        "ignore_checks": false
+      },
+      {
+        "call": "snap",
+        "index": 0,
+        "pos": [
+          8.5,
+          -60.0,
+          8.5
+        ],
+        "yaw": 10.5,
+        "pitch": -25.25
+      },
+      "register",
+      "display_name",
+      "success"
+    ],
+    "feedback": [
+      {
+        "broadcast": true,
+        "message": {
+          "translate": "commands.summon.success",
+          "with": [
+            {
+              "text": "Loaded ",
+              "extra": [
+                {
+                  "translate": "entity.minecraft.cow"
+                }
+              ],
+              "color": "yellow"
+            }
+          ]
+        }
+      }
+    ],
+    "original_after": "{Item:{count:3,id:\"minecraft:stone\"}}"
+  },
+  {
+    "command": "summon minecraft:tnt ~ ~1 ~-2 {fuse:120}",
+    "peaceful": false,
+    "load": true,
+    "duplicate": false,
+    "passengers": 0,
+    "permission": 4,
+    "display": {
+      "text": "Loaded ",
+      "extra": [
+        {
+          "translate": "entity.minecraft.cow"
+        }
+      ],
+      "color": "yellow"
+    },
+    "eyes": false,
+    "mob": false,
+    "allowed": true,
+    "value": 1,
+    "trace": [
+      "difficulty",
+      {
+        "call": "load",
+        "tag": "{fuse:120,id:\"minecraft:tnt\"}",
+        "reason": "COMMAND",
+        "ignore_checks": false
+      },
+      {
+        "call": "snap",
+        "index": 0,
+        "pos": [
+          80.25,
+          65.5,
+          -18.75
+        ],
+        "yaw": 10.5,
+        "pitch": -25.25
+      },
+      "register",
+      "display_name",
+      "success"
+    ],
+    "feedback": [
+      {
+        "broadcast": true,
+        "message": {
+          "translate": "commands.summon.success",
+          "with": [
+            {
+              "text": "Loaded ",
+              "extra": [
+                {
+                  "translate": "entity.minecraft.cow"
+                }
+              ],
+              "color": "yellow"
+            }
+          ]
+        }
+      }
+    ],
+    "original_after": "{fuse:120}"
+  },
+  {
+    "command": "summon minecraft:falling_block ^1 ^2 ^3 {BlockState:{Name:'minecraft:sand'}}",
+    "peaceful": false,
+    "load": true,
+    "duplicate": false,
+    "passengers": 0,
+    "permission": 4,
+    "display": {
+      "text": "Loaded ",
+      "extra": [
+        {
+          "translate": "entity.minecraft.cow"
+        }
+      ],
+      "color": "yellow"
+    },
+    "eyes": true,
+    "mob": false,
+    "allowed": true,
+    "value": 1,
+    "trace": [
+      "eye_height",
+      "difficulty",
+      {
+        "call": "load",
+        "tag": "{BlockState:{Name:\"minecraft:sand\"},id:\"minecraft:falling_block\"}",
+        "reason": "COMMAND",
+        "ignore_checks": false
+      },
+      {
+        "call": "snap",
+        "index": 0,
+        "pos": [
+          79.84452642181053,
+          68.65526375121779,
+          -14.427278735711848
+        ],
+        "yaw": 10.5,
+        "pitch": -25.25
+      },
+      "register",
+      "display_name",
+      "success"
+    ],
+    "feedback": [
+      {
+        "broadcast": true,
+        "message": {
+          "translate": "commands.summon.success",
+          "with": [
+            {
+              "text": "Loaded ",
+              "extra": [
+                {
+                  "translate": "entity.minecraft.cow"
+                }
+              ],
+              "color": "yellow"
+            }
+          ]
+        }
+      }
+    ],
+    "original_after": "{BlockState:{Name:\"minecraft:sand\"}}"
+  },
+  {
+    "command": "summon minecraft:experience_orb 8.5 -60 8.5 {Value:7s,Count:3}",
+    "peaceful": false,
+    "load": true,
+    "duplicate": false,
+    "passengers": 0,
+    "permission": 4,
+    "display": {
+      "text": "Loaded ",
+      "extra": [
+        {
+          "translate": "entity.minecraft.cow"
+        }
+      ],
+      "color": "yellow"
+    },
+    "eyes": false,
+    "mob": false,
+    "allowed": true,
+    "value": 1,
+    "trace": [
+      "difficulty",
+      {
+        "call": "load",
+        "tag": "{Count:3,Value:7s,id:\"minecraft:experience_orb\"}",
+        "reason": "COMMAND",
+        "ignore_checks": false
+      },
+      {
+        "call": "snap",
+        "index": 0,
+        "pos": [
+          8.5,
+          -60.0,
+          8.5
+        ],
+        "yaw": 10.5,
+        "pitch": -25.25
+      },
+      "register",
+      "display_name",
+      "success"
+    ],
+    "feedback": [
+      {
+        "broadcast": true,
+        "message": {
+          "translate": "commands.summon.success",
+          "with": [
+            {
+              "text": "Loaded ",
+              "extra": [
+                {
+                  "translate": "entity.minecraft.cow"
+                }
+              ],
+              "color": "yellow"
+            }
+          ]
+        }
+      }
+    ],
+    "original_after": "{Count:3,Value:7s}"
+  },
+  {
+    "command": "summon minecraft:cow 8.5 -60 8.5 {id:'minecraft:tnt',Passengers:[{id:'minecraft:item'},{id:'minecraft:experience_orb'}]}",
+    "peaceful": false,
+    "load": true,
+    "duplicate": false,
+    "passengers": 2,
+    "permission": 4,
+    "display": {
+      "text": "Loaded ",
+      "extra": [
+        {
+          "translate": "entity.minecraft.cow"
+        }
+      ],
+      "color": "yellow"
+    },
+    "eyes": false,
+    "mob": true,
+    "allowed": true,
+    "value": 1,
+    "trace": [
+      "difficulty",
+      {
+        "call": "load",
+        "tag": "{Passengers:[{id:\"minecraft:item\"},{id:\"minecraft:experience_orb\"}],id:\"minecraft:cow\"}",
+        "reason": "COMMAND",
+        "ignore_checks": false
+      },
+      {
+        "call": "snap",
+        "index": 0,
+        "pos": [
+          8.5,
+          -60.0,
+          8.5
+        ],
+        "yaw": 10.5,
+        "pitch": -25.25
+      },
+      {
+        "call": "snap",
+        "index": 1,
+        "pos": [
+          8.5,
+          -60.0,
+          8.5
+        ],
+        "yaw": 20.5,
+        "pitch": -15.25
+      },
+      {
+        "call": "snap",
+        "index": 2,
+        "pos": [
+          8.5,
+          -60.0,
+          8.5
+        ],
+        "yaw": 30.5,
+        "pitch": -5.25
+      },
+      "register",
+      "display_name",
+      "success"
+    ],
+    "feedback": [
+      {
+        "broadcast": true,
+        "message": {
+          "translate": "commands.summon.success",
+          "with": [
+            {
+              "text": "Loaded ",
+              "extra": [
+                {
+                  "translate": "entity.minecraft.cow"
+                }
+              ],
+              "color": "yellow"
+            }
+          ]
+        }
+      }
+    ],
+    "original_after": "{Passengers:[{id:\"minecraft:item\"},{id:\"minecraft:experience_orb\"}],id:\"minecraft:tnt\"}"
+  },
+  {
+    "command": "summon minecraft:cow 8.5 -60 8.5",
+    "peaceful": false,
+    "load": true,
+    "duplicate": true,
+    "passengers": 0,
+    "permission": 4,
+    "display": {
+      "text": "Loaded ",
+      "extra": [
+        {
+          "translate": "entity.minecraft.cow"
+        }
+      ],
+      "color": "yellow"
+    },
+    "eyes": false,
+    "mob": true,
+    "allowed": true,
+    "error": "Unable to summon entity due to duplicate UUIDs",
+    "cursor": -1,
+    "error_component": {
+      "translate": "commands.summon.failed.uuid"
+    },
+    "trace": [
+      "difficulty",
+      {
+        "call": "load",
+        "tag": "{id:\"minecraft:cow\"}",
+        "reason": "COMMAND",
+        "ignore_checks": false
+      },
+      {
+        "call": "snap",
+        "index": 0,
+        "pos": [
+          8.5,
+          -60.0,
+          8.5
+        ],
+        "yaw": 10.5,
+        "pitch": -25.25
+      },
+      {
+        "call": "local_difficulty",
+        "pos": [
+          8,
+          -60,
+          8
+        ]
+      },
+      "finalize",
+      "register"
+    ],
+    "feedback": []
+  },
+  {
+    "command": "summon minecraft:experience_orb 8.5 -60 8.5 {Passengers:[{id:'minecraft:item'}]}",
+    "peaceful": false,
+    "load": true,
+    "duplicate": true,
+    "passengers": 1,
+    "permission": 4,
+    "display": {
+      "text": "Loaded ",
+      "extra": [
+        {
+          "translate": "entity.minecraft.cow"
+        }
+      ],
+      "color": "yellow"
+    },
+    "eyes": false,
+    "mob": false,
+    "allowed": true,
+    "error": "Unable to summon entity due to duplicate UUIDs",
+    "cursor": -1,
+    "error_component": {
+      "translate": "commands.summon.failed.uuid"
+    },
+    "trace": [
+      "difficulty",
+      {
+        "call": "load",
+        "tag": "{Passengers:[{id:\"minecraft:item\"}],id:\"minecraft:experience_orb\"}",
+        "reason": "COMMAND",
+        "ignore_checks": false
+      },
+      {
+        "call": "snap",
+        "index": 0,
+        "pos": [
+          8.5,
+          -60.0,
+          8.5
+        ],
+        "yaw": 10.5,
+        "pitch": -25.25
+      },
+      {
+        "call": "snap",
+        "index": 1,
+        "pos": [
+          8.5,
+          -60.0,
+          8.5
+        ],
+        "yaw": 20.5,
+        "pitch": -15.25
+      },
+      "register"
+    ],
+    "feedback": [],
+    "original_after": "{Passengers:[{id:\"minecraft:item\"}]}"
+  },
+  {
+    "command": "summon minecraft:cow 8.5 -60 8.5",
+    "peaceful": false,
+    "load": false,
+    "duplicate": false,
+    "passengers": 0,
+    "permission": 4,
+    "display": {
+      "text": "Loaded ",
+      "extra": [
+        {
+          "translate": "entity.minecraft.cow"
+        }
+      ],
+      "color": "yellow"
+    },
+    "eyes": false,
+    "mob": true,
+    "allowed": true,
+    "error": "Unable to summon entity",
+    "cursor": -1,
+    "error_component": {
+      "translate": "commands.summon.failed"
+    },
+    "trace": [
+      "difficulty",
+      {
+        "call": "load",
+        "tag": "{id:\"minecraft:cow\"}",
+        "reason": "COMMAND",
+        "ignore_checks": false
+      }
+    ],
+    "feedback": []
+  },
+  {
+    "command": "summon minecraft:experience_orb 8.5 -60 8.5 {}",
+    "peaceful": false,
+    "load": false,
+    "duplicate": false,
+    "passengers": 0,
+    "permission": 4,
+    "display": {
+      "text": "Loaded ",
+      "extra": [
+        {
+          "translate": "entity.minecraft.cow"
+        }
+      ],
+      "color": "yellow"
+    },
+    "eyes": false,
+    "mob": false,
+    "allowed": true,
+    "error": "Unable to summon entity",
+    "cursor": -1,
+    "error_component": {
+      "translate": "commands.summon.failed"
+    },
+    "trace": [
+      "difficulty",
+      {
+        "call": "load",
+        "tag": "{id:\"minecraft:experience_orb\"}",
+        "reason": "COMMAND",
+        "ignore_checks": false
+      }
+    ],
+    "feedback": [],
+    "original_after": "{}"
+  },
+  {
+    "command": "summon minecraft:zombie 8.5 -60 8.5",
+    "peaceful": true,
+    "load": true,
+    "duplicate": false,
+    "passengers": 0,
+    "permission": 4,
+    "display": {
+      "text": "Loaded ",
+      "extra": [
+        {
+          "translate": "entity.minecraft.cow"
+        }
+      ],
+      "color": "yellow"
+    },
+    "eyes": false,
+    "mob": false,
+    "allowed": false,
+    "error": "Monsters cannot be summoned in Peaceful difficulty",
+    "cursor": -1,
+    "error_component": {
+      "translate": "commands.summon.failed.peaceful"
+    },
+    "trace": [
+      "difficulty"
+    ],
+    "feedback": []
+  },
+  {
+    "command": "summon minecraft:cow 8.5 -60 8.5",
+    "peaceful": true,
+    "load": true,
+    "duplicate": false,
+    "passengers": 0,
+    "permission": 4,
+    "display": {
+      "text": "Loaded ",
+      "extra": [
+        {
+          "translate": "entity.minecraft.cow"
+        }
+      ],
+      "color": "yellow"
+    },
+    "eyes": false,
+    "mob": true,
+    "allowed": true,
+    "value": 1,
+    "trace": [
+      "difficulty",
+      {
+        "call": "load",
+        "tag": "{id:\"minecraft:cow\"}",
+        "reason": "COMMAND",
+        "ignore_checks": false
+      },
+      {
+        "call": "snap",
+        "index": 0,
+        "pos": [
+          8.5,
+          -60.0,
+          8.5
+        ],
+        "yaw": 10.5,
+        "pitch": -25.25
+      },
+      {
+        "call": "local_difficulty",
+        "pos": [
+          8,
+          -60,
+          8
+        ]
+      },
+      "finalize",
+      "register",
+      "display_name",
+      "success"
+    ],
+    "feedback": [
+      {
+        "broadcast": true,
+        "message": {
+          "translate": "commands.summon.success",
+          "with": [
+            {
+              "text": "Loaded ",
+              "extra": [
+                {
+                  "translate": "entity.minecraft.cow"
+                }
+              ],
+              "color": "yellow"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "command": "summon minecraft:zombie 30000000 64 0",
+    "peaceful": true,
+    "load": true,
+    "duplicate": false,
+    "passengers": 0,
+    "permission": 4,
+    "display": {
+      "text": "Loaded ",
+      "extra": [
+        {
+          "translate": "entity.minecraft.cow"
+        }
+      ],
+      "color": "yellow"
+    },
+    "eyes": false,
+    "mob": false,
+    "allowed": false,
+    "error": "Invalid position for summon",
+    "cursor": -1,
+    "error_component": {
+      "translate": "commands.summon.invalidPosition"
+    },
+    "trace": [],
+    "feedback": []
+  },
+  {
+    "command": "summon minecraft:player 30000000 64 0",
+    "peaceful": false,
+    "load": true,
+    "duplicate": false,
+    "passengers": 0,
+    "permission": 4,
+    "display": {
+      "text": "Loaded ",
+      "extra": [
+        {
+          "translate": "entity.minecraft.cow"
+        }
+      ],
+      "color": "yellow"
+    },
+    "eyes": false,
+    "mob": false,
+    "allowed": true,
+    "error": "Can't summon entity of type minecraft:player",
+    "cursor": -1,
+    "error_component": {
+      "translate": "entity.not_summonable",
+      "with": [
+        "minecraft:player"
+      ]
+    },
+    "trace": [],
+    "feedback": []
+  },
+  {
+    "command": "summon minecraft:fishing_bobber",
+    "peaceful": false,
+    "load": true,
+    "duplicate": false,
+    "passengers": 0,
+    "permission": 4,
+    "display": {
+      "text": "Loaded ",
+      "extra": [
+        {
+          "translate": "entity.minecraft.cow"
+        }
+      ],
+      "color": "yellow"
+    },
+    "eyes": false,
+    "mob": false,
+    "allowed": true,
+    "error": "Can't summon entity of type minecraft:fishing_bobber",
+    "cursor": -1,
+    "error_component": {
+      "translate": "entity.not_summonable",
+      "with": [
+        "minecraft:fishing_bobber"
+      ]
+    },
+    "trace": [],
+    "feedback": []
+  },
+  {
+    "command": "summon minecraft:no_such_entity",
+    "peaceful": false,
+    "load": true,
+    "duplicate": false,
+    "passengers": 0,
+    "permission": 4,
+    "display": {
+      "text": "Loaded ",
+      "extra": [
+        {
+          "translate": "entity.minecraft.cow"
+        }
+      ],
+      "color": "yellow"
+    },
+    "eyes": false,
+    "mob": false,
+    "allowed": true,
+    "error": "Can't find element 'minecraft:no_such_entity' of type 'minecraft:entity_type'",
+    "cursor": 31,
+    "error_component": {
+      "translate": "argument.resource.not_found",
+      "with": [
+        "minecraft:no_such_entity",
+        "minecraft:entity_type"
+      ]
+    },
+    "trace": [],
+    "feedback": []
+  },
+  {
+    "command": "summon minecraft:cow 30000000 64 0",
+    "peaceful": false,
+    "load": true,
+    "duplicate": false,
+    "passengers": 0,
+    "permission": 4,
+    "display": {
+      "text": "Loaded ",
+      "extra": [
+        {
+          "translate": "entity.minecraft.cow"
+        }
+      ],
+      "color": "yellow"
+    },
+    "eyes": false,
+    "mob": true,
+    "allowed": true,
+    "error": "Invalid position for summon",
+    "cursor": -1,
+    "error_component": {
+      "translate": "commands.summon.invalidPosition"
+    },
+    "trace": [],
+    "feedback": []
+  },
+  {
+    "command": "summon minecraft:cow -30000001 64 0",
+    "peaceful": false,
+    "load": true,
+    "duplicate": false,
+    "passengers": 0,
+    "permission": 4,
+    "display": {
+      "text": "Loaded ",
+      "extra": [
+        {
+          "translate": "entity.minecraft.cow"
+        }
+      ],
+      "color": "yellow"
+    },
+    "eyes": false,
+    "mob": true,
+    "allowed": true,
+    "error": "Invalid position for summon",
+    "cursor": -1,
+    "error_component": {
+      "translate": "commands.summon.invalidPosition"
+    },
+    "trace": [],
+    "feedback": []
+  },
+  {
+    "command": "summon minecraft:cow 0 20000000 0",
+    "peaceful": false,
+    "load": true,
+    "duplicate": false,
+    "passengers": 0,
+    "permission": 4,
+    "display": {
+      "text": "Loaded ",
+      "extra": [
+        {
+          "translate": "entity.minecraft.cow"
+        }
+      ],
+      "color": "yellow"
+    },
+    "eyes": false,
+    "mob": true,
+    "allowed": true,
+    "error": "Invalid position for summon",
+    "cursor": -1,
+    "error_component": {
+      "translate": "commands.summon.invalidPosition"
+    },
+    "trace": [],
+    "feedback": []
+  },
+  {
+    "command": "summon minecraft:cow 0 -20000000.001 0",
+    "peaceful": false,
+    "load": true,
+    "duplicate": false,
+    "passengers": 0,
+    "permission": 4,
+    "display": {
+      "text": "Loaded ",
+      "extra": [
+        {
+          "translate": "entity.minecraft.cow"
+        }
+      ],
+      "color": "yellow"
+    },
+    "eyes": false,
+    "mob": true,
+    "allowed": true,
+    "error": "Invalid position for summon",
+    "cursor": -1,
+    "error_component": {
+      "translate": "commands.summon.invalidPosition"
+    },
+    "trace": [],
+    "feedback": []
+  },
+  {
+    "command": "summon minecraft:cow -30000000 -20000000 29999999",
+    "peaceful": false,
+    "load": true,
+    "duplicate": false,
+    "passengers": 0,
+    "permission": 4,
+    "display": {
+      "text": "Loaded ",
+      "extra": [
+        {
+          "translate": "entity.minecraft.cow"
+        }
+      ],
+      "color": "yellow"
+    },
+    "eyes": false,
+    "mob": true,
+    "allowed": true,
+    "value": 1,
+    "trace": [
+      "difficulty",
+      {
+        "call": "load",
+        "tag": "{id:\"minecraft:cow\"}",
+        "reason": "COMMAND",
+        "ignore_checks": false
+      },
+      {
+        "call": "snap",
+        "index": 0,
+        "pos": [
+          -29999999.5,
+          -20000000.0,
+          29999999.5
+        ],
+        "yaw": 10.5,
+        "pitch": -25.25
+      },
+      {
+        "call": "local_difficulty",
+        "pos": [
+          -30000000,
+          -20000000,
+          29999999
+        ]
+      },
+      "finalize",
+      "register",
+      "display_name",
+      "success"
+    ],
+    "feedback": [
+      {
+        "broadcast": true,
+        "message": {
+          "translate": "commands.summon.success",
+          "with": [
+            {
+              "text": "Loaded ",
+              "extra": [
+                {
+                  "translate": "entity.minecraft.cow"
+                }
+              ],
+              "color": "yellow"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "command": "summon minecraft:cow 29999999.99 19999999.99 -30000000",
+    "peaceful": false,
+    "load": true,
+    "duplicate": false,
+    "passengers": 0,
+    "permission": 4,
+    "display": {
+      "text": "Loaded ",
+      "extra": [
+        {
+          "translate": "entity.minecraft.cow"
+        }
+      ],
+      "color": "yellow"
+    },
+    "eyes": false,
+    "mob": true,
+    "allowed": true,
+    "value": 1,
+    "trace": [
+      "difficulty",
+      {
+        "call": "load",
+        "tag": "{id:\"minecraft:cow\"}",
+        "reason": "COMMAND",
+        "ignore_checks": false
+      },
+      {
+        "call": "snap",
+        "index": 0,
+        "pos": [
+          29999999.99,
+          19999999.99,
+          -29999999.5
+        ],
+        "yaw": 10.5,
+        "pitch": -25.25
+      },
+      {
+        "call": "local_difficulty",
+        "pos": [
+          29999999,
+          19999999,
+          -30000000
+        ]
+      },
+      "finalize",
+      "register",
+      "display_name",
+      "success"
+    ],
+    "feedback": [
+      {
+        "broadcast": true,
+        "message": {
+          "translate": "commands.summon.success",
+          "with": [
+            {
+              "text": "Loaded ",
+              "extra": [
+                {
+                  "translate": "entity.minecraft.cow"
+                }
+              ],
+              "color": "yellow"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "command": "summon minecraft:cow 8.5 -60 8.5 []",
+    "peaceful": false,
+    "load": true,
+    "duplicate": false,
+    "passengers": 0,
+    "permission": 4,
+    "display": {
+      "text": "Loaded ",
+      "extra": [
+        {
+          "translate": "entity.minecraft.cow"
+        }
+      ],
+      "color": "yellow"
+    },
+    "eyes": false,
+    "mob": true,
+    "allowed": true,
+    "error": "Expected compound tag",
+    "cursor": 35,
+    "error_component": {
+      "translate": "argument.nbt.expected.compound"
+    },
+    "trace": [],
+    "feedback": []
+  },
+  {
+    "command": "summon minecraft:cow 8.5 -60",
+    "peaceful": false,
+    "load": true,
+    "duplicate": false,
+    "passengers": 0,
+    "permission": 4,
+    "display": {
+      "text": "Loaded ",
+      "extra": [
+        {
+          "translate": "entity.minecraft.cow"
+        }
+      ],
+      "color": "yellow"
+    },
+    "eyes": false,
+    "mob": true,
+    "allowed": true,
+    "error": "Incomplete (expected 3 coordinates)",
+    "cursor": 21,
+    "error_component": {
+      "translate": "argument.pos3d.incomplete"
+    },
+    "trace": [],
+    "feedback": []
+  },
+  {
+    "command": "summon minecraft:cow",
+    "peaceful": false,
+    "load": true,
+    "duplicate": false,
+    "passengers": 0,
+    "permission": 1,
+    "display": {
+      "text": "Loaded ",
+      "extra": [
+        {
+          "translate": "entity.minecraft.cow"
+        }
+      ],
+      "color": "yellow"
+    },
+    "eyes": false,
+    "mob": true,
+    "allowed": true,
+    "error": "Unknown or incomplete command. See below for error",
+    "cursor": 0,
+    "error_component": {
+      "translate": "command.unknown.command"
+    },
+    "trace": [],
+    "feedback": []
+  }
+]

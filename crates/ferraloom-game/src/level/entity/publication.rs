@@ -27,7 +27,22 @@ impl EntityPublication<'_> {
             Self::Mutable(level) => level.add_entity_with_origin(id, state, loaded),
             Self::Shared(level) => {
                 let base = state.as_entity();
-                if base.entity_type == ferraloom_data::EntityType::PLAYER
+                // ServerLevel.EntityCallbacks#onCreated needs mutable access
+                // even for hidden new transmitters; never buffer that callback.
+                let creates_waypoint = if let Some(living) = state.as_living().filter(|_| !loaded) {
+                    let attribute =
+                        ferraloom_data::registries::attribute::Id::WAYPOINT_TRANSMIT_RANGE;
+                    living.attributes.value(attribute).map_err(|_| {
+                        LevelError::MissingEntityAttribute {
+                            entity_type: base.entity_type,
+                            attribute,
+                        }
+                    })? > 0.0
+                } else {
+                    false
+                };
+                if creates_waypoint
+                    || base.entity_type == ferraloom_data::EntityType::PLAYER
                     || level
                         .entity_chunk_visibility(base.chunk_position)
                         .is_accessible()

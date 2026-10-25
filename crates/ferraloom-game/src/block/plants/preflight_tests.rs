@@ -263,6 +263,7 @@ fn native_light_block_updates_preserve_state_water_ticks_and_rng_on_both_arms() 
         assert_eq!(live.unported_behavior_stats().skipped_calls, 0);
 
         chunks[0].fluid_ticks = Default::default();
+        let registry_context = crate::level::LevelContext::fixture(0, 63);
         let mut region = WorldGenRegion::new(
             &mut chunks,
             [0, 0],
@@ -274,6 +275,7 @@ fn native_light_block_updates_preserve_state_water_ticks_and_rng_on_both_arms() 
             63,
         )
         .unwrap();
+        region.set_registry_context(registry_context.registry_context().unwrap());
         region.set_block_in_section(point(POS), state).unwrap();
         for side in Direction::VALUES {
             region
@@ -373,6 +375,7 @@ fn native_light_contexts_keep_outline_and_inherited_collision_distinct() {
             6 => BlockCollisionContext::placement_context(None, &live).unwrap(),
             _ => panic!("unknown native collision context"),
         };
+        let registry_context = crate::level::LevelContext::fixture(0, 63);
         let mut region = WorldGenRegion::new(
             &mut chunks,
             [0, 0],
@@ -384,6 +387,7 @@ fn native_light_contexts_keep_outline_and_inherited_collision_distinct() {
             63,
         )
         .unwrap();
+        region.set_registry_context(registry_context.registry_context().unwrap());
         region.set_block_in_section(point(POS), state).unwrap();
         region.set_random(Random::Legacy(LegacyRandomSource::new(1234)));
         for reader in [

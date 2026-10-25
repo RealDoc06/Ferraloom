@@ -33,6 +33,7 @@ fn level() -> Level {
         }
     });
     let mut level = Level::new(Region::new(&EMPTY), LevelContext::fixture(0, 63));
+    level.install_shared(Box::default());
     level.set_block_tags(tags.blocks.clone());
     level.set_fluid_tags(tags.fluids.clone());
     for x in -1..=1 {
@@ -190,7 +191,8 @@ fn native_precise_contact_dispatches_original_position_shape_and_motion_hooks() 
             &mut level,
             Vec3::new(8.5, 64.0, 8.5),
             ItemStack::new(Item::STONE, 1, Default::default()),
-        );
+        )
+        .unwrap();
         item.parent.velocity = Vec3::new(
             0.25,
             f64::from_bits(u64::from_str_radix(f[4], 16).unwrap()),
@@ -249,13 +251,15 @@ fn native_pickup_returns_water_even_when_the_air_write_does_not_change_a_block()
 fn required_tags_and_chunk_reads_keep_native_short_circuits_and_water_schedule() {
     for policy in [UnportedBehavior::Strict, UnportedBehavior::Warn] {
         let mut level = Level::new(Region::new(&EMPTY), LevelContext::fixture(0, 63));
+        level.install_shared(Box::default());
         level.set_unported_behavior(policy);
         let entity = level.next_entity_ref();
         let item = ItemEntity::new_at(
             &mut level,
             Vec3::new(8.5, 64.0, 8.5),
             ItemStack::new(Item::STONE, 1, Default::default()),
-        );
+        )
+        .unwrap();
         level
             .add_entity(entity, EntityState::Item(Box::new(item)))
             .unwrap();

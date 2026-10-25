@@ -13,10 +13,14 @@ use std::{collections::BTreeMap, num::NonZeroI32};
 const VECTORS: &str = include_str!("../../../../tests/java/entity/vectors.tsv");
 fn level() -> Level {
     static BEHAVIORS: Behaviors = Behaviors::EMPTY;
-    Level::new(
-        Region::new(&BEHAVIORS),
-        crate::level::LevelContext::fixture(0, 63),
-    )
+    {
+        let mut fixture_level = Level::new(
+            Region::new(&BEHAVIORS),
+            crate::level::LevelContext::fixture(0, 63),
+        );
+        fixture_level.install_shared(Box::default());
+        fixture_level
+    }
 }
 fn bits(v: Vec3) -> String {
     format!(
@@ -265,7 +269,7 @@ fn nonliving_damage_forces_native_velocity_sync_even_without_an_update_interval(
         let fields: Vec<_> = row.split('\t').collect();
         let mut level = level();
         let id = level.next_entity_ref();
-        let network = level.next_entity_id();
+        let network = level.next_entity_id().unwrap();
         let state = if fields[1] == "item" {
             let mut item = ItemEntity::new(network, 123);
             item.set_item(stack(1));

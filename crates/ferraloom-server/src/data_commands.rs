@@ -6,16 +6,20 @@ use ferraloom_game::{
         data::{self, DataAccess, DataAccessor, DataError},
         source::EntityAnchor,
     },
-    entity::{EntityData, EntityState},
+    entity::EntityData,
 };
 use ferraloom_nbt::CompoundTag;
 
 struct DataHost<'a> {
     server: &'a mut MinecraftServer,
     roots: Vec<BlockEntityRef>,
+    entity_roots: Vec<EntityRef>,
 }
 impl Drop for DataHost<'_> {
     fn drop(&mut self) {
+        for entity in self.entity_roots.drain(..) {
+            self.server.level.level.release_entity(entity);
+        }
         for handle in self.roots.drain(..) {
             self.server.level.level.release_block_entity(handle);
         }
@@ -37,6 +41,8 @@ impl DataAccess for DataHost<'_> {
                 if entities.len() != 1 {
                     return Err(exceptions::error("argument.entity.toomany", &[]).into());
                 }
+                self.server.level.level.retain_entity(entities[0])?;
+                self.entity_roots.push(entities[0]);
                 DataAccessor::Entity(entities[0])
             }
             "block" => {
@@ -97,10 +103,10 @@ impl DataAccess for DataHost<'_> {
         match accessor {
             DataAccessor::Storage(id) => {
                 self.server.command_storage.set(id, value)?;
-                self.server
-                    .level
-                    .level
-                    .set_command_storage(self.server.command_storage.snapshot());
+                let snapshot = self.server.command_storage.snapshot();
+                for live in self.server.live_levels_mut() {
+                    live.level.set_command_storage(snapshot.clone());
+                }
             }
             DataAccessor::Block { entity, pos } => {
                 // BlockDataAccessor captures this state before either load callback.
@@ -113,19 +119,7 @@ impl DataAccess for DataHost<'_> {
                     .send_block_updated(*pos, state, state);
             }
             DataAccessor::Entity(entity) => {
-                if matches!(
-                    self.server.level.level.entity_state(*entity)?,
-                    EntityState::Player(_)
-                ) {
-                    return Err(exceptions::error("commands.data.entity.invalid", &[]).into());
-                }
-                // Full subclass Entity#load/postDataManipulated belongs to entity
-                // core; base-only EntityData decoding cannot substitute for it.
-                return Err(exceptions::error(
-                    "ferraloom.command.pending",
-                    &["data entity mutation".into()],
-                )
-                .into());
+                data::set_entity_data(*entity, &value, &mut self.server.level.level)?;
             }
         }
         Ok(())
@@ -139,10 +133,10 @@ impl DataAccess for DataHost<'_> {
             self.server
                 .command_storage
                 .publish_read_mutation(id, value)?;
-            self.server
-                .level
-                .level
-                .set_command_storage(self.server.command_storage.snapshot());
+            let snapshot = self.server.command_storage.snapshot();
+            for live in self.server.live_levels_mut() {
+                live.level.set_command_storage(snapshot.clone());
+            }
         }
         Ok(())
     }
@@ -167,6 +161,7 @@ impl MinecraftServer {
             &mut DataHost {
                 server: self,
                 roots: Vec::new(),
+                entity_roots: Vec::new(),
             },
         );
         // Partial modifications and load callbacks publish their actual ordered

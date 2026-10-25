@@ -25,7 +25,7 @@ fn spawn_piece(
     position: Vec3,
     stack: ItemStack,
 ) -> Result<EntityRef, LevelError> {
-    let mut item = ItemEntity::new_at(level, position, stack);
+    let mut item = ItemEntity::new_at(level, position, stack)?;
     let random = level.random();
     item.parent.velocity = Vec3::new(
         random.triangle(0.0, 0.11485000171139836),
@@ -56,9 +56,12 @@ pub fn drop_item_stack(
 /// is reborrowed after every spawn, even if an entity callback replaced its block.
 pub fn drop_contents(entity: BlockEntityRef, level: &mut Level) -> Result<(), LevelError> {
     use super::storage::BaseContainerBlockEntity;
-    let size = level
-        .block_entity::<BaseContainerBlockEntity>(entity)?
-        .size();
+    let size = match level.block_entity_state(entity)? {
+        crate::block::entity::BlockEntityState::ChiseledBookShelf(entity) => entity.items.len(),
+        _ => level
+            .block_entity::<BaseContainerBlockEntity>(entity)?
+            .size(),
+    };
     let mut operation = crate::inventory::StackOperation::new(level);
     for slot in 0..size {
         let stack = operation
@@ -111,10 +114,14 @@ mod tests {
             let fields: Vec<_> = line.split('\t').collect();
             let seed = fields[1].parse().unwrap();
             let count = fields[2].parse().unwrap();
-            let mut level = Level::new(
-                Region::new(&BEHAVIORS),
-                crate::level::LevelContext::fixture(0, 63),
-            );
+            let mut level = {
+                let mut fixture_level = Level::new(
+                    Region::new(&BEHAVIORS),
+                    crate::level::LevelContext::fixture(0, 63),
+                );
+                fixture_level.install_shared(Box::default());
+                fixture_level
+            };
             level.set_random_streams(Random::Legacy(LegacyRandomSource::new(seed)), 0);
             let mut stack = ItemStack::new(Item::STONE, count, Default::default());
             let ids = drop_item_stack(&mut level, Vec3::new(-1.2, 64.7, 2.8), &mut stack).unwrap();

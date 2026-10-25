@@ -247,7 +247,12 @@ fn native_command_and_utility_placement_callbacks() {
                 for (key, bit) in [("auto", 16), ("powered", 32), ("TrackOutput", 64)] {
                     tag.insert(key, Tag::Byte(i8::from(mask & bit != 0)));
                 }
-                entity.load_with_components(&tag);
+                entity.load_with_components(
+                    &tag,
+                    crate::level::LevelContext::fixture(0, 63)
+                        .registry_context()
+                        .unwrap(),
+                );
                 level.set_block_state(POS, state).unwrap();
                 level.set_block_entity(entity).unwrap();
                 let handle = level.block_entity_ref(POS).unwrap().unwrap();

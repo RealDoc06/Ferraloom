@@ -81,7 +81,7 @@ fn native_virtual_travel_preserves_player_swim_flight_and_passenger_parent_calls
             let mut player = ServerPlayer::new(
                 Uuid::new(3, 4),
                 "travel".into(),
-                level.next_entity_id(),
+                level.next_entity_id().unwrap(),
                 vector(row[4]),
                 GameType::Survival,
             );
@@ -109,7 +109,7 @@ fn native_virtual_travel_preserves_player_swim_flight_and_passenger_parent_calls
         level.add_entity(entity, state).unwrap();
         if row[13] == "true" {
             let mount = level.next_entity_ref();
-            let tnt = PrimedTnt::new(level.next_entity_id(), 0);
+            let tnt = PrimedTnt::new(level.next_entity_id().unwrap(), 0);
             level
                 .add_entity(mount, EntityState::PrimedTnt(Box::new(tnt)))
                 .unwrap();

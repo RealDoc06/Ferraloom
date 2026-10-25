@@ -658,6 +658,7 @@ fn entities(out: &mut String, entities: &Value, registries: &Value) {
             "track_deltas",
             "fire_immune",
             "summonable",
+            "allowed_in_peaceful",
         ] {
             write!(out, "{field}: {},", entity[field]).unwrap();
         }

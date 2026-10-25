@@ -16,7 +16,11 @@ pub struct LevelContext {
     pub initial_difficulty: Difficulty,
     damage_types: Arc<DamageTypeRegistry>,
     block_transformers: Option<Arc<crate::item::block_transformer::BlockTransformerRegistry>>,
+    enchantments: Option<Arc<crate::item::enchantment::EnchantmentRegistry>>,
+    mob_variants: Option<Arc<crate::entity::variant::MobVariants>>,
     registry_context: Option<Arc<dyn ferraloom_protocol::codec::RegistryContext>>,
+    game_event_tags:
+        Option<Arc<ferraloom_data::datapack::TagSet<ferraloom_data::registries::game_event::Id>>>,
 }
 
 impl LevelContext {
@@ -38,7 +42,10 @@ impl LevelContext {
             damage_types,
             initial_difficulty,
             block_transformers: None,
+            enchantments: None,
+            mob_variants: None,
             registry_context: None,
+            game_event_tags: None,
         }
     }
 
@@ -59,6 +66,53 @@ impl LevelContext {
         self.block_transformers
             .as_ref()
             .ok_or(super::LevelError::MissingBlockTransformers)
+    }
+
+    /// Attach the actual loaded registry, shared with every level in this world.
+    pub fn with_enchantments(
+        mut self,
+        registry: Arc<crate::item::enchantment::EnchantmentRegistry>,
+    ) -> Self {
+        self.enchantments = Some(registry);
+        self
+    }
+    pub fn enchantments(
+        &self,
+    ) -> Result<&Arc<crate::item::enchantment::EnchantmentRegistry>, super::LevelError> {
+        self.enchantments
+            .as_ref()
+            .ok_or(super::LevelError::MissingEnchantments)
+    }
+    /// Install the merged immutable spawn-conditioned registries once per load.
+    pub fn with_mob_variants(mut self, variants: Arc<crate::entity::variant::MobVariants>) -> Self {
+        self.mob_variants = Some(variants);
+        self
+    }
+    pub fn mob_variants(
+        &self,
+    ) -> Result<&Arc<crate::entity::variant::MobVariants>, super::LevelError> {
+        self.mob_variants
+            .as_ref()
+            .ok_or(super::LevelError::MissingMobVariants)
+    }
+    /// Install the actual merged GameEventTags used by vibration listeners.
+    pub fn with_game_event_tags(
+        mut self,
+        tags: Arc<ferraloom_data::datapack::TagSet<ferraloom_data::registries::game_event::Id>>,
+    ) -> Self {
+        self.game_event_tags = Some(tags);
+        self
+    }
+
+    pub fn game_event_tags(
+        &self,
+    ) -> Result<
+        &ferraloom_data::datapack::TagSet<ferraloom_data::registries::game_event::Id>,
+        super::LevelError,
+    > {
+        self.game_event_tags
+            .as_deref()
+            .ok_or(super::LevelError::MissingGameEventTags)
     }
 
     /// Port of ServerLevel#registryAccess: the same immutable synchronized
@@ -104,7 +158,11 @@ impl LevelContext {
             structures: Arc<super::StructureServices>,
             damage_types: Arc<DamageTypeRegistry>,
             block_transformers: Arc<crate::item::block_transformer::BlockTransformerRegistry>,
+            enchantments: Arc<crate::item::enchantment::EnchantmentRegistry>,
+            mob_variants: Arc<crate::entity::variant::MobVariants>,
             registry_context: Arc<dyn ferraloom_protocol::codec::RegistryContext>,
+            game_event_tags:
+                Arc<ferraloom_data::datapack::TagSet<ferraloom_data::registries::game_event::Id>>,
         }
         static SERVICES: OnceLock<Services> = OnceLock::new();
         let services = SERVICES.get_or_init(|| {
@@ -124,6 +182,15 @@ impl LevelContext {
                     crate::item::block_transformer::BlockTransformerRegistry::load(&resources)
                         .unwrap(),
                 ),
+                enchantments: Arc::new(
+                    crate::item::enchantment::EnchantmentRegistry::load(&resources).unwrap(),
+                ),
+                mob_variants: Arc::new(
+                    crate::entity::variant::MobVariants::load(&resources).unwrap(),
+                ),
+                game_event_tags: Arc::new(
+                    ferraloom_data::datapack::TagSet::load(&resources).unwrap(),
+                ),
                 registry_context: Arc::new(FixtureRegistryContext(resources)),
             }
         });
@@ -138,7 +205,10 @@ impl LevelContext {
                 Difficulty::Normal,
             )
             .with_block_transformers(services.block_transformers.clone())
-            .with_registry_context(services.registry_context.clone()),
+            .with_enchantments(services.enchantments.clone())
+            .with_mob_variants(services.mob_variants.clone())
+            .with_registry_context(services.registry_context.clone())
+            .with_game_event_tags(services.game_event_tags.clone()),
         )
     }
 }

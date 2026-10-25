@@ -169,6 +169,7 @@ fn check(
     let mut chunks = base.to_vec();
     let mut random = WorldgenRandom::new(Algorithm::Xoroshiro.new_instance(seed));
     let center = [origin[0] >> 4, origin[2] >> 4];
+    let registry_context = crate::level::LevelContext::fixture(0, 63);
     let mut region = WorldGenRegion::new(
         &mut chunks,
         center,
@@ -180,6 +181,7 @@ fn check(
         63,
     )
     .unwrap();
+    region.set_registry_context(registry_context.registry_context().unwrap());
     region.set_has_skylight(true);
     region.set_block_tags(generator.data.block_tags.clone());
     region.set_fluid_tags(generator.data.fluid_tags.clone());

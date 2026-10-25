@@ -88,7 +88,12 @@ impl PistonMovingBlockEntity {
 pub struct PistonMovingEntityBehavior;
 pub static MOVING_PISTON_ENTITY: PistonMovingEntityBehavior = PistonMovingEntityBehavior;
 impl BlockEntity for PistonMovingEntityBehavior {
-    fn load_additional(&self, state: &mut BlockEntityState, tag: &CompoundTag) {
+    fn load_additional(
+        &self,
+        state: &mut BlockEntityState,
+        tag: &CompoundTag,
+        _registries: &dyn ferraloom_protocol::codec::RegistryContext,
+    ) {
         if let Some(e) = PistonMovingBlockEntity::view_mut(state) {
             e.moved_state = tag
                 .get("blockState")

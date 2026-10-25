@@ -469,7 +469,12 @@ fn vanilla_single_entity_team_feedback_reads_completed_membership() {
     static BEHAVIORS: Behaviors = Behaviors::EMPTY;
     let commands = commands::Commands::default();
     for kind in ["player", "cow"] {
-        let mut level = Level::new(Region::new(&BEHAVIORS), LevelContext::fixture(0, 63));
+        let mut level = {
+            let mut fixture_level =
+                Level::new(Region::new(&BEHAVIORS), LevelContext::fixture(0, 63));
+            fixture_level.install_shared(Box::default());
+            fixture_level
+        };
         let entity = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
         let uuid = Uuid::new(0, 1);
         let mut state = if kind == "player" {
@@ -492,7 +497,9 @@ fn vanilla_single_entity_team_feedback_reads_completed_membership() {
         };
         state.as_entity_mut().uuid = uuid;
         level.add_entity(entity, state).unwrap();
-        level.install_shared(Box::default());
+        if level.shared().is_err() {
+            level.install_shared(Box::default());
+        }
         for (name, color) in [("red", TeamColor::Red), ("blue", TeamColor::Blue)] {
             let board = &mut level.shared_mut().unwrap().scoreboard;
             board.add_player_team(name);

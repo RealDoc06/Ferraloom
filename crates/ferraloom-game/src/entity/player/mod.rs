@@ -15,6 +15,7 @@ mod notifications;
 pub mod shoulders;
 pub use notifications::{build_limit_packet, send_build_limit_message};
 mod spawn;
+pub use spawn::SavedPosition;
 mod stuck;
 mod tick;
 pub use tick::{award_stat, player_do_tick_with_tick_rate, reset_stat};
@@ -80,6 +81,8 @@ pub struct ServerPlayer {
     pub experience_level: i32,
     pub experience_progress: f32,
     pub total_experience: i32,
+    /// Player#takeXpDelay is transient and decreases at Player#tick's start.
+    pub take_xp_delay: i32,
     last_level_up_time: i32,
     last_sent_experience: i32,
     last_sent_health: f32,
@@ -106,6 +109,8 @@ pub struct ServerPlayer {
     pub chunk_tracking_view: std::collections::HashSet<ChunkPos>,
     /// Port of ChunkTrackingView.Positioned#center, absent for EMPTY.
     pub chunk_tracking_center: Option<ChunkPos>,
+    /// Port of ChunkTrackingView.Positioned#viewDistance, captured with its center.
+    pub chunk_tracking_distance: Option<i32>,
     /// Port of ServerPlayer#getLastSectionPos, set by ChunkMap#updatePlayerPos.
     pub chunk_tracking_section: Option<ferraloom_util::SectionPos>,
     /// Port of ServerGamePacketListenerImpl#chunkSender: canonical pending/sent
@@ -260,6 +265,7 @@ impl ServerPlayer {
             experience_level: 0,
             experience_progress: 0.0,
             total_experience: 0,
+            take_xp_delay: 0,
             last_level_up_time: 0,
             last_sent_experience: -99_999_999,
             last_sent_health: -1.0e8,
@@ -295,6 +301,7 @@ impl ServerPlayer {
             view_distance: 10,
             chunk_tracking_view: Default::default(),
             chunk_tracking_center: None,
+            chunk_tracking_distance: None,
             chunk_tracking_section: None,
             chunk_sender: Default::default(),
             loaded: false,
@@ -755,6 +762,33 @@ fn jump_from_ground(entity: crate::entity::EntityRef, level: &mut Level) -> Resu
 }
 pub struct PlayerBehavior;
 impl crate::entity::Entity for PlayerBehavior {
+    /// ServerPlayer#onAttributeUpdated handles RECEIVE before its LivingEntity parent.
+    fn on_attribute_updated(
+        &self,
+        entity: EntityRef,
+        attribute: ferraloom_data::registries::attribute::Id,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        if attribute == ferraloom_data::registries::attribute::Id::WAYPOINT_RECEIVE_RANGE {
+            if super::living::attribute(entity, attribute, level)? > 0.0 {
+                level.add_waypoint_player(entity)?;
+            } else {
+                level.remove_waypoint_player(entity)?;
+            }
+        }
+        super::living::on_attribute_updated_parent(self, entity, attribute, level)
+    }
+    fn take(
+        &self,
+        collector: EntityRef,
+        entity: EntityRef,
+        count: i32,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        super::living::take(collector, entity, count, level)?;
+        crate::inventory::broadcast_container_menu(collector, level)?;
+        crate::inventory::flush_container_packets(collector, level)
+    }
     fn is_invulnerable_to(
         &self,
         entity: EntityRef,
@@ -1604,10 +1638,14 @@ mod tests {
         static BEHAVIORS: Behaviors = Behaviors::EMPTY;
         let biome = Strategy::biomes(Arc::new(IdMap::new(vec![BiomeId(0)]).unwrap()));
         let section = LevelChunkSection::new(Strategy::block_states(), biome, BiomeId(0));
-        let mut level = Level::new(
-            Region::new(&BEHAVIORS),
-            crate::level::LevelContext::fixture(0, 63),
-        );
+        let mut level = {
+            let mut fixture_level = Level::new(
+                Region::new(&BEHAVIORS),
+                crate::level::LevelContext::fixture(0, 63),
+            );
+            fixture_level.install_shared(Box::default());
+            fixture_level
+        };
         crate::entity::tests::tags(&mut level);
         level
             .add_chunk(LevelChunk::new(ChunkPos::new(0, 0), 0..16, section))
