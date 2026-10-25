@@ -104,7 +104,8 @@ impl SummonAccess for World<'_> {
     }
 }
 fn source(permission: u8, eyes: bool) -> CommandSourceStack {
-    let mut source = CommandSourceStack::server(permission, Vec3::new(80.25, 64.5, -16.75));
+    let mut source =
+        CommandSourceStack::server(i32::from(permission), Vec3::new(80.25, 64.5, -16.75));
     source.rotation = Rotation {
         pitch: -20.,
         yaw: 35.,
