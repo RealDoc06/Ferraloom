@@ -654,29 +654,28 @@ mod tests {
             }
             let mut observed = Vec::new();
             for effect in level.take_effects() {
-                if let LevelEffect::PlayerPacket { packet, .. } = effect {
-                    if let Some(message) = packer.push(*packet).unwrap() {
-                        observed.push(match message {
-                            ClientboundMessage::Packet(packet) => match *packet {
-                                Packet::EntityEvent(event) => format!("event:{}", event.event_id),
-                                Packet::RemoveEntities(_) => "remove".into(),
-                                packet => panic!("unexpected {packet:?}"),
-                            },
-                            ClientboundMessage::Bundle(packets) => format!(
-                                "bundle:{}",
-                                packets
-                                    .iter()
-                                    .map(|packet| match packet {
-                                        Packet::AddEntity(_) => "ClientboundAddEntityPacket",
-                                        Packet::SetEntityData(_) =>
-                                            "ClientboundSetEntityDataPacket",
-                                        packet => panic!("unexpected {packet:?}"),
-                                    })
-                                    .collect::<Vec<_>>()
-                                    .join(",")
-                            ),
-                        });
-                    }
+                if let LevelEffect::PlayerPacket { packet, .. } = effect
+                    && let Some(message) = packer.push(*packet).unwrap()
+                {
+                    observed.push(match message {
+                        ClientboundMessage::Packet(packet) => match *packet {
+                            Packet::EntityEvent(event) => format!("event:{}", event.event_id),
+                            Packet::RemoveEntities(_) => "remove".into(),
+                            packet => panic!("unexpected {packet:?}"),
+                        },
+                        ClientboundMessage::Bundle(packets) => format!(
+                            "bundle:{}",
+                            packets
+                                .iter()
+                                .map(|packet| match packet {
+                                    Packet::AddEntity(_) => "ClientboundAddEntityPacket",
+                                    Packet::SetEntityData(_) => "ClientboundSetEntityDataPacket",
+                                    packet => panic!("unexpected {packet:?}"),
+                                })
+                                .collect::<Vec<_>>()
+                                .join(",")
+                        ),
+                    });
                 }
             }
             assert_eq!(

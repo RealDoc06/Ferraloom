@@ -1,3 +1,7 @@
+#[expect(
+    dead_code,
+    reason = "Tracking keeps world time frozen and uses only the non-block level fixtures."
+)]
 mod level_support;
 use ferraloom_data::{EntityType, Item};
 use ferraloom_parity::{
