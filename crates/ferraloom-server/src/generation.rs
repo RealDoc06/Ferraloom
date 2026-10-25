@@ -502,8 +502,14 @@ impl GenerationState {
                             }
                             // Proto writes and partial effects are canonical before
                             // the light executor reads its owned section snapshots.
-                            let stage_skips =
-                                self.finish_light(result.map_err(anyhow::Error::new))?;
+                            let stage_skips = self.finish_light(
+                                result.map_err(anyhow::Error::new).with_context(|| {
+                                    format!(
+                                        "generation chunk={position:?} status={:?} task={:?}",
+                                        step.target, step.task
+                                    )
+                                }),
+                            )?;
                             skips.extend(stage_skips);
                             if matches!(
                                 step.task,
