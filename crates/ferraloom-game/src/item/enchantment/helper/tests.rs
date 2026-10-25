@@ -1,5 +1,4 @@
 use super::*;
-use crate::entity::Entity;
 use crate::item::stack::tests::level;
 use ferraloom_data::Item;
 use ferraloom_protocol::{

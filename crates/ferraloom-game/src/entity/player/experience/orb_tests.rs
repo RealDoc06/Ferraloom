@@ -3,7 +3,7 @@ use crate::{
     Behaviors, ServerShared,
     block::UnportedBehavior,
     entity::{
-        Entity, EntityData, EntityState, LivingEntity,
+        Entity, EntityState, LivingEntity,
         experience_orb::{ExperienceOrb, ExperienceOrbBehavior},
         player::{GameType, PlayerBehavior},
     },
