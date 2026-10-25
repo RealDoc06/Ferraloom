@@ -64,9 +64,7 @@ impl WorldgenBlockBehavior for GameWorldgenBlockBehavior {
         table: &ferraloom_worldgen::Identifier,
         seed: i64,
     ) -> Result<(), Error> {
-        if let Some(entity) = region.get_or_create_block_entity(p)?
-            && entity.is_randomizable()
-        {
+        if let Some(entity) = region.get_or_create_block_entity(p)? {
             entity.set_loot_table(table, seed)?;
         }
         Ok(())
