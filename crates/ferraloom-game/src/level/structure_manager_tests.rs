@@ -449,7 +449,7 @@ use super::super::acquisition::{
 use std::cell::RefCell;
 
 struct ProtoStructuresDriver {
-    sources: RefCell<BTreeMap<ChunkPos, (u64, Arc<ChunkStructures>)>>,
+    sources: RefCell<BTreeMap<i64, (u64, Arc<ChunkStructures>)>>,
     unknown: RefCell<Vec<(ChunkPos, i32)>>,
     requested: RefCell<Vec<(ChunkPos, ChunkStatus)>>,
 }
@@ -484,7 +484,11 @@ impl AcquireDriver for ProtoStructuresDriver {
             pos,
             status,
             request_id: status as u64 + 1,
-            holder_epoch: self.sources.borrow().get(&pos).map_or(0, |source| source.0),
+            holder_epoch: self
+                .sources
+                .borrow()
+                .get(&pos.pack())
+                .map_or(0, |source| source.0),
         })
     }
     fn acquisition_result(&self, handle: AcquireHandle) -> Result<AcquireResult, LevelError> {
@@ -520,7 +524,7 @@ impl AcquireDriver for ProtoStructuresDriver {
     ) -> Result<Arc<ChunkStructures>, LevelError> {
         self.sources
             .borrow()
-            .get(&chunk.pos)
+            .get(&chunk.pos.pack())
             .filter(|source| source.0 == chunk.generation)
             .map(|source| Arc::clone(&source.1))
             .ok_or(LevelError::ChunkAcquisition(
@@ -555,8 +559,8 @@ fn proto_queries_acquire_reference_then_source_status_and_retain_source_versions
             Box::new(ProtoStructuresDriver {
                 sources: RefCell::new(
                     [
-                        (query, (1, Arc::new(references))),
-                        (source, (2, make_start(7))),
+                        (query.pack(), (1, Arc::new(references))),
+                        (source.pack(), (2, make_start(7))),
                     ]
                     .into(),
                 ),
@@ -591,7 +595,7 @@ fn proto_queries_acquire_reference_then_source_status_and_retain_source_versions
     driver
         .sources
         .borrow_mut()
-        .insert(source, (2, make_start(8)));
+        .insert(source.pack(), (2, make_start(8)));
     let newer = level
         .structure_manager()
         .get_structure_with_piece_at(pos, &id)
@@ -602,7 +606,7 @@ fn proto_queries_acquire_reference_then_source_status_and_retain_source_versions
     driver
         .sources
         .borrow_mut()
-        .insert(source, (3, make_start(9)));
+        .insert(source.pack(), (3, make_start(9)));
     assert_eq!(
         level
             .chunk_structures(source, ChunkStatus::StructureStarts)
