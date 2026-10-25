@@ -91,7 +91,7 @@ impl BlockBehavior for Callback {
         }
         level.set_block_state(LATCH, Block::STONE.default_state())?;
         if matches!(self.kind, CallbackKind::Pickup) {
-            let entity = EntityRef(1);
+            let entity = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
             let mut operation = StackOperation::new(level);
             let original = operation
                 .pin(ContainerSlot {
@@ -364,7 +364,7 @@ fn hopper_item_entity_copy_precedes_callbacks_and_original_survives_removal() {
         let replace = name.ends_with("true");
         let mut level = level_with_behaviors(1, &BEHAVIORS[6 + usize::from(replace)]);
         let hopper = install(&mut level, POS, Block::HOPPER);
-        let entity = EntityRef(1);
+        let entity = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
         let item = ItemEntity::new_at(
             &mut level,
             Vec3::new(8.5, 65.0, 8.5),
@@ -446,7 +446,7 @@ fn projectile_callback(
     };
     mutate_dispensed(source, replace, level)?;
     // The concrete projectile factory is outside this receiver-boundary test.
-    Ok(EntityRef(0))
+    Ok(EntityRef::fixture(crate::level::RegionId::FIXTURE, 0))
 }
 fn projectile_keep(
     projectile: dispenser::ProjectileDispense,

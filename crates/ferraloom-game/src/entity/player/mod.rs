@@ -1385,7 +1385,7 @@ mod tests {
                 .set_block_state(BlockPos::new(4, y, 1), Block::STONE.default_state())
                 .unwrap();
         }
-        let entity = EntityRef(1);
+        let entity = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
         let player = ServerPlayer::new(
             Uuid::NIL,
             "Walker".into(),

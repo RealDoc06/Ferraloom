@@ -273,7 +273,7 @@ mod tests {
         )
     }
     fn player(level: &mut Level, id: u64, position: Vec3) -> EntityRef {
-        let handle = EntityRef(id);
+        let handle = EntityRef::fixture(crate::level::RegionId::FIXTURE, id);
         let network = level.next_entity_id();
         let player = ServerPlayer::new(
             Uuid::offline_player(&format!("Sound{id}")),

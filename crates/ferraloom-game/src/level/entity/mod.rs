@@ -124,11 +124,18 @@ impl EntityStorage {
     pub fn get_mut(&mut self, id: &EntityRef) -> Option<&mut EntityState> {
         self.states.get_mut(id)
     }
-    fn add(&self, id: EntityRef, mut state: EntityState) -> Result<i32, LevelError> {
+    fn add(
+        &self,
+        namespace: super::RegionId,
+        id: EntityRef,
+        mut state: EntityState,
+    ) -> Result<i32, LevelError> {
         if self.states.contains_key(&id) {
             return Err(LevelError::DuplicateEntity(id));
         }
-        self.next_ref.set(self.next_ref.get().max(id.0));
+        if id.allocation_namespace() == namespace {
+            self.next_ref.set(self.next_ref.get().max(id.serial()));
+        }
         let base = state.as_entity_mut();
         if !base.network_id_allocated {
             base.network_id = self
@@ -211,16 +218,10 @@ impl Level {
         self.region().entities.are_entities_loaded(pos)
     }
 
-    /// Server-lifetime handles never reuse a retired identity. Regional blocks
-    /// are assigned by the scheduler before parallel execution is enabled.
+    /// Server-lifetime handles never reuse a retired identity. Birth-Region
+    /// namespaces separate equal local serials without a shared hot allocator.
     pub fn next_entity_ref(&self) -> EntityRef {
-        let counter = &self.region().entities.next_ref;
-        let next = counter
-            .get()
-            .checked_add(1)
-            .expect("entity reference space exhausted");
-        counter.set(next);
-        EntityRef(next)
+        EntityRef::allocate(self.region().id, &self.region().entities.next_ref)
     }
     /// Entity constructors share RandomSource.create's seed uniquifier with the
     /// level factory, while retaining a separate random stream per entity.
@@ -265,7 +266,7 @@ impl Level {
         loaded: bool,
     ) -> Result<(), LevelError> {
         let region = self.region();
-        let network_id = region.entities.add(entity, state)?;
+        let network_id = region.entities.add(region.id, entity, state)?;
         let base = region.entities.get(&entity).unwrap().as_entity();
         let status = if base.entity_type == ferraloom_data::EntityType::PLAYER {
             Visibility::Ticking
@@ -296,7 +297,11 @@ impl Level {
     fn retain_unmanaged_entity(&self, entity: EntityRef, state: EntityState) {
         let storage = &self.region().entities;
         assert!(!storage.states.contains_key(&entity), "new entity handle");
-        storage.next_ref.set(storage.next_ref.get().max(entity.0));
+        if entity.allocation_namespace() == self.region().id {
+            storage
+                .next_ref
+                .set(storage.next_ref.get().max(entity.serial()));
+        }
         storage
             .states
             .publish(entity, state)
@@ -683,7 +688,7 @@ mod tests {
             crate::level::LevelContext::fixture(0, 63),
         );
         let uuid = Uuid::offline_player("JoinBot");
-        let entity = EntityRef(1);
+        let entity = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
         level
             .add_entity(
                 entity,
@@ -725,13 +730,22 @@ mod tests {
         );
         assert_eq!(player.network_id, 1);
         level
-            .add_entity(EntityRef(1), EntityState::Player(Box::new(player)))
+            .add_entity(
+                EntityRef::fixture(crate::level::RegionId::FIXTURE, 1),
+                EntityState::Player(Box::new(player)),
+            )
             .unwrap();
         level
-            .add_entity(EntityRef(2), EntityState::Cow(Box::default()))
+            .add_entity(
+                EntityRef::fixture(crate::level::RegionId::FIXTURE, 2),
+                EntityState::Cow(Box::default()),
+            )
             .unwrap();
         assert_eq!(
-            level.entity::<EntityData>(EntityRef(2)).unwrap().network_id,
+            level
+                .entity::<EntityData>(EntityRef::fixture(crate::level::RegionId::FIXTURE, 2))
+                .unwrap()
+                .network_id,
             2
         );
         assert_eq!(level.next_entity_id(), 3);
@@ -828,7 +842,7 @@ mod removal_tests {
             Region::new(&BEHAVIORS),
             crate::level::LevelContext::fixture(0, 63),
         );
-        let id = EntityRef(1);
+        let id = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
         level
             .add_entity(id, EntityState::Cow(Box::default()))
             .unwrap();
@@ -930,7 +944,7 @@ mod identity_tests {
             let mut tag = CompoundTag::new();
             tag.insert("id", Tag::String(kind.name().into()));
             let (entity, state) = load_entity_state(&level, tag).unwrap();
-            assert_eq!(entity.0 as i32, state.as_entity().network_id);
+            assert_eq!(entity.serial() as i32, state.as_entity().network_id);
             actual.push(format!(
                 "entity-creation-order\t{}\t{}",
                 kind.name(),
@@ -944,7 +958,7 @@ mod identity_tests {
             Vec3::ZERO,
             GameType::Survival,
         );
-        assert_eq!(level.next_entity_ref().0 as i32, player.network_id);
+        assert_eq!(level.next_entity_ref().serial() as i32, player.network_id);
         actual.push(format!(
             "entity-creation-order\t{}\t{}",
             EntityType::PLAYER.name(),
@@ -963,21 +977,76 @@ mod identity_tests {
     }
 
     #[test]
+    fn birth_namespaces_separate_equal_serials_and_reject_foreign_cached_reads() {
+        static BEHAVIORS: Behaviors = Behaviors::EMPTY;
+        let context = crate::level::LevelContext::fixture(0, 63);
+        let mut first = Level::new(Region::new(&BEHAVIORS), context.clone());
+        let mut second = Level::new(Region::new(&BEHAVIORS), context);
+        let first_ref = first.next_entity_ref();
+        let second_ref = second.next_entity_ref();
+        assert_eq!(first_ref.serial(), second_ref.serial());
+        assert_ne!(first_ref, second_ref);
+        assert_eq!(first_ref.allocation_namespace(), first.region_id());
+        assert_eq!(second_ref.allocation_namespace(), second.region_id());
+        first
+            .add_entity(first_ref, EntityState::Cow(Box::default()))
+            .unwrap();
+        second
+            .add_entity(second_ref, EntityState::Cow(Box::default()))
+            .unwrap();
+        assert_eq!(
+            second.entity_state(first_ref).unwrap_err(),
+            LevelError::MissingEntity(first_ref)
+        );
+        assert_eq!(
+            first.entity_state(second_ref).unwrap_err(),
+            LevelError::MissingEntity(second_ref)
+        );
+        let mut cached =
+            crate::entity::reference::EntityReference::<EntityData>::of(first_ref, &first).unwrap();
+        assert_eq!(
+            cached.resolve(&second),
+            Err(LevelError::MissingEntity(first_ref))
+        );
+        assert_eq!(cached.resolve(&first).unwrap(), Some(first_ref));
+    }
+
+    #[test]
+    fn foreign_birth_serials_do_not_advance_managed_or_retained_allocators() {
+        static BEHAVIORS: Behaviors = Behaviors::EMPTY;
+        let context = crate::level::LevelContext::fixture(0, 63);
+        let origin = Level::new(Region::new(&BEHAVIORS), context.clone());
+        let foreign = EntityRef::fixture(origin.region_id(), u64::MAX);
+        let mut managed = Level::new(Region::new(&BEHAVIORS), context.clone());
+        managed
+            .add_entity(foreign, EntityState::Cow(Box::default()))
+            .unwrap();
+        assert!(managed.entity::<EntityData>(foreign).is_ok());
+        let local = managed.next_entity_ref();
+        assert_eq!(local.serial(), 1);
+        assert_eq!(local.allocation_namespace(), managed.region_id());
+        let retained = Level::new(Region::new(&BEHAVIORS), context);
+        retained.retain_unmanaged_entity(foreign, EntityState::Cow(Box::default()));
+        assert!(retained.entity::<EntityData>(foreign).is_ok());
+        assert_eq!(retained.next_entity_ref().serial(), 1);
+    }
+
+    #[test]
     fn entity_refs_observe_existing_handles_and_never_reuse_retired_ids() {
         static BEHAVIORS: Behaviors = Behaviors::EMPTY;
         let mut level = Level::new(
             Region::new(&BEHAVIORS),
             crate::level::LevelContext::fixture(0, 63),
         );
-        assert_eq!(level.next_entity_ref(), EntityRef(1));
-        let existing = EntityRef(40);
+        assert_eq!(level.next_entity_ref().serial(), 1);
+        let existing = EntityRef::fixture(level.region_id(), 40);
         level
             .add_entity(existing, EntityState::Cow(Box::default()))
             .unwrap();
         level.remove_entity(existing).unwrap();
         level.finish_entity_management();
-        assert_eq!(level.next_entity_ref(), EntityRef(41));
-        assert_eq!(level.next_entity_ref(), EntityRef(42));
+        assert_eq!(level.next_entity_ref().serial(), 41);
+        assert_eq!(level.next_entity_ref().serial(), 42);
     }
 }
 
@@ -1002,10 +1071,13 @@ mod visibility_tests {
         let pos = ChunkPos::new(0, 0);
         for n in 1..=2 {
             level
-                .add_entity(EntityRef(n), EntityState::Cow(Box::default()))
+                .add_entity(
+                    EntityRef::fixture(crate::level::RegionId::FIXTURE, n),
+                    EntityState::Cow(Box::default()),
+                )
                 .unwrap();
         }
-        let player = EntityRef(3);
+        let player = EntityRef::fixture(crate::level::RegionId::FIXTURE, 3);
         level
             .add_entity(
                 player,
@@ -1020,12 +1092,21 @@ mod visibility_tests {
             .unwrap();
         assert_eq!(level.entity_chunk_visibility(pos), Visibility::Hidden);
         assert_eq!(level.all_entities(), [player]);
-        let uuid = level.entity::<EntityData>(EntityRef(1)).unwrap().uuid;
+        let uuid = level
+            .entity::<EntityData>(EntityRef::fixture(crate::level::RegionId::FIXTURE, 1))
+            .unwrap()
+            .uuid;
         let mut duplicate = Cow::default();
         duplicate.as_living_mut().parent.uuid = uuid;
         assert_eq!(
-            level.add_entity(EntityRef(4), EntityState::Cow(Box::new(duplicate))),
-            Err(LevelError::DuplicateEntity(EntityRef(4)))
+            level.add_entity(
+                EntityRef::fixture(crate::level::RegionId::FIXTURE, 4),
+                EntityState::Cow(Box::new(duplicate))
+            ),
+            Err(LevelError::DuplicateEntity(EntityRef::fixture(
+                crate::level::RegionId::FIXTURE,
+                4
+            )))
         );
         level.take_entity_management_events();
         level
@@ -1034,8 +1115,14 @@ mod visibility_tests {
         assert_eq!(
             level.take_entity_management_events(),
             [
-                EntityManagementEvent::TrackingStart(EntityRef(1)),
-                EntityManagementEvent::TrackingStart(EntityRef(2))
+                EntityManagementEvent::TrackingStart(EntityRef::fixture(
+                    crate::level::RegionId::FIXTURE,
+                    1
+                )),
+                EntityManagementEvent::TrackingStart(EntityRef::fixture(
+                    crate::level::RegionId::FIXTURE,
+                    2
+                ))
             ]
         );
         level
@@ -1044,8 +1131,14 @@ mod visibility_tests {
         assert_eq!(
             level.take_entity_management_events(),
             [
-                EntityManagementEvent::TickingStart(EntityRef(1)),
-                EntityManagementEvent::TickingStart(EntityRef(2))
+                EntityManagementEvent::TickingStart(EntityRef::fixture(
+                    crate::level::RegionId::FIXTURE,
+                    1
+                )),
+                EntityManagementEvent::TickingStart(EntityRef::fixture(
+                    crate::level::RegionId::FIXTURE,
+                    2
+                ))
             ]
         );
         level
@@ -1054,10 +1147,22 @@ mod visibility_tests {
         assert_eq!(
             level.take_entity_management_events(),
             [
-                EntityManagementEvent::TickingEnd(EntityRef(1)),
-                EntityManagementEvent::TickingEnd(EntityRef(2)),
-                EntityManagementEvent::TrackingEnd(EntityRef(1)),
-                EntityManagementEvent::TrackingEnd(EntityRef(2))
+                EntityManagementEvent::TickingEnd(EntityRef::fixture(
+                    crate::level::RegionId::FIXTURE,
+                    1
+                )),
+                EntityManagementEvent::TickingEnd(EntityRef::fixture(
+                    crate::level::RegionId::FIXTURE,
+                    2
+                )),
+                EntityManagementEvent::TrackingEnd(EntityRef::fixture(
+                    crate::level::RegionId::FIXTURE,
+                    1
+                )),
+                EntityManagementEvent::TrackingEnd(EntityRef::fixture(
+                    crate::level::RegionId::FIXTURE,
+                    2
+                ))
             ]
         );
         assert_eq!(level.all_entities(), [player]);
@@ -1073,7 +1178,7 @@ mod visibility_tests {
         level
             .update_entity_chunk_status(ChunkPos::new(1, 0), Visibility::Ticking)
             .unwrap();
-        let id = EntityRef(1);
+        let id = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
         level
             .add_entity(id, EntityState::Cow(Box::default()))
             .unwrap();
@@ -1091,7 +1196,7 @@ mod visibility_tests {
             .as_living_mut()
             .parent
             .set_pos(Vec3::new(16.5, 64.0, 0.5));
-        let new = EntityRef(2);
+        let new = EntityRef::fixture(crate::level::RegionId::FIXTURE, 2);
         level
             .add_entity(new, EntityState::Cow(Box::new(replacement)))
             .unwrap();

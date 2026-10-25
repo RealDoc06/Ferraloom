@@ -10,7 +10,10 @@ struct Backend {
 }
 impl EntityQuery for Backend {
     fn candidates(&self, _: bool) -> Vec<EntityRef> {
-        vec![EntityRef(1), EntityRef(2)]
+        vec![
+            EntityRef::fixture(crate::level::RegionId::FIXTURE, 1),
+            EntityRef::fixture(crate::level::RegionId::FIXTURE, 2),
+        ]
     }
     fn info(&self, _: EntityRef) -> Option<SelectorEntity<'_>> {
         Some(SelectorEntity {
@@ -95,7 +98,8 @@ struct Vector {
 fn native_dynamic_components_recursion_styles_and_nbt_text_match() {
     let vectors: Vec<Vector> =
         serde_json::from_str(include_str!("../vanilla/component-resolution-vectors.json")).unwrap();
-    let source = CommandSourceStack::server(4, Vec3::ZERO).with_entity(EntityRef(1));
+    let source = CommandSourceStack::server(4, Vec3::ZERO)
+        .with_entity(EntityRef::fixture(crate::level::RegionId::FIXTURE, 1));
     for (index, vector) in vectors.into_iter().enumerate() {
         let component = Component::from_json(&vector.input.to_string()).unwrap();
         let mut backend = Backend {
@@ -147,7 +151,8 @@ fn native_dynamic_components_recursion_styles_and_nbt_text_match() {
 }
 #[test]
 fn missing_live_score_service_remains_explicitly_unsupported() {
-    let source = CommandSourceStack::server(4, Vec3::ZERO).with_entity(EntityRef(1));
+    let source = CommandSourceStack::server(4, Vec3::ZERO)
+        .with_entity(EntityRef::fixture(crate::level::RegionId::FIXTURE, 1));
     let mut context = ResolutionContext::new(Some(&source));
     let mut backend = Backend {
         document: CompoundTag::new(),
@@ -167,7 +172,10 @@ fn missing_live_score_service_remains_explicitly_unsupported() {
 
 #[test]
 fn required_selector_name_failure_retains_the_level_error() {
-    let failure = crate::level::LevelError::MissingEntity(EntityRef(99));
+    let failure = crate::level::LevelError::MissingEntity(EntityRef::fixture(
+        crate::level::RegionId::FIXTURE,
+        99,
+    ));
     let syntax = crate::commands::arguments::selectors::selector_read_error(failure.clone());
     assert!(
         matches!(ResolutionError::from(syntax), ResolutionError::EntityData(error) if error == failure)

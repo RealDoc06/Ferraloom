@@ -311,7 +311,10 @@ impl BlockBehavior for ReplaceDuringDrops {
         level: &mut Level,
     ) -> Result<Vec<ItemStack>, LevelError> {
         assert!(context.params.tool.as_ref().unwrap().is_empty());
-        assert_eq!(context.params.this_entity, Some(EntityRef(123)));
+        assert_eq!(
+            context.params.this_entity,
+            Some(EntityRef::fixture(crate::level::RegionId::FIXTURE, 123))
+        );
         let original = context.block_entity.unwrap();
         assert_eq!(original, level.block_entity_ref(POS)?.unwrap());
         level.set_block_entity(create(POS, Block::CHEST.default_state())?)?;
@@ -335,7 +338,12 @@ fn destroy_block_keeps_original_receiver_and_reads_fluid_after_reentrant_drops()
         .unwrap();
     assert!(
         !level
-            .destroy_block_with_breaker(POS, true, Some(EntityRef(123)), 7)
+            .destroy_block_with_breaker(
+                POS,
+                true,
+                Some(EntityRef::fixture(crate::level::RegionId::FIXTURE, 123)),
+                7
+            )
             .unwrap()
     );
     assert_eq!(level.get_block_state(POS).unwrap().block(), Block::WATER);

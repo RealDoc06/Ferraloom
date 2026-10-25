@@ -321,7 +321,7 @@ fn pure_and_live_pickup_share_native_cursor_and_target_identity() {
 
     static BEHAVIORS: crate::Behaviors = crate::Behaviors::EMPTY;
     let mut level = Level::new(Region::new(&BEHAVIORS), LevelContext::fixture(0, 63));
-    let player = EntityRef(1);
+    let player = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
     let mut state = make_player();
     let menu = state.menus.install_container_menu(make_menu());
     level
