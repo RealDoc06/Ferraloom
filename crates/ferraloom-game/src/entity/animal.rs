@@ -362,20 +362,19 @@ impl Entity for CowBehavior {
             .as_living()
             .expect("Cow inherits LivingEntity")
             .trace_damage_entity_refs(references);
-        if let Some(cow) = state.as_mob() {
-            if let Some(holder) = cow.leash_data.as_ref().and_then(|data| data.holder) {
-                references.push(holder);
-            }
+        if let Some(cow) = state.as_mob()
+            && let Some(holder) = cow.leash_data.as_ref().and_then(|data| data.holder)
+        {
+            references.push(holder);
         }
-        if let super::EntityState::Cow(cow) = state {
-            if let Some(cause) = cow
+        if let super::EntityState::Cow(cow) = state
+            && let Some(cause) = cow
                 .parent
                 .parent
                 .love_cause
                 .and_then(|cause| cause.cached_entity())
-            {
-                references.push(cause);
-            }
+        {
+            references.push(cause);
         }
         if let Some(target) = state.as_mob().and_then(|mob| mob.target) {
             references.push(target);
