@@ -999,7 +999,7 @@ fn native_location_tick_tail_checks_interval_after_experience_packet() {
     let manager = ServerAdvancementManager::new(holders(&json!([{
         "id":"test:location_tick", "value":{
             "criteria":{"location":{"trigger":"location"}},
-            "display":{"icon":{"id":"stone"},"title":"Tail","description":"Native interval"},
+            "display":{"icon":{"id":"stone"},"title":"Tail","description":"Native interval","background":"test:background"},
             "rewards":{"experience":1}
         }
     }])));
