@@ -23,10 +23,10 @@ impl MinecraftServer {
     ) -> Result<CommandResult, ferraloom_brigadier::CommandSyntaxException> {
         let verb = command.literals[1].as_str();
         let id = command.argument("id").map(|_| bossbar::id(command));
-        if let Some(id) = &id {
-            if verb != "add" {
-                bossbar::require(&self.shared().custom_boss_events, id)?;
-            }
+        if let Some(id) = &id
+            && verb != "add"
+        {
+            bossbar::require(&self.shared().custom_boss_events, id)?;
         }
         let mut resolved = command.clone();
         if let Some(ArgumentValue::Component(name)) = command.argument("name") {
@@ -71,7 +71,7 @@ impl MinecraftServer {
             if command.source.level.dimension != self.level.dimension {
                 return Err(exceptions::error(
                     "ferraloom.bossbar.source_level.unsupported",
-                    &[command.source.level.dimension.clone()],
+                    std::slice::from_ref(&command.source.level.dimension),
                 ));
             }
             Some(Uuid::insecure(self.level.level.random()))
