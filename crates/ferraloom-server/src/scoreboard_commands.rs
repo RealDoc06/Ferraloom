@@ -125,6 +125,8 @@ impl MinecraftServer {
             Vec::new()
         };
         let resolved = self.resolve_scoreboard_components(command)?;
+        // Pending level-core multi-dimension ownership: route global player
+        // lookup and each level's waypoint manager through the server adapter.
         let pending =
             team::execute_live(&mut self.level.level, &resolved, &members).map_err(|error| {
                 match error {

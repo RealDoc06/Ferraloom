@@ -10,6 +10,9 @@ type Result<T> = std::result::Result<T, TeamError>;
 impl Level {
     fn team_member_changed(&mut self, holder: &str) -> std::result::Result<(), LevelError> {
         self.emit_scoreboard_packets()?;
+        // Pending multi-dimension ownership: ServerScoreboard#updatePlayerWaypoint
+        // uses global PlayerList lookup and the player's actual level;
+        // updateTeamWaypoints visits every server level for each online member.
         let player = self.all_entities().into_iter().find(|&entity| {
             self.entity::<ServerPlayer>(entity)
                 .is_ok_and(|player| player.name.eq_ignore_ascii_case(holder))
