@@ -49,8 +49,23 @@ fn direction(value: p::Facing) -> Direction {
         p::Facing::East => Direction::East,
     }
 }
-/// Port of ChestBlock#candidatePartnerFacing, including CopperChestBlock's live
-/// chestCanConnectTo override. Joined neighbors cannot accept another partner.
+/// Port of ChestBlock#chestCanConnectTo and CopperChestBlock's live-tag override.
+pub(super) fn chest_can_connect_to(
+    block: Block,
+    neighbor: BlockState,
+    reader: &LevelReaderRef<'_, '_>,
+) -> Result<bool, LevelError> {
+    Ok(if block.is_instance_of(BlockClass::CopperChestBlock) {
+        reader
+            .block_tags()?
+            .contains_key(BlockTags::COPPER_CHESTS, neighbor.block())
+            && neighbor.property_values("type") == block.default_state().property_values("type")
+    } else {
+        neighbor.block() == block
+    })
+}
+/// Port of ChestBlock#candidatePartnerFacing. Joined neighbors cannot accept
+/// another partner, even when their class allows cross-variant connections.
 fn candidate_partner_facing(
     block: Block,
     pos: BlockPos,
@@ -58,14 +73,7 @@ fn candidate_partner_facing(
     reader: &LevelReaderRef<'_, '_>,
 ) -> Result<Option<Direction>, LevelError> {
     let state = reader.get_block_state(pos.relative(side, 1))?;
-    let connects = if block.is_instance_of(BlockClass::CopperChestBlock) {
-        reader
-            .block_tags()?
-            .contains_key(BlockTags::COPPER_CHESTS, state.block())
-            && state.property_values("type") == block.default_state().property_values("type")
-    } else {
-        state.block() == block
-    };
+    let connects = chest_can_connect_to(block, state, reader)?;
     Ok(
         if connects && state.get(p::TYPE_) == Some(p::Type::Single) {
             state.get(p::FACING).map(direction)

@@ -120,7 +120,7 @@ impl ChargeCursor {
 }
 
 /// Port of SculkSpreader. Cursor insertion and native fastutil event order matter.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct SculkSpreader {
     pub settings: SpreadSettings,
     cursors: Vec<ChargeCursor>,
@@ -155,6 +155,11 @@ impl SculkSpreader {
     }
     pub fn clear(&mut self) {
         self.cursors.clear();
+    }
+    /// Port of SculkSpreader#load's decoded-list installation. Preserve each
+    /// cursor's charge, delays and optional facings; never split/reset it.
+    pub(crate) fn replace_cursors(&mut self, cursors: Vec<ChargeCursor>) {
+        self.cursors = cursors.into_iter().take(32).collect();
     }
     pub fn add_cursors(&mut self, pos: BlockPos, mut charge: i32) {
         while charge > 0 {

@@ -200,6 +200,7 @@ pub fn family(name: &str) -> Result<Vec<Case>> {
     if name == "gamerule" {
         return gamerules();
     }
+    // The chest fixture uses native strict placement while double-chest updateShape is pending.
     let all: std::collections::BTreeMap<String, Vec<Case>> =
         serde_json::from_str(include_str!("cases.json"))?;
     all.get(name)

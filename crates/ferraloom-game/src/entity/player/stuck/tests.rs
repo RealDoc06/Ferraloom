@@ -1,9 +1,7 @@
 use super::*;
 use crate::{
-    Behaviors,
     advancements::{Advancement, AdvancementHolder, PlayerAdvancements, ServerAdvancementManager},
     entity::{EntityData, EntityState, item::PrimedTnt, player::GameType},
-    level::{LevelContext, Region},
 };
 use ferraloom_data::Block;
 use ferraloom_nbt::{CompoundTag, ListTag, Tag};
@@ -16,8 +14,7 @@ const START: Vec3 = Vec3::new(2.0, 80.0, -3.0);
 const IMPACT: Vec3 = Vec3::new(-0.0, 70.25, 3.0);
 const VECTORS: &str = include_str!("../../../../tests/java/entity/vectors.tsv");
 fn fixture(player: bool) -> (Level, EntityRef) {
-    static BEHAVIORS: Behaviors = Behaviors::EMPTY;
-    let mut level = Level::new(Region::new(&BEHAVIORS), LevelContext::fixture(0, 63));
+    let mut level = crate::entity::tests::persistence_level();
     let entity = level.next_entity_ref();
     let id = level.next_entity_id();
     let state = if player {
@@ -55,7 +52,7 @@ fn state(entity: EntityRef, level: &Level) -> String {
     );
     if let Ok(player) = level.entity::<ServerPlayer>(entity) {
         // The grace counter has native persistence, without a second query API.
-        let saved = player.save();
+        let saved = player.save(level).unwrap();
         format!(
             "{result}\t{}\t{}\t{}",
             vector(player.starting_to_fall_position),
@@ -203,7 +200,12 @@ fn native_impulse_load_reset_and_save_preserve_negative_grace_and_optional_vecto
         let (mut level, entity) = fixture(true);
         let player = level.entity_mut::<ServerPlayer>(entity).unwrap();
         player.try_load(impulse_tag(f[1])).unwrap();
-        let before = player.save();
+        let before = level
+            .entity::<ServerPlayer>(entity)
+            .unwrap()
+            .save(&level)
+            .unwrap();
+        let player = level.entity_mut::<ServerPlayer>(entity).unwrap();
         assert_eq!(
             before
                 .get_int_or("current_impulse_context_reset_grace_time", 0)
@@ -213,7 +215,12 @@ fn native_impulse_load_reset_and_save_preserve_negative_grace_and_optional_vecto
         );
         assert_eq!(vector(player.current_impulse_impact_pos()), f[3], "{row}");
         player.try_reset_current_impulse_context();
-        let saved = player.save();
+        let saved = level
+            .entity::<ServerPlayer>(entity)
+            .unwrap()
+            .save(&level)
+            .unwrap();
+        let player = level.entity_mut::<ServerPlayer>(entity).unwrap();
         assert_eq!(
             saved
                 .get_int_or("current_impulse_context_reset_grace_time", 0)
@@ -252,7 +259,12 @@ fn native_impulse_state_methods_and_grace_tick_keep_the_same_canonical_position(
             "reset" => player.reset_current_impulse_context(),
             _ => panic!("unknown impulse operation"),
         }
-        let saved = player.save();
+        let saved = level
+            .entity::<ServerPlayer>(entity)
+            .unwrap()
+            .save(&level)
+            .unwrap();
+        let player = level.entity::<ServerPlayer>(entity).unwrap();
         assert_eq!(
             format!(
                 "{}\t{}\t{}\t{}\t{}",

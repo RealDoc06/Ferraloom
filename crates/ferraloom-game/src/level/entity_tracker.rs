@@ -20,6 +20,8 @@ use ferraloom_util::{SectionPos, collections::Int2ObjectOpenHashMap};
 /// Port of ChunkMap#entityMap and the immutable server tracking settings.
 pub struct EntityTracker {
     entries: Int2ObjectOpenHashMap<TrackedEntity>,
+    /// Port of ChunkMap#playerMap's ignored flags; this map is lookup-only.
+    player_map: std::collections::HashMap<EntityRef, bool>,
     server_view_distance: i32,
     broadcast_range_percentage: i32,
 }
@@ -27,6 +29,7 @@ impl Default for EntityTracker {
     fn default() -> Self {
         Self {
             entries: Default::default(),
+            player_map: Default::default(),
             server_view_distance: 10,
             broadcast_range_percentage: 100,
         }
@@ -39,23 +42,54 @@ impl Level {
         tracker.server_view_distance = view_distance.clamp(2, 32);
         tracker.broadcast_range_percentage = range_percentage;
     }
-    /// Port of ChunkMap#updatePlayerPos and its DistanceManager call. Keep the
-    /// canonical player's last section so join and packet adapters cannot repeat
-    /// an already applied status update. Native skipPlayer/PlayerMap ignored
-    /// transitions remain pending; this preserves the existing default-true path.
+    /// Port of PlayerMap#ignoredOrUnknown. Ignored players keep their client view
+    /// and entity audiences, but do not contribute DistanceManager player tickets.
+    pub fn player_ignored_by_chunk_map(&self, player: EntityRef) -> Result<bool, LevelError> {
+        self.entity::<ServerPlayer>(player)?;
+        Ok(self
+            .region()
+            .entity_tracker
+            .player_map
+            .get(&player)
+            .copied()
+            .unwrap_or(true))
+    }
+    /// Port of ChunkMap#updatePlayerStatus and move's section/ignored transition.
+    /// Reevaluate skipPlayer even when a movement stays in the same section.
     pub fn update_player_tracking_section(
         &mut self,
         player: EntityRef,
         section: SectionPos,
     ) -> Result<(), LevelError> {
-        if self.entity::<ServerPlayer>(player)?.chunk_tracking_section == Some(section) {
+        let state = self.entity::<ServerPlayer>(player)?;
+        let ignored = state.game_mode == crate::entity::player::GameType::Spectator
+            && !self.rules().spectators_generate_chunks;
+        let previous = self
+            .region()
+            .entity_tracker
+            .player_map
+            .get(&player)
+            .copied();
+        if state.chunk_tracking_section == Some(section) && previous == Some(ignored) {
             return Ok(());
         }
-        if let Some(driver) = &self.acquire_driver {
-            driver.update_player_tracking_status(player, Some(section))?;
+        if previous.is_none() {
+            self.region_mut()
+                .entity_tracker
+                .player_map
+                .insert(player, ignored);
         }
         self.entity_mut::<ServerPlayer>(player)?
             .chunk_tracking_section = Some(section);
+        if (!ignored || previous == Some(false))
+            && let Some(driver) = &self.acquire_driver
+        {
+            driver.update_player_tracking_status(player, (!ignored).then_some(section))?;
+        }
+        self.region_mut()
+            .entity_tracker
+            .player_map
+            .insert(player, ignored);
         Ok(())
     }
     /// Port of ChunkMap#updateChunkTracking/applyChunkTrackingView. Packet
@@ -113,7 +147,13 @@ impl Level {
         Ok(())
     }
     fn remove_player_tracking_status(&mut self, player: EntityRef) -> Result<(), LevelError> {
-        if let Some(driver) = &self.acquire_driver {
+        let was_ignored = self
+            .region_mut()
+            .entity_tracker
+            .player_map
+            .remove(&player)
+            .unwrap_or(true);
+        if !was_ignored && let Some(driver) = &self.acquire_driver {
             driver.update_player_tracking_status(player, None)?;
         }
         self.entity_mut::<ServerPlayer>(player)?
@@ -841,3 +881,6 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod spectator_tests;
