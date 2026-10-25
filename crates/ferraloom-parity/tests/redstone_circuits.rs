@@ -5,8 +5,8 @@ mod redstone_support;
 use ferraloom_data::{Block, properties as p};
 use ferraloom_parity::{ObservationLog, Result, RunMode, Session, ensure, run};
 use ferraloom_util::BlockPos;
-use level_support::*;
-use redstone_support::set;
+use level_support::block;
+use redstone_support::{command, set, step};
 
 async fn record_torch_burnout(
     bot: &mut ferraloom_parity::Bot,
@@ -207,8 +207,6 @@ async fn record_wire_shapes(
     use redstone_support::{click, hand, sample, source, timeline};
     let wire = BlockPos::new(34, -58, 6);
     // A wire on a conductor climbs one block and descends into a branch.
-    set(bot, wire.below(1), Block::STONE).await?;
-    set(bot, wire.east(1), Block::STONE).await?;
     for pos in [
         wire,
         wire.east(1).above(1),
@@ -237,15 +235,21 @@ async fn record_wire_shapes(
         set(bot, lamp, Block::REDSTONE_LAMP).await?;
         dot_positions.push(lamp);
     }
+    for direction in [D::North, D::South, D::East, D::West, D::Up] {
+        set(bot, dot.relative(direction, 2), Block::STONE).await?;
+    }
     hand(bot, ferraloom_data::Item::AIR).await?;
-    sample(bot, log, "wire.cross", &dot_positions)?;
+    step(bot, 1).await?;
+    sample(bot, log, "wire.initial-dot", &dot_positions)?;
     for toggle in 0..2 {
         let before = block(bot, dot)?;
         click(bot, dot, D::Up).await?;
-        ensure!(
-            block(bot, dot)? != before,
-            "dot/cross click did not change the wire"
-        );
+        bot.wait_for(
+            "dot/cross mutation",
+            ferraloom_parity::Ticks::DEFAULT,
+            |snapshot, _| snapshot.block(dot).is_some_and(|state| state != before),
+        )
+        .await?;
         timeline(
             bot,
             log,
@@ -254,9 +258,16 @@ async fn record_wire_shapes(
             5,
         )
         .await?;
+        for direction in [D::North, D::South, D::East, D::West] {
+            ensure!(
+                block(bot, dot.relative(direction, 1))?.get(p::LIT) == Some(toggle == 0),
+                "dot/cross directional side output"
+            );
+        }
+        ensure!(block(bot, dot.above(1))?.get(p::LIT) == Some(false));
     }
-    // Weak lamp power does not relay through stone. A repeater's direct output
-    // does, and wire powers its supporting conductor into the lamp below.
+    // A repeater's direct output relays through stone. Wire also directly
+    // powers its supporting conductor into the lamp below.
     let relay = BlockPos::new(34, -58, 18);
     set(bot, relay.below(1), Block::STONE).await?;
     redstone_support::state(bot, relay, "minecraft:repeater[facing=west]").await?;
@@ -269,7 +280,30 @@ async fn record_wire_shapes(
     set(bot, weak.below(2), Block::REDSTONE_LAMP).await?;
     set(bot, weak, Block::REDSTONE_WIRE).await?;
     source(bot, weak.west(1), true).await?;
-    timeline(bot, log, "power.support-relay", &[weak, weak.below(2)], 4).await
+    timeline(bot, log, "power.support-relay", &[weak, weak.below(2)], 4).await?;
+    let torch = BlockPos::new(34, -58, 28);
+    for pos in [torch.below(1), torch.east(1), torch.above(1)] {
+        set(bot, pos, Block::STONE).await?;
+    }
+    for pos in [torch.west(1), torch.east(2), torch.above(2)] {
+        set(bot, pos, Block::REDSTONE_LAMP).await?;
+    }
+    set(bot, torch, Block::REDSTONE_TORCH).await?;
+    timeline(
+        bot,
+        log,
+        "power.torch-weak-and-direct",
+        &[torch, torch.west(1), torch.east(2), torch.above(2)],
+        2,
+    )
+    .await?;
+    ensure!(block(bot, torch.west(1))?.get(p::LIT) == Some(true));
+    ensure!(
+        block(bot, torch.east(2))?.get(p::LIT) == Some(false),
+        "weak torch side power relayed through stone"
+    );
+    ensure!(block(bot, torch.above(2))?.get(p::LIT) == Some(true));
+    Ok(())
 }
 
 async fn record_diodes(bot: &mut ferraloom_parity::Bot, log: &mut ObservationLog) -> Result<()> {
@@ -358,18 +392,17 @@ async fn record_comparators(
             )
             .await?;
             state(bot, pos.north(1), "minecraft:comparator[facing=north]").await?;
-            state(
-                bot,
-                pos.west(1),
-                &format!("minecraft:barrel{{Items:[{}]}}", filled_slots(main)),
-            )
-            .await?;
-            state(
-                bot,
-                pos.north(2),
-                &format!("minecraft:barrel{{Items:[{}]}}", filled_slots(side)),
-            )
-            .await?;
+            for (input, slots) in [(pos.west(1), main), (pos.north(2), side)] {
+                state(bot, input, "minecraft:barrel").await?;
+                if slots > 0 {
+                    redstone_support::merge(
+                        bot,
+                        input,
+                        &format!("{{Items:[{}]}}", filled_slots(slots)),
+                    )
+                    .await?;
+                }
+            }
             for x in 1..=3 {
                 set(bot, pos.east(x), Block::REDSTONE_WIRE).await?;
             }
@@ -406,10 +439,19 @@ async fn record_comparators(
             redstone_support::merge(bot, pos, "{OutputSignal:1}").await?;
         }
         redstone_support::merge(bot, pos, &format!("{{OutputSignal:{output}}}")).await?;
+        state(bot, pos, "minecraft:comparator[facing=west,powered=true]").await?;
         set(bot, pos.east(1), Block::STONE).await?;
         set(bot, pos.east(2), Block::REDSTONE_LAMP).await?;
+        set(bot, pos.east(3), Block::STONE).await?;
+        // Observe the injected signed signal before its ordinary two-tick
+        // comparator recheck, including a conductor relay above signal 15.
+        step(bot, 1).await?;
         let saved = data(bot, pos, "OutputSignal").await?;
         ensure!(saved == ferraloom_nbt::Tag::Int(output));
+        ensure!(
+            block(bot, pos.east(2))?.get(p::LIT) == Some(output > 0),
+            "stored signed comparator signal did not relay"
+        );
         log.record(
             format!("comparator.stored.{case}"),
             ferraloom_nbt::to_text(&saved, "", false),
@@ -457,11 +499,18 @@ async fn record_bulbs_and_rods(
     .into_iter()
     .enumerate()
     {
-        for facing in ["down", "up", "north", "south", "west", "east"] {
+        for (facing, direction) in [
+            ("down", ferraloom_util::Direction::Down),
+            ("up", ferraloom_util::Direction::Up),
+            ("north", ferraloom_util::Direction::North),
+            ("south", ferraloom_util::Direction::South),
+            ("west", ferraloom_util::Direction::West),
+            ("east", ferraloom_util::Direction::East),
+        ] {
             let pos = BlockPos::new(50, -55, 48);
             // Restore lamp states between fixtures; the center rod is always a
             // new placement and must schedule its own eight-tick reset.
-            redstone_support::clear(bot, BlockPos::new(48, -57, 46), BlockPos::new(52, -53, 50))
+            redstone_support::clear(bot, BlockPos::new(47, -58, 45), BlockPos::new(53, -52, 51))
                 .await?;
             let mut positions = vec![pos];
             for (dx, dy, dz) in [
@@ -484,8 +533,26 @@ async fn record_bulbs_and_rods(
                 &format!("minecraft:{rod}[facing={facing},powered=true]"),
             )
             .await?;
-            timeline(bot, log, &format!("rod.{case}.{facing}"), &positions, 12).await?;
-            ensure!(block(bot, pos)?.get(p::POWERED) == Some(false));
+            for output in ferraloom_util::Direction::VALUES {
+                set(bot, pos.relative(output, 3), Block::STONE).await?;
+            }
+            for tick in 1..=12 {
+                step(bot, 1).await?;
+                redstone_support::sample(
+                    bot,
+                    log,
+                    format!("rod.{case}.{facing}.{tick}"),
+                    &positions,
+                )?;
+                ensure!(block(bot, pos)?.get(p::POWERED) == Some(tick < 8));
+                for output in ferraloom_util::Direction::VALUES {
+                    ensure!(
+                        block(bot, pos.relative(output, 2))?.get(p::LIT)
+                            == Some(tick < 12 && output == direction.opposite()),
+                        "rod {rod} {facing} output {output:?} at {tick}"
+                    );
+                }
+            }
         }
     }
     Ok(())

@@ -6,8 +6,8 @@ mod redstone_support;
 use ferraloom_data::{Block, properties as p};
 use ferraloom_parity::{Bot, ObservationLog, Result, RunMode, Session, ensure, run};
 use ferraloom_util::BlockPos;
-use level_support::*;
-use redstone_support::set;
+use level_support::block;
+use redstone_support::{command, game_time, set, step};
 
 async fn build_piston(bot: &mut Bot, pos: BlockPos, sticky: bool, length: i32) -> Result<()> {
     let block = if sticky { "sticky_piston" } else { "piston" };
@@ -237,15 +237,43 @@ async fn collision_and_drop_order(bot: &mut Bot, log: &mut ObservationLog) -> Re
     ] {
         set(bot, cell, Block::SLIME_BLOCK).await?;
     }
-    for cell in [root.north(1), root.west(1).north(1)] {
-        set(bot, cell, Block::STONE).await?;
+    set(bot, root.north(1), Block::REDSTONE_BLOCK).await?;
+    set(bot, root.west(1).north(1), Block::STONE).await?;
+    // RailBlock#updateState only reconnects a T junction when its notified old
+    // block is a signal source. Without collision reordering, moving the rear
+    // stone first overwrites this redstone receiver and captures MOVING_PISTON
+    // as the old block instead. The rail then keeps the wrong powered branch.
+    let junction = root.north(2);
+    let rails = [
+        junction,
+        junction.north(1),
+        junction.west(1),
+        junction.east(1),
+    ];
+    for cell in rails {
+        set(bot, cell.below(1), Block::STONE).await?;
     }
+    for cell in rails {
+        set(bot, cell, Block::RAIL).await?;
+    }
+    bot.wait_for(
+        "powered collision junction",
+        ferraloom_parity::Ticks::DEFAULT,
+        |snapshot, _| {
+            snapshot
+                .block(junction)
+                .is_some_and(|state| state.get(p::SHAPE) == Some(p::Shape::NorthWest))
+        },
+    )
+    .await?;
+    log.record("collision.junction.before", block(bot, junction)?.id())?;
     // Reverse destruction is visible as distinct, ordered native item spawns.
     let popped = [root.east(1), root.north(1).east(1), root.above(1).east(1)];
     for cell in &popped[..2] {
         set(bot, cell.below(1), Block::OBSIDIAN).await?;
-        set(bot, *cell, Block::REDSTONE_WIRE).await?;
     }
+    set(bot, popped[0], Block::REDSTONE_WIRE).await?;
+    set(bot, popped[1], Block::REDSTONE_TORCH).await?;
     set(bot, popped[2], Block::COBWEB).await?;
     let mut positions = vec![pos];
     for y in 0..=1 {
@@ -254,11 +282,16 @@ async fn collision_and_drop_order(bot: &mut Bot, log: &mut ObservationLog) -> Re
         }
     }
     positions.extend(popped);
+    positions.extend(rails);
     let initial = game_time(bot).await?;
     source(bot, pos.west(1), true).await?;
-    command(bot, "tick step 1", "commands.tick.step.success").await?;
+    // This collector starts before the step: a feedback fence after step 1
+    // could already consume the entity pairing packets we need to observe.
+    bot.command("tick step 1").await?;
     let mut spawned = std::collections::BTreeMap::new();
     let mut stacks = std::collections::BTreeMap::new();
+    let mut step_ok = false;
+    let mut step_error = None;
     // Capture AddEntity's original coordinates, before random drop velocity
     // changes them. Its floor identifies the destroyed block without comparing RNG.
     bot.wait_for(
@@ -293,12 +326,26 @@ async fn collision_and_drop_order(bot: &mut Bot, log: &mut ObservationLog) -> Re
                         }
                     }
                 }
+                Packet::SystemChat(message) => {
+                    if let Ok(json) = message.content.to_json() {
+                        step_ok |= json.contains("commands.tick.step.success");
+                        if json.contains("commands.tick.step.fail")
+                            || json.contains("commands.generic.failed")
+                        {
+                            step_error = Some(json);
+                        }
+                    }
+                }
                 _ => {}
             }
-            stacks.len() == 3
+            step_error.is_some() || (step_ok && stacks.len() == 3)
         },
     )
     .await?;
+    ensure!(
+        step_error.is_none(),
+        "piston witness step failed: {step_error:?}"
+    );
     let drops = spawned
         .into_iter()
         .map(|(id, (x, z))| {
@@ -308,6 +355,10 @@ async fn collision_and_drop_order(bot: &mut Bot, log: &mut ObservationLog) -> Re
         .collect::<Vec<_>>();
     log.record("collision.popped-creation-order", drops)?;
     ensure!(game_time(bot).await? == initial + 1);
+    ensure!(
+        block(bot, junction)?.get(p::SHAPE) == Some(p::Shape::NorthEast),
+        "collision did not notify the old redstone receiver"
+    );
     timeline(bot, log, "collision.extend", &positions, 6).await?;
     ensure!(
         block(bot, pos)?.get(p::EXTENDED) == Some(true),
@@ -365,7 +416,8 @@ async fn immovable(bot: &mut Bot, log: &mut ObservationLog) -> Result<()> {
     source(bot, edge.west(1), true).await?;
     timeline(bot, log, "immovable.world-border", &[edge, edge.east(1)], 4).await?;
     ensure!(block(bot, edge)?.get(p::EXTENDED) == Some(false));
-    bot.teleport([8.5, -59.0, 12.5]).await?;
+    bot.teleport([16.5, -59.0, 16.5]).await?;
+    redstone_support::loaded(bot, &[BlockPos::new(8, -59, 8), BlockPos::new(48, -55, 24)]).await?;
     Ok(())
 }
 async fn contraction_recheck(bot: &mut Bot, log: &mut ObservationLog) -> Result<()> {

@@ -151,7 +151,6 @@ impl BlockEntity for HopperEntityBehavior {
 
 #[cfg(test)]
 mod nbt_tests {
-    use super::*;
     use crate::{block::entity::create, inventory::Container};
     use ferraloom_data::{Block, Item};
     use ferraloom_protocol::component::ItemStack;

@@ -5,7 +5,8 @@ mod redstone_support;
 use ferraloom_data::{Block, properties as p};
 use ferraloom_parity::{Bot, ObservationLog, Result, RunMode, Session, ensure, run};
 use ferraloom_util::{BlockPos, Direction};
-use level_support::{block, step};
+use level_support::block;
+use redstone_support::step;
 use redstone_support::{sample, set, source, state, timeline};
 
 async fn propagation(bot: &mut Bot, log: &mut ObservationLog) -> Result<()> {
@@ -54,13 +55,15 @@ async fn propagation(bot: &mut Bot, log: &mut ObservationLog) -> Result<()> {
     for i in 0..11 {
         let pos = BlockPos::new(origin.x + i, origin.y + i32::from(i >= 4), origin.z);
         set(bot, pos.below(1), Block::STONE).await?;
+        positions.push(pos);
+    }
+    for (i, pos) in positions.iter().enumerate() {
         let shape = if i == 3 {
             "ascending_east"
         } else {
             "east_west"
         };
-        state(bot, pos, &format!("minecraft:powered_rail[shape={shape}]")).await?;
-        positions.push(pos);
+        state(bot, *pos, &format!("minecraft:powered_rail[shape={shape}]")).await?;
     }
     for (edge, on) in [("rise", true), ("fall", false)] {
         if on {
@@ -118,6 +121,7 @@ async fn junctions(bot: &mut Bot, log: &mut ObservationLog) -> Result<()> {
                 center.west(1),
                 center.east(1),
             ];
+            step(bot, 1).await?;
             sample(
                 bot,
                 log,
@@ -125,6 +129,7 @@ async fn junctions(bot: &mut Bot, log: &mut ObservationLog) -> Result<()> {
                 &positions,
             )?;
             source(bot, center.below(1), true).await?;
+            step(bot, 1).await?;
             sample(
                 bot,
                 log,
@@ -132,6 +137,7 @@ async fn junctions(bot: &mut Bot, log: &mut ObservationLog) -> Result<()> {
                 &positions,
             )?;
             set(bot, center.below(1), Block::STONE).await?;
+            step(bot, 1).await?;
             sample(
                 bot,
                 log,

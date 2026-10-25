@@ -12,22 +12,20 @@ use ferraloom_parity::{
     run,
 };
 use ferraloom_util::{BlockPos, Direction};
-use level_support::{block, step};
+use level_support::block;
+use redstone_support::step;
 use redstone_support::{click, data, hand, inventory, sample, set, source, state, timeline};
 
 async fn hoppers(bot: &mut Bot, log: &mut ObservationLog) -> Result<()> {
     let origin = BlockPos::new(8, -59, 8);
     let positions = (0..4).map(|x| origin.east(x)).collect::<Vec<_>>();
     for pos in &positions {
-        state(
-            bot,
-            *pos,
-            "minecraft:hopper[facing=east]{TransferCooldown:0}",
-        )
-        .await?;
+        state(bot, *pos, "minecraft:hopper[facing=east]").await?;
+        redstone_support::merge(bot, *pos, "{TransferCooldown:0}").await?;
     }
     state(bot, origin.east(4), "minecraft:barrel").await?;
-    state(bot,origin.above(1),"minecraft:barrel{Items:[{Slot:0b,id:\"minecraft:dirt\",count:3},{Slot:1b,id:\"minecraft:stone\",count:2}]}").await?;
+    state(bot, origin.above(1), "minecraft:barrel").await?;
+    redstone_support::merge(bot,origin.above(1),"{Items:[{Slot:0b,id:\"minecraft:dirt\",count:3},{Slot:1b,id:\"minecraft:stone\",count:2}]}").await?;
     // Allow the final source item to cross all four staggered eight-tick
     // cooldowns, including the two lock intervals above.
     for tick in 0..=96 {
@@ -40,7 +38,9 @@ async fn hoppers(bot: &mut Bot, log: &mut ObservationLog) -> Result<()> {
         if tick > 0 {
             step(bot, 1).await?;
         }
-        sample(bot, log, format!("hopper.{tick}.state"), &positions)?;
+        if tick > 0 {
+            sample(bot, log, format!("hopper.{tick}.state"), &positions)?;
+        }
         for (index, pos) in positions.iter().enumerate() {
             log.record(
                 format!("hopper.{tick}.{index}.items"),
@@ -77,7 +77,13 @@ async fn hoppers(bot: &mut Bot, log: &mut ObservationLog) -> Result<()> {
 async fn dispensers(bot: &mut Bot, log: &mut ObservationLog) -> Result<()> {
     for (case, name) in ["dispenser", "dropper"].into_iter().enumerate() {
         let pos = BlockPos::new(8 + case as i32 * 12, -59, 24);
-        state(bot,pos,&format!("minecraft:{name}[facing=east]{{Items:[{{Slot:0b,id:\"minecraft:stone\",count:6}}]}}")).await?;
+        state(bot, pos, &format!("minecraft:{name}[facing=east]")).await?;
+        redstone_support::merge(
+            bot,
+            pos,
+            "{Items:[{Slot:0b,id:\"minecraft:stone\",count:6}]}",
+        )
+        .await?;
         // A dropper uses a real destination; dispenser uses DefaultDispenseItemBehavior.
         if name == "dropper" {
             set(bot, pos.east(1), Block::BARREL).await?;
@@ -93,7 +99,9 @@ async fn dispensers(bot: &mut Bot, log: &mut ObservationLog) -> Result<()> {
             if tick > 0 {
                 step(bot, 1).await?;
             }
-            sample(bot, log, format!("{name}.first.{tick}"), &[pos])?;
+            if tick > 0 {
+                sample(bot, log, format!("{name}.first.{tick}"), &[pos])?;
+            }
             let items = inventory(bot, pos).await?;
             ensure!(
                 items.first().map(|item| item.2) == Some(if tick < 4 { 6 } else { 5 }),
@@ -168,10 +176,16 @@ async fn openings(bot: &mut Bot, log: &mut ObservationLog) -> Result<()> {
             .ok_or_else(|| anyhow::anyhow!("missing block item"))?;
         hand(bot, item).await?;
         click(bot, pos.below(1), Direction::Up).await?;
-        ensure!(
-            block(bot, pos)?.block() == block_type,
-            "opening item did not place {block_type:?}"
-        );
+        bot.wait_for(
+            "opening item placement",
+            ferraloom_parity::Ticks::DEFAULT,
+            |snapshot, _| {
+                snapshot
+                    .block(pos)
+                    .is_some_and(|state| state.block() == block_type)
+            },
+        )
+        .await?;
         hand(bot, Item::AIR).await?;
         let mut positions = vec![pos];
         if block(bot, pos)?.get(p::HALF).is_some() && block_type.name().ends_with("_door") {
@@ -179,6 +193,7 @@ async fn openings(bot: &mut Bot, log: &mut ObservationLog) -> Result<()> {
         }
         for toggle in 0..2 {
             click(bot, pos, Direction::South).await?;
+            step(bot, 1).await?;
             sample(
                 bot,
                 log,
@@ -242,8 +257,13 @@ async fn tripwires(bot: &mut Bot, log: &mut ObservationLog) -> Result<()> {
         sequence: VarInt(100),
     }))
     .await?;
-    bot.synchronize().await?;
-    ensure!(block(bot, cut)?.is_air(), "shears did not cut the wire");
+    redstone_support::fence(bot).await?;
+    bot.wait_for(
+        "sheared wire removal",
+        ferraloom_parity::Ticks::DEFAULT,
+        |snapshot, _| snapshot.block(cut).is_some_and(|state| state.is_air()),
+    )
+    .await?;
     timeline(bot, log, "tripwire.disarm", &positions, 12).await?;
     ensure!(block(bot, start)?.get(p::POWERED) == Some(false));
     // A normal break must retain the armed source long enough to pulse hooks.
