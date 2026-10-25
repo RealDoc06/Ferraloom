@@ -385,6 +385,7 @@ pub struct EntityTypeData {
     pub track_deltas: bool,
     pub fire_immune: bool,
     pub summonable: bool,
+    pub allowed_in_peaceful: bool,
     pub attributes: &'static [(registries::attribute::Id, f64)],
     pub attachments: EntityAttachments,
 }

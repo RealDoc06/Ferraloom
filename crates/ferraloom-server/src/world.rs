@@ -993,6 +993,9 @@ impl World {
             ))
             .with_enchantments(Arc::new(
                 ferraloom_game::item::enchantment::EnchantmentRegistry::load(resources)?,
+            ))
+            .with_mob_variants(Arc::new(
+                ferraloom_game::entity::variant::MobVariants::load(resources)?,
             )),
         ))
     }
