@@ -2730,35 +2730,54 @@ impl MinecraftServer {
         Ok(())
     }
     fn send_chunks(&mut self) -> Result<()> {
-        let ready = self.level.generation().with_world(|world| {
-            world
-                .ready
-                .intersection(&world.light_ready)
-                .copied()
-                .collect::<HashSet<_>>()
-        });
         let mut batches = Vec::new();
-        for (&connection, c) in &mut self.connections {
+        for connection in self.players.clone() {
+            let Some(c) = self.connections.get(&connection) else {
+                continue;
+            };
             if c.close {
                 continue;
             }
-            if let Phase::Play(_) = c.phase {
-                let positions = c.chunks.next_batch(c.center.unwrap(), |pos| {
-                    // prepareTickingChunk already awaited the FULL neighborhood
-                    // and post-processing; sending does not await its neighbors'
-                    // own ticking futures. Retain the center light dependency.
-                    ready.contains(&pos)
+            let Phase::Play(entity) = c.phase else {
+                continue;
+            };
+            let dimension = self
+                .level_for_entity(entity)
+                .map_err(game_error)?
+                .dimension_key()
+                .map_err(game_error)?
+                .clone();
+            let ready = self
+                .live_level_in(&dimension)?
+                .generation()
+                .with_world(|world| {
+                    world
+                        .ready
+                        .intersection(&world.light_ready)
+                        .copied()
+                        .collect::<HashSet<_>>()
                 });
-                if !positions.is_empty() {
-                    batches.push((connection, positions));
-                }
+            let c = self
+                .connections
+                .get_mut(&connection)
+                .expect("selected connection");
+            let positions = c.chunks.next_batch(
+                c.center.context("playing connection has no chunk center")?,
+                |pos| {
+                    // prepareTickingChunk and center-light import own readiness;
+                    // neither another dimension nor neighbor readiness substitutes.
+                    ready.contains(&pos)
+                },
+            );
+            if !positions.is_empty() {
+                batches.push((connection, dimension, positions));
             }
         }
-        for (connection, positions) in batches {
+        for (connection, dimension, positions) in batches {
             let mut packets = vec![cb::Packet::ChunkBatchStart(cb::ChunkBatchStart {})];
             for &pos in &positions {
                 let chunk = self
-                    .level
+                    .live_level_in(&dimension)?
                     .level
                     .chunk(pos)
                     .context("ready chunk not owned")?;
@@ -2787,13 +2806,13 @@ impl MinecraftServer {
                         ],
                         sections: chunk.sections().map(LevelChunkSectionData::from).collect(),
                         block_entities: self
-                            .level
+                            .live_level_in(&dimension)?
                             .level
                             .block_entity_chunk_packet_info(pos)
                             .map_err(game_error)?,
                     },
                     light_data: self
-                        .level
+                        .live_level_in(&dimension)?
                         .generation()
                         .with_world(|world| light_packet(world.lights.get(&pos.pack()))),
                 }));
