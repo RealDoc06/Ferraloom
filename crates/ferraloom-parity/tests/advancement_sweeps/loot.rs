@@ -38,8 +38,18 @@ fn contents(bot: &Bot, menu: i32) -> Result<Vec<ItemStack>> {
     );
     Ok(container.slots[..27].to_vec())
 }
+/// Chest slots contain optional stacks; preserve every empty slot's position as null.
 fn stacks(items: &[ItemStack]) -> Result<Vec<Value>> {
-    items.iter().map(|stack| Ok(stack.to_json()?)).collect()
+    items
+        .iter()
+        .map(|stack| {
+            if stack.is_empty() {
+                Ok(Value::Null)
+            } else {
+                Ok(stack.to_json()?)
+            }
+        })
+        .collect()
 }
 async fn use_chest(bot: &mut Bot, pos: BlockPos) -> Result<()> {
     bot.use_item_on(
