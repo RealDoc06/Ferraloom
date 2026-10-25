@@ -6,6 +6,7 @@ use ferraloom_nbt::Tag;
 use ferraloom_parity::{
     Bot, LaunchOptions, ObservationLog, Result, Ticks, ensure,
     protocol::{
+        common,
         component::ItemStack,
         play::{self, clientbound as cb, serverbound as sb},
     },
@@ -112,6 +113,23 @@ async fn type_received(bot: &mut Bot, pos: BlockPos, block: Block) -> Result<()>
 pub async fn prepare(bot: &mut Bot) -> Result<()> {
     command(bot, "tick freeze", "commands.tick.status.frozen").await?;
     command(bot, "tick query", "commands.tick.status.frozen").await?;
+    // The shared bot joins with a two-chunk request. Server view distance alone
+    // cannot keep this four-chunk-wide contraption tracked after camera moves.
+    bot.send(sb::Packet::ClientInformation(
+        common::serverbound::ClientInformation {
+            language: common::FriendlyString("en_us".into()),
+            view_distance: 4,
+            chat_visibility: common::serverbound::ChatVisibility::Full,
+            chat_colors: true,
+            model_customisation: 127,
+            main_hand: common::serverbound::HumanoidArm::Right,
+            text_filtering_enabled: false,
+            allows_listing: true,
+            particle_status: common::serverbound::ParticleStatus::All,
+        },
+    ))
+    .await?;
+    fence(bot).await?;
     bot.teleport([16.5, -59.0, 16.5]).await?;
     let columns = (0..4)
         .flat_map(|x| (0..4).map(move |z| BlockPos::new(x * 16, -60, z * 16)))
