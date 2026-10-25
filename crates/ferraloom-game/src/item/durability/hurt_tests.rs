@@ -76,7 +76,6 @@ fn slot(name: &str) -> EquipmentSlot {
 fn native_hurt_and_break_overloads_preserve_abilities_unbreaking_rng_boundaries_copies_events_and_stats()
  {
     let (mut level, player) = crate::item::stack::tests::level();
-    level.install_shared(Box::default());
     crate::level::drop_fixtures::install(&mut level);
     let mut count = 0;
     for row in rows().lines().filter(|row| row.starts_with("hurt-break\t")) {
@@ -183,7 +182,6 @@ fn native_hurt_and_break_overloads_preserve_abilities_unbreaking_rng_boundaries_
 fn native_registry_proves_unbreaking_cleanup_noop_and_preserves_required_attribute_and_location_effects()
  {
     let (mut level, player) = crate::item::stack::tests::level();
-    level.install_shared(Box::default());
     level.set_unported_behavior(UnportedBehavior::Strict);
     let mut count = 0;
     for row in rows()
@@ -246,7 +244,6 @@ fn native_registry_proves_unbreaking_cleanup_noop_and_preserves_required_attribu
 #[test]
 fn native_equipment_wear_preserves_damage_division_eligibility_unbreaking_and_break_output() {
     let (mut level, player) = crate::item::stack::tests::level();
-    level.install_shared(Box::default());
     crate::level::drop_fixtures::install(&mut level);
     let source = level.damage_sources().generic();
     let behavior = level.entity_behavior(player).unwrap();

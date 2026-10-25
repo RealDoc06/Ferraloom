@@ -45,6 +45,7 @@ fn anvil_ticks_falling_configuration_and_damage_transform_match_native() {
                 let tick = f[4].parse::<i64>().unwrap();
                 if tick == 0 {
                     let mut level = super::fire_powder_tests::level();
+                    level.install_shared(Box::default());
                     crate::level::drop_fixtures::install(&mut level);
                     let chunk = ChunkPos::containing(POS);
                     level
