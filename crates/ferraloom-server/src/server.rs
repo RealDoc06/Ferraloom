@@ -11,6 +11,8 @@ mod interaction;
 mod level_tick;
 #[path = "levels.rs"]
 mod levels;
+#[path = "player_spawn.rs"]
+mod player_spawn;
 use crate::{
     access::AccessLists,
     assets,
@@ -66,6 +68,7 @@ use ferraloom_protocol::{
     status,
 };
 use ferraloom_util::{BlockPos, ChunkPos, Vec3};
+use player_spawn::{PrepareSpawnTask, PreparedPlayerSpawn};
 use std::{
     collections::{BTreeMap, HashSet},
     net::SocketAddr,
@@ -140,7 +143,7 @@ struct Connection {
     pending: Vec<Outgoing>,
     close: bool,
     information: common::serverbound::ClientInformation,
-    player: Option<ServerPlayer>,
+    spawn: Option<PrepareSpawnTask>,
     chunks: PlayerChunkSender,
     view: HashSet<ChunkPos>,
     center: Option<ChunkPos>,
@@ -803,7 +806,7 @@ impl MinecraftServer {
                         pending: Vec::new(),
                         close: false,
                         information: client_information(),
-                        player: None,
+                        spawn: None,
                         chunks: PlayerChunkSender::default(),
                         view: HashSet::new(),
                         center: None,
@@ -870,16 +873,23 @@ impl MinecraftServer {
                         "connection {id} ingress sequence mismatch"
                     );
                     c.incoming_sequence += 1;
-                    let dimension = match c.phase {
-                        Phase::Play(entity) => self
-                            .level_for_entity(entity)
-                            .map_err(game_error)?
-                            .dimension_key()
-                            .map_err(game_error)?
-                            .clone(),
-                        Phase::Configuration(_) => crate::registries::id("overworld"),
+                    let phase = c.phase;
+                    let preparing_dimension =
+                        c.spawn.as_ref().map(|spawn| spawn.dimension().clone());
+                    let dimension = match phase {
+                        Phase::Play(entity) => Some(
+                            self.level_for_entity(entity)
+                                .map_err(game_error)?
+                                .dimension_key()
+                                .map_err(game_error)?
+                                .clone(),
+                        ),
+                        Phase::Configuration(_) => preparing_dimension,
                     };
-                    let lent = self.lend_server_shared_to(&dimension)?;
+                    let lent = match &dimension {
+                        Some(dimension) => self.lend_server_shared_to(dimension)?,
+                        None => false,
+                    };
                     let result = match packet {
                         Incoming::Configuration(p) => self.configuration(id, p).await,
                         Incoming::Play(p) => self.play_packet(id, *p).await,
@@ -1038,7 +1048,7 @@ impl MinecraftServer {
                 ) {
                     bail!("{reason}");
                 }
-                self.place_player(connection)?;
+                self.place_player(connection).await?;
             }
             cfg::ServerboundPacket::KeepAlive(p) => self.keepalive_reply(connection, p.id)?,
             cfg::ServerboundPacket::CookieResponse(_) => {
@@ -1099,42 +1109,70 @@ impl MinecraftServer {
         self.prepare_player(connection).await
     }
     async fn prepare_player(&mut self, connection: ConnectionId) -> Result<()> {
+        let access = self.world_root.access.clone();
+        let uuid = self.connections[&connection].profile.id.to_string();
+        let saved = tokio::task::spawn_blocking(move || access.player_data().load(&uuid)).await??;
+        let saved = ServerPlayer::saved_position(saved.as_ref());
+        let respawn = self.default_spawn_data();
+        let dimension = saved.resolve_dimension(&respawn.dimension.parse()?, |key| {
+            self.get_level(key).is_some()
+        });
+        let dimension_type = self.world_root.stem(&dimension)?.dimension;
+        let game_type = self.default_game_mode;
+        let radius = self
+            .game_rules
+            .integer(ferraloom_game::gamerules::GameRule::RespawnRadius);
+        let lent = self.lend_server_shared_to(&dimension)?;
+        let task = PrepareSpawnTask::new(
+            self.live_level_in_mut(&dimension)?,
+            dimension_type,
+            dimension.clone(),
+            saved,
+            &respawn,
+            game_type,
+            radius,
+        );
+        self.return_server_shared(lent);
+        let c = self
+            .connections
+            .get_mut(&connection)
+            .context("missing preparing connection")?;
+        c.spawn = Some(task?);
+        c.phase = Phase::Configuration(ConfigTask::Preparing);
+        Ok(())
+    }
+
+    /// Port of Ready#spawn's waitForEntities -> constructor -> second player NBT
+    /// load. All IO captures are owned; no Level borrow survives an await.
+    async fn construct_ready_player(
+        &mut self,
+        connection: ConnectionId,
+        spawn: &PreparedPlayerSpawn,
+    ) -> Result<ServerPlayer> {
+        self.wait_for_spawn_entities(spawn).await?;
         let profile = self.connections[&connection].profile.clone();
-        let access = self
+        let mode = self.default_game_mode;
+        let network_id = self
+            .live_level_in(&spawn.dimension)?
             .level
-            .generation()
-            .with_world(|world| world.access.clone());
+            .next_entity_id()
+            .map_err(game_error)?;
+        let mut player =
+            ServerPlayer::new(profile.id, profile.name, network_id, spawn.position, mode);
+        let access = self.world_root.access.clone();
         let uuid = profile.id.to_string();
         let saved = tokio::task::spawn_blocking(move || access.player_data().load(&uuid)).await??;
-        let respawn = self.default_spawn_data();
-        let (yaw, pitch) = ServerPlayer::saved_spawn_rotation(saved.as_ref())
-            .unwrap_or((respawn.rotation.yaw, respawn.rotation.pitch));
-        let mode = self.default_game_mode;
-        let mut player = ServerPlayer::new(
-            profile.id,
-            profile.name,
-            self.level.level.next_entity_id().map_err(game_error)?,
-            Vec3::new(
-                f64::from(self.world_root.spawn_position().x) + 0.5,
-                f64::from(self.world_root.spawn_position().y),
-                f64::from(self.world_root.spawn_position().z) + 0.5,
-            ),
-            mode,
-        );
         if let Some(saved) = saved {
             player.try_load_with_recipes(saved, &self.recipe_manager)?;
         }
         let advancement_manager = self
-            .level
+            .live_level_in(&spawn.dimension)?
             .level
             .container_resources()
             .map_err(game_error)?
             .advancements
             .clone();
-        let progress_path = self
-            .level
-            .generation()
-            .with_world(|world| world.access.path().to_path_buf());
+        let progress_path = self.world_root.access.path().to_path_buf();
         let progress_uuid = profile.id;
         let progress = tokio::task::spawn_blocking(move || {
             ferraloom_game::advancements::load_player_progress(
@@ -1153,22 +1191,42 @@ impl MinecraftServer {
             player.game_mode = mode;
             player.update_game_mode_abilities();
         }
-        let spawn_position = player.position;
-        player.snap_to(spawn_position, yaw, pitch);
+        player.snap_to(spawn.position, spawn.yaw, spawn.pitch);
         player.view_distance = i32::from(self.connections[&connection].information.view_distance);
         player.text_filtering_enabled = self.connections[&connection]
             .information
             .text_filtering_enabled;
-        let center = player.chunk_position();
-        self.level
-            .generation()
-            .with_tickets_mut(|tickets| tickets.add_player_spawn(center, self.tick));
-        self.update_chunk_tickets()?;
-        self.request_area(center, 3)?;
-        let c = self.connections.get_mut(&connection).unwrap();
-        c.player = Some(player);
-        c.phase = Phase::Configuration(ConfigTask::Preparing);
-        Ok(())
+        Ok(player)
+    }
+
+    /// Port of ServerLevel#waitForEntities. Owned tasks, entity responses and
+    /// pending load callbacks progress without simulating entities or time.
+    async fn wait_for_spawn_entities(&mut self, spawn: &PreparedPlayerSpawn) -> Result<()> {
+        let center = ChunkPos::containing(BlockPos::new(
+            ferraloom_util::mth::floor(spawn.position.x),
+            ferraloom_util::mth::floor(spawn.position.y),
+            ferraloom_util::mth::floor(spawn.position.z),
+        ));
+        loop {
+            let ready = {
+                let live = self.live_level_in_mut(&spawn.dimension)?;
+                live.level.process_pending_entity_loads()?;
+                (-3..=3).all(|z| {
+                    (-3..=3).all(|x| {
+                        live.level
+                            .are_entities_loaded(ChunkPos::new(center.x + x, center.z + z))
+                    })
+                })
+            };
+            if ready {
+                return Ok(());
+            }
+            self.live_level_in_mut(&spawn.dimension)?
+                .level
+                .poll_chunk_acquisition_mut()
+                .map_err(game_error)?;
+            tokio::time::sleep(Duration::from_millis(1)).await;
+        }
     }
 
     /// Apply accepted section transitions immediately, including Y-only moves.
@@ -1218,23 +1276,21 @@ impl MinecraftServer {
         }
         Ok(())
     }
-    fn place_player(&mut self, connection: ConnectionId) -> Result<()> {
+    async fn place_player(&mut self, connection: ConnectionId) -> Result<()> {
+        let spawn = self.connections[&connection]
+            .spawn
+            .as_ref()
+            .context("spawn not prepared")?
+            .ready()?
+            .clone();
+        let dimension = spawn.dimension.clone();
+        let mut player = self.construct_ready_player(connection, &spawn).await?;
         let mut c = self
             .connections
             .remove(&connection)
             .context("missing joining connection")?;
-        let mut player = c.player.take().context("spawn not prepared")?;
-        if player.saved.is_empty() {
-            let position = Vec3::new(
-                player.position.x,
-                f64::from(self.world_root.spawn_position().y),
-                player.position.z,
-            );
-            player.set_pos(position);
-            player.first_good = player.position;
-            player.last_good = player.position;
-        }
-        let entity = self.level.level.next_entity_ref();
+        c.spawn = None;
+        let entity = self.live_level_in(&dimension)?.level.next_entity_ref();
         let pos = player.position;
         let yaw = player.yaw;
         let pitch = player.pitch;
@@ -1247,7 +1303,7 @@ impl MinecraftServer {
         c.push(cb::Packet::Login(cb::Login {
             player_id: entity_id,
             hardcore: self.properties.boolean("hardcore"),
-            levels: vec![id("overworld"), id("the_nether"), id("the_end")],
+            levels: self.level_keys(),
             max_players: VarInt(self.properties.int("max-players")),
             chunk_radius: VarInt(self.properties.int("view-distance").clamp(2, 32)),
             simulation_distance: VarInt(self.properties.int("simulation-distance").clamp(2, 32)),
@@ -1261,25 +1317,19 @@ impl MinecraftServer {
                 .game_rules
                 .boolean(ferraloom_game::gamerules::GameRule::LimitedCrafting),
             common_player_spawn_info: CommonPlayerSpawnInfo {
-                dimension_type: DimensionTypeId(
-                    self.registries.numeric(
-                        "dimension_type",
-                        self.world_root
-                            .dimension_type_key(&id("overworld"))?
-                            .as_str(),
-                    ),
-                ),
-                dimension: id("overworld"),
-                seed: ferraloom_worldgen::biome_manager::obfuscate_seed(
-                    self.level.generation().with_world(|world| world.seed),
-                ),
+                dimension_type: DimensionTypeId(self.registries.numeric(
+                    "dimension_type",
+                    self.world_root.dimension_type_key(&dimension)?.as_str(),
+                )),
+                dimension: dimension.clone(),
+                seed: ferraloom_worldgen::biome_manager::obfuscate_seed(self.world_root.seed),
                 game_type: mode,
                 previous_game_type: OptionalGameType(None),
-                is_debug: false,
-                is_flat: false,
+                is_debug: self.world_root.is_debug_world(),
+                is_flat: self.world_root.is_flat_world(),
                 last_death_location: None,
                 portal_cooldown: VarInt(0),
-                sea_level: VarInt(63),
+                sea_level: VarInt(self.live_level_in(&dimension)?.level.sea_level()),
             },
             online_mode: self.properties.boolean("online-mode"),
             enforces_secure_chat: self.enforces_secure_chat,
@@ -1330,12 +1380,7 @@ impl MinecraftServer {
             .iter()
             .filter_map(|id| self.connections.get(id))
             .filter_map(|c| match c.phase {
-                Phase::Play(handle) => self
-                    .level
-                    .level
-                    .entity::<ServerPlayer>(handle)
-                    .ok()
-                    .map(|p| player_info(&c.profile, p)),
+                Phase::Play(handle) => self.player(handle).ok().map(|p| player_info(&c.profile, p)),
                 _ => None,
             })
             .collect();
@@ -1350,7 +1395,7 @@ impl MinecraftServer {
         self.broadcast(initialize.clone());
         c.push(initialize);
         c.push(cb::Packet::InitializeBorder(
-            self.level
+            self.live_level_in(&dimension)?
                 .level
                 .entity_world_border()
                 .initialization_packet(),
@@ -1380,15 +1425,18 @@ impl MinecraftServer {
         c.push(cb::Packet::PostEffects(common_cb::PostEffects {
             post_effects: Vec::new(),
         }));
-        self.level
+        self.live_level_in_mut(&dimension)?
             .level
             .add_entity(entity, EntityState::Player(Box::new(player)))
             .map_err(game_error)?;
-        ferraloom_game::inventory::initialize_inventory_menu(entity, &mut self.level.level)?;
+        ferraloom_game::inventory::initialize_inventory_menu(
+            entity,
+            &mut self.live_level_in_mut(&dimension)?.level,
+        )?;
         use protocol::entity_data::{DataValue, EntityDataItems, EntityDataValue};
         let post_initialization = {
             let player = self
-                .level
+                .live_level_in(&dimension)?
                 .level
                 .entity::<ServerPlayer>(entity)
                 .map_err(game_error)?;
@@ -1421,7 +1469,7 @@ impl MinecraftServer {
         ferraloom_game::inventory::send_container_packets(
             entity,
             post_initialization,
-            &mut self.level.level,
+            &mut self.live_level_in_mut(&dimension)?.level,
         )?;
         println!(
             "{} joined at {}, {}, {}",
@@ -1430,7 +1478,7 @@ impl MinecraftServer {
         self.update_player_tickets(entity)?;
         self.players.push(connection);
         self.connections.insert(connection, c);
-        self.apply_level_effects()
+        self.apply_level_effects_in(&dimension)
     }
     async fn play_packet(&mut self, connection: ConnectionId, packet: sb::Packet) -> Result<()> {
         let Phase::Play(entity) = self.connections[&connection].phase else {
@@ -2670,27 +2718,39 @@ impl MinecraftServer {
             let phase = c.phase;
             match phase {
                 Phase::Configuration(ConfigTask::Preparing) => {
-                    let c = &self.connections[&id];
-                    let player = c.player.as_ref().unwrap();
-                    let center = player.chunk_position();
-                    if (-3..=3).all(|x| {
-                        (-3..=3).all(|z| {
-                            self.level.generation().with_world(|world| {
-                                world
-                                    .light_ready
-                                    .contains(&ChunkPos::new(center.x + x, center.z + z))
-                            })
-                        })
-                    }) {
+                    let dimension = self.connections[&id]
+                        .spawn
+                        .as_ref()
+                        .context("spawn not prepared")?
+                        .dimension()
+                        .clone();
+                    let dimension_type = self.world_root.stem(&dimension)?.dimension;
+                    let lent = self.lend_server_shared_to(&dimension)?;
+                    let result = {
+                        let task = self
+                            .connections
+                            .get_mut(&id)
+                            .unwrap()
+                            .spawn
+                            .as_mut()
+                            .expect("prepared spawn task");
+                        let live = std::iter::once(&mut self.level)
+                            .chain(self.additional_levels.iter_mut())
+                            .find(|live| live.dimension == dimension.as_str())
+                            .expect("selected dimension");
+                        task.tick(live, dimension_type)
+                    };
+                    self.return_server_shared(lent);
+                    if result? {
                         joining.push(id);
                     }
                 }
                 Phase::Configuration(ConfigTask::Finishing) => {
-                    let c = &self.connections[&id];
-                    let center = c.player.as_ref().unwrap().chunk_position();
-                    self.level
-                        .generation()
-                        .with_tickets_mut(|tickets| tickets.add_player_spawn(center, self.tick));
+                    let task = self.connections[&id]
+                        .spawn
+                        .as_ref()
+                        .context("spawn not prepared")?;
+                    task.keep_alive(self.live_level_in(task.dimension())?, self.tick)?;
                 }
                 Phase::Play(entity) => {
                     if !self.was_paused {
@@ -2727,10 +2787,12 @@ impl MinecraftServer {
             }
         }
         for id in joining {
+            let task = self.connections[&id]
+                .spawn
+                .as_ref()
+                .context("spawn not prepared")?;
+            task.keep_alive(self.live_level_in(task.dimension())?, self.tick)?;
             let c = self.connections.get_mut(&id).unwrap();
-            self.level.generation().with_tickets_mut(|tickets| {
-                tickets.add_player_spawn(c.player.as_ref().unwrap().chunk_position(), self.tick)
-            });
             c.phase = Phase::Configuration(ConfigTask::Finishing);
             c.push(cfg::ClientboundPacket::FinishConfiguration(
                 cfg::FinishConfiguration {},
@@ -2973,20 +3035,20 @@ impl MinecraftServer {
         if let Some(c) = self.connections.remove(&connection)
             && let Phase::Play(entity) = c.phase
         {
-            let player = self.player(entity)?;
-            let progress_path = self
-                .level
-                .generation()
-                .with_world(|world| world.access.path().to_path_buf());
-            let progress =
-                ferraloom_game::advancements::PlayerProgressSave::capture(player, &progress_path)?;
-            let tag = player.save();
-            let uuid = player.uuid.to_string();
-            let name = player.display_name();
-            let access = self
-                .level
-                .generation()
-                .with_world(|world| world.access.clone());
+            let access = self.world_root.access.clone();
+            let (progress, tag, uuid, name) = {
+                let level = self.level_for_entity(entity).map_err(game_error)?;
+                let player = level.entity::<ServerPlayer>(entity).map_err(game_error)?;
+                (
+                    ferraloom_game::advancements::PlayerProgressSave::capture(
+                        player,
+                        access.path(),
+                    )?,
+                    player.save(level).map_err(game_error)?,
+                    player.uuid.to_string(),
+                    player.display_name(),
+                )
+            };
             tokio::task::spawn_blocking(move || -> Result<()> {
                 access.player_data().save(&uuid, &tag)?;
                 progress.write()?;
@@ -3241,10 +3303,7 @@ impl MinecraftServer {
                 .with_world(|world| world.io.store(pos, Some(tag)));
             save.await?;
         }
-        let progress_path = self
-            .level
-            .generation()
-            .with_world(|world| world.access.path().to_path_buf());
+        let progress_path = self.world_root.access.path().to_path_buf();
         let progress = self
             .players
             .iter()
@@ -3272,8 +3331,12 @@ impl MinecraftServer {
                 }
             })
             .map(|entity| {
-                let player = self.player(entity)?;
-                Ok((player.uuid.to_string(), player.save()))
+                let level = self.level_for_entity(entity).map_err(game_error)?;
+                let player = level.entity::<ServerPlayer>(entity).map_err(game_error)?;
+                Ok((
+                    player.uuid.to_string(),
+                    player.save(level).map_err(game_error)?,
+                ))
             })
             .collect::<Result<Vec<_>>>()?;
         let bootstrap = self
