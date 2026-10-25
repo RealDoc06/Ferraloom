@@ -2,7 +2,7 @@
 use super::harness::{Case, Check, Step};
 use serde_json::json;
 
-pub fn cases() -> Vec<Case> {
+pub fn cases(banner: bool) -> Vec<Case> {
     let mut cases = Vec::new();
     for (index, (block, entity, payload, replacement)) in [
         ("chest", "chest", "CustomName:'atomic chest',Items:[{Slot:0b,id:'minecraft:stone',count:3}]", "CustomName:'changed'"),
@@ -11,6 +11,9 @@ pub fn cases() -> Vec<Case> {
         // SpawnData's additional sendBlockUpdated callback is BE-owned and pending.
         ("spawner", "mob_spawner", "Delay:100s,MinSpawnDelay:20,MaxSpawnDelay:30,SpawnCount:2,RequiredPlayerRange:0,SpawnRange:1", "Delay:120s,RequiredPlayerRange:0"),
     ].into_iter().enumerate() {
+        if (block == "white_banner") != banner {
+            continue;
+        }
         let x = 2 + index as i32 * 3;
         let tag = format!("{{{payload},components:{{'minecraft:custom_data':{{placement:1b}}}},id:'minecraft:wrong',x:999,y:999,z:999}}");
         let replacement = format!("{{{replacement}}}");

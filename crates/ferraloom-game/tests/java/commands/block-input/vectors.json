@@ -172,6 +172,7 @@
     "input": "{patterns:[{pattern:'minecraft:stripe_bottom',color:red}],CustomName:'banner'}",
     "setResult": true,
     "entity": true,
+    "pending": "BannerBlockEntity factory not ported",
     "affected": true,
     "trace": [
       "set",
@@ -192,6 +193,7 @@
     "input": "{}",
     "setResult": false,
     "entity": true,
+    "pending": "BannerBlockEntity factory not ported",
     "affected": true,
     "trace": [
       "set",

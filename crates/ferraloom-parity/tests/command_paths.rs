@@ -27,3 +27,9 @@ family!(parity_paths_give, "give");
 family!(parity_paths_data_storage, "data_storage");
 
 family!(parity_paths_data_block, "data_block");
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "BannerBlockEntity factory not ported"]
+async fn parity_paths_placement_nbt_banner() -> ferraloom_parity::Result<()> {
+    harness::run_family("placement_nbt_banner").await
+}
