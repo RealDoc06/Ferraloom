@@ -51,9 +51,12 @@ fn native_chiseled_bookshelf_factory_load_save_and_components_match() {
                 );
                 assert_eq!(
                     entity.collect_components(),
-                    crate::block::entity::components::load(Some(
-                        &parse_compound(fields[7]).unwrap()
-                    )),
+                    crate::block::entity::components::load(
+                        Some(&parse_compound(fields[7]).unwrap()),
+                        crate::level::LevelContext::fixture(0, 63)
+                            .registry_context()
+                            .unwrap()
+                    ),
                     "{row}"
                 );
                 assert_eq!(
@@ -84,9 +87,12 @@ fn native_chiseled_bookshelf_factory_load_save_and_components_match() {
                 );
                 assert_eq!(
                     entity.collect_components(),
-                    crate::block::entity::components::load(Some(
-                        &parse_compound(fields[5]).unwrap()
-                    )),
+                    crate::block::entity::components::load(
+                        Some(&parse_compound(fields[5]).unwrap()),
+                        crate::level::LevelContext::fixture(0, 63)
+                            .registry_context()
+                            .unwrap()
+                    ),
                     "{row}"
                 );
                 assert_eq!(
@@ -130,9 +136,12 @@ fn native_chiseled_bookshelf_factory_load_save_and_components_match() {
                 );
                 assert_eq!(
                     entity.collect_components(),
-                    crate::block::entity::components::load(Some(
-                        &parse_compound(fields[4]).unwrap()
-                    )),
+                    crate::block::entity::components::load(
+                        Some(&parse_compound(fields[4]).unwrap()),
+                        crate::level::LevelContext::fixture(0, 63)
+                            .registry_context()
+                            .unwrap()
+                    ),
                     "{row}"
                 );
                 assert_eq!(

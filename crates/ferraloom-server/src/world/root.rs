@@ -311,7 +311,7 @@ mod tests {
         let resources = ResourceManager::new(vec![
             ferraloom_data::datapack::Pack::vanilla_jar(Path::new(&jar)).unwrap(),
         ]);
-        let registries = RegistrySet::load(&resources).unwrap();
+        let registries = Arc::new(RegistrySet::load(&resources).unwrap());
         let cases: Vec<_> = include_str!("../../tests/java/world_data/flags.tsv")
             .lines()
             .map(|row| row.split('\t').collect::<Vec<_>>())

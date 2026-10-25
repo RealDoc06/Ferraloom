@@ -517,10 +517,7 @@ impl MinecraftServer {
             .collect::<protocol::Result<Vec<_>>>()?;
         for dimension in dimensions {
             let world = world_root.open_dimension(dimension.clone(), &properties)?;
-            let level_context = Arc::new(
-                Arc::unwrap_or_clone(world.level_context(&resources)?)
-                    .with_registry_context(registry_context.clone()),
-            );
+            let level_context = world.level_context(&resources)?;
             let mut bootstrap = ServerLevel::new(
                 Region::new(&BEHAVIORS),
                 dimension.to_string(),

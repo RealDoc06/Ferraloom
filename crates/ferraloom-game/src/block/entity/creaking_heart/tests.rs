@@ -138,9 +138,12 @@ fn native_creaking_heart_factory_load_save_updates_and_ticker_gate_match() {
                 );
                 assert_eq!(
                     entity.collect_components(),
-                    crate::block::entity::components::load(Some(
-                        &parse_compound(fields[8]).unwrap()
-                    )),
+                    crate::block::entity::components::load(
+                        Some(&parse_compound(fields[8]).unwrap()),
+                        crate::level::LevelContext::fixture(0, 63)
+                            .registry_context()
+                            .unwrap()
+                    ),
                     "{row}"
                 );
                 let reloaded = load_static(
@@ -170,9 +173,12 @@ fn native_creaking_heart_factory_load_save_updates_and_ticker_gate_match() {
 fn live_heart_loading_keeps_the_original_generation_and_components() {
     let state = Block::CREAKING_HEART.default_state();
     let mut entity = create(POS, state).unwrap();
-    entity.data_mut().components = crate::block::entity::components::load(Some(
-        &parse_compound("{'minecraft:custom_name':'kept'}").unwrap(),
-    ));
+    entity.data_mut().components = crate::block::entity::components::load(
+        Some(&parse_compound("{'minecraft:custom_name':'kept'}").unwrap()),
+        crate::level::LevelContext::fixture(0, 63)
+            .registry_context()
+            .unwrap(),
+    );
     let mut level = level(state, entity);
     let original = level.block_entity_ref(POS).unwrap().unwrap();
     level.retain_block_entity(original).unwrap();
@@ -206,9 +212,12 @@ fn live_heart_loading_keeps_the_original_generation_and_components() {
             .unwrap()
             .data()
             .components,
-        crate::block::entity::components::load(Some(
-            &parse_compound("{'minecraft:custom_name':'kept'}").unwrap()
-        ))
+        crate::block::entity::components::load(
+            Some(&parse_compound("{'minecraft:custom_name':'kept'}").unwrap()),
+            crate::level::LevelContext::fixture(0, 63)
+                .registry_context()
+                .unwrap()
+        )
     );
     assert!(
         !level
