@@ -774,6 +774,29 @@ pub async fn run_family(family: &'static str) -> Result<()> {
             failures.len(),
             failures.join("\n")
         );
+        if family == "data_block" {
+            driver.session.stop().await?;
+            let saved = driver
+                .session
+                .saved_world()?
+                .block_entities("minecraft:overworld", ferraloom_util::ChunkPos::new(0, 0))?;
+            let chest = saved
+                .into_iter()
+                .find(|tag| {
+                    tag.get_int("x") == Some(4)
+                        && tag.get_int("y") == Some(-63)
+                        && tag.get_int("z") == Some(4)
+                })
+                .ok_or_else(|| anyhow::anyhow!("modified chest was not persisted"))?;
+            ensure!(
+                chest
+                    .get_compound("components")
+                    .and_then(|components| components.get_compound("minecraft:custom_data"))
+                    .is_some(),
+                "modified component payload missing from saved chest"
+            );
+            log.record("data.block.saved", chest.to_string())?;
+        }
         Ok(log)
     })
     .await
