@@ -126,6 +126,18 @@ public final class SummonVectors {
         }
         return vectors;
     }
+    static JsonArray cowPairingProof = new JsonArray();
+    static String packetWire(net.minecraft.network.protocol.Packet<?> packet, RegistryAccess access) {
+        var buffer = new net.minecraft.network.RegistryFriendlyByteBuf(io.netty.buffer.Unpooled.buffer(),access);
+        if (packet instanceof net.minecraft.network.protocol.game.ClientboundAddEntityPacket p)
+            net.minecraft.network.protocol.game.ClientboundAddEntityPacket.STREAM_CODEC.encode(buffer,p);
+        else if (packet instanceof net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket p)
+            net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket.STREAM_CODEC.encode(buffer,p);
+        else if (packet instanceof net.minecraft.network.protocol.game.ClientboundUpdateAttributesPacket p)
+            net.minecraft.network.protocol.game.ClientboundUpdateAttributesPacket.STREAM_CODEC.encode(buffer,p);
+        else throw new AssertionError(packet);
+        var bytes=new byte[buffer.readableBytes()];buffer.readBytes(bytes);buffer.release();return HexFormat.of().formatHex(bytes);
+    }
     static JsonArray uuidProof(HolderLookup.Provider lookup,CommandBuildContext context) throws Exception {
         var access=new RegistryAccess.ImmutableRegistryAccess(lookup.listRegistries().map(r->(Registry<?>)r).toList());
         var level=mock(ServerLevel.class);doReturn(access).when(level).registryAccess();
@@ -150,13 +162,38 @@ public final class SummonVectors {
             row.addProperty("uuid",current[0].getUUID().toString());row.addProperty("removed",current[0].isRemoved());row.add("display_name",component(current[0].getDisplayName()));
             proof.add(row);
         }
+        // As in a live Level, this second capture uses a process-seeded stream.
+        // Repetition lets the rare native left-handed branch appear in the proof.
+        doReturn(RandomSource.create()).when(level).getRandom();
+        var soundGetter=net.minecraft.world.entity.animal.cow.Cow.class.getDeclaredMethod("getSoundVariant");soundGetter.setAccessible(true);
+        for(int index=0;index<128;index++) {
+            dispatcher.execute("summon minecraft:cow 8.5 -60 8.5",source);
+            var cow=(net.minecraft.world.entity.animal.cow.Cow)current[0];
+            cow.setId(1);cow.setUUID(new java.util.UUID(0,1));
+            var row=new JsonObject();row.addProperty("left_handed",cow.isLeftHanded());
+            row.addProperty("sound_variant",((Holder<?>)soundGetter.invoke(cow)).getRegisteredName());
+            var followRange=cow.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.FOLLOW_RANGE);
+            row.addProperty("follow_range_amount",followRange.getModifier(net.minecraft.resources.Identifier.withDefaultNamespace("random_spawn_bonus")).amount());
+            row.addProperty("follow_range_syncable",followRange.getAttribute().value().isClientSyncable());
+            var packets=new JsonArray();
+            var tracker=new net.minecraft.server.level.ServerEntity(level,cow,UpdateInterval.periodic(3),true,mock(net.minecraft.server.level.ServerEntity.Synchronizer.class));
+            tracker.sendPairingData(mock(net.minecraft.server.level.ServerPlayer.class),packet->{
+                var entry=new JsonObject();entry.addProperty("kind",packet.getClass().getSimpleName());entry.addProperty("wire",packetWire(packet,access));
+                if(packet instanceof net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket data) {
+                    var stable=data.packedItems().stream().filter(v->v.id()!=15&&v.id()!=19).toList();
+                    entry.addProperty("stable_wire",packetWire(new net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket(1,stable),access));
+                }
+                packets.add(entry);
+            });
+            row.add("packets",packets);cowPairingProof.add(row);
+        }
         return proof;
     }
     public static void main(String[] args) throws Exception {
         SharedConstants.tryDetectVersion();Bootstrap.bootStrap();
         var lookup=LootVectors.load();BuiltInRegistries.DATA_COMPONENT_INITIALIZERS.build(lookup).forEach(p->p.apply());
         var context=CommandBuildContext.simple(lookup,FeatureFlags.DEFAULT_FLAGS);
-        var output=new JsonObject();output.add("vectors",capture(context));output.add("uuid_proof",uuidProof(lookup,context));
+        var output=new JsonObject();output.add("vectors",capture(context));output.add("uuid_proof",uuidProof(lookup,context));output.add("cow_pairing_proof",cowPairingProof);
         Files.writeString(Path.of(args[0]),JSON.toJson(output)+"\n");System.out.println("Captured summon vectors and native implicit UUID proof");
     }
 }

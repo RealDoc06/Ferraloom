@@ -26,4 +26,11 @@ for first, second in zip(captures[0]['uuid_proof'], captures[1]['uuid_proof']):
     assert first['command'] == second['command'] and first['uuid'] != second['uuid']
 (source / 'vectors.json').write_text(json.dumps(captures[0]['vectors'], indent=2, ensure_ascii=False) + '\n')
 (source / 'uuid-proof.json').write_text(json.dumps([capture['uuid_proof'] for capture in captures], indent=2, ensure_ascii=False) + '\n')
+for capture in captures:
+    cows = capture['cow_pairing_proof']
+    assert len(cows) == 128
+    assert {cow['left_handed'] for cow in cows} == {False, True}
+    assert {cow['sound_variant'] for cow in cows} == {'minecraft:classic', 'minecraft:moody'}
+    assert all(not cow['follow_range_syncable'] for cow in cows)
+(source / 'cow-pairing-proof.json').write_text(json.dumps([capture['cow_pairing_proof'] for capture in captures], indent=2, ensure_ascii=False) + '\n')
 print('Captured', len(captures[0]['vectors']), 'native summon cases and two-JVM UUID proof')
