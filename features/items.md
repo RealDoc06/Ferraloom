@@ -256,6 +256,5 @@ One class row per bootstrapped runtime Item class, listing every item id assigne
 | items.slot-source-type.group | `minecraft:group` (slot source type) | `net.minecraft.world.item.slot.SlotSources#bootstrap` | | - | todo |
 | items.slot-source-type.limit-slots | `minecraft:limit_slots` (slot source type) | `net.minecraft.world.item.slot.SlotSources#bootstrap` | | - | todo |
 | items.slot-source-type.slot-range | `minecraft:slot_range` (slot source type) | `net.minecraft.world.item.slot.SlotSources#bootstrap` | | - | todo |
-
 | items.stack.hash-validation | Match container-click HashedStack/HashedPatchMap values using persistent component codecs and HashOps CRC32C | `HashedStack; HashedPatchMap; HashOps` | `ferraloom-protocol::component::tests::vanilla_hashed_stack_validation`; `vanilla_hash_ops_scalar_kinds_arrays_and_map_order` | pass | pass |
 | items.stack.template-wire | Encode ItemStackTemplate item/count/patch order and optional nested container slots | `ItemStackTemplate#STREAM_CODEC; ItemContainerContents#STREAM_CODEC` | `ferraloom-protocol::component::tests::vanilla_stacks_removals_nesting_and_untrusted_delimiters` | pass | pass |
