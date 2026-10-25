@@ -56,7 +56,7 @@ impl BlockEntity for BrushableBehavior {
             ItemStack::default()
         } else {
             tag.get("item")
-                .and_then(|value| ItemStack::from_nbt(value).ok())
+                .and_then(|value| ItemStack::from_nbt_with_partial(value).ok())
                 .unwrap_or_default()
         };
         entity.hit_direction = tag
