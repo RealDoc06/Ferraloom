@@ -1,10 +1,12 @@
-use super::GenerationRuntime;
+use super::{GenerationAccess, GenerationRuntime};
 use crate::{
     properties::ServerProperties,
     world::{ChunkSaveSnapshot, World},
 };
 use anyhow::{Result, ensure};
-use ferraloom_game::level::{Level, distance_manager::FullChunkStatus, server_level::ServerLevel};
+use ferraloom_game::level::{
+    Level, LevelError, distance_manager::FullChunkStatus, server_level::ServerLevel,
+};
 use ferraloom_util::ChunkPos;
 use std::sync::Arc;
 
@@ -54,6 +56,39 @@ impl LiveLevel {
         GenerationRuntime::from_level(&self.level)
     }
 
+    /// Native owner progress retains mutable publication capability. Every
+    /// owned task ends its driver borrow before entering Level callbacks.
+    pub(crate) fn progress_jobs(&mut self) -> Result<()> {
+        while self
+            .level
+            .poll_chunk_acquisition_mut()
+            .map_err(|error| anyhow::anyhow!("{error:?}"))?
+            != ferraloom_game::level::acquisition::AcquireProgress::Idle
+        {}
+        Ok(())
+    }
+    pub(crate) fn update_chunk_tickets(&mut self) -> Result<(), LevelError> {
+        GenerationRuntime::run_distance_pass_with_access(&mut GenerationAccess::Mutable(
+            &mut self.level,
+        ))?;
+        Ok(())
+    }
+    pub(crate) fn request_full(&mut self, pos: ChunkPos) -> Result<(), LevelError> {
+        GenerationRuntime::request_full_mut(&mut self.level, pos)
+    }
+
+    /// ServerLevel#waitForEntities / PersistentEntitySectionManager#saveAll may
+    /// publish pending IO during their explicit owner wait, without a tick.
+    pub(crate) fn poll_entity_loads_for_wait(&mut self) -> Result<bool> {
+        let progressed = self.generation().poll_entity_io(&self.level)?;
+        self.level.process_pending_entity_loads()?;
+        let requests = self.level.take_entity_storage_requests();
+        let properties = self.generation().properties.clone();
+        self.generation()
+            .with_world_mut(|world| world.submit_entity_requests(requests, &properties))?;
+        Ok(progressed)
+    }
+
     /// Exclusive prepareTickingChunk continuation. The shared driver only queues
     /// these owned tasks and never fabricates a mutable Level during a read.
     pub(crate) fn finish_promotions(&mut self) -> Result<()> {
@@ -93,12 +128,10 @@ impl LiveLevel {
             self.generation().with_world_mut(|world| {
                 world.ready.insert(identity.pos);
             });
-            self.generation()
-                .refresh_loading_status(&self.level, identity.pos)
+            GenerationRuntime::refresh_loading_status_mut(&mut self.level, identity.pos)
                 .map_err(|error| anyhow::anyhow!("{error:?}"))?;
         }
-        self.generation()
-            .confirm_ready_ranges(&self.level)
+        GenerationRuntime::confirm_ready_ranges_mut(&mut self.level)
             .map_err(|error| anyhow::anyhow!("{error:?}"))
     }
 
@@ -110,10 +143,14 @@ impl LiveLevel {
         self.level
             .try_mark_chunk_saved(pos)
             .map_err(|error| anyhow::anyhow!("{error:?}"))?;
-        let result = self
-            .generation()
-            .with_world(|world| world.chunk_save_plan(pos, game_time))
-            .and_then(|plan| plan.capture(&self.level));
+        let result = (|| {
+            self.level
+                .prepare_block_entities_for_saving(pos)
+                .map_err(anyhow::Error::new)?;
+            self.generation()
+                .with_world(|world| world.chunk_save_plan(pos, game_time))
+                .and_then(|plan| plan.capture(&self.level))
+        })();
         if result.is_err() {
             self.level
                 .mark_chunk_unsaved(pos)

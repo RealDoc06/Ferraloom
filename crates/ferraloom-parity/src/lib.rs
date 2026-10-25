@@ -6,7 +6,7 @@ mod session;
 mod world;
 
 pub use anyhow::{Result, bail, ensure};
-pub use bot::{Bot, BotState, Container, Entity, Sequence, Ticks};
+pub use bot::{BossEventState, Bot, BotState, Container, Entity, Sequence, Ticks};
 pub use ferraloom_protocol as protocol;
 pub use launch::{LaunchOptions, Regions, ServerKind, WorldPreset};
 pub use observation::{Normalization, ObservationLog};

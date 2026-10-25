@@ -678,9 +678,12 @@ pub fn move_player_with_checks(
         let delta = target - start;
         movement::set_on_ground(entity, input.on_ground, Some(delta), level)?;
         movement::check_supporting_block(entity, input.on_ground, Some(delta), level)?;
-        let pos = movement::get_on_pos(entity, 0.2_f32, level)?;
-        let state = level.get_block_state(pos)?;
-        movement::check_fall_damage(entity, delta.y, input.on_ground, state, pos, level)?;
+        // Entity#doCheckFallDamage never reads terrain while touching unloaded chunks.
+        if !tick::touching_unloaded_chunk(entity, level)? {
+            let pos = movement::get_on_pos(entity, 0.2_f32, level)?;
+            let state = level.get_block_state(pos)?;
+            movement::check_fall_damage(entity, delta.y, input.on_ground, state, pos, level)?;
+        }
         level.entity_mut::<ServerPlayer>(entity)?.known_movement = delta;
         if moved_up {
             crate::entity::reset_fall_distance(entity, level)?;
@@ -696,9 +699,12 @@ pub fn move_player_with_checks(
             player.velocity = Vec3::ZERO;
         }
         movement::check_supporting_block(entity, input.on_ground, Some(Vec3::ZERO), level)?;
-        let pos = movement::get_on_pos(entity, 0.2_f32, level)?;
-        let state = level.get_block_state(pos)?;
-        movement::check_fall_damage(entity, 0.0, input.on_ground, state, pos, level)?;
+        // Entity#doCheckFallDamage never reads terrain while touching unloaded chunks.
+        if !tick::touching_unloaded_chunk(entity, level)? {
+            let pos = movement::get_on_pos(entity, 0.2_f32, level)?;
+            let state = level.get_block_state(pos)?;
+            movement::check_fall_damage(entity, 0.0, input.on_ground, state, pos, level)?;
+        }
         level
             .entity_mut::<EntityData>(entity)?
             .remove_latest_movement_recording();

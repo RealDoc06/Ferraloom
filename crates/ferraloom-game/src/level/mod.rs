@@ -85,6 +85,10 @@ pub enum LevelError {
     UnsupportedPortalUse(Block),
     UnsupportedEntityMethod(EntityType, crate::entity::EntityMethod),
     UnsupportedAdvancementCriterion(crate::advancements::criteria::Trigger),
+    UnsupportedAdvancementPredicate {
+        trigger: crate::advancements::criteria::Trigger,
+        source: String,
+    },
     Inventory(&'static str),
     MissingBlockEntity(crate::block::entity::BlockEntityRef),
     WrongBlockEntityType(crate::block::entity::BlockEntityRef),
@@ -161,6 +165,9 @@ impl std::fmt::Display for LevelError {
                 write!(formatter, "item data for {}: {source}", item.name())
             }
             Self::MissingSoundEvent(id) => write!(formatter, "missing sound event {id}"),
+            Self::UnsupportedAdvancementPredicate { trigger, source } => {
+                write!(formatter, "{}: {source}", trigger.name())
+            }
             Self::EnchantmentEffect {
                 enchantment,
                 source,
@@ -188,6 +195,7 @@ pub struct LevelRules {
     /// Published by the canonical GameRules owner after load and each change.
     pub block_drops: Option<bool>,
     pub show_advancement_messages: bool,
+    pub spectators_generate_chunks: bool,
     pub tnt_explodes: bool,
     pub entity_drops: bool,
     pub max_entity_cramming: i32,
@@ -225,6 +233,7 @@ impl Default for LevelRules {
         Self {
             block_drops: None,
             show_advancement_messages: true,
+            spectators_generate_chunks: damage_default(GameRule::SpectatorsGenerateChunks),
             tnt_explodes: true,
             entity_drops: true,
             max_entity_cramming: 24,
