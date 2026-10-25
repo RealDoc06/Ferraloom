@@ -25,9 +25,44 @@ pub use relationships::PassengerList;
 /// Server-lifetime identity, independent of storage location and network ID.
 /// The server allocator must never reuse a value, including after removal.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct EntityRef(pub u64);
+pub struct EntityRef {
+    allocation_namespace: crate::level::RegionId,
+    serial: u64,
+}
 
 impl EntityRef {
+    /// Allocate from the sole birth-Region counter. The namespace identifies
+    /// the allocator, not the current storage location, so transfers retain it.
+    pub(crate) fn allocate(
+        namespace: crate::level::RegionId,
+        counter: &std::cell::Cell<u64>,
+    ) -> Self {
+        let serial = counter
+            .get()
+            .checked_add(1)
+            .expect("entity reference space exhausted");
+        counter.set(serial);
+        Self {
+            allocation_namespace: namespace,
+            serial,
+        }
+    }
+    pub const fn allocation_namespace(self) -> crate::level::RegionId {
+        self.allocation_namespace
+    }
+    pub const fn serial(self) -> u64 {
+        self.serial
+    }
+
+    /// Explicit identities for model fixtures or a known serial in a live
+    /// fixture's namespace. Production callers must use Level#next_entity_ref.
+    #[cfg(test)]
+    pub const fn fixture(namespace: crate::level::RegionId, serial: u64) -> Self {
+        Self {
+            allocation_namespace: namespace,
+            serial,
+        }
+    }
     pub fn teleport_relative(
         self,
         delta: ferraloom_util::Vec3,

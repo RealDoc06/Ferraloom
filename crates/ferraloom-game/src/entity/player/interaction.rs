@@ -266,7 +266,7 @@ mod tests {
             component::{SwingAnimation, SwingAnimationType},
         };
         let mut level = crate::entity::tests::level(false);
-        let id = EntityRef(93);
+        let id = EntityRef::fixture(crate::level::RegionId::FIXTURE, 93);
         level
             .add_entity(id, EntityState::Player(Box::new(player())))
             .unwrap();
@@ -306,13 +306,16 @@ mod tests {
         assert!(level.take_effects().is_empty());
         assert_eq!(
             swing_and_reset_attack_strength(
-                EntityRef(94),
+                EntityRef::fixture(crate::level::RegionId::FIXTURE, 94),
                 InteractionHand::MainHand,
                 animation,
                 false,
                 &mut level
             ),
-            Err(LevelError::MissingEntity(EntityRef(94)))
+            Err(LevelError::MissingEntity(EntityRef::fixture(
+                crate::level::RegionId::FIXTURE,
+                94
+            )))
         );
         assert_eq!(level.unported_behavior_stats().skipped_calls, 2);
     }

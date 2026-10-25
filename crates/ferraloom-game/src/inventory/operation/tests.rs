@@ -127,7 +127,7 @@ fn retained_broadcast_receivers_and_memoized_copies_match_native_reentry() {
     {
         let fields: Vec<_> = line.split('\t').collect();
         let mut level = Level::new(Region::new(&BEHAVIORS), LevelContext::fixture(0, 63));
-        let player = EntityRef(1);
+        let player = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
         level
             .add_entity(
                 player,
@@ -201,7 +201,7 @@ fn menu_transfer_keeps_the_native_copy_alias_when_either_cache_is_replaced() {
     {
         let fields: Vec<_> = line.split('\t').collect();
         let mut level = Level::new(Region::new(&BEHAVIORS), LevelContext::fixture(0, 63));
-        let player = EntityRef(1);
+        let player = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
         level
             .add_entity(
                 player,

@@ -451,7 +451,10 @@ fn all_available_builtin_tables_match_real_java() {
             params.origin = Some(ferraloom_util::Vec3::new(0.5, 64.0, 0.5));
         }
         if allowed.contains(&ContextParam::ThisEntity) {
-            params.this_entity = Some(crate::entity::EntityRef(1));
+            params.this_entity = Some(crate::entity::EntityRef::fixture(
+                crate::level::RegionId::FIXTURE,
+                1,
+            ));
         }
         if allowed.contains(&ContextParam::DamageSource) {
             params.damage_source = Some(DamageSource {
@@ -462,7 +465,10 @@ fn all_available_builtin_tables_match_real_java() {
             });
         }
         if allowed.contains(&ContextParam::TargetEntity) {
-            params.target_entity = Some(crate::entity::EntityRef(2));
+            params.target_entity = Some(crate::entity::EntityRef::fixture(
+                crate::level::RegionId::FIXTURE,
+                2,
+            ));
         }
         if allowed.contains(&ContextParam::Tool) {
             params.tool = Some(ItemStack::new(

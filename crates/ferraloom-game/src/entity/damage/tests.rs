@@ -169,14 +169,17 @@ fn native_source_constructors_preserve_actor_identity_scaling_and_live_positions
     .enumerate()
     {
         level
-            .add_entity(EntityRef(index as u64 + 1), state)
+            .add_entity(
+                EntityRef::fixture(crate::level::RegionId::FIXTURE, index as u64 + 1),
+                state,
+            )
             .unwrap();
     }
     let actors = [
         None,
-        Some(EntityRef(1)),
-        Some(EntityRef(2)),
-        Some(EntityRef(3)),
+        Some(EntityRef::fixture(crate::level::RegionId::FIXTURE, 1)),
+        Some(EntityRef::fixture(crate::level::RegionId::FIXTURE, 2)),
+        Some(EntityRef::fixture(crate::level::RegionId::FIXTURE, 3)),
     ];
     let sources = registry.sources();
     let mut count = 0;
@@ -208,9 +211,11 @@ fn native_source_constructors_preserve_actor_identity_scaling_and_live_positions
                     registry.holder(DamageTypeKey::Generic).clone(),
                     Vec3::new(-0.0, 100.0, 3.0),
                 ),
-                "player" => sources.player_attack(EntityRef(1)),
-                "mob" => sources.mob_attack(EntityRef(2)),
-                "thorns" => sources.thorns(EntityRef(3)),
+                "player" => {
+                    sources.player_attack(EntityRef::fixture(crate::level::RegionId::FIXTURE, 1))
+                }
+                "mob" => sources.mob_attack(EntityRef::fixture(crate::level::RegionId::FIXTURE, 2)),
+                "thorns" => sources.thorns(EntityRef::fixture(crate::level::RegionId::FIXTURE, 3)),
                 "bad-respawn" => sources.bad_respawn_point_explosion(Vec3::new(-0.0, 100.0, 3.0)),
                 _ => panic!("unexpected source case {name}"),
             }

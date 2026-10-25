@@ -54,20 +54,23 @@ fn comparison_nbt_reads_subclass_data_selected_item_and_ineligible_objects() {
         base.set_y_rot(0.0);
         base.set_x_rot(0.0);
         base.velocity = Vec3::ZERO;
-        let entity = EntityRef(1);
+        let entity = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
         level.add_entity(entity, state).unwrap();
         if scenario == "item-riding" {
             let mut vehicle = PrimedTnt::new(2, 0);
             vehicle.parent.uuid = Uuid::new(0, 2);
             vehicle.parent.set_pos(Vec3::new(10.0, 70.0, -20.0));
             level
-                .add_entity(EntityRef(2), EntityState::PrimedTnt(Box::new(vehicle)))
+                .add_entity(
+                    EntityRef::fixture(crate::level::RegionId::FIXTURE, 2),
+                    EntityState::PrimedTnt(Box::new(vehicle)),
+                )
                 .unwrap();
             level
                 .entity::<EntityData>(entity)
                 .unwrap()
                 .vehicle
-                .set(Some(EntityRef(2)));
+                .set(Some(EntityRef::fixture(crate::level::RegionId::FIXTURE, 2)));
         } else if scenario == "item-removed" {
             level
                 .remove_entity_with_reason(entity, RemovalReason::Discarded)

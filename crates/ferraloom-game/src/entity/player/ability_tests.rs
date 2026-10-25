@@ -26,9 +26,9 @@ fn native_flying_speed_uses_independent_ability_sprint_and_passenger_gates() {
         let mut player = player();
         player.set_ability_flying_speed(f32::from_bits(u32::from_str_radix(row[1], 16).unwrap()));
         player.abilities.flying = row[2].parse().unwrap();
-        player
-            .vehicle
-            .set((row[3] == "true").then_some(EntityRef(2)));
+        player.vehicle.set(
+            (row[3] == "true").then_some(EntityRef::fixture(crate::level::RegionId::FIXTURE, 2)),
+        );
         player.set_shared_flag(3, row[4].parse().unwrap());
         assert_eq!(bits(player.flying_movement_speed()), row[5], "{row:?}");
         checked += 1;

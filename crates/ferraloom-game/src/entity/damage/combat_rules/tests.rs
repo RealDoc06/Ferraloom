@@ -21,7 +21,7 @@ fn float(value: &str) -> f32 {
 fn player(level: &mut Level) -> EntityRef {
     let entity = level.next_entity_ref();
     let state = ServerPlayer::new(
-        Uuid::new(0, entity.0 as i64),
+        Uuid::new(0, entity.serial() as i64),
         "combat".into(),
         level.next_entity_id(),
         Vec3::new(8.5, 64.0, 8.5),
