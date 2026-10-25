@@ -101,25 +101,26 @@ fn cow_finalize_spawn_matches_native_variants_group_age_permanent_bonus_flags_an
         assert_eq!(group.group_size, row[9].parse::<i32>().unwrap());
         assert_eq!(group.should_spawn_baby, row[10] == "true");
         assert_eq!(format!("{:x}", group.baby_spawn_chance.to_bits()), row[11]);
-        let attributes = level
-            .entity_mut::<LivingEntity>(entity)
-            .unwrap()
-            .attributes
-            .get_instance(Attribute::FOLLOW_RANGE)
-            .unwrap();
-        let modifier = attributes
-            .modifier(&"minecraft:random_spawn_bonus".parse().unwrap())
-            .unwrap();
-        assert_eq!(format!("{:x}", modifier.amount.0.to_bits()), row[12]);
-        assert_eq!(modifier.operation as i32, row[13].parse::<i32>().unwrap());
-        assert_eq!(
-            attributes
-                .permanent_modifiers()
-                .iter()
-                .any(|entry| Arc::ptr_eq(entry, modifier)),
-            row[14] == "true"
-        );
-        drop(attributes);
+        {
+            let attributes = level
+                .entity_mut::<LivingEntity>(entity)
+                .unwrap()
+                .attributes
+                .get_instance(Attribute::FOLLOW_RANGE)
+                .unwrap();
+            let modifier = attributes
+                .modifier(&"minecraft:random_spawn_bonus".parse().unwrap())
+                .unwrap();
+            assert_eq!(format!("{:x}", modifier.amount.0.to_bits()), row[12]);
+            assert_eq!(modifier.operation as i32, row[13].parse::<i32>().unwrap());
+            assert_eq!(
+                attributes
+                    .permanent_modifiers()
+                    .iter()
+                    .any(|entry| Arc::ptr_eq(entry, modifier)),
+                row[14] == "true"
+            );
+        }
         let dimensions = level
             .entity_behavior(entity)
             .unwrap()

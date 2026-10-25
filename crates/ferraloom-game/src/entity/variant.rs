@@ -140,7 +140,7 @@ impl SpawnVariantRegistry {
                     .map(move |selector| (entry, selector))
             })
             .collect::<Vec<_>>();
-        entries.sort_by(|(_, a), (_, b)| b.priority.cmp(&a.priority));
+        entries.sort_by_key(|(_, selector)| std::cmp::Reverse(selector.priority));
         let mut highest = i32::MIN;
         let mut selected = Vec::new();
         for (entry, selector) in entries {

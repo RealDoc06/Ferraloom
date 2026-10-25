@@ -76,7 +76,19 @@ fn recursive_load_and_fresh_add_match_native_constructor_callback_riding_and_uui
             .add_entity(existing, EntityState::PrimedTnt(Box::new(state)))
             .unwrap();
         level.take_entity_management_events();
-        let tag = ferraloom_nbt::parse_compound(fields[2]).unwrap();
+        let mut tag = ferraloom_nbt::parse_compound(fields[2]).unwrap();
+        if scenario == "invalid-position" {
+            // DoubleTag's NaNd text reparses as a string, not a numeric NaN.
+            // Restore the actual typed payload constructed by the Java fixture.
+            tag.insert(
+                "Pos",
+                Tag::List(ferraloom_nbt::ListTag(vec![
+                    Tag::Double(f64::NAN),
+                    Tag::Double(64.0),
+                    Tag::Double(0.0),
+                ])),
+            );
+        }
         let mut callbacks = Vec::new();
         let root = load_entity_recursive(&tag, request(), &mut level, |id, level| {
             let base = level.entity::<EntityData>(id)?;
