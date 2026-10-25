@@ -28,6 +28,34 @@ fn vectors() -> String {
 fn native_standing_and_wall_item_stage_keeps_native_direction_order_and_supports() {
     let (mut level, _) = level();
     let pos = BlockPos::new(8, 5, 8);
+    // Audit every receiver the standing/wall native vectors can select before
+    // running cases, so a missing family registration is reported in one pass.
+    let reader = LevelReaderRef::Server(&level);
+    let mut missing = Vec::new();
+    for item in [
+        Item::TORCH,
+        Item::SOUL_TORCH,
+        Item::OAK_SIGN,
+        Item::OAK_HANGING_SIGN,
+        Item::TUBE_CORAL_FAN,
+        Item::DEAD_TUBE_CORAL_FAN,
+    ] {
+        for block in [item.data().block.unwrap(), item.wall_block().unwrap()] {
+            for method in [
+                crate::block::BlockMethod::CanSurvive,
+                crate::block::BlockMethod::UpdateShape,
+                crate::block::BlockMethod::UpdateFromNeighbourShapes,
+            ] {
+                if let Err(error) = reader.required_behavior(block, method) {
+                    missing.push(error);
+                }
+            }
+        }
+    }
+    assert!(
+        missing.is_empty(),
+        "standing/wall dispatch gaps: {missing:?}"
+    );
     let mut calls = 0;
     for line in vectors()
         .lines()

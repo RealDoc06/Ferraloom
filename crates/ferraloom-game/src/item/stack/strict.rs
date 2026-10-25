@@ -150,7 +150,7 @@ mod tests {
     #[test]
     fn strict_validation_and_item_input_reasons_match_native() {
         let rows: Vec<serde_json::Value> = serde_json::from_str(include_str!(
-            "../commands/vanilla/item-validation-vectors.json"
+            "../../commands/vanilla/item-validation-vectors.json"
         ))
         .unwrap();
         for row in &rows {

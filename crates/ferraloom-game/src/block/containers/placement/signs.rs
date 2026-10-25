@@ -1,7 +1,7 @@
 //! Banner, sign and skull placement, with native support and hanging-chain reads.
 use super::{direction, facing};
 use crate::{
-    block::{BlockMethod, BlockPlaceContext, LevelReaderRef},
+    block::{BlockBehavior, BlockMethod, BlockPlaceContext, LevelAccessRef, LevelReaderRef},
     level::LevelError,
 };
 use ferraloom_data::{
@@ -11,7 +11,21 @@ use ferraloom_util::{BlockPos, Direction, shapes};
 
 pub(super) fn supports(block: Block, method: BlockMethod) -> bool {
     if method == BlockMethod::CanSurvive {
-        return matches!(block.class(), C::WallBannerBlock | C::WallSignBlock);
+        return matches!(
+            block.class(),
+            C::BannerBlock
+                | C::WallBannerBlock
+                | C::StandingSignBlock
+                | C::WallSignBlock
+                | C::CeilingHangingSignBlock
+        );
+    }
+    if matches!(
+        method,
+        BlockMethod::UpdateShape | BlockMethod::UpdateFromNeighbourShapes
+    ) {
+        return block.is_instance_of(C::SignBlock)
+            || matches!(block.class(), C::BannerBlock | C::WallBannerBlock);
     }
     method == BlockMethod::GetStateForPlacement
         && (block.is_instance_of(C::SkullBlock)
@@ -31,12 +45,40 @@ pub(super) fn supports(block: Block, method: BlockMethod) -> bool {
 fn rotation_segment(degrees: f32) -> u8 {
     (((f64::from(degrees * (16.0_f32 / 360.0_f32)) + 0.5).floor() as i32) & 15) as u8
 }
-/// Ports WallBannerBlock/WallSignBlock#canSurvive's legacy-solid support test.
+/// Ports StandingSignBlock/BannerBlock's below.isSolid and the wall variants'
+/// legacy-solid backing test. CeilingHangingSignBlock uses SupportType.CENTER,
+/// without Block#canSupportCenter's extra UNSTABLE_BOTTOM_CENTER tag check.
 pub(super) fn can_survive(
     state: BlockState,
     pos: BlockPos,
     reader: &LevelReaderRef<'_, '_>,
 ) -> Result<bool, LevelError> {
+    if matches!(state.block().class(), C::StandingSignBlock | C::BannerBlock) {
+        return Ok(reader.get_block_state(pos.below(1))?.is_solid());
+    }
+    if state.block().class() == C::CeilingHangingSignBlock {
+        let above = pos.above(1);
+        let support = reader.get_block_state(above)?;
+        if let Some(sturdy) = support.cached_center_support(Direction::Down) {
+            return Ok(sturdy);
+        }
+        let shape = reader
+            .required_behavior(support.block(), BlockMethod::IsFaceSturdy)?
+            .support_shape(support, above, reader)?;
+        let center = shapes::create(
+            7.0 / 16.0,
+            0.0,
+            7.0 / 16.0,
+            9.0 / 16.0,
+            10.0 / 16.0,
+            9.0 / 16.0,
+        );
+        return Ok(!shapes::join_is_not_empty(
+            &shape.get_face_shape(Direction::Down),
+            &center,
+            shapes::BooleanOp::OnlySecond,
+        ));
+    }
     let back = direction(state.get(p::FACING).unwrap()).opposite();
     Ok(reader.get_block_state(pos.relative(back, 1))?.is_solid())
 }
@@ -207,4 +249,34 @@ pub(super) fn get_state_for_placement(
         }
     }
     Ok(None)
+}
+
+/// Ports the sign/banner updateShape overrides. A failed attachment returns air
+/// before SignBlock's water tick; other directions reach that superclass hook.
+pub(super) fn update_shape(
+    state: BlockState,
+    pos: BlockPos,
+    side: Direction,
+    neighbor_pos: BlockPos,
+    neighbor: BlockState,
+    level: &mut LevelAccessRef<'_, '_>,
+) -> Result<BlockState, LevelError> {
+    let check = match state.block().class() {
+        C::StandingSignBlock | C::BannerBlock => side == Direction::Down,
+        C::WallSignBlock | C::WallBannerBlock => {
+            side == direction(state.get(p::FACING).unwrap()).opposite()
+        }
+        C::CeilingHangingSignBlock => side == Direction::Up,
+        C::WallHangingSignBlock => {
+            side.axis() == direction(state.get(p::FACING).unwrap()).clockwise().axis()
+        }
+        _ => false,
+    };
+    if check && !level.as_reader().can_survive(state, pos)? {
+        return Ok(Block::AIR.default_state());
+    }
+    if state.block().is_instance_of(C::SignBlock) && state.get(p::WATERLOGGED) == Some(true) {
+        level.schedule_fluid_tick(pos, fluid::Id::WATER, 5)?;
+    }
+    crate::block::BASE_BLOCK.update_shape(state, pos, side, neighbor_pos, neighbor, level)
 }

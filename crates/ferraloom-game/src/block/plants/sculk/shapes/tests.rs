@@ -31,7 +31,11 @@ fn update(access: &mut LevelAccessRef<'_, '_>, fields: &[&str]) -> BlockState {
             }
         }
     }
-    *access.random().unwrap() = Random::Legacy(LegacyRandomSource::new(1234));
+    let random = Random::Legacy(LegacyRandomSource::new(1234));
+    match access {
+        LevelAccessRef::Server(level) => *level.random() = random,
+        LevelAccessRef::Worldgen(region) => region.set_random(random),
+    }
     let actual = if direction < 0 {
         match access {
             LevelAccessRef::Worldgen(region) => GameWorldgenBlockBehavior
