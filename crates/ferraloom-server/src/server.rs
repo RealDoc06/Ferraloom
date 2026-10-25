@@ -267,7 +267,10 @@ impl MinecraftServer {
             &resources,
             Some(&LootRegistryLookup::new(&registries, &resources)),
         )?);
-        let crafting_context = Arc::new(RuntimeCraftingContext::load(&resources, &registries)?);
+        let crafting_context = Arc::new(RuntimeCraftingContext::load(
+            &resources,
+            registries.as_ref(),
+        )?);
 
         let mut world_root = WorldRoot::open(
             &options.root,
