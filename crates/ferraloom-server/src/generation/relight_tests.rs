@@ -125,7 +125,7 @@ fn partial_write_error_flushes_propagated_neighbors_before_transport_and_save() 
     assert_eq!(state.light.light_value(LightLayer::Block, probe), 14);
     assert!(state.light_changed.contains(&changed_neighbor.pack()));
     assert!(
-        !state
+        state
             .captured_terrain
             .contains_key(&changed_neighbor.pack())
     );
