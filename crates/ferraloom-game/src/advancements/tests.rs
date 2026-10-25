@@ -1500,6 +1500,88 @@ fn vanilla_fall_from_height_uses_start_and_captured_current_position() {
 }
 
 #[test]
+fn vanilla_hurt_triggers_preserve_damage_blocking_and_entity_roles() {
+    use crate::entity::{
+        EntityData, EntityState, animal::Cow, damage::DamageSource, player::ServerPlayer,
+    };
+
+    let mut bytes = Vec::new();
+    flate2::read::GzDecoder::new(&include_bytes!("hurt-triggers.json.gz")[..])
+        .read_to_end(&mut bytes)
+        .unwrap();
+    let rows: Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(rows.as_array().unwrap().len(), 13);
+    for row in rows.as_array().unwrap() {
+        let manager = ServerAdvancementManager::new(vec![AdvancementHolder {
+            id: id("test:hurt"),
+            value: Advancement::decode(&row["input"]).unwrap(),
+        }]);
+        let (mut level, player) = live_fixture(manager);
+        level
+            .entity_mut::<EntityData>(player)
+            .unwrap()
+            .set_pos(Vec3::new(1.0, 64.0, 2.0));
+        let other = level.next_entity_ref();
+        let mut other_data = EntityData::new(EntityType::COW, 2, 0);
+        other_data.set_pos(Vec3::new(4.0, 64.0, 2.0));
+        level
+            .add_entity(
+                other,
+                EntityState::Cow(Box::new(Cow::with_parent(other_data))),
+            )
+            .unwrap();
+        let source = match row["source"].as_str().unwrap() {
+            "player" => level.context().damage_sources().player_attack(player),
+            "mob" => level.context().damage_sources().mob_attack(other),
+            "generic" => level.context().damage_sources().generic(),
+            "indirect" => {
+                let holder = level
+                    .context()
+                    .damage_types()
+                    .get(&"arrow".parse().unwrap())
+                    .unwrap()
+                    .clone();
+                DamageSource::with_entities(holder, Some(other), Some(player))
+            }
+            _ => unreachable!(),
+        };
+        assert_eq!(
+            source.to_loot_source().damage_type.as_str(),
+            row["damage_type"].as_str().unwrap()
+        );
+        let original = row["original"].as_f64().unwrap() as f32;
+        let damage = row["damage"].as_f64().unwrap() as f32;
+        let blocked = row["blocked"].as_bool().unwrap();
+        let health = level.entity::<ServerPlayer>(player).unwrap().health();
+        match row["input"]["criteria"]["a"]["trigger"].as_str().unwrap() {
+            "entity_hurt_player" => {
+                criteria::entity_hurt_player(&mut level, player, &source, original, damage, blocked)
+            }
+            "player_hurt_entity" => criteria::player_hurt_entity(
+                &mut level, player, other, &source, original, damage, blocked,
+            ),
+            _ => unreachable!(),
+        }
+        .unwrap();
+        let owner = level.entity::<ServerPlayer>(player).unwrap();
+        assert_eq!(
+            owner
+                .advancements
+                .get_progress(&id("test:hurt"))
+                .unwrap()
+                .is_done(),
+            row["done"].as_bool().unwrap(),
+            "{row}"
+        );
+        assert_eq!(
+            owner.total_experience,
+            row["experience"].as_i64().unwrap() as i32
+        );
+        assert_eq!(owner.health(), health);
+    }
+}
+
+#[test]
 fn retained_inventory_trigger_and_stats_request_read_canonical_player() {
     use crate::{
         entity::player::{ServerPlayer, inventory},
