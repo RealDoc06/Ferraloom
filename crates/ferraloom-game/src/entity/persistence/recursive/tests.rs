@@ -57,7 +57,10 @@ fn tree(entity: EntityRef, level: &Level, rows: &mut Vec<String>) {
 #[test]
 fn recursive_load_and_fresh_add_match_native_constructor_callback_riding_and_uuid_order() {
     let mut count = 0;
-    for line in include_str!("../../../../tests/java/entity/summon/vectors.tsv").lines() {
+    for line in include_str!("../../../../tests/java/entity/summon/vectors.tsv")
+        .lines()
+        .filter(|line| line.starts_with("entity-recursive\t"))
+    {
         let fields: Vec<_> = line.split('\t').collect();
         let scenario = fields[1];
         let mut level = crate::entity::tests::persistence_level();

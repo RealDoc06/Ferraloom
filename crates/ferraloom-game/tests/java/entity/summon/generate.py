@@ -29,9 +29,9 @@ run([str(JDK / 'javac'), '-cp', CP, '-d', str(CLASSES),
 run([str(JDK / 'java'), '-Xmx512m', '-cp', str(CLASSES) + ':' + CP,
      'EntityVectors', 'generate', str(CLASSES / 'EntityFixture.java')])
 run([str(JDK / 'javac'), '-cp', str(CLASSES) + ':' + CP, '-d', str(CLASSES),
-     str(CLASSES / 'EntityFixture.java'), str(HERE / 'SummonVectors.java')])
+     str(CLASSES / 'EntityFixture.java'), *map(str,sorted(HERE.glob('*.java')))])
 output = run([str(JDK / 'java'), '-Xmx512m', '-cp', str(CLASSES) + ':' + CP, 'SummonVectors'])
-vectors = '\n'.join(line for line in output.splitlines() if line.startswith('entity-recursive\t')) + '\n'
+vectors = '\n'.join(line for line in output.splitlines() if line.startswith(('entity-recursive\t', 'mob-variant\t', 'mob-sound\t', 'variant-select\t', 'cow-finalize\t'))) + '\n'
 path = HERE / 'vectors.tsv'
 if sys.argv[1:] == ['--check']:
     if path.read_text() != vectors:

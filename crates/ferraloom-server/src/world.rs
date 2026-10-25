@@ -982,6 +982,9 @@ impl World {
             )
             .with_block_transformers(Arc::new(
                 ferraloom_game::item::block_transformer::BlockTransformerRegistry::load(resources)?,
+            ))
+            .with_mob_variants(Arc::new(
+                ferraloom_game::entity::variant::MobVariants::load(resources)?,
             )),
         ))
     }

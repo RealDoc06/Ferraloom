@@ -8,3 +8,38 @@ entity-recursive	unknown-child	{Passengers:[{Passengers:[{Pos:[1.5d,64.0d,1.5d],
 entity-recursive	invalid-position	{Pos:[NaNd,64.0d,0.0d],Rotation:[],UUID:[I;0,0,0,1],id:"minecraft:tnt"}	2	-	-	none	-	2
 entity-recursive	player-null	{Pos:[1.5d,64.0d,1.5d],UUID:[I;0,0,0,1],id:"minecraft:player"}	2	-	-	none	-	1
 entity-recursive	peaceful-zombie	{Pos:[1.5d,64.0d,1.5d],UUID:[I;0,0,0,1],id:"minecraft:zombie"}	0	-	-	none	-	1
+mob-variant	minecraft:cold	[{"condition":{"biomes":"#minecraft:spawns_cold_variant_farm_animals","type":"minecraft:biome"},"priority":1}]
+mob-variant	minecraft:temperate	[{"priority":0}]
+mob-variant	minecraft:warm	[{"condition":{"biomes":"#minecraft:spawns_warm_variant_farm_animals","type":"minecraft:biome"},"priority":1}]
+mob-sound	minecraft:classic
+mob-sound	minecraft:moody
+variant-select	0	0	c	[0, 1, 2, 3]	c	-3109364765729502342
+variant-select	0	1	c	[0, 1, 2, 3]	c	1853403699951111791
+variant-select	0	12345	c	[0, 1, 2, 3]	c	-8979699159253079774
+variant-select	1	0	a	[0, 1, 2]	a	-3109364765729502342
+variant-select	1	1	a	[0, 1, 2]	a	1853403699951111791
+variant-select	1	12345	a	[0, 1, 2]	a	-8979699159253079774
+variant-select	2	0	a	[0, 1, 2]	a	-3109364765729502342
+variant-select	2	1	a	[0, 1, 2]	a	1853403699951111791
+variant-select	2	12345	a	[0, 1, 2]	a	-8979699159253079774
+variant-select	3	0	a,a	[0, 1, 2]	a	-3109364765729502342
+variant-select	3	1	a,a	[0, 1, 2]	a	1853403699951111791
+variant-select	3	12345	a,a	[0, 1, 2]	a	-8979699159253079774
+variant-select	4	0	b	[0, 1, 2]	b	-3109364765729502342
+variant-select	4	1	b	[0, 1, 2]	b	1853403699951111791
+variant-select	4	12345	b	[0, 1, 2]	b	-8979699159253079774
+variant-select	5	0	a,b	[0, 1, 2]	b	-3109364765729502342
+variant-select	5	1	a,b	[0, 1, 2]	b	1853403699951111791
+variant-select	5	12345	a,b	[0, 1, 2]	a	-8979699159253079774
+variant-select	6	0	a,b	[0, 1, 2]	b	-3109364765729502342
+variant-select	6	1	a,b	[0, 1, 2]	b	1853403699951111791
+variant-select	6	12345	a,b	[0, 1, 2]	a	-8979699159253079774
+variant-select	7	0	a,a,b	[0, 1, 2]	a	-3109364765729502342
+variant-select	7	1	a,a,b	[0, 1, 2]	a	1853403699951111791
+variant-select	7	12345	a,a,b	[0, 1, 2]	a	-8979699159253079774
+variant-select	8	0		[]	-	-4962768465676381896
+variant-select	8	1		[]	-	-4964420948893066024
+variant-select	8	12345		[]	-	6674089274190705457
+variant-select	9	0		[0]	-	-4962768465676381896
+variant-select	9	1		[0]	-	-4964420948893066024
+variant-select	9	12345		[0]	-	6674089274190705457

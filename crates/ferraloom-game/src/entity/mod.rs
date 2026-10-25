@@ -18,6 +18,7 @@ pub mod monster;
 pub mod player;
 pub mod pushing;
 mod stuck;
+pub mod variant;
 pub use persistence::{EntityPersistenceError, load_entity_recursive, load_in_place};
 mod spawn;
 pub use spawn::{EntitySpawnReason, EntitySpawnRequest};

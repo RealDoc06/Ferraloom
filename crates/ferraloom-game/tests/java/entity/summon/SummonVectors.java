@@ -88,5 +88,6 @@ public final class SummonVectors {
     var context=HolderLookup.Provider.create(java.util.stream.Stream.concat(builtins.listRegistries(),registries.listRegistries()));
     BuiltInRegistries.DATA_COMPONENT_INITIALIZERS.build(context).forEach(net.minecraft.core.component.DataComponentInitializers.PendingComponents::apply);
     run(registries);
+    VariantVectors.run(registries,context);
   }
 }

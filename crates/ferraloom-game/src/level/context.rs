@@ -16,6 +16,7 @@ pub struct LevelContext {
     pub initial_difficulty: Difficulty,
     damage_types: Arc<DamageTypeRegistry>,
     block_transformers: Option<Arc<crate::item::block_transformer::BlockTransformerRegistry>>,
+    mob_variants: Option<Arc<crate::entity::variant::MobVariants>>,
     registry_context: Option<Arc<dyn ferraloom_protocol::codec::RegistryContext>>,
 }
 
@@ -38,6 +39,7 @@ impl LevelContext {
             damage_types,
             initial_difficulty,
             block_transformers: None,
+            mob_variants: None,
             registry_context: None,
         }
     }
@@ -59,6 +61,19 @@ impl LevelContext {
         self.block_transformers
             .as_ref()
             .ok_or(super::LevelError::MissingBlockTransformers)
+    }
+
+    /// Install the merged immutable spawn-conditioned registries once per load.
+    pub fn with_mob_variants(mut self, variants: Arc<crate::entity::variant::MobVariants>) -> Self {
+        self.mob_variants = Some(variants);
+        self
+    }
+    pub fn mob_variants(
+        &self,
+    ) -> Result<&Arc<crate::entity::variant::MobVariants>, super::LevelError> {
+        self.mob_variants
+            .as_ref()
+            .ok_or(super::LevelError::MissingMobVariants)
     }
 
     /// Port of ServerLevel#registryAccess: the same immutable synchronized
@@ -104,6 +119,7 @@ impl LevelContext {
             structures: Arc<super::StructureServices>,
             damage_types: Arc<DamageTypeRegistry>,
             block_transformers: Arc<crate::item::block_transformer::BlockTransformerRegistry>,
+            mob_variants: Arc<crate::entity::variant::MobVariants>,
             registry_context: Arc<dyn ferraloom_protocol::codec::RegistryContext>,
         }
         static SERVICES: OnceLock<Services> = OnceLock::new();
@@ -124,6 +140,9 @@ impl LevelContext {
                     crate::item::block_transformer::BlockTransformerRegistry::load(&resources)
                         .unwrap(),
                 ),
+                mob_variants: Arc::new(
+                    crate::entity::variant::MobVariants::load(&resources).unwrap(),
+                ),
                 registry_context: Arc::new(FixtureRegistryContext(resources)),
             }
         });
@@ -138,6 +157,7 @@ impl LevelContext {
                 Difficulty::Normal,
             )
             .with_block_transformers(services.block_transformers.clone())
+            .with_mob_variants(services.mob_variants.clone())
             .with_registry_context(services.registry_context.clone()),
         )
     }
