@@ -27,7 +27,7 @@ impl CrafterBlockEntity {
     }
     /// Identity of the list replaced by CrafterBlockEntity#loadAdditional.
     /// Slot/count edits and component application keep the same list identity.
-    pub fn items_list_generation(&self) -> u64 {
+    pub const fn items_list_generation(&self) -> u64 {
         self.items_list_generation
     }
     pub fn set_slot_state(&mut self, slot: usize, enabled: bool) {
