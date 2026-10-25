@@ -1,8 +1,4 @@
 //! Real BlockItem placement -> synchronous section listener -> vibration ticker.
-#[expect(
-    dead_code,
-    reason = "The sculk fixture uses only the needed shared level helpers."
-)]
 mod level_support;
 use ferraloom_data::{Block, properties as p};
 use ferraloom_parity::{
