@@ -7,6 +7,7 @@ use ferraloom_util::{BlockPos, ChunkPos};
 
 pub mod beehive;
 pub mod brushable;
+pub mod chiseled_bookshelf;
 mod components;
 pub mod creaking_heart;
 pub mod daylight_detector;
@@ -190,6 +191,7 @@ static THE_END_PORTAL: TheEndPortal = TheEndPortal;
 /// Canonical concrete states. Extend this enum when porting a subclass, never Any.
 #[derive(Clone, Debug)]
 pub enum BlockEntityState {
+    ChiseledBookShelf(Box<chiseled_bookshelf::ChiseledBookShelfBlockEntity>),
     CreakingHeart(Box<creaking_heart::CreakingHeartBlockEntity>),
     SculkSensor(Box<sculk::SculkSensorBlockEntity>),
     CalibratedSculkSensor(Box<sculk::CalibratedSculkSensorBlockEntity>),
@@ -218,6 +220,7 @@ pub enum BlockEntityState {
 impl BlockEntityState {
     pub fn data(&self) -> &BlockEntityData {
         match self {
+            Self::ChiseledBookShelf(entity) => &entity.parent,
             Self::CreakingHeart(entity) => &entity.parent,
             Self::SculkSensor(entity) => &entity.parent,
             Self::CalibratedSculkSensor(entity) => &entity.parent.parent,
@@ -246,6 +249,7 @@ impl BlockEntityState {
     }
     pub fn data_mut(&mut self) -> &mut BlockEntityData {
         match self {
+            Self::ChiseledBookShelf(entity) => &mut entity.parent,
             Self::CreakingHeart(entity) => &mut entity.parent,
             Self::SculkSensor(entity) => &mut entity.parent,
             Self::CalibratedSculkSensor(entity) => &mut entity.parent.parent,
@@ -274,6 +278,7 @@ impl BlockEntityState {
     }
     pub fn behavior(&self) -> &'static dyn BlockEntity {
         match self {
+            Self::ChiseledBookShelf(_) => &chiseled_bookshelf::CHISELED_BOOKSHELF_ENTITY,
             Self::CreakingHeart(_) => &creaking_heart::CREAKING_HEART_ENTITY,
             Self::SculkSensor(_)
             | Self::CalibratedSculkSensor(_)
@@ -476,6 +481,9 @@ pub fn create(pos: BlockPos, state: BlockState) -> Result<BlockEntityState, Leve
         .ok_or(LevelError::UnsupportedBlockEntity(state.block()))?;
     let data = BlockEntityData::new(kind, pos, state)?;
     match kind {
+        BlockEntityType::CHISELED_BOOKSHELF => Ok(BlockEntityState::ChiseledBookShelf(Box::new(
+            chiseled_bookshelf::ChiseledBookShelfBlockEntity::new(data),
+        ))),
         BlockEntityType::CREAKING_HEART => Ok(BlockEntityState::CreakingHeart(Box::new(
             creaking_heart::CreakingHeartBlockEntity::new(data),
         ))),
@@ -590,7 +598,8 @@ pub fn supports(block: Block) -> bool {
     matches!(
         registry::for_block(block),
         Some(
-            BlockEntityType::CREAKING_HEART
+            BlockEntityType::CHISELED_BOOKSHELF
+                | BlockEntityType::CREAKING_HEART
                 | BlockEntityType::SCULK_SENSOR
                 | BlockEntityType::CALIBRATED_SCULK_SENSOR
                 | BlockEntityType::SCULK_SHRIEKER
@@ -747,3 +756,7 @@ mod placement_tests;
 
 projection!(potent_sulfur::PotentSulfurBlockEntity, PotentSulfur);
 projection!(creaking_heart::CreakingHeartBlockEntity, CreakingHeart);
+projection!(
+    chiseled_bookshelf::ChiseledBookShelfBlockEntity,
+    ChiseledBookShelf
+);

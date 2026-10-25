@@ -257,6 +257,9 @@ pub fn block_container_at(
         return Ok(None);
     };
     let receiver = level.block_entity_state(handle)?;
+    if matches!(receiver, BlockEntityState::ChiseledBookShelf(_)) {
+        return Err(LevelError::UnsupportedBlockEntity(state.block()));
+    }
     if receiver.container().is_none() {
         return Ok(None);
     }
