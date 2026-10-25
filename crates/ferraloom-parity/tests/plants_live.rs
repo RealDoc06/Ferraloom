@@ -78,12 +78,30 @@ async fn fill(bot: &mut Bot, from: BlockPos, to: BlockPos, state: BlockState) ->
     expect_blocks(bot, &[(from, state), (to, state)]).await
 }
 async fn random_ticks(bot: &mut Bot, speed: i32) -> Result<()> {
-    command(
+    // GameRuleCommand#setRule throws not_set when the requested value is
+    // already installed. Startup and each arena reset deliberately request 0.
+    let response = command(
         bot,
         &format!("gamerule minecraft:random_tick_speed {speed}"),
-        "commands.gamerule.set",
+        "commands.gamerule.",
     )
     .await?;
+    // CommandSourceStack#sendFailure wraps not_set in a red parent component.
+    fn accepted(component: &serde_json::Value) -> bool {
+        matches!(
+            component
+                .get("translate")
+                .and_then(serde_json::Value::as_str),
+            Some("commands.gamerule.set" | "commands.gamerule.not_set")
+        ) || component
+            .get("extra")
+            .and_then(serde_json::Value::as_array)
+            .is_some_and(|extra| extra.iter().any(accepted))
+    }
+    ensure!(
+        accepted(&response),
+        "unexpected random tick rule response: {response}"
+    );
     Ok(())
 }
 async fn reset(bot: &mut Bot) -> Result<()> {
