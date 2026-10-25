@@ -100,6 +100,31 @@ impl MinecraftServer {
     }
 }
 
+/// Port of ServerGamePacketListenerImpl#tickPlayer after its network bookkeeping.
+/// All game reborrows resolve within this connection's one canonical Level.
+pub(super) fn tick_player_connection(
+    entity: EntityRef,
+    level: &mut Level,
+    tick_rate: &ServerTickRateManager,
+) -> Result<()> {
+    let player = level
+        .entity_mut::<ServerPlayer>(entity)
+        .map_err(game_error)?;
+    player.reset_position();
+    player.old_position = player.position;
+    ferraloom_game::entity::player::player_do_tick_with_tick_rate(entity, level, tick_rate)
+        .map_err(game_error)?;
+    let player = level.entity::<ServerPlayer>(entity).map_err(game_error)?;
+    let (position, yaw, pitch) = (player.first_good, player.yaw, player.pitch);
+    ferraloom_game::entity::teleport::abs_snap_to(entity, position, yaw, pitch, level)
+        .map_err(game_error)?;
+    level
+        .entity_mut::<ServerPlayer>(entity)
+        .map_err(game_error)?
+        .finish_connection_tick();
+    Ok(())
+}
+
 fn entity_level_index<'a>(
     levels: impl Iterator<Item = &'a Level>,
     entity: EntityRef,

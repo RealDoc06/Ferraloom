@@ -665,6 +665,10 @@ impl MinecraftServer {
         Ok(true)
     }
     fn lend_server_shared(&mut self) -> bool {
+        if self.shared.is_none() {
+            self.shared(); // A nested command retains the current phase owner.
+            return false;
+        }
         self.lend_server_shared_to(&id("overworld"))
             .expect("overworld phase shared owner")
     }
@@ -743,10 +747,7 @@ impl MinecraftServer {
     }
     /// Port of MinecraftServer#processPacketsAndTick. No IO task applies play state.
     async fn process_packets(&mut self) -> Result<()> {
-        let lent = self.lend_server_shared();
-        let result = self.process_packets_inner().await;
-        self.return_server_shared(lent);
-        result
+        self.process_packets_inner().await
     }
     async fn process_packets_inner(&mut self) -> Result<()> {
         let count = self.ingress.len();
@@ -869,10 +870,21 @@ impl MinecraftServer {
                         "connection {id} ingress sequence mismatch"
                     );
                     c.incoming_sequence += 1;
+                    let dimension = match c.phase {
+                        Phase::Play(entity) => self
+                            .level_for_entity(entity)
+                            .map_err(game_error)?
+                            .dimension_key()
+                            .map_err(game_error)?
+                            .clone(),
+                        Phase::Configuration(_) => crate::registries::id("overworld"),
+                    };
+                    let lent = self.lend_server_shared_to(&dimension)?;
                     let result = match packet {
                         Incoming::Configuration(p) => self.configuration(id, p).await,
                         Incoming::Play(p) => self.play_packet(id, *p).await,
                     };
+                    self.return_server_shared(lent);
                     if let Err(e) = result {
                         eprintln!("Packet rejected for {id}: {e:#}");
                         if let Some(c) = self.connections.get_mut(&id) {
@@ -880,7 +892,21 @@ impl MinecraftServer {
                         }
                     }
                 }
-                Ingress::Closed { id } => self.remove_player(id).await?,
+                Ingress::Closed { id } => {
+                    let dimension = match self.connections.get(&id).map(|c| c.phase) {
+                        Some(Phase::Play(entity)) => self
+                            .level_for_entity(entity)
+                            .map_err(game_error)?
+                            .dimension_key()
+                            .map_err(game_error)?
+                            .clone(),
+                        _ => crate::registries::id("overworld"),
+                    };
+                    let lent = self.lend_server_shared_to(&dimension)?;
+                    let result = self.remove_player(id).await;
+                    self.return_server_shared(lent);
+                    result?;
+                }
                 Ingress::Console(command) => {
                     if let Err(e) = self.execute_command(None, &command).await {
                         eprintln!("{e:#}");
@@ -927,14 +953,8 @@ impl MinecraftServer {
         for dimension in self.level_keys() {
             self.tick_level(&dimension, paused)?;
         }
-        let lent = self.lend_server_shared();
-        let connection_result = async {
-            self.tick_connections().await?;
-            self.send_chunks()
-        }
-        .await;
-        self.return_server_shared(lent);
-        connection_result?;
+        self.tick_connections().await?;
+        self.send_chunks()?;
         self.flush_outbound();
         self.refresh_status();
         if !paused {
@@ -2595,10 +2615,15 @@ impl MinecraftServer {
     }
 
     async fn tick_connections(&mut self) -> Result<()> {
-        self.process_command_suggestions()?;
+        let lent = self.lend_server_shared();
+        let suggestions = self.process_command_suggestions();
+        self.return_server_shared(lent);
+        suggestions?;
         let now = Instant::now();
         let mut joining = Vec::new();
-        for (&id, c) in &mut self.connections {
+        let connections: Vec<_> = self.connections.keys().copied().collect();
+        for id in connections {
+            let c = self.connections.get_mut(&id).expect("selected connection");
             if c.close {
                 continue;
             }
@@ -2642,8 +2667,10 @@ impl MinecraftServer {
                     }
                 }
             }
-            match c.phase {
+            let phase = c.phase;
+            match phase {
                 Phase::Configuration(ConfigTask::Preparing) => {
+                    let c = &self.connections[&id];
                     let player = c.player.as_ref().unwrap();
                     let center = player.chunk_position();
                     if (-3..=3).all(|x| {
@@ -2659,6 +2686,7 @@ impl MinecraftServer {
                     }
                 }
                 Phase::Configuration(ConfigTask::Finishing) => {
+                    let c = &self.connections[&id];
                     let center = c.player.as_ref().unwrap().chunk_position();
                     self.level
                         .generation()
@@ -2666,39 +2694,28 @@ impl MinecraftServer {
                 }
                 Phase::Play(entity) => {
                     if !self.was_paused {
-                        let player = self
-                            .level
-                            .level
-                            .entity_mut::<ServerPlayer>(entity)
-                            .map_err(game_error)?;
-                        player.reset_position();
-                        player.old_position = player.position;
-                        ferraloom_game::entity::player::player_do_tick_with_tick_rate(
-                            entity,
-                            &mut self.level.level,
-                            &self.tick_rate_manager,
-                        )
-                        .map_err(game_error)?;
-                        let player = self
-                            .level
-                            .level
-                            .entity::<ServerPlayer>(entity)
-                            .map_err(game_error)?;
-                        let (position, yaw, pitch) = (player.first_good, player.yaw, player.pitch);
-                        ferraloom_game::entity::teleport::abs_snap_to(
-                            entity,
-                            position,
-                            yaw,
-                            pitch,
-                            &mut self.level.level,
-                        )
-                        .map_err(game_error)?;
-                        self.level
-                            .level
-                            .entity_mut::<ServerPlayer>(entity)
+                        let dimension = self
+                            .level_for_entity(entity)
                             .map_err(game_error)?
-                            .finish_connection_tick();
+                            .dimension_key()
+                            .map_err(game_error)?
+                            .clone();
+                        let lent = self.lend_server_shared_to(&dimension)?;
+                        let result = {
+                            let live = std::iter::once(&mut self.level)
+                                .chain(self.additional_levels.iter_mut())
+                                .find(|live| live.dimension == dimension.as_str())
+                                .expect("selected dimension");
+                            levels::tick_player_connection(
+                                entity,
+                                &mut live.level,
+                                &self.tick_rate_manager,
+                            )
+                        };
+                        self.return_server_shared(lent);
+                        result?;
                     }
+                    let c = self.connections.get_mut(&id).expect("selected connection");
                     let idle = self.idle_timeout;
                     if idle > 0
                         && now.duration_since(c.last_action) > Duration::from_secs(idle as u64 * 60)
@@ -2976,8 +2993,19 @@ impl MinecraftServer {
                 Ok(())
             })
             .await??;
-            self.level.generation().update_player(entity, None);
-            self.level.level.remove_entity(entity).map_err(game_error)?;
+            let dimension = self
+                .level_for_entity(entity)
+                .map_err(game_error)?
+                .dimension_key()
+                .map_err(game_error)?
+                .clone();
+            self.live_level_in(&dimension)?
+                .generation()
+                .update_player(entity, None);
+            self.level_for_entity_mut(entity)
+                .map_err(game_error)?
+                .remove_entity(entity)
+                .map_err(game_error)?;
             self.players.retain(|&id| id != connection);
             self.broadcast(cb::Packet::PlayerInfoRemove(cb::PlayerInfoRemove {
                 profile_ids: vec![c.profile.id],
