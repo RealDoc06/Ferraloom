@@ -1,7 +1,6 @@
 //! Ordered LivingEntity/Player damage pipeline; entity and item callbacks keep
 //! their native visibility points and use short canonical state borrows.
 use crate::{
-    block::UnportedOperation,
     entity::{
         Entity, EntityData, EntityMethod, EntityRef, EntityState, LivingEntity,
         damage::{DamageSource, DamageTypeKey, DamageTypeTag, combat_rules, combat_tracker},
