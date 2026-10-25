@@ -58,7 +58,7 @@ fn decrease_eggs(state: BlockState, pos: BlockPos, level: &mut Level) -> Result<
     level.play_sound(
         None,
         position,
-        SoundEvent::TURTLE_EGG_BREAK,
+        SoundEvent::ENTITY_TURTLE_EGG_BREAK,
         SoundSource::Blocks,
         0.7,
         pitch,

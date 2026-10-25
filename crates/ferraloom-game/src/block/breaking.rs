@@ -118,5 +118,6 @@ impl Level {
         self.optional_block_call(state.block(), BlockMethod::Attack, |behavior, level| {
             behavior.attack(state, pos, player, level)
         })
+        .map(|_| ())
     }
 }

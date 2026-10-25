@@ -68,6 +68,18 @@ fn replace(level: &mut Level, pos: BlockPos, state: ferraloom_data::BlockState) 
 }
 fn setup(fields: &[&str]) -> (Level, EntityRef, EntityRef) {
     let (mut level, player) = super::tests::fixture(false, true);
+    let mut shared = crate::ServerShared::default();
+    if fields[4] == "true" {
+        shared.ops.set_operator(
+            &ferraloom_protocol::login::GameProfile {
+                id: Uuid::new(100, 100),
+                name: "operator".into(),
+                properties: Vec::new(),
+            },
+            Some(crate::commands::permissions::PermissionLevel::Owners),
+        );
+    }
+    level.install_shared(Box::new(shared));
     assert_eq!(level.min_build_height(), fields[7].parse::<i32>().unwrap());
     assert_eq!(level.max_build_height(), fields[8].parse::<i32>().unwrap());
     let mode = match fields[2] {
@@ -97,11 +109,6 @@ fn setup(fields: &[&str]) -> (Level, EntityRef, EntityRef) {
         "minecraft:overworld".parse().unwrap(),
         POS,
         16,
-        if fields[4] == "true" {
-            vec![Uuid::new(100, 100)]
-        } else {
-            Vec::new()
-        },
     ));
     let observer = level.next_entity_ref();
     level
@@ -350,7 +357,6 @@ fn pending_item_and_missing_stat_context_preserve_source_side_effects() {
             "minecraft:overworld".parse().unwrap(),
             POS,
             0,
-            [],
         ));
         replace(&mut level, POS, Block::DIRT.default_state());
         let error = destroy_block(player, POS, &mut level).unwrap_err();
@@ -380,6 +386,7 @@ fn pending_item_and_missing_stat_context_preserve_source_side_effects() {
                 .iter()
                 .any(|event| matches!(event, Observation::GameEvent { .. }))
         );
+        level.install_shared(Box::default());
         replace(&mut level, POS, Block::STONE.default_state());
         level
             .entity_mut::<ServerPlayer>(player)
@@ -400,8 +407,10 @@ fn pending_item_and_missing_stat_context_preserve_source_side_effects() {
                     removed: Vec::new(),
                 },
             ));
-        let mut mining = BlockBreakingState::default();
-        mining.game_ticks = 17;
+        let mut mining = BlockBreakingState {
+            game_ticks: 17,
+            ..Default::default()
+        };
         let max_y = level.max_build_height();
         assert!(matches!(
             mining.handle_block_break_action(
