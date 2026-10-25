@@ -50,8 +50,6 @@ use ferraloom_game::{
     level::{
         LevelError, Region,
         chunk_holder::ChunkStatus,
-        chunk_map::PlayerChunkSender,
-        distance_manager::tracking_view,
         server_level::ServerLevel,
         tick_rate::{ServerTickRateManager, TickRateEvent},
     },
@@ -144,9 +142,6 @@ struct Connection {
     close: bool,
     information: common::serverbound::ClientInformation,
     spawn: Option<PrepareSpawnTask>,
-    chunks: PlayerChunkSender,
-    view: HashSet<ChunkPos>,
-    center: Option<ChunkPos>,
     last_keepalive: Instant,
     keepalive: Option<i64>,
     last_action: Instant,
@@ -409,6 +404,10 @@ impl MinecraftServer {
         level
             .distance_manager
             .set_view_distance(properties.int("view-distance"));
+        level.level.configure_entity_tracking(
+            properties.int("view-distance"),
+            properties.int("entity-broadcast-range-percentage"),
+        );
         level.distance_manager.set_simulation_distance(
             properties.int("simulation-distance").clamp(2, 32),
             &mut level.tickets,
@@ -535,6 +534,10 @@ impl MinecraftServer {
             bootstrap
                 .distance_manager
                 .set_view_distance(properties.int("view-distance"));
+            bootstrap.level.configure_entity_tracking(
+                properties.int("view-distance"),
+                properties.int("entity-broadcast-range-percentage"),
+            );
             bootstrap.distance_manager.set_simulation_distance(
                 properties.int("simulation-distance").clamp(2, 32),
                 &mut bootstrap.tickets,
@@ -816,9 +819,6 @@ impl MinecraftServer {
                         close: false,
                         information: client_information(),
                         spawn: None,
-                        chunks: PlayerChunkSender::default(),
-                        view: HashSet::new(),
-                        center: None,
                         last_keepalive: Instant::now(),
                         keepalive: None,
                         last_action: Instant::now(),
@@ -1239,8 +1239,7 @@ impl MinecraftServer {
     }
 
     /// Apply accepted section transitions immediately, including Y-only moves.
-    /// The commands branch supplies the current SpectatorsGenerateChunks rule
-    /// when its canonical GameRules state lands (vanilla's default is true).
+    /// Preserve ChunkMap#move's audience pass before the distance-manager pass.
     pub(super) fn update_player_tickets(&mut self, entity: EntityRef) -> Result<()> {
         let dimension = self
             .level_for_entity(entity)
@@ -1248,19 +1247,29 @@ impl MinecraftServer {
             .dimension_key()
             .map_err(game_error)?
             .clone();
+        self.live_level_in_mut(&dimension)?
+            .level
+            .move_tracked_player(entity)
+            .map_err(anyhow::Error::new)?;
         let changes = self
             .live_level_in_mut(&dimension)?
             .level
             .take_player_section_changes();
         for (player, section) in changes {
-            self.live_level_in(&dimension)?
-                .generation()
-                .update_player(player, Some(section));
+            self.live_level_in_mut(&dimension)?
+                .level
+                .update_player_tracking_section(player, section)
+                .map_err(game_error)?;
         }
         let section = ferraloom_util::SectionPos::from_position(self.player(entity)?.position);
-        self.live_level_in(&dimension)?
-            .generation()
-            .update_player(entity, Some(section));
+        self.live_level_in_mut(&dimension)?
+            .level
+            .update_player_tracking_section(entity, section)
+            .map_err(game_error)?;
+        self.live_level_in_mut(&dimension)?
+            .level
+            .update_player_chunk_tracking(entity)
+            .map_err(game_error)?;
         Ok(())
     }
 
@@ -1303,7 +1312,6 @@ impl MinecraftServer {
         let pos = player.position;
         let yaw = player.yaw;
         let pitch = player.pitch;
-        let center = player.chunk_position();
         let mode = protocol_game_type(player.game_mode);
         let entity_id = player.network_id;
         let permission = self.shared().ops.permission_level(player.uuid).id();
@@ -1426,18 +1434,17 @@ impl MinecraftServer {
         c.push(cb::Packet::TickingStep(cb::TickingStep {
             tick_steps: VarInt(self.tick_rate_manager.frozen_ticks_to_run()),
         }));
-        c.push(cb::Packet::SetChunkCacheCenter(cb::SetChunkCacheCenter {
-            x: VarInt(center.x),
-            z: VarInt(center.z),
-        }));
-        c.center = Some(center);
-        c.push(cb::Packet::PostEffects(common_cb::PostEffects {
-            post_effects: Vec::new(),
-        }));
         self.live_level_in_mut(&dimension)?
             .level
             .add_entity(entity, EntityState::Player(Box::new(player)))
             .map_err(game_error)?;
+        ferraloom_game::inventory::send_container_packets(
+            entity,
+            [cb::Packet::PostEffects(common_cb::PostEffects {
+                post_effects: Vec::new(),
+            })],
+            &mut self.live_level_in_mut(&dimension)?.level,
+        )?;
         ferraloom_game::inventory::initialize_inventory_menu(
             entity,
             &mut self.live_level_in_mut(&dimension)?.level,
@@ -1484,7 +1491,6 @@ impl MinecraftServer {
             "{} joined at {}, {}, {}",
             c.profile.name, pos.x, pos.y, pos.z
         );
-        self.update_player_tickets(entity)?;
         self.players.push(connection);
         self.connections.insert(connection, c);
         self.apply_level_effects_in(&dimension)
@@ -1614,10 +1620,11 @@ impl MinecraftServer {
                     .on_ground = p.flags.on_ground
             }
             sb::Packet::ChunkBatchReceived(p) => self
-                .connections
-                .get_mut(&connection)
-                .unwrap()
-                .chunks
+                .level_for_entity_mut(entity)
+                .map_err(game_error)?
+                .entity_mut::<ServerPlayer>(entity)
+                .map_err(game_error)?
+                .chunk_sender
                 .acknowledge(p.desired_chunks_per_tick),
             sb::Packet::KeepAlive(p) => self.keepalive_reply(connection, p.id)?,
             sb::Packet::PlayerLoaded(_) => {
@@ -2845,18 +2852,17 @@ impl MinecraftServer {
                         .copied()
                         .collect::<HashSet<_>>()
                 });
-            let c = self
-                .connections
-                .get_mut(&connection)
-                .expect("selected connection");
-            let positions = c.chunks.next_batch(
-                c.center.context("playing connection has no chunk center")?,
-                |pos| {
-                    // prepareTickingChunk and center-light import own readiness;
-                    // neither another dimension nor neighbor readiness substitutes.
-                    ready.contains(&pos)
-                },
-            );
+            let player = self
+                .live_level_in_mut(&dimension)?
+                .level
+                .entity_mut::<ServerPlayer>(entity)
+                .map_err(game_error)?;
+            let center = player.chunk_position();
+            let positions = player.chunk_sender.next_batch(center, |pos| {
+                // prepareTickingChunk and center-light import own readiness;
+                // neither another dimension nor neighbor readiness substitutes.
+                ready.contains(&pos)
+            });
             if !positions.is_empty() {
                 batches.push((connection, dimension, positions));
             }
@@ -3070,13 +3076,11 @@ impl MinecraftServer {
                 .dimension_key()
                 .map_err(game_error)?
                 .clone();
-            self.live_level_in(&dimension)?
-                .generation()
-                .update_player(entity, None);
             self.level_for_entity_mut(entity)
                 .map_err(game_error)?
                 .remove_entity(entity)
                 .map_err(game_error)?;
+            self.apply_level_effects_in(&dimension)?;
             self.players.retain(|&id| id != connection);
             self.broadcast(cb::Packet::PlayerInfoRemove(cb::PlayerInfoRemove {
                 profile_ids: vec![c.profile.id],

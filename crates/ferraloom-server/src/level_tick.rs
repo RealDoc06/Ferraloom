@@ -286,11 +286,15 @@ impl MinecraftServer {
                     })
                 });
             for connection in self.player_connections_in(dimension)? {
+                let Phase::Play(entity) = self.connections[&connection].phase else {
+                    continue;
+                };
+                let sent = self.player(entity)?.chunk_sender.sent.contains(&pos);
                 let c = self
                     .connections
                     .get_mut(&connection)
                     .expect("selected connection");
-                if matches!(c.phase, Phase::Play(_)) && !c.close && c.chunks.sent.contains(&pos) {
+                if !c.close && sent {
                     if let Some(light) = &light {
                         c.push(light.clone());
                     }
@@ -335,7 +339,9 @@ impl MinecraftServer {
                 LevelEffect::PlayerPacket { recipients, packet } => {
                     for entity in recipients {
                         for &connection in &self.players {
-                            let c = self.connections.get_mut(&connection).unwrap();
+                            let Some(c) = self.connections.get_mut(&connection) else {
+                                continue;
+                            };
                             if matches!(c.phase, Phase::Play(id) if id == entity) && !c.close {
                                 c.push(*packet.clone());
                                 break;
@@ -344,9 +350,10 @@ impl MinecraftServer {
                     }
                 }
                 LevelEffect::PlayerSectionChange { player, section } => {
-                    self.live_level_in(dimension)?
-                        .generation()
-                        .update_player(player, Some(section));
+                    self.live_level_in_mut(dimension)?
+                        .level
+                        .update_player_tracking_section(player, section)
+                        .map_err(game_error)?;
                 }
             }
         }
@@ -392,35 +399,16 @@ impl MinecraftServer {
             let Phase::Play(entity) = c.phase else {
                 continue;
             };
-            self.update_player_tickets(entity)?;
             let player = self.player(entity)?;
             let center = player.chunk_position();
             let distance = player
                 .view_distance
                 .clamp(2, self.properties.int("view-distance").clamp(2, 32));
-            let desired: HashSet<_> = tracking_view(center, distance).into_iter().collect();
+            self.live_level_in_mut(dimension)?
+                .level
+                .update_player_chunk_tracking(entity)
+                .map_err(game_error)?;
             self.request_area_in(dimension, center, distance + 2)?;
-            let c = self.connections.get_mut(&connection).unwrap();
-            if c.center != Some(center) {
-                c.push(cb::Packet::SetChunkCacheCenter(cb::SetChunkCacheCenter {
-                    x: VarInt(center.x),
-                    z: VarInt(center.z),
-                }));
-                c.center = Some(center);
-            }
-            let mut leaving = c.view.difference(&desired).copied().collect::<Vec<_>>();
-            leaving.sort_by_key(|p| p.pack());
-            for pos in leaving {
-                if c.chunks.drop_chunk(pos) {
-                    c.push(cb::Packet::ForgetLevelChunk(cb::ForgetLevelChunk {
-                        pos: play::ChunkPos { x: pos.x, z: pos.z },
-                    }));
-                }
-            }
-            for &pos in desired.difference(&c.view) {
-                c.chunks.pending.insert(pos);
-            }
-            c.view = desired;
         }
         Ok(())
     }
