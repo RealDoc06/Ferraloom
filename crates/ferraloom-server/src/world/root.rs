@@ -311,6 +311,7 @@ mod tests {
             world.configure_live_rules(&mut level);
             assert_eq!(level.has_skylight().unwrap(), stem.dimension.has_skylight);
             let mut marker = CompoundTag::new();
+            marker.insert("DataVersion", Tag::Int(storage::DATA_VERSION));
             marker.insert("dimension", Tag::String(key.into()));
             world.io.store(ChunkPos::ZERO, Some(marker)).await.unwrap();
             world.io.synchronize(true).await.unwrap();
