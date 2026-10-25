@@ -161,6 +161,7 @@ pub struct LevelRules {
     pub fall_damage: bool,
     pub fire_damage: bool,
     pub freeze_damage: bool,
+    pub send_command_feedback: bool,
     pub natural_health_regeneration: bool,
     pub debug: bool,
     pub can_have_weather: bool,
@@ -200,6 +201,7 @@ impl Default for LevelRules {
             fall_damage: damage_default(GameRule::FallDamage),
             fire_damage: damage_default(GameRule::FireDamage),
             freeze_damage: damage_default(GameRule::FreezeDamage),
+            send_command_feedback: damage_default(GameRule::SendCommandFeedback),
             natural_health_regeneration: damage_default(GameRule::NaturalHealthRegeneration),
             debug: false,
             can_have_weather: true,
@@ -486,7 +488,7 @@ impl Level {
         chunk.loaded.set(true);
         region
             .block_entity_state
-            .prepare_published_chunk(&mut chunk);
+            .prepare_published_chunk(&mut chunk, region.game_time);
         region.block_entity_state.register_published_chunk(&chunk);
         region
             .block_ticks

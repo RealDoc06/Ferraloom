@@ -36,6 +36,12 @@ pub(crate) fn ported_behavior(
     method: BlockMethod,
 ) -> Option<&'static dyn BlockBehavior> {
     use BlockMethod as M;
+    if let Some(behavior) = super::post_placement::ported_behavior(block, method) {
+        return Some(behavior);
+    }
+    if super::placement::supports(block, method) {
+        return Some(&super::placement::CONTAINER_PLACEMENT);
+    }
     if matches!(
         block.block_entity_type(),
         Some(
