@@ -18,7 +18,10 @@ pub mod monster;
 pub mod player;
 pub mod pushing;
 mod stuck;
-pub use persistence::{EntityPersistenceError, load_in_place};
+pub mod variant;
+pub use persistence::{EntityPersistenceError, load_entity_recursive, load_in_place};
+mod spawn;
+pub use spawn::{EntitySpawnReason, EntitySpawnRequest};
 pub use stuck::{make_stuck_in_block, reset_fall_distance};
 mod relationships;
 pub use relationships::PassengerList;
@@ -291,6 +294,7 @@ pub enum EntityMethod {
     LoadSleepingPosition,
     LoadBrain,
     CowVariantBehavior,
+    FinalizeSpawn,
 }
 impl EntityMethod {
     pub const fn name(self) -> &'static str {
@@ -314,6 +318,7 @@ impl EntityMethod {
             Self::LoadSleepingPosition => "LivingEntity#readAdditionalSaveData(sleeping_pos)",
             Self::LoadBrain => "LivingEntity#makeBrain",
             Self::CowVariantBehavior => "Cow#getSoundSet",
+            Self::FinalizeSpawn => "Mob#finalizeSpawn",
             Self::Die => "LivingEntity#die",
         }
     }

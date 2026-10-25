@@ -1,6 +1,10 @@
 //! One boot per backend covers the live Strict furnace/storage group.
 #[allow(dead_code)] // This target uses only the clock/command subset of the fixture.
 mod level_support;
+#[path = "block_entity_sweeps/signs.rs"]
+mod signs;
+#[path = "block_entity_sweeps/storage.rs"]
+mod storage;
 
 use anyhow::Context;
 use ferraloom_data::{Block, Item, properties as p};

@@ -13,6 +13,7 @@ mod indexes;
 mod persistent;
 mod publication;
 use publication::EntityPublication;
+mod fresh;
 mod push;
 mod worldgen;
 use indexes::EntityRegistration;
@@ -268,8 +269,16 @@ impl Level {
         loaded: bool,
     ) -> Result<(), LevelError> {
         let status = self.publish_entity_data(entity, state, loaded)?;
+        self.complete_entity_registration(entity, status, !loaded)
+    }
+    fn complete_entity_registration(
+        &mut self,
+        entity: EntityRef,
+        status: Visibility,
+        created: bool,
+    ) -> Result<(), LevelError> {
         // ServerLevel.EntityCallbacks#onCreated precedes tracking start.
-        if !loaded && self.is_transmitting_waypoint(entity)? {
+        if created && self.is_transmitting_waypoint(entity)? {
             self.track_waypoint(entity)?;
         }
         if status.is_accessible() {
