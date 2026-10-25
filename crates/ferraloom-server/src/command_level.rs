@@ -160,7 +160,8 @@ impl MinecraftServer {
                 self.apply_command_result(source, &command.source, result?);
             }
             "weather" => {
-                let result = ferraloom_game::commands::weather::run(command, &mut self.level.level);
+                let result = ferraloom_game::commands::weather::run(command, &mut self.level.level)
+                    .map_err(CommandLevelFailure)?;
                 self.apply_command_result(source, &command.source, result);
             }
             "forceload" => {
