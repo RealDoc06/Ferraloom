@@ -8,8 +8,20 @@ use crate::{
     level::{Level, LevelError},
 };
 use ferraloom_data::{Item, ItemMethod};
-use ferraloom_protocol::component::{ComponentTypeId, DataComponent};
+use ferraloom_protocol::component::{ComponentTypeId, DataComponent, ItemStack, ItemStackTemplate};
 pub use strict::{ValidationError, validate_strict};
+
+/// Port of ItemStackTemplate#create/validate. Invalid runtime stacks become
+/// EMPTY; codecs and the canonical strict validator retain their own contracts.
+pub fn create_from_template(template: &ItemStackTemplate) -> ItemStack {
+    let stack = ItemStack::new(template.item, template.count, template.components.clone());
+    if let Err(error) = validate_strict(&stack) {
+        eprintln!("Can't create item stack with properties {template:?}, error: {error}");
+        ItemStack::default()
+    } else {
+        stack
+    }
+}
 
 /// Port of ItemStack#useOn. Receiver and context.getItemInHand are distinct
 /// captured objects. Every returned stack handle is scoped to this operation.

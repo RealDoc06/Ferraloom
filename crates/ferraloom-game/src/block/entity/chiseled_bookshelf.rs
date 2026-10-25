@@ -152,7 +152,7 @@ impl BlockEntity for ChiseledBookShelfBehavior {
             let item = contents
                 .and_then(|contents| contents.0.get(slot))
                 .and_then(Option::as_ref)
-                .map(|item| ItemStack::new(item.item, item.count, item.components.clone()))
+                .map(crate::item::stack::create_from_template)
                 .unwrap_or_default();
             entity.replace_item(slot, item);
         }
