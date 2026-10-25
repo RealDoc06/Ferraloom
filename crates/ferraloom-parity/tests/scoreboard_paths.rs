@@ -144,7 +144,7 @@ async fn sweep(session: &mut Session) -> Result<ObservationLog> {
             "commands.scoreboard.objectives.add.success",
         ),
         (
-            "scoreboard players set #capture_barrier capture_barrier 0",
+            "scoreboard players set #capture_barrier capture_barrier 1",
             "commands.scoreboard.players.set.success.single",
         ),
     ] {
@@ -330,6 +330,14 @@ async fn sweep(session: &mut Session) -> Result<ObservationLog> {
         "operation.readonly-target",
         command(bot, "scoreboard players get #holder points").await?,
     )?;
+    for (label, text) in [
+        ("zero.set", "scoreboard players set #holder points 0"),
+        ("zero.repeat", "scoreboard players set #holder points 0"),
+        ("zero.add", "scoreboard players add #holder points 0"),
+        ("zero.remove", "scoreboard players remove #holder points 0"),
+    ] {
+        log.record(label, command(bot, text).await?)?;
+    }
     command(bot, "scoreboard players enable ParityBot toggle").await?;
     log.record(
         "trigger.primed",

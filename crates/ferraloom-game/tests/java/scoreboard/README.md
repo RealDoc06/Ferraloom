@@ -14,6 +14,10 @@ statistic aliases (`mined:stone` becomes `minecraft.mined:minecraft.stone`).
 `CommandVectors` adds 120 real dispatcher cases. Each case compares exact
 feedback components, return values/errors and the ordered bytes emitted by real
 ServerScoreboard hooks through all five native scoreboard packet codecs.
+
+`python3 generate-zero.py` captures eight displayed-score cases: zero and repeated
+zero sets filter feedback with NON_ZERO, while zero add/remove retain ANY targets,
+including wildcard cardinality. The live command sweep checks the same zero cases.
 Capture includes both PlayerList broadcasts and direct player-connection sends
 for objective tracking start/stop packets.
 Only `/scoreboard players list <holder>` entry lines compare without ordering:
