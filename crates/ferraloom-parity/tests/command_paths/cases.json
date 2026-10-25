@@ -953,8 +953,7 @@
             }
           ]
         }
-      ],
-      "pending": "BlockCollisions full-block fast path"
+      ]
     },
     {
       "name": "commands.path.gamemode.arg-gamemode.arg-target",
@@ -972,8 +971,7 @@
             }
           ]
         }
-      ],
-      "pending": "BlockCollisions full-block fast path"
+      ]
     },
     {
       "name": "commands.path.defaultgamemode.arg-gamemode",
