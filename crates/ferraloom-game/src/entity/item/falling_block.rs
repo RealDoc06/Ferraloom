@@ -1,4 +1,4 @@
-//! Port of FallingBlockEntity's sand/gravel physics, landing and persistence.
+//! Port of FallingBlockEntity's physics, water interception, landing and persistence.
 use crate::{
     block::{BlockMethod, DirectionalPlaceContext, LevelReaderRef, fluid::legacy_block},
     entity::{
@@ -8,13 +8,21 @@ use crate::{
         persistence,
         synched_data::EntityDataAccessor,
     },
-    level::{Level, LevelError},
+    level::{
+        Level, LevelError,
+        clip::{ClipBlock, ClipContext, ClipFluid},
+    },
 };
-use ferraloom_data::{Block, BlockClass, BlockState, EntityType, properties, tags::BlockTags};
+use ferraloom_data::{
+    Block, BlockClass, BlockState, EntityType, properties,
+    tags::{BlockTags, FluidTags},
+};
 use ferraloom_nbt::{CompoundTag, Tag};
 use ferraloom_protocol::component::ItemStack;
 use ferraloom_util::{BlockPos, Direction, Vec3, mth, random::RandomSource};
 
+#[cfg(test)]
+mod powder_tests;
 #[cfg(test)]
 mod tests;
 
@@ -341,8 +349,7 @@ impl Entity for FallingBlockBehavior {
     fn movement_emission(&self) -> MovementEmission {
         MovementEmission::None
     }
-    /// Concrete-powder hydration and block-entity restoration retain required
-    /// boundaries until those families supply their live callback ports.
+    /// Port of FallingBlockEntity#tick. Block-entity restoration remains required.
     fn tick(&self, entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
         with_entity_refs(&[entity], level, |level| {
             self.tick_falling_block(entity, level)
@@ -369,12 +376,6 @@ impl FallingBlockBehavior {
         if state.is_air() {
             return level.remove_entity(entity);
         }
-        if state
-            .block()
-            .is_instance_of(BlockClass::ConcretePowderBlock)
-        {
-            return Err(LevelError::UnsupportedBlock(state.block()));
-        }
         if falling.block_data.is_some() && state.has_block_entity() {
             return Err(LevelError::UnsupportedBlockEntity(state.block()));
         }
@@ -389,8 +390,40 @@ impl FallingBlockBehavior {
         self.apply_effects_from_blocks(entity, level)?;
         let falling = level.entity::<FallingBlockEntity>(entity)?;
         if !falling.parent.removed || falling.force_tick_after_teleport_to_duplicate {
-            let pos = falling.parent.block_position;
-            if !falling.parent.on_ground {
+            let mut pos = falling.parent.block_position;
+            let is_concrete = falling
+                .block_state
+                .block()
+                .is_instance_of(BlockClass::ConcretePowderBlock);
+            let mut in_water = if is_concrete {
+                let fluid = level.get_block_state(pos)?.data().fluid;
+                level
+                    .fluid_tags()?
+                    .contains_key(FluidTags::WATER, fluid.fluid_type)
+            } else {
+                false
+            };
+            if is_concrete && falling.parent.velocity.length_sqr() > 1.0 {
+                let context = ClipContext::for_entity(
+                    falling.parent.old_position,
+                    falling.parent.position,
+                    ClipBlock::Collider,
+                    ClipFluid::SourceOnly,
+                    Some(entity),
+                    level,
+                )?;
+                let hit = level.clip(&context)?;
+                if !hit.miss && {
+                    let fluid = level.get_block_state(hit.block_pos)?.data().fluid;
+                    level
+                        .fluid_tags()?
+                        .contains_key(FluidTags::WATER, fluid.fluid_type)
+                } {
+                    pos = hit.block_pos;
+                    in_water = true;
+                }
+            }
+            if !falling.parent.on_ground && !in_water {
                 if falling.time > 100
                     && (pos.y <= level.min_build_height() || pos.y > level.max_build_height())
                     || falling.time > 600
@@ -417,7 +450,8 @@ impl FallingBlockBehavior {
                         )?;
                         let may_replace = reader.can_be_replaced(current, &context)?;
                         let continues_falling =
-                            is_free(level.get_block_state(pos.below(1))?, level)?;
+                            is_free(level.get_block_state(pos.below(1))?, level)?
+                                && (!is_concrete || !in_water);
                         let state = level.entity::<FallingBlockEntity>(entity)?.block_state;
                         let survives = reader.can_survive(state, pos)? && !continues_falling;
                         if may_replace && survives {
