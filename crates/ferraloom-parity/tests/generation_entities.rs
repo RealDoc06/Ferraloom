@@ -91,7 +91,17 @@ async fn load_and_track(session: &mut Session) -> Result<ObservationLog> {
         "commands.forceload.added.single",
     )
     .await?;
-    bot.teleport([1024.5, 80.0, 1024.5]).await?;
+    let position = [1024.5, 80.0, 1024.5];
+    bot.teleport(position).await?;
+    if !bot.snapshot().chunks.contains(&(CENTER.x, CENTER.z)) {
+        bot.wait_for("loaded entity chunk sent", Ticks::DEFAULT, |state, _| {
+            state.chunks.contains(&(CENTER.x, CENTER.z))
+        })
+        .await?;
+    }
+    // ChunkMap#move retries entity pairing through isChunkTracked, which is
+    // false while PlayerChunkSender still has the chunk pending after teleport.
+    bot.move_to(position, false).await?;
     let paired = |state: &ferraloom_parity::BotState| {
         UUIDS.iter().all(|uuid| {
             state.entities.values().any(|entity| {
@@ -110,7 +120,8 @@ async fn load_and_track(session: &mut Session) -> Result<ObservationLog> {
             Ticks::DEFAULT,
             |state, _| paired(state),
         )
-        .await?;
+        .await
+        .with_context(|| format!("loaded entity snapshot: {:?}", bot.snapshot().entities))?;
     }
     bot.synchronize().await?;
     let snapshot = bot.snapshot();
