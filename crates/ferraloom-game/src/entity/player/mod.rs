@@ -404,7 +404,10 @@ impl ServerPlayer {
         tag.insert("XpTotal", Tag::Int(self.total_experience));
         tag.insert("Score", Tag::Int(self.score()));
         tag.insert("UUID", Tag::IntArray(self.uuid.to_int_array().to_vec()));
-        tag.insert("Dimension", Tag::String("minecraft:overworld".into()));
+        tag.insert(
+            "Dimension",
+            Tag::String(level.dimension_key()?.to_string().into()),
+        );
         tag.insert(
             "Pos",
             Tag::List(ListTag(vec![
