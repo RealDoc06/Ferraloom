@@ -31,6 +31,8 @@ pub enum InsideBlockAction {
     Effect(InsideBlockEffectType),
     LavaHurt,
     InFireHurt(f32),
+    /// PowderSnowBlock#entityInside captures pos in runBefore(EXTINGUISH).
+    PowderSnowExtinguish(BlockPos),
 }
 
 /// Port of InsideBlockEffectApplier.StepBasedCollector. Adjacent visits to the
@@ -206,6 +208,9 @@ pub fn apply_collected<E: Entity + ?Sized>(
                         )?;
                     }
                 }
+            }
+            InsideBlockAction::PowderSnowExtinguish(pos) => {
+                crate::block::plants::powder_snow_before_extinguish(entity, pos, level)?;
             }
             InsideBlockAction::InFireHurt(damage) => {
                 let source = level.damage_sources().in_fire();

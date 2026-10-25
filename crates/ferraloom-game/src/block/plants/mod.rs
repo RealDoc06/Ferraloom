@@ -39,6 +39,7 @@ mod survival;
 pub mod tree_grower;
 mod vines;
 pub use moss::place_at as place_mossy_carpet;
+pub(crate) use powder_snow::before_extinguish as powder_snow_before_extinguish;
 pub use powder_snow::can_walk_on as can_entity_walk_on_powder_snow;
 pub use survival::place_double_plant;
 pub use vines::acceptable_neighbor as vine_acceptable_neighbor;
@@ -175,7 +176,7 @@ pub fn ported_behavior(block: Block, method: BlockMethod) -> Option<&'static dyn
         C::PowderSnowBlock
             if matches!(
                 method,
-                M::CollisionShape | M::EntityInsideCollisionShape | M::PickupBlock
+                M::CollisionShape | M::EntityInsideCollisionShape | M::PickupBlock | M::FallOn
             ) =>
         {
             &powder_snow::POWDER_SNOW
