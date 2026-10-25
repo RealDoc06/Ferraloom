@@ -131,6 +131,7 @@ pub enum LevelError {
     UnsupportedEnvironmentAttribute(ferraloom_data::registries::environment_attribute::Id),
     MissingEnvironmentContext,
     MissingBlockTransformers,
+    MissingEnchantments,
     MissingSpawnProtectionContext,
     MissingServerShared,
     MissingBlockTags,
