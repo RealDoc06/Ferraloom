@@ -71,7 +71,7 @@ pub(super) fn fixture(behaviors: &'static Behaviors) -> (Level, EntityRef) {
     let mut miner = ServerPlayer::new(
         Uuid::offline_player("Destroy"),
         "Destroy".into(),
-        level.next_entity_id(),
+        level.next_entity_id().unwrap(),
         Vec3::new(8.5, 64.0, 8.5),
         GameType::Survival,
     );

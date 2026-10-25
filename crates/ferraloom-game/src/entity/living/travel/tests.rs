@@ -122,7 +122,7 @@ fn native_climb_movement_clamps_axes_resets_fall_and_only_players_suppress_slidi
             EntityState::Player(Box::new(ServerPlayer::new(
                 Uuid::new(5, 6),
                 "climb".into(),
-                level.next_entity_id(),
+                level.next_entity_id().unwrap(),
                 Vec3::new(8.5, 64.0, 8.5),
                 if row[1] == "spectator" {
                     GameType::Spectator
@@ -186,7 +186,7 @@ fn native_air_travel_matches_collision_positions_flags_effects_and_drag_bits() {
             let mut player = ServerPlayer::new(
                 Uuid::new(3, 4),
                 "air".into(),
-                level.next_entity_id(),
+                level.next_entity_id().unwrap(),
                 vector(row[5]),
                 GameType::Survival,
             );

@@ -319,14 +319,18 @@ mod tests {
     use ferraloom_util::Uuid;
     static EMPTY: Behaviors = Behaviors::EMPTY;
     fn level() -> Level {
-        Level::new(
-            Region::new(&EMPTY),
-            crate::level::LevelContext::fixture(0, 63),
-        )
+        {
+            let mut fixture_level = Level::new(
+                Region::new(&EMPTY),
+                crate::level::LevelContext::fixture(0, 63),
+            );
+            fixture_level.install_shared(Box::default());
+            fixture_level
+        }
     }
     fn player(level: &mut Level, id: u64, position: Vec3) -> EntityRef {
         let handle = EntityRef::fixture(crate::level::RegionId::FIXTURE, id);
-        let network = level.next_entity_id();
+        let network = level.next_entity_id().unwrap();
         let player = ServerPlayer::new(
             Uuid::offline_player(&format!("Sound{id}")),
             format!("Sound{id}"),

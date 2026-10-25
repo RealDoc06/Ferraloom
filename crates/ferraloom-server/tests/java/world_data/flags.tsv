@@ -1,0 +1,9 @@
+minecraft:normal	NoiseBasedChunkGenerator	false	false	false
+minecraft:normal	FlatLevelSource	false	false	false
+minecraft:normal	DebugLevelSource	false	false	false
+minecraft:flat	NoiseBasedChunkGenerator	false	true	true
+minecraft:flat	FlatLevelSource	false	true	true
+minecraft:flat	DebugLevelSource	false	true	true
+minecraft:debug_all_block_states	NoiseBasedChunkGenerator	true	false	false
+minecraft:debug_all_block_states	FlatLevelSource	true	false	false
+minecraft:debug_all_block_states	DebugLevelSource	true	false	false

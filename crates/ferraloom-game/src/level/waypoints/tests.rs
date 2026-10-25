@@ -16,7 +16,6 @@ fn set_range(level: &mut Level, player: EntityRef, attribute: Attribute, value: 
 }
 fn fixture(reciprocal: bool, source_x: f64) -> (Level, Vec<EntityRef>) {
     let mut level = crate::entity::tests::level(false);
-    level.install_shared(Box::default());
     let mut players = Vec::new();
     for index in 1..=3 {
         let entity = level.next_entity_ref();

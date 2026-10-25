@@ -34,12 +34,11 @@ fn modifier() -> AttributeModifier {
 
 fn receiver(installed: bool) -> (Level, EntityRef) {
     let mut level = crate::entity::tests::level(false);
-    level.install_shared(Box::default());
     let owner = level.next_entity_ref();
     let mut player = ServerPlayer::new(
         Uuid::new(1, 2),
         "break".into(),
-        level.next_entity_id(),
+        level.next_entity_id().unwrap(),
         Vec3::new(8.5, 64.0, 8.5),
         GameType::Survival,
     );
@@ -167,7 +166,7 @@ fn living_equipment_break_parent_does_not_award_player_stats() {
     let mut level = crate::entity::tests::level(false);
     level.set_unported_behavior(UnportedBehavior::Warn);
     let owner = level.next_entity_ref();
-    let mut cow = Cow::with_parent(level.create_entity_data(EntityType::COW));
+    let mut cow = Cow::with_parent(level.create_entity_data(EntityType::COW).unwrap());
     cow.as_living_mut()
         .attributes
         .get_instance(Attribute::MAX_HEALTH)

@@ -136,19 +136,20 @@ impl EntityData {
         network_id: i32,
         random: LegacyRandomSource,
     ) -> Self {
-        Self::from_random_with_id(kind, random, || network_id)
+        Self::from_random_with_id(kind, random, || Ok(network_id))
+            .expect("fixed entity ID is infallible")
     }
     /// Entity's random and UUID field initializers run before the constructor's
     /// Level#getNextEntityId call; subclass RNG draws follow this base creation.
     pub(crate) fn from_random_with_id(
         kind: EntityType,
         mut random: LegacyRandomSource,
-        next_id: impl FnOnce() -> i32,
-    ) -> Self {
+        next_id: impl FnOnce() -> Result<i32, crate::level::LevelError>,
+    ) -> Result<Self, crate::level::LevelError> {
         let uuid = Uuid::insecure(&mut random);
-        let network_id = next_id();
+        let network_id = next_id()?;
         let dimensions = EntityDimensions::for_type(kind);
-        Self {
+        Ok(Self {
             entity_type: kind,
             network_id,
             network_id_allocated: network_id != 0,
@@ -220,7 +221,7 @@ impl EntityData {
             inside_block_is_precise: false,
             custom_data: CompoundTag::new(),
             saved: CompoundTag::new(),
-        }
+        })
     }
     pub fn set_pos_raw(&mut self, pos: Vec3) {
         if self.position.x != pos.x || self.position.y != pos.y || self.position.z != pos.z {

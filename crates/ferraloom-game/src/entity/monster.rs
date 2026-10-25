@@ -42,7 +42,7 @@ pub mod piglin {
                 let state = ServerPlayer::new(
                     Uuid::new(0, 1),
                     "guarded".into(),
-                    level.next_entity_id(),
+                    level.next_entity_id().unwrap(),
                     Vec3::new(8.0, 64.0, 8.0),
                     GameType::Survival,
                 );

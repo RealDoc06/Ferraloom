@@ -151,14 +151,17 @@ impl Level {
     }
     fn run_collected_fluids(&mut self) -> Result<(), LevelError> {
         while let Some(tick) = self.region_mut().fluid_ticks.poll_this_tick() {
-            let state = self.get_block_state(tick.pos)?;
+            let state = self
+                .get_block_state(tick.pos)
+                .map_err(|error| error.at(tick.pos, "scheduled fluid tick"))?;
             let fluid = state.data().fluid;
             if fluid.fluid_type == tick.block
                 && let Some(flow) = FlowingFluid::from_id(tick.block)
             {
                 self.optional_call(state.block(), BlockMethod::FluidTick, |level| {
                     flow.tick(level, tick.pos, state, fluid)
-                })?;
+                })
+                .map_err(|error| error.at(tick.pos, "scheduled fluid tick"))?;
             }
         }
         Ok(())
@@ -188,7 +191,8 @@ impl Level {
             if self.random().next_int_bound(48) == 0 {
                 let pos = self
                     .get_block_random_pos(BlockPos::new(chunk_pos.x * 16, 0, chunk_pos.z * 16), 15);
-                self.tick_precipitation(pos)?;
+                self.tick_precipitation(pos)
+                    .map_err(|error| error.at(pos, "precipitation tick"))?;
             }
         }
         if speed == 0 {
@@ -215,13 +219,16 @@ impl Level {
                     ),
                     15,
                 );
-                let state = self.get_block_state(pos)?;
+                let state = self
+                    .get_block_state(pos)
+                    .map_err(|error| error.at(pos, "random block tick"))?;
                 if state.data().random_ticking {
                     self.optional_block_call(
                         state.block(),
                         BlockMethod::RandomTick,
                         |behavior, level| behavior.random_tick(state, pos, level),
-                    )?;
+                    )
+                    .map_err(|error| error.at(pos, "random block tick"))?;
                 }
                 // The fluid is captured from the original state, even if the
                 // block callback changed it (LiquidBlock invokes lava twice).
@@ -231,7 +238,8 @@ impl Level {
                         FlowingFluid::from_id(fluid.fluid_type)
                             .ok_or(LevelError::UnsupportedFluidRandomTick)?
                             .random_tick(level, pos, fluid)
-                    })?;
+                    })
+                    .map_err(|error| error.at(pos, "random fluid tick"))?;
                 }
             }
         }

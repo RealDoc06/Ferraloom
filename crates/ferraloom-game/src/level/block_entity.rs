@@ -369,7 +369,9 @@ impl Level {
             .next_ticker()
         {
             let handle = ticker.entity;
-            let entity = self.block_entity_state(handle)?;
+            let entity = self
+                .block_entity_state(handle)
+                .map_err(|error| error.at(handle.pos, "block entity tick"))?;
             if entity.data().removed {
                 self.region_mut()
                     .block_entity_state
@@ -383,18 +385,25 @@ impl Level {
                 continue;
             }
             let key = ChunkPos::containing(handle.pos);
-            let chunk = self.chunk(key).ok_or(LevelError::MissingChunk(key))?;
+            let chunk = self
+                .chunk(key)
+                .ok_or(LevelError::MissingChunk(key))
+                .map_err(|error| error.at(handle.pos, "block entity tick"))?;
             if chunk.full_status() < super::distance_manager::FullChunkStatus::BlockTicking
                 || !self.are_entities_loaded(key)
                 || !self.entity_world_border().is_within_block(handle.pos)
             {
                 continue;
             }
-            if !ticker.kind.is_valid(self.get_block_state(handle.pos)?) {
+            if !ticker.kind.is_valid(
+                self.get_block_state(handle.pos)
+                    .map_err(|error| error.at(handle.pos, "block entity tick"))?,
+            ) {
                 continue;
             }
             let behavior = entity.behavior();
-            self.with_block_entity_callback(handle, |level| behavior.tick(handle, level))?;
+            self.with_block_entity_callback(handle, |level| behavior.tick(handle, level))
+                .map_err(|error| error.at(handle.pos, "block entity tick"))?;
         }
         Ok(())
     }
@@ -687,10 +696,14 @@ mod tests {
     use std::sync::Arc;
     static BEHAVIORS: Behaviors = Behaviors::EMPTY;
     fn level() -> Level {
-        let mut level = Level::new(
-            Region::new(&BEHAVIORS),
-            crate::level::LevelContext::fixture(0, 63),
-        );
+        let mut level = {
+            let mut fixture_level = Level::new(
+                Region::new(&BEHAVIORS),
+                crate::level::LevelContext::fixture(0, 63),
+            );
+            fixture_level.install_shared(Box::default());
+            fixture_level
+        };
         for x in 0..=1 {
             level
                 .add_chunk(LevelChunk::new(

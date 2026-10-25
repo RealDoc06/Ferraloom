@@ -16,7 +16,7 @@ fn fixture() -> (Level, EntityRef) {
     let mut level = crate::entity::tests::level(false);
     level.set_unported_behavior(crate::block::UnportedBehavior::Strict);
     let player = level.next_entity_ref();
-    let entity_id = level.next_entity_id();
+    let entity_id = level.next_entity_id().unwrap();
     level
         .add_entity(
             player,
