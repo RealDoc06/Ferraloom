@@ -49,5 +49,5 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Wandering traders](features/wandering-traders.md) | 5 | 5 | 0 | 0 | 0 |
 | [Weather, time and environment](features/weather-time.md) | 85 | 85 | 0 | 0 | 0 |
 | [World storage and data fixing](features/world-storage.md) | 308 | 305 | 3 | 0 | 0 |
-| [World generation](features/worldgen.md) | 3115 | 2640 | 175 | 300 | 0 |
-| **Total** | **19639** | **8222** | **2844** | **8573** | **0** |
+| [World generation](features/worldgen.md) | 3116 | 2640 | 176 | 300 | 0 |
+| **Total** | **19640** | **8222** | **2845** | **8573** | **0** |
