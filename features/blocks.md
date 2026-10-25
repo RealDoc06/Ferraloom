@@ -33,6 +33,7 @@ One class row per bootstrapped runtime Block class, listing every block id assig
 | blocks.collision.friction-speed | Apply per-block friction, speed factor and jump factor | `BlockBehaviour; Entity` | | - | todo |
 | blocks.falling.gravity | Schedule unsupported falling blocks and spawn falling-block entities | `FallingBlock#tick; FallingBlockEntity` | | - | todo |
 | blocks.falling.landing | Resolve landing placement, entity damage and item drops for falling blocks | `FallingBlockEntity#tick` | | - | todo |
+| blocks.fire.odds | Bootstrapped per-state ignition and burn odds, including waterlogged suppression | `FireBlock#getIgniteOdds; FireBlock#getBurnOdds` | [native state-fact comparisons](../crates/ferraloom-data/src/building_properties.rs) | - | partial |
 | blocks.fire.spread | Age and extinguish fire; test flammability, rain, difficulty and spread gamerule | `FireBlock#tick` | | - | todo |
 | blocks.fire.soul-base | Require valid bases for soul fire and preserve its distinct damage | `SoulFireBlock; BaseFireBlock` | | - | todo |
 | blocks.crop.growth | Use random-tick crop age, light, moisture and adjacent-crop growth modifiers | `CropBlock#randomTick; CropBlock#getGrowthSpeed` | [live Strict scenario](../crates/ferraloom-parity/tests/plants_live.rs) (`crops` group; Strict both-server pass) | pass | pass |
