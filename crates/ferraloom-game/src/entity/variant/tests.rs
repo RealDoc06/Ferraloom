@@ -127,7 +127,7 @@ fn priority_selection_preserves_native_stable_ties_duplicate_candidates_and_rng(
         let picked = if selected.is_empty() {
             "-"
         } else {
-            selected[random.next_int(selected.len() as i32) as usize].path()
+            selected[random.next_int_bound(selected.len() as i32) as usize].path()
         };
         assert_eq!(picked, row[5]);
         assert_eq!(random.next_long(), row[6].parse::<i64>().unwrap());

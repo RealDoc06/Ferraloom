@@ -71,7 +71,8 @@ pub fn finalize_spawn(
     let variants = level.context().mob_variants()?.clone();
     let candidates = variants.cow.variants.candidates(pos, level)?;
     if !candidates.is_empty() {
-        let variant = candidates[level.random().next_int(candidates.len() as i32) as usize].clone();
+        let variant =
+            candidates[level.random().next_int_bound(candidates.len() as i32) as usize].clone();
         level
             .entity_mut::<LivingEntity>(entity)?
             .entity_data
@@ -86,7 +87,7 @@ pub fn finalize_spawn(
             entry: level.entity::<Cow>(entity)?.sound_variant().0.clone(),
         });
     }
-    let sound = sounds[level.random().next_int(sounds.len() as i32) as usize].clone();
+    let sound = sounds[level.random().next_int_bound(sounds.len() as i32) as usize].clone();
     level
         .entity_mut::<LivingEntity>(entity)?
         .entity_data
