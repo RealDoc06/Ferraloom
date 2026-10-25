@@ -378,6 +378,7 @@ impl GameRules {
         rules.random_tick_speed = self.integer(GameRule::RandomTickSpeed).max(0) as u32;
         rules.water_source_conversion = self.boolean(GameRule::WaterSourceConversion);
         rules.lava_source_conversion = self.boolean(GameRule::LavaSourceConversion);
+        rules.send_command_feedback = self.boolean(GameRule::SendCommandFeedback);
         rules.players_nether_portal_default_delay =
             self.integer(GameRule::PlayersNetherPortalDefaultDelay);
     }
