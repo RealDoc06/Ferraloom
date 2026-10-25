@@ -2,7 +2,6 @@
 //! its ticker using the owning dimension's static skylight fact.
 use super::{BlockEntity, BlockEntityData, BlockEntityRef};
 use crate::level::{Level, LevelError};
-use ferraloom_data::Block;
 
 /// Port of DaylightDetectorBlockEntity.
 #[derive(Clone, Debug)]
@@ -17,10 +16,8 @@ impl DaylightDetectorBlockEntity {
 pub(super) struct DaylightDetectorBehavior;
 pub(super) static DAYLIGHT_DETECTOR_ENTITY: DaylightDetectorBehavior = DaylightDetectorBehavior;
 impl BlockEntity for DaylightDetectorBehavior {
-    fn tick(&self, _receiver: BlockEntityRef, _level: &mut Level) -> Result<(), LevelError> {
-        // Redstone owns DaylightDetectorBlock#tickEntity and signal math. Bind
-        // its real hook once released through restart; never suppress this tick.
-        Err(LevelError::UnsupportedBlockEntity(Block::DAYLIGHT_DETECTOR))
+    fn tick(&self, receiver: BlockEntityRef, level: &mut Level) -> Result<(), LevelError> {
+        crate::block::redstone::device::tick_daylight_detector(receiver, level)
     }
 }
 
@@ -93,3 +90,6 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+mod ticker_tests;

@@ -127,7 +127,21 @@ impl PredicateContext for Level {
         Ok(self
             .structure_manager()
             .get_structure_with_piece_at_in(pos, set)
-            .map_err(required)?
+            .map_err(|error| match error {
+                LevelError::MissingChunk(chunk) => {
+                    // StructureManager reads the query's references before
+                    // consulting STRUCTURE_STARTS in referenced source chunks.
+                    let status = if chunk == ferraloom_util::ChunkPos::containing(pos) {
+                        super::chunk_holder::ChunkStatus::StructureReferences
+                    } else {
+                        super::chunk_holder::ChunkStatus::StructureStarts
+                    };
+                    LootError::Unsupported(format!(
+                        "StructureManager#getStructureWithPieceAt: MissingChunk({chunk:?}), required status {status:?}"
+                    ))
+                }
+                error => required(error),
+            })?
             .is_some())
     }
     fn light(&self, pos: BlockPos) -> Result<i32> {

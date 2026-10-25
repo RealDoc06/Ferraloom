@@ -1,0 +1,22 @@
+tick-crafter	35504	0	0	35504	0
+tick-crafter	35504	1	0	35504	0
+tick-crafter	35504	2	1	35504	0
+tick-crafter	35504	-2147483648	2147483647	35504	0
+tick-crafter	35504	2147483647	2147483646	35504	0
+tick-crafter	35480	0	0	35480	0
+tick-crafter	35480	1	0	35504	1
+tick-crafter	35480	2	1	35480	0
+tick-crafter	35480	-2147483648	2147483647	35480	0
+tick-crafter	35480	2147483647	2147483646	35480	0
+tick-daylight	13065	true	1	true	13065	0
+tick-daylight	13049	true	1	true	13049	0
+tick-daylight	13065	true	20	true	13075	1
+tick-daylight	13049	true	20	true	13048	1
+tick-daylight	13065	false	1	false	13065	0
+tick-daylight	13049	false	1	false	13049	0
+tick-daylight	13065	false	20	false	13065	0
+tick-daylight	13049	false	20	false	13049	0
+tick-daylight	13065	true	1	true	13065	0
+tick-daylight	13049	true	1	true	13049	0
+tick-daylight	13065	true	20	true	13075	1
+tick-daylight	13049	true	20	true	13048	1

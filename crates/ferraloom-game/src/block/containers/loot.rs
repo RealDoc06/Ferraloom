@@ -189,12 +189,13 @@ mod tests {
             .entity_mut::<ServerPlayer>(player)
             .unwrap()
             .advancements = crate::advancements::PlayerAdvancements::new(&advancements);
-        assert_eq!(
+        assert!(matches!(
             unpack_loot_table(handle, Some(player), &mut level),
-            Err(LevelError::UnsupportedAdvancementCriterion(
-                criteria::Trigger::GenerateLoot
-            ))
-        );
+            Err(LevelError::UnsupportedAdvancementPredicate {
+                trigger: criteria::Trigger::GenerateLoot,
+                ..
+            })
+        ));
         assert!(
             level
                 .block_entity_state(handle)

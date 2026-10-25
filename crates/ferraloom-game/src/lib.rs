@@ -2,6 +2,7 @@
 //!
 pub mod advancements;
 pub mod block;
+pub mod bossbar;
 pub mod commands;
 pub mod crafting;
 pub mod entity;

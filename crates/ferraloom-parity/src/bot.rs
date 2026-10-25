@@ -13,7 +13,7 @@ use ferraloom_protocol::{
 use ferraloom_server::{network::PacketIo, registries::RegistrySet};
 use ferraloom_util::{BlockPos, Direction};
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, HashMap},
     net::SocketAddr,
     sync::{Arc, Mutex},
     time::{Duration, SystemTime, UNIX_EPOCH},
@@ -57,6 +57,15 @@ pub struct Entity {
     pub rotation: [f32; 2],
     pub data: BTreeMap<u8, p::entity_data::EntityDataValue>,
 }
+/// Client state reconstructed solely from decoded ClientboundBossEventPacket operations.
+#[derive(Clone, Debug, PartialEq)]
+pub struct BossEventState {
+    pub name: p::chat::Component,
+    pub progress: f32,
+    pub color: play::BossBarColor,
+    pub overlay: play::BossBarOverlay,
+    pub properties: play::BossProperties,
+}
 #[derive(Clone, Debug, Default)]
 pub struct BotState {
     pub entity_id: Option<i32>,
@@ -78,6 +87,8 @@ pub struct BotState {
     pub inventory: BTreeMap<i32, ItemStack>,
     /// Latest full advancement progress, including packets consumed during join.
     pub advancement_progress: BTreeMap<p::Identifier, play::AdvancementProgress>,
+    /// Includes initial Add operations consumed while connecting.
+    pub boss_events: HashMap<Uuid, BossEventState>,
     pub scores: BTreeMap<(String, String), i32>,
     pub objectives: BTreeMap<String, play::ObjectiveOperation>,
     pub display_objectives: Vec<cb::SetDisplayObjective>,
@@ -122,6 +133,7 @@ pub struct Bot {
     pub name: String,
     state: Arc<Mutex<BotState>>,
     sequence: Arc<Mutex<Sequence>>,
+    registries: Option<Arc<RegistrySet>>,
     send: mpsc::Sender<sb::Packet>,
     events: broadcast::Receiver<Arc<cb::Packet>>,
     tasks: Vec<JoinHandle<()>>,
@@ -137,6 +149,47 @@ impl Drop for Bot {
     }
 }
 impl Bot {
+    /// The actual synchronized registry order and tags shared by this connection's codecs.
+    pub fn registry_context(&self) -> Result<Arc<RegistrySet>> {
+        self.registries.clone().context("client disconnected")
+    }
+
+    /// Close this client's socket and release observations while keeping its session index stable.
+    pub async fn disconnect(&mut self) -> Result<()> {
+        let tasks = std::mem::take(&mut self.tasks);
+        for task in &tasks {
+            task.abort();
+        }
+        let mut failure = None;
+        for task in tasks {
+            if let Err(error) = task.await
+                && !error.is_cancelled()
+                && failure.is_none()
+            {
+                failure = Some(error);
+            }
+        }
+        *self.state.lock().unwrap() = BotState {
+            error: Some("client disconnected".into()),
+            ..Default::default()
+        };
+        *self.sequence.lock().unwrap() = Sequence {
+            login: Vec::new(),
+            configuration: Vec::new(),
+            registries: Vec::new(),
+            join: Vec::new(),
+        };
+        // The closed broadcast channel can otherwise retain decoded chunk packets in its ring.
+        let (_, events) = broadcast::channel(1);
+        self.events = events;
+        self.registries = None;
+        if let Some(error) = failure {
+            Err(error.into())
+        } else {
+            Ok(())
+        }
+    }
+
     pub async fn connect(address: SocketAddr, name: &str) -> Result<Self> {
         tokio::time::timeout(Duration::from_secs(180), Self::connect_inner(address, name))
             .await
@@ -300,13 +353,14 @@ impl Bot {
             ..BotState::default()
         }));
         let sequence = Arc::new(Mutex::new(sequence));
+        let registries = Arc::new(registries);
         let writer_state = state.clone();
         let writer_registries = registries.clone();
         let writer = tokio::spawn(async move {
             let result = async {
                 let mut encoder = CompressionEncoder::new(compression);
                 while let Some(packet) = outbound.recv().await {
-                    let mut body = p::Writer::with_context(&writer_registries);
+                    let mut body = p::Writer::with_context(writer_registries.as_ref());
                     packet.encode(&mut body)?;
                     write
                         .write_all(&FrameEncoder::encode(&encoder.encode(body.as_slice())?)?)
@@ -321,6 +375,7 @@ impl Bot {
         });
         let reader_state = state.clone();
         let reader_sequence = sequence.clone();
+        let reader_registries = registries.clone();
         let reply = send.clone();
         let reader = tokio::spawn(async move {
             let result = async {
@@ -342,7 +397,7 @@ impl Bot {
                     read.read_exact(&mut bytes).await?;
                     let bytes = decoder.decode(&bytes)?;
                     let packet = {
-                        let mut input = Reader::with_context(&bytes, &registries);
+                        let mut input = Reader::with_context(&bytes, reader_registries.as_ref());
                         let packet = cb::Packet::decode(&mut input)?;
                         input.finish()?;
                         packet
@@ -407,6 +462,7 @@ impl Bot {
             name,
             state,
             sequence,
+            registries: Some(registries),
             send,
             events: receiver,
             tasks: vec![reader, writer],
@@ -997,6 +1053,47 @@ fn apply(s: &mut BotState, p: &cb::Packet) -> Result<()> {
             s.containers.remove(&p.container_id.0);
         }
         cb::Packet::ChangeDifficulty(p) => s.difficulty = Some(p.clone()),
+        cb::Packet::BossEvent(p) => match &p.operation {
+            play::BossOperation::Add {
+                name,
+                progress,
+                color,
+                overlay,
+                properties,
+            } => {
+                s.boss_events.insert(
+                    p.id,
+                    BossEventState {
+                        name: name.clone(),
+                        progress: *progress,
+                        color: *color,
+                        overlay: *overlay,
+                        properties: properties.clone(),
+                    },
+                );
+            }
+            play::BossOperation::Remove {} => {
+                s.boss_events.remove(&p.id);
+            }
+            operation => {
+                if let Some(event) = s.boss_events.get_mut(&p.id) {
+                    match operation {
+                        play::BossOperation::UpdateProgress { progress } => {
+                            event.progress = *progress
+                        }
+                        play::BossOperation::UpdateName { name } => event.name = name.clone(),
+                        play::BossOperation::UpdateStyle { color, overlay } => {
+                            event.color = *color;
+                            event.overlay = *overlay;
+                        }
+                        play::BossOperation::UpdateProperties { properties } => {
+                            event.properties = properties.clone()
+                        }
+                        _ => unreachable!("handled add and remove"),
+                    }
+                }
+            }
+        },
         cb::Packet::SetScore(p) => {
             s.scores
                 .insert((p.objective_name.clone(), p.owner.clone()), p.score.0);

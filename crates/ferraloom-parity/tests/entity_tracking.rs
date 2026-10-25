@@ -426,3 +426,101 @@ async fn players_pair_equipment_reciprocally_then_remove_on_leave() -> Result<()
     )
     .await
 }
+
+/// A real movement packet invokes ChunkMap#move even within one section.
+async fn spectator_move(bot: &mut Bot, x: f64, changed_center: Option<i32>) -> Result<()> {
+    let before = bot.snapshot();
+    bot.send(sb::Packet::MovePlayerPosRot(sb::MovePlayerPosRot {
+        x,
+        y: 80.0,
+        z: 10.5,
+        y_rot: before.rotation[0],
+        x_rot: before.rotation[1],
+        flags: play::MovementFlags {
+            on_ground: false,
+            horizontal_collision: false,
+        },
+    }))
+    .await?;
+    bot.send(sb::Packet::ClientTickEnd(sb::ClientTickEnd {}))
+        .await?;
+    if let Some(center) = changed_center {
+        bot.wait_for("spectator client view follows movement", Ticks::DEFAULT, |_, packet| {
+            matches!(packet, cb::Packet::SetChunkCacheCenter(packet) if packet.x.0 == center && packet.z.0 == 0)
+        }).await?;
+    }
+    bot.synchronize().await?;
+    ensure!(
+        bot.snapshot().teleports == before.teleports,
+        "spectator movement was corrected"
+    );
+    Ok(())
+}
+async fn spectator_generation_rule(session: &mut Session) -> Result<ObservationLog> {
+    let id = session.join("ParityBot").await?;
+    let bot = session.bot(id)?;
+    freeze(bot).await?;
+    bot.teleport([8.5, 80.0, 10.5]).await?;
+    chunk(bot, (0, 0)).await?;
+    level_support::command(
+        bot,
+        "gamerule spectators_generate_chunks false",
+        "commands.gamerule.set",
+    )
+    .await?;
+    level_support::command(bot, "gamemode spectator", "commands.gamemode.success.self").await?;
+    spectator_move(bot, 8.5, None).await?;
+    ensure!(
+        bot.snapshot().chunks.contains(&(0, 0)),
+        "ignored spectator lost an existing view chunk"
+    );
+    // Each move is below the runtime's existing 100-block packet bound. No /tp
+    // ticket or creative observer can generate the destination's outer view.
+    for center in [4, 8, 12, 16] {
+        spectator_move(bot, f64::from(center * 16) + 8.5, Some(center)).await?;
+    }
+    // Frozen servers still publish this native wall-clock tick heartbeat.
+    bot.wait_for(
+        "frozen tracker tick heartbeat",
+        Ticks::DEFAULT,
+        |_, packet| matches!(packet, cb::Packet::SetTime(_)),
+    )
+    .await?;
+    bot.synchronize().await?;
+    let outer = (19, 0);
+    ensure!(
+        !bot.snapshot().chunks.contains(&outer),
+        "ignored spectator generated the fresh outer view chunk"
+    );
+    let mut log = ObservationLog::default();
+    log.record("ignored.client_view_center", [16, 0])?;
+    log.record("ignored.fresh_outer_chunk_missing", true)?;
+    level_support::command(
+        bot,
+        "gamerule spectators_generate_chunks true",
+        "commands.gamerule.set",
+    )
+    .await?;
+    // The position and section are unchanged: only the ignored flag transitions.
+    spectator_move(bot, 264.5, None).await?;
+    chunk(bot, outer).await?;
+    log.record("enabled.same_section_outer_chunk_received", true)?;
+    level_support::command(
+        bot,
+        "gamerule spectators_generate_chunks false",
+        "commands.gamerule.set",
+    )
+    .await?;
+    spectator_move(bot, 264.5, None).await?;
+    ensure!(
+        bot.snapshot().chunks.contains(&outer),
+        "disabling generation discarded the client view"
+    );
+    log.record("disabled_again.existing_client_view_retained", true)?;
+    Ok(log)
+}
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "launches disposable Strict vanilla/Ferraloom servers"]
+async fn spectator_generation_rule_preserves_view_and_rechecks_same_section_moves() -> Result<()> {
+    ferraloom_parity::run(options(), RunMode::from_env()?, spectator_generation_rule).await
+}

@@ -27,7 +27,7 @@ use crate::{
     level::{Level, LevelError},
 };
 use ferraloom_nbt::{CompoundTag, ListTag, Tag};
-use ferraloom_protocol::component::Persistent;
+use ferraloom_protocol::component::{ItemStack, Persistent};
 use ferraloom_util::{BlockPos, ChunkPos, Uuid, Vec3, mth};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -68,6 +68,10 @@ pub struct ServerPlayer {
     pub stats: crate::stats::ServerStatsCounter,
     pub food_data: food::FoodData,
     pub jump_trigger_time: i32,
+    /// ServerPlayer's native dimension-transfer guard; no cross-dimension
+    /// transition producer is ported yet, so it starts and remains false.
+    pub changing_dimension: bool,
+    pub hurt_dir: f32,
     pub(crate) spawn_extra_particles_on_fall: bool,
     starting_to_fall_position: Option<Vec3>,
     shoulder_entity_left: CompoundTag,
@@ -95,6 +99,7 @@ pub struct ServerPlayer {
     pub last_client_input: ferraloom_protocol::play::Input,
     pub text_filtering_enabled: bool,
     pub cooldowns: cooldowns::ServerItemCooldowns,
+    pub(crate) last_item_in_main_hand: ItemStack,
     interaction_range_modifiers: [std::sync::Arc<super::ai::attributes::AttributeModifier>; 2],
     pub view_distance: i32,
     /// Port of ServerPlayer#chunkTrackingView: the canonical desired chunk set.
@@ -245,6 +250,8 @@ impl ServerPlayer {
             stats: Default::default(),
             food_data: Default::default(),
             jump_trigger_time: 0,
+            changing_dimension: false,
+            hurt_dir: 0.0,
             spawn_extra_particles_on_fall: false,
             starting_to_fall_position: None,
             shoulder_entity_left: CompoundTag::new(),
@@ -283,6 +290,7 @@ impl ServerPlayer {
             },
             text_filtering_enabled: false,
             cooldowns: Default::default(),
+            last_item_in_main_hand: ItemStack::default(),
             interaction_range_modifiers: interaction::range_modifiers(),
             view_distance: 10,
             chunk_tracking_view: Default::default(),
@@ -352,7 +360,10 @@ impl ServerPlayer {
         &mut self,
         tag: CompoundTag,
     ) -> Result<(), super::persistence::EntityLoadError> {
-        self.parent.parent.load_nbt(tag)?;
+        self.parent.parent.load_nbt_with_absorption_setter(
+            tag,
+            super::living::damage_state::player_internal_set_absorption_amount,
+        )?;
         // Player#readAdditionalSaveData restores the profile UUID after super.
         self.uuid = self.profile_id;
         self.food_data.load(&self.parent.parent.parent.saved);
@@ -402,11 +413,11 @@ impl ServerPlayer {
         Ok(())
     }
     /// PlayerDataStorage's payload uses the same full player save chain.
-    pub fn save(&self) -> CompoundTag {
-        self.save_without_id()
+    pub fn save(&self, level: &Level) -> Result<CompoundTag, LevelError> {
+        self.save_without_id(level)
     }
     /// Port of Entity#saveWithoutId, Player#addAdditionalSaveData and ServerPlayer.
-    pub fn save_without_id(&self) -> CompoundTag {
+    pub fn save_without_id(&self, level: &Level) -> Result<CompoundTag, LevelError> {
         let mut tag = self.parent.parent.save_without_id();
         // Player#addAdditionalSaveData writes the version even for predicate NBT.
         tag.insert("DataVersion", Tag::Int(5023));
@@ -416,7 +427,10 @@ impl ServerPlayer {
         tag.insert("XpTotal", Tag::Int(self.total_experience));
         tag.insert("Score", Tag::Int(self.score()));
         tag.insert("UUID", Tag::IntArray(self.uuid.to_int_array().to_vec()));
-        tag.insert("Dimension", Tag::String("minecraft:overworld".into()));
+        tag.insert(
+            "Dimension",
+            Tag::String(level.dimension_key()?.to_string().into()),
+        );
         tag.insert(
             "Pos",
             Tag::List(ListTag(vec![
@@ -438,11 +452,19 @@ impl ServerPlayer {
             Tag::List(ListTag(vec![Tag::Float(self.yaw), Tag::Float(self.pitch)])),
         );
         tag.insert("playerGameType", Tag::Int(self.game_mode.id()));
-        self.parent.parent.add_additional_save_data(&mut tag);
+        self.parent.parent.add_additional_save_data(
+            &mut tag,
+            level,
+            super::living::damage_state::player_absorption_amount,
+        )?;
         tag.insert("OnGround", Tag::Byte(i8::from(self.on_ground)));
         tag.insert(
             "Inventory",
-            Tag::List(self.inventory.save().expect("canonical inventory stacks")),
+            Tag::List(
+                self.inventory
+                    .save()
+                    .map_err(|_| LevelError::Inventory("invalid saved inventory"))?,
+            ),
         );
         tag.insert(
             "SelectedItemSlot",
@@ -465,9 +487,12 @@ impl ServerPlayer {
         }
         tag.insert(
             "abilities",
-            self.abilities.pack().to_nbt().expect("canonical abilities"),
+            self.abilities
+                .pack()
+                .to_nbt()
+                .map_err(|_| LevelError::Inventory("invalid saved abilities"))?,
         );
-        tag
+        Ok(tag)
     }
 }
 /// Embedded-parent projection preserving the bring-up's public field access.
@@ -654,9 +679,12 @@ pub fn move_player_with_checks(
         let delta = target - start;
         movement::set_on_ground(entity, input.on_ground, Some(delta), level)?;
         movement::check_supporting_block(entity, input.on_ground, Some(delta), level)?;
-        let pos = movement::get_on_pos(entity, 0.2_f32, level)?;
-        let state = level.get_block_state(pos)?;
-        movement::check_fall_damage(entity, delta.y, input.on_ground, state, pos, level)?;
+        // Entity#doCheckFallDamage never reads terrain while touching unloaded chunks.
+        if !tick::touching_unloaded_chunk(entity, level)? {
+            let pos = movement::get_on_pos(entity, 0.2_f32, level)?;
+            let state = level.get_block_state(pos)?;
+            movement::check_fall_damage(entity, delta.y, input.on_ground, state, pos, level)?;
+        }
         level.entity_mut::<ServerPlayer>(entity)?.known_movement = delta;
         if moved_up {
             crate::entity::reset_fall_distance(entity, level)?;
@@ -672,9 +700,12 @@ pub fn move_player_with_checks(
             player.velocity = Vec3::ZERO;
         }
         movement::check_supporting_block(entity, input.on_ground, Some(Vec3::ZERO), level)?;
-        let pos = movement::get_on_pos(entity, 0.2_f32, level)?;
-        let state = level.get_block_state(pos)?;
-        movement::check_fall_damage(entity, 0.0, input.on_ground, state, pos, level)?;
+        // Entity#doCheckFallDamage never reads terrain while touching unloaded chunks.
+        if !tick::touching_unloaded_chunk(entity, level)? {
+            let pos = movement::get_on_pos(entity, 0.2_f32, level)?;
+            let state = level.get_block_state(pos)?;
+            movement::check_fall_damage(entity, 0.0, input.on_ground, state, pos, level)?;
+        }
         level
             .entity_mut::<EntityData>(entity)?
             .remove_latest_movement_recording();
@@ -725,6 +756,140 @@ fn jump_from_ground(entity: crate::entity::EntityRef, level: &mut Level) -> Resu
 }
 pub struct PlayerBehavior;
 impl crate::entity::Entity for PlayerBehavior {
+    fn is_invulnerable_to(
+        &self,
+        entity: EntityRef,
+        source: &super::DamageSource,
+        level: &Level,
+    ) -> Result<bool, LevelError> {
+        super::living::hurt::player_is_invulnerable_to(self, entity, source, level)
+    }
+    fn absorption_amount(&self, entity: EntityRef, level: &Level) -> Result<f32, LevelError> {
+        Ok(level.entity::<ServerPlayer>(entity)?.absorption_amount())
+    }
+    fn set_absorption_amount(
+        &self,
+        entity: EntityRef,
+        amount: f32,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        level
+            .entity_mut::<ServerPlayer>(entity)?
+            .set_absorption_amount(amount);
+        Ok(())
+    }
+    fn actually_hurt(
+        &self,
+        entity: EntityRef,
+        source: &super::DamageSource,
+        damage: f32,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        super::living::hurt::player_actually_hurt(self, entity, source, damage, level)
+    }
+    fn hurt_armor(
+        &self,
+        entity: EntityRef,
+        source: &super::DamageSource,
+        damage: f32,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        use ferraloom_protocol::component::EquipmentSlot;
+        super::living::hurt::hurt_equipment(
+            self,
+            entity,
+            source,
+            damage,
+            &[
+                EquipmentSlot::Feet,
+                EquipmentSlot::Legs,
+                EquipmentSlot::Chest,
+                EquipmentSlot::Head,
+            ],
+            level,
+        )
+    }
+    fn hurt_helmet(
+        &self,
+        entity: EntityRef,
+        source: &super::DamageSource,
+        damage: f32,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        super::living::hurt::hurt_equipment(
+            self,
+            entity,
+            source,
+            damage,
+            &[ferraloom_protocol::component::EquipmentSlot::Head],
+            level,
+        )
+    }
+    fn hurt_sound(
+        &self,
+        _entity: EntityRef,
+        source: &super::DamageSource,
+        _level: &Level,
+    ) -> Result<Option<ferraloom_data::registries::sound_event::Id>, LevelError> {
+        Ok(Some(source.damage_type().effects.sound()))
+    }
+    fn death_sound(
+        &self,
+        _entity: EntityRef,
+        _level: &Level,
+    ) -> Result<Option<ferraloom_data::registries::sound_event::Id>, LevelError> {
+        Ok(Some(
+            ferraloom_data::registries::sound_event::Id::ENTITY_PLAYER_DEATH,
+        ))
+    }
+    fn voice_pitch(&self, _entity: EntityRef, _level: &mut Level) -> Result<f32, LevelError> {
+        Ok(1.0)
+    }
+    fn indicate_damage(
+        &self,
+        entity: EntityRef,
+        x: f64,
+        z: f64,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        super::living::hurt::player_indicate_damage(entity, x, z, level)
+    }
+    fn hurt_server(
+        &self,
+        entity: EntityRef,
+        level: &mut Level,
+        source: super::DamageSource,
+        damage: f32,
+    ) -> Result<bool, LevelError> {
+        super::living::hurt::player_hurt_server(self, entity, source, damage, level)
+    }
+    fn on_enter_combat(&self, entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
+        level.entity::<ServerPlayer>(entity)?;
+        level.emit(crate::level::effects::LevelEffect::PlayerPacket {
+            recipients: vec![entity],
+            packet: Box::new(
+                ferraloom_protocol::play::clientbound::Packet::PlayerCombatEnter(
+                    ferraloom_protocol::play::clientbound::PlayerCombatEnter {},
+                ),
+            ),
+        });
+        Ok(())
+    }
+    fn on_leave_combat(&self, entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
+        let player = level.entity::<ServerPlayer>(entity)?;
+        let duration = player.combat_tracker().combat_duration(player.tick_count);
+        level.emit(crate::level::effects::LevelEffect::PlayerPacket {
+            recipients: vec![entity],
+            packet: Box::new(
+                ferraloom_protocol::play::clientbound::Packet::PlayerCombatEnd(
+                    ferraloom_protocol::play::clientbound::PlayerCombatEnd {
+                        duration: ferraloom_protocol::codec::VarInt(duration),
+                    },
+                ),
+            ),
+        });
+        Ok(())
+    }
     fn reset_fall_distance(&self, entity: EntityRef, level: &mut Level) -> Result<(), LevelError> {
         stuck::reset_fall_distance(entity, level)
     }
@@ -736,6 +901,18 @@ impl crate::entity::Entity for PlayerBehavior {
         level: &mut Level,
     ) -> Result<(), LevelError> {
         stuck::make_stuck_in_block(self, entity, state, multiplier, level)
+    }
+    fn cause_fall_damage(
+        &self,
+        entity: super::EntityRef,
+        level: &mut crate::level::Level,
+        distance: f64,
+        modifier: f32,
+        source: &super::DamageSource,
+    ) -> Result<bool, crate::level::LevelError> {
+        super::living::fall_damage::player_cause_fall_damage(
+            self, entity, level, distance, modifier, source,
+        )
     }
     fn check_fall_damage(
         &self,
@@ -770,6 +947,13 @@ impl crate::entity::Entity for PlayerBehavior {
     ) -> Result<(), LevelError> {
         super::living::on_equipped_item_broken_parent(entity, &broken, slot, level)?;
         award_stat(entity, crate::stats::Stat::Broken(broken.item()), 1, level)
+    }
+    fn weapon_item<'level>(
+        &self,
+        entity: EntityRef,
+        level: &'level Level,
+    ) -> Result<Option<&'level ferraloom_protocol::component::ItemStack>, LevelError> {
+        super::living::weapon_item(self, entity, level)
     }
     /// Port of PlayerEquipment#get's selected main-hand projection.
     fn item_by_slot<'level>(
@@ -933,7 +1117,10 @@ impl crate::entity::Entity for PlayerBehavior {
         state: &crate::entity::EntityState,
         references: &mut Vec<crate::entity::EntityRef>,
     ) {
-        crate::entity::trace_base_entity_refs(state.as_entity(), references);
+        state
+            .as_living()
+            .expect("Player inherits LivingEntity")
+            .trace_damage_entity_refs(references);
     }
 
     fn known_movement(
@@ -1195,7 +1382,9 @@ mod tests {
                 tag.insert("UUID", Tag::IntArray(saved.to_int_array().to_vec()));
             }
             player.try_load(tag).unwrap();
-            let saved = player.save();
+            let saved = player
+                .save(&crate::entity::tests::persistence_level())
+                .unwrap();
             let Some(Tag::IntArray(words)) = saved.get("UUID") else {
                 panic!("saved UUID")
             };
@@ -1238,7 +1427,9 @@ mod tests {
             .unwrap()
             .set_base_value(40.0);
         player.set_health(35.0);
-        let saved = player.save();
+        let saved = player
+            .save(&crate::entity::tests::persistence_level())
+            .unwrap();
         let mut loaded = ServerPlayer::new(
             Uuid::new(1, 2),
             "health".into(),
@@ -1301,7 +1492,9 @@ mod tests {
         };
         let mut original = make_player();
         original.recipe_book.add(kept.clone());
-        let mut saved = original.save();
+        let mut saved = original
+            .save(&crate::entity::tests::persistence_level())
+            .unwrap();
         let book = saved
             .get_mut("recipeBook")
             .unwrap()
@@ -1325,7 +1518,12 @@ mod tests {
         assert!(loaded.recipe_book.settings.0[0].open);
         let mut round_trip = make_player();
         round_trip
-            .try_load_with_recipes(loaded.save(), &manager)
+            .try_load_with_recipes(
+                loaded
+                    .save(&crate::entity::tests::persistence_level())
+                    .unwrap(),
+                &manager,
+            )
             .unwrap();
         assert_eq!(round_trip.recipe_book.to_nbt(), loaded.recipe_book.to_nbt());
     }
@@ -1341,7 +1539,9 @@ mod tests {
             GameType::Survival,
         );
         let before = player.recipe_book.to_nbt();
-        let mut saved = player.save();
+        let mut saved = player
+            .save(&crate::entity::tests::persistence_level())
+            .unwrap();
         saved.insert(
             "recipeBook",
             Tag::String("invalid optional packed data".into()),
