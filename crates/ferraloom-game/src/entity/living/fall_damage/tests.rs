@@ -321,7 +321,7 @@ fn fall_receiver(player: bool, level: &mut Level) -> EntityRef {
         let mut cow = crate::entity::animal::Cow::with_parent(
             level.create_entity_data(ferraloom_data::EntityType::COW),
         );
-        cow.set_pos(Vec3::new(8.5, 64.0, 8.5));
+        cow.as_living_mut().set_pos(Vec3::new(8.5, 64.0, 8.5));
         EntityState::Cow(Box::new(cow))
     };
     level.add_entity(id, state).unwrap();
