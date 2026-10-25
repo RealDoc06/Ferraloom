@@ -58,6 +58,87 @@ fn neighbors(level: &mut Level, mask: u8, neighbor: BlockState) {
             .unwrap();
     }
 }
+
+#[test]
+fn powder_inherited_place_and_tick_match_native_creation_and_blocked_supports() {
+    use crate::{
+        entity::item::falling_block::FallingBlockEntity,
+        level::{
+            distance_manager::FullChunkStatus,
+            entity::{EntityStorageRequest, Visibility},
+        },
+    };
+    use ferraloom_util::ChunkPos;
+    let mut current: Option<Level> = None;
+    let mut checked = 0;
+    let mut blocks = std::collections::BTreeSet::new();
+    for line in include_str!("../../../tests/java/blocks/building/powder-falling.tsv").lines() {
+        let f: Vec<_> = line.split('\t').collect();
+        let original = state(f[1]);
+        let tick = f[4].parse::<i64>().unwrap();
+        if tick == 0 {
+            let mut level = level();
+            crate::level::drop_fixtures::install(&mut level);
+            let chunk = ChunkPos::containing(POS);
+            level
+                .set_chunk_loading_status(chunk, FullChunkStatus::BlockTicking, true)
+                .unwrap();
+            level
+                .update_entity_chunk_status(chunk, Visibility::Ticking)
+                .unwrap();
+            level.set_chunk_block_ticking(chunk, true).unwrap();
+            for request in level.take_entity_storage_requests() {
+                let EntityStorageRequest::Load { id, .. } = request else {
+                    unreachable!("fresh empty fixture only queues loads")
+                };
+                level.complete_entity_chunk_load(id, Ok(None)).unwrap();
+            }
+            level.process_pending_entity_loads().unwrap();
+            assert!(level.are_entities_loaded(chunk));
+            level.set_block_state(POS.below(1), state(f[2])).unwrap();
+            level.set_block_state(POS, original).unwrap();
+            level
+                .required_block_behavior(original.block(), BlockMethod::OnPlace)
+                .unwrap()
+                .on_place(
+                    original,
+                    POS,
+                    Block::AIR.default_state(),
+                    f[3] == "true",
+                    &mut level,
+                )
+                .unwrap();
+            current = Some(level);
+        }
+        let level = current.as_mut().unwrap();
+        level
+            .tick_block_phase(tick, 65536)
+            .unwrap_or_else(|error| panic!("{line}: {error:?}"));
+        let entities = level
+            .all_entities()
+            .into_iter()
+            .filter_map(|entity| level.entity::<FallingBlockEntity>(entity).ok())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            format!(
+                "{}\t{}\t{}\t{}",
+                level.get_block_state(POS).unwrap().id(),
+                level.has_scheduled_block_tick(POS, original.block()),
+                entities.len(),
+                entities
+                    .first()
+                    .map_or(-1, |entity| i32::from(entity.block_state.id()))
+            ),
+            f[5..].join("\t"),
+            "{line}",
+        );
+        blocks.insert(original.block());
+        checked += 1;
+    }
+    assert_eq!(checked, 768);
+    assert_eq!(blocks.len(), 16);
+}
+
 #[test]
 fn concrete_powder_landing_matches_native_replaced_fluids_and_all_water_masks() {
     use crate::{
