@@ -53,6 +53,7 @@ fn player_tick<E: Entity + ?Sized>(
     } else {
         0
     };
+    living.tick_current_impulse_grace_time();
     super::cooldowns::tick(player, level)
 }
 

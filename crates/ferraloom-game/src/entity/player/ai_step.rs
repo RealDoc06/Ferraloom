@@ -109,18 +109,21 @@ fn living_ai_step<E: Entity + ?Sized>(
     if level.entity::<EntityData>(entity)?.shared_flag(7) {
         living::gliding::update_fall_flying(behavior, entity, level)?;
     }
-    let input = {
-        let living = level.entity_mut::<LivingEntity>(entity)?;
+    let (input, reset_fall_distance) = {
+        let living = level.entity::<LivingEntity>(entity)?;
         let input = Vec3::new(
             f64::from(living.xxa),
             f64::from(living.yya),
             f64::from(living.zza),
         );
-        if living.has_effect(MobEffect::SLOW_FALLING) || living.has_effect(MobEffect::LEVITATION) {
-            living.fall_distance = 0.0;
-        }
-        input
+        (
+            input,
+            living.has_effect(MobEffect::SLOW_FALLING) || living.has_effect(MobEffect::LEVITATION),
+        )
     };
+    if reset_fall_distance {
+        behavior.reset_fall_distance(entity, level)?;
+    }
     // Server Player#isEffectiveAi is true; retain the native canSimulate query.
     if behavior.can_simulate_movement(entity, level)? {
         behavior.travel(entity, input, level)?;
@@ -154,11 +157,9 @@ pub(super) fn ai_step<E: Entity + ?Sized>(
     }
     food::tick_regeneration(entity, level)?;
     item_tick::tick_inventory(entity, level)?;
-    {
-        let player = level.entity_mut::<ServerPlayer>(entity)?;
-        if player.abilities.flying && player.vehicle.get().is_none() {
-            player.fall_distance = 0.0;
-        }
+    let player = level.entity::<ServerPlayer>(entity)?;
+    if player.abilities.flying && player.vehicle.get().is_none() {
+        behavior.reset_fall_distance(entity, level)?;
     }
     living_ai_step(behavior, entity, level, tick_rate)?;
     {
