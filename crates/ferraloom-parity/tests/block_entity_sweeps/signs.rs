@@ -66,6 +66,11 @@ async fn sign_edits(session: &mut Session) -> Result<ObservationLog> {
     level_support::freeze(bot).await?;
     set(bot, BlockPos::new(8, 79, 14), Block::STONE).await?;
     bot.teleport([8.5, 80.0, 14.5]).await?;
+    // Supports remain in place across the four cases; native /setblock rejects
+    // replacing a block with its identical state.
+    for support in [POS.below(1), POS.above(1), POS.south(1), POS.east(1)] {
+        set(bot, support, Block::STONE).await?;
+    }
     let mut log = ObservationLog::default();
     for (index, (block, north_front)) in [
         (Block::OAK_SIGN, false),
@@ -77,10 +82,6 @@ async fn sign_edits(session: &mut Session) -> Result<ObservationLog> {
     .enumerate()
     {
         let bot = session.bot(player)?;
-        // Explicit supports let all four native updateShape paths run normally.
-        for support in [POS.below(1), POS.above(1), POS.south(1), POS.east(1)] {
-            set(bot, support, Block::STONE).await?;
-        }
         set(bot, POS, block).await?;
         for front in [true, false] {
             let slot = if front {
