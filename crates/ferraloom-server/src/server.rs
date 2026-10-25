@@ -1634,6 +1634,17 @@ impl MinecraftServer {
             sb::Packet::PlayerAction(packet)
                 if matches!(
                     packet.action,
+                    PlayerAction::StartDestroyBlock
+                        | PlayerAction::ChangeDestroyDirection
+                        | PlayerAction::AbortDestroyBlock
+                        | PlayerAction::StopDestroyBlock
+                ) =>
+            {
+                self.handle_player_block_action(connection, entity, packet)?;
+            }
+            sb::Packet::PlayerAction(packet)
+                if matches!(
+                    packet.action,
                     PlayerAction::DropItem
                         | PlayerAction::DropAllItems
                         | PlayerAction::SwapItemWithOffhand

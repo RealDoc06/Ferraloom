@@ -34,7 +34,7 @@ const POS: BlockPos = BlockPos::new(8, 64, 8);
 const VECTORS: &str = include_str!("../../../../tests/java/level/player-destroy.tsv");
 static EMPTY: Behaviors = Behaviors::EMPTY;
 
-fn fixture(behaviors: &'static Behaviors) -> (Level, EntityRef) {
+pub(super) fn fixture(behaviors: &'static Behaviors) -> (Level, EntityRef) {
     let context = LevelContext::fixture(0, 63);
     let mut level = Level::new(Region::new(behaviors), context.clone());
     let data = context.generator.access().data();
