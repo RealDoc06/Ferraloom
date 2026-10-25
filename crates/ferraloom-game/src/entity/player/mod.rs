@@ -894,6 +894,18 @@ impl crate::entity::Entity for PlayerBehavior {
     ) -> Result<(), LevelError> {
         stuck::make_stuck_in_block(self, entity, state, multiplier, level)
     }
+    fn cause_fall_damage(
+        &self,
+        entity: super::EntityRef,
+        level: &mut crate::level::Level,
+        distance: f64,
+        modifier: f32,
+        source: &super::DamageSource,
+    ) -> Result<bool, crate::level::LevelError> {
+        super::living::fall_damage::player_cause_fall_damage(
+            self, entity, level, distance, modifier, source,
+        )
+    }
     fn check_fall_damage(
         &self,
         entity: EntityRef,

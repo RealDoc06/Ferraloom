@@ -121,6 +121,18 @@ impl Entity for CowBehavior {
     {
         super::living::weapon_item(self, entity, level)
     }
+    fn cause_fall_damage(
+        &self,
+        entity: super::EntityRef,
+        level: &mut crate::level::Level,
+        distance: f64,
+        modifier: f32,
+        source: &super::DamageSource,
+    ) -> Result<bool, crate::level::LevelError> {
+        super::living::fall_damage::cause_fall_damage(
+            self, entity, level, distance, modifier, source,
+        )
+    }
     fn check_fall_damage(
         &self,
         entity: super::EntityRef,

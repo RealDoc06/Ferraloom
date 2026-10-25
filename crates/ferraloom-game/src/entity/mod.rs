@@ -556,6 +556,23 @@ pub trait Entity: Sync {
     fn swim_sound(&self) -> ferraloom_data::registries::sound_event::Id {
         ferraloom_data::registries::sound_event::Id::ENTITY_GENERIC_SWIM
     }
+    /// Port of LivingEntity#calculateFallDamage's virtual calculation.
+    fn calculate_fall_damage(
+        &self,
+        entity: EntityRef,
+        distance: f64,
+        modifier: f32,
+        level: &Level,
+    ) -> Result<i32, LevelError> {
+        living::fall_damage::calculate_fall_damage(entity, distance, modifier, level)
+    }
+    fn play_block_fall_sound(
+        &self,
+        entity: EntityRef,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        living::fall_damage::play_block_fall_sound(self, entity, level)
+    }
     /// Port of LivingEntity#getFallSounds's inherited selection.
     fn fall_sounds(&self) -> living::FallSounds {
         use ferraloom_data::registries::sound_event::Id as Sound;
@@ -871,21 +888,16 @@ pub trait Entity: Sync {
         Ok(ferraloom_util::shapes::empty())
     }
 
-    /// Port of Entity#causeFallDamage's passenger propagation. LivingEntity
-    /// overrides the damage calculation; the base entity itself takes none.
+    /// Port of Entity#causeFallDamage's immunity and passenger propagation.
     fn cause_fall_damage(
         &self,
         entity: EntityRef,
         level: &mut Level,
         fall_distance: f64,
         damage_modifier: f32,
+        source: &DamageSource,
     ) -> Result<bool, LevelError> {
-        let passengers = level.entity::<EntityData>(entity)?.passengers.clone();
-        for passenger in passengers {
-            let behavior = level.entity_behavior(passenger)?;
-            behavior.cause_fall_damage(passenger, level, fall_distance, damage_modifier)?;
-        }
-        Ok(false)
+        movement::base_cause_fall_damage(entity, level, fall_distance, damage_modifier, source)
     }
 
     /// Port of LivingEntity#onEquippedItemBroken, overridden by ServerPlayer.
