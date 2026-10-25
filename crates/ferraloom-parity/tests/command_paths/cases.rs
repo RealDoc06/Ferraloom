@@ -216,6 +216,7 @@ fn every_sweep_path_has_an_inventory_row_and_an_observable_command() -> Result<(
         "admin",
         "placement",
         "data_storage",
+        "data_block",
     ] {
         let mut labels = std::collections::BTreeSet::new();
         for case in family(name)? {

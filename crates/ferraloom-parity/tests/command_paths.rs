@@ -22,3 +22,5 @@ family!(parity_paths_placement, "placement");
 
 family!(parity_paths_give, "give");
 family!(parity_paths_data_storage, "data_storage");
+
+family!(parity_paths_data_block, "data_block");

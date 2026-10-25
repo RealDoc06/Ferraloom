@@ -2364,5 +2364,379 @@
         }
       ]
     }
+  ],
+  "data_block": [
+    {
+      "name": "data.block.setup",
+      "path": null,
+      "steps": [
+        {
+          "command": "setblock 4 -63 4 minecraft:chest",
+          "keys": [
+            "commands.setblock.success"
+          ]
+        },
+        {
+          "command": "data merge block 4 -63 4 {components:{\"minecraft:custom_data\":{n:3,items:[1,2],object:{a:1},text:\"Before\"}}}",
+          "keys": [
+            "commands.data.block.modified"
+          ]
+        },
+        {
+          "command": "data merge storage paths:block_source {n:5,text:\"A😀BC\",entries:[11,12],objects:[{b:99},{c:30}]}",
+          "keys": [
+            "commands.data.storage.modified"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "data.block.get",
+      "path": "commands.path.data.get.block.arg-target",
+      "steps": [
+        {
+          "command": "data get block 4 -63 4",
+          "keys": [
+            "commands.data.block.query"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "data.block.get_path",
+      "path": "commands.path.data.get.block.arg-target.arg-path",
+      "steps": [
+        {
+          "command": "data get block 4 -63 4 components.\"minecraft:custom_data\".n",
+          "keys": [
+            "commands.data.block.query"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "data.block.get_numeric",
+      "path": "commands.path.data.get.block.arg-target.arg-path.arg-scale",
+      "steps": [
+        {
+          "command": "data get block 4 -63 4 components.\"minecraft:custom_data\".n 2.5",
+          "keys": [
+            "commands.data.block.get"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "data.block.root_merge",
+      "path": "commands.path.data.merge.block.arg-target.arg-nbt",
+      "steps": [
+        {
+          "command": "data merge block 4 -63 4 {components:{\"minecraft:custom_data\":{n:4,changed:true}}}",
+          "keys": [
+            "commands.data.block.modified"
+          ]
+        },
+        {
+          "command": "data get block 4 -63 4 components.\"minecraft:custom_data\"",
+          "keys": [
+            "commands.data.block.query"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "data.block.remove",
+      "path": "commands.path.data.remove.block.arg-target.arg-path",
+      "steps": [
+        {
+          "command": "data remove block 4 -63 4 components.\"minecraft:custom_data\".changed",
+          "keys": [
+            "commands.data.block.modified"
+          ]
+        },
+        {
+          "command": "data get block 4 -63 4 components.\"minecraft:custom_data\"",
+          "keys": [
+            "commands.data.block.query"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "data.block.set",
+      "path": "commands.path.data.modify.block.arg-target.arg-target-path.set.value.arg-value",
+      "steps": [
+        {
+          "command": "data modify block 4 -63 4 components.\"minecraft:custom_data\".items set value [1,2,3]",
+          "keys": [
+            "commands.data.block.modified"
+          ]
+        },
+        {
+          "command": "data get block 4 -63 4 components.\"minecraft:custom_data\"",
+          "keys": [
+            "commands.data.block.query"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "data.block.append",
+      "path": "commands.path.data.modify.block.arg-target.arg-target-path.append.value.arg-value",
+      "steps": [
+        {
+          "command": "data modify block 4 -63 4 components.\"minecraft:custom_data\".items append value 4",
+          "keys": [
+            "commands.data.block.modified"
+          ]
+        },
+        {
+          "command": "data get block 4 -63 4 components.\"minecraft:custom_data\"",
+          "keys": [
+            "commands.data.block.query"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "data.block.prepend",
+      "path": "commands.path.data.modify.block.arg-target.arg-target-path.prepend.value.arg-value",
+      "steps": [
+        {
+          "command": "data modify block 4 -63 4 components.\"minecraft:custom_data\".items prepend value 0",
+          "keys": [
+            "commands.data.block.modified"
+          ]
+        },
+        {
+          "command": "data get block 4 -63 4 components.\"minecraft:custom_data\"",
+          "keys": [
+            "commands.data.block.query"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "data.block.insert",
+      "path": "commands.path.data.modify.block.arg-target.arg-target-path.insert.arg-index.value.arg-value",
+      "steps": [
+        {
+          "command": "data modify block 4 -63 4 components.\"minecraft:custom_data\".items insert 1 value 9",
+          "keys": [
+            "commands.data.block.modified"
+          ]
+        },
+        {
+          "command": "data get block 4 -63 4 components.\"minecraft:custom_data\"",
+          "keys": [
+            "commands.data.block.query"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "data.block.merge",
+      "path": "commands.path.data.modify.block.arg-target.arg-target-path.merge.value.arg-value",
+      "steps": [
+        {
+          "command": "data modify block 4 -63 4 components.\"minecraft:custom_data\".object merge value {b:3}",
+          "keys": [
+            "commands.data.block.modified"
+          ]
+        },
+        {
+          "command": "data get block 4 -63 4 components.\"minecraft:custom_data\"",
+          "keys": [
+            "commands.data.block.query"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "data.block.set_from",
+      "path": "commands.path.data.modify.block.arg-target.arg-target-path.set.from.storage.arg-source.arg-source-path",
+      "steps": [
+        {
+          "command": "data modify block 4 -63 4 components.\"minecraft:custom_data\".copy set from storage paths:block_source entries[]",
+          "keys": [
+            "commands.data.block.modified"
+          ]
+        },
+        {
+          "command": "data get block 4 -63 4 components.\"minecraft:custom_data\"",
+          "keys": [
+            "commands.data.block.query"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "data.block.append_from_root",
+      "path": "commands.path.data.modify.block.arg-target.arg-target-path.append.from.storage.arg-source",
+      "steps": [
+        {
+          "command": "data modify block 4 -63 4 components.\"minecraft:custom_data\".items append from storage paths:block_source",
+          "keys": [
+            "commands.data.block.modified"
+          ]
+        },
+        {
+          "command": "data get block 4 -63 4 components.\"minecraft:custom_data\"",
+          "keys": [
+            "commands.data.block.query"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "data.block.prepend_from",
+      "path": "commands.path.data.modify.block.arg-target.arg-target-path.prepend.from.storage.arg-source.arg-source-path",
+      "steps": [
+        {
+          "command": "data modify block 4 -63 4 components.\"minecraft:custom_data\".items prepend from storage paths:block_source entries[]",
+          "keys": [
+            "commands.data.block.modified"
+          ]
+        },
+        {
+          "command": "data get block 4 -63 4 components.\"minecraft:custom_data\"",
+          "keys": [
+            "commands.data.block.query"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "data.block.insert_from_root",
+      "path": "commands.path.data.modify.block.arg-target.arg-target-path.insert.arg-index.from.storage.arg-source",
+      "steps": [
+        {
+          "command": "data modify block 4 -63 4 components.\"minecraft:custom_data\".items insert 2 from storage paths:block_source",
+          "keys": [
+            "commands.data.block.modified"
+          ]
+        },
+        {
+          "command": "data get block 4 -63 4 components.\"minecraft:custom_data\"",
+          "keys": [
+            "commands.data.block.query"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "data.block.merge_from_root",
+      "path": "commands.path.data.modify.block.arg-target.arg-target-path.merge.from.storage.arg-source",
+      "steps": [
+        {
+          "command": "data modify block 4 -63 4 components.\"minecraft:custom_data\".object merge from storage paths:block_source",
+          "keys": [
+            "commands.data.block.modified"
+          ]
+        },
+        {
+          "command": "data get block 4 -63 4 components.\"minecraft:custom_data\"",
+          "keys": [
+            "commands.data.block.query"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "data.block.merge_from",
+      "path": "commands.path.data.modify.block.arg-target.arg-target-path.merge.from.storage.arg-source.arg-source-path",
+      "steps": [
+        {
+          "command": "data modify block 4 -63 4 components.\"minecraft:custom_data\".object merge from storage paths:block_source objects[]",
+          "keys": [
+            "commands.data.block.modified"
+          ]
+        },
+        {
+          "command": "data get block 4 -63 4 components.\"minecraft:custom_data\"",
+          "keys": [
+            "commands.data.block.query"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "data.block.string",
+      "path": "commands.path.data.modify.block.arg-target.arg-target-path.set.string.storage.arg-source.arg-source-path",
+      "steps": [
+        {
+          "command": "data modify block 4 -63 4 components.\"minecraft:custom_data\".slice set string storage paths:block_source text",
+          "keys": [
+            "commands.data.block.modified"
+          ]
+        },
+        {
+          "command": "data get block 4 -63 4 components.\"minecraft:custom_data\"",
+          "keys": [
+            "commands.data.block.query"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "data.block.string_start",
+      "path": "commands.path.data.modify.block.arg-target.arg-target-path.set.string.storage.arg-source.arg-source-path.arg-start",
+      "steps": [
+        {
+          "command": "data modify block 4 -63 4 components.\"minecraft:custom_data\".slice set string storage paths:block_source text 1",
+          "keys": [
+            "commands.data.block.modified"
+          ]
+        },
+        {
+          "command": "data get block 4 -63 4 components.\"minecraft:custom_data\"",
+          "keys": [
+            "commands.data.block.query"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "data.block.string_end",
+      "path": "commands.path.data.modify.block.arg-target.arg-target-path.set.string.storage.arg-source.arg-source-path.arg-start.arg-end",
+      "steps": [
+        {
+          "command": "data modify block 4 -63 4 components.\"minecraft:custom_data\".slice set string storage paths:block_source text 1 3",
+          "keys": [
+            "commands.data.block.modified"
+          ]
+        },
+        {
+          "command": "data get block 4 -63 4 components.\"minecraft:custom_data\"",
+          "keys": [
+            "commands.data.block.query"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "data.block.no_be",
+      "path": null,
+      "steps": [
+        {
+          "command": "data get block 5 -63 5",
+          "keys": [
+            "commands.data.block.invalid"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "data.block.unloaded",
+      "path": null,
+      "steps": [
+        {
+          "command": "data get block 1000000 -63 1000000",
+          "keys": [
+            "argument.pos.unloaded"
+          ]
+        }
+      ]
+    }
   ]
 }
