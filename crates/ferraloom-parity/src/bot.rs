@@ -133,6 +133,7 @@ pub struct Bot {
     pub name: String,
     state: Arc<Mutex<BotState>>,
     sequence: Arc<Mutex<Sequence>>,
+    registries: Option<Arc<RegistrySet>>,
     send: mpsc::Sender<sb::Packet>,
     events: broadcast::Receiver<Arc<cb::Packet>>,
     tasks: Vec<JoinHandle<()>>,
@@ -148,6 +149,11 @@ impl Drop for Bot {
     }
 }
 impl Bot {
+    /// The actual synchronized registry order and tags shared by this connection's codecs.
+    pub fn registry_context(&self) -> Result<Arc<RegistrySet>> {
+        self.registries.clone().context("client disconnected")
+    }
+
     /// Close this client's socket and release observations while keeping its session index stable.
     pub async fn disconnect(&mut self) -> Result<()> {
         let tasks = std::mem::take(&mut self.tasks);
@@ -176,6 +182,7 @@ impl Bot {
         // The closed broadcast channel can otherwise retain decoded chunk packets in its ring.
         let (_, events) = broadcast::channel(1);
         self.events = events;
+        self.registries = None;
         if let Some(error) = failure {
             Err(error.into())
         } else {
@@ -346,13 +353,14 @@ impl Bot {
             ..BotState::default()
         }));
         let sequence = Arc::new(Mutex::new(sequence));
+        let registries = Arc::new(registries);
         let writer_state = state.clone();
         let writer_registries = registries.clone();
         let writer = tokio::spawn(async move {
             let result = async {
                 let mut encoder = CompressionEncoder::new(compression);
                 while let Some(packet) = outbound.recv().await {
-                    let mut body = p::Writer::with_context(&writer_registries);
+                    let mut body = p::Writer::with_context(writer_registries.as_ref());
                     packet.encode(&mut body)?;
                     write
                         .write_all(&FrameEncoder::encode(&encoder.encode(body.as_slice())?)?)
@@ -367,6 +375,7 @@ impl Bot {
         });
         let reader_state = state.clone();
         let reader_sequence = sequence.clone();
+        let reader_registries = registries.clone();
         let reply = send.clone();
         let reader = tokio::spawn(async move {
             let result = async {
@@ -388,7 +397,7 @@ impl Bot {
                     read.read_exact(&mut bytes).await?;
                     let bytes = decoder.decode(&bytes)?;
                     let packet = {
-                        let mut input = Reader::with_context(&bytes, &registries);
+                        let mut input = Reader::with_context(&bytes, reader_registries.as_ref());
                         let packet = cb::Packet::decode(&mut input)?;
                         input.finish()?;
                         packet
@@ -453,6 +462,7 @@ impl Bot {
             name,
             state,
             sequence,
+            registries: Some(registries),
             send,
             events: receiver,
             tasks: vec![reader, writer],
