@@ -1,7 +1,7 @@
 use super::DoubleBounds;
+use crate::loot::codec::DecodeInput;
 use crate::loot::{Result, codec};
 use ferraloom_util::Vec3;
-use serde_json::Value;
 
 /// Port of MovementPredicate. The context supplies getKnownMovement, not delta
 /// movement; vanilla scales it by 20 before comparing signed axis bounds.
@@ -16,7 +16,7 @@ pub struct MovementPredicate {
     pub fall_distance: DoubleBounds,
 }
 impl MovementPredicate {
-    pub fn decode(v: &Value) -> Result<Self> {
+    pub fn decode<I: DecodeInput>(v: &I) -> Result<Self> {
         let bound = |key| -> Result<DoubleBounds> {
             Ok(codec::optional(v, key, DoubleBounds::decode)?.unwrap_or_default())
         };

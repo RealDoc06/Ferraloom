@@ -2,6 +2,7 @@ use super::{
     ContextParam, EntityTarget, EvalContext, Identifier, LootData, LootError, NbtSource, Result,
     codec,
 };
+use crate::loot::codec::{DecodeInput, PersistentInput};
 use ferraloom_data::Block;
 use ferraloom_protocol::{
     chat::Component,
@@ -9,7 +10,6 @@ use ferraloom_protocol::{
     component::*,
 };
 use ferraloom_util::random::RandomSource;
-use serde_json::Value;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ComponentSource {
@@ -18,7 +18,7 @@ pub enum ComponentSource {
     Entity(EntityTarget),
 }
 impl ComponentSource {
-    fn decode(v: &Value) -> Result<Self> {
+    fn decode<I: DecodeInput>(v: &I) -> Result<Self> {
         Ok(match codec::string(v)? {
             "tool" => Self::Tool,
             "block_entity" => Self::BlockEntity,
@@ -65,8 +65,8 @@ pub enum ComponentFunction {
     ToggleTooltips(Vec<(ComponentTypeId, bool)>),
 }
 impl ComponentFunction {
-    pub(crate) fn decode(kind: &str, v: &Value) -> Result<Option<Self>> {
-        let types = |v: &Value| {
+    pub(crate) fn decode<I: DecodeInput>(kind: &str, v: &I) -> Result<Option<Self>> {
+        let types = |v: &I| {
             codec::list(v, |v| {
                 let id = codec::id(v)?;
                 ComponentTypeId::from_name(id.as_str())
@@ -94,7 +94,7 @@ impl ComponentFunction {
             }
             "minecraft:set_name" => Self::SetName {
                 name: codec::optional(v, "name", |v| {
-                    Ok(Box::new(<Component as Persistent>::from_json(v)?))
+                    Ok(Box::new(<Component as PersistentInput>::from_input(v)?))
                 })?,
                 entity: codec::optional(v, "entity", EntityTarget::decode)?,
                 item_name: match codec::optional(v, "target", codec::string)?
@@ -110,20 +110,21 @@ impl ComponentFunction {
                 seed: codec::optional(v, "seed", codec::long)?.unwrap_or(0),
             },
             "minecraft:set_instrument" => {
-                Self::SetInstrument(HolderSet::from_json(codec::field(v, "options")?)?)
+                Self::SetInstrument(HolderSet::from_input(codec::field(v, "options")?)?)
             }
             "minecraft:set_random_potion" => {
                 Self::SetRandomPotion(codec::optional(v, "options", |v| {
-                    Ok(HolderSet::from_json(v)?)
+                    Ok(HolderSet::from_input(v)?)
                 })?)
             }
             "minecraft:set_banner_pattern" => Self::SetBannerPattern {
-                patterns: Vec::<BannerLayer>::from_json(codec::field(v, "patterns")?)?,
+                patterns: Vec::<BannerLayer>::from_input(codec::field(v, "patterns")?)?,
                 append: codec::boolean(codec::field(v, "append")?)?,
             },
             "minecraft:toggle_tooltips" => Self::ToggleTooltips(
-                codec::object(codec::field(v, "toggles")?)?
-                    .iter()
+                codec::map(codec::field(v, "toggles")?)?
+                    .entries()?
+                    .into_iter()
                     .map(|(key, value)| {
                         let key = Identifier::parse(key)?;
                         Ok((

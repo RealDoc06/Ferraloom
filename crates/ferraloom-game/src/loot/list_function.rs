@@ -2,8 +2,8 @@ use super::{
     ContextFloatProvider, ContextIntProvider, EntityTarget, EvalContext, Holder, ListEdit,
     ListOperation, LootData, Result, codec,
 };
+use crate::loot::codec::{DecodeInput, PersistentInput};
 use ferraloom_protocol::{chat::Component, codec::VarInt, component::*};
-use serde_json::Value;
 
 /// Ports of list- and page-editing loot functions using shared ListOperation.
 #[derive(Clone, Debug, PartialEq)]
@@ -45,11 +45,11 @@ pub enum ListFunction {
     },
 }
 impl ListFunction {
-    pub(crate) fn decode(kind: &str, v: &Value) -> Result<Option<Self>> {
+    pub(crate) fn decode<I: DecodeInput>(kind: &str, v: &I) -> Result<Option<Self>> {
         Ok(Some(match kind {
             "minecraft:set_lore" => {
                 let lore = codec::list(codec::field(v, "lore")?, |v| {
-                    Ok(<Component as Persistent>::from_json(v)?)
+                    Ok(<Component as PersistentInput>::from_input(v)?)
                 })?;
                 if lore.len() > 256 {
                     return Err(codec::error("too much lore"));
@@ -67,7 +67,7 @@ impl ListFunction {
                 }
                 Self::SetBookCover {
                     title: codec::optional(v, "title", |v| {
-                        Ok(Filterable::<BoundedString<32>>::from_json(v)?)
+                        Ok(Filterable::<BoundedString<32>>::from_input(v)?)
                     })?,
                     author: codec::optional(v, "author", |v| Ok(codec::string(v)?.into()))?,
                     generation,
@@ -78,7 +78,7 @@ impl ListFunction {
                 mode: ListOperation::decode(v, i32::MAX as usize)?,
             },
             "minecraft:set_writable_book_pages" => Self::SetWritableBookPages {
-                pages: BoundedList::<Filterable<BoundedString<1024>>, 100>::from_json(
+                pages: BoundedList::<Filterable<BoundedString<1024>>, 100>::from_input(
                     codec::field(v, "pages")?,
                 )?
                 .0,
@@ -86,14 +86,14 @@ impl ListFunction {
             },
             "minecraft:set_fireworks" => Self::SetFireworks {
                 explosions: codec::optional(v, "explosions", |v| {
-                    ListEdit::decode(v, 256, |v| Ok(FireworkExplosion::from_json(v)?))
+                    ListEdit::decode(v, 256, |v| Ok(FireworkExplosion::from_input(v)?))
                 })?,
                 flight_duration: codec::optional(v, "flight_duration", |v| {
                     Ok(i32::from(codec::int(v)? as u8))
                 })?,
             },
             "minecraft:set_firework_explosion" => Self::SetFireworkExplosion {
-                shape: codec::optional(v, "shape", |v| Ok(FireworkShape::from_json(v)?))?,
+                shape: codec::optional(v, "shape", |v| Ok(FireworkShape::from_input(v)?))?,
                 colors: codec::optional(v, "colors", |v| codec::list(v, codec::int))?,
                 fade_colors: codec::optional(v, "fade_colors", |v| codec::list(v, codec::int))?,
                 trail: codec::optional(v, "trail", codec::boolean)?,
@@ -117,7 +117,7 @@ impl ListFunction {
                             if rgb.len() != 3 {
                                 return Err(codec::error("expected RGB vector"));
                             }
-                            let channel = |v: &Value| -> Result<i32> {
+                            let channel = |v: &I| -> Result<i32> {
                                 Ok((codec::float(v)? * 255.0).floor() as i32)
                             };
                             let r = channel(&rgb[0])?;
@@ -302,8 +302,8 @@ impl ListFunction {
     }
 }
 /// Port of WrittenBookContent#CONTENT_CODEC's Gson JSON character limit.
-fn written_pages(v: &Value) -> Result<Vec<Filterable<Component>>> {
-    let pages = Vec::<Filterable<Component>>::from_json(v)?;
+fn written_pages<I: DecodeInput>(v: &I) -> Result<Vec<Filterable<Component>>> {
+    let pages = Vec::<Filterable<Component>>::from_input(v)?;
     for page in &pages {
         for value in std::iter::once(&page.raw).chain(page.filtered.iter()) {
             if let Ok(json) = value.to_json() {

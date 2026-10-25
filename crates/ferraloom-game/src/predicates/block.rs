@@ -1,20 +1,20 @@
 use super::{PredicateContext, match_components};
+use crate::loot::codec::{DecodeInput, PersistentInput};
 use crate::loot::{Identifier, LootError, Result, codec};
 use ferraloom_data::BlockState;
 use ferraloom_nbt::{Tag, compare_nbt};
 use ferraloom_protocol::{
     codec::{Either, HolderSet},
-    component::{self, Persistent},
+    component,
 };
 use ferraloom_util::BlockPos;
-use serde_json::Value;
 
 /// Port of StatePropertiesPredicate. Values compare in the property's typed order.
 #[derive(Clone, Debug, PartialEq)]
 pub struct StatePropertiesPredicate(pub component::StatePropertiesPredicate);
 impl StatePropertiesPredicate {
-    pub fn decode(v: &Value) -> Result<Self> {
-        Ok(Self(component::StatePropertiesPredicate::from_json(v)?))
+    pub fn decode<I: DecodeInput>(v: &I) -> Result<Self> {
+        Ok(Self(component::StatePropertiesPredicate::from_input(v)?))
     }
     pub fn matches(&self, state: BlockState) -> bool {
         self.0.properties.iter().all(|p| {
@@ -64,8 +64,8 @@ impl StatePropertiesPredicate {
 #[derive(Clone, Debug, PartialEq)]
 pub struct NbtPredicate(pub Tag);
 impl NbtPredicate {
-    pub fn decode(v: &Value) -> Result<Self> {
-        Ok(Self(component::NbtPredicate::from_json(v)?.0.0))
+    pub fn decode<I: DecodeInput>(v: &I) -> Result<Self> {
+        Ok(Self(component::NbtPredicate::from_input(v)?.0.0))
     }
     pub fn matches(&self, actual: Option<&Tag>) -> bool {
         compare_nbt(Some(&self.0), actual, true)
@@ -75,8 +75,8 @@ impl NbtPredicate {
 #[derive(Clone, Debug, PartialEq)]
 pub struct BlockPredicate(pub component::BlockPredicate);
 impl BlockPredicate {
-    pub fn decode(v: &Value) -> Result<Self> {
-        let value = component::BlockPredicate::from_json(v)?;
+    pub fn decode<I: DecodeInput>(v: &I) -> Result<Self> {
+        let value = component::BlockPredicate::from_input(v)?;
         if let Some(set) = &value.blocks {
             super::validate_static_holders(&set.0, "block", |id| {
                 ferraloom_data::Block::from_name(id).is_some()
@@ -172,17 +172,17 @@ pub struct FluidPredicate {
     pub state: Option<component::StatePropertiesPredicate>,
 }
 impl FluidPredicate {
-    pub fn decode(v: &Value) -> Result<Self> {
+    pub fn decode<I: DecodeInput>(v: &I) -> Result<Self> {
         Ok(Self {
             fluids: codec::optional(v, "fluids", |v| {
-                let set = HolderSet::from_json(v)?;
+                let set = HolderSet::from_input(v)?;
                 super::validate_static_holders(&set, "fluid", |id| {
                     ferraloom_data::registries::fluid::from_name(id).is_some()
                 })?;
                 Ok(set)
             })?,
             state: codec::optional(v, "state", |v| {
-                Ok(component::StatePropertiesPredicate::from_json(v)?)
+                Ok(component::StatePropertiesPredicate::from_input(v)?)
             })?,
         })
     }
