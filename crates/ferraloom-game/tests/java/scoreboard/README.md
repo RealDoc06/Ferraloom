@@ -23,6 +23,9 @@ for objective tracking start/stop packets.
 Only `/scoreboard players list <holder>` entry lines compare without ordering:
 vanilla keys those entries by Objective identity hash, which varies with JVM
 allocation. Their full components and header remain checked; packet order is exact.
+The live sweep applies that comparison only to the independent entry suffix of
+`commands.path.scoreboard.players.list.arg-target`, after checking every entry's
+message type. It preserves the header and all other command/packet order.
 
 Separate fixtures invoke real PlayerList join synchronization (one ordered
 packet sequence), ReadOnlyScoreInfo formatting (four cases), and actual
