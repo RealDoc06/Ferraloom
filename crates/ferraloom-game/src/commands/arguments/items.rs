@@ -13,6 +13,33 @@ pub struct ItemInput {
     pub item: Item,
     pub components: DataComponentPatch,
 }
+impl ItemInput {
+    /// Port of ItemInput#createItemStack, including the overstack check before
+    /// ItemStack#validateStrict's component and contained-item validation.
+    pub fn create_item_stack(
+        &self,
+        count: i32,
+    ) -> Result<ferraloom_protocol::component::ItemStack, CommandSyntaxException> {
+        let stack = ferraloom_protocol::component::ItemStack::new(
+            self.item,
+            count,
+            self.components.clone(),
+        );
+        let maximum = crate::entity::player::inventory::max_stack_size(&stack);
+        if count > maximum {
+            return Err(crate::commands::exceptions::error_with_arguments(
+                "arguments.item.overstacked",
+                vec![
+                    crate::commands::builtins::string(self.item.name()),
+                    crate::commands::builtins::integer(maximum),
+                ],
+            ));
+        }
+        crate::item::stack::validate_strict(&stack)
+            .map_err(|reason| error("arguments.item.malformed", &[reason.to_string()]))?;
+        Ok(stack)
+    }
+}
 pub fn parse(reader: &mut StringReader) -> Result<ItemInput, CommandSyntaxException> {
     let start = reader.cursor();
     let parsed = parse_inner(reader, &mut CompletionMode::Item);
