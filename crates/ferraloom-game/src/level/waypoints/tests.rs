@@ -50,11 +50,14 @@ fn fixture(reciprocal: bool, source_x: f64) -> (Level, Vec<EntityRef>) {
             } else {
                 0.0
             });
-        player.chunk_tracking_center = Some(ChunkPos::new(0, 0));
-        player.chunk_tracking_distance = Some(2);
         level
             .add_entity(entity, EntityState::Player(Box::new(player)))
             .unwrap();
+        // Match the Java fixture's controlled view after ChunkMap#addEntity
+        // has installed the live requested-distance view.
+        let player = level.entity_mut::<ServerPlayer>(entity).unwrap();
+        player.chunk_tracking_center = Some(ChunkPos::new(0, 0));
+        player.chunk_tracking_distance = Some(2);
         level.entity_mut::<EntityData>(entity).unwrap().first_tick = false;
         players.push(entity);
     }

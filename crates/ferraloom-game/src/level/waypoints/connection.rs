@@ -67,10 +67,12 @@ fn chunk_visible(
     Ok(center.is_some_and(|center| {
         let x = (i64::from(position.x) - i64::from(center.x))
             .abs()
-            .saturating_sub(1);
+            .saturating_sub(1)
+            .max(0);
         let z = (i64::from(position.z) - i64::from(center.z))
             .abs()
-            .saturating_sub(1);
+            .saturating_sub(1)
+            .max(0);
         x * x + z * z < i64::from(distance) * i64::from(distance)
     }))
 }
