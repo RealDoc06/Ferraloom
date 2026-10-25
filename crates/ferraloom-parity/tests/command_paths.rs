@@ -19,3 +19,5 @@ family!(parity_paths_chat, "chat");
 family!(parity_paths_players, "players");
 family!(parity_paths_admin, "admin");
 family!(parity_paths_placement, "placement");
+
+family!(parity_paths_give, "give");

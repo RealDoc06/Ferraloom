@@ -137,6 +137,10 @@ impl MinecraftServer {
                 self.apply_level_effects()?;
                 self.apply_command_result(source, &command.source, result?);
             }
+            "give" => {
+                let result = self.give_command(command)?;
+                self.apply_command_result(source, &command.source, result);
+            }
             "teleport" => {
                 let result = self.teleport_command(command)?;
                 self.apply_command_result(source, &command.source, result);

@@ -139,6 +139,7 @@ fn every_sweep_path_has_an_inventory_row_and_an_observable_command() -> Result<(
         .collect::<std::collections::BTreeSet<_>>();
     for name in [
         "gamerule",
+        "give",
         "clocks",
         "chat",
         "players",

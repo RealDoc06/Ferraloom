@@ -2179,5 +2179,171 @@
         }
       ]
     }
+  ],
+  "give": [
+    {
+      "name": "give.default",
+      "path": "commands.path.give.arg-targets.arg-item",
+      "steps": [
+        {
+          "command": "give @s minecraft:stone",
+          "keys": [
+            "commands.give.success.single"
+          ],
+          "checks": [
+            {
+              "kind": "inventory",
+              "player": "ParityBot",
+              "slot": 0,
+              "item": "minecraft:stone",
+              "count": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "give.split",
+      "path": "commands.path.give.arg-targets.arg-item.arg-count",
+      "steps": [
+        {
+          "command": "give @s minecraft:stone 65",
+          "keys": [
+            "commands.give.success.single"
+          ],
+          "checks": [
+            {
+              "kind": "inventory",
+              "player": "ParityBot",
+              "slot": 0,
+              "item": "minecraft:stone",
+              "count": 64
+            },
+            {
+              "kind": "inventory",
+              "player": "ParityBot",
+              "slot": 1,
+              "item": "minecraft:stone",
+              "count": 2
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "give.multiple",
+      "path": null,
+      "steps": [
+        {
+          "command": "give @a minecraft:diamond_sword 2",
+          "keys": [
+            "commands.give.success.multiple"
+          ],
+          "checks": [
+            {
+              "kind": "inventory",
+              "player": "ParityBot",
+              "slot": 2,
+              "item": "minecraft:diamond_sword",
+              "count": 1
+            },
+            {
+              "kind": "inventory",
+              "player": "ParityBot",
+              "slot": 3,
+              "item": "minecraft:diamond_sword",
+              "count": 1
+            },
+            {
+              "kind": "inventory",
+              "player": "PathGuest",
+              "slot": 0,
+              "item": "minecraft:diamond_sword",
+              "count": 1
+            },
+            {
+              "kind": "inventory",
+              "player": "PathGuest",
+              "slot": 1,
+              "item": "minecraft:diamond_sword",
+              "count": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "give.components",
+      "path": null,
+      "steps": [
+        {
+          "command": "give @s minecraft:stone[minecraft:custom_name='Named'] 3",
+          "keys": [
+            "commands.give.success.single"
+          ],
+          "checks": [
+            {
+              "kind": "inventory",
+              "player": "ParityBot",
+              "slot": 4,
+              "item": "minecraft:stone",
+              "count": 3
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "give.over-limit",
+      "path": null,
+      "steps": [
+        {
+          "command": "give @s minecraft:stone 6401",
+          "keys": [
+            "commands.give.failed.toomanyitems"
+          ],
+          "checks": []
+        }
+      ]
+    },
+    {
+      "name": "give.air",
+      "path": null,
+      "steps": [
+        {
+          "command": "give @s minecraft:air 3",
+          "keys": [
+            "commands.give.success.single"
+          ],
+          "checks": []
+        }
+      ]
+    },
+    {
+      "name": "give.low-count",
+      "path": null,
+      "steps": [
+        {
+          "command": "give @s minecraft:stone 0",
+          "keys": [
+            "argument.integer.low"
+          ],
+          "checks": []
+        }
+      ]
+    },
+    {
+      "name": "give.malformed",
+      "path": null,
+      "steps": [
+        {
+          "command": "give @s minecraft:stone[minecraft:max_damage=1]",
+          "keys": [
+            "arguments.item.malformed"
+          ],
+          "checks": []
+        }
+      ]
+    }
   ]
 }

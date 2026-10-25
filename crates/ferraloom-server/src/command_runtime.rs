@@ -660,6 +660,7 @@ impl MinecraftServer {
         if let Err(error) = result {
             if error.to_string() == "disconnect.spam"
                 || error.is::<super::command_level::CommandLevelFailure>()
+                || error.is::<ferraloom_game::commands::give::GiveError>()
             {
                 return Err(error);
             }
@@ -1225,6 +1226,34 @@ impl MinecraftServer {
                     vec![],
                 ));
         }
+    }
+    pub(super) fn give_command(&mut self, command: &PreparedCommand) -> Result<CommandResult> {
+        let targets = self.selected_connections(command, "targets")?;
+        let players = targets
+            .into_iter()
+            .map(|connection| {
+                let Phase::Play(entity) = self.connections[&connection].phase else {
+                    unreachable!("selected live player")
+                };
+                entity
+            })
+            .collect::<Vec<_>>();
+        let Some(ArgumentValue::Item(input)) = command.argument("item") else {
+            unreachable!("parsed item input")
+        };
+        let result = ferraloom_game::commands::give::run(
+            input,
+            command.integer("count").unwrap_or(1),
+            &players,
+            &mut self.level.level,
+        );
+        // Native sound and menu effects precede command feedback. Entity tracker
+        // registration/pickup packets use their sole canonical runtime consumer.
+        self.apply_level_effects()?;
+        result.map_err(|error| match error {
+            ferraloom_game::commands::give::GiveError::Syntax(error) => anyhow::Error::new(error),
+            error => anyhow::Error::new(error),
+        })
     }
     fn operator_command(
         &mut self,

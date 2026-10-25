@@ -5,6 +5,7 @@ use ferraloom_parity::{
         chat::Component,
         codec::VarInt,
         common::Utf8,
+        component::Persistent,
         play::{self, clientbound as cb, serverbound as sb},
     },
 };
@@ -42,6 +43,12 @@ pub struct Step {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Check {
+    Inventory {
+        player: String,
+        slot: i32,
+        item: String,
+        count: i32,
+    },
     Argument {
         key: String,
         index: usize,
@@ -163,6 +170,7 @@ struct Driver<'a> {
     bots: BTreeMap<String, BotId>,
     barrier: i32,
     weather: Weather,
+    items: bool,
 }
 fn component(value: &Component) -> Result<Value> {
     Ok(serde_json::from_str(&value.to_json()?)?)
@@ -245,8 +253,25 @@ fn event(
     packet: &cb::Packet,
     own_id: Option<i32>,
     names: &BTreeMap<i32, String>,
+    items: bool,
 ) -> Result<Option<Value>> {
     let value = match packet {
+        cb::Packet::Sound(p) if items => {
+            // Player RNG is deliberately unseeded on live servers. Exact pitch
+            // draws are covered by native GiveCommand vectors; validate its
+            // range here and compare the other sound fields and their ordering.
+            ensure!(
+                (0.6..=3.4).contains(&p.pitch),
+                "pickup pitch outside the native range"
+            );
+            json!({"kind":"sound","sound":format!("{:?}",p.sound),"source":format!("{:?}",p.source),"position":[p.x,p.y,p.z],"volume":p.volume,"pitch_in_native_range":true})
+        }
+        cb::Packet::ContainerSetSlot(p) if items => {
+            json!({"kind":"menu_slot","menu":p.container_id.0,"state":p.state_id.0,"slot":p.slot,"stack":p.item_stack.to_json()?})
+        }
+        cb::Packet::SetPlayerInventory(p) if items => {
+            json!({"kind":"inventory_slot","slot":p.slot.0,"stack":p.contents.to_json()?})
+        }
         cb::Packet::SystemChat(p) => {
             let mut content = component(&p.content)?;
             timing(&mut content)?;
@@ -323,6 +348,7 @@ impl Driver<'_> {
                     .map(|id| (id, name.clone()))
             })
             .collect();
+        let items = self.items;
         let bot = self.session.bot(actor)?;
         let own_id = bot.snapshot().entity_id;
         if let Some(step) = step {
@@ -362,7 +388,7 @@ impl Driver<'_> {
                         _ => {}
                     }
                 }
-                match event(packet, own_id, &names) {
+                match event(packet, own_id, &names, items) {
                     Ok(Some(value)) => events.push(value),
                     Ok(None) => {}
                     Err(error) => failure = Some(error),
@@ -438,6 +464,15 @@ impl Driver<'_> {
         let mut checks = Vec::new();
         for check in &step.checks {
             match check {
+                Check::Inventory { player,slot,item,count } => {
+                    let id = self.bots[player];
+                    let matches = |state: &ferraloom_parity::BotState| state.inventory.get(slot).is_some_and(|s| s.item().name() == item && s.0.as_ref().map_or(0,|s|s.count) == *count);
+                    if !matches(&self.session.bot(id)?.snapshot()) {
+                        self.session.bot(id)?.wait_for("given inventory stack",Ticks::DEFAULT,|state,_|matches(state)).await?;
+                    }
+                    let stack = self.session.bot(id)?.snapshot().inventory[slot].to_json()?;
+                    checks.push(json!({"player":player,"slot":slot,"stack":stack}));
+                }
                 Check::Advance { ticks } => checks.push(
                     json!({"advance":self.wait_advance(actor,baseline.unwrap(),*ticks).await?}),
                 ),
@@ -652,6 +687,7 @@ pub async fn run_family(family: &'static str) -> Result<()> {
             bots,
             barrier: 100_000,
             weather: Weather::default(),
+            items: family == "give",
         };
         for step in [
             Step::feedback("tick freeze", "commands.tick.status.frozen"),
