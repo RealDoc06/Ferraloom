@@ -34,7 +34,7 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | scoreboard-teams-bossbars.parity.team | Team membership, options and feedback on a bedrock-only flat world | `TeamCommand` | `parity_team_commands` | pass | pass |
 | scoreboard-teams-bossbars.parity.scoreboard | Scores, operations, triggers, initial sync and feedback on a bedrock-only flat world | `ScoreboardCommand; TriggerCommand` | `parity_scoreboard_commands` | pass | pass |
 | scoreboard-teams-bossbars.bossbars.custom | Persist custom bossbar id, name, value, max, style, visibility and player set | `CustomBossEvents; CustomBossEvent` | | - | todo |
-| scoreboard-teams-bossbars.bossbars.lifecycle | Add, remove and update bossbar viewers on joins, leaves and boss encounter state | `ServerBossEvent` | | - | todo |
+| scoreboard-teams-bossbars.bossbars.lifecycle | Add, remove and update bossbar viewers on joins, leaves and boss encounter state | `ServerBossEvent` | `bossbar::tests::vanilla_boss_event_lifecycle_and_packet_bytes` | pass | partial |
 | scoreboard-teams-bossbars.criterion.air | Scoreboard criterion `air` | `ObjectiveCriteria#registerCustom; ObjectiveCriteria#byName` | `parity_scoreboard_team_trigger_paths` | - | todo |
 | scoreboard-teams-bossbars.criterion.armor | Scoreboard criterion `armor` | `ObjectiveCriteria#registerCustom; ObjectiveCriteria#byName` | `parity_scoreboard_team_trigger_paths` | - | todo |
 | scoreboard-teams-bossbars.criterion.death-count | Scoreboard criterion `deathCount` | `ObjectiveCriteria#registerCustom; ObjectiveCriteria#byName` | `parity_scoreboard_team_trigger_paths` | - | todo |

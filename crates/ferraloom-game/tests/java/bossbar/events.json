@@ -1,0 +1,1811 @@
+[
+  {
+    "action": "add",
+    "argument": "0",
+    "dirty": true,
+    "value": 0,
+    "max": 100,
+    "progressBits": 0,
+    "visible": true,
+    "color": 6,
+    "overlay": 0,
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        "Boss"
+      ],
+      "color": "white",
+      "hover_event": {
+        "value": "test:bar",
+        "action": "show_text"
+      },
+      "insertion": "test:bar"
+    },
+    "online": [
+      "00000000-0000-0000-0000-000000000001"
+    ],
+    "persistent": [
+      "00000000-0000-0000-0000-000000000001"
+    ],
+    "packets": {
+      "00000000-0000-0000-0000-000000000001": [
+        "0000000000000000000000000000001100080004426f737300000000060000"
+      ]
+    }
+  },
+  {
+    "action": "add",
+    "argument": "0",
+    "dirty": false,
+    "value": 0,
+    "max": 100,
+    "progressBits": 0,
+    "visible": true,
+    "color": 6,
+    "overlay": 0,
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        "Boss"
+      ],
+      "color": "white",
+      "hover_event": {
+        "value": "test:bar",
+        "action": "show_text"
+      },
+      "insertion": "test:bar"
+    },
+    "online": [
+      "00000000-0000-0000-0000-000000000001"
+    ],
+    "persistent": [
+      "00000000-0000-0000-0000-000000000001"
+    ],
+    "packets": {}
+  },
+  {
+    "action": "add",
+    "argument": "1",
+    "dirty": true,
+    "value": 0,
+    "max": 100,
+    "progressBits": 0,
+    "visible": true,
+    "color": 6,
+    "overlay": 0,
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        "Boss"
+      ],
+      "color": "white",
+      "hover_event": {
+        "value": "test:bar",
+        "action": "show_text"
+      },
+      "insertion": "test:bar"
+    },
+    "online": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "persistent": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "packets": {
+      "00000000-0000-0000-0000-000000000002": [
+        "0000000000000000000000000000001100080004426f737300000000060000"
+      ]
+    }
+  },
+  {
+    "action": "value",
+    "argument": "0",
+    "dirty": true,
+    "value": 0,
+    "max": 100,
+    "progressBits": 0,
+    "visible": true,
+    "color": 6,
+    "overlay": 0,
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        "Boss"
+      ],
+      "color": "white",
+      "hover_event": {
+        "value": "test:bar",
+        "action": "show_text"
+      },
+      "insertion": "test:bar"
+    },
+    "online": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "persistent": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "packets": {}
+  },
+  {
+    "action": "value",
+    "argument": "50",
+    "dirty": true,
+    "value": 50,
+    "max": 100,
+    "progressBits": 1056964608,
+    "visible": true,
+    "color": 6,
+    "overlay": 0,
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        "Boss"
+      ],
+      "color": "white",
+      "hover_event": {
+        "value": "test:bar",
+        "action": "show_text"
+      },
+      "insertion": "test:bar"
+    },
+    "online": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "persistent": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "packets": {
+      "00000000-0000-0000-0000-000000000001": [
+        "00000000000000000000000000000011023f000000"
+      ],
+      "00000000-0000-0000-0000-000000000002": [
+        "00000000000000000000000000000011023f000000"
+      ]
+    }
+  },
+  {
+    "action": "value",
+    "argument": "50",
+    "dirty": true,
+    "value": 50,
+    "max": 100,
+    "progressBits": 1056964608,
+    "visible": true,
+    "color": 6,
+    "overlay": 0,
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        "Boss"
+      ],
+      "color": "white",
+      "hover_event": {
+        "value": "test:bar",
+        "action": "show_text"
+      },
+      "insertion": "test:bar"
+    },
+    "online": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "persistent": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "packets": {}
+  },
+  {
+    "action": "value",
+    "argument": "200",
+    "dirty": true,
+    "value": 200,
+    "max": 100,
+    "progressBits": 1065353216,
+    "visible": true,
+    "color": 6,
+    "overlay": 0,
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        "Boss"
+      ],
+      "color": "white",
+      "hover_event": {
+        "value": "test:bar",
+        "action": "show_text"
+      },
+      "insertion": "test:bar"
+    },
+    "online": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "persistent": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "packets": {
+      "00000000-0000-0000-0000-000000000001": [
+        "00000000000000000000000000000011023f800000"
+      ],
+      "00000000-0000-0000-0000-000000000002": [
+        "00000000000000000000000000000011023f800000"
+      ]
+    }
+  },
+  {
+    "action": "value",
+    "argument": "-1",
+    "dirty": true,
+    "value": -1,
+    "max": 100,
+    "progressBits": 0,
+    "visible": true,
+    "color": 6,
+    "overlay": 0,
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        "Boss"
+      ],
+      "color": "white",
+      "hover_event": {
+        "value": "test:bar",
+        "action": "show_text"
+      },
+      "insertion": "test:bar"
+    },
+    "online": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "persistent": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "packets": {
+      "00000000-0000-0000-0000-000000000001": [
+        "000000000000000000000000000000110200000000"
+      ],
+      "00000000-0000-0000-0000-000000000002": [
+        "000000000000000000000000000000110200000000"
+      ]
+    }
+  },
+  {
+    "action": "max",
+    "argument": "0",
+    "dirty": true,
+    "value": -1,
+    "max": 0,
+    "progressBits": 0,
+    "visible": true,
+    "color": 6,
+    "overlay": 0,
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        "Boss"
+      ],
+      "color": "white",
+      "hover_event": {
+        "value": "test:bar",
+        "action": "show_text"
+      },
+      "insertion": "test:bar"
+    },
+    "online": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "persistent": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "packets": {}
+  },
+  {
+    "action": "value",
+    "argument": "0",
+    "dirty": true,
+    "value": 0,
+    "max": 0,
+    "progressBits": 2143289344,
+    "visible": true,
+    "color": 6,
+    "overlay": 0,
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        "Boss"
+      ],
+      "color": "white",
+      "hover_event": {
+        "value": "test:bar",
+        "action": "show_text"
+      },
+      "insertion": "test:bar"
+    },
+    "online": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "persistent": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "packets": {
+      "00000000-0000-0000-0000-000000000001": [
+        "0000000000000000000000000000001102ffc00000"
+      ],
+      "00000000-0000-0000-0000-000000000002": [
+        "0000000000000000000000000000001102ffc00000"
+      ]
+    }
+  },
+  {
+    "action": "progress",
+    "argument": "NaN",
+    "dirty": true,
+    "value": 0,
+    "max": 0,
+    "progressBits": 2143289344,
+    "visible": true,
+    "color": 6,
+    "overlay": 0,
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        "Boss"
+      ],
+      "color": "white",
+      "hover_event": {
+        "value": "test:bar",
+        "action": "show_text"
+      },
+      "insertion": "test:bar"
+    },
+    "online": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "persistent": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "packets": {
+      "00000000-0000-0000-0000-000000000001": [
+        "00000000000000000000000000000011027fc00000"
+      ],
+      "00000000-0000-0000-0000-000000000002": [
+        "00000000000000000000000000000011027fc00000"
+      ]
+    }
+  },
+  {
+    "action": "max",
+    "argument": "100",
+    "dirty": true,
+    "value": 0,
+    "max": 100,
+    "progressBits": 0,
+    "visible": true,
+    "color": 6,
+    "overlay": 0,
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        "Boss"
+      ],
+      "color": "white",
+      "hover_event": {
+        "value": "test:bar",
+        "action": "show_text"
+      },
+      "insertion": "test:bar"
+    },
+    "online": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "persistent": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "packets": {
+      "00000000-0000-0000-0000-000000000001": [
+        "000000000000000000000000000000110200000000"
+      ],
+      "00000000-0000-0000-0000-000000000002": [
+        "000000000000000000000000000000110200000000"
+      ]
+    }
+  },
+  {
+    "action": "progress",
+    "argument": "-0.0",
+    "dirty": false,
+    "value": 0,
+    "max": 100,
+    "progressBits": 0,
+    "visible": true,
+    "color": 6,
+    "overlay": 0,
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        "Boss"
+      ],
+      "color": "white",
+      "hover_event": {
+        "value": "test:bar",
+        "action": "show_text"
+      },
+      "insertion": "test:bar"
+    },
+    "online": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "persistent": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "packets": {}
+  },
+  {
+    "action": "progress",
+    "argument": "0.0",
+    "dirty": false,
+    "value": 0,
+    "max": 100,
+    "progressBits": 0,
+    "visible": true,
+    "color": 6,
+    "overlay": 0,
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        "Boss"
+      ],
+      "color": "white",
+      "hover_event": {
+        "value": "test:bar",
+        "action": "show_text"
+      },
+      "insertion": "test:bar"
+    },
+    "online": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "persistent": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "packets": {}
+  },
+  {
+    "action": "name",
+    "argument": "Renamed",
+    "dirty": true,
+    "value": 0,
+    "max": 100,
+    "progressBits": 0,
+    "visible": true,
+    "color": 6,
+    "overlay": 0,
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        "Renamed"
+      ],
+      "color": "white",
+      "hover_event": {
+        "value": "test:bar",
+        "action": "show_text"
+      },
+      "insertion": "test:bar"
+    },
+    "online": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "persistent": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "packets": {
+      "00000000-0000-0000-0000-000000000001": [
+        "000000000000000000000000000000110308000752656e616d6564"
+      ],
+      "00000000-0000-0000-0000-000000000002": [
+        "000000000000000000000000000000110308000752656e616d6564"
+      ]
+    }
+  },
+  {
+    "action": "name",
+    "argument": "Renamed",
+    "dirty": false,
+    "value": 0,
+    "max": 100,
+    "progressBits": 0,
+    "visible": true,
+    "color": 6,
+    "overlay": 0,
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        "Renamed"
+      ],
+      "color": "white",
+      "hover_event": {
+        "value": "test:bar",
+        "action": "show_text"
+      },
+      "insertion": "test:bar"
+    },
+    "online": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "persistent": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "packets": {}
+  },
+  {
+    "action": "color",
+    "argument": "PINK",
+    "dirty": true,
+    "value": 0,
+    "max": 100,
+    "progressBits": 0,
+    "visible": true,
+    "color": 0,
+    "overlay": 0,
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        "Renamed"
+      ],
+      "color": "red",
+      "hover_event": {
+        "value": "test:bar",
+        "action": "show_text"
+      },
+      "insertion": "test:bar"
+    },
+    "online": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "persistent": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "packets": {
+      "00000000-0000-0000-0000-000000000001": [
+        "00000000000000000000000000000011040000"
+      ],
+      "00000000-0000-0000-0000-000000000002": [
+        "00000000000000000000000000000011040000"
+      ]
+    }
+  },
+  {
+    "action": "color",
+    "argument": "BLUE",
+    "dirty": true,
+    "value": 0,
+    "max": 100,
+    "progressBits": 0,
+    "visible": true,
+    "color": 1,
+    "overlay": 0,
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        "Renamed"
+      ],
+      "color": "blue",
+      "hover_event": {
+        "value": "test:bar",
+        "action": "show_text"
+      },
+      "insertion": "test:bar"
+    },
+    "online": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "persistent": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "packets": {
+      "00000000-0000-0000-0000-000000000001": [
+        "00000000000000000000000000000011040100"
+      ],
+      "00000000-0000-0000-0000-000000000002": [
+        "00000000000000000000000000000011040100"
+      ]
+    }
+  },
+  {
+    "action": "color",
+    "argument": "RED",
+    "dirty": true,
+    "value": 0,
+    "max": 100,
+    "progressBits": 0,
+    "visible": true,
+    "color": 2,
+    "overlay": 0,
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        "Renamed"
+      ],
+      "color": "dark_red",
+      "hover_event": {
+        "value": "test:bar",
+        "action": "show_text"
+      },
+      "insertion": "test:bar"
+    },
+    "online": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "persistent": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "packets": {
+      "00000000-0000-0000-0000-000000000001": [
+        "00000000000000000000000000000011040200"
+      ],
+      "00000000-0000-0000-0000-000000000002": [
+        "00000000000000000000000000000011040200"
+      ]
+    }
+  },
+  {
+    "action": "color",
+    "argument": "GREEN",
+    "dirty": true,
+    "value": 0,
+    "max": 100,
+    "progressBits": 0,
+    "visible": true,
+    "color": 3,
+    "overlay": 0,
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        "Renamed"
+      ],
+      "color": "green",
+      "hover_event": {
+        "value": "test:bar",
+        "action": "show_text"
+      },
+      "insertion": "test:bar"
+    },
+    "online": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "persistent": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "packets": {
+      "00000000-0000-0000-0000-000000000001": [
+        "00000000000000000000000000000011040300"
+      ],
+      "00000000-0000-0000-0000-000000000002": [
+        "00000000000000000000000000000011040300"
+      ]
+    }
+  },
+  {
+    "action": "color",
+    "argument": "YELLOW",
+    "dirty": true,
+    "value": 0,
+    "max": 100,
+    "progressBits": 0,
+    "visible": true,
+    "color": 4,
+    "overlay": 0,
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        "Renamed"
+      ],
+      "color": "yellow",
+      "hover_event": {
+        "value": "test:bar",
+        "action": "show_text"
+      },
+      "insertion": "test:bar"
+    },
+    "online": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "persistent": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "packets": {
+      "00000000-0000-0000-0000-000000000001": [
+        "00000000000000000000000000000011040400"
+      ],
+      "00000000-0000-0000-0000-000000000002": [
+        "00000000000000000000000000000011040400"
+      ]
+    }
+  },
+  {
+    "action": "color",
+    "argument": "PURPLE",
+    "dirty": true,
+    "value": 0,
+    "max": 100,
+    "progressBits": 0,
+    "visible": true,
+    "color": 5,
+    "overlay": 0,
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        "Renamed"
+      ],
+      "color": "dark_blue",
+      "hover_event": {
+        "value": "test:bar",
+        "action": "show_text"
+      },
+      "insertion": "test:bar"
+    },
+    "online": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "persistent": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "packets": {
+      "00000000-0000-0000-0000-000000000001": [
+        "00000000000000000000000000000011040500"
+      ],
+      "00000000-0000-0000-0000-000000000002": [
+        "00000000000000000000000000000011040500"
+      ]
+    }
+  },
+  {
+    "action": "color",
+    "argument": "WHITE",
+    "dirty": true,
+    "value": 0,
+    "max": 100,
+    "progressBits": 0,
+    "visible": true,
+    "color": 6,
+    "overlay": 0,
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        "Renamed"
+      ],
+      "color": "white",
+      "hover_event": {
+        "value": "test:bar",
+        "action": "show_text"
+      },
+      "insertion": "test:bar"
+    },
+    "online": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "persistent": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "packets": {
+      "00000000-0000-0000-0000-000000000001": [
+        "00000000000000000000000000000011040600"
+      ],
+      "00000000-0000-0000-0000-000000000002": [
+        "00000000000000000000000000000011040600"
+      ]
+    }
+  },
+  {
+    "action": "overlay",
+    "argument": "PROGRESS",
+    "dirty": false,
+    "value": 0,
+    "max": 100,
+    "progressBits": 0,
+    "visible": true,
+    "color": 6,
+    "overlay": 0,
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        "Renamed"
+      ],
+      "color": "white",
+      "hover_event": {
+        "value": "test:bar",
+        "action": "show_text"
+      },
+      "insertion": "test:bar"
+    },
+    "online": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "persistent": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "packets": {}
+  },
+  {
+    "action": "overlay",
+    "argument": "NOTCHED_6",
+    "dirty": true,
+    "value": 0,
+    "max": 100,
+    "progressBits": 0,
+    "visible": true,
+    "color": 6,
+    "overlay": 1,
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        "Renamed"
+      ],
+      "color": "white",
+      "hover_event": {
+        "value": "test:bar",
+        "action": "show_text"
+      },
+      "insertion": "test:bar"
+    },
+    "online": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "persistent": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "packets": {
+      "00000000-0000-0000-0000-000000000001": [
+        "00000000000000000000000000000011040601"
+      ],
+      "00000000-0000-0000-0000-000000000002": [
+        "00000000000000000000000000000011040601"
+      ]
+    }
+  },
+  {
+    "action": "overlay",
+    "argument": "NOTCHED_10",
+    "dirty": true,
+    "value": 0,
+    "max": 100,
+    "progressBits": 0,
+    "visible": true,
+    "color": 6,
+    "overlay": 2,
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        "Renamed"
+      ],
+      "color": "white",
+      "hover_event": {
+        "value": "test:bar",
+        "action": "show_text"
+      },
+      "insertion": "test:bar"
+    },
+    "online": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "persistent": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "packets": {
+      "00000000-0000-0000-0000-000000000001": [
+        "00000000000000000000000000000011040602"
+      ],
+      "00000000-0000-0000-0000-000000000002": [
+        "00000000000000000000000000000011040602"
+      ]
+    }
+  },
+  {
+    "action": "overlay",
+    "argument": "NOTCHED_12",
+    "dirty": true,
+    "value": 0,
+    "max": 100,
+    "progressBits": 0,
+    "visible": true,
+    "color": 6,
+    "overlay": 3,
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        "Renamed"
+      ],
+      "color": "white",
+      "hover_event": {
+        "value": "test:bar",
+        "action": "show_text"
+      },
+      "insertion": "test:bar"
+    },
+    "online": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "persistent": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "packets": {
+      "00000000-0000-0000-0000-000000000001": [
+        "00000000000000000000000000000011040603"
+      ],
+      "00000000-0000-0000-0000-000000000002": [
+        "00000000000000000000000000000011040603"
+      ]
+    }
+  },
+  {
+    "action": "overlay",
+    "argument": "NOTCHED_20",
+    "dirty": true,
+    "value": 0,
+    "max": 100,
+    "progressBits": 0,
+    "visible": true,
+    "color": 6,
+    "overlay": 4,
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        "Renamed"
+      ],
+      "color": "white",
+      "hover_event": {
+        "value": "test:bar",
+        "action": "show_text"
+      },
+      "insertion": "test:bar"
+    },
+    "online": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "persistent": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "packets": {
+      "00000000-0000-0000-0000-000000000001": [
+        "00000000000000000000000000000011040604"
+      ],
+      "00000000-0000-0000-0000-000000000002": [
+        "00000000000000000000000000000011040604"
+      ]
+    }
+  },
+  {
+    "action": "darken",
+    "argument": "true",
+    "dirty": true,
+    "value": 0,
+    "max": 100,
+    "progressBits": 0,
+    "visible": true,
+    "color": 6,
+    "overlay": 4,
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        "Renamed"
+      ],
+      "color": "white",
+      "hover_event": {
+        "value": "test:bar",
+        "action": "show_text"
+      },
+      "insertion": "test:bar"
+    },
+    "online": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "persistent": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "packets": {
+      "00000000-0000-0000-0000-000000000001": [
+        "000000000000000000000000000000110501"
+      ],
+      "00000000-0000-0000-0000-000000000002": [
+        "000000000000000000000000000000110501"
+      ]
+    }
+  },
+  {
+    "action": "darken",
+    "argument": "true",
+    "dirty": false,
+    "value": 0,
+    "max": 100,
+    "progressBits": 0,
+    "visible": true,
+    "color": 6,
+    "overlay": 4,
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        "Renamed"
+      ],
+      "color": "white",
+      "hover_event": {
+        "value": "test:bar",
+        "action": "show_text"
+      },
+      "insertion": "test:bar"
+    },
+    "online": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "persistent": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "packets": {}
+  },
+  {
+    "action": "darken",
+    "argument": "false",
+    "dirty": true,
+    "value": 0,
+    "max": 100,
+    "progressBits": 0,
+    "visible": true,
+    "color": 6,
+    "overlay": 4,
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        "Renamed"
+      ],
+      "color": "white",
+      "hover_event": {
+        "value": "test:bar",
+        "action": "show_text"
+      },
+      "insertion": "test:bar"
+    },
+    "online": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "persistent": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "packets": {
+      "00000000-0000-0000-0000-000000000001": [
+        "000000000000000000000000000000110500"
+      ],
+      "00000000-0000-0000-0000-000000000002": [
+        "000000000000000000000000000000110500"
+      ]
+    }
+  },
+  {
+    "action": "music",
+    "argument": "true",
+    "dirty": true,
+    "value": 0,
+    "max": 100,
+    "progressBits": 0,
+    "visible": true,
+    "color": 6,
+    "overlay": 4,
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        "Renamed"
+      ],
+      "color": "white",
+      "hover_event": {
+        "value": "test:bar",
+        "action": "show_text"
+      },
+      "insertion": "test:bar"
+    },
+    "online": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "persistent": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "packets": {
+      "00000000-0000-0000-0000-000000000001": [
+        "000000000000000000000000000000110502"
+      ],
+      "00000000-0000-0000-0000-000000000002": [
+        "000000000000000000000000000000110502"
+      ]
+    }
+  },
+  {
+    "action": "music",
+    "argument": "true",
+    "dirty": false,
+    "value": 0,
+    "max": 100,
+    "progressBits": 0,
+    "visible": true,
+    "color": 6,
+    "overlay": 4,
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        "Renamed"
+      ],
+      "color": "white",
+      "hover_event": {
+        "value": "test:bar",
+        "action": "show_text"
+      },
+      "insertion": "test:bar"
+    },
+    "online": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "persistent": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "packets": {}
+  },
+  {
+    "action": "music",
+    "argument": "false",
+    "dirty": true,
+    "value": 0,
+    "max": 100,
+    "progressBits": 0,
+    "visible": true,
+    "color": 6,
+    "overlay": 4,
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        "Renamed"
+      ],
+      "color": "white",
+      "hover_event": {
+        "value": "test:bar",
+        "action": "show_text"
+      },
+      "insertion": "test:bar"
+    },
+    "online": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "persistent": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "packets": {
+      "00000000-0000-0000-0000-000000000001": [
+        "000000000000000000000000000000110500"
+      ],
+      "00000000-0000-0000-0000-000000000002": [
+        "000000000000000000000000000000110500"
+      ]
+    }
+  },
+  {
+    "action": "fog",
+    "argument": "true",
+    "dirty": true,
+    "value": 0,
+    "max": 100,
+    "progressBits": 0,
+    "visible": true,
+    "color": 6,
+    "overlay": 4,
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        "Renamed"
+      ],
+      "color": "white",
+      "hover_event": {
+        "value": "test:bar",
+        "action": "show_text"
+      },
+      "insertion": "test:bar"
+    },
+    "online": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "persistent": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "packets": {
+      "00000000-0000-0000-0000-000000000001": [
+        "000000000000000000000000000000110504"
+      ],
+      "00000000-0000-0000-0000-000000000002": [
+        "000000000000000000000000000000110504"
+      ]
+    }
+  },
+  {
+    "action": "fog",
+    "argument": "true",
+    "dirty": false,
+    "value": 0,
+    "max": 100,
+    "progressBits": 0,
+    "visible": true,
+    "color": 6,
+    "overlay": 4,
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        "Renamed"
+      ],
+      "color": "white",
+      "hover_event": {
+        "value": "test:bar",
+        "action": "show_text"
+      },
+      "insertion": "test:bar"
+    },
+    "online": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "persistent": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "packets": {}
+  },
+  {
+    "action": "fog",
+    "argument": "false",
+    "dirty": true,
+    "value": 0,
+    "max": 100,
+    "progressBits": 0,
+    "visible": true,
+    "color": 6,
+    "overlay": 4,
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        "Renamed"
+      ],
+      "color": "white",
+      "hover_event": {
+        "value": "test:bar",
+        "action": "show_text"
+      },
+      "insertion": "test:bar"
+    },
+    "online": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "persistent": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "packets": {
+      "00000000-0000-0000-0000-000000000001": [
+        "000000000000000000000000000000110500"
+      ],
+      "00000000-0000-0000-0000-000000000002": [
+        "000000000000000000000000000000110500"
+      ]
+    }
+  },
+  {
+    "action": "visible",
+    "argument": "false",
+    "dirty": true,
+    "value": 0,
+    "max": 100,
+    "progressBits": 0,
+    "visible": false,
+    "color": 6,
+    "overlay": 4,
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        "Renamed"
+      ],
+      "color": "white",
+      "hover_event": {
+        "value": "test:bar",
+        "action": "show_text"
+      },
+      "insertion": "test:bar"
+    },
+    "online": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "persistent": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "packets": {
+      "00000000-0000-0000-0000-000000000001": [
+        "0000000000000000000000000000001101"
+      ],
+      "00000000-0000-0000-0000-000000000002": [
+        "0000000000000000000000000000001101"
+      ]
+    }
+  },
+  {
+    "action": "value",
+    "argument": "30",
+    "dirty": true,
+    "value": 30,
+    "max": 100,
+    "progressBits": 1050253722,
+    "visible": false,
+    "color": 6,
+    "overlay": 4,
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        "Renamed"
+      ],
+      "color": "white",
+      "hover_event": {
+        "value": "test:bar",
+        "action": "show_text"
+      },
+      "insertion": "test:bar"
+    },
+    "online": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "persistent": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "packets": {}
+  },
+  {
+    "action": "remove",
+    "argument": "1",
+    "dirty": true,
+    "value": 30,
+    "max": 100,
+    "progressBits": 1050253722,
+    "visible": false,
+    "color": 6,
+    "overlay": 4,
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        "Renamed"
+      ],
+      "color": "white",
+      "hover_event": {
+        "value": "test:bar",
+        "action": "show_text"
+      },
+      "insertion": "test:bar"
+    },
+    "online": [
+      "00000000-0000-0000-0000-000000000001"
+    ],
+    "persistent": [
+      "00000000-0000-0000-0000-000000000001"
+    ],
+    "packets": {}
+  },
+  {
+    "action": "add",
+    "argument": "1",
+    "dirty": true,
+    "value": 30,
+    "max": 100,
+    "progressBits": 1050253722,
+    "visible": false,
+    "color": 6,
+    "overlay": 4,
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        "Renamed"
+      ],
+      "color": "white",
+      "hover_event": {
+        "value": "test:bar",
+        "action": "show_text"
+      },
+      "insertion": "test:bar"
+    },
+    "online": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "persistent": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "packets": {}
+  },
+  {
+    "action": "visible",
+    "argument": "true",
+    "dirty": true,
+    "value": 30,
+    "max": 100,
+    "progressBits": 1050253722,
+    "visible": true,
+    "color": 6,
+    "overlay": 4,
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        "Renamed"
+      ],
+      "color": "white",
+      "hover_event": {
+        "value": "test:bar",
+        "action": "show_text"
+      },
+      "insertion": "test:bar"
+    },
+    "online": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "persistent": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "packets": {
+      "00000000-0000-0000-0000-000000000001": [
+        "000000000000000000000000000000110008000752656e616d65643e99999a060400"
+      ],
+      "00000000-0000-0000-0000-000000000002": [
+        "000000000000000000000000000000110008000752656e616d65643e99999a060400"
+      ]
+    }
+  },
+  {
+    "action": "disconnect",
+    "argument": "1",
+    "dirty": false,
+    "value": 30,
+    "max": 100,
+    "progressBits": 1050253722,
+    "visible": true,
+    "color": 6,
+    "overlay": 4,
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        "Renamed"
+      ],
+      "color": "white",
+      "hover_event": {
+        "value": "test:bar",
+        "action": "show_text"
+      },
+      "insertion": "test:bar"
+    },
+    "online": [
+      "00000000-0000-0000-0000-000000000001"
+    ],
+    "persistent": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "packets": {
+      "00000000-0000-0000-0000-000000000002": [
+        "0000000000000000000000000000001101"
+      ]
+    }
+  },
+  {
+    "action": "connect",
+    "argument": "1",
+    "dirty": false,
+    "value": 30,
+    "max": 100,
+    "progressBits": 1050253722,
+    "visible": true,
+    "color": 6,
+    "overlay": 4,
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        "Renamed"
+      ],
+      "color": "white",
+      "hover_event": {
+        "value": "test:bar",
+        "action": "show_text"
+      },
+      "insertion": "test:bar"
+    },
+    "online": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "persistent": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "packets": {
+      "00000000-0000-0000-0000-000000000002": [
+        "000000000000000000000000000000110008000752656e616d65643e99999a060400"
+      ]
+    }
+  },
+  {
+    "action": "players",
+    "argument": "0,0",
+    "dirty": true,
+    "value": 30,
+    "max": 100,
+    "progressBits": 1050253722,
+    "visible": true,
+    "color": 6,
+    "overlay": 4,
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        "Renamed"
+      ],
+      "color": "white",
+      "hover_event": {
+        "value": "test:bar",
+        "action": "show_text"
+      },
+      "insertion": "test:bar"
+    },
+    "online": [
+      "00000000-0000-0000-0000-000000000001"
+    ],
+    "persistent": [
+      "00000000-0000-0000-0000-000000000001"
+    ],
+    "packets": {
+      "00000000-0000-0000-0000-000000000002": [
+        "0000000000000000000000000000001101"
+      ]
+    }
+  },
+  {
+    "action": "disconnect",
+    "argument": "0",
+    "dirty": false,
+    "value": 30,
+    "max": 100,
+    "progressBits": 1050253722,
+    "visible": true,
+    "color": 6,
+    "overlay": 4,
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        "Renamed"
+      ],
+      "color": "white",
+      "hover_event": {
+        "value": "test:bar",
+        "action": "show_text"
+      },
+      "insertion": "test:bar"
+    },
+    "online": [],
+    "persistent": [
+      "00000000-0000-0000-0000-000000000001"
+    ],
+    "packets": {
+      "00000000-0000-0000-0000-000000000001": [
+        "0000000000000000000000000000001101"
+      ]
+    }
+  },
+  {
+    "action": "players",
+    "argument": "",
+    "dirty": true,
+    "value": 30,
+    "max": 100,
+    "progressBits": 1050253722,
+    "visible": true,
+    "color": 6,
+    "overlay": 4,
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        "Renamed"
+      ],
+      "color": "white",
+      "hover_event": {
+        "value": "test:bar",
+        "action": "show_text"
+      },
+      "insertion": "test:bar"
+    },
+    "online": [],
+    "persistent": [],
+    "packets": {}
+  },
+  {
+    "action": "connect",
+    "argument": "0",
+    "dirty": false,
+    "value": 30,
+    "max": 100,
+    "progressBits": 1050253722,
+    "visible": true,
+    "color": 6,
+    "overlay": 4,
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        "Renamed"
+      ],
+      "color": "white",
+      "hover_event": {
+        "value": "test:bar",
+        "action": "show_text"
+      },
+      "insertion": "test:bar"
+    },
+    "online": [],
+    "persistent": [],
+    "packets": {}
+  },
+  {
+    "action": "add",
+    "argument": "0",
+    "dirty": true,
+    "value": 30,
+    "max": 100,
+    "progressBits": 1050253722,
+    "visible": true,
+    "color": 6,
+    "overlay": 4,
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        "Renamed"
+      ],
+      "color": "white",
+      "hover_event": {
+        "value": "test:bar",
+        "action": "show_text"
+      },
+      "insertion": "test:bar"
+    },
+    "online": [
+      "00000000-0000-0000-0000-000000000001"
+    ],
+    "persistent": [
+      "00000000-0000-0000-0000-000000000001"
+    ],
+    "packets": {
+      "00000000-0000-0000-0000-000000000001": [
+        "000000000000000000000000000000110008000752656e616d65643e99999a060400"
+      ]
+    }
+  },
+  {
+    "action": "disconnect",
+    "argument": "0",
+    "dirty": false,
+    "value": 30,
+    "max": 100,
+    "progressBits": 1050253722,
+    "visible": true,
+    "color": 6,
+    "overlay": 4,
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        "Renamed"
+      ],
+      "color": "white",
+      "hover_event": {
+        "value": "test:bar",
+        "action": "show_text"
+      },
+      "insertion": "test:bar"
+    },
+    "online": [],
+    "persistent": [
+      "00000000-0000-0000-0000-000000000001"
+    ],
+    "packets": {
+      "00000000-0000-0000-0000-000000000001": [
+        "0000000000000000000000000000001101"
+      ]
+    }
+  },
+  {
+    "action": "clear",
+    "argument": "",
+    "dirty": true,
+    "value": 30,
+    "max": 100,
+    "progressBits": 1050253722,
+    "visible": true,
+    "color": 6,
+    "overlay": 4,
+    "display": {
+      "translate": "chat.square_brackets",
+      "with": [
+        "Renamed"
+      ],
+      "color": "white",
+      "hover_event": {
+        "value": "test:bar",
+        "action": "show_text"
+      },
+      "insertion": "test:bar"
+    },
+    "online": [],
+    "persistent": [],
+    "packets": {}
+  }
+]
