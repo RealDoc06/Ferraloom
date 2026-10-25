@@ -1313,11 +1313,8 @@ fn random_phase_uses_registered_callbacks_and_warn_counts_block_and_fluid_skips(
     }
     install_weather_environment(&mut level, "plains");
     assert_eq!(
-        level.tick_random_chunk(chunk),
-        Err(LevelError::UnsupportedBlockMethod(
-            state.block(),
-            BlockMethod::RandomTick
-        ))
+        level.tick_random_chunk(chunk).unwrap_err().root(),
+        &LevelError::UnsupportedBlockMethod(state.block(), BlockMethod::RandomTick)
     );
     level.set_unported_behavior(UnportedBehavior::Warn);
     level.tick_random_chunk(chunk).unwrap();
@@ -2553,4 +2550,76 @@ fn warn_post_processing_retains_skipped_units_and_continues_in_position_order() 
     level.post_process_generation(chunk).unwrap();
     assert_eq!(level.unported_behavior_stats().skipped_calls, 2);
     assert_eq!(level.unported_behavior_stats().distinct_calls, 1);
+}
+
+#[test]
+fn dispatch_error_context_keeps_the_root_cause_and_preceding_effects() {
+    use crate::block::BlockMethod;
+    use std::error::Error;
+
+    struct FailingTick;
+    impl BlockBehavior for FailingTick {
+        fn tick(
+            &self,
+            state: BlockState,
+            pos: BlockPos,
+            level: &mut Level,
+        ) -> Result<(), LevelError> {
+            level.emit(LevelEffect::LevelEvent {
+                pos,
+                id: 99,
+                data: 1,
+            });
+            Err(LevelError::UnsupportedBlockMethod(
+                state.block(),
+                BlockMethod::Tick,
+            ))
+        }
+    }
+    static BEHAVIORS: Behaviors = Behaviors::EMPTY.with_block(Block::STONE, &FailingTick);
+    let mut level = empty_level(&BEHAVIORS);
+    let pos = BlockPos::new(3, -2, 7);
+    level
+        .set_chunk_block_ticking(ChunkPos::containing(pos), true)
+        .unwrap();
+    level
+        .set_block_state(pos, Block::STONE.default_state())
+        .unwrap();
+    level
+        .schedule_block_tick_after(pos, Block::STONE, 0)
+        .unwrap();
+    level.take_effects();
+
+    let error = level.tick_block_phase(0, 65536).unwrap_err();
+    let cause = LevelError::UnsupportedBlockMethod(Block::STONE, BlockMethod::Tick);
+    assert_eq!(error.root(), &cause);
+    assert_eq!(
+        error.to_string(),
+        format!("scheduled block tick at {pos:?}: {cause}")
+    );
+    assert_eq!(error.clone(), error);
+    assert_eq!(
+        error.source().unwrap().downcast_ref::<LevelError>(),
+        Some(error.root())
+    );
+    assert!(matches!(level.take_effects().as_slice(),
+        [LevelEffect::LevelEvent { pos: actual, id: 99, data: 1 }] if *actual == pos));
+
+    let outer_pos = pos.above(1);
+    let nested = error.at(outer_pos, "block event");
+    assert_eq!(nested.root(), &cause);
+    assert_eq!(
+        nested.to_string(),
+        format!("block event at {outer_pos:?}: scheduled block tick at {pos:?}: {cause}")
+    );
+    assert_eq!(
+        nested
+            .source()
+            .unwrap()
+            .downcast_ref::<LevelError>()
+            .unwrap()
+            .root(),
+        &cause
+    );
+    assert!(std::ptr::eq(cause.root(), &cause));
 }

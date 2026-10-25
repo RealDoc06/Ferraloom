@@ -61,6 +61,12 @@ pub mod weather;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum LevelError {
+    /// Diagnostic context at a world dispatch boundary; the cause is unchanged.
+    At {
+        pos: BlockPos,
+        phase: &'static str,
+        source: Box<LevelError>,
+    },
     BlockBreak(crate::entity::player::game_mode::BlockBreakFailure),
     /// Native ArrayList iterator ConcurrentModificationException during listener visitation.
     ConcurrentGameEventListenerModification,
@@ -155,9 +161,31 @@ pub enum LevelError {
     UnsupportedPathNavigationQuery(path_navigation_region::PathNavigationQuery),
 }
 
+impl LevelError {
+    pub(crate) fn at(self, pos: BlockPos, phase: &'static str) -> Self {
+        Self::At {
+            pos,
+            phase,
+            source: Box::new(self),
+        }
+    }
+
+    /// Inspect the original error without discarding dispatch context or its cause.
+    pub fn root(&self) -> &Self {
+        let mut error = self;
+        while let Self::At { source, .. } = error {
+            error = source;
+        }
+        error
+    }
+}
+
 impl std::fmt::Display for LevelError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::At { pos, phase, source } => {
+                write!(formatter, "{phase} at {pos:?}: {source}")
+            }
             Self::BlockBreak(error) => std::fmt::Display::fmt(error.error(), formatter),
             Self::WorldgenMutationFailed { pos, source } => {
                 write!(formatter, "worldgen mutation at {pos:?}: {source}")
@@ -182,6 +210,7 @@ impl std::fmt::Display for LevelError {
 impl std::error::Error for LevelError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
+            Self::At { source, .. } => Some(source.as_ref()),
             Self::BlockBreak(error) => Some(error.error()),
             Self::WorldgenMutationFailed { source, .. } => Some(source),
             _ => None,
@@ -604,13 +633,16 @@ impl Level {
     }
     fn run_collected_blocks(&mut self) -> Result<(), LevelError> {
         while let Some(tick) = self.region_mut().block_ticks.poll_this_tick() {
-            let state = self.get_block_state(tick.pos)?;
+            let state = self
+                .get_block_state(tick.pos)
+                .map_err(|error| error.at(tick.pos, "scheduled block tick"))?;
             if state.block() == tick.block {
                 self.optional_block_call(
                     tick.block,
                     crate::block::BlockMethod::Tick,
                     |behavior, level| behavior.tick(state, tick.pos, level),
-                )?;
+                )
+                .map_err(|error| error.at(tick.pos, "scheduled block tick"))?;
             }
         }
         Ok(())

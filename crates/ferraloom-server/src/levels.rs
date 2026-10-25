@@ -138,7 +138,7 @@ fn entity_level_index<'a>(
                     return Err(LevelError::DuplicateEntity(entity));
                 }
             }
-            Err(LevelError::MissingEntity(_)) => (),
+            Err(error) if matches!(error.root(), LevelError::MissingEntity(_)) => (),
             Err(error) => return Err(error),
         }
     }

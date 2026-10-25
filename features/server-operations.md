@@ -25,6 +25,7 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | server-operations.monitor.jmx | Expose dedicated-server tick metrics through the optional JMX bean | `MinecraftServerStatistics` | | - | todo |
 | server-operations.monitor.jfr | Start and stop flight recording and publish profiling results | `JvmProfiler; JfrCommand` | | - | todo |
 | server-operations.monitor.debug-report | Write debug reports, tick profiles and performance capture on command | `MinecraftServer#saveDebugReport; PerfCommand; DebugCommand` | | - | todo |
+| server-operations.diagnostics.tick-context | Include block position and dispatch phase in required tick failures while retaining the original typed cause | `Level#tickBlockEntities; ServerLevel#tickBlock; ServerLevel#tickFluid; ServerLevel#tickChunk; ServerLevel#runBlockEvents` | `level::tests::dispatch_error_context_keeps_the_root_cause_and_preceding_effects` (source-only; focused Rust test pending) | - | partial |
 | server-operations.pause.empty | Autosave once and pause simulation while continuing connection ticks when empty | `MinecraftServer#tickServer` | | - | todo |
 | server-operations.players.idle-kick | Disconnect idle players after configured timeout | `ServerGamePacketListenerImpl#tick` | | - | todo |
 | server-operations.players.spawn-protection | Apply operator-sensitive spawn protection in the spawn dimension | `DedicatedServer#isUnderSpawnProtection` | | - | todo |

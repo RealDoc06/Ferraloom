@@ -177,11 +177,14 @@ pub(super) fn criterion_error(
             .unported_operation(UnportedOperation::AdvancementCriterion(
                 super::criteria::Trigger::from_type(trigger),
             ))
-            .map_err(|error| match error {
+            .map_err(|error| match error.root() {
                 LevelError::UnsupportedAdvancementCriterion(trigger) => {
-                    LevelError::UnsupportedAdvancementPredicate { trigger, source }
+                    LevelError::UnsupportedAdvancementPredicate {
+                        trigger: *trigger,
+                        source,
+                    }
                 }
-                error => error,
+                _ => error,
             }),
         _ => Err(LevelError::Inventory("advancement predicate evaluation")),
     }
