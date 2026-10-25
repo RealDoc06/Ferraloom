@@ -170,6 +170,11 @@ impl Capture {
         let id = menu.container_id.0;
         self.wait(bot, "storage menu contents", |_, packet| matches!(packet, cb::Packet::ContainerSetContent(content) if content.container_id.0 == id)).await?;
         self.step(bot).await?;
+        ensure!(
+            bot.snapshot().containers.contains_key(&id),
+            "menu {id} closed after stepping at {pos:?}; packets={:?}",
+            self.packets
+        );
         Ok(id)
     }
     async fn close(&mut self, bot: &mut Bot, id: i32) -> Result<()> {
@@ -217,7 +222,11 @@ async fn storage_interactions(session: &mut Session) -> Result<ObservationLog> {
     let player = session.join("ParityBot").await?;
     let bot = session.bot(player)?;
     level_support::freeze(bot).await?;
-    set(bot, BlockPos::new(8, 79, 13), Block::STONE).await?;
+    // Player travel is server-authoritative in 26.3 and players keep ticking
+    // while the world is frozen. Every interaction position needs a floor.
+    for z in [11, 12, 13] {
+        set(bot, BlockPos::new(8, 79, z), Block::STONE).await?;
+    }
     bot.teleport([8.5, 80.0, 13.5]).await?;
     let mut log = ObservationLog::default();
     for (case, block, double) in [
@@ -285,7 +294,13 @@ async fn storage_interactions(session: &mut Session) -> Result<ObservationLog> {
         let mut capture = Capture::new(positions);
         let menu = capture.open(bot, pos).await?;
         let count = if double { 54 } else { 27 };
-        let slots = bot.snapshot().containers[&menu].slots.clone();
+        let slots = bot
+            .snapshot()
+            .containers
+            .get(&menu)
+            .with_context(|| format!("{case}: opened storage menu {menu} disappeared"))?
+            .slots
+            .clone();
         ensure!(slots.len() == count + 36, "wrong storage menu size");
         let expected = if double { Item::DIAMOND } else { Item::STONE };
         ensure!(slots[0].item() == expected, "wrong first container half");
