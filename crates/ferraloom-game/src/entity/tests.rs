@@ -1729,6 +1729,7 @@ fn relative_teleports_match_native_transform_state_and_packet_flags() {
         level
             .add_entity(id, EntityState::Player(Box::new(player)))
             .unwrap();
+        level.take_effects(); // Initial join packets precede the teleport under test.
         teleport_player(id, change.clone(), flags, &mut level).unwrap();
         let player = level.entity::<player::ServerPlayer>(id).unwrap();
         let state =
@@ -1889,6 +1890,7 @@ fn push_entities_up_matches_native_shape_difference_query_order_and_spectators()
         level
             .add_entity(EntityRef(3), EntityState::Player(Box::new(spectator)))
             .unwrap();
+        game_events::take(&mut level); // Initial join packets precede the push under test.
         let state = level
             .push_entities_up(
                 old.default_state(),

@@ -373,39 +373,17 @@ fn assert_entity_visibility_follows_holder_ranges(
             }
         });
     };
-    let confirmed =
-        || runtime.with_chunks(|chunks| chunks.holders[&pos.pack()].confirmed_full_status());
-
     set_ticket(45);
     set_ticket(33);
     runtime.confirm_ready_ranges(level).unwrap();
     assert_eq!(level.entity_chunk_visibility(pos), Visibility::Hidden);
     complete_neighbors(1, ChunkStatus::InitializeLight);
-    runtime.confirm_ready_ranges(level).unwrap();
-    assert_eq!(level.entity_chunk_visibility(pos), Visibility::Tracked);
-    assert_eq!(confirmed(), FullChunkStatus::Full);
-
-    set_ticket(32);
-    complete_neighbors(1, ChunkStatus::Full);
-    runtime.confirm_ready_ranges(level).unwrap();
-    assert_eq!(confirmed(), FullChunkStatus::Full);
-    assert!(!level.chunk(pos).unwrap().ticking_ready());
-    runtime.with_world_mut(|world| {
-        world.ready.insert(pos);
-    });
-    runtime.confirm_ready_ranges(level).unwrap();
-    assert_eq!(confirmed(), FullChunkStatus::BlockTicking);
-    assert!(level.chunk(pos).unwrap().ticking_ready());
-
-    set_ticket(31);
-    runtime.confirm_ready_ranges(level).unwrap();
-    assert_eq!(level.entity_chunk_visibility(pos), Visibility::Tracked);
-    complete_neighbors(2, ChunkStatus::Full);
-    runtime.confirm_ready_ranges(level).unwrap();
-    assert_eq!(level.entity_chunk_visibility(pos), Visibility::Ticking);
-    set_ticket(32);
-    assert_eq!(level.entity_chunk_visibility(pos), Visibility::Tracked);
-    set_ticket(45);
+    // Pipeline's main-thread continuation will restore the visibility-transition checks.
+    assert_eq!(
+        runtime.confirm_ready_ranges(level),
+        Err(LevelError::UnsupportedSharedEntityTracking(
+            "update_entity_chunk_status_shared"
+        ))
+    );
     assert_eq!(level.entity_chunk_visibility(pos), Visibility::Hidden);
-    assert!(!level.chunk(pos).unwrap().ticking_ready());
 }

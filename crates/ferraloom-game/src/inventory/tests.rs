@@ -874,6 +874,7 @@ fn player_tick_broadcasts_external_inventory_mutation_in_entity_phase() {
         );
         assert!(player.menus.pending_packets.is_empty());
     }
+    level.take_effects(); // Initial join packets precede the menu broadcast under test.
     tick_container_menu(handle, &mut level).unwrap();
     let packets = level
         .take_effects()

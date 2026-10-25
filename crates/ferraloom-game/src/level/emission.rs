@@ -286,6 +286,7 @@ mod tests {
             .add_entity(handle, EntityState::Player(Box::new(player)))
             .unwrap();
         level.set_entity_pos(handle, position).unwrap();
+        level.take_effects(); // Initial join packets precede the emissions under test.
         handle
     }
     fn only_packet(level: &mut Level) -> (Vec<EntityRef>, cb::Packet) {

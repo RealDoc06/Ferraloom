@@ -99,7 +99,7 @@ fn broken_stack(slot: EquipmentSlot, scenario: &str, attribute: Attribute) -> It
 }
 
 #[test]
-fn native_equipment_break_ids_cleanup_and_stats_keep_tracking_explicitly_pending() {
+fn native_equipment_break_ids_cleanup_and_stats_deliver_the_captured_event() {
     let mut cases = 0;
     for row in include_str!("../../../../tests/java/entity/vectors.tsv")
         .lines()
@@ -114,42 +114,13 @@ fn native_equipment_break_ids_cleanup_and_stats_keep_tracking_explicitly_pending
         for policy in [UnportedBehavior::Strict, UnportedBehavior::Warn] {
             let (mut level, owner) = receiver(installed);
             level.set_unported_behavior(policy);
-            let before = level
-                .entity::<LivingEntity>(owner)
-                .unwrap()
-                .attributes
-                .save_nbt();
             let broken = broken_stack(slot, fields[2], Attribute::SUBMERGED_MINING_SPEED);
             let kind = broken.item();
             let result = on_equipped_item_broken(owner, broken, slot, &mut level);
-            if policy == UnportedBehavior::Strict {
-                assert_eq!(
-                    result,
-                    Err(LevelError::UnsupportedEntityMethod(
-                        EntityType::PLAYER,
-                        EntityMethod::BroadcastEntityEvent,
-                    )),
-                    "{row}",
-                );
-                let player = level.entity::<ServerPlayer>(owner).unwrap();
-                assert_eq!(player.attributes.save_nbt(), before, "{row}");
-                assert_eq!(
-                    player
-                        .attributes
-                        .has_modifier(Attribute::SUBMERGED_MINING_SPEED, &modifier().id),
-                    installed,
-                    "{row}",
-                );
-                assert_eq!(player.attributes.attributes_to_update().count(), 0, "{row}");
-                assert_eq!(player.stats.get_value(Stat::Broken(kind)), 0, "{row}");
-                assert!(level.take_effects().is_empty(), "{row}");
-                continue;
-            }
             result.unwrap();
             let player = level.entity::<ServerPlayer>(owner).unwrap();
             let stat = player.stats.get_value(Stat::Broken(kind));
-            // Delivery is the approved pending bridge; verify its native event
-            // selection and pre-cleanup state separately from the actual cleanup/stat.
+            // Native event selection precedes the component cleanup and broken-item stat.
             assert_eq!(
                 format!(
                     "event:{}:{installed};stat:{}:{stat}",
@@ -174,7 +145,17 @@ fn native_equipment_break_ids_cleanup_and_stats_keep_tracking_explicitly_pending
                 fields[6].parse::<usize>().unwrap(),
                 "{row}",
             );
-            assert_eq!(level.unported_behavior_stats().skipped_calls, 1, "{row}");
+            assert_eq!(level.unported_behavior_stats().skipped_calls, 0, "{row}");
+            let effects = level.take_effects();
+            assert!(
+                matches!(effects.as_slice(),
+                    [crate::level::effects::LevelEffect::PlayerPacket { recipients, packet }]
+                    if recipients == &[owner] && matches!(packet.as_ref(),
+                        ferraloom_protocol::play::clientbound::Packet::EntityEvent(packet)
+                        if packet.event_id == entity_event_for_equipment_break(slot))
+                ),
+                "{row}"
+            );
         }
         cases += 1;
     }
@@ -210,7 +191,8 @@ fn living_equipment_break_parent_does_not_award_player_stats() {
             .attributes
             .has_modifier(Attribute::MAX_HEALTH, &modifier().id)
     );
-    assert_eq!(level.unported_behavior_stats().skipped_calls, 1);
+    assert_eq!(level.unported_behavior_stats().skipped_calls, 0);
+    assert!(level.take_effects().is_empty()); // Unobserved cow has no tracking audience.
 }
 
 #[test]
@@ -247,7 +229,7 @@ fn required_enchantment_iteration_preserves_completed_component_cleanup_prefix()
     );
     level.set_unported_behavior(UnportedBehavior::Warn);
     on_equipped_item_broken(owner, broken, EquipmentSlot::Mainhand, &mut level).unwrap();
-    assert_eq!(level.unported_behavior_stats().skipped_calls, 3);
+    assert_eq!(level.unported_behavior_stats().skipped_calls, 2);
     assert_eq!(
         level
             .entity::<ServerPlayer>(owner)
