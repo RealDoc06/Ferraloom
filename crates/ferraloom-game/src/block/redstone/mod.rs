@@ -422,3 +422,6 @@ mod identity_tests;
 
 #[cfg(test)]
 mod device_tests;
+
+#[cfg(test)]
+mod registry_tests;
