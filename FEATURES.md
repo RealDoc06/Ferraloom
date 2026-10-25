@@ -5,8 +5,8 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | Area | Rows | Ferraloom todo | Ferraloom partial | Ferraloom pass | Ferraloom fail |
 |---|---:|---:|---:|---:|---:|
 | [Advancements](features/advancements.md) | 1954 | 3 | 1940 | 11 | 0 |
-| [Block entities](features/block-entities.md) | 119 | 77 | 40 | 2 | 0 |
-| [Blocks](features/blocks.md) | 427 | 281 | 101 | 45 | 0 |
+| [Block entities](features/block-entities.md) | 123 | 81 | 40 | 2 | 0 |
+| [Blocks](features/blocks.md) | 431 | 280 | 106 | 45 | 0 |
 | [Chat and text components](features/chat.md) | 23 | 21 | 2 | 0 | 0 |
 | [Chunks and tickets](features/chunks.md) | 54 | 20 | 33 | 1 | 0 |
 | [Combat and damage](features/combat-damage.md) | 204 | 204 | 0 | 0 | 0 |
@@ -14,7 +14,7 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Crafting and recipes](features/crafting-recipes.md) | 2137 | 2 | 29 | 2106 | 0 |
 | [Datapacks and resource reload](features/datapacks-reload.md) | 57 | 57 | 0 | 0 | 0 |
 | [Enchantments](features/enchantments.md) | 136 | 136 | 0 | 0 | 0 |
-| [Entities and AI](features/entities.md) | 763 | 670 | 81 | 12 | 0 |
+| [Entities and AI](features/entities.md) | 767 | 670 | 85 | 12 | 0 |
 | [Fluids](features/fluids.md) | 27 | 25 | 2 | 0 | 0 |
 | [Binary data, geometry and randomness](features/foundations.md) | 64 | 18 | 18 | 28 | 0 |
 | [Functions and macros](features/functions-macros.md) | 10 | 10 | 0 | 0 | 0 |
@@ -23,7 +23,7 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [GameTest](features/gametest.md) | 23 | 23 | 0 | 0 | 0 |
 | [Inventory and menus](features/inventory-menus.md) | 63 | 12 | 51 | 0 | 0 |
 | [Item modifiers](features/item-modifiers.md) | 4 | 1 | 3 | 0 | 0 |
-| [Items and data components](features/items.md) | 242 | 116 | 123 | 3 | 0 |
+| [Items and data components](features/items.md) | 243 | 116 | 124 | 3 | 0 |
 | [Lighting](features/lighting.md) | 15 | 2 | 2 | 11 | 0 |
 | [Loot](features/loot.md) | 1671 | 158 | 1513 | 0 | 0 |
 | [Management JSON-RPC](features/management.md) | 101 | 101 | 0 | 0 | 0 |
@@ -32,7 +32,7 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Patrols](features/patrols.md) | 4 | 4 | 0 | 0 | 0 |
 | [Permissions](features/permissions.md) | 7 | 7 | 0 | 0 | 0 |
 | [Phantoms](features/phantoms.md) | 3 | 3 | 0 | 0 | 0 |
-| [Player mechanics](features/player.md) | 73 | 28 | 45 | 0 | 0 |
+| [Player mechanics](features/player.md) | 78 | 26 | 52 | 0 | 0 |
 | [Portals and dimension travel](features/portals-travel.md) | 13 | 13 | 0 | 0 | 0 |
 | [Predicates](features/predicates.md) | 101 | 79 | 22 | 0 | 0 |
 | [Protocol packets](features/protocol.md) | 271 | 47 | 1 | 223 | 0 |
@@ -50,4 +50,4 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Weather, time and environment](features/weather-time.md) | 85 | 85 | 0 | 0 | 0 |
 | [World storage and data fixing](features/world-storage.md) | 307 | 306 | 1 | 0 | 0 |
 | [World generation](features/worldgen.md) | 3114 | 2640 | 174 | 300 | 0 |
-| **Total** | **19473** | **12066** | **4451** | **2956** | **0** |
+| **Total** | **19491** | **12067** | **4468** | **2956** | **0** |

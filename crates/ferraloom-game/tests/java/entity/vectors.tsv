@@ -150,6 +150,13 @@ attribute-map	fresh	0	0	0
 attribute-map	created	1	1	1
 attribute-map	unchanged	0	0	1
 attribute-map	modified	1	1	1
+attribute-removal	absent	[]	0	0
+attribute-removal	created	[{base:0.2d,id:"minecraft:submerged_mining_speed"}]	0	0
+attribute-removal	transient	[{base:0.2d,id:"minecraft:submerged_mining_speed"}]	1	1
+attribute-removal	permanent	[{base:0.2d,id:"minecraft:submerged_mining_speed"}]	1	1
+attribute-removal	different-id	[{base:0.2d,id:"minecraft:submerged_mining_speed",modifiers:[{amount:0.25d,id:"minecraft:keep",operation:"add_value"}]}]	0	0
+attribute-removal	mixed	[{base:0.2d,id:"minecraft:submerged_mining_speed",modifiers:[{amount:0.25d,id:"minecraft:keep",operation:"add_value"}]}]	1	1
+attribute-removal	unsupported	[]	0	0
 attribute-nbt	0	true	0:
 attribute-nbt	1	false	0:
 attribute-nbt	2	false	403e000000000000:yes
@@ -1454,6 +1461,38 @@ impulse-state	enable	40	4000000000000000,4054000000000000,c008000000000000	true	
 impulse-state	disable	0	8000000000000000,4051900000000000,4008000000000000	false	true	0,4051900000000000,4008000000000000
 impulse-state	max-grace	47	8000000000000000,4051900000000000,4008000000000000	true	true	0,4051900000000000,4008000000000000
 impulse-state	reset	0	-	false	false	-
+equipment-break	mainhand	absent	event:47:false;stat:minecraft:stone:1	[{base:0.2d,id:"minecraft:submerged_mining_speed"}]	1	1
+equipment-break	mainhand	installed	event:47:true;stat:minecraft:stone:1	[{base:0.2d,id:"minecraft:submerged_mining_speed"}]	1	1
+equipment-break	mainhand	other-slot	event:47:false;stat:minecraft:stone:1	[]	0	0
+equipment-break	mainhand	empty	event:47:false;stat:minecraft:air:1	[]	0	0
+equipment-break	offhand	absent	event:48:false;stat:minecraft:stone:1	[{base:0.2d,id:"minecraft:submerged_mining_speed"}]	1	1
+equipment-break	offhand	installed	event:48:true;stat:minecraft:stone:1	[{base:0.2d,id:"minecraft:submerged_mining_speed"}]	1	1
+equipment-break	offhand	other-slot	event:48:false;stat:minecraft:stone:1	[]	0	0
+equipment-break	offhand	empty	event:48:false;stat:minecraft:air:1	[]	0	0
+equipment-break	feet	absent	event:52:false;stat:minecraft:stone:1	[{base:0.2d,id:"minecraft:submerged_mining_speed"}]	1	1
+equipment-break	feet	installed	event:52:true;stat:minecraft:stone:1	[{base:0.2d,id:"minecraft:submerged_mining_speed"}]	1	1
+equipment-break	feet	other-slot	event:52:false;stat:minecraft:stone:1	[]	0	0
+equipment-break	feet	empty	event:52:false;stat:minecraft:air:1	[]	0	0
+equipment-break	legs	absent	event:51:false;stat:minecraft:stone:1	[{base:0.2d,id:"minecraft:submerged_mining_speed"}]	1	1
+equipment-break	legs	installed	event:51:true;stat:minecraft:stone:1	[{base:0.2d,id:"minecraft:submerged_mining_speed"}]	1	1
+equipment-break	legs	other-slot	event:51:false;stat:minecraft:stone:1	[]	0	0
+equipment-break	legs	empty	event:51:false;stat:minecraft:air:1	[]	0	0
+equipment-break	chest	absent	event:50:false;stat:minecraft:stone:1	[{base:0.2d,id:"minecraft:submerged_mining_speed"}]	1	1
+equipment-break	chest	installed	event:50:true;stat:minecraft:stone:1	[{base:0.2d,id:"minecraft:submerged_mining_speed"}]	1	1
+equipment-break	chest	other-slot	event:50:false;stat:minecraft:stone:1	[]	0	0
+equipment-break	chest	empty	event:50:false;stat:minecraft:air:1	[]	0	0
+equipment-break	head	absent	event:49:false;stat:minecraft:stone:1	[{base:0.2d,id:"minecraft:submerged_mining_speed"}]	1	1
+equipment-break	head	installed	event:49:true;stat:minecraft:stone:1	[{base:0.2d,id:"minecraft:submerged_mining_speed"}]	1	1
+equipment-break	head	other-slot	event:49:false;stat:minecraft:stone:1	[]	0	0
+equipment-break	head	empty	event:49:false;stat:minecraft:air:1	[]	0	0
+equipment-break	body	absent	event:65:false;stat:minecraft:stone:1	[{base:0.2d,id:"minecraft:submerged_mining_speed"}]	1	1
+equipment-break	body	installed	event:65:true;stat:minecraft:stone:1	[{base:0.2d,id:"minecraft:submerged_mining_speed"}]	1	1
+equipment-break	body	other-slot	event:65:false;stat:minecraft:stone:1	[]	0	0
+equipment-break	body	empty	event:65:false;stat:minecraft:air:1	[]	0	0
+equipment-break	saddle	absent	event:68:false;stat:minecraft:stone:1	[{base:0.2d,id:"minecraft:submerged_mining_speed"}]	1	1
+equipment-break	saddle	installed	event:68:true;stat:minecraft:stone:1	[{base:0.2d,id:"minecraft:submerged_mining_speed"}]	1	1
+equipment-break	saddle	other-slot	event:68:false;stat:minecraft:stone:1	[]	0	0
+equipment-break	saddle	empty	event:68:false;stat:minecraft:air:1	[]	0	0
 entity-equipment-fact	player	head	1	minecraft:leather_boots	true
 entity-equipment-fact	player	head	0	minecraft:air	false
 entity-equipment-fact	player	head	-1	minecraft:air	false

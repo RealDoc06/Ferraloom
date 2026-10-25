@@ -232,6 +232,9 @@ pub enum EntityMethod {
     RespawnEntityOnShoulder,
     CheckAutoSpinAttack,
     RunLocationChangedEffects,
+    BroadcastEntityEvent,
+    EnchantmentAttributeModifiers,
+    StopLocationBasedEffects,
     JumpInLiquid,
 }
 impl EntityMethod {
@@ -243,6 +246,9 @@ impl EntityMethod {
             Self::RespawnEntityOnShoulder => "respawnEntityOnShoulder",
             Self::CheckAutoSpinAttack => "checkAutoSpinAttack",
             Self::RunLocationChangedEffects => "EnchantmentHelper#runLocationChangedEffects",
+            Self::BroadcastEntityEvent => "ServerLevel#broadcastEntityEvent",
+            Self::EnchantmentAttributeModifiers => "EnchantmentHelper#forEachModifier",
+            Self::StopLocationBasedEffects => "EnchantmentHelper#stopLocationBasedEffects",
             Self::JumpInLiquid => "jumpInLiquid",
         }
     }
@@ -782,6 +788,17 @@ pub trait Entity: Sync {
             behavior.cause_fall_damage(passenger, level, fall_distance, damage_modifier)?;
         }
         Ok(false)
+    }
+
+    /// Port of LivingEntity#onEquippedItemBroken, overridden by ServerPlayer.
+    fn on_equipped_item_broken(
+        &self,
+        entity: EntityRef,
+        broken: ferraloom_protocol::component::ItemStack,
+        slot: ferraloom_protocol::component::EquipmentSlot,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        living::on_equipped_item_broken_parent(entity, &broken, slot, level)
     }
 
     fn can_be_collided_with(

@@ -332,6 +332,7 @@ impl WorldGenContext {
                 );
                 chunks[index].structures = previous.structures;
                 chunks[index].block_entities = previous.block_entities;
+                chunks[index].instantiated_block_entities = previous.instantiated_block_entities;
                 chunks[index].entities = previous.entities;
                 chunks[index].block_ticks = previous.block_ticks;
                 chunks[index].fluid_ticks = previous.fluid_ticks;

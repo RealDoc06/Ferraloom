@@ -8,6 +8,7 @@ pub mod cooldowns;
 pub mod equipment;
 mod experience;
 pub mod food;
+pub mod game_mode;
 mod interaction;
 pub(crate) mod item_tick;
 pub mod shoulders;
@@ -742,6 +743,16 @@ impl crate::entity::Entity for PlayerBehavior {
             super::living::fall_damage::on_changed_block(entity, level)?;
         }
         Ok(())
+    }
+    fn on_equipped_item_broken(
+        &self,
+        entity: EntityRef,
+        broken: ferraloom_protocol::component::ItemStack,
+        slot: ferraloom_protocol::component::EquipmentSlot,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        super::living::on_equipped_item_broken_parent(entity, &broken, slot, level)?;
+        award_stat(entity, crate::stats::Stat::Broken(broken.item()), 1, level)
     }
     /// Port of PlayerEquipment#get's selected main-hand projection.
     fn item_by_slot<'level>(

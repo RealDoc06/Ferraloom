@@ -5,8 +5,11 @@ use ferraloom_nbt::{CompoundTag, Tag};
 use ferraloom_protocol::component::{ComponentTypeId, DataComponentMap, DataComponentPatch};
 use ferraloom_util::{BlockPos, ChunkPos};
 
+pub mod beehive;
 mod components;
 pub mod potent_sulfur;
+pub mod spawner;
+mod worldgen;
 use super::containers::{
     chest::{BarrelBlockEntity, ChestBlockEntity, ShulkerBoxBlockEntity},
     crafter::CrafterBlockEntity,
@@ -187,6 +190,8 @@ pub enum BlockEntityState {
     Command(Box<super::containers::command::CommandBlockEntity>),
     Structure(Box<super::containers::structure::StructureBlockEntity>),
     Skull(Box<super::containers::skull::SkullBlockEntity>),
+    Spawner(Box<spawner::SpawnerBlockEntity>),
+    Beehive(Box<beehive::BeehiveBlockEntity>),
     Sign(Box<super::containers::sign::SignBlockEntity>),
     Furnace(Box<super::containers::furnace::AbstractFurnaceBlockEntity>),
     Dispenser(Box<super::redstone::storage::DispenserBlockEntity>),
@@ -206,6 +211,8 @@ impl BlockEntityState {
             Self::Command(entity) => &entity.parent,
             Self::Structure(entity) => &entity.parent,
             Self::Skull(entity) => &entity.parent,
+            Self::Spawner(entity) => &entity.parent,
+            Self::Beehive(entity) => &entity.parent,
             Self::Sign(entity) => &entity.parent,
             Self::Furnace(entity) => &entity.parent.parent,
             Self::Dispenser(entity) => &entity.parent.parent.parent,
@@ -225,6 +232,8 @@ impl BlockEntityState {
             Self::Command(entity) => &mut entity.parent,
             Self::Structure(entity) => &mut entity.parent,
             Self::Skull(entity) => &mut entity.parent,
+            Self::Spawner(entity) => &mut entity.parent,
+            Self::Beehive(entity) => &mut entity.parent,
             Self::Sign(entity) => &mut entity.parent,
             Self::Furnace(entity) => &mut entity.parent.parent,
             Self::Dispenser(entity) => &mut entity.parent.parent.parent,
@@ -244,6 +253,8 @@ impl BlockEntityState {
             Self::Command(_) => &super::containers::command::COMMAND_ENTITY,
             Self::Structure(_) => &super::containers::structure::STRUCTURE_ENTITY,
             Self::Skull(_) => &super::containers::skull::SKULL_ENTITY,
+            Self::Spawner(_) => &spawner::SPAWNER_ENTITY,
+            Self::Beehive(_) => &beehive::BEEHIVE_ENTITY,
             Self::Sign(_) => &super::containers::sign::SIGN_ENTITY,
             Self::Furnace(_) => &super::containers::furnace::FURNACE_ENTITY,
             Self::Dispenser(_) => &super::redstone::storage::DISPENSER_ENTITY,
@@ -442,6 +453,12 @@ pub fn create(pos: BlockPos, state: BlockState) -> Result<BlockEntityState, Leve
         BlockEntityType::SKULL => Ok(BlockEntityState::Skull(Box::new(
             super::containers::skull::SkullBlockEntity::new(data),
         ))),
+        BlockEntityType::MOB_SPAWNER => Ok(BlockEntityState::Spawner(Box::new(
+            spawner::SpawnerBlockEntity::new(data),
+        ))),
+        BlockEntityType::BEEHIVE => Ok(BlockEntityState::Beehive(Box::new(
+            beehive::BeehiveBlockEntity::new(data),
+        ))),
         BlockEntityType::END_PORTAL => Ok(BlockEntityState::EndPortal(data)),
         BlockEntityType::PISTON => Ok(BlockEntityState::MovingPiston(Box::new(
             super::redstone::moving_piston::PistonMovingBlockEntity::new(data),
@@ -489,7 +506,10 @@ pub fn load_static(
         .get_string("id")
         .map(|id| id.to_string_lossy())
         .unwrap_or_default();
-    if id != "DUMMY" && BlockEntityType::from_name(&id) != registry::for_block(state.block()) {
+    if id != "DUMMY"
+        && (BlockEntityType::from_name(&id).is_none()
+            || BlockEntityType::from_name(&id) != registry::for_block(state.block()))
+    {
         return Ok(None);
     }
     let mut entity = create(pos, state)?;
@@ -518,6 +538,8 @@ pub fn supports(block: Block) -> bool {
                 | BlockEntityType::COMMAND_BLOCK
                 | BlockEntityType::STRUCTURE_BLOCK
                 | BlockEntityType::SKULL
+                | BlockEntityType::MOB_SPAWNER
+                | BlockEntityType::BEEHIVE
                 | BlockEntityType::END_PORTAL
                 | BlockEntityType::PISTON
                 | BlockEntityType::DISPENSER
@@ -566,6 +588,8 @@ projection!(
 );
 projection!(super::containers::skull::SkullBlockEntity, Skull);
 projection!(ChestBlockEntity, Chest);
+projection!(spawner::SpawnerBlockEntity, Spawner);
+projection!(beehive::BeehiveBlockEntity, Beehive);
 projection!(BarrelBlockEntity, Barrel);
 projection!(ShulkerBoxBlockEntity, ShulkerBox);
 projection!(CrafterBlockEntity, Crafter);
