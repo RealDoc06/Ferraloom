@@ -2371,7 +2371,7 @@
       "path": null,
       "steps": [
         {
-          "command": "setblock 4 -63 4 minecraft:chest",
+          "command": "setblock 4 -63 4 minecraft:chest strict",
           "keys": [
             "commands.setblock.success"
           ]

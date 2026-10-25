@@ -173,32 +173,15 @@ pub(super) async fn run(driver: &mut Driver<'_>, actor: BotId) -> Result<Value> 
         ))
         .await?;
     let (leftover, leftover_pair) = pair(driver, actor, Item::EMERALD, 3).await?;
-    driver
-        .step(&Step::feedback(
-            "gamemode creative",
-            "commands.gamemode.success.self",
-        ))
-        .await?;
-    driver
-        .session
-        .bot(actor)?
-        .send(sb::Packet::SetCreativeModeSlot(sb::SetCreativeModeSlot {
-            slot_num: 36,
-            item_stack: play::UntrustedItemStack(ItemStack::default()),
-        }))
-        .await?;
-    driver.exchange(actor, None).await?;
-    driver
-        .step(&Step::feedback(
-            "gamemode survival",
-            "commands.gamemode.success.self",
-        ))
-        .await?;
     let bot = driver.session.bot(actor)?;
     let player = bot
         .snapshot()
         .entity_id
         .ok_or_else(|| anyhow::anyhow!("missing collector id"))?;
+    // Players still tick while the game is frozen. Switching to Creative here
+    // would consume the item immediately, even with a full inventory. The real
+    // swap-hands packet frees a slot in Survival; start observing before pickup.
+    bot.swap_hands().await?;
     bot.command("tick step 1").await?;
     let mut pickup = Vec::new();
     let mut invalid = false;
