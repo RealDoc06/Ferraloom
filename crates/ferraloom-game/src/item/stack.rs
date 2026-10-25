@@ -1,5 +1,6 @@
 //! Handle-based ItemStack operations. Native copy() capture points create values;
 //! mutable use receivers always remain in the caller's canonical operation.
+mod strict;
 use crate::{
     block::{InteractionResult, UnportedOperation, UseOnContext},
     entity::{EntityRef, EntityState, player::inventory},
@@ -8,6 +9,7 @@ use crate::{
 };
 use ferraloom_data::{Item, ItemMethod};
 use ferraloom_protocol::component::{ComponentTypeId, DataComponent};
+pub use strict::{ValidationError, validate_strict};
 
 /// Port of ItemStack#useOn. Receiver and context.getItemInHand are distinct
 /// captured objects. Every returned stack handle is scoped to this operation.

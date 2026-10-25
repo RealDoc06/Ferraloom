@@ -122,6 +122,10 @@ impl MinecraftServer {
         command: &PreparedCommand,
     ) -> Result<bool> {
         match command.command.as_str() {
+            "data" => {
+                let result = self.data_command(command)?;
+                self.apply_command_result(source, &command.source, result);
+            }
             "setblock" | "fill" => {
                 let result = placement::run(
                     command,
@@ -136,6 +140,18 @@ impl MinecraftServer {
                 });
                 self.apply_level_effects()?;
                 self.apply_command_result(source, &command.source, result?);
+            }
+            "gamemode" => {
+                let result = self.game_mode_command(source, command)?;
+                self.apply_command_result(source, &command.source, result);
+            }
+            "defaultgamemode" => {
+                let result = self.default_game_mode_command(command)?;
+                self.apply_command_result(source, &command.source, result);
+            }
+            "give" => {
+                let result = self.give_command(command)?;
+                self.apply_command_result(source, &command.source, result);
             }
             "teleport" => {
                 let result = self.teleport_command(command)?;

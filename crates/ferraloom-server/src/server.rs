@@ -3129,7 +3129,11 @@ impl MinecraftServer {
                 ferraloom_game::advancements::PlayerProgressSave::capture(player, &progress_path)?;
             let tag = player.save();
             let uuid = player.uuid.to_string();
-            let name = player.display_name();
+            let name = self
+                .level
+                .level
+                .entity_display_name_with_scoreboard(entity, self.shared().scoreboard.scoreboard())
+                .map_err(game_error)?;
             let access = self
                 .level
                 .generation()
@@ -3146,11 +3150,15 @@ impl MinecraftServer {
             self.broadcast(cb::Packet::PlayerInfoRemove(cb::PlayerInfoRemove {
                 profile_ids: vec![c.profile.id],
             }));
+            // ServerGamePacketListenerImpl#removePlayerFromWorld styles the
+            // complete leave component, so the name inherits yellow as well.
+            let mut message = Component::translatable(
+                "multiplayer.player.left",
+                vec![protocol::chat::Argument::Component(Box::new(name))],
+            );
+            message.style.color = Some(protocol::chat::TextColor::parse("yellow").unwrap());
             self.broadcast(cb::Packet::SystemChat(Box::new(cb::SystemChat {
-                content: Component::translatable(
-                    "multiplayer.player.left",
-                    vec![protocol::chat::Argument::Component(Box::new(name))],
-                ),
+                content: message,
                 overlay: false,
             })));
         }
