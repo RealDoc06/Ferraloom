@@ -260,6 +260,44 @@ pub fn stop_open(
 ) -> Result<(), LevelError> {
     change_openers(entity, Some(player), -1, level)
 }
+/// Port of ChestBlockEntity#getEntitiesWithContainerOpen and
+/// ContainerOpenersCounter#getEntitiesWithContainerOpen. Menu membership uses
+/// the receiver generation, including either member of a compound container.
+pub fn has_entities_with_container_open(
+    receiver: BlockEntityRef,
+    level: &Level,
+) -> Result<bool, LevelError> {
+    let range = level
+        .block_entity::<ChestBlockEntity>(receiver)?
+        .max_interaction_range
+        + 4.0;
+    let pos = receiver.pos;
+    let bounds = ferraloom_util::Aabb::new(
+        f64::from(pos.x),
+        f64::from(pos.y),
+        f64::from(pos.z),
+        f64::from(pos.x) + 1.0,
+        f64::from(pos.y) + 1.0,
+        f64::from(pos.z) + 1.0,
+    )
+    .inflate_uniform(range);
+    let mut found = false;
+    // Native getEntities evaluates the entire predicate before isEmpty is read.
+    for entity in level.entities_in(bounds, |_, _| true) {
+        let state = level.entity_state(entity)?;
+        if let crate::entity::EntityState::Player(player) = state {
+            let menu = player.menus.current();
+            found |= player.game_mode != GameType::Spectator
+                && matches!(menu.kind, MenuKind::Chest { .. })
+                && menu.block_entities.contains(&receiver);
+        } else if state.entity_type() == ferraloom_data::EntityType::COPPER_GOLEM {
+            return Err(LevelError::UnsupportedEntity(
+                ferraloom_data::EntityType::COPPER_GOLEM,
+            ));
+        }
+    }
+    Ok(found)
+}
 fn change_openers(
     entity: BlockEntityRef,
     player: Option<EntityRef>,
@@ -274,6 +312,22 @@ fn change_openers(
         return Ok(());
     }
     level.with_block_entity_callback(entity, |level| {
+        if level.block_entity_state(entity)?.data().removed {
+            return Ok(());
+        }
+        // The native startOpen argument is evaluated before incrementOpeners
+        // invokes sounds, game events, opener notifications or neighbors.
+        let opening_range = if delta > 0 {
+            player
+                .map(|player| {
+                    level
+                        .entity::<ServerPlayer>(player)
+                        .map(ServerPlayer::block_interaction_range)
+                })
+                .transpose()?
+        } else {
+            None
+        };
         let (state, kind, previous, current) = {
             let receiver = level.block_entity_state_mut(entity)?;
             if receiver.data().removed {
@@ -375,6 +429,12 @@ fn change_openers(
                 level.schedule_block_tick_after(entity.pos, state.block(), 5)?;
             }
         }
+        if delta < 0
+            && current == 0
+            && let BlockEntityState::Chest(chest) = level.block_entity_state_mut(entity)?
+        {
+            chest.max_interaction_range = 0.0;
+        }
         if kind == BlockEntityType::CHEST
             || kind == BlockEntityType::TRAPPED_CHEST
             || kind == BlockEntityType::SHULKER_BOX
@@ -390,6 +450,15 @@ fn change_openers(
             level.update_neighbors_at(entity.pos, state.block())?;
             level.update_neighbors_at(entity.pos.below(1), state.block())?;
         }
+        if let Some(range) = opening_range
+            && let BlockEntityState::Chest(chest) = level.block_entity_state_mut(entity)?
+        {
+            chest.max_interaction_range =
+                ferraloom_util::java::max(range, chest.max_interaction_range);
+        }
         Ok(())
     })
 }
+
+#[cfg(test)]
+mod opener_tests;
