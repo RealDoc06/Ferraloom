@@ -10,7 +10,7 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Chat and text components](features/chat.md) | 23 | 21 | 2 | 0 | 0 |
 | [Chunks and tickets](features/chunks.md) | 60 | 20 | 39 | 1 | 0 |
 | [Combat and damage](features/combat-damage.md) | 204 | 204 | 0 | 0 | 0 |
-| [Commands and argument types](features/commands.md) | 2691 | 1858 | 46 | 787 | 0 |
+| [Commands and argument types](features/commands.md) | 2695 | 1858 | 50 | 787 | 0 |
 | [Crafting and recipes](features/crafting-recipes.md) | 2137 | 2 | 29 | 2106 | 0 |
 | [Datapacks and resource reload](features/datapacks-reload.md) | 57 | 57 | 0 | 0 | 0 |
 | [Enchantments](features/enchantments.md) | 139 | 107 | 32 | 0 | 0 |
@@ -47,7 +47,7 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Ticking, game events and vibrations](features/ticking.md) | 192 | 181 | 11 | 0 | 0 |
 | [Villages, trading and POI](features/villages-trading-poi.md) | 599 | 599 | 0 | 0 | 0 |
 | [Wandering traders](features/wandering-traders.md) | 5 | 5 | 0 | 0 | 0 |
-| [Weather, time and environment](features/weather-time.md) | 85 | 85 | 0 | 0 | 0 |
+| [Weather, time and environment](features/weather-time.md) | 88 | 85 | 3 | 0 | 0 |
 | [World storage and data fixing](features/world-storage.md) | 308 | 305 | 3 | 0 | 0 |
 | [World generation](features/worldgen.md) | 3120 | 2640 | 180 | 300 | 0 |
-| **Total** | **19672** | **8211** | **2883** | **8578** | **0** |
+| **Total** | **19679** | **8211** | **2890** | **8578** | **0** |
