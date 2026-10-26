@@ -147,14 +147,14 @@ impl BlockBehavior for Fire {
     ) -> Result<(), LevelError> {
         if old.block() != state.block() {
             let dimension = level.dimension_key()?;
-            if matches!(
-                dimension.as_str(),
-                "minecraft:overworld" | "minecraft:the_nether"
-            ) && let Some(shape) = super::portal_shape::PortalShape::find_empty(
-                pos,
-                Axis::X,
-                &LevelReaderRef::Server(level),
-            )? {
+            if dimension.namespace() == "minecraft"
+                && matches!(dimension.path(), "overworld" | "the_nether")
+                && let Some(shape) = super::portal_shape::PortalShape::find_empty(
+                    pos,
+                    Axis::X,
+                    &LevelReaderRef::Server(level),
+                )?
+            {
                 shape.create_portal_blocks(level)?;
             } else if !super::fire_powder::FIRE_POWDER.can_survive(
                 state,

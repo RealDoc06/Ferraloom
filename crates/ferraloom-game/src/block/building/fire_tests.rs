@@ -167,7 +167,9 @@ fn scheduled(level: &mut Level) -> String {
             let mut saved = ferraloom_storage::SerializableChunkData::default();
             level.save_chunk_ticks(pos, &mut saved).unwrap();
             for tick in saved.block_ticks.unwrap_or_default() {
-                let block = Block::from_name(tick.id.as_ref().unwrap().as_str()).unwrap();
+                let block =
+                    Block::from_name(&tick.id.as_ref().unwrap().to_string_checked().unwrap())
+                        .unwrap();
                 rows.push(format!(
                     "{},{},{}:{}:{}",
                     tick.x.unwrap(),
