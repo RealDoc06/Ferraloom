@@ -1,7 +1,7 @@
 use super::*;
 use crate::{
     Behaviors,
-    entity::{Cow, EntityData, EntityDimensions, EntityRef, EntityState},
+    entity::{EntityData, EntityDimensions, EntityRef, EntityState, animal::Cow},
     level::{
         Level, LevelContext, LevelError, Region, chunk::LevelChunk,
         path_navigation_region::PathNavigationRegion,
@@ -243,12 +243,10 @@ fn run<E: PreparedEvaluator>(evaluator: &mut E, row: &Value) -> Result<Value, St
             .map_err(|e| format!("done {e:?}"))?;
         Ok(json!({"start":start_state,"nodes":nodes,"types":types}))
     } else {
-        let targets = row["targets"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(pos)
-            .collect::<HashSet<_>>();
+        let mut targets = HashSet::new();
+        for value in row["targets"].as_array().unwrap() {
+            targets.insert(pos(value));
+        }
         let mut finder = PathFinder::new(row["budget"].as_i64().unwrap() as i32);
         let path = finder
             .find_path(
