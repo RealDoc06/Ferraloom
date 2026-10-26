@@ -5,8 +5,8 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | Area | Rows | Ferraloom todo | Ferraloom partial | Ferraloom pass | Ferraloom fail |
 |---|---:|---:|---:|---:|---:|
 | [Advancements](features/advancements.md) | 1958 | 4 | 193 | 1761 | 0 |
-| [Block entities](features/block-entities.md) | 148 | 41 | 49 | 58 | 0 |
-| [Blocks](features/blocks.md) | 454 | 243 | 137 | 74 | 0 |
+| [Block entities](features/block-entities.md) | 149 | 41 | 50 | 58 | 0 |
+| [Blocks](features/blocks.md) | 454 | 242 | 138 | 74 | 0 |
 | [Chat and text components](features/chat.md) | 23 | 21 | 2 | 0 | 0 |
 | [Chunks and tickets](features/chunks.md) | 60 | 20 | 39 | 1 | 0 |
 | [Combat and damage](features/combat-damage.md) | 204 | 204 | 0 | 0 | 0 |
@@ -14,7 +14,7 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Crafting and recipes](features/crafting-recipes.md) | 2137 | 2 | 29 | 2106 | 0 |
 | [Datapacks and resource reload](features/datapacks-reload.md) | 57 | 57 | 0 | 0 | 0 |
 | [Enchantments](features/enchantments.md) | 139 | 107 | 32 | 0 | 0 |
-| [Entities and AI](features/entities.md) | 808 | 668 | 124 | 16 | 0 |
+| [Entities and AI](features/entities.md) | 809 | 668 | 125 | 16 | 0 |
 | [Fluids](features/fluids.md) | 32 | 25 | 6 | 1 | 0 |
 | [Binary data, geometry and randomness](features/foundations.md) | 64 | 18 | 18 | 28 | 0 |
 | [Functions and macros](features/functions-macros.md) | 10 | 10 | 0 | 0 | 0 |
@@ -50,4 +50,4 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Weather, time and environment](features/weather-time.md) | 85 | 85 | 0 | 0 | 0 |
 | [World storage and data fixing](features/world-storage.md) | 308 | 305 | 3 | 0 | 0 |
 | [World generation](features/worldgen.md) | 3120 | 2640 | 180 | 300 | 0 |
-| **Total** | **19670** | **8212** | **2880** | **8578** | **0** |
+| **Total** | **19672** | **8211** | **2883** | **8578** | **0** |
