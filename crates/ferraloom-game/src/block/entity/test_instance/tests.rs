@@ -18,7 +18,11 @@ fn prime(state: &mut BlockEntityState) {
     };
     entity.data = TestInstanceData {
         test: Some("minecraft:unregistered".parse().unwrap()),
-        size: Vec3i::new(7, 8, 9),
+        size: Vec3i {
+            x: VarInt(7),
+            y: VarInt(8),
+            z: VarInt(9),
+        },
         rotation: Rotation::Clockwise180,
         ignore_entities: true,
         status: TestInstanceStatus::Finished,
@@ -48,7 +52,7 @@ impl BlockBehavior for Observer {
         assert_eq!(source, Block::TEST_INSTANCE_BLOCK);
         let handle = RECEIVER.with_borrow(|handle| handle.unwrap());
         let entity = level.block_entity::<TestInstanceBlockEntity>(handle)?;
-        let visible = format!("{}:{}", entity.data.size.x, entity.error_markers.len());
+        let visible = format!("{}:{}", entity.data.size.x.0, entity.error_markers.len());
         assert!(level.try_mark_chunk_saved(CHUNK)?);
         assert!(
             level.take_effects().is_empty(),
@@ -69,7 +73,8 @@ impl BlockBehavior for Observer {
                     .block_entity::<TestInstanceBlockEntity>(handle)?
                     .data
                     .size
-                    .x,
+                    .x
+                    .0,
                 1
             );
         }
@@ -228,13 +233,27 @@ fn live_instance_load_keeps_the_replaced_receiver_through_set_changed_and_error_
         .block_entity::<TestInstanceBlockEntity>(handle)
         .unwrap();
     assert_eq!(old.error_markers[0].pos, BlockPos::new(9, 8, 7));
-    assert_eq!(old.data.size, Vec3i::new(1, 2, 3));
+    assert_eq!(
+        old.data.size,
+        Vec3i {
+            x: VarInt(1),
+            y: VarInt(2),
+            z: VarInt(3)
+        }
+    );
     assert_eq!(old.parent.components.entries.len(), 1);
     let new = level
         .block_entity::<TestInstanceBlockEntity>(replacement)
         .unwrap();
     assert!(new.error_markers.is_empty());
-    assert_eq!(new.data.size, Vec3i::new(0, 0, 0));
+    assert_eq!(
+        new.data.size,
+        Vec3i {
+            x: VarInt(0),
+            y: VarInt(0),
+            z: VarInt(0)
+        }
+    );
     assert_eq!(
         level.take_effects(),
         vec![LevelEffect::BlockUpdated {

@@ -5,9 +5,10 @@ use ferraloom_data::Block;
 use ferraloom_nbt::{CompoundTag, ListTag, Tag};
 use ferraloom_protocol::{
     chat::Component,
-    play::{Rotation, TestInstanceData, TestInstanceStatus},
+    codec::VarInt,
+    play::{Rotation, TestInstanceData, TestInstanceStatus, Vec3i},
 };
-use ferraloom_util::{BlockPos, Vec3i};
+use ferraloom_util::BlockPos;
 
 /// Port of TestInstanceBlockEntity.ErrorMarker.
 #[derive(Clone, Debug, PartialEq)]
@@ -30,7 +31,11 @@ impl TestInstanceBlockEntity {
             parent,
             data: TestInstanceData {
                 test: None,
-                size: Vec3i::new(0, 0, 0),
+                size: Vec3i {
+                    x: VarInt(0),
+                    y: VarInt(0),
+                    z: VarInt(0),
+                },
                 rotation: Rotation::None,
                 ignore_entities: false,
                 status: TestInstanceStatus::Cleared,
@@ -62,7 +67,11 @@ impl TestInstanceBlockEntity {
         }
         data.insert(
             "size",
-            Tag::IntArray(vec![self.data.size.x, self.data.size.y, self.data.size.z]),
+            Tag::IntArray(vec![
+                self.data.size.x.0,
+                self.data.size.y.0,
+                self.data.size.z.0,
+            ]),
         );
         data.insert(
             "rotation",
@@ -174,7 +183,11 @@ fn load_data(tag: &CompoundTag) -> Option<TestInstanceData> {
             .get_string("test")
             .and_then(|value| value.to_string_checked().ok())
             .and_then(|value| value.parse().ok()),
-        size: Vec3i::new(x, y, z),
+        size: Vec3i {
+            x: VarInt(x),
+            y: VarInt(y),
+            z: VarInt(z),
+        },
         rotation,
         ignore_entities: data.get("ignore_entities")?.as_double()? != 0.0,
         status,
