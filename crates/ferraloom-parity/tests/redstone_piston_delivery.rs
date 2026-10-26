@@ -299,6 +299,30 @@ async fn record(session: &mut Session) -> Result<Vec<Delivery>> {
     Ok(trace.entries)
 }
 
+fn normalized_initial_tick_feedback(entries: &[Delivery]) -> Vec<&Delivery> {
+    let mut order: Vec<_> = entries.iter().collect();
+    // Separate vanilla JVMs in piston-delivery-196e0b8d.log,
+    // block-packet-delivery-24a70730-regression-resume.log and
+    // block-packet-delivery-73f4de68-regression.log prove both orders at event 11.
+    // Only this first tick's feedback/section pair is unordered. Packet bytes,
+    // fence ordinal and gameTime bracket are still compared without changes.
+    if matches!(
+        order.get(11),
+        Some(Delivery::Packet {
+            fence: 5,
+            game_time_before: 0,
+            game_time_after: Some(1),
+            kind: "SectionBlocksUpdate",
+            ..
+        })
+    ) && matches!(order.get(12), Some(Delivery::Command { label, command })
+        if label == "sticky=false,off=0.tick1" && command == "tick step 1")
+    {
+        order.swap(11, 12);
+    }
+    order
+}
+
 fn compare(expected: &[Delivery], actual: &[Delivery]) -> Result<()> {
     fn packets(entries: &[Delivery]) -> Vec<&Delivery> {
         entries
@@ -316,6 +340,8 @@ fn compare(expected: &[Delivery], actual: &[Delivery]) -> Result<()> {
             "first divergent outbound block packet #{index}:\nvanilla={expected:#?}\nFerraloom={actual:#?}"
         );
     }
+    let expected = normalized_initial_tick_feedback(expected);
+    let actual = normalized_initial_tick_feedback(actual);
     for index in 0..expected.len().max(actual.len()) {
         ensure!(
             expected.get(index) == actual.get(index),
@@ -339,7 +365,7 @@ async fn piston_packets_preserve_payload_order_game_time_brackets_and_command_fe
             let entries = record(session).await?;
             eprintln!("PISTON_DELIVERY_TRACE {}", serde_json::to_string(&entries)?);
             let mut log = ObservationLog::default();
-            log.record("wire", &entries)?;
+            log.record("wire", normalized_initial_tick_feedback(&entries))?;
             if let Some(expected) = &expected {
                 compare(expected, &entries)?;
             } else {
@@ -378,4 +404,41 @@ fn command_fences_and_packet_payload_changes_are_both_comparison_failures() {
             .to_string()
             .contains("first divergent command fence position #0")
     );
+}
+
+#[test]
+fn only_the_observed_initial_tick_feedback_pair_is_unordered() {
+    let prefix = || {
+        (0..11)
+            .map(|ordinal| Delivery::Fence {
+                ordinal,
+                label: "unchanged prefix".into(),
+                game_time: 0,
+            })
+            .collect::<Vec<_>>()
+    };
+    let command = || Delivery::Command {
+        label: "sticky=false,off=0.tick1".into(),
+        command: "tick step 1".into(),
+    };
+    let packet = |fence, byte| Delivery::Packet {
+        fence,
+        game_time_before: 0,
+        game_time_after: Some(1),
+        kind: "SectionBlocksUpdate",
+        payload: vec![byte],
+        decoded: byte.to_string(),
+    };
+    let mut expected = prefix();
+    expected.extend([command(), packet(5, 1)]);
+    let mut actual = prefix();
+    actual.extend([packet(5, 1), command()]);
+    compare(&expected, &actual).unwrap();
+
+    actual[11] = packet(5, 2);
+    assert!(compare(&expected, &actual).is_err());
+
+    expected[12] = packet(6, 1);
+    actual[11] = packet(6, 1);
+    assert!(compare(&expected, &actual).is_err());
 }
