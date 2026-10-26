@@ -2623,3 +2623,50 @@ fn dispatch_error_context_keeps_the_root_cause_and_preceding_effects() {
     );
     assert!(std::ptr::eq(cause.root(), &cause));
 }
+
+#[test]
+fn precipitation_layer_growth_pushes_entities_before_publishing_and_stops_at_rule_cap() {
+    use crate::entity::{EntityData, EntityState, item::PrimedTnt};
+    use ferraloom_data::properties;
+    use ferraloom_util::Vec3;
+    let mut level = empty_level(&SNOW_SURVIVAL);
+    let pos = BlockPos::new(8, 0, 8);
+    level
+        .set_block_state(pos.below(1), Block::STONE.default_state())
+        .unwrap();
+    level
+        .set_block_state(pos, Block::SNOW.default_state())
+        .unwrap();
+    install_weather_environment(&mut level, "snowy_plains");
+    level
+        .load_weather(weather::WeatherData {
+            raining: true,
+            ..Default::default()
+        })
+        .unwrap();
+    level.rules_mut().max_snow_accumulation_height = 2;
+    let entity = level.next_entity_ref();
+    let mut tnt = PrimedTnt::new(1, 123);
+    tnt.parent.set_pos(Vec3::new(8.5, 0.0, 8.5));
+    level
+        .add_entity(entity, EntityState::PrimedTnt(Box::new(tnt)))
+        .unwrap();
+    level.tick_precipitation(pos).unwrap();
+    assert_eq!(
+        level.get_block_state(pos).unwrap().get(properties::LAYERS),
+        Some(2)
+    );
+    assert_eq!(
+        level.entity::<EntityData>(entity).unwrap().position.y,
+        0.125
+    );
+    level.tick_precipitation(pos).unwrap();
+    assert_eq!(
+        level.get_block_state(pos).unwrap().get(properties::LAYERS),
+        Some(2)
+    );
+    assert_eq!(
+        level.entity::<EntityData>(entity).unwrap().position.y,
+        0.125
+    );
+}

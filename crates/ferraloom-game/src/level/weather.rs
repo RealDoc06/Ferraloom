@@ -486,8 +486,8 @@ impl Level {
         }
         self.can_survive(Block::SNOW.default_state(), pos)
     }
-    /// Port of ServerLevel#tickPrecipitation. Selection remains observable in
-    /// the pending-family hook while survival, entity pushing and cauldrons land.
+    /// Port of ServerLevel#tickPrecipitation. Chunk random ticks select the
+    /// column before this heightmap/biome query and synchronous mutation path.
     pub fn tick_precipitation(&mut self, pos: BlockPos) -> std::result::Result<(), LevelError> {
         use crate::block::{BlockMethod, UnportedOperation};
         use ferraloom_data::Block;
@@ -550,7 +550,7 @@ impl Level {
             let layers = state.get(properties::LAYERS).unwrap();
             if i32::from(layers) < self.rules().max_snow_accumulation_height.min(8) {
                 let next = state.with(properties::LAYERS, layers + 1).unwrap();
-                self.unported_operation(crate::block::UnportedOperation::PushEntitiesUp)?;
+                self.push_entities_up(state, next, top)?;
                 self.set_block_and_update(top, next)?;
             }
         } else {

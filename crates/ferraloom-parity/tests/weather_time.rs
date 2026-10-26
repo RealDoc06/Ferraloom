@@ -204,3 +204,85 @@ async fn weather(session: &mut Session) -> Result<ObservationLog> {
 async fn stepped_weather_levels_transitions_and_rule_match_vanilla() -> Result<()> {
     run(level_support::options(), RunMode::from_env()?, weather).await
 }
+
+/// Observe converged block states, not which random precipitation column won
+/// first. The biome, light and full-chunk queries are the real live paths.
+async fn precipitation(session: &mut Session) -> Result<ObservationLog> {
+    use ferraloom_data::{Block, properties};
+    use ferraloom_util::BlockPos;
+    let id = session.join("ParityBot").await?;
+    let bot = session.bot(id)?;
+    level_support::freeze(bot).await?;
+    bot.teleport([8.5, -60.0, 12.5]).await?;
+    let water = BlockPos::new(6, -59, 8);
+    let snow = BlockPos::new(10, -59, 8);
+    for (text, key) in [
+        (
+            "fill 5 -60 7 11 -60 9 minecraft:stone",
+            "commands.fill.success",
+        ),
+        (
+            "setblock 6 -59 8 minecraft:water",
+            "commands.setblock.success",
+        ),
+        (
+            "setblock 10 -59 8 minecraft:snow[layers=1]",
+            "commands.setblock.success",
+        ),
+        (
+            "gamerule max_snow_accumulation_height 2",
+            "commands.gamerule.set",
+        ),
+        ("weather rain 100000t", "commands.weather.set.rain"),
+        ("gamerule random_tick_speed 1024", "commands.gamerule.set"),
+    ] {
+        level_support::command(bot, text, key).await?;
+    }
+    for _ in 0..20 {
+        level_support::step(bot, 20).await?;
+        let snapshot = bot.snapshot();
+        if snapshot
+            .block(water)
+            .is_some_and(|state| state.block() == Block::ICE)
+            && snapshot.block(snow).is_some_and(|state| {
+                state.block() == Block::SNOW && state.get(properties::LAYERS) == Some(2)
+            })
+        {
+            break;
+        }
+    }
+    level_support::expect_blocks(
+        bot,
+        &[
+            (water, Block::ICE.default_state()),
+            (
+                snow,
+                Block::SNOW
+                    .default_state()
+                    .with(properties::LAYERS, 2)
+                    .unwrap(),
+            ),
+        ],
+    )
+    .await?;
+    level_support::step(bot, 40).await?;
+    let mut log = ObservationLog::default();
+    for (label, pos) in [
+        ("freeze.edge_source", water),
+        ("snow.rule_capped_layers", snow),
+    ] {
+        log.record(label, level_support::block(bot, pos)?.id())?;
+    }
+    Ok(log)
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "requires dedicated builder vanilla/JDK; Strict cold precipitation comparison"]
+async fn cold_precipitation_freezes_water_and_caps_snow_layers() -> Result<()> {
+    let mut options = level_support::options();
+    options.preset = ferraloom_parity::WorldPreset::Flat {
+        layers: vec![("minecraft:stone".into(), 4)],
+        biome: "minecraft:snowy_plains".into(),
+    };
+    run(options, RunMode::from_env()?, precipitation).await
+}
