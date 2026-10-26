@@ -4,7 +4,7 @@ use super::{furnace::AbstractFurnaceBlockEntity, menu, storage::BaseContainerBlo
 use crate::{
     block::entity::{BlockEntityRef, BlockEntityState},
     entity::player::inventory::{component, count, max_stack_size, set_count, split},
-    inventory::{Container, ContainerHandle, ContainerSlot, StackOperation, StackValue},
+    inventory::{Container, ContainerHandle, ContainerSlot, StackOperation, StackRef, StackValue},
     level::{Level, LevelError},
 };
 use ferraloom_data::{
@@ -52,11 +52,51 @@ impl ContainerRef {
     }
     pub fn size(&self, level: &Level) -> Result<usize, LevelError> {
         self.handles().iter().try_fold(0, |size, &handle| {
-            Ok(size
-                + level
-                    .block_entity::<BaseContainerBlockEntity>(handle)?
-                    .size())
+            Ok(size + container_size(level.block_entity_state(handle)?)?)
         })
+    }
+    /// Port of each receiver's isEmpty, including lazy randomizable unpacking.
+    pub fn is_empty(&self, level: &mut Level) -> Result<bool, LevelError> {
+        for &handle in self.handles() {
+            if !matches!(
+                level.block_entity_state(handle)?,
+                BlockEntityState::ChiseledBookShelf(_)
+            ) {
+                super::loot::unpack_loot_table(handle, None, level)?;
+            }
+            let state = level.block_entity_state(handle)?;
+            let items = match state {
+                BlockEntityState::ChiseledBookShelf(shelf) => shelf.items.as_slice(),
+                _ => {
+                    &level
+                        .block_entity::<BaseContainerBlockEntity>(handle)?
+                        .items
+                }
+            };
+            if items.iter().any(|item| !item.is_empty()) {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+    /// CompoundContainer#setChanged calls each underlying container in order.
+    pub fn set_changed(&self, level: &mut Level) -> Result<(), LevelError> {
+        for &handle in self.handles() {
+            if !matches!(
+                level.block_entity_state(handle)?,
+                BlockEntityState::ChiseledBookShelf(_)
+            ) {
+                level
+                    .block_entity_mut::<BaseContainerBlockEntity>(handle)?
+                    .set_changed();
+            }
+            handle.set_changed(level)?;
+        }
+        Ok(())
+    }
+    /// CompoundContainer#getMaxStackSize uses its first receiver.
+    pub fn max_stack_size(&self, level: &Level) -> Result<i32, LevelError> {
+        container_max_stack_size(level.block_entity_state(self.handles()[0])?)
     }
     /// Resolve a combined slot for one short canonical borrow. Keep the original
     /// handle across callbacks: replacing the block must not retarget the view.
@@ -66,15 +106,97 @@ impl ContainerRef {
         level: &Level,
     ) -> Result<(BlockEntityRef, usize), LevelError> {
         for &handle in self.handles() {
-            let size = level
-                .block_entity::<BaseContainerBlockEntity>(handle)?
-                .size();
+            let size = container_size(level.block_entity_state(handle)?)?;
             if slot < size {
                 return Ok((handle, slot));
             }
             slot -= size;
         }
         Err(LevelError::Inventory("container slot out of range"))
+    }
+}
+
+fn container_size(state: &BlockEntityState) -> Result<usize, LevelError> {
+    match state {
+        BlockEntityState::ChiseledBookShelf(shelf) => Ok(shelf.items.len()),
+        _ => state
+            .container()
+            .map(Container::size)
+            .ok_or(LevelError::Inventory("container view")),
+    }
+}
+fn container_max_stack_size(state: &BlockEntityState) -> Result<i32, LevelError> {
+    match state {
+        BlockEntityState::ChiseledBookShelf(_) => Ok(1),
+        _ => state
+            .container()
+            .map(Container::max_stack_size)
+            .ok_or(LevelError::Inventory("container view")),
+    }
+}
+
+/// Port of ChiseledBookShelfBlockEntity#canTakeItem. Resolve both held objects
+/// afresh for every native hasAnyMatching predicate, after lazy getItem callbacks.
+/// The producer owns the supplied receiver root for this entire call.
+pub fn can_take_item(
+    source: BlockEntityRef,
+    _slot: usize,
+    item: StackRef,
+    into: &ContainerRef,
+    level: &mut Level,
+) -> Result<bool, LevelError> {
+    if !matches!(
+        level.block_entity_state(source)?,
+        BlockEntityState::ChiseledBookShelf(_)
+    ) {
+        return Ok(true);
+    }
+    // The native Container argument holds both halves of a compound receiver
+    // before the first getItem can lazily unpack loot or run criteria callbacks.
+    into.with_callback(level, |level| {
+        let mut operation = StackOperation::new(level);
+        operation.pin_existing(item).map_err(stack_error)?;
+        for slot in 0..into.size(operation.level)? {
+            let (handle, local) = into.slot(slot, operation.level)?;
+            let destination = operation
+                .pin(ContainerSlot {
+                    container: ContainerHandle::BlockEntity(handle),
+                    slot: local,
+                })
+                .map_err(stack_error)?;
+            let target = operation.level.stack(destination).map_err(stack_error)?;
+            if target.is_empty() {
+                return Ok(true);
+            }
+            let held = operation.level.stack(item).map_err(stack_error)?;
+            if crate::entity::player::inventory::is_same_item_same_components(held, target)
+                && count(target).wrapping_add(count(held))
+                    <= into
+                        .max_stack_size(operation.level)?
+                        .min(max_stack_size(target))
+            {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    })
+}
+
+/// Port of Container#removeItem, preserving a ListBackedContainer's whole
+/// original receiver in the caller's operation. Ordinary split results are new.
+pub fn remove_item_value(
+    handle: BlockEntityRef,
+    slot: usize,
+    amount: i32,
+    operation: &mut StackOperation<'_>,
+) -> Result<StackValue, LevelError> {
+    if matches!(
+        operation.level.block_entity_state(handle)?,
+        BlockEntityState::ChiseledBookShelf(_)
+    ) {
+        super::bookshelf::remove_item_value(handle, slot, amount, operation)
+    } else {
+        remove_item(handle, slot, amount, operation.level).map(StackValue::New)
     }
 }
 
@@ -257,9 +379,7 @@ fn analog_output_inner(container: &ContainerRef, level: &mut Level) -> Result<i3
         let (handle, _) = container.slot(slot, level)?;
         let stack = container.get_item(slot, level)?;
         if !stack.is_empty() {
-            let limit = level
-                .block_entity::<BaseContainerBlockEntity>(handle)?
-                .max_stack_size()
+            let limit = container_max_stack_size(level.block_entity_state(handle)?)?
                 .min(max_stack_size(&stack));
             fullness += count(&stack) as f32 / limit as f32;
         }
@@ -285,16 +405,14 @@ pub fn block_container_at(
         return Ok(None);
     };
     let receiver = level.block_entity_state(handle)?;
-    if matches!(
-        receiver,
-        BlockEntityState::ChiseledBookShelf(_) | BlockEntityState::DecoratedPot(_)
-    ) {
+    if matches!(receiver, BlockEntityState::DecoratedPot(_)) {
         return Err(LevelError::UnsupportedBlockEntity(state.block()));
     }
     if matches!(receiver, BlockEntityState::BrewingStand(_)) {
         return Err(LevelError::Inventory("BrewingStand worldly container"));
     }
-    if receiver.container().is_none() {
+    if receiver.container().is_none() && !matches!(receiver, BlockEntityState::ChiseledBookShelf(_))
+    {
         return Ok(None);
     }
     if matches!(receiver, BlockEntityState::Chest(_)) {
@@ -318,7 +436,7 @@ pub fn slots_for_face(state: &BlockEntityState, face: Direction) -> Vec<usize> {
             _ => vec![1],
         };
     }
-    (0..state.container().expect("container view").size()).collect()
+    (0..container_size(state).expect("container view")).collect()
 }
 
 /// Port of Container#canPlaceItem. Callers performing transfers first read the

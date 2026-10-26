@@ -127,16 +127,6 @@ fn check_burn_out(
     Ok(())
 }
 
-/// Required until the released dimension-type owner exposes the actual tag.
-/// Never infer DimensionType#infiniburn from a dimension's registry key.
-fn infini_burn(_below: BlockState, pos: BlockPos, _level: &Level) -> Result<bool, LevelError> {
-    Err(LevelError::At {
-        pos,
-        phase: "FireBlock#tick requires the canonical DimensionType#infiniburn accessor",
-        source: Box::new(LevelError::MissingEnvironmentContext),
-    })
-}
-
 impl BlockBehavior for Fire {
     /// Port of BaseFireBlock#onPlace and FireBlock#onPlace. Fire still schedules
     /// after the base creates a portal or removes an unsupported fire cell.
@@ -192,7 +182,7 @@ impl BlockBehavior for Fire {
             level.remove_block(pos, false)?;
         }
         let below = level.get_block_state(pos.below(1))?;
-        let infinite = infini_burn(below, pos, level)?;
+        let infinite = level.is_infiniburn(below)?;
         let age = state.get(p::AGE).unwrap();
         if !infinite
             && level.is_raining()
