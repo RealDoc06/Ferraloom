@@ -7,7 +7,7 @@ use ferraloom_storage::IoWorker;
 use ferraloom_util::ChunkPos;
 use std::sync::Arc;
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeSet, VecDeque},
     sync::atomic::{AtomicBool, Ordering},
 };
 use tokio::sync::oneshot;
@@ -133,6 +133,11 @@ struct GenerationStepResult {
     result: Result<()>,
 }
 
+type PendingChunkRead = (
+    ChunkPos,
+    ferraloom_storage::IoTask<Option<ferraloom_nbt::CompoundTag>>,
+);
+
 /// One serial request continuation, owned by exactly one queued/active unit.
 /// The FULL response remains reachable without requiring a tick between steps.
 struct GenerationExecution {
@@ -145,6 +150,8 @@ struct GenerationExecution {
     pool: Arc<JobPool>,
     done: oneshot::Sender<GenerationCompletion>,
     job_timing: profile::Span,
+    executor: tokio::runtime::Handle,
+    reads: VecDeque<PendingChunkRead>,
 }
 pub(crate) fn dispatch_generation(
     mut state: GenerationState,
@@ -154,6 +161,8 @@ pub(crate) fn dispatch_generation(
     io: Arc<IoWorker>,
     pool: Arc<JobPool>,
 ) -> Result<oneshot::Receiver<GenerationCompletion>> {
+    let executor = tokio::runtime::Handle::try_current()
+        .context("generation dispatch requires the server executor")?;
     let progress = state.begin_generation(request.id, request.pos, request.status)?;
     let job_timing = profile::Span::new("generation_job", Some((request.id, request.pos)))
         .status(request.status);
@@ -168,6 +177,8 @@ pub(crate) fn dispatch_generation(
         pool,
         done,
         job_timing,
+        executor,
+        reads: VecDeque::new(),
     }
     .dispatch_next();
     Ok(result)
@@ -178,6 +189,12 @@ impl GenerationExecution {
             .progress
             .next_step(&self.state, Some(&self.request.cancelled))
         {
+            Ok(Some(step))
+                if step.status == ChunkStatus::Empty
+                    && !self.state.failed_loads.contains_key(&step.position.pack()) =>
+            {
+                self.dispatch_read(step);
+            }
             Ok(Some(step)) => {
                 let pool = self.pool.clone();
                 // The request has its own response channel. Each unit returns
@@ -190,6 +207,53 @@ impl GenerationExecution {
             Ok(None) => self.queue_finish(None),
             Err(error) => self.queue_finish(Some(error)),
         }
+    }
+    /// Read ahead only inside the current EMPTY layer. IO runs on its existing
+    /// actor; waiting yields the server executor rather than occupying a worker.
+    /// Decode/publication still follow the layer's X-major/Z-minor order.
+    fn dispatch_read(mut self, step: GenerationStep) {
+        const READ_WINDOW: usize = 8;
+        if self.reads.is_empty() {
+            self.reads
+                .push_back((step.position, self.io.load(step.position)));
+        }
+        let layer = self.progress.layer.as_ref().expect("EMPTY layer");
+        for position in layer.positions.clone() {
+            if self.reads.len() == READ_WINDOW {
+                break;
+            }
+            if !self.state.holders.contains_key(&position.pack())
+                && !self.state.failed_loads.contains_key(&position.pack())
+                && !self.reads.iter().any(|(queued, _)| *queued == position)
+            {
+                self.reads.push_back((position, self.io.load(position)));
+            }
+        }
+        let (position, read) = self.reads.pop_front().expect("current read");
+        assert_eq!(position, step.position);
+        let executor = self.executor.clone();
+        executor.spawn(async move {
+            let mut timing = self.progress.take_step_timing();
+            let loaded = {
+                let _wait =
+                    profile::Span::new("chunk_read_wait", Some((self.request.id, position)));
+                read.await
+            };
+            let pool = self.pool.clone();
+            drop(pool.submit(move || {
+                let _work =
+                    profile::Span::new("generation_step", Some((self.request.id, position)))
+                        .status(ChunkStatus::Empty);
+                let result =
+                    self.state
+                        .integrate_chunk_read(position, loaded, &self.registry, &mut timing);
+                self.integrate_step(GenerationStepResult {
+                    timing,
+                    effects: GenerationStepEffects::default(),
+                    result,
+                });
+            }));
+        });
     }
     fn execute(mut self, step: GenerationStep) -> (Self, GenerationStepResult) {
         let _work = profile::Span::new("generation_step", Some((self.request.id, step.position)))
@@ -216,7 +280,19 @@ impl GenerationExecution {
             Err(error) => self.queue_finish(Some(error)),
         }
     }
-    fn queue_finish(self, failure: Option<anyhow::Error>) {
+    fn queue_finish(mut self, failure: Option<anyhow::Error>) {
+        if !self.reads.is_empty() {
+            let executor = self.executor.clone();
+            executor.spawn(async move {
+                // Issued reads stay reachable until settled, including failure
+                // cleanup. Never publish a later read ahead of the failed one.
+                while let Some((_, read)) = self.reads.pop_front() {
+                    let _ = read.await;
+                }
+                self.queue_finish(failure);
+            });
+            return;
+        }
         let pool = self.pool.clone();
         drop(pool.submit(move || self.finish(failure)));
     }
@@ -231,6 +307,8 @@ impl GenerationExecution {
             pool,
             done,
             job_timing,
+            executor: _,
+            reads: _,
         } = self;
         let result = match failure {
             Some(error) => Err(error),
@@ -294,6 +372,8 @@ mod tests {
     }
     #[test]
     fn step_resubmission_yields_the_worker_and_preserves_chunk_bytes() {
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let _entered = runtime.enter();
         let (mut inline, registry) = super::super::relight_tests::fixture();
         let state = GenerationState::new(inline.context.clone(), inline.light_pool.clone());
         let registry = Arc::new(registry);
@@ -369,6 +449,8 @@ mod tests {
     }
     #[test]
     fn cancellation_finishes_the_started_layer_and_returns_the_owned_cache() {
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let _entered = runtime.enter();
         let (state, registry) = super::super::relight_tests::fixture();
         let directory = tempfile::tempdir().unwrap();
         let mut io =
