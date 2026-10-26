@@ -234,7 +234,10 @@ impl MinecraftServer {
                         connection: source,
                     },
                 )?;
-                command.source.callback.on_success(value);
+                command.source.callback.on_success(
+                    &mut command_runtime::callbacks::ServerCommandHost::new(self, source),
+                    value,
+                );
             }
             _ => return Ok(false),
         }
