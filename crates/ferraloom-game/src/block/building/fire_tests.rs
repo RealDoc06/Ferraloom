@@ -2,7 +2,7 @@ use super::{fire, portal_shape::PortalShape, tests::POS};
 use crate::{
     block::{BlockBehavior, BlockMethod, LevelReaderRef, fluid::FlowingFluid},
     entity::{
-        EntityRef, EntityState,
+        Entity, EntityRef, EntityState,
         player::{GameType, ServerPlayer},
     },
     gamerules::{GameRule, GameRuleValue, GameRules},
@@ -605,7 +605,7 @@ thread_local! {
 /// Observe only the native virtual consumers; the block and canonical effect
 /// collector run normally, including freeze clearing and the ignition mutation.
 struct ContactProbe;
-impl crate::entity::Entity for ContactProbe {
+impl Entity for ContactProbe {
     fn trace_entity_refs(&self, state: &EntityState, references: &mut Vec<EntityRef>) {
         crate::entity::player::PlayerBehavior.trace_entity_refs(state, references);
     }
