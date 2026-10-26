@@ -2,9 +2,10 @@ use crate::{
     Behaviors,
     block::BlockMethod,
     level::{
-        Level, LevelContext, LevelEffect, Region,
+        Level, LevelContext, Region,
         chunk::{LevelChunk, LevelChunkSection},
         distance_manager::FullChunkStatus,
+        effects::LevelEffect,
     },
 };
 use ferraloom_data::{Block, BlockState};
