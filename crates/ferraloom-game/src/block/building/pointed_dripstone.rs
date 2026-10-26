@@ -197,7 +197,7 @@ pub(super) fn maybe_transfer_fluid(
         tip_pos,
         Direction::Down,
         11,
-        |at, state, level| can_drip_through(at, state, level),
+        can_drip_through,
         |state, _| Ok(can_receive_drip(state, source.fluid)),
     )? {
         level.level_event(None, 1504, tip_pos, 0)?;
