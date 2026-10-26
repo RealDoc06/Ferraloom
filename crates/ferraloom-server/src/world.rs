@@ -2632,7 +2632,7 @@ mod generation_order_tests {
     #[tokio::test]
     async fn dimensions_share_worldgen_registries_and_keep_flat_features_separate() {
         let resources = crate::generation_tests::resources();
-        let registries = Arc::new(RegistrySet::load(&resources).unwrap());
+        let registries = Arc::new(RegistrySet::load(resources.clone()).unwrap());
         let directory = tempfile::tempdir().unwrap();
         let mut properties = ServerProperties::from_values(Default::default());
         properties.set("level-type", "minecraft:normal");
