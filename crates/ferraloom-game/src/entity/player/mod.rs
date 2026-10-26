@@ -775,6 +775,13 @@ fn jump_from_ground(entity: crate::entity::EntityRef, level: &mut Level) -> Resu
 }
 pub struct PlayerBehavior;
 impl crate::entity::Entity for PlayerBehavior {
+    fn can_be_seen_as_enemy(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
+        Ok(
+            !level.entity::<ServerPlayer>(entity)?.abilities.invulnerable
+                && super::mob::can_be_seen_as_enemy_parent(self, entity, level)?,
+        )
+    }
+
     fn base_experience_reward(
         &self,
         entity: EntityRef,
