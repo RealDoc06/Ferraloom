@@ -5,6 +5,13 @@ pub fn generate(root: &Path) {
     let states = data["state_count"].as_u64().unwrap() as usize;
     let blocks = data["block_count"].as_u64().unwrap() as usize;
     let mut burn = vec![0_u64; states.div_ceil(64)];
+    let mut ignite_odds = vec![0_u8; states];
+    let mut burn_odds = vec![0_u8; states];
+    for row in data["fire_odds"].as_array().unwrap() {
+        let id = row[0].as_u64().unwrap() as usize;
+        ignite_odds[id] = row[1].as_u64().unwrap().try_into().unwrap();
+        burn_odds[id] = row[2].as_u64().unwrap().try_into().unwrap();
+    }
     let mut targets = vec![u16::MAX; blocks];
     for state in data["can_burn"].as_array().unwrap() {
         let id = state.as_u64().unwrap() as usize;
@@ -15,6 +22,8 @@ pub fn generate(root: &Path) {
     }
     let mut out = String::new();
     writeln!(out, "const FIRE_CAN_BURN: &[u64] = &{burn:?};").unwrap();
+    writeln!(out, "const FIRE_IGNITE_ODDS: &[u8] = &{ignite_odds:?};").unwrap();
+    writeln!(out, "const FIRE_BURN_ODDS: &[u8] = &{burn_odds:?};").unwrap();
     writeln!(out, "const CONCRETE_POWDER_TARGETS: &[u16] = &{targets:?};").unwrap();
     std::fs::write(
         Path::new(&std::env::var("OUT_DIR").unwrap()).join("building_properties.rs"),

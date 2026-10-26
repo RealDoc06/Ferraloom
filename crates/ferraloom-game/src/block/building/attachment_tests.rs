@@ -70,6 +70,7 @@ fn player_context<'stack>(level: &Level, item: &'stack ItemStack) -> BlockPlaceC
 #[test]
 fn attachments_match_every_variant_face_support_mask_and_actual_player_look_order() {
     let mut level = connected_level();
+    level.install_shared(Box::default());
     level
         .add_entity(
             EntityRef::fixture(crate::level::RegionId::FIXTURE, 1),
@@ -125,6 +126,7 @@ fn attachments_match_every_variant_face_support_mask_and_actual_player_look_orde
 #[test]
 fn player_view_placement_uses_head_yaw_independently_of_body_yaw() {
     let mut level = connected_level();
+    level.install_shared(Box::default());
     level
         .add_entity(
             EntityRef::fixture(crate::level::RegionId::FIXTURE, 1),

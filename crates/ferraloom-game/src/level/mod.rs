@@ -261,7 +261,8 @@ pub struct LevelRules {
     pub lava_source_conversion: bool,
     pub fast_lava: bool,
     pub redstone_experiments: bool,
-    pub spread_fire: bool,
+    /// GameRules.FIRE_SPREAD_RADIUS_AROUND_PLAYER; -1 permits fire anywhere.
+    pub fire_spread_radius_around_player: i32,
     pub spread_vines: bool,
     pub mob_griefing: bool,
 }
@@ -306,7 +307,13 @@ impl Default for LevelRules {
             lava_source_conversion: false,
             fast_lava: false,
             redstone_experiments: false,
-            spread_fire: true,
+            fire_spread_radius_around_player: match GameRule::FireSpreadRadiusAroundPlayer
+                .definition()
+                .kind
+            {
+                RuleType::Integer { default, .. } => default,
+                _ => unreachable!("fire-spread radius is an integer game rule"),
+            },
             spread_vines: true,
             mob_griefing: true,
         }
