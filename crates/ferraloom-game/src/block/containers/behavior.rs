@@ -13,6 +13,8 @@ pub struct ContainerBlock;
 static CONTAINER_BLOCK: ContainerBlock = ContainerBlock;
 #[cfg(test)]
 mod chest_tests;
+#[cfg(test)]
+mod statue_tests;
 
 fn chest(block: Block) -> bool {
     matches!(
@@ -39,6 +41,14 @@ pub(crate) fn ported_behavior(
     method: BlockMethod,
 ) -> Option<&'static dyn BlockBehavior> {
     use BlockMethod as M;
+    if method == M::AffectNeighborsAfterRemoval
+        && matches!(
+            block.class(),
+            BlockClass::CopperGolemStatueBlock | BlockClass::WeatheringCopperGolemStatueBlock
+        )
+    {
+        return Some(&CONTAINER_BLOCK);
+    }
     if block.class() == BlockClass::ChiseledBookShelfBlock
         && matches!(
             method,
@@ -186,6 +196,7 @@ impl BlockBehavior for ContainerBlock {
         let behavior = level.block_entity_state(handle)?.behavior();
         Ok(behavior.trigger_event(level.block_entity_state_mut(handle)?, a, b))
     }
+    /// Port of CopperGolemStatueBlock and storage blocks' affectNeighborsAfterRemoval.
     fn affect_neighbors_after_removal(
         &self,
         state: BlockState,
