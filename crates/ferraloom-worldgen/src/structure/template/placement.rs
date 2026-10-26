@@ -253,7 +253,7 @@ impl StructureTemplate {
                     bounds,
                 )?;
             }
-            for (p, _) in placed {
+            for (p, has_nbt) in placed {
                 if !settings.known_shape {
                     let state = access.level().block(p)?;
                     let updated = access.level_mut()?.update_from_neighbor_shapes(p, state)?;
@@ -266,8 +266,11 @@ impl StructureTemplate {
                         .level_mut()?
                         .update_neighbors_at(p, updated.block())?;
                 }
-                // Protochunk block-entity NBT is already pending for saving;
-                // the load_block_entity adapter marks instantiated entities dirty.
+                if has_nbt {
+                    // Protochunks already retain their pending NBT for saving;
+                    // live receivers need this native late setChanged callback.
+                    access.level_mut()?.mark_template_block_entity_changed(p)?;
+                }
             }
         }
         if !settings.ignore_entities {
@@ -310,17 +313,12 @@ impl StructureTemplate {
             if tag.contains_key("block_pos") {
                 tag.insert("block_pos", Tag::IntArray(block_pos.to_vec()));
             }
-            if !region.finalize_template_entity(
-                &mut tag,
+            region.place_template_entity(
+                [(pos[0].floor() as i32) >> 4, (pos[2].floor() as i32) >> 4],
+                tag,
                 settings.mirror,
                 settings.rotation,
                 settings.finalize_entities,
-            )? {
-                continue;
-            }
-            region.add_entity(
-                [(pos[0].floor() as i32) >> 4, (pos[2].floor() as i32) >> 4],
-                tag,
             )?;
         }
         Ok(())

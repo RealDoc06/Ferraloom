@@ -24,7 +24,7 @@ pub fn options() -> LaunchOptions {
 pub async fn command(bot: &mut Bot, text: &str, expected: &str) -> Result<serde_json::Value> {
     bot.command(text).await?;
     let response=bot.wait_for(text,Ticks::DEFAULT,|_,packet| {
-        matches!(packet,cb::Packet::SystemChat(p) if p.content.to_json().is_ok_and(|json| json.contains(expected)||json.contains("commands.generic.failed")||json.contains("commands.generic.unknown")||json.contains("commands.generic.permission")))
+        matches!(packet,cb::Packet::SystemChat(p) if p.content.to_json().is_ok_and(|json| json.contains(expected)||json.contains("commands.generic.failed")||json.contains("commands.generic.unknown")||json.contains("commands.generic.permission")||json.contains("ferraloom.command.pending")))
     }).await?;
     let cb::Packet::SystemChat(response) = response.as_ref() else {
         unreachable!()

@@ -30,6 +30,7 @@ fn state(id: &str) -> BlockState {
 #[test]
 fn speleothem_placement_keeps_native_support_fallback_and_cross_type_thickness_rules() {
     let mut level = connected_level();
+    level.install_shared(Box::default());
     let item = ItemStack::default();
     level
         .add_entity(

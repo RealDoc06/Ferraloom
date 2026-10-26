@@ -9,7 +9,7 @@ pub(crate) mod live;
 mod recursive;
 mod tree;
 pub use live::load_in_place;
-pub use recursive::load_entity_recursive;
+pub use recursive::{create_entity_from_tag, load_entity_recursive};
 pub use tree::EntityPersistenceError;
 pub(crate) use tree::load_entity_tree;
 

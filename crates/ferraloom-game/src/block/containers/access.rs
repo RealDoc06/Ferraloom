@@ -405,6 +405,9 @@ pub fn block_container_at(
         return Ok(None);
     };
     let receiver = level.block_entity_state(handle)?;
+    if matches!(receiver, BlockEntityState::DecoratedPot(_)) {
+        return Err(LevelError::UnsupportedBlockEntity(state.block()));
+    }
     if matches!(receiver, BlockEntityState::BrewingStand(_)) {
         return Err(LevelError::Inventory("BrewingStand worldly container"));
     }
@@ -438,12 +441,32 @@ pub fn slots_for_face(state: &BlockEntityState, face: Direction) -> Vec<usize> {
 
 /// Port of Container#canPlaceItem. Callers performing transfers first read the
 /// destination through getItem, which unpacks any pending loot before this test.
-pub fn can_place_item(state: &BlockEntityState, slot: usize, stack: &ItemStack) -> bool {
-    match state {
+/// Tag-gated receivers read the canonical Level service at each query; ordinary
+/// predicates retain their native pure behavior without requiring item tags.
+pub fn can_place_item(
+    state: &BlockEntityState,
+    slot: usize,
+    stack: &ItemStack,
+    level: &Level,
+) -> Result<bool, LevelError> {
+    Ok(match state {
+        BlockEntityState::ChiseledBookShelf(shelf) => {
+            if !level
+                .item_tags()?
+                .contains_key(ItemTags::BOOKSHELF_BOOKS, stack.item())
+            {
+                return Ok(false);
+            }
+            let current = shelf
+                .items
+                .get(slot)
+                .ok_or(LevelError::Inventory("bookshelf slot out of range"))?;
+            current.is_empty() || count(current) < 1.min(max_stack_size(stack))
+        }
         BlockEntityState::Furnace(furnace) => furnace.can_place_item(slot, stack),
         BlockEntityState::Crafter(crafter) => crafter.can_place_item(slot, stack),
         _ => true,
-    }
+    })
 }
 /// Port of WorldlyContainer#canPlaceItemThroughFace. The hopper must also call
 /// canPlaceItem; shulker's ordinary predicate differs from its sided predicate.
@@ -601,6 +624,10 @@ mod tests {
     }
     #[test]
     fn furnace_sided_slots_and_rules_match_native_live_tags() {
+        let level = Level::new(
+            crate::level::Region::new(&crate::Behaviors::EMPTY),
+            crate::level::LevelContext::fixture(0, 63),
+        );
         let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").expect("builder vanilla jar");
         let resources =
             ResourceManager::new(vec![Pack::vanilla_jar(std::path::Path::new(&jar)).unwrap()]);
@@ -637,7 +664,7 @@ mod tests {
                     .map(|slot| {
                         format!(
                             "{},{},{}",
-                            can_place_item(&state, slot, &stack),
+                            can_place_item(&state, slot, &stack, &level).unwrap(),
                             can_place_item_through_face(&state, slot, &stack, Some(face)),
                             can_take_item_through_face(&state, slot, &stack, face, &tags)
                         )

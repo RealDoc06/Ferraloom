@@ -1,0 +1,94 @@
+[
+  [
+    {
+      "key": "minecraft:block.chest.open",
+      "position": [
+        8.5,
+        79.5,
+        9.5
+      ],
+      "source": "BLOCKS",
+      "volume": 0.5,
+      "pitch": 0.99074316
+    },
+    {
+      "key": "minecraft:block.chest.close",
+      "position": [
+        8.5,
+        79.5,
+        9.5
+      ],
+      "source": "BLOCKS",
+      "volume": 0.5,
+      "pitch": 0.9796541
+    },
+    {
+      "key": "minecraft:block.barrel.open",
+      "position": [
+        8.5,
+        79.5,
+        9.0
+      ],
+      "source": "BLOCKS",
+      "volume": 0.5,
+      "pitch": 0.958809
+    },
+    {
+      "key": "minecraft:block.barrel.close",
+      "position": [
+        8.5,
+        79.5,
+        9.0
+      ],
+      "source": "BLOCKS",
+      "volume": 0.5,
+      "pitch": 0.93883663
+    }
+  ],
+  [
+    {
+      "key": "minecraft:block.chest.open",
+      "position": [
+        8.5,
+        79.5,
+        9.5
+      ],
+      "source": "BLOCKS",
+      "volume": 0.5,
+      "pitch": 0.95838624
+    },
+    {
+      "key": "minecraft:block.chest.close",
+      "position": [
+        8.5,
+        79.5,
+        9.5
+      ],
+      "source": "BLOCKS",
+      "volume": 0.5,
+      "pitch": 0.9093256
+    },
+    {
+      "key": "minecraft:block.barrel.open",
+      "position": [
+        8.5,
+        79.5,
+        9.0
+      ],
+      "source": "BLOCKS",
+      "volume": 0.5,
+      "pitch": 0.9441389
+    },
+    {
+      "key": "minecraft:block.barrel.close",
+      "position": [
+        8.5,
+        79.5,
+        9.0
+      ],
+      "source": "BLOCKS",
+      "volume": 0.5,
+      "pitch": 0.9306078
+    }
+  ]
+]

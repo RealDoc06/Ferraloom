@@ -15,6 +15,7 @@ pub mod gamemode;
 pub mod give;
 pub mod message;
 pub mod permissions;
+pub mod place;
 pub mod placement;
 pub mod reload;
 pub mod scoreboard;

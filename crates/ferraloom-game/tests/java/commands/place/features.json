@@ -1,0 +1,866 @@
+[
+  {
+    "command": "place feature minecraft:oak",
+    "placed": true,
+    "hasChunk": true,
+    "inWorld": true,
+    "missing": [],
+    "permission": 4,
+    "value": 1,
+    "trace": [
+      {
+        "call": "loaded",
+        "pos": [
+          64,
+          0,
+          -48
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          80,
+          0,
+          -48
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          96,
+          0,
+          -48
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          64,
+          0,
+          -32
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          80,
+          0,
+          -32
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          96,
+          0,
+          -32
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          64,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          80,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          96,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "feature",
+        "id": "minecraft:oak",
+        "pos": [
+          80,
+          64,
+          -17
+        ],
+        "draw": -5025562857975149833
+      },
+      "success"
+    ],
+    "feedback": [
+      {
+        "broadcast": true,
+        "message": {
+          "translate": "commands.place.feature.success",
+          "with": [
+            "minecraft:oak",
+            80,
+            64,
+            -17
+          ]
+        }
+      }
+    ],
+    "next_long": -5843495416241995736
+  },
+  {
+    "command": "place feature minecraft:oak 0 80 0",
+    "placed": true,
+    "hasChunk": true,
+    "inWorld": true,
+    "missing": [],
+    "permission": 4,
+    "value": 1,
+    "trace": [
+      {
+        "call": "has_chunk",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "in_world",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          -16,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          -16,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          -16,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "feature",
+        "id": "minecraft:oak",
+        "pos": [
+          0,
+          80,
+          0
+        ],
+        "draw": -5025562857975149833
+      },
+      "success"
+    ],
+    "feedback": [
+      {
+        "broadcast": true,
+        "message": {
+          "translate": "commands.place.feature.success",
+          "with": [
+            "minecraft:oak",
+            0,
+            80,
+            0
+          ]
+        }
+      }
+    ],
+    "next_long": -5843495416241995736
+  },
+  {
+    "command": "place feature minecraft:oak ~ ~1 ~-2",
+    "placed": true,
+    "hasChunk": true,
+    "inWorld": true,
+    "missing": [],
+    "permission": 4,
+    "value": 1,
+    "trace": [
+      {
+        "call": "has_chunk",
+        "pos": [
+          80,
+          65,
+          -19
+        ]
+      },
+      {
+        "call": "in_world",
+        "pos": [
+          80,
+          65,
+          -19
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          64,
+          0,
+          -48
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          80,
+          0,
+          -48
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          96,
+          0,
+          -48
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          64,
+          0,
+          -32
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          80,
+          0,
+          -32
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          96,
+          0,
+          -32
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          64,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          80,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          96,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "feature",
+        "id": "minecraft:oak",
+        "pos": [
+          80,
+          65,
+          -19
+        ],
+        "draw": -5025562857975149833
+      },
+      "success"
+    ],
+    "feedback": [
+      {
+        "broadcast": true,
+        "message": {
+          "translate": "commands.place.feature.success",
+          "with": [
+            "minecraft:oak",
+            80,
+            65,
+            -19
+          ]
+        }
+      }
+    ],
+    "next_long": -5843495416241995736
+  },
+  {
+    "command": "place feature minecraft:oak ^1 ^2 ^3",
+    "placed": true,
+    "hasChunk": true,
+    "inWorld": true,
+    "missing": [],
+    "permission": 4,
+    "value": 1,
+    "trace": [
+      "eye_height",
+      {
+        "call": "has_chunk",
+        "pos": [
+          79,
+          68,
+          -15
+        ]
+      },
+      {
+        "call": "in_world",
+        "pos": [
+          79,
+          68,
+          -15
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          48,
+          0,
+          -32
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          64,
+          0,
+          -32
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          80,
+          0,
+          -32
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          48,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          64,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          80,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          48,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          64,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          80,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "feature",
+        "id": "minecraft:oak",
+        "pos": [
+          79,
+          68,
+          -15
+        ],
+        "draw": -5025562857975149833
+      },
+      "success"
+    ],
+    "feedback": [
+      {
+        "broadcast": true,
+        "message": {
+          "translate": "commands.place.feature.success",
+          "with": [
+            "minecraft:oak",
+            79,
+            68,
+            -15
+          ]
+        }
+      }
+    ],
+    "next_long": -5843495416241995736
+  },
+  {
+    "command": "place feature minecraft:oak 0 80 0",
+    "placed": false,
+    "hasChunk": true,
+    "inWorld": true,
+    "missing": [],
+    "permission": 4,
+    "error": "Failed to place feature",
+    "cursor": -1,
+    "error_component": {
+      "translate": "commands.place.feature.failed"
+    },
+    "trace": [
+      {
+        "call": "has_chunk",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "in_world",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          -16,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          -16,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          -16,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "feature",
+        "id": "minecraft:oak",
+        "pos": [
+          0,
+          80,
+          0
+        ],
+        "draw": -5025562857975149833
+      }
+    ],
+    "feedback": [],
+    "next_long": -5843495416241995736
+  },
+  {
+    "command": "place feature minecraft:oak 0 80 0",
+    "placed": true,
+    "hasChunk": false,
+    "inWorld": false,
+    "missing": [],
+    "permission": 4,
+    "error": "That position is not loaded",
+    "cursor": -1,
+    "error_component": {
+      "translate": "argument.pos.unloaded"
+    },
+    "trace": [
+      {
+        "call": "has_chunk",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      }
+    ],
+    "feedback": [],
+    "next_long": -5025562857975149833
+  },
+  {
+    "command": "place feature minecraft:oak 0 80 0",
+    "placed": true,
+    "hasChunk": true,
+    "inWorld": false,
+    "missing": [],
+    "permission": 4,
+    "error": "That position is out of this world!",
+    "cursor": -1,
+    "error_component": {
+      "translate": "argument.pos.outofworld"
+    },
+    "trace": [
+      {
+        "call": "has_chunk",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "in_world",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      }
+    ],
+    "feedback": [],
+    "next_long": -5025562857975149833
+  },
+  {
+    "command": "place feature minecraft:oak 0 80 0",
+    "placed": true,
+    "hasChunk": true,
+    "inWorld": true,
+    "missing": [
+      -16,
+      0,
+      -16
+    ],
+    "permission": 4,
+    "error": "That position is not loaded",
+    "cursor": -1,
+    "error_component": {
+      "translate": "argument.pos.unloaded"
+    },
+    "trace": [
+      {
+        "call": "has_chunk",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "in_world",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          -16,
+          0,
+          -16
+        ]
+      }
+    ],
+    "feedback": [],
+    "next_long": -5025562857975149833
+  },
+  {
+    "command": "place feature minecraft:oak 0 80 0",
+    "placed": true,
+    "hasChunk": true,
+    "inWorld": true,
+    "missing": [
+      16,
+      0,
+      16
+    ],
+    "permission": 4,
+    "error": "That position is not loaded",
+    "cursor": -1,
+    "error_component": {
+      "translate": "argument.pos.unloaded"
+    },
+    "trace": [
+      {
+        "call": "has_chunk",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "in_world",
+        "pos": [
+          0,
+          80,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          -16,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          -16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          -16,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          0
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          -16,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          0,
+          0,
+          16
+        ]
+      },
+      {
+        "call": "loaded",
+        "pos": [
+          16,
+          0,
+          16
+        ]
+      }
+    ],
+    "feedback": [],
+    "next_long": -5025562857975149833
+  },
+  {
+    "command": "place feature minecraft:oak",
+    "placed": true,
+    "hasChunk": true,
+    "inWorld": true,
+    "missing": [],
+    "permission": 1,
+    "error": "Unknown or incomplete command. See below for error",
+    "cursor": 0,
+    "error_component": {
+      "translate": "command.unknown.command"
+    },
+    "trace": [],
+    "feedback": [],
+    "next_long": -5025562857975149833
+  },
+  {
+    "command": "place feature minecraft:unknown_native_feature",
+    "placed": true,
+    "hasChunk": true,
+    "inWorld": true,
+    "missing": [],
+    "permission": 4,
+    "error": "Can't find element 'minecraft:unknown_native_feature' in registry 'minecraft:worldgen/feature'",
+    "cursor": 46,
+    "error_component": {
+      "translate": "argument.resource_or_id.no_such_element",
+      "with": [
+        "minecraft:unknown_native_feature",
+        "minecraft:worldgen/feature"
+      ]
+    },
+    "trace": [],
+    "feedback": [],
+    "next_long": -5025562857975149833
+  },
+  {
+    "command": "place feature minecraft:oak 0 80",
+    "placed": true,
+    "hasChunk": true,
+    "inWorld": true,
+    "missing": [],
+    "permission": 4,
+    "error": "Incomplete (expected 3 coordinates)",
+    "cursor": 28,
+    "error_component": {
+      "translate": "argument.pos3d.incomplete"
+    },
+    "trace": [],
+    "feedback": [],
+    "next_long": -5025562857975149833
+  }
+]

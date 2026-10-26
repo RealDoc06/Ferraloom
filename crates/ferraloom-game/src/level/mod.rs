@@ -251,6 +251,7 @@ pub struct LevelRules {
     pub pvp: bool,
     pub mob_drops: bool,
     pub keep_inventory: bool,
+    pub limited_crafting: bool,
     pub send_command_feedback: bool,
     pub natural_health_regeneration: bool,
     pub debug: bool,
@@ -261,7 +262,8 @@ pub struct LevelRules {
     pub lava_source_conversion: bool,
     pub fast_lava: bool,
     pub redstone_experiments: bool,
-    pub spread_fire: bool,
+    /// GameRules.FIRE_SPREAD_RADIUS_AROUND_PLAYER; -1 permits fire anywhere.
+    pub fire_spread_radius_around_player: i32,
     pub spread_vines: bool,
     pub mob_griefing: bool,
 }
@@ -296,6 +298,7 @@ impl Default for LevelRules {
             pvp: damage_default(GameRule::Pvp),
             mob_drops: damage_default(GameRule::MobDrops),
             keep_inventory: damage_default(GameRule::KeepInventory),
+            limited_crafting: damage_default(GameRule::LimitedCrafting),
             send_command_feedback: damage_default(GameRule::SendCommandFeedback),
             natural_health_regeneration: damage_default(GameRule::NaturalHealthRegeneration),
             debug: false,
@@ -306,7 +309,13 @@ impl Default for LevelRules {
             lava_source_conversion: false,
             fast_lava: false,
             redstone_experiments: false,
-            spread_fire: true,
+            fire_spread_radius_around_player: match GameRule::FireSpreadRadiusAroundPlayer
+                .definition()
+                .kind
+            {
+                RuleType::Integer { default, .. } => default,
+                _ => unreachable!("fire-spread radius is an integer game rule"),
+            },
             spread_vines: true,
             mob_griefing: true,
         }

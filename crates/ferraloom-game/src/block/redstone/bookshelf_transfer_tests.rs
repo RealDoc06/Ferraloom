@@ -71,6 +71,11 @@ fn stack_tag(stack: &ItemStack) -> Tag {
         stack.to_nbt().unwrap()
     }
 }
+fn bytes(tag: &Tag) -> Vec<u8> {
+    let mut bytes = Vec::new();
+    ferraloom_nbt::NbtIo::write_any_tag(&mut bytes, tag).unwrap();
+    bytes
+}
 fn expected(value: &str) -> Tag {
     Tag::Compound(parse_compound(value).unwrap())
 }
@@ -314,7 +319,11 @@ fn native_bookshelf_container_view_and_whole_receiver_transfers() {
                         changes(fields[6], POS.y - 1),
                         "{line}"
                     );
-                    outcomes.push((tag, stack_tag(&remainder), after.wrapping_sub(before)));
+                    outcomes.push((
+                        bytes(&tag),
+                        bytes(&stack_tag(&remainder)),
+                        after.wrapping_sub(before),
+                    ));
                 }
                 assert_eq!(outcomes[0], outcomes[1], "{line}");
                 checked[2] += 1;

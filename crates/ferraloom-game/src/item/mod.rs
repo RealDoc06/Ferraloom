@@ -9,6 +9,7 @@ pub mod enchantment;
 pub mod name;
 mod placement;
 mod pov;
+pub mod slot;
 pub use pov::get_player_pov_hit_result;
 pub mod stack;
 pub use behavior::{ItemBehavior, ported_behavior, required_behavior};
