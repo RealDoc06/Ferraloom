@@ -390,6 +390,8 @@ it unchanged. Worldgen retains its own seeded/positional streams.
 without even a fork when the one reference region is created. Vanilla initializes
 some streams from nondeterministic seeds; exact seeded comparisons require the
 same controlled seed inputs in both harnesses, not merely the same world seed.
+Worldgen fixes FEATURES visits in request order: native asynchronous readiness can reorder serialized visits and change blocks.
+Controlled native traces prove this order dependence; BIOMES/TERRAIN must remain order-independent, and parity fixes the same legal FEATURES order.
 
 In region mode the server allocates network-ID blocks on demand at phase
 boundaries in region-ordinal order; each region allocates locally from its block
