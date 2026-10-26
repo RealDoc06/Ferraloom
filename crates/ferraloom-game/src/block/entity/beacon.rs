@@ -115,9 +115,8 @@ impl BlockEntity for BeaconBehavior {
         if let Some(name) = &entity.custom_name {
             tag.insert("CustomName", name.to_nbt()?);
         }
-        if let Some(lock) = &entity.lock
-            && has_lock(lock)
-        {
+        // LockCode#addToTag tests NO_LOCK identity: a decoded empty lock saves.
+        if let Some(lock) = &entity.lock {
             tag.insert("lock", lock.to_nbt()?);
         }
         Ok(tag)
