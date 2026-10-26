@@ -1,4 +1,5 @@
 //! StructureTemplate's resource loading, palette order and coordinate geometry.
+mod manager;
 mod placement;
 use super::BoundingBox;
 use crate::{Error, Identifier};
@@ -11,6 +12,7 @@ use ferraloom_util::{
     Mirror, Rotation, mth,
     random::{LegacyRandomSource, Random, RandomSource},
 };
+pub use manager::StructureTemplateManager;
 use std::{collections::BTreeMap, sync::Arc};
 
 /// Port of StructureTemplate.StructureBlockInfo.
@@ -150,8 +152,11 @@ impl StructureTemplate {
     }
     pub fn load(resources: &ResourceManager, id: &Identifier) -> Result<Self, Error> {
         let resource = resources.require(&id.with_path(format!("structure/{}.nbt", id.path()))?)?;
+        Self::load_bytes(resource.bytes, id)
+    }
+    fn load_bytes(bytes: &[u8], id: &Identifier) -> Result<Self, Error> {
         let (_, tag) = NbtIo::read(
-            resource.bytes,
+            bytes,
             Compression::Gzip,
             true,
             &mut NbtAccounter::unlimited(),
@@ -224,63 +229,6 @@ impl StructureTemplate {
             r.next_int_bound(self.palettes.len() as i32)
         }) as usize;
         Ok(&self.palettes[index])
-    }
-}
-/// Preloaded templates are shared immutably. Generation jobs never race to
-/// install entries or mutate a template's block-entity tags.
-#[derive(Clone, Debug, Default)]
-pub struct StructureTemplateManager {
-    pub templates: BTreeMap<Identifier, Arc<StructureTemplate>>,
-}
-impl StructureTemplateManager {
-    /// Preload the effective jar/datapack template set before chunk jobs run.
-    /// This includes handwritten structures whose templates are not in pools.
-    pub fn load_all(resources: &ResourceManager) -> Result<Self, Error> {
-        let ids = resources
-            .list("structure/", ".nbt")
-            .into_iter()
-            .map(|id| {
-                let path = id
-                    .path()
-                    .strip_prefix("structure/")
-                    .and_then(|p| p.strip_suffix(".nbt"))
-                    .ok_or_else(|| Error(format!("invalid template path {id}")))?;
-                id.with_path(path).map_err(Error::from)
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        Self::load(resources, ids)
-    }
-    pub fn load(
-        resources: &ResourceManager,
-        ids: impl IntoIterator<Item = Identifier>,
-    ) -> Result<Self, Error> {
-        let mut templates = BTreeMap::new();
-        for id in ids {
-            let file = id.with_path(format!("structure/{}.nbt", id.path()))?;
-            if resources.get(&file).is_some() {
-                templates.insert(
-                    id.clone(),
-                    Arc::new(StructureTemplate::load(resources, &id)?),
-                );
-            }
-        }
-        Ok(Self { templates })
-    }
-    /// Port of StructureTemplateManager#getOrCreate for pool element queries.
-    /// Empty templates are immutable, so missing resources need no cache write.
-    pub fn get_or_create(&self, id: &Identifier) -> &StructureTemplate {
-        static EMPTY: StructureTemplate = StructureTemplate {
-            size: [0; 3],
-            palettes: Vec::new(),
-            entities: Vec::new(),
-        };
-        self.templates.get(id).map_or(&EMPTY, Arc::as_ref)
-    }
-    pub fn get(&self, id: &Identifier) -> Result<&StructureTemplate, Error> {
-        self.templates
-            .get(id)
-            .map(Arc::as_ref)
-            .ok_or_else(|| Error(format!("missing structure template {id}")))
     }
 }
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
