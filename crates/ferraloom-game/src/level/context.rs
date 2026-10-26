@@ -14,11 +14,14 @@ pub struct LevelContext {
     pub features: Arc<FeatureRegistry>,
     pub structures: Arc<super::StructureServices>,
     pub initial_difficulty: Difficulty,
+    dimension_type: Option<ferraloom_worldgen::settings::DimensionType>,
     damage_types: Arc<DamageTypeRegistry>,
     block_transformers: Option<Arc<crate::item::block_transformer::BlockTransformerRegistry>>,
     enchantments: Option<Arc<crate::item::enchantment::EnchantmentRegistry>>,
     mob_variants: Option<Arc<crate::entity::variant::MobVariants>>,
     registry_context: Option<Arc<dyn ferraloom_protocol::codec::RegistryContext>>,
+    structure_templates:
+        Option<Arc<ferraloom_worldgen::structure::template::StructureTemplateManager>>,
     game_event_tags:
         Option<Arc<ferraloom_data::datapack::TagSet<ferraloom_data::registries::game_event::Id>>>,
 }
@@ -41,12 +44,32 @@ impl LevelContext {
             structures,
             damage_types,
             initial_difficulty,
+            dimension_type: None,
             block_transformers: None,
             enchantments: None,
             mob_variants: None,
             registry_context: None,
+            structure_templates: None,
             game_event_tags: None,
         }
+    }
+
+    /// Install the decoded active LevelStem's DimensionType, including inline types.
+    pub fn with_dimension_type(
+        mut self,
+        dimension: ferraloom_worldgen::settings::DimensionType,
+    ) -> Self {
+        self.dimension_type = Some(dimension);
+        self
+    }
+
+    /// Port of Level#dimensionType. An uninstalled service is a required error.
+    pub fn dimension_type(
+        &self,
+    ) -> Result<&ferraloom_worldgen::settings::DimensionType, super::LevelError> {
+        self.dimension_type
+            .as_ref()
+            .ok_or(super::LevelError::MissingDimensionType)
     }
 
     /// Install the actual merged BlockTransformer registry without changing
@@ -133,6 +156,26 @@ impl LevelContext {
             .ok_or(super::LevelError::MissingRegistryContext)
     }
 
+    /// MinecraftServer#getStructureManager supplies the same canonical asset
+    /// cache to live placement and worldgen in every dimension.
+    pub fn with_structure_templates(
+        mut self,
+        templates: Arc<ferraloom_worldgen::structure::template::StructureTemplateManager>,
+    ) -> Self {
+        self.structure_templates = Some(templates);
+        self
+    }
+    pub fn structure_templates(
+        &self,
+    ) -> Result<
+        &Arc<ferraloom_worldgen::structure::template::StructureTemplateManager>,
+        super::LevelError,
+    > {
+        self.structure_templates
+            .as_ref()
+            .ok_or(super::LevelError::MissingStructureTemplates)
+    }
+
     pub fn damage_types(&self) -> &Arc<DamageTypeRegistry> {
         &self.damage_types
     }
@@ -153,6 +196,7 @@ impl LevelContext {
         };
         use std::{path::Path, sync::OnceLock};
         struct Services {
+            dimension_type: ferraloom_worldgen::settings::DimensionType,
             generator: Arc<ChunkGenerator>,
             features: Arc<FeatureRegistry>,
             structures: Arc<super::StructureServices>,
@@ -174,6 +218,14 @@ impl LevelContext {
             let flat =
                 FlatLevelSource::new(data, FlatLevelGeneratorSettings::default_settings()).unwrap();
             Services {
+                dimension_type: ferraloom_worldgen::settings::DimensionType::decode(
+                    &resources
+                        .require(&"minecraft:dimension_type/overworld.json".parse().unwrap())
+                        .unwrap()
+                        .json()
+                        .unwrap(),
+                )
+                .unwrap(),
                 generator: Arc::new(ChunkGenerator::Flat(Box::new(flat))),
                 features: Arc::new(FeatureRegistry::default()),
                 structures,
@@ -204,6 +256,7 @@ impl LevelContext {
                 services.damage_types.clone(),
                 Difficulty::Normal,
             )
+            .with_dimension_type(services.dimension_type.clone())
             .with_block_transformers(services.block_transformers.clone())
             .with_enchantments(services.enchantments.clone())
             .with_mob_variants(services.mob_variants.clone())
@@ -212,6 +265,10 @@ impl LevelContext {
         )
     }
 }
+
+#[cfg(test)]
+#[path = "dimension_tests.rs"]
+mod tests;
 
 /// Controlled fixtures resolve the actual vanilla resource/registry snapshot.
 /// Production installs the server's existing RegistrySet; this is test-only.
@@ -281,5 +338,27 @@ impl ferraloom_protocol::codec::RegistryContext for FixtureRegistryContext {
             .registry(&format!("tags/{}", registry.path()))
             .keys()
             .any(|name| name.to_string() == tag.as_str())
+    }
+}
+
+#[cfg(test)]
+mod template_tests {
+    use super::*;
+
+    #[test]
+    fn structure_templates_require_installation_and_retain_the_canonical_arc() {
+        let mut context = Arc::unwrap_or_clone(LevelContext::fixture(0, 63));
+        context.structure_templates = None;
+        assert!(matches!(
+            context.structure_templates(),
+            Err(super::super::LevelError::MissingStructureTemplates)
+        ));
+        let templates =
+            Arc::new(ferraloom_worldgen::structure::template::StructureTemplateManager::default());
+        let context = context.with_structure_templates(templates.clone());
+        assert!(Arc::ptr_eq(
+            context.structure_templates().unwrap(),
+            &templates
+        ));
     }
 }

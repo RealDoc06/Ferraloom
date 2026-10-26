@@ -165,6 +165,51 @@ impl Drop for Bot {
         }
     }
 }
+async fn wait_for_packet(
+    state: &Arc<Mutex<BotState>>,
+    events: &mut broadcast::Receiver<Arc<cb::Packet>>,
+    label: &str,
+    budget: Ticks,
+    mut predicate: impl FnMut(&BotState, &cb::Packet) -> bool,
+) -> Result<Arc<cb::Packet>> {
+    let start = state.lock().unwrap().game_time;
+    let mut baseline = start;
+    let duration = Duration::from_secs(30) + Duration::from_millis(u64::from(budget.0) * 200);
+    tokio::time::timeout(duration, async {
+        loop {
+            let packet = events.recv().await.with_context(|| {
+                format!(
+                    "{label}: bot stream closed or observation queue overrun; {:?}",
+                    state.lock().unwrap().error
+                )
+            })?;
+            let state = state.lock().unwrap();
+            if predicate(&state, &packet) {
+                return Ok(packet);
+            }
+            if let Some(tick) = state.game_time {
+                let initial = *baseline.get_or_insert(tick);
+                ensure!(
+                    tick - initial < i64::from(budget.0),
+                    "{label}: exceeded {} observed game ticks ({} -> {tick})",
+                    budget.0,
+                    initial
+                );
+            }
+            if let Some(error) = &state.error {
+                bail!("{label}: {error}");
+            }
+        }
+    })
+    .await
+    .with_context(|| {
+        format!(
+            "{label}: server progress watchdog expired (budget {} ticks)",
+            budget.0
+        )
+    })?
+}
+
 impl Bot {
     /// The actual synchronized registry order and tags shared by this connection's codecs.
     pub fn registry_context(&self) -> Result<Arc<RegistrySet>> {
@@ -525,44 +570,9 @@ impl Bot {
         &mut self,
         label: &str,
         budget: Ticks,
-        mut predicate: impl FnMut(&BotState, &cb::Packet) -> bool,
+        predicate: impl FnMut(&BotState, &cb::Packet) -> bool,
     ) -> Result<Arc<cb::Packet>> {
-        let start = self.state.lock().unwrap().game_time;
-        let mut baseline = start;
-        let duration = Duration::from_secs(30) + Duration::from_millis(u64::from(budget.0) * 200);
-        tokio::time::timeout(duration, async {
-            loop {
-                let packet = self.events.recv().await.with_context(|| {
-                    format!(
-                        "{label}: bot stream closed or observation queue overrun; {:?}",
-                        self.state.lock().unwrap().error
-                    )
-                })?;
-                let state = self.state.lock().unwrap();
-                if predicate(&state, &packet) {
-                    return Ok(packet);
-                }
-                if let Some(tick) = state.game_time {
-                    let initial = *baseline.get_or_insert(tick);
-                    ensure!(
-                        tick - initial < i64::from(budget.0),
-                        "{label}: exceeded {} observed game ticks ({} -> {tick})",
-                        budget.0,
-                        initial
-                    );
-                }
-                if let Some(error) = &state.error {
-                    bail!("{label}: {error}");
-                }
-            }
-        })
-        .await
-        .with_context(|| {
-            format!(
-                "{label}: server progress watchdog expired (budget {} ticks)",
-                budget.0
-            )
-        })?
+        wait_for_packet(&self.state, &mut self.events, label, budget, predicate).await
     }
     pub async fn wait_ticks(&mut self, ticks: Ticks) -> Result<()> {
         let initialized = self.state.lock().unwrap().game_time.is_some();
@@ -766,6 +776,27 @@ impl Bot {
             sequence,
         }))
         .await
+    }
+    /// Wait for handleUseItemOn's BlockChangedAck, emitted by the listener tick
+    /// after its main-thread use frame. Ping/Pong only fences the network thread.
+    /// A separate subscription keeps menu/content/effect packets available to
+    /// the scenario's ordinary waits and capture callbacks.
+    pub async fn use_item_on_and_await_ack(
+        &mut self,
+        hand: play::InteractionHand,
+        hit_result: play::BlockHitResult,
+    ) -> Result<()> {
+        let mut acknowledgements = self.events.resubscribe();
+        self.use_item_on(hand, hit_result).await?;
+        let sequence = self.sequence_id;
+        wait_for_packet(
+            &self.state,
+            &mut acknowledgements,
+            "use-item-on frame acknowledgement",
+            Ticks::DEFAULT,
+            |_, packet| matches!(packet, cb::Packet::BlockChangedAck(ack) if ack.sequence.0 >= sequence),
+        ).await?;
+        Ok(())
     }
     pub async fn attack(&self, entity_id: i32) -> Result<()> {
         self.send(sb::Packet::Attack(sb::Attack {

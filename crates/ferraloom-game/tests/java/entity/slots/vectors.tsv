@@ -1,0 +1,1314 @@
+ender-nbt	0	{}	{EnderItems:[]}	27	true
+ender-nbt	1	{EnderItems:[]}	{EnderItems:[]}	27	true
+ender-nbt	2	{EnderItems:[{Slot:26b,id:'minecraft:stone',count:3},{Slot:0b,id:'minecraft:diamond',count:2}]}	{EnderItems:[{Slot:0b,count:2,id:"minecraft:diamond"},{Slot:26b,count:3,id:"minecraft:stone"}]}	29	true
+ender-nbt	3	{EnderItems:[{id:'minecraft:stone',count:77}]}	{EnderItems:[{Slot:0b,count:64,id:"minecraft:stone"}]}	28	true
+ender-nbt	4	{EnderItems:[{Slot:1b,id:'minecraft:stone',count:2},{Slot:1b,id:'minecraft:diamond',count:3}]}	{EnderItems:[{Slot:1b,count:3,id:"minecraft:diamond"}]}	29	true
+ender-nbt	5	{EnderItems:[{Slot:27b,id:'minecraft:stone',count:1},{Slot:-1b,id:'minecraft:diamond',count:1}]}	{EnderItems:[]}	27	true
+ender-nbt	6	{EnderItems:[{Slot:'invalid',id:'minecraft:stone',count:1}]}	{EnderItems:[{Slot:0b,count:1,id:"minecraft:stone"}]}	28	true
+ender-nbt	7	{EnderItems:[{Slot:257,id:'minecraft:stone',count:3},{Slot:-256,id:'minecraft:diamond',count:4}]}	{EnderItems:[{Slot:0b,count:4,id:"minecraft:diamond"},{Slot:1b,count:3,id:"minecraft:stone"}]}	29	true
+ender-nbt	8	{EnderItems:[{Slot:26.9d,id:'minecraft:stone',count:4}]}	{EnderItems:[{Slot:26b,count:4,id:"minecraft:stone"}]}	28	true
+ender-nbt	9	{EnderItems:[{Slot:2b,id:'minecraft:missing_item',count:1},{Slot:3b,id:'minecraft:stone',count:4}]}	{EnderItems:[{Slot:3b,count:4,id:"minecraft:stone"}]}	28	true
+slot-read	player	-2147483648	-
+slot-read	player	-1	-
+slot-read	player	0	minecraft:stone:1
+slot-read	player	1	minecraft:stone:2
+slot-read	player	2	minecraft:stone:3
+slot-read	player	3	minecraft:stone:4
+slot-read	player	4	minecraft:stone:40
+slot-read	player	5	minecraft:stone:6
+slot-read	player	6	minecraft:stone:7
+slot-read	player	7	minecraft:stone:8
+slot-read	player	8	minecraft:stone:9
+slot-read	player	9	minecraft:stone:10
+slot-read	player	10	minecraft:stone:11
+slot-read	player	11	minecraft:stone:12
+slot-read	player	12	minecraft:stone:13
+slot-read	player	13	minecraft:stone:14
+slot-read	player	14	minecraft:stone:15
+slot-read	player	15	minecraft:stone:16
+slot-read	player	16	minecraft:stone:17
+slot-read	player	17	minecraft:stone:18
+slot-read	player	18	minecraft:stone:19
+slot-read	player	19	minecraft:stone:20
+slot-read	player	20	minecraft:stone:21
+slot-read	player	21	minecraft:stone:22
+slot-read	player	22	minecraft:stone:23
+slot-read	player	23	minecraft:stone:24
+slot-read	player	24	minecraft:stone:25
+slot-read	player	25	minecraft:stone:26
+slot-read	player	26	minecraft:stone:27
+slot-read	player	27	minecraft:stone:28
+slot-read	player	28	minecraft:stone:29
+slot-read	player	29	minecraft:stone:30
+slot-read	player	30	minecraft:stone:31
+slot-read	player	31	minecraft:stone:32
+slot-read	player	32	minecraft:stone:33
+slot-read	player	33	minecraft:stone:34
+slot-read	player	34	minecraft:stone:35
+slot-read	player	35	minecraft:stone:36
+slot-read	player	36	-
+slot-read	player	37	-
+slot-read	player	38	-
+slot-read	player	39	-
+slot-read	player	40	-
+slot-read	player	41	-
+slot-read	player	42	-
+slot-read	player	43	-
+slot-read	player	97	-
+slot-read	player	98	minecraft:stone:40
+slot-read	player	99	minecraft:stone:41
+slot-read	player	100	minecraft:stone:42
+slot-read	player	101	minecraft:stone:43
+slot-read	player	102	minecraft:stone:44
+slot-read	player	103	minecraft:stone:45
+slot-read	player	104	-
+slot-read	player	105	minecraft:stone:46
+slot-read	player	106	minecraft:stone:47
+slot-read	player	107	-
+slot-read	player	199	-
+slot-read	player	200	minecraft:stone:1
+slot-read	player	201	minecraft:stone:2
+slot-read	player	202	minecraft:stone:3
+slot-read	player	203	minecraft:stone:4
+slot-read	player	204	minecraft:stone:5
+slot-read	player	205	minecraft:stone:6
+slot-read	player	206	minecraft:stone:7
+slot-read	player	207	minecraft:stone:8
+slot-read	player	208	minecraft:stone:9
+slot-read	player	209	minecraft:stone:10
+slot-read	player	210	minecraft:stone:11
+slot-read	player	211	minecraft:stone:12
+slot-read	player	212	minecraft:stone:13
+slot-read	player	213	minecraft:stone:14
+slot-read	player	214	minecraft:stone:15
+slot-read	player	215	minecraft:stone:16
+slot-read	player	216	minecraft:stone:17
+slot-read	player	217	minecraft:stone:18
+slot-read	player	218	minecraft:stone:19
+slot-read	player	219	minecraft:stone:20
+slot-read	player	220	minecraft:stone:21
+slot-read	player	221	minecraft:stone:22
+slot-read	player	222	minecraft:stone:23
+slot-read	player	223	minecraft:stone:24
+slot-read	player	224	minecraft:stone:25
+slot-read	player	225	minecraft:stone:26
+slot-read	player	226	minecraft:stone:27
+slot-read	player	227	-
+slot-read	player	498	-
+slot-read	player	499	minecraft:stone:55
+slot-read	player	500	minecraft:stone:56
+slot-read	player	501	minecraft:stone:57
+slot-read	player	502	minecraft:stone:58
+slot-read	player	503	minecraft:stone:59
+slot-read	player	504	-
+slot-read	player	2147483647	-
+slot-read	cow	-2147483648	-
+slot-read	cow	-1	-
+slot-read	cow	0	-
+slot-read	cow	1	-
+slot-read	cow	2	-
+slot-read	cow	3	-
+slot-read	cow	4	-
+slot-read	cow	5	-
+slot-read	cow	6	-
+slot-read	cow	7	-
+slot-read	cow	8	-
+slot-read	cow	9	-
+slot-read	cow	10	-
+slot-read	cow	11	-
+slot-read	cow	12	-
+slot-read	cow	13	-
+slot-read	cow	14	-
+slot-read	cow	15	-
+slot-read	cow	16	-
+slot-read	cow	17	-
+slot-read	cow	18	-
+slot-read	cow	19	-
+slot-read	cow	20	-
+slot-read	cow	21	-
+slot-read	cow	22	-
+slot-read	cow	23	-
+slot-read	cow	24	-
+slot-read	cow	25	-
+slot-read	cow	26	-
+slot-read	cow	27	-
+slot-read	cow	28	-
+slot-read	cow	29	-
+slot-read	cow	30	-
+slot-read	cow	31	-
+slot-read	cow	32	-
+slot-read	cow	33	-
+slot-read	cow	34	-
+slot-read	cow	35	-
+slot-read	cow	36	-
+slot-read	cow	37	-
+slot-read	cow	38	-
+slot-read	cow	39	-
+slot-read	cow	40	-
+slot-read	cow	41	-
+slot-read	cow	42	-
+slot-read	cow	43	-
+slot-read	cow	97	-
+slot-read	cow	98	minecraft:stone:40
+slot-read	cow	99	minecraft:stone:41
+slot-read	cow	100	minecraft:stone:42
+slot-read	cow	101	minecraft:stone:43
+slot-read	cow	102	minecraft:stone:44
+slot-read	cow	103	minecraft:stone:45
+slot-read	cow	104	-
+slot-read	cow	105	minecraft:stone:46
+slot-read	cow	106	minecraft:stone:47
+slot-read	cow	107	-
+slot-read	cow	199	-
+slot-read	cow	200	-
+slot-read	cow	201	-
+slot-read	cow	202	-
+slot-read	cow	203	-
+slot-read	cow	204	-
+slot-read	cow	205	-
+slot-read	cow	206	-
+slot-read	cow	207	-
+slot-read	cow	208	-
+slot-read	cow	209	-
+slot-read	cow	210	-
+slot-read	cow	211	-
+slot-read	cow	212	-
+slot-read	cow	213	-
+slot-read	cow	214	-
+slot-read	cow	215	-
+slot-read	cow	216	-
+slot-read	cow	217	-
+slot-read	cow	218	-
+slot-read	cow	219	-
+slot-read	cow	220	-
+slot-read	cow	221	-
+slot-read	cow	222	-
+slot-read	cow	223	-
+slot-read	cow	224	-
+slot-read	cow	225	-
+slot-read	cow	226	-
+slot-read	cow	227	-
+slot-read	cow	498	-
+slot-read	cow	499	-
+slot-read	cow	500	-
+slot-read	cow	501	-
+slot-read	cow	502	-
+slot-read	cow	503	-
+slot-read	cow	504	-
+slot-read	cow	2147483647	-
+slot-read	item	-2147483648	-
+slot-read	item	-1	-
+slot-read	item	0	minecraft:stone:9
+slot-read	item	1	-
+slot-read	item	2	-
+slot-read	item	3	-
+slot-read	item	4	-
+slot-read	item	5	-
+slot-read	item	6	-
+slot-read	item	7	-
+slot-read	item	8	-
+slot-read	item	9	-
+slot-read	item	10	-
+slot-read	item	11	-
+slot-read	item	12	-
+slot-read	item	13	-
+slot-read	item	14	-
+slot-read	item	15	-
+slot-read	item	16	-
+slot-read	item	17	-
+slot-read	item	18	-
+slot-read	item	19	-
+slot-read	item	20	-
+slot-read	item	21	-
+slot-read	item	22	-
+slot-read	item	23	-
+slot-read	item	24	-
+slot-read	item	25	-
+slot-read	item	26	-
+slot-read	item	27	-
+slot-read	item	28	-
+slot-read	item	29	-
+slot-read	item	30	-
+slot-read	item	31	-
+slot-read	item	32	-
+slot-read	item	33	-
+slot-read	item	34	-
+slot-read	item	35	-
+slot-read	item	36	-
+slot-read	item	37	-
+slot-read	item	38	-
+slot-read	item	39	-
+slot-read	item	40	-
+slot-read	item	41	-
+slot-read	item	42	-
+slot-read	item	43	-
+slot-read	item	97	-
+slot-read	item	98	-
+slot-read	item	99	-
+slot-read	item	100	-
+slot-read	item	101	-
+slot-read	item	102	-
+slot-read	item	103	-
+slot-read	item	104	-
+slot-read	item	105	-
+slot-read	item	106	-
+slot-read	item	107	-
+slot-read	item	199	-
+slot-read	item	200	-
+slot-read	item	201	-
+slot-read	item	202	-
+slot-read	item	203	-
+slot-read	item	204	-
+slot-read	item	205	-
+slot-read	item	206	-
+slot-read	item	207	-
+slot-read	item	208	-
+slot-read	item	209	-
+slot-read	item	210	-
+slot-read	item	211	-
+slot-read	item	212	-
+slot-read	item	213	-
+slot-read	item	214	-
+slot-read	item	215	-
+slot-read	item	216	-
+slot-read	item	217	-
+slot-read	item	218	-
+slot-read	item	219	-
+slot-read	item	220	-
+slot-read	item	221	-
+slot-read	item	222	-
+slot-read	item	223	-
+slot-read	item	224	-
+slot-read	item	225	-
+slot-read	item	226	-
+slot-read	item	227	-
+slot-read	item	498	-
+slot-read	item	499	-
+slot-read	item	500	-
+slot-read	item	501	-
+slot-read	item	502	-
+slot-read	item	503	-
+slot-read	item	504	-
+slot-read	item	2147483647	-
+slot-read	falling	-2147483648	-
+slot-read	falling	-1	-
+slot-read	falling	0	-
+slot-read	falling	1	-
+slot-read	falling	2	-
+slot-read	falling	3	-
+slot-read	falling	4	-
+slot-read	falling	5	-
+slot-read	falling	6	-
+slot-read	falling	7	-
+slot-read	falling	8	-
+slot-read	falling	9	-
+slot-read	falling	10	-
+slot-read	falling	11	-
+slot-read	falling	12	-
+slot-read	falling	13	-
+slot-read	falling	14	-
+slot-read	falling	15	-
+slot-read	falling	16	-
+slot-read	falling	17	-
+slot-read	falling	18	-
+slot-read	falling	19	-
+slot-read	falling	20	-
+slot-read	falling	21	-
+slot-read	falling	22	-
+slot-read	falling	23	-
+slot-read	falling	24	-
+slot-read	falling	25	-
+slot-read	falling	26	-
+slot-read	falling	27	-
+slot-read	falling	28	-
+slot-read	falling	29	-
+slot-read	falling	30	-
+slot-read	falling	31	-
+slot-read	falling	32	-
+slot-read	falling	33	-
+slot-read	falling	34	-
+slot-read	falling	35	-
+slot-read	falling	36	-
+slot-read	falling	37	-
+slot-read	falling	38	-
+slot-read	falling	39	-
+slot-read	falling	40	-
+slot-read	falling	41	-
+slot-read	falling	42	-
+slot-read	falling	43	-
+slot-read	falling	97	-
+slot-read	falling	98	-
+slot-read	falling	99	-
+slot-read	falling	100	-
+slot-read	falling	101	-
+slot-read	falling	102	-
+slot-read	falling	103	-
+slot-read	falling	104	-
+slot-read	falling	105	-
+slot-read	falling	106	-
+slot-read	falling	107	-
+slot-read	falling	199	-
+slot-read	falling	200	-
+slot-read	falling	201	-
+slot-read	falling	202	-
+slot-read	falling	203	-
+slot-read	falling	204	-
+slot-read	falling	205	-
+slot-read	falling	206	-
+slot-read	falling	207	-
+slot-read	falling	208	-
+slot-read	falling	209	-
+slot-read	falling	210	-
+slot-read	falling	211	-
+slot-read	falling	212	-
+slot-read	falling	213	-
+slot-read	falling	214	-
+slot-read	falling	215	-
+slot-read	falling	216	-
+slot-read	falling	217	-
+slot-read	falling	218	-
+slot-read	falling	219	-
+slot-read	falling	220	-
+slot-read	falling	221	-
+slot-read	falling	222	-
+slot-read	falling	223	-
+slot-read	falling	224	-
+slot-read	falling	225	-
+slot-read	falling	226	-
+slot-read	falling	227	-
+slot-read	falling	498	-
+slot-read	falling	499	-
+slot-read	falling	500	-
+slot-read	falling	501	-
+slot-read	falling	502	-
+slot-read	falling	503	-
+slot-read	falling	504	-
+slot-read	falling	2147483647	-
+slot-read	tnt	-2147483648	-
+slot-read	tnt	-1	-
+slot-read	tnt	0	-
+slot-read	tnt	1	-
+slot-read	tnt	2	-
+slot-read	tnt	3	-
+slot-read	tnt	4	-
+slot-read	tnt	5	-
+slot-read	tnt	6	-
+slot-read	tnt	7	-
+slot-read	tnt	8	-
+slot-read	tnt	9	-
+slot-read	tnt	10	-
+slot-read	tnt	11	-
+slot-read	tnt	12	-
+slot-read	tnt	13	-
+slot-read	tnt	14	-
+slot-read	tnt	15	-
+slot-read	tnt	16	-
+slot-read	tnt	17	-
+slot-read	tnt	18	-
+slot-read	tnt	19	-
+slot-read	tnt	20	-
+slot-read	tnt	21	-
+slot-read	tnt	22	-
+slot-read	tnt	23	-
+slot-read	tnt	24	-
+slot-read	tnt	25	-
+slot-read	tnt	26	-
+slot-read	tnt	27	-
+slot-read	tnt	28	-
+slot-read	tnt	29	-
+slot-read	tnt	30	-
+slot-read	tnt	31	-
+slot-read	tnt	32	-
+slot-read	tnt	33	-
+slot-read	tnt	34	-
+slot-read	tnt	35	-
+slot-read	tnt	36	-
+slot-read	tnt	37	-
+slot-read	tnt	38	-
+slot-read	tnt	39	-
+slot-read	tnt	40	-
+slot-read	tnt	41	-
+slot-read	tnt	42	-
+slot-read	tnt	43	-
+slot-read	tnt	97	-
+slot-read	tnt	98	-
+slot-read	tnt	99	-
+slot-read	tnt	100	-
+slot-read	tnt	101	-
+slot-read	tnt	102	-
+slot-read	tnt	103	-
+slot-read	tnt	104	-
+slot-read	tnt	105	-
+slot-read	tnt	106	-
+slot-read	tnt	107	-
+slot-read	tnt	199	-
+slot-read	tnt	200	-
+slot-read	tnt	201	-
+slot-read	tnt	202	-
+slot-read	tnt	203	-
+slot-read	tnt	204	-
+slot-read	tnt	205	-
+slot-read	tnt	206	-
+slot-read	tnt	207	-
+slot-read	tnt	208	-
+slot-read	tnt	209	-
+slot-read	tnt	210	-
+slot-read	tnt	211	-
+slot-read	tnt	212	-
+slot-read	tnt	213	-
+slot-read	tnt	214	-
+slot-read	tnt	215	-
+slot-read	tnt	216	-
+slot-read	tnt	217	-
+slot-read	tnt	218	-
+slot-read	tnt	219	-
+slot-read	tnt	220	-
+slot-read	tnt	221	-
+slot-read	tnt	222	-
+slot-read	tnt	223	-
+slot-read	tnt	224	-
+slot-read	tnt	225	-
+slot-read	tnt	226	-
+slot-read	tnt	227	-
+slot-read	tnt	498	-
+slot-read	tnt	499	-
+slot-read	tnt	500	-
+slot-read	tnt	501	-
+slot-read	tnt	502	-
+slot-read	tnt	503	-
+slot-read	tnt	504	-
+slot-read	tnt	2147483647	-
+slot-read	orb	-2147483648	-
+slot-read	orb	-1	-
+slot-read	orb	0	-
+slot-read	orb	1	-
+slot-read	orb	2	-
+slot-read	orb	3	-
+slot-read	orb	4	-
+slot-read	orb	5	-
+slot-read	orb	6	-
+slot-read	orb	7	-
+slot-read	orb	8	-
+slot-read	orb	9	-
+slot-read	orb	10	-
+slot-read	orb	11	-
+slot-read	orb	12	-
+slot-read	orb	13	-
+slot-read	orb	14	-
+slot-read	orb	15	-
+slot-read	orb	16	-
+slot-read	orb	17	-
+slot-read	orb	18	-
+slot-read	orb	19	-
+slot-read	orb	20	-
+slot-read	orb	21	-
+slot-read	orb	22	-
+slot-read	orb	23	-
+slot-read	orb	24	-
+slot-read	orb	25	-
+slot-read	orb	26	-
+slot-read	orb	27	-
+slot-read	orb	28	-
+slot-read	orb	29	-
+slot-read	orb	30	-
+slot-read	orb	31	-
+slot-read	orb	32	-
+slot-read	orb	33	-
+slot-read	orb	34	-
+slot-read	orb	35	-
+slot-read	orb	36	-
+slot-read	orb	37	-
+slot-read	orb	38	-
+slot-read	orb	39	-
+slot-read	orb	40	-
+slot-read	orb	41	-
+slot-read	orb	42	-
+slot-read	orb	43	-
+slot-read	orb	97	-
+slot-read	orb	98	-
+slot-read	orb	99	-
+slot-read	orb	100	-
+slot-read	orb	101	-
+slot-read	orb	102	-
+slot-read	orb	103	-
+slot-read	orb	104	-
+slot-read	orb	105	-
+slot-read	orb	106	-
+slot-read	orb	107	-
+slot-read	orb	199	-
+slot-read	orb	200	-
+slot-read	orb	201	-
+slot-read	orb	202	-
+slot-read	orb	203	-
+slot-read	orb	204	-
+slot-read	orb	205	-
+slot-read	orb	206	-
+slot-read	orb	207	-
+slot-read	orb	208	-
+slot-read	orb	209	-
+slot-read	orb	210	-
+slot-read	orb	211	-
+slot-read	orb	212	-
+slot-read	orb	213	-
+slot-read	orb	214	-
+slot-read	orb	215	-
+slot-read	orb	216	-
+slot-read	orb	217	-
+slot-read	orb	218	-
+slot-read	orb	219	-
+slot-read	orb	220	-
+slot-read	orb	221	-
+slot-read	orb	222	-
+slot-read	orb	223	-
+slot-read	orb	224	-
+slot-read	orb	225	-
+slot-read	orb	226	-
+slot-read	orb	227	-
+slot-read	orb	498	-
+slot-read	orb	499	-
+slot-read	orb	500	-
+slot-read	orb	501	-
+slot-read	orb	502	-
+slot-read	orb	503	-
+slot-read	orb	504	-
+slot-read	orb	2147483647	-
+slot-set	player	-1	minecraft:air	-	false	-
+slot-set	player	-1	minecraft:stone	-	false	-
+slot-set	player	-1	minecraft:iron_helmet	-	false	-
+slot-set	player	-1	minecraft:iron_chestplate	-	false	-
+slot-set	player	-1	minecraft:iron_leggings	-	false	-
+slot-set	player	-1	minecraft:iron_boots	-	false	-
+slot-set	player	-1	minecraft:wolf_armor	-	false	-
+slot-set	player	-1	minecraft:saddle	-	false	-
+slot-set	player	0	minecraft:air	minecraft:stone:1	true	minecraft:air:0
+slot-set	player	0	minecraft:stone	minecraft:stone:1	true	minecraft:stone:77
+slot-set	player	0	minecraft:iron_helmet	minecraft:stone:1	true	minecraft:iron_helmet:1
+slot-set	player	0	minecraft:iron_chestplate	minecraft:stone:1	true	minecraft:iron_chestplate:1
+slot-set	player	0	minecraft:iron_leggings	minecraft:stone:1	true	minecraft:iron_leggings:1
+slot-set	player	0	minecraft:iron_boots	minecraft:stone:1	true	minecraft:iron_boots:1
+slot-set	player	0	minecraft:wolf_armor	minecraft:stone:1	true	minecraft:wolf_armor:1
+slot-set	player	0	minecraft:saddle	minecraft:stone:1	true	minecraft:saddle:1
+slot-set	player	8	minecraft:air	minecraft:stone:9	true	minecraft:air:0
+slot-set	player	8	minecraft:stone	minecraft:stone:9	true	minecraft:stone:77
+slot-set	player	8	minecraft:iron_helmet	minecraft:stone:9	true	minecraft:iron_helmet:1
+slot-set	player	8	minecraft:iron_chestplate	minecraft:stone:9	true	minecraft:iron_chestplate:1
+slot-set	player	8	minecraft:iron_leggings	minecraft:stone:9	true	minecraft:iron_leggings:1
+slot-set	player	8	minecraft:iron_boots	minecraft:stone:9	true	minecraft:iron_boots:1
+slot-set	player	8	minecraft:wolf_armor	minecraft:stone:9	true	minecraft:wolf_armor:1
+slot-set	player	8	minecraft:saddle	minecraft:stone:9	true	minecraft:saddle:1
+slot-set	player	9	minecraft:air	minecraft:stone:10	true	minecraft:air:0
+slot-set	player	9	minecraft:stone	minecraft:stone:10	true	minecraft:stone:77
+slot-set	player	9	minecraft:iron_helmet	minecraft:stone:10	true	minecraft:iron_helmet:1
+slot-set	player	9	minecraft:iron_chestplate	minecraft:stone:10	true	minecraft:iron_chestplate:1
+slot-set	player	9	minecraft:iron_leggings	minecraft:stone:10	true	minecraft:iron_leggings:1
+slot-set	player	9	minecraft:iron_boots	minecraft:stone:10	true	minecraft:iron_boots:1
+slot-set	player	9	minecraft:wolf_armor	minecraft:stone:10	true	minecraft:wolf_armor:1
+slot-set	player	9	minecraft:saddle	minecraft:stone:10	true	minecraft:saddle:1
+slot-set	player	35	minecraft:air	minecraft:stone:36	true	minecraft:air:0
+slot-set	player	35	minecraft:stone	minecraft:stone:36	true	minecraft:stone:77
+slot-set	player	35	minecraft:iron_helmet	minecraft:stone:36	true	minecraft:iron_helmet:1
+slot-set	player	35	minecraft:iron_chestplate	minecraft:stone:36	true	minecraft:iron_chestplate:1
+slot-set	player	35	minecraft:iron_leggings	minecraft:stone:36	true	minecraft:iron_leggings:1
+slot-set	player	35	minecraft:iron_boots	minecraft:stone:36	true	minecraft:iron_boots:1
+slot-set	player	35	minecraft:wolf_armor	minecraft:stone:36	true	minecraft:wolf_armor:1
+slot-set	player	35	minecraft:saddle	minecraft:stone:36	true	minecraft:saddle:1
+slot-set	player	36	minecraft:air	-	false	-
+slot-set	player	36	minecraft:stone	-	false	-
+slot-set	player	36	minecraft:iron_helmet	-	false	-
+slot-set	player	36	minecraft:iron_chestplate	-	false	-
+slot-set	player	36	minecraft:iron_leggings	-	false	-
+slot-set	player	36	minecraft:iron_boots	-	false	-
+slot-set	player	36	minecraft:wolf_armor	-	false	-
+slot-set	player	36	minecraft:saddle	-	false	-
+slot-set	player	98	minecraft:air	minecraft:stone:40	true	minecraft:air:0
+slot-set	player	98	minecraft:stone	minecraft:stone:40	true	minecraft:stone:77
+slot-set	player	98	minecraft:iron_helmet	minecraft:stone:40	true	minecraft:iron_helmet:1
+slot-set	player	98	minecraft:iron_chestplate	minecraft:stone:40	true	minecraft:iron_chestplate:1
+slot-set	player	98	minecraft:iron_leggings	minecraft:stone:40	true	minecraft:iron_leggings:1
+slot-set	player	98	minecraft:iron_boots	minecraft:stone:40	true	minecraft:iron_boots:1
+slot-set	player	98	minecraft:wolf_armor	minecraft:stone:40	true	minecraft:wolf_armor:1
+slot-set	player	98	minecraft:saddle	minecraft:stone:40	true	minecraft:saddle:1
+slot-set	player	99	minecraft:air	minecraft:stone:41	true	minecraft:air:0
+slot-set	player	99	minecraft:stone	minecraft:stone:41	true	minecraft:stone:77
+slot-set	player	99	minecraft:iron_helmet	minecraft:stone:41	true	minecraft:iron_helmet:1
+slot-set	player	99	minecraft:iron_chestplate	minecraft:stone:41	true	minecraft:iron_chestplate:1
+slot-set	player	99	minecraft:iron_leggings	minecraft:stone:41	true	minecraft:iron_leggings:1
+slot-set	player	99	minecraft:iron_boots	minecraft:stone:41	true	minecraft:iron_boots:1
+slot-set	player	99	minecraft:wolf_armor	minecraft:stone:41	true	minecraft:wolf_armor:1
+slot-set	player	99	minecraft:saddle	minecraft:stone:41	true	minecraft:saddle:1
+slot-set	player	100	minecraft:air	minecraft:stone:42	true	minecraft:air:0
+slot-set	player	100	minecraft:stone	minecraft:stone:42	false	minecraft:stone:42
+slot-set	player	100	minecraft:iron_helmet	minecraft:stone:42	false	minecraft:stone:42
+slot-set	player	100	minecraft:iron_chestplate	minecraft:stone:42	false	minecraft:stone:42
+slot-set	player	100	minecraft:iron_leggings	minecraft:stone:42	false	minecraft:stone:42
+slot-set	player	100	minecraft:iron_boots	minecraft:stone:42	true	minecraft:iron_boots:1
+slot-set	player	100	minecraft:wolf_armor	minecraft:stone:42	false	minecraft:stone:42
+slot-set	player	100	minecraft:saddle	minecraft:stone:42	false	minecraft:stone:42
+slot-set	player	101	minecraft:air	minecraft:stone:43	true	minecraft:air:0
+slot-set	player	101	minecraft:stone	minecraft:stone:43	false	minecraft:stone:43
+slot-set	player	101	minecraft:iron_helmet	minecraft:stone:43	false	minecraft:stone:43
+slot-set	player	101	minecraft:iron_chestplate	minecraft:stone:43	false	minecraft:stone:43
+slot-set	player	101	minecraft:iron_leggings	minecraft:stone:43	true	minecraft:iron_leggings:1
+slot-set	player	101	minecraft:iron_boots	minecraft:stone:43	false	minecraft:stone:43
+slot-set	player	101	minecraft:wolf_armor	minecraft:stone:43	false	minecraft:stone:43
+slot-set	player	101	minecraft:saddle	minecraft:stone:43	false	minecraft:stone:43
+slot-set	player	102	minecraft:air	minecraft:stone:44	true	minecraft:air:0
+slot-set	player	102	minecraft:stone	minecraft:stone:44	false	minecraft:stone:44
+slot-set	player	102	minecraft:iron_helmet	minecraft:stone:44	false	minecraft:stone:44
+slot-set	player	102	minecraft:iron_chestplate	minecraft:stone:44	true	minecraft:iron_chestplate:1
+slot-set	player	102	minecraft:iron_leggings	minecraft:stone:44	false	minecraft:stone:44
+slot-set	player	102	minecraft:iron_boots	minecraft:stone:44	false	minecraft:stone:44
+slot-set	player	102	minecraft:wolf_armor	minecraft:stone:44	false	minecraft:stone:44
+slot-set	player	102	minecraft:saddle	minecraft:stone:44	false	minecraft:stone:44
+slot-set	player	103	minecraft:air	minecraft:stone:45	true	minecraft:air:0
+slot-set	player	103	minecraft:stone	minecraft:stone:45	true	minecraft:stone:77
+slot-set	player	103	minecraft:iron_helmet	minecraft:stone:45	true	minecraft:iron_helmet:1
+slot-set	player	103	minecraft:iron_chestplate	minecraft:stone:45	true	minecraft:iron_chestplate:1
+slot-set	player	103	minecraft:iron_leggings	minecraft:stone:45	true	minecraft:iron_leggings:1
+slot-set	player	103	minecraft:iron_boots	minecraft:stone:45	true	minecraft:iron_boots:1
+slot-set	player	103	minecraft:wolf_armor	minecraft:stone:45	true	minecraft:wolf_armor:1
+slot-set	player	103	minecraft:saddle	minecraft:stone:45	true	minecraft:saddle:1
+slot-set	player	104	minecraft:air	-	false	-
+slot-set	player	104	minecraft:stone	-	false	-
+slot-set	player	104	minecraft:iron_helmet	-	false	-
+slot-set	player	104	minecraft:iron_chestplate	-	false	-
+slot-set	player	104	minecraft:iron_leggings	-	false	-
+slot-set	player	104	minecraft:iron_boots	-	false	-
+slot-set	player	104	minecraft:wolf_armor	-	false	-
+slot-set	player	104	minecraft:saddle	-	false	-
+slot-set	player	105	minecraft:air	minecraft:stone:46	true	minecraft:air:0
+slot-set	player	105	minecraft:stone	minecraft:stone:46	false	minecraft:stone:46
+slot-set	player	105	minecraft:iron_helmet	minecraft:stone:46	false	minecraft:stone:46
+slot-set	player	105	minecraft:iron_chestplate	minecraft:stone:46	false	minecraft:stone:46
+slot-set	player	105	minecraft:iron_leggings	minecraft:stone:46	false	minecraft:stone:46
+slot-set	player	105	minecraft:iron_boots	minecraft:stone:46	false	minecraft:stone:46
+slot-set	player	105	minecraft:wolf_armor	minecraft:stone:46	true	minecraft:wolf_armor:1
+slot-set	player	105	minecraft:saddle	minecraft:stone:46	false	minecraft:stone:46
+slot-set	player	106	minecraft:air	minecraft:stone:47	true	minecraft:air:0
+slot-set	player	106	minecraft:stone	minecraft:stone:47	false	minecraft:stone:47
+slot-set	player	106	minecraft:iron_helmet	minecraft:stone:47	false	minecraft:stone:47
+slot-set	player	106	minecraft:iron_chestplate	minecraft:stone:47	false	minecraft:stone:47
+slot-set	player	106	minecraft:iron_leggings	minecraft:stone:47	false	minecraft:stone:47
+slot-set	player	106	minecraft:iron_boots	minecraft:stone:47	false	minecraft:stone:47
+slot-set	player	106	minecraft:wolf_armor	minecraft:stone:47	false	minecraft:stone:47
+slot-set	player	106	minecraft:saddle	minecraft:stone:47	true	minecraft:saddle:1
+slot-set	player	200	minecraft:air	minecraft:stone:1	true	minecraft:air:0
+slot-set	player	200	minecraft:stone	minecraft:stone:1	true	minecraft:stone:64
+slot-set	player	200	minecraft:iron_helmet	minecraft:stone:1	true	minecraft:iron_helmet:1
+slot-set	player	200	minecraft:iron_chestplate	minecraft:stone:1	true	minecraft:iron_chestplate:1
+slot-set	player	200	minecraft:iron_leggings	minecraft:stone:1	true	minecraft:iron_leggings:1
+slot-set	player	200	minecraft:iron_boots	minecraft:stone:1	true	minecraft:iron_boots:1
+slot-set	player	200	minecraft:wolf_armor	minecraft:stone:1	true	minecraft:wolf_armor:1
+slot-set	player	200	minecraft:saddle	minecraft:stone:1	true	minecraft:saddle:1
+slot-set	player	226	minecraft:air	minecraft:stone:27	true	minecraft:air:0
+slot-set	player	226	minecraft:stone	minecraft:stone:27	true	minecraft:stone:64
+slot-set	player	226	minecraft:iron_helmet	minecraft:stone:27	true	minecraft:iron_helmet:1
+slot-set	player	226	minecraft:iron_chestplate	minecraft:stone:27	true	minecraft:iron_chestplate:1
+slot-set	player	226	minecraft:iron_leggings	minecraft:stone:27	true	minecraft:iron_leggings:1
+slot-set	player	226	minecraft:iron_boots	minecraft:stone:27	true	minecraft:iron_boots:1
+slot-set	player	226	minecraft:wolf_armor	minecraft:stone:27	true	minecraft:wolf_armor:1
+slot-set	player	226	minecraft:saddle	minecraft:stone:27	true	minecraft:saddle:1
+slot-set	player	227	minecraft:air	-	false	-
+slot-set	player	227	minecraft:stone	-	false	-
+slot-set	player	227	minecraft:iron_helmet	-	false	-
+slot-set	player	227	minecraft:iron_chestplate	-	false	-
+slot-set	player	227	minecraft:iron_leggings	-	false	-
+slot-set	player	227	minecraft:iron_boots	-	false	-
+slot-set	player	227	minecraft:wolf_armor	-	false	-
+slot-set	player	227	minecraft:saddle	-	false	-
+slot-set	player	499	minecraft:air	minecraft:stone:55	true	minecraft:air:0
+slot-set	player	499	minecraft:stone	minecraft:stone:55	true	minecraft:stone:77
+slot-set	player	499	minecraft:iron_helmet	minecraft:stone:55	true	minecraft:iron_helmet:1
+slot-set	player	499	minecraft:iron_chestplate	minecraft:stone:55	true	minecraft:iron_chestplate:1
+slot-set	player	499	minecraft:iron_leggings	minecraft:stone:55	true	minecraft:iron_leggings:1
+slot-set	player	499	minecraft:iron_boots	minecraft:stone:55	true	minecraft:iron_boots:1
+slot-set	player	499	minecraft:wolf_armor	minecraft:stone:55	true	minecraft:wolf_armor:1
+slot-set	player	499	minecraft:saddle	minecraft:stone:55	true	minecraft:saddle:1
+slot-set	player	500	minecraft:air	minecraft:stone:56	true	minecraft:air:0
+slot-set	player	500	minecraft:stone	minecraft:stone:56	true	minecraft:stone:77
+slot-set	player	500	minecraft:iron_helmet	minecraft:stone:56	true	minecraft:iron_helmet:1
+slot-set	player	500	minecraft:iron_chestplate	minecraft:stone:56	true	minecraft:iron_chestplate:1
+slot-set	player	500	minecraft:iron_leggings	minecraft:stone:56	true	minecraft:iron_leggings:1
+slot-set	player	500	minecraft:iron_boots	minecraft:stone:56	true	minecraft:iron_boots:1
+slot-set	player	500	minecraft:wolf_armor	minecraft:stone:56	true	minecraft:wolf_armor:1
+slot-set	player	500	minecraft:saddle	minecraft:stone:56	true	minecraft:saddle:1
+slot-set	player	501	minecraft:air	minecraft:stone:57	true	minecraft:air:0
+slot-set	player	501	minecraft:stone	minecraft:stone:57	true	minecraft:stone:77
+slot-set	player	501	minecraft:iron_helmet	minecraft:stone:57	true	minecraft:iron_helmet:1
+slot-set	player	501	minecraft:iron_chestplate	minecraft:stone:57	true	minecraft:iron_chestplate:1
+slot-set	player	501	minecraft:iron_leggings	minecraft:stone:57	true	minecraft:iron_leggings:1
+slot-set	player	501	minecraft:iron_boots	minecraft:stone:57	true	minecraft:iron_boots:1
+slot-set	player	501	minecraft:wolf_armor	minecraft:stone:57	true	minecraft:wolf_armor:1
+slot-set	player	501	minecraft:saddle	minecraft:stone:57	true	minecraft:saddle:1
+slot-set	player	502	minecraft:air	minecraft:stone:58	true	minecraft:air:0
+slot-set	player	502	minecraft:stone	minecraft:stone:58	true	minecraft:stone:77
+slot-set	player	502	minecraft:iron_helmet	minecraft:stone:58	true	minecraft:iron_helmet:1
+slot-set	player	502	minecraft:iron_chestplate	minecraft:stone:58	true	minecraft:iron_chestplate:1
+slot-set	player	502	minecraft:iron_leggings	minecraft:stone:58	true	minecraft:iron_leggings:1
+slot-set	player	502	minecraft:iron_boots	minecraft:stone:58	true	minecraft:iron_boots:1
+slot-set	player	502	minecraft:wolf_armor	minecraft:stone:58	true	minecraft:wolf_armor:1
+slot-set	player	502	minecraft:saddle	minecraft:stone:58	true	minecraft:saddle:1
+slot-set	player	503	minecraft:air	minecraft:stone:59	true	minecraft:air:0
+slot-set	player	503	minecraft:stone	minecraft:stone:59	true	minecraft:stone:77
+slot-set	player	503	minecraft:iron_helmet	minecraft:stone:59	true	minecraft:iron_helmet:1
+slot-set	player	503	minecraft:iron_chestplate	minecraft:stone:59	true	minecraft:iron_chestplate:1
+slot-set	player	503	minecraft:iron_leggings	minecraft:stone:59	true	minecraft:iron_leggings:1
+slot-set	player	503	minecraft:iron_boots	minecraft:stone:59	true	minecraft:iron_boots:1
+slot-set	player	503	minecraft:wolf_armor	minecraft:stone:59	true	minecraft:wolf_armor:1
+slot-set	player	503	minecraft:saddle	minecraft:stone:59	true	minecraft:saddle:1
+slot-set	player	504	minecraft:air	-	false	-
+slot-set	player	504	minecraft:stone	-	false	-
+slot-set	player	504	minecraft:iron_helmet	-	false	-
+slot-set	player	504	minecraft:iron_chestplate	-	false	-
+slot-set	player	504	minecraft:iron_leggings	-	false	-
+slot-set	player	504	minecraft:iron_boots	-	false	-
+slot-set	player	504	minecraft:wolf_armor	-	false	-
+slot-set	player	504	minecraft:saddle	-	false	-
+slot-set	cow	-1	minecraft:air	-	false	-
+slot-set	cow	-1	minecraft:stone	-	false	-
+slot-set	cow	-1	minecraft:iron_helmet	-	false	-
+slot-set	cow	-1	minecraft:iron_chestplate	-	false	-
+slot-set	cow	-1	minecraft:iron_leggings	-	false	-
+slot-set	cow	-1	minecraft:iron_boots	-	false	-
+slot-set	cow	-1	minecraft:wolf_armor	-	false	-
+slot-set	cow	-1	minecraft:saddle	-	false	-
+slot-set	cow	0	minecraft:air	-	false	-
+slot-set	cow	0	minecraft:stone	-	false	-
+slot-set	cow	0	minecraft:iron_helmet	-	false	-
+slot-set	cow	0	minecraft:iron_chestplate	-	false	-
+slot-set	cow	0	minecraft:iron_leggings	-	false	-
+slot-set	cow	0	minecraft:iron_boots	-	false	-
+slot-set	cow	0	minecraft:wolf_armor	-	false	-
+slot-set	cow	0	minecraft:saddle	-	false	-
+slot-set	cow	8	minecraft:air	-	false	-
+slot-set	cow	8	minecraft:stone	-	false	-
+slot-set	cow	8	minecraft:iron_helmet	-	false	-
+slot-set	cow	8	minecraft:iron_chestplate	-	false	-
+slot-set	cow	8	minecraft:iron_leggings	-	false	-
+slot-set	cow	8	minecraft:iron_boots	-	false	-
+slot-set	cow	8	minecraft:wolf_armor	-	false	-
+slot-set	cow	8	minecraft:saddle	-	false	-
+slot-set	cow	9	minecraft:air	-	false	-
+slot-set	cow	9	minecraft:stone	-	false	-
+slot-set	cow	9	minecraft:iron_helmet	-	false	-
+slot-set	cow	9	minecraft:iron_chestplate	-	false	-
+slot-set	cow	9	minecraft:iron_leggings	-	false	-
+slot-set	cow	9	minecraft:iron_boots	-	false	-
+slot-set	cow	9	minecraft:wolf_armor	-	false	-
+slot-set	cow	9	minecraft:saddle	-	false	-
+slot-set	cow	35	minecraft:air	-	false	-
+slot-set	cow	35	minecraft:stone	-	false	-
+slot-set	cow	35	minecraft:iron_helmet	-	false	-
+slot-set	cow	35	minecraft:iron_chestplate	-	false	-
+slot-set	cow	35	minecraft:iron_leggings	-	false	-
+slot-set	cow	35	minecraft:iron_boots	-	false	-
+slot-set	cow	35	minecraft:wolf_armor	-	false	-
+slot-set	cow	35	minecraft:saddle	-	false	-
+slot-set	cow	36	minecraft:air	-	false	-
+slot-set	cow	36	minecraft:stone	-	false	-
+slot-set	cow	36	minecraft:iron_helmet	-	false	-
+slot-set	cow	36	minecraft:iron_chestplate	-	false	-
+slot-set	cow	36	minecraft:iron_leggings	-	false	-
+slot-set	cow	36	minecraft:iron_boots	-	false	-
+slot-set	cow	36	minecraft:wolf_armor	-	false	-
+slot-set	cow	36	minecraft:saddle	-	false	-
+slot-set	cow	98	minecraft:air	minecraft:stone:40	true	minecraft:air:0
+slot-set	cow	98	minecraft:stone	minecraft:stone:40	true	minecraft:stone:77
+slot-set	cow	98	minecraft:iron_helmet	minecraft:stone:40	true	minecraft:iron_helmet:1
+slot-set	cow	98	minecraft:iron_chestplate	minecraft:stone:40	true	minecraft:iron_chestplate:1
+slot-set	cow	98	minecraft:iron_leggings	minecraft:stone:40	true	minecraft:iron_leggings:1
+slot-set	cow	98	minecraft:iron_boots	minecraft:stone:40	true	minecraft:iron_boots:1
+slot-set	cow	98	minecraft:wolf_armor	minecraft:stone:40	true	minecraft:wolf_armor:1
+slot-set	cow	98	minecraft:saddle	minecraft:stone:40	true	minecraft:saddle:1
+slot-set	cow	99	minecraft:air	minecraft:stone:41	true	minecraft:air:0
+slot-set	cow	99	minecraft:stone	minecraft:stone:41	true	minecraft:stone:77
+slot-set	cow	99	minecraft:iron_helmet	minecraft:stone:41	true	minecraft:iron_helmet:1
+slot-set	cow	99	minecraft:iron_chestplate	minecraft:stone:41	true	minecraft:iron_chestplate:1
+slot-set	cow	99	minecraft:iron_leggings	minecraft:stone:41	true	minecraft:iron_leggings:1
+slot-set	cow	99	minecraft:iron_boots	minecraft:stone:41	true	minecraft:iron_boots:1
+slot-set	cow	99	minecraft:wolf_armor	minecraft:stone:41	true	minecraft:wolf_armor:1
+slot-set	cow	99	minecraft:saddle	minecraft:stone:41	true	minecraft:saddle:1
+slot-set	cow	100	minecraft:air	minecraft:stone:42	true	minecraft:air:0
+slot-set	cow	100	minecraft:stone	minecraft:stone:42	false	minecraft:stone:42
+slot-set	cow	100	minecraft:iron_helmet	minecraft:stone:42	false	minecraft:stone:42
+slot-set	cow	100	minecraft:iron_chestplate	minecraft:stone:42	false	minecraft:stone:42
+slot-set	cow	100	minecraft:iron_leggings	minecraft:stone:42	false	minecraft:stone:42
+slot-set	cow	100	minecraft:iron_boots	minecraft:stone:42	true	minecraft:iron_boots:1
+slot-set	cow	100	minecraft:wolf_armor	minecraft:stone:42	false	minecraft:stone:42
+slot-set	cow	100	minecraft:saddle	minecraft:stone:42	false	minecraft:stone:42
+slot-set	cow	101	minecraft:air	minecraft:stone:43	true	minecraft:air:0
+slot-set	cow	101	minecraft:stone	minecraft:stone:43	false	minecraft:stone:43
+slot-set	cow	101	minecraft:iron_helmet	minecraft:stone:43	false	minecraft:stone:43
+slot-set	cow	101	minecraft:iron_chestplate	minecraft:stone:43	false	minecraft:stone:43
+slot-set	cow	101	minecraft:iron_leggings	minecraft:stone:43	true	minecraft:iron_leggings:1
+slot-set	cow	101	minecraft:iron_boots	minecraft:stone:43	false	minecraft:stone:43
+slot-set	cow	101	minecraft:wolf_armor	minecraft:stone:43	false	minecraft:stone:43
+slot-set	cow	101	minecraft:saddle	minecraft:stone:43	false	minecraft:stone:43
+slot-set	cow	102	minecraft:air	minecraft:stone:44	true	minecraft:air:0
+slot-set	cow	102	minecraft:stone	minecraft:stone:44	false	minecraft:stone:44
+slot-set	cow	102	minecraft:iron_helmet	minecraft:stone:44	false	minecraft:stone:44
+slot-set	cow	102	minecraft:iron_chestplate	minecraft:stone:44	true	minecraft:iron_chestplate:1
+slot-set	cow	102	minecraft:iron_leggings	minecraft:stone:44	false	minecraft:stone:44
+slot-set	cow	102	minecraft:iron_boots	minecraft:stone:44	false	minecraft:stone:44
+slot-set	cow	102	minecraft:wolf_armor	minecraft:stone:44	false	minecraft:stone:44
+slot-set	cow	102	minecraft:saddle	minecraft:stone:44	false	minecraft:stone:44
+slot-set	cow	103	minecraft:air	minecraft:stone:45	true	minecraft:air:0
+slot-set	cow	103	minecraft:stone	minecraft:stone:45	true	minecraft:stone:77
+slot-set	cow	103	minecraft:iron_helmet	minecraft:stone:45	true	minecraft:iron_helmet:1
+slot-set	cow	103	minecraft:iron_chestplate	minecraft:stone:45	true	minecraft:iron_chestplate:1
+slot-set	cow	103	minecraft:iron_leggings	minecraft:stone:45	true	minecraft:iron_leggings:1
+slot-set	cow	103	minecraft:iron_boots	minecraft:stone:45	true	minecraft:iron_boots:1
+slot-set	cow	103	minecraft:wolf_armor	minecraft:stone:45	true	minecraft:wolf_armor:1
+slot-set	cow	103	minecraft:saddle	minecraft:stone:45	true	minecraft:saddle:1
+slot-set	cow	104	minecraft:air	-	false	-
+slot-set	cow	104	minecraft:stone	-	false	-
+slot-set	cow	104	minecraft:iron_helmet	-	false	-
+slot-set	cow	104	minecraft:iron_chestplate	-	false	-
+slot-set	cow	104	minecraft:iron_leggings	-	false	-
+slot-set	cow	104	minecraft:iron_boots	-	false	-
+slot-set	cow	104	minecraft:wolf_armor	-	false	-
+slot-set	cow	104	minecraft:saddle	-	false	-
+slot-set	cow	105	minecraft:air	minecraft:stone:46	true	minecraft:air:0
+slot-set	cow	105	minecraft:stone	minecraft:stone:46	false	minecraft:stone:46
+slot-set	cow	105	minecraft:iron_helmet	minecraft:stone:46	false	minecraft:stone:46
+slot-set	cow	105	minecraft:iron_chestplate	minecraft:stone:46	false	minecraft:stone:46
+slot-set	cow	105	minecraft:iron_leggings	minecraft:stone:46	false	minecraft:stone:46
+slot-set	cow	105	minecraft:iron_boots	minecraft:stone:46	false	minecraft:stone:46
+slot-set	cow	105	minecraft:wolf_armor	minecraft:stone:46	true	minecraft:wolf_armor:1
+slot-set	cow	105	minecraft:saddle	minecraft:stone:46	false	minecraft:stone:46
+slot-set	cow	106	minecraft:air	minecraft:stone:47	true	minecraft:air:0
+slot-set	cow	106	minecraft:stone	minecraft:stone:47	false	minecraft:stone:47
+slot-set	cow	106	minecraft:iron_helmet	minecraft:stone:47	false	minecraft:stone:47
+slot-set	cow	106	minecraft:iron_chestplate	minecraft:stone:47	false	minecraft:stone:47
+slot-set	cow	106	minecraft:iron_leggings	minecraft:stone:47	false	minecraft:stone:47
+slot-set	cow	106	minecraft:iron_boots	minecraft:stone:47	false	minecraft:stone:47
+slot-set	cow	106	minecraft:wolf_armor	minecraft:stone:47	false	minecraft:stone:47
+slot-set	cow	106	minecraft:saddle	minecraft:stone:47	true	minecraft:saddle:1
+slot-set	cow	200	minecraft:air	-	false	-
+slot-set	cow	200	minecraft:stone	-	false	-
+slot-set	cow	200	minecraft:iron_helmet	-	false	-
+slot-set	cow	200	minecraft:iron_chestplate	-	false	-
+slot-set	cow	200	minecraft:iron_leggings	-	false	-
+slot-set	cow	200	minecraft:iron_boots	-	false	-
+slot-set	cow	200	minecraft:wolf_armor	-	false	-
+slot-set	cow	200	minecraft:saddle	-	false	-
+slot-set	cow	226	minecraft:air	-	false	-
+slot-set	cow	226	minecraft:stone	-	false	-
+slot-set	cow	226	minecraft:iron_helmet	-	false	-
+slot-set	cow	226	minecraft:iron_chestplate	-	false	-
+slot-set	cow	226	minecraft:iron_leggings	-	false	-
+slot-set	cow	226	minecraft:iron_boots	-	false	-
+slot-set	cow	226	minecraft:wolf_armor	-	false	-
+slot-set	cow	226	minecraft:saddle	-	false	-
+slot-set	cow	227	minecraft:air	-	false	-
+slot-set	cow	227	minecraft:stone	-	false	-
+slot-set	cow	227	minecraft:iron_helmet	-	false	-
+slot-set	cow	227	minecraft:iron_chestplate	-	false	-
+slot-set	cow	227	minecraft:iron_leggings	-	false	-
+slot-set	cow	227	minecraft:iron_boots	-	false	-
+slot-set	cow	227	minecraft:wolf_armor	-	false	-
+slot-set	cow	227	minecraft:saddle	-	false	-
+slot-set	cow	499	minecraft:air	-	false	-
+slot-set	cow	499	minecraft:stone	-	false	-
+slot-set	cow	499	minecraft:iron_helmet	-	false	-
+slot-set	cow	499	minecraft:iron_chestplate	-	false	-
+slot-set	cow	499	minecraft:iron_leggings	-	false	-
+slot-set	cow	499	minecraft:iron_boots	-	false	-
+slot-set	cow	499	minecraft:wolf_armor	-	false	-
+slot-set	cow	499	minecraft:saddle	-	false	-
+slot-set	cow	500	minecraft:air	-	false	-
+slot-set	cow	500	minecraft:stone	-	false	-
+slot-set	cow	500	minecraft:iron_helmet	-	false	-
+slot-set	cow	500	minecraft:iron_chestplate	-	false	-
+slot-set	cow	500	minecraft:iron_leggings	-	false	-
+slot-set	cow	500	minecraft:iron_boots	-	false	-
+slot-set	cow	500	minecraft:wolf_armor	-	false	-
+slot-set	cow	500	minecraft:saddle	-	false	-
+slot-set	cow	501	minecraft:air	-	false	-
+slot-set	cow	501	minecraft:stone	-	false	-
+slot-set	cow	501	minecraft:iron_helmet	-	false	-
+slot-set	cow	501	minecraft:iron_chestplate	-	false	-
+slot-set	cow	501	minecraft:iron_leggings	-	false	-
+slot-set	cow	501	minecraft:iron_boots	-	false	-
+slot-set	cow	501	minecraft:wolf_armor	-	false	-
+slot-set	cow	501	minecraft:saddle	-	false	-
+slot-set	cow	502	minecraft:air	-	false	-
+slot-set	cow	502	minecraft:stone	-	false	-
+slot-set	cow	502	minecraft:iron_helmet	-	false	-
+slot-set	cow	502	minecraft:iron_chestplate	-	false	-
+slot-set	cow	502	minecraft:iron_leggings	-	false	-
+slot-set	cow	502	minecraft:iron_boots	-	false	-
+slot-set	cow	502	minecraft:wolf_armor	-	false	-
+slot-set	cow	502	minecraft:saddle	-	false	-
+slot-set	cow	503	minecraft:air	-	false	-
+slot-set	cow	503	minecraft:stone	-	false	-
+slot-set	cow	503	minecraft:iron_helmet	-	false	-
+slot-set	cow	503	minecraft:iron_chestplate	-	false	-
+slot-set	cow	503	minecraft:iron_leggings	-	false	-
+slot-set	cow	503	minecraft:iron_boots	-	false	-
+slot-set	cow	503	minecraft:wolf_armor	-	false	-
+slot-set	cow	503	minecraft:saddle	-	false	-
+slot-set	cow	504	minecraft:air	-	false	-
+slot-set	cow	504	minecraft:stone	-	false	-
+slot-set	cow	504	minecraft:iron_helmet	-	false	-
+slot-set	cow	504	minecraft:iron_chestplate	-	false	-
+slot-set	cow	504	minecraft:iron_leggings	-	false	-
+slot-set	cow	504	minecraft:iron_boots	-	false	-
+slot-set	cow	504	minecraft:wolf_armor	-	false	-
+slot-set	cow	504	minecraft:saddle	-	false	-
+slot-set	item	-1	minecraft:air	-	false	-
+slot-set	item	-1	minecraft:stone	-	false	-
+slot-set	item	-1	minecraft:iron_helmet	-	false	-
+slot-set	item	-1	minecraft:iron_chestplate	-	false	-
+slot-set	item	-1	minecraft:iron_leggings	-	false	-
+slot-set	item	-1	minecraft:iron_boots	-	false	-
+slot-set	item	-1	minecraft:wolf_armor	-	false	-
+slot-set	item	-1	minecraft:saddle	-	false	-
+slot-set	item	0	minecraft:air	minecraft:stone:9	true	minecraft:air:0
+slot-set	item	0	minecraft:stone	minecraft:stone:9	true	minecraft:stone:77
+slot-set	item	0	minecraft:iron_helmet	minecraft:stone:9	true	minecraft:iron_helmet:1
+slot-set	item	0	minecraft:iron_chestplate	minecraft:stone:9	true	minecraft:iron_chestplate:1
+slot-set	item	0	minecraft:iron_leggings	minecraft:stone:9	true	minecraft:iron_leggings:1
+slot-set	item	0	minecraft:iron_boots	minecraft:stone:9	true	minecraft:iron_boots:1
+slot-set	item	0	minecraft:wolf_armor	minecraft:stone:9	true	minecraft:wolf_armor:1
+slot-set	item	0	minecraft:saddle	minecraft:stone:9	true	minecraft:saddle:1
+slot-set	item	8	minecraft:air	-	false	-
+slot-set	item	8	minecraft:stone	-	false	-
+slot-set	item	8	minecraft:iron_helmet	-	false	-
+slot-set	item	8	minecraft:iron_chestplate	-	false	-
+slot-set	item	8	minecraft:iron_leggings	-	false	-
+slot-set	item	8	minecraft:iron_boots	-	false	-
+slot-set	item	8	minecraft:wolf_armor	-	false	-
+slot-set	item	8	minecraft:saddle	-	false	-
+slot-set	item	9	minecraft:air	-	false	-
+slot-set	item	9	minecraft:stone	-	false	-
+slot-set	item	9	minecraft:iron_helmet	-	false	-
+slot-set	item	9	minecraft:iron_chestplate	-	false	-
+slot-set	item	9	minecraft:iron_leggings	-	false	-
+slot-set	item	9	minecraft:iron_boots	-	false	-
+slot-set	item	9	minecraft:wolf_armor	-	false	-
+slot-set	item	9	minecraft:saddle	-	false	-
+slot-set	item	35	minecraft:air	-	false	-
+slot-set	item	35	minecraft:stone	-	false	-
+slot-set	item	35	minecraft:iron_helmet	-	false	-
+slot-set	item	35	minecraft:iron_chestplate	-	false	-
+slot-set	item	35	minecraft:iron_leggings	-	false	-
+slot-set	item	35	minecraft:iron_boots	-	false	-
+slot-set	item	35	minecraft:wolf_armor	-	false	-
+slot-set	item	35	minecraft:saddle	-	false	-
+slot-set	item	36	minecraft:air	-	false	-
+slot-set	item	36	minecraft:stone	-	false	-
+slot-set	item	36	minecraft:iron_helmet	-	false	-
+slot-set	item	36	minecraft:iron_chestplate	-	false	-
+slot-set	item	36	minecraft:iron_leggings	-	false	-
+slot-set	item	36	minecraft:iron_boots	-	false	-
+slot-set	item	36	minecraft:wolf_armor	-	false	-
+slot-set	item	36	minecraft:saddle	-	false	-
+slot-set	item	98	minecraft:air	-	false	-
+slot-set	item	98	minecraft:stone	-	false	-
+slot-set	item	98	minecraft:iron_helmet	-	false	-
+slot-set	item	98	minecraft:iron_chestplate	-	false	-
+slot-set	item	98	minecraft:iron_leggings	-	false	-
+slot-set	item	98	minecraft:iron_boots	-	false	-
+slot-set	item	98	minecraft:wolf_armor	-	false	-
+slot-set	item	98	minecraft:saddle	-	false	-
+slot-set	item	99	minecraft:air	-	false	-
+slot-set	item	99	minecraft:stone	-	false	-
+slot-set	item	99	minecraft:iron_helmet	-	false	-
+slot-set	item	99	minecraft:iron_chestplate	-	false	-
+slot-set	item	99	minecraft:iron_leggings	-	false	-
+slot-set	item	99	minecraft:iron_boots	-	false	-
+slot-set	item	99	minecraft:wolf_armor	-	false	-
+slot-set	item	99	minecraft:saddle	-	false	-
+slot-set	item	100	minecraft:air	-	false	-
+slot-set	item	100	minecraft:stone	-	false	-
+slot-set	item	100	minecraft:iron_helmet	-	false	-
+slot-set	item	100	minecraft:iron_chestplate	-	false	-
+slot-set	item	100	minecraft:iron_leggings	-	false	-
+slot-set	item	100	minecraft:iron_boots	-	false	-
+slot-set	item	100	minecraft:wolf_armor	-	false	-
+slot-set	item	100	minecraft:saddle	-	false	-
+slot-set	item	101	minecraft:air	-	false	-
+slot-set	item	101	minecraft:stone	-	false	-
+slot-set	item	101	minecraft:iron_helmet	-	false	-
+slot-set	item	101	minecraft:iron_chestplate	-	false	-
+slot-set	item	101	minecraft:iron_leggings	-	false	-
+slot-set	item	101	minecraft:iron_boots	-	false	-
+slot-set	item	101	minecraft:wolf_armor	-	false	-
+slot-set	item	101	minecraft:saddle	-	false	-
+slot-set	item	102	minecraft:air	-	false	-
+slot-set	item	102	minecraft:stone	-	false	-
+slot-set	item	102	minecraft:iron_helmet	-	false	-
+slot-set	item	102	minecraft:iron_chestplate	-	false	-
+slot-set	item	102	minecraft:iron_leggings	-	false	-
+slot-set	item	102	minecraft:iron_boots	-	false	-
+slot-set	item	102	minecraft:wolf_armor	-	false	-
+slot-set	item	102	minecraft:saddle	-	false	-
+slot-set	item	103	minecraft:air	-	false	-
+slot-set	item	103	minecraft:stone	-	false	-
+slot-set	item	103	minecraft:iron_helmet	-	false	-
+slot-set	item	103	minecraft:iron_chestplate	-	false	-
+slot-set	item	103	minecraft:iron_leggings	-	false	-
+slot-set	item	103	minecraft:iron_boots	-	false	-
+slot-set	item	103	minecraft:wolf_armor	-	false	-
+slot-set	item	103	minecraft:saddle	-	false	-
+slot-set	item	104	minecraft:air	-	false	-
+slot-set	item	104	minecraft:stone	-	false	-
+slot-set	item	104	minecraft:iron_helmet	-	false	-
+slot-set	item	104	minecraft:iron_chestplate	-	false	-
+slot-set	item	104	minecraft:iron_leggings	-	false	-
+slot-set	item	104	minecraft:iron_boots	-	false	-
+slot-set	item	104	minecraft:wolf_armor	-	false	-
+slot-set	item	104	minecraft:saddle	-	false	-
+slot-set	item	105	minecraft:air	-	false	-
+slot-set	item	105	minecraft:stone	-	false	-
+slot-set	item	105	minecraft:iron_helmet	-	false	-
+slot-set	item	105	minecraft:iron_chestplate	-	false	-
+slot-set	item	105	minecraft:iron_leggings	-	false	-
+slot-set	item	105	minecraft:iron_boots	-	false	-
+slot-set	item	105	minecraft:wolf_armor	-	false	-
+slot-set	item	105	minecraft:saddle	-	false	-
+slot-set	item	106	minecraft:air	-	false	-
+slot-set	item	106	minecraft:stone	-	false	-
+slot-set	item	106	minecraft:iron_helmet	-	false	-
+slot-set	item	106	minecraft:iron_chestplate	-	false	-
+slot-set	item	106	minecraft:iron_leggings	-	false	-
+slot-set	item	106	minecraft:iron_boots	-	false	-
+slot-set	item	106	minecraft:wolf_armor	-	false	-
+slot-set	item	106	minecraft:saddle	-	false	-
+slot-set	item	200	minecraft:air	-	false	-
+slot-set	item	200	minecraft:stone	-	false	-
+slot-set	item	200	minecraft:iron_helmet	-	false	-
+slot-set	item	200	minecraft:iron_chestplate	-	false	-
+slot-set	item	200	minecraft:iron_leggings	-	false	-
+slot-set	item	200	minecraft:iron_boots	-	false	-
+slot-set	item	200	minecraft:wolf_armor	-	false	-
+slot-set	item	200	minecraft:saddle	-	false	-
+slot-set	item	226	minecraft:air	-	false	-
+slot-set	item	226	minecraft:stone	-	false	-
+slot-set	item	226	minecraft:iron_helmet	-	false	-
+slot-set	item	226	minecraft:iron_chestplate	-	false	-
+slot-set	item	226	minecraft:iron_leggings	-	false	-
+slot-set	item	226	minecraft:iron_boots	-	false	-
+slot-set	item	226	minecraft:wolf_armor	-	false	-
+slot-set	item	226	minecraft:saddle	-	false	-
+slot-set	item	227	minecraft:air	-	false	-
+slot-set	item	227	minecraft:stone	-	false	-
+slot-set	item	227	minecraft:iron_helmet	-	false	-
+slot-set	item	227	minecraft:iron_chestplate	-	false	-
+slot-set	item	227	minecraft:iron_leggings	-	false	-
+slot-set	item	227	minecraft:iron_boots	-	false	-
+slot-set	item	227	minecraft:wolf_armor	-	false	-
+slot-set	item	227	minecraft:saddle	-	false	-
+slot-set	item	499	minecraft:air	-	false	-
+slot-set	item	499	minecraft:stone	-	false	-
+slot-set	item	499	minecraft:iron_helmet	-	false	-
+slot-set	item	499	minecraft:iron_chestplate	-	false	-
+slot-set	item	499	minecraft:iron_leggings	-	false	-
+slot-set	item	499	minecraft:iron_boots	-	false	-
+slot-set	item	499	minecraft:wolf_armor	-	false	-
+slot-set	item	499	minecraft:saddle	-	false	-
+slot-set	item	500	minecraft:air	-	false	-
+slot-set	item	500	minecraft:stone	-	false	-
+slot-set	item	500	minecraft:iron_helmet	-	false	-
+slot-set	item	500	minecraft:iron_chestplate	-	false	-
+slot-set	item	500	minecraft:iron_leggings	-	false	-
+slot-set	item	500	minecraft:iron_boots	-	false	-
+slot-set	item	500	minecraft:wolf_armor	-	false	-
+slot-set	item	500	minecraft:saddle	-	false	-
+slot-set	item	501	minecraft:air	-	false	-
+slot-set	item	501	minecraft:stone	-	false	-
+slot-set	item	501	minecraft:iron_helmet	-	false	-
+slot-set	item	501	minecraft:iron_chestplate	-	false	-
+slot-set	item	501	minecraft:iron_leggings	-	false	-
+slot-set	item	501	minecraft:iron_boots	-	false	-
+slot-set	item	501	minecraft:wolf_armor	-	false	-
+slot-set	item	501	minecraft:saddle	-	false	-
+slot-set	item	502	minecraft:air	-	false	-
+slot-set	item	502	minecraft:stone	-	false	-
+slot-set	item	502	minecraft:iron_helmet	-	false	-
+slot-set	item	502	minecraft:iron_chestplate	-	false	-
+slot-set	item	502	minecraft:iron_leggings	-	false	-
+slot-set	item	502	minecraft:iron_boots	-	false	-
+slot-set	item	502	minecraft:wolf_armor	-	false	-
+slot-set	item	502	minecraft:saddle	-	false	-
+slot-set	item	503	minecraft:air	-	false	-
+slot-set	item	503	minecraft:stone	-	false	-
+slot-set	item	503	minecraft:iron_helmet	-	false	-
+slot-set	item	503	minecraft:iron_chestplate	-	false	-
+slot-set	item	503	minecraft:iron_leggings	-	false	-
+slot-set	item	503	minecraft:iron_boots	-	false	-
+slot-set	item	503	minecraft:wolf_armor	-	false	-
+slot-set	item	503	minecraft:saddle	-	false	-
+slot-set	item	504	minecraft:air	-	false	-
+slot-set	item	504	minecraft:stone	-	false	-
+slot-set	item	504	minecraft:iron_helmet	-	false	-
+slot-set	item	504	minecraft:iron_chestplate	-	false	-
+slot-set	item	504	minecraft:iron_leggings	-	false	-
+slot-set	item	504	minecraft:iron_boots	-	false	-
+slot-set	item	504	minecraft:wolf_armor	-	false	-
+slot-set	item	504	minecraft:saddle	-	false	-
+slot-dynamic-hand	minecraft:stone:7	minecraft:stone:40	minecraft:diamond:3
+slot-dynamic-cursor	minecraft:gold_ingot:2	minecraft:stone:55	minecraft:diamond:3
+slot-retired-ender	true	true	minecraft:diamond:7	true
+slot-reentrant	true	minecraft:stone:4	minecraft:iron_boots:5	minecraft:diamond:1	true
+slot-equip	cow	mainhand	0	minecraft:iron_helmet	minecraft:iron_helmet:1	event:minecraft:equip	b8d59fd5bc12dbb4
+slot-equip	cow	mainhand	1	minecraft:stone	minecraft:stone:7	-	b8d59fd5bc12dbb4
+slot-equip	cow	mainhand	2	minecraft:iron_helmet	minecraft:iron_helmet:1	-	b8d59fd5bc12dbb4
+slot-equip	cow	mainhand	3	minecraft:iron_helmet	minecraft:iron_helmet:1	event:minecraft:equip	b8d59fd5bc12dbb4
+slot-equip	cow	mainhand	4	minecraft:air	minecraft:air:0	event:minecraft:unequip	b8d59fd5bc12dbb4
+slot-equip	cow	mainhand	5	minecraft:stone	minecraft:stone:1	event:minecraft:unequip	b8d59fd5bc12dbb4
+slot-equip	cow	offhand	0	minecraft:iron_helmet	minecraft:iron_helmet:1	event:minecraft:equip	b8d59fd5bc12dbb4
+slot-equip	cow	offhand	1	minecraft:stone	minecraft:stone:7	-	b8d59fd5bc12dbb4
+slot-equip	cow	offhand	2	minecraft:iron_helmet	minecraft:iron_helmet:1	-	b8d59fd5bc12dbb4
+slot-equip	cow	offhand	3	minecraft:iron_helmet	minecraft:iron_helmet:1	event:minecraft:equip	b8d59fd5bc12dbb4
+slot-equip	cow	offhand	4	minecraft:air	minecraft:air:0	event:minecraft:unequip	b8d59fd5bc12dbb4
+slot-equip	cow	offhand	5	minecraft:stone	minecraft:stone:1	event:minecraft:unequip	b8d59fd5bc12dbb4
+slot-equip	cow	feet	0	minecraft:iron_boots	minecraft:iron_boots:1	sound:minecraft:item.armor.equip_iron:6:b8d59fd5bc12dbb4;event:minecraft:equip	31e9f344b73ee369
+slot-equip	cow	feet	1	minecraft:stone	minecraft:stone:7	-	b8d59fd5bc12dbb4
+slot-equip	cow	feet	2	minecraft:iron_boots	minecraft:iron_boots:1	-	b8d59fd5bc12dbb4
+slot-equip	cow	feet	3	minecraft:iron_boots	minecraft:iron_boots:1	event:minecraft:equip	b8d59fd5bc12dbb4
+slot-equip	cow	feet	4	minecraft:air	minecraft:air:0	event:minecraft:unequip	b8d59fd5bc12dbb4
+slot-equip	cow	feet	5	minecraft:stone	minecraft:stone:1	event:minecraft:unequip	b8d59fd5bc12dbb4
+slot-equip	cow	legs	0	minecraft:iron_leggings	minecraft:iron_leggings:1	sound:minecraft:item.armor.equip_iron:6:b8d59fd5bc12dbb4;event:minecraft:equip	31e9f344b73ee369
+slot-equip	cow	legs	1	minecraft:stone	minecraft:stone:7	-	b8d59fd5bc12dbb4
+slot-equip	cow	legs	2	minecraft:iron_leggings	minecraft:iron_leggings:1	-	b8d59fd5bc12dbb4
+slot-equip	cow	legs	3	minecraft:iron_leggings	minecraft:iron_leggings:1	event:minecraft:equip	b8d59fd5bc12dbb4
+slot-equip	cow	legs	4	minecraft:air	minecraft:air:0	event:minecraft:unequip	b8d59fd5bc12dbb4
+slot-equip	cow	legs	5	minecraft:stone	minecraft:stone:1	event:minecraft:unequip	b8d59fd5bc12dbb4
+slot-equip	cow	chest	0	minecraft:iron_chestplate	minecraft:iron_chestplate:1	sound:minecraft:item.armor.equip_iron:6:b8d59fd5bc12dbb4;event:minecraft:equip	31e9f344b73ee369
+slot-equip	cow	chest	1	minecraft:stone	minecraft:stone:7	-	b8d59fd5bc12dbb4
+slot-equip	cow	chest	2	minecraft:iron_chestplate	minecraft:iron_chestplate:1	-	b8d59fd5bc12dbb4
+slot-equip	cow	chest	3	minecraft:iron_chestplate	minecraft:iron_chestplate:1	event:minecraft:equip	b8d59fd5bc12dbb4
+slot-equip	cow	chest	4	minecraft:air	minecraft:air:0	event:minecraft:unequip	b8d59fd5bc12dbb4
+slot-equip	cow	chest	5	minecraft:stone	minecraft:stone:1	event:minecraft:unequip	b8d59fd5bc12dbb4
+slot-equip	cow	head	0	minecraft:iron_helmet	minecraft:iron_helmet:1	sound:minecraft:item.armor.equip_iron:6:b8d59fd5bc12dbb4;event:minecraft:equip	31e9f344b73ee369
+slot-equip	cow	head	1	minecraft:stone	minecraft:stone:7	-	b8d59fd5bc12dbb4
+slot-equip	cow	head	2	minecraft:iron_helmet	minecraft:iron_helmet:1	-	b8d59fd5bc12dbb4
+slot-equip	cow	head	3	minecraft:iron_helmet	minecraft:iron_helmet:1	event:minecraft:equip	b8d59fd5bc12dbb4
+slot-equip	cow	head	4	minecraft:air	minecraft:air:0	event:minecraft:unequip	b8d59fd5bc12dbb4
+slot-equip	cow	head	5	minecraft:stone	minecraft:stone:1	event:minecraft:unequip	b8d59fd5bc12dbb4
+slot-equip	cow	body	0	minecraft:wolf_armor	minecraft:wolf_armor:1	sound:minecraft:item.armor.equip_wolf:6:b8d59fd5bc12dbb4;event:minecraft:equip	31e9f344b73ee369
+slot-equip	cow	body	1	minecraft:stone	minecraft:stone:7	-	b8d59fd5bc12dbb4
+slot-equip	cow	body	2	minecraft:wolf_armor	minecraft:wolf_armor:1	-	b8d59fd5bc12dbb4
+slot-equip	cow	body	3	minecraft:wolf_armor	minecraft:wolf_armor:1	event:minecraft:equip	b8d59fd5bc12dbb4
+slot-equip	cow	body	4	minecraft:air	minecraft:air:0	event:minecraft:unequip	b8d59fd5bc12dbb4
+slot-equip	cow	body	5	minecraft:stone	minecraft:stone:1	event:minecraft:unequip	b8d59fd5bc12dbb4
+slot-equip	cow	saddle	0	minecraft:saddle	minecraft:saddle:1	sound:minecraft:entity.horse.saddle:6:b8d59fd5bc12dbb4;event:minecraft:equip	31e9f344b73ee369
+slot-equip	cow	saddle	1	minecraft:stone	minecraft:stone:7	-	b8d59fd5bc12dbb4
+slot-equip	cow	saddle	2	minecraft:saddle	minecraft:saddle:1	-	b8d59fd5bc12dbb4
+slot-equip	cow	saddle	3	minecraft:saddle	minecraft:saddle:1	event:minecraft:equip	b8d59fd5bc12dbb4
+slot-equip	cow	saddle	4	minecraft:air	minecraft:air:0	event:minecraft:unequip	b8d59fd5bc12dbb4
+slot-equip	cow	saddle	5	minecraft:stone	minecraft:stone:1	event:minecraft:unequip	b8d59fd5bc12dbb4
+slot-equip	player	mainhand	0	minecraft:iron_helmet	minecraft:iron_helmet:1	-	b8d59fd5bc12dbb4
+slot-equip	player	mainhand	1	minecraft:stone	minecraft:stone:7	-	b8d59fd5bc12dbb4
+slot-equip	player	mainhand	2	minecraft:iron_helmet	minecraft:iron_helmet:1	-	b8d59fd5bc12dbb4
+slot-equip	player	mainhand	3	minecraft:iron_helmet	minecraft:iron_helmet:1	-	b8d59fd5bc12dbb4
+slot-equip	player	mainhand	4	minecraft:air	minecraft:air:0	-	b8d59fd5bc12dbb4
+slot-equip	player	mainhand	5	minecraft:stone	minecraft:stone:1	-	b8d59fd5bc12dbb4
+slot-equip	player	offhand	0	minecraft:iron_helmet	minecraft:iron_helmet:1	-	b8d59fd5bc12dbb4
+slot-equip	player	offhand	1	minecraft:stone	minecraft:stone:7	-	b8d59fd5bc12dbb4
+slot-equip	player	offhand	2	minecraft:iron_helmet	minecraft:iron_helmet:1	-	b8d59fd5bc12dbb4
+slot-equip	player	offhand	3	minecraft:iron_helmet	minecraft:iron_helmet:1	-	b8d59fd5bc12dbb4
+slot-equip	player	offhand	4	minecraft:air	minecraft:air:0	-	b8d59fd5bc12dbb4
+slot-equip	player	offhand	5	minecraft:stone	minecraft:stone:1	-	b8d59fd5bc12dbb4
+slot-equip	player	feet	0	minecraft:iron_boots	minecraft:iron_boots:1	sound:minecraft:item.armor.equip_iron:7:b8d59fd5bc12dbb4;event:minecraft:equip	31e9f344b73ee369
+slot-equip	player	feet	1	minecraft:stone	minecraft:stone:7	-	b8d59fd5bc12dbb4
+slot-equip	player	feet	2	minecraft:iron_boots	minecraft:iron_boots:1	-	b8d59fd5bc12dbb4
+slot-equip	player	feet	3	minecraft:iron_boots	minecraft:iron_boots:1	event:minecraft:equip	b8d59fd5bc12dbb4
+slot-equip	player	feet	4	minecraft:air	minecraft:air:0	event:minecraft:unequip	b8d59fd5bc12dbb4
+slot-equip	player	feet	5	minecraft:stone	minecraft:stone:1	event:minecraft:unequip	b8d59fd5bc12dbb4
+slot-equip	player	legs	0	minecraft:iron_leggings	minecraft:iron_leggings:1	sound:minecraft:item.armor.equip_iron:7:b8d59fd5bc12dbb4;event:minecraft:equip	31e9f344b73ee369
+slot-equip	player	legs	1	minecraft:stone	minecraft:stone:7	-	b8d59fd5bc12dbb4
+slot-equip	player	legs	2	minecraft:iron_leggings	minecraft:iron_leggings:1	-	b8d59fd5bc12dbb4
+slot-equip	player	legs	3	minecraft:iron_leggings	minecraft:iron_leggings:1	event:minecraft:equip	b8d59fd5bc12dbb4
+slot-equip	player	legs	4	minecraft:air	minecraft:air:0	event:minecraft:unequip	b8d59fd5bc12dbb4
+slot-equip	player	legs	5	minecraft:stone	minecraft:stone:1	event:minecraft:unequip	b8d59fd5bc12dbb4
+slot-equip	player	chest	0	minecraft:iron_chestplate	minecraft:iron_chestplate:1	sound:minecraft:item.armor.equip_iron:7:b8d59fd5bc12dbb4;event:minecraft:equip	31e9f344b73ee369
+slot-equip	player	chest	1	minecraft:stone	minecraft:stone:7	-	b8d59fd5bc12dbb4
+slot-equip	player	chest	2	minecraft:iron_chestplate	minecraft:iron_chestplate:1	-	b8d59fd5bc12dbb4
+slot-equip	player	chest	3	minecraft:iron_chestplate	minecraft:iron_chestplate:1	event:minecraft:equip	b8d59fd5bc12dbb4
+slot-equip	player	chest	4	minecraft:air	minecraft:air:0	event:minecraft:unequip	b8d59fd5bc12dbb4
+slot-equip	player	chest	5	minecraft:stone	minecraft:stone:1	event:minecraft:unequip	b8d59fd5bc12dbb4
+slot-equip	player	head	0	minecraft:iron_helmet	minecraft:iron_helmet:1	sound:minecraft:item.armor.equip_iron:7:b8d59fd5bc12dbb4;event:minecraft:equip	31e9f344b73ee369
+slot-equip	player	head	1	minecraft:stone	minecraft:stone:7	-	b8d59fd5bc12dbb4
+slot-equip	player	head	2	minecraft:iron_helmet	minecraft:iron_helmet:1	-	b8d59fd5bc12dbb4
+slot-equip	player	head	3	minecraft:iron_helmet	minecraft:iron_helmet:1	event:minecraft:equip	b8d59fd5bc12dbb4
+slot-equip	player	head	4	minecraft:air	minecraft:air:0	event:minecraft:unequip	b8d59fd5bc12dbb4
+slot-equip	player	head	5	minecraft:stone	minecraft:stone:1	event:minecraft:unequip	b8d59fd5bc12dbb4
+slot-equip	player	body	0	minecraft:wolf_armor	minecraft:wolf_armor:1	sound:minecraft:item.armor.equip_wolf:7:b8d59fd5bc12dbb4	31e9f344b73ee369
+slot-equip	player	body	1	minecraft:stone	minecraft:stone:7	-	b8d59fd5bc12dbb4
+slot-equip	player	body	2	minecraft:wolf_armor	minecraft:wolf_armor:1	-	b8d59fd5bc12dbb4
+slot-equip	player	body	3	minecraft:wolf_armor	minecraft:wolf_armor:1	-	b8d59fd5bc12dbb4
+slot-equip	player	body	4	minecraft:air	minecraft:air:0	-	b8d59fd5bc12dbb4
+slot-equip	player	body	5	minecraft:stone	minecraft:stone:1	-	b8d59fd5bc12dbb4
+slot-equip	player	saddle	0	minecraft:saddle	minecraft:saddle:1	sound:minecraft:entity.horse.saddle:7:b8d59fd5bc12dbb4	31e9f344b73ee369
+slot-equip	player	saddle	1	minecraft:stone	minecraft:stone:7	-	b8d59fd5bc12dbb4
+slot-equip	player	saddle	2	minecraft:saddle	minecraft:saddle:1	-	b8d59fd5bc12dbb4
+slot-equip	player	saddle	3	minecraft:saddle	minecraft:saddle:1	-	b8d59fd5bc12dbb4
+slot-equip	player	saddle	4	minecraft:air	minecraft:air:0	-	b8d59fd5bc12dbb4
+slot-equip	player	saddle	5	minecraft:stone	minecraft:stone:1	-	b8d59fd5bc12dbb4
+slot-equip	spectator	mainhand	0	minecraft:iron_helmet	minecraft:iron_helmet:1	-	b8d59fd5bc12dbb4
+slot-equip	spectator	mainhand	1	minecraft:stone	minecraft:stone:7	-	b8d59fd5bc12dbb4
+slot-equip	spectator	mainhand	2	minecraft:iron_helmet	minecraft:iron_helmet:1	-	b8d59fd5bc12dbb4
+slot-equip	spectator	mainhand	3	minecraft:iron_helmet	minecraft:iron_helmet:1	-	b8d59fd5bc12dbb4
+slot-equip	spectator	mainhand	4	minecraft:air	minecraft:air:0	-	b8d59fd5bc12dbb4
+slot-equip	spectator	mainhand	5	minecraft:stone	minecraft:stone:1	-	b8d59fd5bc12dbb4
+slot-equip	spectator	offhand	0	minecraft:iron_helmet	minecraft:iron_helmet:1	-	b8d59fd5bc12dbb4
+slot-equip	spectator	offhand	1	minecraft:stone	minecraft:stone:7	-	b8d59fd5bc12dbb4
+slot-equip	spectator	offhand	2	minecraft:iron_helmet	minecraft:iron_helmet:1	-	b8d59fd5bc12dbb4
+slot-equip	spectator	offhand	3	minecraft:iron_helmet	minecraft:iron_helmet:1	-	b8d59fd5bc12dbb4
+slot-equip	spectator	offhand	4	minecraft:air	minecraft:air:0	-	b8d59fd5bc12dbb4
+slot-equip	spectator	offhand	5	minecraft:stone	minecraft:stone:1	-	b8d59fd5bc12dbb4
+slot-equip	spectator	feet	0	minecraft:iron_boots	minecraft:iron_boots:1	-	b8d59fd5bc12dbb4
+slot-equip	spectator	feet	1	minecraft:stone	minecraft:stone:7	-	b8d59fd5bc12dbb4
+slot-equip	spectator	feet	2	minecraft:iron_boots	minecraft:iron_boots:1	-	b8d59fd5bc12dbb4
+slot-equip	spectator	feet	3	minecraft:iron_boots	minecraft:iron_boots:1	-	b8d59fd5bc12dbb4
+slot-equip	spectator	feet	4	minecraft:air	minecraft:air:0	-	b8d59fd5bc12dbb4
+slot-equip	spectator	feet	5	minecraft:stone	minecraft:stone:1	-	b8d59fd5bc12dbb4
+slot-equip	spectator	legs	0	minecraft:iron_leggings	minecraft:iron_leggings:1	-	b8d59fd5bc12dbb4
+slot-equip	spectator	legs	1	minecraft:stone	minecraft:stone:7	-	b8d59fd5bc12dbb4
+slot-equip	spectator	legs	2	minecraft:iron_leggings	minecraft:iron_leggings:1	-	b8d59fd5bc12dbb4
+slot-equip	spectator	legs	3	minecraft:iron_leggings	minecraft:iron_leggings:1	-	b8d59fd5bc12dbb4
+slot-equip	spectator	legs	4	minecraft:air	minecraft:air:0	-	b8d59fd5bc12dbb4
+slot-equip	spectator	legs	5	minecraft:stone	minecraft:stone:1	-	b8d59fd5bc12dbb4
+slot-equip	spectator	chest	0	minecraft:iron_chestplate	minecraft:iron_chestplate:1	-	b8d59fd5bc12dbb4
+slot-equip	spectator	chest	1	minecraft:stone	minecraft:stone:7	-	b8d59fd5bc12dbb4
+slot-equip	spectator	chest	2	minecraft:iron_chestplate	minecraft:iron_chestplate:1	-	b8d59fd5bc12dbb4
+slot-equip	spectator	chest	3	minecraft:iron_chestplate	minecraft:iron_chestplate:1	-	b8d59fd5bc12dbb4
+slot-equip	spectator	chest	4	minecraft:air	minecraft:air:0	-	b8d59fd5bc12dbb4
+slot-equip	spectator	chest	5	minecraft:stone	minecraft:stone:1	-	b8d59fd5bc12dbb4
+slot-equip	spectator	head	0	minecraft:iron_helmet	minecraft:iron_helmet:1	-	b8d59fd5bc12dbb4
+slot-equip	spectator	head	1	minecraft:stone	minecraft:stone:7	-	b8d59fd5bc12dbb4
+slot-equip	spectator	head	2	minecraft:iron_helmet	minecraft:iron_helmet:1	-	b8d59fd5bc12dbb4
+slot-equip	spectator	head	3	minecraft:iron_helmet	minecraft:iron_helmet:1	-	b8d59fd5bc12dbb4
+slot-equip	spectator	head	4	minecraft:air	minecraft:air:0	-	b8d59fd5bc12dbb4
+slot-equip	spectator	head	5	minecraft:stone	minecraft:stone:1	-	b8d59fd5bc12dbb4
+slot-equip	spectator	body	0	minecraft:wolf_armor	minecraft:wolf_armor:1	-	b8d59fd5bc12dbb4
+slot-equip	spectator	body	1	minecraft:stone	minecraft:stone:7	-	b8d59fd5bc12dbb4
+slot-equip	spectator	body	2	minecraft:wolf_armor	minecraft:wolf_armor:1	-	b8d59fd5bc12dbb4
+slot-equip	spectator	body	3	minecraft:wolf_armor	minecraft:wolf_armor:1	-	b8d59fd5bc12dbb4
+slot-equip	spectator	body	4	minecraft:air	minecraft:air:0	-	b8d59fd5bc12dbb4
+slot-equip	spectator	body	5	minecraft:stone	minecraft:stone:1	-	b8d59fd5bc12dbb4
+slot-equip	spectator	saddle	0	minecraft:saddle	minecraft:saddle:1	-	b8d59fd5bc12dbb4
+slot-equip	spectator	saddle	1	minecraft:stone	minecraft:stone:7	-	b8d59fd5bc12dbb4
+slot-equip	spectator	saddle	2	minecraft:saddle	minecraft:saddle:1	-	b8d59fd5bc12dbb4
+slot-equip	spectator	saddle	3	minecraft:saddle	minecraft:saddle:1	-	b8d59fd5bc12dbb4
+slot-equip	spectator	saddle	4	minecraft:air	minecraft:air:0	-	b8d59fd5bc12dbb4
+slot-equip	spectator	saddle	5	minecraft:stone	minecraft:stone:1	-	b8d59fd5bc12dbb4
+slot-craft	false	false	0	500	minecraft:oak_log:1	true	minecraft:oak_planks:4	0:1:0:minecraft:oak_planks:4;0:2:0:minecraft:oak_planks:4
+slot-craft	false	false	1	501	minecraft:iron_ingot:1	true	minecraft:air:0	0:3:0:minecraft:air:0;0:4:0:minecraft:air:0
+slot-craft	false	false	2	501	minecraft:air:0	true	minecraft:oak_planks:4	0:5:0:minecraft:oak_planks:4;0:6:0:minecraft:oak_planks:4
+slot-craft	false	false	3	500	minecraft:air:0	true	minecraft:air:0	0:7:0:minecraft:air:0;0:8:0:minecraft:air:0
+slot-craft	false	true	0	500	minecraft:oak_log:1	true	minecraft:oak_planks:4	0:1:0:minecraft:oak_planks:4;0:2:0:minecraft:oak_planks:4
+slot-craft	false	true	1	501	minecraft:iron_ingot:1	true	minecraft:air:0	0:3:0:minecraft:air:0;0:4:0:minecraft:air:0
+slot-craft	false	true	2	501	minecraft:air:0	true	minecraft:oak_planks:4	0:5:0:minecraft:oak_planks:4;0:6:0:minecraft:oak_planks:4
+slot-craft	false	true	3	500	minecraft:air:0	true	minecraft:air:0	0:7:0:minecraft:air:0;0:8:0:minecraft:air:0
+slot-craft	true	false	0	500	minecraft:oak_log:1	true	minecraft:air:0	0:1:0:minecraft:air:0;0:2:0:minecraft:air:0
+slot-craft	true	false	1	501	minecraft:iron_ingot:1	true	minecraft:air:0	0:3:0:minecraft:air:0;0:4:0:minecraft:air:0
+slot-craft	true	false	2	501	minecraft:air:0	true	minecraft:air:0	0:5:0:minecraft:air:0;0:6:0:minecraft:air:0
+slot-craft	true	false	3	500	minecraft:air:0	true	minecraft:air:0	0:7:0:minecraft:air:0;0:8:0:minecraft:air:0
+slot-craft	true	true	0	500	minecraft:oak_log:1	true	minecraft:oak_planks:4	0:1:0:minecraft:oak_planks:4;0:2:0:minecraft:oak_planks:4
+slot-craft	true	true	1	501	minecraft:iron_ingot:1	true	minecraft:air:0	0:3:0:minecraft:air:0;0:4:0:minecraft:air:0
+slot-craft	true	true	2	501	minecraft:air:0	true	minecraft:oak_planks:4	0:5:0:minecraft:oak_planks:4;0:6:0:minecraft:oak_planks:4
+slot-craft	true	true	3	500	minecraft:air:0	true	minecraft:air:0	0:7:0:minecraft:air:0;0:8:0:minecraft:air:0

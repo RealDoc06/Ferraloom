@@ -450,7 +450,7 @@ mod tests {
         )
         .unwrap();
         let mut chunks = [RegionChunk::new(
-            generator.build_terrain([0, 0], dimension),
+            generator.build_terrain([0, 0], dimension.clone()),
             ChunkStatus::Features,
         )];
         let registry_context = crate::level::LevelContext::fixture(0, 63);

@@ -21,6 +21,7 @@ pub mod daylight_detector;
 pub mod decorated_pot;
 pub mod enchanting_table;
 pub mod ender_chest;
+pub mod jigsaw;
 pub mod jukebox;
 pub mod lectern;
 pub mod potent_sulfur;
@@ -243,6 +244,7 @@ pub enum BlockEntityState {
     Shelf(Box<shelf::ShelfBlockEntity>),
     Conduit(Box<conduit::ConduitBlockEntity>),
     Beacon(Box<beacon::BeaconBlockEntity>),
+    Jigsaw(Box<jigsaw::JigsawBlockEntity>),
     Campfire(Box<campfire::CampfireBlockEntity>),
     Bell(Box<bell::BellBlockEntity>),
     Lectern(Box<lectern::LecternBlockEntity>),
@@ -285,6 +287,7 @@ impl BlockEntityState {
             Self::Shelf(entity) => &entity.parent,
             Self::Conduit(entity) => &entity.parent,
             Self::Beacon(entity) => &entity.parent,
+            Self::Jigsaw(entity) => &entity.parent,
             Self::Campfire(entity) => &entity.parent,
             Self::Bell(entity) => &entity.parent,
             Self::Lectern(entity) => &entity.parent,
@@ -327,6 +330,7 @@ impl BlockEntityState {
             Self::Shelf(entity) => &mut entity.parent,
             Self::Conduit(entity) => &mut entity.parent,
             Self::Beacon(entity) => &mut entity.parent,
+            Self::Jigsaw(entity) => &mut entity.parent,
             Self::Campfire(entity) => &mut entity.parent,
             Self::Bell(entity) => &mut entity.parent,
             Self::Lectern(entity) => &mut entity.parent,
@@ -369,6 +373,7 @@ impl BlockEntityState {
             Self::Shelf(_) => &shelf::SHELF_ENTITY,
             Self::Conduit(_) => &conduit::CONDUIT_ENTITY,
             Self::Beacon(_) => &beacon::BEACON_ENTITY,
+            Self::Jigsaw(_) => &jigsaw::JIGSAW_ENTITY,
             Self::Campfire(_) => &campfire::CAMPFIRE_ENTITY,
             Self::Bell(_) => &bell::BELL_ENTITY,
             Self::Lectern(_) => &lectern::LECTERN_ENTITY,
@@ -607,6 +612,9 @@ pub fn create(pos: BlockPos, state: BlockState) -> Result<BlockEntityState, Leve
         BlockEntityType::BEACON => Ok(BlockEntityState::Beacon(Box::new(
             beacon::BeaconBlockEntity::new(data),
         ))),
+        BlockEntityType::JIGSAW => Ok(BlockEntityState::Jigsaw(Box::new(
+            jigsaw::JigsawBlockEntity::new(data),
+        ))),
         BlockEntityType::CAMPFIRE => Ok(BlockEntityState::Campfire(Box::new(
             campfire::CampfireBlockEntity::new(data),
         ))),
@@ -754,6 +762,7 @@ pub fn supports(block: Block) -> bool {
                 | BlockEntityType::SHELF
                 | BlockEntityType::COPPER_GOLEM_STATUE
                 | BlockEntityType::JUKEBOX
+                | BlockEntityType::JIGSAW
                 | BlockEntityType::CAMPFIRE
                 | BlockEntityType::BELL
                 | BlockEntityType::LECTERN
@@ -820,6 +829,7 @@ macro_rules! projection {
     };
 }
 projection!(super::containers::command::CommandBlockEntity, Command);
+projection!(jigsaw::JigsawBlockEntity, Jigsaw);
 projection!(
     super::containers::structure::StructureBlockEntity,
     Structure

@@ -3,6 +3,9 @@
 use super::{BlockBehavior, BlockMethod};
 use ferraloom_data::{Block, BlockClass};
 
+#[cfg(test)]
+mod admission_tests;
+
 pub mod comparator;
 pub mod crafter;
 pub mod device;

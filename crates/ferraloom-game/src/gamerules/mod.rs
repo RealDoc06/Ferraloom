@@ -362,6 +362,8 @@ impl GameRules {
     /// Supplies the live level's exact rule fields after load and every mutation,
     /// before callbacks or another command can query the simulation.
     pub fn update_level_rules(&self, rules: &mut crate::level::LevelRules) {
+        rules.fire_spread_radius_around_player =
+            self.integer(GameRule::FireSpreadRadiusAroundPlayer);
         rules.block_drops = Some(self.boolean(GameRule::BlockDrops));
         rules.spread_vines = self.boolean(GameRule::SpreadVines);
         rules.mob_griefing = self.boolean(GameRule::MobGriefing);
@@ -380,6 +382,7 @@ impl GameRules {
         rules.pvp = self.boolean(GameRule::Pvp);
         rules.mob_drops = self.boolean(GameRule::MobDrops);
         rules.keep_inventory = self.boolean(GameRule::KeepInventory);
+        rules.limited_crafting = self.boolean(GameRule::LimitedCrafting);
         rules.random_tick_speed = self.integer(GameRule::RandomTickSpeed).max(0) as u32;
         rules.water_source_conversion = self.boolean(GameRule::WaterSourceConversion);
         rules.lava_source_conversion = self.boolean(GameRule::LavaSourceConversion);

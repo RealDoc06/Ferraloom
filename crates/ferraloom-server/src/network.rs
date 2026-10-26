@@ -46,6 +46,17 @@ pub enum Incoming {
     Configuration(configuration::ServerboundPacket),
     Play(Box<play::serverbound::Packet>),
 }
+impl Incoming {
+    /// ServerGamePacketListenerImpl#tryHandleChat uses server.execute instead
+    /// of PacketUtils' pre-tick PacketProcessor. The game handler is unchanged.
+    pub(crate) fn uses_main_executor(&self) -> bool {
+        matches!(self, Self::Play(packet) if matches!(packet.as_ref(),
+            play::serverbound::Packet::Chat(_)
+                | play::serverbound::Packet::ChatCommand(_)
+                | play::serverbound::Packet::ChatCommandSigned(_)))
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum Outgoing {
     Configuration(Box<configuration::ClientboundPacket>),

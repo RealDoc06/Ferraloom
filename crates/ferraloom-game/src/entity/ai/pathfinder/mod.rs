@@ -25,3 +25,16 @@ mod classification_tests;
 mod pathfindability_tests;
 #[cfg(test)]
 mod tests;
+
+mod mob_access;
+pub use mob_access::{Capabilities, MobAccess};
+pub mod amphibious_node_evaluator;
+pub mod fly_node_evaluator;
+pub mod swim_node_evaluator;
+pub use amphibious_node_evaluator::AmphibiousNodeEvaluator;
+pub use fly_node_evaluator::FlyNodeEvaluator;
+pub use swim_node_evaluator::SwimNodeEvaluator;
+pub use walk_node_evaluator::WalkNodeEvaluator;
+
+#[cfg(test)]
+mod evaluator_tests;

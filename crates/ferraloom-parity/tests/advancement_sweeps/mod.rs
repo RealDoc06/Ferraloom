@@ -1,4 +1,6 @@
 //! Live builtin non-recipe criteria. Inputs and completion requirements come from vanilla.
+mod location;
+mod loot;
 mod physical;
 
 use super::{Rewards, item_input, normalize_obtained};

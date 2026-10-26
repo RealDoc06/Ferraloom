@@ -12,13 +12,13 @@ use ferraloom_util::{
 };
 use serde_json::Value;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum BlockSet {
     Tag(Identifier),
     Direct(Vec<Block>),
 }
 impl BlockSet {
-    fn decode(v: &Value) -> Result<Self, Error> {
+    pub(crate) fn decode(v: &Value) -> Result<Self, Error> {
         if let Some(tag) = v.as_str().and_then(|s| s.strip_prefix('#')) {
             return Ok(Self::Tag(tag.parse()?));
         }

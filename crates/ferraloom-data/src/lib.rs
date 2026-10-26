@@ -9,6 +9,7 @@
 //! ```
 
 mod block_methods;
+mod block_names;
 mod building_properties;
 mod copper_chest_properties;
 pub mod dispenser_properties;

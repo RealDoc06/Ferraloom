@@ -484,7 +484,7 @@ impl SpawnChunks {
 }
 impl SpawnWorld for SpawnChunks {
     fn dimension(&self) -> DimensionType {
-        self.dimension
+        self.dimension.clone()
     }
     fn ensure_chunk(
         &mut self,
@@ -647,7 +647,7 @@ pub struct World {
     proto_structures: BTreeMap<i64, ProtoStructureSnapshot>,
     generation: Arc<JobPool>,
     generation_state: Option<GenerationState>,
-    generation_work: Option<oneshot::Receiver<GenerationCompletion>>,
+    generation_task: Option<oneshot::Receiver<GenerationCompletion>>,
     progress_waker: Waker,
     generation_dispatcher: ThrottlingChunkTaskDispatcher<GenerationRequest>,
     active_generation: BTreeMap<i64, GenerationActivity>,
@@ -759,7 +759,7 @@ impl World {
             Arc::ptr_eq(&self.generator, &stem.generator),
             "World generator differs from its registered stem"
         );
-        let properties = |value: DimensionType| {
+        let properties = |value: &DimensionType| {
             (
                 value.min_y,
                 value.height,
@@ -768,10 +768,11 @@ impl World {
                 value.has_skylight,
                 value.fast_lava,
                 value.coordinate_scale.to_bits(),
+                value.infiniburn.clone(),
             )
         };
         ensure!(
-            properties(self.dimension) == properties(stem.dimension),
+            properties(&self.dimension) == properties(&stem.dimension),
             "World dimension properties differ from its registered stem"
         );
         ensure!(
@@ -792,7 +793,7 @@ impl World {
     ) -> Result<(Self, Option<StartupSpawn>)> {
         let mut timing = crate::generation::profile::Span::new("open_dimension", None);
         let stem = services.stem(&dimension_key)?;
-        let dimension = stem.dimension;
+        let dimension = stem.dimension.clone();
         let generator = stem.generator.clone();
         let access = services.access.clone();
         let seed = services.seed;
@@ -811,10 +812,10 @@ impl World {
         let generation = services.generation.clone();
         let light_pool = services.light_pool.clone();
         timing.checkpoint("storage_and_stem");
-        let mut context = ferraloom_game::level::generation::WorldGenContext::load(
-            &services.resources,
+        let mut context = ferraloom_game::level::generation::WorldGenContext::from_registries(
+            services.worldgen.clone(),
             generator.clone(),
-            dimension,
+            dimension.clone(),
             seed,
             services.generate_structures,
             services.dimensions.environment.clone(),
@@ -830,6 +831,7 @@ impl World {
         let io = if initialize_spawn {
             let (reply, result) = mpsc::channel();
             let spawn_generator = generator.clone();
+            let spawn_dimension = dimension.clone();
             let bonus_chest = services.bonus_chest;
             let registry = registry.clone();
             let _task = generation.submit(move || {
@@ -837,7 +839,7 @@ impl World {
                     let mut world = SpawnChunks {
                         generator: spawn_generator,
                         registry,
-                        dimension,
+                        dimension: spawn_dimension,
                         state: generation_state,
                         io,
                         chunks: BTreeMap::new(),
@@ -926,7 +928,7 @@ impl World {
                 proto_structures,
                 generation,
                 generation_state: Some(generation_state),
-                generation_work: None,
+                generation_task: None,
                 progress_waker: Waker::noop().clone(),
                 generation_dispatcher: ThrottlingChunkTaskDispatcher::new(4),
                 active_generation: BTreeMap::new(),
@@ -997,7 +999,9 @@ impl World {
                 })?),
                 self.initial_difficulty,
             )
+            .with_dimension_type(self.dimension.clone())
             .with_registry_context(self.services.registry_context.clone())
+            .with_structure_templates(self.services.worldgen.templates.clone())
             .with_block_transformers(Arc::new(timing.measure("block_transformers", || {
                 ferraloom_game::item::block_transformer::BlockTransformerRegistry::load(resources)
             })?))
@@ -1245,7 +1249,7 @@ impl World {
         );
     }
     fn start_generation(&mut self) -> Result<()> {
-        if self.generation_work.is_some() {
+        if self.generation_task.is_some() {
             return Ok(());
         }
         let mut next = None;
@@ -1293,43 +1297,14 @@ impl World {
             }
         }
         self.running_generation = Some((request.id, request.pos));
-        self.generation_work = Some(self.generation.submit(move || {
-            let _timing = crate::generation::profile::Span::new(
-                "generation_job",
-                Some((request.id, request.pos)),
-            )
-            .status(request.status);
-            let mut result = state.generate(
-                request.id,
-                request.pos,
-                request.status,
-                &registry,
-                &io,
-                Some(&request.cancelled),
-            );
-            let cleanup = if request.cancelled.load(Ordering::Relaxed) {
-                state.save_proto_chunks(&registry, &io).and_then(|()| {
-                    if let Ok(output) = &result {
-                        io.store(request.pos, Some(output.terrain.disk.write()?))
-                            .wait()?;
-                    }
-                    Ok(())
-                })
-            } else if result.is_ok() {
-                state.save_unclaimed_protos(&retained, &registry, &io)
-            } else {
-                Ok(())
-            };
-            if let Ok(output) = &mut result {
-                output.statuses = state.completed_statuses();
-            }
-            GenerationCompletion {
-                state,
-                result,
-                request,
-                cleanup,
-            }
-        }));
+        self.generation_task = Some(crate::generation::dispatch_generation(
+            state,
+            request,
+            retained,
+            registry,
+            io,
+            self.generation.clone(),
+        )?);
         Ok(())
     }
     fn complete_generation(&mut self, output: GenerationCompletion) -> Result<()> {
@@ -1373,7 +1348,7 @@ impl World {
     /// Pause dispatch while save captures canonical data. No worker owns live
     /// chunks; pending requests resume at the next normal integration poll.
     pub async fn finish_generation(&mut self) -> Result<()> {
-        if let Some(work) = self.generation_work.take() {
+        if let Some(work) = self.generation_task.take() {
             self.complete_generation(work.await?)?;
         }
         Ok(())
@@ -1596,24 +1571,24 @@ impl World {
         // Integrate completed results before capturing the next job's live
         // imposter snapshots, including post-processing writes and heightmaps.
         if self.completed_generation.is_empty() {
-            let running = self.generation_work.is_some();
+            let running = self.generation_task.is_some();
             self.start_generation()?;
-            progressed |= !running && self.generation_work.is_some();
+            progressed |= !running && self.generation_task.is_some();
         }
         Ok(progressed)
     }
     pub(crate) fn generation_running(&self) -> bool {
-        self.generation_work.is_some()
+        self.generation_task.is_some()
     }
     /// Settle the submitted layer without dispatching a new one. Receivers and
     /// later completions stay reachable in the canonical backend during waits.
     pub(crate) fn poll_running_generation(&mut self) -> Result<bool> {
         let waker = self.progress_waker.clone();
         let mut context = TaskContext::from_waker(&waker);
-        if let Some(work) = &mut self.generation_work {
+        if let Some(work) = &mut self.generation_task {
             match Pin::new(work).poll(&mut context) {
                 Poll::Ready(Ok(output)) => {
-                    self.generation_work = None;
+                    self.generation_task = None;
                     self.complete_generation(output)?;
                     return Ok(true);
                 }
@@ -2653,6 +2628,98 @@ mod light_worker_tests {
 #[cfg(test)]
 mod generation_order_tests {
     use super::*;
+
+    #[tokio::test]
+    async fn dimensions_share_worldgen_registries_and_keep_flat_features_separate() {
+        let resources = crate::generation_tests::resources();
+        let registries = Arc::new(RegistrySet::load(&resources).unwrap());
+        let directory = tempfile::tempdir().unwrap();
+        let mut properties = ServerProperties::from_values(Default::default());
+        properties.set("level-type", "minecraft:normal");
+        properties.set("level-seed", 12345);
+        properties.set("generate-structures", false);
+        let mut root = WorldRoot::open(
+            directory.path(),
+            &properties,
+            &resources,
+            &registries,
+            ferraloom_game::block::UnportedBehavior::Strict,
+        )
+        .unwrap();
+        // This fixture exercises construction, without invoking spawn search.
+        root.level_data
+            .data
+            .insert("spawn", spawn_tag(BlockPos::new(0, 80, 0)));
+        let shared = root.services.worldgen.clone();
+        let dimensions = root
+            .dimensions
+            .dimensions
+            .iter()
+            .map(|stem| stem.name.to_string().parse().unwrap())
+            .collect::<Vec<_>>();
+        assert!(dimensions.len() > 1);
+        let mut contexts = Vec::new();
+        for dimension in dimensions {
+            let mut world = root.open_dimension(dimension, &properties).unwrap();
+            let context = world.generation_state.as_ref().unwrap().context.clone();
+            assert!(Arc::ptr_eq(&shared, &context.registries));
+            assert!(Arc::ptr_eq(
+                world
+                    .level_context(&resources)
+                    .unwrap()
+                    .structure_templates()
+                    .unwrap(),
+                &shared.templates,
+            ));
+            assert!(Arc::ptr_eq(&world.generator, &context.generator));
+            assert!(std::ptr::eq(context.features(), &shared.features));
+            assert_eq!(context.seed, root.seed);
+            assert_eq!(context.structure_state.seed, root.seed);
+            assert_eq!(
+                context.structure_state.origin,
+                world.generator.get_origin().unwrap()
+            );
+            assert_eq!(context.dimension.height, world.dimension.height);
+            assert_eq!(context.dimension.has_skylight, world.dimension.has_skylight);
+            contexts.push(context);
+            world.close_chunk_storage().await.unwrap();
+        }
+        assert!(!Arc::ptr_eq(&contexts[0], &contexts[1]));
+        let generator = Arc::new(
+            ChunkGenerator::decode(
+                &serde_json::json!({"type":"minecraft:flat", "settings":{
+                    "layers":[{"height":1,"block":"minecraft:water"}],
+                    "biome":"minecraft:plains", "features":true, "lakes":true,
+                    "structure_overrides":[]
+                }}),
+                &resources,
+                Arc::new(GenerationData::load(&resources).unwrap()),
+                root.seed,
+            )
+            .unwrap(),
+        );
+        let ChunkGenerator::Flat(flat) = generator.as_ref() else {
+            unreachable!()
+        };
+        let expected = flat.feature_registry(&resources).unwrap();
+        let flat = ferraloom_game::level::generation::WorldGenContext::from_registries(
+            shared.clone(),
+            generator,
+            contexts[0].dimension.clone(),
+            root.seed,
+            false,
+            contexts[0].environment.clone(),
+            contexts[0].dimension_environment.clone(),
+        )
+        .unwrap();
+        assert!(Arc::ptr_eq(&shared, &flat.registries));
+        assert!(!std::ptr::eq(flat.features(), &shared.features));
+        assert_eq!(flat.features().biome_features, expected.biome_features);
+        assert_eq!(
+            flat.features().placed.keys().collect::<Vec<_>>(),
+            expected.placed.keys().collect::<Vec<_>>()
+        );
+    }
 
     #[tokio::test]
     async fn saved_world_structure_option_overrides_properties_and_defaults_to_true() {

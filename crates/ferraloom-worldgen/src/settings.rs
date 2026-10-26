@@ -103,7 +103,8 @@ impl NoiseGeneratorSettings {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+/// Port of DimensionType#DIRECT_CODEC's generation and infiniburn fields.
+#[derive(Clone, Debug)]
 pub struct DimensionType {
     pub min_y: i32,
     pub height: i32,
@@ -113,6 +114,8 @@ pub struct DimensionType {
     /// FAST_LAVA's dimension constant, after applying the dimension modifier.
     pub fast_lava: bool,
     pub coordinate_scale: f64,
+    /// DimensionType#infiniburn: the decoded block holder set, independent of the level key.
+    pub infiniburn: crate::structure::processor::BlockSet,
 }
 impl DimensionType {
     pub fn decode(v: &Value) -> Result<Self, Error> {
@@ -133,6 +136,7 @@ impl DimensionType {
                 9.999999747378752E-6,
                 30000000.0,
             )?,
+            infiniburn: crate::structure::processor::BlockSet::decode(field(v, "infiniburn")?)?,
         })
     }
 }

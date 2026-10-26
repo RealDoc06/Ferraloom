@@ -4,6 +4,8 @@ use super::*;
 mod bossbar_commands;
 #[path = "data_commands.rs"]
 mod data_commands;
+#[path = "place_commands.rs"]
+mod place_commands;
 #[path = "scoreboard_commands.rs"]
 mod scoreboard_commands;
 #[path = "summon_commands.rs"]

@@ -36,6 +36,31 @@ impl Default for EntityTracker {
     }
 }
 impl Level {
+    /// Port of ServerLevel#canSpreadFireAround and ChunkMap#anyPlayerCloseEnoughTo.
+    /// Distance is from the integer block corner, with a strict radius boundary;
+    /// ignored chunk-generation players still participate unless spectators.
+    pub fn can_spread_fire_around(
+        &self,
+        pos: ferraloom_util::BlockPos,
+    ) -> Result<bool, LevelError> {
+        let radius = self.rules().fire_spread_radius_around_player;
+        if radius == -1 {
+            return Ok(true);
+        }
+        for &player in self.region().entity_tracker.player_map.keys() {
+            if self.entity_behavior(player)?.is_spectator(player, self)? {
+                continue;
+            }
+            let at = self.entity::<EntityData>(player)?.position;
+            let x = at.x - f64::from(pos.x);
+            let y = at.y - f64::from(pos.y);
+            let z = at.z - f64::from(pos.z);
+            if (x * x + y * y + z * z).sqrt() < f64::from(radius) {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
     /// Publish the canonical server properties before entities enter the level.
     pub fn configure_entity_tracking(&mut self, view_distance: i32, range_percentage: i32) {
         let tracker = &mut self.region_mut().entity_tracker;
