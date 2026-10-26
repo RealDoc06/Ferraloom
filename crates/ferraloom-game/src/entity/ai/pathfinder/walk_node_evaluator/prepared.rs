@@ -11,7 +11,7 @@ use ferraloom_util::{Aabb, Axis, BlockPos, Direction, Vec3};
 use std::collections::HashMap;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub(super) enum WalkKind {
+pub(in crate::entity::ai::pathfinder) enum WalkKind {
     Walk,
     Fly,
     Amphibious { prefers_shallow: bool },
@@ -20,8 +20,8 @@ pub(super) enum WalkKind {
 /// Port of WalkNodeEvaluator. The prepared frame borrows the canonical Mob
 /// access and the level; it owns only native per-search caches and node handles.
 pub struct WalkNodeEvaluator<'a, M> {
-    pub(super) context: Context<'a, M>,
-    pub(super) kind: WalkKind,
+    pub(in crate::entity::ai::pathfinder) context: Context<'a, M>,
+    pub(in crate::entity::ai::pathfinder) kind: WalkKind,
     types: HashMap<i64, PathType>,
     collisions: HashMap<[u64; 6], bool>,
     old_walkable: f32,
@@ -31,7 +31,7 @@ impl<'a, M: MobAccess> WalkNodeEvaluator<'a, M> {
     pub fn new(region: &'a PathNavigationRegion, level: &'a mut Level, mob: &'a mut M) -> Self {
         Self::with_kind(region, level, mob, WalkKind::Walk)
     }
-    pub(super) fn with_kind(
+    pub(in crate::entity::ai::pathfinder) fn with_kind(
         region: &'a PathNavigationRegion,
         level: &'a mut Level,
         mob: &'a mut M,
@@ -143,7 +143,10 @@ impl<'a, M: MobAccess> WalkNodeEvaluator<'a, M> {
             highest
         })
     }
-    pub(super) fn cached_type(&mut self, pos: BlockPos) -> Result<PathType, LevelError> {
+    pub(in crate::entity::ai::pathfinder) fn cached_type(
+        &mut self,
+        pos: BlockPos,
+    ) -> Result<PathType, LevelError> {
         if let Some(value) = self.types.get(&pos.as_long()) {
             return Ok(*value);
         }
@@ -151,7 +154,7 @@ impl<'a, M: MobAccess> WalkNodeEvaluator<'a, M> {
         self.types.insert(pos.as_long(), value);
         Ok(value)
     }
-    pub(super) fn start_node(
+    pub(in crate::entity::ai::pathfinder) fn start_node(
         &mut self,
         pos: BlockPos,
         data: &mut PathData,
@@ -163,7 +166,10 @@ impl<'a, M: MobAccess> WalkNodeEvaluator<'a, M> {
         data[node].cost_malus = self.context.malus(data[node].path_type)?;
         Ok(node)
     }
-    pub(super) fn can_start_at(&mut self, pos: BlockPos) -> Result<bool, LevelError> {
+    pub(in crate::entity::ai::pathfinder) fn can_start_at(
+        &mut self,
+        pos: BlockPos,
+    ) -> Result<bool, LevelError> {
         let path_type = self.cached_type(pos)?;
         Ok((self.kind == WalkKind::Fly || path_type != PathType::Open)
             && self.context.malus(path_type)? >= 0.0)
@@ -242,7 +248,10 @@ impl<'a, M: MobAccess> WalkNodeEvaluator<'a, M> {
         }
         self.start_node(start, data)
     }
-    pub(super) fn floor_level(&self, pos: BlockPos) -> Result<f64, LevelError> {
+    pub(in crate::entity::ai::pathfinder) fn floor_level(
+        &self,
+        pos: BlockPos,
+    ) -> Result<f64, LevelError> {
         let reader = self.context.reader()?;
         if (self.context.capabilities.can_float || self.amphibious())
             && reader.fluid_tags()?.contains_key(
@@ -319,7 +328,7 @@ impl<'a, M: MobAccess> WalkNodeEvaluator<'a, M> {
         data[node].cost_malus = -1.0;
         node
     }
-    pub(super) fn accepted_node(
+    pub(in crate::entity::ai::pathfinder) fn accepted_node(
         &mut self,
         pos: BlockPos,
         jump: i32,
@@ -427,7 +436,11 @@ impl<'a, M: MobAccess> WalkNodeEvaluator<'a, M> {
         }
         Ok(best)
     }
-    pub(super) fn neighbor_valid(node: Option<NodeId>, current: NodeId, data: &PathData) -> bool {
+    pub(in crate::entity::ai::pathfinder) fn neighbor_valid(
+        node: Option<NodeId>,
+        current: NodeId,
+        data: &PathData,
+    ) -> bool {
         node.is_some_and(|n| {
             !data[n].closed && (data[n].cost_malus >= 0.0 || data[current].cost_malus < 0.0)
         })
@@ -462,7 +475,7 @@ impl<'a, M: MobAccess> WalkNodeEvaluator<'a, M> {
         Ok((a.pos.y < pos.pos.y || a.cost_malus >= 0.0 || posts)
             && (b.pos.y < pos.pos.y || b.cost_malus >= 0.0 || posts))
     }
-    pub(super) fn walk_neighbors(
+    pub(in crate::entity::ai::pathfinder) fn walk_neighbors(
         &mut self,
         current: NodeId,
         neighbors: &mut Vec<NodeId>,
@@ -634,7 +647,7 @@ impl<M: MobAccess> NodeEvaluator for WalkNodeEvaluator<'_, M> {
         }
     }
 }
-pub(super) const HORIZONTAL: [Direction; 4] = [
+pub(in crate::entity::ai::pathfinder) const HORIZONTAL: [Direction; 4] = [
     Direction::North,
     Direction::East,
     Direction::South,
@@ -646,7 +659,7 @@ fn partial_collision(path_type: PathType) -> bool {
         PathType::Fence | PathType::DoorWoodClosed | PathType::DoorIronClosed
     )
 }
-pub(super) fn java_max(a: f32, b: f32) -> f32 {
+pub(in crate::entity::ai::pathfinder) fn java_max(a: f32, b: f32) -> f32 {
     ferraloom_util::java::max(a as f64, b as f64) as f32
 }
 
@@ -813,7 +826,7 @@ impl<M: MobAccess> WalkNodeEvaluator<'_, M> {
             if data[node].closed {
                 continue;
             }
-            let prerequisites = OFFSETS[..i].iter().enumerate().filter(|(_, &(a, b, c))| {
+            let prerequisites = OFFSETS[..i].iter().enumerate().filter(|&(_, &(a, b, c))| {
                 (a == 0 || a == x)
                     && (b == 0 || b == y)
                     && (c == 0 || c == z)

@@ -5,7 +5,7 @@ use super::{
     walk_node_evaluator::prepared::{HORIZONTAL, java_max},
 };
 use crate::level::{Level, LevelError, path_navigation_region::PathNavigationRegion};
-use ferraloom_data::{registries::fluid, tags::FluidTags};
+use ferraloom_data::tags::FluidTags;
 use ferraloom_util::{BlockPos, Direction, Vec3};
 use std::collections::HashMap;
 
@@ -46,7 +46,7 @@ impl<'a, M: MobAccess> SwimNodeEvaluator<'a, M> {
                     last = BlockPos::new(x, y, z);
                     let state = reader.get_block_state(last)?;
                     let below = reader.get_block_state(last.below(1))?;
-                    if state.data().fluid.fluid_type == fluid::EMPTY
+                    if state.data().fluid.empty
                         && reader.is_pathfindable(below, PathComputationType::Water)?
                         && state.is_air()
                     {
@@ -94,7 +94,7 @@ impl<'a, M: MobAccess> SwimNodeEvaluator<'a, M> {
         let node = self.context.node(pos, data);
         data[node].path_type = path_type;
         data[node].cost_malus = java_max(data[node].cost_malus, cost);
-        if self.context.state(pos)?.data().fluid.fluid_type == fluid::EMPTY {
+        if self.context.state(pos)?.data().fluid.empty {
             data[node].cost_malus += 8.0;
         }
         Ok(Some(node))
