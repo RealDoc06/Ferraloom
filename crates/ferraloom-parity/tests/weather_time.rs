@@ -149,12 +149,8 @@ async fn weather(session: &mut Session) -> Result<ObservationLog> {
     let id = session.join("ParityBot").await?;
     let bot = session.bot(id)?;
     level_support::freeze(bot).await?;
-    level_support::command(
-        bot,
-        "gamerule advance_weather false",
-        "commands.gamerule.set",
-    )
-    .await?;
+    // LaunchOptions already installs advance_weather=false. Native rejects
+    // assigning an unchanged rule, so do not wait for a set-success response.
     level_support::command(bot, "weather clear 1000", "commands.weather.set.clear").await?;
     stepped_window(bot, 110).await?;
     let mut log = ObservationLog::default();
@@ -217,6 +213,11 @@ async fn precipitation(session: &mut Session) -> Result<ObservationLog> {
     let water = BlockPos::new(6, -59, 8);
     let snow = BlockPos::new(10, -59, 8);
     for (text, key) in [
+        // Four flat layers end at -61; give the -59 snow a real -60 support.
+        (
+            "fill 5 -60 7 11 -60 9 minecraft:stone",
+            "commands.fill.success",
+        ),
         (
             "fill 5 -59 7 7 -59 9 minecraft:stone",
             "commands.fill.success",
@@ -238,6 +239,14 @@ async fn precipitation(session: &mut Session) -> Result<ObservationLog> {
     ] {
         level_support::command(bot, text, key).await?;
     }
+    level_support::expect_blocks(
+        bot,
+        &[
+            (water, Block::WATER.default_state()),
+            (snow, Block::SNOW.default_state()),
+        ],
+    )
+    .await?;
     for _ in 0..20 {
         level_support::step(bot, 20).await?;
         let snapshot = bot.snapshot();
@@ -251,20 +260,20 @@ async fn precipitation(session: &mut Session) -> Result<ObservationLog> {
             break;
         }
     }
-    level_support::expect_blocks(
-        bot,
-        &[
-            (water, Block::ICE.default_state()),
-            (
-                snow,
-                Block::SNOW
-                    .default_state()
-                    .with(properties::LAYERS, 2)
-                    .unwrap(),
-            ),
-        ],
-    )
-    .await?;
+    ensure!(
+        level_support::block(bot, water)?.block() == Block::ICE,
+        "source water did not freeze: {:?}",
+        level_support::block(bot, water)?
+    );
+    ensure!(
+        level_support::block(bot, snow)?
+            == Block::SNOW
+                .default_state()
+                .with(properties::LAYERS, 2)
+                .unwrap(),
+        "snow did not reach its two-layer cap: {:?}",
+        level_support::block(bot, snow)?
+    );
     level_support::step(bot, 40).await?;
     let mut log = ObservationLog::default();
     for (label, pos) in [
