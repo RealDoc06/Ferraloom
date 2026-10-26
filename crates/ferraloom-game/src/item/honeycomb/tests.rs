@@ -15,7 +15,7 @@ use ferraloom_protocol::{
     play::{InteractionHand, clientbound as cb},
 };
 use ferraloom_util::{
-    Direction, Vec3,
+    Direction,
     random::{LegacyRandomSource, Random, RandomSource},
 };
 use std::io::Read;
