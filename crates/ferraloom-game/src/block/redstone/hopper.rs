@@ -164,7 +164,7 @@ pub(super) fn try_move_in_item(
         })
         .map_err(stack_error)?;
     let state = operation.level.block_entity_state(handle)?;
-    if !access::can_place_item(state, local, &item)
+    if !access::can_place_item(state, local, &item, operation.level)?
         || !access::can_place_item_through_face(state, local, &item, direction)
     {
         return Ok(item);

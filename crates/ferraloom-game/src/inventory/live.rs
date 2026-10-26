@@ -384,11 +384,13 @@ impl MenuContainerAccess for LiveMenuContext<'_> {
             ContainerHandle::PlayerInventory(player) => self.with_player(player, |container| {
                 container.can_place_item(slot.slot, stack)
             }),
-            ContainerHandle::BlockEntity(handle) => Ok(access::can_place_item(
+            ContainerHandle::BlockEntity(handle) => access::can_place_item(
                 self.level.block_entity_state(handle)?,
                 slot.slot,
                 stack,
-            )),
+                self.level,
+            )
+            .map_err(MenuError::Level),
             ContainerHandle::MenuLocal {
                 player,
                 menu,
