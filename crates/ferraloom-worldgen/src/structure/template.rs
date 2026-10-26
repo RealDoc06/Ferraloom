@@ -13,7 +13,6 @@ use ferraloom_util::{
     random::{LegacyRandomSource, Random, RandomSource},
 };
 pub use manager::StructureTemplateManager;
-use std::{collections::BTreeMap, sync::Arc};
 
 /// Port of StructureTemplate.StructureBlockInfo.
 #[derive(Clone, Debug, Eq, PartialEq)]
