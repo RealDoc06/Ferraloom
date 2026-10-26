@@ -207,3 +207,115 @@ fn recursive_callback_failure_releases_root_and_required_factories_are_explicit(
         matches!(load_entity_recursive(&tag, request(), &mut level, |_, _| Ok(())), Err(EntityPersistenceError::UnsupportedType(name)) if name == "minecraft:zombie")
     );
 }
+
+#[test]
+fn single_root_creation_and_transform_virtuals_match_native_without_loading_passengers() {
+    use ferraloom_util::{Mirror, Rotation};
+    fn bits(value: f32) -> u32 {
+        if value.is_nan() {
+            0x7fc00000
+        } else {
+            value.to_bits()
+        }
+    }
+    let mut count = 0;
+    for line in include_str!("../../../../tests/java/entity/single_root/vectors.tsv").lines() {
+        let fields: Vec<_> = line.split('\t').collect();
+        let mut level = crate::entity::tests::persistence_level();
+        if fields[0] == "entity-single" {
+            let mut tag = ferraloom_nbt::parse_compound(fields[2]).unwrap();
+            if fields[1] == "invalid-position" {
+                tag.insert(
+                    "Pos",
+                    Tag::List(ferraloom_nbt::ListTag(vec![
+                        Tag::Double(f64::NAN),
+                        Tag::Double(64.0),
+                        Tag::Double(0.0),
+                    ])),
+                );
+            }
+            let result = create_entity_from_tag(&tag, request(), &mut level);
+            let observed = match result {
+                Ok(Some(entity)) => {
+                    level.finish_entity_management();
+                    let base = level.entity::<EntityData>(entity).unwrap();
+                    let observed = format!(
+                        "{}:{}:{}:{}",
+                        base.entity_type.name(),
+                        base.uuid.least,
+                        base.passengers.len(),
+                        base.vehicle.get().is_some()
+                    );
+                    let network_id = base.network_id;
+                    // A saved passenger, including an unported one, never invokes
+                    // its constructor on this single-root path.
+                    assert_eq!(
+                        level
+                            .create_entity_data(EntityType::TNT)
+                            .unwrap()
+                            .network_id,
+                        network_id + 1
+                    );
+                    assert!(level.all_entities().is_empty());
+                    level.release_entity(entity);
+                    level.finish_entity_management();
+                    assert!(level.entity_state(entity).is_err());
+                    observed
+                }
+                Ok(None) => "none".into(),
+                Err(EntityPersistenceError::Base(_)) => "error".into(),
+                Err(error) => panic!("{}: {error}", fields[1]),
+            };
+            assert_eq!(observed, fields[3], "{}", fields[1]);
+        } else {
+            let tag = ferraloom_nbt::parse_compound("{id:\"minecraft:tnt\"}").unwrap();
+            let entity = create_entity_from_tag(&tag, request(), &mut level)
+                .unwrap()
+                .unwrap();
+            let yaw = u32::from_str_radix(fields[1], 16).unwrap();
+            level.entity_mut::<EntityData>(entity).unwrap().yaw = f32::from_bits(yaw);
+            let behavior = level.entity_behavior(entity).unwrap();
+            let result = if fields[0] == "entity-rotate" {
+                behavior
+                    .rotate(
+                        entity,
+                        match fields[2] {
+                            "NONE" => Rotation::None,
+                            "CLOCKWISE_90" => Rotation::Clockwise90,
+                            "CLOCKWISE_180" => Rotation::Clockwise180,
+                            "COUNTERCLOCKWISE_90" => Rotation::CounterClockwise90,
+                            value => panic!("{value}"),
+                        },
+                        &mut level,
+                    )
+                    .unwrap()
+            } else {
+                behavior
+                    .mirror(
+                        entity,
+                        match fields[2] {
+                            "NONE" => Mirror::None,
+                            "LEFT_RIGHT" => Mirror::LeftRight,
+                            "FRONT_BACK" => Mirror::FrontBack,
+                            value => panic!("{value}"),
+                        },
+                        &mut level,
+                    )
+                    .unwrap()
+            };
+            assert_eq!(
+                bits(result),
+                u32::from_str_radix(fields[3], 16).unwrap(),
+                "{line}"
+            );
+            assert_eq!(
+                bits(level.entity::<EntityData>(entity).unwrap().yaw),
+                u32::from_str_radix(fields[4], 16).unwrap(),
+                "{line}: yaw must not mutate"
+            );
+            level.release_entity(entity);
+        }
+        count += 1;
+    }
+    assert_eq!(count, 125);
+}

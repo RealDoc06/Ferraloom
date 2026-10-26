@@ -13,6 +13,7 @@ use crate::{
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub enum ContainerHandle {
     PlayerInventory(EntityRef),
+    PlayerEnderChest(EntityRef),
     BlockEntity(BlockEntityRef),
     MenuLocal {
         player: EntityRef,
@@ -136,6 +137,18 @@ impl LiveMenuContext<'_> {
             equipment: &mut player.parent.equipment,
         }))
     }
+    fn with_ender_chest<R>(
+        &mut self,
+        player: EntityRef,
+        operation: impl FnOnce(&mut super::SimpleContainer) -> R,
+    ) -> Result<R> {
+        Ok(operation(
+            self.level
+                .entity_mut::<ServerPlayer>(player)?
+                .get_ender_chest_inventory_mut()
+                .contents_mut(),
+        ))
+    }
     fn with_local<R>(
         &mut self,
         player: EntityRef,
@@ -158,6 +171,10 @@ impl LiveMenuContext<'_> {
 impl MenuContainerAccess for LiveMenuContext<'_> {
     fn set_item_count(&mut self, slot: ContainerSlot, amount: i32) -> Result<()> {
         match slot.container {
+            ContainerHandle::PlayerEnderChest(player) => self
+                .with_ender_chest(player, |container| {
+                    container.set_item_count(slot.slot, amount)
+                })?,
             ContainerHandle::PlayerInventory(player) => self.with_player(player, |container| {
                 container.set_item_count(slot.slot, amount)
             })?,
@@ -186,6 +203,9 @@ impl MenuContainerAccess for LiveMenuContext<'_> {
     }
     fn get_item(&mut self, slot: ContainerSlot) -> Result<ItemStack> {
         match slot.container {
+            ContainerHandle::PlayerEnderChest(player) => {
+                self.with_ender_chest(player, |container| container.get_item(slot.slot))
+            }
             ContainerHandle::PlayerInventory(player) => {
                 self.with_player(player, |container| container.get_item(slot.slot))
             }
@@ -213,6 +233,9 @@ impl MenuContainerAccess for LiveMenuContext<'_> {
     }
     fn set_item(&mut self, slot: ContainerSlot, stack: ItemStack) -> Result<()> {
         match slot.container {
+            ContainerHandle::PlayerEnderChest(player) => {
+                self.with_ender_chest(player, |container| container.set_item(slot.slot, stack))
+            }
             ContainerHandle::PlayerInventory(player) => {
                 self.with_player(player, |container| container.set_item(slot.slot, stack))
             }
@@ -240,6 +263,9 @@ impl MenuContainerAccess for LiveMenuContext<'_> {
     }
     fn remove_item(&mut self, slot: ContainerSlot, amount: i32) -> Result<ItemStack> {
         match slot.container {
+            ContainerHandle::PlayerEnderChest(player) => {
+                self.with_ender_chest(player, |container| container.remove_item(slot.slot, amount))
+            }
             ContainerHandle::PlayerInventory(player) => {
                 self.with_player(player, |container| container.remove_item(slot.slot, amount))
             }
@@ -272,6 +298,10 @@ impl MenuContainerAccess for LiveMenuContext<'_> {
             ));
         }
         match slot.container {
+            ContainerHandle::PlayerEnderChest(player) => self
+                .with_ender_chest(player, |container| {
+                    container.remove_item_no_update(slot.slot)
+                }),
             ContainerHandle::PlayerInventory(player) => self.with_player(player, |container| {
                 container.remove_item_no_update(slot.slot)
             }),
@@ -299,6 +329,9 @@ impl MenuContainerAccess for LiveMenuContext<'_> {
     }
     fn set_changed(&mut self, container: ContainerHandle) -> Result<()> {
         match container {
+            ContainerHandle::PlayerEnderChest(player) => {
+                self.with_ender_chest(player, |container| container.set_changed())
+            }
             ContainerHandle::PlayerInventory(player) => {
                 self.with_player(player, |container| container.set_changed())
             }
@@ -327,6 +360,9 @@ impl MenuContainerAccess for LiveMenuContext<'_> {
     }
     fn size(&mut self, container: ContainerHandle) -> Result<usize> {
         match container {
+            ContainerHandle::PlayerEnderChest(player) => {
+                self.with_ender_chest(player, |container| container.size())
+            }
             ContainerHandle::PlayerInventory(player) => {
                 self.with_player(player, |container| container.size())
             }
@@ -353,6 +389,9 @@ impl MenuContainerAccess for LiveMenuContext<'_> {
     }
     fn max_stack_size(&mut self, container: ContainerHandle) -> Result<i32> {
         match container {
+            ContainerHandle::PlayerEnderChest(player) => {
+                self.with_ender_chest(player, |container| container.max_stack_size())
+            }
             ContainerHandle::PlayerInventory(player) => {
                 self.with_player(player, |container| container.max_stack_size())
             }
@@ -381,6 +420,10 @@ impl MenuContainerAccess for LiveMenuContext<'_> {
     }
     fn can_place_item(&mut self, slot: ContainerSlot, stack: &ItemStack) -> Result<bool> {
         match slot.container {
+            ContainerHandle::PlayerEnderChest(player) => self
+                .with_ender_chest(player, |container| {
+                    container.can_place_item(slot.slot, stack)
+                }),
             ContainerHandle::PlayerInventory(player) => self.with_player(player, |container| {
                 container.can_place_item(slot.slot, stack)
             }),
@@ -410,6 +453,9 @@ impl MenuContainerAccess for LiveMenuContext<'_> {
     }
     fn still_valid(&mut self, container: ContainerHandle) -> Result<bool> {
         match container {
+            ContainerHandle::PlayerEnderChest(player) => Ok(
+                crate::entity::player::ender_chest::still_valid(player, self.level)?,
+            ),
             ContainerHandle::BlockEntity(handle) => Ok(self.level.block_entity_ref(handle.pos)?
                 == Some(handle)
                 && self

@@ -289,6 +289,14 @@ pub fn player_touch(
 
 pub struct ItemEntityBehavior;
 impl Entity for ItemEntityBehavior {
+    fn get_slot(
+        &self,
+        entity: EntityRef,
+        slot: i32,
+        level: &Level,
+    ) -> Result<Option<crate::item::slot::SlotAccess>, LevelError> {
+        crate::item::slot::item_access(entity, slot, level)
+    }
     /// Port of ItemEntity#dampensVibrations on the live effective item receiver.
     fn dampens_vibrations(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
         let stack = level.entity::<ItemEntity>(entity)?.item();
