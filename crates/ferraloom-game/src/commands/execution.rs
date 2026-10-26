@@ -16,6 +16,19 @@ enum FrameControl {
     Depth(usize),
 }
 impl Frame {
+    /// Port of CallFunction's child frame and inherited return-parent control.
+    pub fn child(&self, callback: CommandResultCallback, return_parent: bool) -> Self {
+        let depth = self.depth + 1;
+        Self {
+            depth,
+            return_value_consumer: callback,
+            control: if return_parent {
+                self.control
+            } else {
+                FrameControl::Depth(depth)
+            },
+        }
+    }
     pub fn return_success(&self, host: &mut dyn CommandCallbackHost, value: i32) {
         self.return_value_consumer.on_success(host, value);
     }
