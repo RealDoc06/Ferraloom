@@ -3,10 +3,7 @@ use super::{stack_error, state::facing, storage::HopperBlockEntity};
 use crate::{
     block::{
         BlockBehavior, LevelReaderRef, UPDATE_LIMIT, UpdateFlags,
-        containers::{
-            access::{self, ContainerRef},
-            storage::BaseContainerBlockEntity,
-        },
+        containers::access::{self, ContainerRef},
         entity::{BlockEntityRef, BlockEntityState},
     },
     entity::{
@@ -16,7 +13,7 @@ use crate::{
             copy_with_count, count, is_same_item_same_components, max_stack_size, set_count,
         },
     },
-    inventory::{Container, ContainerHandle, ContainerSlot, StackOperation, StackRef, StackValue},
+    inventory::{ContainerHandle, ContainerSlot, StackOperation, StackRef, StackValue},
     level::{Level, LevelError, redstone::Orientation},
 };
 use ferraloom_data::{Block, BlockState, properties as p, tags::BlockTags};
