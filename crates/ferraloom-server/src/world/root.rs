@@ -149,9 +149,13 @@ impl WorldRoot {
         let dimension_types = dimension_type_keys(&preset.definition)?;
         let worldgen = {
             let _timing = crate::generation::profile::Span::new("worldgen_registries", None);
-            Arc::new(ferraloom_game::level::generation::WorldGenRegistries::load(
-                resources, &data,
-            )?)
+            Arc::new(
+                ferraloom_game::level::generation::WorldGenRegistries::load_for_world(
+                    resources,
+                    &data,
+                    access.path(),
+                )?,
+            )
         };
         let mut level_data = if access.path().join("level.dat").exists() {
             access.read_level_data()?

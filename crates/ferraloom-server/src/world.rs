@@ -998,6 +998,7 @@ impl World {
                 self.initial_difficulty,
             )
             .with_registry_context(self.services.registry_context.clone())
+            .with_structure_templates(self.services.worldgen.templates.clone())
             .with_block_transformers(Arc::new(timing.measure("block_transformers", || {
                 ferraloom_game::item::block_transformer::BlockTransformerRegistry::load(resources)
             })?))
@@ -2688,6 +2689,14 @@ mod generation_order_tests {
             let mut world = root.open_dimension(dimension, &properties).unwrap();
             let context = world.generation_state.as_ref().unwrap().context.clone();
             assert!(Arc::ptr_eq(&shared, &context.registries));
+            assert!(Arc::ptr_eq(
+                world
+                    .level_context(&resources)
+                    .unwrap()
+                    .structure_templates()
+                    .unwrap(),
+                &shared.templates,
+            ));
             assert!(Arc::ptr_eq(&world.generator, &context.generator));
             assert!(std::ptr::eq(context.features(), &shared.features));
             assert_eq!(context.seed, root.seed);

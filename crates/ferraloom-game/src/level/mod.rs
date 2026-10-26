@@ -123,6 +123,7 @@ pub enum LevelError {
     },
     MissingTrackedEntity(i32),
     MissingRegistryContext,
+    MissingStructureTemplates,
     MissingMobVariants,
     UnsupportedSpawnCondition(ferraloom_protocol::Identifier),
     MissingNetworkRegistryEntry {
