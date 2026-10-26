@@ -33,20 +33,24 @@ static VECTORS: LazyLock<String> = LazyLock::new(|| {
     text
 });
 static EMPTY: Behaviors = Behaviors::EMPTY;
-static TAGS: LazyLock<(Arc<TagSet<Block>>, Arc<TagSet<Fluid>>)> = LazyLock::new(|| {
+struct NativeTags {
+    blocks: Arc<TagSet<Block>>,
+    fluids: Arc<TagSet<Fluid>>,
+}
+static TAGS: LazyLock<NativeTags> = LazyLock::new(|| {
     let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").expect("builder supplies native tags");
     let resources =
         ResourceManager::new(vec![Pack::vanilla_jar(std::path::Path::new(&jar)).unwrap()]);
-    (
-        Arc::new(TagSet::load(&resources).unwrap()),
-        Arc::new(TagSet::load(&resources).unwrap()),
-    )
+    NativeTags {
+        blocks: Arc::new(TagSet::load(&resources).unwrap()),
+        fluids: Arc::new(TagSet::load(&resources).unwrap()),
+    }
 });
 
 fn level(origin: BlockPos) -> Level {
     let mut level = Level::new(Region::new(&EMPTY), LevelContext::fixture(0, 63));
-    level.set_block_tags(Arc::clone(&TAGS.0));
-    level.set_fluid_tags(Arc::clone(&TAGS.1));
+    level.set_block_tags(Arc::clone(&TAGS.blocks));
+    level.set_fluid_tags(Arc::clone(&TAGS.fluids));
     let biome = ferraloom_chunk::BiomeId(0);
     let section = LevelChunkSection::new(
         ferraloom_chunk::Strategy::block_states(),
