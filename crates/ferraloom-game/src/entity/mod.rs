@@ -1063,28 +1063,93 @@ pub trait Entity: Sync {
     ) -> Result<(), LevelError> {
         Ok(())
     }
+    /// LivingEntity owns head rotation; Entity's parent body is empty.
     fn set_y_head_rot(
         &self,
-        _entity: EntityRef,
-        _value: f32,
-        _level: &mut Level,
+        entity: EntityRef,
+        value: f32,
+        level: &mut Level,
     ) -> Result<(), LevelError> {
+        if let Some(living) = level.entity_state_mut(entity)?.as_living_mut() {
+            living.y_head_rot = value;
+        }
         Ok(())
     }
+    /// LivingEntity owns body rotation; Entity's parent body is empty.
     fn set_y_body_rot(
         &self,
-        _entity: EntityRef,
-        _value: f32,
-        _level: &mut Level,
+        entity: EntityRef,
+        value: f32,
+        level: &mut Level,
     ) -> Result<(), LevelError> {
+        if let Some(living) = level.entity_state_mut(entity)?.as_living_mut() {
+            living.y_body_rot = value;
+        }
         Ok(())
     }
     /// Port of Entity#repositionEntityAfterLoad's inherited true result.
     fn reposition_entity_after_load(&self) -> bool {
         true
     }
-    fn y_head_rot(&self, _entity: EntityRef, _level: &Level) -> Result<f32, LevelError> {
-        Ok(0.0)
+    fn y_head_rot(&self, entity: EntityRef, level: &Level) -> Result<f32, LevelError> {
+        Ok(level
+            .entity_state(entity)?
+            .as_living()
+            .map_or(0.0, |living| living.y_head_rot))
+    }
+    /// Port of LivingEntity#setSpeed and Mob's forward-input override.
+    fn set_speed(
+        &self,
+        entity: EntityRef,
+        speed: f32,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        if level.entity_state(entity)?.as_mob().is_some() {
+            mob::set_speed(self, entity, speed, level)
+        } else {
+            level.entity_mut::<LivingEntity>(entity)?.set_speed(speed);
+            Ok(())
+        }
+    }
+    /// Port of Mob#setZza, dispatched after the parent speed write.
+    fn set_zza(&self, entity: EntityRef, value: f32, level: &mut Level) -> Result<(), LevelError> {
+        level.entity_mut::<Mob>(entity)?.parent.zza = value;
+        Ok(())
+    }
+    /// Port of Mob#setXxa.
+    fn set_xxa(&self, entity: EntityRef, value: f32, level: &mut Level) -> Result<(), LevelError> {
+        level.entity_mut::<Mob>(entity)?.parent.xxa = value;
+        Ok(())
+    }
+    /// Port of Mob#setYya.
+    fn set_yya(&self, entity: EntityRef, value: f32, level: &mut Level) -> Result<(), LevelError> {
+        level.entity_mut::<Mob>(entity)?.parent.yya = value;
+        Ok(())
+    }
+    /// Port of LivingEntity#setJumping.
+    fn set_jumping(
+        &self,
+        entity: EntityRef,
+        value: bool,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        level.entity_mut::<LivingEntity>(entity)?.jumping = value;
+        Ok(())
+    }
+    /// Port of Mob#getMaxHeadXRot. Concrete family overrides remain virtual.
+    fn get_max_head_x_rot(&self, entity: EntityRef, level: &Level) -> Result<i32, LevelError> {
+        level.entity::<Mob>(entity)?;
+        Ok(40)
+    }
+    /// Port of Mob#getMaxHeadYRot.
+    fn get_max_head_y_rot(&self, entity: EntityRef, level: &Level) -> Result<i32, LevelError> {
+        level.entity::<Mob>(entity)?;
+        Ok(75)
+    }
+    /// Port of Mob#getHeadRotSpeed; native base is a constant, not an attribute.
+    fn get_head_rot_speed(&self, entity: EntityRef, level: &Level) -> Result<i32, LevelError> {
+        level.entity::<Mob>(entity)?;
+        Ok(10)
     }
     fn effective_gravity(&self, entity: EntityRef, level: &Level) -> Result<f64, LevelError> {
         base_effective_gravity(self, entity, level)

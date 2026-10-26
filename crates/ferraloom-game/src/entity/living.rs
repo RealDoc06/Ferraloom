@@ -158,6 +158,11 @@ impl LivingEntity {
         living.y_head_rot = living.parent.yaw;
         living
     }
+    /// Port of LivingEntity#setSpeed's parent body. Use Entity::set_speed for
+    /// virtual calls so Mob also updates forward input at its native point.
+    pub fn set_speed(&mut self, speed: f32) {
+        self.speed = speed;
+    }
     pub fn is_swinging(&self) -> bool {
         self.swing_state.is_swinging()
     }

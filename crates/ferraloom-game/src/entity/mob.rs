@@ -82,3 +82,6 @@ pub use tick::server_ai_step;
 
 #[cfg(test)]
 mod foundation_tests;
+
+mod control_access;
+pub use control_access::set_speed;
