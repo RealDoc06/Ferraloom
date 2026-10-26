@@ -116,6 +116,7 @@ mod tests {
             let compatibility = match decoded.compatibility {
                 PackCompatibility::TooOld => "TOO_OLD",
                 PackCompatibility::TooNew => "TOO_NEW",
+                PackCompatibility::Unknown => "UNKNOWN",
                 PackCompatibility::Compatible => "COMPATIBLE",
             };
             assert_eq!(
@@ -124,7 +125,7 @@ mod tests {
                 "{row}"
             );
             assert_eq!(
-                decoded.description.to_json().unwrap(),
+                <Component as Persistent>::to_json(&decoded.description).unwrap(),
                 row["description"],
                 "{row}"
             );

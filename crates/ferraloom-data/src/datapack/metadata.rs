@@ -72,11 +72,14 @@ impl FormatRange {
 pub enum PackCompatibility {
     TooOld,
     TooNew,
+    Unknown,
     Compatible,
 }
 impl PackCompatibility {
     pub fn for_version(range: FormatRange, version: PackFormat) -> Self {
-        if range.max < version {
+        if range.min.major == i32::MAX {
+            Self::Unknown
+        } else if range.max < version {
             Self::TooOld
         } else if range.min > version {
             Self::TooNew

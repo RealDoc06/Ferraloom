@@ -92,6 +92,7 @@ fn compatibility<D>(metadata: &PackMetadata<D>) -> &'static str {
     match metadata.compatibility {
         PackCompatibility::TooOld => "TOO_OLD",
         PackCompatibility::TooNew => "TOO_NEW",
+        PackCompatibility::Unknown => "UNKNOWN",
         PackCompatibility::Compatible => "COMPATIBLE",
     }
 }
