@@ -102,6 +102,7 @@ fn level(unloaded_corner: bool) -> Level {
         Region::new(&crate::Behaviors::EMPTY),
         LevelContext::fixture(0, 63),
     );
+    level.install_shared(Box::default());
     let biome = ferraloom_chunk::BiomeId(0);
     for x in -1..=1 {
         for z in -1..=1 {

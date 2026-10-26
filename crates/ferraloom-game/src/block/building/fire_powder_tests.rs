@@ -78,6 +78,7 @@ fn powder_inherited_place_and_tick_match_native_creation_and_blocked_supports() 
         let tick = f[4].parse::<i64>().unwrap();
         if tick == 0 {
             let mut level = level();
+            level.install_shared(Box::default());
             crate::level::drop_fixtures::install(&mut level);
             let chunk = ChunkPos::containing(POS);
             level
@@ -146,6 +147,7 @@ fn concrete_powder_landing_matches_native_replaced_fluids_and_all_water_masks() 
         level::effects::LevelEffect,
     };
     let mut level = level();
+    level.install_shared(Box::default());
     level
         .set_chunk_loading_status(
             ferraloom_util::ChunkPos::containing(POS),
