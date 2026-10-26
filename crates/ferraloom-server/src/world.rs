@@ -647,7 +647,7 @@ pub struct World {
     proto_structures: BTreeMap<i64, ProtoStructureSnapshot>,
     generation: Arc<JobPool>,
     generation_state: Option<GenerationState>,
-    generation_work: Option<oneshot::Receiver<GenerationCompletion>>,
+    generation_task: Option<oneshot::Receiver<GenerationCompletion>>,
     progress_waker: Waker,
     generation_dispatcher: ThrottlingChunkTaskDispatcher<GenerationRequest>,
     active_generation: BTreeMap<i64, GenerationActivity>,
@@ -926,7 +926,7 @@ impl World {
                 proto_structures,
                 generation,
                 generation_state: Some(generation_state),
-                generation_work: None,
+                generation_task: None,
                 progress_waker: Waker::noop().clone(),
                 generation_dispatcher: ThrottlingChunkTaskDispatcher::new(4),
                 active_generation: BTreeMap::new(),
@@ -1246,7 +1246,7 @@ impl World {
         );
     }
     fn start_generation(&mut self) -> Result<()> {
-        if self.generation_work.is_some() {
+        if self.generation_task.is_some() {
             return Ok(());
         }
         let mut next = None;
@@ -1294,43 +1294,14 @@ impl World {
             }
         }
         self.running_generation = Some((request.id, request.pos));
-        self.generation_work = Some(self.generation.submit(move || {
-            let _timing = crate::generation::profile::Span::new(
-                "generation_job",
-                Some((request.id, request.pos)),
-            )
-            .status(request.status);
-            let mut result = state.generate(
-                request.id,
-                request.pos,
-                request.status,
-                &registry,
-                &io,
-                Some(&request.cancelled),
-            );
-            let cleanup = if request.cancelled.load(Ordering::Relaxed) {
-                state.save_proto_chunks(&registry, &io).and_then(|()| {
-                    if let Ok(output) = &result {
-                        io.store(request.pos, Some(output.terrain.disk.write()?))
-                            .wait()?;
-                    }
-                    Ok(())
-                })
-            } else if result.is_ok() {
-                state.save_unclaimed_protos(&retained, &registry, &io)
-            } else {
-                Ok(())
-            };
-            if let Ok(output) = &mut result {
-                output.statuses = state.completed_statuses();
-            }
-            GenerationCompletion {
-                state,
-                result,
-                request,
-                cleanup,
-            }
-        }));
+        self.generation_task = Some(crate::generation::dispatch_generation(
+            state,
+            request,
+            retained,
+            registry,
+            io,
+            self.generation.clone(),
+        )?);
         Ok(())
     }
     fn complete_generation(&mut self, output: GenerationCompletion) -> Result<()> {
@@ -1374,7 +1345,7 @@ impl World {
     /// Pause dispatch while save captures canonical data. No worker owns live
     /// chunks; pending requests resume at the next normal integration poll.
     pub async fn finish_generation(&mut self) -> Result<()> {
-        if let Some(work) = self.generation_work.take() {
+        if let Some(work) = self.generation_task.take() {
             self.complete_generation(work.await?)?;
         }
         Ok(())
@@ -1597,24 +1568,24 @@ impl World {
         // Integrate completed results before capturing the next job's live
         // imposter snapshots, including post-processing writes and heightmaps.
         if self.completed_generation.is_empty() {
-            let running = self.generation_work.is_some();
+            let running = self.generation_task.is_some();
             self.start_generation()?;
-            progressed |= !running && self.generation_work.is_some();
+            progressed |= !running && self.generation_task.is_some();
         }
         Ok(progressed)
     }
     pub(crate) fn generation_running(&self) -> bool {
-        self.generation_work.is_some()
+        self.generation_task.is_some()
     }
     /// Settle the submitted layer without dispatching a new one. Receivers and
     /// later completions stay reachable in the canonical backend during waits.
     pub(crate) fn poll_running_generation(&mut self) -> Result<bool> {
         let waker = self.progress_waker.clone();
         let mut context = TaskContext::from_waker(&waker);
-        if let Some(work) = &mut self.generation_work {
+        if let Some(work) = &mut self.generation_task {
             match Pin::new(work).poll(&mut context) {
                 Poll::Ready(Ok(output)) => {
-                    self.generation_work = None;
+                    self.generation_task = None;
                     self.complete_generation(output)?;
                     return Ok(true);
                 }
