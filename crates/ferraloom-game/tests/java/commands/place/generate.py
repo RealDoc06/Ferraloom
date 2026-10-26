@@ -13,7 +13,11 @@ cp = ':'.join(map(str, [vanilla / 'versions/26.3/server-26.3.jar',
     *sorted((vanilla / 'libraries').rglob('*.jar')),
     *sorted((vanilla / 'tree-harness').rglob('*.jar'))]))
 subprocess.run([str(jdk / 'javac'), '-cp', cp, '-d', str(classes),
-    str(source / 'PlaceVectors.java'), str(source.parents[1] / 'loot/LootVectors.java')], check=True)
+    str(source / 'PlaceVectors.java'), str(source / 'FeatureVectors.java'),
+    str(source.parents[1] / 'loot/LootVectors.java')], check=True)
 subprocess.run([str(jdk / 'java'), '-Xmx1g', '-Dnet.bytebuddy.experimental=true',
     '-XX:+EnableDynamicAgentLoading', '-cp', f'{classes}:{cp}', 'PlaceVectors',
     str(source / 'vectors.json'), str(source / 'block-entity-callbacks.json')], cwd=vanilla, check=True)
+subprocess.run([str(jdk / 'java'), '-Xmx1g', '-Dnet.bytebuddy.experimental=true',
+    '-XX:+EnableDynamicAgentLoading', '-cp', f'{classes}:{cp}', 'FeatureVectors',
+    str(source / 'features.json')], cwd=vanilla, check=True)

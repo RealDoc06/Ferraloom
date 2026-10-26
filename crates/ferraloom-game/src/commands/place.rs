@@ -43,13 +43,15 @@ impl<E> From<CommandSyntaxException> for PlaceError<E> {
     }
 }
 
-pub trait TemplateAccess {
-    type Template;
+pub trait PlaceAccess {
     type Error: std::error::Error + 'static;
     fn eye_height(&self, entity: EntityRef) -> Result<f64, Self::Error>;
     fn has_chunk_at(&self, pos: BlockPos) -> Result<bool, Self::Error>;
     fn in_world_bounds(&self, pos: BlockPos) -> bool;
     fn is_loaded(&self, pos: BlockPos) -> Result<bool, Self::Error>;
+}
+pub trait TemplateAccess: PlaceAccess {
+    type Template;
     /// None includes native manager lookup failure, including an invalid file path.
     fn template(&mut self, id: &Identifier) -> Result<Option<Self::Template>, Self::Error>;
     fn size(&self, template: &Self::Template) -> [i32; 3];
@@ -69,7 +71,7 @@ pub trait TemplateAccess {
 
 /// Port of PlaceCommand#checkLoaded. ChunkPos.rangeClosed visits X first and
 /// checks world positions at Y=0; the unrotated size's inclusive end is native.
-fn check_loaded<A: TemplateAccess>(
+fn check_loaded<A: PlaceAccess>(
     access: &A,
     from: ChunkPos,
     to: ChunkPos,
@@ -98,11 +100,12 @@ fn check_loaded<A: TemplateAccess>(
     }
 }
 
-fn position<A: TemplateAccess>(
+fn position<A: PlaceAccess>(
     command: &PreparedCommand,
+    name: &str,
     access: &A,
 ) -> Result<BlockPos, PlaceError<A::Error>> {
-    let Some(coordinates) = command.coordinates("pos") else {
+    let Some(coordinates) = command.coordinates(name) else {
         let p = command.source.position;
         return Ok(BlockPos::containing(p.x, p.y, p.z));
     };
@@ -137,7 +140,7 @@ pub fn template<A: TemplateAccess>(
     command: &PreparedCommand,
     access: &mut A,
 ) -> Result<CommandResult, PlaceError<A::Error>> {
-    let pos = position(command, access)?;
+    let pos = position(command, "pos", access)?;
     let id: Identifier = command
         .string("template")
         .expect("template identifier argument")
@@ -208,8 +211,59 @@ pub fn template<A: TemplateAccess>(
     ))
 }
 
+pub trait FeatureAccess: PlaceAccess {
+    /// Place the already-validated registered holder through Feature#place,
+    /// passing the canonical generator and the live Level.random stream.
+    fn place_registered_feature(
+        &mut self,
+        id: &Identifier,
+        position: BlockPos,
+    ) -> Result<bool, Self::Error>;
+}
+
+/// Port of PlaceCommand#placeFeature's registered-holder branch. Inline values
+/// remain rejected by ResourceOrIdArgument until its canonical codec is ported.
+pub fn feature<A: FeatureAccess>(
+    command: &PreparedCommand,
+    access: &mut A,
+) -> Result<CommandResult, PlaceError<A::Error>> {
+    let Some(ArgumentValue::RegistryReference(reference)) = command.argument("feature") else {
+        unreachable!("validated registered feature argument");
+    };
+    let id: Identifier = reference.key.parse().expect("feature identifier");
+    let pos = position(command, "pos", access)?;
+    let chunk = ChunkPos::containing(pos);
+    check_loaded(
+        access,
+        ChunkPos::new(chunk.x - 1, chunk.z - 1),
+        ChunkPos::new(chunk.x + 1, chunk.z + 1),
+    )?;
+    if !access
+        .place_registered_feature(&id, pos)
+        .map_err(PlaceError::World)?
+    {
+        return Err(error("commands.place.feature.failed", &[]).into());
+    }
+    Ok(CommandResult::success(
+        1,
+        Component::translatable(
+            "commands.place.feature.success",
+            vec![
+                builtins::string(id.to_string()),
+                builtins::integer(pos.x),
+                builtins::integer(pos.y),
+                builtins::integer(pos.z),
+            ],
+        ),
+        true,
+    ))
+}
+
 #[cfg(test)]
 #[path = "place/block_entities.rs"]
 mod block_entity_tests;
+#[cfg(test)]
+#[path = "place/feature_tests.rs"]
+mod feature_tests;
 #[cfg(test)]
 mod tests;

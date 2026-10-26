@@ -36,8 +36,7 @@ impl Host<'_> {
 fn pos(pos: BlockPos) -> [i32; 3] {
     [pos.x, pos.y, pos.z]
 }
-impl TemplateAccess for Host<'_> {
-    type Template = ();
+impl PlaceAccess for Host<'_> {
     type Error = io::Error;
     fn eye_height(&self, _: EntityRef) -> Result<f64, Self::Error> {
         self.record("eye_height");
@@ -55,6 +54,9 @@ impl TemplateAccess for Host<'_> {
         self.record(json!({"call":"loaded","pos":pos(position)}));
         Ok(self.vector.missing != pos(position))
     }
+}
+impl TemplateAccess for Host<'_> {
+    type Template = ();
     fn template(&mut self, id: &Identifier) -> Result<Option<()>, Self::Error> {
         self.record(json!({"call":"template","id":id.to_string()}));
         Ok(self.vector.found.then_some(()))
