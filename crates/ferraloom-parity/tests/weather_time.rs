@@ -10,7 +10,9 @@ use ferraloom_parity::{Bot, ObservationLog, Result, RunMode, Session, Ticks, ens
 use serde_json::json;
 
 /// ADVANCE_TIME sends the complete native clock map. Its identity-keyed map
-/// order is unspecified, so compare entries by registry id, retaining all fields.
+/// order differs in the two JVM captures in commands/vanilla/full-clock-map-orders.json
+/// (tests/java/commands/run-clock-map-order.sh). Compare only keys by registry id,
+/// retaining every field, as the command packet harness does.
 async fn advance_time(bot: &mut Bot, enabled: bool) -> Result<serde_json::Value> {
     bot.command(&format!("gamerule advance_time {enabled}"))
         .await?;
