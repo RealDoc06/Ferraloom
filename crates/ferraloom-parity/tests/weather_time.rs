@@ -218,7 +218,7 @@ async fn precipitation(session: &mut Session) -> Result<ObservationLog> {
     let snow = BlockPos::new(10, -59, 8);
     for (text, key) in [
         (
-            "fill 5 -60 7 11 -60 9 minecraft:stone",
+            "fill 5 -59 7 7 -59 9 minecraft:stone",
             "commands.fill.success",
         ),
         (
