@@ -6,9 +6,9 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 |---|---:|---:|---:|---:|---:|
 | [Advancements](features/advancements.md) | 1958 | 4 | 193 | 1761 | 0 |
 | [Block entities](features/block-entities.md) | 148 | 41 | 49 | 58 | 0 |
-| [Blocks](features/blocks.md) | 453 | 243 | 136 | 74 | 0 |
+| [Blocks](features/blocks.md) | 454 | 243 | 137 | 74 | 0 |
 | [Chat and text components](features/chat.md) | 23 | 21 | 2 | 0 | 0 |
-| [Chunks and tickets](features/chunks.md) | 59 | 20 | 38 | 1 | 0 |
+| [Chunks and tickets](features/chunks.md) | 60 | 20 | 39 | 1 | 0 |
 | [Combat and damage](features/combat-damage.md) | 204 | 204 | 0 | 0 | 0 |
 | [Commands and argument types](features/commands.md) | 2691 | 1858 | 46 | 787 | 0 |
 | [Crafting and recipes](features/crafting-recipes.md) | 2137 | 2 | 29 | 2106 | 0 |
@@ -39,7 +39,7 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Raids](features/raids.md) | 8 | 8 | 0 | 0 | 0 |
 | [Redstone mechanics](features/redstone.md) | 70 | 11 | 34 | 25 | 0 |
 | [Scoreboard, teams and bossbars](features/scoreboard-teams-bossbars.md) | 80 | 2 | 18 | 60 | 0 |
-| [Server operations](features/server-operations.md) | 114 | 96 | 18 | 0 | 0 |
+| [Server operations](features/server-operations.md) | 115 | 96 | 19 | 0 | 0 |
 | [Sounds and particles](features/sounds-particles.md) | 2146 | 5 | 0 | 2141 | 0 |
 | [Spawning, trial spawners and vaults](features/spawning.md) | 138 | 138 | 0 | 0 | 0 |
 | [Statistics](features/statistics.md) | 104 | 5 | 94 | 5 | 0 |
@@ -49,5 +49,5 @@ Minecraft Java dedicated server 26.3 (protocol 777, data version 5023). Use the 
 | [Wandering traders](features/wandering-traders.md) | 5 | 5 | 0 | 0 | 0 |
 | [Weather, time and environment](features/weather-time.md) | 85 | 85 | 0 | 0 | 0 |
 | [World storage and data fixing](features/world-storage.md) | 308 | 305 | 3 | 0 | 0 |
-| [World generation](features/worldgen.md) | 3116 | 2640 | 176 | 300 | 0 |
-| **Total** | **19662** | **8216** | **2868** | **8578** | **0** |
+| [World generation](features/worldgen.md) | 3120 | 2640 | 180 | 300 | 0 |
+| **Total** | **19669** | **8216** | **2875** | **8578** | **0** |
