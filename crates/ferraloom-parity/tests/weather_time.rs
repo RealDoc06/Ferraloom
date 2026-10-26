@@ -63,15 +63,21 @@ async fn advance_time(bot: &mut Bot, enabled: bool) -> Result<serde_json::Value>
 /// Frozen ticks still send periodic game-time packets. Wait for the stepped
 /// window's final value rather than counting repeated frozen broadcasts, whose
 /// arrival depends on the network and is not simulated time.
-async fn stepped_window(bot: &mut Bot, ticks: i64) -> Result<()> {
+async fn stepped_window(bot: &mut Bot, ticks: i64) -> Result<Vec<(u8, u32)>> {
     let initial = level_support::game_time(bot).await?;
     bot.command(&format!("tick step {ticks}")).await?;
     let target = initial + ticks;
     let mut failure = None;
+    let mut weather = Vec::new();
     bot.wait_for(
         "stepped game-time synchronization",
         Ticks::DEFAULT,
         |_, packet| {
+            if let cb::Packet::GameEvent(event) = packet
+                && matches!(event.event, 1 | 2 | 7 | 8)
+            {
+                weather.push((event.event, event.param.to_bits()));
+            }
             if let cb::Packet::SetTime(packet) = packet {
                 if !packet.clock_updates.is_empty()
                     || packet.game_time < initial
@@ -91,7 +97,7 @@ async fn stepped_window(bot: &mut Bot, ticks: i64) -> Result<()> {
         level_support::game_time(bot).await? == target,
         "tickTime must advance independently of advance_time"
     );
-    Ok(())
+    Ok(weather)
 }
 
 async fn clocks(session: &mut Session) -> Result<ObservationLog> {
@@ -135,4 +141,66 @@ async fn clocks(session: &mut Session) -> Result<ObservationLog> {
 #[ignore = "requires dedicated builder vanilla/JDK; Strict time packet comparison"]
 async fn stepped_time_and_daylight_rule_packets_match_vanilla() -> Result<()> {
     run(level_support::options(), RunMode::from_env()?, clocks).await
+}
+
+/// Native weather durations keep counting only with ADVANCE_WEATHER; the
+/// per-level 0.01F interpolation keeps running while the rule is disabled.
+async fn weather(session: &mut Session) -> Result<ObservationLog> {
+    let id = session.join("ParityBot").await?;
+    let bot = session.bot(id)?;
+    level_support::freeze(bot).await?;
+    level_support::command(
+        bot,
+        "gamerule advance_weather false",
+        "commands.gamerule.set",
+    )
+    .await?;
+    level_support::command(bot, "weather clear 1000", "commands.weather.set.clear").await?;
+    stepped_window(bot, 110).await?;
+    let mut log = ObservationLog::default();
+    for (label, command, key, ticks) in [
+        (
+            "rain.rule-disabled",
+            "weather rain 1",
+            "commands.weather.set.rain",
+            25,
+        ),
+        (
+            "thunder.rule-disabled",
+            "weather thunder 1000",
+            "commands.weather.set.thunder",
+            110,
+        ),
+        (
+            "clear.rule-disabled",
+            "weather clear 1000",
+            "commands.weather.set.clear",
+            110,
+        ),
+        (
+            "rain.timer-prepared",
+            "weather rain 1",
+            "commands.weather.set.rain",
+            25,
+        ),
+    ] {
+        level_support::command(bot, command, key).await?;
+        let events = stepped_window(bot, ticks).await?;
+        ensure!(!events.is_empty(), "{label} must interpolate weather");
+        log.record(label, events)?;
+    }
+    level_support::command(
+        bot,
+        "gamerule advance_weather true",
+        "commands.gamerule.set",
+    )
+    .await?;
+    log.record("rain.timer-expiry", stepped_window(bot, 45).await?)?;
+    Ok(log)
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "requires dedicated builder vanilla/JDK; Strict weather packet comparison"]
+async fn stepped_weather_levels_transitions_and_rule_match_vanilla() -> Result<()> {
+    run(level_support::options(), RunMode::from_env()?, weather).await
 }

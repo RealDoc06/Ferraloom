@@ -10,8 +10,8 @@ Mechanics are identified from the 26.3 server source. Registry and resource entr
 | weather-time.clocks.independent | Maintain multiple registered world clocks with independent tick rate and pause state | `ServerClockManager` | | - | todo |
 | weather-time.clocks.markers | Resolve named time markers and move clocks using marker-aware command and sleep operations | `ServerClockManager#moveToTimeMarker; ClockTimeMarkers` | | - | todo |
 | weather-time.clocks.persist-sync | Persist total ticks, rate and paused state and synchronize full clock state to clients | `ServerClockManager#packState; ServerClockManager#createFullSyncPacket` | | - | todo |
-| weather-time.weather.cycles | Advance clear, rain and thunder durations only under the weather-cycle rule | `ServerLevel#advanceWeatherCycle` | | - | todo |
-| weather-time.weather.strength | Interpolate rain and thunder strength and broadcast transitions | `ServerLevel#advanceWeatherCycle` | | - | todo |
+| weather-time.weather.cycles | Advance clear, rain and thunder durations only under the weather-cycle rule | `ServerLevel#advanceWeatherCycle` | [weather_time::stepped_weather_levels_transitions_and_rule_match_vanilla](../crates/ferraloom-parity/tests/weather_time.rs) (Strict stepped weather packets; unrun) | - | partial |
+| weather-time.weather.strength | Interpolate rain and thunder strength and broadcast transitions | `ServerLevel#advanceWeatherCycle` | [weather_time::stepped_weather_levels_transitions_and_rule_match_vanilla](../crates/ferraloom-parity/tests/weather_time.rs) (Strict stepped weather packets; unrun) | - | partial |
 | weather-time.weather.lightning | Choose lightning targets from rods and eligible entities with skeleton-trap conditions | `ServerLevel#tickThunder; ServerLevel#findLightningTargetAround` | | - | todo |
 | weather-time.weather.precipitation | Freeze water and accumulate or melt snow under biome and environment conditions | `ServerLevel#tickPrecipitation` | | - | todo |
 | weather-time.weather.biome-exposure | Require local precipitation eligibility and sky exposure for rain interactions | `Level#isRainingAt; Biome` | | - | todo |

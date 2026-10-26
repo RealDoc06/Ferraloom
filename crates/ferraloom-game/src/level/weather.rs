@@ -165,12 +165,14 @@ impl Weather {
         if self.old_rain != self.rain {
             events.push(LevelEffect::WeatherEvent {
                 event: 7,
+                global: false,
                 param: self.rain,
             });
         }
         if self.old_thunder != self.thunder {
             events.push(LevelEffect::WeatherEvent {
                 event: 8,
+                global: false,
                 param: self.thunder,
             });
         }
@@ -178,13 +180,16 @@ impl Weather {
             events.push(LevelEffect::WeatherEvent {
                 event: if was_raining { 2 } else { 1 },
                 param: 0.0,
+                global: true,
             });
             events.push(LevelEffect::WeatherEvent {
                 event: 7,
+                global: true,
                 param: self.rain,
             });
             events.push(LevelEffect::WeatherEvent {
                 event: 8,
+                global: true,
                 param: self.thunder,
             });
         }
@@ -743,11 +748,11 @@ mod tests {
             events
                 .iter()
                 .map(|e| match e {
-                    LevelEffect::WeatherEvent { event, .. } => *event,
+                    LevelEffect::WeatherEvent { event, global, .. } => (*event, *global),
                     _ => unreachable!(),
                 })
                 .collect::<Vec<_>>(),
-            vec![7, 8, 1, 7, 8]
+            vec![(7, false), (8, false), (1, true), (7, true), (8, true)]
         );
     }
 }
