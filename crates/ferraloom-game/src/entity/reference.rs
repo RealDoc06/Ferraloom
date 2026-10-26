@@ -98,10 +98,14 @@ mod tests {
 
     fn level() -> Level {
         static BEHAVIORS: Behaviors = Behaviors::EMPTY;
-        Level::new(
-            Region::new(&BEHAVIORS),
-            crate::level::LevelContext::fixture(0, 63),
-        )
+        {
+            let mut fixture_level = Level::new(
+                Region::new(&BEHAVIORS),
+                crate::level::LevelContext::fixture(0, 63),
+            );
+            fixture_level.install_shared(Box::default());
+            fixture_level
+        }
     }
 
     #[test]
@@ -135,7 +139,7 @@ mod tests {
             .unwrap();
         let cached = reference.resolve(&level).unwrap() == Some(replacement);
         let wrong = level.next_entity_ref();
-        let mut tnt = PrimedTnt::new(level.next_entity_id(), 123);
+        let mut tnt = PrimedTnt::new(level.next_entity_id().unwrap(), 123);
         let wrong_uuid = tnt.parent.uuid;
         tnt.parent.set_pos(Vec3::new(16.0, 64.0, 0.0));
         level
@@ -197,13 +201,15 @@ mod tests {
     #[test]
     fn dropped_item_retains_disconnected_thrower_until_owner_lookup() {
         let mut level = level();
-        level.install_shared(Box::default());
+        if level.shared().is_err() {
+            level.install_shared(Box::default());
+        }
         let player = level.next_entity_ref();
         let uuid = Uuid::new(1, 2);
         let state = ServerPlayer::new(
             uuid,
             "thrower".into(),
-            level.next_entity_id(),
+            level.next_entity_id().unwrap(),
             Vec3::ZERO,
             GameType::Survival,
         );

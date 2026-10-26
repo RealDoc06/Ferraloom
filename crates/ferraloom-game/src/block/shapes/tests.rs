@@ -12,7 +12,11 @@ const POS: BlockPos = BlockPos::new(8, 64, 8);
 static EMPTY: Behaviors = Behaviors::EMPTY;
 
 fn player_level() -> (Level, EntityRef) {
-    let mut level = Level::new(Region::new(&EMPTY), LevelContext::fixture(0, 63));
+    let mut level = {
+        let mut fixture_level = Level::new(Region::new(&EMPTY), LevelContext::fixture(0, 63));
+        fixture_level.install_shared(Box::default());
+        fixture_level
+    };
     level
         .update_entity_chunk_status(ChunkPos::containing(POS), Visibility::Tracked)
         .unwrap();
@@ -20,7 +24,7 @@ fn player_level() -> (Level, EntityRef) {
     let player = ServerPlayer::new(
         Uuid::offline_player("Placement"),
         "Placement".into(),
-        level.next_entity_id(),
+        level.next_entity_id().unwrap(),
         Vec3::new(8.5, 64.0, 8.5),
         GameType::Survival,
     );

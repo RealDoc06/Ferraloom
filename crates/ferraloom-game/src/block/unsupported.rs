@@ -385,11 +385,11 @@ impl UnportedCalls {
 }
 impl Level {
     pub(crate) fn skip_post_processing(&mut self, error: LevelError) -> Result<(), LevelError> {
-        let (block, behavior) = match error {
-            LevelError::UnsupportedBlockMethod(block, method) => (block, method.name()),
+        let (block, behavior) = match error.root() {
+            LevelError::UnsupportedBlockMethod(block, method) => (*block, method.name()),
             LevelError::UnsupportedShape(state) => (state.block(), "getCollisionShape"),
-            LevelError::UnsupportedBlock(block) => (block, "Block.updateFromNeighbourShapes"),
-            LevelError::UnsupportedBlockEntity(block) => (block, "setBlockState block entity"),
+            LevelError::UnsupportedBlock(block) => (*block, "Block.updateFromNeighbourShapes"),
+            LevelError::UnsupportedBlockEntity(block) => (*block, "setBlockState block entity"),
             _ => return Err(error),
         };
         let calls = &mut self.region_mut().unported;
@@ -538,10 +538,10 @@ impl Level {
             Ok(value) => return Ok(Some(value)),
             Err(error) => error,
         };
-        let (block, method) = match error {
-            LevelError::UnsupportedBlock(block) => (block, method),
+        let (block, method) = match error.root() {
+            LevelError::UnsupportedBlock(block) => (*block, method),
             LevelError::UnsupportedBlockMethod(block, method) if method.can_skip() => {
-                (block, method)
+                (*block, *method)
             }
             LevelError::UnsupportedFluidRandomTick => (block, method),
             _ => return Err(error),

@@ -62,6 +62,12 @@ pub mod weather;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum LevelError {
+    /// Diagnostic context at a world dispatch boundary; the cause is unchanged.
+    At {
+        pos: BlockPos,
+        phase: &'static str,
+        source: Box<LevelError>,
+    },
     BlockBreak(crate::entity::player::game_mode::BlockBreakFailure),
     /// Native ArrayList iterator ConcurrentModificationException during listener visitation.
     ConcurrentGameEventListenerModification,
@@ -117,6 +123,7 @@ pub enum LevelError {
     },
     MissingTrackedEntity(i32),
     MissingRegistryContext,
+    MissingStructureTemplates,
     MissingMobVariants,
     UnsupportedSpawnCondition(ferraloom_protocol::Identifier),
     MissingNetworkRegistryEntry {
@@ -133,22 +140,27 @@ pub enum LevelError {
     UnsupportedBlock(Block),
     UnsupportedBlockMethod(Block, crate::block::BlockMethod),
     UnsupportedBlockEntity(Block),
+    /// A live catalyst cursor list was replaced during a retained update frame.
+    UnsupportedSculkCursorReentrancy(crate::block::entity::BlockEntityRef),
     /// CrafterBlock#dispenseItem replaced the captured CraftingInput list before remainders.
     UnsupportedCrafterCapturedListIdentity(crate::block::entity::BlockEntityRef),
     UnsupportedGameRule(&'static str),
     UnsupportedLightQuery,
     UnsupportedEnvironmentAttribute(ferraloom_data::registries::environment_attribute::Id),
     MissingEnvironmentContext,
+    MissingDimensionType,
     MissingBlockTransformers,
     MissingEnchantments,
     MissingSpawnProtectionContext,
     MissingServerShared,
+    EntityIdAllocationExhausted,
     MissingBlockTags,
     MissingBlockTag,
     MissingDamageTypeTag,
     MissingFluidTags,
     MissingEntityTypeTags,
     MissingItemTags,
+    MissingGameEventTags,
     UnsupportedShape(BlockState),
     UnsupportedFluidRandomTick,
     UnsupportedWeatherQuery,
@@ -164,9 +176,31 @@ pub enum LevelError {
     UnsupportedPathNavigationQuery(path_navigation_region::PathNavigationQuery),
 }
 
+impl LevelError {
+    pub(crate) fn at(self, pos: BlockPos, phase: &'static str) -> Self {
+        Self::At {
+            pos,
+            phase,
+            source: Box::new(self),
+        }
+    }
+
+    /// Inspect the original error without discarding dispatch context or its cause.
+    pub fn root(&self) -> &Self {
+        let mut error = self;
+        while let Self::At { source, .. } = error {
+            error = source;
+        }
+        error
+    }
+}
+
 impl std::fmt::Display for LevelError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::At { pos, phase, source } => {
+                write!(formatter, "{phase} at {pos:?}: {source}")
+            }
             Self::BlockBreak(error) => std::fmt::Display::fmt(error.error(), formatter),
             Self::WorldgenMutationFailed { pos, source } => {
                 write!(formatter, "worldgen mutation at {pos:?}: {source}")
@@ -191,6 +225,7 @@ impl std::fmt::Display for LevelError {
 impl std::error::Error for LevelError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
+            Self::At { source, .. } => Some(source.as_ref()),
             Self::BlockBreak(error) => Some(error.error()),
             Self::WorldgenMutationFailed { source, .. } => Some(source),
             _ => None,
@@ -218,6 +253,7 @@ pub struct LevelRules {
     pub pvp: bool,
     pub mob_drops: bool,
     pub keep_inventory: bool,
+    pub limited_crafting: bool,
     pub send_command_feedback: bool,
     pub natural_health_regeneration: bool,
     pub debug: bool,
@@ -228,7 +264,8 @@ pub struct LevelRules {
     pub lava_source_conversion: bool,
     pub fast_lava: bool,
     pub redstone_experiments: bool,
-    pub spread_fire: bool,
+    /// GameRules.FIRE_SPREAD_RADIUS_AROUND_PLAYER; -1 permits fire anywhere.
+    pub fire_spread_radius_around_player: i32,
     pub spread_vines: bool,
     pub mob_griefing: bool,
 }
@@ -263,6 +300,7 @@ impl Default for LevelRules {
             pvp: damage_default(GameRule::Pvp),
             mob_drops: damage_default(GameRule::MobDrops),
             keep_inventory: damage_default(GameRule::KeepInventory),
+            limited_crafting: damage_default(GameRule::LimitedCrafting),
             send_command_feedback: damage_default(GameRule::SendCommandFeedback),
             natural_health_regeneration: damage_default(GameRule::NaturalHealthRegeneration),
             debug: false,
@@ -273,7 +311,13 @@ impl Default for LevelRules {
             lava_source_conversion: false,
             fast_lava: false,
             redstone_experiments: false,
-            spread_fire: true,
+            fire_spread_radius_around_player: match GameRule::FireSpreadRadiusAroundPlayer
+                .definition()
+                .kind
+            {
+                RuleType::Integer { default, .. } => default,
+                _ => unreachable!("fire-spread radius is an integer game rule"),
+            },
             spread_vines: true,
             mob_griefing: true,
         }
@@ -316,7 +360,7 @@ pub struct Region {
     block_ticks: LevelTicks,
     fluid_ticks: LevelTicks<ferraloom_data::registries::fluid::Id>,
     block_entity_state: block_entity::BlockEntityRuntime,
-    game_event_listeners: game_event::GameEventListenerRegistries,
+    game_event_listeners: std::cell::RefCell<game_event::GameEventListenerRegistries>,
     container_runtime: crate::block::containers::runtime::ContainerRuntime,
     next_sub_tick_order: i64,
     game_time: i64,
@@ -575,16 +619,20 @@ impl Level {
         region
             .block_entity_state
             .prepare_published_chunk(&mut chunk, region.game_time);
-        region
-            .block_entity_state
-            .register_published_chunk(&chunk, region.has_skylight)?;
-        region
-            .block_ticks
-            .add_container(pos, std::mem::take(&mut chunk.block_ticks));
-        region
-            .fluid_ticks
-            .add_container(pos, std::mem::take(&mut chunk.fluid_ticks));
+        let block_ticks = std::mem::take(&mut chunk.block_ticks);
+        let fluid_ticks = std::mem::take(&mut chunk.fluid_ticks);
+        // Listener roots must resolve the canonical receiver before native
+        // listener-before-ticker registration, including the attached fixture path.
         region.chunks.insert(pos, chunk);
+        let region = self.region();
+        region.block_entity_state.register_published_chunk(
+            region.chunks.get(&pos).expect("just attached"),
+            region.has_skylight,
+            self,
+        )?;
+        let region = self.region_mut();
+        region.block_ticks.add_container(pos, block_ticks);
+        region.fluid_ticks.add_container(pos, fluid_ticks);
         Ok(())
     }
     /// Port of ServerLevel#startTickingChunk, after generation post-processing.
@@ -617,13 +665,16 @@ impl Level {
     }
     fn run_collected_blocks(&mut self) -> Result<(), LevelError> {
         while let Some(tick) = self.region_mut().block_ticks.poll_this_tick() {
-            let state = self.get_block_state(tick.pos)?;
+            let state = self
+                .get_block_state(tick.pos)
+                .map_err(|error| error.at(tick.pos, "scheduled block tick"))?;
             if state.block() == tick.block {
                 self.optional_block_call(
                     tick.block,
                     crate::block::BlockMethod::Tick,
                     |behavior, level| behavior.tick(state, tick.pos, level),
-                )?;
+                )
+                .map_err(|error| error.at(tick.pos, "scheduled block tick"))?;
             }
         }
         Ok(())

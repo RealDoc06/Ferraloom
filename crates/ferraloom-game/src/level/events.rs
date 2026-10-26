@@ -49,21 +49,27 @@ impl Level {
                 reschedule.push(event);
                 continue;
             }
-            let state = self.get_block_state(event.pos)?;
+            let state = self
+                .get_block_state(event.pos)
+                .map_err(|error| error.at(event.pos, "block event"))?;
             if state.block() == event.block
                 && self
-                    .required_block_behavior(event.block, crate::block::BlockMethod::TriggerEvent)?
-                    .trigger_event(state, event.pos, event.param_a, event.param_b, self)?
+                    .required_block_behavior(event.block, crate::block::BlockMethod::TriggerEvent)
+                    .map_err(|error| error.at(event.pos, "block event"))?
+                    .trigger_event(state, event.pos, event.param_a, event.param_b, self)
+                    .map_err(|error| error.at(event.pos, "block event"))?
             {
-                let recipients = self.broadcast_audience(
-                    None,
-                    Vec3::new(
-                        f64::from(event.pos.x),
-                        f64::from(event.pos.y),
-                        f64::from(event.pos.z),
-                    ),
-                    64.0,
-                )?;
+                let recipients = self
+                    .broadcast_audience(
+                        None,
+                        Vec3::new(
+                            f64::from(event.pos.x),
+                            f64::from(event.pos.y),
+                            f64::from(event.pos.z),
+                        ),
+                        64.0,
+                    )
+                    .map_err(|error| error.at(event.pos, "block event"))?;
                 self.emit(LevelEffect::PlayerPacket {
                     recipients,
                     packet: Box::new(ferraloom_protocol::play::clientbound::Packet::BlockEvent(

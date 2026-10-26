@@ -776,10 +776,14 @@ mod tests {
         };
         use ferraloom_util::{Uuid, Vec3};
         static BEHAVIORS: crate::Behaviors = crate::Behaviors::EMPTY;
-        let mut level = Level::new(
-            Region::new(&BEHAVIORS),
-            crate::level::LevelContext::fixture(0, 63),
-        );
+        let mut level = {
+            let mut fixture_level = Level::new(
+                Region::new(&BEHAVIORS),
+                crate::level::LevelContext::fixture(0, 63),
+            );
+            fixture_level.install_shared(Box::default());
+            fixture_level
+        };
         let player = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
         let mut state = ServerPlayer::new(
             Uuid::from_int_array([0, 0, 0, 1]),

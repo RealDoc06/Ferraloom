@@ -1,4 +1,4 @@
-//! Port of ServerEntity for players and the implemented nonliving entity families.
+//! Port of ServerEntity for every implemented entity family.
 use super::codec::{UpdateInterval, VecDeltaCodec, encoding_precision_loss};
 use crate::{
     entity::{EntityData, EntityRef, EntityState},
@@ -17,10 +17,6 @@ use ferraloom_util::{Vec3, mth};
 #[derive(Debug)]
 pub enum TrackingError {
     Level(LevelError),
-
-    /// Cow's variant metadata and leash state remain separate subclass work.
-    /// Other living families must finish their metadata before enabling pairing.
-    LivingSynchronizationPending(EntityRef),
 }
 impl From<LevelError> for TrackingError {
     fn from(error: LevelError) -> Self {
@@ -28,13 +24,9 @@ impl From<LevelError> for TrackingError {
     }
 }
 impl TrackingError {
-    pub(crate) fn into_level(self, level: &Level) -> LevelError {
+    pub(crate) fn into_level(self, _level: &Level) -> LevelError {
         match self {
             Self::Level(error) => error,
-            Self::LivingSynchronizationPending(entity) => match level.entity_state(entity) {
-                Ok(state) => LevelError::UnsupportedEntity(state.entity_type()),
-                Err(error) => error,
-            },
         }
     }
 }
@@ -140,11 +132,6 @@ impl ServerEntity {
         level: &Level,
     ) -> Result<Vec<Packet>, TrackingError> {
         let state = level.entity_state(self.entity)?;
-        // Unobserved living entities may own tracking state. Pairing still
-        // requires their subclass metadata/leash port; never send partial data.
-        if state.as_living().is_some() && !matches!(state, EntityState::Player(_)) {
-            return Err(TrackingError::LivingSynchronizationPending(self.entity));
-        }
         let base = state.as_entity();
         let position = self.position_codec.base;
         let data = match state {
@@ -206,6 +193,20 @@ impl ServerEntity {
         if let Some(vehicle) = base.vehicle.get() {
             packets.push(passengers_packet(vehicle, level)?);
         }
+        // Mob implements Leashable. Delayed UUID/fence attachments are not
+        // isLeashed until their canonical holder has been resolved.
+        if let Some(holder) = state
+            .as_mob()
+            .and_then(|mob| mob.leash_data.as_ref())
+            .and_then(|leash| leash.holder)
+        {
+            packets.push(Packet::SetEntityLink(packet::SetEntityLink {
+                source_id: base.network_id,
+                dest_id: level.entity::<EntityData>(holder)?.network_id,
+            }));
+        }
+        // Native sendPairingData sends no active-effect packets. Those belong
+        // to PlayerList#sendActiveEffects and ServerPlayer#startRiding.
         Ok(packets)
     }
     #[cfg(test)]
@@ -282,6 +283,13 @@ impl ServerEntity {
             out.push(TrackingPacket::players(packet));
             self.last_passengers = base.passengers.clone();
         }
+        let position = base.position;
+        if let Some(living) = state.as_living_mut() {
+            living
+                .interpolation_tracker
+                .update_tracking(position, &mut living.parent.sync_position);
+        }
+        let base = state.as_entity();
         if base.sync_position {
             self.tick_count = self.update_interval.next_interval(self.tick_count);
             state.as_entity_mut().sync_position = false;
@@ -309,15 +317,35 @@ impl ServerEntity {
                     self.last_sent_x_rot = x_rot;
                 }
                 self.position_codec.base = position;
+                if let Some(living) = state.as_living_mut() {
+                    living.interpolation_tracker.clear();
+                }
                 self.send_dirty_entity_data(state, &mut out);
                 self.was_riding = true;
             } else {
                 self.teleport_delay = self.teleport_delay.wrapping_add(1);
+                let path = if let Some(living) = state.as_living_mut() {
+                    let path = living.interpolation_tracker.position_path(position);
+                    living.interpolation_tracker.clear();
+                    path
+                } else {
+                    PositionPath::Linear(play::Vec3 {
+                        x: position.x,
+                        y: position.y,
+                        z: position.z,
+                    })
+                };
                 let send_position = self.position_codec.delta(position).length_sqr()
                     >= 7.62939453125E-6
                     || self.tick_count % 60 == 0;
-                let (movement_packet, has_position, has_rotation) =
-                    self.create_move_packet(state, send_position, rotation_changed, y_rot, x_rot);
+                let (movement_packet, has_position, has_rotation) = self.create_move_packet(
+                    state,
+                    &path,
+                    send_position,
+                    rotation_changed,
+                    y_rot,
+                    x_rot,
+                );
                 let base = state.as_entity();
                 let fall_flying = state.as_living().is_some() && base.shared_flag(7);
                 if base.needs_sync || self.track_delta || fall_flying {
@@ -397,6 +425,7 @@ impl ServerEntity {
     fn create_move_packet(
         &mut self,
         state: &EntityState,
+        position: &PositionPath,
         send_position: bool,
         send_rotation: bool,
         y_rot: i8,
@@ -406,11 +435,7 @@ impl ServerEntity {
         let absolute = |base: &EntityData| {
             Packet::EntityPositionSync(packet::EntityPositionSync {
                 id: VarInt(base.network_id),
-                position: PositionPath::Linear(play::Vec3 {
-                    x: base.position.x,
-                    y: base.position.y,
-                    z: base.position.z,
-                }),
+                position: position.clone(),
                 y_rot: base.yaw,
                 x_rot: base.pitch,
                 on_ground: base.on_ground,
@@ -426,7 +451,7 @@ impl ServerEntity {
             return (Some(absolute(base)), true, true);
         }
         if send_position {
-            let Some(delta) = self.position_codec.try_encode(base.position) else {
+            let Some(delta) = self.position_codec.try_encode_path(position) else {
                 return (Some(absolute(base)), true, true);
             };
             if matches!(state, EntityState::Item(_)) && item_requires_full_precision(base, &delta) {

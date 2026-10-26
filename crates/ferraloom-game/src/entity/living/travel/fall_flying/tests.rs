@@ -22,7 +22,7 @@ fn state(player: bool, level: &Level, position: Vec3) -> EntityState {
         EntityState::Player(Box::new(ServerPlayer::new(
             Uuid::new(3, 4),
             "flight".into(),
-            level.next_entity_id(),
+            level.next_entity_id().unwrap(),
             position,
             GameType::Survival,
         )))

@@ -12,8 +12,8 @@ impl MinecraftServer {
         packet: sb::PlayerActionPacket,
     ) -> Result<()> {
         if !self
-            .level
-            .level
+            .level_for_entity(entity)
+            .map_err(game_error)?
             .entity::<ServerPlayer>(entity)
             .map_err(game_error)?
             .has_client_loaded()
@@ -26,16 +26,27 @@ impl MinecraftServer {
             .last_action = Instant::now();
         let action = DestroyAction::from_player_action(packet.action)
             .context("not a block-break player action")?;
+        let dimension = self
+            .level_for_entity(entity)
+            .map_err(game_error)?
+            .dimension_key()
+            .map_err(game_error)?
+            .to_string()
+            .parse::<protocol::Identifier>()?;
         let input = BlockBreakAction {
             action,
             pos: packet.pos,
             direction: packet.direction.0,
-            max_y: self.level.level.max_build_height(),
+            max_y: self.live_level_in(&dimension)?.level.max_build_height(),
         };
-        game_mode::handle_block_break_action(entity, input, &mut self.level.level)?;
+        game_mode::handle_block_break_action(
+            entity,
+            input,
+            &mut self.live_level_in_mut(&dimension)?.level,
+        )?;
         // Native mining packets precede ACK validation, including the clear
         // already sent when a negative sequence subsequently throws.
-        self.apply_level_effects()?;
+        self.apply_level_effects_in(&dimension)?;
         self.connections
             .get_mut(&connection)
             .unwrap()

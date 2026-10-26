@@ -51,8 +51,8 @@ impl ItemEntity {
     pub fn new(network_id: i32, seed: i64) -> Self {
         Self::with_parent(EntityData::new(EntityType::ITEM, network_id, seed))
     }
-    pub fn new_at(level: &mut Level, position: Vec3, stack: ItemStack) -> Self {
-        let mut entity = Self::with_parent(level.create_entity_data(EntityType::ITEM));
+    pub fn new_at(level: &mut Level, position: Vec3, stack: ItemStack) -> Result<Self, LevelError> {
+        let mut entity = Self::with_parent(level.create_entity_data(EntityType::ITEM)?);
         entity.parent.set_pos(position);
         entity.set_item(stack);
         entity.parent.velocity = Vec3::new(
@@ -60,7 +60,7 @@ impl ItemEntity {
             0.2,
             entity.parent.random.next_double() * 0.2 - 0.1,
         );
-        entity
+        Ok(entity)
     }
     /// Port of ItemEntity's explicit-velocity constructor. Unlike new_at, this
     /// overload does not consume the entity RNG for a random launch velocity.
@@ -69,12 +69,12 @@ impl ItemEntity {
         position: Vec3,
         stack: ItemStack,
         velocity: Vec3,
-    ) -> Self {
-        let mut entity = Self::with_parent(level.create_entity_data(EntityType::ITEM));
+    ) -> Result<Self, LevelError> {
+        let mut entity = Self::with_parent(level.create_entity_data(EntityType::ITEM)?);
         entity.parent.set_pos(position);
         entity.set_item(stack);
         entity.parent.velocity = velocity;
-        entity
+        Ok(entity)
     }
     /// Port of ItemEntity#makeFakeItem, used by GiveCommand before registration.
     pub fn make_fake_item(&mut self) {
@@ -289,6 +289,22 @@ pub fn player_touch(
 
 pub struct ItemEntityBehavior;
 impl Entity for ItemEntityBehavior {
+    fn get_slot(
+        &self,
+        entity: EntityRef,
+        slot: i32,
+        level: &Level,
+    ) -> Result<Option<crate::item::slot::SlotAccess>, LevelError> {
+        crate::item::slot::item_access(entity, slot, level)
+    }
+    /// Port of ItemEntity#dampensVibrations on the live effective item receiver.
+    fn dampens_vibrations(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
+        let stack = level.entity::<ItemEntity>(entity)?.item();
+        Ok(level.item_tags()?.contains_key(
+            ferraloom_data::tags::ItemTags::DAMPENS_VIBRATIONS,
+            stack.item(),
+        ))
+    }
     /// Port of ItemEntity#fireImmune and ItemStack#canBeHurtBy(inFire).
     fn fire_immune(&self, entity: EntityRef, level: &Level) -> Result<bool, LevelError> {
         let item = level.entity::<ItemEntity>(entity)?;

@@ -516,10 +516,14 @@ fn native_dimensions_pose_scales_and_attachment_rotations_keep_float_and_double_
         ),
         row("happy-ghast", &ghast),
     ];
-    let mut level = Level::new(
-        Region::new(&BEHAVIORS),
-        crate::level::LevelContext::fixture(0, 63),
-    );
+    let mut level = {
+        let mut fixture_level = Level::new(
+            Region::new(&BEHAVIORS),
+            crate::level::LevelContext::fixture(0, 63),
+        );
+        fixture_level.install_shared(Box::default());
+        fixture_level
+    };
     let player = player::ServerPlayer::new(
         Uuid::new(1, 2),
         "dimensions".into(),
@@ -807,6 +811,7 @@ pub(crate) fn persistence_level() -> Level {
         Region::new(&BEHAVIORS),
         crate::level::LevelContext::fixture(0, 63),
     );
+    level.install_shared(Box::default());
     install_test_environment(&mut level, false, "minecraft:overworld");
     level
 }
@@ -837,10 +842,14 @@ pub(crate) fn level_with_behaviors(floor: bool, behaviors: &'static Behaviors) -
         Strategy::biomes(Arc::new(IdMap::new(vec![BiomeId(0)]).unwrap())),
         BiomeId(0),
     );
-    let mut level = Level::new(
-        Region::new(behaviors),
-        crate::level::LevelContext::fixture(0, 63),
-    );
+    let mut level = {
+        let mut fixture_level = Level::new(
+            Region::new(behaviors),
+            crate::level::LevelContext::fixture(0, 63),
+        );
+        fixture_level.install_shared(Box::default());
+        fixture_level
+    };
     // Explicit controlled dimension with native constants and no timelines.
     install_test_environment(&mut level, false, "test");
     for x in -2..=2 {
@@ -1222,7 +1231,7 @@ fn vanilla_movement_path_block_contact_order_and_step_indices() {
 #[test]
 fn vanilla_primed_tnt_tick_motion_fuse_and_removal_bits() {
     let mut level = level(true);
-    let mut tnt = item::PrimedTnt::new(level.next_entity_id(), 123);
+    let mut tnt = item::PrimedTnt::new(level.next_entity_id().unwrap(), 123);
     tnt.parent.set_pos(Vec3::new(8.5, 66.0, 8.5));
     tnt.parent.velocity = Vec3::new(0.125, 0.2, -0.03);
     tnt.set_fuse(4);
@@ -1476,12 +1485,14 @@ fn vanilla_player_dropped_item_position_and_velocity_bits() {
     for row in VECTORS.lines().filter(|s| s.starts_with("drop\t")) {
         let f: Vec<_> = row.split('\t').collect();
         let mut level = level(false);
-        level.install_shared(Box::default());
+        if level.shared().is_err() {
+            level.install_shared(Box::default());
+        }
         let player_id = level.next_entity_ref();
         let mut player = player::ServerPlayer::new(
             Uuid::new(1, 2),
             "fixture".into(),
-            level.next_entity_id(),
+            level.next_entity_id().unwrap(),
             Vec3::new(8.5, 64.0, 8.5),
             player::GameType::Survival,
         );
@@ -1554,7 +1565,7 @@ fn falling_sand_is_constructed_before_source_replacement_then_lands() {
             level: &mut Level,
         ) -> Result<(), crate::level::LevelError> {
             if pos.y == 66 {
-                let tnt = item::PrimedTnt::new(level.next_entity_id(), 123);
+                let tnt = item::PrimedTnt::new(level.next_entity_id().unwrap(), 123);
                 let id = level.next_entity_ref();
                 level.add_entity(id, EntityState::PrimedTnt(Box::new(tnt)))?;
             }

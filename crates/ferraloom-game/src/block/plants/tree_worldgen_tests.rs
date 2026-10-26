@@ -183,6 +183,7 @@ fn tree_fixtures_use_real_leaf_and_plant_bridge() {
             let mut chunks = baseline.clone();
             let mut random =
                 WorldgenRandom::new(Random::Xoroshiro(XoroshiroRandomSource::new(seed)));
+            let registry_context = crate::level::LevelContext::fixture(0, 63);
             let mut region = WorldGenRegion::new(
                 &mut chunks,
                 center,
@@ -194,6 +195,7 @@ fn tree_fixtures_use_real_leaf_and_plant_bridge() {
                 63,
             )
             .unwrap();
+            region.set_registry_context(registry_context.registry_context().unwrap());
             region.set_has_skylight(true);
             region.set_block_tags(generator.data.block_tags.clone());
             region.set_fluid_tags(generator.data.fluid_tags.clone());

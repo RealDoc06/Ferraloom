@@ -24,6 +24,7 @@ struct Interval {
     items: usize,
     started_unix_ns: u128,
     start: Instant,
+    last_checkpoint: Duration,
     work: BTreeMap<&'static str, (usize, Duration)>,
 }
 impl Span {
@@ -44,6 +45,7 @@ impl Span {
                         .unwrap_or_default()
                         .as_nanos(),
                     start: Instant::now(),
+                    last_checkpoint: Duration::ZERO,
                     work: BTreeMap::new(),
                 })
             } else {
@@ -70,6 +72,16 @@ impl Span {
         if let Some(interval) = &mut self.0 {
             interval.items = items;
         }
+    }
+    /// Attribute successive startup intervals without moving any operation,
+    /// including awaits, into a closure. Checkpoints partition this span.
+    pub(crate) fn checkpoint(&mut self, phase: &'static str) {
+        let Some(interval) = &mut self.0 else { return };
+        let elapsed = interval.start.elapsed();
+        let entry = interval.work.entry(phase).or_default();
+        entry.0 += 1;
+        entry.1 += elapsed - interval.last_checkpoint;
+        interval.last_checkpoint = elapsed;
     }
     pub(crate) fn measure<T>(&mut self, phase: &'static str, work: impl FnOnce() -> T) -> T {
         let Some(interval) = &mut self.0 else {

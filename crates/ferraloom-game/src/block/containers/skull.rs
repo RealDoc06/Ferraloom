@@ -28,7 +28,12 @@ impl SkullBlockEntity {
 pub struct SkullBehavior;
 pub static SKULL_ENTITY: SkullBehavior = SkullBehavior;
 impl BlockEntity for SkullBehavior {
-    fn load_additional(&self, state: &mut BlockEntityState, tag: &CompoundTag) {
+    fn load_additional(
+        &self,
+        state: &mut BlockEntityState,
+        tag: &CompoundTag,
+        _registries: &dyn ferraloom_protocol::codec::RegistryContext,
+    ) {
         let BlockEntityState::Skull(e) = state else {
             unreachable!()
         };

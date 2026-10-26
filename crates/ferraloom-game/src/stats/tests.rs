@@ -117,10 +117,14 @@ fn live_stat_counter_and_scoreboard_update_in_native_order() {
     use ferraloom_protocol::chat::Component;
     use ferraloom_util::{Uuid, Vec3};
     static BEHAVIORS: Behaviors = Behaviors::EMPTY;
-    let mut level = Level::new(
-        Region::new(&BEHAVIORS),
-        crate::level::LevelContext::fixture(0, 63),
-    );
+    let mut level = {
+        let mut fixture_level = Level::new(
+            Region::new(&BEHAVIORS),
+            crate::level::LevelContext::fixture(0, 63),
+        );
+        fixture_level.install_shared(Box::default());
+        fixture_level
+    };
     let player = level.next_entity_ref();
     level
         .add_entity(
@@ -135,6 +139,7 @@ fn live_stat_counter_and_scoreboard_update_in_native_order() {
         )
         .unwrap();
     let stat = Stat::Custom(custom::Id::OPEN_CHEST);
+    drop(level.take_shared().unwrap());
     assert_eq!(
         award_stat(&mut level, player, stat, 2),
         Err(LevelError::MissingServerShared)
@@ -147,7 +152,9 @@ fn live_stat_counter_and_scoreboard_update_in_native_order() {
             .get_value(stat),
         2
     );
-    level.install_shared(Box::default());
+    if level.shared().is_err() {
+        level.install_shared(Box::default());
+    }
     let mut objective = Objective::new(
         ObjectiveCriteria::by_name(&stat.objective_name()).unwrap(),
         Component::literal("opened"),

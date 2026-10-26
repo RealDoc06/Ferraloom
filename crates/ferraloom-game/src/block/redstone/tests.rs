@@ -26,10 +26,14 @@ fn level_in_radius(radius: i32) -> Level {
     level_with_behaviors(radius, &EMPTY)
 }
 pub(super) fn level_with_behaviors(radius: i32, behaviors: &'static Behaviors) -> Level {
-    let mut level = Level::new(
-        Region::new(behaviors),
-        crate::level::LevelContext::fixture(0, 63),
-    );
+    let mut level = {
+        let mut fixture_level = Level::new(
+            Region::new(behaviors),
+            crate::level::LevelContext::fixture(0, 63),
+        );
+        fixture_level.install_shared(Box::default());
+        fixture_level
+    };
     for x in -radius..=radius {
         for z in -radius..=radius {
             let pos = ChunkPos::new(x, z);

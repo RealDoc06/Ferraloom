@@ -91,9 +91,7 @@ impl BaseContainerBlockEntity {
         })
     }
     pub fn collect_components(&self, map: &mut DataComponentMap) {
-        if let Some(name) = &self.custom_name {
-            set(map, DataComponent::CustomName(Box::new(name.clone())));
-        }
+        collect_custom_name(map, self.custom_name.as_ref());
         if self.is_locked()
             && let Some(lock) = &self.lock
         {
@@ -274,6 +272,43 @@ pub(crate) fn item_entries(
             (slot < size).then_some((slot, stack))
         })
 }
+/// Port of ItemContainerContents#createStackFromSlot/copyOne. Templates create
+/// fresh native objects; no live container receiver is copied for mutation.
+pub(crate) fn component_item(components: &DataComponentMap, slot: usize) -> ItemStack {
+    match components.get(ComponentTypeId::CONTAINER) {
+        Some(DataComponent::Container(contents)) => contents
+            .0
+            .get(slot)
+            .and_then(Option::as_ref)
+            .map(crate::item::stack::create_from_template)
+            .unwrap_or_default(),
+        _ => ItemStack::default(),
+    }
+}
+/// Port of ItemContainerContents#fromItems: only native nonempty stacks become
+/// templates, and trailing empty slots are omitted.
+pub(crate) fn container_component(items: &[ItemStack]) -> DataComponent {
+    let end = items
+        .iter()
+        .rposition(|item| !item.is_empty())
+        .map_or(0, |slot| slot + 1);
+    DataComponent::Container(BoundedList(
+        items[..end]
+            .iter()
+            .map(|item| {
+                if item.is_empty() {
+                    None
+                } else {
+                    item.0.as_ref().map(|item| ItemStackTemplate {
+                        item: item.item,
+                        count: item.count,
+                        components: item.components.clone(),
+                    })
+                }
+            })
+            .collect(),
+    ))
+}
 pub fn load_items(tag: &CompoundTag, items: &mut [ItemStack]) {
     for (slot, stack) in item_entries(tag, items.len()) {
         items[slot] = stack;
@@ -316,3 +351,14 @@ pub fn analog_output(container: &impl Container) -> i32 {
 
 #[cfg(test)]
 mod partial_tests;
+
+/// Port of DataComponentMap.Builder#set(CUSTOM_NAME, nullable): an absent
+/// implicit name removes a value inherited from the extra component map.
+pub(crate) fn collect_custom_name(map: &mut DataComponentMap, name: Option<&Component>) {
+    if let Some(name) = name {
+        set(map, DataComponent::CustomName(Box::new(name.clone())));
+    } else {
+        map.entries
+            .retain(|value| value.component_type() != ComponentTypeId::CUSTOM_NAME);
+    }
+}

@@ -485,6 +485,7 @@ public final class ExtractData {
             var out = new JsonObject();
             out.addProperty("id", BuiltInRegistries.BLOCK.getId(block));
             out.addProperty("name", BuiltInRegistries.BLOCK.getKey(block).toString());
+            out.addProperty("description_id", block.getDescriptionId());
             out.addProperty("default_state", Block.getId(block.defaultBlockState()));
             out.addProperty("explosion_resistance", block.getExplosionResistance());
             out.addProperty("friction", block.getFriction());

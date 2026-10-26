@@ -1,9 +1,12 @@
-//! Owned chunk-generation state crosses the off-tick pool as one value. Within
-//! overlapping neighborhoods vanilla's X-major layers are serialized. Vanilla
-//! itself permits order-dependent feature writes; worker completion order never
-//! chooses which write wins here. Disjoint dimensions can use separate workers.
+//! Owned generation steps cross the off-tick pool with their cache and effects.
+//! A resumable task preserves X-major layers and the logical visit order of
+//! overlapping FEATURES neighborhoods. Completion timing never selects writes.
 #[cfg(test)]
 mod capture_tests;
+mod execution;
+pub(crate) use execution::{
+    GenerationProgress, GenerationStep, GenerationStepEffects, dispatch_generation,
+};
 pub(crate) mod profile;
 #[cfg(test)]
 mod relight_tests;
@@ -15,8 +18,8 @@ use crate::world::{
 };
 use anyhow::{Context, Result, ensure};
 use ferraloom_game::level::generation::{
-    CapturedChunkTerrain, ChunkGenerationTask, ChunkStatus, ChunkStatusTask, ChunkStep,
-    GenerationChunkHolder, ProtoChunk, WorldGenContext,
+    CapturedChunkTerrain, ChunkStatus, ChunkStatusTask, ChunkStep, GenerationChunkHolder,
+    ProtoChunk, WorldGenContext,
 };
 use ferraloom_light::{LevelLightEngine, LightLayer, LightUpdates, SectionSnapshots};
 use ferraloom_storage::{self as storage, IoWorker, SerializableChunkData};
@@ -25,10 +28,7 @@ use ferraloom_worldgen::structure::{check::StructureCheck, pipeline::ChunkStruct
 use std::{
     borrow::Cow,
     collections::{BTreeMap, BTreeSet},
-    sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering},
-    },
+    sync::{Arc, atomic::AtomicBool},
 };
 
 /// Execution order is separate from FULL request/integration order. Shared
@@ -333,215 +333,205 @@ impl GenerationState {
         io: &IoWorker,
         cancelled: Option<&AtomicBool>,
     ) -> Result<GenerationOutput> {
-        let _timing = profile::Span::new("generate", Some((request, pos))).status(target);
-        let result = self.generate_statuses(request, pos, target, registry, io, cancelled);
+        let mut progress = self.begin_generation(request, pos, target)?;
+        let result = (|| {
+            while let Some(step) = progress.next_step(self, cancelled)? {
+                let mut timing = progress.take_step_timing();
+                let result =
+                    self.execute_step(step, registry, io, &mut progress.effects, &mut timing);
+                progress.return_step_timing(timing);
+                result?;
+            }
+            self.capture_generation(&mut progress, registry)
+        })();
         self.finish_light(result)
     }
 
-    fn generate_statuses(
+    /// Execute just one owned holder/status transition. No live Level is borrowed.
+    pub(crate) fn execute_step(
         &mut self,
-        request: u64,
-        pos: ChunkPos,
-        target: ChunkStatus,
+        step: GenerationStep,
         registry: &RegistryAdapter,
         io: &IoWorker,
-        cancelled: Option<&AtomicBool>,
-    ) -> Result<GenerationOutput> {
-        self.revision = GenerationRevision(
-            self.revision
-                .0
-                .checked_add(1)
-                .context("generation revision exhausted")?,
-        );
-        let mut task = ChunkGenerationTask::new(request, pos, target);
-        let mut touched = BTreeSet::new();
-        let mut skips = Vec::new();
-        loop {
-            if cancelled.is_some_and(|token| token.load(Ordering::Relaxed)) {
-                task.cancel();
+        effects: &mut GenerationStepEffects,
+        timing: &mut profile::Span,
+    ) -> Result<()> {
+        let GenerationStep { position, status } = step;
+        let GenerationStepEffects { touched, skips } = effects;
+        let key = position.pack();
+        if status == ChunkStatus::Empty {
+            if let Some(error) = self.failed_loads.get(&key) {
+                anyhow::bail!("generation dependency failed: {error:?}");
             }
-            let Some(layer) = task
-                .next_layer(|p| self.holders.get(&p.pack()).map(|h| h.persisted))
-                .map_err(|e| anyhow::anyhow!("{e:?}"))?
-            else {
-                break;
-            };
-            let mut timing =
-                profile::Span::new("status_layer", Some((request, pos))).status(layer.status);
-            timing.items(layer.positions.len());
-            for position in layer.positions {
-                let key = position.pack();
-                if layer.status == ChunkStatus::Empty {
-                    if let Some(error) = self.failed_loads.get(&key) {
-                        anyhow::bail!("generation dependency failed: {error:?}");
+            if let std::collections::btree_map::Entry::Vacant(entry) = self.holders.entry(key) {
+                let loaded = (|| -> Result<ProtoChunk> {
+                    if let Some(tag) = timing.measure("read_wait", || io.load(position).wait())? {
+                        timing.measure("decode", || {
+                            ProtoChunk::load(
+                                &self.context,
+                                registry,
+                                position,
+                                SerializableChunkData::parse(tag)?,
+                            )
+                            .map_err(anyhow::Error::msg)
+                        })
+                    } else {
+                        timing.measure("empty_chunk", || {
+                            Ok(ProtoChunk::empty(&self.context, position)?)
+                        })
                     }
-                    if let std::collections::btree_map::Entry::Vacant(entry) =
-                        self.holders.entry(key)
-                    {
-                        let loaded = (|| -> Result<ProtoChunk> {
-                            if let Some(tag) =
-                                timing.measure("read_wait", || io.load(position).wait())?
-                            {
-                                timing.measure("decode", || {
-                                    ProtoChunk::load(
-                                        &self.context,
-                                        registry,
-                                        position,
-                                        SerializableChunkData::parse(tag)?,
-                                    )
-                                    .map_err(anyhow::Error::msg)
-                                })
-                            } else {
-                                timing.measure("empty_chunk", || {
-                                    Ok(ProtoChunk::empty(&self.context, position)?)
-                                })
-                            }
-                        })();
-                        let proto = match loaded {
-                            Ok(proto) => proto,
-                            Err(error) => {
-                                self.failed_loads.insert(
-                                    key,
-                                    ferraloom_game::level::generation::GenerationError::Failed {
-                                        position,
-                                        status: ChunkStatus::Empty,
-                                        message: error.to_string(),
-                                    },
-                                );
-                                return Err(error);
-                            }
-                        };
-                        let persisted = proto.region.status;
-                        entry.insert(GenerationChunkHolder::new(proto, persisted));
-                    }
-                    continue;
-                }
-                let holder = self
-                    .holders
-                    .get(&key)
-                    .context("generation holder missing")?;
-                if holder.completed >= layer.status {
-                    continue;
-                }
-                let step = holder.step_to(layer.status).clone();
-                if let Some(error) = &holder.failure {
-                    anyhow::bail!("generation dependency failed: {error:?}");
-                }
-                self.invalidate_step_terrain(position, &step);
-                let result = (|| -> Result<()> {
-                    match step.task {
-                        ChunkStatusTask::InitializeLight | ChunkStatusTask::Light => {
-                            self.apply_light(position, step.target)?
-                        }
-                        ChunkStatusTask::Full => {
-                            self.flush_light()?;
-                            let disk = self.capture_proto(key, registry)?;
-                            let proto = &mut self.holders.get_mut(&key).unwrap().chunk;
-                            proto.disk = disk;
-                            proto.region.status = ChunkStatus::Full;
-                        }
-                        ChunkStatusTask::GenerateSpawn => {
-                            // Explicit hook: initial mob spawning awaits NaturalSpawner.
-                            // It does not gate block generation or invent entity NBT.
-                            let proto = &mut self.holders.get_mut(&key).unwrap().chunk;
-                            proto.initial_mob_spawning_pending = matches!(
-                                self.context.generator.as_ref(),
-                                ferraloom_worldgen::generator::ChunkGenerator::Noise(noise) if !noise.settings.disable_mob_generation
-                            );
-                            proto.region.status = proto.region.status.max(ChunkStatus::Spawn);
-                        }
-                        _ => {
-                            let radius = step.direct.radius().unwrap_or(0) as i32;
-                            let mut neighborhood = Vec::new();
-                            for x in position.x - radius..=position.x + radius {
-                                for z in position.z - radius..=position.z + radius {
-                                    let neighbor = ChunkPos::new(x, z);
-                                    let distance =
-                                        x.abs_diff(position.x).max(z.abs_diff(position.z)) as usize;
-                                    let holder = self
-                                        .holders
-                                        .get(&neighbor.pack())
-                                        .context("generation dependency missing")?;
-                                    if let Some(required) = step.direct.get(distance) {
-                                        ensure!(
-                                            holder.completed >= required,
-                                            "dependency {neighbor:?} incomplete at {required:?}"
-                                        );
-                                    }
-                                    neighborhood.push(neighbor);
-                                }
-                            }
-                            // Move the actual neighborhood out, never clone writable
-                            // chunks. Restore every neighbor before propagating errors.
-                            let mut owned = neighborhood
-                                .iter()
-                                .map(|p| {
-                                    self.holders.remove(&p.pack()).expect("checked dependency")
-                                })
-                                .collect::<Vec<_>>();
-                            let mut regions = owned
-                                .iter_mut()
-                                .map(|h| {
-                                    std::mem::replace(&mut h.chunk.region, self.placeholder.clone())
-                                })
-                                .collect::<Vec<_>>();
-                            let result = timing.measure("apply", || {
-                                self.context.apply_with_light(
-                                    &mut regions,
-                                    [position.x, position.z],
-                                    &step,
-                                    &mut self.light,
-                                )
-                            });
-                            for ((neighbor, mut holder), region) in
-                                neighborhood.into_iter().zip(owned.drain(..)).zip(regions)
-                            {
-                                holder.chunk.region = region;
-                                self.holders.insert(neighbor.pack(), holder);
-                                touched.insert(neighbor.pack());
-                            }
-                            // Proto writes and partial effects are canonical before
-                            // the light executor reads its owned section snapshots.
-                            let stage_skips = self.finish_light(
-                                result.map_err(anyhow::Error::new).with_context(|| {
-                                    format!(
-                                        "generation chunk={position:?} status={:?} task={:?}",
-                                        step.target, step.task
-                                    )
-                                }),
-                            )?;
-                            skips.extend(stage_skips);
-                            if matches!(
-                                step.task,
-                                ChunkStatusTask::GenerateStructureStarts
-                                    | ChunkStatusTask::LoadStructureStarts
-                            ) {
-                                self.structure_check.on_structure_load(
-                                    [position.x, position.z],
-                                    self.holders[&key]
-                                        .chunk
-                                        .region
-                                        .structures
-                                        .known_valid_starts(),
-                                );
-                            }
-                        }
-                    }
-                    Ok(())
                 })();
-                if let Err(error) = result {
-                    self.holders.get_mut(&key).unwrap().failure =
-                        Some(ferraloom_game::level::generation::GenerationError::Failed {
-                            position,
-                            status: step.target,
-                            message: error.to_string(),
-                        });
-                    return Err(error);
-                }
-                self.holders.get_mut(&key).unwrap().complete(layer.status);
-                touched.insert(key);
+                let proto = match loaded {
+                    Ok(proto) => proto,
+                    Err(error) => {
+                        self.failed_loads.insert(
+                            key,
+                            ferraloom_game::level::generation::GenerationError::Failed {
+                                position,
+                                status: ChunkStatus::Empty,
+                                message: error.to_string(),
+                            },
+                        );
+                        return Err(error);
+                    }
+                };
+                let persisted = proto.region.status;
+                entry.insert(GenerationChunkHolder::new(proto, persisted));
             }
+            return Ok(());
         }
+        let holder = self
+            .holders
+            .get(&key)
+            .context("generation holder missing")?;
+        if holder.completed >= status {
+            return Ok(());
+        }
+        let step = holder.step_to(status).clone();
+        if let Some(error) = &holder.failure {
+            anyhow::bail!("generation dependency failed: {error:?}");
+        }
+        self.invalidate_step_terrain(position, &step);
+        let result = (|| -> Result<()> {
+            match step.task {
+                ChunkStatusTask::InitializeLight | ChunkStatusTask::Light => {
+                    self.apply_light(position, step.target)?
+                }
+                ChunkStatusTask::Full => {
+                    self.flush_light()?;
+                    let disk = self.capture_proto(key, registry)?;
+                    let proto = &mut self.holders.get_mut(&key).unwrap().chunk;
+                    proto.disk = disk;
+                    proto.region.status = ChunkStatus::Full;
+                }
+                ChunkStatusTask::GenerateSpawn => {
+                    // Explicit hook: initial mob spawning awaits NaturalSpawner.
+                    // It does not gate block generation or invent entity NBT.
+                    let proto = &mut self.holders.get_mut(&key).unwrap().chunk;
+                    proto.initial_mob_spawning_pending = matches!(
+                        self.context.generator.as_ref(),
+                        ferraloom_worldgen::generator::ChunkGenerator::Noise(noise) if !noise.settings.disable_mob_generation
+                    );
+                    proto.region.status = proto.region.status.max(ChunkStatus::Spawn);
+                }
+                _ => {
+                    let radius = step.direct.radius().unwrap_or(0) as i32;
+                    let mut neighborhood = Vec::new();
+                    for x in position.x - radius..=position.x + radius {
+                        for z in position.z - radius..=position.z + radius {
+                            let neighbor = ChunkPos::new(x, z);
+                            let distance =
+                                x.abs_diff(position.x).max(z.abs_diff(position.z)) as usize;
+                            let holder = self
+                                .holders
+                                .get(&neighbor.pack())
+                                .context("generation dependency missing")?;
+                            if let Some(required) = step.direct.get(distance) {
+                                ensure!(
+                                    holder.completed >= required,
+                                    "dependency {neighbor:?} incomplete at {required:?}"
+                                );
+                            }
+                            neighborhood.push(neighbor);
+                        }
+                    }
+                    // Move the actual neighborhood out, never clone writable
+                    // chunks. Restore every neighbor before propagating errors.
+                    let mut owned = neighborhood
+                        .iter()
+                        .map(|p| self.holders.remove(&p.pack()).expect("checked dependency"))
+                        .collect::<Vec<_>>();
+                    let mut regions = owned
+                        .iter_mut()
+                        .map(|h| std::mem::replace(&mut h.chunk.region, self.placeholder.clone()))
+                        .collect::<Vec<_>>();
+                    let result = timing.measure("apply", || {
+                        self.context.apply_with_light(
+                            &mut regions,
+                            [position.x, position.z],
+                            &step,
+                            &mut self.light,
+                        )
+                    });
+                    for ((neighbor, mut holder), region) in
+                        neighborhood.into_iter().zip(owned.drain(..)).zip(regions)
+                    {
+                        holder.chunk.region = region;
+                        self.holders.insert(neighbor.pack(), holder);
+                        touched.insert(neighbor.pack());
+                    }
+                    // Proto writes and partial effects are canonical before
+                    // the light executor reads its owned section snapshots.
+                    let stage_skips =
+                        self.finish_light(result.map_err(anyhow::Error::new).with_context(|| {
+                            format!(
+                                "generation chunk={position:?} status={:?} task={:?}",
+                                step.target, step.task
+                            )
+                        }))?;
+                    skips.extend(stage_skips);
+                    if matches!(
+                        step.task,
+                        ChunkStatusTask::GenerateStructureStarts
+                            | ChunkStatusTask::LoadStructureStarts
+                    ) {
+                        self.structure_check.on_structure_load(
+                            [position.x, position.z],
+                            self.holders[&key]
+                                .chunk
+                                .region
+                                .structures
+                                .known_valid_starts(),
+                        );
+                    }
+                }
+            }
+            Ok(())
+        })();
+        if let Err(error) = result {
+            self.holders.get_mut(&key).unwrap().failure =
+                Some(ferraloom_game::level::generation::GenerationError::Failed {
+                    position,
+                    status: step.target,
+                    message: error.to_string(),
+                });
+            return Err(error);
+        }
+        self.holders.get_mut(&key).unwrap().complete(status);
+        touched.insert(key);
+        Ok(())
+    }
+
+    pub(crate) fn capture_generation(
+        &mut self,
+        progress: &mut GenerationProgress,
+        registry: &RegistryAdapter,
+    ) -> Result<GenerationOutput> {
+        let request = progress.task.request;
+        let pos = progress.task.center;
+        let target = progress.task.target;
+        let mut touched = std::mem::take(&mut progress.effects.touched);
+        let skips = std::mem::take(&mut progress.effects.skips);
         self.flush_light()?;
         let mut timing = profile::Span::new("capture_output", Some((request, pos))).status(target);
         touched.extend(self.light_changed.iter().copied());
@@ -651,6 +641,7 @@ impl GenerationState {
         self.light_changed.clear();
         Ok(output)
     }
+
     /// ChunkStatusTasks#initializeLight fills the canonical source buffer even
     /// for loaded chunks. Merely reading a saved lit status never fills it.
     fn apply_light(&mut self, pos: ChunkPos, target: ChunkStatus) -> Result<()> {
@@ -711,7 +702,7 @@ impl GenerationState {
 
     /// Preserve the owned generation error after draining its partial writes.
     /// A second executor failure is retained as context, never a rollback.
-    fn finish_light<T>(&mut self, result: Result<T>) -> Result<T> {
+    pub(crate) fn finish_light<T>(&mut self, result: Result<T>) -> Result<T> {
         match (result, self.flush_light()) {
             (Err(source), Err(light)) => Err(source.context(light)),
             (Err(source), Ok(())) => Err(source),
@@ -798,7 +789,6 @@ impl GenerationState {
                 continue;
             };
             self.light_changed.insert(key);
-            self.captured_terrain.remove(&key);
             let sections = holder.chunk.disk.sections.get_or_insert_default();
             let y = update.section.y as i8;
             let index =
@@ -817,6 +807,9 @@ impl GenerationState {
             match update.layer {
                 LightLayer::Sky => sections[index].sky_light = data,
                 LightLayer::Block => sections[index].block_light = data,
+            }
+            if let Some(Some(cached)) = self.captured_terrain.get_mut(&key) {
+                cached.sync_light_section(&sections[index]);
             }
         }
     }

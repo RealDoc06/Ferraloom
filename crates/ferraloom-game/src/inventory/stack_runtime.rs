@@ -31,6 +31,12 @@ impl Level {
     }
     fn stack_parts(&self, slot: ContainerSlot) -> Result<(&StackGenerations, &ItemStack, usize)> {
         match slot.container {
+            ContainerHandle::PlayerEnderChest(entity) => self
+                .entity::<ServerPlayer>(entity)?
+                .get_ender_chest_inventory()
+                .contents()
+                .stack_parts(slot.slot)
+                .ok_or(MenuError::InvalidSlot(slot.slot as i32)),
             ContainerHandle::PlayerInventory(entity) => {
                 let player = self.entity::<ServerPlayer>(entity)?;
                 player
@@ -95,6 +101,9 @@ impl Level {
         slot: ContainerSlot,
     ) -> Result<(&mut StackGenerations, &mut ItemStack, usize)> {
         match slot.container {
+            ContainerHandle::PlayerEnderChest(entity) => self.entity_mut::<ServerPlayer>(entity)?
+                .get_ender_chest_inventory_mut().contents_mut().stack_parts_mut(slot.slot)
+                .ok_or(MenuError::InvalidSlot(slot.slot as i32)),
             ContainerHandle::PlayerInventory(entity) => {
                 let player = self.entity_mut::<ServerPlayer>(entity)?;
                 player
@@ -179,18 +188,18 @@ impl Level {
             ContainerHandle::PlayerInventory(_)
             | ContainerHandle::MenuListenerCopies { .. }
             | ContainerHandle::MenuOperationStacks { .. } => {}
-            ContainerHandle::Entity(entity) | ContainerHandle::LivingEquipment(entity) => {
-                self.retain_entity(entity)?
-            }
+            ContainerHandle::Entity(entity)
+            | ContainerHandle::LivingEquipment(entity)
+            | ContainerHandle::PlayerEnderChest(entity) => self.retain_entity(entity)?,
         }
         Ok(())
     }
     fn release_stack_owner(&mut self, owner: ContainerHandle) {
         match owner {
             ContainerHandle::BlockEntity(handle) => self.release_block_entity(handle),
-            ContainerHandle::Entity(entity) | ContainerHandle::LivingEquipment(entity) => {
-                self.release_entity(entity)
-            }
+            ContainerHandle::Entity(entity)
+            | ContainerHandle::LivingEquipment(entity)
+            | ContainerHandle::PlayerEnderChest(entity) => self.release_entity(entity),
             ContainerHandle::MenuLocal { player, menu, .. }
             | ContainerHandle::MenuCarried { player, menu } => {
                 if let Ok(player) = self.entity_mut::<ServerPlayer>(player)
@@ -572,7 +581,8 @@ mod tests {
             &mut level,
             Vec3::new(8.5, 64.0, 8.5),
             ItemStack::new(Item::STONE, 7, Default::default()),
-        );
+        )
+        .unwrap();
         let entity = level.next_entity_ref();
         let uuid = item.parent.uuid;
         level
@@ -623,10 +633,14 @@ mod tests {
             .filter(|line| line.starts_with("listener\toperation-"))
         {
             let fields: Vec<_> = line.split('\t').collect();
-            let mut level = Level::new(
-                Region::new(&BEHAVIORS),
-                crate::level::LevelContext::fixture(0, 63),
-            );
+            let mut level = {
+                let mut fixture_level = Level::new(
+                    Region::new(&BEHAVIORS),
+                    crate::level::LevelContext::fixture(0, 63),
+                );
+                fixture_level.install_shared(Box::default());
+                fixture_level
+            };
             let player = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
             let mut state = ServerPlayer::new(
                 Uuid::new(0, 1),
@@ -727,10 +741,14 @@ mod tests {
     #[test]
     fn hand_exchange_preserves_outer_roots_and_replaced_moved_receivers() {
         static BEHAVIORS: crate::Behaviors = crate::Behaviors::EMPTY;
-        let mut level = Level::new(
-            Region::new(&BEHAVIORS),
-            crate::level::LevelContext::fixture(0, 63),
-        );
+        let mut level = {
+            let mut fixture_level = Level::new(
+                Region::new(&BEHAVIORS),
+                crate::level::LevelContext::fixture(0, 63),
+            );
+            fixture_level.install_shared(Box::default());
+            fixture_level
+        };
         let player = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
         level
             .add_entity(
@@ -846,10 +864,14 @@ mod tests {
         use ferraloom_util::{BlockPos, ChunkPos};
         use std::sync::Arc;
         static BEHAVIORS: crate::Behaviors = crate::Behaviors::EMPTY;
-        let mut level = Level::new(
-            Region::new(&BEHAVIORS),
-            crate::level::LevelContext::fixture(0, 63),
-        );
+        let mut level = {
+            let mut fixture_level = Level::new(
+                Region::new(&BEHAVIORS),
+                crate::level::LevelContext::fixture(0, 63),
+            );
+            fixture_level.install_shared(Box::default());
+            fixture_level
+        };
         let player = EntityRef::fixture(crate::level::RegionId::FIXTURE, 1);
         level
             .add_entity(

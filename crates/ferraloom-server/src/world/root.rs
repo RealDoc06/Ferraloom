@@ -8,8 +8,10 @@ pub struct WorldServices {
     pub access: Arc<LevelStorageAccess>,
     pub seed: i64,
     pub dimensions: WorldDimensions,
+    dimension_types: std::collections::BTreeMap<Identifier, Option<Identifier>>,
     pub registry: Arc<RegistryAdapter>,
-    pub(super) resources: Arc<ResourceManager>,
+    pub registry_context: Arc<RegistrySet>,
+    pub(super) worldgen: Arc<ferraloom_game::level::generation::WorldGenRegistries>,
     pub(super) generate_structures: bool,
     pub(super) bonus_chest: bool,
     pub(super) unported_behavior: ferraloom_game::block::UnportedBehavior,
@@ -18,6 +20,32 @@ pub struct WorldServices {
     pub(super) saving: Arc<JobPool>,
 }
 impl WorldServices {
+    /// Port of WorldDimensions#specialWorldProperty: debug/flat are global
+    /// WorldData flags, including when the player's current level is not OW.
+    pub fn is_debug_world(&self) -> bool {
+        matches!(
+            self.dimensions.overworld().generator.as_ref(),
+            ChunkGenerator::Debug(_)
+        )
+    }
+    pub fn is_flat_world(&self) -> bool {
+        matches!(
+            self.dimensions.overworld().generator.as_ref(),
+            ChunkGenerator::Flat(_)
+        )
+    }
+    /// CommonPlayerSpawnInfo uses the original DimensionType holder key, not
+    /// the dimension key or a structurally equal decoded value.
+    pub fn dimension_type_key(&self, dimension: &Identifier) -> Result<&Identifier> {
+        self.stem(dimension)?;
+        self.dimension_types
+            .get(dimension)
+            .context("registered dimension is missing its type holder")?
+            .as_ref()
+            .with_context(|| {
+                format!("Unsupported: inline DimensionType network holder for {dimension}")
+            })
+    }
     pub fn stem(&self, dimension: &Identifier) -> Result<&LevelStem> {
         self.dimensions
             .dimensions
@@ -51,7 +79,7 @@ impl WorldRoot {
         root: &Path,
         properties: &ServerProperties,
         resources: &ResourceManager,
-        registries: &RegistrySet,
+        registries: &Arc<RegistrySet>,
         unported_behavior: ferraloom_game::block::UnportedBehavior,
     ) -> Result<Self> {
         let access = Arc::new(LevelStorageAccess::open(
@@ -84,7 +112,7 @@ impl WorldRoot {
             WorldPreset::decode(
                 &nbt_json(&Tag::Compound(settings.value().clone()))?,
                 resources,
-                data,
+                data.clone(),
                 seed,
             )?
         } else {
@@ -99,7 +127,7 @@ impl WorldRoot {
                 properties.get("level-type"),
                 &generator_settings,
                 resources,
-                data,
+                data.clone(),
                 seed,
             )?;
             let mut settings = json_nbt(&preset.definition)
@@ -118,6 +146,17 @@ impl WorldRoot {
             )?;
             preset
         };
+        let dimension_types = dimension_type_keys(&preset.definition)?;
+        let worldgen = {
+            let _timing = crate::generation::profile::Span::new("worldgen_registries", None);
+            Arc::new(
+                ferraloom_game::level::generation::WorldGenRegistries::load_for_world(
+                    resources,
+                    &data,
+                    access.path(),
+                )?,
+            )
+        };
         let mut level_data = if access.path().join("level.dat").exists() {
             access.read_level_data()?
         } else {
@@ -131,8 +170,10 @@ impl WorldRoot {
                 access,
                 seed,
                 dimensions: preset.dimensions,
+                dimension_types,
                 registry: Arc::new(RegistryAdapter::new(registries)?),
-                resources: Arc::new(resources.clone()),
+                registry_context: registries.clone(),
+                worldgen,
                 generate_structures,
                 bonus_chest,
                 unported_behavior,
@@ -215,11 +256,114 @@ impl WorldRoot {
     }
 }
 
+// Retain holder identity while the raw preset and resolved stems are together.
+// Inline holders remain representable here; the network boundary rejects them.
+fn dimension_type_keys(
+    definition: &serde_json::Value,
+) -> Result<std::collections::BTreeMap<Identifier, Option<Identifier>>> {
+    definition
+        .get("dimensions")
+        .and_then(serde_json::Value::as_object)
+        .context("world preset dimension map")?
+        .iter()
+        .map(|(dimension, stem)| {
+            let holder = stem.get("type").context("dimension type holder")?;
+            let key = match holder.as_str() {
+                Some(name) => Some(name.parse()?),
+                None => {
+                    ensure!(
+                        holder.is_object(),
+                        "dimension type holder is neither named nor inline"
+                    );
+                    None
+                }
+            };
+            Ok((dimension.parse()?, key))
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use ferraloom_game::{Behaviors, level::Region};
     use ferraloom_util::ChunkPos;
+
+    #[test]
+    fn dimension_type_holder_identity_is_independent_of_dimension_name() {
+        let holders = dimension_type_keys(&serde_json::json!({"dimensions": {
+            "fixture:moon": {"type": "minecraft:overworld"},
+            "fixture:other": {"type": "fixture:custom_type"},
+            "fixture:inline": {"type": {"min_y": 0, "height": 256}}
+        }}))
+        .unwrap();
+        assert_eq!(
+            holders[&"fixture:moon".parse().unwrap()]
+                .as_ref()
+                .unwrap()
+                .as_str(),
+            "minecraft:overworld"
+        );
+        assert_eq!(
+            holders[&"fixture:other".parse().unwrap()]
+                .as_ref()
+                .unwrap()
+                .as_str(),
+            "fixture:custom_type"
+        );
+        assert!(holders[&"fixture:inline".parse().unwrap()].is_none());
+        assert!(!holders.contains_key(&"minecraft:overworld".parse().unwrap()));
+    }
+
+    #[tokio::test]
+    async fn native_world_flags_follow_overworld_data_in_every_dimension() {
+        let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").unwrap();
+        let resources = ResourceManager::new(vec![
+            ferraloom_data::datapack::Pack::vanilla_jar(Path::new(&jar)).unwrap(),
+        ]);
+        let registries = Arc::new(RegistrySet::load(&resources).unwrap());
+        let cases: Vec<_> = include_str!("../../tests/java/world_data/flags.tsv")
+            .lines()
+            .map(|row| row.split('\t').collect::<Vec<_>>())
+            .collect();
+        assert_eq!(cases.len(), 9);
+        for preset in [
+            "minecraft:normal",
+            "minecraft:flat",
+            "minecraft:debug_all_block_states",
+        ] {
+            let directory = tempfile::tempdir().unwrap();
+            let mut properties = ServerProperties::from_values(Default::default());
+            properties.set("level-type", preset);
+            properties.set("level-seed", 0);
+            let mut root = WorldRoot::open(
+                directory.path(),
+                &properties,
+                &resources,
+                &registries,
+                ferraloom_game::block::UnportedBehavior::Strict,
+            )
+            .unwrap();
+            for fields in cases.iter().filter(|fields| fields[0] == preset) {
+                assert_eq!(root.is_debug_world(), fields[2] == "true", "{fields:?}");
+                assert_eq!(root.is_flat_world(), fields[3] == "true", "{fields:?}");
+                assert_eq!(
+                    root.is_flat_world(),
+                    fields[4] == "true",
+                    "native ServerLevel#isFlat: {fields:?}"
+                );
+            }
+            let mut world = root
+                .open_dimension("minecraft:the_nether".parse().unwrap(), &properties)
+                .unwrap();
+            let context = world.level_context(&resources).unwrap();
+            let mut level = Level::new(Region::new(&Behaviors::EMPTY), context);
+            world.configure_live_rules(&mut level);
+            assert_eq!(level.rules().debug, root.is_debug_world());
+            assert!(!world.dimension.has_skylight);
+            world.close_chunk_storage().await.unwrap();
+        }
+    }
 
     #[tokio::test]
     async fn dimensions_share_one_root_and_keep_their_actual_generators_and_io() {
@@ -227,7 +371,7 @@ mod tests {
         let resources = ResourceManager::new(vec![
             ferraloom_data::datapack::Pack::vanilla_jar(Path::new(&jar)).unwrap(),
         ]);
-        let registries = RegistrySet::load(&resources).unwrap();
+        let registries = Arc::new(RegistrySet::load(&resources).unwrap());
         let directory = tempfile::tempdir().unwrap();
         let mut properties = ServerProperties::from_values(Default::default());
         properties.set("level-type", "minecraft:flat");
@@ -306,6 +450,10 @@ mod tests {
             assert_eq!(context.seed, 1234);
             assert_eq!(context.sea_level, stem.generator.sea_level());
             assert!(Arc::ptr_eq(&context.generator, &stem.generator));
+            assert_eq!(
+                context.dimension_type().unwrap().infiniburn,
+                stem.dimension.infiniburn
+            );
             static EMPTY: Behaviors = Behaviors::EMPTY;
             let mut level = Level::new(Region::new(&EMPTY), context);
             world.configure_live_rules(&mut level);
@@ -369,7 +517,7 @@ mod tests {
         let resources = ResourceManager::new(vec![
             ferraloom_data::datapack::Pack::vanilla_jar(Path::new(&jar)).unwrap(),
         ]);
-        let registries = RegistrySet::load(&resources).unwrap();
+        let registries = Arc::new(RegistrySet::load(&resources).unwrap());
         let directory = tempfile::tempdir().unwrap();
         let properties = ServerProperties::from_values(Default::default());
         let mut root = WorldRoot::open(

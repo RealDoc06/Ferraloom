@@ -5,6 +5,7 @@ pub mod abilities;
 mod ai_step;
 mod contact;
 pub mod cooldowns;
+pub mod ender_chest;
 pub mod equipment;
 mod experience;
 pub mod food;
@@ -15,6 +16,7 @@ mod notifications;
 pub mod shoulders;
 pub use notifications::{build_limit_packet, send_build_limit_message};
 mod spawn;
+pub use spawn::SavedPosition;
 mod stuck;
 mod tick;
 pub use tick::{award_stat, player_do_tick_with_tick_rate, reset_stat};
@@ -62,6 +64,7 @@ pub struct ServerPlayer {
     // GameProfile identity is immutable; entity NBT cannot replace it.
     profile_id: Uuid,
     pub inventory: inventory::Inventory,
+    ender_chest_inventory: ender_chest::PlayerEnderChestContainer,
     pub menus: crate::inventory::MenuSession,
     pub recipe_book: crate::crafting::ServerRecipeBook,
     pub advancements: crate::advancements::PlayerAdvancements,
@@ -248,6 +251,7 @@ impl ServerPlayer {
             profile_id: uuid,
             name,
             inventory: Default::default(),
+            ender_chest_inventory: Default::default(),
             menus: Default::default(),
             recipe_book: Default::default(),
             advancements: Default::default(),
@@ -413,6 +417,8 @@ impl ServerPlayer {
         let selected = tag.get_int_or("SelectedItemSlot", 0);
         self.inventory.load(&inventory);
         self.inventory.set_selected_slot(selected as usize);
+        self.ender_chest_inventory
+            .load_slots(&tag.get_list("EnderItems").cloned().unwrap_or_default());
         self.first_good = self.position;
         self.last_good = self.position;
         Ok(())
@@ -474,6 +480,14 @@ impl ServerPlayer {
         tag.insert(
             "SelectedItemSlot",
             Tag::Int(self.inventory.selected_slot() as i32),
+        );
+        tag.insert(
+            "EnderItems",
+            Tag::List(
+                self.ender_chest_inventory
+                    .store_as_slots()
+                    .map_err(|_| LevelError::Inventory("invalid saved ender chest"))?,
+            ),
         );
         self.food_data.save(&mut tag);
         tag.remove("ShoulderEntityLeft");
@@ -761,6 +775,22 @@ fn jump_from_ground(entity: crate::entity::EntityRef, level: &mut Level) -> Resu
 }
 pub struct PlayerBehavior;
 impl crate::entity::Entity for PlayerBehavior {
+    fn get_slot(
+        &self,
+        entity: EntityRef,
+        slot: i32,
+        level: &Level,
+    ) -> Result<Option<crate::item::slot::SlotAccess>, LevelError> {
+        crate::item::slot::player_access(entity, slot, level)
+    }
+    /// Port of Player#doesEmitEquipEvent: hands and animal armor do not emit.
+    fn does_emit_equip_event(&self, slot: ferraloom_protocol::component::EquipmentSlot) -> bool {
+        use ferraloom_protocol::component::EquipmentSlot;
+        matches!(
+            slot,
+            EquipmentSlot::Feet | EquipmentSlot::Legs | EquipmentSlot::Chest | EquipmentSlot::Head
+        )
+    }
     /// ServerPlayer#onAttributeUpdated handles RECEIVE before its LivingEntity parent.
     fn on_attribute_updated(
         &self,
@@ -1637,10 +1667,14 @@ mod tests {
         static BEHAVIORS: Behaviors = Behaviors::EMPTY;
         let biome = Strategy::biomes(Arc::new(IdMap::new(vec![BiomeId(0)]).unwrap()));
         let section = LevelChunkSection::new(Strategy::block_states(), biome, BiomeId(0));
-        let mut level = Level::new(
-            Region::new(&BEHAVIORS),
-            crate::level::LevelContext::fixture(0, 63),
-        );
+        let mut level = {
+            let mut fixture_level = Level::new(
+                Region::new(&BEHAVIORS),
+                crate::level::LevelContext::fixture(0, 63),
+            );
+            fixture_level.install_shared(Box::default());
+            fixture_level
+        };
         crate::entity::tests::tags(&mut level);
         level
             .add_chunk(LevelChunk::new(ChunkPos::new(0, 0), 0..16, section))

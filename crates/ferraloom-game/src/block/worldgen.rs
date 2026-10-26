@@ -41,6 +41,7 @@ impl WorldgenBlockBehavior for GameWorldgenBlockBehavior {
         p: [i32; 3],
         state: BlockState,
         tag: &ferraloom_nbt::CompoundTag,
+        registries: &dyn ferraloom_protocol::codec::RegistryContext,
     ) -> Result<Option<Box<dyn ferraloom_worldgen::region::WorldgenBlockEntity>>, Error> {
         let entity = if tag
             .get_string("id")
@@ -53,9 +54,10 @@ impl WorldgenBlockBehavior for GameWorldgenBlockBehavior {
                 (Some(state), pos(p))
             })?
         } else {
-            result(super::entity::load_static(pos(p), state, tag), || {
-                (Some(state), pos(p))
-            })?
+            result(
+                super::entity::load_static(pos(p), state, tag, registries),
+                || (Some(state), pos(p)),
+            )?
         };
         Ok(entity.map(|entity| {
             Box::new(entity) as Box<dyn ferraloom_worldgen::region::WorldgenBlockEntity>
@@ -121,14 +123,16 @@ impl WorldgenBlockBehavior for GameWorldgenBlockBehavior {
         mut tag: ferraloom_nbt::CompoundTag,
         random: &mut ferraloom_util::random::WorldgenRandom,
     ) -> Result<(), Error> {
+        let registries = region.registry_context();
         if let Some(entity) = region.get_or_create_block_entity(p)? {
+            let registries = registries?;
             if entity.is_randomizable() {
                 tag.insert(
                     "LootTableSeed",
                     ferraloom_nbt::Tag::Long(random.next_long()),
                 );
             }
-            entity.load_with_components(&tag)?;
+            entity.load_with_components(&tag, registries)?;
         }
         Ok(())
     }
@@ -446,9 +450,10 @@ mod tests {
         )
         .unwrap();
         let mut chunks = [RegionChunk::new(
-            generator.build_terrain([0, 0], dimension),
+            generator.build_terrain([0, 0], dimension.clone()),
             ChunkStatus::Features,
         )];
+        let registry_context = crate::level::LevelContext::fixture(0, 63);
         let mut region = WorldGenRegion::new(
             &mut chunks,
             [0, 0],
@@ -460,6 +465,7 @@ mod tests {
             63,
         )
         .unwrap();
+        region.set_registry_context(registry_context.registry_context().unwrap());
         let p = [8, dimension.min_y + 1, 8];
         let environment = Arc::new(
             ferraloom_worldgen::environment::EnvironmentDefinitions::load(&resources).unwrap(),
@@ -588,6 +594,7 @@ mod tests {
         }
         // The preceding checks use the actual game bridge. Required-service
         // failures use an explicit receiver rather than an unported family.
+        let registry_context = crate::level::LevelContext::fixture(0, 63);
         let mut region = WorldGenRegion::new(
             &mut chunks,
             [0, 0],
@@ -599,6 +606,7 @@ mod tests {
             63,
         )
         .unwrap();
+        region.set_registry_context(registry_context.registry_context().unwrap());
         assert_eq!(
             region
                 .update_shape(

@@ -83,7 +83,12 @@ impl BlockEntity for CreakingHeartBehavior {
         }
         Ok(())
     }
-    fn load_additional(&self, state: &mut BlockEntityState, tag: &CompoundTag) {
+    fn load_additional(
+        &self,
+        state: &mut BlockEntityState,
+        tag: &CompoundTag,
+        _registries: &dyn ferraloom_protocol::codec::RegistryContext,
+    ) {
         let BlockEntityState::CreakingHeart(entity) = state else {
             unreachable!()
         };
@@ -95,7 +100,12 @@ impl BlockEntity for CreakingHeartBehavior {
         tag: &CompoundTag,
         level: &mut Level,
     ) -> Result<(), LevelError> {
-        self.load_additional(level.block_entity_state_mut(handle)?, tag);
+        let context = level.context().clone();
+        self.load_additional(
+            level.block_entity_state_mut(handle)?,
+            tag,
+            context.registry_context()?,
+        );
         handle.set_changed(level)
     }
     fn save_additional(&self, state: &BlockEntityState) -> ferraloom_protocol::Result<CompoundTag> {

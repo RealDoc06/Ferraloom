@@ -13,10 +13,14 @@ use std::{collections::BTreeMap, num::NonZeroI32};
 const VECTORS: &str = include_str!("../../../../tests/java/entity/vectors.tsv");
 fn level() -> Level {
     static BEHAVIORS: Behaviors = Behaviors::EMPTY;
-    Level::new(
-        Region::new(&BEHAVIORS),
-        crate::level::LevelContext::fixture(0, 63),
-    )
+    {
+        let mut fixture_level = Level::new(
+            Region::new(&BEHAVIORS),
+            crate::level::LevelContext::fixture(0, 63),
+        );
+        fixture_level.install_shared(Box::default());
+        fixture_level
+    }
 }
 fn bits(v: Vec3) -> String {
     format!(
@@ -29,13 +33,28 @@ fn bits(v: Vec3) -> String {
 fn path(value: &PositionPath) -> String {
     match value {
         PositionPath::Linear(pos) => format!("L:{}", bits(Vec3::new(pos.x, pos.y, pos.z))),
-        PositionPath::Stepped(_) => panic!("these nonliving trackers use linear paths"),
+        PositionPath::Stepped(steps) => format!(
+            "S:{}",
+            steps
+                .iter()
+                .map(|step| format!(
+                    "{}:{}",
+                    step.tick_offset.0,
+                    bits(Vec3::new(step.position.x, step.position.y, step.position.z))
+                ))
+                .collect::<Vec<_>>()
+                .join(";")
+        ),
     }
 }
 fn delta(value: &VecDelta) -> String {
     match value {
         VecDelta::Linear { xa, ya, za } => format!("{xa},{ya},{za}"),
-        VecDelta::Stepped(_) => panic!("these nonliving trackers use linear deltas"),
+        VecDelta::Stepped(steps) => steps
+            .iter()
+            .map(|step| format!("{}:{},{},{}", step.ticks.0, step.xa, step.ya, step.za))
+            .collect::<Vec<_>>()
+            .join(";"),
     }
 }
 fn packet_text(packet: &Packet) -> String {
@@ -125,6 +144,9 @@ fn packet_text(packet: &Packet) -> String {
                         EntityDataValue::Float(value) => format!("{value:?}"),
                         EntityDataValue::Byte(value) => value.to_string(),
                         EntityDataValue::Int(value) => value.0.to_string(),
+                        EntityDataValue::Boolean(value) => value.to_string(),
+                        EntityDataValue::CowVariant(value) => value.0.to_string(),
+                        EntityDataValue::CowSoundVariant(value) => value.0.to_string(),
                         _ => panic!("unexpected metadata {:?}", value.value),
                     };
                     format!("{}:{contents}", value.id)
@@ -132,6 +154,16 @@ fn packet_text(packet: &Packet) -> String {
                 .collect::<Vec<_>>()
                 .join(",")
         ),
+        Packet::SetPassengers(p) => format!(
+            "passengers:{}:{}",
+            p.vehicle.0,
+            p.passengers
+                .iter()
+                .map(|id| id.0.to_string())
+                .collect::<Vec<_>>()
+                .join(",")
+        ),
+        Packet::SetEntityLink(p) => format!("leash:{}:{}", p.source_id, p.dest_id),
         _ => panic!("unexpected tracking packet {packet:?}"),
     }
 }
@@ -265,7 +297,7 @@ fn nonliving_damage_forces_native_velocity_sync_even_without_an_update_interval(
         let fields: Vec<_> = row.split('\t').collect();
         let mut level = level();
         let id = level.next_entity_ref();
-        let network = level.next_entity_id();
+        let network = level.next_entity_id().unwrap();
         let state = if fields[1] == "item" {
             let mut item = ItemEntity::new(network, 123);
             item.set_item(stack(1));
@@ -462,5 +494,225 @@ fn pairing_uses_cached_metadata_and_position_until_the_next_sync() {
     assert!(matches!(
         tracker.removal_packet(&level).unwrap(),
         Packet::RemoveEntities(_)
+    ));
+}
+
+const LIVING_VECTORS: &str = include_str!("../../../../tests/java/entity/tracker/living.tsv");
+
+fn cow(level: &mut Level, network: i32) -> EntityRef {
+    let mut cow = crate::entity::animal::Cow::default();
+    let living = cow.as_living_mut();
+    living.parent.network_id = network;
+    living.parent.network_id_allocated = true;
+    living.parent.set_pos(Vec3::new(8.5, 64.0, 8.5));
+    living.parent.yaw = 0.0;
+    living.parent.pitch = 0.0;
+    living.y_head_rot = 10.0;
+    let id = level.next_entity_ref();
+    level
+        .add_entity(id, EntityState::Cow(Box::new(cow)))
+        .unwrap();
+    id
+}
+fn leash(holder: Option<EntityRef>, delayed_holder_id: i32) -> crate::entity::mob::LeashData {
+    crate::entity::mob::LeashData {
+        holder,
+        delayed: None,
+        delayed_holder_id,
+        angular_momentum: 0.0,
+    }
+}
+
+#[test]
+fn native_cow_pairing_shares_living_snapshots_and_sends_leash_last_without_effect_packets() {
+    use crate::entity::{LivingEntity, animal::Cow};
+    use ferraloom_data::{Item, registries::attribute::Id as Attribute};
+    use ferraloom_protocol::component::{CowVariant, EquipmentSlot};
+    let mut checked = 0;
+    for row in LIVING_VECTORS
+        .lines()
+        .filter(|row| row.starts_with("pairing\t"))
+    {
+        let fields: Vec<_> = row.split('\t').collect();
+        let mut level = level();
+        let id = cow(&mut level, 9);
+        let other = cow(&mut level, 12);
+        if matches!(fields[1], "equipment" | "all") {
+            let living = level.entity_mut::<LivingEntity>(id).unwrap();
+            living.equipment.set(EquipmentSlot::Mainhand, stack(3));
+            living.equipment.set(
+                EquipmentSlot::Offhand,
+                ItemStack::new(Item::SHIELD, 1, Default::default()),
+            );
+            living.equipment.set(
+                EquipmentSlot::Chest,
+                ItemStack::new(Item::IRON_CHESTPLATE, 1, Default::default()),
+            );
+            living
+                .attributes
+                .get_instance(Attribute::MAX_HEALTH)
+                .unwrap()
+                .set_base_value(30.0);
+        }
+        if matches!(fields[1], "passengers" | "all") {
+            assert!(crate::entity::start_riding(other, id, true, &mut level).unwrap());
+        }
+        if fields[1] == "mounted" {
+            assert!(crate::entity::start_riding(id, other, true, &mut level).unwrap());
+        }
+        if matches!(fields[1], "leash" | "all") {
+            level.entity_mut::<Cow>(id).unwrap().as_mob_mut().leash_data =
+                Some(leash(Some(other), 0));
+        }
+        if fields[1] == "delayed" {
+            level.entity_mut::<Cow>(id).unwrap().as_mob_mut().leash_data = Some(leash(None, 12));
+        }
+        if fields[1] == "effect" {
+            let tag = ferraloom_nbt::parse_compound(
+                "{active_effects:[{id:'minecraft:speed',duration:200,amplifier:1}]}",
+            )
+            .unwrap();
+            let living = level.entity_mut::<LivingEntity>(id).unwrap();
+            assert!(
+                living
+                    .active_effects
+                    .load(tag.get("active_effects"))
+                    .is_empty()
+            );
+            assert_eq!(living.active_effects.len(), 1);
+        }
+        if fields[1] == "variant" {
+            level
+                .entity_mut::<LivingEntity>(id)
+                .unwrap()
+                .entity_data
+                .set(
+                    crate::entity::synched_data::COW_VARIANT,
+                    CowVariant("minecraft:cold".parse().unwrap()),
+                );
+        }
+        let tracker = ServerEntity::new(
+            id,
+            &level,
+            UpdateInterval::for_entity_type(ferraloom_data::EntityType::COW),
+            true,
+        )
+        .unwrap();
+        let actual = tracker
+            .pairing_data(&mut level)
+            .unwrap()
+            .iter()
+            .map(packet_text)
+            .collect::<Vec<_>>()
+            .join("|");
+        assert_eq!(actual, fields[2], "{row}");
+        checked += 1;
+    }
+    assert_eq!(checked, 9);
+}
+
+#[test]
+fn native_cow_updates_use_canonical_steps_prediction_dirty_attributes_and_flying_motion() {
+    use crate::entity::{
+        EntityData, LivingEntity,
+        movement::{MoverType, record_movement},
+    };
+    use ferraloom_data::registries::attribute::Id as Attribute;
+    let mut checked = 0;
+    for track_delta in [false, true] {
+        let mut level = level();
+        let id = cow(&mut level, 9);
+        let mut tracker = ServerEntity::new(
+            id,
+            &level,
+            UpdateInterval::for_entity_type(ferraloom_data::EntityType::COW),
+            track_delta,
+        )
+        .unwrap();
+        for tick in 0..16 {
+            match tick {
+                1 | 2 => {
+                    let base = level.entity_mut::<EntityData>(id).unwrap();
+                    base.set_pos(if tick == 1 {
+                        Vec3::new(8.625, 64.0, 8.5)
+                    } else {
+                        Vec3::new(8.75, 64.125, 8.5)
+                    });
+                    base.sync_position = true;
+                }
+                3 => level.entity_mut::<LivingEntity>(id).unwrap().y_head_rot = 23.9,
+                4 => level
+                    .entity_mut::<LivingEntity>(id)
+                    .unwrap()
+                    .set_health(7.5),
+                5 => level
+                    .entity_mut::<LivingEntity>(id)
+                    .unwrap()
+                    .attributes
+                    .get_instance(Attribute::MAX_HEALTH)
+                    .unwrap()
+                    .set_base_value(35.0),
+                6 => {
+                    let base = level.entity_mut::<EntityData>(id).unwrap();
+                    base.set_shared_flag(7, true);
+                    base.velocity = Vec3::new(0.125, 0.0, 0.0);
+                }
+                7 => {
+                    let base = level.entity_mut::<EntityData>(id).unwrap();
+                    base.set_pos(Vec3::new(8.875, 64.125, 8.5));
+                    base.sync_position = true;
+                }
+                8 => {
+                    record_movement(id, MoverType::Piston, Vec3::new(0.25, 0.0, 0.0), &mut level)
+                        .unwrap();
+                    level
+                        .entity_mut::<EntityData>(id)
+                        .unwrap()
+                        .set_pos(Vec3::new(9.125, 64.125, 8.5));
+                }
+                10 => {
+                    let base = level.entity_mut::<EntityData>(id).unwrap();
+                    base.on_ground = true;
+                    base.needs_sync = true;
+                }
+                11 => {
+                    let base = level.entity_mut::<EntityData>(id).unwrap();
+                    base.requires_precise_position = true;
+                    base.set_pos(Vec3::new(9.25, 64.125, 8.5));
+                    base.needs_sync = true;
+                }
+                12 => {
+                    let base = level.entity_mut::<EntityData>(id).unwrap();
+                    base.requires_precise_position = false;
+                    base.velocity = Vec3::ZERO;
+                    base.sync_velocity = true;
+                }
+                _ => {}
+            }
+            let actual = output_text(&tracker.send_changes(&mut level).unwrap());
+            let prefix = format!("updates\t{track_delta}\t{tick}\t");
+            let expected = LIVING_VECTORS
+                .lines()
+                .find_map(|row| row.strip_prefix(&prefix))
+                .unwrap();
+            let sync = level.entity::<EntityData>(id).unwrap().sync_position;
+            assert_eq!(format!("{actual}\t{sync}"), expected, "{prefix}");
+            checked += 1;
+        }
+    }
+    assert_eq!(checked, 32);
+}
+
+#[test]
+fn bound_leash_pairing_requires_the_retained_holder() {
+    use crate::entity::animal::Cow;
+    let mut level = level();
+    let id = cow(&mut level, 9);
+    let missing = EntityRef::fixture(level.region_id(), 123456);
+    level.entity_mut::<Cow>(id).unwrap().as_mob_mut().leash_data = Some(leash(Some(missing), 0));
+    let tracker = ServerEntity::new(id, &level, UpdateInterval::Never, true).unwrap();
+    assert!(matches!(
+        tracker.pairing_data(&mut level),
+        Err(TrackingError::Level(_))
     ));
 }

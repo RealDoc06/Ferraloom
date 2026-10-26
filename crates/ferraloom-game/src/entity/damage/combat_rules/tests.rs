@@ -23,7 +23,7 @@ fn player(level: &mut Level) -> EntityRef {
     let state = ServerPlayer::new(
         Uuid::new(0, entity.serial() as i64),
         "combat".into(),
-        level.next_entity_id(),
+        level.next_entity_id().unwrap(),
         Vec3::new(8.5, 64.0, 8.5),
         GameType::Survival,
     );
@@ -89,7 +89,7 @@ fn native_damage_weapon_uses_the_direct_entity_and_live_selected_stack() {
     let mut level = crate::entity::tests::level(false);
     let attacker = player(&mut level);
     let cow = level.next_entity_ref();
-    let mut state = Cow::with_parent(level.create_entity_data(EntityType::COW));
+    let mut state = Cow::with_parent(level.create_entity_data(EntityType::COW).unwrap());
     state.as_living_mut().equipment.set(
         EquipmentSlot::Mainhand,
         ItemStack::new(Item::IRON_AXE, 1, Default::default()),
@@ -98,7 +98,7 @@ fn native_damage_weapon_uses_the_direct_entity_and_live_selected_stack() {
         .add_entity(cow, EntityState::Cow(Box::new(state)))
         .unwrap();
     let tnt = level.next_entity_ref();
-    let state = PrimedTnt::new(level.next_entity_id(), 123);
+    let state = PrimedTnt::new(level.next_entity_id().unwrap(), 123);
     level
         .add_entity(tnt, EntityState::PrimedTnt(Box::new(state)))
         .unwrap();

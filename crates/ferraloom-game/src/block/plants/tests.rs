@@ -14,10 +14,14 @@ fn level() -> Level {
     level_with_height(2)
 }
 pub(super) fn level_with_height(sections: i32) -> Level {
-    let mut level = Level::new(
-        Region::new(&EMPTY),
-        crate::level::LevelContext::fixture(0, 63),
-    );
+    let mut level = {
+        let mut fixture_level = Level::new(
+            Region::new(&EMPTY),
+            crate::level::LevelContext::fixture(0, 63),
+        );
+        fixture_level.install_shared(Box::default());
+        fixture_level
+    };
     level.set_has_skylight(true);
     level
         .add_chunk(LevelChunk::new(
@@ -1112,8 +1116,7 @@ fn farmland_trampling_preserves_draw_order_permission_size_and_actor() {
             .update_entity_chunk_status(ChunkPos::ZERO, crate::level::entity::Visibility::Ticking)
             .unwrap();
         level.add_entity(actor, entity).unwrap();
-        let mut shared = crate::ServerShared::default();
-        shared.ops.set_operator(
+        level.shared_mut().unwrap().ops.set_operator(
             &ferraloom_protocol::login::GameProfile {
                 id: Uuid::new(3, 4),
                 name: "Other".into(),
@@ -1121,7 +1124,6 @@ fn farmland_trampling_preserves_draw_order_permission_size_and_actor() {
             },
             Some(crate::commands::permissions::PermissionLevel::Owners),
         );
-        level.install_shared(Box::new(shared));
         level.set_spawn_protection(SpawnProtectionSnapshot::new(
             "minecraft:overworld".parse().unwrap(),
             "minecraft:overworld".parse().unwrap(),
@@ -1200,7 +1202,11 @@ fn tree_growth_restores_captured_saplings_and_uses_the_live_random_stream() {
             services.damage_types().clone(),
             services.initial_difficulty,
         ));
-        let mut level = Level::new(original.into_region(), context);
+        let mut level = {
+            let mut fixture_level = Level::new(original.into_region(), context);
+            fixture_level.install_shared(Box::default());
+            fixture_level
+        };
         level.set_block_tags(blocks.clone());
         level.set_fluid_tags(fluids.clone());
         let block = if mega {

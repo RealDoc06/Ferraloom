@@ -9,10 +9,14 @@ use ferraloom_util::{Uuid, Vec3};
 
 fn level() -> Level {
     static BEHAVIORS: Behaviors = Behaviors::EMPTY;
-    Level::new(
-        Region::new(&BEHAVIORS),
-        crate::level::LevelContext::fixture(0, 63),
-    )
+    {
+        let mut fixture_level = Level::new(
+            Region::new(&BEHAVIORS),
+            crate::level::LevelContext::fixture(0, 63),
+        );
+        fixture_level.install_shared(Box::default());
+        fixture_level
+    }
 }
 fn orb_tag(number: i64, position: Vec3) -> CompoundTag {
     let mut orb = ExperienceOrb::new(1, number);
@@ -59,7 +63,7 @@ fn mutable_status_and_io_queues_preserve_native_events_and_canonical_state() {
     let state = ServerPlayer::new(
         Uuid::new(0, 3),
         "visibility".into(),
-        level.next_entity_id(),
+        level.next_entity_id().unwrap(),
         Vec3::new(1.5, 64.0, 1.5),
         GameType::Survival,
     );
@@ -230,7 +234,7 @@ fn load_completion_order_does_not_change_entity_creation_or_callbacks() {
 #[test]
 fn fresh_chunk_loads_before_saving_new_and_existing_entities() {
     let mut level = level();
-    let mut orb = ExperienceOrb::new(level.next_entity_id(), 1);
+    let mut orb = ExperienceOrb::new(level.next_entity_id().unwrap(), 1);
     orb.parent.uuid = Uuid::new(0, 1);
     orb.parent.set_pos(Vec3::new(1.0, 64.0, 1.0));
     let new = level.next_entity_ref();
@@ -372,7 +376,7 @@ fn save_all_waits_for_pending_load_and_keeps_unported_chunks_pending() {
         .update_entity_chunk_status(pos, Visibility::Ticking)
         .unwrap();
     let (request, _) = load_request(&mut level);
-    let mut orb = ExperienceOrb::new(level.next_entity_id(), 1);
+    let mut orb = ExperienceOrb::new(level.next_entity_id().unwrap(), 1);
     orb.parent.set_pos(Vec3::new(1.0, 64.0, 1.0));
     let id = level.next_entity_ref();
     level
@@ -449,7 +453,7 @@ fn shared_entity_io_preflight_keeps_owned_nbt_and_never_replays_it() {
         shared.entity_chunk_load_status(pos),
         ChunkLoadStatus::Pending
     );
-    assert_eq!(shared.next_entity_id(), 1);
+    assert_eq!(shared.next_entity_id().unwrap(), 1);
     assert_eq!(
         shared.next_entity_ref(),
         EntityRef::fixture(shared.region_id(), 1)
@@ -520,7 +524,7 @@ fn mutable_legacy_load_skips_unknown_trees_and_keeps_registered_passenger_order(
     );
     assert!(shared.are_entities_loaded(pos));
     assert_eq!(parent.tick_count, 0);
-    assert_eq!(shared.next_entity_id(), 3);
+    assert_eq!(shared.next_entity_id().unwrap(), 3);
     let expected = include_str!("../../../../tests/java/entity/vectors.tsv")
         .lines()
         .find(|row| row.starts_with("entity-legacy\tunknown-trees\t"))

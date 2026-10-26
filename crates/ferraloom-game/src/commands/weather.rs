@@ -1,10 +1,10 @@
-//! Port of WeatherCommand; weather state and cycling belong to Level.
+//! Port of WeatherCommand over the canonical server-owned weather.
 use super::{PreparedCommand, builtins::CommandResult};
-use crate::level::Level;
+use crate::level::{Level, LevelError};
 use ferraloom_protocol::chat::Component;
 use ferraloom_util::random::RandomSource;
 
-pub fn run(command: &PreparedCommand, level: &mut Level) -> CommandResult {
+pub fn run(command: &PreparedCommand, level: &mut Level) -> Result<CommandResult, LevelError> {
     let action = command.literals[1].as_str();
     let requested = command.integer("duration").unwrap_or(-1);
     let duration = if requested == -1 {
@@ -23,13 +23,13 @@ pub fn run(command: &PreparedCommand, level: &mut Level) -> CommandResult {
         "rain" => level.set_weather(0, duration, true, false),
         "thunder" => level.set_weather(0, duration, true, true),
         _ => unreachable!("registered weather variant"),
-    }
+    }?;
     // Vanilla returns the supplied duration, including the -1 default sentinel.
-    CommandResult::success(
+    Ok(CommandResult::success(
         requested,
         Component::translatable(format!("commands.weather.set.{action}"), vec![]),
         true,
-    )
+    ))
 }
 
 #[cfg(test)]
@@ -66,6 +66,7 @@ mod tests {
                 Region::new(&BEHAVIORS),
                 crate::level::LevelContext::fixture(0, 63),
             );
+            level.install_shared(Box::default());
             level.set_random_streams(Random::Legacy(LegacyRandomSource::new(vector.seed)), 0);
             let input = format!(
                 "weather {}{}",
@@ -79,8 +80,8 @@ mod tests {
             let command = commands
                 .prepare(&input, CommandSourceStack::server(4, Vec3::ZERO))
                 .unwrap();
-            let result = run(&command, &mut level);
-            let weather = level.weather();
+            let result = run(&command, &mut level).unwrap();
+            let weather = level.weather().unwrap();
             assert_eq!(
                 (
                     weather.clear_weather_time,

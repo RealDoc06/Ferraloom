@@ -50,12 +50,27 @@ fn native_spawner_load_notifications_use_the_live_state_and_retained_generation(
         let custom = f[3] == "true";
         let incoming = parse_compound(f[4]).unwrap();
         let mut original = create(POS, Block::SPAWNER.default_state()).unwrap();
-        original.load_with_components(&parse_compound(SEED).unwrap());
+        original.load_with_components(
+            &parse_compound(SEED).unwrap(),
+            crate::level::LevelContext::fixture(0, 63)
+                .registry_context()
+                .unwrap(),
+        );
         let actual = if f[1] == "false" {
             if custom {
-                original.load_custom_only(&incoming);
+                original.load_custom_only(
+                    &incoming,
+                    crate::level::LevelContext::fixture(0, 63)
+                        .registry_context()
+                        .unwrap(),
+                );
             } else {
-                original.load_with_components(&incoming);
+                original.load_with_components(
+                    &incoming,
+                    crate::level::LevelContext::fixture(0, 63)
+                        .registry_context()
+                        .unwrap(),
+                );
             }
             assert!(f[6].is_empty(), "unattached load: {row}");
             original.save_with_full_metadata().unwrap()

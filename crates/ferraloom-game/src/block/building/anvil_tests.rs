@@ -45,6 +45,7 @@ fn anvil_ticks_falling_configuration_and_damage_transform_match_native() {
                 let tick = f[4].parse::<i64>().unwrap();
                 if tick == 0 {
                     let mut level = super::fire_powder_tests::level();
+                    level.install_shared(Box::default());
                     crate::level::drop_fixtures::install(&mut level);
                     let chunk = ChunkPos::containing(POS);
                     level
@@ -137,6 +138,7 @@ fn fallable_sources_and_anvil_silent_landing_events_match_native() {
             continue;
         }
         let mut level = super::tests::tagged_level();
+        level.install_shared(Box::default());
         let entity = receiver(&mut level, f[0] == "event" && f[2] == "true");
         let original = if f[0] == "event" {
             state(f[1])

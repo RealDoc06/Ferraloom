@@ -19,7 +19,9 @@ pub mod player;
 pub mod pushing;
 mod stuck;
 pub mod variant;
-pub use persistence::{EntityPersistenceError, load_entity_recursive, load_in_place};
+pub use persistence::{
+    EntityPersistenceError, create_entity_from_tag, load_entity_recursive, load_in_place,
+};
 mod spawn;
 pub use spawn::{EntitySpawnReason, EntitySpawnRequest};
 pub use stuck::{make_stuck_in_block, reset_fall_distance};
@@ -334,6 +336,37 @@ pub fn trace_base_entity_refs(base: &EntityData, references: &mut Vec<EntityRef>
 ///
 /// Dispatch objects are stateless. Never hold a state borrow across a world call.
 pub trait Entity: Sync {
+    /// Port of Entity#rotate. Returns the transformed angle without changing yaw.
+    fn rotate(
+        &self,
+        entity: EntityRef,
+        rotation: ferraloom_util::Rotation,
+        level: &mut Level,
+    ) -> Result<f32, LevelError> {
+        use ferraloom_util::Rotation;
+        let angle = ferraloom_util::mth::wrap_degrees_f32(level.entity::<EntityData>(entity)?.yaw);
+        Ok(match rotation {
+            Rotation::Clockwise180 => angle + 180.0,
+            Rotation::CounterClockwise90 => angle + 270.0,
+            Rotation::Clockwise90 => angle + 90.0,
+            Rotation::None => angle,
+        })
+    }
+    /// Port of Entity#mirror. Subclasses can override independently of rotation.
+    fn mirror(
+        &self,
+        entity: EntityRef,
+        mirror: ferraloom_util::Mirror,
+        level: &mut Level,
+    ) -> Result<f32, LevelError> {
+        use ferraloom_util::Mirror;
+        let angle = ferraloom_util::mth::wrap_degrees_f32(level.entity::<EntityData>(entity)?.yaw);
+        Ok(match mirror {
+            Mirror::FrontBack => -angle,
+            Mirror::LeftRight => 180.0 - angle,
+            Mirror::None => angle,
+        })
+    }
     /// Port of Player#awardStat's virtual entry. ServerPlayer owns the single
     /// canonical counter and scoreboard producer.
     fn award_stat(
@@ -489,6 +522,50 @@ pub trait Entity: Sync {
             .as_living()
             .map(|living| living.equipment.get(slot)))
     }
+    /// Port of Entity#getSlot, with LivingEntity's equipment implementation.
+    fn get_slot(
+        &self,
+        entity: EntityRef,
+        slot: i32,
+        level: &Level,
+    ) -> Result<Option<crate::item::slot::SlotAccess>, LevelError> {
+        crate::item::slot::living_access(entity, slot, level)
+    }
+    /// Port of LivingEntity#canUseSlot's parent body.
+    fn can_use_slot(
+        &self,
+        entity: EntityRef,
+        _slot: ferraloom_protocol::component::EquipmentSlot,
+        level: &Level,
+    ) -> Result<bool, LevelError> {
+        level.entity::<LivingEntity>(entity)?;
+        Ok(true)
+    }
+    /// Port of LivingEntity#setItemSlot. Old and new object receivers are rooted
+    /// through the ordered onEquipItem callback, including PlayerEquipment.
+    fn set_item_slot(
+        &self,
+        entity: EntityRef,
+        slot: ferraloom_protocol::component::EquipmentSlot,
+        value: crate::inventory::StackValue,
+        operation: &mut crate::inventory::StackOperation<'_>,
+    ) -> Result<(), LevelError> {
+        crate::item::slot::set_equipment_value(entity, slot, value, operation)
+    }
+    fn on_equip_item(
+        &self,
+        entity: EntityRef,
+        slot: ferraloom_protocol::component::EquipmentSlot,
+        old: crate::inventory::StackRef,
+        new: crate::inventory::StackRef,
+        level: &mut Level,
+    ) -> Result<(), LevelError> {
+        living::on_equip_item_parent(self, entity, slot, old, new, level)
+    }
+    /// Port of LivingEntity#doesEmitEquipEvent; Player restricts it to armor.
+    fn does_emit_equip_event(&self, _slot: ferraloom_protocol::component::EquipmentSlot) -> bool {
+        true
+    }
     /// Port of Entity#getWeaponItem; LivingEntity returns its live main hand.
     fn weapon_item<'level>(
         &self,
@@ -517,6 +594,10 @@ pub trait Entity: Sync {
         movement::get_on_pos(entity, 1.0e-5_f32, level)
     }
     fn is_spectator(&self, _entity: EntityRef, _level: &Level) -> Result<bool, LevelError> {
+        Ok(false)
+    }
+    /// Port of Entity#dampensVibrations; ItemEntity overrides its effective stack query.
+    fn dampens_vibrations(&self, _entity: EntityRef, _level: &Level) -> Result<bool, LevelError> {
         Ok(false)
     }
     /// Port of Entity#isSteppingCarefully; Cat and Ocelot override this read.

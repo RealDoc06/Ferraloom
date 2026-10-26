@@ -4,7 +4,10 @@ use ferraloom_protocol::{
     component::{DataComponent, DataComponentMap},
 };
 
-pub(super) fn load(tag: Option<&CompoundTag>) -> DataComponentMap {
+pub(super) fn load(
+    tag: Option<&CompoundTag>,
+    registries: &dyn ferraloom_protocol::codec::RegistryContext,
+) -> DataComponentMap {
     DataComponentMap {
         entries: tag
             .into_iter()
@@ -12,7 +15,17 @@ pub(super) fn load(tag: Option<&CompoundTag>) -> DataComponentMap {
             .filter_map(|(key, value)| {
                 Identifier::parse(&key.to_string_lossy())
                     .ok()
-                    .and_then(|key| DataComponent::from_nbt(&key, value).ok())
+                    .and_then(|key| {
+                        if key.as_str() == "minecraft:banner_patterns" {
+                            super::banner::read_patterns(value, registries)
+                                .map(DataComponent::BannerPatterns)
+                        } else if key.as_str() == "minecraft:pot_decorations" {
+                            super::decorated_pot::read_decorations(value)
+                                .map(DataComponent::PotDecorations)
+                        } else {
+                            DataComponent::from_nbt(&key, value).ok()
+                        }
+                    })
             })
             .collect(),
     }

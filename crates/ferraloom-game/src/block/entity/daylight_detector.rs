@@ -41,9 +41,16 @@ mod tests {
                     let entity = match fields[2] {
                         "typed" => create(pos, state).unwrap(),
                         "factory" => new_block_entity(pos, state).unwrap().unwrap(),
-                        _ => load_static(pos, state, &parse_compound(fields[3]).unwrap())
-                            .unwrap()
-                            .unwrap(),
+                        _ => load_static(
+                            pos,
+                            state,
+                            &parse_compound(fields[3]).unwrap(),
+                            crate::level::LevelContext::fixture(0, 63)
+                                .registry_context()
+                                .unwrap(),
+                        )
+                        .unwrap()
+                        .unwrap(),
                     };
                     assert_eq!(
                         entity.save_with_full_metadata().unwrap(),

@@ -47,7 +47,7 @@ impl PrimedTnt {
         position: Vec3,
         owner: Option<EntityRef>,
     ) -> Result<Self, LevelError> {
-        let mut entity = Self::with_parent(level.create_entity_data(EntityType::TNT));
+        let mut entity = Self::with_parent(level.create_entity_data(EntityType::TNT)?);
         entity.parent.set_pos(position);
         let angle = level.random().next_double() * f64::from(mth::TWO_PI);
         entity.parent.velocity = Vec3::new(
@@ -232,10 +232,14 @@ mod tests {
         {
             let fields: Vec<_> = row.split('\t').collect();
             static BEHAVIORS: crate::Behaviors = crate::Behaviors::EMPTY;
-            let mut level = Level::new(
-                crate::level::Region::new(&BEHAVIORS),
-                crate::level::LevelContext::fixture(0, 63),
-            );
+            let mut level = {
+                let mut fixture_level = Level::new(
+                    crate::level::Region::new(&BEHAVIORS),
+                    crate::level::LevelContext::fixture(0, 63),
+                );
+                fixture_level.install_shared(Box::default());
+                fixture_level
+            };
             level.random().set_seed(fields[1].parse().unwrap());
             let tnt = PrimedTnt::new_at(&mut level, Vec3::new(1.0, 64.0, 1.0), None).unwrap();
             let expected: Vec<_> = fields[2]
@@ -254,7 +258,7 @@ mod tests {
                 "{row}"
             );
             assert_eq!(tnt.parent.network_id, 1);
-            assert_eq!(level.next_entity_id(), 2);
+            assert_eq!(level.next_entity_id().unwrap(), 2);
             rows += 1;
         }
         assert_eq!(rows, 3);
@@ -263,10 +267,14 @@ mod tests {
     fn tnt_nbt_uses_native_lowercase_fields_and_keeps_unknown_data() {
         let mut tnt = PrimedTnt::new(1, 123);
         static BEHAVIORS: crate::Behaviors = crate::Behaviors::EMPTY;
-        let level = Level::new(
-            crate::level::Region::new(&BEHAVIORS),
-            crate::level::LevelContext::fixture(0, 63),
-        );
+        let level = {
+            let mut fixture_level = Level::new(
+                crate::level::Region::new(&BEHAVIORS),
+                crate::level::LevelContext::fixture(0, 63),
+            );
+            fixture_level.install_shared(Box::default());
+            fixture_level
+        };
         let mut tag = tnt.save_without_id(&level).unwrap();
         tag.insert("future", Tag::String("retained".into()));
         tag.insert("fuse", Tag::Short(17));

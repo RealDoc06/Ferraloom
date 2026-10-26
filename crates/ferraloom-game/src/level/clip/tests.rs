@@ -49,7 +49,11 @@ fn tags(level: &mut Level) {
     level.set_fluid_tags(tags.fluid.clone());
 }
 fn level(loaded: &str, states: &str, behaviors: &'static Behaviors) -> Level {
-    let mut level = Level::new(Region::new(behaviors), LevelContext::fixture(0, 63));
+    let mut level = {
+        let mut fixture_level = Level::new(Region::new(behaviors), LevelContext::fixture(0, 63));
+        fixture_level.install_shared(Box::default());
+        fixture_level
+    };
     tags(&mut level);
     for key in loaded.split(';').filter(|key| !key.is_empty()) {
         let xz = ints(key);
@@ -290,7 +294,7 @@ fn native_player_fall_reset_shapes_use_actual_portal_delay_and_tags() {
             EntityState::Player(Box::new(ServerPlayer::new(
                 Uuid::offline_player("Clip"),
                 "Clip".into(),
-                level.next_entity_id(),
+                level.next_entity_id().unwrap(),
                 Vec3::new(8.5, 64.0, 8.5),
                 GameType::Survival,
             ))),
@@ -478,7 +482,7 @@ fn all_shape_modes_receive_the_supplied_collision_context() {
             EntityState::Player(Box::new(ServerPlayer::new(
                 Uuid::offline_player("Context"),
                 "Context".into(),
-                level.next_entity_id(),
+                level.next_entity_id().unwrap(),
                 Vec3::ZERO,
                 GameType::Survival,
             ))),
