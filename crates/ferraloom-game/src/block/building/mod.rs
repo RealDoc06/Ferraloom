@@ -29,8 +29,11 @@ mod fire_powder;
 mod fire_tests;
 pub(crate) use fire::lava_random_tick;
 #[cfg(test)]
+mod dripstone_tests;
+#[cfg(test)]
 mod fire_powder_tests;
 mod orientation;
+mod pointed_dripstone;
 mod portal_shape;
 mod scaffolding;
 pub use scaffolding::scaffolding_distance;
@@ -53,6 +56,9 @@ pub(crate) fn ported_behavior(
 ) -> Option<&'static dyn BlockBehavior> {
     if block == Block::BUDDING_AMETHYST && method == BlockMethod::RandomTick {
         return Some(&amethyst::BUDDING_AMETHYST);
+    }
+    if block == Block::POINTED_DRIPSTONE && method == BlockMethod::RandomTick {
+        return Some(&pointed_dripstone::POINTED_DRIPSTONE);
     }
     if fire::supports(block, method) {
         return Some(&fire::FIRE);
