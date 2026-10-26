@@ -14,6 +14,7 @@ pub mod feedback;
 pub mod forceload;
 pub mod gamemode;
 pub mod give;
+pub mod item;
 pub mod message;
 pub mod permissions;
 pub mod place;
