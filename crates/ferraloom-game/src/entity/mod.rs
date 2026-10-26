@@ -19,7 +19,9 @@ pub mod player;
 pub mod pushing;
 mod stuck;
 pub mod variant;
-pub use persistence::{EntityPersistenceError, load_entity_recursive, load_in_place};
+pub use persistence::{
+    EntityPersistenceError, create_entity_from_tag, load_entity_recursive, load_in_place,
+};
 mod spawn;
 pub use spawn::{EntitySpawnReason, EntitySpawnRequest};
 pub use stuck::{make_stuck_in_block, reset_fall_distance};
@@ -334,6 +336,37 @@ pub fn trace_base_entity_refs(base: &EntityData, references: &mut Vec<EntityRef>
 ///
 /// Dispatch objects are stateless. Never hold a state borrow across a world call.
 pub trait Entity: Sync {
+    /// Port of Entity#rotate. Returns the transformed angle without changing yaw.
+    fn rotate(
+        &self,
+        entity: EntityRef,
+        rotation: ferraloom_util::Rotation,
+        level: &mut Level,
+    ) -> Result<f32, LevelError> {
+        use ferraloom_util::Rotation;
+        let angle = ferraloom_util::mth::wrap_degrees_f32(level.entity::<EntityData>(entity)?.yaw);
+        Ok(match rotation {
+            Rotation::Clockwise180 => angle + 180.0,
+            Rotation::CounterClockwise90 => angle + 270.0,
+            Rotation::Clockwise90 => angle + 90.0,
+            Rotation::None => angle,
+        })
+    }
+    /// Port of Entity#mirror. Subclasses can override independently of rotation.
+    fn mirror(
+        &self,
+        entity: EntityRef,
+        mirror: ferraloom_util::Mirror,
+        level: &mut Level,
+    ) -> Result<f32, LevelError> {
+        use ferraloom_util::Mirror;
+        let angle = ferraloom_util::mth::wrap_degrees_f32(level.entity::<EntityData>(entity)?.yaw);
+        Ok(match mirror {
+            Mirror::FrontBack => -angle,
+            Mirror::LeftRight => 180.0 - angle,
+            Mirror::None => angle,
+        })
+    }
     /// Port of Player#awardStat's virtual entry. ServerPlayer owns the single
     /// canonical counter and scoreboard producer.
     fn award_stat(
