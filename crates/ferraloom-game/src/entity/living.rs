@@ -12,6 +12,7 @@ pub use attribute_updates::{on_attribute_updated_parent, refresh_dirty_attribute
 pub mod climbable;
 pub mod damage_state;
 mod equipment;
+pub(crate) use equipment::on_equip_item_parent;
 pub use equipment::on_equipped_item_broken;
 pub(crate) use equipment::on_equipped_item_broken_parent;
 pub mod fall_damage;
@@ -34,6 +35,8 @@ pub struct FallSounds {
 #[derive(Debug)]
 pub struct LivingEntity {
     pub parent: EntityData,
+    /// Server-side handler selected by LivingEntity#createInterpolationHandler.
+    pub(crate) interpolation_tracker: super::tracking::codec::SteppedInterpolationTracker,
     pub attributes: AttributeMap,
     pub equipment: EntityEquipment,
     /// Port of LivingEntity#locatorBarIcon; the persistent icon, before team color overrides.
@@ -93,6 +96,7 @@ impl LivingEntity {
         let attributes = AttributeMap::new(parent.entity_type);
         let mut living = Self {
             parent,
+            interpolation_tracker: Default::default(),
             attributes,
             equipment: EntityEquipment::default(),
             locator_bar_icon: crate::level::waypoints::default_icon(),

@@ -13,6 +13,10 @@ mod interaction;
 mod level_tick;
 #[path = "levels.rs"]
 mod levels;
+#[path = "packet_processor.rs"]
+mod packet_processor;
+#[path = "player_io.rs"]
+mod player_io;
 #[path = "player_spawn.rs"]
 mod player_spawn;
 use crate::{
@@ -68,9 +72,9 @@ use ferraloom_protocol::{
     status,
 };
 use ferraloom_util::{BlockPos, ChunkPos, Vec3};
-use player_spawn::{PrepareSpawnTask, PreparedPlayerSpawn};
+use player_spawn::PrepareSpawnTask;
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, HashSet, VecDeque},
     net::SocketAddr,
     path::{Path, PathBuf},
     sync::Arc,
@@ -125,8 +129,10 @@ enum ConfigTask {
     KnownPacks,
     Conduct,
     ResourcePack,
+    ReadingPlayerData,
     Preparing,
     Finishing,
+    Joining,
 }
 #[derive(Clone, Copy, Debug)]
 enum Phase {
@@ -144,6 +150,9 @@ struct Connection {
     close: bool,
     information: common::serverbound::ClientInformation,
     spawn: Option<PrepareSpawnTask>,
+    spawn_input: Option<player_io::PlayerIo<Option<ferraloom_nbt::CompoundTag>>>,
+    player_load: Option<player_io::PlayerLoad>,
+    player_save: Option<player_io::PlayerSave>,
     last_keepalive: Instant,
     keepalive: Option<i64>,
     last_action: Instant,
@@ -177,14 +186,14 @@ impl Connection {
     }
     fn disconnect_component(&mut self, reason: Component) {
         match self.phase {
+            Phase::Play(_) | Phase::Configuration(ConfigTask::Joining) => self.push(
+                play::clientbound::Packet::Disconnect(Box::new(common_cb::Disconnect { reason })),
+            ),
             Phase::Configuration(_) => {
                 self.push(cfg::ClientboundPacket::Disconnect(common_cb::Disconnect {
                     reason,
                 }))
             }
-            Phase::Play(_) => self.push(play::clientbound::Packet::Disconnect(Box::new(
-                common_cb::Disconnect { reason },
-            ))),
         };
         self.close = true;
     }
@@ -213,6 +222,8 @@ pub struct MinecraftServer {
     connections: BTreeMap<ConnectionId, Connection>,
     players: Vec<ConnectionId>,
     ingress: mpsc::Receiver<Ingress>,
+    packet_processor: VecDeque<packet_processor::PacketEvent>,
+    pending_tasks: VecDeque<packet_processor::TickTask>,
     status: watch::Sender<status::ServerStatus>,
     shutdown: watch::Sender<bool>,
     tick: u64,
@@ -597,6 +608,8 @@ impl MinecraftServer {
             connections: BTreeMap::new(),
             players: Vec::new(),
             ingress,
+            packet_processor: VecDeque::new(),
+            pending_tasks: VecDeque::new(),
             status,
             shutdown,
             tick: 0,
@@ -663,7 +676,11 @@ impl MinecraftServer {
             self.apply_tick_rate_events()?;
             self.process_packets().await?;
             self.tick_server().await?;
-            tokio::time::sleep_until(origin + Duration::from_nanos(next.max(0) as u64)).await;
+            self.wait_until_next_tick(
+                origin + Duration::from_nanos(next.max(0) as u64),
+                Duration::from_nanos(this_tick_nanos as u64),
+            )
+            .await?;
             if this_tick_nanos == 0 {
                 self.tick_rate_manager
                     .end_tick_work(origin.elapsed().as_nanos() as i64);
@@ -787,183 +804,6 @@ impl MinecraftServer {
         }
         Ok(())
     }
-    /// Port of MinecraftServer#processPacketsAndTick. No IO task applies play state.
-    async fn process_packets(&mut self) -> Result<()> {
-        self.process_packets_inner().await
-    }
-    async fn process_packets_inner(&mut self) -> Result<()> {
-        let count = self.ingress.len();
-        for _ in 0..count {
-            let Ok(event) = self.ingress.try_recv() else {
-                break;
-            };
-            match event {
-                Ingress::Admission {
-                    id,
-                    profile,
-                    address,
-                    reply,
-                } => {
-                    let full =
-                        self.players.len() >= self.properties.int("max-players").max(0) as usize;
-                    let reason = self.access.can_join(
-                        &profile,
-                        address.ip(),
-                        self.properties.boolean("white-list"),
-                        full,
-                        &self.shared().ops,
-                    );
-                    if reason.is_none() {
-                        let duplicates = self
-                            .connections
-                            .iter()
-                            .filter(|(other, c)| **other != id && c.profile.id == profile.id)
-                            .map(|(id, _)| *id)
-                            .collect::<Vec<_>>();
-                        for id in duplicates {
-                            self.connections
-                                .get_mut(&id)
-                                .unwrap()
-                                .disconnect("You logged in from another location");
-                        }
-                    }
-                    let _ = reply.send(reason);
-                }
-                Ingress::Connected {
-                    id,
-                    profile,
-                    address,
-                    outbound,
-                } => {
-                    let mut c = Connection {
-                        profile,
-                        address,
-                        outbound,
-                        phase: Phase::Configuration(ConfigTask::KnownPacks),
-                        incoming_sequence: 0,
-                        outgoing_sequence: 0,
-                        pending: Vec::new(),
-                        close: false,
-                        information: client_information(),
-                        spawn: None,
-                        last_keepalive: Instant::now(),
-                        keepalive: None,
-                        last_action: Instant::now(),
-                        chat_spam: 0,
-                        command_spam: 0,
-                        session: None,
-                        last_seen: LastSeenMessagesValidator::default(),
-                        signature_cache: MessageSignatureCache::default(),
-                        command_message: None,
-                        command_suggestion: None,
-                        next_chat_index: 0,
-                        network_ticks: 0,
-                        rate_packets: 0,
-                        average_packets: 0.,
-                        received_position_this_tick: false,
-                        received_movement_this_tick: false,
-                        ack_block_changes_up_to: -1,
-                    };
-                    c.push(cfg::ClientboundPacket::CustomPayload(
-                        common_cb::CustomPayload {
-                            payload: common::CustomPayload::Brand("Ferraloom".into()),
-                        },
-                    ));
-                    if !self.properties.get("bug-report-link").is_empty() {
-                        c.push(cfg::ClientboundPacket::ServerLinks(
-                            common_cb::ServerLinks {
-                                links: vec![common_cb::ServerLink {
-                                    link_type: protocol::codec::Either::Left(
-                                        common_cb::KnownLinkType::BugReport,
-                                    ),
-                                    link: self.properties.get("bug-report-link").into(),
-                                }],
-                            },
-                        ));
-                    }
-                    c.push(cfg::ClientboundPacket::UpdateEnabledFeatures(
-                        cfg::UpdateEnabledFeatures {
-                            features: vec![crate::registries::id("vanilla")],
-                        },
-                    ));
-                    c.push(cfg::ClientboundPacket::SelectKnownPacks(
-                        cfg::ClientboundSelectKnownPacks {
-                            known_packs: vec![core_pack()],
-                        },
-                    ));
-                    self.connections.insert(id, c);
-                }
-                Ingress::Packet {
-                    id,
-                    sequence,
-                    packet,
-                } => {
-                    let Some(c) = self.connections.get_mut(&id) else {
-                        continue;
-                    };
-                    if c.close {
-                        continue;
-                    }
-                    ensure!(
-                        sequence == c.incoming_sequence,
-                        "connection {id} ingress sequence mismatch"
-                    );
-                    c.incoming_sequence += 1;
-                    let phase = c.phase;
-                    let preparing_dimension =
-                        c.spawn.as_ref().map(|spawn| spawn.dimension().clone());
-                    let dimension = match phase {
-                        Phase::Play(entity) => Some(
-                            self.level_for_entity(entity)
-                                .map_err(game_error)?
-                                .dimension_key()
-                                .map_err(game_error)?
-                                .to_string()
-                                .parse::<protocol::Identifier>()?,
-                        ),
-                        Phase::Configuration(_) => preparing_dimension,
-                    };
-                    let lent = match &dimension {
-                        Some(dimension) => self.lend_server_shared_to(dimension)?,
-                        None => false,
-                    };
-                    let result = match packet {
-                        Incoming::Configuration(p) => self.configuration(id, p).await,
-                        Incoming::Play(p) => self.play_packet(id, *p).await,
-                    };
-                    self.return_server_shared(lent);
-                    if let Err(e) = result {
-                        eprintln!("Packet rejected for {id}: {e:#}");
-                        if let Some(c) = self.connections.get_mut(&id) {
-                            c.disconnect(e.to_string());
-                        }
-                    }
-                }
-                Ingress::Closed { id } => {
-                    let dimension = match self.connections.get(&id).map(|c| c.phase) {
-                        Some(Phase::Play(entity)) => self
-                            .level_for_entity(entity)
-                            .map_err(game_error)?
-                            .dimension_key()
-                            .map_err(game_error)?
-                            .to_string()
-                            .parse::<protocol::Identifier>()?,
-                        _ => crate::registries::id("overworld"),
-                    };
-                    let lent = self.lend_server_shared_to(&dimension)?;
-                    let result = self.remove_player(id).await;
-                    self.return_server_shared(lent);
-                    result?;
-                }
-                Ingress::Console(command) => {
-                    if let Err(e) = self.execute_command(None, &command).await {
-                        eprintln!("{e:#}");
-                    }
-                }
-            }
-        }
-        Ok(())
-    }
     /// TickChildren retains level-before-connection and chunk-send-after-player order.
     async fn tick_server(&mut self) -> Result<()> {
         let started = Instant::now();
@@ -1001,7 +841,7 @@ impl MinecraftServer {
         for dimension in self.level_keys() {
             self.tick_level(&dimension, paused)?;
         }
-        self.tick_connections().await?;
+        self.tick_connections()?;
         self.send_chunks()?;
         self.flush_outbound();
         self.refresh_status();
@@ -1023,7 +863,7 @@ impl MinecraftServer {
         }
         Ok(())
     }
-    async fn configuration(
+    fn configuration(
         &mut self,
         connection: ConnectionId,
         packet: cfg::ServerboundPacket,
@@ -1047,14 +887,14 @@ impl MinecraftServer {
                 for packet in packets {
                     c.push(packet);
                 }
-                self.optional_tasks(connection, false).await?;
+                self.optional_tasks(connection, false)?;
             }
             cfg::ServerboundPacket::AcceptCodeOfConduct(_) => {
                 ensure!(
                     matches!(phase, Phase::Configuration(ConfigTask::Conduct)),
                     "unexpected code of conduct response"
                 );
-                self.optional_tasks(connection, true).await?;
+                self.optional_tasks(connection, true)?;
             }
             cfg::ServerboundPacket::ResourcePack(p) => {
                 ensure!(
@@ -1068,7 +908,7 @@ impl MinecraftServer {
                     {
                         bail!("You must accept the server resource pack");
                     }
-                    self.prepare_player(connection).await?;
+                    self.prepare_player(connection)?;
                 }
             }
             cfg::ServerboundPacket::FinishConfiguration(_) => {
@@ -1076,6 +916,10 @@ impl MinecraftServer {
                     matches!(phase, Phase::Configuration(ConfigTask::Finishing)),
                     "unexpected configuration completion"
                 );
+                // Native switches the outbound protocol before Ready#spawn,
+                // even while the player is still waiting to be constructed.
+                self.connections.get_mut(&connection).unwrap().phase =
+                    Phase::Configuration(ConfigTask::Joining);
                 let c = &self.connections[&connection];
                 if let Some(reason) = self.access.can_join(
                     &c.profile,
@@ -1086,7 +930,6 @@ impl MinecraftServer {
                 ) {
                     bail!("{reason}");
                 }
-                self.place_player(connection).await?;
             }
             cfg::ServerboundPacket::KeepAlive(p) => self.keepalive_reply(connection, p.id)?,
             cfg::ServerboundPacket::CookieResponse(_) => {
@@ -1098,7 +941,7 @@ impl MinecraftServer {
         }
         Ok(())
     }
-    async fn optional_tasks(&mut self, connection: ConnectionId, conduct_done: bool) -> Result<()> {
+    fn optional_tasks(&mut self, connection: ConnectionId, conduct_done: bool) -> Result<()> {
         let c = self.connections.get_mut(&connection).unwrap();
         if !conduct_done && !self.code_of_conduct.is_empty() {
             let language = c.information.language.0.to_lowercase();
@@ -1124,7 +967,7 @@ impl MinecraftServer {
                     Ok(id) => id,
                     Err(error) => {
                         eprintln!("Invalid resource-pack-id; skipping resource pack: {error}");
-                        return self.prepare_player(connection).await;
+                        return self.prepare_player(connection);
                     }
                 }
             };
@@ -1144,18 +987,33 @@ impl MinecraftServer {
             c.phase = Phase::Configuration(ConfigTask::ResourcePack);
             return Ok(());
         }
-        self.prepare_player(connection).await
+        self.prepare_player(connection)
     }
-    async fn prepare_player(&mut self, connection: ConnectionId) -> Result<()> {
+    fn prepare_player(&mut self, connection: ConnectionId) -> Result<()> {
         let access = self.world_root.access.clone();
-        let uuid = self.connections[&connection].profile.id.to_string();
-        let saved = tokio::task::spawn_blocking(move || access.player_data().load(&uuid)).await??;
+        let c = self
+            .connections
+            .get_mut(&connection)
+            .context("missing preparing connection")?;
+        let uuid = c.profile.id.to_string();
+        c.spawn_input = Some(player_io::PlayerIo::start(move || {
+            Ok(access.player_data().load(&uuid)?)
+        }));
+        c.phase = Phase::Configuration(ConfigTask::ReadingPlayerData);
+        Ok(())
+    }
+
+    fn finish_prepare_player(
+        &mut self,
+        connection: ConnectionId,
+        saved: Option<ferraloom_nbt::CompoundTag>,
+    ) -> Result<()> {
         let saved = ServerPlayer::saved_position(saved.as_ref());
         let respawn = self.default_spawn_data();
         let dimension = saved.resolve_dimension(&respawn.dimension.parse()?, |key| {
             self.get_level(key).is_some()
         });
-        let dimension_type = self.world_root.stem(&dimension)?.dimension;
+        let dimension_type = self.world_root.stem(&dimension)?.dimension.clone();
         let game_type = self.default_game_mode;
         let radius = self
             .game_rules
@@ -1180,51 +1038,126 @@ impl MinecraftServer {
         Ok(())
     }
 
-    /// Port of Ready#spawn's waitForEntities -> constructor -> second player NBT
-    /// load. All IO captures are owned; no Level borrow survives an await.
-    async fn construct_ready_player(
-        &mut self,
-        connection: ConnectionId,
-        spawn: &PreparedPlayerSpawn,
-    ) -> Result<ServerPlayer> {
-        self.wait_for_spawn_entities(spawn).await?;
-        let profile = self.connections[&connection].profile.clone();
-        let mode = self.default_game_mode;
-        let network_id = self
-            .live_level_in(&spawn.dimension)?
-            .level
-            .next_entity_id()
-            .map_err(game_error)?;
-        let mut player =
-            ServerPlayer::new(profile.id, profile.name, network_id, spawn.position, mode);
-        let access = self.world_root.access.clone();
-        let uuid = profile.id.to_string();
-        let saved = tokio::task::spawn_blocking(move || access.player_data().load(&uuid)).await??;
-        if let Some(saved) = saved {
-            player.try_load_with_recipes(saved, &self.recipe_manager)?;
+    fn configuration_failed(&mut self, connection: ConnectionId, error: anyhow::Error) {
+        eprintln!("Configuration failed for {connection}: {error:#}");
+        if let Some(c) = self.connections.get_mut(&connection) {
+            c.disconnect(error.to_string());
         }
-        let advancement_manager = self
-            .live_level_in(&spawn.dimension)?
-            .level
-            .container_resources()
-            .map_err(game_error)?
-            .advancements
+    }
+
+    /// Ready#spawn's ordered continuation: waitForEntities, constructor,
+    /// second NBT load, then placeNewPlayer. Every pending step yields to the loop.
+    fn poll_ready_player(&mut self, connection: ConnectionId) -> Result<Option<Box<ServerPlayer>>> {
+        let spawn = self.connections[&connection]
+            .spawn
+            .as_ref()
+            .context("spawn not prepared")?
+            .ready()?
             .clone();
-        let progress_path = self.world_root.access.path().to_path_buf();
-        let progress_uuid = profile.id;
-        let progress = tokio::task::spawn_blocking(move || {
-            ferraloom_game::advancements::load_player_progress(
-                &progress_path,
-                progress_uuid,
-                &advancement_manager,
-            )
-        })
-        .await??;
+        if self.connections[&connection].player_load.is_none() {
+            let ready = {
+                let live = std::iter::once(&mut self.level)
+                    .chain(self.additional_levels.iter_mut())
+                    .find(|live| live.dimension == spawn.dimension.as_str())
+                    .context("selected spawn dimension missing")?;
+                self.connections
+                    .get_mut(&connection)
+                    .unwrap()
+                    .spawn
+                    .as_mut()
+                    .unwrap()
+                    .poll_entities(live)?
+            };
+            if !ready {
+                return Ok(None);
+            }
+            let profile = self.connections[&connection].profile.clone();
+            let network_id = self
+                .live_level_in(&spawn.dimension)?
+                .level
+                .next_entity_id()
+                .map_err(game_error)?;
+            let player = Box::new(ServerPlayer::new(
+                profile.id,
+                profile.name,
+                network_id,
+                spawn.position,
+                self.default_game_mode,
+            ));
+            let access = self.world_root.access.clone();
+            self.connections.get_mut(&connection).unwrap().player_load =
+                Some(player_io::PlayerLoad {
+                    player,
+                    stage: player_io::PlayerLoadStage::Nbt(player_io::PlayerIo::start(move || {
+                        Ok(access.player_data().load(&profile.id.to_string())?)
+                    })),
+                });
+        }
+        let result = self
+            .connections
+            .get_mut(&connection)
+            .unwrap()
+            .player_load
+            .as_mut()
+            .unwrap()
+            .poll()?;
+        let Some(result) = result else {
+            return Ok(None);
+        };
+        let progress = match result {
+            player_io::PlayerLoadResult::Nbt(saved) => {
+                // Native applies the second NBT load before obtaining progress.
+                if let Some(saved) = saved {
+                    self.connections
+                        .get_mut(&connection)
+                        .unwrap()
+                        .player_load
+                        .as_mut()
+                        .unwrap()
+                        .player
+                        .try_load_with_recipes(saved, &self.recipe_manager)?;
+                }
+                let access = self.world_root.access.clone();
+                let profile_id = self.connections[&connection].profile.id;
+                let manager = self
+                    .live_level_in(&spawn.dimension)?
+                    .level
+                    .container_resources()
+                    .map_err(game_error)?
+                    .advancements
+                    .clone();
+                self.connections
+                    .get_mut(&connection)
+                    .unwrap()
+                    .player_load
+                    .as_mut()
+                    .unwrap()
+                    .stage =
+                    player_io::PlayerLoadStage::Progress(player_io::PlayerIo::start(move || {
+                        Ok(ferraloom_game::advancements::load_player_progress(
+                            access.path(),
+                            profile_id,
+                            &manager,
+                        )?)
+                    }));
+                return Ok(None);
+            }
+            player_io::PlayerLoadResult::Progress(progress) => progress,
+        };
+        let mut player = self
+            .connections
+            .get_mut(&connection)
+            .unwrap()
+            .player_load
+            .take()
+            .unwrap()
+            .player;
         for diagnostic in progress.diagnostics {
             eprintln!("{diagnostic}");
         }
         player.advancements = progress.advancements;
         player.stats = progress.stats;
+        let mode = self.default_game_mode;
         if self.properties.boolean("force-gamemode") {
             player.game_mode = mode;
             player.update_game_mode_abilities();
@@ -1244,37 +1177,7 @@ impl MinecraftServer {
         player.text_filtering_enabled = self.connections[&connection]
             .information
             .text_filtering_enabled;
-        Ok(player)
-    }
-
-    /// Port of ServerLevel#waitForEntities. Owned tasks, entity responses and
-    /// pending load callbacks progress without simulating entities or time.
-    async fn wait_for_spawn_entities(&mut self, spawn: &PreparedPlayerSpawn) -> Result<()> {
-        let center = ChunkPos::containing(BlockPos::new(
-            ferraloom_util::mth::floor(spawn.position.x),
-            ferraloom_util::mth::floor(spawn.position.y),
-            ferraloom_util::mth::floor(spawn.position.z),
-        ));
-        loop {
-            let ready = {
-                let live = self.live_level_in_mut(&spawn.dimension)?;
-                live.poll_entity_loads_for_wait()?;
-                (-3..=3).all(|z| {
-                    (-3..=3).all(|x| {
-                        live.level
-                            .are_entities_loaded(ChunkPos::new(center.x + x, center.z + z))
-                    })
-                })
-            };
-            if ready {
-                return Ok(());
-            }
-            self.live_level_in_mut(&spawn.dimension)?
-                .level
-                .poll_chunk_acquisition_mut()
-                .map_err(game_error)?;
-            tokio::time::sleep(Duration::from_millis(1)).await;
-        }
+        Ok(Some(player))
     }
 
     /// Apply accepted section transitions immediately, including Y-only moves.
@@ -1343,7 +1246,7 @@ impl MinecraftServer {
         }
         Ok(())
     }
-    async fn place_player(&mut self, connection: ConnectionId) -> Result<()> {
+    fn place_player(&mut self, connection: ConnectionId, mut player: ServerPlayer) -> Result<()> {
         let spawn = self.connections[&connection]
             .spawn
             .as_ref()
@@ -1351,7 +1254,6 @@ impl MinecraftServer {
             .ready()?
             .clone();
         let dimension = spawn.dimension.clone();
-        let mut player = self.construct_ready_player(connection, &spawn).await?;
         let mut c = self
             .connections
             .remove(&connection)
@@ -1562,6 +1464,20 @@ impl MinecraftServer {
         self.apply_level_effects_in(&dimension)
     }
     async fn play_packet(&mut self, connection: ConnectionId, packet: sb::Packet) -> Result<()> {
+        if matches!(
+            self.connections[&connection].phase,
+            Phase::Configuration(ConfigTask::Joining)
+        ) {
+            return match packet {
+                sb::Packet::KeepAlive(packet) => self.keepalive_reply(connection, packet.id),
+                sb::Packet::ClientInformation(information) => {
+                    self.connections.get_mut(&connection).unwrap().information = information;
+                    Ok(())
+                }
+                sb::Packet::CustomPayload(_) | sb::Packet::Pong(_) => Ok(()),
+                _ => bail!("gameplay packet before player publication"),
+            };
+        }
         let Phase::Play(entity) = self.connections[&connection].phase else {
             bail!("play packet before configuration finished");
         };
@@ -2794,15 +2710,33 @@ impl MinecraftServer {
         Ok(())
     }
 
-    async fn tick_connections(&mut self) -> Result<()> {
+    fn tick_connections(&mut self) -> Result<()> {
         let lent = self.lend_server_shared();
         let suggestions = self.process_command_suggestions();
         self.return_server_shared(lent);
         suggestions?;
         let now = Instant::now();
         let mut joining = Vec::new();
+        let mut placing = Vec::new();
         let connections: Vec<_> = self.connections.keys().copied().collect();
         for id in connections {
+            let saved = if let Some(save) = self
+                .connections
+                .get_mut(&id)
+                .and_then(|c| c.player_save.as_mut())
+            {
+                save.poll()?
+            } else {
+                false
+            };
+            if saved {
+                let dimension = self.player_connection_dimension(id)?;
+                let lent = self.lend_server_shared_to(&dimension)?;
+                let result = self.finish_remove_player(id);
+                self.return_server_shared(lent);
+                result?;
+                continue;
+            }
             let c = self.connections.get_mut(&id).expect("selected connection");
             if c.close {
                 continue;
@@ -2837,18 +2771,35 @@ impl MinecraftServer {
                 c.keepalive = Some(key);
                 c.last_keepalive = now;
                 match c.phase {
+                    Phase::Play(_) | Phase::Configuration(ConfigTask::Joining) => {
+                        c.push(cb::Packet::KeepAlive(common_cb::KeepAlive { id: key }))
+                    }
                     Phase::Configuration(_) => {
                         c.push(cfg::ClientboundPacket::KeepAlive(common_cb::KeepAlive {
                             id: key,
                         }))
                     }
-                    Phase::Play(_) => {
-                        c.push(cb::Packet::KeepAlive(common_cb::KeepAlive { id: key }))
-                    }
                 }
             }
             let phase = c.phase;
             match phase {
+                Phase::Configuration(ConfigTask::ReadingPlayerData) => {
+                    let result = c
+                        .spawn_input
+                        .as_mut()
+                        .context("missing player input IO")
+                        .and_then(|io| io.poll());
+                    match result {
+                        Ok(Some(saved)) => {
+                            c.spawn_input = None;
+                            if let Err(error) = self.finish_prepare_player(id, saved) {
+                                self.configuration_failed(id, error);
+                            }
+                        }
+                        Ok(None) => (),
+                        Err(error) => self.configuration_failed(id, error),
+                    }
+                }
                 Phase::Configuration(ConfigTask::Preparing) => {
                     let dimension = self.connections[&id]
                         .spawn
@@ -2856,7 +2807,7 @@ impl MinecraftServer {
                         .context("spawn not prepared")?
                         .dimension()
                         .clone();
-                    let dimension_type = self.world_root.stem(&dimension)?.dimension;
+                    let dimension_type = self.world_root.stem(&dimension)?.dimension.clone();
                     let lent = self.lend_server_shared_to(&dimension)?;
                     let result = {
                         let task = self
@@ -2883,6 +2834,22 @@ impl MinecraftServer {
                         .as_ref()
                         .context("spawn not prepared")?;
                     task.keep_alive(self.live_level_in(task.dimension())?, self.tick)?;
+                }
+                Phase::Configuration(ConfigTask::Joining) => {
+                    let task = self.connections[&id]
+                        .spawn
+                        .as_ref()
+                        .context("spawn not prepared")?;
+                    let dimension = task.dimension().clone();
+                    task.keep_alive(self.live_level_in(&dimension)?, self.tick)?;
+                    let lent = self.lend_server_shared_to(&dimension)?;
+                    let result = self.poll_ready_player(id);
+                    self.return_server_shared(lent);
+                    match result {
+                        Ok(Some(player)) => placing.push((id, player)),
+                        Ok(None) => (),
+                        Err(error) => self.configuration_failed(id, error),
+                    }
                 }
                 Phase::Play(entity) => {
                     if !self.was_paused {
@@ -2930,6 +2897,20 @@ impl MinecraftServer {
             c.push(cfg::ClientboundPacket::FinishConfiguration(
                 cfg::FinishConfiguration {},
             ));
+        }
+        for (id, player) in placing {
+            let dimension = self.connections[&id]
+                .spawn
+                .as_ref()
+                .context("spawn not prepared")?
+                .dimension()
+                .clone();
+            let lent = self.lend_server_shared_to(&dimension)?;
+            let result = self.place_player(id, *player);
+            self.return_server_shared(lent);
+            if let Err(error) = result {
+                self.configuration_failed(id, error);
+            }
         }
         self.broadcast_container_changes()?;
         self.apply_level_effects()?;
@@ -3164,10 +3145,15 @@ impl MinecraftServer {
             self.enforces_secure_chat,
         ));
     }
-    async fn remove_player(&mut self, connection: ConnectionId) -> Result<()> {
-        if let Some(c) = self.connections.remove(&connection)
-            && let Phase::Play(entity) = c.phase
-        {
+    fn remove_player(&mut self, connection: ConnectionId) -> Result<()> {
+        let Some(c) = self.connections.get_mut(&connection) else {
+            return Ok(());
+        };
+        if c.player_save.is_some() {
+            return Ok(());
+        }
+        c.close = true;
+        if let Phase::Play(entity) = c.phase {
             let access = self.world_root.access.clone();
             let (progress, tag, uuid, name, boss_player) = {
                 let level = self.level_for_entity(entity).map_err(game_error)?;
@@ -3192,12 +3178,31 @@ impl MinecraftServer {
                     },
                 )
             };
-            tokio::task::spawn_blocking(move || -> Result<()> {
-                access.player_data().save(&uuid, &tag)?;
-                progress.write()?;
-                Ok(())
-            })
-            .await??;
+            self.connections.get_mut(&connection).unwrap().player_save =
+                Some(player_io::PlayerSave {
+                    name,
+                    boss_player,
+                    io: Some(player_io::PlayerIo::start(move || {
+                        access.player_data().save(&uuid, &tag)?;
+                        progress.write()?;
+                        Ok(())
+                    })),
+                });
+        } else {
+            self.connections.remove(&connection);
+        }
+        Ok(())
+    }
+
+    fn finish_remove_player(&mut self, connection: ConnectionId) -> Result<()> {
+        let c = self
+            .connections
+            .remove(&connection)
+            .context("missing saved connection")?;
+        if let Phase::Play(entity) = c.phase {
+            let saved = c.player_save.context("missing player save continuation")?;
+            let name = saved.name;
+            let boss_player = saved.boss_player;
             let dimension = self
                 .level_for_entity(entity)
                 .map_err(game_error)?
@@ -3229,6 +3234,34 @@ impl MinecraftServer {
                 content: message,
                 overlay: false,
             })));
+        }
+        Ok(())
+    }
+
+    fn player_connection_dimension(
+        &self,
+        connection: ConnectionId,
+    ) -> Result<protocol::Identifier> {
+        let Phase::Play(entity) = self.connections[&connection].phase else {
+            bail!("connection is not playing");
+        };
+        Ok(self
+            .level_for_entity(entity)
+            .map_err(game_error)?
+            .dimension_key()
+            .map_err(game_error)?
+            .to_string()
+            .parse()?)
+    }
+
+    /// SaveAll/shutdown cannot race a prior disconnect save of the same file.
+    /// Only finish the owned writes here; removal callbacks keep their selected
+    /// level's Shared loan at the connection tick, outside a command's loan.
+    async fn wait_for_player_saves(&mut self) -> Result<()> {
+        for connection in self.connections.values_mut() {
+            if let Some(save) = &mut connection.player_save {
+                save.wait().await?;
+            }
         }
         Ok(())
     }
@@ -3404,6 +3437,7 @@ impl MinecraftServer {
     }
 
     async fn save_all(&mut self, flush: bool, force: bool) -> Result<()> {
+        self.wait_for_player_saves().await?;
         let lent = self.lend_server_shared();
         let result = self.save_all_inner(flush, force).await;
         self.return_server_shared(lent);

@@ -168,9 +168,13 @@ impl WorldGenContext {
     /// TERRAIN even though its biome palette can be created without noise.
     pub fn empty_chunk(&self, position: [i32; 2]) -> Result<RegionChunk, Error> {
         let generated = match self.generator.as_ref() {
-            ChunkGenerator::Noise(noise) => noise.new_chunk_in_dimension(position, self.dimension),
-            ChunkGenerator::Debug(debug) => debug.build_terrain(position, self.dimension),
-            ChunkGenerator::Flat(flat) => flat.new_chunk_in_dimension(position, self.dimension),
+            ChunkGenerator::Noise(noise) => {
+                noise.new_chunk_in_dimension(position, self.dimension.clone())
+            }
+            ChunkGenerator::Debug(debug) => debug.build_terrain(position, self.dimension.clone()),
+            ChunkGenerator::Flat(flat) => {
+                flat.new_chunk_in_dimension(position, self.dimension.clone())
+            }
         };
         Ok(RegionChunk::new(generated, ChunkStatus::Empty))
     }
@@ -323,7 +327,7 @@ impl WorldGenContext {
                     }
                     _ => self.generator.build_terrain(
                         center,
-                        self.dimension,
+                        self.dimension.clone(),
                         Some(Arc::new(beardifier)),
                     )?,
                 };

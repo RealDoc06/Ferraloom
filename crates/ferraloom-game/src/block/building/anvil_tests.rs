@@ -138,6 +138,7 @@ fn fallable_sources_and_anvil_silent_landing_events_match_native() {
             continue;
         }
         let mut level = super::tests::tagged_level();
+        level.install_shared(Box::default());
         let entity = receiver(&mut level, f[0] == "event" && f[2] == "true");
         let original = if f[0] == "event" {
             state(f[1])

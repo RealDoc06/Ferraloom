@@ -561,11 +561,11 @@ impl FlowingFluid {
     pub fn random_tick(
         self,
         level: &mut Level,
-        _pos: BlockPos,
+        pos: BlockPos,
         _fluid: FluidState,
     ) -> Result<(), LevelError> {
-        if self == Self::Lava && level.rules().spread_fire {
-            return Err(LevelError::UnsupportedFluidRandomTick);
+        if self == Self::Lava {
+            return super::building::lava_random_tick(pos, level);
         }
         Ok(())
     }

@@ -180,7 +180,7 @@ fn flat_chunks_steps_columns_and_real_void_features_match_vanilla() {
         }
         for expected in case["chunks"].as_array().unwrap() {
             let p = std::array::from_fn(|i| expected["position"][i].as_i64().unwrap() as i32);
-            let chunk = generator.build_terrain(p, dimension);
+            let chunk = generator.build_terrain(p, dimension.clone());
             assert_chunk(&chunk, &expected["terrain"]);
             if !expected["features"].is_null() {
                 let registry = generator.feature_registry(&resources).unwrap();
@@ -191,7 +191,7 @@ fn flat_chunks_steps_columns_and_real_void_features_match_vanilla() {
                 for x in p[0] - 1..=p[0] + 1 {
                     for z in p[1] - 1..=p[1] + 1 {
                         chunks.push(RegionChunk::new(
-                            generator.build_terrain([x, z], dimension),
+                            generator.build_terrain([x, z], dimension.clone()),
                             ChunkStatus::Terrain,
                         ));
                     }
