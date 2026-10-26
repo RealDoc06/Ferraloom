@@ -91,8 +91,10 @@ async fn walk_and_compare_saved_chunks(session: &mut Session) -> Result<Observat
     session.stop().await?;
     let world = session.saved_world()?;
     let jar = std::env::var_os("FERRALOOM_VANILLA_JAR").expect("builder provides vanilla jar");
-    let resources = ResourceManager::new(vec![Pack::vanilla_jar(std::path::Path::new(&jar))?]);
-    let registry = RegistryAdapter::new(&RegistrySet::load(&resources)?)?;
+    let resources = std::sync::Arc::new(ResourceManager::new(vec![Pack::vanilla_jar(
+        std::path::Path::new(&jar),
+    )?]));
+    let registry = RegistryAdapter::new(&RegistrySet::load(resources)?)?;
     let mut log = ObservationLog::default();
     for (dimension, origin) in [
         ("minecraft:overworld", 512),
